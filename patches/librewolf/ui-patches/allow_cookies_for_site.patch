@@ -1,0 +1,76 @@
+diff --git a/browser/base/content/browser-siteIdentity.js b/browser/base/content/browser-siteIdentity.js
+index 4efbba2..5445b03 100644
+--- a/browser/base/content/browser-siteIdentity.js
++++ b/browser/base/content/browser-siteIdentity.js
+@@ -414,6 +414,33 @@ var gIdentityHandler = {
+     event.stopPropagation();
+   },
+ 
++  async refreshSiteData() {
++    document.getElementById("identity-popup-allow-sitedata-toggle").toggleAttribute(
++      "pressed",
++      Services.perms.testExactPermissionFromPrincipal(
++        gBrowser.contentPrincipal,
++        "cookie"
++      ) === Services.perms.ALLOW_ACTION
++    );
++  },
++
++  async toggleSiteData() {
++    const pressed = document.getElementById("identity-popup-allow-sitedata-toggle").toggleAttribute(
++      "pressed"
++    );
++
++    if (pressed) {
++      Services.perms.addFromPrincipal(
++        gBrowser.contentPrincipal,
++        "cookie",
++        Services.perms.ALLOW_ACTION,
++        Services.perms.EXPIRE_NEVER
++      );
++    } else {
++      Services.perms.removeFromPrincipal(gBrowser.contentPrincipal, "cookie");
++    }
++  },
++
+   /**
+    * Handler for mouseclicks on the "More Information" button in the
+    * "identity-popup" panel.
+@@ -1151,6 +1178,8 @@ var gIdentityHandler = {
+     this._identityPopupContentOwner.textContent = owner;
+     this._identityPopupContentSupp.textContent = supplemental;
+     this._identityPopupContentVerif.textContent = verifier;
++
++    this.refreshSiteData();
+   },
+ 
+   setURI(uri) {
+diff --git a/browser/components/controlcenter/content/identityPanel.inc.xhtml b/browser/components/controlcenter/content/identityPanel.inc.xhtml
+index 8bc64fa..4a4a1af 100644
+--- a/browser/components/controlcenter/content/identityPanel.inc.xhtml
++++ b/browser/components/controlcenter/content/identityPanel.inc.xhtml
+@@ -96,6 +96,12 @@
+                 data-l10n-id="identity-clear-site-data"
+                 class="subviewbutton"
+                 oncommand="gIdentityHandler.clearSiteData(event);"/>
++        <toolbarbutton id="identity-popup-allow-sitedata-button"
++                class="subviewbutton"
++                oncommand="gIdentityHandler.toggleSiteData();">
++          <label data-l10n-id="identity-allow-site-data" flex="1"></label>
++          <html:moz-toggle id="identity-popup-allow-sitedata-toggle" style="pointer-events: none;"></html:moz-toggle>
++        </toolbarbutton>
+       </vbox>
+     </panelview>
+ 
+diff --git a/browser/locales/en-US/browser/browser.ftl b/browser/locales/en-US/browser/browser.ftl
+index 0dbdc78..e183f1a 100644
+--- a/browser/locales/en-US/browser/browser.ftl
++++ b/browser/locales/en-US/browser/browser.ftl
+@@ -402,6 +402,7 @@ identity-permissions-storage-access-learn-more = Learn more
+ identity-permissions-reload-hint = You may need to reload the page for changes to apply.
+ identity-clear-site-data =
+     .label = Clear cookies and site data…
++identity-allow-site-data = Camoufox: Always store cookies/data for this site
+ identity-connection-not-secure-security-view = You are not securely connected to this site.
+ identity-connection-verified = You are securely connected to this site.
+ identity-ev-owner-label = Certificate issued to:

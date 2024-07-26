@@ -1,0 +1,168 @@
+/*
+    Minimalistic theme
+    Based on https://github.com/Jamir-boop/minimalisticfox
+*/
+
+:root {
+  --tab-block-margin: 0 !important;
+}
+.tabbrowser-tab {
+  padding-inline: 0 !important;
+  max-height: 30px !important;
+}
+.tab-context-line {
+  display: none !important;
+}
+*/ .tab-background {
+  /* border-block: 2px solid var(--identity-icon-color,transparent) !important; */
+  border-radius: 0px !important;
+  max-height: 30px !important;
+}
+
+/* Disable tab dragging and use it for window movement */
+#TabsToolbar {
+  -moz-window-dragging: drag !important;
+}
+
+.tabbrowser-tab {
+  -moz-window-dragging: inherit !important;
+}
+
+.tab-content {
+  pointer-events: none !important;
+}
+
+/* Tab and url height */
+
+:root {
+  --tab-min-height: 25px !important;
+  --tab-max-height: 25px !important;
+  --toolbar-field-focus-border-color: transparent !important;
+}
+
+#navigator-toolbox :-moz-any(#nav-bar) {
+  min-height: 30px !important;
+  max-height: 30px !important;
+  margin-top: 0px !important;
+  z-index: 5 !important;
+}
+
+/* fix urlbar being too high in ff 74 */
+* {
+  --urlbar-toolbar-height: 30px !important;
+}
+
+/* Center tab icons */
+.tab-background {
+  min-height: 0 !important;
+}
+.tabbrowser-tab[fadein] {
+  max-width: 100% !important;
+}
+.tab-text {
+  margin: 0 auto !important;
+}
+
+/* Center tab icon */
+.tab-icon-stack {
+  margin-inline-start: auto;
+}
+.tab-label-container {
+  max-width: min-content;
+  margin-inline-end: auto;
+}
+
+/* Window handles */
+.titlebar-spacer[type="pre-tabs"] {
+  width: 100px !important;
+}
+
+.titlebar-buttonbox-container {
+  width: 100px !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+}
+
+.titlebar-spacer[type="post-tabs"] {
+  width: 0px !important;
+}
+
+/* Keeps the .titlebar-spacer[type="pre-tabs"] and [type="post-tabs"] consistent in all window sizes */
+:root:not([sizemode="normal"]) .titlebar-spacer[type="pre-tabs"] {
+  display: block !important;
+}
+@media (max-width: 500px) {
+  .titlebar-spacer[type="post-tabs"] {
+    display: block !important;
+  }
+}
+
+/* Deactivating close, minimize and maximize buttons */
+.tab-close-button,
+#TabsToolbar .toolbarbutton-1 {
+  display: none !important;
+}
+
+/* Custom font */
+* {
+  font-family: monospace !important;
+}
+
+/* Context menu */
+menupopup,
+panel {
+  --panel-background: black !important;
+  --panel-border-radius: 0px !important;
+}
+
+/*
+    * Items inside menu
+    * menu, menuitem:where([_moz-menuactive]:not([disabled="true"])){
+    *	background-color: #242429 !important;
+    * }
+    */
+
+#nav-bar toolbarspring {
+  min-width: 0px !important;
+  max-width: 0px !important;
+}
+
+/* Make URL bar black when not focused */
+#urlbar-container {
+  --urlbar-container-height: 30px !important;
+}
+
+#urlbar {
+  --urlbar-height: 30px !important;
+  --urlbar-toolbar-height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+}
+
+#urlbar:not(:focus-within):not([open]) > #urlbar-background {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+#urlbar:not(:focus-within):not([open]) .urlbar-icon:not([open]) {
+  fill: white !important;
+  fill-opacity: 0.6 !important;
+}
+
+/* Make tab background transparent when focused */
+.tabbrowser-tab[selected="true"] .tab-background {
+  background-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Cleanup menu bar */
+#tracking-protection-icon-container,
+#identity-box,
+#star-button-box,
+#urlbar-go-button,
+#unified-extensions-button,
+#PersonalToolbar,
+#appMenu-library-remotetabs-button {
+  display: none !important;
+}

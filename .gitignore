@@ -1,0 +1,10 @@
+/firefox-*
+/camoufox-*
+/mozilla-unified
+/extra-docs
+/.vscode
+_old/
+dist/
+/bundle/fonts/extra
+launch
+launch.exe

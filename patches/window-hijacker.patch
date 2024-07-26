@@ -1,0 +1,116 @@
+diff --git a/browser/base/content/browser.js b/browser/base/content/browser.js
+index c91a5d4db2..02262d2feb 100644
+--- a/browser/base/content/browser.js
++++ b/browser/base/content/browser.js
+@@ -1568,7 +1568,7 @@ var gBrowserInit = {
+     updateBookmarkToolbarVisibility();
+ 
+     // Set a sane starting width/height for all resolutions on new profiles.
+-    if (ChromeUtils.shouldResistFingerprinting("RoundWindowSize", null)) {
++    if (true || ChromeUtils.shouldResistFingerprinting("RoundWindowSize", null)) {
+       // When the fingerprinting resistance is enabled, making sure that we don't
+       // have a maximum window to interfere with generating rounded window dimensions.
+       document.documentElement.setAttribute("sizemode", "normal");
+@@ -1796,6 +1796,44 @@ var gBrowserInit = {
+       )?.removeAttribute("key");
+     }
+ 
++    // Hijack the outer window size
++    let outerWidth, outerHeight;
++    if ((outerWidth = ChromeUtils.camouGetConfig("window.outerWidth"))) {
++      document.documentElement.style.setProperty('width', outerWidth + 'px');
++      browser.style.setProperty('width', outerWidth + 'px');
++      window.resizeTo(outerWidth, window.outerHeight);
++    }
++    if ((outerHeight = ChromeUtils.camouGetConfig("window.outerHeight"))) {
++      document.documentElement.style.setProperty('height', outerHeight + 'px');
++      browser.style.setProperty('height', outerHeight + 'px');
++      window.resizeTo(window.outerWidth, outerHeight);
++    }
++    browser.style.setProperty('box-sizing', 'content-box');
++
++    // Hijack the inner window size
++    let innerWidth = ChromeUtils.camouGetConfig("window.innerWidth") || ChromeUtils.camouGetConfig("document.body.clientWidth");
++    let innerHeight = ChromeUtils.camouGetConfig("window.innerHeight") || ChromeUtils.camouGetConfig("document.body.clientHeight");
++
++    if (innerWidth || innerHeight) {
++      let win_inner_style = document.createElement('style');
++      win_inner_style.innerHTML = `
++        .browserStack {
++          ${innerWidth ? `width: ${innerWidth}px !important;` : ''}
++          ${innerHeight ? `height: ${innerHeight}px !important;` : ''}
++          overflow: auto;
++          contain: size;
++          scrollbar-width: none;
++        }
++      `;
++      document.head.appendChild(win_inner_style);
++    }
++
++    if (innerWidth && innerHeight && !(outerWidth || outerHeight)) {
++      let stackRect = __browserStack.getBoundingClientRect();
++      let toolbarTop = stackRect.y;
++      window.resizeBy(width - innerWidth, height + toolbarTop - innerHeight);
++    }
++
+     this._loadHandled = true;
+   },
+ 
+diff --git a/dom/base/ChromeUtils.cpp b/dom/base/ChromeUtils.cpp
+index 0df1cd3c9b..49844441b0 100644
+--- a/dom/base/ChromeUtils.cpp
++++ b/dom/base/ChromeUtils.cpp
+@@ -5,6 +5,7 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "ChromeUtils.h"
++#include "MaskConfig.hpp"
+ 
+ #include "JSOracleParent.h"
+ #include "js/CallAndConstruct.h"  // JS::Call
+@@ -2082,6 +2083,16 @@ void ChromeUtils::GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
+   }
+ }
+ 
++/* static */
++int32_t ChromeUtils::CamouGetConfig(GlobalObject& aGlobal,
++                                    const nsAString& aVarName) {
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  if (auto value = MaskConfig::GetInt32(utf8VarName.get())) {
++    return value.value();
++  }
++  return 0;
++}
++
+ /* static */
+ bool ChromeUtils::ShouldResistFingerprinting(
+     GlobalObject& aGlobal, JSRFPTarget aTarget,
+diff --git a/dom/base/ChromeUtils.h b/dom/base/ChromeUtils.h
+index 4c2d043ecb..1d717b656e 100644
+--- a/dom/base/ChromeUtils.h
++++ b/dom/base/ChromeUtils.h
+@@ -305,6 +305,8 @@ class ChromeUtils {
+   static void GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
+                                               nsTArray<nsCString>& aNames);
+ 
++  static int32_t CamouGetConfig(GlobalObject& aGlobal, const nsAString& aVarName);
++
+   static bool ShouldResistFingerprinting(
+       GlobalObject& aGlobal, JSRFPTarget aTarget,
+       const Nullable<uint64_t>& aOverriddenFingerprintingSettings);
+diff --git a/dom/chrome-webidl/ChromeUtils.webidl b/dom/chrome-webidl/ChromeUtils.webidl
+index 3ccb125a1e..02b231d1c8 100644
+--- a/dom/chrome-webidl/ChromeUtils.webidl
++++ b/dom/chrome-webidl/ChromeUtils.webidl
+@@ -747,6 +747,11 @@ partial namespace ChromeUtils {
+   [ChromeOnly]
+   readonly attribute unsigned long aliveUtilityProcesses;
+ 
++  /**
++   * Get the value from Camoufox MaskConfig.
++   */
++  long camouGetConfig(DOMString varName);
++
+   /**
+    * Get a list of all possible Utility process Actor Names ; mostly useful to
+    * perform testing and ensure about:processes display is sound and misses no

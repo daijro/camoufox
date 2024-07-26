@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+
+du  | grep -v 'browser/locales/l10n' | grep -v 'js/src/tests' | grep -v './mobile' | grep -v './third_party' | grep -v './testing' | grep -v './js/src/jit-test' | grep -v './devtools/client/debugger/test' | grep -v './dom/canvas/test' | grep -v './browser/components/migration/tests' | grep -v './devtools' | grep -v './layout/reftests' | grep -v './xpcom/tests' | grep -v './gfx/wr/wrench/reftests' | grep -v './netwerk/test' | grep -v './taskcluster' | grep -v './security/nss/doc' | grep -v './security/nss/tests' | grep -v './security/nss/gtests' | grep -v './other-licenses' | grep -v './python/mozperftest/mozperftest' | grep -v './python/mozbuild' | less -S

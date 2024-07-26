@@ -1,0 +1,24 @@
+diff --git a/browser/components/extensions/parent/ext-browser.js b/browser/components/extensions/parent/ext-browser.js
+index e7a516dcd3..afb84679db 100644
+--- a/browser/components/extensions/parent/ext-browser.js
++++ b/browser/components/extensions/parent/ext-browser.js
+@@ -62,6 +62,7 @@ extensions.on("page-shutdown", (type, context) => {
+ /* eslint-enable mozilla/balanced-listeners */
+ 
+ global.openOptionsPage = extension => {
++  if (true) {return Promise.reject({ message: "Rejected by Camoufox." })};
+   let window = windowTracker.topWindow;
+   if (!window) {
+     return Promise.reject({ message: "No browser window available" });
+diff --git a/browser/components/extensions/parent/ext-tabs.js b/browser/components/extensions/parent/ext-tabs.js
+index 4b8d296d67..09342331e2 100644
+--- a/browser/components/extensions/parent/ext-tabs.js
++++ b/browser/components/extensions/parent/ext-tabs.js
+@@ -683,6 +683,7 @@ this.tabs = class extends ExtensionAPIPersistent {
+         }).api(),
+ 
+         create(createProperties) {
++          if (true) {return Promise.reject({ message: "Rejected by Camoufox." })};
+           return new Promise(resolve => {
+             let window =
+               createProperties.windowId !== null

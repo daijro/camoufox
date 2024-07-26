@@ -1,0 +1,61 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+body {
+  color: white;
+}
+
+#label,
+#progress_background,
+#blurb {
+  text-align: center;
+  margin: 20px 30px;
+}
+
+#label {
+  font-size: 40px;
+  margin-top: 100px;
+  margin-bottom: 20px;
+}
+
+#progress_background {
+  margin: 0 auto;
+  width: 60%;
+  height: 24px;
+  background-color: white;
+}
+
+body.high-contrast #progress_background {
+  outline: solid;
+}
+
+#progress_bar {
+  margin: 0;
+  width: 0%;
+  height: 100%;
+  background-color: #00AAFF;
+}
+
+/* In high contrast mode, fill the entire progress bar with its border. */
+body.high-contrast #progress_bar {
+  /* This border should be the height of progress_background. */
+  border-top: 24px solid;
+  box-sizing: border-box;
+}
+
+/* This layout doesn't want the header or content text. */
+#header, #content {
+  display: none;
+}
+
+#blurb {
+  font-size: 20px;
+}
+
+/* The footer goes in the bottom right corner. */
+#footer {
+  position: fixed;
+  right: 50px;
+  bottom: 59px;
+}

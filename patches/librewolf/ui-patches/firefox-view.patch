@@ -1,0 +1,74 @@
+# LibreWolf firefox-view.patch
+#
+# Author:        Malte Jürgens <maltejur@dismail.de>
+# Description:   Hide "Firefox View" by default
+# Last Updated:  2024-02-23
+# License:       MPL 2.0
+#
+# This patch removes the Firefox View from the toolbar by default. Users can
+# enable it again by using the "Customize Toolbar" mode and dragging it back to
+# the titlebar.
+--- a/browser/base/content/navigator-toolbox.inc.xhtml
++++ b/browser/base/content/navigator-toolbox.inc.xhtml
+@@ -35,16 +35,6 @@
+       <hbox flex="1" align="end" class="toolbar-items">
+         <toolbartabstop/>
+         <hbox id="TabsToolbar-customization-target" flex="1">
+-          <toolbarbutton id="firefox-view-button"
+-                         class="toolbarbutton-1 chromeclass-toolbar-additional"
+-                         data-l10n-id="toolbar-button-firefox-view-2"
+-                         role="button"
+-                         aria-pressed="false"
+-                         oncommand="FirefoxViewHandler.openTab();"
+-                         onmousedown="FirefoxViewHandler.openToolbarMouseEvent(event);"
+-                         cui-areatype="toolbar"
+-                         removable="true"/>
+-
+           <tabs id="tabbrowser-tabs"
+                 is="tabbrowser-tabs"
+                 aria-multiselectable="true"
+@@ -718,5 +708,15 @@
+                    closemenu="none"
+                    cui-areatype="toolbar"
+                    data-l10n-id="navbar-library"/>
++
++    <toolbarbutton id="firefox-view-button"
++                   class="toolbarbutton-1 chromeclass-toolbar-additional"
++                   data-l10n-id="toolbar-button-firefox-view-2"
++                   role="button"
++                   aria-pressed="false"
++                   oncommand="FirefoxViewHandler.openTab();"
++                   onmousedown="FirefoxViewHandler.openToolbarMouseEvent(event);"
++                   cui-areatype="toolbar"
++                   removable="true"/>
+   </html:template>
+ </toolbox>
+--- a/browser/components/customizableui/CustomizableUI.sys.mjs
++++ b/browser/components/customizableui/CustomizableUI.sys.mjs
+@@ -287,7 +287,6 @@ var CustomizableUIInternal = {
+       {
+         type: CustomizableUI.TYPE_TOOLBAR,
+         defaultPlacements: [
+-          "firefox-view-button",
+           "tabbrowser-tabs",
+           "new-tab-button",
+           "alltabs-button",
+@@ -616,18 +615,6 @@ var CustomizableUIInternal = {
+       }
+     }
+ 
+-    // Add firefox-view if not present
+-    if (currentVersion < 18) {
+-      let tabstripPlacements =
+-        gSavedState.placements[CustomizableUI.AREA_TABSTRIP];
+-      if (
+-        tabstripPlacements &&
+-        !tabstripPlacements.includes("firefox-view-button")
+-      ) {
+-        tabstripPlacements.unshift("firefox-view-button");
+-      }
+-    }
+-
+     // Unified Extensions addon button migration, which puts any browser action
+     // buttons in the overflow menu into the addons panel instead.
+     if (currentVersion < 19) {

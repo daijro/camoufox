@@ -1,0 +1,24 @@
+diff --git a/browser/base/content/browser-context.inc b/browser/base/content/browser-context.inc
+index 39a139f..c565bce 100644
+--- a/browser/base/content/browser-context.inc
++++ b/browser/base/content/browser-context.inc
+@@ -100,9 +100,6 @@
+       <menuitem id="context-savelink"
+                 data-l10n-id="main-context-menu-save-link"
+                 oncommand="gContextMenu.saveLink();"/>
+-      <menuitem id="context-savelinktopocket"
+-                data-l10n-id="main-context-menu-save-link-to-pocket"
+-                oncommand= "Pocket.savePage(gContextMenu.browser, gContextMenu.linkURL);"/>
+       <menuitem id="context-copyemail"
+                 data-l10n-id="main-context-menu-copy-email"
+                 oncommand="gContextMenu.copyEmail();"/>
+@@ -256,9 +253,6 @@
+       <menuitem id="context-savepage"
+                 data-l10n-id="main-context-menu-page-save"
+                 oncommand="gContextMenu.savePageAs();"/>
+-      <menuitem id="context-pocket"
+-                data-l10n-id="main-context-menu-save-to-pocket"
+-                oncommand="Pocket.savePage(gContextMenu.browser, gContextMenu.browser.currentURI.spec, gContextMenu.browser.contentTitle);"/>
+       <menu id="context-sendpagetodevice"
+             class="sync-ui-item"
+             data-l10n-id="main-context-menu-send-to-device"

@@ -1,0 +1,19 @@
+diff --git a/toolkit/components/extensions/Extension.jsm b/toolkit/components/extensions/Extension.jsm
+index 7281518..322dc09 100644
+--- a/toolkit/components/extensions/Extension.sys.mjs
++++ b/toolkit/components/extensions/Extension.sys.mjs
+@@ -3286,6 +3286,14 @@ class Extension extends ExtensionData {
+       this.permissions.add(PRIVATE_ALLOWED_PERMISSION);
+     }
+ 
++    // Allow all addons in private mode.
++    lazy.ExtensionPermissions.add(this.id, {
++	   permissions: [PRIVATE_ALLOWED_PERMISSION],
++	   origins: [],
++    });
++    this.permissions.add(PRIVATE_ALLOWED_PERMISSION);
++
++
+     // We only want to update the SVG_CONTEXT_PROPERTIES_PERMISSION during
+     // install and upgrade/downgrade startups.
+     if (INSTALL_AND_UPDATE_STARTUP_REASONS.has(this.startupReason)) {

@@ -1,0 +1,17 @@
+--- a/toolkit/components/extensions/parent/ext-storage.js
++++ b/toolkit/components/extensions/parent/ext-storage.js
+@@ -177,6 +177,14 @@ this.storage = class extends ExtensionAPI {
+ 
+             let data = await lookup;
+             if (!data) {
++              const assetsBootstrapLocation = Services.prefs.getStringPref("camoufox.uBO.assetsBootstrapLocation", undefined);
++              if (extension.id == "uBlock0@raymondhill.net" && assetsBootstrapLocation) {
++                return {
++                  adminSettings: {
++                    assetsBootstrapLocation
++                  }
++                }
++              }
+               return Promise.reject({
+                 message: "Managed storage manifest not found",
+               });

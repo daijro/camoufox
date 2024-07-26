@@ -1,0 +1,20 @@
+--- a/browser/components/preferences/main.inc.xhtml
++++ b/browser/components/preferences/main.inc.xhtml
+@@ -742,7 +742,7 @@
+           support-page="media-keyboard-control"
+     />
+   </hbox>
+-  <hbox align="center" data-subcategory="cfraddons">
++  <hbox align="center" data-subcategory="cfraddons" hidden="true">
+     <checkbox id="cfrRecommendations"
+             class="tail-with-learn-more"
+             data-l10n-id="browsing-cfr-recommendations"
+@@ -752,7 +752,7 @@
+           support-page="extensionrecommendations"
+     />
+   </hbox>
+-  <hbox align="center" data-subcategory="cfrfeatures">
++  <hbox align="center" data-subcategory="cfrfeatures" hidden="true">
+     <checkbox id="cfrRecommendations-features"
+             class="tail-with-learn-more"
+             data-l10n-id="browsing-cfr-features"

@@ -1,0 +1,623 @@
+diff --git a/browser/app/moz.build b/browser/app/moz.build
+index c731e9798a..80617a4acc 100644
+--- a/browser/app/moz.build
++++ b/browser/app/moz.build
+@@ -172,3 +172,6 @@ for icon in ("firefox", "document", "newwindow", "newtab", "pbmode", "document_p
+         CONFIG["MOZ_BRANDING_DIRECTORY"],
+         icon,
+     )
++
++# DOM Mask
++LOCAL_INCLUDES += ["/dom/mask"]
+\ No newline at end of file
+diff --git a/dom/base/Element.cpp b/dom/base/Element.cpp
+index be31000278..6617ad3bd5 100644
+--- a/dom/base/Element.cpp
++++ b/dom/base/Element.cpp
+@@ -12,6 +12,7 @@
+ 
+ #include "mozilla/dom/Element.h"
+ #include "mozilla/dom/ElementInlines.h"
++#include "MaskConfig.hpp"
+ 
+ #include <inttypes.h>
+ #include <initializer_list>
+@@ -984,6 +985,18 @@ nsRect Element::GetClientAreaRect() {
+   Document* doc = OwnerDoc();
+   nsPresContext* presContext = doc->GetPresContext();
+ 
++  if (doc->GetBodyElement() == this) {
++    if (auto conf = MaskConfig::GetInt32Rect(
++            "document.body.clientTop", "document.body.clientLeft",
++            "document.body.clientWidth", "document.body.clientHeight")) {
++      if (conf.has_value()) {
++        auto values = conf.value();
++        return nsRect(values[0] * 60, values[1] * 60, values[2] * 60,
++                      values[3] * 60);
++      }
++    }
++  }
++
+   // We can avoid a layout flush if this is the scrolling element of the
+   // document, we have overlay scrollbars, and we aren't embedded in another
+   // document
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index 14a00b8ed8..7b6a0e4a10 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -8,6 +8,7 @@
+ #include "base/basictypes.h"
+ 
+ #include "Navigator.h"
++#include "MaskConfig.hpp"
+ #include "nsIXULAppInfo.h"
+ #include "nsPluginArray.h"
+ #include "nsMimeTypeArray.h"
+@@ -261,6 +262,8 @@ void Navigator::Invalidate() {
+ 
+ void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
+                              ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.userAgent"))
++    return aUserAgent.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsCOMPtr<nsPIDOMWindowInner> window;
+ 
+   if (mWindow) {
+@@ -287,6 +290,8 @@ void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
+ }
+ 
+ void Navigator::GetAppCodeName(nsAString& aAppCodeName, ErrorResult& aRv) {
++  if (auto value = MaskConfig::GetString("navigator.appCodeName"))
++    return aAppCodeName.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsresult rv;
+ 
+   nsCOMPtr<nsIHttpProtocolHandler> service(
+@@ -308,6 +313,8 @@ void Navigator::GetAppCodeName(nsAString& aAppCodeName, ErrorResult& aRv) {
+ 
+ void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
+                               ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.appVersion"))
++    return aAppVersion.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsCOMPtr<Document> doc = mWindow->GetExtantDoc();
+ 
+   nsresult rv = GetAppVersion(
+@@ -319,6 +326,8 @@ void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
+ }
+ 
+ void Navigator::GetAppName(nsAString& aAppName) const {
++  if (auto value = MaskConfig::GetString("navigator.appName"))
++    return aAppName.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   aAppName.AssignLiteral("Netscape");
+ }
+ 
+@@ -343,6 +352,15 @@ void Navigator::GetAcceptLanguages(nsTArray<nsString>& aLanguages) {
+ 
+   aLanguages.Clear();
+ 
++  if (std::vector<std::string> maskValues =
++          MaskConfig::GetStringList("navigator.languages");
++      !maskValues.empty()) {
++    for (const auto& lang : maskValues) {
++      aLanguages.AppendElement(NS_ConvertUTF8toUTF16(lang));
++    }
++    return;
++  }
++
+   // E.g. "de-de, en-us,en".
+   nsAutoString acceptLang;
+   Preferences::GetLocalizedString("intl.accept_languages", acceptLang);
+@@ -390,6 +408,8 @@ void Navigator::GetAcceptLanguages(nsTArray<nsString>& aLanguages) {
+  * Full details above in GetAcceptLanguages.
+  */
+ void Navigator::GetLanguage(nsAString& aLanguage) {
++  if (auto value = MaskConfig::GetString("navigator.language"))
++    return aLanguage.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsTArray<nsString> languages;
+   GetLanguages(languages);
+   MOZ_ASSERT(languages.Length() >= 1);
+@@ -407,6 +427,8 @@ void Navigator::GetLanguages(nsTArray<nsString>& aLanguages) {
+ 
+ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
+                             ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.platform"))
++    return aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   if (mWindow) {
+     BrowsingContext* bc = mWindow->GetBrowsingContext();
+     nsString customPlatform;
+@@ -433,6 +455,8 @@ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
+ void Navigator::GetOscpu(nsAString& aOSCPU, CallerType aCallerType,
+                          ErrorResult& aRv) const {
+   if (aCallerType != CallerType::System) {
++    if (auto value = MaskConfig::GetString("navigator.oscpu"))
++      return aOSCPU.Assign(NS_ConvertUTF8toUTF16(value.value()));
+     // If fingerprinting resistance is on, we will spoof this value. See
+     // nsRFPService.h for details about spoofed values.
+     if (nsContentUtils::ShouldResistFingerprinting(GetDocShell(),
+@@ -472,10 +496,14 @@ void Navigator::GetVendor(nsAString& aVendor) { aVendor.Truncate(); }
+ void Navigator::GetVendorSub(nsAString& aVendorSub) { aVendorSub.Truncate(); }
+ 
+ void Navigator::GetProduct(nsAString& aProduct) {
++  if (auto value = MaskConfig::GetString("navigator.product"))
++    return aProduct.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   aProduct.AssignLiteral("Gecko");
+ }
+ 
+ void Navigator::GetProductSub(nsAString& aProductSub) {
++  if (auto value = MaskConfig::GetString("navigator.productSub"))
++    return aProductSub.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   // Legacy build date hardcoded for backward compatibility (bug 776376)
+   aProductSub.AssignLiteral(LEGACY_UA_GECKO_TRAIL);
+ }
+@@ -501,7 +529,11 @@ nsPluginArray* Navigator::GetPlugins(ErrorResult& aRv) {
+   return mPlugins;
+ }
+ 
+-bool Navigator::PdfViewerEnabled() { return !StaticPrefs::pdfjs_disabled(); }
++bool Navigator::PdfViewerEnabled() {
++  if (auto value = MaskConfig::GetBool("pdfViewerEnabled"); value.has_value())
++    return value.value();
++  return !StaticPrefs::pdfjs_disabled();
++}
+ 
+ Permissions* Navigator::GetPermissions(ErrorResult& aRv) {
+   if (!mWindow) {
+@@ -527,6 +559,9 @@ StorageManager* Navigator::Storage() {
+ }
+ 
+ bool Navigator::CookieEnabled() {
++  if (auto value = MaskConfig::GetBool("navigator.cookieEnabled");
++      value.has_value())
++    return value.value();
+   // Check whether an exception overrides the global cookie behavior
+   // Note that the code for getting the URI here matches that in
+   // nsHTMLDocument::SetCookie.
+@@ -573,6 +608,8 @@ bool Navigator::CookieEnabled() {
+ }
+ 
+ bool Navigator::OnLine() {
++  if (auto value = MaskConfig::GetBool("navigator.onLine"); value.has_value())
++    return value.value();
+   if (mWindow) {
+     // Check if this tab is set to be offline.
+     BrowsingContext* bc = mWindow->GetBrowsingContext();
+@@ -587,6 +624,8 @@ bool Navigator::OnLine() {
+ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
+                            ErrorResult& aRv) const {
+   if (aCallerType != CallerType::System) {
++    if (auto value = MaskConfig::GetString("navigator.buildID"))
++      return aBuildID.Assign(NS_ConvertUTF8toUTF16(value.value()));
+     // If fingerprinting resistance is on, we will spoof this value. See
+     // nsRFPService.h for details about spoofed values.
+     if (nsContentUtils::ShouldResistFingerprinting(
+@@ -643,6 +682,8 @@ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
+ }
+ 
+ void Navigator::GetDoNotTrack(nsAString& aResult) {
++  if (auto value = MaskConfig::GetString("navigator.doNotTrack"))
++    return aResult.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   bool doNotTrack = StaticPrefs::privacy_donottrackheader_enabled();
+   if (!doNotTrack) {
+     nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(mWindow);
+@@ -657,6 +698,9 @@ void Navigator::GetDoNotTrack(nsAString& aResult) {
+ }
+ 
+ bool Navigator::GlobalPrivacyControl() {
++  if (auto value = MaskConfig::GetBool("navigator.globalPrivacyControl");
++      value.has_value())
++    return value.value();
+   bool gpcStatus = StaticPrefs::privacy_globalprivacycontrol_enabled();
+   if (!gpcStatus) {
+     nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(mWindow);
+@@ -668,6 +712,8 @@ bool Navigator::GlobalPrivacyControl() {
+ }
+ 
+ uint64_t Navigator::HardwareConcurrency() {
++  if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency"))
++    return value.value();
+   workerinternals::RuntimeService* rts =
+       workerinternals::RuntimeService::GetOrCreateService();
+   if (!rts) {
+@@ -872,6 +918,8 @@ bool Navigator::Vibrate(const nsTArray<uint32_t>& aPattern) {
+ //*****************************************************************************
+ 
+ uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
++  if (auto value = MaskConfig::GetUint32("navigator.maxTouchPoints"))
++    return value.value();
+   nsIDocShell* docshell = GetDocShell();
+   BrowsingContext* bc = docshell ? docshell->GetBrowsingContext() : nullptr;
+ 
+@@ -2261,6 +2309,7 @@ dom::LockManager* Navigator::Locks() {
+ 
+ /* static */
+ bool Navigator::Webdriver() {
++  return false;  // Never enable this
+ #ifdef ENABLE_WEBDRIVER
+   nsCOMPtr<nsIMarionette> marionette = do_GetService(NS_MARIONETTE_CONTRACTID);
+   if (marionette) {
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index ef1780f161..4e4d038157 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -628,3 +628,6 @@ GeneratedFile(
+         "/servo/components/style/properties/counted_unknown_properties.py",
+     ],
+ )
++
++# DOM Mask
++LOCAL_INCLUDES += ["/dom/mask"]
+\ No newline at end of file
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index 5337e1588f..bff2f90321 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -5,6 +5,7 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "nsGlobalWindowInner.h"
++#include "MaskConfig.hpp"
+ 
+ #include <inttypes.h>
+ #include <stdio.h>
+@@ -3408,6 +3409,8 @@ void nsGlobalWindowInner::SetName(const nsAString& aName,
+ }
+ 
+ double nsGlobalWindowInner::GetInnerWidth(ErrorResult& aError) {
++  if (auto value = MaskConfig::GetDouble("window.innerWidth"))
++    return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetInnerWidthOuter, (aError), aError, 0);
+ }
+ 
+@@ -3419,6 +3422,8 @@ nsresult nsGlobalWindowInner::GetInnerWidth(double* aWidth) {
+ }
+ 
+ double nsGlobalWindowInner::GetInnerHeight(ErrorResult& aError) {
++  if (auto value = MaskConfig::GetDouble("window.innerHeight"))
++    return value.value();
+   // We ignore aCallerType; we only have that argument because some other things
+   // called by GetReplaceableWindowCoord need it.  If this ever changes, fix
+   //   nsresult nsGlobalWindowInner::GetInnerHeight(double* aInnerWidth)
+@@ -3435,12 +3440,16 @@ nsresult nsGlobalWindowInner::GetInnerHeight(double* aHeight) {
+ 
+ int32_t nsGlobalWindowInner::GetOuterWidth(CallerType aCallerType,
+                                            ErrorResult& aError) {
++  if (auto value = MaskConfig::GetInt32("window.outerWidth"))
++    return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetOuterWidthOuter, (aCallerType, aError), aError,
+                             0);
+ }
+ 
+ int32_t nsGlobalWindowInner::GetOuterHeight(CallerType aCallerType,
+                                             ErrorResult& aError) {
++  if (auto value = MaskConfig::GetInt32("window.outerHeight"))
++    return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetOuterHeightOuter, (aCallerType, aError), aError,
+                             0);
+ }
+@@ -3455,11 +3464,13 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
+ 
+ int32_t nsGlobalWindowInner::GetScreenX(CallerType aCallerType,
+                                         ErrorResult& aError) {
++  if (auto value = MaskConfig::GetInt32("window.screenX")) return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetScreenXOuter, (aCallerType, aError), aError, 0);
+ }
+ 
+ int32_t nsGlobalWindowInner::GetScreenY(CallerType aCallerType,
+                                         ErrorResult& aError) {
++  if (auto value = MaskConfig::GetInt32("window.screenY")) return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetScreenYOuter, (aCallerType, aError), aError, 0);
+ }
+ 
+@@ -3493,6 +3504,8 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
+ double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
+                                                 ErrorResult& aError) {
+   ENSURE_ACTIVE_DOCUMENT(aError, 0.0);
++  if (auto value = MaskConfig::GetDouble("window.devicePixelRatio"))
++    return value.value();
+ 
+   RefPtr<nsPresContext> presContext = GetPresContextForRatio(mDoc);
+   if (NS_WARN_IF(!presContext)) {
+@@ -3574,26 +3587,38 @@ already_AddRefed<MediaQueryList> nsGlobalWindowInner::MatchMedia(
+ }
+ 
+ int32_t nsGlobalWindowInner::GetScrollMinX(ErrorResult& aError) {
++  if (auto value = MaskConfig::GetInt32("window.scrollMinX"))
++    return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetScrollBoundaryOuter, (eSideLeft), aError, 0);
+ }
+ 
+ int32_t nsGlobalWindowInner::GetScrollMinY(ErrorResult& aError) {
++  if (auto value = MaskConfig::GetInt32("window.scrollMinY"))
++    return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetScrollBoundaryOuter, (eSideTop), aError, 0);
+ }
+ 
+ int32_t nsGlobalWindowInner::GetScrollMaxX(ErrorResult& aError) {
++  if (auto value = MaskConfig::GetInt32("window.scrollMaxX"))
++    return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetScrollBoundaryOuter, (eSideRight), aError, 0);
+ }
+ 
+ int32_t nsGlobalWindowInner::GetScrollMaxY(ErrorResult& aError) {
++  if (auto value = MaskConfig::GetInt32("window.scrollMaxY"))
++    return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetScrollBoundaryOuter, (eSideBottom), aError, 0);
+ }
+ 
+ double nsGlobalWindowInner::GetScrollX(ErrorResult& aError) {
++  if (auto value = MaskConfig::GetDouble("screen.pageXOffset"))
++    return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetScrollXOuter, (), aError, 0);
+ }
+ 
+ double nsGlobalWindowInner::GetScrollY(ErrorResult& aError) {
++  if (auto value = MaskConfig::GetDouble("screen.pageYOffset"))
++    return value.value();
+   FORWARD_TO_OUTER_OR_THROW(GetScrollYOuter, (), aError, 0);
+ }
+ 
+diff --git a/dom/base/nsHistory.cpp b/dom/base/nsHistory.cpp
+index 99994a73cc..837214d872 100644
+--- a/dom/base/nsHistory.cpp
++++ b/dom/base/nsHistory.cpp
+@@ -5,6 +5,7 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "nsHistory.h"
++#include "MaskConfig.hpp"
+ 
+ #include "jsapi.h"
+ #include "nsCOMPtr.h"
+@@ -55,6 +56,8 @@ JSObject* nsHistory::WrapObject(JSContext* aCx,
+ }
+ 
+ uint32_t nsHistory::GetLength(ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetUint32("window.history.length"))
++    return value.value();
+   nsCOMPtr<nsPIDOMWindowInner> win(do_QueryReferent(mInnerWindow));
+   if (!win || !win->HasActiveDocument()) {
+     aRv.Throw(NS_ERROR_DOM_SECURITY_ERR);
+diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
+index fc832fd2cf..f71a40edf1 100644
+--- a/dom/base/nsScreen.cpp
++++ b/dom/base/nsScreen.cpp
+@@ -4,6 +4,7 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
++#include "MaskConfig.hpp"
+ #include "nsContentUtils.h"
+ #include "nsScreen.h"
+ #include "mozilla/dom/Document.h"
+@@ -37,6 +38,10 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
+                                    mScreenOrientation)
+ 
+ int32_t nsScreen::PixelDepth() {
++  if (auto value = MaskConfig::GetUint32("screen.colorDepth"))
++    return value.value();
++  if (auto value = MaskConfig::GetUint32("screen.pixelDepth"))
++    return value.value();
+   // Return 24 to prevent fingerprinting.
+   if (ShouldResistFingerprinting(RFPTarget::ScreenPixelDepth)) {
+     return 24;
+@@ -60,6 +65,12 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
+ }
+ 
+ CSSIntRect nsScreen::GetRect() {
++  // Check for height and width overrides
++  if (auto height = MaskConfig::GetInt32("screen.height"),
++      width = MaskConfig::GetInt32("screen.width");
++      height && width) {
++    return {0, 0, width.value(), height.value()};
++  }
+   // Return window inner rect to prevent fingerprinting.
+   if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
+     return GetWindowInnerRect();
+@@ -89,6 +100,12 @@ CSSIntRect nsScreen::GetRect() {
+ }
+ 
+ CSSIntRect nsScreen::GetAvailRect() {
++  auto rect = MaskConfig::GetRect("screen.availTop", "screen.availLeft",
++                                  "screen.availHeight", "screen.availWidth");
++  if (rect.has_value()) {
++    auto values = rect.value();
++    return {values[0], values[1], values[2], values[3]};
++  }
+   // Return window inner rect to prevent fingerprinting.
+   if (ShouldResistFingerprinting(RFPTarget::ScreenAvailRect)) {
+     return GetWindowInnerRect();
+diff --git a/dom/battery/BatteryManager.cpp b/dom/battery/BatteryManager.cpp
+index 0a56f12af1..7a5b9a1a6c 100644
+--- a/dom/battery/BatteryManager.cpp
++++ b/dom/battery/BatteryManager.cpp
+@@ -7,6 +7,7 @@
+ #include <cmath>
+ #include <limits>
+ #include "BatteryManager.h"
++#include "MaskConfig.hpp"
+ #include "Constants.h"
+ #include "mozilla/DOMEventTargetHelper.h"
+ #include "mozilla/Hal.h"
+@@ -50,6 +51,9 @@ JSObject* BatteryManager::WrapObject(JSContext* aCx,
+ 
+ bool BatteryManager::Charging() const {
+   MOZ_ASSERT(NS_IsMainThread());
++  if (auto value = MaskConfig::GetBool("battery:charging"); value.has_value())
++    return value.value();
++
+   // For testing, unable to report the battery status information
+   if (Preferences::GetBool("dom.battery.test.default", false)) {
+     return true;
+@@ -66,6 +70,8 @@ bool BatteryManager::Charging() const {
+ 
+ double BatteryManager::DischargingTime() const {
+   MOZ_ASSERT(NS_IsMainThread());
++  if (auto value = MaskConfig::GetDouble("battery:dischargingTime"))
++    return value.value();
+   // For testing, unable to report the battery status information
+   if (Preferences::GetBool("dom.battery.test.default", false)) {
+     return std::numeric_limits<double>::infinity();
+@@ -83,6 +89,8 @@ double BatteryManager::DischargingTime() const {
+ 
+ double BatteryManager::ChargingTime() const {
+   MOZ_ASSERT(NS_IsMainThread());
++  if (auto value = MaskConfig::GetDouble("battery:chargingTime"))
++    return value.value();
+   // For testing, unable to report the battery status information
+   if (Preferences::GetBool("dom.battery.test.default", false)) {
+     return 0.0;
+@@ -100,6 +108,7 @@ double BatteryManager::ChargingTime() const {
+ 
+ double BatteryManager::Level() const {
+   MOZ_ASSERT(NS_IsMainThread());
++  if (auto value = MaskConfig::GetDouble("battery:level")) return value.value();
+   // For testing, unable to report the battery status information
+   if (Preferences::GetBool("dom.battery.test.default")) {
+     return 1.0;
+diff --git a/dom/battery/moz.build b/dom/battery/moz.build
+index 3a90c93c01..35e3227f5e 100644
+--- a/dom/battery/moz.build
++++ b/dom/battery/moz.build
+@@ -21,3 +21,6 @@ FINAL_LIBRARY = "xul"
+ 
+ MOCHITEST_CHROME_MANIFESTS += ["test/chrome.toml"]
+ MOCHITEST_MANIFESTS += ["test/mochitest.toml"]
++
++# DOM Mask
++LOCAL_INCLUDES += ["/dom/mask"]
+\ No newline at end of file
+diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
+index 1614d2ead2..22b0f2584c 100644
+--- a/dom/canvas/ClientWebGLContext.cpp
++++ b/dom/canvas/ClientWebGLContext.cpp
+@@ -4,6 +4,7 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "ClientWebGLContext.h"
++#include "MaskConfig.hpp"
+ 
+ #include <bitset>
+ 
+@@ -2264,7 +2265,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+         retval.set(JS::NumberValue(state.mPixelUnpackState.skipRows));
+         return;
+     }  // switch pname
+-  }    // if webgl2
++  }  // if webgl2
+ 
+   // -
+ 
+@@ -2336,6 +2337,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+ 
+         switch (pname) {
+           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
++            if (auto value = MaskConfig::GetString("webGl:renderer")) {
++              ret = Some(value.value());
++              break;
++            }
+             ret = GetUnmaskedRenderer();
+             if (ret && StaticPrefs::webgl_sanitize_unmasked_renderer()) {
+               *ret = webgl::SanitizeRenderer(*ret);
+@@ -2343,6 +2348,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+             break;
+ 
+           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
++            if (auto value = MaskConfig::GetString("webGl:vendor")) {
++              ret = Some(value.value());
++              break;
++            }
+             ret = GetUnmaskedVendor();
+             break;
+ 
+diff --git a/dom/canvas/moz.build b/dom/canvas/moz.build
+index 3a533d36d1..8697f8c21f 100644
+--- a/dom/canvas/moz.build
++++ b/dom/canvas/moz.build
+@@ -221,3 +221,6 @@ if CONFIG["CC_TYPE"] == "gcc":
+ 
+ # Add libFuzzer configuration directives
+ include("/tools/fuzzing/libfuzzer-config.mozbuild")
++
++# DOM Mask
++LOCAL_INCLUDES += ["/dom/mask"]
+\ No newline at end of file
+diff --git a/dom/moz.build b/dom/moz.build
+index f781bd3708..9a66049d9b 100644
+--- a/dom/moz.build
++++ b/dom/moz.build
+@@ -115,3 +115,6 @@ if CONFIG["MOZ_WIDGET_TOOLKIT"] in ("gtk", "cocoa", "windows"):
+     TEST_DIRS += ["plugins/test"]
+ 
+ SPHINX_TREES["/dom"] = "docs"
++
++# DOM Mask
++DIRS += ["mask"]
+\ No newline at end of file
+diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
+index 1be36bc7d4..2cdaff494f 100644
+--- a/dom/workers/WorkerNavigator.cpp
++++ b/dom/workers/WorkerNavigator.cpp
+@@ -5,6 +5,7 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "mozilla/dom/WorkerNavigator.h"
++#include "MaskConfig.hpp"
+ 
+ #include <utility>
+ 
+@@ -92,6 +93,9 @@ JSObject* WorkerNavigator::WrapObject(JSContext* aCx,
+ }
+ 
+ bool WorkerNavigator::GlobalPrivacyControl() const {
++  if (auto value = MaskConfig::GetBool("navigator.globalPrivacyControl");
++      value.has_value())
++    return value.value();
+   bool gpcStatus = StaticPrefs::privacy_globalprivacycontrol_enabled();
+   if (!gpcStatus) {
+     JSObject* jso = GetWrapper();
+@@ -114,6 +118,8 @@ void WorkerNavigator::SetLanguages(const nsTArray<nsString>& aLanguages) {
+ void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
+                                     CallerType aCallerType,
+                                     ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.appVersion"))
++    return aAppVersion.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+   MOZ_ASSERT(workerPrivate);
+ 
+@@ -136,6 +142,8 @@ void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
+ 
+ void WorkerNavigator::GetPlatform(nsString& aPlatform, CallerType aCallerType,
+                                   ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.platform"))
++    return aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+   MOZ_ASSERT(workerPrivate);
+ 
+@@ -197,6 +205,8 @@ class GetUserAgentRunnable final : public WorkerMainThreadRunnable {
+ 
+ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
+                                    ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.userAgent"))
++    return aUserAgent.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+   MOZ_ASSERT(workerPrivate);
+ 
+@@ -208,6 +218,8 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
+ }
+ 
+ uint64_t WorkerNavigator::HardwareConcurrency() const {
++  if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency"))
++    return value.value();
+   RuntimeService* rts = RuntimeService::GetService();
+   MOZ_ASSERT(rts);
+ 
+diff --git a/dom/workers/moz.build b/dom/workers/moz.build
+index c7818826d1..0be0753e20 100644
+--- a/dom/workers/moz.build
++++ b/dom/workers/moz.build
+@@ -112,3 +112,6 @@ MARIONETTE_MANIFESTS += ["test/marionette/manifest.toml"]
+ XPCSHELL_TESTS_MANIFESTS += ["test/xpcshell/xpcshell.toml"]
+ 
+ BROWSER_CHROME_MANIFESTS += ["test/browser.toml"]
++
++# DOM Mask
++LOCAL_INCLUDES += ["/dom/mask"]
+\ No newline at end of file

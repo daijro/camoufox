@@ -1,0 +1,92 @@
+{
+  "manifest_version": 2,
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "firefox-compact-dark@mozilla.org"
+    }
+  },
+
+  "name": "Dark",
+  "description": "A theme with a dark color scheme.",
+  "author": "Mozilla",
+  "version": "1.2",
+
+  "icons": { "32": "icon.svg" },
+
+  "theme": {
+    "colors": {
+      "button_background_active": "#333333",
+      "button_background_hover": "#282828",
+      "bookmark_text": "rgba(255, 255, 255, 0.8)",
+      "frame": "#000000",
+      "frame_inactive": "#000000",
+      "icons": "rgba(255, 255, 255, 0.8)",
+      "icons_attention": "#9400ff",
+      "ntp_background": "#000000",
+      "ntp_text": "rgba(255, 255, 255, 0.8)",
+      "popup": "#101010",
+      "popup_border": "#303030",
+      "popup_highlight": "#303030",
+      "popup_highlight_text": "white",
+      "popup_text": "rgba(255, 255, 255, 0.8)",
+      "sidebar": "#101010",
+      "sidebar_border": "#303030",
+      "sidebar_highlight": "#303030",
+      "sidebar_highlight_text": "white",
+      "sidebar_text": "rgba(255, 255, 255, 0.8)",
+      "tab_background_separator": "transparent",
+      "tab_background_text": "#aaaaaa",
+      "tab_loading": "white",
+      "tab_selected": "rgba(200, 200, 200, 0.1)",
+      "tab_text": "#ffffff",
+      "tab_line": "rgba(255, 255, 255, 0.05)",
+      "toolbar": "rgba(18, 18, 18, 0.8)",
+      "toolbar_bottom_separator": "#101010",
+      "toolbar_field": "#000000",
+      "toolbar_field_border": "transparent",
+      "toolbar_field_border_focus": "#303030",
+      "toolbar_field_focus": "#111111",
+      "toolbar_field_highlight": "#333333",
+      "toolbar_field_highlight_text": "white",
+      "toolbar_field_separator": "#101010",
+      "toolbar_field_text": "rgba(255, 255, 255, 0.8)",
+      "toolbar_field_text_focus": "white",
+      "toolbar_top_separator": "rgba(18, 18, 18, 0.0)",
+      "toolbar_vertical_separator": "rgba(255, 255, 255, 0.06)"
+    },
+    "properties": {
+      "color_scheme": "dark",
+      "panel_active": "color-mix(in srgb, currentColor 14%, transparent)",
+      "toolbar_field_icon_opacity": "1",
+      "zap_gradient": "linear-gradient(90deg, #9059FF 0%, #FF4AA2 52.08%, #FFBD4F 100%)"
+    },
+    "images": {
+      "additional_backgrounds": ["background.gif"]
+    }
+  },
+
+  "theme_experiment": {
+    "stylesheet": "experiment.css",
+    "colors": {
+      "button": "--button-bgcolor",
+      "button_hover": "--button-hover-bgcolor",
+      "button_active": "--button-active-bgcolor",
+      "button_primary": "--button-primary-bgcolor",
+      "button_primary_hover": "--button-primary-hover-bgcolor",
+      "button_primary_active": "--button-primary-active-bgcolor",
+      "button_primary_color": "--button-primary-color",
+      "input_background": "--input-bgcolor",
+      "input_color": "--input-color",
+      "urlbar_popup_separator": "--urlbarView-separator-color",
+      "zoom_controls": "--zoom-controls-bgcolor",
+      "tab_icon_overlay_stroke": "--tab-icon-overlay-stroke",
+      "tab_icon_overlay_fill": "--tab-icon-overlay-fill"
+    },
+    "properties": {
+      "panel_active": "--arrowpanel-dimmed-further",
+      "toolbar_field_icon_opacity": "--urlbar-icon-fill-opacity",
+      "zap_gradient": "--panel-separator-zap-gradient"
+    }
+  }
+}

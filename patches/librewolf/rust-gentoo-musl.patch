@@ -1,0 +1,27 @@
+diff --git a/build/moz.configure/rust.configure b/build/moz.configure/rust.configure
+index 7a2fd1ae70..7abdcaa2c1 100644
+--- a/build/moz.configure/rust.configure
++++ b/build/moz.configure/rust.configure
+@@ -404,11 +404,21 @@ def detect_rustc_target(
+         if len(narrowed) == 1:
+             return narrowed[0].rust_target
+ 
+-        # Finally, see if the vendor can be used to disambiguate.
++        # See if the vendor can be used to disambiguate.
+         narrowed = [c for c in candidates if c.target.vendor == host_or_target.vendor]
+         if len(narrowed) == 1:
+             return narrowed[0].rust_target
+ 
++        # Finally, check for vendor gentoo in the target triple.
++        vendor_aliases = {"unknown": ("gentoo")}
++        narrowed = [
++            c
++            for c in candidates
++            if host_or_target.vendor in vendor_aliases.get(c.target.vendor, ())
++        ]
++        if len(narrowed) == 1:
++            return narrowed[0].rust_target
++
+         return None
+ 
+     rustc_target = find_candidate(candidates)

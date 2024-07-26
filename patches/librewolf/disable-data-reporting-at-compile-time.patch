@@ -1,0 +1,32 @@
+diff --git a/browser/moz.configure b/browser/moz.configure
+--- a/browser/moz.configure
++++ b/browser/moz.configure
+@@ -5,11 +5,11 @@
+ # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ 
+ imply_option("MOZ_PLACES", True)
+-imply_option("MOZ_SERVICES_HEALTHREPORT", True)
++imply_option("MOZ_SERVICES_HEALTHREPORT", False)
+ imply_option("MOZ_SERVICES_SYNC", True)
+ imply_option("MOZ_DEDICATED_PROFILES", True)
+ imply_option("MOZ_BLOCK_PROFILE_DOWNGRADE", True)
+-imply_option("MOZ_NORMANDY", True)
++imply_option("MOZ_NORMANDY", False)
+ 
+ with only_when(target_has_linux_kernel & compile_environment):
+     option(env="MOZ_NO_PIE_COMPAT", help="Enable non-PIE wrapper")
+diff --git a/python/mach/mach/telemetry.py b/python/mach/mach/telemetry.py
+--- a/python/mach/mach/telemetry.py
++++ b/python/mach/mach/telemetry.py
+@@ -98,10 +98,7 @@ def is_applicable_telemetry_environment(
+ 
+ 
+ def is_telemetry_enabled(settings):
+-    if os.environ.get("DISABLE_TELEMETRY") == "1":
+-        return False
+-
+-    return settings.mach_telemetry.is_enabled
++    return False
+ 
+ 
+ def arcrc_path():

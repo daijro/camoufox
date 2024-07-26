@@ -1,0 +1,12 @@
+diff --git a/js/src/wasm/WasmSignalHandlers.cpp b/js/src/wasm/WasmSignalHandlers.cpp
+index f8977a6..34f52fc 100644
+--- a/js/src/wasm/WasmSignalHandlers.cpp
++++ b/js/src/wasm/WasmSignalHandlers.cpp
+@@ -243,7 +243,7 @@ using mozilla::DebugOnly;
+ // If you run into compile problems on a tier-3 platform, you can disable the
+ // emulation here.
+ 
+-#if defined(__linux__) && defined(__arm__)
++#if 0 && defined(__linux__) && defined(__arm__)
+ #  define WASM_EMULATE_ARM_UNALIGNED_FP_ACCESS
+ #endif

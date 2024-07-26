@@ -1,0 +1,179 @@
+# LibreWolf bootstrap-without-vcs.patch
+#
+# Author:        Malte Jürgens <maltejur@dismail.de>
+# Description:   Allow mach bootstrapping without a VCS checkout
+# Last Updated:  2023-03-15
+# License:       MPL 2.0
+#
+# This patch allows you to use `./mach bootstrap` without a VCS checkout.
+# You can use that command to bootstrap a Firefox build environment.
+# This patch works by adding a stub `LocalRepository`, which suprisingly
+# is enough to make the bootstrapping process work. This may break other
+# things in mach, but we don't use those.
+--- a/python/mozboot/mozboot/bootstrap.py
++++ b/python/mozboot/mozboot/bootstrap.py
+@@ -628,10 +628,7 @@ def current_firefox_checkout(env, hg: Optional[Path] = None):
+             break
+         path = path.parent
+ 
+-    raise UserError(
+-        "Could not identify the root directory of your checkout! "
+-        "Are you running `mach bootstrap` in an hg or git clone?"
+-    )
++    return ("local", Path.cwd())
+ 
+ 
+ def update_git_tools(git: Optional[Path], root_state_dir: Path):
+--- a/python/mozversioncontrol/mozversioncontrol/__init__.py
++++ b/python/mozversioncontrol/mozversioncontrol/__init__.py
+@@ -744,7 +744,30 @@ class GitRepository(Repository):
+         self._run("config", name, value)
+ 
+ 
++class LocalRepository(Repository):
++
++    def __init__(self, path):
++        super(LocalRepository, self).__init__(path, tool="true")
++
++    @property
++    def head_ref(self):
++        return ""
++
++    def get_outgoing_files(self):
++        return []
++
++    def get_changed_files(self):
++        return []
++
++    def get_tracked_files_finder(self):
++        files = [os.path.relpath(os.path.join(dp, f), self.path).replace("\\","/") for dp, dn, fn in os.walk(self.path) for f in fn]
++        files.sort()
++        return FileListFinder(files)
++
++
++        
++
+ def get_repository_object(
+     path: Optional[Union[str, Path]], hg="hg", git="git", src="src"
+ ):
+     """Get a repository object for the repository at `path`.
+@@ -757,7 +780,7 @@ def get_repository_object(path: Optional[Union[str, Path]], hg="hg", git="git"):
+     elif (path / ".git").exists():
+         return GitRepository(path, git=git)
+     else:
+-        raise InvalidRepoPath(f"Unknown VCS, or not a source checkout: {path}")
++        return LocalRepository(path)
+ 
+ 
+ def get_repository_from_build_config(config):
+@@ -781,6 +804,8 @@ def get_repository_from_build_config(config):
+         return HgRepository(Path(config.topsrcdir), hg=config.substs["HG"])
+     elif flavor == "git":
+         return GitRepository(Path(config.topsrcdir), git=config.substs["GIT"])
++    elif flavor == "local":
++        return LocalRepository(config.topsrcdir)
+     elif flavor == "src":
+         return SrcRepository(Path(config.topsrcdir), src=config.substs["SRC"])
+     else:
+--- a/third_party/python/mozilla_repo_urls/mozilla_repo_urls/parser.py
++++ b/third_party/python/mozilla_repo_urls/mozilla_repo_urls/parser.py
+@@ -9,22 +9,7 @@ for i, platform in enumerate(ADDITIONAL_PLATFORMS):
+     giturlparse.platforms.PLATFORMS.insert(i, platform)
+ 
+ 
+-_SUPPORTED_PLATFORMS = ("hgmo", "github")
+-
+-
+-SUPPORTED_HOSTS = tuple(
+-    sorted(
+-        [
+-            host
+-            for domains in [
+-                platform[1].DOMAINS
+-                for platform in giturlparse.platforms.PLATFORMS
+-                if platform[0] in _SUPPORTED_PLATFORMS
+-            ]
+-            for host in domains
+-        ]
+-    )
+-)
++SUPPORTED_HOSTS = ("hg.mozilla.org", "github.com", "gitlab.com")
+ 
+ 
+ def parse(url_string):
+--- a/third_party/python/taskcluster_taskgraph/taskgraph/util/vcs.py
++++ b/third_party/python/taskcluster_taskgraph/taskgraph/util/vcs.py
+@@ -495,6 +495,64 @@ class GitRepository(Repository):
+             raise
+ 
+ 
++class LocalRepository(Repository):
++    @property
++    def tool(self):
++        return "true"
++
++    @property
++    def head_rev(self) -> str:
++        return ""
++
++    @property
++    def base_rev(self):
++        return ""
++
++    @property
++    def branch(self):
++        return ""
++
++    @property
++    def all_remote_names(self):
++        return ""
++
++    @property
++    def default_remote_name(self):
++        return ""
++
++    @property
++    def remote_name(self):
++        return ""
++
++    @property
++    def default_branch(self):
++        return ""
++
++    def get_url(self, remote=None):
++        return ""
++
++    def get_commit_message(self, revision=None):
++        raise Exception("Unimplemented")
++
++    def get_changed_files(self, diff_filter, mode="unstaged", rev=None, base_rev=None):
++        raise Exception("Unimplemented")
++
++    def get_outgoing_files(self, diff_filter, upstream):
++        raise Exception("Unimplemented")
++
++    def working_directory_clean(self, untracked=False, ignored=False):
++        raise Exception("Unimplemented")
++
++    def update(self, ref):
++        raise Exception("Unimplemented")
++
++    def find_latest_common_revision(self, base_ref_or_rev, head_rev):
++        raise Exception("Unimplemented")
++
++    def does_revision_exist_locally(self, revision):
++        raise Exception("Unimplemented")
++
++
+ def get_repository(path):
+     """Get a repository object for the repository at `path`.
+     If `path` is not a known VCS repository, raise an exception.
+@@ -505,7 +563,7 @@ def get_repository(path):
+         elif os.path.exists(os.path.join(path, ".git")):
+             return GitRepository(path)
+ 
+-    raise RuntimeError("Current directory is neither a git or hg repository")
++    return LocalRepository(path)
+ 
+ 
+ def find_hg_revision_push_info(repository, revision):

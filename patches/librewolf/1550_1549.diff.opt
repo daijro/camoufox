@@ -1,0 +1,33 @@
+=== modified file 'debian/patches/unity-menubar.patch'
+--- debian/patches/unity-menubar.patch	2022-04-21 08:09:23 +0000
++++ debian/patches/unity-menubar.patch	2022-05-18 06:18:20 +0000
+@@ -1068,7 +1068,7 @@
+ +
+ +    OnOpen();
+ +
+-+    mOpenDelayTimer = do_CreateInstance(NS_TIMER_CONTRACTID);
+++    mOpenDelayTimer = NS_NewTimer();
+ +    if (!mOpenDelayTimer) {
+ +        return;
+ +    }
+@@ -5118,8 +5118,8 @@
+ --- a/widget/gtk/components.conf
+ +++ b/widget/gtk/components.conf
+ @@ -76,6 +76,14 @@ Classes = [
+-         'headers': ['/widget/gtk/nsApplicationChooser.h'],
+-         'processes': ProcessSelector.MAIN_PROCESS_ONLY,
++         'headers': ['/widget/gtk/nsUserIdleServiceGTK.h'],
++         'constructor': 'nsUserIdleServiceGTK::GetInstance',
+      },
+ +    {
+ +        'cid': '{0b3fe5aa-bc72-4303-85ae-76365df1251d}',
+@@ -5131,7 +5131,7 @@
+ +    },
+  ]
+  
+- if defined('MOZ_X11'):
++ if defined('NS_PRINTING'):
+ --- a/xpfe/appshell/AppWindow.cpp
+ +++ b/xpfe/appshell/AppWindow.cpp
+ @@ -80,7 +80,7 @@
+

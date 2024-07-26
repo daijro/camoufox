@@ -1,0 +1,46 @@
+# LibreWolf windows-theming-bug.patch
+#
+# Author:        Malte Jürgens <maltejur@dismail.de>
+# Description:   Fix broken titlebar on Windows
+# Last Updated:  2023-03-17
+# License:       MPL 2.0
+#
+# If we use `--with-app-name=librewolf`, Firefox will think it is running on a
+# super old windows version. This will cause it to make some changes
+# which break the titlebar styling (and probably also some other things).
+#
+# See:
+# https://gitlab.com/librewolf-community/browser/windows/-/issues/146
+# https://bugzilla.mozilla.org/show_bug.cgi?id=1801640
+diff --git a/browser/app/Makefile.in b/browser/app/Makefile.in
+index 54d6b43fe126..116410bb89d9 100644
+--- a/browser/app/Makefile.in
++++ b/browser/app/Makefile.in
+@@ -31,7 +31,7 @@ ifeq ($(OS_ARCH),WINNT)
+ # (this dependency should really be just for firefox.exe, not other targets)
+ # Note the manifest file exists in the tree, so we use the explicit filename
+ # here.
+-EXTRA_DEPS += $(srcdir)/firefox.exe.manifest
++EXTRA_DEPS += $(srcdir)/camoufox.exe.manifest
+ endif
+
+ PROGRAMS_DEST = $(DIST)/bin
+diff --git a/browser/app/firefox.exe.manifest b/browser/app/camoufox.manifest
+similarity index 96%
+rename from browser/app/firefox.exe.manifest
+rename to browser/app/camoufox.exe.manifest
+--- a/browser/app/firefox.exe.manifest
++++ b/browser/app/camoufox.exe.manifest
+@@ -3,10 +3,10 @@
+ <assemblyIdentity
+         version="1.0.0.0"
+         processorArchitecture="*"
+-        name="Firefox"
++        name="Camoufox"
+         type="win32"
+ />
+-<description>Firefox</description>
++<description>Camoufox</description>
+ <dependency>
+         <dependentAssembly>
+                 <assemblyIdentity
