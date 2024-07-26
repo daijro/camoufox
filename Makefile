@@ -4,16 +4,17 @@ export
 ff_source_dir := firefox-$(version)
 lw_source_dir := camoufox-$(version)-$(release)
 
-debs := python3 python3-dev python3-pip p7zip-full golang-go
-rpms := python3 python3-devel p7zip golang
-pacman := python python-pip p7zip go
+debs := python3 python3-dev python3-pip p7zip-full golang-go msitools wget
+rpms := python3 python3-devel p7zip golang msitools wget
+pacman := python python-pip p7zip go msitools wget
 
-.PHONY: help fetch clean distclean build package build-launcher check-arch edits run bootstrap dir package-common package-linux package-macos package-windows
+.PHONY: help fetch clean distclean build package build-launcher check-arch edits run bootstrap mozbootstrap dir package-common package-linux package-macos package-windows
 
 help:
 	@echo "Available targets:"
 	@echo "  fetch           - Clone Firefox source code"
 	@echo "  bootstrap       - Set up build environment"
+	@echo "  mozbootstrap    - Sets up mach"
 	@echo "  dir             - Prepare Camoufox source directory"
 	@echo "  edits           - Camoufox developer UI"
 	@echo "  build-launcher  - Build launcher"
@@ -37,9 +38,12 @@ dir:
 	cp -r $(ff_source_dir) $(lw_source_dir)
 	python3 scripts/patch.py $(version) $(release)
 
+mozbootstrap:
+	cd $(ff_source_dir) && MOZBUILD_STATE_PATH=$$HOME/.mozbuild ./mach --no-interactive bootstrap --application-choice=browser
+
 bootstrap: dir
 	(sudo apt-get -y install $(debs) || sudo dnf -y install $(rpms) || sudo pacman -Sy $(pacman))
-	cd $(lw_source_dir) && MOZBUILD_STATE_PATH=$$HOME/.mozbuild ./mach --no-interactive bootstrap --application-choice=browser
+	make mozbootstrap
 
 clean:
 	rm -rf $(lw_source_dir)

@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 if [ ! -f browser/locales/shipped-locales ]; then
-  echo "ERROR: Run this script from the root of the LibreWolf source code"
+  echo "ERROR: Run this script from the root of the Camoufox source code"
   exit 1
 fi
 
@@ -26,14 +26,14 @@ generate_locale() {
   echo_status "Downloading locale \"$1\""
   wget -q -O browser/locales/l10n/$1.zip https://hg.mozilla.org/l10n-central/$1/archive/tip.zip
   echo_status "Extracting locale \"$1\""
-  unzip -qo browser/locales/l10n/$1.zip -d browser/locales/l10n/
+  7z x -y -obrowser/locales/l10n browser/locales/l10n/$1.zip > /dev/null
   mv browser/locales/l10n/$1-*/ browser/locales/l10n/$1/
   rm -f browser/locales/l10n/$1.zip
   echo_status "Generating locale \"$1\""
-  mv browser/locales/l10n/$1/browser/branding/official browser/locales/l10n/$1/browser/branding/librewolf
-  find browser/locales/l10n/$1 -type f -exec sed -i -e 's/Mozilla Firefox/LibreWolf/g' {} \;
-  find browser/locales/l10n/$1 -type f -exec sed -i -e 's/Mozilla/LibreWolf/g' {} \;
-  find browser/locales/l10n/$1 -type f -exec sed -i -e 's/Firefox/LibreWolf/g' {} \;
+  mv browser/locales/l10n/$1/browser/branding/official browser/locales/l10n/$1/browser/branding/camoufox
+  find browser/locales/l10n/$1 -type f -exec sed -i -e 's/Mozilla Firefox/Camoufox/g' {} \;
+  find browser/locales/l10n/$1 -type f -exec sed -i -e 's/Mozilla/Camoufox/g' {} \;
+  find browser/locales/l10n/$1 -type f -exec sed -i -e 's/Firefox/Camoufox/g' {} \;
   echo_status "Done"
   sleep 0.3
   echo_status

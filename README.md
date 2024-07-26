@@ -2,10 +2,10 @@
 
 <h1 align="center">Camoufox</h1>
 
-<h4 align="center">A stealthy, minimalistic Firefox fork for web scraping 🦊</h4>
+<h4 align="center">A stealthy, minimalistic, custom build of Firefox for web scraping 🦊</h4>
 
 <p align="center">                                      
-Camoufox aims to be a minimalistic browser that for robust fingerprint injection & anti-bot evasion.
+Camoufox aims to be a minimalistic browser for robust fingerprint injection & anti-bot evasion.
     
 </p>
 
@@ -22,6 +22,7 @@ Camoufox aims to be a minimalistic browser that for robust fingerprint injection
 - Full integration of Playwright's Juggler ✅
 - Patches from LibreWolf & Ghostery to remove Mozilla services ✅
 - Optimized for memory and speed ✅
+- Stays up to date with the latest Firefox version ⌚
 
 #### What's planned?
 
@@ -295,7 +296,9 @@ graph TD
     end
 ```
 
-### Build CLI
+This was originally forked from the LibreWolf build system.
+
+## Build CLI
 
 > [!WARNING]
 > Camoufox's build system is designed to be used in Linux. WSL will not work!
@@ -328,6 +331,49 @@ make package-linux arch=x64
 make package-windows arch=x86
 make package-macos arch=amd64
 ```
+
+### Using Docker
+
+Camoufox can be built through Docker on all platforms.
+
+1. Create the Docker image containing Firefox's source code:
+
+```bash
+docker build -t camoufox-builder .
+```
+
+2. Build Camoufox patches to a target platform and architecture:
+
+```bash
+docker run camoufox-builder --target <os> --arch <arch>
+# Asset files will be printed at the end
+```
+
+3. Download zip file assets:
+
+```bash
+docker ps # Find container ID
+docker cp <container id>:/app/<asset>.zip .
+```
+
+<details>
+<summary>
+CLI Parameters
+</summary>
+
+```bash
+options:
+  -h, --help            show this help message and exit
+  --target {linux,windows,macos}
+                        Target platform for the build
+  --arch {x86_64,arm64,i686}
+                        Target architecture for the build
+```
+
+</details>
+
+
+---
 
 ## Development Notes
 

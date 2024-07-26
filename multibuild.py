@@ -49,7 +49,7 @@ class BSYS:
         return glob.glob(package_pattern)
 
     def clean(self):
-        exec('make veryclean')
+        exec('make clean')
 
 
 def main():
@@ -62,7 +62,7 @@ def main():
     )
     parser.add_argument("--bootstrap", action="store_true", help="Bootstrap the build system")
     parser.add_argument(
-        "--no-clean", action="store_true", help="Do not clean the build directory before starting"
+        "--clean", action="store_true", help="Clean the build directory before starting"
     )
 
     args = parser.parse_args()
@@ -72,7 +72,7 @@ def main():
     if args.bootstrap:
         builder.bootstrap()
     # Clean if requested
-    if not args.no_clean:
+    if args.clean:
         builder.clean()
     # Run build
     builder.build()
