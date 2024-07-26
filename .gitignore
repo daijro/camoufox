@@ -8,3 +8,4 @@ dist/
 /bundle/fonts/extra
 launch
 launch.exe
+*.old
