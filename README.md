@@ -2,16 +2,17 @@
 
 <h1 align="center">Camoufox</h1>
 
-<h4 align="center">Camoufox is a Firefox fork for webscraping. 🦊</h4>
+<h4 align="center">A stealthy, minimalistic Firefox fork for web scraping 🦊</h4>
 
 <p align="center">                                      
 Camoufox aims to be a minimalistic browser that for robust fingerprint injection & anti-bot evasion.
     
 </p>
 
-!!!warning Camoufox is still under active development! Built releases aren't yet avaliable for production.
-
 ---
+
+> [!WARNING]
+> Camoufox is still under active development! Built releases aren't yet avaliable for production.
 
 ## Features
 
@@ -296,7 +297,8 @@ graph TD
 
 ### Build CLI
 
-!!!warning Camoufox's build system is designed to be used in Linux. WSL will not work!
+> [!WARNING]
+> Camoufox's build system is designed to be used in Linux. WSL will not work!
 
 First, clone this repository with Git:
 
