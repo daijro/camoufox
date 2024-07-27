@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bullseye
+FROM ubuntu:latest
 
 WORKDIR /app
 
@@ -9,6 +9,8 @@ COPY . /app
 RUN apt-get update && apt-get install -y \
 	# Makefile utils
     build-essential make git msitools wget unzip \
+	# Python
+	python3 python3-dev python3-pip \
 	# Camoufox build system utils
 	p7zip-full golang-go
 

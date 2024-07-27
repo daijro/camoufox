@@ -101,7 +101,7 @@ def list_files(root_dir, suffix='*.patch'):
 
 def add_rustup(*targets):
     for rust_target in targets:
-        os.system(f'rustup target add "{rust_target}"')
+        os.system(f'~/.cargo/bin/rustup target add "{rust_target}"')
 
 
 """
@@ -117,7 +117,6 @@ def camoufox_patches():
     # Set cross building
     print(f'Using target: {moz_target}')
     _update_mozconfig()
-    _update_rustup()
 
     # Copy the search-config.json file
     run('cp -v ../assets/search-config.json services/settings/dumps/main/search-config.json')
@@ -176,7 +175,7 @@ def _get_moz_target():
     raise ValueError(f"Unsupported target: {target}")
 
 
-def _update_rustup():
+def _update_rustup(target):
     if target == "linux":
         add_rustup("aarch64-unknown-linux-gnu", "i686-unknown-linux-gnu")
     elif target == "windows":
@@ -257,6 +256,7 @@ if __name__ == "__main__":
     else:
         target, arch = "linux", "x86_64"
     moz_target = _get_moz_target()
+    _update_rustup(target=target)
 
     # Check if the folder exists
     if not os.path.exists(f'camoufox-{version}-{release}/configure.py'):
