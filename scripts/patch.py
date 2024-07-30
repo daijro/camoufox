@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 
 """
-The script that patches the firefox source into the camoufox source.
+The script that patches the Firefox source into the Camoufox source.
+Based on LibreWolf's patch script:
+https://gitlab.com/librewolf-community/browser/source/-/blob/main/scripts/librewolf-patches.py
+
+Run:
+    python3 scripts/init-patch.py <version> <release>
 """
 
 import fnmatch
@@ -69,6 +74,7 @@ def patch(patchfile, reverse=False):
 
 def enter_srcdir(_dir=None):
     if _dir is None:
+        version, release = extract_args()
         dir = f"camoufox-{version}-{release}"
     else:
         dir = _dir
@@ -121,9 +127,6 @@ def camoufox_patches():
     # Copy the search-config.json file
     run('cp -v ../assets/search-config.json services/settings/dumps/main/search-config.json')
 
-    # Apply bootstraps first
-    for patch_file in list_files('../patches', suffix='*.bootstrap'):
-        patch(patch_file)
     # Then apply all other patches
     for patch_file in list_files('../patches'):
         patch(patch_file)
@@ -210,10 +213,6 @@ def _update_mozconfig():
         with open(target_mozconfig, 'r') as f:
             content += f.read()
 
-    # Add macOS-specific hack
-    # if target == "macos" and arch == "x86_64":
-    #     content += 'export NASM="$MOZBUILD/nasm/nasm"\n'
-
     # Calculate new hash
     new_hash = hashlib.sha256(content.encode()).hexdigest()
 
@@ -238,12 +237,17 @@ def _update_mozconfig():
 Preparation
 """
 
-if __name__ == "__main__":
-    # Extract args
+
+def extract_args():
     if len(args) != 2:
         sys.stderr.write('error: please specify version and release of camoufox source')
         sys.exit(1)
-    version, release = args[0], args[1]
+    return args[0], args[1]
+
+
+if __name__ == "__main__":
+    # Extract args
+    version, release = extract_args()
 
     # Get moz_target if passed to BUILD_TARGET environment variable
     AVAILABLE_TARGETS = ["linux", "windows", "macos"]
