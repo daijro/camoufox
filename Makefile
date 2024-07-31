@@ -41,6 +41,7 @@ dir:
 	fi
 	make clean
 	python3 scripts/patch.py $(version) $(release)
+	touch $(cf_source_dir)/_READY
 
 mozbootstrap:
 	cd $(cf_source_dir) && MOZBUILD_STATE_PATH=$$HOME/.mozbuild ./mach --no-interactive bootstrap --application-choice=browser
@@ -57,7 +58,7 @@ distclean: clean
 	rm -rf $(cf_source_dir)
 
 build:
-	@if [ ! -d $(cf_source_dir) ]; then \
+	@if [ ! -f $(cf_source_dir)/_READY ]; then \
 		make dir; \
 	fi
 	cd $(cf_source_dir) && ./mach build
