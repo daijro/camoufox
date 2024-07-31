@@ -9,3 +9,4 @@ launch
 launch.exe
 *.old
 __pycache__/
+*.pyc

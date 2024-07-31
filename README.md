@@ -350,22 +350,6 @@ docker run -v "$(pwd)/dist:/app/dist" camoufox-builder --target <os> --arch <arc
 
 <details>
 <summary>
-CLI Parameters
-</summary>
-
-```bash
-Options:
-  -h, --help            show this help message and exit
-  --target {linux,windows,macos}
-                        Target platform for the build
-  --arch {x86_64,arm64,i686}
-                        Target architecture for the build
-```
-
-</details>
-
-<details>
-<summary>
 How can I use my local ~/.mozbuild directory?
 </summary>
 
@@ -382,7 +366,21 @@ docker run \
 
 </details>
 
-<br>
+<details>
+<summary>
+Docker CLI Parameters
+</summary>
+
+```bash
+Options:
+  -h, --help            show this help message and exit
+  --target {linux,windows,macos}
+                        Target platform for the build
+  --arch {x86_64,arm64,i686}
+                        Target architecture for the build
+```
+
+</details>
 
 Build artifacts will now appear written under the `dist/` folder.
 
