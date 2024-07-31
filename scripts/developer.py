@@ -48,7 +48,7 @@ def run_patches(reverse=False):
         title = "Patch files"
     selected_patches = easygui.multchoicebox(title, "Patches", patch_files)
     if not selected_patches:
-        exit()
+        return
 
     for patch_file in selected_patches:
         patch(patch_file, reverse=reverse)
@@ -57,6 +57,8 @@ def run_patches(reverse=False):
 # GUI Choicebox with options
 choices = [
     "Reset workspace",
+    "Check patches",
+    "Set checkpoint",
     "Select patches",
     "Reverse patches",
     "Find broken patches",
@@ -65,15 +67,7 @@ choices = [
 ]
 
 """
-GUI Choicebox with the following options:
-- Reset:
-    `make clean`
-- Patch all BUT:
-    Checklist of *.patch files in ../patches to exclude. The rest gets patched.
-- Find broken:
-    Resets, runs patches, then finds broken patches.
-    If all show good error code, show at the top of the message box "All patches applied successfully"
-    If any show bad error code, show at the top of the message box "Some patches failed to apply", then the rej output
+GUI Choicebox
 """
 
 
@@ -82,6 +76,32 @@ def handle_choice(choice):
         case "Reset workspace":
             reset_camoufox()
             easygui.msgbox("Reset completed and bootstrap patches applied.", "Reset Complete")
+
+        case "Check patches":
+            # Produces a list of patches that are applied
+            apply_dict = {}
+            for patch_file in list_files('../patches', suffix='*.patch'):
+                result = os.system(f'git apply --check "{patch_file}" > /dev/null 2>&1')
+                if result == 0:
+                    apply_dict[patch_file] = 'NOT APPLIED'
+                else:
+                    apply_dict[patch_file] = 'APPLIED'
+            easygui.textbox(
+                "Patching Result",
+                "Patching Result",
+                '\n'.join(
+                    sorted(
+                        (f'{v}\t{os.path.basename(k)[:-6]}' for k, v in apply_dict.items()),
+                        reverse=True,
+                        key=lambda x: x[0],
+                    )
+                ),
+            )
+
+        case "Set checkpoint":
+            with temp_cd('..'):
+                run('make checkpoint')
+            easygui.msgbox("Checkpoint set.", "Checkpoint Set")
 
         case "Select patches":
             run_patches(reverse=False)
@@ -131,5 +151,5 @@ def handle_choice(choice):
 if __name__ == "__main__":
     into_camoufox_dir()
 
-    choice = easygui.choicebox("Select an option:", "Camoufox Dev Tools", choices)
-    handle_choice(choice)
+    while choice := easygui.choicebox("Select an option:", "Camoufox Dev Tools", choices):
+        handle_choice(choice)

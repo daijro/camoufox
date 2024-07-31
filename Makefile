@@ -50,11 +50,17 @@ bootstrap: dir
 	(sudo apt-get -y install $(debs) || sudo dnf -y install $(rpms) || sudo pacman -Sy $(pacman))
 	make mozbootstrap
 
+diff:
+	cd $(cf_source_dir) && git diff
+
+checkpoint:
+	cd $(cf_source_dir) && git commit -m "Checkpoint" -a
+
 clean:
 	cd $(cf_source_dir) && git clean -fdx && ./mach clobber
 	make revert
 
-distclean: clean
+distclean:
 	rm -rf $(cf_source_dir)
 
 build:
