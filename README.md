@@ -345,15 +345,7 @@ docker build -t camoufox-builder .
 2. Build Camoufox patches to a target platform and architecture:
 
 ```bash
-docker run camoufox-builder --target <os> --arch <arch>
-# Asset files will be printed at the end
-```
-
-3. Download zip file assets:
-
-```bash
-docker ps # Find container ID
-docker cp <container id>:/app/<asset>.zip .
+docker run -v "$(pwd)/dist:/app/dist" camoufox-builder --target <os> --arch <arch>
 ```
 
 <details>
@@ -362,7 +354,7 @@ CLI Parameters
 </summary>
 
 ```bash
-options:
+Options:
   -h, --help            show this help message and exit
   --target {linux,windows,macos}
                         Target platform for the build
@@ -372,6 +364,27 @@ options:
 
 </details>
 
+<details>
+<summary>
+How can I use my local ~/.mozbuild directory?
+</summary>
+
+If you want to use the host's .mozbuild directory, you can use the following command instead to run the docker:
+
+```bash
+docker run \
+  -v "$HOME/.mozbuild":/root/.mozbuild:rw,z \
+  -v "$(pwd)/dist:/app/dist" \
+  camoufox-builder \
+  --target <os> \
+  --arch <arch>
+```
+
+</details>
+
+<br>
+
+Build artifacts will now appear written under the `dist/` folder.
 
 ---
 
@@ -393,16 +406,18 @@ To use, select "Reset workspace", make changes in the camoufox-\*/ folder, then 
 
 ### How to work on an existing patch
 
-In the developer UI, reset your workspace, then select "Select patches" and select all **but** the one you want to edit.
-
-Then, in the camoufox-\*/ folder, create a new commit:
+1. In the developer UI, reset your workspace.
+2. Then, click "Select patches", and select all **but** the one you want to edit.
+3. Create a checkpoint. This will commit the current workspace to the local repo:
 
 ```bash
-git commit -m "Base commit" -a
+make checkpoint
 ```
 
-Then in the developer UI, hit "Select patches" and apply the patch you would like to edit.
+4. In the developer UI, click "Select patches", and _apply_ the patch you would like to edit.
 
-After you're done editing, hit "Write workspace to patch", and overwrite the existing patch.
+   Make your changes. Test builds can be made with `make build` and `make run`.
+
+5. After you're done editing, hit "Write workspace to patch", and overwrite the existing patch.
 
 ---

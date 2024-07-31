@@ -78,8 +78,9 @@ def main():
     builder.build()
     # Run package
     builder.package()
-    # Print assets
-    print(builder.assets)
+    # Move assets to dist
+    for asset in builder.assets:
+        os.rename(asset, f'dist/{asset}')
 
 
 if __name__ == "__main__":
