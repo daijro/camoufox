@@ -1,7 +1,7 @@
-diff --git a/browser/base/content/browser.js b/browser/base/content/browser.js
+diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
 index cc62392ab0..0c68a0e991 100644
---- a/browser/base/content/browser.js
-+++ b/browser/base/content/browser.js
+--- a/browser/base/content/browser-init.js
++++ b/browser/base/content/browser-init.js
 @@ -1568,7 +1568,7 @@ var gBrowserInit = {
      updateBookmarkToolbarVisibility();
  

@@ -4,11 +4,12 @@
 GUI for managing Camoufox patches.
 """
 
-import os
 import contextlib
+import os
+import re
 
 import easygui
-from patch import list_files, patch, run
+from patch import list_patches, patch, run
 
 
 def into_camoufox_dir():
@@ -41,7 +42,7 @@ def reset_camoufox():
 
 
 def run_patches(reverse=False):
-    patch_files = list(list_files('../patches', suffix='*.patch'))
+    patch_files = list_patches()
     if reverse:
         title = "Unpatch files"
     else:
@@ -54,16 +55,116 @@ def run_patches(reverse=False):
         patch(patch_file, reverse=reverse)
 
 
+def open_patch_workspace(selected_patch, stop_at_patch=False):
+    """
+    Resets a workspace for editing a patch.
+
+    Process:
+    1. Resets Camoufox
+    2. Patches all except the selected patch
+    3. Sets checkpoint
+    4. Reruns the selected patch, but reads rejects similar to "Find broken patches"
+    """
+    # Prepare UI
+    patch_files = list_patches()
+
+    # Reset workspace
+    reset_camoufox()
+
+    skipped_patches = []
+    applied_patches = []
+    # Patch all except the selected patch
+    for patch_file in patch_files:
+        if patch_file == selected_patch:
+            if stop_at_patch:
+                break
+            continue
+        if is_broken(patch_file):
+            print(f'Skipping broken patch: {patch_file}')
+            skipped_patches.append(patch_file)
+            continue
+        patch(patch_file, silent=True)
+        applied_patches.append(patch_file)
+
+    # Set checkpoint
+    if applied_patches:
+        with temp_cd('..'):
+            run('make checkpoint')
+
+    # Set message for patch result
+    patch_broken = is_broken(selected_patch)
+    if patch_broken:
+        message = "Broken patch has been applied to the workspace.\n\nPLEASE FIX THE FOLLOWING:\n"
+    else:
+        message = "Successfully applied patch to the workspace.\n"
+
+    # Run the selected patch
+    patch_result = os.popen(f'patch -p1 -i "{selected_patch}"').read()
+
+    # Find any line containing a file .rej
+    if patch_broken:
+        for line in patch_result.splitlines():
+            if file := re.search(r'[^\s]+\.rej', line):
+                message += f'> {file[0]}' + '\n'
+
+    def msg_format_paths(file_list):
+        message = ''
+        for patch_file in file_list:
+            message += '> ' + patch_file[len('../patches/') :] + '\n'
+        return message
+
+    # Show which patches were applied if not all patches were allowed
+    if stop_at_patch and applied_patches:
+        message += f'\n{"-" * 22} Applied patches {"-" * 22}\n'
+        message += msg_format_paths(applied_patches)
+
+    if skipped_patches:
+        message += f'\n{"-" * 17} Skipped patches (broken!) {"-" * 17}\n'
+        message += msg_format_paths(skipped_patches)
+
+    message += f'\n{"-" * 24} Full output {"-" * 24}\n{patch_result}'
+    easygui.textbox("Patch Result", "Patch Result", message)
+
+
+def check_patch(patch_file):
+    """
+    Checks if the patch can be applied or can be reversed
+    Returns (can_apply, can_reverse, is_broken)
+    """
+    can_apply = not bool(
+        os.system(f'patch -p1 --dry-run --force -i "{patch_file}" > /dev/null 2>&1')
+    )
+    can_reverse = not bool(
+        os.system(f'patch -p1 -R --dry-run --force -i "{patch_file}" > /dev/null 2>&1')
+    )
+    return can_apply, can_reverse, not (can_apply or can_reverse)
+
+
+def is_broken(patch_file):
+    _, _, is_broken = check_patch(patch_file)
+    return is_broken
+
+
+def get_rejects(patch_file):
+    # Returns a broken patch's rejects
+    cmd = f'patch -p1 -i "{patch_file}" | tee /dev/stderr | sed -n -E \'s/^.*saving rejects to file (.*\\.rej)$/\\1/p\''
+    result = os.popen(cmd).read().strip()
+    return result.split('\n') if result else []
+
+
 # GUI Choicebox with options
 choices = [
     "Reset workspace",
-    "Check patches",
-    "Set checkpoint",
+    "Edit a patch",
+    "\u2014" * 44,
+    "List patches currently applied",
     "Select patches",
     "Reverse patches",
-    "Find broken patches",
+    "Find broken patches (resets workspace)",
+    "\u2014" * 44,
     "See current workspace",
     "Write workspace to patch",
+    "Set checkpoint",
 ]
 
 """
@@ -75,23 +176,34 @@ def handle_choice(choice):
     match choice:
         case "Reset workspace":
             reset_camoufox()
-            easygui.msgbox("Reset completed and bootstrap patches applied.", "Reset Complete")
+            easygui.msgbox(
+                "Reset. All patches & changes have been removed.",
+                "Reset Complete",
+            )
 
-        case "Check patches":
+        case "List patches currently applied":
             # Produces a list of patches that are applied
             apply_dict = {}
-            for patch_file in list_files('../patches', suffix='*.patch'):
-                result = os.system(f'git apply --check "{patch_file}" > /dev/null 2>&1')
-                if result == 0:
+            for patch_file in list_patches():
+                print(f'FILE: {patch_file}')
+                can_apply, can_reverse, broken = check_patch(patch_file)
+                if broken:
+                    apply_dict[patch_file] = 'BROKEN'
+                elif can_reverse:
+                    apply_dict[patch_file] = 'APPLIED'
+                elif can_apply:
                     apply_dict[patch_file] = 'NOT APPLIED'
                 else:
-                    apply_dict[patch_file] = 'APPLIED'
+                    apply_dict[patch_file] = 'UNKNOWN (broken .patch?)'
             easygui.textbox(
                 "Patching Result",
                 "Patching Result",
                 '\n'.join(
                     sorted(
-                        (f'{v}\t{os.path.basename(k)[:-6]}' for k, v in apply_dict.items()),
+                        (
+                            f'{v}\t{k[len("../patches/"):-len('.patch')]}'
+                            for k, v in apply_dict.items()
+                        ),
                         reverse=True,
                         key=lambda x: x[0],
                     )
@@ -111,24 +223,59 @@ def handle_choice(choice):
             run_patches(reverse=True)
             easygui.msgbox("Unpatching completed.", "Unpatching Complete")
 
-        case "Find broken patches":
+        case "Find broken patches (resets workspace)":
             reset_camoufox()
 
             broken_patches = []
-            for patch_file in list_files('../patches', suffix='*.patch'):
-                cmd = rf'patch -p1 -i "{patch_file}" | tee /dev/stderr | sed -r --quiet \'s/^.*saving rejects to file (.*\.rej)$/\\1/p\''
-                result = os.popen(cmd).read().strip()
-                print(result)
-                if result:
-                    broken_patches.append((patch_file, result))
+            for patch_file in list_patches():
+                if reject_files := get_rejects(patch_file):
+                    broken_patches.append((patch_file, reject_files))
 
             if not broken_patches:
                 easygui.msgbox("All patches applied successfully", "Patching Result")
-            else:
-                message = "Some patches failed to apply:\n\n"
-                for patch_file, rejects in broken_patches:
-                    message += f"Patch: {patch_file}\nRejects: {rejects}\n\n"
-                easygui.textbox("Patching Result", "Failed Patches", message)
+                return
+
+            # Display message
+            message = "Some patches failed to apply:\n\n"
+            for patch_file, rejects in broken_patches:
+                message += '> ' + patch_file[len('../patches/') :] + '\n'
+            message += '\n\n\n'
+
+            # Show file contents
+            for patch_file, rejects in broken_patches:
+                message += f"Patch: {patch_file[len('../patches/'):]}\nRejects:\n"
+                for reject in rejects:
+                    message += f"{reject}\n"
+                    with open(reject, 'r') as f:
+                        message += f.read()
+                    message += "-" * 62 + "\n"
+                message += '\n'
+            easygui.textbox("Patching Result", "Failed Patches", message)
+
+        case "Edit a patch":
+            patch_files = list_patches()
+            ui_choices = [
+                (
+                    f'{n+1}. {"BOOTSTRAP:" if os.path.basename(file_name).startswith("0-") else ""} '
+                    f'{file_name[len("../patches/") :]}'
+                )
+                for n, file_name in enumerate(patch_files)
+            ]
+            selected_patch = easygui.choicebox(
+                "Select patch to open in workspace",
+                "Patches",
+                ui_choices,
+            )
+            # Return if user cancelled
+            if not selected_patch:
+                return
+            # Get file path of selected patch
+            selected_patch = patch_files[ui_choices.index(selected_patch)]
+            open_patch_workspace(
+                selected_patch,
+                # Patches starting with 0- rely on being ran first.
+                stop_at_patch=os.path.basename(selected_patch).startswith('0-'),
+            )
 
         case "See current workspace":
             result = os.popen('git diff').read()
@@ -136,13 +283,16 @@ def handle_choice(choice):
 
         case "Write workspace to patch":
             # Open a file dialog to select a file to write the diff to
-            file_path = easygui.filesavebox(
-                "Select a file to write the diff to", "Write Diff", filetypes="*.patch"
-            )
+            with temp_cd('../patches'):
+                file_path = easygui.filesavebox(
+                    "Select a file to write the patch to",
+                    "Write Patch",
+                    filetypes="*.patch",
+                )
             if not file_path:
                 exit()
             run(f'git diff > {file_path}')
-            easygui.msgbox("Diff written to file", "Diff Written")
+            easygui.msgbox(f"Patch has been written to {file_path}.", "Patch Written")
 
         case _:
             print('No choice selected')

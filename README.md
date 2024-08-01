@@ -217,7 +217,7 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 
 #### Playwright support
 
-- Added Playwright's Juggler patches
+- A more updated version of Playwright's Juggler for the latest Firefox, maintained by me
 - Various config patches to evade bot detection
 
 #### Debloat/Optimizations
@@ -386,9 +386,7 @@ Build artifacts will now appear written under the `dist/` folder.
 
 ---
 
-## Development Notes
-
-### How to make a patch
+## Development Tools
 
 This repo comes with a developer UI under scripts/developer.py:
 
@@ -396,26 +394,20 @@ This repo comes with a developer UI under scripts/developer.py:
 make edits
 ```
 
-Patches can be added, removed, and new patches can be added through here.
+Patches can be edited, created, removed, and managed through here.
 
-<img src="https://i.imgur.com/cLEn2Yr.png">
+<img src="https://i.imgur.com/BYAN5J0.png">
 
-To use, select "Reset workspace", make changes in the camoufox-\*/ folder, then select "Write workspace to patch".
+### How to make a patch
+
+1. In the developer UI, click **Reset workspace**.
+2. Make changes in the `camoufox-*/` folder as needed. You can test your changes with `make build` and `make run`.
+3. After you're done making changes, click **Write workspace to patch** and save the patch file.
 
 ### How to work on an existing patch
 
-1. In the developer UI, reset your workspace.
-2. Then, click "Select patches", and select all **but** the one you want to edit.
-3. Create a checkpoint. This will commit the current workspace to the local repo:
-
-```bash
-make checkpoint
-```
-
-4. In the developer UI, click "Select patches", and _apply_ the patch you would like to edit.
-
-   Make your changes. Test builds can be made with `make build` and `make run`.
-
-5. After you're done editing, hit "Write workspace to patch", and overwrite the existing patch.
+1. In the developer UI, click **Edit a patch**.
+2. Select the patch you'd like to edit. Your workspace will be reset to the state of the selected patch.
+3. After you're done making changes, hit **Write workspace to patch** and overwrite the existing patch file.
 
 ---

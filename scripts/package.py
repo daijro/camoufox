@@ -139,7 +139,7 @@ def main():
         includes=args.includes,
         fonts=args.fonts,
         new_file=new_name,
-        os==args.os,
+        os=args.os,
     )
 
     print(f"Packaging complete for {args.os}")

@@ -1,4 +1,5 @@
 /camoufox-*
+/firefox-*
 /mozilla-unified
 /extra-docs
 /.vscode
@@ -10,3 +11,4 @@ launch.exe
 *.old
 __pycache__/
 *.pyc
+wget-log

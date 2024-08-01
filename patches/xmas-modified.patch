@@ -1,21 +1,21 @@
 diff --git a/browser/installer/package-manifest.in b/browser/installer/package-manifest.in
-index a638dbe8e2..f0d4310cfa 100644
+index bb0f71dd60..3ad3d84b82 100644
 --- a/browser/installer/package-manifest.in
 +++ b/browser/installer/package-manifest.in
-@@ -253,6 +253,11 @@
- @RESPATH@/browser/defaults/settings/main
- @RESPATH@/browser/defaults/settings/security-state
+@@ -244,6 +244,11 @@
+ #endif
+ #endif
  
 +; Camoufox specific files
 +@RESPATH@/defaults/pref/local-settings.js
 +@RESPATH@/distribution/policies.json
 +@RESPATH@/camoufox.cfg
 +
- ; Warning: changing the path to channel-prefs.js can cause bugs (Bug 756325)
- ; Technically this is an app pref file, but we are keeping it in the original
- ; gre location for now.
+ ; [Default Preferences]
+ ; All the pref files must be part of base to prevent migration bugs
+ @RESPATH@/browser/@PREF_DIR@/firefox.js
 diff --git a/lw/moz.build b/lw/moz.build
-index e69de29..8589aac 100644
+index e69de29bb2..208184547e 100644
 --- a/lw/moz.build
 +++ b/lw/moz.build
 @@ -0,0 +1,13 @@
@@ -33,10 +33,10 @@ index e69de29..8589aac 100644
 +  "local-settings.js",
 +]
 diff --git a/moz.build b/moz.build
-index 5af3642165..01f5a7e45b 100644
+index 9db27fd056..e1ec1dc872 100644
 --- a/moz.build
 +++ b/moz.build
-@@ -218,3 +218,5 @@ SPHINX_TREES["mots"] = "docs/mots"
+@@ -220,3 +220,5 @@ SPHINX_TREES["mots"] = "docs/mots"
  SPHINX_TREES["update-infrastructure"] = "docs/update-infrastructure"
  
  include("build/templates.mozbuild")

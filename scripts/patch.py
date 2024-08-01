@@ -56,12 +56,15 @@ def run(cmd, exit_on_fail=True, do_print=True):
     return retval
 
 
-def patch(patchfile, reverse=False):
+def patch(patchfile, reverse=False, silent=False):
     if reverse:
         cmd = f"patch -p1 -R -i {patchfile}"
     else:
         cmd = f"patch -p1 -i {patchfile}"
-    print(f"\n*** -> {cmd}")
+    if silent:
+        cmd += ' > /dev/null'
+    else:
+        print(f"\n*** -> {cmd}")
     sys.stdout.flush()
     if options.no_execute:
         return
@@ -97,12 +100,16 @@ def leave_srcdir():
         os.chdir("..")
 
 
-def list_files(root_dir, suffix='*.patch'):
+def list_files(root_dir, suffix):
     for root, _, files in os.walk(root_dir):
         for file in fnmatch.filter(files, suffix):
             full_path = os.path.join(root, file)
             relative_path = os.path.relpath(full_path, root_dir)
             yield os.path.join('..', 'patches', relative_path).replace('\\', '/')
+
+
+def list_patches(root_dir='../patches', suffix='*.patch'):
+    return sorted(list_files(root_dir, suffix), key=lambda f: os.path.basename(f))
 
 
 def add_rustup(*targets):
@@ -124,41 +131,9 @@ def camoufox_patches():
     print(f'Using target: {moz_target}')
     _update_mozconfig()
 
-    # Copy the search-config.json file
-    run('cp -v ../assets/search-config.json services/settings/dumps/main/search-config.json')
-
     # Then apply all other patches
-    for patch_file in list_files('../patches'):
+    for patch_file in list_patches():
         patch(patch_file)
-
-    # vs_pack.py issue... should be temporary
-    run('cp -v ../patches/librewolf/pack_vs.py build/vs/')
-
-    """
-    Apply most recent `settings` repository files.
-    """
-
-    run('mkdir -p lw', exit_on_fail=False)
-    enter_srcdir('lw')
-    run('cp -v ../../settings/camoufox.cfg .')
-    run('cp -v ../../settings/distribution/policies.json .')
-    run('cp -v ../../settings/defaults/pref/local-settings.js .')
-    run('cp -v ../../settings/chrome.css .')
-    leave_srcdir()
-
-    # Copy ALL new files/folders from ../additions to .
-    run('cp -r ../additions/* .')
-
-    # Provide a script that fetches and bootstraps Nightly and some mozconfigs
-    run('cp -v ../scripts/mozfetch.sh lw/')
-
-    # Override the firefox version
-    for file in ["browser/config/version.txt", "browser/config/version_display.txt"]:
-        with open(file, "w") as f:
-            f.write(f"{version}-{release}")
-
-    # Generate locales
-    run("bash ../scripts/generate-locales.sh")
 
     leave_srcdir()
 
