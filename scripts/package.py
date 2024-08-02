@@ -3,23 +3,23 @@
 import argparse
 import glob
 import os
+import shlex
 import shutil
-import subprocess
+import sys
 import tempfile
+
+from _mixin import find_src_dir, get_moz_target, run, temp_cd
 
 UNNEEDED_PATHS = {'uninstall', 'pingsender.exe', 'pingsender', 'vaapitest', 'glxtest'}
 
 
 def run_command(command):
-    result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"Error executing command: {' '.join(command)}")
-        print(f"Error output: {result.stderr}")
-        exit(1)
-    return result.stdout
+    """Execute a command with subprocess"""
+    cmd = ' '.join(shlex.quote(arg) for arg in command)
+    run(cmd)
 
 
-def add_includes_to_package(package_file, includes, fonts, new_file, os):
+def add_includes_to_package(package_file, includes, fonts, new_file, target):
     with tempfile.TemporaryDirectory() as temp_dir:
         # Extract package
         run_command(['7z', 'x', package_file, f'-o{temp_dir}'])
@@ -33,10 +33,10 @@ def add_includes_to_package(package_file, includes, fonts, new_file, os):
                 includes=includes,
                 fonts=fonts,
                 new_file=new_file,
-                os=os,
+                target=target,
             )
 
-        if os == 'macos':
+        if target == 'macos':
             # Move Nightly/Nightly.app -> Camoufox.app
             nightly_dir = os.path.join(temp_dir, 'Nightly')
             shutil.move(
@@ -56,7 +56,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, os):
                 os.rmdir(camoufox_dir)
 
         # Create target_dir
-        if os == 'macos':
+        if target == 'macos':
             target_dir = os.path.join(temp_dir, 'Camoufox.app', 'Contents', 'Resources')
         else:
             target_dir = temp_dir
@@ -84,7 +84,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, os):
         # Add launcher from launcher/dist/launch to temp_dir
         shutil.copy2(
             os.path.join('launcher', 'dist', 'launch'),
-            os.path.join(temp_dir, 'launch' + ('.exe' if os == 'windows' else '')),
+            os.path.join(temp_dir, 'launch' + ('.exe' if target == 'windows' else '')),
         )
 
         # Remove unneeded paths
@@ -98,7 +98,8 @@ def add_includes_to_package(package_file, includes, fonts, new_file, os):
         run_command(['7z', 'u', new_file, f'{temp_dir}/*', '-r', '-mx=9'])
 
 
-def main():
+def get_args():
+    """Get CLI parameters"""
     parser = argparse.ArgumentParser(
         description='Package Camoufox for different operating systems.'
     )
@@ -109,20 +110,47 @@ def main():
     parser.add_argument('--version', required=True, help='Camoufox version')
     parser.add_argument('--release', required=True, help='Camoufox release number')
     parser.add_argument(
-        '--arch', choices=['x64', 'x86', 'arm64'], help='Architecture for Windows build'
+        '--arch', choices=['x86_64', 'i686', 'arm64'], help='Architecture for Windows build'
     )
+    parser.add_argument('--no-locales', action='store_true', help='Do not package locales')
     parser.add_argument('--fonts', nargs='+', help='Font directories to include under fonts/')
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    """The main packaging function"""
+    args = get_args()
 
     # Determine file extension based on OS
     file_extensions = {'linux': 'tar.bz2', 'macos': 'dmg', 'windows': 'zip'}
     file_ext = file_extensions[args.os]
 
-    # Remove xpt_artifacts file if it exists
-    xpt_artifacts_pattern = f'camoufox-{args.version}-{args.release}.*.xpt_artifacts.*'
-    for xpt_file in glob.glob(xpt_artifacts_pattern):
-        if os.path.exists(xpt_file):
-            os.remove(xpt_file)
+    # Build the package
+    src_dir = find_src_dir('.', args.version, args.release)
+    moz_target = get_moz_target(target=args.os, arch=args.arch)
+    with temp_cd(src_dir):
+        # Create package files
+        if args.no_locales:
+            run('./mach package')
+        else:
+            run('cat browser/locales/shipped-locales | xargs ./mach package-multi-locale --locales')
+        # Find package files
+        search_path = os.path.abspath(
+            f'obj-{moz_target}/dist/camoufox-{args.version}-{args.release}.*.{file_ext}'
+        )
+
+    # Copy package files
+    for file in glob.glob(search_path):
+        if 'xpt_artifacts' in file:
+            print(f'Skipping xpt artifacts: {file}')
+            continue
+        print(f'Found package: {file}')
+        # Copy to root
+        shutil.copy2(file, '.')
+        break
+    else:
+        print(f"Error: No package file found matching pattern: {search_path}")
+        sys.exit(1)
 
     # Find the package file
     package_pattern = f'camoufox-{args.version}-{args.release}.en-US.*.{file_ext}'
@@ -139,7 +167,7 @@ def main():
         includes=args.includes,
         fonts=args.fonts,
         new_file=new_name,
-        os=args.os,
+        target=args.os,
     )
 
     print(f"Packaging complete for {args.os}")

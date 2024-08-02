@@ -217,7 +217,7 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 
 #### Playwright support
 
-- A more updated version of Playwright's Juggler for the latest Firefox, maintained by me
+- Updated Playwright's Juggler for the latest Firefox
 - Various config patches to evade bot detection
 
 #### Debloat/Optimizations
@@ -322,15 +322,32 @@ After that, you have to bootstrap your system to be able to build Camoufox. You 
 make bootstrap
 ```
 
-Finally you can build Camoufox and then package it with the following commands:
+Finally you can build and package Camoufox the following command:
 
 ```bash
-make build
-# Example package commands:
-make package-linux arch=x64
-make package-windows arch=x86
-make package-macos arch=amd64
+python3 multibuild.py --target linux windows macos --arch x86_64 arm64 i686
 ```
+
+<details>
+<summary>
+CLI Parameters
+</summary>
+
+```bash
+Options:
+  -h, --help            show this help message and exit
+  --target {linux,windows,macos} [{linux,windows,macos} ...]
+                        Target platforms to build
+  --arch {x86_64,arm64,i686} [{x86_64,arm64,i686} ...]
+                        Target architectures to build for each platform
+  --bootstrap           Bootstrap the build system
+  --clean               Clean the build directory before starting
+
+Example:
+$ python3 multibuild.py --target linux windows macos --arch x86_64 arm64
+```
+
+</details>
 
 ### Using Docker
 
@@ -374,10 +391,15 @@ Docker CLI Parameters
 ```bash
 Options:
   -h, --help            show this help message and exit
-  --target {linux,windows,macos}
-                        Target platform for the build
-  --arch {x86_64,arm64,i686}
-                        Target architecture for the build
+  --target {linux,windows,macos} [{linux,windows,macos} ...]
+                        Target platforms to build
+  --arch {x86_64,arm64,i686} [{x86_64,arm64,i686} ...]
+                        Target architectures to build for each platform
+  --bootstrap           Bootstrap the build system
+  --clean               Clean the build directory before starting
+
+Example:
+$ docker run -v "$(pwd)/dist:/app/dist" camoufox-builder --target windows macos linux --arch x86_64 arm64 i686
 ```
 
 </details>

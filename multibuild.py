@@ -1,5 +1,18 @@
 """
 Easy build CLI for Camoufox
+
+options:
+  -h, --help            show this help message and exit
+  --target {linux,windows,macos} [{linux,windows,macos} ...]
+                        Target platforms to build
+  --arch {x86_64,arm64,i686} [{x86_64,arm64,i686} ...]
+                        Target architectures to build for each platform
+  --bootstrap           Bootstrap the build system
+  --clean               Clean the build directory before starting
+
+Example:
+$ python3 multibuild.py --target linux windows macos --arch x86_64 arm64
+
 Since Camoufox is NOT meant to be used as a daily driver, no installers are provided.
 """
 
@@ -15,11 +28,11 @@ AVAILABLE_TARGETS = ["linux", "windows", "macos"]
 AVAILABLE_ARCHS = ["x86_64", "arm64", "i686"]
 
 
-def exec(cmd, exit_on_fail=True):
+def run(cmd, exit_on_fail=True):
     print(f'\n------------\n{cmd}\n------------\n')
     retval = os.system(cmd)
     if retval != 0 and exit_on_fail:
-        print("fatal error: command '{}' failed".format(cmd))
+        print(f"fatal error: command '{cmd}' failed")
         sys.exit(1)
     return retval
 
@@ -29,36 +42,67 @@ class BSYS:
     target: str
     arch: str
 
-    def bootstrap(self):
-        exec('make bootstrap')
+    @staticmethod
+    def bootstrap():
+        """Bootstrap the build system"""
+        run('make bootstrap')
 
     def build(self):
+        """Build the Camoufox source code"""
         os.environ['BUILD_TARGET'] = f'{self.target},{self.arch}'
-        exec(f'make build')
+        run('make build')
 
     def package(self):
-        if self.arch == 'x86_64':
-            _arch = 'x64'
-        else:
-            _arch = 'arm64'
-        exec(f'make package-{self.target} arch={_arch}')
+        """Package the Camoufox source code"""
+        run(f'make package-{self.target} arch={self.arch}')
+
+    def update_target(self):
+        """Change the build target"""
+        os.environ['BUILD_TARGET'] = f'{self.target},{self.arch}'
+        run('make set-target')
 
     @property
     def assets(self) -> List[str]:
-        package_pattern = f'camoufox-*.en-US.*.zip'
+        """Get the list of assets"""
+        package_pattern = 'camoufox-*.en-US.*.zip'
         return glob.glob(package_pattern)
 
-    def clean(self):
-        exec('make clean')
+    @staticmethod
+    def clean():
+        """Clean the Camoufox directory"""
+        run('make clean')
+
+
+def run_build(target, arch):
+    """
+    Run the build for the given target and architecture
+    """
+    builder = BSYS(target, arch)
+    builder.update_target()
+    # Run build
+    builder.build()
+    # Run package
+    builder.package()
+    # Move assets to dist
+    for asset in builder.assets:
+        os.rename(asset, f'dist/{asset}')
 
 
 def main():
     parser = argparse.ArgumentParser(description="Easy build CLI for Camoufox")
     parser.add_argument(
-        "--target", choices=AVAILABLE_TARGETS, required=True, help="Target platform for the build"
+        "--target",
+        choices=AVAILABLE_TARGETS,
+        nargs='+',
+        required=True,
+        help="Target platform for the build",
     )
     parser.add_argument(
-        "--arch", choices=AVAILABLE_ARCHS, required=True, help="Target architecture for the build"
+        "--arch",
+        choices=AVAILABLE_ARCHS,
+        nargs='+',
+        required=True,
+        help="Target architecture for the build",
     )
     parser.add_argument("--bootstrap", action="store_true", help="Bootstrap the build system")
     parser.add_argument(
@@ -67,20 +111,16 @@ def main():
 
     args = parser.parse_args()
 
-    builder = BSYS(args.target, args.arch)
     # Run bootstrap if requested
     if args.bootstrap:
-        builder.bootstrap()
+        BSYS.bootstrap()
     # Clean if requested
     if args.clean:
-        builder.clean()
+        BSYS.clean()
     # Run build
-    builder.build()
-    # Run package
-    builder.package()
-    # Move assets to dist
-    for asset in builder.assets:
-        os.rename(asset, f'dist/{asset}')
+    for target in args.target:
+        for arch in args.arch:
+            run_build(target, arch)
 
 
 if __name__ == "__main__":

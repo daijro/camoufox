@@ -8,7 +8,7 @@ debs := python3 python3-dev python3-pip p7zip-full golang-go msitools wget aria2
 rpms := python3 python3-devel p7zip golang msitools wget aria2c
 pacman := python python-pip p7zip go msitools wget aria2c
 
-.PHONY: help fetch setup setup-minimal clean distclean build package build-launcher check-arch revert edits run bootstrap mozbootstrap dir package-common package-linux package-macos package-windows
+.PHONY: help fetch setup setup-minimal clean set-target distclean build package build-launcher check-arch revert edits run bootstrap mozbootstrap dir package-linux package-macos package-windows
 
 help:
 	@echo "Available targets:"
@@ -23,6 +23,7 @@ help:
 	@echo "  clean           - Remove build artifacts"
 	@echo "  distclean       - Remove everything including downloads"
 	@echo "  build           - Build Camoufox"
+	@echo "  set-target      - Change the build target with BUILD_TARGET"
 	@echo "  package-linux   - Package Camoufox for Linux"
 	@echo "  package-macos   - Package Camoufox for macOS"
 	@echo "  package-windows - Package Camoufox for Windows"
@@ -63,6 +64,9 @@ dir:
 	python3 scripts/patch.py $(version) $(release)
 	touch $(cf_source_dir)/_READY
 
+set-target:
+	python3 scripts/patch.py $(version) $(release) --mozconfig-only
+
 mozbootstrap:
 	cd $(cf_source_dir) && MOZBUILD_STATE_PATH=$$HOME/.mozbuild ./mach --no-interactive bootstrap --application-choice=browser
 
@@ -93,19 +97,15 @@ edits:
 	python ./scripts/developer.py
 
 check-arch:
-	@if [ "$(arch)" != "x64" ] && [ "$(arch)" != "x86" ] && [ "$(arch)" != "arm64" ]; then \
-		echo "Error: Invalid arch value. Must be x64, x86, or arm64."; \
+	@if ! echo "x86_64 i686 arm64" | grep -qw "$(arch)"; then \
+		echo "Error: Invalid arch value. Must be x86_64, i686, or arm64."; \
 		exit 1; \
 	fi
 
 build-launcher: check-arch
-	cd launcher && ./build.sh $(arch) $(os)
+	cd launcher && bash build.sh $(arch) $(os)
 
-package-common: check-arch
-	cd $(cf_source_dir) && cat browser/locales/shipped-locales | xargs ./mach package-multi-locale --locales
-	cp -v $(cf_source_dir)/obj-*/dist/camoufox-$(version)-$(release).*.* .
-
-package-linux: package-common
+package-linux:
 	make build-launcher arch=$(arch) os=linux;
 	python3 scripts/package.py linux \
 		--includes \
@@ -116,7 +116,7 @@ package-linux: package-common
 		--arch $(arch) \
 		--fonts windows macos linux
 
-package-macos: package-common
+package-macos:
 	make build-launcher arch=$(arch) os=macos;
 	python3 scripts/package.py macos \
 		--includes \
@@ -126,7 +126,7 @@ package-macos: package-common
 		--arch $(arch) \
 		--fonts windows linux
 
-package-windows: package-common
+package-windows:
 	make build-launcher arch=$(arch) os=windows;
 	python3 scripts/package.py windows \
 		--includes \

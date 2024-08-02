@@ -4,44 +4,28 @@
 GUI for managing Camoufox patches.
 """
 
-import contextlib
 import os
 import re
 
 import easygui
-from patch import list_patches, patch, run
+from _mixin import find_src_dir, list_patches, patch, run, temp_cd
 
 
 def into_camoufox_dir():
-    """Find and cd to the camoufox-* folder (this is located ..)"""
-    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    folders = os.listdir('.')
-    for folder in folders:
-        if os.path.isdir(folder) and folder.startswith('camoufox-'):
-            os.chdir(folder)
-            break
-    else:
-        raise FileNotFoundError('No camoufox-* folder found')
-
-
-@contextlib.contextmanager
-def temp_cd(path):
-    # Temporarily change to a different working directory
-    _old_cwd = os.getcwd()
-    os.chdir(os.path.abspath(path))
-
-    try:
-        yield
-    finally:
-        os.chdir(_old_cwd)
-
+    """Cd to the camoufox-* folder"""
+    this_script = os.path.dirname(os.path.abspath(__file__))
+    # Go one directory up from the current script path
+    os.chdir(os.path.dirname(this_script))
+    os.chdir(find_src_dir('.'))
 
 def reset_camoufox():
+    """Reset the Camoufox source"""
     with temp_cd('..'):
         run('make clean')
 
 
 def run_patches(reverse=False):
+    """Apply patches"""
     patch_files = list_patches()
     if reverse:
         title = "Unpatch files"
@@ -141,12 +125,13 @@ def check_patch(patch_file):
 
 
 def is_broken(patch_file):
+    """Check if a patch file is broken"""
     _, _, is_broken = check_patch(patch_file)
     return is_broken
 
 
 def get_rejects(patch_file):
-    # Returns a broken patch's rejects
+    """Get rejects from a patch file"""
     cmd = f'patch -p1 -i "{patch_file}" | tee /dev/stderr | sed -n -E \'s/^.*saving rejects to file (.*\\.rej)$/\\1/p\''
     result = os.popen(cmd).read().strip()
     return result.split('\n') if result else []
@@ -173,6 +158,7 @@ GUI Choicebox
 
 
 def handle_choice(choice):
+    """Handle UI choice"""
     match choice:
         case "Reset workspace":
             reset_camoufox()
