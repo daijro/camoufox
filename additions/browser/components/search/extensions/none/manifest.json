@@ -11,10 +11,12 @@
   "hidden": true,
   "chrome_settings_overrides": {
     "search_provider": {
-      "keyword": ["@none"],
+      "keyword": [
+        "@none"
+      ],
       "name": "None",
       "search_url": "http://127.0.0.1",
-      "search_url_get_params": "&q={searchTerms}",
+      "search_url_get_params": "&q={searchTerms}"
     }
   }
 }
