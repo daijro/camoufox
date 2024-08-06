@@ -18,6 +18,7 @@ def into_camoufox_dir():
     os.chdir(os.path.dirname(this_script))
     os.chdir(find_src_dir('.'))
 
+
 def reset_camoufox():
     """Reset the Camoufox source"""
     with temp_cd('..'):
@@ -141,6 +142,7 @@ def get_rejects(patch_file):
 choices = [
     "Reset workspace",
     "Edit a patch",
+    "Create new patch",
     "\u2014" * 44,
     "List patches currently applied",
     "Select patches",
@@ -167,11 +169,27 @@ def handle_choice(choice):
                 "Reset Complete",
             )
 
+        case "Create new patch":
+            # Reset camoufox, apply all patches, then create a checkpoint
+            with temp_cd('..'):
+                run('make dir')
+                run('make checkpoint')
+            easygui.msgbox(
+                "Created new patch workspace. You can test Camoufox with 'make run'.\n\n"
+                "When you are finished, write your workspace back to a new patch.",
+                "New Patch Workspace",
+            )
+
         case "List patches currently applied":
             # Produces a list of patches that are applied
             apply_dict = {}
             for patch_file in list_patches():
                 print(f'FILE: {patch_file}')
+                # Ignore bootstrap files, these will always break.
+                if os.path.basename(patch_file).startswith('0-'):
+                    apply_dict[patch_file] = 'IGNORED'
+                    continue
+                # Check if the patch can be applied or reversed
                 can_apply, can_reverse, broken = check_patch(patch_file)
                 if broken:
                     apply_dict[patch_file] = 'BROKEN'
@@ -218,7 +236,7 @@ def handle_choice(choice):
                     broken_patches.append((patch_file, reject_files))
 
             if not broken_patches:
-                easygui.msgbox("All patches applied successfully", "Patching Result")
+                easygui.msgbox("All patches applied successfully.", "Patching Result")
                 return
 
             # Display message
