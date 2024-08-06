@@ -14,7 +14,6 @@ import (
 )
 
 func main() {
-
 	configPath, remainingArgs := parseArgs(os.Args[1:]) // Parse args arguments
 
 	configMap := readAndParseConfig(configPath) // Read and parse the config file

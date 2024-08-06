@@ -12,3 +12,4 @@ launch.exe
 __pycache__/
 *.pyc
 wget-log
+*.kate-swp
