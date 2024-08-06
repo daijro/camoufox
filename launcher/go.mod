@@ -1,4 +1,4 @@
-module camoufox-launcher
+module launch
 
 go 1.22.5
 

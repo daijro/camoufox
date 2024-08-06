@@ -47,9 +47,9 @@ func parseArgs(args []string) (string, []string) {
 		}
 	}
 
+	// If no config data is provided, fallback to an empty object
 	if configPath == "" {
-		fmt.Println("Usage: ./launch --config <config.json> [...additional args]")
-		os.Exit(1)
+		configPath = "{}"
 	}
 
 	return configPath, remainingArgs
