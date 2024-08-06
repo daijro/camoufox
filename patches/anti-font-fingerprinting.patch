@@ -1,0 +1,46 @@
+cd camoufox-128.0.3-1 && git diff
+diff --git a/gfx/thebes/gfxHarfBuzzShaper.cpp b/gfx/thebes/gfxHarfBuzzShaper.cpp
+index 18bc08a6bf..b779ed6c0f 100644
+--- a/gfx/thebes/gfxHarfBuzzShaper.cpp
++++ b/gfx/thebes/gfxHarfBuzzShaper.cpp
+@@ -17,6 +17,8 @@
+ 
+ #include "harfbuzz/hb.h"
+ #include "harfbuzz/hb-ot.h"
++#include <cstdlib>
++#include <chrono>
+ 
+ #include <algorithm>
+ 
+@@ -1557,6 +1559,31 @@ bool gfxHarfBuzzShaper::ShapeText(DrawTarget* aDrawTarget,
+ 
+   hb_shape(mHBFont, mBuffer, features.Elements(), features.Length());
+ 
++  // Generate a random float [0, 0.1] to offset the letter spacing
++  static uint32_t seed = static_cast<uint32_t>(
++      std::chrono::high_resolution_clock::now().time_since_epoch().count());
++  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
++  float randomFloat = (static_cast<float>(seed) / 0x7fffffff) * 0.1f;
++  hb_position_t spacing = FloatToFixed(randomFloat);
++
++  uint32_t glyphCount;
++  hb_glyph_position_t* glyphPositions =
++      hb_buffer_get_glyph_positions(mBuffer, &glyphCount);
++
++  hb_position_t cumulativeOffset = 0;
++
++  // Apply custom letter spacing
++  for (uint32_t i = 0; i < glyphCount; ++i) {
++    if (aVertical) {
++      glyphPositions[i].y_advance -= spacing;
++      glyphPositions[i].y_offset -= cumulativeOffset;
++    } else {
++      glyphPositions[i].x_advance += spacing;
++      glyphPositions[i].x_offset += cumulativeOffset;
++    }
++    cumulativeOffset += spacing;
++  }
++
+   if (isRightToLeft) {
+     hb_buffer_reverse(mBuffer);
+   }

@@ -18,16 +18,15 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 
 - Fingerprint injection (override properties of `navigator`, `window`, `screen`, etc) ✅
 - Patches to avoid webdriver detection ✅
-- Font spoofing ✅
+- Font spoofing & anti-fingerprinting ✅
 - Full integration of Playwright's Juggler ✅
 - Patches from LibreWolf & Ghostery to remove Mozilla services ✅
 - Optimized for memory and speed ✅
-- Stays up to date with the latest Firefox version ⌚
+- Stays up to date with the latest Firefox version 🕓
 
 #### What's planned?
 
 - Built in TLS fingerprinting protection using [Hazetunnel](https://github.com/daijro/hazetunnel)
-- Automatic font renderer rotation on Linux (fontconfig) and Windows (DirectWrite/GDI)
 - Create integration tests
 - Chromium port (long-term)
 
@@ -75,6 +74,8 @@ Navigator (the most important attributes) can be fully spoof other Firefox finge
 | navigator.buildID              | ✅    |
 | navigator.doNotTrack           | ✅    |
 
+Camoufox will automatically add the default fonts associated your spoofed User-Agent OS (the value passed in `navigator.userAgent`).
+
 **Notes**:
 
 - **navigator.webdriver** is set to false at all times.
@@ -91,7 +92,9 @@ Fonts
 
 Fonts can be passed to be used in Camoufox through the `fonts` config property.
 
-By default, Camoufox is bundled with the default Windows 11 22H2 fonts, macOS Sonma fonts, and Linux fonts used in the TOR bundle. Camoufox will automatically pass in the default fonts associated your spoofed User-Agent:
+By default, Camoufox is bundled with the default Windows 11 22H2 fonts, macOS Sonma fonts, and Linux fonts used in the TOR bundle.
+
+Camoufox will automatically add the default fonts associated your spoofed User-Agent OS (the value passed in `navigator.userAgent`).
 
 **Mac OS** fonts (from macOS Sonma):
 
@@ -111,7 +114,9 @@ By default, Camoufox is bundled with the default Windows 11 22H2 fonts, macOS So
 ["Arimo", "Cousine", "Noto Naskh Arabic", "Noto Sans Adlam", "Noto Sans Armenian", "Noto Sans Balinese", "Noto Sans Bamum", "Noto Sans Bassa Vah", "Noto Sans Batak", "Noto Sans Bengali", "Noto Sans Buginese", "Noto Sans Buhid", "Noto Sans Canadian Aboriginal", "Noto Sans Chakma", "Noto Sans Cham", "Noto Sans Cherokee", "Noto Sans Coptic", "Noto Sans Deseret", "Noto Sans Devanagari", "Noto Sans Elbasan", "Noto Sans Ethiopic", "Noto Sans Georgian", "Noto Sans Grantha", "Noto Sans Gujarati", "Noto Sans Gunjala Gondi", "Noto Sans Gurmukhi", "Noto Sans Hanifi Rohingya", "Noto Sans Hanunoo", "Noto Sans Hebrew", "Noto Sans JP", "Noto Sans Javanese", "Noto Sans KR", "Noto Sans Kannada", "Noto Sans Kayah Li", "Noto Sans Khmer", "Noto Sans Khojki", "Noto Sans Khudawadi", "Noto Sans Lao", "Noto Sans Lepcha", "Noto Sans Limbu", "Noto Sans Lisu", "Noto Sans Mahajani", "Noto Sans Malayalam", "Noto Sans Mandaic", "Noto Sans Masaram Gondi", "Noto Sans Medefaidrin", "Noto Sans Meetei Mayek", "Noto Sans Mende Kikakui", "Noto Sans Miao", "Noto Sans Modi", "Noto Sans Mongolian", "Noto Sans Mro", "Noto Sans Multani", "Noto Sans Myanmar", "Noto Sans NKo", "Noto Sans New Tai Lue", "Noto Sans Newa", "Noto Sans Ol Chiki", "Noto Sans Oriya", "Noto Sans Osage", "Noto Sans Osmanya", "Noto Sans Pahawh Hmong", "Noto Sans Pau Cin Hau", "Noto Sans Rejang", "Noto Sans Runic", "Noto Sans SC", "Noto Sans Samaritan", "Noto Sans Saurashtra", "Noto Sans Sharada", "Noto Sans Shavian", "Noto Sans Sinhala", "Noto Sans Sora Sompeng", "Noto Sans Soyombo", "Noto Sans Sundanese", "Noto Sans Syloti Nagri", "Noto Sans Symbols", "Noto Sans Symbols 2", "Noto Sans Syriac", "Noto Sans TC", "Noto Sans Tagalog", "Noto Sans Tagbanwa", "Noto Sans Tai Le", "Noto Sans Tai Tham", "Noto Sans Tai Viet", "Noto Sans Takri", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Thaana", "Noto Sans Thai", "Noto Sans Tifinagh", "Noto Sans Tifinagh APT", "Noto Sans Tifinagh Adrar", "Noto Sans Tifinagh Agraw Imazighen", "Noto Sans Tifinagh Ahaggar", "Noto Sans Tifinagh Air", "Noto Sans Tifinagh Azawagh", "Noto Sans Tifinagh Ghat", "Noto Sans Tifinagh Hawad", "Noto Sans Tifinagh Rhissa Ixa", "Noto Sans Tifinagh SIL", "Noto Sans Tifinagh Tawellemmet", "Noto Sans Tirhuta", "Noto Sans Vai", "Noto Sans Wancho", "Noto Sans Warang Citi", "Noto Sans Yi", "Noto Sans Zanabazar Square", "Noto Serif Armenian", "Noto Serif Balinese", "Noto Serif Bengali", "Noto Serif Devanagari", "Noto Serif Dogra", "Noto Serif Ethiopic", "Noto Serif Georgian", "Noto Serif Grantha", "Noto Serif Gujarati", "Noto Serif Gurmukhi", "Noto Serif Hebrew", "Noto Serif Kannada", "Noto Serif Khmer", "Noto Serif Khojki", "Noto Serif Lao", "Noto Serif Malayalam", "Noto Serif Myanmar", "Noto Serif NP Hmong", "Noto Serif Sinhala", "Noto Serif Tamil", "Noto Serif Telugu", "Noto Serif Thai", "Noto Serif Tibetan", "Noto Serif Yezidi", "STIX Two Math", "Tinos", "Twemoji Mozilla"]
 ```
 
-Note other fonts can be added to this list (and please do add your own fonts) to avoid font fingerprinting.
+Other fonts can be added by copying them into the `fonts/` directory in Camoufox, or by installing them on your system.
+
+**Note**: It is highly recommended that you randomly pass custom fonts to the `fonts` config property to avoid font fingerprinting!
 
 </details>
 
@@ -132,10 +137,6 @@ Screen
 | screen.pixelDepth  | ✅     |
 | screen.pageXOffset | ✅     |
 | screen.pageYOffset | ✅     |
-
-**Notes:**
-
-- For screen properties, using Page.setViewportSize() may be more effective.
 
 </details>
 
@@ -158,6 +159,10 @@ Window
 | window.screenY          | ✅                          |
 | window.history.length   | ✅                          |
 | window.devicePixelRatio | Works, but not recommended! |
+
+**Notes:**
+
+- Setting the outer window viewport will cause some cosmetic defects to the Camoufox window if the user attempts to manually resize it. Under no circumstances will Camoufox allow the outer window viewport to be resized.
 
 </details>
 
@@ -204,14 +209,15 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 
 ### What other changes were made?
 
-#### Fingerprint injection
+#### Fingerprint spoofing
 
 - Navigator properties spoofing (device, browser, locale, etc.)
 - Support for emulating screen size, resolution, etc.
-- Spoof default system fonts of Windows, Mac, and Linux
-- WebGL unmasked renderer spoofing (WIP).
+- Uses Windows, Mac, and Linux system fonts
+- Prevents font fingerprinting by randomly offsetting letter spacing
+- WebGL unmasked renderer spoofing (WIP)
 - Battery API spoofing
-- Support for spoofing both inner and outer window sizes
+- Support for spoofing both inner and outer window viewport sizes
 - Network headers (Accept-Languages and User-Agent) are spoofed to match the navigator properties.
 - etc.
 

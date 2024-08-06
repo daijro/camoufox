@@ -77,7 +77,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
         for font in fonts or []:
             shutil.copytree(
                 os.path.join('bundle', 'fonts', font),
-                os.path.join(target_dir, 'fonts', font),
+                os.path.join(target_dir, 'fonts', font) if target == 'linux' else target_dir,
                 dirs_exist_ok=True,
             )
 
