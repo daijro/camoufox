@@ -8,7 +8,7 @@ import shutil
 import sys
 import tempfile
 
-from _mixin import find_src_dir, get_moz_target, run, temp_cd
+from _mixin import find_src_dir, get_moz_target, list_files, run, temp_cd
 
 UNNEEDED_PATHS = {'uninstall', 'pingsender.exe', 'pingsender', 'vaapitest', 'glxtest'}
 
@@ -73,13 +73,21 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
                 else:
                     shutil.copy2(include, target_dir)
 
-        # Add fonts under fonts/
-        for font in fonts or []:
-            shutil.copytree(
-                os.path.join('bundle', 'fonts', font),
-                os.path.join(target_dir, 'fonts', font) if target == 'linux' else target_dir,
-                dirs_exist_ok=True,
-            )
+        # Add the font folders under fonts/
+        fonts_dir = os.path.join(target_dir, 'fonts')
+        if target == 'linux':
+            for font in fonts or []:
+                shutil.copytree(
+                    os.path.join('bundle', 'fonts', font),
+                    os.path.join(fonts_dir, font),
+                    dirs_exist_ok=True,
+                )
+        # Non-linux systems cannot read fonts within subfolders.
+        # Instead, we walk the fonts/ directory and copy all files.
+        else:
+            for font in fonts or []:
+                for file in list_files(root_dir=os.path.join('bundle', 'fonts', font), suffix='*'):
+                    shutil.copy2(file, fonts_dir)
 
         # Add launcher from launcher/dist/launch to temp_dir
         shutil.copy2(
