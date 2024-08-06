@@ -8,7 +8,7 @@ debs := python3 python3-dev python3-pip p7zip-full golang-go msitools wget aria2
 rpms := python3 python3-devel p7zip golang msitools wget aria2c
 pacman := python python-pip p7zip go msitools wget aria2c
 
-.PHONY: help fetch setup setup-minimal clean set-target distclean build package build-launcher check-arch revert edits run bootstrap mozbootstrap dir package-linux package-macos package-windows
+.PHONY: help fetch setup setup-minimal clean set-target distclean build package build-launcher check-arch revert edits run bootstrap mozbootstrap dir package-linux package-macos package-windows vcredist_arch
 
 help:
 	@echo "Available targets:"
@@ -131,7 +131,7 @@ package-windows:
 	python3 scripts/package.py windows \
 		--includes \
 			settings/chrome.css \
-			~/.mozbuild/vs/VC/Redist/MSVC/14.38.33135/$(arch)/Microsoft.VC143.CRT/*.dll \
+			~/.mozbuild/vs/VC/Redist/MSVC/14.38.33135/$(vcredist_arch)/Microsoft.VC143.CRT/*.dll \
 		--version $(version) \
 		--release $(release) \
 		--arch $(arch) \
@@ -139,3 +139,5 @@ package-windows:
 
 run:
 	cd $(cf_source_dir) && rm -rf ~/.camoufox && ./mach run
+
+vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')
