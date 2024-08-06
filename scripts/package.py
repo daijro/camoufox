@@ -90,9 +90,10 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
                     shutil.copy2(file, fonts_dir)
 
         # Add launcher from launcher/dist/launch to temp_dir
+        launch_file = 'launch' + ('.exe' if target == 'windows' else '')
         shutil.copy2(
-            os.path.join('launcher', 'dist', 'launch'),
-            os.path.join(temp_dir, 'launch' + ('.exe' if target == 'windows' else '')),
+            os.path.join('launcher', 'dist', launch_file),
+            os.path.join(temp_dir, launch_file),
         )
 
         # Remove unneeded paths
