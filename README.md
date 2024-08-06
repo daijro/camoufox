@@ -264,16 +264,19 @@ Camoufox performs well against every major WAF I've tested. (Test sites from [Bo
 | ‣ [recaptcha-demo.appspot.com](https://recaptcha-demo.appspot.com/recaptcha-v3-request-scores.php) | ✔️ 0.9                                            |
 | ‣ [berstend.github.io](https://berstend.github.io/static/recaptcha/v3-programmatic.html)           | ✔️ 0.9                                            |
 | [**CreepJS**](https://abrahamjuliot.github.io/creepjs/)                                            | ✔️ 68.5% (56% with Chrome fingerprint)            |
-| ‣ **DataDome**                                                                                     | ✔️                                                |
+| **DataDome**                                                                                       | ✔️                                                |
 | ‣ [antoinevastel.com](https://antoinevastel.com/bots/datadome)                                     | ✔️                                                |
 | ‣ [datadome.co](https://datadome.co/bot-tester/)                                                   | ✔️                                                |
 | **Imperva**                                                                                        | ✔️                                                |
 | ‣ [ticketmaster.es](https://www.ticketmaster.es/)                                                  | ✔️                                                |
-| ‣ **Kasada**                                                                                       | ✔️                                                |
+| **Kasada**                                                                                         | ✔️                                                |
 | ‣ [canadagoose.com](https://www.canadagoose.com/)                                                  | ✔️                                                |
-| ‣ **Cloudflare**                                                                                   | ✔️                                                |
+| **Cloudflare**                                                                                     | ✔️                                                |
 | ‣ [Turnstile](https://nopecha.com/demo/turnstile)                                                  | ✔️                                                |
-| ‣ [Interstitial](https://nopecha.com/demo/cloudflare)                                              | ✔️❓ Unstable on Chrome fingerprints              |
+| ‣ [Interstitial](https://nopecha.com/demo/cloudflare)                                              | ✔️ Unstable on Chrome fingerprints                |
+| **Font Fingerprinting**                                                                            | ✔️                                                |
+| ‣ [Browserleaks Fonts](https://browserleaks.net/fonts)                                             | ✔️                                                |
+| ‣ [CreepJS TextMetrics](https://abrahamjuliot.github.io/creepjs/tests/fonts.html)                  | ✔️                                                |
 | [**SannySoft**](https://bot.sannysoft.com/)                                                        | ✔️                                                |
 | [**Incolumitas**](https://bot.incolumitas.com/)                                                    | ✔️ 0.8-1.0                                        |
 | [**Fingerprint.com**](https://fingerprint.com/products/bot-detection/)                             | ✔️                                                |
