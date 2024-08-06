@@ -1,5 +1,5 @@
 /*
-Helper to extract values from the Mask Config JSON file.
+Helper to extract values from the CAMOU_CONFIG environment variable(s).
 Written by daijro.
 */
 
@@ -15,17 +15,60 @@ Written by daijro.
 #include <stdlib.h>
 #include <stdio.h>
 
+#ifdef _WIN32
+#  include <windows.h>
+#endif
+
 namespace MaskConfig {
+
+inline std::optional<std::string> get_env_utf8(const std::string& name) {
+#ifdef _WIN32
+  std::wstring wName(name.begin(), name.end());
+  DWORD size = GetEnvironmentVariableW(wName.c_str(), nullptr, 0);
+  if (size == 0) return std::nullopt;  // Environment variable not found
+
+  std::vector<wchar_t> buffer(size);
+  GetEnvironmentVariableW(wName.c_str(), buffer.data(), size);
+  std::wstring wValue(buffer.data());
+
+  // Convert UTF-16 to UTF-8
+  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+  return converter.to_bytes(wValue);
+#else
+  const char* value = getenv(name.c_str());
+  if (!value) return std::nullopt;
+  return std::string(value);
+#endif
+}
 
 inline const nlohmann::json& GetJson() {
   static const nlohmann::json jsonConfig = []() {
-    const char* jsonString = getenv("CAMOU_CONFIG");
-    if (!jsonString) return nlohmann::json{};
+    std::string jsonString;
+    int index = 1;
+
+    while (true) {
+      std::string envName = "CAMOU_CONFIG_" + std::to_string(index);
+      auto partialConfig = get_env_utf8(envName);
+      if (!partialConfig) break;
+
+      jsonString += *partialConfig;
+      index++;
+    }
+
+    if (jsonString.empty()) {
+      // Check for the original CAMOU_CONFIG as fallback
+      auto originalConfig = get_env_utf8("CAMOU_CONFIG");
+      if (originalConfig) jsonString = *originalConfig;
+    }
+
+    if (jsonString.empty()) return nlohmann::json{};
+
     // Validate
     if (!nlohmann::json::accept(jsonString)) {
       printf_stderr("ERROR: Invalid JSON passed to CAMOU_CONFIG!\n");
       return nlohmann::json{};
     }
+
     nlohmann::json result = nlohmann::json::parse(jsonString);
     return result;
   }();

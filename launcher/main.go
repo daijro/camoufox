@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -9,7 +8,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"unicode/utf8"
 
+	json "github.com/goccy/go-json"
 	"github.com/mileusna/useragent"
 )
 
@@ -112,7 +113,7 @@ func updateFonts(configMap map[string]interface{}, userAgentOS string) {
 			existingFonts[f] = true
 		}
 	}
-	for _, font := range fontsByOS[userAgentOS] {
+	for _, font := range FontsByOS[userAgentOS] {
 		if !existingFonts[font] {
 			fonts = append(fonts, font)
 		}
@@ -127,7 +128,35 @@ func setEnvironmentVariables(configMap map[string]interface{}, userAgentOS strin
 		os.Exit(1)
 	}
 
-	os.Setenv("CAMOU_CONFIG", string(updatedConfigData))
+	// Validate utf8
+	if !utf8.Valid(updatedConfigData) {
+		fmt.Println("Config is not valid UTF-8")
+		os.Exit(1)
+	}
+
+	// Split the config into chunks of 2047 characters if the OS is Windows,
+	// otherwise split into 32767 characters
+	var chunkSize int
+	if normalizeOS(runtime.GOOS) == "windows" {
+		chunkSize = 2047
+	} else {
+		chunkSize = 32767
+	}
+
+	configStr := string(updatedConfigData)
+	for i := 0; i < len(configStr); i += chunkSize {
+		end := i + chunkSize
+		if end > len(configStr) {
+			end = len(configStr)
+		}
+		chunk := configStr[i:end]
+		envName := fmt.Sprintf("CAMOU_CONFIG_%d", (i/chunkSize)+1)
+		if err := os.Setenv(envName, chunk); err != nil {
+			fmt.Printf("Error setting %s: %v\n", envName, err)
+			os.Exit(1)
+		}
+	}
+
 	if normalizeOS(runtime.GOOS) == "linux" {
 		fontconfigPath := filepath.Join("fontconfig", userAgentOS)
 		os.Setenv("FONTCONFIG_PATH", fontconfigPath)
@@ -141,7 +170,7 @@ func getExecutableName() string {
 	case "macos":
 		return "./Camoufox.app"
 	case "windows":
-		return "camoufox.exe"
+		return "./camoufox.exe"
 	default:
 		// This should never be reached due to the check in normalizeOS
 		return ""
