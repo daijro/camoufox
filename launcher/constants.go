@@ -1,5 +1,29 @@
 package main
 
+import (
+	"regexp"
+	"strings"
+)
+
+// Exclude lines from output
+var ExclusionRules = []string{
+	// Ignore search related warnings
+	"^console\\.error:\\ Search",
+	"SearchService",
+	"SearchEngineSelector",
+	// Ignore glxtest errors
+	"\\[GFX1\\-\\]:",
+	// Ignore meaningless lines
+	"^console\\.error:\\ \\(\\{\\}\\)$",
+	"^console\\.error:\\ \"Could\\ not\\ record\\ event:\\ \"\\ \\(\\{\\}\\)$",
+	"^\\s*?$",
+	// Ignore missing urlbar provider errors
+	"^JavaScript\\ error:\\ resource:///modules/UrlbarProvider",
+}
+
+// Convert ExclusionRules into a regex command
+var ExclusionRegex = regexp.MustCompile(".*(" + strings.Join(ExclusionRules, "|") + ").*")
+
 // List of fonts for each OS
 var FontsByOS = map[string][]string{
 	"windows": {

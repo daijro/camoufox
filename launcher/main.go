@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -27,10 +25,15 @@ func main() {
 
 	// Run the Camoufox executable
 	execName := getExecutableName()
+	if err := setExecutablePermissions(execName); err != nil {
+		fmt.Printf("Error setting executable permissions: %v\n", err)
+		os.Exit(1)
+	}
 	runCamoufox(execName, remainingArgs)
 }
 
 func parseArgs(args []string) (string, []string) {
+	// Parse the arguments
 	var configPath string
 	var remainingArgs []string
 
@@ -56,6 +59,7 @@ func parseArgs(args []string) (string, []string) {
 }
 
 func readAndParseConfig(configInput string) map[string]interface{} {
+	// Unmarshal the config input into a map
 	var configData []byte
 
 	// Check if the input is a file path or inline JSON
@@ -80,6 +84,7 @@ func readAndParseConfig(configInput string) map[string]interface{} {
 }
 
 func determineUserAgentOS(configMap map[string]interface{}) string {
+	// Determine the OS from the user agent string if provided
 	defaultOS := normalizeOS(runtime.GOOS)
 	if ua, ok := configMap["navigator.userAgent"].(string); ok {
 		parsedUA := useragent.Parse(ua)
@@ -91,6 +96,7 @@ func determineUserAgentOS(configMap map[string]interface{}) string {
 }
 
 func normalizeOS(osName string) string {
+	// Get the OS name as {macos, windows, linux}
 	osName = strings.ToLower(osName)
 	switch {
 	case osName == "darwin" || strings.Contains(osName, "mac"):
@@ -103,6 +109,7 @@ func normalizeOS(osName string) string {
 }
 
 func updateFonts(configMap map[string]interface{}, userAgentOS string) {
+	// Add fonts associated with the OS to the config map
 	fonts, ok := configMap["fonts"].([]interface{})
 	if !ok {
 		fonts = []interface{}{}
@@ -122,6 +129,7 @@ func updateFonts(configMap map[string]interface{}, userAgentOS string) {
 }
 
 func setEnvironmentVariables(configMap map[string]interface{}, userAgentOS string) {
+	// Update the config map with the fonts and environment variables
 	updatedConfigData, err := json.Marshal(configMap)
 	if err != nil {
 		fmt.Printf("Error updating config: %v\n", err)
@@ -160,68 +168,5 @@ func setEnvironmentVariables(configMap map[string]interface{}, userAgentOS strin
 	if normalizeOS(runtime.GOOS) == "linux" {
 		fontconfigPath := filepath.Join("fontconfig", userAgentOS)
 		os.Setenv("FONTCONFIG_PATH", fontconfigPath)
-	}
-}
-
-func getExecutableName() string {
-	switch normalizeOS(runtime.GOOS) {
-	case "linux":
-		return "./camoufox-bin"
-	case "macos":
-		return "./Camoufox.app"
-	case "windows":
-		return "./camoufox.exe"
-	default:
-		// This should never be reached due to the check in normalizeOS
-		return ""
-	}
-}
-
-func runCamoufox(execName string, args []string) {
-	cmd := exec.Command(execName, args...)
-
-	// Create pipes for stdout and stderr
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Printf("Error creating stdout pipe: %v\n", err)
-		os.Exit(1)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		fmt.Printf("Error creating stderr pipe: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("Error starting %s: %v\n", execName, err)
-		os.Exit(1)
-	}
-
-	// Create a channel to signal when we're done copying output
-	done := make(chan bool)
-
-	// Copy stdout and stderr to the console
-	go func() {
-		io.Copy(os.Stdout, stdout)
-		done <- true
-	}()
-	go func() {
-		io.Copy(os.Stderr, stderr)
-		done <- true
-	}()
-
-	// Wait for both stdout and stderr to finish
-	<-done
-	<-done
-
-	// Wait for the command to finish
-	if err := cmd.Wait(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
-		} else {
-			fmt.Printf("Error running %s: %v\n", execName, err)
-			os.Exit(1)
-		}
 	}
 }

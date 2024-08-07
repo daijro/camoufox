@@ -26,6 +26,9 @@ esac
 
 [ "$OS" = "windows" ] && OUTPUT="launch.exe" || OUTPUT="launch"
 
-GOOS=$GOOS GOARCH=$GOARCH go build -o dist/$OUTPUT
+rm -rf ./dist launch launch.exe
 
-echo "Built: $OUTPUT"
+echo Building launcher...
+GOOS=$GOOS GOARCH=$GOARCH go build -o dist/$OUTPUT || exit 1
+
+echo "Complete: launcher/dist/$OUTPUT"
