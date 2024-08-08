@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"syscall"
+	"time"
 )
 
 func getExecutableName() string {
@@ -66,7 +68,32 @@ func filterOutput(r io.Reader, w io.Writer) {
 	}
 }
 
-func runCamoufox(execName string, args []string) {
+func tryLoadAddons(debugPortInt int, addonsList []string) {
+	// Wait for the server to be open
+	for {
+		conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", debugPortInt))
+		if err == nil {
+			conn.Close()
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Load addons
+	for _, addon := range addonsList {
+		loadFirefoxAddon(debugPortInt, addon)
+	}
+}
+
+// Run Camoufox
+func runCamoufox(execName string, args []string, addonsList []string) {
+	// If addons are specified, get the debug port
+	var debugPortInt int
+	if len(addonsList) > 0 {
+		debugPortInt = getDebugPort(&args)
+	}
+
+	// Print args
 	cmd := exec.Command(execName, args...)
 
 	setProcessGroupID(cmd)
@@ -89,6 +116,10 @@ func runCamoufox(execName string, args []string) {
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("Error starting %s: %v\n", execName, err)
 		os.Exit(1)
+	}
+
+	if len(addonsList) > 0 {
+		go tryLoadAddons(debugPortInt, addonsList)
 	}
 
 	// Channel to signal when the subprocess has finished

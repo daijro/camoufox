@@ -13,9 +13,21 @@ import (
 )
 
 func main() {
-	configPath, remainingArgs := parseArgs(os.Args[1:]) // Parse args arguments
+	args := os.Args[1:]
 
-	configMap := readAndParseConfig(configPath) // Read and parse the config file
+	configPath := parseArgs("--config", "{}", &args, true)
+	addons := parseArgs("--addons", "[]", &args, true)
+
+	// Read and parse the config file
+	var configMap map[string]interface{}
+	parseJson(configPath, &configMap)
+
+	// If addons are passed, handle them
+	var addonsList []string
+	parseJson(addons, &addonsList)
+
+	// Confirm addon paths are valid
+	confirmPaths(addonsList)
 
 	userAgentOS := determineUserAgentOS(configMap) // Determine the user agent OS
 
@@ -29,58 +41,47 @@ func main() {
 		fmt.Printf("Error setting executable permissions: %v\n", err)
 		os.Exit(1)
 	}
-	runCamoufox(execName, remainingArgs)
+	runCamoufox(execName, args, addonsList)
 }
 
-func parseArgs(args []string) (string, []string) {
-	// Parse the arguments
-	var configPath string
-	var remainingArgs []string
-
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--config" {
-			if i+1 < len(args) {
-				configPath = args[i+1]
-				remainingArgs = append(args[:i], args[i+2:]...)
-				break
-			} else {
-				fmt.Println("Error: --config flag requires a value")
-				os.Exit(1)
-			}
+func parseArgs(param string, defaultValue string, args *[]string, removeFromArgs bool) string {
+	for i := 0; i < len(*args); i++ {
+		if (*args)[i] != param {
+			continue
 		}
+		if i+1 < len(*args) {
+			value := (*args)[i+1]
+			if removeFromArgs {
+				*args = append((*args)[:i], (*args)[i+2:]...)
+			}
+			return value
+		}
+		fmt.Printf("Error: %s flag requires a value\n", param)
+		os.Exit(1)
 	}
-
-	// If no config data is provided, fallback to an empty object
-	if configPath == "" {
-		configPath = "{}"
-	}
-
-	return configPath, remainingArgs
+	return defaultValue
 }
 
-func readAndParseConfig(configInput string) map[string]interface{} {
+func parseJson(argv string, target interface{}) {
 	// Unmarshal the config input into a map
-	var configData []byte
+	var data []byte
 
 	// Check if the input is a file path or inline JSON
-	if _, err := os.Stat(configInput); err == nil {
-		configData, err = os.ReadFile(configInput)
+	if _, err := os.Stat(argv); err == nil {
+		data, err = os.ReadFile(argv)
 		if err != nil {
 			fmt.Printf("Error reading config file: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
 		// Assume it's inline JSON
-		configData = []byte(configInput)
+		data = []byte(argv)
 	}
 
-	var configMap map[string]interface{}
-	if err := json.Unmarshal(configData, &configMap); err != nil {
+	if err := json.Unmarshal(data, target); err != nil {
 		fmt.Printf("Invalid JSON in config: %v\n", err)
 		os.Exit(1)
 	}
-
-	return configMap
 }
 
 func determineUserAgentOS(configMap map[string]interface{}) string {
