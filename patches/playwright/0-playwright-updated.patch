@@ -1,5 +1,4 @@
-# Modified version of Playwright's bootstrap.diff that runs on Firefox v128.0.3.
-# Modifications made by daijro.
+cd camoufox-128.0.3-1 && git diff
 diff --git a/accessible/base/NotificationController.h b/accessible/base/NotificationController.h
 index 137963f117..41fa27bc4a 100644
 --- a/accessible/base/NotificationController.h
@@ -892,7 +891,7 @@ index 7eea29947d..227314db13 100644
  
    static bool AutomaticStorageAccessPermissionCanBeGranted(
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index a7229fe412..4fdefb1868 100644
+index a7229fe412..5b737ab6a8 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
 @@ -344,14 +344,18 @@ void Navigator::GetAppName(nsAString& aAppName) const {
@@ -900,7 +899,8 @@ index a7229fe412..4fdefb1868 100644
   */
  /* static */
 -void Navigator::GetAcceptLanguages(nsTArray<nsString>& aLanguages) {
-+void Navigator::GetAcceptLanguages(const nsString* aLanguageOverride, nsTArray<nsString>& aLanguages) {
++void Navigator::GetAcceptLanguages(const nsString* aLanguageOverride,
++                                   nsTArray<nsString>& aLanguages) {
    MOZ_ASSERT(NS_IsMainThread());
  
    aLanguages.Clear();
@@ -912,7 +912,6 @@ index a7229fe412..4fdefb1868 100644
 +    acceptLang = *aLanguageOverride;
 +  else
 +    Preferences::GetLocalizedString("intl.accept_languages", acceptLang);
-+    
  
    // Split values on commas.
    for (nsDependentSubstring lang :
@@ -931,13 +930,23 @@ index a7229fe412..4fdefb1868 100644
  
    // The returned value is cached by the binding code. The window listens to the
    // accept languages change and will clear the cache when needed. It has to
-@@ -2308,7 +2318,8 @@ bool Navigator::Webdriver() {
+@@ -2288,6 +2298,10 @@ dom::PrivateAttribution* Navigator::PrivateAttribution() {
+ 
+ /* static */
+ bool Navigator::Webdriver() {
++  // Never enable
++  if (1 == 1) {
++    return false;
++  }
+ #ifdef ENABLE_WEBDRIVER
+   nsCOMPtr<nsIMarionette> marionette = do_GetService(NS_MARIONETTE_CONTRACTID);
+   if (marionette) {
+@@ -2307,8 +2321,6 @@ bool Navigator::Webdriver() {
+     }
    }
  #endif
- 
+-
 -  return false;
-+  // Playwright is automating the browser, so we should pretend to be a webdriver
-+  return true;
  }
  
  AutoplayPolicy Navigator::GetAutoplayPolicy(AutoplayPolicyMediaType aType) {
@@ -1117,7 +1126,7 @@ index 63968c9b7a..decf3ea383 100644
    MOZ_CAN_RUN_SCRIPT
    nsresult SendTouchEventCommon(
 diff --git a/dom/base/nsFocusManager.cpp b/dom/base/nsFocusManager.cpp
-index 587f03849d..d0a910d3ae 100644
+index 587f03849d..28780215bd 100644
 --- a/dom/base/nsFocusManager.cpp
 +++ b/dom/base/nsFocusManager.cpp
 @@ -1684,6 +1684,10 @@ Maybe<uint64_t> nsFocusManager::SetFocusInner(Element* aNewContent,
@@ -1131,20 +1140,13 @@ index 587f03849d..d0a910d3ae 100644
    // Exit fullscreen if a website focuses another window
    if (StaticPrefs::full_screen_api_exit_on_windowRaise() &&
        !isElementInActiveWindow && (aFlags & FLAG_RAISE)) {
-@@ -2269,6 +2273,7 @@ bool nsFocusManager::BlurImpl(BrowsingContext* aBrowsingContextToClear,
-                               bool aIsLeavingDocument, bool aAdjustWidget,
-                               bool aRemainActive, Element* aElementToFocus,
-                               uint64_t aActionId) {
-+
-   LOGFOCUS(("<<Blur begin actionid: %" PRIu64 ">>", aActionId));
- 
-   // hold a reference to the focused content, which may be null
-@@ -2315,6 +2320,11 @@ bool nsFocusManager::BlurImpl(BrowsingContext* aBrowsingContextToClear,
+@@ -2315,6 +2319,12 @@ bool nsFocusManager::BlurImpl(BrowsingContext* aBrowsingContextToClear,
      return true;
    }
  
 +  // Playwright: emulate focused page by never bluring when leaving document.
-+  if (XRE_IsContentProcess() && aIsLeavingDocument && docShell && nsDocShell::Cast(docShell)->ShouldOverrideHasFocus()) {
++  if (XRE_IsContentProcess() && aIsLeavingDocument && docShell &&
++      nsDocShell::Cast(docShell)->ShouldOverrideHasFocus()) {
 +    return true;
 +  }
 +
@@ -2248,30 +2250,17 @@ index 6e588cff05..a173b1154e 100644
  
      // If the browser is visible but just due to be preserving layers
 diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
-index 2ed62888d7..f5540c38df 100644
+index 2ed62888d7..0ca02752aa 100644
 --- a/layout/base/nsLayoutUtils.cpp
 +++ b/layout/base/nsLayoutUtils.cpp
-@@ -698,6 +698,10 @@ bool nsLayoutUtils::AllowZoomingForDocument(
+@@ -698,6 +698,7 @@ bool nsLayoutUtils::AllowZoomingForDocument(
        !aDocument->GetPresShell()->AsyncPanZoomEnabled()) {
      return false;
    }
 +
-+  /* Playwright: disable zooming as we don't support meta viewport tag */
-+  if (1 == 1) return false;
-+
    // True if we allow zooming for all documents on this platform, or if we are
    // in RDM.
    BrowsingContext* bc = aDocument->GetBrowsingContext();
-@@ -9794,6 +9798,9 @@ void nsLayoutUtils::ComputeSystemFont(nsFont* aSystemFont,
- 
- /* static */
- bool nsLayoutUtils::ShouldHandleMetaViewport(const Document* aDocument) {
-+  /* Playwright: disable meta viewport handling since we don't require one */
-+  if (1 == 1) return false;
-+
-   BrowsingContext* bc = aDocument->GetBrowsingContext();
-   return StaticPrefs::dom_meta_viewport_enabled() || (bc && bc->InRDMPane());
- }
 diff --git a/layout/style/GeckoBindings.h b/layout/style/GeckoBindings.h
 index d273793fc8..46b4078c60 100644
 --- a/layout/style/GeckoBindings.h
@@ -2591,23 +2580,6 @@ index 217beda78e..7ba723410e 100644
      // Prevents new window animations on MacOS and Windows. Currently
      // ignored for Linux.
      const unsigned long CHROME_SUPPRESS_ANIMATION     = 1 << 24;
-diff --git a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-index 00a5381133..5d3e3d6f56 100644
---- a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-+++ b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-@@ -108,6 +108,12 @@ EnterprisePoliciesManager.prototype = {
-       Services.prefs.clearUserPref(PREF_POLICIES_APPLIED);
-     }
- 
-+    // Playwright: Disable enterprise policies
-+    if (true) {
-+      this.status = Ci.nsIEnterprisePolicies.INACTIVE;
-+      return;
-+    }
-+
-     let provider = this._chooseProvider();
- 
-     if (provider.failed) {
 diff --git a/toolkit/components/resistfingerprinting/nsUserCharacteristics.cpp b/toolkit/components/resistfingerprinting/nsUserCharacteristics.cpp
 index 32b1ac4813..808031fbeb 100644
 --- a/toolkit/components/resistfingerprinting/nsUserCharacteristics.cpp
@@ -2666,21 +2638,6 @@ index 0767cb1539..dc0d72b4ff 100644
  }
  
  /**
-diff --git a/toolkit/mozapps/update/UpdateService.sys.mjs b/toolkit/mozapps/update/UpdateService.sys.mjs
-index deaed885c7..6d7851421b 100644
---- a/toolkit/mozapps/update/UpdateService.sys.mjs
-+++ b/toolkit/mozapps/update/UpdateService.sys.mjs
-@@ -3875,7 +3875,9 @@ export class UpdateService {
-   }
- 
-   get disabledForTesting() {
--    return lazy.UpdateServiceStub.updateDisabledForTesting;
-+    /* playwright */
-+    return true;
-+    // return lazy.UpdateServiceStub.updateDisabledForTesting;
-   }
- 
-   /**
 diff --git a/toolkit/toolkit.mozbuild b/toolkit/toolkit.mozbuild
 index 8c2b2bf996..07d237eb17 100644
 --- a/toolkit/toolkit.mozbuild
