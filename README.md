@@ -17,12 +17,21 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 ## Features
 
 - Fingerprint injection (override properties of `navigator`, `window`, `screen`, etc) ✅
-- Patches to avoid webdriver detection ✅
+- Patches to avoid Playwright detection ✅
+- Custom Playwright Juggler implementation with minimal leaks ✅
 - Font spoofing & anti-fingerprinting ✅
-- Playwright integration ✅
 - Patches from LibreWolf & Ghostery to remove Mozilla services ✅
 - Optimized for memory and speed ✅
 - Stays up to date with the latest Firefox version 🕓
+
+#### Why Firefox instead of Chromium?
+
+Camoufox is built on top of Firefox/Juggler instead of Chromium because:
+
+- CDP is more widely used and known, so it's a more common target for anti-bot detection
+- Juggler operates on a lower level than CDP, and has less JS leaks
+- WAFs tend to be more lenient towards Firefox
+- Firefox is generally less associated with automation
 
 #### What's planned?
 
@@ -54,7 +63,6 @@ Navigator (the most important attributes) can be fully spoof other Firefox finge
 | Property                       | Notes |
 | ------------------------------ | ----- |
 | navigator.userAgent            | ✅    |
-| navigator.userAgentData        | ✅    |
 | navigator.doNotTrack           | ✅    |
 | navigator.appCodeName          | ✅    |
 | navigator.appName              | ✅    |
@@ -63,7 +71,6 @@ Navigator (the most important attributes) can be fully spoof other Firefox finge
 | navigator.language             | ✅    |
 | navigator.languages            | ✅    |
 | navigator.platform             | ✅    |
-| navigator.deviceMemory         | ✅    |
 | navigator.hardwareConcurrency  | ✅    |
 | navigator.product              | ✅    |
 | navigator.productSub           | ✅    |
@@ -193,6 +200,26 @@ Spoofing document.body has been implemented, but it is more advicable to set `wi
 </details>
 
 <details>
+
+<summary>
+Addons
+</summary>
+
+Addons can be loaded with the `--addons` flag.
+
+Example:
+
+```bash
+./launcher --addons '["/path/to/addon", "/path/to/addon2"]'
+```
+
+Camoufox will automatically download and use the latest uBlock Origin with custom privacy/adblock filters, and B.P.C. by default to help with scraping.
+
+To disable this, use the `--no-default-addons` flag.
+
+</details>
+
+<details>
 <summary>
 Miscellaneous (WebGl spoofing, battery status, etc)
 </summary>
@@ -217,23 +244,28 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 
 ## Patches
 
-### What other changes were made?
+### What changes were made?
 
 #### Fingerprint spoofing
 
 - Navigator properties spoofing (device, browser, locale, etc.)
 - Support for emulating screen size, resolution, etc.
-- Uses Windows, Mac, and Linux system fonts
-- Prevents font fingerprinting by randomly offsetting letter spacing
 - WebGL unmasked renderer spoofing (WIP)
 - Battery API spoofing
 - Support for spoofing both inner and outer window viewport sizes
-- Network headers (Accept-Languages and User-Agent) are spoofed to match the navigator properties.
+- Network headers (Accept-Languages and User-Agent) are spoofed to match the navigator properties
 - etc.
+
+#### Anti font fingerprinting
+
+- Automatically uses the correct system fonts for your User Agent
+- Bundled with Windows, Mac, and Linux system fonts
+- Prevents font metrics fingerprinting by randomly offsetting letter spacing
 
 #### Playwright support
 
-- Updated Playwright's Juggler for the latest Firefox
+- Removed leaking Playwright patches
+- Custom implementation of Playwright for the latest Firefox
 - Various config patches to evade bot detection
 
 #### Debloat/Optimizations
@@ -246,10 +278,11 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 
 #### Addons
 
+- Firefox addons can be loaded with the `--addons` flag
 - Added uBlock Origin with custom privacy filters
 - Added B.P.C.
 - Addons are not allowed to open tabs
-- Addons will automatically run in Private Browsing mode
+- Addons are automatically enabled in Private Browsing mode
 
 ## Stealth Performance
 
