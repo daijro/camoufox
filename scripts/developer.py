@@ -22,7 +22,7 @@ def into_camoufox_dir():
 def reset_camoufox():
     """Reset the Camoufox source"""
     with temp_cd('..'):
-        run('make clean')
+        run('make revert')
 
 
 def run_patches(reverse=False):
@@ -230,10 +230,27 @@ def handle_choice(choice):
         case "Find broken patches (resets workspace)":
             reset_camoufox()
 
+            get_all = None
+
             broken_patches = []
             for patch_file in list_patches():
+                print(f'Testing: {patch_file}')
                 if reject_files := get_rejects(patch_file):
+                    # Add the patch to the list
                     broken_patches.append((patch_file, reject_files))
+                    # If get_all is None, ask the user if they want to get all the rejects
+                    if get_all is None:
+                        get_all = easygui.ynbox(
+                            f"Reject was found: {patch_file}.\nGet the rest of them?",
+                            "Get All Rejects",
+                            choices=["Yes", "No"]
+                        )
+                    # If the user closed the dialog, return
+                    if get_all is None:
+                        return
+                    # If the user said no, break the patch loop
+                    if not get_all:
+                        break
 
             if not broken_patches:
                 easygui.msgbox("All patches applied successfully.", "Patching Result")
@@ -249,10 +266,9 @@ def handle_choice(choice):
             for patch_file, rejects in broken_patches:
                 message += f"Patch: {patch_file[len('../patches/'):]}\nRejects:\n"
                 for reject in rejects:
-                    message += f"{reject}\n"
                     with open(reject, 'r') as f:
-                        message += f.read()
-                    message += "-" * 62 + "\n"
+                        count = len(re.findall('^@@.*', f.read(), re.MULTILINE))
+                    message += f"{count} reject(s) > {reject}\n"
                 message += '\n'
             easygui.textbox("Patching Result", "Failed Patches", message)
 
