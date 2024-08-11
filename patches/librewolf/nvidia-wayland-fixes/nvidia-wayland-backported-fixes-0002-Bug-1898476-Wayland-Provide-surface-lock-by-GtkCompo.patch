@@ -51,10 +51,10 @@ index d4834247f16d..8d56f35a561c 100644
  #if defined(MOZ_WAYLAND)
    void ConfigureWaylandBackend();
 diff --git a/widget/gtk/nsWindow.cpp b/widget/gtk/nsWindow.cpp
-index 297149796986..28c0cb2641e2 100644
+index b78ad4ca286b..40594a0e6f2f 100644
 --- a/widget/gtk/nsWindow.cpp
 +++ b/widget/gtk/nsWindow.cpp
-@@ -10218,3 +10218,10 @@ void nsWindow::SetDragSource(GdkDragContext* aSourceDragContext) {
+@@ -10276,3 +10276,10 @@ void nsWindow::SetDragSource(GdkDragContext* aSourceDragContext) {
      }
    }
  }
@@ -66,7 +66,7 @@ index 297149796986..28c0cb2641e2 100644
 +  return MakeUnique<MozContainerSurfaceLock>(mContainer);
 +}
 diff --git a/widget/gtk/nsWindow.h b/widget/gtk/nsWindow.h
-index 1dd1f1dce8f4..98cec928817f 100644
+index 36b039cc5e58..ce57689fcc15 100644
 --- a/widget/gtk/nsWindow.h
 +++ b/widget/gtk/nsWindow.h
 @@ -13,6 +13,7 @@
@@ -77,7 +77,7 @@ index 1dd1f1dce8f4..98cec928817f 100644
  #include "VsyncSource.h"
  #include "mozilla/EventForwards.h"
  #include "mozilla/Maybe.h"
-@@ -422,6 +423,8 @@ class nsWindow final : public nsBaseWidget {
+@@ -421,6 +422,8 @@ class nsWindow final : public nsBaseWidget {
  
    static nsWindow* GetFocusedWindow();
  
