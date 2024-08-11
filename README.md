@@ -24,16 +24,15 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 - Optimized for memory and speed ✅
 - Stays up to date with the latest Firefox version 🕓
 
-#### Why Firefox instead of Chromium?
+### Why Firefox instead of Chromium?
 
 Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 
-- CDP is more widely used and known, so it's a more common target for anti-bot detection
+- CDP is more widely used and known, so it's a more common target for bot detection
 - Juggler operates on a lower level than CDP, and has less JS leaks
-- WAFs tend to be more lenient towards Firefox
-- Firefox is generally less associated with automation
+- WAFs are less likely to associate Firefox with automation
 
-#### What's planned?
+### What's planned?
 
 - Built in TLS fingerprinting protection using [Hazetunnel](https://github.com/daijro/hazetunnel)
 - Create integration tests
@@ -215,8 +214,6 @@ Example:
 
 Camoufox will automatically download and use the latest uBlock Origin with custom privacy/adblock filters, and B.P.C. by default to help with scraping.
 
-To disable this, use the `--no-default-addons` flag.
-
 </details>
 
 <details>
@@ -264,9 +261,14 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 
 #### Playwright support
 
-- Removed leaking Playwright patches
 - Custom implementation of Playwright for the latest Firefox
 - Various config patches to evade bot detection
+- Removed leaking Playwright patches:
+  - Fixes `Runtime` domain detection
+  - Fixes `navigator.webdriver` detection
+  - Removed potentially leaking anti-zoom/meta viewport handling patches
+  - Re-enable fission content isolation
+  - Re-enable PDF.js
 
 #### Debloat/Optimizations
 
