@@ -577,7 +577,7 @@ const Network = {
   },
 };
 
-const Runtime = {
+const _Runtime = {
   targets: ['page'],
   types: runtimeTypes,
   events: {
