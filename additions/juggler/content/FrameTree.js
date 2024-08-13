@@ -68,7 +68,6 @@ class FrameTree {
         frame._pendingNavigationId = helper.toProtocolNavigationId(loadIdentifier);
         this.emit(FrameTree.Events.NavigationStarted, frame);
       }, 'juggler-navigation-started-renderer'),
-      helper.addObserver(this._onDOMWindowCreated.bind(this), 'content-document-global-created'),
       helper.addObserver(this._onDOMWindowCreated.bind(this), 'juggler-dom-window-reused'),
       helper.addObserver((browsingContext, topic, why) => {
         this._onBrowsingContextAttached(browsingContext);

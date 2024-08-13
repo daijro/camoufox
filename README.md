@@ -264,7 +264,7 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 - Custom implementation of Playwright for the latest Firefox
 - Various config patches to evade bot detection
 - Removed leaking Playwright patches:
-  - Fixes `Runtime` domain detection
+  - Fixes `content-document-global-created` observer leak
   - Fixes `navigator.webdriver` detection
   - Removed potentially leaking anti-zoom/meta viewport handling patches
   - Re-enable fission content isolation
