@@ -60,7 +60,7 @@ dir:
 	@if [ ! -d $(cf_source_dir) ]; then \
 		make setup; \
 	fi
-	make clean
+	make revert
 	python3 scripts/patch.py $(version) $(release)
 	touch $(cf_source_dir)/_READY
 
@@ -136,6 +136,11 @@ package-windows:
 		--release $(release) \
 		--arch $(arch) \
 		--fonts macos linux
+
+run-pw:
+	python3 scripts/run-pw.py \
+		--version $(version) \
+		--release $(release)
 
 run:
 	cd $(cf_source_dir) && rm -rf ~/.camoufox && ./mach run
