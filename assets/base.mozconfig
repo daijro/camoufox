@@ -14,8 +14,8 @@ ac_add_options --enable-release
 # ac_add_options --enable-rust-simd
 
 ac_add_options --disable-system-policies
-ac_add_options --disable-accessibility
-ac_add_options --disable-webspeech
+# ac_add_options --disable-accessibility
+# ac_add_options --disable-webspeech
 
 ac_add_options --with-app-name=camoufox
 ac_add_options --with-branding=browser/branding/camoufox
