@@ -1,4 +1,3 @@
-cd camoufox-129.0-beta && git diff
 diff --git a/browser/base/content/browser.js b/browser/base/content/browser.js
 index 1d69c20fb5..c34b4c6a88 100644
 --- a/browser/base/content/browser.js

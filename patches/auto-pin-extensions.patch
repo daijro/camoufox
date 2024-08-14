@@ -1,4 +1,3 @@
-cd camoufox-129.0-beta && git diff
 diff --git a/browser/base/content/browser-addons.js b/browser/base/content/browser-addons.js
 index d071b231aa..1733b17fd1 100644
 --- a/browser/base/content/browser-addons.js
