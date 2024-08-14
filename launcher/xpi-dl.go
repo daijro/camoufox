@@ -110,27 +110,15 @@ func contains(slice []string, item string) bool {
 }
 
 // Returns the absolute path to the target addon location
-func getAddonPath(addonName string) (string, error) {
-	execPath, err := os.Executable()
-	if err != nil {
-		fmt.Printf("Error getting executable path: %v\n", err)
-		return "", err
-	}
-	execDir := filepath.Dir(execPath)
-
-	addonPath := filepath.Join(execDir, "addons", addonName)
-	return addonPath, nil
+func getAddonPath(addonName string) string {
+	return getPath(filepath.Join("addons", addonName))
 }
 
 // Downloads and extracts the addons
 func maybeDownloadAddons(addons map[string]string, addonsList *[]string) {
 	for addonName, url := range addons {
 		// Get the addon path
-		addonPath, err := getAddonPath(addonName)
-		if err != nil {
-			fmt.Printf("Error getting addon path: %v\n", err)
-			continue
-		}
+		addonPath := getAddonPath(addonName)
 
 		// Check if the addon is already extracted
 		if _, err := os.Stat(addonPath); !os.IsNotExist(err) {
@@ -140,7 +128,7 @@ func maybeDownloadAddons(addons map[string]string, addonsList *[]string) {
 		}
 
 		// Addon doesn't exist, create directory and download
-		err = os.MkdirAll(addonPath, 0755)
+		err := os.MkdirAll(addonPath, 0755)
 		if err != nil {
 			fmt.Printf("Failed to create directory for %s: %v\n", addonName, err)
 			continue

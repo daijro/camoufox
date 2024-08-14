@@ -16,11 +16,11 @@ func getExecutableName() string {
 	// Get the executable name based on the OS
 	switch normalizeOS(runtime.GOOS) {
 	case "linux":
-		return "./camoufox-bin"
+		return getPath("camoufox-bin")
 	case "macos":
-		return "./Camoufox.app"
+		return getPath("Camoufox.app")
 	case "windows":
-		return "./camoufox.exe"
+		return getPath("camoufox.exe")
 	default:
 		// This should never be reached due to the check in normalizeOS
 		return ""

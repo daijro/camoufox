@@ -60,6 +60,19 @@ func main() {
 	runCamoufox(execName, args, addonsList)
 }
 
+// Returns the absolute path relative to the launcher
+func getPath(path string) string {
+	execPath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("Error getting executable path: %v\n", err)
+		os.Exit(1)
+	}
+	execDir := filepath.Dir(execPath)
+
+	addonPath := filepath.Join(execDir, path)
+	return addonPath
+}
+
 // Parses & removes an argument from the args list
 func parseArgs(param string, defaultValue string, args *[]string, removeFromArgs bool) string {
 	for i := 0; i < len(*args); i++ {
