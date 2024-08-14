@@ -35,10 +35,6 @@
       "Exceptions": ["https://localhost/*"]
     },
     "Extensions": {
-      "Install": [
-        "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi",
-        "https://github.com/bpc-clone/bpc_updates/releases/download/latest/bypass_paywalls_clean-latest.xpi"
-      ],
       "Uninstall": [
         "google@search.mozilla.org",
         "bing@search.mozilla.org",

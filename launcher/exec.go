@@ -4,14 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"syscall"
-	"time"
 )
 
 func getExecutableName() string {
@@ -65,23 +63,6 @@ func filterOutput(r io.Reader, w io.Writer) {
 		if !ExclusionRegex.MatchString(line) {
 			fmt.Fprintln(w, line)
 		}
-	}
-}
-
-func tryLoadAddons(debugPortInt int, addonsList []string) {
-	// Wait for the server to be open
-	for {
-		conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", debugPortInt))
-		if err == nil {
-			conn.Close()
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	// Load addons
-	for _, addon := range addonsList {
-		loadFirefoxAddon(debugPortInt, addon)
 	}
 }
 

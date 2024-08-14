@@ -17,8 +17,8 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 ## Features
 
 - Fingerprint injection (override properties of `navigator`, `window`, `screen`, etc) ✅
-- Patches to avoid Playwright detection ✅
-- Custom Playwright Juggler implementation with minimal leaks ✅
+- Patches to avoid bot detection ✅
+- Custom Playwright Juggler implementation for the latest Firefox ✅
 - Font spoofing & anti-fingerprinting ✅
 - Patches from LibreWolf & Ghostery to remove Mozilla services ✅
 - Optimized for memory and speed ✅
@@ -34,6 +34,7 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 
 ### What's planned?
 
+- Continue research on potential leaks
 - Built in TLS fingerprinting protection using [Hazetunnel](https://github.com/daijro/hazetunnel)
 - Create integration tests
 - Chromium port (long-term)
@@ -199,6 +200,25 @@ Spoofing document.body has been implemented, but it is more advicable to set `wi
 </details>
 
 <details>
+<summary>
+HTTP Headers
+</summary>
+
+Camoufox can override the following network headers:
+
+| Property                | Status |
+| ----------------------- | ------ |
+| headers.User-Agent      | ✅     |
+| headers.Accept-Language | ✅     |
+| headers.Accept-Encoding | ✅     |
+
+**Notes:**
+
+- If `headers.User-Agent` is not set, it will fall back to `navigator.userAgent`.
+
+</details>
+
+<details>
 
 <summary>
 Addons
@@ -213,6 +233,14 @@ Example:
 ```
 
 Camoufox will automatically download and use the latest uBlock Origin with custom privacy/adblock filters, and B.P.C. by default to help with scraping.
+
+You can also exclude default addons with the `--exclude-addons` flag:
+
+```bash
+./launcher --exclude-addons '["uBO", "BPC"]'
+```
+
+</details>
 
 </details>
 
@@ -285,6 +313,7 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 - Added B.P.C.
 - Addons are not allowed to open tabs
 - Addons are automatically enabled in Private Browsing mode
+- Addons are automatically pinned to the toolbar
 
 ## Stealth Performance
 
@@ -319,7 +348,7 @@ Camoufox performs well against every major WAF I've tested. (Test sites from [Bo
 | [**BrowserScan**](https://browserscan.net/)                                                        | ✔️                                                |
 | [**Bet365**](https://www.bet365.com/#/AC/B1/C1/D1002/E79147586/G40/)                               | ✔️                                                |
 
-Camoufox does **not** fully support injecting Chromium fingerprints. Some websites (such as Cloudflare [Interstitial](https://nopecha.com/demo/cloudflare)) look for the Gecko webdriver underneath.
+Camoufox does **not** fully support injecting Chromium fingerprints. Some WAFs (such as [Interstitial](https://nopecha.com/demo/cloudflare)) look for the Gecko webdriver underneath.
 
 ---
 
@@ -334,11 +363,11 @@ graph TD
     FFSRC[Firefox Source] -->|make fetch| REPO
 
     subgraph REPO[Camoufox Repository]
-        MASKING[Camoufox masking module]
-        PATCHES[Debloat/optimizations]
+        PATCHES[Fingerprint masking patches]
         ADDONS[uBlock & B.P.C.]
-        SYSTEM_FONTS[Win, Mac, Linux System fonts]
-        JUGGLER[Playwright Juggler]
+        DEBLOAT[Debloat/optimizations]
+        SYSTEM_FONTS[Win, Mac, Linux fonts]
+        JUGGLER[Patched Juggler]
     end
 
     subgraph Local

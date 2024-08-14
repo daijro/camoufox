@@ -8,8 +8,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
+// Gets the debug port from the args, or creates a new one if not provided
 func getDebugPort(args *[]string) int {
 	debugPort := parseArgs("-start-debugger-server", "", args, false)
 
@@ -30,8 +32,8 @@ func getDebugPort(args *[]string) int {
 	return debugPortInt
 }
 
+// Confirm paths are valid
 func confirmPaths(paths []string) {
-	// Confirm paths are valid
 	for _, path := range paths {
 		if _, err := os.Stat(path); err != nil {
 			fmt.Printf("Error: %s is not a valid addon path.\n", path)
@@ -40,8 +42,8 @@ func confirmPaths(paths []string) {
 	}
 }
 
+// Generate an open port
 func getOpenPort() int {
-	// Generate an open port
 	ln, err := net.Listen("tcp", ":0") // listen on a random port
 	if err != nil {
 		return 0
@@ -50,6 +52,24 @@ func getOpenPort() int {
 
 	addr := ln.Addr().(*net.TCPAddr) // type assert to *net.TCPAddr to get the Port
 	return addr.Port
+}
+
+// Waits for the server to start, then loads the addons
+func tryLoadAddons(debugPortInt int, addonsList []string) {
+	// Wait for the server to be open
+	for {
+		conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", debugPortInt))
+		if err == nil {
+			conn.Close()
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Load addons
+	for _, addon := range addonsList {
+		go loadFirefoxAddon(debugPortInt, addon)
+	}
 }
 
 // Firefox addon loader

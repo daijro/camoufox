@@ -17,10 +17,15 @@ func main() {
 
 	configPath := parseArgs("--config", "{}", &args, true)
 	addons := parseArgs("--addons", "[]", &args, true)
+	excludeAddons := parseArgs("--exclude-addons", "[]", &args, true)
+
+	//*** PARSE CONFIG ***//
 
 	// Read and parse the config file
 	var configMap map[string]interface{}
 	parseJson(configPath, &configMap)
+
+	//*** PARSE ADDONS ***//
 
 	// If addons are passed, handle them
 	var addonsList []string
@@ -29,10 +34,21 @@ func main() {
 	// Confirm addon paths are valid
 	confirmPaths(addonsList)
 
-	userAgentOS := determineUserAgentOS(configMap) // Determine the user agent OS
+	// Add the default addons, excluding the ones specified in --exclude-addons
+	var excludeAddonsList []string
+	parseJson(excludeAddons, &excludeAddonsList)
 
-	// OS specific font config
+	addDefaultAddons(excludeAddonsList, &addonsList)
+
+	//*** FONTS ***//
+
+	// Determine the target OS
+	userAgentOS := determineUserAgentOS(configMap)
+	// Add OS specific fonts
 	updateFonts(configMap, userAgentOS)
+
+	//*** LAUNCH ***//
+
 	setEnvironmentVariables(configMap, userAgentOS)
 
 	// Run the Camoufox executable
@@ -44,6 +60,7 @@ func main() {
 	runCamoufox(execName, args, addonsList)
 }
 
+// Parses & removes an argument from the args list
 func parseArgs(param string, defaultValue string, args *[]string, removeFromArgs bool) string {
 	for i := 0; i < len(*args); i++ {
 		if (*args)[i] != param {
@@ -62,6 +79,7 @@ func parseArgs(param string, defaultValue string, args *[]string, removeFromArgs
 	return defaultValue
 }
 
+// Parses a JSON string or file into a map
 func parseJson(argv string, target interface{}) {
 	// Unmarshal the config input into a map
 	var data []byte
@@ -84,6 +102,7 @@ func parseJson(argv string, target interface{}) {
 	}
 }
 
+// Determines the target OS from the user agent string if provided
 func determineUserAgentOS(configMap map[string]interface{}) string {
 	// Determine the OS from the user agent string if provided
 	defaultOS := normalizeOS(runtime.GOOS)
@@ -96,8 +115,8 @@ func determineUserAgentOS(configMap map[string]interface{}) string {
 	return defaultOS
 }
 
+// Get the OS name as {macos, windows, linux}
 func normalizeOS(osName string) string {
-	// Get the OS name as {macos, windows, linux}
 	osName = strings.ToLower(osName)
 	switch {
 	case osName == "darwin" || strings.Contains(osName, "mac"):
@@ -109,8 +128,8 @@ func normalizeOS(osName string) string {
 	}
 }
 
+// Add fonts associated with the OS to the config map
 func updateFonts(configMap map[string]interface{}, userAgentOS string) {
-	// Add fonts associated with the OS to the config map
 	fonts, ok := configMap["fonts"].([]interface{})
 	if !ok {
 		fonts = []interface{}{}
@@ -129,8 +148,8 @@ func updateFonts(configMap map[string]interface{}, userAgentOS string) {
 	configMap["fonts"] = fonts
 }
 
+// Update the config map with the fonts and environment variables
 func setEnvironmentVariables(configMap map[string]interface{}, userAgentOS string) {
-	// Update the config map with the fonts and environment variables
 	updatedConfigData, err := json.Marshal(configMap)
 	if err != nil {
 		fmt.Printf("Error updating config: %v\n", err)

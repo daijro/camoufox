@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+// Default addons to extract to /addons
+var DefaultAddons = map[string]string{
+	"uBO": "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi",
+	"BPC": "https://gitflic.ru/project/magnolia1234/bpc_uploads/blob/raw?file=bypass_paywalls_clean-latest.xpi",
+}
+
 // Exclude lines from output
 var ExclusionRules = []string{
 	// Ignore search related warnings
@@ -17,6 +23,7 @@ var ExclusionRules = []string{
 	"^console\\.error:\\ \\(\\{\\}\\)$",
 	"^console\\.error:\\ \"Could\\ not\\ record\\ event:\\ \"\\ \\(\\{\\}\\)$",
 	"^\\s*?$",
+	"Rejected by Camoufox\\.$",
 	// Ignore missing urlbar provider errors
 	"^JavaScript\\ error:\\ resource:///modules/UrlbarProvider",
 }
