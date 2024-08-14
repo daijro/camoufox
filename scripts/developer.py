@@ -23,7 +23,7 @@ def into_camoufox_dir():
 def reset_camoufox():
     """Reset the Camoufox source"""
     with temp_cd('..'):
-        run('make revert')
+        run('make clean')
 
 
 def run_patches(reverse=False):
@@ -172,6 +172,7 @@ def handle_choice(choice):
 
         case "Create new patch":
             # Reset camoufox, apply all patches, then create a checkpoint
+            reset_camoufox()
             with temp_cd('..'):
                 run('make dir')
                 run('make checkpoint')

@@ -60,7 +60,6 @@ dir:
 	@if [ ! -d $(cf_source_dir) ]; then \
 		make setup; \
 	fi
-	make revert
 	python3 scripts/patch.py $(version) $(release)
 	touch $(cf_source_dir)/_READY
 
