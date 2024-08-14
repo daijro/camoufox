@@ -138,6 +138,7 @@ package-windows:
 		--fonts macos linux
 
 run-pw:
+	make build-launcher arch=x86_64 os=linux;
 	python3 scripts/run-pw.py \
 		--version $(version) \
 		--release $(release)

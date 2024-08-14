@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import time
 
 from _mixin import find_src_dir, get_moz_target, temp_cd
@@ -39,12 +40,17 @@ def main():
     src_dir = find_src_dir('.', args.version, args.release)
     moz_target = get_moz_target(target='linux', arch='x86_64')
 
+    launcher_path = os.path.abspath(os.path.join('.', 'launcher', 'dist', 'launch'))
+
     with temp_cd(src_dir):
         print(f'Looking for file: obj-{moz_target}/dist/bin/camoufox-bin')
         with temp_cd(f'obj-{moz_target}/dist/bin'):
             if os.path.exists('camoufox-bin'):
-                file_name = 'camoufox-bin'
+                # Copy launcher_path to . if we are using camoufox-bin
+                shutil.copy(launcher_path, '.')
+                file_name = 'launch'
             elif os.path.exists('firefox-bin'):
+                # Or else just use firefox-bin
                 file_name = 'firefox-bin'
             else:
                 raise FileNotFoundError(f'Binary not found: obj-{moz_target}/dist/bin')
