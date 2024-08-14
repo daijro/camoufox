@@ -5,6 +5,7 @@
 /.vscode
 _old/
 dist/
+bin/
 /bundle/fonts/extra
 launch
 launch.exe

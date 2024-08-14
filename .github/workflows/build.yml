@@ -1,0 +1,76 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+env:
+  MOZBUILD_PATH: ${{ github.workspace }}/.mozbuild
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: "1.23"
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y msitools p7zip-full aria2
+
+      - name: Cache .mozbuild
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.MOZBUILD_PATH }}
+          key: ${{ runner.os }}-mozbuild-${{ hashFiles('**/Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-mozbuild-
+
+      - name: Setup and bootstrap
+        run: |
+          make setup-minimal
+          make mozbootstrap
+          mkdir -p dist
+
+      - name: Build
+        run: |
+          python3 ./multibuild.py --target linux windows macos --arch x86_64
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: CamoufoxBuilds
+          path: dist/*
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: true
+          prerelease: false
+
+      - name: Upload Release Assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/*
+          asset_name: CamoufoxBuilds
+          asset_content_type: application/zip
