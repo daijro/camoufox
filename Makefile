@@ -94,7 +94,7 @@ build:
 	cd $(cf_source_dir) && ./mach build
 
 edits:
-	python ./scripts/developer.py
+	python ./scripts/developer.py $(version) $(release)
 
 check-arch:
 	@if ! echo "x86_64 i686 arm64" | grep -qw "$(arch)"; then \

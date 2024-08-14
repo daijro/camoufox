@@ -6,6 +6,7 @@ GUI for managing Camoufox patches.
 
 import os
 import re
+import sys
 
 import easygui
 from _mixin import find_src_dir, list_patches, patch, run, temp_cd
@@ -16,7 +17,7 @@ def into_camoufox_dir():
     this_script = os.path.dirname(os.path.abspath(__file__))
     # Go one directory up from the current script path
     os.chdir(os.path.dirname(this_script))
-    os.chdir(find_src_dir('.'))
+    os.chdir(find_src_dir('.', version=sys.argv[1], release=sys.argv[2]))
 
 
 def reset_camoufox():
