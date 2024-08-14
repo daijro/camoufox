@@ -37,10 +37,10 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
             )
 
         if target == 'macos':
-            # Move Nightly/Nightly.app -> Camoufox.app
-            nightly_dir = os.path.join(temp_dir, 'Nightly')
+            # Move Camoufox/Camoufox.app -> Camoufox.app
+            nightly_dir = os.path.join(temp_dir, 'Camoufox')
             shutil.move(
-                os.path.join(nightly_dir, 'Nightly.app'), os.path.join(temp_dir, 'Camoufox.app')
+                os.path.join(nightly_dir, 'Camoufox.app'), os.path.join(temp_dir, 'Camoufox.app')
             )
             # Remove old app dir and all content in it
             shutil.rmtree(nightly_dir)
@@ -85,9 +85,10 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
         # Non-linux systems cannot read fonts within subfolders.
         # Instead, we walk the fonts/ directory and copy all files.
         else:
+            os.makedirs(fonts_dir, exist_ok=True)
             for font in fonts or []:
                 for file in list_files(root_dir=os.path.join('bundle', 'fonts', font), suffix='*'):
-                    shutil.copy2(file, fonts_dir)
+                    shutil.copy2(file, os.path.join(fonts_dir, os.path.basename(file)))
 
         # Add launcher from launcher/dist/launch to temp_dir
         launch_file = 'launch' + ('.exe' if target == 'windows' else '')

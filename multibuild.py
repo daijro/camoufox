@@ -64,7 +64,7 @@ class BSYS:
     @property
     def assets(self) -> List[str]:
         """Get the list of assets"""
-        package_pattern = 'camoufox-*.en-US.*.zip'
+        package_pattern = f'camoufox-*-{self.target[:3]}.{self.arch}.zip'
         return glob.glob(package_pattern)
 
     @staticmethod
@@ -84,6 +84,7 @@ def run_build(target, arch):
     # Run package
     builder.package()
     # Move assets to dist
+    print('Assets:', ', '.join(builder.assets))
     for asset in builder.assets:
         os.rename(asset, f'dist/{asset}')
 

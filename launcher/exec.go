@@ -74,6 +74,12 @@ func runCamoufox(execName string, args []string, addonsList []string) {
 		debugPortInt = getDebugPort(&args)
 	}
 
+	// For macOS, use "open" command to launch the app
+	if normalizeOS(runtime.GOOS) == "macos" {
+		args = append([]string{"-a", execName}, args...)
+		execName = "open"
+	}
+
 	// Print args
 	cmd := exec.Command(execName, args...)
 
