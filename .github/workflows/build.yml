@@ -30,8 +30,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y msitools p7zip-full aria2
 
-      - name: Cache .mozbuild
-        uses: actions/cache@v2
+      - name: Restore .mozbuild cache
+        uses: actions/cache/restore@v3
         with:
           path: ${{ env.MOZBUILD_PATH }}
           key: ${{ runner.os }}-mozbuild-${{ hashFiles('**/Makefile') }}
@@ -43,6 +43,12 @@ jobs:
           make setup-minimal
           make mozbootstrap
           mkdir -p dist
+
+      - name: Save .mozbuild cache
+        uses: actions/cache/save@v3
+        with:
+          path: ${{ env.MOZBUILD_PATH }}
+          key: ${{ runner.os }}-mozbuild-${{ hashFiles('**/Makefile') }}
 
       - name: Build
         run: |
