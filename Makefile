@@ -75,7 +75,7 @@ bootstrap: dir
 	make mozbootstrap
 
 diff:
-	cd $(cf_source_dir) && git diff
+	@cd $(cf_source_dir) && git diff
 
 checkpoint:
 	cd $(cf_source_dir) && git commit -m "Checkpoint" -a
@@ -136,6 +136,11 @@ package-windows:
 		--release $(release) \
 		--arch $(arch) \
 		--fonts macos linux
+
+run-launcher:
+	make build-launcher arch=x86_64 os=linux;
+	cp launcher/dist/launch $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch;
+	$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch
 
 run-pw:
 	make build-launcher arch=x86_64 os=linux;
