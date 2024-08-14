@@ -1,17 +1,14 @@
 diff --git a/browser/base/content/browser-addons.js b/browser/base/content/browser-addons.js
-index d071b231aa..1733b17fd1 100644
+index d071b231aa..9bcf162160 100644
 --- a/browser/base/content/browser-addons.js
 +++ b/browser/base/content/browser-addons.js
-@@ -1873,6 +1873,11 @@ var gUnifiedExtensions = {
-     // will be overflowed directly. In this case, we do not want to change the
-     // class name since it is going to be changed by `onWidgetOverflow()`
-     // below.
-+    if (aArea !== CustomizableUI.AREA_NAVBAR) {
-+      aArea = CustomizableUI.AREA_NAVBAR;
-+      this.pinToToolbar(aWidgetId, true);
-+    }
-+
-     if (CustomizableUI.getWidget(aWidgetId)?.forWindow(window)?.overflowed) {
+@@ -1924,6 +1924,8 @@ var gUnifiedExtensions = {
+   // class and not the `.toolbarbutton-1` one. When NOT placed in the panel,
+   // it is the other way around.
+   _updateWidgetClassName(aWidgetId, inPanel) {
++    inPanel = false;
++    this.pinToToolbar(aWidgetId, true);
+     if (!CustomizableUI.isWebExtensionWidget(aWidgetId)) {
        return;
      }
 diff --git a/browser/base/content/main-popupset.inc.xhtml b/browser/base/content/main-popupset.inc.xhtml
