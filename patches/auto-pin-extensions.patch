@@ -1,0 +1,29 @@
+cd camoufox-129.0-beta && git diff
+diff --git a/browser/base/content/browser-addons.js b/browser/base/content/browser-addons.js
+index d071b231aa..1733b17fd1 100644
+--- a/browser/base/content/browser-addons.js
++++ b/browser/base/content/browser-addons.js
+@@ -1873,6 +1873,11 @@ var gUnifiedExtensions = {
+     // will be overflowed directly. In this case, we do not want to change the
+     // class name since it is going to be changed by `onWidgetOverflow()`
+     // below.
++    if (aArea !== CustomizableUI.AREA_NAVBAR) {
++      aArea = CustomizableUI.AREA_NAVBAR;
++      this.pinToToolbar(aWidgetId, true);
++    }
++
+     if (CustomizableUI.getWidget(aWidgetId)?.forWindow(window)?.overflowed) {
+       return;
+     }
+diff --git a/browser/base/content/main-popupset.inc.xhtml b/browser/base/content/main-popupset.inc.xhtml
+index 1fb595272a..389d436e90 100644
+--- a/browser/base/content/main-popupset.inc.xhtml
++++ b/browser/base/content/main-popupset.inc.xhtml
+@@ -286,7 +286,6 @@
+               type="checkbox"
+               contexttype="toolbaritem"
+               class="customize-context-pinToToolbar"/>
+-    <menuseparator id="toolbarDownloadsAnchorMenuSeparator"/>
+     <menuitem id="toolbar-context-always-open-downloads-panel"
+               type="checkbox"
+               data-lazy-l10n-id="toolbar-context-menu-always-open-downloads-panel"

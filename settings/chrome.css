@@ -162,6 +162,7 @@ panel {
 #star-button-box,
 #urlbar-go-button,
 #unified-extensions-button,
+.customize-context-pinToToolbar,
 #PersonalToolbar,
 #appMenu-library-remotetabs-button {
   display: none !important;
