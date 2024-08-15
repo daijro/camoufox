@@ -348,7 +348,7 @@ Camoufox performs well against every major WAF I've tested. (Test sites from [Bo
 | [**BrowserScan**](https://browserscan.net/)                                                        | ✔️                                                |
 | [**Bet365**](https://www.bet365.com/#/AC/B1/C1/D1002/E79147586/G40/)                               | ✔️                                                |
 
-Camoufox does **not** fully support injecting Chromium fingerprints. Some WAFs (such as [Interstitial](https://nopecha.com/demo/cloudflare)) look for the Gecko webdriver underneath.
+Camoufox does **not** fully support injecting Chromium fingerprints. Some WAFs (such as [Interstitial](https://nopecha.com/demo/cloudflare)) test for Spidermonkey engine behavior, which is impossible to spoof.
 
 ---
 
@@ -389,7 +389,7 @@ This was originally forked from the LibreWolf build system.
 First, clone this repository with Git:
 
 ```bash
-git clone --depth 1 https://gitlab.com/daijro/camoufox
+git clone --depth 1 https://github.com/daijro/camoufox
 cd camoufox
 ```
 
