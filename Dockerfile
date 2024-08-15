@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     # Python
     python3 python3-dev python3-pip \
     # Camoufox build system tools
-    git p7zip-full golang-go aria2c
+    git p7zip-full golang-go aria2
 
 # Fetch Firefox & apply initial patches
 RUN make setup-minimal && \
