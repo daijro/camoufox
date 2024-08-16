@@ -34,3 +34,5 @@ mk_add_options MOZ_SERVICES_HEALTHREPORT=0
 mk_add_options MOZ_TELEMETRY_REPORTING=0
 mk_add_options MOZ_INSTALLER=0
 mk_add_options MOZ_AUTOMATION_INSTALLER=0
+
+ac_add_options --enable-lto=cross

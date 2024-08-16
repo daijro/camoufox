@@ -6,15 +6,46 @@ on:
     tags:
       - "*"
 
-env:
-  MOZBUILD_PATH: ${{ github.workspace }}/.mozbuild
-
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        target: [linux, windows, macos]
 
     steps:
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@v4.1
+        with:
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+          remove-docker-images: "true"
+          remove-cached-tools: "true"
+          remove-swapfile: "true"
+          verbose: "false"
+
+      - name: Remove unwanted tools
+        # Originally from here: https://github.com/AdityaGarg8/remove-unwanted-software/blob/master/action.yml
+        # Modified to keep llvm.
+        run: |
+          sudo apt-get remove -y '^aspnetcore-.*' > /dev/null
+          sudo apt-get remove -y '^dotnet-.*' > /dev/null
+          sudo apt-get remove -y 'php.*' > /dev/null
+          sudo apt-get remove -y '^mongodb-.*' > /dev/null
+          sudo apt-get remove -y '^mysql-.*' > /dev/null
+          sudo apt-get remove -y azure-cli google-chrome-stable firefox ${POWERSHELL} mono-devel libgl1-mesa-dri --fix-missing > /dev/null
+          if [[ (${CODENAME} = focal) || (${CODENAME} = jammy) ]]; then
+            sudo apt-get remove -y google-cloud-sdk --fix-missing > /dev/null
+            sudo apt-get remove -y google-cloud-cli --fix-missing > /dev/null
+          fi
+          sudo apt-get autoremove -y > /dev/null
+          sudo apt-get clean > /dev/null
+
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
 
       - name: Set up Go
         uses: actions/setup-go@v2
@@ -26,6 +57,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x64
+
+      - name: Check disk space
+        run: df -h
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -34,10 +74,8 @@ jobs:
       - name: Restore .mozbuild cache
         uses: actions/cache/restore@v3
         with:
-          path: ${{ env.MOZBUILD_PATH }}
-          key: ${{ runner.os }}-mozbuild-${{ hashFiles('**/Makefile') }}
-          restore-keys: |
-            ${{ runner.os }}-mozbuild-
+          path: ~/.mozbuild
+          key: mozbuild-${{ matrix.target }}
 
       - name: Setup and bootstrap
         run: |
@@ -45,39 +83,52 @@ jobs:
           make mozbootstrap
           mkdir -p dist
 
+      - name: List .mozbuild contents
+        run: |
+          ls -R ~/.mozbuild
+
+      - name: Create swap space
+        run: |
+          sudo fallocate -l 16G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
+      - name: Build
+        run: python3 ./multibuild.py --target ${{ matrix.target }} --arch x86_64
+
       - name: Save .mozbuild cache
         uses: actions/cache/save@v3
         with:
-          path: ${{ env.MOZBUILD_PATH }}
-          key: ${{ runner.os }}-mozbuild-${{ hashFiles('**/Makefile') }}
-
-      - name: Build
-        run: |
-          python3 ./multibuild.py --target linux windows macos --arch x86_64
+          path: ~/.mozbuild
+          key: mozbuild-${{ matrix.target }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: CamoufoxBuilds
+          name: CamoufoxBuilds-${{ matrix.target }}
           path: dist/*
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  release:
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
           draft: true
           prerelease: false
-
-      - name: Upload Release Assets
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dist/*
-          asset_name: CamoufoxBuilds
-          asset_content_type: application/zip

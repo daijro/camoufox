@@ -3,26 +3,20 @@
 import argparse
 import glob
 import os
-import shlex
 import shutil
 import sys
 import tempfile
+from shlex import join
 
 from _mixin import find_src_dir, get_moz_target, list_files, run, temp_cd
 
 UNNEEDED_PATHS = {'uninstall', 'pingsender.exe', 'pingsender', 'vaapitest', 'glxtest'}
 
 
-def run_command(command):
-    """Execute a command with subprocess"""
-    cmd = ' '.join(shlex.quote(arg) for arg in command)
-    run(cmd)
-
-
 def add_includes_to_package(package_file, includes, fonts, new_file, target):
     with tempfile.TemporaryDirectory() as temp_dir:
         # Extract package
-        run_command(['7z', 'x', package_file, f'-o{temp_dir}'])
+        run(join(['7z', 'x', package_file, f'-o{temp_dir}']), exit_on_fail=False)
         # Delete package_file
         os.remove(package_file)
         if package_file.endswith('.tar.bz2'):
@@ -105,7 +99,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
                 os.remove(os.path.join(target_dir, path))
 
         # Update package
-        run_command(['7z', 'u', new_file, f'{temp_dir}/*', '-r', '-mx=9'])
+        run(join(['7z', 'u', new_file, f'{temp_dir}/*', '-r', '-mx=9']))
 
 
 def get_args():
