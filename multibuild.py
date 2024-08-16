@@ -121,6 +121,9 @@ def main():
     # Run build
     for target in args.target:
         for arch in args.arch:
+            if (target, arch) in [("windows", "arm64"), ("macos", "i686")]:
+                print(f"Skipping {target} {arch}: Unsuported architecture.")
+                continue
             run_build(target, arch)
 
 

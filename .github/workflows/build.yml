@@ -12,6 +12,14 @@ jobs:
     strategy:
       matrix:
         target: [linux, windows, macos]
+        arch: [x86_64, arm64, i686]
+        exclude:
+          # Fails (.mozbuild does not include clang++-cl)
+          - target: windows
+            arch: arm64
+          # Unsuported
+          - target: macos
+            arch: i686
 
     steps:
       - name: Maximize build space
@@ -96,18 +104,12 @@ jobs:
           free -h
 
       - name: Build
-        run: python3 ./multibuild.py --target ${{ matrix.target }} --arch x86_64
-
-      - name: Save .mozbuild cache
-        uses: actions/cache/save@v3
-        with:
-          path: ~/.mozbuild
-          key: mozbuild-${{ matrix.target }}
+        run: python3 ./multibuild.py --target ${{ matrix.target }} --arch ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: CamoufoxBuilds-${{ matrix.target }}
+          name: CamoufoxBuilds-${{ matrix.target }}-${{ matrix.arch }}
           path: dist/*
 
   release:
