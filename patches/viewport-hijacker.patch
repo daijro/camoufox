@@ -1,8 +1,8 @@
 diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
-index cc62392ab0..0c68a0e991 100644
+index f8d49ac2a3..0bf5981a2e 100644
 --- a/browser/base/content/browser-init.js
 +++ b/browser/base/content/browser-init.js
-@@ -1568,7 +1568,7 @@ var gBrowserInit = {
+@@ -72,7 +72,7 @@ var gBrowserInit = {
      updateBookmarkToolbarVisibility();
  
      // Set a sane starting width/height for all resolutions on new profiles.
@@ -11,7 +11,7 @@ index cc62392ab0..0c68a0e991 100644
        // When the fingerprinting resistance is enabled, making sure that we don't
        // have a maximum window to interfere with generating rounded window dimensions.
        document.documentElement.setAttribute("sizemode", "normal");
-@@ -1796,6 +1796,47 @@ var gBrowserInit = {
+@@ -300,6 +300,48 @@ var gBrowserInit = {
        )?.removeAttribute("key");
      }
  
@@ -42,6 +42,7 @@ index cc62392ab0..0c68a0e991 100644
 +        .browserStack {
 +          ${innerWidth ? `width: ${innerWidth}px !important;` : ''}
 +          ${innerHeight ? `height: ${innerHeight}px !important;` : ''}
++          ${innerHeight ? `flex: unset !important;` : ''}
 +          overflow: auto;
 +          contain: size;
 +          scrollbar-width: none;
@@ -60,7 +61,7 @@ index cc62392ab0..0c68a0e991 100644
    },
  
 diff --git a/dom/base/ChromeUtils.cpp b/dom/base/ChromeUtils.cpp
-index 0df1cd3c9b..49844441b0 100644
+index d412679e64..3802d9c481 100644
 --- a/dom/base/ChromeUtils.cpp
 +++ b/dom/base/ChromeUtils.cpp
 @@ -5,6 +5,7 @@
@@ -71,7 +72,7 @@ index 0df1cd3c9b..49844441b0 100644
  
  #include "JSOracleParent.h"
  #include "js/CallAndConstruct.h"  // JS::Call
-@@ -2082,6 +2083,16 @@ void ChromeUtils::GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
+@@ -2077,6 +2078,16 @@ void ChromeUtils::GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
    }
  }
  
@@ -89,10 +90,10 @@ index 0df1cd3c9b..49844441b0 100644
  bool ChromeUtils::ShouldResistFingerprinting(
      GlobalObject& aGlobal, JSRFPTarget aTarget,
 diff --git a/dom/base/ChromeUtils.h b/dom/base/ChromeUtils.h
-index 4c2d043ecb..1d717b656e 100644
+index 707a04b1d3..3335f153b5 100644
 --- a/dom/base/ChromeUtils.h
 +++ b/dom/base/ChromeUtils.h
-@@ -305,6 +305,8 @@ class ChromeUtils {
+@@ -302,6 +302,8 @@ class ChromeUtils {
    static void GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
                                                nsTArray<nsCString>& aNames);
  
@@ -102,10 +103,10 @@ index 4c2d043ecb..1d717b656e 100644
        GlobalObject& aGlobal, JSRFPTarget aTarget,
        const Nullable<uint64_t>& aOverriddenFingerprintingSettings);
 diff --git a/dom/chrome-webidl/ChromeUtils.webidl b/dom/chrome-webidl/ChromeUtils.webidl
-index 3ccb125a1e..02b231d1c8 100644
+index c0a4d900d4..d23e8adaf7 100644
 --- a/dom/chrome-webidl/ChromeUtils.webidl
 +++ b/dom/chrome-webidl/ChromeUtils.webidl
-@@ -747,6 +747,11 @@ partial namespace ChromeUtils {
+@@ -741,6 +741,11 @@ partial namespace ChromeUtils {
    [ChromeOnly]
    readonly attribute unsigned long aliveUtilityProcesses;
  
