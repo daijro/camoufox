@@ -1,0 +1,42 @@
+diff --git a/gfx/src/moz.build b/gfx/src/moz.build
+index a2b3e60fe5..56326fc038 100644
+--- a/gfx/src/moz.build
++++ b/gfx/src/moz.build
+@@ -95,3 +95,6 @@ FINAL_LIBRARY = "xul"
+ if CONFIG["MOZ_WIDGET_TOOLKIT"] == "gtk":
+     CXXFLAGS += CONFIG["MOZ_GTK3_CFLAGS"]
+     CXXFLAGS += CONFIG["MOZ_PANGO_CFLAGS"]
++
++# DOM Mask
++LOCAL_INCLUDES += ["/dom/mask"]
+\ No newline at end of file
+diff --git a/gfx/src/nsDeviceContext.cpp b/gfx/src/nsDeviceContext.cpp
+index 2bb53010a8..0ff718c0f1 100644
+--- a/gfx/src/nsDeviceContext.cpp
++++ b/gfx/src/nsDeviceContext.cpp
+@@ -5,6 +5,7 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "nsDeviceContext.h"
++#include "MaskConfig.hpp"
+ #include <algorithm>  // for max
+ #include "gfxContext.h"
+ #include "gfxImageSurface.h"  // for gfxImageSurface
+@@ -388,6 +389,17 @@ void nsDeviceContext::ComputeClientRectUsingScreen(nsRect* outRect) {
+ }
+ 
+ void nsDeviceContext::ComputeFullAreaUsingScreen(nsRect* outRect) {
++  // Check for height and width overrides from MaskConfig
++  if (auto height = MaskConfig::GetInt32("screen.height"),
++      width = MaskConfig::GetInt32("screen.width");
++      height && width) {
++    *outRect = LayoutDeviceIntRect::ToAppUnits(
++        LayoutDeviceIntRect(0, 0, width.value(), height.value()),
++        AppUnitsPerDevPixel());
++    mWidth = outRect->Width();
++    mHeight = outRect->Height();
++    return;
++  }
+   // if we have more than one screen, we always need to recompute the clientRect
+   // because the window may have moved onto a different screen. In the single
+   // monitor case, we only need to do the computation if we haven't done it

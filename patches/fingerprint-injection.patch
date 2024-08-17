@@ -11,7 +11,7 @@ index 434167c996..c6b47bc835 100644
 +LOCAL_INCLUDES += ["/dom/mask"]
 \ No newline at end of file
 diff --git a/dom/base/Element.cpp b/dom/base/Element.cpp
-index be601a06e3..95bde81ea9 100644
+index 807cb4ec25..3df0e0f70f 100644
 --- a/dom/base/Element.cpp
 +++ b/dom/base/Element.cpp
 @@ -12,6 +12,7 @@
@@ -22,7 +22,7 @@ index be601a06e3..95bde81ea9 100644
  
  #include <inttypes.h>
  #include <initializer_list>
-@@ -988,6 +989,18 @@ nsRect Element::GetClientAreaRect() {
+@@ -984,6 +985,18 @@ nsRect Element::GetClientAreaRect() {
    Document* doc = OwnerDoc();
    nsPresContext* presContext = doc->GetPresContext();
  
@@ -42,7 +42,7 @@ index be601a06e3..95bde81ea9 100644
    // document, we have overlay scrollbars, and we aren't embedded in another
    // document
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index 5b737ab6a8..3569ddae58 100644
+index 8e577bd9fd..3ed748a75f 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
 @@ -8,6 +8,7 @@
@@ -216,7 +216,7 @@ index 5b737ab6a8..3569ddae58 100644
    workerinternals::RuntimeService* rts =
        workerinternals::RuntimeService::GetOrCreateService();
    if (!rts) {
-@@ -888,6 +934,8 @@ bool Navigator::Vibrate(const nsTArray<uint32_t>& aPattern) {
+@@ -882,6 +928,8 @@ bool Navigator::Vibrate(const nsTArray<uint32_t>& aPattern) {
  //*****************************************************************************
  
  uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
@@ -226,10 +226,10 @@ index 5b737ab6a8..3569ddae58 100644
    BrowsingContext* bc = docshell ? docshell->GetBrowsingContext() : nullptr;
  
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index fb7ed4b6a0..d51ab30a89 100644
+index 114402c4a1..a883a2493f 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -642,3 +642,6 @@ GeneratedFile(
+@@ -641,3 +641,6 @@ GeneratedFile(
          "/servo/components/style/properties/counted_unknown_properties.py",
      ],
  )
@@ -238,7 +238,7 @@ index fb7ed4b6a0..d51ab30a89 100644
 +LOCAL_INCLUDES += ["/dom/mask"]
 \ No newline at end of file
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 3d0f51e924..085ffcd943 100644
+index 3678ebc59c..03a72fe242 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -5,6 +5,7 @@
@@ -249,7 +249,7 @@ index 3d0f51e924..085ffcd943 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -3409,6 +3410,8 @@ void nsGlobalWindowInner::SetName(const nsAString& aName,
+@@ -3410,6 +3411,8 @@ void nsGlobalWindowInner::SetName(const nsAString& aName,
  }
  
  double nsGlobalWindowInner::GetInnerWidth(ErrorResult& aError) {
@@ -258,7 +258,7 @@ index 3d0f51e924..085ffcd943 100644
    FORWARD_TO_OUTER_OR_THROW(GetInnerWidthOuter, (aError), aError, 0);
  }
  
-@@ -3420,6 +3423,8 @@ nsresult nsGlobalWindowInner::GetInnerWidth(double* aWidth) {
+@@ -3421,6 +3424,8 @@ nsresult nsGlobalWindowInner::GetInnerWidth(double* aWidth) {
  }
  
  double nsGlobalWindowInner::GetInnerHeight(ErrorResult& aError) {
@@ -267,7 +267,7 @@ index 3d0f51e924..085ffcd943 100644
    // We ignore aCallerType; we only have that argument because some other things
    // called by GetReplaceableWindowCoord need it.  If this ever changes, fix
    //   nsresult nsGlobalWindowInner::GetInnerHeight(double* aInnerWidth)
-@@ -3436,12 +3441,16 @@ nsresult nsGlobalWindowInner::GetInnerHeight(double* aHeight) {
+@@ -3437,12 +3442,16 @@ nsresult nsGlobalWindowInner::GetInnerHeight(double* aHeight) {
  
  int32_t nsGlobalWindowInner::GetOuterWidth(CallerType aCallerType,
                                             ErrorResult& aError) {
@@ -284,7 +284,7 @@ index 3d0f51e924..085ffcd943 100644
    FORWARD_TO_OUTER_OR_THROW(GetOuterHeightOuter, (aCallerType, aError), aError,
                              0);
  }
-@@ -3456,11 +3465,13 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
+@@ -3457,11 +3466,13 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
  
  int32_t nsGlobalWindowInner::GetScreenX(CallerType aCallerType,
                                          ErrorResult& aError) {
@@ -298,7 +298,7 @@ index 3d0f51e924..085ffcd943 100644
    FORWARD_TO_OUTER_OR_THROW(GetScreenYOuter, (aCallerType, aError), aError, 0);
  }
  
-@@ -3494,6 +3505,8 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
+@@ -3495,6 +3506,8 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
  double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
                                                  ErrorResult& aError) {
    ENSURE_ACTIVE_DOCUMENT(aError, 0.0);
@@ -307,7 +307,7 @@ index 3d0f51e924..085ffcd943 100644
  
    RefPtr<nsPresContext> presContext = GetPresContextForRatio(mDoc);
    if (NS_WARN_IF(!presContext)) {
-@@ -3564,26 +3577,38 @@ already_AddRefed<MediaQueryList> nsGlobalWindowInner::MatchMedia(
+@@ -3565,26 +3578,38 @@ already_AddRefed<MediaQueryList> nsGlobalWindowInner::MatchMedia(
  }
  
  int32_t nsGlobalWindowInner::GetScrollMinX(ErrorResult& aError) {
@@ -368,7 +368,7 @@ index 99994a73cc..837214d872 100644
    if (!win || !win->HasActiveDocument()) {
      aRv.Throw(NS_ERROR_DOM_SECURITY_ERR);
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index fc832fd2cf..f71a40edf1 100644
+index 4bd1e0c964..a5a95d3fdf 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
 @@ -4,6 +4,7 @@
@@ -390,20 +390,7 @@ index fc832fd2cf..f71a40edf1 100644
    // Return 24 to prevent fingerprinting.
    if (ShouldResistFingerprinting(RFPTarget::ScreenPixelDepth)) {
      return 24;
-@@ -60,6 +65,12 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
- }
- 
- CSSIntRect nsScreen::GetRect() {
-+  // Check for height and width overrides
-+  if (auto height = MaskConfig::GetInt32("screen.height"),
-+      width = MaskConfig::GetInt32("screen.width");
-+      height && width) {
-+    return {0, 0, width.value(), height.value()};
-+  }
-   // Return window inner rect to prevent fingerprinting.
-   if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
-     return GetWindowInnerRect();
-@@ -89,6 +100,12 @@ CSSIntRect nsScreen::GetRect() {
+@@ -89,6 +94,12 @@ CSSIntRect nsScreen::GetRect() {
  }
  
  CSSIntRect nsScreen::GetAvailRect() {
@@ -417,7 +404,7 @@ index fc832fd2cf..f71a40edf1 100644
    if (ShouldResistFingerprinting(RFPTarget::ScreenAvailRect)) {
      return GetWindowInnerRect();
 diff --git a/dom/battery/BatteryManager.cpp b/dom/battery/BatteryManager.cpp
-index 0a56f12af1..7a5b9a1a6c 100644
+index a42ac3017d..fadae4a714 100644
 --- a/dom/battery/BatteryManager.cpp
 +++ b/dom/battery/BatteryManager.cpp
 @@ -7,6 +7,7 @@
@@ -428,7 +415,7 @@ index 0a56f12af1..7a5b9a1a6c 100644
  #include "Constants.h"
  #include "mozilla/DOMEventTargetHelper.h"
  #include "mozilla/Hal.h"
-@@ -50,6 +51,9 @@ JSObject* BatteryManager::WrapObject(JSContext* aCx,
+@@ -51,6 +52,9 @@ JSObject* BatteryManager::WrapObject(JSContext* aCx,
  
  bool BatteryManager::Charging() const {
    MOZ_ASSERT(NS_IsMainThread());
@@ -438,7 +425,7 @@ index 0a56f12af1..7a5b9a1a6c 100644
    // For testing, unable to report the battery status information
    if (Preferences::GetBool("dom.battery.test.default", false)) {
      return true;
-@@ -66,6 +70,8 @@ bool BatteryManager::Charging() const {
+@@ -67,6 +71,8 @@ bool BatteryManager::Charging() const {
  
  double BatteryManager::DischargingTime() const {
    MOZ_ASSERT(NS_IsMainThread());
@@ -447,7 +434,7 @@ index 0a56f12af1..7a5b9a1a6c 100644
    // For testing, unable to report the battery status information
    if (Preferences::GetBool("dom.battery.test.default", false)) {
      return std::numeric_limits<double>::infinity();
-@@ -83,6 +89,8 @@ double BatteryManager::DischargingTime() const {
+@@ -84,6 +90,8 @@ double BatteryManager::DischargingTime() const {
  
  double BatteryManager::ChargingTime() const {
    MOZ_ASSERT(NS_IsMainThread());
@@ -456,7 +443,7 @@ index 0a56f12af1..7a5b9a1a6c 100644
    // For testing, unable to report the battery status information
    if (Preferences::GetBool("dom.battery.test.default", false)) {
      return 0.0;
-@@ -100,6 +108,7 @@ double BatteryManager::ChargingTime() const {
+@@ -101,6 +109,7 @@ double BatteryManager::ChargingTime() const {
  
  double BatteryManager::Level() const {
    MOZ_ASSERT(NS_IsMainThread());
@@ -477,7 +464,7 @@ index 3a90c93c01..35e3227f5e 100644
 +LOCAL_INCLUDES += ["/dom/mask"]
 \ No newline at end of file
 diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
-index 5c92ba003d..a8871228d4 100644
+index 4e43425ef9..26bbfdc868 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
 +++ b/dom/canvas/ClientWebGLContext.cpp
 @@ -4,6 +4,7 @@
@@ -487,15 +474,6 @@ index 5c92ba003d..a8871228d4 100644
 +#include "MaskConfig.hpp"
  
  #include <bitset>
- 
-@@ -2327,7 +2328,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
-         retval.set(JS::NumberValue(state.mPixelUnpackState.skipRows));
-         return;
-     }  // switch pname
--  }    // if webgl2
-+  }  // if webgl2
- 
-   // -
  
 @@ -2399,6 +2400,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
  
@@ -544,7 +522,7 @@ index 88fc49cb73..3d73af36c0 100644
 +DIRS += ["mask"]
 \ No newline at end of file
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
-index 0f9dada965..3537adb7e3 100644
+index b05e409a84..8e0f7ea657 100644
 --- a/dom/workers/WorkerNavigator.cpp
 +++ b/dom/workers/WorkerNavigator.cpp
 @@ -5,6 +5,7 @@
@@ -583,7 +561,7 @@ index 0f9dada965..3537adb7e3 100644
    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
    MOZ_ASSERT(workerPrivate);
  
-@@ -197,6 +205,8 @@ class GetUserAgentRunnable final : public WorkerMainThreadRunnable {
+@@ -200,6 +208,8 @@ class GetUserAgentRunnable final : public WorkerMainThreadRunnable {
  
  void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
                                     ErrorResult& aRv) const {
@@ -592,7 +570,7 @@ index 0f9dada965..3537adb7e3 100644
    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
    MOZ_ASSERT(workerPrivate);
  
-@@ -208,6 +218,8 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
+@@ -211,6 +221,8 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
  }
  
  uint64_t WorkerNavigator::HardwareConcurrency() const {
