@@ -1,6 +1,6 @@
 module launch
 
-go 1.23
+go 1.23.0
 
 require github.com/mileusna/useragent v1.3.4
 

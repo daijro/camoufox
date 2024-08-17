@@ -8,11 +8,14 @@ COPY . /app
 # Install necessary packages
 RUN apt-get update && apt-get install -y \
     # Mach build tools
-    build-essential make msitools wget unzip \
+    build-essential make msitools wget unzip rustc \
     # Python
     python3 python3-dev python3-pip \
     # Camoufox build system tools
-    git p7zip-full golang-go aria2
+    git p7zip-full golang-go aria2 \
+    # CA certificates
+    ca-certificates \
+    && update-ca-certificates
 
 # Fetch Firefox & apply initial patches
 RUN make setup-minimal && \
