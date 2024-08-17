@@ -530,6 +530,19 @@ class PageTarget {
     // The "default size" (1) is only respected when the page is opened.
     // Otherwise, explicitly set page viewport prevales over browser context
     // default viewport.
+    
+    // Do not allow default viewport size if Camoufox set it first
+    if (
+      !viewportSize &&
+      this._browserContext.defaultViewportSize && (
+        ChromeUtils.camouGetConfig("window.outerWidth") ||
+        ChromeUtils.camouGetConfig("window.outerHeight") ||
+        ChromeUtils.camouGetConfig("window.innerWidth") ||
+        ChromeUtils.camouGetConfig("window.innerHeight"))
+    ) {
+      return;
+    }
+
     const viewportSize = this._viewportSize || this._browserContext.defaultViewportSize;
     if (viewportSize) {
       const {width, height} = viewportSize;
