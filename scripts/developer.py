@@ -24,6 +24,7 @@ def reset_camoufox():
     """Reset the Camoufox source"""
     with temp_cd('..'):
         run('make clean')
+    run('touch _READY')
 
 
 def run_patches(reverse=False):
