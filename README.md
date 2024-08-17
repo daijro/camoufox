@@ -12,7 +12,7 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 ---
 
 > [!WARNING]
-> Camoufox is still under active development! Built releases aren't yet avaliable for production.
+> Camoufox is in active development! Releases are avaliable [here](https://github.com/daijro/camoufox/releases), but are not recommended for production use.
 
 ## Features
 
