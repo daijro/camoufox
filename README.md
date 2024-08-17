@@ -357,7 +357,7 @@ Camoufox is fully compatible with your existing Playwright code. You only have t
 ```py
 browser = pw.firefox.launch(
   executable_path='/path/to/camoufox/launch',  # Path to the Camoufox launcher
-  args=['--config', '/path/to/config.json'],  # Pass in file path or JSON string
+  args=['--config', '/path/to/config.json'],   # File path or JSON string
 )
 ```
 
@@ -580,3 +580,14 @@ Patches can be edited, created, removed, and managed through here.
 3. After you're done making changes, hit **Write workspace to patch** and overwrite the existing patch file.
 
 ---
+
+## Thanks
+
+- [LibreWolf](https://gitlab.com/librewolf-community/browser/source) - Debloat patches & build system inspiration
+- [BetterFox](https://github.com/yokoffing/BetterFox) - Debloat & optimizations
+- [Ghostery](https://github.com/ghostery/user-agent-desktop) - Debloat reference
+- [TOR Browser](https://2019.www.torproject.org/projects/torbrowser/design/) - Anti fingerprinting reference
+- [Jamir-boop/minimalisticfox](https://github.com/Jamir-boop/minimalisticfox) - Inspired Camoufox's minimalistic theming
+- [nicoth-in/Dark-Space-Theme](https://github.com/nicoth-in/Dark-Space-Theme) - Camoufox's dark theme
+- [Playwright](https://github.com/microsoft/playwright/tree/main/browser_patches/firefox), [Puppeteer/Juggler](https://github.com/puppeteer/juggler) - Original Juggler implementation
+- [CreepJS](https://github.com/abrahamjuliot/creepjs), [Browserleaks](https://browserleaks.com) - Valuable leak testing sites
