@@ -35,9 +35,11 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 ### What's planned?
 
 - Continue research on potential leaks
+- Create a pypi package for downloading & updating Camoufox
+- Integrate [BrowserForge](https://github.com/daijro/browserforge) for fingerprint generation
 - Built in TLS fingerprinting protection using [Hazetunnel](https://github.com/daijro/hazetunnel)
 - Create integration tests
-- Chromium port (long-term)
+- Chromium port (long term)
 
 <hr width=50>
 
