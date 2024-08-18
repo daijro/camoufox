@@ -151,12 +151,16 @@ Screen
 | screen.availWidth  | ✅     |
 | screen.availTop    | ✅     |
 | screen.availLeft   | ✅     |
-| screen.colorDepth  | ✅     |
 | screen.height      | ✅     |
 | screen.width       | ✅     |
+| screen.colorDepth  | ✅     |
 | screen.pixelDepth  | ✅     |
 | screen.pageXOffset | ✅     |
 | screen.pageYOffset | ✅     |
+
+**Notes:**
+
+- `screen.colorDepth` and `screen.pixelDepth` are synonymous.
 
 </details>
 
@@ -165,20 +169,20 @@ Screen
 Window
 </summary>
 
-| Property                | Status                      |
-| ----------------------- | --------------------------- |
-| window.scrollMinX       | ✅                          |
-| window.scrollMinY       | ✅                          |
-| window.scrollMaxX       | ✅                          |
-| window.scrollMaxY       | ✅                          |
-| window.innerHeight      | ✅                          |
-| window.outerHeight      | ✅                          |
-| window.outerWidth       | ✅                          |
-| window.innerWidth       | ✅                          |
-| window.screenX          | ✅                          |
-| window.screenY          | ✅                          |
-| window.history.length   | ✅                          |
-| window.devicePixelRatio | Works, but not recommended! |
+| Property                | Status | Notes                           |
+| ----------------------- | ------ | ------------------------------- |
+| window.scrollMinX       | ✅     |
+| window.scrollMinY       | ✅     |
+| window.scrollMaxX       | ✅     |
+| window.scrollMaxY       | ✅     |
+| window.outerHeight      | ✅     | Sets the window height.         |
+| window.outerWidth       | ✅     | Sets the window width.          |
+| window.innerHeight      | ✅     | Sets the inner viewport height. |
+| window.innerWidth       | ✅     | Sets the inner viewport width.  |
+| window.screenX          | ✅     |
+| window.screenY          | ✅     |
+| window.history.length   | ✅     |
+| window.devicePixelRatio | ✅     | Works, but not recommended.     |
 
 **Notes:**
 
@@ -269,7 +273,7 @@ You can also exclude default addons with the `--exclude-addons` flag:
 Miscellaneous (WebGl spoofing, battery status, etc)
 </summary>
 
-| Property                | Status | Notes                                                                                                                                          |
+| Property                | Status | Description                                                                                                                                    |
 | ----------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | pdfViewer               | ✅     | Sets navigator.pdfViewerEnabled. Please keep this on though, many websites will flag a lack of pdfViewer as a headless browser.                |
 | webGl:renderer          | ✅     | Spoofs the name of the unmasked WebGL renderer. Can cause leaks, use at your own caution! Also note, webGl is disabled in Camoufox by default. |

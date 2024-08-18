@@ -24,6 +24,7 @@ func main() {
 	// Read and parse the config file
 	var configMap map[string]interface{}
 	parseJson(configPath, &configMap)
+	validateConfig(configMap)
 
 	//*** PARSE ADDONS ***//
 
@@ -199,7 +200,7 @@ func setEnvironmentVariables(configMap map[string]interface{}, userAgentOS strin
 	}
 
 	if normalizeOS(runtime.GOOS) == "linux" {
-		fontconfigPath := filepath.Join("fontconfig", userAgentOS)
+		fontconfigPath := getPath(filepath.Join("fontconfig", userAgentOS))
 		os.Setenv("FONTCONFIG_PATH", fontconfigPath)
 	}
 }
