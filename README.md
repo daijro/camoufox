@@ -20,6 +20,7 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 - Patches to avoid bot detection ✅
 - Custom Playwright Juggler implementation for the latest Firefox ✅
 - Font spoofing & anti-fingerprinting ✅
+- WebRTC IP spoofing ✅
 - Patches from LibreWolf & Ghostery to remove Mozilla services ✅
 - Optimized for memory and speed ✅
 - Stays up to date with the latest Firefox version 🕓
@@ -45,7 +46,7 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 
 ## Fingerprint Injection
 
-Camoufox overrides Javascript properties on the lowest level possible, allowing values to be spoofed across all scopes.
+In Camoufox, data is intercepted at the C++ implementation level, making the changes undetectable through JavaScript inspection.
 
 To spoof fingerprint properties, pass a JSON containing properties to spoof:
 
@@ -221,7 +222,24 @@ Camoufox can override the following network headers:
 </details>
 
 <details>
+<summary>
+WebRTC IP
+</summary>
 
+Camoufox implements WebRTC IP spoofing at the protocol level by modifying ICE candidates and SDP before they're sent.
+
+| Property    | Status | Description         |
+| ----------- | ------ | ------------------- |
+| webrtc:ipv4 | ✅     | IPv4 address to use |
+| webrtc:ipv6 | ✅     | IPv6 address to use |
+
+**Notes:**
+
+- To completely disable WebRTC, set the `media.peerconnection.enabled` preference to `false`.
+
+</details>
+
+<details>
 <summary>
 Addons
 </summary>
@@ -281,6 +299,7 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 - Battery API spoofing
 - Support for spoofing both inner and outer window viewport sizes
 - Network headers (Accept-Languages and User-Agent) are spoofed to match the navigator properties
+- WebRTC IP spoofing at the protocol level
 - etc.
 
 #### Anti font fingerprinting
@@ -321,7 +340,7 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 
 ### Tests
 
-Camoufox performs well against every major WAF I've tested. (Test sites from [Botright](https://github.com/Vinyzu/botright/?tab=readme-ov-file#browser-stealth))
+Camoufox performs well against every major WAF I've tested. (Original test sites from [Botright](https://github.com/Vinyzu/botright/?tab=readme-ov-file#browser-stealth))
 
 | Test                                                                                               | Status                                            |
 | -------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
@@ -340,6 +359,10 @@ Camoufox performs well against every major WAF I've tested. (Test sites from [Bo
 | **Cloudflare**                                                                                     | ✔️                                                |
 | ‣ [Turnstile](https://nopecha.com/demo/turnstile)                                                  | ✔️                                                |
 | ‣ [Interstitial](https://nopecha.com/demo/cloudflare)                                              | ✔️ Unstable on Chrome fingerprints                |
+| **WebRTC IP Spoofing**                                                                             | ✔️                                                |
+| ‣ [Browserleaks WebRTC](https://browserleaks.net/webrtc)                                           | ✔️                                                |
+| ‣ [CreepJS WebRTC](https://abrahamjuliot.github.io/creepjs/)                                       | ✔️                                                |
+| ‣ [BrowserScan WebRTC](https://www.browserscan.net/webrtc)                                         | ✔️                                                |
 | **Font Fingerprinting**                                                                            | ✔️                                                |
 | ‣ [Browserleaks Fonts](https://browserleaks.net/fonts)                                             | ✔️                                                |
 | ‣ [CreepJS TextMetrics](https://abrahamjuliot.github.io/creepjs/tests/fonts.html)                  | ✔️                                                |
