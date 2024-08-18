@@ -68,6 +68,7 @@ class FrameTree {
         frame._pendingNavigationId = helper.toProtocolNavigationId(loadIdentifier);
         this.emit(FrameTree.Events.NavigationStarted, frame);
       }, 'juggler-navigation-started-renderer'),
+      helper.addObserver(this._onDOMWindowCreated.bind(this), 'content-document-global-created'),
       helper.addObserver(this._onDOMWindowCreated.bind(this), 'juggler-dom-window-reused'),
       helper.addObserver((browsingContext, topic, why) => {
         this._onBrowsingContextAttached(browsingContext);
@@ -558,20 +559,21 @@ class Frame {
   }
 
   _onGlobalObjectCleared() {
+    // Causing leaks.
     const webSocketService = this._frameTree._webSocketEventService;
     if (this._webSocketListenerInnerWindowId && webSocketService.hasListenerFor(this._webSocketListenerInnerWindowId))
       webSocketService.removeListener(this._webSocketListenerInnerWindowId, this._webSocketListener);
     this._webSocketListenerInnerWindowId = this.domWindow().windowGlobalChild.innerWindowId;
     webSocketService.addListener(this._webSocketListenerInnerWindowId, this._webSocketListener);
+    // Camoufox: Causes leaks.
+    // for (const context of this._worldNameToContext.values())
+    //   this._runtime.destroyExecutionContext(context);
+    // this._worldNameToContext.clear();
 
-    for (const context of this._worldNameToContext.values())
-      this._runtime.destroyExecutionContext(context);
-    this._worldNameToContext.clear();
-
-    this._worldNameToContext.set('', this._runtime.createExecutionContext(this.domWindow(), this.domWindow(), {
-      frameId: this._frameId,
-      name: '',
-    }));
+    // this._worldNameToContext.set('', this._runtime.createExecutionContext(this.domWindow(), this.domWindow(), {
+    //   frameId: this._frameId,
+    //   name: '',
+    // }));
     for (const [name, world] of this._frameTree._isolatedWorlds) {
       if (name)
         this._createIsolatedContext(name);
