@@ -8,7 +8,7 @@ index b090a56d88..9fe4a5e1e8 100644
  include("/tools/fuzzing/libfuzzer-config.mozbuild")
 +
 +# DOM Mask
-+LOCAL_INCLUDES += ["/dom/mask"]
++LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/netwerk/protocol/http/nsHttpHandler.cpp b/netwerk/protocol/http/nsHttpHandler.cpp
 index d0aebdf965..01472ec205 100644

@@ -8,7 +8,7 @@ index a2b3e60fe5..56326fc038 100644
      CXXFLAGS += CONFIG["MOZ_PANGO_CFLAGS"]
 +
 +# DOM Mask
-+LOCAL_INCLUDES += ["/dom/mask"]
++LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/gfx/src/nsDeviceContext.cpp b/gfx/src/nsDeviceContext.cpp
 index 2bb53010a8..0ff718c0f1 100644

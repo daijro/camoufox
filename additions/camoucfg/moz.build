@@ -13,7 +13,7 @@ EXPORTS += [
 
 LOCAL_INCLUDES += [
     "/dom/base",
-    "/dom/mask",
+    "/camoucfg",
 ]
 
 FINAL_LIBRARY = "xul"

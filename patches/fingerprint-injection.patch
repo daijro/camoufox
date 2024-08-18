@@ -1,5 +1,5 @@
 diff --git a/browser/app/moz.build b/browser/app/moz.build
-index 434167c996..c6b47bc835 100644
+index 434167c996..e18a16aee0 100644
 --- a/browser/app/moz.build
 +++ b/browser/app/moz.build
 @@ -174,3 +174,6 @@ for icon in ("firefox", "document", "newwindow", "newtab", "pbmode", "document_p
@@ -8,7 +8,7 @@ index 434167c996..c6b47bc835 100644
      )
 +
 +# DOM Mask
-+LOCAL_INCLUDES += ["/dom/mask"]
++LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/base/Element.cpp b/dom/base/Element.cpp
 index 807cb4ec25..3df0e0f70f 100644
@@ -226,7 +226,7 @@ index 8e577bd9fd..3ed748a75f 100644
    BrowsingContext* bc = docshell ? docshell->GetBrowsingContext() : nullptr;
  
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 114402c4a1..a883a2493f 100644
+index 114402c4a1..55daeabe7a 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
 @@ -641,3 +641,6 @@ GeneratedFile(
@@ -235,7 +235,7 @@ index 114402c4a1..a883a2493f 100644
  )
 +
 +# DOM Mask
-+LOCAL_INCLUDES += ["/dom/mask"]
++LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index 3678ebc59c..03a72fe242 100644
@@ -452,7 +452,7 @@ index a42ac3017d..fadae4a714 100644
    if (Preferences::GetBool("dom.battery.test.default")) {
      return 1.0;
 diff --git a/dom/battery/moz.build b/dom/battery/moz.build
-index 3a90c93c01..35e3227f5e 100644
+index 3a90c93c01..91d673039b 100644
 --- a/dom/battery/moz.build
 +++ b/dom/battery/moz.build
 @@ -21,3 +21,6 @@ FINAL_LIBRARY = "xul"
@@ -461,7 +461,7 @@ index 3a90c93c01..35e3227f5e 100644
  MOCHITEST_MANIFESTS += ["test/mochitest.toml"]
 +
 +# DOM Mask
-+LOCAL_INCLUDES += ["/dom/mask"]
++LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
 index 4e43425ef9..26bbfdc868 100644
@@ -498,7 +498,7 @@ index 4e43425ef9..26bbfdc868 100644
              break;
  
 diff --git a/dom/canvas/moz.build b/dom/canvas/moz.build
-index 3a533d36d1..8697f8c21f 100644
+index 3a533d36d1..41d74d9b3f 100644
 --- a/dom/canvas/moz.build
 +++ b/dom/canvas/moz.build
 @@ -221,3 +221,6 @@ if CONFIG["CC_TYPE"] == "gcc":
@@ -507,19 +507,7 @@ index 3a533d36d1..8697f8c21f 100644
  include("/tools/fuzzing/libfuzzer-config.mozbuild")
 +
 +# DOM Mask
-+LOCAL_INCLUDES += ["/dom/mask"]
-\ No newline at end of file
-diff --git a/dom/moz.build b/dom/moz.build
-index 88fc49cb73..3d73af36c0 100644
---- a/dom/moz.build
-+++ b/dom/moz.build
-@@ -116,3 +116,6 @@ if CONFIG["MOZ_WIDGET_TOOLKIT"] in ("gtk", "cocoa", "windows"):
-     TEST_DIRS += ["plugins/test"]
- 
- SPHINX_TREES["/dom"] = "docs"
-+
-+# DOM Mask
-+DIRS += ["mask"]
++LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
 index b05e409a84..8e0f7ea657 100644
@@ -580,7 +568,7 @@ index b05e409a84..8e0f7ea657 100644
    MOZ_ASSERT(rts);
  
 diff --git a/dom/workers/moz.build b/dom/workers/moz.build
-index c7818826d1..0be0753e20 100644
+index c7818826d1..2e2e6526e7 100644
 --- a/dom/workers/moz.build
 +++ b/dom/workers/moz.build
 @@ -112,3 +112,6 @@ MARIONETTE_MANIFESTS += ["test/marionette/manifest.toml"]
@@ -589,5 +577,5 @@ index c7818826d1..0be0753e20 100644
  BROWSER_CHROME_MANIFESTS += ["test/browser.toml"]
 +
 +# DOM Mask
-+LOCAL_INCLUDES += ["/dom/mask"]
++LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file

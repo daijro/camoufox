@@ -559,7 +559,6 @@ class Frame {
   }
 
   _onGlobalObjectCleared() {
-    // Causing leaks.
     const webSocketService = this._frameTree._webSocketEventService;
     if (this._webSocketListenerInnerWindowId && webSocketService.hasListenerFor(this._webSocketListenerInnerWindowId))
       webSocketService.removeListener(this._webSocketListenerInnerWindowId, this._webSocketListener);

@@ -37,7 +37,7 @@ index 3d99906827..a9d1191688 100644
  include("/tools/fuzzing/libfuzzer-config.mozbuild")
 +
 +# DOM Mask
-+LOCAL_INCLUDES += ["/dom/mask"]
++LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/layout/style/FontFace.cpp b/layout/style/FontFace.cpp
 index f1a90334ea..47d3a881ac 100644
@@ -155,5 +155,5 @@ index a14ab6a7ac..6e6a727abf 100644
      ]
 +
 +# DOM Mask
-+LOCAL_INCLUDES += ["/dom/mask"]
++LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
