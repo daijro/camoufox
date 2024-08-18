@@ -1,4 +1,4 @@
-<img src="https://i.imgur.com/8nXwzrW.png" align="center">
+<img src="https://i.imgur.com/enUBkXt.png" align="center">
 
 <h1 align="center">Camoufox</h1>
 
