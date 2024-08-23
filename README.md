@@ -358,8 +358,6 @@ Camoufox performs well against every major WAF I've tested. (Original test sites
 | ‣ [antoinevastel.com](https://antoinevastel.com/bots/datadome)                                     | ✔️                                                |
 | **Imperva**                                                                                        | ✔️                                                |
 | ‣ [ticketmaster.es](https://www.ticketmaster.es/)                                                  | ✔️                                                |
-| **Kasada**                                                                                         | ✔️                                                |
-| ‣ [canadagoose.com](https://www.canadagoose.com/)                                                  | ✔️                                                |
 | **Cloudflare**                                                                                     | ✔️                                                |
 | ‣ [Turnstile](https://nopecha.com/demo/turnstile)                                                  | ✔️                                                |
 | ‣ [Interstitial](https://nopecha.com/demo/cloudflare)                                              | ✔️ Unstable on Chrome fingerprints                |
