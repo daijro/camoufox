@@ -25,6 +25,34 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 - Optimized for memory and speed ✅
 - Stays up to date with the latest Firefox version 🕓
 
+## Sponsors
+
+<a href="https://www.capsolver.com/?utm_source=github&utm_medium=repo&utm_campaign=scraping&utm_term=camoufox" >
+  <img src="https://i.imgur.com/ziOJLDj.png" alt="drawing" width="60%"/>
+</a>
+
+**[Capsolver](https://www.capsolver.com/?utm_source=github&utm_medium=repo&utm_campaign=scraping&utm_term=camoufox)** is an affordable AI-powered captcha-solving service that supports reCaptcha, hCaptcha, GeeTest, ImageToText, & more.
+
+<details>
+<summary>
+Using Capsolver in Camoufox
+</summary>
+
+1. Download & extract the [Capsolver Firefox extension](https://github.com/capsolver/capsolver-browser-extension/releases/).
+2. Edit `/assets/config.js` in the extracted files (e.g. add API key). See the [config settings](https://docs.capsolver.com/en/guide/extension/settings_for_developers/#configurable-settings).
+3. Load the addon in Camoufox with the `--addons` flag:
+
+```py
+browser = await pw.firefox.launch(
+  executable_path='/path/to/camoufox/launch',
+  args=['--addons', json.dumps(['/path/to/CapSolver-Extension'])],
+)
+```
+
+</details>
+
+---
+
 ### Why Firefox instead of Chromium?
 
 Camoufox is built on top of Firefox/Juggler instead of Chromium because:
@@ -36,7 +64,7 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 ### What's planned?
 
 - Continue research on potential leaks
-- Create a pypi package for downloading & updating Camoufox
+- Create a PyPi package for downloading & updating Camoufox
 - Integrate [BrowserForge](https://github.com/daijro/browserforge) for fingerprint generation
 - Built in TLS fingerprinting protection using [Hazetunnel](https://github.com/daijro/hazetunnel)
 - Create integration tests
