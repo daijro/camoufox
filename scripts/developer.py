@@ -23,7 +23,7 @@ def into_camoufox_dir():
 def reset_camoufox():
     """Reset the Camoufox source"""
     with temp_cd('..'):
-        run('make clean')
+        run('make revert')
     run('touch _READY')
 
 
