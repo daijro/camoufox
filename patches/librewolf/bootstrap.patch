@@ -1,17 +1,13 @@
+diff --git a/python/mozversioncontrol/mozversioncontrol/__init__.py b/python/mozversioncontrol/mozversioncontrol/__init__.py
+index f9a9b0d6bd1f..c5c437b3f220 100644
 --- a/python/mozversioncontrol/mozversioncontrol/__init__.py
 +++ b/python/mozversioncontrol/mozversioncontrol/__init__.py
-@@ -1019,9 +1019,11 @@ class SrcRepository(Repository):
-         """
-         res = []
-         # move away the .git or .hg folder from path to more easily test in a hg/git repo
--        for root, dirs, files in os.walk("."):
-+        for root, dirs, files in os.walk(path):
+@@ -1144,7 +1144,7 @@ class SrcRepository(Repository):
+         for root, dirs, files in os.walk(self.path):
+             base = os.path.relpath(root, self.path)
              for name in files:
--                res.append(os.path.join(root, name))
-+                res.append(
-+                    os.path.relpath(os.path.join(root, name), path).replace("\\", "/")
-+                )
+-                res.append(os.path.join(base, name))
++                res.append(os.path.join(base, name)).replace("\\", "/")
          return res
  
      def get_tracked_files_finder(self, path):
-
