@@ -11,11 +11,11 @@ index 988f5831f2..62f64589a4 100644
        !queryContext.searchString ||
        queryContext.searchString.length > UrlbarUtils.MAX_TEXT_LENGTH ||
        lazy.UrlbarTokenizer.REGEXP_LIKE_PROTOCOL.test(
-diff --git a/toolkit/components/search/SearchEngineSelectorOld.sys.mjs b/toolkit/components/search/SearchEngineSelectorOld.sys.mjs
+diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/components/search/SearchEngineSelector.sys.mjs
 index 3dab73ee2f..c5c1259217 100644
---- a/toolkit/components/search/SearchEngineSelectorOld.sys.mjs
-+++ b/toolkit/components/search/SearchEngineSelectorOld.sys.mjs
-@@ -158,6 +158,21 @@ export class SearchEngineSelectorOld {
+--- a/toolkit/components/search/SearchEngineSelector.sys.mjs
++++ b/toolkit/components/search/SearchEngineSelector.sys.mjs
+@@ -158,6 +158,21 @@ export class SearchEngineSelector {
     *   could be obtained.
     */
    async _getConfiguration(firstTime = true) {
