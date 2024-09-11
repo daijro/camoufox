@@ -67,7 +67,7 @@ func filterOutput(r io.Reader, w io.Writer) {
 }
 
 // Run Camoufox
-func runCamoufox(execName string, args []string, addonsList []string) {
+func runCamoufox(execName string, args []string, addonsList []string, stderrPath string) {
 	// If addons are specified, get the debug port
 	var debugPortInt int
 	if len(addonsList) > 0 {
@@ -130,8 +130,18 @@ func runCamoufox(execName string, args []string, addonsList []string) {
 		done <- true
 	}()
 	go func() {
+		// If stderrPath is not empty, write to the file
+		fmt.Printf("Setting stderr to file: %s\n", stderrPath)
+		if stderrPath != "" {
+			file, err := os.Create(stderrPath)
+			if err != nil {
+				fmt.Printf("Error creating stderr file: %v\n", err)
+				os.Exit(1)
+			}
+			defer file.Close()
+			filterOutput(stderr, file)
+		}
 		filterOutput(stderr, os.Stderr)
-		done <- true
 	}()
 
 	<-done

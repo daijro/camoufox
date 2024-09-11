@@ -131,15 +131,20 @@ class Juggler {
           },
         };
         pipe.init(connection);
+        ChromeUtils.camouDebug('Juggler pipe initialized');
         const dispatcher = new Dispatcher(connection);
+        ChromeUtils.camouDebug('Dispatcher created');
         browserHandler = new BrowserHandler(dispatcher.rootSession(), dispatcher, targetRegistry, browserStartupFinishedPromise, () => {
+          ChromeUtils.camouDebug('BrowserHandler cleanup callback called');
           if (this._silent)
             Services.startup.exitLastWindowClosingSurvivalArea();
           connection.onclose();
           pipe.stop();
           pipeStopped = true;
         });
+        ChromeUtils.camouDebug('BrowserHandler created');
         dispatcher.rootSession().setHandler(browserHandler);
+        ChromeUtils.camouDebug('BrowserHandler set as root session handler');
         loadStyleSheet();
         dump(`\nJuggler listening to the pipe\n`);
         break;

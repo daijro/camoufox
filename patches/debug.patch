@@ -1,0 +1,63 @@
+diff --git a/dom/base/ChromeUtils.cpp b/dom/base/ChromeUtils.cpp
+index 71d897a0d0..2234834f3e 100644
+--- a/dom/base/ChromeUtils.cpp
++++ b/dom/base/ChromeUtils.cpp
+@@ -2069,6 +2069,25 @@ bool ChromeUtils::IsDarkBackground(GlobalObject&, Element& aElement) {
+   return nsNativeTheme::IsDarkBackground(f);
+ }
+ 
++/* static */
++void ChromeUtils::CamouDebug(GlobalObject& aGlobal,
++                              const nsAString& aVarName) {
++  if (auto value = MaskConfig::GetBool("debug");
++      value.has_value() && !value.value()) {
++    return;
++  }
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  printf_stderr("DEBUG: %s\n", utf8VarName.get());
++}
++
++bool ChromeUtils::IsCamouDebug(GlobalObject& aGlobal) {
++  if (auto value = MaskConfig::GetBool("debug");
++      value.has_value() && value.value()) {
++    return true;
++  }
++  return false;
++}
++
+ double ChromeUtils::DateNow(GlobalObject&) { return JS_Now() / 1000.0; }
+ 
+ /* static */
+diff --git a/dom/base/ChromeUtils.h b/dom/base/ChromeUtils.h
+index 42b74131d6..9f151ca2e7 100644
+--- a/dom/base/ChromeUtils.h
++++ b/dom/base/ChromeUtils.h
+@@ -301,6 +301,10 @@ class ChromeUtils {
+ 
+   static bool IsDarkBackground(GlobalObject&, Element&);
+ 
++  static void CamouDebug(GlobalObject& aGlobal, const nsAString& aVarName);
++
++  static bool IsCamouDebug(GlobalObject& aGlobal);
++
+   static double DateNow(GlobalObject&);
+ 
+   static void EnsureJSOracleStarted(GlobalObject&);
+diff --git a/dom/chrome-webidl/ChromeUtils.webidl b/dom/chrome-webidl/ChromeUtils.webidl
+index f761be86a4..c6409bd56e 100644
+--- a/dom/chrome-webidl/ChromeUtils.webidl
++++ b/dom/chrome-webidl/ChromeUtils.webidl
+@@ -746,6 +746,13 @@ partial namespace ChromeUtils {
+    */
+   boolean isDarkBackground(Element element);
+ 
++  /**
++   * Camoufox debug commands
++   */
++  undefined camouDebug(DOMString varName);
++
++  boolean isCamouDebug();
++
+   /**
+    * Starts the JSOracle process for ORB JavaScript validation, if it hasn't started already.
+    */

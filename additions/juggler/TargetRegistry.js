@@ -571,6 +571,8 @@ class PageTarget {
     // default viewport.
     
     // Do not allow default viewport size if Camoufox set it first
+    const viewportSize = this._viewportSize || this._browserContext.defaultViewportSize;
+    
     if (
       !viewportSize &&
       this._browserContext.defaultViewportSize && (
@@ -582,7 +584,6 @@ class PageTarget {
       return;
     }
 
-    const viewportSize = this._viewportSize || this._browserContext.defaultViewportSize;
     if (viewportSize) {
       const {width, height} = viewportSize;
       this._linkedBrowser.style.setProperty('width', width + 'px');

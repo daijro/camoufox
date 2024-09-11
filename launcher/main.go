@@ -18,6 +18,7 @@ func main() {
 	configPath := parseArgs("--config", "{}", &args, true)
 	addons := parseArgs("--addons", "[]", &args, true)
 	excludeAddons := parseArgs("--exclude-addons", "[]", &args, true)
+	stderrPath := parseArgs("--stderr", "", &args, true)
 
 	//*** PARSE CONFIG ***//
 
@@ -25,6 +26,11 @@ func main() {
 	var configMap map[string]interface{}
 	parseJson(configPath, &configMap)
 	validateConfig(configMap)
+
+	// Add "debug: True" to the config
+	if stderrPath != "" {
+		configMap["debug"] = true
+	}
 
 	//*** PARSE ADDONS ***//
 
@@ -58,7 +64,7 @@ func main() {
 		fmt.Printf("Error setting executable permissions: %v\n", err)
 		os.Exit(1)
 	}
-	runCamoufox(execName, args, addonsList)
+	runCamoufox(execName, args, addonsList, stderrPath)
 }
 
 // Returns the absolute path relative to the launcher
@@ -93,13 +99,20 @@ func parseArgs(param string, defaultValue string, args *[]string, removeFromArgs
 	return defaultValue
 }
 
+// fileExists checks if a file exists
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // Parses a JSON string or file into a map
 func parseJson(argv string, target interface{}) {
 	// Unmarshal the config input into a map
 	var data []byte
+	var err error
 
 	// Check if the input is a file path or inline JSON
-	if _, err := os.Stat(argv); err == nil {
+	if fileExists(argv) {
 		data, err = os.ReadFile(argv)
 		if err != nil {
 			fmt.Printf("Error reading config file: %v\n", err)

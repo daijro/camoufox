@@ -140,11 +140,13 @@ package-windows:
 		--fonts macos linux
 
 run-launcher:
+	rm -rf $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch;
 	make build-launcher arch=x86_64 os=linux;
 	cp launcher/dist/launch $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch;
 	$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch
 
 run-pw:
+	rm -rf $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch;
 	make build-launcher arch=x86_64 os=linux;
 	python3 scripts/run-pw.py \
 		--version $(version) \
