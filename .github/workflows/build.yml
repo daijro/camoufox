@@ -69,7 +69,7 @@ jobs:
         uses: egor-tensin/setup-clang@v1
         with:
           version: latest
-          platform: x64
+          platform: ${{ matrix.arch == 'x86_64' && 'x64' || 'any' }}
 
       - name: Check disk space
         run: df -h
