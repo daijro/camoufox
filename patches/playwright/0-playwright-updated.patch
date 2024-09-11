@@ -1702,7 +1702,7 @@ index 9aebaa3932..de9bd34256 100644
  
  #include "desktop_device_info.h"
  #include "MediaEngineSource.h"
-@@ -45,6 +46,23 @@ namespace webrtc {
+@@ -45,6 +46,35 @@ namespace webrtc {
  
  class VideoCaptureEncodeInterface;
  
