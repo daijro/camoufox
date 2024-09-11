@@ -107,7 +107,7 @@ jobs:
         run: python3 ./multibuild.py --target ${{ matrix.target }} --arch ${{ matrix.arch }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: CamoufoxBuilds-${{ matrix.target }}-${{ matrix.arch }}
           path: dist/*
@@ -120,7 +120,7 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
