@@ -1,5 +1,5 @@
 diff --git a/python/mozversioncontrol/mozversioncontrol/__init__.py b/python/mozversioncontrol/mozversioncontrol/__init__.py
-index f9a9b0d6bd1f..c5c437b3f220 100644
+index f9a9b0d6bd1f..f763871f6a29 100644
 --- a/python/mozversioncontrol/mozversioncontrol/__init__.py
 +++ b/python/mozversioncontrol/mozversioncontrol/__init__.py
 @@ -1144,7 +1144,7 @@ class SrcRepository(Repository):
@@ -7,7 +7,7 @@ index f9a9b0d6bd1f..c5c437b3f220 100644
              base = os.path.relpath(root, self.path)
              for name in files:
 -                res.append(os.path.join(base, name))
-+                res.append(os.path.join(base, name)).replace("\\", "/")
++                res.append(os.path.join(base, name).replace("\\", "/"))
          return res
  
      def get_tracked_files_finder(self, path):
