@@ -115,7 +115,7 @@ func parseJson(argv string, target interface{}) {
 	if fileExists(argv) {
 		data, err = os.ReadFile(argv)
 		if err != nil {
-			fmt.Printf("Error reading config file: %v\n", err)
+			fmt.Printf("Error reading JSON file: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
@@ -124,7 +124,7 @@ func parseJson(argv string, target interface{}) {
 	}
 
 	if err := json.Unmarshal(data, target); err != nil {
-		fmt.Printf("Invalid JSON in config: %v\n", err)
+		fmt.Printf("Invalid JSON: %v\n", err)
 		os.Exit(1)
 	}
 }

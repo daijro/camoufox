@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"runtime"
 )
 
 type Property struct {
@@ -36,8 +37,15 @@ func validateConfig(configMap map[string]interface{}) {
 }
 
 func loadProperties() []Property {
-	propertiesPath := getPath("properties.json")
+	// Get the path to the properties.json file
+	var propertiesPath string
+	if normalizeOS(runtime.GOOS) == "macos" {
+		propertiesPath = getPath("Camoufox.app/Contents/Resources/properties.json")
+	} else {
+		propertiesPath = getPath("properties.json")
+	}
 	var properties []Property
+	// Parse the JSON file
 	parseJson(propertiesPath, &properties)
 	return properties
 }
