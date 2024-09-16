@@ -1,0 +1,65 @@
+# Mappings of Browserforge fingerprints to Camoufox config properties.
+
+navigator:
+  # Disabled for now, since Browserforge tends to have outdated UAs
+  # userAgent: navigator.userAgent
+  # userAgentData not in Firefox
+  doNotTrack: navigator.doNotTrack
+  appCodeName: navigator.appCodeName
+  appName: navigator.appName
+  appVersion: navigator.appVersion
+  oscpu: navigator.oscpu
+  # webdriver is always True
+  language: navigator.language
+  languages: navigator.languages
+  platform: navigator.platform
+  # deviceMemory not in Firefox
+  hardwareConcurrency: navigator.hardwareConcurrency
+  product: navigator.product
+  productSub: navigator.productSub
+  # vendor is not necessary
+  # vendorSub is not necessary
+  maxTouchPoints: navigator.maxTouchPoints
+  extraProperties:
+    # Note: Changing pdfViewerEnabled is not recommended. This will be kept to True.
+    globalPrivacyControl: navigator.globalPrivacyControl
+
+screen:
+  # hasHDR is not implemented in Camoufox
+  availHeight: screen.availHeight
+  availWidth: screen.availWidth
+  availTop: screen.availTop
+  availLeft: screen.availLeft
+  height: screen.height
+  width: screen.width
+  colorDepth: screen.colorDepth
+  pixelDepth: screen.pixelDepth
+  # devicePixelRatio is not recommended. Any value other than 1.0 is suspicious.
+  pageXOffset: screen.pageXOffset
+  pageYOffset: screen.pageYOffset
+  # Disable viewport hijacking temporarily.
+  # outerHeight: window.outerHeight
+  # outerWidth: window.outerWidth
+  # innerHeight: window.innerHeight
+  # innerWidth: window.innerWidth
+  screenX: window.screenX
+  # These seem to not be generating properly in Browserforge:
+  # clientWidth: document.body.clientWidth
+  # clientHeight: document.body.clientHeight
+
+videoCard:
+  renderer: webGl:renderer
+  vendor: webGl:vendor
+
+headers:
+  # headers.User-Agent is redundant with navigator.userAgent
+  Accept-Language: headers.Accept-Language
+  Accept-Encoding: headers.Accept-Encoding
+
+battery:
+  charging: battery:charging
+  chargingTime: battery:chargingTime
+  dischargingTime: battery:dischargingTime
+
+# Unsupported: videoCodecs, audioCodecs, pluginsData, multimediaDevices
+# Fonts are listed through the launcher.

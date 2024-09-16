@@ -1,0 +1,43 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "camoufox"
+version = "1.0.0"
+description = "Wrapper around Playwright to help launch Camoufox"
+authors = ["daijro <daijro.dev@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/daijro/camoufox"
+readme = "README.md"
+keywords = [
+    "client",
+    "fingerprint",
+    "browser",
+    "scraping",
+    "injector",
+    "firefox",
+    "playwright",
+]
+classifiers = [
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Browsers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+click = "*"
+requests = "*"
+orjson = "*"
+browserforge = "*"
+playwright = "*"
+pyyaml = "*"
+platformdirs = "*"
+tqdm = "*"
+numpy = "*"
+ua_parser = "*"
+typing_extensions = "*"
+
+[tool.poetry.scripts]
+camoufox = "camoufox.__main__:cli"

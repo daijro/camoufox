@@ -6,6 +6,7 @@
 _old/
 dist/
 bin/
+venv/
 /bundle/fonts/extra
 launch
 launch.exe

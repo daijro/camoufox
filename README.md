@@ -344,7 +344,8 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 
 - Custom implementation of Playwright for the latest Firefox
 - Various config patches to evade bot detection
-- Removed leaking Playwright patches:
+- Fixes leaking Playwright patches:
+  - All page agent javascript is sandboxed
   - Fixes frame execution context leaks
   - Fixes `navigator.webdriver` detection
   - Removed potentially leaking anti-zoom/meta viewport handling patches
@@ -356,6 +357,7 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 - Stripped out/disabled _many, many_ Mozilla services. Runs faster than the original Mozilla Firefox, and uses less memory (200mb)
 - Includes the debloat config from PeskyFox & LibreWolf, and others
 - Speed optimizations from FastFox, and other network optimizations
+- Removed all CSS animations
 - Minimalistic theming
 - etc.
 
