@@ -1,4 +1,3 @@
-# Set to environment variables
 import os
 import sys
 from os import environ
@@ -24,7 +23,7 @@ from .xpi_dl import add_default_addons
 LAUNCH_FILE = {
     'win': 'camoufox.exe',
     'lin': 'camoufox-bin',
-    'mac': 'camoufox',
+    'mac': '../MacOS/camoufox',
 }
 
 ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
