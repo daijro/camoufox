@@ -1,6 +1,7 @@
 import os
 import platform
 import re
+import shlex
 import shutil
 import sys
 import tempfile
@@ -69,10 +70,9 @@ class CamoufoxFetcher:
         Get the current platform and architecture information.
 
         Returns:
-
+            str: The architecture of the current platform
 
         Raises:
-            UnsupportedOS: If the current OS is not supported
             UnsupportedArchitecture: If the current architecture is not supported
         """
 
@@ -125,7 +125,7 @@ class CamoufoxFetcher:
             url (str): The URL to download the file from
 
         Returns:
-            BytesIO: The downloaded file content as a BytesIO object
+            DownloadBuffer: The downloaded file content as a BytesIO object
         """
         rprint(f'Downloading package: {url}')
         return webdl(url, buffer=file)
@@ -135,7 +135,7 @@ class CamoufoxFetcher:
         Extract the contents of a zip file to the installation directory.
 
         Args:
-            zip_file (BytesIO): The zip file content as a BytesIO object
+            zip_file (DownloadBuffer): The zip file content as a BytesIO object
         """
         rprint(f'Extracting Camoufox: {INSTALL_DIR}')
         unzip(zip_file, str(INSTALL_DIR))
@@ -177,11 +177,10 @@ class CamoufoxFetcher:
                 self.extract_zip(temp_file)
                 self.set_version()
 
-            # Run chmod -R 755 on INSTALL_DIR
+            # Set permissions on INSTALL_DIR
             if OS_NAME != 'win':
-                shutil.chmod(INSTALL_DIR, 0o755)
+                os.system(f'chmod -R 755 {shlex.quote(str(INSTALL_DIR))}')
 
-            # Clean up old installation
             rprint('\nCamoufox successfully installed.', fg="yellow")
         except Exception as e:
             rprint(f"Error installing Camoufox: {str(e)}")
@@ -302,7 +301,7 @@ def webdl(
     Raises:
         requests.RequestException: If there's an error downloading the file
     """
-    response = requests.get(url, stream=True, timeout=20)
+    response = requests.get(url, stream=True)
     response.raise_for_status()
 
     total_size = int(response.headers.get('content-length', 0))

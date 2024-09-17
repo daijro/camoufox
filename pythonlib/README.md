@@ -7,11 +7,21 @@
 
 ## Installation
 
+First, install the `camoufox` package:
+
 ```bash
-git clone https://github.com/camoufox
+git clone --depth 1 https://github.com/camoufox
 cd camoufox/pythonlib
 pip install .
 ```
+
+Then, download the Camoufox browser:
+
+```bash
+camoufox fetch
+```
+
+To uninstall, run `camoufox remove`.
 
 <hr width=50>
 

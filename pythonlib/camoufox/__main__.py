@@ -64,7 +64,7 @@ def cli() -> None:
 
 
 @cli.command(name='fetch')
-def fetch():
+def fetch() -> None:
     """
     Fetch the latest version of Camoufox
     """
