@@ -1,9 +1,12 @@
+<div align="center">
+
 # Camoufox Python Interface
 
 #### Lightweight wrapper around the Playwright API to help launch Camoufox.
 
-> [!WARNING]
-> This is still experimental and in active development!
+</div>
+
+---
 
 ## Installation
 
@@ -28,6 +31,24 @@ python3 -m camoufox fetch
 ```
 
 To uninstall, run `camoufox remove`.
+
+<details>
+<summary>CLI options</summary>
+
+```
+Usage: python -m camoufox [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  fetch    Fetch the latest version of Camoufox
+  remove   Remove all downloaded files
+  test     Open the Playwright inspector
+  version  Display the current version
+```
+
+</details>
 
 <hr width=50>
 

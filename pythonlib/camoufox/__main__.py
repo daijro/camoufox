@@ -1,11 +1,12 @@
 """
-Binary CLI manager for Camoufox.
+CLI package manager for Camoufox.
 
 Adapted from https://github.com/daijro/hrequests/blob/main/hrequests/__main__.py
 """
 
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
+from typing import Optional
 
 import click
 
@@ -22,12 +23,13 @@ class CamoufoxUpdate(CamoufoxFetcher):
         Initializes the CamoufoxUpdate class
         """
         super().__init__()
+        self.current_verstr: Optional[str]
         try:
             self.current_verstr = installed_verstr()
         except FileNotFoundError:
             self.current_verstr = None
 
-    def is_updated_needed(self) -> None:
+    def is_updated_needed(self) -> bool:
         if self.current_verstr is None:
             return True
         # If the installed version is not the latest version
@@ -37,7 +39,7 @@ class CamoufoxUpdate(CamoufoxFetcher):
 
     def update(self) -> None:
         """
-        Updates the library if needed
+        Updates Camoufox if needed
         """
         # Check if the version is the same as the latest available version
         if not self.is_updated_needed():
@@ -74,10 +76,25 @@ def fetch() -> None:
 @cli.command(name='remove')
 def remove() -> None:
     """
-    Remove all library files
+    Remove all downloaded files
     """
     if not CamoufoxUpdate().cleanup():
         rprint("Camoufox binaries not found!", fg="red")
+
+
+@cli.command(name='test')
+@click.argument('url', default=None, required=False)
+def test(url: Optional[str] = None) -> None:
+    """
+    Open the Playwright inspector
+    """
+    from .sync_api import Camoufox
+
+    with Camoufox(headless=False) as browser:
+        page = browser.new_page()
+        if url:
+            page.goto(url)
+        page.pause()  # Open the Playwright inspector
 
 
 @cli.command(name='version')
@@ -101,7 +118,7 @@ def version() -> None:
     # Print the base version
     rprint(f"Camoufox:\tv{bin_ver} ", fg="green", nl=False)
 
-    # Check for library updates
+    # Check for Camoufox updates
     if updater.is_updated_needed():
         rprint(f"(Latest: v{updater.verstr})", fg="red")
     else:
