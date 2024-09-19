@@ -2,11 +2,12 @@ import os
 import sys
 from os import environ
 from random import randrange
-from typing import Any, Dict, List, Optional, Tuple, TypeAlias, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import numpy as np
 import orjson
 from browserforge.fingerprints import Fingerprint, Screen
+from typing_extensions import TypeAlias
 from ua_parser import user_agent_parser
 
 from .addons import (
@@ -162,6 +163,7 @@ def get_launch_options(
     fonts: Optional[List[str]] = None,
     args: Optional[List[str]] = None,
     executable_path: Optional[str] = None,
+    env: Optional[Dict[str, Union[str, float, bool]]] = None,
 ) -> Dict[str, Any]:
     """
     Builds the launch options for the Camoufox browser.
@@ -212,7 +214,10 @@ def get_launch_options(
 
     # Launch
     threaded_try_load_addons(get_debug_port(args), addons)
-    env_vars = {**get_env_vars(config, target_os), **environ}
+    env_vars = {
+        **get_env_vars(config, target_os),
+        **(cast(Dict[str, Union[str, float, bool]], environ) if env is None else env),
+    }
     return {
         "executable_path": executable_path or get_path(LAUNCH_FILE[OS_NAME]),
         "args": args,

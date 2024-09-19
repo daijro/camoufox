@@ -21,8 +21,8 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 - Custom Playwright Juggler implementation for the latest Firefox ✅
 - Font spoofing & anti-fingerprinting ✅
 - WebRTC IP spoofing ✅
-- Patches from LibreWolf & Ghostery to remove Mozilla services ✅
-- Optimized for memory and speed ✅
+- Debloated & optimized for memory and speed ✅
+- [PyPi package](https://pypi.org/project/camoufox/) for updates & unique fingerprint injection 📦
 - Stays up to date with the latest Firefox version 🕓
 
 ## Sponsors
@@ -64,8 +64,8 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 ### What's planned?
 
 - Continue research on potential leaks
-- Create a PyPi package for downloading & updating Camoufox
-- Integrate [BrowserForge](https://github.com/daijro/browserforge) for fingerprint generation
+- ~~Create a PyPi package for downloading & updating Camoufox~~ ✅
+- ~~Integrate [BrowserForge](https://github.com/daijro/browserforge) for fingerprint generation~~ ✅
 - Built in TLS fingerprinting protection using [Hazetunnel](https://github.com/daijro/hazetunnel)
 - Create integration tests
 - Chromium port (long term)
@@ -80,6 +80,12 @@ To spoof fingerprint properties, pass a JSON containing properties to spoof:
 
 ```bash
 $ ./launch --config '{"property": "value"}' [...other Firefox arguments]
+```
+
+Or, using the Camoufox Python interface ([see here](https://github.com/daijro/camoufox/tree/main/pythonlib#camoufox-python-interface)):
+
+```py
+>>> with Camoufox(config={"property": "value"}) as browser:
 ```
 
 The following attributes can be spoofed:
@@ -355,8 +361,9 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 #### Debloat/Optimizations
 
 - Stripped out/disabled _many, many_ Mozilla services. Runs faster than the original Mozilla Firefox, and uses less memory (200mb)
-- Includes the debloat config from PeskyFox & LibreWolf, and others
-- Speed optimizations from FastFox, and other network optimizations
+- Patches from LibreWolf & Ghostery to help remove telemetry & bloat
+- Debloat config from PeskyFox, LibreWolf, and others
+- Speed & network optimizations from FastFox
 - Removed all CSS animations
 - Minimalistic theming
 - etc.
@@ -369,6 +376,7 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 - Addons are not allowed to open tabs
 - Addons are automatically enabled in Private Browsing mode
 - Addons are automatically pinned to the toolbar
+- Fixes DNS leaks with uBO prefetching
 
 ## Stealth Performance
 
@@ -408,6 +416,9 @@ Camoufox performs well against every major WAF I've tested. (Original test sites
 Camoufox does **not** fully support injecting Chromium fingerprints. Some WAFs (such as [Interstitial](https://nopecha.com/demo/cloudflare)) test for Spidermonkey engine behavior, which is impossible to spoof.
 
 ## Playwright Usage
+
+> [!NOTE]
+> It is recommended to use Camoufox's Python interface instead. See [here](https://github.com/daijro/camoufox/tree/main/pythonlib#camoufox-python-interface) for more information.
 
 Camoufox is fully compatible with your existing Playwright code. You only have to change your browser initialization:
 
@@ -500,7 +511,7 @@ graph TD
     end
 ```
 
-This was originally forked from the LibreWolf build system.
+This was originally based on the LibreWolf build system.
 
 ## Build CLI
 

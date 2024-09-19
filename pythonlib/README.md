@@ -1,6 +1,6 @@
 # Camoufox Python Interface
 
-#### This is the Python library for Camoufox. 
+#### Lightweight wrapper around the Playwright API to help launch Camoufox.
 
 > [!WARNING]
 > This is still experimental and in active development!
@@ -10,15 +10,21 @@
 First, install the `camoufox` package:
 
 ```bash
-git clone --depth 1 https://github.com/camoufox
-cd camoufox/pythonlib
-pip install .
+pip install -U camoufox
 ```
 
 Then, download the Camoufox browser:
 
+**Windows**
+
 ```bash
 camoufox fetch
+```
+
+**MacOS & Linux**
+
+```bash
+python3 -m camoufox fetch
 ```
 
 To uninstall, run `camoufox remove`.
@@ -34,9 +40,9 @@ Camoufox is fully compatible with your existing Playwright code. You only have t
 ```python
 from camoufox.sync_api import Camoufox
 
-with Camoufox() as browser:
+with Camoufox(headless=False) as browser:
     page = browser.new_page()
-    page.goto("https://www.browserscan.net/")
+    page.goto("https://example.com/")
 ```
 
 #### Async API
@@ -44,15 +50,17 @@ with Camoufox() as browser:
 ```python
 from camoufox.async_api import AsyncCamoufox
 
-async with AsyncCamoufox() as browser:
+async with AsyncCamoufox(headless=False) as browser:
     page = await browser.new_page()
-    await page.goto("https://www.browserscan.net/")
+    await page.goto("https://example.com")
 ```
+
 <details>
 <summary>Parameters</summary>
 
 ```
 Launches a new browser instance for Camoufox.
+Accepts all Playwright Firefox launch options, along with the following:
 
 Parameters:
     playwright (Playwright):
@@ -80,6 +88,7 @@ Parameters:
     **launch_options (Dict[str, Any]):
         Additional Firefox launch options.
 ```
+
 </details>
 
 ---
@@ -98,7 +107,7 @@ with Camoufox(
     }
 ) as browser:
     page = browser.new_page()
-    page.goto("https://www.browserscan.net/")
+    page.goto("https://www.browserscan.net/webrtc")
 ```
 
 <hr width=50>
@@ -118,7 +127,11 @@ fg = FingerprintGenerator(browser='firefox')
 # Launch Camoufox with a random Firefox fingerprint
 with Camoufox(fingerprint=fg.generate()) as browser:
     page = browser.new_page()
-    page.goto("https://www.browserscan.net/")
+    page.goto("https://example.com/")
 ```
+
+<hr width=50>
+
+**Note:** As of now, some properties from BrowserForge fingerprints will not be passed to Camoufox. This is due to the outdated fingerprint dataset from Apify's fingerprint-suite (see [here](https://github.com/apify/fingerprint-suite/discussions/308)). Properties will be re-enabled as soon as an updated dataset is available.
 
 ---

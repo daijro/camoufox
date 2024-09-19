@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from browserforge.fingerprints import Fingerprint, Screen
 from playwright.async_api import Browser, Playwright, PlaywrightContextManager
@@ -42,6 +42,7 @@ async def AsyncNewBrowser(
     fonts: Optional[List[str]] = None,
     args: Optional[List[str]] = None,
     executable_path: Optional[str] = None,
+    env: Optional[Dict[str, Union[str, float, bool]]] = None,
     **launch_options: Dict[str, Any]
 ) -> Browser:
     """
@@ -70,6 +71,8 @@ async def AsyncNewBrowser(
             The arguments to pass to the browser.
         executable_path (Optional[str]):
             The path to the Camoufox browser executable.
+        env (Optional[Dict[str, Union[str, float, bool]]]):
+            The environment variables to set.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -84,5 +87,6 @@ async def AsyncNewBrowser(
         fonts=fonts,
         args=args,
         executable_path=executable_path,
+        env=env,
     )
     return await playwright.firefox.launch(**opt, **launch_options)

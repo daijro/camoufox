@@ -279,7 +279,7 @@ def get_path(file: str) -> str:
     Get the path to the camoufox executable.
     """
     if OS_NAME == 'mac':
-        return str(camoufox_path() / 'Camoufox.app' / 'Contents' / 'Resources' / file)
+        return os.path.abspath(camoufox_path() / 'Camoufox.app' / 'Contents' / 'Resources' / file)
     return str(camoufox_path() / file)
 
 
