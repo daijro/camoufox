@@ -1,8 +1,8 @@
 # Mappings of Browserforge fingerprints to Camoufox config properties.
 
 navigator:
-  # Disabled for now, since Browserforge tends to have outdated UAs
-  # userAgent: navigator.userAgent
+  # Note: Browserforge tends to have outdated UAs
+  userAgent: navigator.userAgent
   # userAgentData not in Firefox
   doNotTrack: navigator.doNotTrack
   appCodeName: navigator.appCodeName
