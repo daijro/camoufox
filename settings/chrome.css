@@ -111,8 +111,15 @@
 /* Context menu */
 menupopup,
 panel {
-  --panel-background: black !important;
   --panel-border-radius: 0px !important;
+}
+
+/* Set menu popups to black on dark mode */
+@media (prefers-color-scheme: dark) {
+  menupopup,
+  panel {
+    --panel-background: black !important;
+  }
 }
 
 /*
