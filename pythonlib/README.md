@@ -114,7 +114,7 @@ with Camoufox(
 
 ### BrowserForge Integration
 
-Camoufox is fully compatible with BrowserForge.
+Camoufox is compatible with [BrowserForge](https://github.com/daijro/browserforge) fingerprints.
 
 By default, Camoufox will use a random fingerprint. You can also inject your own Firefox Browserforge fingerprint into Camoufox with the following example:
 
