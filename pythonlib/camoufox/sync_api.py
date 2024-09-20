@@ -42,6 +42,9 @@ def NewBrowser(
     fonts: Optional[List[str]] = None,
     args: Optional[List[str]] = None,
     executable_path: Optional[str] = None,
+    block_images: Optional[bool] = None,
+    block_webrtc: Optional[bool] = None,
+    firefox_user_prefs: Optional[Dict[str, Any]] = None,
     env: Optional[Dict[str, Union[str, float, bool]]] = None,
     **launch_options: Dict[str, Any]
 ) -> Browser:
@@ -50,29 +53,35 @@ def NewBrowser(
 
     Parameters:
         playwright (Playwright):
-            The playwright instance to use.
+            Playwright instance to use.
         config (Optional[Dict[str, Any]]):
-            The configuration to use.
+            Configuration to use.
         addons (Optional[List[str]]):
-            The addons to use.
+            Addons to use.
         fingerprint (Optional[Fingerprint]):
-            The fingerprint to use.
+            BrowserForge fingerprint to use.
         exclude_addons (Optional[List[DefaultAddons]]):
-            The default addons to exclude, passed as a list of camoufox.DefaultAddons enums.
+            Default addons to exclude. Passed as a list of camoufox.DefaultAddons enums.
         screen (Optional[browserforge.fingerprints.Screen]):
-            The screen constraints to use.
+            BrowserForge screen constraints to use.
         os (Optional[ListOrString]):
-            The operating system to use for the fingerprint. Either a string or a list of strings.
+            Operating system to use for the fingerprint. Either a string or a list of strings.
         user_agent (Optional[ListOrString]):
-            The user agent to use for the fingerprint. Either a string or a list of strings.
+            User agent to use for the fingerprint. Either a string or a list of strings.
         fonts (Optional[List[str]]):
-            The fonts to load into Camoufox, in addition to the default fonts.
+            Fonts to load into Camoufox, in addition to the default fonts.
         args (Optional[List[str]]):
-            The arguments to pass to the browser.
-        executable_path (Optional[str]):
-            The path to the Camoufox browser executable.
+            Arguments to pass to the browser.
+        block_images (Optional[bool]):
+            Whether to block all images.
+        block_webrtc (Optional[bool]):
+            Whether to block WebRTC entirely.
+        firefox_user_prefs (Optional[Dict[str, Any]]):
+            Firefox user preferences to set.
         env (Optional[Dict[str, Union[str, float, bool]]]):
-            The environment variables to set.
+            Environment variables to set.
+        executable_path (Optional[str]):
+            Custom Camoufox browser executable path.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -88,5 +97,8 @@ def NewBrowser(
         args=args,
         executable_path=executable_path,
         env=env,
+        block_images=block_images,
+        block_webrtc=block_webrtc,
+        firefox_user_prefs=firefox_user_prefs,
     )
     return playwright.firefox.launch(**opt, **launch_options)

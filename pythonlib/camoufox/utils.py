@@ -164,6 +164,9 @@ def get_launch_options(
     args: Optional[List[str]] = None,
     executable_path: Optional[str] = None,
     env: Optional[Dict[str, Union[str, float, bool]]] = None,
+    block_images: Optional[bool] = None,
+    block_webrtc: Optional[bool] = None,
+    firefox_user_prefs: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Builds the launch options for the Camoufox browser.
@@ -212,6 +215,15 @@ def get_launch_options(
     target_os = get_target_os(config)
     update_fonts(config, target_os)
 
+    # Set Firefox user preferences
+    if firefox_user_prefs is None:
+        firefox_user_prefs = {}
+
+    if block_images:
+        firefox_user_prefs['permissions.default.image'] = 2
+    if block_webrtc:
+        firefox_user_prefs['media.peerconnection.enabled'] = False
+
     # Launch
     threaded_try_load_addons(get_debug_port(args), addons)
     env_vars = {
@@ -222,4 +234,5 @@ def get_launch_options(
         "executable_path": executable_path or get_path(LAUNCH_FILE[OS_NAME]),
         "args": args,
         "env": env_vars,
+        "firefox_user_prefs": firefox_user_prefs,
     }

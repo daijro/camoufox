@@ -52,7 +52,7 @@ def confirm_paths(paths: List[str]) -> None:
     Confirms that the addon paths are valid
     """
     for path in paths:
-        if not os.path.exists(path):
+        if not os.path.isdir(path):
             raise InvalidAddonPath(path)
 
 
