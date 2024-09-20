@@ -85,29 +85,33 @@ Accepts all Playwright Firefox launch options, along with the following:
 
 Parameters:
     config (Optional[Dict[str, Any]]):
-        Configuration to use.
-    addons (Optional[List[str]]):
-        Addons to use.
-    fingerprint (Optional[Fingerprint]):
-        BrowserForge fingerprint to use.
-    exclude_addons (Optional[List[DefaultAddons]]):
-        Default addons to exclude. Passed as a list of camoufox.DefaultAddons enums.
-    screen (Optional[browserforge.fingerprints.Screen]):
-        BrowserForge screen constraints to use.
+        Camoufox properties to use. (read https://github.com/daijro/camoufox/blob/main/README.md)
     os (Optional[ListOrString]):
-        Operating system to use for the fingerprint. Either a string or a list of strings.
-    user_agent (Optional[ListOrString]):
-        User agent to use for the fingerprint. Either a string or a list of strings.
-    fonts (Optional[List[str]]):
-        Fonts to load into Camoufox, in addition to the default fonts.
-    args (Optional[List[str]]):
-        Arguments to pass to the browser.
+        Operating system to use for the fingerprint generation.
+        Can be "windows", "macos", or "linux", or a list of these to choose from randomly.
+        Default: ["windows", "macos", "linux"]
     block_images (Optional[bool]):
         Whether to block all images.
     block_webrtc (Optional[bool]):
         Whether to block WebRTC entirely.
     firefox_user_prefs (Optional[Dict[str, Any]]):
         Firefox user preferences to set.
+    addons (Optional[List[str]]):
+        List of Firefox addons to use. 
+    fingerprint (Optional[Fingerprint]):
+        BrowserForge fingerprint to use.
+        If not provided, a random fingerprint will be generated based on the provided os & user_agent.
+    exclude_addons (Optional[List[DefaultAddons]]):
+        Default addons to exclude. Passed as a list of camoufox.DefaultAddons enums.
+    user_agent (Optional[ListOrString]):
+        User agent to use for the fingerprint generation. Either a string or a list of strings.
+        Note: This must be a valid BrowserForge User-Agent string.
+              To use a different user agent, set the "navigator.userAgent" preference in `config`.
+    fonts (Optional[List[str]]):
+        Fonts to load into Camoufox (in addition to the default fonts for the target `os`).
+        Takes a list of font family names that are installed on the system.
+    args (Optional[List[str]]):
+        Arguments to pass to the browser.
     env (Optional[Dict[str, Union[str, float, bool]]]):
         Environment variables to set.
     executable_path (Optional[str]):
