@@ -1,0 +1,129 @@
+diff --git a/dom/base/ChromeUtils.cpp b/dom/base/ChromeUtils.cpp
+index 6833d2227f..d3d2ef088d 100644
+--- a/dom/base/ChromeUtils.cpp
++++ b/dom/base/ChromeUtils.cpp
+@@ -5,6 +5,7 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "ChromeUtils.h"
++#include "MaskConfig.hpp"
+ 
+ #include "JSOracleParent.h"
+ #include "js/CallAndConstruct.h"  // JS::Call
+@@ -2068,6 +2069,25 @@ bool ChromeUtils::IsDarkBackground(GlobalObject&, Element& aElement) {
+   return nsNativeTheme::IsDarkBackground(f);
+ }
+ 
++/* static */
++void ChromeUtils::CamouDebug(GlobalObject& aGlobal,
++                              const nsAString& aVarName) {
++  if (auto value = MaskConfig::GetBool("debug");
++      value.has_value() && !value.value()) {
++    return;
++  }
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  printf_stderr("DEBUG: %s\n", utf8VarName.get());
++}
++
++bool ChromeUtils::IsCamouDebug(GlobalObject& aGlobal) {
++  if (auto value = MaskConfig::GetBool("debug");
++      value.has_value() && value.value()) {
++    return true;
++  }
++  return false;
++}
++
+ double ChromeUtils::DateNow(GlobalObject&) { return JS_Now() / 1000.0; }
+ 
+ /* static */
+@@ -2094,6 +2114,28 @@ void ChromeUtils::GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
+   }
+ }
+ 
++/* static */
++int32_t ChromeUtils::CamouGetInt(GlobalObject& aGlobal,
++                                    const nsAString& aVarName) {
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  if (auto value = MaskConfig::GetInt32(utf8VarName.get())) {
++    return value.value();
++  }
++  return 0;
++}
++
++/* static */
++double ChromeUtils::CamouGetDouble(GlobalObject& aGlobal,
++                                    const nsAString& aVarName,
++                                    double aDefaultValue) {
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  if (auto value = MaskConfig::GetDouble(utf8VarName.get())) {
++    return value.value();
++  }
++  return aDefaultValue;
++}
++
++
+ /* static */
+ bool ChromeUtils::ShouldResistFingerprinting(
+     GlobalObject& aGlobal, JSRFPTarget aTarget,
+diff --git a/dom/base/ChromeUtils.h b/dom/base/ChromeUtils.h
+index 0150c59670..d297ab5788 100644
+--- a/dom/base/ChromeUtils.h
++++ b/dom/base/ChromeUtils.h
+@@ -301,6 +301,10 @@ class ChromeUtils {
+ 
+   static bool IsDarkBackground(GlobalObject&, Element&);
+ 
++  static void CamouDebug(GlobalObject& aGlobal, const nsAString& aVarName);
++
++  static bool IsCamouDebug(GlobalObject& aGlobal);
++
+   static double DateNow(GlobalObject&);
+ 
+   static void EnsureJSOracleStarted(GlobalObject&);
+@@ -310,6 +314,11 @@ class ChromeUtils {
+   static void GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
+                                               nsTArray<nsCString>& aNames);
+ 
++  static int32_t CamouGetInt(GlobalObject& aGlobal, const nsAString& aVarName);
++
++  static double CamouGetDouble(GlobalObject& aGlobal, const nsAString& aVarName,
++                               double aDefaultValue);
++
+   static bool ShouldResistFingerprinting(
+       GlobalObject& aGlobal, JSRFPTarget aTarget,
+       const Nullable<uint64_t>& aOverriddenFingerprintingSettings);
+diff --git a/dom/chrome-webidl/ChromeUtils.webidl b/dom/chrome-webidl/ChromeUtils.webidl
+index bf196f039d..994b5803df 100644
+--- a/dom/chrome-webidl/ChromeUtils.webidl
++++ b/dom/chrome-webidl/ChromeUtils.webidl
+@@ -746,6 +746,13 @@ partial namespace ChromeUtils {
+    */
+   boolean isDarkBackground(Element element);
+ 
++  /**
++   * Camoufox debug commands
++   */
++  undefined camouDebug(DOMString varName);
++
++  boolean isCamouDebug();
++
+   /**
+    * Starts the JSOracle process for ORB JavaScript validation, if it hasn't started already.
+    */
+@@ -757,6 +764,16 @@ partial namespace ChromeUtils {
+   [ChromeOnly]
+   readonly attribute unsigned long aliveUtilityProcesses;
+ 
++  /**
++   * Get an int value from Camoufox MaskConfig.
++   */
++  long camouGetInt(DOMString varName);
++
++  /**
++   * Get a double value from Camoufox MaskConfig.
++   */
++  double camouGetDouble(DOMString varName, double defaultValue);
++
+   /**
+    * Get a list of all possible Utility process Actor Names ; mostly useful to
+    * perform testing and ensure about:processes display is sound and misses no

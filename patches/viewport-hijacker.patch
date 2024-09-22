@@ -1,5 +1,5 @@
 diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
-index f8d49ac2a3..0bf5981a2e 100644
+index bee5309c04..d7fa2af364 100644
 --- a/browser/base/content/browser-init.js
 +++ b/browser/base/content/browser-init.js
 @@ -72,7 +72,7 @@ var gBrowserInit = {
@@ -11,7 +11,7 @@ index f8d49ac2a3..0bf5981a2e 100644
        // When the fingerprinting resistance is enabled, making sure that we don't
        // have a maximum window to interfere with generating rounded window dimensions.
        document.documentElement.setAttribute("sizemode", "normal");
-@@ -300,6 +300,48 @@ var gBrowserInit = {
+@@ -302,6 +302,48 @@ var gBrowserInit = {
        )?.removeAttribute("key");
      }
  
@@ -20,12 +20,12 @@ index f8d49ac2a3..0bf5981a2e 100644
 +
 +    // Hijack the outer window size
 +    let outerWidth, outerHeight;
-+    if ((outerWidth = ChromeUtils.camouGetConfig("window.outerWidth"))) {
++    if ((outerWidth = ChromeUtils.camouGetInt("window.outerWidth"))) {
 +      document.documentElement.style.setProperty('width', outerWidth + 'px');
 +      browser.style.setProperty('width', outerWidth + 'px');
 +      window.resizeTo(outerWidth, window.outerHeight);
 +    }
-+    if ((outerHeight = ChromeUtils.camouGetConfig("window.outerHeight"))) {
++    if ((outerHeight = ChromeUtils.camouGetInt("window.outerHeight"))) {
 +      document.documentElement.style.setProperty('height', outerHeight + 'px');
 +      browser.style.setProperty('height', outerHeight + 'px');
 +      window.resizeTo(window.outerWidth, outerHeight);
@@ -33,8 +33,8 @@ index f8d49ac2a3..0bf5981a2e 100644
 +    browser.style.setProperty('box-sizing', 'content-box');
 +
 +    // Hijack the inner window size
-+    let innerWidth = ChromeUtils.camouGetConfig("window.innerWidth") || ChromeUtils.camouGetConfig("document.body.clientWidth");
-+    let innerHeight = ChromeUtils.camouGetConfig("window.innerHeight") || ChromeUtils.camouGetConfig("document.body.clientHeight");
++    let innerWidth = ChromeUtils.camouGetInt("window.innerWidth") || ChromeUtils.camouGetInt("document.body.clientWidth");
++    let innerHeight = ChromeUtils.camouGetInt("window.innerHeight") || ChromeUtils.camouGetInt("document.body.clientHeight");
 +
 +    if (innerWidth || innerHeight) {
 +      let win_inner_style = document.createElement('style');
@@ -60,61 +60,3 @@ index f8d49ac2a3..0bf5981a2e 100644
      this._loadHandled = true;
    },
  
-diff --git a/dom/base/ChromeUtils.cpp b/dom/base/ChromeUtils.cpp
-index d412679e64..3802d9c481 100644
---- a/dom/base/ChromeUtils.cpp
-+++ b/dom/base/ChromeUtils.cpp
-@@ -5,6 +5,7 @@
-  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
- 
- #include "ChromeUtils.h"
-+#include "MaskConfig.hpp"
- 
- #include "JSOracleParent.h"
- #include "js/CallAndConstruct.h"  // JS::Call
-@@ -2077,6 +2078,16 @@ void ChromeUtils::GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
-   }
- }
- 
-+/* static */
-+int32_t ChromeUtils::CamouGetConfig(GlobalObject& aGlobal,
-+                                    const nsAString& aVarName) {
-+  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
-+  if (auto value = MaskConfig::GetInt32(utf8VarName.get())) {
-+    return value.value();
-+  }
-+  return 0;
-+}
-+
- /* static */
- bool ChromeUtils::ShouldResistFingerprinting(
-     GlobalObject& aGlobal, JSRFPTarget aTarget,
-diff --git a/dom/base/ChromeUtils.h b/dom/base/ChromeUtils.h
-index 707a04b1d3..3335f153b5 100644
---- a/dom/base/ChromeUtils.h
-+++ b/dom/base/ChromeUtils.h
-@@ -302,6 +302,8 @@ class ChromeUtils {
-   static void GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
-                                               nsTArray<nsCString>& aNames);
- 
-+  static int32_t CamouGetConfig(GlobalObject& aGlobal, const nsAString& aVarName);
-+
-   static bool ShouldResistFingerprinting(
-       GlobalObject& aGlobal, JSRFPTarget aTarget,
-       const Nullable<uint64_t>& aOverriddenFingerprintingSettings);
-diff --git a/dom/chrome-webidl/ChromeUtils.webidl b/dom/chrome-webidl/ChromeUtils.webidl
-index c0a4d900d4..d23e8adaf7 100644
---- a/dom/chrome-webidl/ChromeUtils.webidl
-+++ b/dom/chrome-webidl/ChromeUtils.webidl
-@@ -741,6 +741,11 @@ partial namespace ChromeUtils {
-   [ChromeOnly]
-   readonly attribute unsigned long aliveUtilityProcesses;
- 
-+  /**
-+   * Get the value from Camoufox MaskConfig.
-+   */
-+  long camouGetConfig(DOMString varName);
-+
-   /**
-    * Get a list of all possible Utility process Actor Names ; mostly useful to
-    * perform testing and ensure about:processes display is sound and misses no
