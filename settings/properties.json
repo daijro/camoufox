@@ -54,5 +54,8 @@
   { "property": "battery:chargingTime", "type": "double" },
   { "property": "battery:dischargingTime", "type": "double" },
   { "property": "battery:level", "type": "double" },
-  { "property": "fonts", "type": "array" }
+  { "property": "fonts", "type": "array" },
+  { "property": "geolocation:latitude", "type": "double" },
+  { "property": "geolocation:longitude", "type": "double" },
+  { "property": "geolocation:accuracy", "type": "double" }
 ]
