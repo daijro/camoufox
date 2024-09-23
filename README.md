@@ -17,14 +17,13 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 ## Features
 
 - Invisible to **all major anti-bot systems** 🎭
-- Fingerprint injection (without JS injection!) ✅
-  - Override properties for device, viewport, screen, navigator, etc. ✅
-  - Font spoofing & anti-fingerprinting ✅
-  - WebRTC IP spoofing ✅
-  - Geolocation & timezone spoofing ✅
+- Fingerprint injection & rotation (without JS injection!) ✅
+- Spoof properties of device, viewport, screen, WebGL, battery API, location, etc. ✅
+- Font spoofing & anti-fingerprinting ✅
+- WebRTC IP spoofing ✅
 - Blocks & circumvents ads 🛡️
-- Debloated & optimized for memory and speed 🚀
-- [PyPi package](https://pypi.org/project/camoufox/) for updates & fingerprint rotation 📦
+- Debloated & optimized for memory and speed ⚡
+- [PyPi package](https://pypi.org/project/camoufox/) for updates & auto fingerprint injection 📦
 - Stays up to date with the latest Firefox version 🕓
 
 ## Sponsors
@@ -42,13 +41,14 @@ Using Capsolver in Camoufox
 
 1. Download & extract the [Capsolver Firefox extension](https://github.com/capsolver/capsolver-browser-extension/releases/).
 2. Edit `/assets/config.js` in the extracted files (e.g. add API key). See the [config settings](https://docs.capsolver.com/en/guide/extension/settings_for_developers/#configurable-settings).
-3. Load the addon in Camoufox with the `--addons` flag:
+3. Load the addon in Camoufox:
 
 ```py
-browser = await pw.firefox.launch(
-  executable_path='/path/to/camoufox/launch',
-  args=['--addons', json.dumps(['/path/to/CapSolver-Extension'])],
-)
+from camoufox.sync_api import Camoufox
+
+with Camoufox(addons=['/path/to/CapSolver-Extension']) as browser:
+  page = browser.new_page()
+  ...
 ```
 
 </details>
@@ -67,6 +67,8 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 
 - Continue research on potential leaks
 - Integrate into [hrequests](https://github.com/daijro/hrequests)
+- Human-like typing & mouse movement
+- WebGL fingerprint spoofing through software rendering
 - Built in TLS fingerprinting protection using [Hazetunnel](https://github.com/daijro/hazetunnel)
 - Create integration tests
 - Chromium port (long term)
@@ -300,7 +302,52 @@ Camoufox implements WebRTC IP spoofing at the protocol level by modifying ICE ca
 
 <details>
 <summary>
+WebGL
+</summary>
+
+Camoufox has experimental support for spoofing WebGL properties.
+
+| Property       | Status | Description                                     |
+| -------------- | ------ | ----------------------------------------------- |
+| webGl:renderer | ✅     | Spoofs the name of the unmasked WebGL renderer. |
+| webGl:vendor   | ✅     | Spoofs the name of the unmasked WebGL vendor.   |
+
+**Notes:**
+
+- Spoofing your unmasked WebGL provider does NOT spoof your [WebGL fingerprint](https://scrapfly.io/web-scraping-tools/webgl-fingerprint). **This can cause detection!**
+- WebGL is disabled in Camoufox by default. To enable it, set the `webgl.disabled` preference to `false`.
+
+</details>
+
+<details>
+<summary>
 Addons
+</summary>
+
+In the Camoufox Python library, addons can be loaded with the `addons` parameter:
+
+```python
+from camoufox.sync_api import Camoufox
+
+with Camoufox(addons=['/path/to/addon', '/path/to/addon2']) as browser:
+    page = browser.new_page()
+```
+
+Camoufox will automatically download and use the latest uBlock Origin with custom privacy/adblock filters, and B.P.C. by default to help with ad circumvention.
+
+You can also exclude default addons with the `exclude_addons` parameter:
+
+```python
+from camoufox.sync_api import Camoufox
+from camoufox import DefaultAddons
+
+with Camoufox(exclude_addons=[DefaultAddons.uBO, DefaultAddons.BPC]) as browser:
+    page = browser.new_page()
+```
+
+<details>
+<summary>
+Loading addons with the legacy launcher...
 </summary>
 
 Addons can be loaded with the `--addons` flag.
@@ -321,26 +368,26 @@ You can also exclude default addons with the `--exclude-addons` flag:
 
 </details>
 
+---
+
+</details>
+
+</details>
+
 </details>
 
 <details>
 <summary>
-Miscellaneous (WebGl spoofing, battery status, etc)
+Miscellaneous (battery status, etc)
 </summary>
 
-| Property                | Status | Description                                                                                                                                    |
-| ----------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| pdfViewer               | ✅     | Sets navigator.pdfViewerEnabled. Please keep this on though, many websites will flag a lack of pdfViewer as a headless browser.                |
-| webGl:renderer          | ✅     | Spoofs the name of the unmasked WebGL renderer. Can cause leaks, use at your own caution! Also note, webGl is disabled in Camoufox by default. |
-| webGl:vendor            | ✅     | Spoofs the name of the unmasked WebGL vendor. Can cause leaks, use at your own caution! Also note, webGl is disabled in Camoufox by default.   |
-| battery:charging        | ✅     | Spoofs the battery charging status.                                                                                                            |
-| battery:chargingTime    | ✅     | Spoofs the battery charging time.                                                                                                              |
-| battery:dischargingTime | ✅     | Spoofs the battery discharging time.                                                                                                           |
-| battery:level           | ✅     | Spoofs the battery level.                                                                                                                      |
-
-**Notes:**
-
-- For screen properties, using Page.setViewportSize() may be more effective.
+| Property                | Status | Description                                                                                                                     |
+| ----------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| pdfViewer               | ✅     | Sets navigator.pdfViewerEnabled. Please keep this on though, many websites will flag a lack of pdfViewer as a headless browser. |
+| battery:charging        | ✅     | Spoofs the battery charging status.                                                                                             |
+| battery:chargingTime    | ✅     | Spoofs the battery charging time.                                                                                               |
+| battery:dischargingTime | ✅     | Spoofs the battery discharging time.                                                                                            |
+| battery:level           | ✅     | Spoofs the battery level.                                                                                                       |
 
 </details>
 
