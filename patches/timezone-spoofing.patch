@@ -1,0 +1,49 @@
+diff --git a/intl/components/moz.build b/intl/components/moz.build
+index b0af60b999..28c221136e 100644
+--- a/intl/components/moz.build
++++ b/intl/components/moz.build
+@@ -89,3 +89,6 @@ if CONFIG["MOZ_ICU4X"]:
+ DEFINES["MOZ_HAS_MOZGLUE"] = True
+ 
+ Library("intlcomponents")
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+\ No newline at end of file
+diff --git a/intl/components/src/TimeZone.cpp b/intl/components/src/TimeZone.cpp
+index 5b09dfdcc5..98a78b33cc 100644
+--- a/intl/components/src/TimeZone.cpp
++++ b/intl/components/src/TimeZone.cpp
+@@ -8,7 +8,8 @@
+ 
+ #include <algorithm>
+ #include <string_view>
+-
++#include "unicode/unistr.h"
++#include "MaskConfig.hpp"
+ #include "unicode/uenum.h"
+ #if MOZ_INTL_USE_ICU_CPP_TIMEZONE
+ #  include "unicode/basictz.h"
+@@ -22,7 +23,21 @@ Result<UniquePtr<TimeZone>, ICUError> TimeZone::TryCreate(
+     Maybe<Span<const char16_t>> aTimeZoneOverride) {
+   const UChar* zoneID = nullptr;
+   int32_t zoneIDLen = 0;
+-  if (aTimeZoneOverride) {
++
++  if (auto value = MaskConfig::GetString("timezone")) {
++    std::string camouTimeZone = value.value();
++
++    // Because we don't have access to NS_ConvertUTF8toUTF16 here,
++    // convert UTF-8 to UTF-16 using ICU's UnicodeString
++    icu::UnicodeString uniStr = icu::UnicodeString::fromUTF8(camouTimeZone);
++
++    if (uniStr.isBogus()) {
++      return Err(ICUError::InternalError);
++    }
++
++    zoneIDLen = uniStr.length();
++    zoneID = uniStr.getBuffer();
++  } else if (aTimeZoneOverride) {
+     zoneIDLen = static_cast<int32_t>(aTimeZoneOverride->Length());
+     zoneID = aTimeZoneOverride->Elements();
+   }

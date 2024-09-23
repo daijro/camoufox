@@ -57,5 +57,6 @@
   { "property": "fonts", "type": "array" },
   { "property": "geolocation:latitude", "type": "double" },
   { "property": "geolocation:longitude", "type": "double" },
-  { "property": "geolocation:accuracy", "type": "double" }
+  { "property": "geolocation:accuracy", "type": "double" },
+  { "property": "timezone", "type": "str" }
 ]
