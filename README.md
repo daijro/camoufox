@@ -16,13 +16,15 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 
 ## Features
 
-- Fingerprint injection (override properties of `navigator`, `window`, `screen`, etc) ✅
-- Patches to avoid bot detection ✅
-- Custom Playwright Juggler implementation for the latest Firefox ✅
-- Font spoofing & anti-fingerprinting ✅
-- WebRTC IP spoofing ✅
-- Debloated & optimized for memory and speed ✅
-- [PyPi package](https://pypi.org/project/camoufox/) for updates & unique fingerprint injection 📦
+- Invisible to **all major anti-bot systems** 🎭
+- Fingerprint injection (without JS injection!) ✅
+  - Override properties for device, viewport, screen, navigator, etc. ✅
+  - Font spoofing & anti-fingerprinting ✅
+  - WebRTC IP spoofing ✅
+  - Geolocation & timezone spoofing ✅
+- Blocks & circumvents ads 🛡️
+- Debloated & optimized for memory and speed 🚀
+- [PyPi package](https://pypi.org/project/camoufox/) for updates & fingerprint rotation 📦
 - Stays up to date with the latest Firefox version 🕓
 
 ## Sponsors
@@ -64,8 +66,7 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 ### What's planned?
 
 - Continue research on potential leaks
-- ~~Create a PyPi package for downloading & updating Camoufox~~ ✅
-- ~~Integrate [BrowserForge](https://github.com/daijro/browserforge) for fingerprint generation~~ ✅
+- Integrate into [hrequests](https://github.com/daijro/hrequests)
 - Built in TLS fingerprinting protection using [Hazetunnel](https://github.com/daijro/hazetunnel)
 - Create integration tests
 - Chromium port (long term)
@@ -261,6 +262,26 @@ Camoufox can override the following network headers:
 
 <details>
 <summary>
+Geolocation
+</summary>
+
+| Property              | Status | Description                                                                                                                                            |
+| --------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| geolocation:latitude  | ✅     | Latitude to use. Requires `geolocation:longitude` to be set as well.                                                                                   |
+| geolocation:longitude | ✅     | Longitude to use. Requires `geolocation:longitude` to be set as well.                                                                                  |
+| geolocation:accuracy  | ✅     | Accuracy in meters. This will be calculated automatically using the decminal percision of `geolocation:latitude` & `geolocation:longitude` if not set. |
+| timezone              | ✅     | Set a custom TZ timezone (e.g. "America/Chicago"). This will also change `Date()` to return the local time.                                            |
+
+**Notes:**
+
+- Setting `geolocation:latitude` & `geolocation:longitude` will automatically accept Location permission prompts.
+- `timezone` **must** be set to a valid TZ identifier. See [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for a list of valid timezones.
+- To change your locale, set the `intl.accept_languages` preference.
+
+</details>
+
+<details>
+<summary>
 WebRTC IP
 </summary>
 
@@ -338,6 +359,7 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 - Support for spoofing both inner and outer window viewport sizes
 - Network headers (Accept-Languages and User-Agent) are spoofed to match the navigator properties
 - WebRTC IP spoofing at the protocol level
+- Geolocation & timezone spoofing
 - etc.
 
 #### Anti font fingerprinting
@@ -379,6 +401,9 @@ Miscellaneous (WebGl spoofing, battery status, etc)
 - Fixes DNS leaks with uBO prefetching
 
 ## Stealth Performance
+
+In Camoufox, all of Playwright's internal Page Agent Javascript is sandboxed and isolated.
+This makes it **impossible** for a page to detect the presence of Playwright through Javascript inspection.
 
 ### Tests
 
