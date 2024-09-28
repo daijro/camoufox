@@ -58,5 +58,8 @@
   { "property": "geolocation:latitude", "type": "double" },
   { "property": "geolocation:longitude", "type": "double" },
   { "property": "geolocation:accuracy", "type": "double" },
-  { "property": "timezone", "type": "str" }
+  { "property": "timezone", "type": "str" },
+  { "property": "locale:language", "type": "str" },
+  { "property": "locale:region", "type": "str" },
+  { "property": "locale:script", "type": "str" }
 ]

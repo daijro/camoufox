@@ -126,6 +126,7 @@ Camoufox will automatically add the following default fonts associated your spoo
 **Notes**:
 
 - **navigator.webdriver** is set to false at all times.
+- `navigator.language` & `navigator.languages` will fall back to the `locale:language`/`locale:region` values if not set.
 - When spoofing Chrome fingerprints, the following may leak:
   - navigator.userAgentData missing.
   - navigator.deviceMemory missing.
@@ -264,21 +265,26 @@ Camoufox can override the following network headers:
 
 <details>
 <summary>
-Geolocation
+Geolocation & Intl
 </summary>
 
-| Property              | Status | Description                                                                                                                                            |
-| --------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| geolocation:latitude  | ✅     | Latitude to use. Requires `geolocation:longitude` to be set as well.                                                                                   |
-| geolocation:longitude | ✅     | Longitude to use. Requires `geolocation:longitude` to be set as well.                                                                                  |
-| geolocation:accuracy  | ✅     | Accuracy in meters. This will be calculated automatically using the decminal percision of `geolocation:latitude` & `geolocation:longitude` if not set. |
-| timezone              | ✅     | Set a custom TZ timezone (e.g. "America/Chicago"). This will also change `Date()` to return the local time.                                            |
+| Property              | Status | Description                                                                                                                                            | Required Keys           |
+| --------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| geolocation:latitude  | ✅     | Latitude to use.                                                                                                                                       | `geolocation:longitude` |
+| geolocation:longitude | ✅     | Longitude to use.                                                                                                                                      | `geolocation:latitude`  |
+| geolocation:accuracy  | ✅     | Accuracy in meters. This will be calculated automatically using the decminal percision of `geolocation:latitude` & `geolocation:longitude` if not set. |                         |
+| timezone              | ✅     | Set a custom TZ timezone (e.g. "America/Chicago"). This will also change `Date()` to return the local time.                                            |                         |
+| locale:language       | ✅     | Spoof the Intl API, headers, and system language (e.g. "en")                                                                                           | `locale:region`         |
+| locale:region         | ✅     | Spoof the Intl API, headers, and system region (e.g. "US").                                                                                            | `locale:language`       |
+| locale:script         | ✅     | Set a custom script (e.g. "Latn"). Will be set automatically if not specified.                                                                         |                         |
+
+The **Required Keys** are keys that must also be set for the property to work.
 
 **Notes:**
 
-- Setting `geolocation:latitude` & `geolocation:longitude` will automatically accept Location permission prompts.
+- Location permission prompts will be accepted automatically if `geolocation:latitude` and `geolocation:longitude` are set.
 - `timezone` **must** be set to a valid TZ identifier. See [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for a list of valid timezones.
-- To change your locale, set the `intl.accept_languages` preference.
+- `locale:language` & `locale:region` **must** be set to valid locale values. See [here](https://simplelocalize.io/data/locales/) for a list of valid locale-region values.
 
 </details>
 
@@ -406,7 +412,7 @@ Miscellaneous (battery status, etc)
 - Support for spoofing both inner and outer window viewport sizes
 - Network headers (Accept-Languages and User-Agent) are spoofed to match the navigator properties
 - WebRTC IP spoofing at the protocol level
-- Geolocation & timezone spoofing
+- Geolocation, timezone, and locale spoofing
 - etc.
 
 #### Anti font fingerprinting

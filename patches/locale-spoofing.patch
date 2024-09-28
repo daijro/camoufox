@@ -1,0 +1,186 @@
+diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
+index 16f4dd7d42..63c9c39741 100644
+--- a/browser/base/content/browser-init.js
++++ b/browser/base/content/browser-init.js
+@@ -109,6 +109,17 @@ var gBrowserInit = {
+     window.TabBarVisibility.update();
+     TabsInTitlebar.init();
+ 
++    let camouLocale;
++    let language = ChromeUtils.camouGetString("locale:language");
++    let region = ChromeUtils.camouGetString("locale:region");
++    if (language && region) {
++      camouLocale = language + "-" + region + ", " + language;
++    } else {
++      camouLocale = ChromeUtils.camouGetString("navigator.language");
++    }
++    if (camouLocale)
++      Services.prefs.setCharPref("intl.accept_languages", camouLocale);
++
+     new LightweightThemeConsumer(document);
+ 
+     if (
+diff --git a/intl/components/src/Locale.cpp b/intl/components/src/Locale.cpp
+index 9a043518cf..a8d3733212 100644
+--- a/intl/components/src/Locale.cpp
++++ b/intl/components/src/Locale.cpp
+@@ -24,11 +24,56 @@
+ 
+ #include "unicode/uloc.h"
+ #include "unicode/utypes.h"
++#include "MaskConfig.hpp"
+ 
+ namespace mozilla::intl {
+ 
+ using namespace intl::LanguageTagLimits;
+ 
++
++// Helper methods for header file
++
++const char* Locale::GetCamouLanguage() {
++  if (auto lang = MaskConfig::GetString("locale:language"))
++    return lang.value().c_str();
++  return nullptr;
++}
++
++const char* Locale::GetCamouRegion() {
++  if (auto region = MaskConfig::GetString("locale:region"))
++    return region.value().c_str();
++  return nullptr;
++}
++
++const char* Locale::GetCamouScript() {
++  if (auto script = MaskConfig::GetString("locale:script"))
++    return script.value().c_str();
++  return nullptr;
++}
++
++// Publicly exposed methods
++
++const char* Locale::GetCamouLocale() {
++  static std::string locale;
++
++  if (auto lang = MaskConfig::GetString("locale:language"))
++    if (auto region = MaskConfig::GetString("locale:region"))
++      locale = (lang.value() + "-" + region.value());
++  if (auto value = MaskConfig::GetString("navigator.language"))
++    locale = value.value();
++  if (locale.empty())
++    return nullptr;
++  return locale.c_str();
++}
++
++const char* Locale::GetDefaultLocale() {
++  // In Camoufox, GetDefaultLocale is defined outside the header
++  // to access MaskConfig.
++  if (auto value = GetCamouLocale())
++    return value;
++  return uloc_getDefault();
++}
++
+ template <typename CharT>
+ bool IsStructurallyValidLanguageTag(Span<const CharT> aLanguage) {
+   // unicode_language_subtag = alpha{2,3} | alpha{5,8};
+diff --git a/intl/components/src/Locale.h b/intl/components/src/Locale.h
+index 1f4e06f543..448486a479 100644
+--- a/intl/components/src/Locale.h
++++ b/intl/components/src/Locale.h
+@@ -190,8 +190,11 @@ using UniqueChars = UniquePtr<char[]>;
+  */
+ class MOZ_STACK_CLASS Locale final {
+   LanguageSubtag mLanguage = {};
++  mutable LanguageSubtag mCamouLanguage = {};
+   ScriptSubtag mScript = {};
++  mutable ScriptSubtag mCamouScript = {};
+   RegionSubtag mRegion = {};
++  mutable RegionSubtag mCamouRegion = {};
+ 
+   using VariantsVector = Vector<UniqueChars, 2>;
+   using ExtensionsVector = Vector<UniqueChars, 2>;
+@@ -314,9 +317,28 @@ class MOZ_STACK_CLASS Locale final {
+     }
+   };
+ 
+-  const LanguageSubtag& Language() const { return mLanguage; }
+-  const ScriptSubtag& Script() const { return mScript; }
+-  const RegionSubtag& Region() const { return mRegion; }
++  const LanguageSubtag& Language() const {
++    if (const char* lang = GetCamouLanguage()) {
++      mCamouLanguage.Set(mozilla::Span<const char>(lang, strlen(lang)));
++      return mCamouLanguage;
++    }
++    return mLanguage;
++  }
++  const ScriptSubtag& Script() const {
++    if (const char* script = GetCamouScript()) {
++      mCamouScript.Set(mozilla::Span<const char>(script, strlen(script)));
++      return mCamouScript;
++    }
++    return mScript;
++  }
++  const RegionSubtag& Region() const {
++    if (const char* region = GetCamouRegion()) {
++      mCamouRegion.Set(mozilla::Span<const char>(region, strlen(region)));
++      return mCamouRegion;
++    }
++    return mRegion;
++  }
++  
+   auto Variants() const { return SubtagEnumeration(mVariants); }
+   auto Extensions() const { return SubtagEnumeration(mExtensions); }
+   Maybe<Span<const char>> PrivateUse() const {
+@@ -483,7 +505,15 @@ class MOZ_STACK_CLASS Locale final {
+    *
+    * Also see <https://unicode-org.github.io/icu/userguide/locale>.
+    */
+-  static const char* GetDefaultLocale() { return uloc_getDefault(); }
++  static const char* GetDefaultLocale();
++
++  static const char* GetCamouLocale();
++
++  static const char* GetCamouLanguage();
++
++  static const char* GetCamouRegion();
++
++  static const char* GetCamouScript();
+ 
+   /**
+    * Returns an iterator over all supported locales.
+diff --git a/intl/locale/OSPreferences.cpp b/intl/locale/OSPreferences.cpp
+index b87924b61a..2eaa960c04 100644
+--- a/intl/locale/OSPreferences.cpp
++++ b/intl/locale/OSPreferences.cpp
+@@ -406,6 +406,10 @@ bool OSPreferences::GetDateTimeConnectorPattern(const nsACString& aLocale,
+  */
+ NS_IMETHODIMP
+ OSPreferences::GetSystemLocales(nsTArray<nsCString>& aRetVal) {
++  if (const char* camouLocale = mozilla::intl::Locale::GetCamouLocale()) {
++    aRetVal.AppendElement(camouLocale);
++    return NS_OK;
++  }
+   if (!mSystemLocales.IsEmpty()) {
+     aRetVal = mSystemLocales.Clone();
+     return NS_OK;
+@@ -425,7 +429,10 @@ OSPreferences::GetSystemLocales(nsTArray<nsCString>& aRetVal) {
+ 
+ NS_IMETHODIMP
+ OSPreferences::GetSystemLocale(nsACString& aRetVal) {
+-  if (!mSystemLocales.IsEmpty()) {
++  if (const char* camouLocale = mozilla::intl::Locale::GetCamouLocale()) {
++    aRetVal = camouLocale;
++    return NS_OK;
++  } else if (!mSystemLocales.IsEmpty()) {
+     aRetVal = mSystemLocales[0];
+   } else {
+     AutoTArray<nsCString, 10> locales;
+@@ -439,6 +446,10 @@ OSPreferences::GetSystemLocale(nsACString& aRetVal) {
+ 
+ NS_IMETHODIMP
+ OSPreferences::GetRegionalPrefsLocales(nsTArray<nsCString>& aRetVal) {
++  if (const char* camouLocale = mozilla::intl::Locale::GetCamouLocale()) {
++    aRetVal.AppendElement(camouLocale);
++    return NS_OK;
++  }
+   if (!mRegionalPrefsLocales.IsEmpty()) {
+     aRetVal = mRegionalPrefsLocales.Clone();
+     return NS_OK;
