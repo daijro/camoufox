@@ -66,10 +66,10 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 ### What's planned?
 
 - Continue research on potential leaks
+- Remote hosting Camoufox as a Playwright server
 - Integrate into [hrequests](https://github.com/daijro/hrequests)
 - Human-like typing & mouse movement
-- WebGL fingerprint spoofing through software rendering
-- Built in TLS fingerprinting protection using [Hazetunnel](https://github.com/daijro/hazetunnel)
+- WebGL fingerprint spoofing through ANGLE rendering
 - Create integration tests
 - Chromium port (long term)
 
@@ -462,34 +462,35 @@ This makes it **impossible** for a page to detect the presence of Playwright thr
 
 Camoufox performs well against every major WAF I've tested. (Original test sites from [Botright](https://github.com/Vinyzu/botright/?tab=readme-ov-file#browser-stealth))
 
-| Test                                                                                               | Status                                            |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| **reCaptcha Score**                                                                                | ✔️                                                |
-| ‣ [nopecha.com](https://nopecha.com/demo/recaptcha)                                                | ✔️ (v2-Hardest is unstable on Chrome fingerprint) |
-| ‣ [recaptcha-demo.appspot.com](https://recaptcha-demo.appspot.com/recaptcha-v3-request-scores.php) | ✔️ 0.9                                            |
-| ‣ [berstend.github.io](https://berstend.github.io/static/recaptcha/v3-programmatic.html)           | ✔️ 0.9                                            |
-| [**CreepJS**](https://abrahamjuliot.github.io/creepjs/)                                            | ✔️ 71.5% (56% with Chrome fingerprint)            |
-| **DataDome**                                                                                       | ✔️                                                |
-| ‣ [hermes.com](https://www.hermes.com/us/en/)                                                      | ✔️                                                |
-| ‣ [antoinevastel.com](https://antoinevastel.com/bots/datadome)                                     | ✔️                                                |
-| **Imperva**                                                                                        | ✔️                                                |
-| ‣ [ticketmaster.es](https://www.ticketmaster.es/)                                                  | ✔️                                                |
-| **Cloudflare**                                                                                     | ✔️                                                |
-| ‣ [Turnstile](https://nopecha.com/demo/turnstile)                                                  | ✔️                                                |
-| ‣ [Interstitial](https://nopecha.com/demo/cloudflare)                                              | ✔️ Unstable on Chrome fingerprints                |
-| **WebRTC IP Spoofing**                                                                             | ✔️                                                |
-| ‣ [Browserleaks WebRTC](https://browserleaks.net/webrtc)                                           | ✔️                                                |
-| ‣ [CreepJS WebRTC](https://abrahamjuliot.github.io/creepjs/)                                       | ✔️                                                |
-| ‣ [BrowserScan WebRTC](https://www.browserscan.net/webrtc)                                         | ✔️                                                |
-| **Font Fingerprinting**                                                                            | ✔️                                                |
-| ‣ [Browserleaks Fonts](https://browserleaks.net/fonts)                                             | ✔️                                                |
-| ‣ [CreepJS TextMetrics](https://abrahamjuliot.github.io/creepjs/tests/fonts.html)                  | ✔️                                                |
-| [**SannySoft**](https://bot.sannysoft.com/)                                                        | ✔️                                                |
-| [**Incolumitas**](https://bot.incolumitas.com/)                                                    | ✔️ 0.8-1.0                                        |
-| [**Fingerprint.com**](https://fingerprint.com/products/bot-detection/)                             | ✔️                                                |
-| [**IpHey**](https://iphey.com/)                                                                    | ✔️                                                |
-| [**BrowserScan**](https://browserscan.net/)                                                        | ✔️                                                |
-| [**Bet365**](https://www.bet365.com/#/AC/B1/C1/D1002/E79147586/G40/)                               | ✔️                                                |
+| Test                                                                                               | Status                                                    |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| [**CreepJS**](https://abrahamjuliot.github.io/creepjs/)                                            | ✔️ 71.5%. Successfully spoofs all OS predictions.         |
+| [**Rebrowser Bot Detector**](https://bot-detector.rebrowser.net/)                                  | ✔️ All tests pass.                                        |
+| [**BrowserScan**](https://browserscan.net/)                                                        | ✔️ 100%. Spoofs all geolocation & locale proxy detection. |
+| **reCaptcha Score**                                                                                | ✔️                                                        |
+| ‣ [nopecha.com](https://nopecha.com/demo/recaptcha)                                                | ✔️                                                        |
+| ‣ [recaptcha-demo.appspot.com](https://recaptcha-demo.appspot.com/recaptcha-v3-request-scores.php) | ✔️ 0.9                                                    |
+| ‣ [berstend.github.io](https://berstend.github.io/static/recaptcha/v3-programmatic.html)           | ✔️ 0.9                                                    |
+| **DataDome**                                                                                       | ✔️                                                        |
+| ‣ [hermes.com](https://www.hermes.com/us/en/)                                                      | ✔️                                                        |
+| ‣ [antoinevastel.com](https://antoinevastel.com/bots/datadome)                                     | ✔️                                                        |
+| **Imperva**                                                                                        | ✔️                                                        |
+| ‣ [ticketmaster.es](https://www.ticketmaster.es/)                                                  | ✔️                                                        |
+| **Cloudflare**                                                                                     | ✔️                                                        |
+| ‣ [Turnstile](https://nopecha.com/demo/turnstile)                                                  | ✔️                                                        |
+| ‣ [Interstitial](https://nopecha.com/demo/cloudflare)                                              | ✔️                                                        |
+| **WebRTC IP Spoofing**                                                                             | ✔️                                                        |
+| ‣ [Browserleaks WebRTC](https://browserleaks.net/webrtc)                                           | ✔️ Spoofs public IP correctly.                            |
+| ‣ [CreepJS WebRTC](https://abrahamjuliot.github.io/creepjs/)                                       | ✔️ Spoofs Host & STUN IP correctly.                       |
+| ‣ [BrowserScan WebRTC](https://www.browserscan.net/webrtc)                                         | ✔️ Spoofs Host & STUN IP correctly.                       |
+| **Font Fingerprinting**                                                                            | ✔️                                                        |
+| ‣ [Browserleaks Fonts](https://browserleaks.net/fonts)                                             | ✔️ Rotates all metrics.                                   |
+| ‣ [CreepJS TextMetrics](https://abrahamjuliot.github.io/creepjs/tests/fonts.html)                  | ✔️ Rotates all metrics.                                   |
+| [**Incolumitas**](https://bot.incolumitas.com/)                                                    | ✔️ 0.8-r1.0                                               |
+| [**SannySoft**](https://bot.sannysoft.com/)                                                        | ✔️                                                        |
+| [**Fingerprint.com**](https://fingerprint.com/products/bot-detection/)                             | ✔️                                                        |
+| [**IpHey**](https://iphey.com/)                                                                    | ✔️                                                        |
+| [**Bet365**](https://www.bet365.com/#/AC/B1/C1/D1002/E79147586/G40/)                               | ✔️                                                        |
 
 Camoufox does **not** fully support injecting Chromium fingerprints. Some WAFs (such as [Interstitial](https://nopecha.com/demo/cloudflare)) test for Spidermonkey engine behavior, which is impossible to spoof.
 
