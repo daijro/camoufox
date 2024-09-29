@@ -5,7 +5,7 @@ import shlex
 import shutil
 import sys
 import tempfile
-from io import BytesIO
+from io import BufferedWriter, BytesIO
 from pathlib import Path
 from typing import List, Optional, Union
 from zipfile import ZipFile
@@ -19,7 +19,7 @@ from typing_extensions import TypeAlias
 
 from .exceptions import UnsupportedArchitecture, UnsupportedOS
 
-DownloadBuffer: TypeAlias = Union[BytesIO, tempfile._TemporaryFileWrapper]
+DownloadBuffer: TypeAlias = Union[BytesIO, tempfile._TemporaryFileWrapper, BufferedWriter]
 
 # Map machine architecture to Camoufox binary name
 ARCH_MAP: dict[str, str] = {
@@ -58,8 +58,8 @@ def rprint(*a, **k):
 class CamoufoxFetcher:
     def __init__(self) -> None:
         self.arch = self.get_platform_arch()
-        self._version: str | None = None
-        self._release: str | None = None
+        self._version: Optional[str] = None
+        self._release: Optional[str] = None
         self.pattern: re.Pattern = re.compile(rf'camoufox-(.+)-(.+)-{OS_NAME}\.{self.arch}\.zip')
 
         self.fetch_latest()

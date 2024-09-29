@@ -1,5 +1,7 @@
 import os.path
+import re
 from dataclasses import asdict
+from typing import Optional
 
 from browserforge.fingerprints import Fingerprint, FingerprintGenerator
 from yaml import CLoader, load
@@ -11,7 +13,9 @@ with open(os.path.join(os.path.dirname(__file__), 'browserforge.yml'), 'r') as f
 FP_GENERATOR = FingerprintGenerator(browser='firefox', os=('linux', 'macos', 'windows'))
 
 
-def _cast_to_properties(camoufox_data: dict, cast_enum: dict, bf_dict: dict) -> None:
+def _cast_to_properties(
+    camoufox_data: dict, cast_enum: dict, bf_dict: dict, ff_version: Optional[str] = None
+) -> None:
     """
     Casts Browserforge fingerprints to Camoufox config properties.
     """
@@ -25,26 +29,34 @@ def _cast_to_properties(camoufox_data: dict, cast_enum: dict, bf_dict: dict) -> 
             continue
         # If the value is a dictionary, recursively recall
         if isinstance(data, dict):
-            _cast_to_properties(camoufox_data, type_key, data)
+            _cast_to_properties(camoufox_data, type_key, data, ff_version)
             continue
         # Fix values that are out of bounds
         if type_key.startswith("screen.") and isinstance(data, int) and data < 0:
             data = 0
+        # Replace the Firefox versions with ff_version
+        if ff_version and isinstance(data, str):
+            data = re.sub(r'(?<!\d)(1[0-9]{2})(\.0)(?!\d)', rf'{ff_version}\2', data)
         camoufox_data[type_key] = data
 
 
-def from_browserforge(fingerprint: Fingerprint) -> dict:
+def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None) -> dict:
     camoufox_data = {}
-    _cast_to_properties(camoufox_data, cast_enum=BROWSERFORGE_DATA, bf_dict=asdict(fingerprint))
+    _cast_to_properties(
+        camoufox_data,
+        cast_enum=BROWSERFORGE_DATA,
+        bf_dict=asdict(fingerprint),
+        ff_version=ff_version,
+    )
     return camoufox_data
 
 
-def generate(**config) -> dict:
+def generate(ff_version: Optional[str] = None, **config) -> dict:
     """
     Generates a Firefox fingerprint.
     """
     data = FP_GENERATOR.generate(**config)
-    return from_browserforge(data)
+    return from_browserforge(data, ff_version=ff_version)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,2024 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE territoryInfo>
+
+<!--
+Source: https://raw.githubusercontent.com/unicode-org/cldr/master/common/supplemental/supplementalData.xml
+
+Copyright © 1991-2023 Unicode, Inc.
+CLDR data files are interpreted according to the LDML specification (http://unicode.org/reports/tr35/)
+For terms of use, see https://www.unicode.org/copyright.html
+-->
+
+<!-- See http://unicode.org/cldr/data/diff/supplemental/territory_language_information.html for more information on territoryInfo. -->
+<territoryInfo>
+	<territory type="AC" literacyPercent="99" population="940">	<!--Ascension Island-->
+		<languagePopulation type="en" populationPercent="99"/>	<!--English-->
+	</territory>
+	<territory type="AD" literacyPercent="100" population="85370">	<!--Andorra-->
+		<languagePopulation type="ca" populationPercent="51" officialStatus="official"/>	<!--Catalan-->
+		<languagePopulation type="es" populationPercent="43"/>	<!--Spanish-->
+		<languagePopulation type="fr" populationPercent="6.8"/>	<!--French-->
+	</territory>
+	<territory type="AE" literacyPercent="90" population="10032200">	<!--United Arab Emirates-->
+		<languagePopulation type="ar" populationPercent="78" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="en" populationPercent="50"/>	<!--English-->
+		<languagePopulation type="ml" populationPercent="7"/>	<!--Malayalam-->
+		<languagePopulation type="ps" populationPercent="2.9"/>	<!--Pashto-->
+		<languagePopulation type="bal" populationPercent="2.3"/>	<!--Baluchi-->
+		<languagePopulation type="fa" populationPercent="1.9"/>	<!--Persian-->
+	</territory>
+	<territory type="AF" literacyPercent="28.1" population="40121600">	<!--Afghanistan-->
+		<languagePopulation type="fa" populationPercent="50" officialStatus="official"/>	<!--Persian-->
+		<languagePopulation type="ps" populationPercent="43" officialStatus="official"/>	<!--Pashto-->
+		<languagePopulation type="haz" populationPercent="5.9"/>	<!--Hazaragi-->
+		<languagePopulation type="uz_Arab" populationPercent="4.7" officialStatus="official_regional"/>	<!--Uzbek (Arabic)-->
+		<languagePopulation type="tk" populationPercent="1.7" officialStatus="official_regional"/>	<!--Turkmen-->
+		<languagePopulation type="prd" populationPercent="1.2"/>	<!--Parsi-Dari-->
+		<languagePopulation type="bgn" writingPercent="5" populationPercent="0.63"/>	<!--Western Balochi-->
+		<languagePopulation type="kaa" populationPercent="0.0084"/>	<!--Kara-Kalpak-->
+		<languagePopulation type="ug" populationPercent="0.0075"/>	<!--Uyghur-->
+		<languagePopulation type="kk_Arab" populationPercent="0.005"/>	<!--Kazakh (Arabic)-->
+	</territory>
+	<territory type="AG" literacyPercent="99" population="102634">	<!--Antigua & Barbuda-->
+		<languagePopulation type="en" populationPercent="86" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="pt" populationPercent="1.6"/>	<!--Portuguese-->
+	</territory>
+	<territory type="AI" literacyPercent="95" population="19416">	<!--Anguilla-->
+		<languagePopulation type="en" populationPercent="95" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="AL" literacyPercent="96.8" population="3107100">	<!--Albania-->
+		<languagePopulation type="sq" populationPercent="100" officialStatus="official"/>	<!--Albanian-->
+		<languagePopulation type="el" populationPercent="1.9"/>	<!--Greek-->
+		<languagePopulation type="mk" populationPercent="0.47"/>	<!--Macedonian-->
+	</territory>
+	<territory type="AM" literacyPercent="99.6" population="2976770">	<!--Armenia-->
+		<languagePopulation type="hy" populationPercent="98" officialStatus="official"/>	<!--Armenian-->
+		<languagePopulation type="ku" populationPercent="3.3"/>	<!--Kurdish-->
+		<languagePopulation type="az" populationPercent="0"/>	<!--Azerbaijani-->
+	</territory>
+	<territory type="AO" literacyPercent="70.4" population="37202100">	<!--Angola-->
+		<languagePopulation type="pt" populationPercent="67" officialStatus="official"/>	<!--Portuguese-->
+		<languagePopulation type="umb" populationPercent="29"/>	<!--Umbundu-->
+		<languagePopulation type="kmb" literacyPercent="10" populationPercent="25"/>	<!--Kimbundu-->
+		<languagePopulation type="ln" populationPercent="0.67"/>	<!--Lingala-->
+	</territory>
+	<territory type="AQ" literacyPercent="99" population="300">	<!--Antarctica-->
+		<languagePopulation type="und" populationPercent="100"/>	<!--Unknown language-->
+	</territory>
+	<territory type="AR" literacyPercent="97.9" population="46994400">	<!--Argentina-->
+		<languagePopulation type="es" populationPercent="100" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="en" populationPercent="7"/>	<!--English-->
+		<languagePopulation type="cy" populationPercent="0.066"/>	<!--Welsh-->
+		<languagePopulation type="gn" populationPercent="0.047"/>	<!--Guarani-->
+	</territory>
+	<territory type="AS" literacyPercent="97" population="43895">	<!--American Samoa-->
+		<languagePopulation type="sm" populationPercent="99" officialStatus="official"/>	<!--Samoan-->
+		<languagePopulation type="en" populationPercent="97" officialStatus="de_facto_official"/>	<!--English-->
+	</territory>
+	<territory type="AT" literacyPercent="98" population="8967980">	<!--Austria-->
+		<languagePopulation type="de" populationPercent="97" officialStatus="official"/>	<!--German-->
+		<languagePopulation type="bar" populationPercent="95"/>	<!--Bavarian-->
+		<languagePopulation type="en" populationPercent="73"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="11"/>	<!--French-->
+		<languagePopulation type="it" populationPercent="9"/>	<!--Italian-->
+		<languagePopulation type="hr" populationPercent="1.2" officialStatus="official_regional"/>	<!--Croatian-->
+		<languagePopulation type="sl" populationPercent="0.37" officialStatus="official_regional"/>	<!--Slovenian-->
+		<languagePopulation type="hu" populationPercent="0.26" officialStatus="official_regional"/>	<!--Hungarian-->
+	</territory>
+	<territory type="AU" literacyPercent="99" population="26768600">	<!--Australia-->
+		<languagePopulation type="en" populationPercent="96" officialStatus="de_facto_official"/>	<!--English-->
+		<languagePopulation type="zh_Hant" populationPercent="2.1"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="it" populationPercent="1.9"/>	<!--Italian-->
+		<languagePopulation type="wbp" populationPercent="0.0093"/>	<!--Warlpiri-->
+		<languagePopulation type="hnj" populationPercent="0.0082"/>	<!--Hmong Njua-->
+	</territory>
+	<territory type="AW" literacyPercent="96.8" population="125063">	<!--Aruba-->
+		<languagePopulation type="nl" populationPercent="97" officialStatus="official"/>	<!--Dutch-->
+		<languagePopulation type="pap" populationPercent="61" officialStatus="official"/>	<!--Papiamento-->
+		<languagePopulation type="en" populationPercent="2.4"/>	<!--English-->
+	</territory>
+	<territory type="AX" literacyPercent="100" population="26200">	<!--Åland Islands-->
+		<languagePopulation type="sv" populationPercent="99" officialStatus="official"/>	<!--Swedish-->
+	</territory>
+	<territory type="AZ" literacyPercent="99.8" population="10650200">	<!--Azerbaijan-->
+		<languagePopulation type="az" populationPercent="89" officialStatus="official"/>	<!--Azerbaijani-->
+		<languagePopulation type="az_Cyrl" populationPercent="9.9" officialStatus="official"/>	<!--Azerbaijani (Cyrillic)-->
+		<languagePopulation type="tly" populationPercent="9.8"/>	<!--Talysh-->
+		<languagePopulation type="ku" populationPercent="0.24"/>	<!--Kurdish-->
+		<languagePopulation type="ttt" populationPercent="0.22"/>	<!--Muslim Tat-->
+		<languagePopulation type="tkr" populationPercent="0.16"/>	<!--Tsakhur-->
+	</territory>
+	<territory type="BA" literacyPercent="98" population="3798670">	<!--Bosnia & Herzegovina-->
+		<languagePopulation type="bs" populationPercent="99" officialStatus="official"/>	<!--Bosnian-->
+		<languagePopulation type="bs_Cyrl" writingPercent="5" populationPercent="99" officialStatus="official"/>	<!--Bosnian (Cyrillic)-->
+		<languagePopulation type="en" populationPercent="45"/>	<!--English-->
+		<languagePopulation type="hr" populationPercent="12" officialStatus="official"/>	<!--Croatian-->
+		<languagePopulation type="sr" populationPercent="10" officialStatus="official"/>	<!--Serbian-->
+		<languagePopulation type="sr_Latn" writingPercent="5" populationPercent="10" officialStatus="official"/>	<!--Serbian (Latin)-->
+	</territory>
+	<territory type="BB" literacyPercent="99.7" population="304139">	<!--Barbados-->
+		<languagePopulation type="en" populationPercent="100" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="BD" literacyPercent="57.7" population="168697000">	<!--Bangladesh-->
+		<languagePopulation type="bn" populationPercent="98" officialStatus="official"/>	<!--Bangla-->
+		<languagePopulation type="en" populationPercent="18"/>	<!--English-->
+		<languagePopulation type="rkt" literacyPercent="20" populationPercent="6.5"/>	<!--Rangpuri-->
+		<languagePopulation type="syl" literacyPercent="35" populationPercent="5"/>	<!--Sylheti-->
+		<languagePopulation type="rhg" populationPercent="0.53"/>	<!--Rohingya-->
+		<languagePopulation type="ccp" populationPercent="0.22"/>	<!--Chakma-->
+		<languagePopulation type="my" populationPercent="0.21"/>	<!--Burmese-->
+		<languagePopulation type="grt" populationPercent="0.073"/>	<!--Garo-->
+		<languagePopulation type="mro" populationPercent="0.018"/>	<!--Mru-->
+		<languagePopulation type="mni" populationPercent="0.011"/>	<!--Manipuri-->
+	</territory>
+	<territory type="BE" literacyPercent="99" population="11977600">	<!--Belgium-->
+		<languagePopulation type="en" populationPercent="59"/>	<!--English-->
+		<languagePopulation type="nl" populationPercent="55" officialStatus="official"/>	<!--Dutch-->
+		<languagePopulation type="fr" populationPercent="38" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="de" populationPercent="22" officialStatus="official"/>	<!--German-->
+		<languagePopulation type="vls" populationPercent="10"/>	<!--West Flemish-->
+		<languagePopulation type="wa" writingPercent="5" populationPercent="5.8"/>	<!--Walloon-->
+	</territory>
+	<territory type="BF" literacyPercent="28.7" population="23042200">	<!--Burkina Faso-->
+		<languagePopulation type="mos" populationPercent="40"/>	<!--Mossi-->
+		<languagePopulation type="dyu" populationPercent="32"/>	<!--Dyula-->
+		<languagePopulation type="fr" populationPercent="22" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="ff" populationPercent="0"/>	<!--Fula-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+	</territory>
+	<territory type="BG" literacyPercent="98.4" population="6782660">	<!--Bulgaria-->
+		<languagePopulation type="bg" populationPercent="100" officialStatus="official"/>	<!--Bulgarian-->
+		<languagePopulation type="en" populationPercent="25"/>	<!--English-->
+		<languagePopulation type="ru" populationPercent="23"/>	<!--Russian-->
+		<languagePopulation type="tr" populationPercent="11"/>	<!--Turkish-->
+		<languagePopulation type="de" populationPercent="8"/>	<!--German-->
+	</territory>
+	<territory type="BH" literacyPercent="94.6" population="1566890">	<!--Bahrain-->
+		<languagePopulation type="ar" populationPercent="87" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="ml" populationPercent="3.3"/>	<!--Malayalam-->
+	</territory>
+	<territory type="BI" literacyPercent="67.2" population="13590100">	<!--Burundi-->
+		<languagePopulation type="rn" populationPercent="63" officialStatus="official"/>	<!--Rundi-->
+		<languagePopulation type="fr" populationPercent="59" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="sw" populationPercent="0.047"/>	<!--Swahili-->
+		<languagePopulation type="en" populationPercent="0.046" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="BJ" literacyPercent="42.4" population="14697100">	<!--Benin-->
+		<languagePopulation type="fr" populationPercent="35" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="fon" populationPercent="25"/>	<!--Fon-->
+		<languagePopulation type="yo" populationPercent="6.7"/>	<!--Yoruba-->
+		<languagePopulation type="blo" populationPercent="0.3"/>	<!--Anii-->
+	</territory>
+	<territory type="BL" literacyPercent="99" population="7086">	<!--St. Barthélemy-->
+		<languagePopulation type="fr" populationPercent="97" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="BM" literacyPercent="98" population="72800">	<!--Bermuda-->
+		<languagePopulation type="en" populationPercent="92" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="BN" literacyPercent="95.4" population="491900">	<!--Brunei-->
+		<languagePopulation type="ms" populationPercent="93" officialStatus="official"/>	<!--Malay-->
+		<languagePopulation type="zh_Hant" populationPercent="11"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="ms_Arab" populationPercent="5" officialStatus="official"/>	<!--Malay (Arabic)-->
+		<languagePopulation type="en" populationPercent="1.6"/>	<!--English-->
+	</territory>
+	<territory type="BO" literacyPercent="91.2" population="12312000">	<!--Bolivia-->
+		<languagePopulation type="es" populationPercent="61" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="qu" populationPercent="32" officialStatus="official"/>	<!--Quechua-->
+		<languagePopulation type="ay" populationPercent="20" officialStatus="official"/>	<!--Aymara-->
+		<languagePopulation type="gn" populationPercent="0.45"/>	<!--Guarani-->
+		<languagePopulation type="aro" populationPercent="0.0009"/>	<!--Araona-->
+	</territory>
+	<territory type="BQ" literacyPercent="99" population="20000">	<!--Caribbean Netherlands-->
+		<languagePopulation type="pap" populationPercent="81"/>	<!--Papiamento-->
+		<languagePopulation type="nl" populationPercent="8" officialStatus="official"/>	<!--Dutch-->
+	</territory>
+	<territory type="BR" literacyPercent="90.4" population="220052000">	<!--Brazil-->
+		<languagePopulation type="pt" populationPercent="91" officialStatus="official"/>	<!--Portuguese-->
+		<languagePopulation type="en" populationPercent="8"/>	<!--English-->
+		<languagePopulation type="de" populationPercent="0.84"/>	<!--German-->
+		<languagePopulation type="it" populationPercent="0.28"/>	<!--Italian-->
+		<languagePopulation type="vec" populationPercent="0.24" officialStatus="official_regional"/>	<!--Venetian-->
+		<languagePopulation type="ja" populationPercent="0.21"/>	<!--Japanese-->
+		<languagePopulation type="es" populationPercent="0.036"/>	<!--Spanish-->
+		<languagePopulation type="kgp" populationPercent="0.024"/>	<!--Kaingang-->
+		<languagePopulation type="ko" populationPercent="0.021"/>	<!--Korean-->
+		<languagePopulation type="yrl" populationPercent="0.01"/>	<!--Nheengatu-->
+		<languagePopulation type="gub" populationPercent="0.0084"/>	<!--Guajajára-->
+		<languagePopulation type="xav" populationPercent="0.0045"/>	<!--Xavánte-->
+	</territory>
+	<territory type="BS" literacyPercent="95.6" population="410862">	<!--Bahamas-->
+		<languagePopulation type="en" populationPercent="100" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="BT" literacyPercent="52.8" population="884546">	<!--Bhutan-->
+		<languagePopulation type="dz" populationPercent="47" officialStatus="official"/>	<!--Dzongkha-->
+		<languagePopulation type="ne" populationPercent="17"/>	<!--Nepali-->
+		<languagePopulation type="tsj" populationPercent="15"/>	<!--Tshangla-->
+		<languagePopulation type="en" populationPercent="11"/>	<!--English-->
+		<languagePopulation type="lep" populationPercent="3.9"/>	<!--Lepcha-->
+	</territory>
+	<territory type="BV" literacyPercent="99" population="1">	<!--Bouvet Island-->
+		<languagePopulation type="und" populationPercent="100"/>	<!--Unknown language-->
+	</territory>
+	<territory type="BW" literacyPercent="85.1" population="2450670">	<!--Botswana-->
+		<languagePopulation type="en" populationPercent="81" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="tn" populationPercent="62" officialStatus="official"/>	<!--Tswana-->
+		<languagePopulation type="af" populationPercent="0.24"/>	<!--Afrikaans-->
+	</territory>
+	<territory type="BY" literacyPercent="99.6" population="9501450">	<!--Belarus-->
+		<languagePopulation type="be" populationPercent="100" officialStatus="official"/>	<!--Belarusian-->
+		<languagePopulation type="ru" populationPercent="12" officialStatus="official"/>	<!--Russian-->
+	</territory>
+	<territory type="BZ" literacyPercent="76.9" population="415789">	<!--Belize-->
+		<languagePopulation type="en" populationPercent="100" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="es" populationPercent="28"/>	<!--Spanish-->
+	</territory>
+	<territory type="CA" literacyPercent="99" population="38794800">	<!--Canada-->
+		<languagePopulation type="en" populationPercent="86" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="30" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="zh" populationPercent="1.8"/>	<!--Chinese-->
+		<languagePopulation type="yue" populationPercent="1.7"/>	<!--Cantonese-->
+		<languagePopulation type="es" populationPercent="1.6"/>	<!--Spanish-->
+		<languagePopulation type="pa" populationPercent="1.6"/>	<!--Punjabi-->
+		<languagePopulation type="ar" populationPercent="1.5"/>	<!--Arabic-->
+		<languagePopulation type="fil" populationPercent="1.5"/>	<!--Filipino-->
+		<languagePopulation type="it" populationPercent="0.91"/>	<!--Italian-->
+		<languagePopulation type="de" populationPercent="0.78"/>	<!--German-->
+		<languagePopulation type="ur" populationPercent="0.76"/>	<!--Urdu-->
+		<languagePopulation type="fa" populationPercent="0.65"/>	<!--Persian-->
+		<languagePopulation type="pt" populationPercent="0.61"/>	<!--Portuguese-->
+		<languagePopulation type="ru" populationPercent="0.56"/>	<!--Russian-->
+		<languagePopulation type="hi" populationPercent="0.5"/>	<!--Hindi-->
+		<languagePopulation type="ta" populationPercent="0.49"/>	<!--Tamil-->
+		<languagePopulation type="vi" populationPercent="0.49"/>	<!--Vietnamese-->
+		<languagePopulation type="pl" populationPercent="0.46"/>	<!--Polish-->
+		<languagePopulation type="ko" populationPercent="0.45"/>	<!--Korean-->
+		<languagePopulation type="gu" populationPercent="0.36"/>	<!--Gujarati-->
+		<languagePopulation type="el" populationPercent="0.33"/>	<!--Greek-->
+		<languagePopulation type="ro" populationPercent="0.27"/>	<!--Romanian-->
+		<languagePopulation type="bn" populationPercent="0.24"/>	<!--Bangla-->
+		<languagePopulation type="pdt" populationPercent="0.24"/>	<!--Plautdietsch-->
+		<languagePopulation type="uk" populationPercent="0.2"/>	<!--Ukrainian-->
+		<languagePopulation type="sr" populationPercent="0.17"/>	<!--Serbian-->
+		<languagePopulation type="nl" populationPercent="0.15"/>	<!--Dutch-->
+		<languagePopulation type="ja" populationPercent="0.14"/>	<!--Japanese-->
+		<languagePopulation type="hu" populationPercent="0.13"/>	<!--Hungarian-->
+		<languagePopulation type="so" populationPercent="0.13"/>	<!--Somali-->
+		<languagePopulation type="hr" populationPercent="0.12"/>	<!--Croatian-->
+		<languagePopulation type="iu" literacyPercent="30" populationPercent="0.12" officialStatus="official_regional"/>	<!--Inuktitut-->
+		<languagePopulation type="iu_Latn" literacyPercent="30" populationPercent="0.12" officialStatus="official_regional"/>	<!--Inuktitut (Latin)-->
+		<languagePopulation type="tr" populationPercent="0.1"/>	<!--Turkish-->
+		<languagePopulation type="oj" populationPercent="0.063"/>	<!--Ojibwa-->
+		<languagePopulation type="ojs" populationPercent="0.04"/>	<!--Oji-Cree-->
+		<languagePopulation type="chp" populationPercent="0.034" officialStatus="official_regional"/>	<!--Chipewyan-->
+		<languagePopulation type="moe" populationPercent="0.032"/>	<!--Innu-aimun-->
+		<languagePopulation type="cr" populationPercent="0.023" officialStatus="official_regional"/>	<!--Cree-->
+		<languagePopulation type="mic" populationPercent="0.02"/>	<!--Mi'kmaw-->
+		<languagePopulation type="atj" populationPercent="0.017"/>	<!--Atikamekw-->
+		<languagePopulation type="bla" populationPercent="0.013"/>	<!--Siksiká-->
+		<languagePopulation type="crk" populationPercent="0.011"/>	<!--Plains Cree-->
+		<languagePopulation type="den" populationPercent="0.0059" officialStatus="official_regional"/>	<!--Slave-->
+		<languagePopulation type="dgr" populationPercent="0.0055" officialStatus="official_regional"/>	<!--Dogrib-->
+		<languagePopulation type="csw" populationPercent="0.0046"/>	<!--Swampy Cree-->
+		<languagePopulation type="moh" populationPercent="0.0045"/>	<!--Mohawk-->
+		<languagePopulation type="nsk" populationPercent="0.0036"/>	<!--Naskapi-->
+		<languagePopulation type="dak" populationPercent="0.0031"/>	<!--Dakota-->
+		<languagePopulation type="clc" populationPercent="0.0022"/>	<!--Chilcotin-->
+		<languagePopulation type="hur" populationPercent="0.0018"/>	<!--Halkomelem-->
+		<languagePopulation type="crg" populationPercent="0.0018"/>	<!--Michif-->
+		<languagePopulation type="war" populationPercent="0.0018"/>	<!--Waray-->
+		<languagePopulation type="lil" populationPercent="0.0014"/>	<!--Lillooet-->
+		<languagePopulation type="oka" populationPercent="0.0013"/>	<!--Okanagan-->
+		<languagePopulation type="pqm" populationPercent="0.0013"/>	<!--Maliseet-Passamaquoddy-->
+		<languagePopulation type="crl" populationPercent="0.001"/>	<!--Northern East Cree-->
+		<languagePopulation type="kwk" populationPercent="0.001"/>	<!--Kwakʼwala-->
+		<languagePopulation type="gwi" populationPercent="0.0007" officialStatus="official_regional"/>	<!--Gwichʼin-->
+	</territory>
+	<territory type="CC" literacyPercent="99" population="593">	<!--Cocos (Keeling) Islands-->
+		<languagePopulation type="ms_Arab" populationPercent="84"/>	<!--Malay (Arabic)-->
+		<languagePopulation type="en" populationPercent="17" officialStatus="de_facto_official"/>	<!--English-->
+	</territory>
+	<territory type="CD" literacyPercent="66.8" population="115403000">	<!--Congo - Kinshasa-->
+		<languagePopulation type="sw" populationPercent="50" officialStatus="official_regional"/>	<!--Swahili-->
+		<languagePopulation type="lua" populationPercent="9.6" officialStatus="official_regional"/>	<!--Luba-Lulua-->
+		<languagePopulation type="fr" populationPercent="3.8" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="ln" populationPercent="3.1" officialStatus="official_regional"/>	<!--Lingala-->
+		<languagePopulation type="lu" populationPercent="2.3"/>	<!--Luba-Katanga-->
+		<languagePopulation type="kg" populationPercent="1.5" officialStatus="official_regional"/>	<!--Kongo-->
+		<languagePopulation type="lol" populationPercent="0.61"/>	<!--Mongo-->
+		<languagePopulation type="rw" populationPercent="0.38"/>	<!--Kinyarwanda-->
+	</territory>
+	<territory type="CF" literacyPercent="56.6" population="5650960">	<!--Central African Republic-->
+		<languagePopulation type="fr" populationPercent="49" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="sg" populationPercent="49" officialStatus="official"/>	<!--Sango-->
+		<languagePopulation type="ln" populationPercent="0.24"/>	<!--Lingala-->
+	</territory>
+	<territory type="CG" literacyPercent="83.8" population="6097670">	<!--Congo - Brazzaville-->
+		<languagePopulation type="fr" populationPercent="84" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="ln" populationPercent="2.4"/>	<!--Lingala-->
+	</territory>
+	<territory type="CH" literacyPercent="99" population="8860570">	<!--Switzerland-->
+		<languagePopulation type="de" populationPercent="73" officialStatus="official"/>	<!--German-->
+		<languagePopulation type="gsw" writingPercent="5" populationPercent="65" officialStatus="de_facto_official"/>	<!--Swiss German-->
+		<languagePopulation type="en" populationPercent="61"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="21" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="it" populationPercent="4.3" officialStatus="official"/>	<!--Italian-->
+		<languagePopulation type="lmo" writingPercent="5" populationPercent="4.1"/>	<!--Lombard-->
+		<languagePopulation type="pt" populationPercent="3.4"/>	<!--Portuguese-->
+		<languagePopulation type="rm" populationPercent="0.5" officialStatus="official_regional"/>	<!--Romansh-->
+		<languagePopulation type="rmo" populationPercent="0.29"/>	<!--Sinte Romani-->
+		<languagePopulation type="wae" populationPercent="0.11"/>	<!--Walser-->
+	</territory>
+	<territory type="CI" literacyPercent="56.9" population="29981800">	<!--Côte d’Ivoire-->
+		<languagePopulation type="fr" populationPercent="49" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="bci" literacyPercent="10" populationPercent="11"/>	<!--Baoulé-->
+		<languagePopulation type="sef" writingPercent="5" populationPercent="4.3"/>	<!--Cebaara Senoufo-->
+		<languagePopulation type="dnj" literacyPercent="1" populationPercent="4"/>	<!--Dan-->
+		<languagePopulation type="kfo" populationPercent="0.23"/>	<!--Koro-->
+		<languagePopulation type="bqv" literacyPercent="10" populationPercent="0.17"/>	<!--Koro Wachi-->
+	</territory>
+	<territory type="CK" literacyPercent="95" population="7761">	<!--Cook Islands-->
+		<languagePopulation type="en" populationPercent="100" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="CL" literacyPercent="98.6" population="18664700">	<!--Chile-->
+		<languagePopulation type="es" populationPercent="98" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="en" populationPercent="9.5"/>	<!--English-->
+		<languagePopulation type="arn" populationPercent="1.5"/>	<!--Mapuche-->
+	</territory>
+	<territory type="CM" literacyPercent="71.3" population="30966100">	<!--Cameroon-->
+		<languagePopulation type="fr" populationPercent="68" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="en" populationPercent="38" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="bum" populationPercent="4.6"/>	<!--Bulu-->
+		<languagePopulation type="ff" populationPercent="3.6"/>	<!--Fula-->
+		<languagePopulation type="ewo" literacyPercent="15" populationPercent="3.1"/>	<!--Ewondo-->
+		<languagePopulation type="ybb" literacyPercent="2" populationPercent="1.6"/>	<!--Yemba-->
+		<languagePopulation type="bbj" literacyPercent="25" populationPercent="1.4"/>	<!--Ghomala-->
+		<languagePopulation type="nnh" literacyPercent="8" populationPercent="1.4"/>	<!--Ngiemboon-->
+		<languagePopulation type="bkm" writingPercent="5" populationPercent="1.3"/>	<!--Kom-->
+		<languagePopulation type="bas" literacyPercent="25" populationPercent="1.2"/>	<!--Basaa-->
+		<languagePopulation type="bax" populationPercent="1.2"/>	<!--Bamun-->
+		<languagePopulation type="byv" literacyPercent="15" populationPercent="1.1"/>	<!--Medumba-->
+		<languagePopulation type="mua" populationPercent="1"/>	<!--Mundang-->
+		<languagePopulation type="maf" populationPercent="0.74"/>	<!--Mafa-->
+		<languagePopulation type="bfd" literacyPercent="30" populationPercent="0.57"/>	<!--Bafut-->
+		<languagePopulation type="bss" literacyPercent="30" populationPercent="0.54"/>	<!--Akoose-->
+		<languagePopulation type="kkj" populationPercent="0.54"/>	<!--Kako-->
+		<languagePopulation type="dua" literacyPercent="25" populationPercent="0.48"/>	<!--Duala-->
+		<languagePopulation type="mgo" writingPercent="5" populationPercent="0.47"/>	<!--Metaʼ-->
+		<languagePopulation type="ar" populationPercent="0.39"/>	<!--Arabic-->
+		<languagePopulation type="jgo" literacyPercent="30" populationPercent="0.34"/>	<!--Ngomba-->
+		<languagePopulation type="ksf" populationPercent="0.32"/>	<!--Bafia-->
+		<languagePopulation type="ken" populationPercent="0.25"/>	<!--Kenyang-->
+		<languagePopulation type="agq" literacyPercent="20" populationPercent="0.14"/>	<!--Aghem-->
+		<languagePopulation type="ha_Arab" populationPercent="0.14"/>	<!--Hausa (Arabic)-->
+		<languagePopulation type="nmg" literacyPercent="10" populationPercent="0.029"/>	<!--Kwasio-->
+		<languagePopulation type="yav" populationPercent="0.0074"/>	<!--Yangben-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+	</territory>
+	<territory type="CN" literacyPercent="95.1" population="1416040000">	<!--China-->
+		<languagePopulation type="zh" populationPercent="90" officialStatus="official"/>	<!--Chinese-->
+		<languagePopulation type="wuu" populationPercent="6"/>	<!--Wu Chinese-->
+		<languagePopulation type="yue" writingPercent="5" populationPercent="5.2"/>	<!--Cantonese-->
+		<languagePopulation type="yue_Hans" writingPercent="5" populationPercent="5.2"/>	<!--Cantonese (Simplified)-->
+		<languagePopulation type="hsn" populationPercent="2.9"/>	<!--Xiang Chinese-->
+		<languagePopulation type="hak" populationPercent="2.3"/>	<!--Hakka Chinese-->
+		<languagePopulation type="nan" populationPercent="1.9"/>	<!--Min Nan Chinese-->
+		<languagePopulation type="gan" populationPercent="1.7"/>	<!--Gan Chinese-->
+		<languagePopulation type="ii" literacyPercent="60" populationPercent="0.6"/>	<!--Sichuan Yi-->
+		<languagePopulation type="ug" populationPercent="0.55" officialStatus="official_regional"/>	<!--Uyghur-->
+		<languagePopulation type="za" populationPercent="0.31" officialStatus="official_regional"/>	<!--Zhuang-->
+		<languagePopulation type="mn_Mong" populationPercent="0.26" officialStatus="official_regional"/>	<!--Mongolian (Mongolian)-->
+		<languagePopulation type="bo" populationPercent="0.2" officialStatus="official_regional"/>	<!--Tibetan-->
+		<languagePopulation type="ko" populationPercent="0.15" officialStatus="official_regional"/>	<!--Korean-->
+		<languagePopulation type="kk_Arab" populationPercent="0.085"/>	<!--Kazakh (Arabic)-->
+		<languagePopulation type="lis" populationPercent="0.045"/>	<!--Lisu-->
+		<languagePopulation type="ky_Arab" populationPercent="0.034"/>	<!--Kyrgyz (Arabic)-->
+		<languagePopulation type="nxq" populationPercent="0.024"/>	<!--Naxi-->
+		<languagePopulation type="khb" populationPercent="0.019"/>	<!--Lü-->
+		<languagePopulation type="tdd" populationPercent="0.019"/>	<!--Tai Nüa-->
+		<languagePopulation type="lcp" populationPercent="0.0058"/>	<!--Western Lawa-->
+		<languagePopulation type="en" populationPercent="0.0045"/>	<!--English-->
+		<languagePopulation type="hnj" populationPercent="0.004"/>	<!--Hmong Njua-->
+		<languagePopulation type="ru" populationPercent="0.001"/>	<!--Russian-->
+		<languagePopulation type="vi" populationPercent="0.0005"/>	<!--Vietnamese-->
+		<languagePopulation type="uz_Cyrl" populationPercent="0.0004"/>	<!--Uzbek (Cyrillic)-->
+		<languagePopulation type="lzh" populationPercent="0"/>	<!--Literary Chinese-->
+	</territory>
+	<territory type="CO" literacyPercent="93.6" population="49588400">	<!--Colombia-->
+		<languagePopulation type="es" populationPercent="93" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="guc" populationPercent="0.27"/>	<!--Wayuu-->
+		<languagePopulation type="yrl" populationPercent="0.006"/>	<!--Nheengatu-->
+	</territory>
+	<territory type="CP" literacyPercent="99" population="1">	<!--Clipperton Island-->
+		<languagePopulation type="und" populationPercent="100"/>	<!--Unknown language-->
+	</territory>
+	<territory type="CQ" literacyPercent="99" population="492">	<!--Sark-->
+		<languagePopulation type="en" populationPercent="98" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="CR" literacyPercent="96.3" population="5265580">	<!--Costa Rica-->
+		<languagePopulation type="es" populationPercent="95" officialStatus="official"/>	<!--Spanish-->
+	</territory>
+	<territory type="CU" literacyPercent="99.8" population="10966000">	<!--Cuba-->
+		<languagePopulation type="es" populationPercent="100" officialStatus="official"/>	<!--Spanish-->
+	</territory>
+	<territory type="CV" literacyPercent="84.9" population="611014">	<!--Cape Verde-->
+		<languagePopulation type="kea" populationPercent="91"/>	<!--Kabuverdianu-->
+		<languagePopulation type="pt" populationPercent="76" officialStatus="official"/>	<!--Portuguese-->
+	</territory>
+	<territory type="CW" literacyPercent="99" population="153289">	<!--Curaçao-->
+		<languagePopulation type="pap" populationPercent="81" officialStatus="de_facto_official"/>	<!--Papiamento-->
+		<languagePopulation type="nl" populationPercent="8" officialStatus="official"/>	<!--Dutch-->
+		<languagePopulation type="es" populationPercent="3.7"/>	<!--Spanish-->
+	</territory>
+	<territory type="CX" literacyPercent="99" population="1692">	<!--Christmas Island-->
+		<languagePopulation type="en" populationPercent="83" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="CY" literacyPercent="98.7" population="1320530">	<!--Cyprus-->
+		<languagePopulation type="el" populationPercent="95" officialStatus="official"/>	<!--Greek-->
+		<languagePopulation type="en" populationPercent="73"/>	<!--English-->
+		<languagePopulation type="tr" populationPercent="23" officialStatus="official"/>	<!--Turkish-->
+		<languagePopulation type="fr" populationPercent="7"/>	<!--French-->
+		<languagePopulation type="hy" populationPercent="0.21"/>	<!--Armenian-->
+		<languagePopulation type="ar" populationPercent="0.098"/>	<!--Arabic-->
+	</territory>
+	<territory type="CZ" literacyPercent="99" population="10837900">	<!--Czechia-->
+		<languagePopulation type="cs" populationPercent="98" officialStatus="official"/>	<!--Czech-->
+		<languagePopulation type="en" populationPercent="27"/>	<!--English-->
+		<languagePopulation type="sk" populationPercent="16"/>	<!--Slovak-->
+		<languagePopulation type="de" populationPercent="15"/>	<!--German-->
+		<languagePopulation type="pl" populationPercent="0.49"/>	<!--Polish-->
+	</territory>
+	<territory type="DE" literacyPercent="99" population="84119100">	<!--Germany-->
+		<languagePopulation type="de" populationPercent="91" officialStatus="official"/>	<!--German-->
+		<languagePopulation type="en" populationPercent="64"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="18"/>	<!--French-->
+		<languagePopulation type="bar" writingPercent="5" populationPercent="17"/>	<!--Bavarian-->
+		<languagePopulation type="nds" writingPercent="5" populationPercent="12"/>	<!--Low German-->
+		<languagePopulation type="nl" populationPercent="9"/>	<!--Dutch-->
+		<languagePopulation type="it" populationPercent="7"/>	<!--Italian-->
+		<languagePopulation type="es" populationPercent="6"/>	<!--Spanish-->
+		<languagePopulation type="ru" populationPercent="6"/>	<!--Russian-->
+		<languagePopulation type="vmf" populationPercent="6"/>	<!--Main-Franconian-->
+		<languagePopulation type="tr" populationPercent="2.5"/>	<!--Turkish-->
+		<languagePopulation type="gsw" writingPercent="5" populationPercent="2.3"/>	<!--Swiss German-->
+		<languagePopulation type="da" populationPercent="2"/>	<!--Danish-->
+		<languagePopulation type="swg" writingPercent="5" populationPercent="1"/>	<!--Swabian-->
+		<languagePopulation type="hr" populationPercent="0.79"/>	<!--Croatian-->
+		<languagePopulation type="ku" populationPercent="0.66"/>	<!--Kurdish-->
+		<languagePopulation type="el" populationPercent="0.38"/>	<!--Greek-->
+		<languagePopulation type="ksh" populationPercent="0.3"/>	<!--Colognian-->
+		<languagePopulation type="pl" populationPercent="0.29"/>	<!--Polish-->
+		<languagePopulation type="hsb" writingPercent="5" populationPercent="0.016"/>	<!--Upper Sorbian-->
+		<languagePopulation type="frr" populationPercent="0.012" officialStatus="official_regional"/>	<!--Northern Frisian-->
+		<languagePopulation type="dsb" writingPercent="5" populationPercent="0.0083"/>	<!--Lower Sorbian-->
+		<languagePopulation type="frs" populationPercent="0.0024"/>	<!--Eastern Frisian-->
+		<languagePopulation type="stq" populationPercent="0.0012"/>	<!--Saterland Frisian-->
+		<languagePopulation type="pfl" populationPercent="0"/>	<!--Palatine German-->
+	</territory>
+	<territory type="DG" literacyPercent="99" population="500">	<!--Diego Garcia-->
+		<languagePopulation type="en" populationPercent="99" officialStatus="de_facto_official"/>	<!--English-->
+	</territory>
+	<territory type="DJ" literacyPercent="67.9" population="994974">	<!--Djibouti-->
+		<languagePopulation type="aa" populationPercent="42"/>	<!--Afar-->
+		<languagePopulation type="so" populationPercent="41"/>	<!--Somali-->
+		<languagePopulation type="ar" populationPercent="7.3" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="fr" populationPercent="2.1" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="DK" literacyPercent="99" population="5973140">	<!--Denmark-->
+		<languagePopulation type="da" populationPercent="93" officialStatus="official"/>	<!--Danish-->
+		<languagePopulation type="en" populationPercent="86"/>	<!--English-->
+		<languagePopulation type="de" populationPercent="47" officialStatus="official_regional"/>	<!--German-->
+		<languagePopulation type="sv" populationPercent="13"/>	<!--Swedish-->
+		<languagePopulation type="fo" populationPercent="0.38"/>	<!--Faroese-->
+		<languagePopulation type="kl" populationPercent="0.12" officialStatus="official_regional"/>	<!--Kalaallisut-->
+		<languagePopulation type="jut" populationPercent="0"/>	<!--Jutish-->
+	</territory>
+	<territory type="DM" literacyPercent="94" population="74661">	<!--Dominica-->
+		<languagePopulation type="en" populationPercent="94" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="DO" literacyPercent="90.1" population="10815900">	<!--Dominican Republic-->
+		<languagePopulation type="es" populationPercent="78" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="en" populationPercent="0.074"/>	<!--English-->
+	</territory>
+	<territory type="DZ" literacyPercent="72.6" population="47022500">	<!--Algeria-->
+		<languagePopulation type="arq" populationPercent="83"/>	<!--Algerian Arabic-->
+		<languagePopulation type="ar" populationPercent="74" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="fr" populationPercent="20" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="kab" literacyPercent="10" populationPercent="7.8"/>	<!--Kabyle-->
+		<languagePopulation type="en" populationPercent="7"/>	<!--English-->
+	</territory>
+	<territory type="EA" literacyPercent="97.7" population="150000">	<!--Ceuta & Melilla-->
+		<languagePopulation type="es" populationPercent="98" officialStatus="official"/>	<!--Spanish-->
+	</territory>
+	<territory type="EC" literacyPercent="91.6" population="18310000">	<!--Ecuador-->
+		<languagePopulation type="es" populationPercent="96" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="qu" populationPercent="17" officialStatus="official"/>	<!--Quechua-->
+		<languagePopulation type="qug" populationPercent="5.7"/>	<!--Chimborazo Highland Quichua-->
+	</territory>
+	<territory type="EE" literacyPercent="99.8" population="1193790">	<!--Estonia-->
+		<languagePopulation type="et" populationPercent="71" officialStatus="official"/>	<!--Estonian-->
+		<languagePopulation type="ru" populationPercent="56"/>	<!--Russian-->
+		<languagePopulation type="en" populationPercent="50"/>	<!--English-->
+		<languagePopulation type="fi" populationPercent="21"/>	<!--Finnish-->
+		<languagePopulation type="vro" populationPercent="5.7"/>	<!--Võro-->
+		<languagePopulation type="ie" literacyPercent="99" populationPercent="0.0001"/>	<!--Interlingue-->
+	</territory>
+	<territory type="EG" literacyPercent="73.9" population="111247000">	<!--Egypt-->
+		<languagePopulation type="ar" populationPercent="94" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="arz" populationPercent="64"/>	<!--Egyptian Arabic-->
+		<languagePopulation type="en" populationPercent="35"/>	<!--English-->
+		<languagePopulation type="el" populationPercent="0.061"/>	<!--Greek-->
+	</territory>
+	<territory type="EH" literacyPercent="50" population="652271">	<!--Western Sahara-->
+		<languagePopulation type="ar" populationPercent="100" officialStatus="official"/>	<!--Arabic-->
+	</territory>
+	<territory type="ER" literacyPercent="68.9" population="6343960">	<!--Eritrea-->
+		<languagePopulation type="ti" populationPercent="60" officialStatus="de_facto_official"/>	<!--Tigrinya-->
+		<languagePopulation type="en" populationPercent="59" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="tig" populationPercent="18"/>	<!--Tigre-->
+		<languagePopulation type="ar" writingPercent="5" populationPercent="4.9" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="aa" populationPercent="3.6"/>	<!--Afar-->
+		<languagePopulation type="ssy" populationPercent="3.6"/>	<!--Saho-->
+		<languagePopulation type="byn" populationPercent="1.3"/>	<!--Blin-->
+	</territory>
+	<territory type="ES" literacyPercent="97.7" population="47280400">	<!--Spain-->
+		<languagePopulation type="es" populationPercent="99" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="en" populationPercent="24"/>	<!--English-->
+		<languagePopulation type="ca" populationPercent="17" officialStatus="official_regional"/>	<!--Catalan-->
+		<languagePopulation type="gl" populationPercent="7" officialStatus="official_regional"/>	<!--Galician-->
+		<languagePopulation type="eu" populationPercent="2" officialStatus="official_regional"/>	<!--Basque-->
+		<languagePopulation type="ast" populationPercent="1.3" officialStatus="official_regional"/>	<!--Asturian-->
+		<languagePopulation type="ext" populationPercent="0.49"/>	<!--Extremaduran-->
+		<languagePopulation type="an" populationPercent="0.052"/>	<!--Aragonese-->
+		<languagePopulation type="oc" populationPercent="0.01" officialStatus="official_regional"/>	<!--Occitan-->
+	</territory>
+	<territory type="ET" literacyPercent="39" population="118550000">	<!--Ethiopia-->
+		<languagePopulation type="en" populationPercent="43"/>	<!--English-->
+		<languagePopulation type="am" populationPercent="33" officialStatus="official"/>	<!--Amharic-->
+		<languagePopulation type="om" populationPercent="32"/>	<!--Oromo-->
+		<languagePopulation type="so" populationPercent="6"/>	<!--Somali-->
+		<languagePopulation type="ti" populationPercent="6"/>	<!--Tigrinya-->
+		<languagePopulation type="sid" populationPercent="3.5"/>	<!--Sidamo-->
+		<languagePopulation type="wal" populationPercent="1.8"/>	<!--Wolaytta-->
+		<languagePopulation type="aa" populationPercent="1.4"/>	<!--Afar-->
+		<languagePopulation type="gez" populationPercent="0"/>	<!--Geez-->
+	</territory>
+	<territory type="FI" literacyPercent="100" population="5626410">	<!--Finland-->
+		<languagePopulation type="fi" populationPercent="94" officialStatus="official"/>	<!--Finnish-->
+		<languagePopulation type="en" populationPercent="70"/>	<!--English-->
+		<languagePopulation type="sv" populationPercent="44" officialStatus="official"/>	<!--Swedish-->
+		<languagePopulation type="de" populationPercent="18"/>	<!--German-->
+		<languagePopulation type="ru" populationPercent="0.81"/>	<!--Russian-->
+		<languagePopulation type="et" populationPercent="0.11"/>	<!--Estonian-->
+		<languagePopulation type="rmf" populationPercent="0.089"/>	<!--Kalo Finnish Romani-->
+		<languagePopulation type="se" populationPercent="0.036"/>	<!--Northern Sami-->
+		<languagePopulation type="smn" populationPercent="0.011"/>	<!--Inari Sami-->
+		<languagePopulation type="sms" populationPercent="0.011" officialStatus="official_regional"/>	<!--Skolt Sami-->
+	</territory>
+	<territory type="FJ" literacyPercent="93.7" population="951611">	<!--Fiji-->
+		<languagePopulation type="en" populationPercent="94" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="hi" populationPercent="44"/>	<!--Hindi-->
+		<languagePopulation type="hif" populationPercent="41" officialStatus="official"/>	<!--Fiji Hindi-->
+		<languagePopulation type="fj" populationPercent="39" officialStatus="official"/>	<!--Fijian-->
+		<languagePopulation type="rtm" populationPercent="0.26"/>	<!--Rotuman-->
+	</territory>
+	<territory type="FK" literacyPercent="99" population="3662">	<!--Falkland Islands-->
+		<languagePopulation type="en" populationPercent="77" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="FM" literacyPercent="89" population="99603">	<!--Micronesia-->
+		<languagePopulation type="en" populationPercent="57" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="chk" populationPercent="30"/>	<!--Chuukese-->
+		<languagePopulation type="pon" populationPercent="23"/>	<!--Pohnpeian-->
+		<languagePopulation type="kos" populationPercent="8"/>	<!--Kosraean-->
+		<languagePopulation type="yap" populationPercent="6.6"/>	<!--Yapese-->
+		<languagePopulation type="uli" populationPercent="3"/>	<!--Ulithian-->
+	</territory>
+	<territory type="FO" literacyPercent="99" population="52933">	<!--Faroe Islands-->
+		<languagePopulation type="fo" populationPercent="95" officialStatus="official"/>	<!--Faroese-->
+	</territory>
+	<territory type="FR" literacyPercent="99" population="68374600">	<!--France-->
+		<languagePopulation type="fr" populationPercent="99" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="en" populationPercent="39"/>	<!--English-->
+		<languagePopulation type="es" populationPercent="13"/>	<!--Spanish-->
+		<languagePopulation type="de" populationPercent="5"/>	<!--German-->
+		<languagePopulation type="oc" writingPercent="5" populationPercent="3"/>	<!--Occitan-->
+		<languagePopulation type="it" populationPercent="1.7"/>	<!--Italian-->
+		<languagePopulation type="pt" populationPercent="1.3"/>	<!--Portuguese-->
+		<languagePopulation type="pcd" populationPercent="1.1"/>	<!--Picard-->
+		<languagePopulation type="gsw" writingPercent="5" populationPercent="0.91"/>	<!--Swiss German-->
+		<languagePopulation type="br" literacyPercent="3" populationPercent="0.83"/>	<!--Breton-->
+		<languagePopulation type="co" writingPercent="5" populationPercent="0.24"/>	<!--Corsican-->
+		<languagePopulation type="hnj" populationPercent="0.19"/>	<!--Hmong Njua-->
+		<languagePopulation type="ca" populationPercent="0.17"/>	<!--Catalan-->
+		<languagePopulation type="nl" populationPercent="0.13"/>	<!--Dutch-->
+		<languagePopulation type="eu" populationPercent="0.13"/>	<!--Basque-->
+		<languagePopulation type="frp" populationPercent="0.094"/>	<!--Arpitan-->
+		<languagePopulation type="ia" populationPercent="0.0002"/>	<!--Interlingua-->
+	</territory>
+	<territory type="GA" literacyPercent="89" population="2455110">	<!--Gabon-->
+		<languagePopulation type="fr" populationPercent="63" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="puu" populationPercent="9"/>	<!--Punu-->
+	</territory>
+	<territory type="GB" literacyPercent="99" population="68459100">	<!--United Kingdom-->
+		<languagePopulation type="en" populationPercent="98" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="23"/>	<!--French-->
+		<languagePopulation type="de" populationPercent="9"/>	<!--German-->
+		<languagePopulation type="es" populationPercent="8"/>	<!--Spanish-->
+		<languagePopulation type="pl" populationPercent="4"/>	<!--Polish-->
+		<languagePopulation type="pa" populationPercent="3.6"/>	<!--Punjabi-->
+		<languagePopulation type="ur" populationPercent="3.5"/>	<!--Urdu-->
+		<languagePopulation type="ta" populationPercent="3.2"/>	<!--Tamil-->
+		<languagePopulation type="gu" populationPercent="2.9"/>	<!--Gujarati-->
+		<languagePopulation type="sco" writingPercent="5" populationPercent="2.5"/>	<!--Scots-->
+		<languagePopulation type="cy" populationPercent="1.3" officialStatus="official_regional"/>	<!--Welsh-->
+		<languagePopulation type="ro" populationPercent="0.8"/>	<!--Romanian-->
+		<languagePopulation type="bn" populationPercent="0.4"/>	<!--Bangla-->
+		<languagePopulation type="ar" populationPercent="0.3"/>	<!--Arabic-->
+		<languagePopulation type="zh_Hant" populationPercent="0.3"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="it" populationPercent="0.2"/>	<!--Italian-->
+		<languagePopulation type="lt" populationPercent="0.2"/>	<!--Lithuanian-->
+		<languagePopulation type="pt" populationPercent="0.2"/>	<!--Portuguese-->
+		<languagePopulation type="so" populationPercent="0.2"/>	<!--Somali-->
+		<languagePopulation type="tr" populationPercent="0.2"/>	<!--Turkish-->
+		<languagePopulation type="ga" populationPercent="0.15" officialStatus="official_regional"/>	<!--Irish-->
+		<languagePopulation type="gd" writingPercent="5" populationPercent="0.11" officialStatus="official_regional"/>	<!--Scottish Gaelic-->
+		<languagePopulation type="kw" populationPercent="0.0029"/>	<!--Cornish-->
+		<languagePopulation type="en_Shaw" populationPercent="0"/>	<!--English (Shavian)-->
+	</territory>
+	<territory type="GD" literacyPercent="96" population="114621">	<!--Grenada-->
+		<languagePopulation type="en" populationPercent="96" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="GE" literacyPercent="99.7" population="4900960">	<!--Georgia-->
+		<languagePopulation type="ka" populationPercent="86" officialStatus="official"/>	<!--Georgian-->
+		<languagePopulation type="xmf" populationPercent="11"/>	<!--Mingrelian-->
+		<languagePopulation type="ru" populationPercent="9"/>	<!--Russian-->
+		<languagePopulation type="hy" populationPercent="7"/>	<!--Armenian-->
+		<languagePopulation type="ab" populationPercent="2.2" officialStatus="official_regional"/>	<!--Abkhazian-->
+		<languagePopulation type="os" populationPercent="2.2" officialStatus="official_regional"/>	<!--Ossetic-->
+		<languagePopulation type="ku" populationPercent="0.89"/>	<!--Kurdish-->
+	</territory>
+	<territory type="GF" literacyPercent="83" population="199509">	<!--French Guiana-->
+		<languagePopulation type="fr" populationPercent="77" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="gcr" populationPercent="26"/>	<!--Guianese Creole French-->
+		<languagePopulation type="zh_Hant" populationPercent="2.5"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="hnj" populationPercent="2.4"/>	<!--Hmong Njua-->
+	</territory>
+	<territory type="GG" literacyPercent="100" population="67787">	<!--Guernsey-->
+		<languagePopulation type="en" populationPercent="100" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="GH" literacyPercent="71.5" population="34589100">	<!--Ghana-->
+		<languagePopulation type="ak" populationPercent="39" officialStatus="official_regional"/>	<!--Akan-->
+		<languagePopulation type="en" populationPercent="21" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="ee" populationPercent="11" officialStatus="official_regional"/>	<!--Ewe-->
+		<languagePopulation type="abr" populationPercent="5"/>	<!--Abron-->
+		<languagePopulation type="gur" populationPercent="3.5"/>	<!--Frafra-->
+		<languagePopulation type="ada" populationPercent="3"/>	<!--Adangme-->
+		<languagePopulation type="gaa" populationPercent="2.8" officialStatus="official_regional"/>	<!--Ga-->
+		<languagePopulation type="nzi" populationPercent="1"/>	<!--Nzima-->
+		<languagePopulation type="ha" populationPercent="0.86"/>	<!--Hausa-->
+		<languagePopulation type="saf" populationPercent="0.012"/>	<!--Safaliba-->
+		<languagePopulation type="ff" populationPercent="0"/>	<!--Fula-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+	</territory>
+	<territory type="GI" literacyPercent="80" population="29683">	<!--Gibraltar-->
+		<languagePopulation type="en" populationPercent="80" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="es" populationPercent="50"/>	<!--Spanish-->
+	</territory>
+	<territory type="GL" literacyPercent="100" population="57751">	<!--Greenland-->
+		<languagePopulation type="kl" populationPercent="84" officialStatus="official"/>	<!--Kalaallisut-->
+		<languagePopulation type="da" populationPercent="14"/>	<!--Danish-->
+	</territory>
+	<territory type="GM" literacyPercent="51.1" population="2523330">	<!--Gambia-->
+		<languagePopulation type="en" populationPercent="40" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="man" populationPercent="29"/>	<!--Mandingo-->
+		<languagePopulation type="ff" populationPercent="0"/>	<!--Fula-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+	</territory>
+	<territory type="GN" literacyPercent="41" population="13986200">	<!--Guinea-->
+		<languagePopulation type="fr" populationPercent="29" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="ff" populationPercent="26"/>	<!--Fula-->
+		<languagePopulation type="man_Nkoo" populationPercent="23"/>	<!--Mandingo (N’Ko)-->
+		<languagePopulation type="sus" populationPercent="11"/>	<!--Susu-->
+		<languagePopulation type="nqo" populationPercent="5"/>	<!--N’Ko-->
+		<languagePopulation type="kpe" populationPercent="3.8"/>	<!--Kpelle-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+	</territory>
+	<territory type="GP" literacyPercent="90" population="452776">	<!--Guadeloupe-->
+		<languagePopulation type="fr" populationPercent="90" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="GQ" literacyPercent="94.2" population="1795830">	<!--Equatorial Guinea-->
+		<languagePopulation type="es" populationPercent="87" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="fan" populationPercent="51"/>	<!--Fang-->
+		<languagePopulation type="fr" populationPercent="8.8" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="bvb" populationPercent="7.9"/>	<!--Bube-->
+		<languagePopulation type="pt" populationPercent="0.0001" officialStatus="official"/>	<!--Portuguese-->
+	</territory>
+	<territory type="GR" literacyPercent="97.3" population="10461100">	<!--Greece-->
+		<languagePopulation type="el" populationPercent="99" officialStatus="official"/>	<!--Greek-->
+		<languagePopulation type="en" populationPercent="51"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="9"/>	<!--French-->
+		<languagePopulation type="de" populationPercent="5"/>	<!--German-->
+		<languagePopulation type="pnt" populationPercent="3.7"/>	<!--Pontic-->
+		<languagePopulation type="mk" populationPercent="1.6"/>	<!--Macedonian-->
+		<languagePopulation type="tr" populationPercent="1.2"/>	<!--Turkish-->
+		<languagePopulation type="bg" populationPercent="0.27"/>	<!--Bulgarian-->
+		<languagePopulation type="sq" populationPercent="0.096"/>	<!--Albanian-->
+		<languagePopulation type="tsd" populationPercent="0.0019"/>	<!--Tsakonian-->
+	</territory>
+	<territory type="GS" literacyPercent="99" population="20">	<!--South Georgia & South Sandwich Islands-->
+		<languagePopulation type="und" literacyPercent="100" populationPercent="100"/>	<!--Unknown language-->
+	</territory>
+	<territory type="GT" literacyPercent="75.9" population="18255200">	<!--Guatemala-->
+		<languagePopulation type="es" populationPercent="93" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="quc" populationPercent="7" officialStatus="official_regional"/>	<!--Kʼicheʼ-->
+	</territory>
+	<territory type="GU" literacyPercent="99" population="169532">	<!--Guam-->
+		<languagePopulation type="en" populationPercent="91" officialStatus="de_facto_official"/>	<!--English-->
+		<languagePopulation type="ch" populationPercent="22" officialStatus="official"/>	<!--Chamorro-->
+	</territory>
+	<territory type="GW" literacyPercent="55.3" population="2132330">	<!--Guinea-Bissau-->
+		<languagePopulation type="pt" populationPercent="100" officialStatus="official"/>	<!--Portuguese-->
+		<languagePopulation type="knf" populationPercent="2.6"/>	<!--Mankanya-->
+		<languagePopulation type="ff" populationPercent="0"/>	<!--Fula-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+	</territory>
+	<territory type="GY" literacyPercent="91.8" population="794099">	<!--Guyana-->
+		<languagePopulation type="en" populationPercent="100" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="HK" literacyPercent="93.5" population="7297820">	<!--Hong Kong SAR China-->
+		<languagePopulation type="zh_Hant" populationPercent="95" officialStatus="official"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="yue" populationPercent="90"/>	<!--Cantonese-->
+		<languagePopulation type="en" populationPercent="51" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="zh" populationPercent="5"/>	<!--Chinese-->
+	</territory>
+	<territory type="HM" literacyPercent="99" population="1">	<!--Heard & McDonald Islands-->
+		<languagePopulation type="und" literacyPercent="100" populationPercent="100"/>	<!--Unknown language-->
+	</territory>
+	<territory type="HN" literacyPercent="85.1" population="9529190">	<!--Honduras-->
+		<languagePopulation type="es" populationPercent="78" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="en" populationPercent="0.44"/>	<!--English-->
+	</territory>
+	<territory type="HR" literacyPercent="98.9" population="4150120">	<!--Croatia-->
+		<languagePopulation type="hr" populationPercent="99" officialStatus="official"/>	<!--Croatian-->
+		<languagePopulation type="en" populationPercent="49"/>	<!--English-->
+		<languagePopulation type="it" populationPercent="1.6" officialStatus="official_regional"/>	<!--Italian-->
+		<languagePopulation type="vec" populationPercent="0.7" officialStatus="official_regional"/>	<!--Venetian-->
+	</territory>
+	<territory type="HT" literacyPercent="48.7" population="11753900">	<!--Haiti-->
+		<languagePopulation type="ht" populationPercent="81" officialStatus="official"/>	<!--Haitian Creole-->
+		<languagePopulation type="fr" literacyPercent="100" populationPercent="4.7" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="HU" literacyPercent="99" population="9855750">	<!--Hungary-->
+		<languagePopulation type="hu" populationPercent="100" officialStatus="official"/>	<!--Hungarian-->
+		<languagePopulation type="en" populationPercent="20"/>	<!--English-->
+		<languagePopulation type="de" populationPercent="18"/>	<!--German-->
+		<languagePopulation type="fr" populationPercent="3"/>	<!--French-->
+		<languagePopulation type="ro" populationPercent="0.99"/>	<!--Romanian-->
+		<languagePopulation type="hr" populationPercent="0.32"/>	<!--Croatian-->
+		<languagePopulation type="sk" populationPercent="0.12"/>	<!--Slovak-->
+		<languagePopulation type="sl" populationPercent="0.051"/>	<!--Slovenian-->
+	</territory>
+	<territory type="IC" literacyPercent="97.7" population="2098590">	<!--Canary Islands-->
+		<languagePopulation type="es" populationPercent="98" officialStatus="official"/>	<!--Spanish-->
+	</territory>
+	<territory type="ID" literacyPercent="92.8" population="281562000">	<!--Indonesia-->
+		<languagePopulation type="id" populationPercent="64" officialStatus="official"/>	<!--Indonesian-->
+		<languagePopulation type="jv" literacyPercent="10" populationPercent="34"/>	<!--Javanese-->
+		<languagePopulation type="su" populationPercent="12"/>	<!--Sundanese-->
+		<languagePopulation type="mad" literacyPercent="40" populationPercent="6.3"/>	<!--Madurese-->
+		<languagePopulation type="ms" populationPercent="3.4"/>	<!--Malay-->
+		<languagePopulation type="min" literacyPercent="10" populationPercent="3"/>	<!--Minangkabau-->
+		<languagePopulation type="bew" populationPercent="2.1"/>	<!--Betawi-->
+		<languagePopulation type="ban" literacyPercent="10" populationPercent="1.8"/>	<!--Balinese-->
+		<languagePopulation type="bug" literacyPercent="10" populationPercent="1.6"/>	<!--Buginese-->
+		<languagePopulation type="bjn" literacyPercent="10" populationPercent="1.5"/>	<!--Banjar-->
+		<languagePopulation type="ace" populationPercent="1.4"/>	<!--Acehnese-->
+		<languagePopulation type="ms_Arab" populationPercent="1.2"/>	<!--Malay (Arabic)-->
+		<languagePopulation type="sas" populationPercent="0.97"/>	<!--Sasak-->
+		<languagePopulation type="bbc" populationPercent="0.92"/>	<!--Batak Toba-->
+		<languagePopulation type="zh_Hant" populationPercent="0.92"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="mak" populationPercent="0.73"/>	<!--Makasar-->
+		<languagePopulation type="ljp" populationPercent="0.69"/>	<!--Lampung Api-->
+		<languagePopulation type="rej" populationPercent="0.46"/>	<!--Rejang-->
+		<languagePopulation type="gor" populationPercent="0.41"/>	<!--Gorontalo-->
+		<languagePopulation type="nij" populationPercent="0.37"/>	<!--Ngaju-->
+		<languagePopulation type="kge" populationPercent="0.32"/>	<!--Komering-->
+		<languagePopulation type="aoz" populationPercent="0.27"/>	<!--Uab Meto-->
+		<languagePopulation type="kvr" populationPercent="0.14"/>	<!--Kerinci-->
+		<languagePopulation type="lbw" populationPercent="0.13"/>	<!--Tolaki-->
+		<languagePopulation type="gay" populationPercent="0.12"/>	<!--Gayo-->
+		<languagePopulation type="rob" populationPercent="0.11"/>	<!--Tae'-->
+		<languagePopulation type="mdr" populationPercent="0.092"/>	<!--Mandar-->
+		<languagePopulation type="sxn" populationPercent="0.092"/>	<!--Sangir-->
+		<languagePopulation type="sly" populationPercent="0.054"/>	<!--Selayar-->
+		<languagePopulation type="mwv" populationPercent="0.024"/>	<!--Mentawai-->
+	</territory>
+	<territory type="IE" literacyPercent="99" population="5233460">	<!--Ireland-->
+		<languagePopulation type="en" populationPercent="98" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="ga" populationPercent="22" officialStatus="official"/>	<!--Irish-->
+		<languagePopulation type="fr" populationPercent="17"/>	<!--French-->
+	</territory>
+	<territory type="IL" literacyPercent="97.1" population="9402620">	<!--Israel-->
+		<languagePopulation type="he" populationPercent="100" officialStatus="official"/>	<!--Hebrew-->
+		<languagePopulation type="en" populationPercent="85"/>	<!--English-->
+		<languagePopulation type="ar" populationPercent="20" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="apc" populationPercent="17"/>	<!--Levantine Arabic-->
+		<languagePopulation type="ru" populationPercent="11"/>	<!--Russian-->
+		<languagePopulation type="ro" populationPercent="3.7"/>	<!--Romanian-->
+		<languagePopulation type="yi" populationPercent="3"/>	<!--Yiddish-->
+		<languagePopulation type="pl" populationPercent="1.5"/>	<!--Polish-->
+		<languagePopulation type="lad" populationPercent="1.3"/>	<!--Ladino-->
+		<languagePopulation type="hu" populationPercent="1"/>	<!--Hungarian-->
+		<languagePopulation type="am" populationPercent="0.59"/>	<!--Amharic-->
+		<languagePopulation type="ti" populationPercent="0.11"/>	<!--Tigrinya-->
+		<languagePopulation type="ml" populationPercent="0.085"/>	<!--Malayalam-->
+	</territory>
+	<territory type="IM" literacyPercent="99" population="92269">	<!--Isle of Man-->
+		<languagePopulation type="en" populationPercent="100" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="gv" populationPercent="1.8" officialStatus="official"/>	<!--Manx-->
+	</territory>
+	<territory type="IN" literacyPercent="62.8" population="1409130000">	<!--India-->
+		<languagePopulation type="hi" populationPercent="41" officialStatus="official"/>	<!--Hindi-->
+		<languagePopulation type="en" populationPercent="19" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="bn" populationPercent="8.1" officialStatus="official_regional"/>	<!--Bangla-->
+		<languagePopulation type="te" populationPercent="7.2" officialStatus="official_regional"/>	<!--Telugu-->
+		<languagePopulation type="mr" populationPercent="7" officialStatus="official_regional"/>	<!--Marathi-->
+		<languagePopulation type="ta" populationPercent="5.9" officialStatus="official_regional"/>	<!--Tamil-->
+		<languagePopulation type="ur" populationPercent="5" officialStatus="official_regional"/>	<!--Urdu-->
+		<languagePopulation type="gu" populationPercent="4.5" officialStatus="official_regional"/>	<!--Gujarati-->
+		<languagePopulation type="kn" populationPercent="3.7" officialStatus="official_regional"/>	<!--Kannada-->
+		<languagePopulation type="ml" populationPercent="3.2" officialStatus="official_regional"/>	<!--Malayalam-->
+		<languagePopulation type="or" populationPercent="3.2" officialStatus="official_regional"/>	<!--Odia-->
+		<languagePopulation type="pa" populationPercent="2.8" officialStatus="official_regional"/>	<!--Punjabi-->
+		<languagePopulation type="bho" literacyPercent="30" populationPercent="2.3"/>	<!--Bhojpuri-->
+		<languagePopulation type="awa" writingPercent="5" populationPercent="1.9"/>	<!--Awadhi-->
+		<languagePopulation type="as" populationPercent="1.3" officialStatus="official_regional"/>	<!--Assamese-->
+		<languagePopulation type="bgc" literacyPercent="55" populationPercent="1.2"/>	<!--Haryanvi-->
+		<languagePopulation type="mag" literacyPercent="30" populationPercent="1.2"/>	<!--Magahi-->
+		<languagePopulation type="mwr" populationPercent="1.2"/>	<!--Marwari-->
+		<languagePopulation type="mai" populationPercent="1.2" officialStatus="official_regional"/>	<!--Maithili-->
+		<languagePopulation type="hne" populationPercent="1.1"/>	<!--Chhattisgarhi-->
+		<languagePopulation type="dcc" populationPercent="0.99"/>	<!--Deccan-->
+		<languagePopulation type="bjj" literacyPercent="60" populationPercent="0.56"/>	<!--Kanauji-->
+		<languagePopulation type="ne" populationPercent="0.56" officialStatus="official_regional"/>	<!--Nepali-->
+		<languagePopulation type="sat" populationPercent="0.55" officialStatus="official_regional"/>	<!--Santali-->
+		<languagePopulation type="wtm" literacyPercent="25" populationPercent="0.46"/>	<!--Mewati-->
+		<languagePopulation type="rkt" literacyPercent="20" populationPercent="0.43"/>	<!--Rangpuri-->
+		<languagePopulation type="ks" populationPercent="0.41" officialStatus="official_regional"/>	<!--Kashmiri-->
+		<languagePopulation type="knn" populationPercent="0.37"/>	<!--Konkani [individual language]-->
+		<languagePopulation type="kok" populationPercent="0.32" officialStatus="official_regional"/>	<!--Konkani-->
+		<languagePopulation type="swv" populationPercent="0.28"/>	<!--Shekhawati-->
+		<languagePopulation type="gbm" populationPercent="0.27"/>	<!--Garhwali-->
+		<languagePopulation type="lmn" populationPercent="0.27"/>	<!--Lambadi-->
+		<languagePopulation type="sd" populationPercent="0.26" officialStatus="official_regional"/>	<!--Sindhi-->
+		<languagePopulation type="gon" populationPercent="0.24"/>	<!--Gondi-->
+		<languagePopulation type="kfy" populationPercent="0.22"/>	<!--Kumaoni-->
+		<languagePopulation type="doi" populationPercent="0.2"/>	<!--Dogri-->
+		<languagePopulation type="kru" populationPercent="0.19"/>	<!--Kurukh-->
+		<languagePopulation type="sck" populationPercent="0.18"/>	<!--Sadri-->
+		<languagePopulation type="wbq" populationPercent="0.18"/>	<!--Waddar-->
+		<languagePopulation type="xnr" populationPercent="0.16"/>	<!--Kangri-->
+		<languagePopulation type="tcy" populationPercent="0.15"/>	<!--Tulu-->
+		<languagePopulation type="wbr" populationPercent="0.15"/>	<!--Wagdi-->
+		<languagePopulation type="khn" populationPercent="0.15"/>	<!--Khandesi-->
+		<languagePopulation type="sd_Deva" populationPercent="0.14" officialStatus="official_regional"/>	<!--Sindhi (Devanagari)-->
+		<languagePopulation type="brx" populationPercent="0.14"/>	<!--Bodo-->
+		<languagePopulation type="noe" populationPercent="0.13"/>	<!--Nimadi-->
+		<languagePopulation type="bhb" populationPercent="0.12"/>	<!--Bhili-->
+		<languagePopulation type="mni" populationPercent="0.11"/>	<!--Manipuri-->
+		<languagePopulation type="raj" populationPercent="0.1"/>	<!--Rajasthani-->
+		<languagePopulation type="hi_Latn" populationPercent="0.1"/>	<!--Hindi (Latin)-->
+		<languagePopulation type="hoc" populationPercent="0.099"/>	<!--Ho-->
+		<languagePopulation type="mtr" populationPercent="0.097"/>	<!--Mewari-->
+		<languagePopulation type="unr" populationPercent="0.094"/>	<!--Mundari-->
+		<languagePopulation type="bhi" populationPercent="0.092"/>	<!--Bhilali-->
+		<languagePopulation type="hoj" populationPercent="0.082"/>	<!--Hadothi-->
+		<languagePopulation type="kha" literacyPercent="29" populationPercent="0.08" officialStatus="official_regional"/>	<!--Khasi-->
+		<languagePopulation type="kfr" populationPercent="0.075"/>	<!--Kachhi-->
+		<languagePopulation type="grt" populationPercent="0.053"/>	<!--Garo-->
+		<languagePopulation type="unx" populationPercent="0.048"/>	<!--Munda-->
+		<languagePopulation type="bfy" populationPercent="0.037"/>	<!--Bagheli-->
+		<languagePopulation type="srx" populationPercent="0.035"/>	<!--Sirmauri-->
+		<languagePopulation type="saz" populationPercent="0.029"/>	<!--Saurashtra-->
+		<languagePopulation type="ccp" populationPercent="0.028"/>	<!--Chakma-->
+		<languagePopulation type="bfq" populationPercent="0.023"/>	<!--Badaga-->
+		<languagePopulation type="njo" populationPercent="0.023"/>	<!--Ao Naga-->
+		<languagePopulation type="ria" populationPercent="0.013"/>	<!--Riang [India]-->
+		<languagePopulation type="bo" populationPercent="0.011"/>	<!--Tibetan-->
+		<languagePopulation type="bpy" populationPercent="0.0068"/>	<!--Bishnupriya-->
+		<languagePopulation type="bft" populationPercent="0.0062"/>	<!--Balti-->
+		<languagePopulation type="bra" populationPercent="0.0041"/>	<!--Braj-->
+		<languagePopulation type="lep" populationPercent="0.0035"/>	<!--Lepcha-->
+		<languagePopulation type="kxv" populationPercent="0.0029"/>	<!--Kuvi-->
+		<languagePopulation type="btv" populationPercent="0.0026"/>	<!--Bateri-->
+		<languagePopulation type="lif" populationPercent="0.0026"/>	<!--Limbu-->
+		<languagePopulation type="lah" populationPercent="0.0025"/>	<!--Western Panjabi-->
+		<languagePopulation type="sa" populationPercent="0.0012" officialStatus="official_regional"/>	<!--Sanskrit-->
+		<languagePopulation type="kht" populationPercent="0.0006"/>	<!--Khamti-->
+		<languagePopulation type="dv" populationPercent="0.0003"/>	<!--Divehi-->
+		<languagePopulation type="dz" populationPercent="0.0002"/>	<!--Dzongkha-->
+	</territory>
+	<territory type="IO" literacyPercent="99" population="3500">	<!--British Indian Ocean Territory-->
+		<languagePopulation type="en" literacyPercent="100" populationPercent="100" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="IQ" literacyPercent="78.5" population="42083400">	<!--Iraq-->
+		<languagePopulation type="ar" populationPercent="68" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="en" populationPercent="35"/>	<!--English-->
+		<languagePopulation type="ckb" populationPercent="20" officialStatus="official_regional"/>	<!--Central Kurdish-->
+		<languagePopulation type="az_Arab" populationPercent="1.8" officialStatus="official_regional"/>	<!--Azerbaijani (Arabic)-->
+		<languagePopulation type="fa" populationPercent="0.87"/>	<!--Persian-->
+		<languagePopulation type="lrc" populationPercent="0.61"/>	<!--Northern Luri-->
+		<languagePopulation type="syr" populationPercent="0.5"/>	<!--Syriac-->
+	</territory>
+	<territory type="IR" literacyPercent="85" population="88386900">	<!--Iran-->
+		<languagePopulation type="fa" populationPercent="75" officialStatus="official"/>	<!--Persian-->
+		<languagePopulation type="az_Arab" populationPercent="24"/>	<!--Azerbaijani (Arabic)-->
+		<languagePopulation type="mzn" populationPercent="5"/>	<!--Mazanderani-->
+		<languagePopulation type="glk" populationPercent="4.6"/>	<!--Gilaki-->
+		<languagePopulation type="ckb" populationPercent="3.9"/>	<!--Central Kurdish-->
+		<languagePopulation type="sdh" populationPercent="3.7"/>	<!--Southern Kurdish-->
+		<languagePopulation type="tk" populationPercent="2.8"/>	<!--Turkmen-->
+		<languagePopulation type="lrc" literacyPercent="10" populationPercent="2.1"/>	<!--Northern Luri-->
+		<languagePopulation type="ar" populationPercent="2"/>	<!--Arabic-->
+		<languagePopulation type="bal" populationPercent="2"/>	<!--Baluchi-->
+		<languagePopulation type="rmt" literacyPercent="1" populationPercent="1.9"/>	<!--Domari-->
+		<languagePopulation type="bqi" populationPercent="1.4"/>	<!--Bakhtiari-->
+		<languagePopulation type="luz" populationPercent="1.2"/>	<!--Southern Luri-->
+		<languagePopulation type="lki" populationPercent="0.76"/>	<!--Laki-->
+		<languagePopulation type="kaa" populationPercent="0.67"/>	<!--Kara-Kalpak-->
+		<languagePopulation type="bgn" writingPercent="5" populationPercent="0.56"/>	<!--Western Balochi-->
+		<languagePopulation type="prd" populationPercent="0.5"/>	<!--Parsi-Dari-->
+		<languagePopulation type="hy" populationPercent="0.24"/>	<!--Armenian-->
+		<languagePopulation type="ps" populationPercent="0.16"/>	<!--Pashto-->
+		<languagePopulation type="ka" populationPercent="0.071"/>	<!--Georgian-->
+		<languagePopulation type="gbz" populationPercent="0.0091"/>	<!--Zoroastrian Dari-->
+		<languagePopulation type="kk_Arab" populationPercent="0.0034"/>	<!--Kazakh (Arabic)-->
+	</territory>
+	<territory type="IS" literacyPercent="99" population="364036">	<!--Iceland-->
+		<languagePopulation type="is" populationPercent="100" officialStatus="official"/>	<!--Icelandic-->
+		<languagePopulation type="da" populationPercent="0.62"/>	<!--Danish-->
+	</territory>
+	<territory type="IT" literacyPercent="99" population="60964900">	<!--Italy-->
+		<languagePopulation type="it" populationPercent="95" officialStatus="official"/>	<!--Italian-->
+		<languagePopulation type="en" populationPercent="34"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="6.3" officialStatus="official_regional"/>	<!--French-->
+		<languagePopulation type="lmo" populationPercent="5.7"/>	<!--Lombard-->
+		<languagePopulation type="sc" populationPercent="1.7"/>	<!--Sardinian-->
+		<languagePopulation type="de" populationPercent="1.6"/>	<!--German-->
+		<languagePopulation type="vec" populationPercent="1.3" officialStatus="official_regional"/>	<!--Venetian-->
+		<languagePopulation type="nap" writingPercent="5" populationPercent="0.97"/>	<!--Neapolitan-->
+		<languagePopulation type="lij" populationPercent="0.86"/>	<!--Ligurian-->
+		<languagePopulation type="scn" writingPercent="5" populationPercent="0.82"/>	<!--Sicilian-->
+		<languagePopulation type="sl" populationPercent="0.17"/>	<!--Slovenian-->
+		<languagePopulation type="sdc" populationPercent="0.17"/>	<!--Sassarese Sardinian-->
+		<languagePopulation type="fur" writingPercent="5" populationPercent="0.06"/>	<!--Friulian-->
+		<languagePopulation type="egl" populationPercent="0.05"/>	<!--Emilian-->
+		<languagePopulation type="lld" populationPercent="0.048"/>	<!--Ladin-->
+		<languagePopulation type="ca" populationPercent="0.035"/>	<!--Catalan-->
+		<languagePopulation type="el" populationPercent="0.035"/>	<!--Greek-->
+		<languagePopulation type="pms" populationPercent="0.01"/>	<!--Piedmontese-->
+		<languagePopulation type="hr" populationPercent="0.0057"/>	<!--Croatian-->
+		<languagePopulation type="mhn" populationPercent="0.0023"/>	<!--Mócheno-->
+		<languagePopulation type="rgn" populationPercent="0"/>	<!--Romagnol-->
+	</territory>
+	<territory type="JE" literacyPercent="99" population="103387">	<!--Jersey-->
+		<languagePopulation type="en" populationPercent="95" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="JM" literacyPercent="87" population="2823710">	<!--Jamaica-->
+		<languagePopulation type="en" populationPercent="98" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="jam" populationPercent="95"/>	<!--Jamaican Creole English-->
+	</territory>
+	<territory type="JO" literacyPercent="95.9" population="11174000">	<!--Jordan-->
+		<languagePopulation type="ar" populationPercent="100" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="apc" populationPercent="66"/>	<!--Levantine Arabic-->
+		<languagePopulation type="en" populationPercent="45"/>	<!--English-->
+	</territory>
+	<territory type="JP" literacyPercent="99" population="123202000">	<!--Japan-->
+		<languagePopulation type="ja" populationPercent="95" officialStatus="official"/>	<!--Japanese-->
+		<languagePopulation type="ryu" writingPercent="5" populationPercent="0.77"/>	<!--Central Okinawan-->
+		<languagePopulation type="ko" populationPercent="0.52"/>	<!--Korean-->
+	</territory>
+	<territory type="KE" literacyPercent="87.4" population="58246400">	<!--Kenya-->
+		<languagePopulation type="sw" populationPercent="66" officialStatus="official"/>	<!--Swahili-->
+		<languagePopulation type="en" populationPercent="19" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="ki" populationPercent="17"/>	<!--Kikuyu-->
+		<languagePopulation type="luy" populationPercent="11"/>	<!--Luyia-->
+		<languagePopulation type="luo" populationPercent="9.8"/>	<!--Luo-->
+		<languagePopulation type="kam" populationPercent="7.6"/>	<!--Kamba-->
+		<languagePopulation type="kln" populationPercent="7.6"/>	<!--Kalenjin-->
+		<languagePopulation type="guz" populationPercent="4.9"/>	<!--Gusii-->
+		<languagePopulation type="mer" populationPercent="4"/>	<!--Meru-->
+		<languagePopulation type="mas" literacyPercent="50" populationPercent="1.6"/>	<!--Masai-->
+		<languagePopulation type="ebu" literacyPercent="1" populationPercent="1.5"/>	<!--Embu-->
+		<languagePopulation type="so" populationPercent="1.3"/>	<!--Somali-->
+		<languagePopulation type="dav" writingPercent="5" populationPercent="0.82"/>	<!--Taita-->
+		<languagePopulation type="teo" populationPercent="0.74"/>	<!--Teso-->
+		<languagePopulation type="pko" literacyPercent="1" populationPercent="0.69"/>	<!--Pökoot-->
+		<languagePopulation type="om" populationPercent="0.47"/>	<!--Oromo-->
+		<languagePopulation type="saq" literacyPercent="1" populationPercent="0.46"/>	<!--Samburu-->
+		<languagePopulation type="ar" populationPercent="0.046"/>	<!--Arabic-->
+		<languagePopulation type="pa" populationPercent="0.017"/>	<!--Punjabi-->
+		<languagePopulation type="gu" populationPercent="0.0086"/>	<!--Gujarati-->
+	</territory>
+	<territory type="KG" literacyPercent="99.2" population="6172100">	<!--Kyrgyzstan-->
+		<languagePopulation type="ky" populationPercent="48" officialStatus="official"/>	<!--Kyrgyz-->
+		<languagePopulation type="ru" populationPercent="36" officialStatus="official"/>	<!--Russian-->
+		<languagePopulation type="kaa" populationPercent="0.019"/>	<!--Kara-Kalpak-->
+	</territory>
+	<territory type="KH" literacyPercent="73.9" population="17063700">	<!--Cambodia-->
+		<languagePopulation type="km" populationPercent="89" officialStatus="official"/>	<!--Khmer-->
+		<languagePopulation type="cja" populationPercent="1.6"/>	<!--Western Cham-->
+		<languagePopulation type="kdt" populationPercent="0.11"/>	<!--Kuy-->
+	</territory>
+	<territory type="KI" literacyPercent="96.8" population="116545">	<!--Kiribati-->
+		<languagePopulation type="en" populationPercent="100" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="gil" populationPercent="60" officialStatus="official"/>	<!--Gilbertese-->
+	</territory>
+	<territory type="KM" literacyPercent="75.5" population="900141">	<!--Comoros-->
+		<languagePopulation type="ar" populationPercent="66" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="fr" populationPercent="56" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="zdj" populationPercent="37" officialStatus="official"/>	<!--Ngazidja Comorian-->
+		<languagePopulation type="wni" populationPercent="34" officialStatus="official"/>	<!--Ndzwani Comorian-->
+	</territory>
+	<territory type="KN" literacyPercent="97.8" population="55133">	<!--St. Kitts & Nevis-->
+		<languagePopulation type="en" populationPercent="98" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="KP" literacyPercent="100" population="26298700">	<!--North Korea-->
+		<languagePopulation type="ko" populationPercent="88" officialStatus="official"/>	<!--Korean-->
+	</territory>
+	<territory type="KR" literacyPercent="97.9" population="52081800">	<!--South Korea-->
+		<languagePopulation type="ko" populationPercent="100" officialStatus="official"/>	<!--Korean-->
+	</territory>
+	<territory type="KW" literacyPercent="93.9" population="3138360">	<!--Kuwait-->
+		<languagePopulation type="ar" populationPercent="100" officialStatus="official"/>	<!--Arabic-->
+	</territory>
+	<territory type="KY" literacyPercent="98.9" population="66653">	<!--Cayman Islands-->
+		<languagePopulation type="en" populationPercent="98" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="KZ" literacyPercent="99.7" population="20260000">	<!--Kazakhstan-->
+		<languagePopulation type="ru" populationPercent="72" officialStatus="official"/>	<!--Russian-->
+		<languagePopulation type="kk" populationPercent="64" officialStatus="official"/>	<!--Kazakh-->
+		<languagePopulation type="en" populationPercent="15"/>	<!--English-->
+		<languagePopulation type="de" populationPercent="6.4"/>	<!--German-->
+		<languagePopulation type="ug_Cyrl" populationPercent="2"/>	<!--Uyghur (Cyrillic)-->
+		<languagePopulation type="kaa" populationPercent="0.018"/>	<!--Kara-Kalpak-->
+	</territory>
+	<territory type="LA" literacyPercent="72.7" population="7953560">	<!--Laos-->
+		<languagePopulation type="lo" populationPercent="69" officialStatus="official"/>	<!--Lao-->
+		<languagePopulation type="kjg" populationPercent="5.8"/>	<!--Khmu-->
+		<languagePopulation type="hnj" populationPercent="3"/>	<!--Hmong Njua-->
+		<languagePopulation type="kdt" populationPercent="0.96"/>	<!--Kuy-->
+	</territory>
+	<territory type="LB" literacyPercent="89.6" population="5364480">	<!--Lebanon-->
+		<languagePopulation type="apc" populationPercent="100"/>	<!--Levantine Arabic-->
+		<languagePopulation type="ar" populationPercent="86" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="en" populationPercent="40"/>	<!--English-->
+		<languagePopulation type="hy" populationPercent="5.2"/>	<!--Armenian-->
+		<languagePopulation type="ku_Arab" populationPercent="1.7"/>	<!--Kurdish (Arabic)-->
+		<languagePopulation type="fr" populationPercent="0.37"/>	<!--French-->
+	</territory>
+	<territory type="LC" literacyPercent="90.1" population="168038">	<!--St. Lucia-->
+		<languagePopulation type="en" populationPercent="90" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="LI" literacyPercent="100" population="40272">	<!--Liechtenstein-->
+		<languagePopulation type="de" populationPercent="100" officialStatus="official"/>	<!--German-->
+		<languagePopulation type="gsw" writingPercent="5" populationPercent="85" officialStatus="de_facto_official"/>	<!--Swiss German-->
+		<languagePopulation type="wae" populationPercent="3.2"/>	<!--Walser-->
+	</territory>
+	<territory type="LK" literacyPercent="91.2" population="21982600">	<!--Sri Lanka-->
+		<languagePopulation type="si" populationPercent="68" officialStatus="official"/>	<!--Sinhala-->
+		<languagePopulation type="ta" populationPercent="15" officialStatus="official"/>	<!--Tamil-->
+		<languagePopulation type="en" populationPercent="10"/>	<!--English-->
+	</territory>
+	<territory type="LR" literacyPercent="60.8" population="5437250">	<!--Liberia-->
+		<languagePopulation type="en" populationPercent="83" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="kpe" populationPercent="14"/>	<!--Kpelle-->
+		<languagePopulation type="vai" populationPercent="2.6"/>	<!--Vai-->
+		<languagePopulation type="men" populationPercent="0.48"/>	<!--Mende-->
+		<languagePopulation type="ff" populationPercent="0"/>	<!--Fula-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+		<languagePopulation type="vai_Latn" populationPercent="0"/>	<!--Vai (Latin)-->
+	</territory>
+	<territory type="LS" literacyPercent="89.6" population="2227550">	<!--Lesotho-->
+		<languagePopulation type="st" populationPercent="98" officialStatus="official"/>	<!--Southern Sotho-->
+		<languagePopulation type="en" populationPercent="27" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="zu" populationPercent="14"/>	<!--Zulu-->
+		<languagePopulation type="ss" populationPercent="2.4"/>	<!--Swati-->
+		<languagePopulation type="xh" populationPercent="0.99"/>	<!--Xhosa-->
+	</territory>
+	<territory type="LT" literacyPercent="99.7" population="2628190">	<!--Lithuania-->
+		<languagePopulation type="lt" populationPercent="86" officialStatus="official"/>	<!--Lithuanian-->
+		<languagePopulation type="ru" populationPercent="80"/>	<!--Russian-->
+		<languagePopulation type="en" populationPercent="38"/>	<!--English-->
+		<languagePopulation type="de" populationPercent="14"/>	<!--German-->
+		<languagePopulation type="sgs" populationPercent="0"/>	<!--Samogitian-->
+	</territory>
+	<territory type="LU" literacyPercent="100" population="671254">	<!--Luxembourg-->
+		<languagePopulation type="fr" populationPercent="87" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="lb" writingPercent="5" populationPercent="67" officialStatus="official"/>	<!--Luxembourgish-->
+		<languagePopulation type="de" populationPercent="63" officialStatus="official"/>	<!--German-->
+		<languagePopulation type="en" populationPercent="56"/>	<!--English-->
+		<languagePopulation type="pt" populationPercent="16"/>	<!--Portuguese-->
+	</territory>
+	<territory type="LV" literacyPercent="99.8" population="1801250">	<!--Latvia-->
+		<languagePopulation type="lv" populationPercent="61" officialStatus="official"/>	<!--Latvian-->
+		<languagePopulation type="en" populationPercent="46"/>	<!--English-->
+		<languagePopulation type="ru" populationPercent="38"/>	<!--Russian-->
+		<languagePopulation type="ltg" populationPercent="8.9"/>	<!--Latgalian-->
+	</territory>
+	<territory type="LY" literacyPercent="89.5" population="7361260">	<!--Libya-->
+		<languagePopulation type="ar" populationPercent="74" officialStatus="official"/>	<!--Arabic-->
+	</territory>
+	<territory type="MA" literacyPercent="67.1" population="37387600">	<!--Morocco-->
+		<languagePopulation type="ary" populationPercent="87"/>	<!--Moroccan Arabic-->
+		<languagePopulation type="ar" populationPercent="62" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="zgh" populationPercent="22"/>	<!--Standard Moroccan Tamazight-->
+		<languagePopulation type="fr" populationPercent="20" officialStatus="de_facto_official"/>	<!--French-->
+		<languagePopulation type="en" populationPercent="14"/>	<!--English-->
+		<languagePopulation type="tzm" literacyPercent="25" populationPercent="9.8" officialStatus="official"/>	<!--Central Atlas Tamazight-->
+		<languagePopulation type="shi" populationPercent="8.7"/>	<!--Tachelhit-->
+		<languagePopulation type="shi_Latn" populationPercent="8.7"/>	<!--Tachelhit (Latin)-->
+		<languagePopulation type="rif" writingPercent="5" populationPercent="4.9"/>	<!--Riffian-->
+		<languagePopulation type="rif_Tfng" writingPercent="5" populationPercent="4.9"/>	<!--Riffian (Tifinagh)-->
+		<languagePopulation type="es" populationPercent="0.065"/>	<!--Spanish-->
+	</territory>
+	<territory type="MC" literacyPercent="99" population="31813">	<!--Monaco-->
+		<languagePopulation type="fr" populationPercent="99" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="MD" literacyPercent="99" population="3599530">	<!--Moldova-->
+		<languagePopulation type="ro" populationPercent="63" officialStatus="official"/>	<!--Romanian-->
+		<languagePopulation type="uk" populationPercent="14"/>	<!--Ukrainian-->
+		<languagePopulation type="bg" populationPercent="9.4"/>	<!--Bulgarian-->
+		<languagePopulation type="gag" populationPercent="3.3"/>	<!--Gagauz-->
+		<languagePopulation type="ru" populationPercent="3"/>	<!--Russian-->
+	</territory>
+	<territory type="ME" literacyPercent="98.5" population="599849">	<!--Montenegro-->
+		<languagePopulation type="sr_Latn" populationPercent="100" officialStatus="official"/>	<!--Serbian (Latin)-->
+		<languagePopulation type="sq" populationPercent="7.9"/>	<!--Albanian-->
+		<languagePopulation type="sr" populationPercent="5"/>	<!--Serbian-->
+	</territory>
+	<territory type="MF" literacyPercent="99" population="32996">	<!--St. Martin-->
+		<languagePopulation type="fr" populationPercent="100" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="MG" literacyPercent="64.5" population="29452700">	<!--Madagascar-->
+		<languagePopulation type="mg" populationPercent="90" officialStatus="official"/>	<!--Malagasy-->
+		<languagePopulation type="fr" populationPercent="69" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="en" populationPercent="18" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="MH" literacyPercent="93.7" population="82011">	<!--Marshall Islands-->
+		<languagePopulation type="en" populationPercent="93" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="mh" populationPercent="73" officialStatus="official"/>	<!--Marshallese-->
+	</territory>
+	<territory type="MK" literacyPercent="97.4" population="2135620">	<!--North Macedonia-->
+		<languagePopulation type="mk" populationPercent="67" officialStatus="official"/>	<!--Macedonian-->
+		<languagePopulation type="sq" populationPercent="25" officialStatus="official_regional"/>	<!--Albanian-->
+		<languagePopulation type="tr" populationPercent="3.5"/>	<!--Turkish-->
+	</territory>
+	<territory type="ML" literacyPercent="33.4" population="21990600">	<!--Mali-->
+		<languagePopulation type="bm" populationPercent="46"/>	<!--Bambara-->
+		<languagePopulation type="fr" populationPercent="46" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="ffm" populationPercent="7.7"/>	<!--Maasina Fulfulde-->
+		<languagePopulation type="snk" populationPercent="5.9"/>	<!--Soninke-->
+		<languagePopulation type="mwk" populationPercent="5"/>	<!--Kita Maninkakan-->
+		<languagePopulation type="ses" populationPercent="3.4"/>	<!--Koyraboro Senni-->
+		<languagePopulation type="tmh" populationPercent="2.1"/>	<!--Tamashek-->
+		<languagePopulation type="bm_Nkoo" populationPercent="2"/>	<!--Bambara (N’Ko)-->
+		<languagePopulation type="khq" populationPercent="1.7"/>	<!--Koyra Chiini-->
+		<languagePopulation type="dtm" populationPercent="1.1"/>	<!--Tomo Kan Dogon-->
+		<languagePopulation type="kao" populationPercent="1"/>	<!--Xaasongaxango-->
+		<languagePopulation type="ar" populationPercent="0.9"/>	<!--Arabic-->
+		<languagePopulation type="bmq" populationPercent="0.86"/>	<!--Bomu-->
+		<languagePopulation type="bze" populationPercent="0.85"/>	<!--Jenaama Bozo-->
+	</territory>
+	<territory type="MM" literacyPercent="92.7" population="57527100">	<!--Myanmar (Burma)-->
+		<languagePopulation type="my" populationPercent="64" officialStatus="official"/>	<!--Burmese-->
+		<languagePopulation type="shn" populationPercent="6.4"/>	<!--Shan-->
+		<languagePopulation type="kac" populationPercent="1.7"/>	<!--Kachin-->
+		<languagePopulation type="rhg" populationPercent="1.7"/>	<!--Rohingya-->
+		<languagePopulation type="mnw" populationPercent="1.5"/>	<!--Mon-->
+		<languagePopulation type="hnj" populationPercent="0.022"/>	<!--Hmong Njua-->
+		<languagePopulation type="kht" populationPercent="0.0074"/>	<!--Khamti-->
+	</territory>
+	<territory type="MN" literacyPercent="97.4" population="3281680">	<!--Mongolia-->
+		<languagePopulation type="mn" populationPercent="93" officialStatus="official"/>	<!--Mongolian-->
+		<languagePopulation type="kk_Arab" populationPercent="7.2"/>	<!--Kazakh (Arabic)-->
+		<languagePopulation type="zh" populationPercent="1.4"/>	<!--Chinese-->
+		<languagePopulation type="ru" populationPercent="0.12"/>	<!--Russian-->
+		<languagePopulation type="ug_Cyrl" populationPercent="0.03"/>	<!--Uyghur (Cyrillic)-->
+	</territory>
+	<territory type="MO" literacyPercent="95.6" population="644426">	<!--Macao SAR China-->
+		<languagePopulation type="zh_Hant" populationPercent="98" officialStatus="official"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="pt" populationPercent="5" officialStatus="official"/>	<!--Portuguese-->
+		<languagePopulation type="zh" populationPercent="5"/>	<!--Chinese-->
+		<languagePopulation type="en" populationPercent="2.3"/>	<!--English-->
+	</territory>
+	<territory type="MP" literacyPercent="97" population="51118">	<!--Northern Mariana Islands-->
+		<languagePopulation type="en" populationPercent="97" officialStatus="de_facto_official"/>	<!--English-->
+		<languagePopulation type="ch" populationPercent="18"/>	<!--Chamorro-->
+	</territory>
+	<territory type="MQ" literacyPercent="98" population="436131">	<!--Martinique-->
+		<languagePopulation type="fr" populationPercent="98" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="MR" literacyPercent="58.6" population="4328040">	<!--Mauritania-->
+		<languagePopulation type="ar" populationPercent="85" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="fr" populationPercent="17"/>	<!--French-->
+		<languagePopulation type="ff" populationPercent="5.7"/>	<!--Fula-->
+		<languagePopulation type="wo" populationPercent="0.23"/>	<!--Wolof-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+	</territory>
+	<territory type="MS" literacyPercent="97" population="5468">	<!--Montserrat-->
+		<languagePopulation type="en" populationPercent="64" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="MT" literacyPercent="92.4" population="469730">	<!--Malta-->
+		<languagePopulation type="mt" populationPercent="100" officialStatus="official"/>	<!--Maltese-->
+		<languagePopulation type="en" populationPercent="88" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="it" populationPercent="56"/>	<!--Italian-->
+		<languagePopulation type="fr" populationPercent="11"/>	<!--French-->
+	</territory>
+	<territory type="MU" literacyPercent="88.8" population="1310500">	<!--Mauritius-->
+		<languagePopulation type="mfe" populationPercent="90"/>	<!--Morisyen-->
+		<languagePopulation type="en" populationPercent="72" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="bho" populationPercent="27"/>	<!--Bhojpuri-->
+		<languagePopulation type="ur" populationPercent="5.2"/>	<!--Urdu-->
+		<languagePopulation type="fr" populationPercent="3" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="ta" populationPercent="2.5"/>	<!--Tamil-->
+	</territory>
+	<territory type="MV" literacyPercent="98.4" population="388858">	<!--Maldives-->
+		<languagePopulation type="dv" populationPercent="98" officialStatus="official"/>	<!--Divehi-->
+		<languagePopulation type="en" populationPercent="75"/>	<!--English-->
+	</territory>
+	<territory type="MW" literacyPercent="74.8" population="21763300">	<!--Malawi-->
+		<languagePopulation type="en" populationPercent="63" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="ny" populationPercent="63" officialStatus="official"/>	<!--Nyanja-->
+		<languagePopulation type="tum" populationPercent="8.4"/>	<!--Tumbuka-->
+		<languagePopulation type="tog" populationPercent="0.98"/>	<!--Nyasa Tonga-->
+		<languagePopulation type="zu" populationPercent="0.33"/>	<!--Zulu-->
+	</territory>
+	<territory type="MX" literacyPercent="93.5" population="130740000">	<!--Mexico-->
+		<languagePopulation type="es" populationPercent="83" officialStatus="de_facto_official"/>	<!--Spanish-->
+		<languagePopulation type="en" populationPercent="13"/>	<!--English-->
+		<languagePopulation type="yua" populationPercent="0.67"/>	<!--Yucateco-->
+		<languagePopulation type="nhe" populationPercent="0.39"/>	<!--Eastern Huasteca Nahuatl-->
+		<languagePopulation type="nhw" populationPercent="0.39"/>	<!--Western Huasteca Nahuatl-->
+		<languagePopulation type="maz" populationPercent="0.34"/>	<!--Central Mazahua-->
+		<languagePopulation type="nch" populationPercent="0.19"/>	<!--Central Huasteca Nahuatl-->
+		<languagePopulation type="vec" populationPercent="0.0019" officialStatus="official_regional"/>	<!--Venetian-->
+		<languagePopulation type="sei" populationPercent="0.0007"/>	<!--Seri-->
+	</territory>
+	<territory type="MY" literacyPercent="93.1" population="34564800">	<!--Malaysia-->
+		<languagePopulation type="ms" populationPercent="75" officialStatus="official"/>	<!--Malay-->
+		<languagePopulation type="en" populationPercent="21"/>	<!--English-->
+		<languagePopulation type="zh" populationPercent="17"/>	<!--Chinese-->
+		<languagePopulation type="ta" populationPercent="4.2"/>	<!--Tamil-->
+		<languagePopulation type="iba" populationPercent="2.5"/>	<!--Iban-->
+		<languagePopulation type="jv" populationPercent="1.2"/>	<!--Javanese-->
+		<languagePopulation type="zmi" populationPercent="1.2"/>	<!--Negeri Sembilan Malay-->
+		<languagePopulation type="dtp" populationPercent="0.56"/>	<!--Central Dusun-->
+		<languagePopulation type="ml" populationPercent="0.15"/>	<!--Malayalam-->
+		<languagePopulation type="bug" populationPercent="0.079"/>	<!--Buginese-->
+		<languagePopulation type="bjn" populationPercent="0.014"/>	<!--Banjar-->
+	</territory>
+	<territory type="MZ" literacyPercent="56.1" population="33351000">	<!--Mozambique-->
+		<languagePopulation type="pt" populationPercent="27" officialStatus="official"/>	<!--Portuguese-->
+		<languagePopulation type="vmw" populationPercent="13"/>	<!--Makhuwa-->
+		<languagePopulation type="ndc" populationPercent="9.9"/>	<!--Ndau-->
+		<languagePopulation type="ts" populationPercent="7.9"/>	<!--Tsonga-->
+		<languagePopulation type="ngl" populationPercent="6.8"/>	<!--Lomwe-->
+		<languagePopulation type="seh" populationPercent="4.6"/>	<!--Sena-->
+		<languagePopulation type="mgh" populationPercent="4.5"/>	<!--Makhuwa-Meetto-->
+		<languagePopulation type="rng" populationPercent="3.4"/>	<!--Ronga-->
+		<languagePopulation type="ny" populationPercent="2.6"/>	<!--Nyanja-->
+		<languagePopulation type="yao" populationPercent="2.4"/>	<!--Yao-->
+		<languagePopulation type="sw" populationPercent="0.028"/>	<!--Swahili-->
+		<languagePopulation type="zu" populationPercent="0.0054"/>	<!--Zulu-->
+	</territory>
+	<territory type="NA" literacyPercent="88.8" population="2803660">	<!--Namibia-->
+		<languagePopulation type="af" populationPercent="75"/>	<!--Afrikaans-->
+		<languagePopulation type="kj" populationPercent="35"/>	<!--Kuanyama-->
+		<languagePopulation type="ng" populationPercent="21"/>	<!--Ndonga-->
+		<languagePopulation type="naq" populationPercent="11"/>	<!--Nama-->
+		<languagePopulation type="hz" populationPercent="9.1"/>	<!--Herero-->
+		<languagePopulation type="en" populationPercent="7" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="de" populationPercent="0.9"/>	<!--German-->
+		<languagePopulation type="tn" populationPercent="0.56"/>	<!--Tswana-->
+	</territory>
+	<territory type="NC" literacyPercent="96.2" population="304167">	<!--New Caledonia-->
+		<languagePopulation type="fr" populationPercent="96" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="NE" literacyPercent="28.7" population="26342800">	<!--Niger-->
+		<languagePopulation type="ha" populationPercent="41"/>	<!--Hausa-->
+		<languagePopulation type="fr" populationPercent="29" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="dje" populationPercent="17"/>	<!--Zarma-->
+		<languagePopulation type="fuq" populationPercent="7"/>	<!--Central-Eastern Niger Fulfulde-->
+		<languagePopulation type="tmh" populationPercent="6"/>	<!--Tamashek-->
+		<languagePopulation type="ar" populationPercent="0.21"/>	<!--Arabic-->
+		<languagePopulation type="twq" populationPercent="0.03"/>	<!--Tasawaq-->
+		<languagePopulation type="ff" populationPercent="0"/>	<!--Fula-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+	</territory>
+	<territory type="NF" literacyPercent="99" population="1748">	<!--Norfolk Island-->
+		<languagePopulation type="en" populationPercent="96" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="NG" literacyPercent="61.3" population="236747000">	<!--Nigeria-->
+		<languagePopulation type="en" populationPercent="53" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="pcm" populationPercent="21"/>	<!--Nigerian Pidgin-->
+		<languagePopulation type="ha" populationPercent="13"/>	<!--Hausa-->
+		<languagePopulation type="ig" populationPercent="13"/>	<!--Igbo-->
+		<languagePopulation type="yo" populationPercent="13" officialStatus="official"/>	<!--Yoruba-->
+		<languagePopulation type="fuv" literacyPercent="20" populationPercent="6.7"/>	<!--Nigerian Fulfulde-->
+		<languagePopulation type="tiv" literacyPercent="25" populationPercent="1.6"/>	<!--Tiv-->
+		<languagePopulation type="efi" populationPercent="1.4"/>	<!--Efik-->
+		<languagePopulation type="ibb" populationPercent="1.4"/>	<!--Ibibio-->
+		<languagePopulation type="ha_Arab" populationPercent="1"/>	<!--Hausa (Arabic)-->
+		<languagePopulation type="bin" populationPercent="0.71"/>	<!--Bini-->
+		<languagePopulation type="kaj" populationPercent="0.21"/>	<!--Jju-->
+		<languagePopulation type="kcg" populationPercent="0.093"/>	<!--Tyap-->
+		<languagePopulation type="ar" populationPercent="0.071"/>	<!--Arabic-->
+		<languagePopulation type="cch" populationPercent="0.021"/>	<!--Atsam-->
+		<languagePopulation type="amo" populationPercent="0.0087"/>	<!--Amo-->
+		<languagePopulation type="ff" populationPercent="0"/>	<!--Fula-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+		<languagePopulation type="ann" populationPercent="0"/>	<!--Obolo-->
+	</territory>
+	<territory type="NI" literacyPercent="78" population="6676950">	<!--Nicaragua-->
+		<languagePopulation type="es" populationPercent="78" officialStatus="official"/>	<!--Spanish-->
+	</territory>
+	<territory type="NL" literacyPercent="99" population="17772400">	<!--Netherlands-->
+		<languagePopulation type="nl" populationPercent="100" officialStatus="official"/>	<!--Dutch-->
+		<languagePopulation type="en" populationPercent="90"/>	<!--English-->
+		<languagePopulation type="de" writingPercent="5" populationPercent="71"/>	<!--German-->
+		<languagePopulation type="fr" populationPercent="29"/>	<!--French-->
+		<languagePopulation type="nds" writingPercent="5" populationPercent="11"/>	<!--Low German-->
+		<languagePopulation type="li" writingPercent="5" populationPercent="5.5"/>	<!--Limburgish-->
+		<languagePopulation type="fy" populationPercent="4.3" officialStatus="official_regional"/>	<!--Western Frisian-->
+		<languagePopulation type="gos" writingPercent="5" populationPercent="3.6"/>	<!--Gronings-->
+		<languagePopulation type="id" populationPercent="1.8"/>	<!--Indonesian-->
+		<languagePopulation type="zea" populationPercent="1.4"/>	<!--Zeelandic-->
+		<languagePopulation type="rif" populationPercent="1.2"/>	<!--Riffian-->
+		<languagePopulation type="tr" populationPercent="1.2"/>	<!--Turkish-->
+	</territory>
+	<territory type="NO" literacyPercent="100" population="5509730">	<!--Norway-->
+		<languagePopulation type="nb" populationPercent="100" officialStatus="official"/>	<!--Norwegian Bokmål-->
+		<languagePopulation type="no" populationPercent="100" officialStatus="official"/>	<!--Norwegian-->
+		<languagePopulation type="nn" populationPercent="25" officialStatus="official"/>	<!--Norwegian Nynorsk-->
+		<languagePopulation type="se" populationPercent="0.29" officialStatus="official_regional"/>	<!--Northern Sami-->
+	</territory>
+	<territory type="NP" literacyPercent="57.4" population="31122400">	<!--Nepal-->
+		<languagePopulation type="ne" populationPercent="44" officialStatus="official"/>	<!--Nepali-->
+		<languagePopulation type="mai" populationPercent="11"/>	<!--Maithili-->
+		<languagePopulation type="bho" populationPercent="6.8"/>	<!--Bhojpuri-->
+		<languagePopulation type="new" populationPercent="3.3"/>	<!--Newari-->
+		<languagePopulation type="jml" populationPercent="3.2"/>	<!--Jumli-->
+		<languagePopulation type="en" populationPercent="3"/>	<!--English-->
+		<languagePopulation type="dty" populationPercent="2.5"/>	<!--Dotyali-->
+		<languagePopulation type="awa" populationPercent="2.2"/>	<!--Awadhi-->
+		<languagePopulation type="thl" populationPercent="2"/>	<!--Dangaura Tharu-->
+		<languagePopulation type="bap" populationPercent="1.5"/>	<!--Bantawa-->
+		<languagePopulation type="tdg" populationPercent="1.3"/>	<!--Western Tamang-->
+		<languagePopulation type="thr" populationPercent="1.2"/>	<!--Rana Tharu-->
+		<languagePopulation type="mgp" populationPercent="1.1"/>	<!--Eastern Magar-->
+		<languagePopulation type="lif" populationPercent="1.1"/>	<!--Limbu-->
+		<languagePopulation type="thq" populationPercent="1"/>	<!--Kochila Tharu-->
+		<languagePopulation type="mrd" populationPercent="0.83"/>	<!--Western Magar-->
+		<languagePopulation type="bfy" populationPercent="0.54"/>	<!--Bagheli-->
+		<languagePopulation type="xsr" populationPercent="0.52"/>	<!--Sherpa-->
+		<languagePopulation type="rjs" literacyPercent="67" populationPercent="0.44"/>	<!--Rajbanshi-->
+		<languagePopulation type="taj" populationPercent="0.43"/>	<!--Eastern Tamang-->
+		<languagePopulation type="hi" populationPercent="0.42"/>	<!--Hindi-->
+		<languagePopulation type="gvr" populationPercent="0.29"/>	<!--Gurung-->
+		<languagePopulation type="bo" populationPercent="0.24"/>	<!--Tibetan-->
+		<languagePopulation type="tkt" populationPercent="0.24"/>	<!--Kathoriya Tharu-->
+		<languagePopulation type="tdh" populationPercent="0.12"/>	<!--Thulung-->
+		<languagePopulation type="bn" populationPercent="0.094"/>	<!--Bangla-->
+		<languagePopulation type="unr_Deva" populationPercent="0.018"/>	<!--Mundari (Devanagari)-->
+		<languagePopulation type="lep" populationPercent="0.0091"/>	<!--Lepcha-->
+	</territory>
+	<territory type="NR" literacyPercent="99" population="9892">	<!--Nauru-->
+		<languagePopulation type="en" populationPercent="95" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="na" populationPercent="70" officialStatus="official"/>	<!--Nauru-->
+	</territory>
+	<territory type="NU" literacyPercent="95" population="2000">	<!--Niue-->
+		<languagePopulation type="en" populationPercent="56" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="niu" populationPercent="56" officialStatus="official"/>	<!--Niuean-->
+	</territory>
+	<territory type="NZ" literacyPercent="99" population="5161210">	<!--New Zealand-->
+		<languagePopulation type="en" populationPercent="98" officialStatus="de_facto_official"/>	<!--English-->
+		<languagePopulation type="mi" populationPercent="2.8" officialStatus="official"/>	<!--Māori-->
+	</territory>
+	<territory type="OM" literacyPercent="86.9" population="3901990">	<!--Oman-->
+		<languagePopulation type="ar" populationPercent="81" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="bal" populationPercent="4.9"/>	<!--Baluchi-->
+		<languagePopulation type="fa" populationPercent="0.94"/>	<!--Persian-->
+	</territory>
+	<territory type="PA" literacyPercent="94.1" population="4470240">	<!--Panama-->
+		<languagePopulation type="es" populationPercent="69" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="en" populationPercent="14"/>	<!--English-->
+		<languagePopulation type="zh_Hant" populationPercent="0.13"/>	<!--Chinese (Traditional)-->
+	</territory>
+	<territory type="PE" literacyPercent="89.6" population="32600200">	<!--Peru-->
+		<languagePopulation type="es" populationPercent="73" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="qu" populationPercent="15" officialStatus="official"/>	<!--Quechua-->
+		<languagePopulation type="ay" populationPercent="1.6"/>	<!--Aymara-->
+	</territory>
+	<territory type="PF" literacyPercent="98" population="303540">	<!--French Polynesia-->
+		<languagePopulation type="fr" populationPercent="61" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="ty" populationPercent="31" officialStatus="official"/>	<!--Tahitian-->
+		<languagePopulation type="zh_Hant" populationPercent="7.8"/>	<!--Chinese (Traditional)-->
+	</territory>
+	<territory type="PG" literacyPercent="62.4" population="10046200">	<!--Papua New Guinea-->
+		<languagePopulation type="tpi" literacyPercent="45" populationPercent="71" officialStatus="official"/>	<!--Tok Pisin-->
+		<languagePopulation type="en" populationPercent="50" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="ho" writingPercent="5" populationPercent="2.1" officialStatus="official"/>	<!--Hiri Motu-->
+	</territory>
+	<territory type="PH" literacyPercent="95.4" population="118277000">	<!--Philippines-->
+		<languagePopulation type="en" populationPercent="64" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="fil" populationPercent="60" officialStatus="official"/>	<!--Filipino-->
+		<languagePopulation type="es" populationPercent="31"/>	<!--Spanish-->
+		<languagePopulation type="ceb" literacyPercent="13" populationPercent="24" officialStatus="official_regional"/>	<!--Cebuano-->
+		<languagePopulation type="ilo" literacyPercent="10" populationPercent="9.6" officialStatus="official_regional"/>	<!--Iloko-->
+		<languagePopulation type="hil" literacyPercent="8" populationPercent="8.4" officialStatus="official_regional"/>	<!--Hiligaynon-->
+		<languagePopulation type="bik" populationPercent="3"/>	<!--Bikol-->
+		<languagePopulation type="war" populationPercent="2.9" officialStatus="official_regional"/>	<!--Waray-->
+		<languagePopulation type="fbl" populationPercent="2.3"/>	<!--West Albay Bikol-->
+		<languagePopulation type="pam" populationPercent="2.3"/>	<!--Pampanga-->
+		<languagePopulation type="pag" populationPercent="1.4" officialStatus="official_regional"/>	<!--Pangasinan-->
+		<languagePopulation type="mdh" populationPercent="1.2" officialStatus="official_regional"/>	<!--Maguindanaon-->
+		<languagePopulation type="tsg" populationPercent="1.1" officialStatus="official_regional"/>	<!--Tausug-->
+		<languagePopulation type="zh_Hant" populationPercent="0.73"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="cps" populationPercent="0.66"/>	<!--Capiznon-->
+		<languagePopulation type="krj" populationPercent="0.39"/>	<!--Kinaray-a-->
+		<languagePopulation type="bto" populationPercent="0.28"/>	<!--Rinconada Bikol-->
+		<languagePopulation type="hnn" populationPercent="0.016"/>	<!--Hanunoo-->
+		<languagePopulation type="tbw" literacyPercent="36" populationPercent="0.0085"/>	<!--Tagbanwa-->
+		<languagePopulation type="bku" populationPercent="0.0068"/>	<!--Buhid-->
+	</territory>
+	<territory type="PK" literacyPercent="54.9" population="252364000">	<!--Pakistan-->
+		<languagePopulation type="ur" populationPercent="95" officialStatus="official"/>	<!--Urdu-->
+		<languagePopulation type="pa_Arab" populationPercent="70"/>	<!--Punjabi (Arabic)-->
+		<languagePopulation type="en" populationPercent="50" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="lah" populationPercent="40"/>	<!--Western Panjabi-->
+		<languagePopulation type="ps" populationPercent="16"/>	<!--Pashto-->
+		<languagePopulation type="sd" populationPercent="15"/>	<!--Sindhi-->
+		<languagePopulation type="skr" literacyPercent="1" populationPercent="12"/>	<!--Saraiki-->
+		<languagePopulation type="bal" populationPercent="2.6"/>	<!--Baluchi-->
+		<languagePopulation type="hno" populationPercent="1.7"/>	<!--Northern Hindko-->
+		<languagePopulation type="brh" populationPercent="1.3"/>	<!--Brahui-->
+		<languagePopulation type="fa" populationPercent="0.66"/>	<!--Persian-->
+		<languagePopulation type="bgn" writingPercent="5" populationPercent="0.57"/>	<!--Western Balochi-->
+		<languagePopulation type="hnd" populationPercent="0.41"/>	<!--Southern Hindko-->
+		<languagePopulation type="tg_Arab" populationPercent="0.33"/>	<!--Tajik (Arabic)-->
+		<languagePopulation type="gju" populationPercent="0.2"/>	<!--Gujari-->
+		<languagePopulation type="bft" populationPercent="0.18"/>	<!--Balti-->
+		<languagePopulation type="kvx" populationPercent="0.16"/>	<!--Parkari Koli-->
+		<languagePopulation type="khw" populationPercent="0.15"/>	<!--Khowar-->
+		<languagePopulation type="mvy" populationPercent="0.14"/>	<!--Indus Kohistani-->
+		<languagePopulation type="kxp" populationPercent="0.11"/>	<!--Wadiyara Koli-->
+		<languagePopulation type="gjk" populationPercent="0.11"/>	<!--Kachi Koli-->
+		<languagePopulation type="ks" populationPercent="0.069"/>	<!--Kashmiri-->
+		<languagePopulation type="trw" populationPercent="0.053"/>	<!--Torwali-->
+		<languagePopulation type="btv" populationPercent="0.019"/>	<!--Bateri-->
+	</territory>
+	<territory type="PL" literacyPercent="99.7" population="38746300">	<!--Poland-->
+		<languagePopulation type="pl" populationPercent="96" officialStatus="official"/>	<!--Polish-->
+		<languagePopulation type="en" populationPercent="33"/>	<!--English-->
+		<languagePopulation type="de" populationPercent="19" officialStatus="official_regional"/>	<!--German-->
+		<languagePopulation type="ru" populationPercent="18"/>	<!--Russian-->
+		<languagePopulation type="szl" populationPercent="1.3"/>	<!--Silesian-->
+		<languagePopulation type="be" populationPercent="0.58"/>	<!--Belarusian-->
+		<languagePopulation type="uk" populationPercent="0.39"/>	<!--Ukrainian-->
+		<languagePopulation type="csb" populationPercent="0.13" officialStatus="official_regional"/>	<!--Kashubian-->
+		<languagePopulation type="sli" populationPercent="0.031"/>	<!--Lower Silesian-->
+		<languagePopulation type="lt" populationPercent="0.021" officialStatus="official_regional"/>	<!--Lithuanian-->
+		<languagePopulation type="prg" populationPercent="0.0001"/>	<!--Prussian-->
+	</territory>
+	<territory type="PM" literacyPercent="99" population="5132">	<!--St. Pierre & Miquelon-->
+		<languagePopulation type="fr" populationPercent="100" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="en" populationPercent="3.7"/>	<!--English-->
+	</territory>
+	<territory type="PN" literacyPercent="99" population="50">	<!--Pitcairn Islands-->
+		<languagePopulation type="en" populationPercent="92" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="PR" literacyPercent="90.3" population="3019450">	<!--Puerto Rico-->
+		<languagePopulation type="es" populationPercent="87" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="en" populationPercent="49" officialStatus="de_facto_official"/>	<!--English-->
+	</territory>
+	<territory type="PS" literacyPercent="95.3" population="5385010">	<!--Palestinian Territories-->
+		<languagePopulation type="ar" populationPercent="100" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="apc" populationPercent="87"/>	<!--Levantine Arabic-->
+	</territory>
+	<territory type="PT" literacyPercent="95.4" population="10207200">	<!--Portugal-->
+		<languagePopulation type="pt" populationPercent="96" officialStatus="official"/>	<!--Portuguese-->
+		<languagePopulation type="en" populationPercent="27"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="15"/>	<!--French-->
+		<languagePopulation type="es" populationPercent="10"/>	<!--Spanish-->
+		<languagePopulation type="gl" populationPercent="0.14"/>	<!--Galician-->
+	</territory>
+	<territory type="PW" literacyPercent="92" population="21864">	<!--Palau-->
+		<languagePopulation type="pau" populationPercent="74" officialStatus="official"/>	<!--Palauan-->
+		<languagePopulation type="en" populationPercent="8.6" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="PY" literacyPercent="93.9" population="7522550">	<!--Paraguay-->
+		<languagePopulation type="gn" populationPercent="80" officialStatus="official"/>	<!--Guarani-->
+		<languagePopulation type="es" populationPercent="3.2" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="de" populationPercent="2.9"/>	<!--German-->
+	</territory>
+	<territory type="QA" literacyPercent="96.3" population="2552090">	<!--Qatar-->
+		<languagePopulation type="ar" populationPercent="89" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="fa" populationPercent="11"/>	<!--Persian-->
+		<languagePopulation type="ml" populationPercent="0.25"/>	<!--Malayalam-->
+	</territory>
+	<territory type="RE" literacyPercent="88" population="787584">	<!--Réunion-->
+		<languagePopulation type="fr" populationPercent="89" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="rcf" populationPercent="71"/>	<!--Réunion Creole French-->
+		<languagePopulation type="ta" populationPercent="15"/>	<!--Tamil-->
+	</territory>
+	<territory type="RO" literacyPercent="97.7" population="18148200">	<!--Romania-->
+		<languagePopulation type="ro" populationPercent="90" officialStatus="official"/>	<!--Romanian-->
+		<languagePopulation type="en" populationPercent="31"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="17"/>	<!--French-->
+		<languagePopulation type="es" populationPercent="10"/>	<!--Spanish-->
+		<languagePopulation type="hu" populationPercent="6.6"/>	<!--Hungarian-->
+		<languagePopulation type="de" populationPercent="0.21"/>	<!--German-->
+		<languagePopulation type="tr" populationPercent="0.13"/>	<!--Turkish-->
+		<languagePopulation type="sr_Latn" populationPercent="0.12"/>	<!--Serbian (Latin)-->
+		<languagePopulation type="bg" populationPercent="0.037"/>	<!--Bulgarian-->
+		<languagePopulation type="el" populationPercent="0.023"/>	<!--Greek-->
+		<languagePopulation type="pl" populationPercent="0.015"/>	<!--Polish-->
+	</territory>
+	<territory type="RS" literacyPercent="98" population="6652210">	<!--Serbia-->
+		<languagePopulation type="sr" populationPercent="99" officialStatus="official"/>	<!--Serbian-->
+		<languagePopulation type="sr_Latn" writingPercent="5" populationPercent="99" officialStatus="official"/>	<!--Serbian (Latin)-->
+		<languagePopulation type="sq" populationPercent="19"/>	<!--Albanian-->
+		<languagePopulation type="hu" populationPercent="4.8" officialStatus="official_regional"/>	<!--Hungarian-->
+		<languagePopulation type="ro" populationPercent="2.1" officialStatus="official_regional"/>	<!--Romanian-->
+		<languagePopulation type="hr" populationPercent="0.93" officialStatus="official_regional"/>	<!--Croatian-->
+		<languagePopulation type="sk" populationPercent="0.85" officialStatus="official_regional"/>	<!--Slovak-->
+		<languagePopulation type="uk" populationPercent="0" officialStatus="official_regional"/>	<!--Ukrainian-->
+	</territory>
+	<territory type="RU" literacyPercent="99.7" population="140821000">	<!--Russia-->
+		<languagePopulation type="ru" populationPercent="94" officialStatus="official"/>	<!--Russian-->
+		<languagePopulation type="tt" populationPercent="1.4" officialStatus="official_regional"/>	<!--Tatar-->
+		<languagePopulation type="ba" populationPercent="1.3" officialStatus="official_regional"/>	<!--Bashkir-->
+		<languagePopulation type="cv" populationPercent="1.3"/>	<!--Chuvash-->
+		<languagePopulation type="hy" literacyPercent="50" populationPercent="0.84"/>	<!--Armenian-->
+		<languagePopulation type="ce" populationPercent="0.66" officialStatus="official_regional"/>	<!--Chechen-->
+		<languagePopulation type="av" populationPercent="0.39" officialStatus="official_regional"/>	<!--Avaric-->
+		<languagePopulation type="udm" populationPercent="0.38" officialStatus="official_regional"/>	<!--Udmurt-->
+		<languagePopulation type="chm" populationPercent="0.37"/>	<!--Mari-->
+		<languagePopulation type="sah" populationPercent="0.32" officialStatus="official_regional"/>	<!--Yakut-->
+		<languagePopulation type="os" populationPercent="0.32"/>	<!--Ossetic-->
+		<languagePopulation type="kbd" populationPercent="0.31" officialStatus="official_regional"/>	<!--Kabardian-->
+		<languagePopulation type="myv" populationPercent="0.31" officialStatus="official_regional"/>	<!--Erzya-->
+		<languagePopulation type="dar" populationPercent="0.26"/>	<!--Dargwa-->
+		<languagePopulation type="bua" populationPercent="0.22"/>	<!--Buriat-->
+		<languagePopulation type="mdf" populationPercent="0.21" officialStatus="official_regional"/>	<!--Moksha-->
+		<languagePopulation type="kum" populationPercent="0.2" officialStatus="official_regional"/>	<!--Kumyk-->
+		<languagePopulation type="kv" populationPercent="0.18" officialStatus="official_regional"/>	<!--Komi-->
+		<languagePopulation type="lez" populationPercent="0.18" officialStatus="official_regional"/>	<!--Lezghian-->
+		<languagePopulation type="krc" populationPercent="0.17" officialStatus="official_regional"/>	<!--Karachay-Balkar-->
+		<languagePopulation type="inh" populationPercent="0.16" officialStatus="official_regional"/>	<!--Ingush-->
+		<languagePopulation type="tyv" populationPercent="0.13" officialStatus="official_regional"/>	<!--Tuvinian-->
+		<languagePopulation type="az_Cyrl" populationPercent="0.093" officialStatus="official_regional"/>	<!--Azerbaijani (Cyrillic)-->
+		<languagePopulation type="ady" populationPercent="0.088" officialStatus="official_regional"/>	<!--Adyghe-->
+		<languagePopulation type="krl" populationPercent="0.082"/>	<!--Karelian-->
+		<languagePopulation type="lbe" populationPercent="0.078" officialStatus="official_regional"/>	<!--Lak-->
+		<languagePopulation type="koi" populationPercent="0.045" officialStatus="official_regional"/>	<!--Komi-Permyak-->
+		<languagePopulation type="mrj" populationPercent="0.021"/>	<!--Western Mari-->
+		<languagePopulation type="alt" populationPercent="0.014"/>	<!--Southern Altai-->
+		<languagePopulation type="fi" populationPercent="0.012"/>	<!--Finnish-->
+		<languagePopulation type="sr_Latn" populationPercent="0.0036"/>	<!--Serbian (Latin)-->
+		<languagePopulation type="vep" populationPercent="0.0026"/>	<!--Veps-->
+		<languagePopulation type="mn" populationPercent="0.0015"/>	<!--Mongolian-->
+		<languagePopulation type="kaa" populationPercent="0.0006"/>	<!--Kara-Kalpak-->
+		<languagePopulation type="izh" populationPercent="0.0001"/>	<!--Ingrian-->
+		<languagePopulation type="vot" populationPercent="0"/>	<!--Votic-->
+		<languagePopulation type="cu" populationPercent="0"/>	<!--Church Slavic-->
+	</territory>
+	<territory type="RW" literacyPercent="71.1" population="13623300">	<!--Rwanda-->
+		<languagePopulation type="rw" populationPercent="77" officialStatus="official"/>	<!--Kinyarwanda-->
+		<languagePopulation type="en" populationPercent="15" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="0.017" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="SA" literacyPercent="87.2" population="36544400">	<!--Saudi Arabia-->
+		<languagePopulation type="ar" populationPercent="100" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="ars" writingPercent="5" populationPercent="3"/>	<!--Najdi Arabic-->
+	</territory>
+	<territory type="SB" literacyPercent="84.1" population="726799">	<!--Solomon Islands-->
+		<languagePopulation type="en" populationPercent="100" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="pis" populationPercent="82"/>	<!--Pijin-->
+		<languagePopulation type="rug" populationPercent="1.4"/>	<!--Roviana-->
+	</territory>
+	<territory type="SC" literacyPercent="91.8" population="98187">	<!--Seychelles-->
+		<languagePopulation type="crs" populationPercent="98"/>	<!--Seselwa Creole French-->
+		<languagePopulation type="fr" populationPercent="60" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="en" populationPercent="38" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="SD" literacyPercent="71.9" population="50467300">	<!--Sudan-->
+		<languagePopulation type="ar" populationPercent="61" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="en" populationPercent="61" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="bej" populationPercent="5.4"/>	<!--Beja-->
+		<languagePopulation type="fvr" populationPercent="2.7"/>	<!--Fur-->
+		<languagePopulation type="ha_Arab" populationPercent="1.8"/>	<!--Hausa (Arabic)-->
+		<languagePopulation type="mls" populationPercent="0.99"/>	<!--Masalit-->
+		<languagePopulation type="fia" populationPercent="0.83"/>	<!--Nobiin-->
+		<languagePopulation type="zag" populationPercent="0.51"/>	<!--Zaghawa-->
+	</territory>
+	<territory type="SE" literacyPercent="99" population="10589800">	<!--Sweden-->
+		<languagePopulation type="sv" populationPercent="95" officialStatus="official"/>	<!--Swedish-->
+		<languagePopulation type="en" populationPercent="86"/>	<!--English-->
+		<languagePopulation type="fi" populationPercent="2.2" officialStatus="official_regional"/>	<!--Finnish-->
+		<languagePopulation type="fit" populationPercent="0.55"/>	<!--Tornedalen Finnish-->
+		<languagePopulation type="se" populationPercent="0.33"/>	<!--Northern Sami-->
+		<languagePopulation type="rmu" populationPercent="0.09"/>	<!--Tavringer Romani-->
+		<languagePopulation type="yi" populationPercent="0.028"/>	<!--Yiddish-->
+		<languagePopulation type="smj" populationPercent="0.014"/>	<!--Lule Sami-->
+		<languagePopulation type="sma" literacyPercent="75" populationPercent="0.0028"/>	<!--Southern Sami-->
+		<languagePopulation type="ia" populationPercent="0"/>	<!--Interlingua-->
+	</territory>
+	<territory type="SG" literacyPercent="95.9" population="6028460">	<!--Singapore-->
+		<languagePopulation type="en" populationPercent="93" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="zh" populationPercent="77" officialStatus="official"/>	<!--Chinese-->
+		<languagePopulation type="ms" populationPercent="14" officialStatus="official"/>	<!--Malay-->
+		<languagePopulation type="ta" populationPercent="2.1" officialStatus="official"/>	<!--Tamil-->
+		<languagePopulation type="ml" populationPercent="0.17"/>	<!--Malayalam-->
+		<languagePopulation type="pa" populationPercent="0.16"/>	<!--Punjabi-->
+	</territory>
+	<territory type="SH" literacyPercent="97" population="7943">	<!--St. Helena-->
+		<languagePopulation type="en" populationPercent="68" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="SI" literacyPercent="99.7" population="2097890">	<!--Slovenia-->
+		<languagePopulation type="sl" populationPercent="87" officialStatus="official"/>	<!--Slovenian-->
+		<languagePopulation type="hr" populationPercent="61"/>	<!--Croatian-->
+		<languagePopulation type="en" populationPercent="59"/>	<!--English-->
+		<languagePopulation type="de" populationPercent="42"/>	<!--German-->
+		<languagePopulation type="vec" populationPercent="1.4" officialStatus="official_regional"/>	<!--Venetian-->
+		<languagePopulation type="hu" populationPercent="0.44"/>	<!--Hungarian-->
+		<languagePopulation type="it" populationPercent="0.19"/>	<!--Italian-->
+	</territory>
+	<territory type="SJ" literacyPercent="100" population="2926">	<!--Svalbard & Jan Mayen-->
+		<languagePopulation type="nb" populationPercent="51" officialStatus="official"/>	<!--Norwegian Bokmål-->
+		<languagePopulation type="ru" populationPercent="41"/>	<!--Russian-->
+	</territory>
+	<territory type="SK" literacyPercent="99.6" population="5563650">	<!--Slovakia-->
+		<languagePopulation type="sk" populationPercent="90" officialStatus="official"/>	<!--Slovak-->
+		<languagePopulation type="cs" populationPercent="47"/>	<!--Czech-->
+		<languagePopulation type="en" populationPercent="26"/>	<!--English-->
+		<languagePopulation type="de" populationPercent="22"/>	<!--German-->
+		<languagePopulation type="hu" populationPercent="11"/>	<!--Hungarian-->
+		<languagePopulation type="uk" populationPercent="1.9"/>	<!--Ukrainian-->
+		<languagePopulation type="pl" populationPercent="0.93"/>	<!--Polish-->
+	</territory>
+	<territory type="SL" literacyPercent="43.3" population="9121050">	<!--Sierra Leone-->
+		<languagePopulation type="kri" populationPercent="95"/>	<!--Krio-->
+		<languagePopulation type="en" populationPercent="35" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="men" populationPercent="27"/>	<!--Mende-->
+		<languagePopulation type="tem" literacyPercent="6" populationPercent="26"/>	<!--Timne-->
+		<languagePopulation type="ff" populationPercent="0"/>	<!--Fula-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+	</territory>
+	<territory type="SM" literacyPercent="96" population="35095">	<!--San Marino-->
+		<languagePopulation type="it" populationPercent="89" officialStatus="official"/>	<!--Italian-->
+		<languagePopulation type="eo" populationPercent="0.85"/>	<!--Esperanto-->
+	</territory>
+	<territory type="SN" literacyPercent="49.7" population="18847500">	<!--Senegal-->
+		<languagePopulation type="wo" populationPercent="70" officialStatus="de_facto_official"/>	<!--Wolof-->
+		<languagePopulation type="fr" literacyPercent="100" populationPercent="39" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="ff" populationPercent="21" officialStatus="official_regional"/>	<!--Fula-->
+		<languagePopulation type="srr" populationPercent="11" officialStatus="official_regional"/>	<!--Serer-->
+		<languagePopulation type="dyo" literacyPercent="10" populationPercent="2.6" officialStatus="official_regional"/>	<!--Jola-Fonyi-->
+		<languagePopulation type="sav" populationPercent="1.5" officialStatus="official_regional"/>	<!--Saafi-Saafi-->
+		<languagePopulation type="mfv" literacyPercent="10" populationPercent="0.77" officialStatus="official_regional"/>	<!--Mandjak-->
+		<languagePopulation type="bjt" literacyPercent="100" populationPercent="0.61" officialStatus="official_regional"/>	<!--Balanta-Ganja-->
+		<languagePopulation type="snf" literacyPercent="10" populationPercent="0.24" officialStatus="official_regional"/>	<!--Noon-->
+		<languagePopulation type="knf" literacyPercent="10" populationPercent="0.21" officialStatus="official_regional"/>	<!--Mankanya-->
+		<languagePopulation type="bsc" literacyPercent="10" populationPercent="0.097" officialStatus="official_regional"/>	<!--Bassari-->
+		<languagePopulation type="mey" literacyPercent="10" populationPercent="0.038" officialStatus="official_regional"/>	<!--Hassaniyya-->
+		<languagePopulation type="tnr" literacyPercent="10" populationPercent="0.018" officialStatus="official_regional"/>	<!--Ménik-->
+		<languagePopulation type="ff_Adlm" populationPercent="0"/>	<!--Fula (Adlam)-->
+	</territory>
+	<territory type="SO" literacyPercent="37.8" population="13017300">	<!--Somalia-->
+		<languagePopulation type="so" populationPercent="78" officialStatus="official"/>	<!--Somali-->
+		<languagePopulation type="ar" literacyPercent="99" populationPercent="34" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="sw" populationPercent="2"/>	<!--Swahili-->
+		<languagePopulation type="om" populationPercent="0.42"/>	<!--Oromo-->
+	</territory>
+	<territory type="SR" literacyPercent="94.7" population="646758">	<!--Suriname-->
+		<languagePopulation type="nl" populationPercent="90" officialStatus="official"/>	<!--Dutch-->
+		<languagePopulation type="srn" literacyPercent="75" populationPercent="68"/>	<!--Sranan Tongo-->
+		<languagePopulation type="zh_Hant" populationPercent="1.1"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="hnj" populationPercent="0.36"/>	<!--Hmong Njua-->
+	</territory>
+	<territory type="SS" literacyPercent="27" population="12703700">	<!--South Sudan-->
+		<languagePopulation type="ar" populationPercent="27"/>	<!--Arabic-->
+		<languagePopulation type="en" populationPercent="27" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="nus" populationPercent="5.6"/>	<!--Nuer-->
+	</territory>
+	<territory type="ST" literacyPercent="69.5" population="223561">	<!--São Tomé & Príncipe-->
+		<languagePopulation type="pt" populationPercent="85" officialStatus="official"/>	<!--Portuguese-->
+	</territory>
+	<territory type="SV" literacyPercent="84.5" population="6628700">	<!--El Salvador-->
+		<languagePopulation type="es" populationPercent="89" officialStatus="official"/>	<!--Spanish-->
+	</territory>
+	<territory type="SX" literacyPercent="99" population="46215">	<!--Sint Maarten-->
+		<languagePopulation type="en" populationPercent="68" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="es" populationPercent="11"/>	<!--Spanish-->
+		<languagePopulation type="vic" populationPercent="6.7"/>	<!--Virgin Islands Creole English-->
+		<languagePopulation type="nl" populationPercent="3.4" officialStatus="official"/>	<!--Dutch-->
+	</territory>
+	<territory type="SY" literacyPercent="84.1" population="23865400">	<!--Syria-->
+		<languagePopulation type="apc" populationPercent="85"/>	<!--Levantine Arabic-->
+		<languagePopulation type="ar" populationPercent="80" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="ku" populationPercent="8"/>	<!--Kurdish-->
+		<languagePopulation type="fr" populationPercent="5.9" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="hy" populationPercent="1.8"/>	<!--Armenian-->
+		<languagePopulation type="syr" writingPercent="5" populationPercent="0.084"/>	<!--Syriac-->
+	</territory>
+	<territory type="SZ" literacyPercent="87.8" population="1138090">	<!--Eswatini-->
+		<languagePopulation type="en" populationPercent="80" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="ss" populationPercent="58" officialStatus="official"/>	<!--Swati-->
+		<languagePopulation type="zu" populationPercent="6.8"/>	<!--Zulu-->
+		<languagePopulation type="ts" populationPercent="1.7"/>	<!--Tsonga-->
+	</territory>
+	<territory type="TA" literacyPercent="99" population="275">	<!--Tristan da Cunha-->
+		<languagePopulation type="en" populationPercent="99"/>	<!--English-->
+	</territory>
+	<territory type="TC" literacyPercent="98" population="60439">	<!--Turks & Caicos Islands-->
+		<languagePopulation type="en" populationPercent="98" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="TD" literacyPercent="35.4" population="19093600">	<!--Chad-->
+		<languagePopulation type="fr" populationPercent="26" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="ar" populationPercent="17" officialStatus="official"/>	<!--Arabic-->
+	</territory>
+	<territory type="TF" literacyPercent="99" population="140">	<!--French Southern Territories-->
+		<languagePopulation type="fr" literacyPercent="100" populationPercent="100"/>	<!--French-->
+	</territory>
+	<territory type="TG" literacyPercent="60.4" population="8917990">	<!--Togo-->
+		<languagePopulation type="fr" populationPercent="61" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="ee" populationPercent="17"/>	<!--Ewe-->
+		<languagePopulation type="ife" literacyPercent="15" populationPercent="1.3"/>	<!--Ifè-->
+		<languagePopulation type="blo" populationPercent="0.15"/>	<!--Anii-->
+	</territory>
+	<territory type="TH" literacyPercent="93.5" population="69921000">	<!--Thailand-->
+		<languagePopulation type="th" literacyPercent="93" populationPercent="80" officialStatus="official"/>	<!--Thai-->
+		<languagePopulation type="en" populationPercent="27"/>	<!--English-->
+		<languagePopulation type="tts" writingPercent="5" populationPercent="24"/>	<!--Northeastern Thai-->
+		<languagePopulation type="nod" writingPercent="5" populationPercent="9.6"/>	<!--Northern Thai-->
+		<languagePopulation type="sou" writingPercent="5" populationPercent="8"/>	<!--Southern Thai-->
+		<languagePopulation type="mfa" populationPercent="5"/>	<!--Pattani Malay-->
+		<languagePopulation type="zh_Hant" populationPercent="1.8"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="kxm" populationPercent="1.7"/>	<!--Northern Khmer-->
+		<languagePopulation type="kdt" literacyPercent="50" populationPercent="0.48"/>	<!--Kuy-->
+		<languagePopulation type="mnw" populationPercent="0.17"/>	<!--Mon-->
+		<languagePopulation type="hnj" populationPercent="0.098"/>	<!--Hmong Njua-->
+		<languagePopulation type="shn" populationPercent="0.096"/>	<!--Shan-->
+		<languagePopulation type="lcp" literacyPercent="25" populationPercent="0.01"/>	<!--Western Lawa-->
+		<languagePopulation type="lwl" populationPercent="0.01"/>	<!--Eastern Lawa-->
+	</territory>
+	<territory type="TJ" literacyPercent="99.7" population="10394100">	<!--Tajikistan-->
+		<languagePopulation type="tg" populationPercent="100" officialStatus="official"/>	<!--Tajik-->
+		<languagePopulation type="ru" populationPercent="12"/>	<!--Russian-->
+		<languagePopulation type="fa" populationPercent="0.78"/>	<!--Persian-->
+		<languagePopulation type="ar" populationPercent="0.0096"/>	<!--Arabic-->
+	</territory>
+	<territory type="TK" literacyPercent="99.6" population="1647">	<!--Tokelau-->
+		<languagePopulation type="en" populationPercent="78" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="tkl" writingPercent="5" populationPercent="78" officialStatus="official"/>	<!--Tokelau-->
+	</territory>
+	<territory type="TL" literacyPercent="58.3" population="1506910">	<!--Timor-Leste-->
+		<languagePopulation type="pt" literacyPercent="100" populationPercent="59" officialStatus="official"/>	<!--Portuguese-->
+		<languagePopulation type="tet" populationPercent="59" officialStatus="official"/>	<!--Tetum-->
+	</territory>
+	<territory type="TM" literacyPercent="99.6" population="5744150">	<!--Turkmenistan-->
+		<languagePopulation type="tk" populationPercent="70" officialStatus="official"/>	<!--Turkmen-->
+		<languagePopulation type="ru" populationPercent="12"/>	<!--Russian-->
+		<languagePopulation type="uz" populationPercent="9"/>	<!--Uzbek-->
+		<languagePopulation type="ku" populationPercent="0.4"/>	<!--Kurdish-->
+		<languagePopulation type="kaa" populationPercent="0.1"/>	<!--Kara-Kalpak-->
+	</territory>
+	<territory type="TN" literacyPercent="79.1" population="12048800">	<!--Tunisia-->
+		<languagePopulation type="aeb" populationPercent="90"/>	<!--Tunisian Arabic-->
+		<languagePopulation type="ar" populationPercent="90" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="fr" populationPercent="74" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="TO" literacyPercent="99" population="104889">	<!--Tonga-->
+		<languagePopulation type="to" populationPercent="95" officialStatus="official"/>	<!--Tongan-->
+		<languagePopulation type="en" populationPercent="28" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="TR" literacyPercent="94.1" population="84119500">	<!--Türkiye-->
+		<languagePopulation type="tr" populationPercent="93" officialStatus="official"/>	<!--Turkish-->
+		<languagePopulation type="en" populationPercent="17"/>	<!--English-->
+		<languagePopulation type="ku" populationPercent="5.5"/>	<!--Kurdish-->
+		<languagePopulation type="apc" populationPercent="5.2"/>	<!--Levantine Arabic-->
+		<languagePopulation type="zza" populationPercent="1.4"/>	<!--Zaza-->
+		<languagePopulation type="kaa" populationPercent="0.1"/>	<!--Kara-Kalpak-->
+		<languagePopulation type="kbd" populationPercent="0.77"/>	<!--Kabardian-->
+		<languagePopulation type="az" populationPercent="0.74"/>	<!--Azerbaijani-->
+		<languagePopulation type="az_Arab" populationPercent="0.65"/>	<!--Azerbaijani (Arabic)-->
+		<languagePopulation type="ar" populationPercent="0.56"/>	<!--Arabic-->
+		<languagePopulation type="bgx" populationPercent="0.46"/>	<!--Balkan Gagauz Turkish-->
+		<languagePopulation type="bg" populationPercent="0.42"/>	<!--Bulgarian-->
+		<languagePopulation type="ady" populationPercent="0.39"/>	<!--Adyghe-->
+		<languagePopulation type="kiu" populationPercent="0.19"/>	<!--Kirmanjki-->
+		<languagePopulation type="hy" populationPercent="0.056"/>	<!--Armenian-->
+		<languagePopulation type="ka" populationPercent="0.056"/>	<!--Georgian-->
+		<languagePopulation type="sr_Latn" writingPercent="5" populationPercent="0.028"/>	<!--Serbian (Latin)-->
+		<languagePopulation type="lzz" populationPercent="0.028"/>	<!--Laz-->
+		<languagePopulation type="sq" populationPercent="0.021"/>	<!--Albanian-->
+		<languagePopulation type="ab" populationPercent="0.0048"/>	<!--Abkhazian-->
+		<languagePopulation type="el" populationPercent="0.0048"/>	<!--Greek-->
+		<languagePopulation type="tru" populationPercent="0.0036"/>	<!--Turoyo-->
+		<languagePopulation type="uz" populationPercent="0.0024"/>	<!--Uzbek-->
+		<languagePopulation type="ky_Latn" populationPercent="0.0014"/>	<!--Kyrgyz (Latin)-->
+		<languagePopulation type="kk" populationPercent="0.0007"/>	<!--Kazakh-->
+	</territory>
+	<territory type="TT" literacyPercent="98.8" population="1408970">	<!--Trinidad & Tobago-->
+		<languagePopulation type="en" populationPercent="88" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="es" populationPercent="0.29"/>	<!--Spanish-->
+	</territory>
+	<territory type="TV" literacyPercent="95" population="11733">	<!--Tuvalu-->
+		<languagePopulation type="tvl" populationPercent="85" officialStatus="official"/>	<!--Tuvalu-->
+		<languagePopulation type="en" populationPercent="9.1" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="TW" literacyPercent="96.1" population="23595300">	<!--Taiwan-->
+		<languagePopulation type="zh_Hant" populationPercent="95" officialStatus="official"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="trv" populationPercent="0.02"/>	<!--Taroko-->
+	</territory>
+	<territory type="TZ" literacyPercent="67.8" population="67462100">	<!--Tanzania-->
+		<languagePopulation type="sw" populationPercent="90" officialStatus="official"/>	<!--Swahili-->
+		<languagePopulation type="en" populationPercent="69" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="suk" populationPercent="8.7"/>	<!--Sukuma-->
+		<languagePopulation type="nym" populationPercent="3.3"/>	<!--Nyamwezi-->
+		<languagePopulation type="kde" populationPercent="2.5"/>	<!--Makonde-->
+		<languagePopulation type="bez" populationPercent="1.7"/>	<!--Bena-->
+		<languagePopulation type="ksb" populationPercent="1.7"/>	<!--Shambala-->
+		<languagePopulation type="mas" literacyPercent="50" populationPercent="1.5"/>	<!--Masai-->
+		<languagePopulation type="mgy" populationPercent="1.4"/>	<!--Mbunga-->
+		<languagePopulation type="asa" populationPercent="1.2"/>	<!--Asu-->
+		<languagePopulation type="lag" populationPercent="0.87"/>	<!--Langi-->
+		<languagePopulation type="jmc" populationPercent="0.74"/>	<!--Machame-->
+		<languagePopulation type="rof" populationPercent="0.74"/>	<!--Rombo-->
+		<languagePopulation type="vun" populationPercent="0.74"/>	<!--Vunjo-->
+		<languagePopulation type="rwk" populationPercent="0.22"/>	<!--Rwa-->
+		<languagePopulation type="sbp" literacyPercent="1" populationPercent="0.2"/>	<!--Sangu-->
+	</territory>
+	<territory type="UA" literacyPercent="99.7" population="35661800">	<!--Ukraine-->
+		<languagePopulation type="uk" populationPercent="65" officialStatus="official"/>	<!--Ukrainian-->
+		<languagePopulation type="ru" populationPercent="46" officialStatus="de_facto_official"/>	<!--Russian-->
+		<languagePopulation type="pl" populationPercent="2.4"/>	<!--Polish-->
+		<languagePopulation type="yi" populationPercent="1.3"/>	<!--Yiddish-->
+		<languagePopulation type="rue" populationPercent="1.2"/>	<!--Rusyn-->
+		<languagePopulation type="be" populationPercent="0.83"/>	<!--Belarusian-->
+		<languagePopulation type="crh" populationPercent="0.56"/>	<!--Crimean Tatar-->
+		<languagePopulation type="ro" populationPercent="0.52"/>	<!--Romanian-->
+		<languagePopulation type="bg" populationPercent="0.49"/>	<!--Bulgarian-->
+		<languagePopulation type="tr" populationPercent="0.42"/>	<!--Turkish-->
+		<languagePopulation type="hu" populationPercent="0.37"/>	<!--Hungarian-->
+		<languagePopulation type="el" populationPercent="0.02"/>	<!--Greek-->
+	</territory>
+	<territory type="UG" literacyPercent="73.2" population="49283000">	<!--Uganda-->
+		<languagePopulation type="sw" populationPercent="75" officialStatus="official"/>	<!--Swahili-->
+		<languagePopulation type="lg" populationPercent="13"/>	<!--Ganda-->
+		<languagePopulation type="nyn" populationPercent="6.3"/>	<!--Nyankole-->
+		<languagePopulation type="cgg" populationPercent="5.4"/>	<!--Chiga-->
+		<languagePopulation type="xog" populationPercent="5.3"/>	<!--Soga-->
+		<languagePopulation type="en" populationPercent="3.9" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="teo" populationPercent="3.9"/>	<!--Teso-->
+		<languagePopulation type="laj" populationPercent="3.8"/>	<!--Lango [Uganda]-->
+		<languagePopulation type="ach" populationPercent="3.7"/>	<!--Acoli-->
+		<languagePopulation type="myx" populationPercent="2.9"/>	<!--Masaaba-->
+		<languagePopulation type="rw" populationPercent="2.1"/>	<!--Kinyarwanda-->
+		<languagePopulation type="ttj" populationPercent="1.9"/>	<!--Tooro-->
+		<languagePopulation type="hi" populationPercent="0.0045"/>	<!--Hindi-->
+	</territory>
+	<territory type="UM" literacyPercent="99" population="316">	<!--U.S. Outlying Islands-->
+		<languagePopulation type="en" populationPercent="100" officialStatus="de_facto_official"/>	<!--English-->
+	</territory>
+	<territory type="US" literacyPercent="99" population="341963000">	<!--United States-->
+		<languagePopulation type="en" populationPercent="96" officialStatus="de_facto_official"/>	<!--English-->
+		<languagePopulation type="es" populationPercent="9.6" officialStatus="official_regional"/>	<!--Spanish-->
+		<languagePopulation type="zh_Hant" populationPercent="0.69"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="fr" populationPercent="0.56"/>	<!--French-->
+		<languagePopulation type="de" populationPercent="0.47"/>	<!--German-->
+		<languagePopulation type="fil" populationPercent="0.42"/>	<!--Filipino-->
+		<languagePopulation type="it" populationPercent="0.34"/>	<!--Italian-->
+		<languagePopulation type="vi" populationPercent="0.34"/>	<!--Vietnamese-->
+		<languagePopulation type="ko" populationPercent="0.3"/>	<!--Korean-->
+		<languagePopulation type="ru" populationPercent="0.24"/>	<!--Russian-->
+		<languagePopulation type="nv" populationPercent="0.05"/>	<!--Navajo-->
+		<languagePopulation type="yi" populationPercent="0.049"/>	<!--Yiddish-->
+		<languagePopulation type="pdc" populationPercent="0.039"/>	<!--Pennsylvania German-->
+		<languagePopulation type="hnj" populationPercent="0.035"/>	<!--Hmong Njua-->
+		<languagePopulation type="haw" populationPercent="0.0089" officialStatus="official_regional"/>	<!--Hawaiian-->
+		<languagePopulation type="frc" populationPercent="0.0084"/>	<!--Cajun French-->
+		<languagePopulation type="chr" writingPercent="5" populationPercent="0.0077"/>	<!--Cherokee-->
+		<languagePopulation type="esu" populationPercent="0.0063"/>	<!--Central Yupik-->
+		<languagePopulation type="dak" populationPercent="0.0059"/>	<!--Dakota-->
+		<languagePopulation type="cho" populationPercent="0.0033"/>	<!--Choctaw-->
+		<languagePopulation type="lkt" populationPercent="0.0024"/>	<!--Lakota-->
+		<languagePopulation type="ik" writingPercent="5" populationPercent="0.0023"/>	<!--Inupiaq-->
+		<languagePopulation type="mus" populationPercent="0.0012"/>	<!--Muscogee-->
+		<languagePopulation type="io" populationPercent="0"/>	<!--Ido-->
+		<languagePopulation type="cic" populationPercent="0"/>	<!--Chickasaw-->
+		<languagePopulation type="cad" populationPercent="0"/>	<!--Caddo-->
+		<languagePopulation type="jbo" populationPercent="0"/>	<!--Lojban-->
+		<languagePopulation type="osa" populationPercent="0"/>	<!--Osage-->
+	</territory>
+	<territory type="UY" literacyPercent="98.1" population="3425330">	<!--Uruguay-->
+		<languagePopulation type="es" populationPercent="88" officialStatus="official"/>	<!--Spanish-->
+	</territory>
+	<territory type="UZ" literacyPercent="99.4" population="36520600">	<!--Uzbekistan-->
+		<languagePopulation type="uz" populationPercent="85" officialStatus="official"/>	<!--Uzbek-->
+		<languagePopulation type="uz_Cyrl" populationPercent="15" officialStatus="official"/>	<!--Uzbek (Cyrillic)-->
+		<languagePopulation type="ru" populationPercent="14"/>	<!--Russian-->
+		<languagePopulation type="kaa" populationPercent="2.1"/>	<!--Kara-Kalpak-->
+		<languagePopulation type="tr" populationPercent="0.62"/>	<!--Turkish-->
+	</territory>
+	<territory type="VA" literacyPercent="100" population="1000">	<!--Vatican City-->
+		<languagePopulation type="it" populationPercent="82" officialStatus="de_facto_official"/>	<!--Italian-->
+		<languagePopulation type="la" populationPercent="82"/>	<!--Latin-->
+	</territory>
+	<territory type="VC" literacyPercent="96" population="100647">	<!--St. Vincent & Grenadines-->
+		<languagePopulation type="en" populationPercent="96" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="VE" literacyPercent="95.5" population="31250300">	<!--Venezuela-->
+		<languagePopulation type="es" populationPercent="82" officialStatus="official"/>	<!--Spanish-->
+		<languagePopulation type="yrl" populationPercent="0.0064"/>	<!--Nheengatu-->
+	</territory>
+	<territory type="VG" literacyPercent="97.8" population="40102">	<!--British Virgin Islands-->
+		<languagePopulation type="en" populationPercent="98" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="VI" literacyPercent="99" population="104377">	<!--U.S. Virgin Islands-->
+		<languagePopulation type="en" populationPercent="75" officialStatus="de_facto_official"/>	<!--English-->
+	</territory>
+	<territory type="VN" literacyPercent="93.4" population="105759000">	<!--Vietnam-->
+		<languagePopulation type="vi" populationPercent="86" officialStatus="official"/>	<!--Vietnamese-->
+		<languagePopulation type="zh_Hant" populationPercent="1.1"/>	<!--Chinese (Traditional)-->
+		<languagePopulation type="blt" populationPercent="0.69"/>	<!--Tai Dam-->
+		<languagePopulation type="hnj" populationPercent="0.17"/>	<!--Hmong Njua-->
+		<languagePopulation type="cjm" literacyPercent="60" populationPercent="0.089"/>	<!--Eastern Cham-->
+	</territory>
+	<territory type="VU" literacyPercent="83.2" population="318007">	<!--Vanuatu-->
+		<languagePopulation type="bi" populationPercent="90" officialStatus="official"/>	<!--Bislama-->
+		<languagePopulation type="en" populationPercent="83" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="fr" populationPercent="50" officialStatus="official"/>	<!--French-->
+	</territory>
+	<territory type="WF" literacyPercent="50" population="15964">	<!--Wallis & Futuna-->
+		<languagePopulation type="wls" populationPercent="59"/>	<!--Wallisian-->
+		<languagePopulation type="fr" populationPercent="48" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="fud" populationPercent="30"/>	<!--East Futuna-->
+	</territory>
+	<territory type="WS" literacyPercent="98.8" population="208853">	<!--Samoa-->
+		<languagePopulation type="sm" populationPercent="100" officialStatus="official"/>	<!--Samoan-->
+		<languagePopulation type="en" populationPercent="2.1" officialStatus="official"/>	<!--English-->
+	</territory>
+	<territory type="XK" literacyPercent="91.9" population="1977090">	<!--Kosovo-->
+		<languagePopulation type="sq" populationPercent="92" officialStatus="official"/>	<!--Albanian-->
+		<languagePopulation type="aln" populationPercent="74"/>	<!--Gheg Albanian-->
+		<languagePopulation type="sr" populationPercent="5" officialStatus="official"/>	<!--Serbian-->
+		<languagePopulation type="sr_Latn" populationPercent="5" officialStatus="official"/>	<!--Serbian (Latin)-->
+	</territory>
+	<territory type="YE" literacyPercent="65.3" population="32140400">	<!--Yemen-->
+		<languagePopulation type="ar" populationPercent="74" officialStatus="official"/>	<!--Arabic-->
+		<languagePopulation type="en" populationPercent="9"/>	<!--English-->
+	</territory>
+	<territory type="YT" literacyPercent="80.8" population="194000">	<!--Mayotte-->
+		<languagePopulation type="swb" populationPercent="88"/>	<!--Comorian-->
+		<languagePopulation type="fr" populationPercent="57" officialStatus="official"/>	<!--French-->
+		<languagePopulation type="buc" populationPercent="23"/>	<!--Bushi-->
+		<languagePopulation type="sw" populationPercent="1.4"/>	<!--Swahili-->
+	</territory>
+	<territory type="ZA" literacyPercent="93" population="60442600">	<!--South Africa-->
+		<languagePopulation type="en" literacyPercent="99" populationPercent="31" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="zu" literacyPercent="50" populationPercent="24" officialStatus="official_regional"/>	<!--Zulu-->
+		<languagePopulation type="xh" literacyPercent="50" populationPercent="18" officialStatus="official_regional"/>	<!--Xhosa-->
+		<languagePopulation type="af" literacyPercent="99" populationPercent="13" officialStatus="official_regional"/>	<!--Afrikaans-->
+		<languagePopulation type="nso" literacyPercent="50" populationPercent="9.4" officialStatus="official_regional"/>	<!--Northern Sotho-->
+		<languagePopulation type="tn" literacyPercent="50" populationPercent="8.2" officialStatus="official_regional"/>	<!--Tswana-->
+		<languagePopulation type="st" literacyPercent="50" populationPercent="7.9" officialStatus="official_regional"/>	<!--Southern Sotho-->
+		<languagePopulation type="ts" literacyPercent="50" populationPercent="4.4" officialStatus="official_regional"/>	<!--Tsonga-->
+		<languagePopulation type="ss" literacyPercent="50" populationPercent="2.7" officialStatus="official_regional"/>	<!--Swati-->
+		<languagePopulation type="ve" literacyPercent="50" populationPercent="2.3" officialStatus="official_regional"/>	<!--Venda-->
+		<languagePopulation type="hi" literacyPercent="69" populationPercent="2"/>	<!--Hindi-->
+		<languagePopulation type="nr" literacyPercent="50" populationPercent="1.6" officialStatus="official_regional"/>	<!--South Ndebele-->
+		<languagePopulation type="sw" literacyPercent="50" populationPercent="0.0017"/>	<!--Swahili-->
+	</territory>
+	<territory type="ZM" literacyPercent="61.4" population="20799100">	<!--Zambia-->
+		<languagePopulation type="bem" populationPercent="31"/>	<!--Bemba-->
+		<languagePopulation type="en" populationPercent="16" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="ny" populationPercent="15"/>	<!--Nyanja-->
+		<languagePopulation type="loz" populationPercent="6"/>	<!--Lozi-->
+	</territory>
+	<territory type="ZW" literacyPercent="83.6" population="17150400">	<!--Zimbabwe-->
+		<languagePopulation type="sn" populationPercent="81" officialStatus="official"/>	<!--Shona-->
+		<languagePopulation type="en" populationPercent="42" officialStatus="official"/>	<!--English-->
+		<languagePopulation type="nd" populationPercent="12" officialStatus="official"/>	<!--North Ndebele-->
+		<languagePopulation type="mxc" populationPercent="6.5"/>	<!--Manyika-->
+		<languagePopulation type="ndc" populationPercent="6.1"/>	<!--Ndau-->
+		<languagePopulation type="kck" populationPercent="5.3"/>	<!--Kalanga-->
+		<languagePopulation type="ny" populationPercent="1.9"/>	<!--Nyanja-->
+		<languagePopulation type="ve" populationPercent="0.64"/>	<!--Venda-->
+		<languagePopulation type="tn" populationPercent="0.22"/>	<!--Tswana-->
+	</territory>
+	<territory type="ZZ" literacyPercent="0" population="0">	<!--Unknown Region-->
+	</territory>
+</territoryInfo>
+<!-- End of Generated Data: see https://cldr.unicode.org/development/updating-codes -->

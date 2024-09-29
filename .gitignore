@@ -16,3 +16,5 @@ __pycache__/
 wget-log
 *.kate-swp
 *.log
+test.py
+*.mmdb

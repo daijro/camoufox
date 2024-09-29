@@ -18,7 +18,9 @@ from .addons import (
 )
 from .exceptions import InvalidPropertyType, UnknownProperty
 from .fingerprints import from_browserforge, generate
-from .pkgman import OS_NAME, get_path
+from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
+from .locale import geoip_allowed, get_geolocation, normalize_locale
+from .pkgman import OS_NAME, get_path, installed_verstr
 from .xpi_dl import add_default_addons
 
 LAUNCH_FILE = {
@@ -151,6 +153,25 @@ def update_fonts(config: Dict[str, Any], target_os: str) -> None:
         config['fonts'] = fonts
 
 
+def merge_into(target: Dict[str, Any], source: Dict[str, Any]) -> None:
+    """
+    Merges new keys/values from the source dictionary into the target dictionary.
+    Given that the key does not exist in the target dictionary.
+    """
+    for key, value in source.items():
+        if key not in target:
+            target[key] = value
+
+
+def set_into(target: Dict[str, Any], key: str, value: Any) -> None:
+    """
+    Sets a new key/value into the target dictionary.
+    Given that the key does not exist in the target dictionary.
+    """
+    if key not in target:
+        target[key] = value
+
+
 def get_launch_options(
     *,
     config: Optional[Dict[str, Any]] = None,
@@ -158,20 +179,25 @@ def get_launch_options(
     fingerprint: Optional[Fingerprint] = None,
     exclude_addons: Optional[List[DefaultAddons]] = None,
     screen: Optional[Screen] = None,
+    geoip: Optional[Union[str, bool]] = None,
+    locale: Optional[str] = None,
     os: Optional[ListOrString] = None,
-    user_agent: Optional[ListOrString] = None,
     fonts: Optional[List[str]] = None,
     args: Optional[List[str]] = None,
     executable_path: Optional[str] = None,
     env: Optional[Dict[str, Union[str, float, bool]]] = None,
     block_images: Optional[bool] = None,
     block_webrtc: Optional[bool] = None,
+    allow_webgl: Optional[bool] = None,
+    proxy: Optional[Dict[str, str]] = None,
+    ff_version: Optional[int] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
+    launch_options: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Builds the launch options for the Camoufox browser.
     """
-    # Validate the config
+    # Build the config
     if config is None:
         config = {}
 
@@ -179,6 +205,8 @@ def get_launch_options(
         addons = []
     if args is None:
         args = []
+    if firefox_user_prefs is None:
+        firefox_user_prefs = {}
 
     # Add the default addons
     add_default_addons(addons, exclude_addons)
@@ -187,42 +215,74 @@ def get_launch_options(
     if addons:
         confirm_paths(addons)
 
+    # Get the Firefox version
+    if ff_version:
+        ff_version_str = str(ff_version)
+    else:
+        ff_version_str = installed_verstr().split('.', 1)[0]
+
     # Generate new fingerprint
     if fingerprint is None:
-        config = {
-            **generate(
+        merge_into(
+            config,
+            generate(
+                ff_version=ff_version_str,
                 screen=screen,
                 os=os,
-                user_agent=user_agent,
             ),
-            **config,
-        }
+        )
     else:
-        config = {
-            **from_browserforge(fingerprint),
-            **config,
-        }
+        merge_into(
+            config,
+            from_browserforge(fingerprint, ff_version_str),
+        )
+    target_os = get_target_os(config)
 
     # Set a random window.history.length
-    config['window.history.length'] = randrange(1, 6)
-
-    if fonts:
-        config['fonts'] = fonts
-
-    validate_config(config)
+    set_into(config, 'window.history.length', randrange(1, 6))  # nosec
 
     # Update fonts list
-    target_os = get_target_os(config)
+    if fonts:
+        config['fonts'] = fonts
     update_fonts(config, target_os)
 
-    # Set Firefox user preferences
-    if firefox_user_prefs is None:
-        firefox_user_prefs = {}
+    # Set geolocation
+    if geoip:
+        geoip_allowed()  # Assert that geoip is allowed
 
+        if geoip is True:
+            # Find the user's IP address
+            if proxy:
+                geoip = public_ip(Proxy(**proxy).as_string())
+            else:
+                geoip = public_ip()
+
+        # Spoof WebRTC if not blocked
+        if not block_webrtc:
+            if valid_ipv4(geoip):
+                set_into(config, 'webrtc:ipv4', geoip)
+                firefox_user_prefs['network.dns.disableIPv6'] = True
+            elif valid_ipv6(geoip):
+                set_into(config, 'webrtc:ipv6', geoip)
+
+        geolocation = get_geolocation(geoip)
+        config.update(geolocation.as_config())
+
+    # Set locale
+    if locale:
+        parsed_locale = normalize_locale(locale)
+        config.update(parsed_locale.as_config())
+
+    # Validate the config
+    validate_config(config)
+
+    # Set Firefox user preferences
     if block_images:
         firefox_user_prefs['permissions.default.image'] = 2
     if block_webrtc:
         firefox_user_prefs['media.peerconnection.enabled'] = False
+    if allow_webgl:
+        firefox_user_prefs['webgl.disabled'] = False
 
     # Launch
     threaded_try_load_addons(get_debug_port(args), addons)
@@ -235,4 +295,6 @@ def get_launch_options(
         "args": args,
         "env": env_vars,
         "firefox_user_prefs": firefox_user_prefs,
+        "proxy": proxy,
+        **(launch_options if launch_options is not None else {}),
     }

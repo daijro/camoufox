@@ -1,7 +1,8 @@
 # Mappings of Browserforge fingerprints to Camoufox config properties.
 
 navigator:
-  # Note: Browserforge tends to have outdated UAs
+  # Note: Browserforge tends to have outdated UAs.
+  # The version will be replaced in Camoufox.
   userAgent: navigator.userAgent
   # userAgentData not in Firefox
   doNotTrack: navigator.doNotTrack
@@ -10,8 +11,9 @@ navigator:
   appVersion: navigator.appVersion
   oscpu: navigator.oscpu
   # webdriver is always True
-  language: navigator.language
-  languages: navigator.languages
+  # Locale is now implemented separately:
+  #   language: navigator.language
+  #   languages: navigator.languages
   platform: navigator.platform
   # deviceMemory not in Firefox
   hardwareConcurrency: navigator.hardwareConcurrency
@@ -26,26 +28,27 @@ navigator:
 
 screen:
   # hasHDR is not implemented in Camoufox
-  availHeight: screen.availHeight
-  availWidth: screen.availWidth
-  availTop: screen.availTop
-  availLeft: screen.availLeft
-  height: screen.height
-  width: screen.width
+  # Screen size values seem to be inconsistent, and will not be implemented for the time being.
+  #   availHeight: screen.availHeight
+  #   availWidth: screen.availWidth
+  #   availTop: screen.availTop
+  #   availLeft: screen.availLeft
+  #   height: screen.height
+  #   width: screen.width
   colorDepth: screen.colorDepth
   pixelDepth: screen.pixelDepth
   # devicePixelRatio is not recommended. Any value other than 1.0 is suspicious.
   pageXOffset: screen.pageXOffset
   pageYOffset: screen.pageYOffset
   # Disable viewport hijacking temporarily.
-  # outerHeight: window.outerHeight
-  # outerWidth: window.outerWidth
-  # innerHeight: window.innerHeight
-  # innerWidth: window.innerWidth
+  #   outerHeight: window.outerHeight
+  #   outerWidth: window.outerWidth
+  #   innerHeight: window.innerHeight
+  #   innerWidth: window.innerWidth
   screenX: window.screenX
-  # These seem to not be generating properly in Browserforge:
-  # clientWidth: document.body.clientWidth
-  # clientHeight: document.body.clientHeight
+  # Tends to generate out of bounds (network inconsistencies):
+  #   clientWidth: document.body.clientWidth
+  #   clientHeight: document.body.clientHeight
 
 videoCard:
   renderer: webGl:renderer
@@ -53,7 +56,7 @@ videoCard:
 
 headers:
   # headers.User-Agent is redundant with navigator.userAgent
-  Accept-Language: headers.Accept-Language
+  # headers.Accept-Language is redundant with locale:*
   Accept-Encoding: headers.Accept-Encoding
 
 battery:

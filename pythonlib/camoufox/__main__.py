@@ -6,11 +6,13 @@ Adapted from https://github.com/daijro/hrequests/blob/main/hrequests/__main__.py
 
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
+from os import environ
 from typing import Optional
 
 import click
 
-from .pkgman import CamoufoxFetcher, installed_verstr, rprint
+from .locale import download_mmdb, remove_mmdb
+from .pkgman import INSTALL_DIR, CamoufoxFetcher, installed_verstr, rprint
 
 
 class CamoufoxUpdate(CamoufoxFetcher):
@@ -71,6 +73,8 @@ def fetch() -> None:
     Fetch the latest version of Camoufox
     """
     CamoufoxUpdate().update()
+    # Fetch the GeoIP database
+    download_mmdb()
 
 
 @cli.command(name='remove')
@@ -80,6 +84,8 @@ def remove() -> None:
     """
     if not CamoufoxUpdate().cleanup():
         rprint("Camoufox binaries not found!", fg="red")
+    # Remove the GeoIP database
+    remove_mmdb()
 
 
 @cli.command(name='test')
@@ -90,11 +96,19 @@ def test(url: Optional[str] = None) -> None:
     """
     from .sync_api import Camoufox
 
-    with Camoufox(headless=False) as browser:
+    with Camoufox(headless=False, env=environ) as browser:
         page = browser.new_page()
         if url:
             page.goto(url)
         page.pause()  # Open the Playwright inspector
+
+
+@cli.command(name='path')
+def path() -> None:
+    """
+    Display the path to the Camoufox executable
+    """
+    rprint(INSTALL_DIR, fg="green")
 
 
 @cli.command(name='version')

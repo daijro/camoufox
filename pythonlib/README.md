@@ -13,10 +13,12 @@
 First, install the `camoufox` package:
 
 ```bash
-pip install -U camoufox
+pip install -U camoufox[geoip]
 ```
 
-Then, download the Camoufox browser:
+The `geoip` parameter is optional, but heavily recommended if you are using proxies. It will download an extra dataset to determine the user's longitude, latitude, timezone, country, & locale.
+
+Next, download the Camoufox browser:
 
 **Windows**
 
@@ -85,7 +87,7 @@ Accepts all Playwright Firefox launch options, along with the following:
 
 Parameters:
     config (Optional[Dict[str, Any]]):
-        Camoufox properties to use. (read https://github.com/daijro/camoufox/blob/main/README.md)
+        Camoufox properties to use.
     os (Optional[ListOrString]):
         Operating system to use for the fingerprint generation.
         Can be "windows", "macos", or "linux", or a list of these to choose from randomly.
@@ -94,28 +96,40 @@ Parameters:
         Whether to block all images.
     block_webrtc (Optional[bool]):
         Whether to block WebRTC entirely.
-    firefox_user_prefs (Optional[Dict[str, Any]]):
-        Firefox user preferences to set.
+    allow_webgl (Optional[bool]):
+        Whether to allow WebGL. To prevent leaks, only use this for special cases.
+    geoip (Optional[Union[str, bool]]):
+        Calculate longitude, latitude, timezone, country, & locale based on the IP address.
+        Pass the target IP address to use, or `True` to find the IP address automatically.
+    locale (Optional[str]):
+        Locale to use in Camoufox.
     addons (Optional[List[str]]):
-        List of Firefox addons to use. 
-    fingerprint (Optional[Fingerprint]):
-        BrowserForge fingerprint to use.
-        If not provided, a random fingerprint will be generated based on the provided os & user_agent.
-    exclude_addons (Optional[List[DefaultAddons]]):
-        Default addons to exclude. Passed as a list of camoufox.DefaultAddons enums.
-    user_agent (Optional[ListOrString]):
-        User agent to use for the fingerprint generation. Either a string or a list of strings.
-        Note: This must be a valid BrowserForge User-Agent string.
-              To use a different user agent, set the "navigator.userAgent" preference in `config`.
+        List of Firefox addons to use.
     fonts (Optional[List[str]]):
         Fonts to load into Camoufox (in addition to the default fonts for the target `os`).
         Takes a list of font family names that are installed on the system.
+    exclude_addons (Optional[List[DefaultAddons]]):
+        Default addons to exclude. Passed as a list of camoufox.DefaultAddons enums.
+    fingerprint (Optional[Fingerprint]):
+        Use a custom BrowserForge fingerprint. Note: Not all values will be implemented.
+        If not provided, a random fingerprint will be generated based on the provided os & user_agent.
+    screen (Optional[Screen]):
+        NOT YET IMPLEMENTED: Constrains the screen dimensions of the generated fingerprint.
+        Takes a browserforge.fingerprints.Screen instance.
+    executable_path (Optional[str]):
+        Custom Camoufox browser executable path.
+    firefox_user_prefs (Optional[Dict[str, Any]]):
+        Firefox user preferences to set.
+    proxy (Optional[Dict[str, str]]):
+        Proxy to use for the browser.
+        Note: If geoip is True, a request will be sent through this proxy to find the target IP.
+    ff_version (Optional[int]):
+        Firefox version to use. Defaults to the current Camoufox version.
+        To prevent leaks, only use this for special cases.
     args (Optional[List[str]]):
         Arguments to pass to the browser.
     env (Optional[Dict[str, Union[str, float, bool]]]):
         Environment variables to set.
-    executable_path (Optional[str]):
-        Custom Camoufox browser executable path.
     **launch_options (Dict[str, Any]):
         Additional Firefox launch options.
 ```
@@ -139,6 +153,39 @@ with Camoufox(
 ) as browser:
     page = browser.new_page()
     page.goto("https://www.browserscan.net/webrtc")
+```
+
+<hr width=50>
+
+### GeoIP & Proxy Support
+
+By passing `geoip=True`, or passing in a target IP address, Camoufox will automatically use the target IP's longitude, latitude, timezone, country, locale, & spoof the WebRTC IP address.
+
+It will also calculate and spoof the browser's language based on the distribution of language speakers in the target region.
+
+#### Installation
+
+Install Camoufox with the `geoip` extra:
+
+```bash
+pip install -U camoufox[geoip]
+```
+
+#### Usage
+
+Pass in the proxy dictionary as you would with Playwright's `proxy` parameter:
+
+```python
+with Camoufox(
+    geoip=True,
+    proxy={
+        'server': 'http://example.com:8080',
+        'username': 'username',
+        'password': 'password'
+    }
+) as browser:
+    page = browser.new_page()
+    page.goto("https://www.browserscan.net")
 ```
 
 <hr width=50>

@@ -52,3 +52,51 @@ class MissingDebugPort(ValueError):
     """
 
     ...
+
+
+class LocaleError(Exception):
+    """
+    Raised when the locale is invalid.
+    """
+
+    ...
+
+
+class InvalidIP(Exception):
+    """
+    Raised when an IP address is invalid.
+    """
+
+    ...
+
+
+class InvalidProxy(Exception):
+    """
+    Raised when a proxy is invalid.
+    """
+
+    ...
+
+
+class UnknownIPLocation(LocaleError):
+    """
+    Raised when the location of an IP is unknown.
+    """
+
+    ...
+
+
+class UnknownTerritory(LocaleError):
+    """
+    Raised when the territory is unknown.
+    """
+
+    ...
+
+
+class NotInstalledGeoIPExtra(ImportError):
+    """
+    Raised when the geoip2 module is not installed.
+    """
+
+    ...
