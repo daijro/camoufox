@@ -7,7 +7,7 @@ import sys
 import tempfile
 from io import BufferedWriter, BytesIO
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union
 from zipfile import ZipFile
 
 import click
@@ -34,12 +34,12 @@ ARCH_MAP: dict[str, str] = {
     'armv6l': 'arm64',
     'armv7l': 'arm64',
 }
-OS_MAP: dict[str, str] = {'darwin': 'mac', 'linux': 'lin', 'win32': 'win'}
+OS_MAP: dict[str, Literal['mac', 'win', 'lin']] = {'darwin': 'mac', 'linux': 'lin', 'win32': 'win'}
 
 if sys.platform not in OS_MAP:
     raise UnsupportedOS(f"OS {sys.platform} is not supported")
 
-OS_NAME: str = OS_MAP[sys.platform]
+OS_NAME: Literal['mac', 'win', 'lin'] = OS_MAP[sys.platform]
 
 INSTALL_DIR: Path = Path(user_cache_dir("camoufox"))
 
@@ -179,7 +179,7 @@ class CamoufoxFetcher:
 
             # Set permissions on INSTALL_DIR
             if OS_NAME != 'win':
-                os.system(f'chmod -R 755 {shlex.quote(str(INSTALL_DIR))}')
+                os.system(f'chmod -R 755 {shlex.quote(str(INSTALL_DIR))}')  # nosec
 
             rprint('\nCamoufox successfully installed.', fg="yellow")
         except Exception as e:

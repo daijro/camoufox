@@ -2,7 +2,7 @@ import os
 import sys
 from os import environ
 from random import randrange
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
 import orjson
@@ -38,7 +38,7 @@ def get_env_vars(
     """
     Gets a dictionary of environment variables for Camoufox.
     """
-    env_vars = {}
+    env_vars: Dict[str, Union[str, float, bool]] = {}
     try:
         updated_config_data = orjson.dumps(config_map)
     except orjson.JSONEncodeError as e:
@@ -46,7 +46,7 @@ def get_env_vars(
         sys.exit(1)
 
     # Split the config into chunks
-    chunk_size = 2047 if OS_NAME == 'windows' else 32767
+    chunk_size = 2047 if OS_NAME == 'win' else 32767
     config_str = updated_config_data.decode('utf-8')
 
     for i in range(0, len(config_str), chunk_size):
@@ -58,7 +58,7 @@ def get_env_vars(
             print(f"Error setting {env_name}: {e}")
             sys.exit(1)
 
-    if OS_NAME == 'linux':
+    if OS_NAME == 'lin':
         fontconfig_path = get_path(os.path.join("fontconfig", user_agent_os))
         env_vars['FONTCONFIG_PATH'] = fontconfig_path
 
@@ -115,7 +115,7 @@ def validate_type(value: Any, expected_type: str) -> bool:
         return False
 
 
-def get_target_os(config: Dict[str, Any]) -> str:
+def get_target_os(config: Dict[str, Any]) -> Literal['mac', 'win', 'lin']:
     """
     Gets the OS from the config if the user agent is set,
     otherwise returns the OS of the current system.
@@ -125,7 +125,7 @@ def get_target_os(config: Dict[str, Any]) -> str:
     return OS_NAME
 
 
-def determine_ua_os(user_agent: str) -> str:
+def determine_ua_os(user_agent: str) -> Literal['mac', 'win', 'lin']:
     """
     Determines the OS from the user agent string.
     """
