@@ -159,12 +159,12 @@ inline std::optional<bool> GetBool(const std::string& key) {
 }
 
 inline std::optional<std::array<uint32_t, 4>> GetRect(
-    const std::string& top, const std::string& left, const std::string& height,
-    const std::string& width) {
+    const std::string& left, const std::string& top, const std::string& width,
+    const std::string& height) {
   // Make top and left default to 0
   std::array<std::optional<uint32_t>, 4> values = {
-      GetUint32(top).value_or(0), GetUint32(left).value_or(0),
-      GetUint32(height), GetUint32(width)};
+      GetUint32(left).value_or(0), GetUint32(top).value_or(0),
+      GetUint32(width), GetUint32(height)};
 
   // If height or width is std::nullopt, return std::nullopt
   if (!values[2].has_value() || !values[3].has_value()) {
@@ -185,10 +185,10 @@ inline std::optional<std::array<uint32_t, 4>> GetRect(
 }
 
 inline std::optional<std::array<int32_t, 4>> GetInt32Rect(
-    const std::string& top, const std::string& left, const std::string& height,
-    const std::string& width) {
+    const std::string& left, const std::string& top, const std::string& width,
+    const std::string& height) {
   // Calls GetRect but casts to int32_t
-  if (auto optValue = GetRect(top, left, height, width)) {
+  if (auto optValue = GetRect(left, top, width, height)) {
     std::array<int32_t, 4> result;
     std::transform(optValue->begin(), optValue->end(), result.begin(),
                    [](const auto& val) { return static_cast<int32_t>(val); });

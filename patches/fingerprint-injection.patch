@@ -28,7 +28,7 @@ index 807cb4ec25..3df0e0f70f 100644
  
 +  if (doc->GetBodyElement() == this) {
 +    if (auto conf = MaskConfig::GetInt32Rect(
-+            "document.body.clientTop", "document.body.clientLeft",
++            "document.body.clientLeft", "document.body.clientTop",
 +            "document.body.clientWidth", "document.body.clientHeight")) {
 +      if (conf.has_value()) {
 +        auto values = conf.value();
@@ -394,8 +394,8 @@ index 4bd1e0c964..a5a95d3fdf 100644
  }
  
  CSSIntRect nsScreen::GetAvailRect() {
-+  auto rect = MaskConfig::GetRect("screen.availTop", "screen.availLeft",
-+                                  "screen.availHeight", "screen.availWidth");
++  auto rect = MaskConfig::GetRect("screen.availLeft", "screen.availTop",
++                                  "screen.availWidth", "screen.availHeight");
 +  if (rect.has_value()) {
 +    auto values = rect.value();
 +    return {values[0], values[1], values[2], values[3]};
