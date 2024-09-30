@@ -79,21 +79,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y msitools p7zip-full aria2
 
-      - name: Restore .mozbuild cache
-        uses: actions/cache/restore@v3
-        with:
-          path: ~/.mozbuild
-          key: mozbuild-${{ matrix.target }}
-
       - name: Setup and bootstrap
         run: |
           make setup-minimal
           make mozbootstrap
           mkdir -p dist
-
-      - name: List .mozbuild contents
-        run: |
-          ls -R ~/.mozbuild
 
       - name: Create swap space
         run: |
