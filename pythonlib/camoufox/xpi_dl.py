@@ -20,13 +20,13 @@ def add_default_addons(
     maybe_download_addons(addons, addons_list)
 
 
-def download_and_extract(url: str, extract_path: str) -> None:
+def download_and_extract(url: str, extract_path: str, name: str) -> None:
     """
     Downloads and extracts an addon from a given URL to a specified path
     """
     # Create a temporary file to store the downloaded zip
-    buffer = webdl(url, desc="Downloading addon")
-    unzip(buffer, extract_path)
+    buffer = webdl(url, desc=f"Downloading addon ({name})")
+    unzip(buffer, extract_path, f"Extracting addon ({name})")
 
 
 def get_addon_path(addon_name: str) -> str:
@@ -54,7 +54,7 @@ def maybe_download_addons(addons: List[DefaultAddons], addons_list: List[str]) -
         # Addon doesn't exist, create directory and download
         try:
             os.makedirs(addon_path, exist_ok=True)
-            download_and_extract(addon.value, addon_path)
+            download_and_extract(addon.value, addon_path, addon.name)
             # Add the new addon directory path to addons_list
             addons_list.append(addon_path)
         except Exception as e:

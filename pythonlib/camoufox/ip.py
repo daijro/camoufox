@@ -1,9 +1,13 @@
 import re
+import warnings
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Dict, Optional, Tuple
 
 import requests
+from urllib3 import disable_warnings
+from urllib3.exceptions import InsecureRequestWarning
 
 from .exceptions import InvalidIP, InvalidProxy
 
@@ -69,6 +73,13 @@ def validate_ip(ip: str) -> None:
         raise InvalidIP(f"Invalid IP address: {ip}")
 
 
+@contextmanager
+def _suppress_insecure_warning():
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=InsecureRequestWarning)
+        yield
+
+
 @lru_cache(maxsize=None)
 def public_ip(proxy: Optional[str] = None) -> str:
     """
@@ -86,11 +97,13 @@ def public_ip(proxy: Optional[str] = None) -> str:
     ]
     for url in URLS:
         try:
-            resp = requests.get(
-                url,
-                proxies=Proxy.as_requests_proxy(proxy) if proxy else None,
-                timeout=5,
-            )
+            with _suppress_insecure_warning():
+                resp = requests.get(  # nosec
+                    url,
+                    proxies=Proxy.as_requests_proxy(proxy) if proxy else None,
+                    timeout=5,
+                    verify=False,
+                )
             resp.raise_for_status()
             ip = resp.text.strip()
             validate_ip(ip)

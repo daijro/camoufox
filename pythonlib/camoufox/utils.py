@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
 import numpy as np
 import orjson
 from browserforge.fingerprints import Fingerprint, Screen
+from screeninfo import get_monitors
 from typing_extensions import TypeAlias
 from ua_parser import user_agent_parser
 
@@ -17,7 +18,7 @@ from .addons import (
     threaded_try_load_addons,
 )
 from .exceptions import InvalidPropertyType, UnknownProperty
-from .fingerprints import from_browserforge, generate
+from .fingerprints import from_browserforge, generate_fingerprint
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locale import geoip_allowed, get_geolocation, normalize_locale
 from .pkgman import OS_NAME, get_path, installed_verstr
@@ -139,6 +140,25 @@ def determine_ua_os(user_agent: str) -> Literal['mac', 'win', 'lin']:
     return "lin"
 
 
+def get_screen_cons(headless: Optional[bool] = None) -> Optional[Screen]:
+    """
+    Determines a sane viewport size for Camoufox if being ran in headful mode.
+    """
+    if headless is False:
+        return None  # Skip if headless
+    try:
+        monitors = get_monitors()
+    except Exception:
+        return None  # Skip if there's an error getting the monitors
+    if not monitors:
+        return None  # Skip if there are no monitors
+
+    # Use the dimensions from the monitor with greatest screen real estate
+    monitor = max(monitors, key=lambda m: m.width * m.height)
+    # Add 25% buffer
+    return Screen(max_width=int(monitor.width * 1.25), max_height=int(monitor.height * 1.25))
+
+
 def update_fonts(config: Dict[str, Any], target_os: str) -> None:
     """
     Updates the fonts for the target OS.
@@ -191,6 +211,7 @@ def get_launch_options(
     allow_webgl: Optional[bool] = None,
     proxy: Optional[Dict[str, str]] = None,
     ff_version: Optional[int] = None,
+    headless: Optional[bool] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     launch_options: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
@@ -221,21 +242,17 @@ def get_launch_options(
     else:
         ff_version_str = installed_verstr().split('.', 1)[0]
 
-    # Generate new fingerprint
+    # Inject a unique Firefox fingerprint
     if fingerprint is None:
-        merge_into(
-            config,
-            generate(
-                ff_version=ff_version_str,
-                screen=screen,
-                os=os,
-            ),
+        fingerprint = generate_fingerprint(
+            screen=screen or get_screen_cons(headless),
+            os=os,
         )
-    else:
-        merge_into(
-            config,
-            from_browserforge(fingerprint, ff_version_str),
-        )
+    merge_into(
+        config,
+        from_browserforge(fingerprint, ff_version_str),
+    )
+
     target_os = get_target_os(config)
 
     # Set a random window.history.length
@@ -296,5 +313,6 @@ def get_launch_options(
         "env": env_vars,
         "firefox_user_prefs": firefox_user_prefs,
         "proxy": proxy,
+        "headless": headless,
         **(launch_options if launch_options is not None else {}),
     }

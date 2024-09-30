@@ -16,7 +16,7 @@ class DefaultAddons(Enum):
     Default addons to be downloaded
     """
 
-    uBO = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
+    UBO = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
     BPC = "https://gitflic.ru/project/magnolia1234/bpc_uploads/blob/raw?file=bypass_paywalls_clean-latest.xpi"
 
 

@@ -28,23 +28,21 @@ navigator:
 
 screen:
   # hasHDR is not implemented in Camoufox
-  # Screen size values seem to be inconsistent, and will not be implemented for the time being.
-  #   availHeight: screen.availHeight
-  #   availWidth: screen.availWidth
-  #   availTop: screen.availTop
-  #   availLeft: screen.availLeft
-  #   height: screen.height
-  #   width: screen.width
+  availLeft: screen.availLeft
+  availTop: screen.availTop
+  availWidth: screen.availWidth
+  availHeight: screen.availHeight
+  height: screen.height
+  width: screen.width
   colorDepth: screen.colorDepth
   pixelDepth: screen.pixelDepth
   # devicePixelRatio is not recommended. Any value other than 1.0 is suspicious.
   pageXOffset: screen.pageXOffset
   pageYOffset: screen.pageYOffset
-  # Disable viewport hijacking temporarily.
-  #   outerHeight: window.outerHeight
-  #   outerWidth: window.outerWidth
-  #   innerHeight: window.innerHeight
-  #   innerWidth: window.innerWidth
+  outerHeight: window.outerHeight
+  outerWidth: window.outerWidth
+  innerHeight: window.innerHeight
+  innerWidth: window.innerWidth
   screenX: window.screenX
   # Tends to generate out of bounds (network inconsistencies):
   #   clientWidth: document.body.clientWidth

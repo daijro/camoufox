@@ -1,7 +1,7 @@
 import os.path
 import re
 from dataclasses import asdict
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from browserforge.fingerprints import Fingerprint, FingerprintGenerator
 from yaml import CLoader, load
@@ -40,8 +40,11 @@ def _cast_to_properties(
         camoufox_data[type_key] = data
 
 
-def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None) -> dict:
-    camoufox_data = {}
+def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Converts a Browserforge fingerprint to a Camoufox config.
+    """
+    camoufox_data: Dict[str, Any] = {}
     _cast_to_properties(
         camoufox_data,
         cast_enum=BROWSERFORGE_DATA,
@@ -51,15 +54,15 @@ def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None
     return camoufox_data
 
 
-def generate(ff_version: Optional[str] = None, **config) -> dict:
+def generate_fingerprint(**config) -> Fingerprint:
     """
-    Generates a Firefox fingerprint.
+    Generates a Firefox fingerprint with Browserforge.
     """
-    data = FP_GENERATOR.generate(**config)
-    return from_browserforge(data, ff_version=ff_version)
+    return FP_GENERATOR.generate(**config)
 
 
 if __name__ == "__main__":
     from pprint import pprint
 
-    pprint(generate())
+    fp = generate_fingerprint()
+    pprint(from_browserforge(fp))

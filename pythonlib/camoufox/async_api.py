@@ -44,6 +44,7 @@ async def AsyncNewBrowser(
     exclude_addons: Optional[List[DefaultAddons]] = None,
     fingerprint: Optional[Fingerprint] = None,
     screen: Optional[Screen] = None,
+    headless: Optional[bool] = None,
     executable_path: Optional[str] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     proxy: Optional[Dict[str, str]] = None,
@@ -85,8 +86,10 @@ async def AsyncNewBrowser(
             Use a custom BrowserForge fingerprint. Note: Not all values will be implemented.
             If not provided, a random fingerprint will be generated based on the provided os & user_agent.
         screen (Optional[Screen]):
-            NOT YET IMPLEMENTED: Constrains the screen dimensions of the generated fingerprint.
+            Constrains the screen dimensions of the generated fingerprint.
             Takes a browserforge.fingerprints.Screen instance.
+        headless (Optional[bool]):
+            Whether to run the browser in headless mode. Defaults to True.
         executable_path (Optional[str]):
             Custom Camoufox browser executable path.
         firefox_user_prefs (Optional[Dict[str, Any]]):
