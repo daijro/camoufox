@@ -1,6 +1,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+* License, v. 2.0. If a copy of the MPL was not distributed with this
+* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
 const {SimpleChannel} = ChromeUtils.import('chrome://juggler/content/SimpleChannel.js');
@@ -13,7 +13,7 @@ const Cr = Components.results;
 
 const helper = new Helper();
 
-const IDENTITY_NAME = 'JUGGLER ';
+const IDENTITY_NAME = 'Camoufox ';
 const HUNDRED_YEARS = 60 * 60 * 24 * 365 * 100;
 
 const ALL_PERMISSIONS = [
@@ -571,10 +571,8 @@ class PageTarget {
     // default viewport.
     
     // Do not allow default viewport size if Camoufox set it first
-    const viewportSize = this._viewportSize || this._browserContext.defaultViewportSize;
-    
     if (
-      !viewportSize &&
+      !this._viewportSize &&
       this._browserContext.defaultViewportSize && (
         ChromeUtils.camouGetConfig("window.outerWidth") ||
         ChromeUtils.camouGetConfig("window.outerHeight") ||
@@ -583,6 +581,8 @@ class PageTarget {
     ) {
       return;
     }
+    
+    const viewportSize = this._viewportSize || this._browserContext.defaultViewportSize;
 
     if (viewportSize) {
       const {width, height} = viewportSize;
