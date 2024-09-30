@@ -79,26 +79,22 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 
 In Camoufox, data is intercepted at the C++ implementation level, making the changes undetectable through JavaScript inspection.
 
-To spoof fingerprint properties, pass a JSON containing properties to spoof:
-
-```bash
-$ ./launch --config '{"property": "value"}' [...other Firefox arguments]
-```
-
-Or, using the Camoufox Python interface ([see here](https://github.com/daijro/camoufox/tree/main/pythonlib#camoufox-python-interface)):
+To spoof fingerprint properties, pass a JSON containing properties to spoof to the [Python interface](https://github.com/daijro/camoufox/tree/main/pythonlib#camoufox-python-interface):
 
 ```py
 >>> with Camoufox(config={"property": "value"}) as browser:
 ```
 
-The following attributes can be spoofed:
+Config data not set by the user will be automatically populated using [BrowserForge](https://github.com/daijro/browserforge) fingerprints, which mimic the statistical distribution of device characteristics in real-world traffic.
+
+#### The following properties can be spoofed:
 
 <details>
 <summary>
 Navigator 
 </summary>
 
-Navigator (the most important attributes) can be fully spoof other Firefox fingerprints, and it is **completely safe**! However, there are some issues when spoofing Chrome (leaks noted).
+Navigator properties can be fully spoofed to other Firefox fingerprints, and it is **completely safe**! However, there are some issues when spoofing Chrome (leaks noted).
 
 | Property                       | Notes |
 | ------------------------------ | ----- |
@@ -130,6 +126,7 @@ Camoufox will automatically add the following default fonts associated your spoo
 - When spoofing Chrome fingerprints, the following may leak:
   - navigator.userAgentData missing.
   - navigator.deviceMemory missing.
+- Changing the presented Firefox version can be detected by some testing websites, but typically will not flag production WAFs.
 
 </details>
 
@@ -496,8 +493,14 @@ Camoufox does **not** fully support injecting Chromium fingerprints. Some WAFs (
 
 ## Playwright Usage
 
-> [!NOTE]
-> It is recommended to use Camoufox's Python interface instead. See [here](https://github.com/daijro/camoufox/tree/main/pythonlib#camoufox-python-interface) for more information.
+#### See [here](https://github.com/daijro/camoufox/tree/main/pythonlib#camoufox-python-interface) for documentation on Camoufox's Python interface.
+
+It is strongly recommended to use the Camoufox Python library instead of the legacy launcher, which is now deprecated.
+
+<details>
+<summary>
+See legacy launcher usage (deprecated)
+</summary>
 
 Camoufox is fully compatible with your existing Playwright code. You only have to change your browser initialization:
 
@@ -559,6 +562,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+</details>
 </details>
 
 ---
