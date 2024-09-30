@@ -1,17 +1,35 @@
 import argparse
+import json
 import os
 import shutil
 import time
+from pathlib import Path
 
 from _mixin import find_src_dir, get_moz_target, temp_cd
 from playwright.sync_api import sync_playwright
+
+LOCAL_PATH = Path(os.path.abspath(__file__)).parent
+
+CONFIG = {
+    'window.outerWidth': 1920,
+    'window.outerHeight': 1080,
+}
 
 
 def launch_playwright(executable_path):
     """Launch playwright Firefox with unlimited time"""
     with sync_playwright() as p:
-        print('Launching browser.')
-        browser = p.firefox.launch(executable_path=executable_path, headless=False)
+        print('Launching browser.', executable_path)
+        browser = p.firefox.launch(
+            executable_path=executable_path,
+            headless=False,
+            args=[
+                '--stderr',
+                str(LOCAL_PATH / 'debug.log'),
+                '--config',
+                json.dumps(CONFIG),
+            ],
+        )
         page = browser.new_page()
         url = os.getenv('URL') or 'https://google.com'
         page.goto(url)
