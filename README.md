@@ -344,7 +344,7 @@ You can also exclude default addons with the `exclude_addons` parameter:
 from camoufox.sync_api import Camoufox
 from camoufox import DefaultAddons
 
-with Camoufox(exclude_addons=[DefaultAddons.uBO, DefaultAddons.BPC]) as browser:
+with Camoufox(exclude_addons=[DefaultAddons.UBO, DefaultAddons.BPC]) as browser:
     page = browser.new_page()
 ```
 
