@@ -1,14 +1,12 @@
-import os
 import xml.etree.ElementTree as ET  # nosec
 from dataclasses import dataclass
-from pathlib import Path
 from random import choice as randchoice
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 from language_tags import tags
 
-from camoufox.pkgman import rprint, webdl
+from camoufox.pkgman import LOCAL_DATA, rprint, webdl
 
 from .exceptions import NotInstalledGeoIPExtra, UnknownIPLocation, UnknownTerritory
 from .ip import validate_ip
@@ -19,8 +17,6 @@ except ImportError:
     ALLOW_GEOIP = False
 else:
     ALLOW_GEOIP = True
-
-LOCAL_DATA = Path(os.path.abspath(__file__)).parent
 
 
 """

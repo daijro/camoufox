@@ -42,6 +42,7 @@ if sys.platform not in OS_MAP:
 OS_NAME: Literal['mac', 'win', 'lin'] = OS_MAP[sys.platform]
 
 INSTALL_DIR: Path = Path(user_cache_dir("camoufox"))
+LOCAL_DATA: Path = Path(os.path.abspath(__file__)).parent
 
 # The supported architectures for each OS
 OS_ARCH_MATRIX: dict[str, List[str]] = {

@@ -45,7 +45,9 @@ Options:
 
 Commands:
   fetch    Fetch the latest version of Camoufox
+  path     Display the path to the Camoufox executable
   remove   Remove all downloaded files
+  server   Launch a Playwright server
   test     Open the Playwright inspector
   version  Display the current version
 ```
@@ -189,6 +191,53 @@ with Camoufox(
     page = browser.new_page()
     page.goto("https://www.browserscan.net")
 ```
+
+<hr width=50>
+
+### Remote Server (experimental)
+
+> [!WARNING]
+> This feature is experimental and not meant for production use. It uses a hacky workaround to gain access to undocumented Playwright methods.
+
+#### Launching
+
+To launch a remote server, run the following CLI command:
+
+```bash
+python -m camoufox server
+```
+
+Or, configure the server with a launch script:
+
+```python
+from camoufox.server import launch_server
+
+launch_server(
+    headless=True,
+    geoip=True,
+    proxy={
+        'server': 'http://example.com:8080',
+        'username': 'username',
+        'password': 'password'
+    }
+)
+```
+
+#### Connecting
+
+To connect to the remote server, use Playwright's `connect` method:
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    # Example endpoint
+    browser = p.firefox.connect('ws://localhost:34091/8c7c6cdea3368d937ef7db2277d6647b')
+    page = browser.new_page()
+    ...
+```
+
+**Note:** Because servers only use **one browser instance**, fingerprints will not rotate between sessions. If you plan on using Camoufox at scale, consider rotating the server between sessions.
 
 <hr width=50>
 

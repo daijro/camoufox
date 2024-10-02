@@ -104,6 +104,16 @@ def test(url: Optional[str] = None) -> None:
         page.pause()  # Open the Playwright inspector
 
 
+@cli.command(name='server')
+def server() -> None:
+    """
+    Launch a Playwright server
+    """
+    from .server import launch_server
+
+    launch_server()
+
+
 @cli.command(name='path')
 def path() -> None:
     """
