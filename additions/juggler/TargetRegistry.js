@@ -574,10 +574,10 @@ class PageTarget {
     if (
       !this._viewportSize &&
       this._browserContext.defaultViewportSize && (
-        ChromeUtils.camouGetConfig("window.outerWidth") ||
-        ChromeUtils.camouGetConfig("window.outerHeight") ||
-        ChromeUtils.camouGetConfig("window.innerWidth") ||
-        ChromeUtils.camouGetConfig("window.innerHeight"))
+        ChromeUtils.camouGetInt("window.outerWidth") ||
+        ChromeUtils.camouGetInt("window.outerHeight") ||
+        ChromeUtils.camouGetInt("window.innerWidth") ||
+        ChromeUtils.camouGetInt("window.innerHeight"))
     ) {
       return;
     }
