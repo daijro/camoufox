@@ -11,7 +11,7 @@ from typing import Optional
 
 import click
 
-from .locale import download_mmdb, remove_mmdb
+from .locale import ALLOW_GEOIP, download_mmdb, remove_mmdb
 from .pkgman import INSTALL_DIR, CamoufoxFetcher, installed_verstr, rprint
 
 
@@ -74,7 +74,8 @@ def fetch() -> None:
     """
     CamoufoxUpdate().update()
     # Fetch the GeoIP database
-    download_mmdb()
+    if ALLOW_GEOIP:
+        download_mmdb()
 
 
 @cli.command(name='remove')
