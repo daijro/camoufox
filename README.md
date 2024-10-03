@@ -142,7 +142,7 @@ Camoufox supports use human-like cursor movement. The natural motion algorithm w
 
 ### Demo
 
-<video src="https://i.imgur.com/JxWRVtm.mp4" width="500px" alt="demo" autoplay loop muted></video>
+<video src="https://github.com/user-attachments/assets/6d33d6af-3537-4603-bf24-6bd3f4f8f455" width="500px" autoplay loop muted></video>
 
 ### Properties
 
