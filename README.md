@@ -138,7 +138,7 @@ Cursor movement
 
 ### Human-like Cursor movement
 
-Camoufox supports use human-like cursor movement. The natural motion algorithm was originally from [rifosnake's HumanCursor](https://github.com/riflosnake/HumanCursor), but has been rewritten in C++ and modified for more distance-aware trajectories.
+Camoufox has built-in support for human-like cursor movement. The natural motion algorithm was originally from [rifosnake's HumanCursor](https://github.com/riflosnake/HumanCursor), but has been rewritten in C++ and modified for more distance-aware trajectories.
 
 ### Demo
 
@@ -150,11 +150,10 @@ Camoufox supports use human-like cursor movement. The natural motion algorithm w
 | ---------------- | --------- | ------------------------------------------------------------------- |
 | humanize         | ✅        | Enable/disable human-like cursor movement. Defaults to False.       |
 | humanize:maxTime | ✅        | Maximum time in seconds for the cursor movement. Defaults to `1.5`. |
-| showcursor       | ✅        | Show/hide the cursor. Defaults to True.                             |
+| showcursor       | ✅        | Toggles the cursor highlighter. Defaults to True.                   |
 
 **Notes:**
 
-- Trajectories are capped at taking 1.5 seconds to complete.
 - The cursor highlighter is **not** ran in the page context. It will not be visible to the page. You don't have to worry about it leaking.
 
 </details>
