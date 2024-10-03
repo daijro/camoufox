@@ -225,6 +225,5 @@ class HumanizeMouseTrajectory {
     return true;
   }
 
-  mutable std::default_random_engine randomEngine{
-      static_cast<unsigned long>(std::time(nullptr))};
+  mutable std::default_random_engine randomEngine{std::random_device{}()};
 };
