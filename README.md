@@ -21,6 +21,7 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 - Spoof properties of device, viewport, screen, WebGL, battery API, location, etc. ✅
 - Font spoofing & anti-fingerprinting ✅
 - WebRTC IP spoofing ✅
+- Human-like mouse movement 🖱️
 - Blocks & circumvents ads 🛡️
 - Debloated & optimized for memory and speed ⚡
 - [PyPi package](https://pypi.org/project/camoufox/) for updates & auto fingerprint injection 📦
@@ -68,7 +69,7 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 - Continue research on potential leaks
 - Remote hosting Camoufox as a Playwright server
 - Integrate into [hrequests](https://github.com/daijro/hrequests)
-- Human-like typing & mouse movement
+- Human-like typing & ~~mouse movement~~ ✔️
 - WebGL fingerprint spoofing through ANGLE rendering
 - Create integration tests
 - Chromium port (long term)
@@ -127,6 +128,34 @@ Camoufox will automatically add the following default fonts associated your spoo
   - navigator.userAgentData missing.
   - navigator.deviceMemory missing.
 - Changing the presented Firefox version can be detected by some testing websites, but typically will not flag production WAFs.
+
+</details>
+
+<details>
+<summary>
+Cursor movement
+</summary>
+
+### Human-like Cursor movement
+
+Camoufox supports use human-like cursor movement. The natural motion algorithm was originally from [rifosnake's HumanCursor](https://github.com/riflosnake/HumanCursor), but has been rewritten in C++ and modified for more distance-aware trajectories.
+
+### Demo
+
+<video src="https://i.imgur.com/JxWRVtm.mp4" width="500px" alt="demo" autoplay loop muted></video>
+
+### Properties
+
+| Property         | Supported | Description                                                         |
+| ---------------- | --------- | ------------------------------------------------------------------- |
+| humanize         | ✅        | Enable/disable human-like cursor movement. Defaults to False.       |
+| humanize:maxTime | ✅        | Maximum time in seconds for the cursor movement. Defaults to `1.5`. |
+| showcursor       | ✅        | Show/hide the cursor. Defaults to True.                             |
+
+**Notes:**
+
+- Trajectories are capped at taking 1.5 seconds to complete.
+- The cursor highlighter is **not** ran in the page context. It will not be visible to the page. You don't have to worry about it leaking.
 
 </details>
 
@@ -483,7 +512,7 @@ Camoufox performs well against every major WAF I've tested. (Original test sites
 | **Font Fingerprinting**                                                                            | ✔️                                                        |
 | ‣ [Browserleaks Fonts](https://browserleaks.net/fonts)                                             | ✔️ Rotates all metrics.                                   |
 | ‣ [CreepJS TextMetrics](https://abrahamjuliot.github.io/creepjs/tests/fonts.html)                  | ✔️ Rotates all metrics.                                   |
-| [**Incolumitas**](https://bot.incolumitas.com/)                                                    | ✔️ 0.8-r1.0                                               |
+| [**Incolumitas**](https://bot.incolumitas.com/)                                                    | ✔️ 0.8-1.0                                                |
 | [**SannySoft**](https://bot.sannysoft.com/)                                                        | ✔️                                                        |
 | [**Fingerprint.com**](https://fingerprint.com/products/bot-detection/)                             | ✔️                                                        |
 | [**IpHey**](https://iphey.com/)                                                                    | ✔️                                                        |
@@ -741,4 +770,5 @@ Patches can be edited, created, removed, and managed through here.
 - [Jamir-boop/minimalisticfox](https://github.com/Jamir-boop/minimalisticfox) - Inspired Camoufox's minimalistic theming
 - [nicoth-in/Dark-Space-Theme](https://github.com/nicoth-in/Dark-Space-Theme) - Camoufox's dark theme
 - [Playwright](https://github.com/microsoft/playwright/tree/main/browser_patches/firefox), [Puppeteer/Juggler](https://github.com/puppeteer/juggler) - Original Juggler implementation
-- [CreepJS](https://github.com/abrahamjuliot/creepjs), [Browserleaks](https://browserleaks.com) - Valuable leak testing sites
+- [CreepJS](https://github.com/abrahamjuliot/creepjs), [Browserleaks](https://browserleaks.com), [BrowserScan](https://www.browserscan.net/) - Valuable leak testing sites
+- [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor) - Original human-like cursor movement algorithm

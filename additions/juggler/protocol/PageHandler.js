@@ -1,6 +1,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+* License, v. 2.0. If a copy of the MPL was not distributed with this
+* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 "use strict";
 
@@ -81,6 +81,7 @@ class PageHandler {
 
     this._isDragging = false;
     this._lastMousePosition = { x: 0, y: 0 };
+    this._lastTrackedPos = { x: 0, y: 0 };
 
     this._reportedFrameIds = new Set();
     this._networkEventsForUnreportedFrameIds = new Map();
@@ -500,13 +501,11 @@ class PageHandler {
         await helper.awaitTopic('apz-repaints-flushed');
 
       const watcher = new EventWatcher(this._pageEventSink, types, this._pendingEventWatchers);
-      const promises = [];
-      for (const type of types) {
-        // This dispatches to the renderer synchronously.
+      const sendMouseEvent = async (eventType, eventX, eventY) => {
         const jugglerEventId = win.windowUtils.jugglerSendMouseEvent(
-          type,
-          x + boundingBox.left,
-          y + boundingBox.top,
+          eventType,
+          eventX + boundingBox.left,
+          eventY + boundingBox.top,
           button,
           clickCount,
           modifiers,
@@ -519,9 +518,26 @@ class PageHandler {
           win.windowUtils.DEFAULT_MOUSE_POINTER_ID /* pointerIdentifier */,
           false /* disablePointerEvent */
         );
-        promises.push(watcher.ensureEvent(type, eventObject => eventObject.jugglerEventId === jugglerEventId));
+        await watcher.ensureEvent(eventType, eventObject => eventObject.jugglerEventId === jugglerEventId);
+      };
+      for (const type of types) {
+        if (type === 'mousemove' && ChromeUtils.camouGetBool('humanize', false)) {
+          let trajectory = ChromeUtils.camouGetMouseTrajectory(this._lastTrackedPos.x, this._lastTrackedPos.y, x, y);
+          for (let i = 2; i < trajectory.length - 2; i += 2) {
+            let currentX = trajectory[i];
+            let currentY = trajectory[i + 1];
+            // Skip movement that is out of bounds
+            if (currentX < 0 || currentY < 0 || currentX > boundingBox.width || currentY > boundingBox.height) {
+              continue;
+            }
+            await sendMouseEvent(type, currentX, currentY);
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        } else {
+          // Call the function for the current event
+          await sendMouseEvent(type, x, y);
+        }
       }
-      await Promise.all(promises);
       await watcher.dispose();
     };
 
@@ -579,6 +595,7 @@ class PageHandler {
 
         const watcher = new EventWatcher(this._pageEventSink, ['dragstart', 'juggler-drag-finalized'], this._pendingEventWatchers);
         await sendEvents(['mousemove']);
+        this._lastTrackedPos = { x, y };
 
         // The order of events after 'mousemove' is sent:
         // 1. [dragstart] - might or might NOT be emitted

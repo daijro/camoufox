@@ -9,10 +9,10 @@ with Files("**"):
 
 EXPORTS += [
     "MaskConfig.hpp",
+    "MouseTrajectories.hpp",
 ]
 
 LOCAL_INCLUDES += [
-    "/dom/base",
     "/camoucfg",
 ]
 

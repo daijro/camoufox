@@ -61,5 +61,8 @@
   { "property": "timezone", "type": "str" },
   { "property": "locale:language", "type": "str" },
   { "property": "locale:region", "type": "str" },
-  { "property": "locale:script", "type": "str" }
+  { "property": "locale:script", "type": "str" },
+  { "property": "humanize", "type": "bool" },
+  { "property": "humanize:maxTime", "type": "double" },
+  { "property": "showcursor", "type": "bool" }
 ]

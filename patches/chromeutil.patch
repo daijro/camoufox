@@ -1,16 +1,17 @@
 diff --git a/dom/base/ChromeUtils.cpp b/dom/base/ChromeUtils.cpp
-index 6833d2227f..0b2ea99615 100644
+index 6833d2227f..9f88bd3d34 100644
 --- a/dom/base/ChromeUtils.cpp
 +++ b/dom/base/ChromeUtils.cpp
-@@ -5,6 +5,7 @@
+@@ -5,6 +5,8 @@
   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
  
  #include "ChromeUtils.h"
 +#include "MaskConfig.hpp"
++#include "MouseTrajectories.hpp"
  
  #include "JSOracleParent.h"
  #include "js/CallAndConstruct.h"  // JS::Call
-@@ -2068,6 +2069,24 @@ bool ChromeUtils::IsDarkBackground(GlobalObject&, Element& aElement) {
+@@ -2068,6 +2070,24 @@ bool ChromeUtils::IsDarkBackground(GlobalObject&, Element& aElement) {
    return nsNativeTheme::IsDarkBackground(f);
  }
  
@@ -35,7 +36,7 @@ index 6833d2227f..0b2ea99615 100644
  double ChromeUtils::DateNow(GlobalObject&) { return JS_Now() / 1000.0; }
  
  /* static */
-@@ -2094,6 +2113,39 @@ void ChromeUtils::GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
+@@ -2094,6 +2114,62 @@ void ChromeUtils::GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
    }
  }
  
@@ -61,6 +62,17 @@ index 6833d2227f..0b2ea99615 100644
 +}
 +
 +/* static */
++bool ChromeUtils::CamouGetBool(GlobalObject& aGlobal,
++                                   const nsAString& aVarName,
++                                   bool aDefaultValue) {
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  if (auto value = MaskConfig::GetBool(utf8VarName.get())) {
++    return value.value();
++  }
++  return aDefaultValue;
++}
++
++/* static */
 +void ChromeUtils::CamouGetString(GlobalObject& aGlobal,
 +                                 const nsAString& aVarName,
 +                                 nsAString& aRetVal) {
@@ -72,11 +84,23 @@ index 6833d2227f..0b2ea99615 100644
 +  }
 +}
 +
++/* static */
++void ChromeUtils::CamouGetMouseTrajectory(GlobalObject& aGlobal, long aFromX,
++                                          long aFromY, long aToX, long aToY,
++                                          nsTArray<int32_t>& aPoints) {
++  HumanizeMouseTrajectory trajectory(std::make_pair(aFromX, aFromY),
++                                     std::make_pair(aToX, aToY));
++  std::vector<int> flattenedPoints = trajectory.getPoints();
++
++  aPoints.Clear();
++  aPoints.AppendElements(flattenedPoints.data(), flattenedPoints.size());
++}
++
  /* static */
  bool ChromeUtils::ShouldResistFingerprinting(
      GlobalObject& aGlobal, JSRFPTarget aTarget,
 diff --git a/dom/base/ChromeUtils.h b/dom/base/ChromeUtils.h
-index 0150c59670..e3d203ed1a 100644
+index 0150c59670..3a244a80e4 100644
 --- a/dom/base/ChromeUtils.h
 +++ b/dom/base/ChromeUtils.h
 @@ -301,6 +301,10 @@ class ChromeUtils {
@@ -90,7 +114,7 @@ index 0150c59670..e3d203ed1a 100644
    static double DateNow(GlobalObject&);
  
    static void EnsureJSOracleStarted(GlobalObject&);
-@@ -310,6 +314,14 @@ class ChromeUtils {
+@@ -310,6 +314,21 @@ class ChromeUtils {
    static void GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
                                                nsTArray<nsCString>& aNames);
  
@@ -99,14 +123,21 @@ index 0150c59670..e3d203ed1a 100644
 +  static double CamouGetDouble(GlobalObject& aGlobal, const nsAString& aVarName,
 +                               double aDefaultValue);
 +
++  static bool CamouGetBool(GlobalObject& aGlobal, const nsAString& aVarName,
++                            bool aDefaultValue);
++
 +  static void CamouGetString(GlobalObject& aGlobal, const nsAString& aVarName,
 +                             nsAString& aRetVal);
++
++  static void CamouGetMouseTrajectory(GlobalObject& aGlobal, long aFromX,
++                                     long aFromY, long aToX, long aToY,
++                                     nsTArray<int32_t>& aPoints);
 +
    static bool ShouldResistFingerprinting(
        GlobalObject& aGlobal, JSRFPTarget aTarget,
        const Nullable<uint64_t>& aOverriddenFingerprintingSettings);
 diff --git a/dom/chrome-webidl/ChromeUtils.webidl b/dom/chrome-webidl/ChromeUtils.webidl
-index bf196f039d..04e0cdcabd 100644
+index bf196f039d..e134d816b3 100644
 --- a/dom/chrome-webidl/ChromeUtils.webidl
 +++ b/dom/chrome-webidl/ChromeUtils.webidl
 @@ -746,6 +746,13 @@ partial namespace ChromeUtils {
@@ -123,7 +154,7 @@ index bf196f039d..04e0cdcabd 100644
    /**
     * Starts the JSOracle process for ORB JavaScript validation, if it hasn't started already.
     */
-@@ -757,6 +764,21 @@ partial namespace ChromeUtils {
+@@ -757,6 +764,31 @@ partial namespace ChromeUtils {
    [ChromeOnly]
    readonly attribute unsigned long aliveUtilityProcesses;
  
@@ -138,9 +169,19 @@ index bf196f039d..04e0cdcabd 100644
 +  double camouGetDouble(DOMString varName, double defaultValue);
 +
 +  /**
++   * Get a bool value from Camoufox MaskConfig.
++   */
++  boolean camouGetBool(DOMString varName, boolean defaultValue);
++
++  /**
 +   * Get a string value from Camoufox MaskConfig.
 +   */
 +  DOMString camouGetString(DOMString varName);
++
++  /**
++   * Calculate a human-like mouse trajectory between two points.
++   */
++  sequence<long> camouGetMouseTrajectory(long fromX, long fromY, long toX, long toY);
 +
    /**
     * Get a list of all possible Utility process Actor Names ; mostly useful to
