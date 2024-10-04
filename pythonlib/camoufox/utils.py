@@ -1,6 +1,8 @@
 import os
 import sys
+import warnings
 from os import environ
+from pprint import pprint
 from random import randrange
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
@@ -17,7 +19,7 @@ from .addons import (
     get_debug_port,
     threaded_try_load_addons,
 )
-from .exceptions import InvalidPropertyType, UnknownProperty
+from .exceptions import InvalidPropertyType, NonFirefoxFingerprint, UnknownProperty
 from .fingerprints import from_browserforge, generate_fingerprint
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locale import geoip_allowed, get_geolocation, normalize_locale
@@ -133,7 +135,7 @@ def determine_ua_os(user_agent: str) -> Literal['mac', 'win', 'lin']:
     parsed_ua = user_agent_parser.ParseOS(user_agent).get('family')
     if not parsed_ua:
         raise ValueError("Could not determine OS from user agent")
-    if parsed_ua.startswith("Mac"):
+    if parsed_ua.startswith("Mac") or parsed_ua.startswith("iOS"):
         return "mac"
     if parsed_ua.startswith("Windows"):
         return "win"
@@ -155,8 +157,8 @@ def get_screen_cons(headless: Optional[bool] = None) -> Optional[Screen]:
 
     # Use the dimensions from the monitor with greatest screen real estate
     monitor = max(monitors, key=lambda m: m.width * m.height)
-    # Add 25% buffer
-    return Screen(max_width=int(monitor.width * 1.25), max_height=int(monitor.height * 1.25))
+    # Add 15% buffer
+    return Screen(max_width=int(monitor.width * 1.15), max_height=int(monitor.height * 1.15))
 
 
 def update_fonts(config: Dict[str, Any], target_os: str) -> None:
@@ -171,6 +173,40 @@ def update_fonts(config: Dict[str, Any], target_os: str) -> None:
         config['fonts'] = np.unique(fonts + config['fonts']).tolist()
     else:
         config['fonts'] = fonts
+
+
+def check_custom_fingerprint(fingerprint: Fingerprint) -> None:
+    """
+    Asserts that the passed BrowserForge fingerprint is a valid Firefox fingerprint.
+    and warns the user that passing their own fingerprint is not recommended.
+    """
+    if any(browser in fingerprint.navigator.userAgent for browser in ('Firefox', 'FxiOS')):
+        return
+    # Tell the user what browser they're using
+    parsed_ua = user_agent_parser.ParseUserAgent(fingerprint.navigator.userAgent).get(
+        'family', 'Non-Firefox'
+    )
+    if parsed_ua:
+        raise NonFirefoxFingerprint(
+            f'"{parsed_ua}" fingerprints are not supported in Camoufox. '
+            'Using fingerprints from a browser other than Firefox WILL lead to detection. '
+            'If this is intentional, pass `i_know_what_im_doing=True`.'
+        )
+
+    warnings.warn(
+        'Passing your own fingerprint is not recommended. '
+        'BrowserForge fingerprints are automatically generated within Camoufox '
+        'based on the provided `os` and `screen` constraints. '
+    )
+
+
+def _clean_locals(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Gets the launch options from the locals of the function.
+    """
+    del data['playwright']
+    del data['persistent_context']
+    return data
 
 
 def merge_into(target: Dict[str, Any], source: Dict[str, Any]) -> None:
@@ -197,6 +233,8 @@ def get_launch_options(
     config: Optional[Dict[str, Any]] = None,
     addons: Optional[List[str]] = None,
     fingerprint: Optional[Fingerprint] = None,
+    humanize: Optional[Union[bool, float]] = None,
+    i_know_what_im_doing: Optional[bool] = None,
     exclude_addons: Optional[List[DefaultAddons]] = None,
     screen: Optional[Screen] = None,
     geoip: Optional[Union[str, bool]] = None,
@@ -214,6 +252,7 @@ def get_launch_options(
     headless: Optional[bool] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     launch_options: Optional[Dict[str, Any]] = None,
+    debug: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Builds the launch options for the Camoufox browser.
@@ -242,12 +281,18 @@ def get_launch_options(
     else:
         ff_version_str = installed_verstr().split('.', 1)[0]
 
-    # Inject a unique Firefox fingerprint
+    # Generate a fingerprint
     if fingerprint is None:
         fingerprint = generate_fingerprint(
             screen=screen or get_screen_cons(headless),
             os=os,
         )
+    else:
+        # Or use the one passed by the user
+        if not i_know_what_im_doing:
+            check_custom_fingerprint(fingerprint)
+
+    # Inject the fingerprint into the config
     merge_into(
         config,
         from_browserforge(fingerprint, ff_version_str),
@@ -290,8 +335,19 @@ def get_launch_options(
         parsed_locale = normalize_locale(locale)
         config.update(parsed_locale.as_config())
 
+    # Pass the humanize option
+    if humanize:
+        set_into(config, 'humanize', True)
+        if isinstance(humanize, (int, float)):
+            set_into(config, 'humanize:maxTime', humanize)
+
     # Validate the config
     validate_config(config)
+
+    # Print the config if debug is enabled
+    if debug:
+        print('[DEBUG] Config:')
+        pprint(config)
 
     # Set Firefox user preferences
     if block_images:

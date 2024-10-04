@@ -1,10 +1,15 @@
 from typing import Any, Dict, List, Optional, Union
 
 from browserforge.fingerprints import Fingerprint, Screen
-from playwright.sync_api import Browser, Playwright, PlaywrightContextManager
+from playwright.sync_api import (
+    Browser,
+    BrowserContext,
+    Playwright,
+    PlaywrightContextManager,
+)
 
 from .addons import DefaultAddons
-from .utils import ListOrString, get_launch_options
+from .utils import ListOrString, _clean_locals, get_launch_options
 
 
 class Camoufox(PlaywrightContextManager):
@@ -16,9 +21,9 @@ class Camoufox(PlaywrightContextManager):
     def __init__(self, **launch_options):
         super().__init__()
         self.launch_options = launch_options
-        self.browser: Optional[Browser] = None
+        self.browser: Optional[Union[Browser, BrowserContext]] = None
 
-    def __enter__(self) -> Browser:
+    def __enter__(self) -> Union[Browser, BrowserContext]:
         super().__enter__()
         self.browser = NewBrowser(self._playwright, **self.launch_options)
         return self.browser
@@ -38,19 +43,23 @@ def NewBrowser(
     block_webrtc: Optional[bool] = None,
     allow_webgl: Optional[bool] = None,
     geoip: Optional[Union[str, bool]] = None,
+    humanize: Optional[Union[bool, float]] = None,
     locale: Optional[str] = None,
     addons: Optional[List[str]] = None,
     fonts: Optional[List[str]] = None,
     exclude_addons: Optional[List[DefaultAddons]] = None,
-    fingerprint: Optional[Fingerprint] = None,
     screen: Optional[Screen] = None,
+    fingerprint: Optional[Fingerprint] = None,
+    ff_version: Optional[int] = None,
     headless: Optional[bool] = None,
     executable_path: Optional[str] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     proxy: Optional[Dict[str, str]] = None,
-    ff_version: Optional[int] = None,
     args: Optional[List[str]] = None,
     env: Optional[Dict[str, Union[str, float, bool]]] = None,
+    persistent_context: Optional[bool] = None,
+    i_know_what_im_doing: Optional[bool] = None,
+    debug: Optional[bool] = None,
     **launch_options: Dict[str, Any]
 ) -> Browser:
     """
@@ -62,7 +71,7 @@ def NewBrowser(
             Camoufox properties to use. (read https://github.com/daijro/camoufox/blob/main/README.md)
         os (Optional[ListOrString]):
             Operating system to use for the fingerprint generation.
-            Can be "windows", "macos", or "linux", or a list of these to choose from randomly.
+            Can be "windows", "macos", "linux", "android", "ios", or a list to randomly choose from.
             Default: ["windows", "macos", "linux"]
         block_images (Optional[bool]):
             Whether to block all images.
@@ -73,6 +82,10 @@ def NewBrowser(
         geoip (Optional[Union[str, bool]]):
             Calculate longitude, latitude, timezone, country, & locale based on the IP address.
             Pass the target IP address to use, or `True` to find the IP address automatically.
+        humanize (Optional[Union[bool, float]]):
+            Humanize the cursor movement.
+            Takes either `True`, or the MAX duration in seconds of the cursor movement.
+            The cursor typically takes up to 1.5 seconds to move across the window.
         locale (Optional[str]):
             Locale to use in Camoufox.
         addons (Optional[List[str]]):
@@ -82,12 +95,16 @@ def NewBrowser(
             Takes a list of font family names that are installed on the system.
         exclude_addons (Optional[List[DefaultAddons]]):
             Default addons to exclude. Passed as a list of camoufox.DefaultAddons enums.
-        fingerprint (Optional[Fingerprint]):
-            Use a custom BrowserForge fingerprint. Note: Not all values will be implemented.
-            If not provided, a random fingerprint will be generated based on the provided os & user_agent.
         screen (Optional[Screen]):
             Constrains the screen dimensions of the generated fingerprint.
             Takes a browserforge.fingerprints.Screen instance.
+        fingerprint (Optional[Fingerprint]):
+            Use a custom BrowserForge fingerprint. Note: Not all values will be implemented.
+            If not provided, a random fingerprint will be generated based on the provided
+            `os` & `screen` constraints.
+        ff_version (Optional[int]):
+            Firefox version to use. Defaults to the current Camoufox version.
+            To prevent leaks, only use this for special cases.
         headless (Optional[bool]):
             Whether to run the browser in headless mode. Defaults to True.
         executable_path (Optional[str]):
@@ -97,18 +114,20 @@ def NewBrowser(
         proxy (Optional[Dict[str, str]]):
             Proxy to use for the browser.
             Note: If geoip is True, a request will be sent through this proxy to find the target IP.
-        ff_version (Optional[int]):
-            Firefox version to use. Defaults to the current Camoufox version.
-            To prevent leaks, only use this for special cases.
         args (Optional[List[str]]):
             Arguments to pass to the browser.
         env (Optional[Dict[str, Union[str, float, bool]]]):
             Environment variables to set.
+        persistent_context (Optional[bool]):
+            Whether to use a persistent context.
+        debug (Optional[bool]):
+            Prints the config being sent to Camoufox.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
-    data = locals()
-    data.pop('playwright')
+    opt = get_launch_options(**_clean_locals(locals()))
 
-    opt = get_launch_options(**data)
+    if persistent_context:
+        return playwright.firefox.launch_persistent_context(**opt)
+
     return playwright.firefox.launch(**opt)

@@ -92,7 +92,7 @@ Parameters:
         Camoufox properties to use.
     os (Optional[ListOrString]):
         Operating system to use for the fingerprint generation.
-        Can be "windows", "macos", or "linux", or a list of these to choose from randomly.
+        Can be "windows", "macos", "linux", "android", "ios", or a list to randomly choose from.
         Default: ["windows", "macos", "linux"]
     block_images (Optional[bool]):
         Whether to block all images.
@@ -103,6 +103,10 @@ Parameters:
     geoip (Optional[Union[str, bool]]):
         Calculate longitude, latitude, timezone, country, & locale based on the IP address.
         Pass the target IP address to use, or `True` to find the IP address automatically.
+    humanize (Optional[Union[bool, float]]):
+        Humanize the cursor movement.
+        Takes either `True`, or the MAX duration in seconds of the cursor movement.
+        The cursor typically takes up to 1.5 seconds to move across the window.
     locale (Optional[str]):
         Locale to use in Camoufox.
     addons (Optional[List[str]]):
@@ -112,12 +116,16 @@ Parameters:
         Takes a list of font family names that are installed on the system.
     exclude_addons (Optional[List[DefaultAddons]]):
         Default addons to exclude. Passed as a list of camoufox.DefaultAddons enums.
-    fingerprint (Optional[Fingerprint]):
-        Use a custom BrowserForge fingerprint. Note: Not all values will be implemented.
-        If not provided, a random fingerprint will be generated based on the provided os & user_agent.
     screen (Optional[Screen]):
         Constrains the screen dimensions of the generated fingerprint.
         Takes a browserforge.fingerprints.Screen instance.
+    fingerprint (Optional[Fingerprint]):
+        Use a custom BrowserForge fingerprint. Note: Not all values will be implemented.
+        If not provided, a random fingerprint will be generated based on the provided
+        `os` & `screen` constraints.
+    ff_version (Optional[int]):
+        Firefox version to use. Defaults to the current Camoufox version.
+        To prevent leaks, only use this for special cases.
     headless (Optional[bool]):
         Whether to run the browser in headless mode. Defaults to True.
     executable_path (Optional[str]):
@@ -127,13 +135,14 @@ Parameters:
     proxy (Optional[Dict[str, str]]):
         Proxy to use for the browser.
         Note: If geoip is True, a request will be sent through this proxy to find the target IP.
-    ff_version (Optional[int]):
-        Firefox version to use. Defaults to the current Camoufox version.
-        To prevent leaks, only use this for special cases.
     args (Optional[List[str]]):
         Arguments to pass to the browser.
     env (Optional[Dict[str, Union[str, float, bool]]]):
         Environment variables to set.
+    persistent_context (Optional[bool]):
+        Whether to use a persistent context.
+    debug (Optional[bool]):
+        Prints the config being sent to Camoufox.
     **launch_options (Dict[str, Any]):
         Additional Firefox launch options.
 ```
@@ -245,7 +254,35 @@ with sync_playwright() as p:
 
 Camoufox is compatible with [BrowserForge](https://github.com/daijro/browserforge) fingerprints.
 
-By default, Camoufox will use a random fingerprint. You can also inject your own Firefox Browserforge fingerprint into Camoufox with the following example:
+By default, Camoufox will generate an use a random BrowserForge fingerprint based on the target `os` & `screen` constraints.
+
+```python
+from camoufox.sync_api import Camoufox
+from browserforge.fingerprints import Screen
+
+with Camoufox(
+    os=('windows', 'macos', 'linux'),
+    screen=Screen(max_width=1920, max_height=1080),
+) as browser:
+    page = browser.new_page()
+    page.goto("https://example.com/")
+```
+
+**Notes:**
+
+- If Camoufox is being ran in headful mode, the max screen size will be generated based on your monitor's dimensions (+15%).
+
+- To prevent UA-spoofing leaks, Camoufox only generates fingerprints with the same browser version as the current Camoufox version by default.
+
+  - If rotating the Firefox version is absolutely necessary, it would be more advisable to rotate between older versions of Camoufox instead.
+
+<details>
+<summary>Injecting custom Fingerprint objects...</summary>
+
+> [!WARNING]
+> It is recommended to pass `os` & `screen` constraints into Camoufox instead. Camoufox will handle fingerprint generation for you. This will be deprecated in the future.
+
+You can also inject your own Firefox BrowserForge fingerprint into Camoufox.
 
 ```python
 from camoufox.sync_api import Camoufox
@@ -259,8 +296,8 @@ with Camoufox(fingerprint=fg.generate()) as browser:
     page.goto("https://example.com/")
 ```
 
-<hr width=50>
-
 **Note:** As of now, some properties from BrowserForge fingerprints will not be passed to Camoufox. This is due to the outdated fingerprint dataset from Apify's fingerprint-suite (see [here](https://github.com/apify/fingerprint-suite/discussions/308)). Properties will be re-enabled as soon as an updated dataset is available.
+
+</details>
 
 ---

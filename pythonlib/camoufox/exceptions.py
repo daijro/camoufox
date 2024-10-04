@@ -100,3 +100,11 @@ class NotInstalledGeoIPExtra(ImportError):
     """
 
     ...
+
+
+class NonFirefoxFingerprint(Exception):
+    """
+    Raised when a passed Browserforge fingerprint is invalid.
+    """
+
+    ...
