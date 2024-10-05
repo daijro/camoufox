@@ -19,7 +19,12 @@ from .addons import (
     get_debug_port,
     threaded_try_load_addons,
 )
-from .exceptions import InvalidPropertyType, NonFirefoxFingerprint, UnknownProperty
+from .exceptions import (
+    InvalidOS,
+    InvalidPropertyType,
+    NonFirefoxFingerprint,
+    UnknownProperty,
+)
 from .fingerprints import from_browserforge, generate_fingerprint
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locale import geoip_allowed, get_geolocation, normalize_locale
@@ -135,7 +140,7 @@ def determine_ua_os(user_agent: str) -> Literal['mac', 'win', 'lin']:
     parsed_ua = user_agent_parser.ParseOS(user_agent).get('family')
     if not parsed_ua:
         raise ValueError("Could not determine OS from user agent")
-    if parsed_ua.startswith("Mac") or parsed_ua.startswith("iOS"):
+    if parsed_ua.startswith("Mac"):
         return "mac"
     if parsed_ua.startswith("Windows"):
         return "win"
@@ -180,15 +185,13 @@ def check_custom_fingerprint(fingerprint: Fingerprint) -> None:
     Asserts that the passed BrowserForge fingerprint is a valid Firefox fingerprint.
     and warns the user that passing their own fingerprint is not recommended.
     """
-    if any(browser in fingerprint.navigator.userAgent for browser in ('Firefox', 'FxiOS')):
-        return
-    # Tell the user what browser they're using
-    parsed_ua = user_agent_parser.ParseUserAgent(fingerprint.navigator.userAgent).get(
+    # Check what the browser is
+    browser_name = user_agent_parser.ParseUserAgent(fingerprint.navigator.userAgent).get(
         'family', 'Non-Firefox'
     )
-    if parsed_ua:
+    if browser_name != 'Firefox':
         raise NonFirefoxFingerprint(
-            f'"{parsed_ua}" fingerprints are not supported in Camoufox. '
+            f'"{browser_name}" fingerprints are not supported in Camoufox. '
             'Using fingerprints from a browser other than Firefox WILL lead to detection. '
             'If this is intentional, pass `i_know_what_im_doing=True`.'
         )
@@ -198,6 +201,22 @@ def check_custom_fingerprint(fingerprint: Fingerprint) -> None:
         'BrowserForge fingerprints are automatically generated within Camoufox '
         'based on the provided `os` and `screen` constraints. '
     )
+
+
+def check_valid_os(os: ListOrString) -> None:
+    """
+    Checks if the target OS is valid.
+    """
+    if not isinstance(os, str):
+        for os_name in os:
+            check_valid_os(os_name)
+        return
+    # Assert that the OS is lowercase
+    if not os.islower():
+        raise InvalidOS(f"OS values must be lowercase: '{os}'")
+    # Assert that the OS is supported by Camoufox
+    if os not in ('windows', 'macos', 'linux'):
+        raise InvalidOS(f"Camoufox does not support the OS: '{os}'")
 
 
 def _clean_locals(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -267,6 +286,10 @@ def get_launch_options(
         args = []
     if firefox_user_prefs is None:
         firefox_user_prefs = {}
+
+    # Assert the target OS is valid
+    if os:
+        check_valid_os(os)
 
     # Add the default addons
     add_default_addons(addons, exclude_addons)

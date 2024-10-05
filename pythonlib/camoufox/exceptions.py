@@ -108,3 +108,11 @@ class NonFirefoxFingerprint(Exception):
     """
 
     ...
+
+
+class InvalidOS(ValueError):
+    """
+    Raised when the target OS is invalid.
+    """
+
+    ...
