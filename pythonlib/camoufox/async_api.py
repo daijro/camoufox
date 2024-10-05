@@ -71,7 +71,7 @@ async def AsyncNewBrowser(
             Camoufox properties to use. (read https://github.com/daijro/camoufox/blob/main/README.md)
         os (Optional[ListOrString]):
             Operating system to use for the fingerprint generation.
-            Can be "windows", "macos", "linux", "android", "ios", or a list to randomly choose from.
+            Can be "windows", "macos", "linux", or a list to randomly choose from.
             Default: ["windows", "macos", "linux"]
         block_images (Optional[bool]):
             Whether to block all images.
