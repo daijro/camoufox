@@ -116,3 +116,11 @@ class InvalidOS(ValueError):
     """
 
     ...
+
+
+class DetectionWarning(RuntimeWarning):
+    """
+    Raised when a the user has a setting enabled that can cause detection.
+    """
+
+    ...

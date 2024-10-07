@@ -127,7 +127,8 @@ Parameters:
         Firefox version to use. Defaults to the current Camoufox version.
         To prevent leaks, only use this for special cases.
     headless (Optional[bool]):
-        Whether to run the browser in headless mode. Defaults to True.
+        Whether to run the browser in headless mode. Defaults to False.
+        WARNING: Please avoid using headless mode until issue #26 is fixed.
     executable_path (Optional[str]):
         Custom Camoufox browser executable path.
     firefox_user_prefs (Optional[Dict[str, Any]]):
