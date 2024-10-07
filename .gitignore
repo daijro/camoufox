@@ -1,20 +1,32 @@
+# Local builds
 /camoufox-*
 /firefox-*
 /mozilla-unified
-/extra-docs
-/.vscode
-_old/
 dist/
 bin/
-venv/
-/bundle/fonts/extra
 launch
 launch.exe
+
+# Internal testing
+/extra-docs
+/tests
+/.vscode
+/bundle/fonts/extra
+pythonlib/*.png
+scripts/*.png
+test*
+
+# Old data
+_old/
 *.old
-__pycache__/
-*.pyc
+
+# Logs
 wget-log
 *.kate-swp
 *.log
-test.py
+
+# Python interface
+venv/
+__pycache__/
+*.pyc
 *.mmdb

@@ -1,14 +1,13 @@
-import os.path
 import re
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
 from browserforge.fingerprints import Fingerprint, FingerprintGenerator
-from yaml import CLoader, load
+
+from camoufox.pkgman import load_yaml
 
 # Load the browserforge.yaml file
-with open(os.path.join(os.path.dirname(__file__), 'browserforge.yml'), 'r') as f:
-    BROWSERFORGE_DATA = load(f, Loader=CLoader)
+BROWSERFORGE_DATA = load_yaml('browserforge.yml')
 
 FP_GENERATOR = FingerprintGenerator(browser='firefox', os=('linux', 'macos', 'windows'))
 

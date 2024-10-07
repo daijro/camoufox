@@ -1,0 +1,32 @@
+headless: >-
+    Headless mode in Camoufox is not recommended at this time.
+    Some WAFs are able to detect headless browsers. The issue is currently being investigated.
+
+navigator: >-
+    Manually setting navigator properties is not recommended.
+    Device information is automatically generated within Camoufox
+    based on the provided `os`.
+
+locale: >-
+    Use the `locale` parameter in Camoufox instead of setting the config manually.
+
+header-ua: >-
+    Do not set the header.User-Agent manually. Camoufox will generate a User-Agent for you.
+
+viewport: >-
+    Manually setting screen & window properties is not recommended.
+    Screen dimensions are randomly generated within Camoufox
+    based on the provided screen constraints. See here:
+    https://github.com/daijro/camoufox/tree/main/pythonlib#browserforge-integration.
+
+custom_fingerprint: >-
+    Passing your own fingerprint is not recommended.
+    BrowserForge fingerprints are automatically generated within Camoufox
+    based on the provided `os` and `screen` constraints.
+
+proxy_without_geoip: >-
+    When using a proxy, it is heavily recommended that you pass `geoip=True`.
+
+allow_webgl: >-
+    Enabling WebGL can lead to Canvas fingerprinting and detection.
+    Camoufox will automatically spoof your vendor and renderer, but it cannot spoof your WebGL fingerprint.

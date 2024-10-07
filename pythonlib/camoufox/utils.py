@@ -1,6 +1,5 @@
 import os
 import sys
-import warnings
 from os import environ
 from pprint import pprint
 from random import randrange
@@ -20,7 +19,6 @@ from .addons import (
     threaded_try_load_addons,
 )
 from .exceptions import (
-    DetectionWarning,
     InvalidOS,
     InvalidPropertyType,
     NonFirefoxFingerprint,
@@ -30,6 +28,7 @@ from .fingerprints import from_browserforge, generate_fingerprint
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locale import geoip_allowed, get_geolocation, normalize_locale
 from .pkgman import OS_NAME, get_path, installed_verstr
+from .warnings import LeakWarning
 from .xpi_dl import add_default_addons
 
 LAUNCH_FILE = {
@@ -197,12 +196,7 @@ def check_custom_fingerprint(fingerprint: Fingerprint) -> None:
             'If this is intentional, pass `i_know_what_im_doing=True`.'
         )
 
-    warnings.warn(
-        'Passing your own fingerprint is not recommended. '
-        'BrowserForge fingerprints are automatically generated within Camoufox '
-        'based on the provided `os` and `screen` constraints.',
-        category=DetectionWarning,
-    )
+    LeakWarning.warn('custom_fingerprint', False)
 
 
 def check_valid_os(os: ListOrString) -> None:
@@ -249,6 +243,45 @@ def set_into(target: Dict[str, Any], key: str, value: Any) -> None:
         target[key] = value
 
 
+def is_domain_set(
+    config: Dict[str, Any],
+    *properties: str,
+) -> bool:
+    """
+    Checks if a domain is set in the config.
+    """
+    for prop in properties:
+        # If the . prefix exists, check if the domain is a prefix of any key in the config
+        if prop.endswith('.'):
+            if any(key.startswith(prop) for key in config):
+                return True
+        # Otherwise, check if the domain is a direct key in the config
+        else:
+            if prop in config:
+                return True
+    return False
+
+
+def warn_manual_config(config: Dict[str, Any]) -> None:
+    """
+    Warns the user if they are manually setting properties that Camoufox already sets internally.
+    """
+    # Manual locale setting
+    if is_domain_set(
+        config, 'navigator.language', 'navigator.languages', 'headers.Accept-Language'
+    ):
+        LeakWarning.warn('locale', False)
+    # Manual User-Agent setting
+    if is_domain_set(config, 'headers.User-Agent'):
+        LeakWarning.warn('header-ua', False)
+    # Manual navigator setting
+    if is_domain_set(config, 'navigator.'):
+        LeakWarning.warn('navigator', False)
+    # Manual screen/window setting
+    if is_domain_set(config, 'screen.', 'window.', 'document.body.'):
+        LeakWarning.warn('viewport', False)
+
+
 def get_launch_options(
     *,
     config: Optional[Dict[str, Any]] = None,
@@ -282,23 +315,26 @@ def get_launch_options(
     if config is None:
         config = {}
 
+    # Set default values for optional arguments
     if addons is None:
         addons = []
     if args is None:
         args = []
     if firefox_user_prefs is None:
         firefox_user_prefs = {}
+    if i_know_what_im_doing is None:
+        i_know_what_im_doing = False
 
     # Warn the user if headless is being used
     # https://github.com/daijro/camoufox/issues/26
     if headless:
-        warnings.warn(
-            'It is currently not recommended to use headless mode in Camoufox. '
-            'Some WAFs are able to detect headless browsers. The issue is currently being investigated.',
-            category=DetectionWarning,
-        )
+        LeakWarning.warn('headless', i_know_what_im_doing)
     elif headless is None:
         headless = False
+
+    # Warn the user for manual config settings
+    if not i_know_what_im_doing:
+        warn_manual_config(config)
 
     # Assert the target OS is valid
     if os:
@@ -366,6 +402,14 @@ def get_launch_options(
         geolocation = get_geolocation(geoip)
         config.update(geolocation.as_config())
 
+    # Raise a warning when a proxy is being used without spoofing geolocation
+    elif (
+        proxy
+        and 'localhost' not in proxy.get('server', '')
+        and not is_domain_set('geolocation', config)
+    ):
+        LeakWarning.warn('proxy_without_geoip')
+
     # Set locale
     if locale:
         parsed_locale = normalize_locale(locale)
@@ -391,10 +435,13 @@ def get_launch_options(
     if block_webrtc:
         firefox_user_prefs['media.peerconnection.enabled'] = False
     if allow_webgl:
+        LeakWarning.warn('allow_webgl', i_know_what_im_doing)
         firefox_user_prefs['webgl.disabled'] = False
 
-    # Launch
+    # Load the addons
     threaded_try_load_addons(get_debug_port(args), addons)
+
+    # Prepare environment variables to pass to Camoufox
     env_vars = {
         **get_env_vars(config, target_os),
         **(cast(Dict[str, Union[str, float, bool]], environ) if env is None else env),
