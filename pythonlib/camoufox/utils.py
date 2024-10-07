@@ -20,6 +20,7 @@ from .addons import (
     threaded_try_load_addons,
 )
 from .exceptions import (
+    DetectionWarning,
     InvalidOS,
     InvalidPropertyType,
     NonFirefoxFingerprint,
@@ -199,7 +200,8 @@ def check_custom_fingerprint(fingerprint: Fingerprint) -> None:
     warnings.warn(
         'Passing your own fingerprint is not recommended. '
         'BrowserForge fingerprints are automatically generated within Camoufox '
-        'based on the provided `os` and `screen` constraints. '
+        'based on the provided `os` and `screen` constraints.',
+        category=DetectionWarning,
     )
 
 
@@ -286,6 +288,17 @@ def get_launch_options(
         args = []
     if firefox_user_prefs is None:
         firefox_user_prefs = {}
+
+    # Warn the user if headless is being used
+    # https://github.com/daijro/camoufox/issues/26
+    if headless:
+        warnings.warn(
+            'It is currently not recommended to use headless mode in Camoufox. '
+            'Some WAFs are able to detect headless browsers. The issue is currently being investigated.',
+            category=DetectionWarning,
+        )
+    elif headless is None:
+        headless = False
 
     # Assert the target OS is valid
     if os:
