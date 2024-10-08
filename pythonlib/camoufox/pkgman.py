@@ -344,5 +344,5 @@ def load_yaml(file: str) -> dict:
     """
     Loads a local YAML file and returns it as a dictionary.
     """
-    with open(Path(__file__).parent / file, 'r') as f:
+    with open(LOCAL_DATA / file, 'r') as f:
         return load(f, Loader=CLoader)

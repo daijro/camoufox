@@ -1,6 +1,11 @@
-headless: >-
-    Headless mode in Camoufox is not recommended at this time.
+headless-non-linux: >-
+    Headless mode is only recommended on Linux at this time.
     Some WAFs are able to detect headless browsers. The issue is currently being investigated.
+
+headless-linux: >-
+    Headless mode is only recommended on Linux with Xvfb installed.
+    Please see the install guide here:
+    https://github.com/daijro/camoufox/tree/main/pythonlib#virtual-display
 
 navigator: >-
     Manually setting navigator properties is not recommended.
@@ -30,3 +35,8 @@ proxy_without_geoip: >-
 allow_webgl: >-
     Enabling WebGL can lead to Canvas fingerprinting and detection.
     Camoufox will automatically spoof your vendor and renderer, but it cannot spoof your WebGL fingerprint.
+
+ff_version: >-
+    Spoofing the Firefox version will likely lead to detection.
+    If rotating the Firefox version is absolutely necessary, it would be more advisable to
+    rotate between older versions of Camoufox instead.
