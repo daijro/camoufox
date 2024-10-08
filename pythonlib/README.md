@@ -8,6 +8,16 @@
 
 ---
 
+## What is this?
+
+This Python library wraps around Playwright's API to help automatically generate & inject unique device characteristics (OS, CPU info, navigator, fonts, headers, screen dimensions, viewport size, WebGL, addons, etc.) into Camoufox.
+
+It uses [BrowserForge](https://github.com/daijro/browserforge) under the hood to generate fingerprints that mimic the statistical distribution of device characteristics in real-world traffic.
+
+In addition, it will also calculate your target geolocation, timezone, and locale to avoid proxy protection ([see demo](https://i.imgur.com/UhSHfaV.png)).
+
+---
+
 ## Installation
 
 First, install the `camoufox` package:
@@ -150,6 +160,8 @@ Parameters:
 
 </details>
 
+Camoufox will warn you if your passed configuration might cause leaks.
+
 ---
 
 ### Config
@@ -169,6 +181,8 @@ with Camoufox(
     page.goto("https://www.browserscan.net/webrtc")
 ```
 
+This can be used to enable fetures that have not yet been implemented into the Python library. (You shouldn't use this for injecting device fingerprints. Device data is automatically populated.)
+
 <hr width=50>
 
 ### GeoIP & Proxy Support
@@ -176,6 +190,8 @@ with Camoufox(
 By passing `geoip=True`, or passing in a target IP address, Camoufox will automatically use the target IP's longitude, latitude, timezone, country, locale, & spoof the WebRTC IP address.
 
 It will also calculate and spoof the browser's language based on the distribution of language speakers in the target region.
+
+[See demo](https://i.imgur.com/UhSHfaV.png).
 
 #### Installation
 
@@ -206,8 +222,9 @@ with Camoufox(
 
 ### Remote Server (experimental)
 
-> [!WARNING]
-> This feature is experimental and not meant for production use. It uses a hacky workaround to gain access to undocumented Playwright methods.
+**Warning! This feature is experimental. It uses a hacky workaround to gain access to undocumented Playwright methods.**
+
+Camoufox can be ran as a remote websocket server. It can be accessed from other devices, and languages other than Python supporting the Playwright API.
 
 #### Launching
 
@@ -251,6 +268,35 @@ with sync_playwright() as p:
 
 <hr width=50>
 
+### Virtual Display
+
+In headless mode, all browsers are prone to being detected by anti-bot services due to the drastic differences in the browser's architecture. It is generally **NOT** recommended to use Camoufox in headless mode on a non-Linux OS.
+
+If you are running Linux, and would like to run Camoufox headlessly in a virtual display, install `xvfb`:
+
+#### Debian-based distros
+
+```bash
+sudo apt-get install xvfb
+```
+
+#### Arch-based distros
+
+```bash
+sudo pacman -S xorg-server-xvfb
+```
+
+#### Confirm `Xvfb` is installed:
+
+```bash
+$ which Xvfb
+/usr/bin/Xvfb
+```
+
+Now, passing `headless=True` will spawn a new lightweight virtual display in the background for Camoufox to run in.
+
+<hr width=50>
+
 ### BrowserForge Integration
 
 Camoufox is compatible with [BrowserForge](https://github.com/daijro/browserforge) fingerprints.
@@ -271,7 +317,7 @@ with Camoufox(
 
 **Notes:**
 
-- If Camoufox is being ran in headful mode, the max screen size will be generated based on your monitor's dimensions (+15%).
+- If Camoufox is being ran in headful mode, the max screen size will be generated based on your monitor's dimensions unless otherwise specified.
 
 - To prevent UA-spoofing leaks, Camoufox only generates fingerprints with the same browser version as the current Camoufox version by default.
 

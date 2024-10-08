@@ -116,3 +116,28 @@ class InvalidOS(ValueError):
     """
 
     ...
+
+
+class VirtualDisplayError(Exception):
+    """
+    Raised when there is an error with the virtual display.
+    """
+
+    ...
+
+
+class CannotFindXvfb(VirtualDisplayError):
+    """
+    Raised when Xvfb cannot be found.
+    """
+
+    ...
+    pass
+
+
+class CannotExecuteXvfb(VirtualDisplayError):
+    """
+    Raised when Xvfb cannot be executed.
+    """
+
+    ...

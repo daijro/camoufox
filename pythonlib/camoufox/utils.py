@@ -3,6 +3,7 @@ import sys
 from os import environ
 from pprint import pprint
 from random import randrange
+from shutil import which
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -30,6 +31,9 @@ from .locale import geoip_allowed, get_geolocation, normalize_locale
 from .pkgman import OS_NAME, get_path, installed_verstr
 from .warnings import LeakWarning
 from .xpi_dl import add_default_addons
+
+if OS_NAME == 'lin':
+    from .virtdisplay import VIRTUAL_DISPLAY
 
 LAUNCH_FILE = {
     'win': 'camoufox.exe',
@@ -162,8 +166,7 @@ def get_screen_cons(headless: Optional[bool] = None) -> Optional[Screen]:
 
     # Use the dimensions from the monitor with greatest screen real estate
     monitor = max(monitors, key=lambda m: m.width * m.height)
-    # Add 15% buffer
-    return Screen(max_width=int(monitor.width * 1.15), max_height=int(monitor.height * 1.15))
+    return Screen(max_width=monitor.width, max_height=monitor.height)
 
 
 def update_fonts(config: Dict[str, Any], target_os: str) -> None:
@@ -222,6 +225,35 @@ def _clean_locals(data: Dict[str, Any]) -> Dict[str, Any]:
     del data['playwright']
     del data['persistent_context']
     return data
+
+
+def handle_headless(
+    headless: Optional[bool],
+    env: Dict[str, Union[str, float, bool]],
+    debug: Optional[bool],
+    i_know_what_im_doing: Optional[bool],
+) -> bool:
+    """
+    Handles the headless mode.
+    """
+    # If headless is not being used, return False
+    if not headless:
+        return False
+
+    # Warn the user if headless is being used on a non-Linux OS
+    # https://github.com/daijro/camoufox/issues/26
+    if OS_NAME != 'lin':
+        LeakWarning.warn('headless-non-linux', i_know_what_im_doing)
+        return True
+
+    # If Xvfb is avaliable, use it instead of headless to prevent leaks
+    if which('Xvfb'):
+        env['DISPLAY'] = VIRTUAL_DISPLAY.new_or_reuse(debug=debug)
+        return False
+
+    # If Linux is being used and Xvfb is not avaliable, warn the user
+    LeakWarning.warn('headless-linux', i_know_what_im_doing)
+    return True
 
 
 def merge_into(target: Dict[str, Any], source: Dict[str, Any]) -> None:
@@ -324,13 +356,11 @@ def get_launch_options(
         firefox_user_prefs = {}
     if i_know_what_im_doing is None:
         i_know_what_im_doing = False
+    if env is None:
+        env = cast(Dict[str, Union[str, float, bool]], environ)
 
-    # Warn the user if headless is being used
-    # https://github.com/daijro/camoufox/issues/26
-    if headless:
-        LeakWarning.warn('headless', i_know_what_im_doing)
-    elif headless is None:
-        headless = False
+    # Handle headless mode cases
+    headless = handle_headless(headless, env, debug, i_know_what_im_doing)
 
     # Warn the user for manual config settings
     if not i_know_what_im_doing:
@@ -350,13 +380,14 @@ def get_launch_options(
     # Get the Firefox version
     if ff_version:
         ff_version_str = str(ff_version)
+        LeakWarning.warn('ff_version', i_know_what_im_doing)
     else:
         ff_version_str = installed_verstr().split('.', 1)[0]
 
     # Generate a fingerprint
     if fingerprint is None:
         fingerprint = generate_fingerprint(
-            screen=screen or get_screen_cons(headless),
+            screen=screen or get_screen_cons(headless or 'DISPLAY' in env),
             os=os,
         )
     else:
@@ -402,7 +433,8 @@ def get_launch_options(
         geolocation = get_geolocation(geoip)
         config.update(geolocation.as_config())
 
-    # Raise a warning when a proxy is being used without spoofing geolocation
+    # Raise a warning when a proxy is being used without spoofing geolocation.
+    # This is a very bad idea; the warning cannot be ignored with i_know_what_im_doing.
     elif (
         proxy
         and 'localhost' not in proxy.get('server', '')
@@ -444,7 +476,7 @@ def get_launch_options(
     # Prepare environment variables to pass to Camoufox
     env_vars = {
         **get_env_vars(config, target_os),
-        **(cast(Dict[str, Union[str, float, bool]], environ) if env is None else env),
+        **env,
     }
     return {
         "executable_path": executable_path or get_path(LAUNCH_FILE[OS_NAME]),
