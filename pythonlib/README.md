@@ -136,9 +136,9 @@ Parameters:
     ff_version (Optional[int]):
         Firefox version to use. Defaults to the current Camoufox version.
         To prevent leaks, only use this for special cases.
-    headless (Optional[bool]):
+    headless (Union[bool, Literal['virtual']]):
         Whether to run the browser in headless mode. Defaults to False.
-        WARNING: Please avoid using headless mode until issue #26 is fixed.
+        If you are running linux, passing 'virtual' will use Xvfb.
     executable_path (Optional[str]):
         Custom Camoufox browser executable path.
     firefox_user_prefs (Optional[Dict[str, Any]]):
@@ -270,7 +270,7 @@ with sync_playwright() as p:
 
 ### Virtual Display
 
-In headless mode, all browsers are prone to being detected by anti-bot services due to the drastic differences in the browser's architecture. It is generally **NOT** recommended to use Camoufox in headless mode on a non-Linux OS.
+While Camoufox includes patches to prevent headless detection, running in headless mode may still be detectable in the future. It's recommended to use a virtual display buffer to run Camoufox headlessly.
 
 If you are running Linux, and would like to run Camoufox headlessly in a virtual display, install `xvfb`:
 
@@ -293,7 +293,7 @@ $ which Xvfb
 /usr/bin/Xvfb
 ```
 
-Now, passing `headless=True` will spawn a new lightweight virtual display in the background for Camoufox to run in.
+Now, passing `headless='virtual'` will spawn a new lightweight virtual display in the background for Camoufox to run in.
 
 <hr width=50>
 

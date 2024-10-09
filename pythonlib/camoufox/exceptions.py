@@ -141,3 +141,11 @@ class CannotExecuteXvfb(VirtualDisplayError):
     """
 
     ...
+
+
+class VirtualDisplayNotSupported(VirtualDisplayError):
+    """
+    Raised when the user tried to use a virtual display on a non-Linux OS.
+    """
+
+    ...

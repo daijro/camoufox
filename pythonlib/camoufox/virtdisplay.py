@@ -4,7 +4,12 @@ from glob import glob
 from shutil import which
 from typing import List, Optional
 
-from camoufox.exceptions import CannotExecuteXvfb, CannotFindXvfb
+from camoufox.exceptions import (
+    CannotExecuteXvfb,
+    CannotFindXvfb,
+    VirtualDisplayNotSupported,
+)
+from camoufox.pkgman import OS_NAME
 
 
 class VirtualDisplay:
@@ -72,6 +77,8 @@ class VirtualDisplay:
         """
         Get the display number
         """
+        self.assert_linux()
+
         if self.proc is None:
             self.execute_xvfb_singleton(debug)
         elif debug:
@@ -115,6 +122,14 @@ class VirtualDisplay:
         if self._display is None:
             self._display = self._free_display()
         return self._display
+
+    @staticmethod
+    def assert_linux():
+        """
+        Assert that the current OS is Linux
+        """
+        if OS_NAME != 'lin':
+            raise VirtualDisplayNotSupported("Virtual display is only supported on Linux.")
 
 
 VIRTUAL_DISPLAY = VirtualDisplay()

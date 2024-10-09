@@ -440,6 +440,18 @@ Miscellaneous (battery status, etc)
 - Geolocation, timezone, and locale spoofing
 - etc.
 
+#### Stealth patches
+
+- Avoids main world execution leaks. All page agent javascript is sandboxed
+- Avoids frame execution context leaks
+- Fixes `navigator.webdriver` detection
+- Fixes Firefox headless detection via pointer type ([#26](https://github.com/daijro/camoufox/issues/26))
+- Removed potentially leaking anti-zoom/meta viewport handling patches
+- Uses non-default screen & window sizes
+- Re-enable fission content isolations
+- Re-enable PDF.js
+- Other leaking config properties changed
+
 #### Anti font fingerprinting
 
 - Automatically uses the correct system fonts for your User Agent
@@ -450,13 +462,6 @@ Miscellaneous (battery status, etc)
 
 - Custom implementation of Playwright for the latest Firefox
 - Various config patches to evade bot detection
-- Fixes leaking Playwright patches:
-  - All page agent javascript is sandboxed
-  - Fixes frame execution context leaks
-  - Fixes `navigator.webdriver` detection
-  - Removed potentially leaking anti-zoom/meta viewport handling patches
-  - Re-enable fission content isolation
-  - Re-enable PDF.js
 
 #### Debloat/Optimizations
 
