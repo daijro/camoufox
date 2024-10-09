@@ -3,7 +3,6 @@ import sys
 from os import environ
 from pprint import pprint
 from random import randrange
-from shutil import which
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -227,35 +226,6 @@ def _clean_locals(data: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
-def handle_headless(
-    headless: Optional[bool],
-    env: Dict[str, Union[str, float, bool]],
-    debug: Optional[bool],
-    i_know_what_im_doing: Optional[bool],
-) -> bool:
-    """
-    Handles the headless mode.
-    """
-    # If headless is not being used, return False
-    if not headless:
-        return False
-
-    # Warn the user if headless is being used on a non-Linux OS
-    # https://github.com/daijro/camoufox/issues/26
-    if OS_NAME != 'lin':
-        LeakWarning.warn('headless-non-linux', i_know_what_im_doing)
-        return True
-
-    # If Xvfb is avaliable, use it instead of headless to prevent leaks
-    if which('Xvfb'):
-        env['DISPLAY'] = VIRTUAL_DISPLAY.new_or_reuse(debug=debug)
-        return False
-
-    # If Linux is being used and Xvfb is not avaliable, warn the user
-    LeakWarning.warn('headless-linux', i_know_what_im_doing)
-    return True
-
-
 def merge_into(target: Dict[str, Any], source: Dict[str, Any]) -> None:
     """
     Merges new keys/values from the source dictionary into the target dictionary.
@@ -335,7 +305,7 @@ def get_launch_options(
     allow_webgl: Optional[bool] = None,
     proxy: Optional[Dict[str, str]] = None,
     ff_version: Optional[int] = None,
-    headless: Optional[bool] = None,
+    headless: Optional[Union[bool, Literal['virtual']]] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     launch_options: Optional[Dict[str, Any]] = None,
     debug: Optional[bool] = None,
@@ -348,6 +318,8 @@ def get_launch_options(
         config = {}
 
     # Set default values for optional arguments
+    if headless is None:
+        headless = False
     if addons is None:
         addons = []
     if args is None:
@@ -360,7 +332,9 @@ def get_launch_options(
         env = cast(Dict[str, Union[str, float, bool]], environ)
 
     # Handle headless mode cases
-    headless = handle_headless(headless, env, debug, i_know_what_im_doing)
+    if headless == 'virtual':
+        env['DISPLAY'] = VIRTUAL_DISPLAY.new_or_reuse(debug=debug)
+        headless = False
 
     # Warn the user for manual config settings
     if not i_know_what_im_doing:

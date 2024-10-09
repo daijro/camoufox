@@ -7,6 +7,7 @@ from playwright.async_api import (
     Playwright,
     PlaywrightContextManager,
 )
+from typing_extensions import Literal
 
 from .addons import DefaultAddons
 from .utils import ListOrString, _clean_locals, get_launch_options
@@ -51,7 +52,7 @@ async def AsyncNewBrowser(
     screen: Optional[Screen] = None,
     fingerprint: Optional[Fingerprint] = None,
     ff_version: Optional[int] = None,
-    headless: Optional[bool] = None,
+    headless: Optional[Union[bool, Literal['virtual']]] = None,
     executable_path: Optional[str] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     proxy: Optional[Dict[str, str]] = None,
@@ -105,9 +106,9 @@ async def AsyncNewBrowser(
         ff_version (Optional[int]):
             Firefox version to use. Defaults to the current Camoufox version.
             To prevent leaks, only use this for special cases.
-        headless (Optional[bool]):
+        headless (Union[bool, Literal['virtual']]):
             Whether to run the browser in headless mode. Defaults to False.
-            WARNING: Please avoid using headless mode until issue #26 is fixed.
+            If you are running linux, passing 'virtual' will use Xvfb.
         executable_path (Optional[str]):
             Custom Camoufox browser executable path.
         firefox_user_prefs (Optional[Dict[str, Any]]):
