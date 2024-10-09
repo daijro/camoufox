@@ -31,6 +31,9 @@ def _cast_to_properties(
         if isinstance(data, dict):
             _cast_to_properties(camoufox_data, type_key, data, ff_version)
             continue
+        # Fix values that are out of bounds
+        if type_key.startswith("screen.") and isinstance(data, int) and data < 0:
+            data = 0
         # Replace the Firefox versions with ff_version
         if ff_version and isinstance(data, str):
             data = re.sub(r'(?<!\d)(1[0-9]{2})(\.0)(?!\d)', rf'{ff_version}\2', data)
