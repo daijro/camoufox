@@ -1,0 +1,31 @@
+diff --git a/layout/style/nsMediaFeatures.cpp b/layout/style/nsMediaFeatures.cpp
+index cc86d1abf6..bfc4d0f1d8 100644
+--- a/layout/style/nsMediaFeatures.cpp
++++ b/layout/style/nsMediaFeatures.cpp
+@@ -372,24 +372,10 @@ static PointerCapabilities GetPointerCapabilities(const Document* aDocument,
+ 
+   // The default value for Desktop is mouse-type pointer, and for Android
+   // a coarse pointer.
+-  const PointerCapabilities kDefaultCapabilities =
+ #ifdef ANDROID
+-      PointerCapabilities::Coarse;
+-#else
+-      PointerCapabilities::Fine | PointerCapabilities::Hover;
++      return PointerCapabilities::Coarse;
+ #endif
+-  if (aDocument->ShouldResistFingerprinting(
+-          RFPTarget::CSSPointerCapabilities)) {
+-    return kDefaultCapabilities;
+-  }
+-
+-  int32_t intValue;
+-  nsresult rv = LookAndFeel::GetInt(aID, &intValue);
+-  if (NS_FAILED(rv)) {
+-    return kDefaultCapabilities;
+-  }
+-
+-  return static_cast<PointerCapabilities>(intValue);
++  return PointerCapabilities::Fine | PointerCapabilities::Hover;
+ }
+ 
+ PointerCapabilities Gecko_MediaFeatures_PrimaryPointerCapabilities(
