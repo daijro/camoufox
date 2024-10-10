@@ -8,7 +8,10 @@ debs := python3 python3-dev python3-pip p7zip-full golang-go msitools wget aria2
 rpms := python3 python3-devel p7zip golang msitools wget aria2
 pacman := python python-pip p7zip go msitools wget aria2
 
-.PHONY: help fetch setup setup-minimal clean set-target distclean build package build-launcher check-arch revert edits run bootstrap mozbootstrap dir package-linux package-macos package-windows vcredist_arch patch unpatch workspace check-arg
+.PHONY: help fetch setup setup-minimal clean set-target distclean build package \
+        build-launcher check-arch revert edits run bootstrap mozbootstrap dir \
+        package-linux package-macos package-windows vcredist_arch patch unpatch \
+        workspace check-arg edit-cfg ff-dbg
 
 help:
 	@echo "Available targets:"
@@ -28,6 +31,8 @@ help:
 	@echo "  package-macos   - Package Camoufox for macOS"
 	@echo "  package-windows - Package Camoufox for Windows"
 	@echo "  run             - Run Camoufox"
+	@echo "  edit-cfg        - Edit camoufox.cfg"
+	@echo "  ff-dbg          - Setup vanilla Firefox with minimal patches"
 	@echo "  patch           - Apply a patch"
 	@echo "  unpatch         - Remove a patch"
 	@echo "  workspace       - Sets the workspace to a patch, assuming its applied"
@@ -59,6 +64,14 @@ setup: setup-minimal
 		git commit -m "Initial commit" && \
 		git tag -a unpatched -m "Initial commit"
 
+ff-dbg: setup
+	# Only apply patches to help debug vanilla Firefox
+	make patch ./patches/chromeutil.patch
+	make patch ./patches/debug-url-navigation.patch
+	echo "\nLOCAL_INCLUDES += ['/camoucfg']" >> $(cf_source_dir)/dom/base/moz.build
+	touch $(cf_source_dir)/_READY
+	make checkpoint
+
 revert:
 	cd $(cf_source_dir) && git reset --hard unpatched
 
@@ -80,7 +93,7 @@ bootstrap: dir
 	make mozbootstrap
 
 diff:
-	@cd $(cf_source_dir) && git diff
+	@cd $(cf_source_dir) && git diff $(_ARGS)
 
 checkpoint:
 	cd $(cf_source_dir) && git commit -m "Checkpoint" -a -uno
@@ -159,10 +172,16 @@ run-pw:
 		--release $(release)
 
 run:
-	CAMOU_CONFIG='{"debug": true}' \
 	cd $(cf_source_dir) \
 	&& rm -rf ~/.camoufox $(cf_source_dir)/obj-x86_64-pc-linux-gnu/tmp/profile-default \
-	&& ./mach run $(args)
+	&& CAMOU_CONFIG='{"debug": true}' ./mach run $(args)
+
+edit-cfg:
+	@if [ ! -f $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox.cfg ]; then \
+		echo "Error: camoufox.cfg not found. Apply config.patch first."; \
+		exit 1; \
+	fi
+	$(EDITOR) $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox.cfg
 
 check-arg:
 	@if [ -z "$(_ARGS)" ]; then \
@@ -186,7 +205,7 @@ workspace:
 	else \
 		echo "Patch is not applied. Proceeding with application..."; \
 	fi
-	make checkpoint || true
+	make checkpoint || trueZ
 	make patch $(_ARGS)
 
 vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')
