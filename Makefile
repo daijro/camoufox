@@ -8,7 +8,7 @@ debs := python3 python3-dev python3-pip p7zip-full golang-go msitools wget aria2
 rpms := python3 python3-devel p7zip golang msitools wget aria2
 pacman := python python-pip p7zip go msitools wget aria2
 
-.PHONY: help fetch setup setup-minimal clean set-target distclean build package build-launcher check-arch revert edits run bootstrap mozbootstrap dir package-linux package-macos package-windows vcredist_arch
+.PHONY: help fetch setup setup-minimal clean set-target distclean build package build-launcher check-arch revert edits run bootstrap mozbootstrap dir package-linux package-macos package-windows vcredist_arch patch unpatch workspace check-arg
 
 help:
 	@echo "Available targets:"
@@ -28,6 +28,12 @@ help:
 	@echo "  package-macos   - Package Camoufox for macOS"
 	@echo "  package-windows - Package Camoufox for Windows"
 	@echo "  run             - Run Camoufox"
+	@echo "  patch           - Apply a patch"
+	@echo "  unpatch         - Remove a patch"
+	@echo "  workspace       - Sets the workspace to a patch, assuming its applied"
+
+_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+$(eval $(_ARGS):;@:)
 
 fetch:
 	aria2c -x16 -s16 -k1M -o $(ff_source_tarball) "https://archive.mozilla.org/pub/firefox/releases/$(version)/source/firefox-$(version).source.tar.xz"; \
@@ -77,7 +83,7 @@ diff:
 	@cd $(cf_source_dir) && git diff
 
 checkpoint:
-	cd $(cf_source_dir) && git commit -m "Checkpoint" -a
+	cd $(cf_source_dir) && git commit -m "Checkpoint" -a -uno
 
 clean:
 	cd $(cf_source_dir) && git clean -fdx && ./mach clobber
@@ -153,6 +159,34 @@ run-pw:
 		--release $(release)
 
 run:
-	cd $(cf_source_dir) && rm -rf ~/.camoufox && ./mach run
+	CAMOU_CONFIG='{"debug": true}' \
+	cd $(cf_source_dir) \
+	&& rm -rf ~/.camoufox $(cf_source_dir)/obj-x86_64-pc-linux-gnu/tmp/profile-default \
+	&& ./mach run $(args)
+
+check-arg:
+	@if [ -z "$(_ARGS)" ]; then \
+		echo "Error: No file specified. Usage: make <command> ./patches/file.patch"; \
+		exit 1; \
+	fi
+
+patch:
+	@make check-arg $(_ARGS);
+	cd $(cf_source_dir) && patch -p1 -i ../$(_ARGS)
+
+unpatch:
+	@make check-arg $(_ARGS);
+	cd $(cf_source_dir) && patch -p1 -R -i ../$(_ARGS)
+
+workspace:
+	@make check-arg $(_ARGS);
+	@if (cd $(cf_source_dir) && patch -p1 -R --dry-run --force -i ../$(_ARGS)) > /dev/null 2>&1; then \
+		echo "Patch is already applied. Unapplying..."; \
+		make unpatch $(_ARGS); \
+	else \
+		echo "Patch is not applied. Proceeding with application..."; \
+	fi
+	make checkpoint || true
+	make patch $(_ARGS)
 
 vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')
