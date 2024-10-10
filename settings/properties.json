@@ -64,5 +64,6 @@
   { "property": "locale:script", "type": "str" },
   { "property": "humanize", "type": "bool" },
   { "property": "humanize:maxTime", "type": "double" },
-  { "property": "showcursor", "type": "bool" }
+  { "property": "showcursor", "type": "bool" },
+  { "property": "debug", "type": "bool" }
 ]
