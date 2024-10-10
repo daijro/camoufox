@@ -1,13 +1,14 @@
 diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
-index cc7fa914c0..760a95487e 100644
+index bee5309c04..3d0df30224 100644
 --- a/browser/base/content/browser-init.js
 +++ b/browser/base/content/browser-init.js
-@@ -257,6 +257,21 @@ var gBrowserInit = {
+@@ -246,6 +246,22 @@ var gBrowserInit = {
      // Update UI if browser is under remote control.
      gRemoteControl.updateVisualCue();
  
 +    // Camoufox: print URL changes to console
 +    if (ChromeUtils.isCamouDebug()) {
++      ChromeUtils.camouDebug("Debug mode ON.");
 +      gBrowser.addTabsProgressListener({
 +        onLocationChange(aBrowser, aWebProgress, aRequest, aLocation, aFlags) {
 +          if (aBrowser === gBrowser.selectedBrowser) {
