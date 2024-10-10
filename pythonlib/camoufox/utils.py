@@ -412,7 +412,7 @@ def get_launch_options(
     elif (
         proxy
         and 'localhost' not in proxy.get('server', '')
-        and not is_domain_set('geolocation', config)
+        and not is_domain_set(config, 'geolocation')
     ):
         LeakWarning.warn('proxy_without_geoip')
 
