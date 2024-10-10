@@ -502,8 +502,8 @@ Camoufox performs well against every major WAF I've tested. (Original test sites
 | ‣ [recaptcha-demo.appspot.com](https://recaptcha-demo.appspot.com/recaptcha-v3-request-scores.php) | ✔️ 0.9                                                    |
 | ‣ [berstend.github.io](https://berstend.github.io/static/recaptcha/v3-programmatic.html)           | ✔️ 0.9                                                    |
 | **DataDome**                                                                                       | ✔️                                                        |
+| ‣ [DataDome bot bounty](https://yeswehack.com/programs/datadome-bot-bounty#program-description)    | ✔️ All test sites pass.                                   |
 | ‣ [hermes.com](https://www.hermes.com/us/en/)                                                      | ✔️                                                        |
-| ‣ [antoinevastel.com](https://antoinevastel.com/bots/datadome)                                     | ✔️                                                        |
 | **Imperva**                                                                                        | ✔️                                                        |
 | ‣ [ticketmaster.es](https://www.ticketmaster.es/)                                                  | ✔️                                                        |
 | **Cloudflare**                                                                                     | ✔️                                                        |
