@@ -1,5 +1,6 @@
 rm -rf ./dist
 rm -rf ./camoufox/*.mmdb
+rm -rf ./camoufox/*.png
 
 python -m build
 twine check dist/*
