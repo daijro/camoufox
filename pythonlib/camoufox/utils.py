@@ -26,7 +26,7 @@ from .exceptions import (
 )
 from .fingerprints import from_browserforge, generate_fingerprint
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
-from .locale import geoip_allowed, get_geolocation, normalize_locale
+from .locale import geoip_allowed, get_geolocation, handle_locale
 from .pkgman import OS_NAME, get_path, installed_verstr
 from .warnings import LeakWarning
 from .xpi_dl import add_default_addons
@@ -418,7 +418,7 @@ def get_launch_options(
 
     # Set locale
     if locale:
-        parsed_locale = normalize_locale(locale)
+        parsed_locale = handle_locale(locale)
         config.update(parsed_locale.as_config())
 
     # Pass the humanize option

@@ -86,9 +86,30 @@ class UnknownIPLocation(LocaleError):
     ...
 
 
-class UnknownTerritory(LocaleError):
+class InvalidLocale(LocaleError):
+    """
+    Raised when the locale input is invalid.
+    """
+
+    @classmethod
+    def invalid_input(cls, locale: str) -> 'InvalidLocale':
+        return cls(
+            f"Invalid locale: '{locale}'. Must be either a region, language, "
+            "language-region, or language-script-region."
+        )
+
+
+class UnknownTerritory(InvalidLocale):
     """
     Raised when the territory is unknown.
+    """
+
+    ...
+
+
+class UnknownLanguage(InvalidLocale):
+    """
+    Raised when the language is unknown.
     """
 
     ...

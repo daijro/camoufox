@@ -32,6 +32,10 @@ ff_version: >-
     If rotating the Firefox version is absolutely necessary, it would be more advisable to
     rotate between older versions of Camoufox instead.
 
+no_region: >-
+    Because you did not pass in a locale region, Camoufox will generate one for you.
+    This can cause suspicion if your IP does not match your locale region.
+
 # headless-non-linux: >-
 #     Headless mode is only recommended on Linux at this time.
 #     Some WAFs are able to detect headless browsers. The issue is currently being investigated.
