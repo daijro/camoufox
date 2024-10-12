@@ -182,6 +182,13 @@ class HumanizeMouseTrajectory {
     return 150;
   }
 
+  int32_t getMinTime() const {
+    if (auto minTime = MaskConfig::GetDouble("humanize:minTime")) {
+      return static_cast<int32_t>(minTime.value() * 100);
+    }
+    return 0;
+  }
+
   std::vector<std::vector<double>> tweenPoints(
       const std::vector<std::vector<double>>& points) const {
     assert(isListOfPoints(points) && "List of points not valid");
@@ -196,7 +203,7 @@ class HumanizeMouseTrajectory {
     // Uses a power scale to keep the speed consistent
     int targetPoints = std::min(
         getMaxTime(),
-        std::max(2, static_cast<int>(std::pow(totalLength, 0.25) * 20)));
+        std::max(getMinTime() + 2, static_cast<int>(std::pow(totalLength, 0.25) * 20)));
 
     std::vector<std::vector<double>> res;
     for (int i = 0; i < targetPoints; i++) {
