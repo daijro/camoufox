@@ -15,6 +15,7 @@ launch.exe
 pythonlib/*.png
 scripts/*.png
 test*
+.vscode
 
 # Old data
 _old/

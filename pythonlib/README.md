@@ -90,16 +90,17 @@ async with AsyncCamoufox(headless=False) as browser:
     await page.goto("https://example.com")
 ```
 
+### Parameters List
+
 <details>
-<summary>Parameters</summary>
+
+<summary><strong>See parameters list...</strong></summary>
 
 ```
 Launches a new browser instance for Camoufox.
 Accepts all Playwright Firefox launch options, along with the following:
 
 Parameters:
-    config (Optional[Dict[str, Any]]):
-        Camoufox properties to use.
     os (Optional[ListOrString]):
         Operating system to use for the fingerprint generation.
         Can be "windows", "macos", "linux", or a list to randomly choose from.
@@ -130,12 +131,16 @@ Parameters:
         Constrains the screen dimensions of the generated fingerprint.
         Takes a browserforge.fingerprints.Screen instance.
     fingerprint (Optional[Fingerprint]):
-        Use a custom BrowserForge fingerprint. Note: Not all values will be implemented.
+        *WILL BE DEPRECATED SOON*
+        Pass a custom BrowserForge fingerprint. Note: Not all values will be implemented.
         If not provided, a random fingerprint will be generated based on the provided
         `os` & `screen` constraints.
     ff_version (Optional[int]):
         Firefox version to use. Defaults to the current Camoufox version.
         To prevent leaks, only use this for special cases.
+    config (Optional[Dict[str, Any]]):
+        Camoufox properties to use. Camoufox will warn you if you are manually setting
+        properties that it handles internally.
     headless (Union[bool, Literal['virtual']]):
         Whether to run the browser in headless mode. Defaults to False.
         If you are running linux, passing 'virtual' will use Xvfb.
@@ -163,27 +168,6 @@ Parameters:
 Camoufox will warn you if your passed configuration might cause leaks.
 
 ---
-
-### Config
-
-Camoufox [config data](https://github.com/daijro/camoufox?tab=readme-ov-file#fingerprint-injection) can be passed as a dictionary to the `config` parameter:
-
-```python
-from camoufox.sync_api import Camoufox
-
-with Camoufox(
-    config={
-        'webrtc:ipv4': '123.45.67.89',
-        'webrtc:ipv6': 'e791:d37a:88f6:48d1:2cad:2667:4582:1d6d',
-    }
-) as browser:
-    page = browser.new_page()
-    page.goto("https://www.browserscan.net/webrtc")
-```
-
-This can be used to enable fetures that have not yet been implemented into the Python library. (You shouldn't use this for injecting device fingerprints. Device data is automatically populated.)
-
-<hr width=50>
 
 ### GeoIP & Proxy Support
 
@@ -315,13 +299,9 @@ with Camoufox(
     page.goto("https://example.com/")
 ```
 
-**Notes:**
+If Camoufox is being ran in headful mode, the max screen size will be generated based on your monitor's dimensions unless otherwise specified.
 
-- If Camoufox is being ran in headful mode, the max screen size will be generated based on your monitor's dimensions unless otherwise specified.
-
-- To prevent UA-spoofing leaks, Camoufox only generates fingerprints with the same browser version as the current Camoufox version by default.
-
-  - If rotating the Firefox version is absolutely necessary, it would be more advisable to rotate between older versions of Camoufox instead.
+**Note:** To prevent UA mismatch detection, Camoufox only generates fingerprints with the same browser version as the current Camoufox version by default. If rotating the Firefox version is absolutely necessary, it would be more advisable to rotate between older versions of Camoufox instead.
 
 <details>
 <summary>Injecting custom Fingerprint objects...</summary>
@@ -346,5 +326,28 @@ with Camoufox(fingerprint=fg.generate()) as browser:
 **Note:** As of now, some properties from BrowserForge fingerprints will not be passed to Camoufox. This is due to the outdated fingerprint dataset from Apify's fingerprint-suite (see [here](https://github.com/apify/fingerprint-suite/discussions/308)). Properties will be re-enabled as soon as an updated dataset is available.
 
 </details>
+
+<hr width=50>
+
+### Config
+
+If needed, Camoufox [config data](https://github.com/daijro/camoufox?tab=readme-ov-file#fingerprint-injection) can be overridden/passed as a dictionary to the `config` parameter. This can be used to enable features that have not yet been implemented into the Python library.
+
+Although, this isn't recommended, as Camoufox will populate this data for you automatically. See the parameters list above for more proper usage.
+
+```python
+from camoufox.sync_api import Camoufox
+
+with Camoufox(
+    config={
+        'webrtc:ipv4': '123.45.67.89',
+        'webrtc:ipv6': 'e791:d37a:88f6:48d1:2cad:2667:4582:1d6d',
+    }
+) as browser:
+    page = browser.new_page()
+    page.goto("https://www.browserscan.net/webrtc")
+```
+
+Camoufox will warn you if you are manually setting properties that the Python library handles internally.
 
 ---
