@@ -174,7 +174,8 @@ run-pw:
 run:
 	cd $(cf_source_dir) \
 	&& rm -rf ~/.camoufox $(cf_source_dir)/obj-x86_64-pc-linux-gnu/tmp/profile-default \
-	&& CAMOU_CONFIG='{"debug": true}' ./mach run $(args)
+	&& CAMOU_CONFIG=$${CAMOU_CONFIG:-'{}'} \
+	&& CAMOU_CONFIG="$${CAMOU_CONFIG%?}, \"debug\": true}" ./mach run $(args)
 
 edit-cfg:
 	@if [ ! -f $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox.cfg ]; then \
