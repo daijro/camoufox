@@ -6,6 +6,11 @@ navigator: >-
 locale: >-
     Use the `locale` parameter in Camoufox instead of setting the config manually.
 
+geolocation: >-
+    Please use the `geoip` parameter in Camoufox instead of setting your geolocation manually.
+    This can lead to detection if your target geolocation does not match your IP.
+    Pass `geoip=True` or a target IP (ex: geoip='123.45.67.89') to let Camoufox populate this data for you.
+
 header-ua: >-
     Do not set the header.User-Agent manually. Camoufox will generate a User-Agent for you.
 
@@ -35,12 +40,3 @@ ff_version: >-
 no_region: >-
     Because you did not pass in a locale region, Camoufox will generate one for you.
     This can cause suspicion if your IP does not match your locale region.
-
-# headless-non-linux: >-
-#     Headless mode is only recommended on Linux at this time.
-#     Some WAFs are able to detect headless browsers. The issue is currently being investigated.
-
-# headless-linux: >-
-#     Headless mode is only recommended on Linux with Xvfb installed.
-#     Please see the install guide here:
-#     https://github.com/daijro/camoufox/tree/main/pythonlib#virtual-display

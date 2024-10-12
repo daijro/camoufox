@@ -254,7 +254,7 @@ def is_domain_set(
     """
     for prop in properties:
         # If the . prefix exists, check if the domain is a prefix of any key in the config
-        if prop.endswith('.'):
+        if prop[-1] in ('.', ':'):
             if any(key.startswith(prop) for key in config):
                 return True
         # Otherwise, check if the domain is a direct key in the config
@@ -270,9 +270,12 @@ def warn_manual_config(config: Dict[str, Any]) -> None:
     """
     # Manual locale setting
     if is_domain_set(
-        config, 'navigator.language', 'navigator.languages', 'headers.Accept-Language'
+        config, 'navigator.language', 'navigator.languages', 'headers.Accept-Language', 'locale:'
     ):
         LeakWarning.warn('locale', False)
+    # Manual geolocation and timezone setting
+    if is_domain_set(config, 'geolocation:', 'timezone'):
+        LeakWarning.warn('geolocation', False)
     # Manual User-Agent setting
     if is_domain_set(config, 'headers.User-Agent'):
         LeakWarning.warn('header-ua', False)
