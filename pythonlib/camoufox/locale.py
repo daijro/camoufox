@@ -7,8 +7,15 @@ import numpy as np
 from language_tags import tags
 
 from camoufox.pkgman import LOCAL_DATA, rprint, webdl
+from camoufox.warnings import LeakWarning
 
-from .exceptions import NotInstalledGeoIPExtra, UnknownIPLocation, UnknownTerritory
+from .exceptions import (
+    InvalidLocale,
+    NotInstalledGeoIPExtra,
+    UnknownIPLocation,
+    UnknownLanguage,
+    UnknownTerritory,
+)
 from .ip import validate_ip
 
 try:
@@ -90,9 +97,7 @@ def verify_locales(locales: List[str]) -> None:
     for loc in locales:
         if tags.check(loc):
             continue
-        raise ValueError(
-            f"Invalid locale: '{loc}'. All locales must be in the format of language[-script][-region]"
-        )
+        raise InvalidLocale.invalid_input(loc)
 
 
 def normalize_locale(locale: str) -> Locale:
@@ -107,7 +112,7 @@ def normalize_locale(locale: str) -> Locale:
     # Parse the locale
     parser = tags.tag(locale)
     if not parser.region:
-        raise ValueError(f"Invalid locale: {locale}. Region is required.")
+        raise InvalidLocale.invalid_input(locale)
 
     record = parser.language.data['record']
 
@@ -117,6 +122,29 @@ def normalize_locale(locale: str) -> Locale:
         region=parser.region.data['record']['Subtag'],
         script=record.get('Suppress-Script'),
     )
+
+
+def handle_locale(locale: str) -> Locale:
+    """
+    Handles a locale input, normalizing it if necessary.
+    """
+    if len(locale) > 3:
+        return normalize_locale(locale)
+
+    try:
+        return SELECTOR.from_region(locale)
+    except UnknownTerritory:
+        pass
+
+    try:
+        language = SELECTOR.from_language(locale)
+    except UnknownLanguage:
+        pass
+    else:
+        LeakWarning.warn('no_region')
+        return language
+
+    raise InvalidLocale.invalid_input(locale)
 
 
 """
@@ -176,7 +204,7 @@ def get_geolocation(ip: str) -> Geolocation:
 
     with geoip2.database.Reader(str(MMDB_FILE)) as reader:
         resp = reader.city(ip)
-        iso_code = cast(str, resp.registered_country.iso_code)
+        iso_code = cast(str, resp.registered_country.iso_code).upper()
         location = resp.location
 
         # Check if any required attributes are missing
@@ -184,8 +212,7 @@ def get_geolocation(ip: str) -> Geolocation:
             raise UnknownIPLocation(f"Unknown IP location: {ip}")
 
         # Get a statistically correct locale based on the country code
-        locale_finder = GetLocaleFromTerritory(iso_code)
-        locale = locale_finder.get_locale()
+        locale = SELECTOR.from_region(iso_code)
 
         return Geolocation(
             locale=locale,
@@ -211,60 +238,100 @@ def get_unicode_info() -> ET.Element:
     return data
 
 
-class GetLocaleFromTerritory:
+def _as_float(element: ET.Element, attr: str) -> float:
     """
-    Calculates a random language based on the territory code,
-    based on the probability that a person speaks the language in the territory.
+    Converts an attribute to a float.
+    """
+    return float(element.get(attr, 0))
+
+
+class StatisticalLocaleSelector:
+    """
+    Selects a random locale based on statistical data.
+    Takes either a territory code or a language code, and generates a Locale object.
     """
 
-    def __init__(self, iso_code: str):
-        self.iso_code = iso_code.upper()
+    def __init__(self):
         self.root = get_unicode_info()
-        self.languages, self.probabilities = self._load_territory_data()
 
-    def _load_territory_data(self) -> Tuple[np.ndarray, np.ndarray]:
-        territory = self.root.find(f"territory[@type='{self.iso_code}']")
-
+    def _load_territory_data(self, iso_code: str) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Calculates a random language based on the territory code,
+        based on the probability that a person speaks the language in the territory.
+        """
+        territory = self.root.find(f"territory[@type='{iso_code}']")
         if territory is None:
-            raise UnknownTerritory(f"Unknown territory: {self.iso_code}")
+            raise UnknownTerritory(f"Unknown territory: {iso_code}")
 
-        lang_population = territory.findall('languagePopulation')
+        lang_populations = territory.findall('languagePopulation')
+        if not lang_populations:
+            raise ValueError(f"No language data found for region: {iso_code}")
 
-        if not lang_population:
-            raise ValueError(f"No language data found for territory: {self.iso_code}")
+        languages = np.array([lang.get('type') for lang in lang_populations])
+        percentages = np.array([_as_float(lang, 'populationPercent') for lang in lang_populations])
 
-        # Use list comprehension for faster data extraction
-        languages = np.array([lang.get('type') for lang in lang_population])
-        percentages = np.array(
-            [float(lang.get('populationPercent', '0')) for lang in lang_population]
-        )
+        return self.normalize_probabilities(languages, percentages)
 
-        # Normalize probabilities
-        total = np.sum(percentages)
-        probabilities = percentages / total
-
-        return languages, probabilities
-
-    def get_random_language(self) -> str:
+    def _load_language_data(self, language: str) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Get a random language based on the territory ISO code.
+        Calculates a random region for a language
+        based on the total speakers of the language in that region.
         """
-        return np.random.choice(self.languages, p=self.probabilities)
+        territories = self.root.findall(f'.//territory/languagePopulation[@type="{language}"]/..')
+        if not territories:
+            raise UnknownLanguage(f"No region data found for language: {language}")
 
-    def get_locale(self) -> Locale:
+        regions = []
+        percentages = []
+
+        for terr in territories:
+            region = terr.get('type')
+            if region is None:
+                continue  # Skip if region is not found
+
+            lang_pop = terr.find(f'languagePopulation[@type="{language}"]')
+            if lang_pop is None:
+                continue  # This shouldn't happen due to our XPath, but just in case
+
+            regions.append(region)
+            percentages.append(
+                _as_float(lang_pop, 'populationPercent')
+                * _as_float(terr, 'literacyPercent')
+                / 10_000
+                * _as_float(terr, 'population')
+            )
+
+        if not regions:
+            raise ValueError(f"No valid region data found for language: {language}")
+
+        return self.normalize_probabilities(np.array(regions), np.array(percentages))
+
+    def normalize_probabilities(
+        self, languages: np.ndarray, freq: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Normalize probabilities.
+        """
+        total = np.sum(freq)
+        return languages, freq / total
+
+    def from_region(self, region: str) -> Locale:
         """
         Get a random locale based on the territory ISO code.
         Returns as a Locale object.
         """
-        language = self.get_random_language()
-        return normalize_locale(f"{language}-{self.iso_code}")
+        languages, probabilities = self._load_territory_data(region)
+        language = np.random.choice(languages, p=probabilities).replace('_', '-')
+        return normalize_locale(f"{language}-{region}")
+
+    def from_language(self, language: str) -> Locale:
+        """
+        Get a random locale based on the language.
+        Returns as a Locale object.
+        """
+        regions, probabilities = self._load_language_data(language)
+        region = np.random.choice(regions, p=probabilities)
+        return normalize_locale(f"{language}-{region}")
 
 
-if __name__ == "__main__":
-    # Extra tests...
-    from timeit import timeit
-
-    print('LanguageSelector:', timeit(lambda: GetLocaleFromTerritory('ES'), number=100))
-
-    ts = GetLocaleFromTerritory('ES')
-    print('get_random_language:', timeit(lambda: ts.get_random_language(), number=10000))
+SELECTOR = StatisticalLocaleSelector()
