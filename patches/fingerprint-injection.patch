@@ -463,52 +463,6 @@ index 3a90c93c01..91d673039b 100644
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
-diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
-index 4e43425ef9..26bbfdc868 100644
---- a/dom/canvas/ClientWebGLContext.cpp
-+++ b/dom/canvas/ClientWebGLContext.cpp
-@@ -4,6 +4,7 @@
-  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
- 
- #include "ClientWebGLContext.h"
-+#include "MaskConfig.hpp"
- 
- #include <bitset>
- 
-@@ -2399,6 +2400,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
- 
-         switch (pname) {
-           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
-+            if (auto value = MaskConfig::GetString("webGl:renderer")) {
-+              ret = Some(value.value());
-+              break;
-+            }
-             ret = GetUnmaskedRenderer();
-             if (ret && StaticPrefs::webgl_sanitize_unmasked_renderer()) {
-               *ret = webgl::SanitizeRenderer(*ret);
-@@ -2406,6 +2411,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
-             break;
- 
-           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
-+            if (auto value = MaskConfig::GetString("webGl:vendor")) {
-+              ret = Some(value.value());
-+              break;
-+            }
-             ret = GetUnmaskedVendor();
-             break;
- 
-diff --git a/dom/canvas/moz.build b/dom/canvas/moz.build
-index 3a533d36d1..41d74d9b3f 100644
---- a/dom/canvas/moz.build
-+++ b/dom/canvas/moz.build
-@@ -221,3 +221,6 @@ if CONFIG["CC_TYPE"] == "gcc":
- 
- # Add libFuzzer configuration directives
- include("/tools/fuzzing/libfuzzer-config.mozbuild")
-+
-+# DOM Mask
-+LOCAL_INCLUDES += ["/camoucfg"]
-\ No newline at end of file
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
 index b05e409a84..8e0f7ea657 100644
 --- a/dom/workers/WorkerNavigator.cpp

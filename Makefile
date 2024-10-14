@@ -109,7 +109,7 @@ build:
 	@if [ ! -f $(cf_source_dir)/_READY ]; then \
 		make dir; \
 	fi
-	cd $(cf_source_dir) && ./mach build
+	cd $(cf_source_dir) && ./mach build $(_ARGS)
 
 edits:
 	python ./scripts/developer.py $(version) $(release)
