@@ -23,7 +23,7 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 - WebRTC IP spoofing ✅
 - Human-like mouse movement 🖱️
 - Blocks & circumvents ads 🛡️
-- Debloated & optimized for memory and speed ⚡
+- Debloated & optimized for memory efficiency ⚡
 - [PyPi package](https://pypi.org/project/camoufox/) for updates & auto fingerprint injection 📦
 - Stays up to date with the latest Firefox version 🕓
 
@@ -70,7 +70,7 @@ Camoufox is built on top of Firefox/Juggler instead of Chromium because:
 - Remote hosting Camoufox as a Playwright server
 - Integrate into [hrequests](https://github.com/daijro/hrequests)
 - Human-like typing & ~~mouse movement~~ ✔️
-- WebGL fingerprint spoofing through ANGLE rendering
+- Auto-rotating WebGL fingerprints
 - Create integration tests
 - Chromium port (long term)
 
@@ -336,17 +336,56 @@ Camoufox implements WebRTC IP spoofing at the protocol level by modifying ICE ca
 WebGL
 </summary>
 
-Camoufox has experimental support for spoofing WebGL properties.
+### WebGL in Camoufox
 
-| Property       | Status | Description                                     |
-| -------------- | ------ | ----------------------------------------------- |
-| webGl:renderer | ✅     | Spoofs the name of the unmasked WebGL renderer. |
-| webGl:vendor   | ✅     | Spoofs the name of the unmasked WebGL vendor.   |
+WebGL is disabled in Camoufox by default. To enable it, set the `webgl.disabled` Firefox preference to `false`.
 
-**Notes:**
+WebGL being disabled typically doesn't trigger detection by WAFs, so you generally don't need to be concerned about it. Only use WebGL when it's absolutely necessary for your specific use case.
 
-- Spoofing your unmasked WebGL provider does NOT spoof your [WebGL fingerprint](https://scrapfly.io/web-scraping-tools/webgl-fingerprint). **This can cause detection!**
-- WebGL is disabled in Camoufox by default. To enable it, set the `webgl.disabled` preference to `false`.
+Because I don't have a dataset of WebGL fingerprints to rotate against, WebGL fingerprint rotation is not implemented in the Camoufox Python library. If you need to spoof WebGL, you can do so manually with the following properties.
+
+### Demo site
+
+This repository includes a demo site (see [here](https://github.com/daijro/camoufox/blob/main/scripts/examples/webgl.html)) that prints your browser's WebGL parameters. You can use this site to generate WebGL fingerprints for Camoufox from other devices.
+
+<img src="https://i.imgur.com/jwT5VqG.png" width="80%">
+
+### Properties
+
+Camoufox supports spoofing WebGL parameters, supported extensions, context attributes, and shader precision formats.
+
+**Note**: Do NOT randomly assign values to these properties. WAFs hash your WebGL fingerprint and compare it against a dataset. Randomly assigning values will lead to detection as an unknown device.
+
+| Property                                        | Description                                                                                                                      | Example                                                                                 |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| webGl:renderer                                  | Spoofs the name of the unmasked WebGL renderer.                                                                                  | `"NVIDIA GeForce GTX 980, or similar"`                                                  |
+| webGl:vendor                                    | Spoofs the name of the unmasked WebGL vendor.                                                                                    | `"NVIDIA Corporation"`                                                                  |
+| webGl:supportedExtensions                       | An array of supported WebGL extensions ([full list](https://registry.khronos.org/webgl/extensions/)).                            | `["ANGLE_instanced_arrays", "EXT_color_buffer_float", "EXT_disjoint_timer_query", ...]` |
+| webgl:contextAttributes                         | A dictionary of WebGL context attributes.                                                                                        | `{"alpha": true, "antialias": true, "depth": true, ...}`                                |
+| webgl2:contextAttributes                        | The same as `webgl:contextAttributes`, but for WebGL2.                                                                           | `{"alpha": true, "antialias": true, "depth": true, ...}`                                |
+| webGl:parameters                                | A dictionary of WebGL parameters. Keys must be GL enums, and values are the values to spoof them as.                             | `{"2849": 1, "2884": false, "2928": [0, 1], ...}`                                       |
+| webGl2:parameters                               | The same as `webGl:parameters`, but for WebGL2.                                                                                  | `{"2849": 1, "2884": false, "2928": [0, 1], ...}`                                       |
+| webGl:shaderPrecisionFormats                    | A dictionary of WebGL shader precision formats. Keys are formatted as `"<shaderType>,<precisionType>"`.                          | `{"35633,36336": {"rangeMin": 127, "rangeMax": 127, "precision": 23}, ...}`             |
+| webGl2:shaderPrecisionFormats                   | The same as `webGL:shaderPrecisionFormats`, but for WebGL2.                                                                      | `{"35633,36336": {"rangeMin": 127, "rangeMax": 127, "precision": 23}, ...}`             |
+| webgl:shaderPrecisionFormats:blockIfNotDefined  | If set to `true`, only the shader percisions in `webGl:shaderPrecisionFormats` will be passed. Everything else will be blocked.  | `true`                                                                                  |
+| webgl2:shaderPrecisionFormats:blockIfNotDefined | If set to `true`, only the shader percisions in `webGl2:shaderPrecisionFormats` will be passed. Everything else will be blocked. | `true`                                                                                  |
+
+</details>
+
+<details>
+<summary>
+AudioContext
+</summary>
+
+Camoufox can spoof the AudioContext sample rate, output latency, and max channel count.
+
+| Property                     | Status | Description                                |
+| ---------------------------- | ------ | ------------------------------------------ |
+| AudioContext:sampleRate      | ✅     | Spoofs the AudioContext sample rate.       |
+| AudioContext:outputLatency   | ✅     | Spoofs the AudioContext output latency.    |
+| AudioContext:maxChannelCount | ✅     | Spoofs the AudioContext max channel count. |
+
+Here is a testing site: https://audiofingerprint.openwpm.com/
 
 </details>
 
@@ -432,12 +471,13 @@ Miscellaneous (battery status, etc)
 
 - Navigator properties spoofing (device, browser, locale, etc.)
 - Support for emulating screen size, resolution, etc.
-- WebGL unmasked renderer spoofing (WIP)
-- Battery API spoofing
-- Support for spoofing both inner and outer window viewport sizes
+- Spoof WebGL parameters, supported extensions, context attributes, and shader precision formats.
+- Spoof inner and outer window viewport sizes
+- Spoof AudioContext sample rate, output latency, and max channel count
 - Network headers (Accept-Languages and User-Agent) are spoofed to match the navigator properties
 - WebRTC IP spoofing at the protocol level
 - Geolocation, timezone, and locale spoofing
+- Battery API spoofing
 - etc.
 
 #### Stealth patches
