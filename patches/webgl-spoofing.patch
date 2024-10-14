@@ -1,0 +1,360 @@
+diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
+index db60868f65..afed6eeb7c 100644
+--- a/dom/canvas/ClientWebGLContext.cpp
++++ b/dom/canvas/ClientWebGLContext.cpp
+@@ -4,6 +4,8 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "ClientWebGLContext.h"
++#include "MaskConfig.hpp"
++#include <algorithm>
+ 
+ #include <bitset>
+ 
+@@ -744,6 +746,13 @@ void ClientWebGLContext::SetDrawingBufferColorSpace(
+   Run<RPROC(SetDrawingBufferColorSpace)>(*mDrawingBufferColorSpace);
+ }
+ 
++bool ClientWebGLContext::MBoolVal(const std::string& key, bool defaultValue) {
++  if (auto value = MaskConfig::GetAttribute<bool>(key, mIsWebGL2);
++      value.has_value())
++    return value.value();
++  return defaultValue;
++}
++
+ void ClientWebGLContext::GetContextAttributes(
+     dom::Nullable<dom::WebGLContextAttributes>& retval) {
+   retval.SetNull();
+@@ -754,14 +763,38 @@ void ClientWebGLContext::GetContextAttributes(
+ 
+   const auto& options = mNotLost->info.options;
+ 
+-  result.mAlpha.Construct(options.alpha);
+-  result.mDepth = options.depth;
+-  result.mStencil = options.stencil;
+-  result.mAntialias.Construct(options.antialias);
+-  result.mPremultipliedAlpha = options.premultipliedAlpha;
+-  result.mPreserveDrawingBuffer = options.preserveDrawingBuffer;
+-  result.mFailIfMajorPerformanceCaveat = options.failIfMajorPerformanceCaveat;
+-  result.mPowerPreference = options.powerPreference;
++  result.mAlpha.Construct(MBoolVal("alpha", options.alpha));
++  result.mDepth = MBoolVal("depth", options.depth);
++  result.mStencil = MBoolVal("stencil", options.stencil);
++  result.mAntialias.Construct(MBoolVal("antialias", options.antialias));
++  result.mPremultipliedAlpha = MBoolVal(
++      "webgl:contextAttributes.premultipliedAlpha", options.premultipliedAlpha);
++  result.mPreserveDrawingBuffer =
++      MBoolVal("preserveDrawingBuffer", options.preserveDrawingBuffer);
++  result.mFailIfMajorPerformanceCaveat = MBoolVal(
++      "failIfMajorPerformanceCaveat", options.failIfMajorPerformanceCaveat);
++  if (auto value =
++          MaskConfig::GetAttribute<std::string>("powerPreference", mIsWebGL2);
++      value.has_value()) {
++    // Convert to enum
++    switch (value.value()[0]) {
++      case 'd':
++        result.mPowerPreference = dom::WebGLPowerPreference::Default;
++        break;
++      case 'l':
++        result.mPowerPreference = dom::WebGLPowerPreference::Low_power;
++        break;
++      case 'h':
++        result.mPowerPreference = dom::WebGLPowerPreference::High_performance;
++        break;
++      default:
++        // Invalid value
++        result.mPowerPreference = options.powerPreference;
++        break;
++    }
++  } else {
++    result.mPowerPreference = options.powerPreference;
++  }
+ }
+ 
+ // -----------------------
+@@ -979,18 +1012,28 @@ bool ClientWebGLContext::CreateHostContext(const uvec2& requestedSize) {
+ std::unordered_map<GLenum, bool> webgl::MakeIsEnabledMap(const bool webgl2) {
+   auto ret = std::unordered_map<GLenum, bool>{};
+ 
+-  ret[LOCAL_GL_BLEND] = false;
+-  ret[LOCAL_GL_CULL_FACE] = false;
+-  ret[LOCAL_GL_DEPTH_TEST] = false;
+-  ret[LOCAL_GL_DITHER] = true;
+-  ret[LOCAL_GL_POLYGON_OFFSET_FILL] = false;
+-  ret[LOCAL_GL_SAMPLE_ALPHA_TO_COVERAGE] = false;
+-  ret[LOCAL_GL_SAMPLE_COVERAGE] = false;
+-  ret[LOCAL_GL_SCISSOR_TEST] = false;
+-  ret[LOCAL_GL_STENCIL_TEST] = false;
++  ret[LOCAL_GL_BLEND] =
++      MaskConfig::MParamGL<bool>(LOCAL_GL_BLEND, false, webgl2);
++  ret[LOCAL_GL_CULL_FACE] =
++      MaskConfig::MParamGL<bool>(LOCAL_GL_CULL_FACE, false, webgl2);
++  ret[LOCAL_GL_DEPTH_TEST] =
++      MaskConfig::MParamGL<bool>(LOCAL_GL_DEPTH_TEST, false, webgl2);
++  ret[LOCAL_GL_DITHER] =
++      MaskConfig::MParamGL<bool>(LOCAL_GL_DITHER, true, webgl2);
++  ret[LOCAL_GL_POLYGON_OFFSET_FILL] =
++      MaskConfig::MParamGL<bool>(LOCAL_GL_POLYGON_OFFSET_FILL, false, webgl2);
++  ret[LOCAL_GL_SAMPLE_ALPHA_TO_COVERAGE] = MaskConfig::MParamGL<bool>(
++      LOCAL_GL_SAMPLE_ALPHA_TO_COVERAGE, false, webgl2);
++  ret[LOCAL_GL_SAMPLE_COVERAGE] =
++      MaskConfig::MParamGL<bool>(LOCAL_GL_SAMPLE_COVERAGE, false, webgl2);
++  ret[LOCAL_GL_SCISSOR_TEST] =
++      MaskConfig::MParamGL<bool>(LOCAL_GL_SCISSOR_TEST, false, webgl2);
++  ret[LOCAL_GL_STENCIL_TEST] =
++      MaskConfig::MParamGL<bool>(LOCAL_GL_STENCIL_TEST, false, webgl2);
+ 
+   if (webgl2) {
+-    ret[LOCAL_GL_RASTERIZER_DISCARD] = false;
++    ret[LOCAL_GL_RASTERIZER_DISCARD] =
++        MaskConfig::MParamGL<bool>(LOCAL_GL_RASTERIZER_DISCARD, false, webgl2);
+   }
+ 
+   return ret;
+@@ -2058,6 +2101,28 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+   const auto& state = State();
+ 
+   // -
++  std::optional<std::variant<int64_t, bool, double, std::string>> data;
++  data = MaskConfig::GLParam(pname, mIsWebGL2);
++
++  if (data.has_value()) {
++    const auto& value = data.value();
++    if (std::holds_alternative<int64_t>(value)) {
++      retval.set(JS::NumberValue(double(std::get<int64_t>(value))));
++      return;
++    }
++    if (std::holds_alternative<double>(value)) {
++      retval.set(JS::NumberValue(std::get<double>(value)));
++      return;
++    }
++    if (std::holds_alternative<bool>(value)) {
++      retval.set(JS::BooleanValue(std::get<bool>(value)));
++      return;
++    }
++    if (std::holds_alternative<std::string>(value)) {
++      retval.set(StringValue(cx, std::get<std::string>(value), rv));
++      return;
++    }
++  }
+ 
+   const auto fnSetRetval_Buffer = [&](const GLenum target) {
+     const auto buffer = *MaybeFind(state.mBoundBufferByTarget, target);
+@@ -2163,49 +2228,84 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+ 
+     // 2 floats
+     case LOCAL_GL_DEPTH_RANGE:
+-      retval.set(Create<dom::Float32Array>(cx, this, state.mDepthRange, rv));
++      retval.set(Create<dom::Float32Array>(
++          cx, this,
++          MaskConfig::MParamGL<std::array<float, 2UL>>(pname, state.mDepthRange,
++                                                       mIsWebGL2),
++          rv));
+       return;
+ 
+     case LOCAL_GL_ALIASED_POINT_SIZE_RANGE:
+-      retval.set(
+-          Create<dom::Float32Array>(cx, this, limits.pointSizeRange, rv));
++      retval.set(Create<dom::Float32Array>(
++          cx, this,
++          MaskConfig::MParamGL<std::array<float, 2UL>>(
++              pname, limits.pointSizeRange, mIsWebGL2),
++          rv));
+       return;
+ 
+     case LOCAL_GL_ALIASED_LINE_WIDTH_RANGE:
+-      retval.set(
+-          Create<dom::Float32Array>(cx, this, limits.lineWidthRange, rv));
++      retval.set(Create<dom::Float32Array>(
++          cx, this,
++          MaskConfig::MParamGL<std::array<float, 2UL>>(
++              pname, limits.lineWidthRange, mIsWebGL2),
++          rv));
+       return;
+ 
+     // 4 floats
+     case LOCAL_GL_COLOR_CLEAR_VALUE:
+-      retval.set(Create<dom::Float32Array>(cx, this, state.mClearColor, rv));
++      retval.set(Create<dom::Float32Array>(
++          cx, this,
++          MaskConfig::MParamGL<std::array<float, 4UL>>(pname, state.mClearColor,
++                                                       mIsWebGL2),
++          rv));
+       return;
+ 
+     case LOCAL_GL_BLEND_COLOR:
+-      retval.set(Create<dom::Float32Array>(cx, this, state.mBlendColor, rv));
++      retval.set(Create<dom::Float32Array>(
++          cx, this,
++          MaskConfig::MParamGL<std::array<float, 4UL>>(pname, state.mBlendColor,
++                                                       mIsWebGL2),
++          rv));
+       return;
+ 
+     // 2 ints
+     case LOCAL_GL_MAX_VIEWPORT_DIMS: {
+       auto maxViewportDim = BitwiseCast<int32_t>(limits.maxViewportDim);
+       const auto dims = std::array<int32_t, 2>{maxViewportDim, maxViewportDim};
+-      retval.set(Create<dom::Int32Array>(cx, this, dims, rv));
++      retval.set(Create<dom::Int32Array>(
++          cx, this,
++          MaskConfig::MParamGL<std::array<int32_t, 2UL>>(pname, dims,
++                                                         mIsWebGL2),
++          rv));
+       return;
+     }
+ 
+     // 4 ints
+     case LOCAL_GL_SCISSOR_BOX:
+-      retval.set(Create<dom::Int32Array>(cx, this, state.mScissor, rv));
++      retval.set(Create<dom::Int32Array>(
++          cx, this,
++          MaskConfig::MParamGL<std::array<int32_t, 4UL>>(pname, state.mScissor,
++                                                         mIsWebGL2),
++          rv));
+       return;
+ 
+     case LOCAL_GL_VIEWPORT:
+-      retval.set(Create<dom::Int32Array>(cx, this, state.mViewport, rv));
++      retval.set(Create<dom::Int32Array>(
++          cx, this,
++          MaskConfig::MParamGL<std::array<int32_t, 4UL>>(pname, state.mViewport,
++                                                         mIsWebGL2),
++          rv));
+       return;
+ 
+-    // any
+     case LOCAL_GL_COMPRESSED_TEXTURE_FORMATS:
+-      retval.set(Create<dom::Uint32Array>(cx, this,
+-                                          state.mCompressedTextureFormats, rv));
++      std::vector<uint32_t> compressedTextureUint32(
++          state.mCompressedTextureFormats.begin(),
++          state.mCompressedTextureFormats.end());
++      retval.set(Create<dom::Uint32Array>(
++          cx, this,
++          MaskConfig::MParamGLVector<uint32_t>(pname, compressedTextureUint32,
++                                               mIsWebGL2),
++          rv));
+       return;
+   }
+ 
+@@ -2385,6 +2485,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+ 
+         switch (pname) {
+           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
++            if (auto value = MaskConfig::GetString("webGl:renderer")) {
++              ret = Some(value.value());
++              break;
++            }
+             ret = GetUnmaskedRenderer();
+             if (ret && StaticPrefs::webgl_sanitize_unmasked_renderer()) {
+               *ret = webgl::SanitizeRenderer(*ret);
+@@ -2392,6 +2496,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+             break;
+ 
+           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
++            if (auto value = MaskConfig::GetString("webGl:vendor")) {
++              ret = Some(value.value());
++              break;
++            }
+             ret = GetUnmaskedVendor();
+             break;
+ 
+@@ -2482,7 +2590,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+         case LOCAL_GL_COLOR_WRITEMASK: {
+           const auto mask = uint8_t(*maybe);
+           const auto bs = std::bitset<4>(mask);
+-          const auto src = std::array<bool, 4>{bs[0], bs[1], bs[2], bs[3]};
++          const auto src = MaskConfig::MParamGL<std::array<bool, 4>>(
++              pname, std::array<bool, 4>{bs[0], bs[1], bs[2], bs[3]},
++              mIsWebGL2);
+           JS::Rooted<JS::Value> arr(cx);
+           if (!dom::ToJSValue(cx, src.data(), src.size(), &arr)) {
+             rv = NS_ERROR_OUT_OF_MEMORY;
+@@ -2865,6 +2975,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
+                                              const GLenum precisiontype) {
+   if (IsContextLost()) return nullptr;
+   const auto info = [&]() {
++    // Check for spoofed value
++    if (auto value =
++            MaskConfig::MShaderData(shadertype, precisiontype, mIsWebGL2)) {
++      const auto& format = value.value();
++      return Some(webgl::ShaderPrecisionFormat{
++          format[0],  // rangeMin
++          format[1],  // rangeMax
++          format[2]   // precision
++      });
++    }
++    // Check if block if not defined is on
++    if (MaskConfig::GetBool(
++            mIsWebGL2 ? "webgl2:shaderPrecisionFormats:blockIfNotDefined"
++                      : "webgl:shaderPrecisionFormats:blockIfNotDefined")) {
++      Maybe<webgl::ShaderPrecisionFormat> ret;
++      return ret;
++    }
++
+     const auto& inProcess = mNotLost->inProcess;
+     if (inProcess) {
+       return inProcess->GetShaderPrecisionFormat(shadertype, precisiontype);
+@@ -5822,6 +5950,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
+     return false;
+   }
+ 
++  if (std::vector<std::string> maskValues =
++          MaskConfig::GetStringList(mIsWebGL2 ? "webgl2:supportedExtensions"
++                                              : "webgl:supportedExtensions");
++      !maskValues.empty()) {
++    if (std::find(maskValues.begin(), maskValues.end(),
++                  GetExtensionName(ext)) != maskValues.end()) {
++      return true;
++    }
++    return false;
++  }
++
+   const auto& limits = Limits();
+   return limits.supportedExtensions[ext];
+ }
+@@ -5833,6 +5972,17 @@ void ClientWebGLContext::GetSupportedExtensions(
+   if (!mNotLost) return;
+ 
+   auto& retarr = retval.SetValue();
++
++  // Implement separately to prevent O(n^2) timing
++  if (std::vector<std::string> maskValues =
++          MaskConfig::GetStringList("webgl:supportedExtensions");
++      !maskValues.empty()) {
++    for (const auto& ext : maskValues) {
++      retarr.AppendElement(NS_ConvertUTF8toUTF16(ext));
++    }
++    return;
++  }
++
+   for (const auto i : MakeEnumeratedRange(WebGLExtensionID::Max)) {
+     if (!IsSupported(i, callerType)) continue;
+ 
+diff --git a/dom/canvas/ClientWebGLContext.h b/dom/canvas/ClientWebGLContext.h
+index 9e8b3c0f00..16e3fc7aa5 100644
+--- a/dom/canvas/ClientWebGLContext.h
++++ b/dom/canvas/ClientWebGLContext.h
+@@ -1067,6 +1067,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
+ 
+   // -
+ 
++  // Helper to get booleans set in MaskConfig
++  bool MBoolVal(const std::string& key, bool defaultValue);
++
+   void GetContextAttributes(dom::Nullable<dom::WebGLContextAttributes>& retval);
+ 
+  private:
+diff --git a/dom/canvas/moz.build b/dom/canvas/moz.build
+index 3a533d36d1..41d74d9b3f 100644
+--- a/dom/canvas/moz.build
++++ b/dom/canvas/moz.build
+@@ -221,3 +221,6 @@ if CONFIG["CC_TYPE"] == "gcc":
+ 
+ # Add libFuzzer configuration directives
+ include("/tools/fuzzing/libfuzzer-config.mozbuild")
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+\ No newline at end of file

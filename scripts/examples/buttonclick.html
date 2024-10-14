@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Random Button Clicker</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        overflow: hidden;
+      }
+      .button {
+        position: absolute;
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      #cursor-highlight {
+        position: fixed;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: rgba(255, 0, 0, 0.5);
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      const body = document.body;
+
+      function createButton() {
+        const button = document.createElement("button");
+        button.classList.add("button");
+        button.textContent = "Click me!";
+
+        const maxX = window.innerWidth - 100;
+        const maxY = window.innerHeight - 50;
+        const randomX = Math.floor(Math.random() * maxX);
+        const randomY = Math.floor(Math.random() * maxY);
+
+        button.style.left = `${randomX}px`;
+        button.style.top = `${randomY}px`;
+
+        button.addEventListener("click", () => {
+          button.remove();
+          createButton();
+        });
+
+        body.appendChild(button);
+      }
+
+      // Create the first button
+      createButton();
+    </script>
+  </body>
+</html>

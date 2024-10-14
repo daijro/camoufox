@@ -14,6 +14,7 @@ Written by daijro.
 #include "mozilla/glue/Debug.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <variant>
 
 #ifdef _WIN32
 #  include <windows.h>
@@ -76,11 +77,9 @@ inline const nlohmann::json& GetJson() {
 }
 
 inline bool HasKey(const std::string& key, nlohmann::json& data) {
-  if (!data.contains(key)) {
-    // printf_stderr("WARNING: Key not found: %s\n", key.c_str());
-    return false;
-  }
-  return true;
+  // printf_stderr("Property: %s\n", key.c_str());
+  // printf_stderr("WARNING: Key not found: %s\n", key.c_str());
+  return data.contains(key);
 }
 
 inline std::optional<std::string> GetString(const std::string& key) {
@@ -163,8 +162,8 @@ inline std::optional<std::array<uint32_t, 4>> GetRect(
     const std::string& height) {
   // Make top and left default to 0
   std::array<std::optional<uint32_t>, 4> values = {
-      GetUint32(left).value_or(0), GetUint32(top).value_or(0),
-      GetUint32(width), GetUint32(height)};
+      GetUint32(left).value_or(0), GetUint32(top).value_or(0), GetUint32(width),
+      GetUint32(height)};
 
   // If height or width is std::nullopt, return std::nullopt
   if (!values[2].has_value() || !values[3].has_value()) {
@@ -193,6 +192,90 @@ inline std::optional<std::array<int32_t, 4>> GetInt32Rect(
     std::transform(optValue->begin(), optValue->end(), result.begin(),
                    [](const auto& val) { return static_cast<int32_t>(val); });
     return result;
+  }
+  return std::nullopt;
+}
+
+// Helpers for WebGL
+
+inline std::optional<nlohmann::json> GetNested(const std::string& domain,
+                                               std::string keyStr) {
+  auto data = GetJson();
+  if (!data.contains(domain)) return std::nullopt;
+
+  if (!data[domain].contains(keyStr)) return std::nullopt;
+
+  return data[domain][keyStr];
+}
+
+template <typename T>
+inline std::optional<T> GetAttribute(const std::string attrib, bool isWebGL2) {
+  auto value = MaskConfig::GetNested(
+      isWebGL2 ? "webgl2:contextAttributes" : "webgl:contextAttributes",
+      attrib);
+  if (!value) return std::nullopt;
+  return value.value().get<T>();
+}
+
+inline std::optional<std::variant<int64_t, bool, double, std::string>> GLParam(
+    uint32_t pname, bool isWebGL2) {
+  auto value =
+      MaskConfig::GetNested(isWebGL2 ? "webgl2:parameters" : "webgl:parameters",
+                            std::to_string(pname));
+  if (!value) return std::nullopt;
+  auto data = value.value();
+  // cast the data and return
+  if (data.is_number_integer()) return data.get<int64_t>();
+  if (data.is_boolean()) return data.get<bool>();
+  if (data.is_number_float()) return data.get<double>();
+  if (data.is_string()) return data.get<std::string>();
+  return std::nullopt;
+}
+
+template <typename T>
+inline T MParamGL(uint32_t pname, T defaultValue, bool isWebGL2) {
+  if (auto value = MaskConfig::GetNested(
+          isWebGL2 ? "webgl2:parameters" : "webgl:parameters",
+          std::to_string(pname));
+      value.has_value()) {
+    return value.value().get<T>();
+  }
+  return defaultValue;
+}
+
+template <typename T>
+inline std::vector<T> MParamGLVector(uint32_t pname,
+                                     std::vector<T> defaultValue,
+                                     bool isWebGL2) {
+  if (auto value = MaskConfig::GetNested(
+          isWebGL2 ? "webgl2:parameters" : "webgl:parameters",
+          std::to_string(pname)); value.has_value()) {
+    if (value.value().is_array()) {
+      std::array<T, 4UL> result = value.value().get<std::array<T, 4UL>>();
+      return std::vector<T>(result.begin(), result.end());
+    }
+  }
+  return defaultValue;
+}
+
+inline std::optional<std::array<int32_t, 3UL>> MShaderData(
+    uint32_t shaderType, uint32_t precisionType, bool isWebGL2) {
+  std::string valueName =
+      std::to_string(shaderType) + "," + std::to_string(precisionType);
+  if (auto value =
+          MaskConfig::GetNested(isWebGL2 ? "webgl2:shaderPrecisionFormats"
+                                         : "webgl:shaderPrecisionFormats",
+                                valueName)) {
+    // Convert {rangeMin: int, rangeMax: int, precision: int} to array
+    auto data = value.value();
+    // Assert rangeMin, rangeMax, and precision are present
+    if (!data.contains("rangeMin") || !data.contains("rangeMax") ||
+        !data.contains("precision")) {
+      return std::nullopt;
+    }
+    return std::array<int32_t, 3U>{data["rangeMin"].get<int32_t>(),
+                                   data["rangeMax"].get<int32_t>(),
+                                   data["precision"].get<int32_t>()};
   }
   return std::nullopt;
 }
