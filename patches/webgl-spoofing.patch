@@ -242,7 +242,7 @@ index db60868f65..afed6eeb7c 100644
  
          switch (pname) {
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
-+            if (auto value = MaskConfig::GetString("webGl:renderer")) {
++            if (auto value = MaskConfig::GetString("webgl:renderer")) {
 +              ret = Some(value.value());
 +              break;
 +            }
@@ -253,7 +253,7 @@ index db60868f65..afed6eeb7c 100644
              break;
  
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
-+            if (auto value = MaskConfig::GetString("webGl:vendor")) {
++            if (auto value = MaskConfig::GetString("webgl:vendor")) {
 +              ret = Some(value.value());
 +              break;
 +            }
