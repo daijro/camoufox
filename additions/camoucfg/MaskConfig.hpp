@@ -15,6 +15,7 @@ Written by daijro.
 #include <stdlib.h>
 #include <stdio.h>
 #include <variant>
+#include <cstddef>
 
 #ifdef _WIN32
 #  include <windows.h>
@@ -217,14 +218,15 @@ inline std::optional<T> GetAttribute(const std::string attrib, bool isWebGL2) {
   return value.value().get<T>();
 }
 
-inline std::optional<std::variant<int64_t, bool, double, std::string>> GLParam(
-    uint32_t pname, bool isWebGL2) {
+inline std::optional<
+    std::variant<int64_t, bool, double, std::string, std::nullptr_t>>
+GLParam(uint32_t pname, bool isWebGL2) {
   auto value =
       MaskConfig::GetNested(isWebGL2 ? "webgl2:parameters" : "webgl:parameters",
                             std::to_string(pname));
   if (!value) return std::nullopt;
   auto data = value.value();
-  // cast the data and return
+  if (data.is_null()) return std::nullptr_t();
   if (data.is_number_integer()) return data.get<int64_t>();
   if (data.is_boolean()) return data.get<bool>();
   if (data.is_number_float()) return data.get<double>();
@@ -249,7 +251,8 @@ inline std::vector<T> MParamGLVector(uint32_t pname,
                                      bool isWebGL2) {
   if (auto value = MaskConfig::GetNested(
           isWebGL2 ? "webgl2:parameters" : "webgl:parameters",
-          std::to_string(pname)); value.has_value()) {
+          std::to_string(pname));
+      value.has_value()) {
     if (value.value().is_array()) {
       std::array<T, 4UL> result = value.value().get<std::array<T, 4UL>>();
       return std::vector<T>(result.begin(), result.end());

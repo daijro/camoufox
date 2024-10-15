@@ -87,7 +87,8 @@
         border-radius: 4px;
         display: none;
         position: relative;
-        transition: opacity 0.3s ease-out, max-height 0.3s ease-out, padding 0.3s ease-out;
+        transition: opacity 0.3s ease-out, max-height 0.3s ease-out,
+          padding 0.3s ease-out;
         opacity: 1;
         max-height: 100px;
         overflow: hidden;
@@ -114,7 +115,10 @@
   <body>
     <div class="container">
       <h1>Your WebGL Information (in Camoufox format)</h1>
-      <div id="warning">Warning: This browser is not Firefox. The fingerprint below will not run properly on Camoufox.<button id="close-warning">&times;</button></div>
+      <div id="warning">
+        Warning: This browser is not Firefox. The fingerprint below will not run
+        properly on Camoufox.<button id="close-warning">&times;</button>
+      </div>
       <div id="hash"></div>
       <pre id="output"></pre>
       <div class="button-container">
@@ -152,33 +156,21 @@
           return {};
         }
 
-        function getMaxAnisotropy(ctx) {
-          if (ctx) {
-            const ext =
-              ctx.getExtension("EXT_texture_filter_anisotropic") ||
-              ctx.getExtension("WEBKIT_EXT_texture_filter_anisotropic") ||
-              ctx.getExtension("MOZ_EXT_texture_filter_anisotropic");
-
-            if (ext) {
-              return ctx.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
-            }
-          }
-
-          return null;
-        }
-
         const glEnums = [
           2849, 2884, 2885, 2886, 2928, 2929, 2930, 2931, 2932, 2960, 2961,
-          2962, 2963, 2964, 2965, 2966, 2967, 2968, 2978, 3024, 3042, 3088,
-          3089, 3106, 3107, 3317, 3333, 3379, 3386, 3408, 3410, 3411, 3412,
-          3413, 3414, 3415, 7936, 7937, 7938, 10752, 32773, 32777, 32823, 32824,
-          32873, 32883, 32936, 32937, 32938, 32939, 32968, 32969, 32970, 32971,
-          33170, 33901, 33902, 34016, 34024, 34045, 34047, 34068, 34076, 34467,
-          34816, 34817, 34818, 34819, 34852, 34877, 34921, 34930, 34964, 34965,
-          35071, 35076, 35077, 35371, 35373, 35374, 35375, 35376, 35377, 35379,
-          35380, 35657, 35658, 35659, 35660, 35661, 35724, 35725, 35968, 35978,
-          35979, 36003, 36004, 36005, 36006, 36007, 36063, 36183, 36347, 36348,
-          36349, 37154, 37157, 37440, 37441, 37443, 37444, 37445, 37446,
+          2962, 2963, 2964, 2965, 2966, 2967, 2968, 2978, 3024, 3042, 3074,
+          3088, 3089, 3106, 3107, 3314, 3315, 3316, 3317, 3330, 3331, 3332,
+          3333, 3379, 3386, 3408, 3410, 3411, 3412, 3413, 3414, 3415, 7936,
+          7937, 7938, 10752, 32773, 32777, 32823, 32824, 32873, 32877, 32878,
+          32883, 32926, 32928, 32936, 32937, 32938, 32939, 32968, 32969, 32970,
+          32971, 33000, 33001, 33170, 33901, 33902, 34016, 34024, 34045, 34047,
+          34068, 34076, 34467, 34816, 34817, 34818, 34819, 34852, 34853, 34854,
+          34855, 34856, 34857, 34858, 34859, 34860, 34877, 34921, 34930, 34964,
+          34965, 35071, 35076, 35077, 35371, 35373, 35374, 35375, 35376, 35377,
+          35379, 35380, 35657, 35658, 35659, 35660, 35661, 35723, 35724, 35725,
+          35738, 35739, 35968, 35977, 35978, 35979, 36003, 36004, 36005, 36006,
+          36007, 36063, 36183, 36203, 36345, 36347, 36348, 36349, 36387, 36388,
+          37137, 37154, 37157, 37440, 37441, 37443, 37444, 37445, 37446, 37447,
         ];
 
         let rendererInfo = null;
@@ -300,15 +292,18 @@
         "DOMContentLoaded",
         async () => {
           // Check if the user agent is Firefox
-          const isFirefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
+          const isFirefox =
+            navigator.userAgent.toLowerCase().indexOf("firefox") > -1;
           if (!isFirefox) {
-            document.getElementById('warning').style.display = 'block';
+            document.getElementById("warning").style.display = "block";
           }
 
           // Add event listener for close button
-          document.getElementById('close-warning').addEventListener('click', function() {
-            document.getElementById('warning').classList.add('hide');
-          });
+          document
+            .getElementById("close-warning")
+            .addEventListener("click", function () {
+              document.getElementById("warning").classList.add("hide");
+            });
 
           const [webglDetail, webgl2Detail] = await Promise.all([
             dumpWebGLCore("webgl", "experimental-webgl"),

@@ -348,7 +348,7 @@ Because I don't have a dataset of WebGL fingerprints to rotate against, WebGL fi
 
 This repository includes a demo site (see [here](https://github.com/daijro/camoufox/blob/main/scripts/examples/webgl.html)) that prints your browser's WebGL parameters. You can use this site to generate WebGL fingerprints for Camoufox from other devices.
 
-<img src="https://i.imgur.com/jwT5VqG.png" width="80%">
+<img src="https://i.imgur.com/jwT5VqG.png">
 
 ### Properties
 
@@ -356,19 +356,22 @@ Camoufox supports spoofing WebGL parameters, supported extensions, context attri
 
 **Note**: Do NOT randomly assign values to these properties. WAFs hash your WebGL fingerprint and compare it against a dataset. Randomly assigning values will lead to detection as an unknown device.
 
-| Property                                        | Description                                                                                                                      | Example                                                                                 |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| webgl:renderer                                  | Spoofs the name of the unmasked WebGL renderer.                                                                                  | `"NVIDIA GeForce GTX 980, or similar"`                                                  |
-| webgl:vendor                                    | Spoofs the name of the unmasked WebGL vendor.                                                                                    | `"NVIDIA Corporation"`                                                                  |
-| webgl:supportedExtensions                       | An array of supported WebGL extensions ([full list](https://registry.khronos.org/webgl/extensions/)).                            | `["ANGLE_instanced_arrays", "EXT_color_buffer_float", "EXT_disjoint_timer_query", ...]` |
-| webgl:contextAttributes                         | A dictionary of WebGL context attributes.                                                                                        | `{"alpha": true, "antialias": true, "depth": true, ...}`                                |
-| webgl2:contextAttributes                        | The same as `webgl:contextAttributes`, but for WebGL2.                                                                           | `{"alpha": true, "antialias": true, "depth": true, ...}`                                |
-| webgl:parameters                                | A dictionary of WebGL parameters. Keys must be GL enums, and values are the values to spoof them as.                             | `{"2849": 1, "2884": false, "2928": [0, 1], ...}`                                       |
-| webgl2:parameters                               | The same as `webgl:parameters`, but for WebGL2.                                                                                  | `{"2849": 1, "2884": false, "2928": [0, 1], ...}`                                       |
-| webgl:shaderPrecisionFormats                    | A dictionary of WebGL shader precision formats. Keys are formatted as `"<shaderType>,<precisionType>"`.                          | `{"35633,36336": {"rangeMin": 127, "rangeMax": 127, "precision": 23}, ...}`             |
-| webgl2:shaderPrecisionFormats                   | The same as `webGL:shaderPrecisionFormats`, but for WebGL2.                                                                      | `{"35633,36336": {"rangeMin": 127, "rangeMax": 127, "precision": 23}, ...}`             |
-| webgl:shaderPrecisionFormats:blockIfNotDefined  | If set to `true`, only the shader percisions in `webgl:shaderPrecisionFormats` will be passed. Everything else will be blocked.  | `true`                                                                                  |
-| webgl2:shaderPrecisionFormats:blockIfNotDefined | If set to `true`, only the shader percisions in `webgl2:shaderPrecisionFormats` will be passed. Everything else will be blocked. | `true`                                                                                  |
+| Property                                        | Description                                                                                                           | Example                                                                                 |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| webgl:renderer                                  | Spoofs the name of the unmasked WebGL renderer.                                                                       | `"NVIDIA GeForce GTX 980, or similar"`                                                  |
+| webgl:vendor                                    | Spoofs the name of the unmasked WebGL vendor.                                                                         | `"NVIDIA Corporation"`                                                                  |
+| webgl:supportedExtensions                       | An array of supported WebGL extensions ([full list](https://registry.khronos.org/webgl/extensions/)).                 | `["ANGLE_instanced_arrays", "EXT_color_buffer_float", "EXT_disjoint_timer_query", ...]` |
+| webgl2:supportedExtensions                      | The same as `webgl:supportedExtensions`, but for WebGL2.                                                              | `["ANGLE_instanced_arrays", "EXT_color_buffer_float", "EXT_disjoint_timer_query", ...]` |
+| webgl:contextAttributes                         | A dictionary of WebGL context attributes.                                                                             | `{"alpha": true, "antialias": true, "depth": true, ...}`                                |
+| webgl2:contextAttributes                        | The same as `webgl:contextAttributes`, but for WebGL2.                                                                | `{"alpha": true, "antialias": true, "depth": true, ...}`                                |
+| webgl:parameters                                | A dictionary of WebGL parameters. Keys must be GL enums, and values are the values to spoof them as.                  | `{"2849": 1, "2884": false, "2928": [0, 1], ...}`                                       |
+| webgl2:parameters                               | The same as `webgl:parameters`, but for WebGL2.                                                                       | `{"2849": 1, "2884": false, "2928": [0, 1], ...}`                                       |
+| webgl:parameters:blockIfNotDefined              | If set to `true`, only the parameters in `webgl:parameters` will be allowed. Can be dangerous if not used correctly.  | `true`/`false`                                                                          |
+| webgl2:parameters:blockIfNotDefined             | If set to `true`, only the parameters in `webgl2:parameters` will be allowed. Can be dangerous if not used correctly. | `true`/`false`                                                                          |
+| webgl:shaderPrecisionFormats                    | A dictionary of WebGL shader precision formats. Keys are formatted as `"<shaderType>,<precisionType>"`.               | `{"35633,36336": {"rangeMin": 127, "rangeMax": 127, "precision": 23}, ...}`             |
+| webgl2:shaderPrecisionFormats                   | The same as `webGL:shaderPrecisionFormats`, but for WebGL2.                                                           | `{"35633,36336": {"rangeMin": 127, "rangeMax": 127, "precision": 23}, ...}`             |
+| webgl:shaderPrecisionFormats:blockIfNotDefined  | If set to `true`, only the shader percisions in `webgl:shaderPrecisionFormats` will be allowed.                       | `true`/`false`                                                                          |
+| webgl2:shaderPrecisionFormats:blockIfNotDefined | If set to `true`, only the shader percisions in `webgl2:shaderPrecisionFormats` will be allowed.                      | `true`/`false`                                                                          |
 
 </details>
 

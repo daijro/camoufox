@@ -1,17 +1,18 @@
 diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
-index db60868f65..afed6eeb7c 100644
+index db60868f65..7361f0fc9c 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
 +++ b/dom/canvas/ClientWebGLContext.cpp
-@@ -4,6 +4,8 @@
+@@ -4,6 +4,9 @@
   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
  
  #include "ClientWebGLContext.h"
 +#include "MaskConfig.hpp"
 +#include <algorithm>
++#include <cstddef>
  
  #include <bitset>
  
-@@ -744,6 +746,13 @@ void ClientWebGLContext::SetDrawingBufferColorSpace(
+@@ -744,6 +747,13 @@ void ClientWebGLContext::SetDrawingBufferColorSpace(
    Run<RPROC(SetDrawingBufferColorSpace)>(*mDrawingBufferColorSpace);
  }
  
@@ -25,7 +26,7 @@ index db60868f65..afed6eeb7c 100644
  void ClientWebGLContext::GetContextAttributes(
      dom::Nullable<dom::WebGLContextAttributes>& retval) {
    retval.SetNull();
-@@ -754,14 +763,38 @@ void ClientWebGLContext::GetContextAttributes(
+@@ -754,14 +764,38 @@ void ClientWebGLContext::GetContextAttributes(
  
    const auto& options = mNotLost->info.options;
  
@@ -72,7 +73,7 @@ index db60868f65..afed6eeb7c 100644
  }
  
  // -----------------------
-@@ -979,18 +1012,28 @@ bool ClientWebGLContext::CreateHostContext(const uvec2& requestedSize) {
+@@ -979,18 +1013,28 @@ bool ClientWebGLContext::CreateHostContext(const uvec2& requestedSize) {
  std::unordered_map<GLenum, bool> webgl::MakeIsEnabledMap(const bool webgl2) {
    auto ret = std::unordered_map<GLenum, bool>{};
  
@@ -111,11 +112,13 @@ index db60868f65..afed6eeb7c 100644
    }
  
    return ret;
-@@ -2058,6 +2101,28 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2058,6 +2102,57 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
    const auto& state = State();
  
    // -
-+  std::optional<std::variant<int64_t, bool, double, std::string>> data;
++  std::optional<
++      std::variant<int64_t, bool, double, std::string, std::nullptr_t>>
++      data;
 +  data = MaskConfig::GLParam(pname, mIsWebGL2);
 +
 +  if (data.has_value()) {
@@ -136,11 +139,38 @@ index db60868f65..afed6eeb7c 100644
 +      retval.set(StringValue(cx, std::get<std::string>(value), rv));
 +      return;
 +    }
++    if (std::holds_alternative<std::nullptr_t>(value)) {
++      retval.set(JS::NullValue());
++      return;
++    }
++  }
++  // If the value is not array (we will handle those later),
++  // then check if it should be blocked.
++  switch (pname) {
++    case LOCAL_GL_DEPTH_RANGE:
++    case LOCAL_GL_ALIASED_POINT_SIZE_RANGE:
++    case LOCAL_GL_ALIASED_LINE_WIDTH_RANGE:
++    case LOCAL_GL_COLOR_CLEAR_VALUE:
++    case LOCAL_GL_BLEND_COLOR:
++    case LOCAL_GL_MAX_VIEWPORT_DIMS:
++    case LOCAL_GL_SCISSOR_BOX:
++    case LOCAL_GL_VIEWPORT:
++    case LOCAL_GL_COMPRESSED_TEXTURE_FORMATS:
++    case LOCAL_GL_COLOR_WRITEMASK:
++    case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
++    case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
++      break;
++    default:
++      if (MaskConfig::GetBool(mIsWebGL2 ? "webgl2:parameters:blockIfNotDefined"
++                                        : "webgl:parameters:blockIfNotDefined")) {
++        retval.set(JS::NullValue());
++        return;
++      }
 +  }
  
    const auto fnSetRetval_Buffer = [&](const GLenum target) {
      const auto buffer = *MaybeFind(state.mBoundBufferByTarget, target);
-@@ -2163,49 +2228,84 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2163,49 +2258,84 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
  
      // 2 floats
      case LOCAL_GL_DEPTH_RANGE:
@@ -238,7 +268,7 @@ index db60868f65..afed6eeb7c 100644
        return;
    }
  
-@@ -2385,6 +2485,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2385,6 +2515,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
  
          switch (pname) {
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
@@ -249,7 +279,7 @@ index db60868f65..afed6eeb7c 100644
              ret = GetUnmaskedRenderer();
              if (ret && StaticPrefs::webgl_sanitize_unmasked_renderer()) {
                *ret = webgl::SanitizeRenderer(*ret);
-@@ -2392,6 +2496,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2392,6 +2526,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
              break;
  
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
@@ -260,7 +290,7 @@ index db60868f65..afed6eeb7c 100644
              ret = GetUnmaskedVendor();
              break;
  
-@@ -2482,7 +2590,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2482,7 +2620,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
          case LOCAL_GL_COLOR_WRITEMASK: {
            const auto mask = uint8_t(*maybe);
            const auto bs = std::bitset<4>(mask);
@@ -271,7 +301,7 @@ index db60868f65..afed6eeb7c 100644
            JS::Rooted<JS::Value> arr(cx);
            if (!dom::ToJSValue(cx, src.data(), src.size(), &arr)) {
              rv = NS_ERROR_OUT_OF_MEMORY;
-@@ -2865,6 +2975,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
+@@ -2865,6 +3005,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
                                               const GLenum precisiontype) {
    if (IsContextLost()) return nullptr;
    const auto info = [&]() {
@@ -296,7 +326,7 @@ index db60868f65..afed6eeb7c 100644
      const auto& inProcess = mNotLost->inProcess;
      if (inProcess) {
        return inProcess->GetShaderPrecisionFormat(shadertype, precisiontype);
-@@ -5822,6 +5950,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
+@@ -5822,6 +5980,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
      return false;
    }
  
@@ -314,14 +344,15 @@ index db60868f65..afed6eeb7c 100644
    const auto& limits = Limits();
    return limits.supportedExtensions[ext];
  }
-@@ -5833,6 +5972,17 @@ void ClientWebGLContext::GetSupportedExtensions(
+@@ -5833,6 +6002,18 @@ void ClientWebGLContext::GetSupportedExtensions(
    if (!mNotLost) return;
  
    auto& retarr = retval.SetValue();
 +
 +  // Implement separately to prevent O(n^2) timing
 +  if (std::vector<std::string> maskValues =
-+          MaskConfig::GetStringList("webgl:supportedExtensions");
++          MaskConfig::GetStringList(mIsWebGL2 ? "webgl2:supportedExtensions"
++                                              : "webgl:supportedExtensions");
 +      !maskValues.empty()) {
 +    for (const auto& ext : maskValues) {
 +      retarr.AppendElement(NS_ConvertUTF8toUTF16(ext));
