@@ -122,6 +122,8 @@ def validate_type(value: Any, expected_type: str) -> bool:
         return isinstance(value, bool)
     elif expected_type == "array":
         return isinstance(value, list)
+    elif expected_type == "dict":
+        return isinstance(value, dict)
     else:
         return False
 

@@ -48,9 +48,9 @@ screen:
   #   clientWidth: document.body.clientWidth
   #   clientHeight: document.body.clientHeight
 
-videoCard:
-  renderer: webGl:renderer
-  vendor: webGl:vendor
+# videoCard:
+#  renderer: webgl:renderer
+#  vendor: webgl:vendor
 
 headers:
   # headers.User-Agent is redundant with navigator.userAgent
