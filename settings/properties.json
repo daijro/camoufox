@@ -60,6 +60,7 @@
   { "property": "locale:language", "type": "str" },
   { "property": "locale:region", "type": "str" },
   { "property": "locale:script", "type": "str" },
+  { "property": "locale:all", "type": "str" },
   { "property": "humanize", "type": "bool" },
   { "property": "humanize:maxTime", "type": "double" },
   { "property": "humanize:minTime", "type": "double" },

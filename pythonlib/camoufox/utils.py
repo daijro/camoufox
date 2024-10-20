@@ -1,6 +1,8 @@
 import os
 import sys
 from os import environ
+from os.path import abspath
+from pathlib import Path
 from pprint import pprint
 from random import randrange
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
@@ -26,7 +28,7 @@ from .exceptions import (
 )
 from .fingerprints import from_browserforge, generate_fingerprint
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
-from .locale import geoip_allowed, get_geolocation, handle_locale
+from .locale import geoip_allowed, get_geolocation, handle_locales
 from .pkgman import OS_NAME, get_path, installed_verstr
 from .warnings import LeakWarning
 from .xpi_dl import add_default_addons
@@ -76,22 +78,25 @@ def get_env_vars(
     return env_vars
 
 
-def _load_properties() -> Dict[str, str]:
+def _load_properties(path: Optional[Path] = None) -> Dict[str, str]:
     """
     Loads the properties.json file.
     """
-    prop_file = get_path("properties.json")
+    if path:
+        prop_file = str(path.parent / "properties.json")
+    else:
+        prop_file = get_path("properties.json")
     with open(prop_file, "rb") as f:
         prop_dict = orjson.loads(f.read())
 
     return {prop['property']: prop['type'] for prop in prop_dict}
 
 
-def validate_config(config_map: Dict[str, str]) -> None:
+def validate_config(config_map: Dict[str, str], path: Optional[Path] = None) -> None:
     """
     Validates the config map.
     """
-    property_types = _load_properties()
+    property_types = _load_properties(path=path)
 
     for key, value in config_map.items():
         expected_type = property_types.get(key)
@@ -289,34 +294,93 @@ def warn_manual_config(config: Dict[str, Any]) -> None:
         LeakWarning.warn('viewport', False)
 
 
-def get_launch_options(
+def launch_options(
     *,
     config: Optional[Dict[str, Any]] = None,
-    addons: Optional[List[str]] = None,
-    fingerprint: Optional[Fingerprint] = None,
-    humanize: Optional[Union[bool, float]] = None,
-    i_know_what_im_doing: Optional[bool] = None,
-    exclude_addons: Optional[List[DefaultAddons]] = None,
-    screen: Optional[Screen] = None,
-    geoip: Optional[Union[str, bool]] = None,
-    locale: Optional[str] = None,
     os: Optional[ListOrString] = None,
-    fonts: Optional[List[str]] = None,
-    args: Optional[List[str]] = None,
-    executable_path: Optional[str] = None,
-    env: Optional[Dict[str, Union[str, float, bool]]] = None,
     block_images: Optional[bool] = None,
     block_webrtc: Optional[bool] = None,
     allow_webgl: Optional[bool] = None,
-    proxy: Optional[Dict[str, str]] = None,
+    geoip: Optional[Union[str, bool]] = None,
+    humanize: Optional[Union[bool, float]] = None,
+    locale: Optional[Union[str, List[str]]] = None,
+    addons: Optional[List[str]] = None,
+    fonts: Optional[List[str]] = None,
+    exclude_addons: Optional[List[DefaultAddons]] = None,
+    screen: Optional[Screen] = None,
+    fingerprint: Optional[Fingerprint] = None,
     ff_version: Optional[int] = None,
     headless: Optional[Union[bool, Literal['virtual']]] = None,
+    executable_path: Optional[str] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
-    launch_options: Optional[Dict[str, Any]] = None,
+    proxy: Optional[Dict[str, str]] = None,
+    args: Optional[List[str]] = None,
+    env: Optional[Dict[str, Union[str, float, bool]]] = None,
+    i_know_what_im_doing: Optional[bool] = None,
     debug: Optional[bool] = None,
+    **launch_options: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
-    Builds the launch options for the Camoufox browser.
+    Launches a new browser instance for Camoufox.
+    Accepts all Playwright Firefox launch options, along with the following:
+
+    Parameters:
+        config (Optional[Dict[str, Any]]):
+            Camoufox properties to use. (read https://github.com/daijro/camoufox/blob/main/README.md)
+        os (Optional[ListOrString]):
+            Operating system to use for the fingerprint generation.
+            Can be "windows", "macos", "linux", or a list to randomly choose from.
+            Default: ["windows", "macos", "linux"]
+        block_images (Optional[bool]):
+            Whether to block all images.
+        block_webrtc (Optional[bool]):
+            Whether to block WebRTC entirely.
+        allow_webgl (Optional[bool]):
+            Whether to allow WebGL. To prevent leaks, only use this for special cases.
+        geoip (Optional[Union[str, bool]]):
+            Calculate longitude, latitude, timezone, country, & locale based on the IP address.
+            Pass the target IP address to use, or `True` to find the IP address automatically.
+        humanize (Optional[Union[bool, float]]):
+            Humanize the cursor movement.
+            Takes either `True`, or the MAX duration in seconds of the cursor movement.
+            The cursor typically takes up to 1.5 seconds to move across the window.
+        locale (Optional[Union[str, List[str]]]):
+            Locale(s) to use in Camoufox. The first listed locale will be used for the Intl API.
+        addons (Optional[List[str]]):
+            List of Firefox addons to use.
+        fonts (Optional[List[str]]):
+            Fonts to load into Camoufox (in addition to the default fonts for the target `os`).
+            Takes a list of font family names that are installed on the system.
+        exclude_addons (Optional[List[DefaultAddons]]):
+            Default addons to exclude. Passed as a list of camoufox.DefaultAddons enums.
+        screen (Optional[Screen]):
+            Constrains the screen dimensions of the generated fingerprint.
+            Takes a browserforge.fingerprints.Screen instance.
+        fingerprint (Optional[Fingerprint]):
+            Use a custom BrowserForge fingerprint. Note: Not all values will be implemented.
+            If not provided, a random fingerprint will be generated based on the provided
+            `os` & `screen` constraints.
+        ff_version (Optional[int]):
+            Firefox version to use. Defaults to the current Camoufox version.
+            To prevent leaks, only use this for special cases.
+        headless (Union[bool, Literal['virtual']]):
+            Whether to run the browser in headless mode. Defaults to False.
+            If you are running linux, passing 'virtual' will use Xvfb.
+        executable_path (Optional[str]):
+            Custom Camoufox browser executable path.
+        firefox_user_prefs (Optional[Dict[str, Any]]):
+            Firefox user preferences to set.
+        proxy (Optional[Dict[str, str]]):
+            Proxy to use for the browser.
+            Note: If geoip is True, a request will be sent through this proxy to find the target IP.
+        args (Optional[List[str]]):
+            Arguments to pass to the browser.
+        env (Optional[Dict[str, Union[str, float, bool]]]):
+            Environment variables to set.
+        debug (Optional[bool]):
+            Prints the config being sent to Camoufox.
+        **launch_options (Dict[str, Any]):
+            Additional Firefox launch options.
     """
     # Build the config
     if config is None:
@@ -335,6 +399,8 @@ def get_launch_options(
         i_know_what_im_doing = False
     if env is None:
         env = cast(Dict[str, Union[str, float, bool]], environ)
+    if isinstance(executable_path, str):
+        executable_path = Path(abspath(executable_path))
 
     # Handle headless mode cases
     if headless == 'virtual':
@@ -423,8 +489,7 @@ def get_launch_options(
 
     # Set locale
     if locale:
-        parsed_locale = handle_locale(locale)
-        config.update(parsed_locale.as_config())
+        handle_locales(locale, config)
 
     # Pass the humanize option
     if humanize:
@@ -433,7 +498,7 @@ def get_launch_options(
             set_into(config, 'humanize:maxTime', humanize)
 
     # Validate the config
-    validate_config(config)
+    validate_config(config, path=executable_path)
 
     # Print the config if debug is enabled
     if debug:

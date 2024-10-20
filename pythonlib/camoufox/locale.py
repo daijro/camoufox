@@ -1,7 +1,6 @@
 import xml.etree.ElementTree as ET  # nosec
 from dataclasses import dataclass
-from random import choice as randchoice
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union, cast
 
 import numpy as np
 from language_tags import tags
@@ -38,17 +37,20 @@ class Locale:
     """
 
     language: str
-    region: str
+    region: Optional[str] = None
     script: Optional[str] = None
 
     @property
     def as_string(self) -> str:
-        return f"{self.language}-{self.region}"
+        if self.region:
+            return f"{self.language}-{self.region}"
+        return self.language
 
     def as_config(self) -> Dict[str, str]:
         """
-        Converts the locale to a config dictionary.
+        Converts the locale to a intl config dictionary.
         """
+        assert self.region
         data = {
             'locale:region': self.region,
             'locale:language': self.language,
@@ -90,24 +92,21 @@ Helpers to validate and normalize locales
 """
 
 
-def verify_locales(locales: List[str]) -> None:
+def verify_locale(loc: str) -> None:
     """
-    Verifies that all locales are valid.
+    Verifies that a locale is valid.
+    Takes either language-region or language.
     """
-    for loc in locales:
-        if tags.check(loc):
-            continue
-        raise InvalidLocale.invalid_input(loc)
+    if tags.check(loc):
+        return
+    raise InvalidLocale.invalid_input(loc)
 
 
 def normalize_locale(locale: str) -> Locale:
     """
     Normalizes and validates a locale code.
     """
-    locales = locale.split(',')
-    verify_locales(locales)
-    if len(locales) > 1:
-        locale = randchoice(locales)  # nosec
+    verify_locale(locale)
 
     # Parse the locale
     parser = tags.tag(locale)
@@ -124,18 +123,26 @@ def normalize_locale(locale: str) -> Locale:
     )
 
 
-def handle_locale(locale: str) -> Locale:
+def handle_locale(locale: str, ignore_region: bool = False) -> Locale:
     """
     Handles a locale input, normalizing it if necessary.
     """
+    # If the user passed in `language-region` or `language-script-region`, normalize it.
     if len(locale) > 3:
         return normalize_locale(locale)
 
+    # Case: user passed in `region` and needs a full locale
     try:
         return SELECTOR.from_region(locale)
     except UnknownTerritory:
         pass
 
+    # Case: user passed in `language`, and doesn't care about the region
+    if ignore_region:
+        verify_locale(locale)
+        return Locale(language=locale)
+
+    # Case: user passed in `language` and wants a region
     try:
         language = SELECTOR.from_language(locale)
     except UnknownLanguage:
@@ -144,7 +151,37 @@ def handle_locale(locale: str) -> Locale:
         LeakWarning.warn('no_region')
         return language
 
+    # Locale is not in a valid format.
     raise InvalidLocale.invalid_input(locale)
+
+
+def handle_locales(locales: Union[str, List[str]], config: Dict[str, Any]) -> None:
+    """
+    Handles a list of locales.
+    """
+    if isinstance(locales, str):
+        locales = [loc.strip() for loc in locales.split(',')]
+
+    # First, handle the first locale. This will be used for the intl api.
+    intl_locale = handle_locale(locales[0])
+    config.update(intl_locale.as_config())
+
+    if len(locales) < 2:
+        return
+
+    # If additional locales were passed, validate them.
+    # Note: in this case, we do not need the region.
+    config['locale:all'] = _join_unique(
+        handle_locale(locale, ignore_region=True).as_string for locale in locales
+    )
+
+
+def _join_unique(seq: Iterable[str]) -> str:
+    """
+    Joins a sequence of strings without duplicates
+    """
+    seen: Set[str] = set()
+    return ', '.join(x for x in seq if not (x in seen or seen.add(x)))
 
 
 """
