@@ -32,6 +32,7 @@ class CamoufoxUpdate(CamoufoxFetcher):
             self.current_verstr = None
 
     def is_updated_needed(self) -> bool:
+        # Camoufox is not installed
         if self.current_verstr is None:
             return True
         # If the installed version is not the latest version
@@ -145,7 +146,7 @@ def version() -> None:
 
     # Check for Camoufox updates
     if updater.is_updated_needed():
-        rprint(f"(Latest: v{updater.verstr})", fg="red")
+        rprint(f"(Latest supported: v{updater.verstr})", fg="red")
     else:
         rprint("(Up to date!)", fg="yellow")
 

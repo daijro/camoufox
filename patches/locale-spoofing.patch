@@ -1,19 +1,24 @@
 diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
-index 16f4dd7d42..63c9c39741 100644
+index 2456c5b4c6..826404b1b7 100644
 --- a/browser/base/content/browser-init.js
 +++ b/browser/base/content/browser-init.js
-@@ -109,6 +109,17 @@ var gBrowserInit = {
+@@ -109,6 +109,22 @@ var gBrowserInit = {
      window.TabBarVisibility.update();
      TabsInTitlebar.init();
  
-+    let camouLocale;
-+    let language = ChromeUtils.camouGetString("locale:language");
-+    let region = ChromeUtils.camouGetString("locale:region");
-+    if (language && region) {
-+      camouLocale = language + "-" + region + ", " + language;
-+    } else {
-+      camouLocale = ChromeUtils.camouGetString("navigator.language");
++    // If a list of languages were passed, use them.
++    let camouLocale = ChromeUtils.camouGetString("locale:all")
++      || ChromeUtils.camouGetString("navigator.language");
++    // If locale:all was NOT passed, but locale:language and locale:region was,
++    // fall back to it instead.
++    if (!camouLocale) {
++      let language = ChromeUtils.camouGetString("locale:language");
++      let region = ChromeUtils.camouGetString("locale:region");
++      if (language && region) {
++        camouLocale = language + "-" + region + ", " + language;
++      }
 +    }
++    // Set the locale if it was found.
 +    if (camouLocale)
 +      Services.prefs.setCharPref("intl.accept_languages", camouLocale);
 +

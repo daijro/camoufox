@@ -4,11 +4,12 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "camoufox"
-version = "0.2.15"
+version = "0.3.0"
 description = "Wrapper around Playwright to help launch Camoufox"
 authors = ["daijro <daijro.dev@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/daijro/camoufox"
+homepage = "https://camoufox.com/python"
 readme = "README.md"
 keywords = [
     "client",
@@ -41,6 +42,7 @@ typing_extensions = "*"
 screeninfo = "*"
 lxml = "*"
 language-tags = "*"
+pysocks = "*"
 geoip2 = {version = "*", optional = true}
 
 [tool.poetry.extras]

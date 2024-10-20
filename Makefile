@@ -206,7 +206,7 @@ workspace:
 	else \
 		echo "Patch is not applied. Proceeding with application..."; \
 	fi
-	make checkpoint || trueZ
+	make checkpoint || true
 	make patch $(_ARGS)
 
 vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')

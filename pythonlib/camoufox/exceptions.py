@@ -1,3 +1,11 @@
+class UnsupportedVersion(Exception):
+    """
+    Raised when the Camoufox executable is outdated.
+    """
+
+    ...
+
+
 class UnsupportedArchitecture(Exception):
     """
     Raised when the architecture is not supported.

@@ -5,9 +5,11 @@ import shlex
 import shutil
 import sys
 import tempfile
+from dataclasses import dataclass
+from functools import total_ordering
 from io import BufferedWriter, BytesIO
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Tuple, Union
 from zipfile import ZipFile
 
 import click
@@ -18,7 +20,8 @@ from tqdm import tqdm
 from typing_extensions import TypeAlias
 from yaml import CLoader, load
 
-from .exceptions import UnsupportedArchitecture, UnsupportedOS
+from .__version__ import CONSTRAINTS
+from .exceptions import UnsupportedArchitecture, UnsupportedOS, UnsupportedVersion
 
 DownloadBuffer: TypeAlias = Union[BytesIO, tempfile._TemporaryFileWrapper, BufferedWriter]
 
@@ -57,12 +60,81 @@ def rprint(*a, **k):
     click.secho(*a, **k, bold=True)
 
 
+@total_ordering
+@dataclass
+class Version:
+    """
+    A version string that can be compared to other version strings.
+    Stores versions up to 5 parts.
+    """
+
+    release: str
+    version: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        # Build an internal sortable structure
+        self.sorted_rel = tuple(
+            [
+                *(int(x) if x.isdigit() else ord(x[0]) - 1024 for x in self.release.split('.')),
+                *(0 for _ in range(5 - self.release.count('.'))),
+            ]
+        )
+
+    @property
+    def full_string(self) -> str:
+        return f"{self.version}-{self.release}"
+
+    def __eq__(self, other) -> bool:
+        return self.sorted_rel == other.sorted_rel
+
+    def __lt__(self, other) -> bool:
+        return self.sorted_rel < other.sorted_rel
+
+    def is_supported(self) -> bool:
+        return VERSION_MIN <= self < VERSION_MAX
+
+    @staticmethod
+    def from_path(path: Optional[Path] = None) -> 'Version':
+        """
+        Get the version from the given path.
+        """
+        version_path = (path or INSTALL_DIR) / 'version.json'
+        if not os.path.exists(version_path):
+            raise FileNotFoundError(
+                f"Version information not found at {version_path}. "
+                "You are likely using an unsupported version of Camoufox."
+            )
+        with open(version_path, 'rb') as f:
+            version_data = orjson.loads(f.read())
+            return Version(**version_data)
+
+    @staticmethod
+    def is_supported_path(path: Path) -> bool:
+        """
+        Check if the version at the given path is supported.
+        """
+        return Version.from_path(path) >= VERSION_MIN
+
+    @staticmethod
+    def build_minmax() -> Tuple['Version', 'Version']:
+        return Version(release=CONSTRAINTS.MIN_VERSION), Version(release=CONSTRAINTS.MAX_VERSION)
+
+
+# The minimum and maximum supported versions
+VERSION_MIN, VERSION_MAX = Version.build_minmax()
+
+
 class CamoufoxFetcher:
+    """
+    Handles fetching and installing the latest version of Camoufox.
+    """
+
     def __init__(self) -> None:
         self.arch = self.get_platform_arch()
-        self._version: Optional[str] = None
-        self._release: Optional[str] = None
-        self.pattern: re.Pattern = re.compile(rf'camoufox-(.+)-(.+)-{OS_NAME}\.{self.arch}\.zip')
+        self._version_obj: Optional[Version] = None
+        self.pattern: re.Pattern = re.compile(
+            rf'camoufox-(?P<version>.+)-(?P<release>.+)-{OS_NAME}\.{self.arch}\.zip'
+        )
 
         self.fetch_latest()
 
@@ -91,6 +163,30 @@ class CamoufoxFetcher:
 
         return arch
 
+    def find_release(self, releases: List[dict]) -> Optional[Tuple[Version, str]]:
+        """
+        Finds the latest release from a GitHub releases API response that
+        supports the Camoufox version constraints, the OS, and architecture.
+
+        Returns:
+            Optional[Tuple[Version, str]]: The version and URL of a release
+        """
+        # Search through releases for the first supported version
+        for release in releases:
+            for asset in release['assets']:
+                match = self.pattern.match(asset['name'])
+                if not match:
+                    continue
+
+                # Check if the version is supported
+                version = Version(release=match['release'], version=match['version'])
+                if not version.is_supported():
+                    continue
+
+                # Asset was found. Return data
+                return version, asset['browser_download_url']
+        return None
+
     def fetch_latest(self) -> None:
         """
         Fetch the URL of the latest camoufox release for the current platform.
@@ -100,23 +196,23 @@ class CamoufoxFetcher:
             requests.RequestException: If there's an error fetching release data
             ValueError: If no matching release is found for the current platform
         """
-        api_url = "https://api.github.com/repos/daijro/camoufox/releases/latest"
-        response = requests.get(api_url, timeout=20)
-        response.raise_for_status()
+        api_url = "https://api.github.com/repos/daijro/camoufox/releases"
+        resp = requests.get(api_url, timeout=20)
+        resp.raise_for_status()
 
-        release_data = response.json()
-        assets = release_data['assets']
+        # Find a release that fits the constraints
+        releases = resp.json()
+        release_data = self.find_release(releases)
 
-        for asset in assets:
-            if match := self.pattern.match(asset['name']):
-                # Set the version and release
-                self._version = match.group(1)
-                self._release = match.group(2)
-                # Return the download URL
-                self._url = asset['browser_download_url']
-                return
+        if release_data is None:
+            raise UnsupportedVersion(
+                f"No matching release found for {OS_NAME} {self.arch} in the "
+                f"supported range: ({CONSTRAINTS.as_range()}). "
+                "Please update the Python library."
+            )
 
-        raise ValueError(f"No matching release found for {OS_NAME}-{self.arch}")
+        # Set the version and URL
+        self._version_obj, self._url = release_data
 
     @staticmethod
     def download_file(file: DownloadBuffer, url: str) -> DownloadBuffer:
@@ -215,9 +311,10 @@ class CamoufoxFetcher:
         Raises:
             ValueError: If the version is not available (fetch_latest not ran)
         """
-        if self._version is None:
+        if self._version_obj is None or not self._version_obj.version:
             raise ValueError("Version is not available. Make sure to run the fetch_latest first.")
-        return self._version
+
+        return self._version_obj.version
 
     @property
     def release(self) -> str:
@@ -230,11 +327,12 @@ class CamoufoxFetcher:
         Raises:
             ValueError: If the release information is not available (fetch_latest not ran)
         """
-        if self._release is None:
+        if self._version_obj is None:
             raise ValueError(
                 "Release information is not available. Make sure to run the installation first."
             )
-        return self._release
+
+        return self._version_obj.release
 
     @property
     def verstr(self) -> str:
@@ -244,36 +342,38 @@ class CamoufoxFetcher:
         Returns:
             str: The version of the installed camoufox
         """
-        return f"{self.version}-{self.release}"
+        if self._version_obj is None:
+            raise ValueError("Version is not available. Make sure to run the installation first.")
+        return self._version_obj.full_string
 
 
 def installed_verstr() -> str:
     """
     Get the full version string of the installed camoufox.
     """
-    version_path = INSTALL_DIR / 'version.json'
-    if not os.path.exists(version_path):
-        raise FileNotFoundError(f"Version information not found at {version_path}")
-
-    with open(version_path, 'rb') as f:
-        version_data = orjson.loads(f.read())
-        return f"{version_data['version']}-{version_data['release']}"
+    return Version.from_path().full_string
 
 
 def camoufox_path(download_if_missing: bool = True) -> Path:
     """
     Full path to the camoufox folder.
     """
+    if os.path.exists(INSTALL_DIR) and Version.from_path().is_supported():
+        return INSTALL_DIR
+
+    # Ensure the directory exists
     if not os.path.exists(INSTALL_DIR):
         if not download_if_missing:
             raise FileNotFoundError(f"Camoufox executable not found at {INSTALL_DIR}")
 
-        installer = CamoufoxFetcher()
-        installer.install()
-        # Rerun and ensure it's installed
-        return camoufox_path()
+    # Ensure the version is supported
+    else:
+        if not download_if_missing:
+            raise UnsupportedVersion("Camoufox executable is outdated.")
 
-    return INSTALL_DIR
+    # Install and recheck
+    CamoufoxFetcher().install()
+    return camoufox_path()
 
 
 def get_path(file: str) -> str:
