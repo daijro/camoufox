@@ -212,7 +212,7 @@ inline std::optional<nlohmann::json> GetNested(const std::string& domain,
 template <typename T>
 inline std::optional<T> GetAttribute(const std::string attrib, bool isWebGL2) {
   auto value = MaskConfig::GetNested(
-      isWebGL2 ? "webgl2:contextAttributes" : "webgl:contextAttributes",
+      isWebGL2 ? "webGl2:contextAttributes" : "webGl:contextAttributes",
       attrib);
   if (!value) return std::nullopt;
   return value.value().get<T>();
@@ -222,7 +222,7 @@ inline std::optional<
     std::variant<int64_t, bool, double, std::string, std::nullptr_t>>
 GLParam(uint32_t pname, bool isWebGL2) {
   auto value =
-      MaskConfig::GetNested(isWebGL2 ? "webgl2:parameters" : "webgl:parameters",
+      MaskConfig::GetNested(isWebGL2 ? "webGl2:parameters" : "webGl:parameters",
                             std::to_string(pname));
   if (!value) return std::nullopt;
   auto data = value.value();
@@ -237,7 +237,7 @@ GLParam(uint32_t pname, bool isWebGL2) {
 template <typename T>
 inline T MParamGL(uint32_t pname, T defaultValue, bool isWebGL2) {
   if (auto value = MaskConfig::GetNested(
-          isWebGL2 ? "webgl2:parameters" : "webgl:parameters",
+          isWebGL2 ? "webGl2:parameters" : "webGl:parameters",
           std::to_string(pname));
       value.has_value()) {
     return value.value().get<T>();
@@ -250,7 +250,7 @@ inline std::vector<T> MParamGLVector(uint32_t pname,
                                      std::vector<T> defaultValue,
                                      bool isWebGL2) {
   if (auto value = MaskConfig::GetNested(
-          isWebGL2 ? "webgl2:parameters" : "webgl:parameters",
+          isWebGL2 ? "webGl2:parameters" : "webGl:parameters",
           std::to_string(pname));
       value.has_value()) {
     if (value.value().is_array()) {
@@ -266,8 +266,8 @@ inline std::optional<std::array<int32_t, 3UL>> MShaderData(
   std::string valueName =
       std::to_string(shaderType) + "," + std::to_string(precisionType);
   if (auto value =
-          MaskConfig::GetNested(isWebGL2 ? "webgl2:shaderPrecisionFormats"
-                                         : "webgl:shaderPrecisionFormats",
+          MaskConfig::GetNested(isWebGL2 ? "webGl2:shaderPrecisionFormats"
+                                         : "webGl:shaderPrecisionFormats",
                                 valueName)) {
     // Convert {rangeMin: int, rangeMax: int, precision: int} to array
     auto data = value.value();

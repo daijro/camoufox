@@ -43,7 +43,7 @@ index db60868f65..7361f0fc9c 100644
 +  result.mStencil = MBoolVal("stencil", options.stencil);
 +  result.mAntialias.Construct(MBoolVal("antialias", options.antialias));
 +  result.mPremultipliedAlpha = MBoolVal(
-+      "webgl:contextAttributes.premultipliedAlpha", options.premultipliedAlpha);
++      "webGl:contextAttributes.premultipliedAlpha", options.premultipliedAlpha);
 +  result.mPreserveDrawingBuffer =
 +      MBoolVal("preserveDrawingBuffer", options.preserveDrawingBuffer);
 +  result.mFailIfMajorPerformanceCaveat = MBoolVal(
@@ -161,8 +161,8 @@ index db60868f65..7361f0fc9c 100644
 +    case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
 +      break;
 +    default:
-+      if (MaskConfig::GetBool(mIsWebGL2 ? "webgl2:parameters:blockIfNotDefined"
-+                                        : "webgl:parameters:blockIfNotDefined")) {
++      if (MaskConfig::GetBool(mIsWebGL2 ? "webGl2:parameters:blockIfNotDefined"
++                                        : "webGl:parameters:blockIfNotDefined")) {
 +        retval.set(JS::NullValue());
 +        return;
 +      }
@@ -272,7 +272,7 @@ index db60868f65..7361f0fc9c 100644
  
          switch (pname) {
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
-+            if (auto value = MaskConfig::GetString("webgl:renderer")) {
++            if (auto value = MaskConfig::GetString("webGl:renderer")) {
 +              ret = Some(value.value());
 +              break;
 +            }
@@ -283,7 +283,7 @@ index db60868f65..7361f0fc9c 100644
              break;
  
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
-+            if (auto value = MaskConfig::GetString("webgl:vendor")) {
++            if (auto value = MaskConfig::GetString("webGl:vendor")) {
 +              ret = Some(value.value());
 +              break;
 +            }
@@ -317,8 +317,8 @@ index db60868f65..7361f0fc9c 100644
 +    }
 +    // Check if block if not defined is on
 +    if (MaskConfig::GetBool(
-+            mIsWebGL2 ? "webgl2:shaderPrecisionFormats:blockIfNotDefined"
-+                      : "webgl:shaderPrecisionFormats:blockIfNotDefined")) {
++            mIsWebGL2 ? "webGl2:shaderPrecisionFormats:blockIfNotDefined"
++                      : "webGl:shaderPrecisionFormats:blockIfNotDefined")) {
 +      Maybe<webgl::ShaderPrecisionFormat> ret;
 +      return ret;
 +    }
@@ -331,8 +331,8 @@ index db60868f65..7361f0fc9c 100644
    }
  
 +  if (std::vector<std::string> maskValues =
-+          MaskConfig::GetStringList(mIsWebGL2 ? "webgl2:supportedExtensions"
-+                                              : "webgl:supportedExtensions");
++          MaskConfig::GetStringList(mIsWebGL2 ? "webGl2:supportedExtensions"
++                                              : "webGl:supportedExtensions");
 +      !maskValues.empty()) {
 +    if (std::find(maskValues.begin(), maskValues.end(),
 +                  GetExtensionName(ext)) != maskValues.end()) {
@@ -351,8 +351,8 @@ index db60868f65..7361f0fc9c 100644
 +
 +  // Implement separately to prevent O(n^2) timing
 +  if (std::vector<std::string> maskValues =
-+          MaskConfig::GetStringList(mIsWebGL2 ? "webgl2:supportedExtensions"
-+                                              : "webgl:supportedExtensions");
++          MaskConfig::GetStringList(mIsWebGL2 ? "webGl2:supportedExtensions"
++                                              : "webGl:supportedExtensions");
 +      !maskValues.empty()) {
 +    for (const auto& ext : maskValues) {
 +      retarr.AppendElement(NS_ConvertUTF8toUTF16(ext));
