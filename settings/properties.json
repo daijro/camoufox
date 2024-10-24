@@ -82,5 +82,6 @@
   { "property": "webGl2:shaderPrecisionFormats:blockIfNotDefined", "type": "bool" },
   { "property": "webGl:contextAttributes", "type": "dict" },
   { "property": "webGl2:contextAttributes", "type": "dict" },
+  { "property": "memorysaver", "type": "bool" },
   { "property": "debug", "type": "bool" }
 ]

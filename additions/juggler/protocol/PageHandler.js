@@ -80,8 +80,17 @@ class PageHandler {
     }
 
     this._isDragging = false;
-    this._lastMousePosition = { x: 0, y: 0 };
-    this._lastTrackedPos = { x: 0, y: 0 };
+    
+    // Camoufox: set a random default cursor position
+    let random_val = (max_val) => Math.floor(Math.random() * max_val);
+    
+    // Try to fetch the viewport size
+    this._defaultCursorPos = {
+      x: random_val(this._pageTarget._viewportSize.width),
+      y: random_val(this._pageTarget._viewportSize.height),
+    };
+    this._lastMousePosition = { ...this._defaultCursorPos };
+    this._lastTrackedPos = { ...this._defaultCursorPos };
 
     this._reportedFrameIds = new Set();
     this._networkEventsForUnreportedFrameIds = new Map();
@@ -423,6 +432,14 @@ class PageHandler {
     });
     unsubscribe();
 
+    if (ChromeUtils.camouGetBool('memorysaver', false)) {
+      ChromeUtils.camouDebug('Clearing all memory...');
+      Services.obs.notifyObservers(null, "child-gc-request");
+      Cu.forceGC();
+      Services.obs.notifyObservers(null, "child-cc-request");
+      Cu.forceCC();
+    }
+
     return {
       navigationId: sameDocumentNavigation ? null : navigationId,
     };
@@ -558,8 +575,8 @@ class PageHandler {
         // NOTE: since this won't go inside the renderer, there's no need to wait for ACK.
         win.windowUtils.sendMouseEvent(
           'mousemove',
-          0 /* x */,
-          0 /* y */,
+          this._defaultCursorPos.x,
+          this._defaultCursorPos.y,
           button,
           clickCount,
           modifiers,
