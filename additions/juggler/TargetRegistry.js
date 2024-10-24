@@ -383,7 +383,11 @@ class PageTarget {
     this._tab = tab;
     this._linkedBrowser = tab.linkedBrowser;
     this._browserContext = browserContext;
-    this._viewportSize = undefined;
+    // Set the viewport size to Camoufox's default value.
+    this._viewportSize = {
+      width: ChromeUtils.camouGetInt("window.innerWidth") || 1280,
+      height: ChromeUtils.camouGetInt("window.innerHeight") || 720,
+    };;
     this._initialDPPX = this._linkedBrowser.browsingContext.overrideDPPX;
     this._url = 'about:blank';
     this._openerId = opener ? opener.id() : undefined;
@@ -570,14 +574,12 @@ class PageTarget {
     // Otherwise, explicitly set page viewport prevales over browser context
     // default viewport.
     
-    // Do not allow default viewport size if Camoufox set it first
+    // Camoufox is already handling viewport size, so we don't need to set it here.
     if (
-      !this._viewportSize &&
-      this._browserContext.defaultViewportSize && (
-        ChromeUtils.camouGetInt("window.outerWidth") ||
-        ChromeUtils.camouGetInt("window.outerHeight") ||
-        ChromeUtils.camouGetInt("window.innerWidth") ||
-        ChromeUtils.camouGetInt("window.innerHeight"))
+      ChromeUtils.camouGetInt("window.outerWidth") ||
+      ChromeUtils.camouGetInt("window.outerHeight") ||
+      ChromeUtils.camouGetInt("window.innerWidth") ||
+      ChromeUtils.camouGetInt("window.innerHeight")
     ) {
       return;
     }

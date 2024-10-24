@@ -1,2 +1,2 @@
 version=130.0.1
-release=beta.12
+release=beta.13
