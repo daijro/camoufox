@@ -6,7 +6,6 @@ from functools import lru_cache
 from typing import Dict, Optional, Tuple
 
 import requests
-from urllib3 import disable_warnings
 from urllib3.exceptions import InsecureRequestWarning
 
 from .exceptions import InvalidIP, InvalidProxy
@@ -108,6 +107,8 @@ def public_ip(proxy: Optional[str] = None) -> str:
             ip = resp.text.strip()
             validate_ip(ip)
             return ip
+        except requests.exceptions.ProxyError as e:
+            raise InvalidProxy(f"Failed to connect to proxy: {proxy}") from e
         except (requests.RequestException, InvalidIP):
             pass
     raise InvalidIP("Failed to get IP address")
