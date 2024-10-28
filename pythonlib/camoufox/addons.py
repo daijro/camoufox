@@ -54,6 +54,10 @@ def confirm_paths(paths: List[str]) -> None:
     for path in paths:
         if not os.path.isdir(path):
             raise InvalidAddonPath(path)
+        if not os.path.exists(os.path.join(path, 'manifest.json')):
+            raise InvalidAddonPath(
+                'manifest.json is missing. Addon path must be a path to an extracted addon.'
+            )
 
 
 def get_open_port() -> int:
