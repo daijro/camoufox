@@ -1,9 +1,13 @@
 import re
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from random import randrange
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
-from browserforge.fingerprints import Fingerprint, FingerprintGenerator, Screen
+from browserforge.fingerprints import (
+    Fingerprint,
+    FingerprintGenerator,
+    ScreenFingerprint,
+)
 
 from camoufox.pkgman import load_yaml
 
@@ -11,6 +15,15 @@ from camoufox.pkgman import load_yaml
 BROWSERFORGE_DATA = load_yaml('browserforge.yml')
 
 FP_GENERATOR = FingerprintGenerator(browser='firefox', os=('linux', 'macos', 'windows'))
+
+
+@dataclass
+class ExtendedScreen(ScreenFingerprint):
+    """
+    An extended version of Browserforge's ScreenFingerprint class
+    """
+
+    screenY: Optional[int] = None
 
 
 def _cast_to_properties(
@@ -40,10 +53,13 @@ def _cast_to_properties(
         camoufox_data[type_key] = data
 
 
-def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: Screen) -> None:
+def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: ScreenFingerprint) -> None:
     """
     Helper method to set window.screenY based on Browserforge's screenX value.
     """
+    # Skip if manually provided
+    if 'window.screenY' in camoufox_data:
+        return
     # Default screenX to 0 if not provided
     screenX = fp_screen.screenX
     if not screenX:
@@ -82,10 +98,37 @@ def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None
     return camoufox_data
 
 
-def generate_fingerprint(**config) -> Fingerprint:
+def handle_window_size(fp: Fingerprint, outer_width: int, outer_height: int) -> None:
+    """
+    Helper method to set a custom outer window size, and center it in the screen
+    """
+    # Cast the screen to an ExtendedScreen
+    fp.screen = ExtendedScreen(**asdict(fp.screen))
+    sc = fp.screen
+
+    # Center the window on the screen
+    sc.screenX += (sc.width - outer_width) // 2
+    sc.screenY = (sc.height - outer_height) // 2
+
+    # Update inner dimensions if set
+    if sc.innerWidth:
+        sc.innerWidth = max(outer_width - sc.outerWidth + sc.innerWidth, 0)
+    if sc.innerHeight:
+        sc.innerHeight = max(outer_height - sc.outerHeight + sc.innerHeight, 0)
+
+    # Set outer dimensions
+    sc.outerWidth = outer_width
+    sc.outerHeight = outer_height
+
+
+def generate_fingerprint(window: Optional[Tuple[int, int]] = None, **config) -> Fingerprint:
     """
     Generates a Firefox fingerprint with Browserforge.
     """
+    if window:  # User-specified outer window size
+        fingerprint = FP_GENERATOR.generate(**config)
+        handle_window_size(fingerprint, *window)
+        return fingerprint
     return FP_GENERATOR.generate(**config)
 
 

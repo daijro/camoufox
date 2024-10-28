@@ -44,6 +44,7 @@ screen:
   innerHeight: window.innerHeight
   innerWidth: window.innerWidth
   screenX: window.screenX
+  screenY: window.screenY
   # Tends to generate out of bounds (network inconsistencies):
   #   clientWidth: document.body.clientWidth
   #   clientHeight: document.body.clientHeight
