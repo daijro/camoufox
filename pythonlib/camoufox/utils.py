@@ -34,7 +34,7 @@ from .warnings import LeakWarning
 from .xpi_dl import add_default_addons
 
 if OS_NAME == 'lin':
-    from .virtdisplay import VIRTUAL_DISPLAY
+    from .virtdisplay import VirtualDisplay
 
 LAUNCH_FILE = {
     'win': 'camoufox.exe',
@@ -294,6 +294,50 @@ def warn_manual_config(config: Dict[str, Any]) -> None:
         LeakWarning.warn('viewport', False)
 
 
+async def async_attach_vd(
+    browser: Any, virtual_display: Optional[VirtualDisplay] = None
+) -> Any:  # type: ignore
+    """
+    Attaches the virtual display to the async browser cleanup
+    """
+    if not virtual_display:  # Skip if no virtual display is provided
+        return browser
+
+    _close = browser.close
+
+    async def new_close(*args: Any, **kwargs: Any):
+        await _close(*args, **kwargs)
+        if virtual_display:
+            virtual_display.kill()
+
+    browser.close = new_close
+    browser._virtual_display = virtual_display
+
+    return browser
+
+
+def sync_attach_vd(
+    browser: Any, virtual_display: Optional[VirtualDisplay] = None
+) -> Any:  # type: ignore
+    """
+    Attaches the virtual display to the sync browser cleanup
+    """
+    if not virtual_display:  # Skip if no virtual display is provided
+        return browser
+
+    _close = browser.close
+
+    def new_close(*args: Any, **kwargs: Any):
+        _close(*args, **kwargs)
+        if virtual_display:
+            virtual_display.kill()
+
+    browser.close = new_close
+    browser._virtual_display = virtual_display
+
+    return browser
+
+
 def launch_options(
     *,
     config: Optional[Dict[str, Any]] = None,
@@ -308,9 +352,10 @@ def launch_options(
     fonts: Optional[List[str]] = None,
     exclude_addons: Optional[List[DefaultAddons]] = None,
     screen: Optional[Screen] = None,
+    window: Optional[Tuple[int, int]] = None,
     fingerprint: Optional[Fingerprint] = None,
     ff_version: Optional[int] = None,
-    headless: Optional[Union[bool, Literal['virtual']]] = None,
+    headless: Optional[bool] = None,
     executable_path: Optional[str] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     proxy: Optional[Dict[str, str]] = None,
@@ -318,6 +363,7 @@ def launch_options(
     env: Optional[Dict[str, Union[str, float, bool]]] = None,
     i_know_what_im_doing: Optional[bool] = None,
     debug: Optional[bool] = None,
+    virtual_display: Optional[str] = None,
     **launch_options: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
@@ -356,6 +402,8 @@ def launch_options(
         screen (Optional[Screen]):
             Constrains the screen dimensions of the generated fingerprint.
             Takes a browserforge.fingerprints.Screen instance.
+        window (Optional[Tuple[int, int]]):
+            Set a fixed window size instead of generating a random one
         fingerprint (Optional[Fingerprint]):
             Use a custom BrowserForge fingerprint. Note: Not all values will be implemented.
             If not provided, a random fingerprint will be generated based on the provided
@@ -363,9 +411,10 @@ def launch_options(
         ff_version (Optional[int]):
             Firefox version to use. Defaults to the current Camoufox version.
             To prevent leaks, only use this for special cases.
-        headless (Union[bool, Literal['virtual']]):
+        headless (Optional[bool]):
             Whether to run the browser in headless mode. Defaults to False.
-            If you are running linux, passing 'virtual' will use Xvfb.
+            Note: If you are running linux, passing headless='virtual' to Camoufox & AsyncCamoufox
+            will use Xvfb.
         executable_path (Optional[str]):
             Custom Camoufox browser executable path.
         firefox_user_prefs (Optional[Dict[str, Any]]):
@@ -379,6 +428,8 @@ def launch_options(
             Environment variables to set.
         debug (Optional[bool]):
             Prints the config being sent to Camoufox.
+        virtual_display (Optional[str]):
+            Virtual display number. Ex: ':99'. This is handled by Camoufox & AsyncCamoufox.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -402,10 +453,9 @@ def launch_options(
     if isinstance(executable_path, str):
         executable_path = Path(abspath(executable_path))
 
-    # Handle headless mode cases
-    if headless == 'virtual':
-        env['DISPLAY'] = VIRTUAL_DISPLAY.new_or_reuse(debug=debug)
-        headless = False
+    # Handle virtual display
+    if virtual_display:
+        env['DISPLAY'] = virtual_display
 
     # Warn the user for manual config settings
     if not i_know_what_im_doing:
@@ -433,6 +483,7 @@ def launch_options(
     if fingerprint is None:
         fingerprint = generate_fingerprint(
             screen=screen or get_screen_cons(headless or 'DISPLAY' in env),
+            window=window,
             os=os,
         )
     else:

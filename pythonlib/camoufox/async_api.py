@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, overload
 
 from playwright.async_api import (
     Browser,
@@ -6,8 +6,11 @@ from playwright.async_api import (
     Playwright,
     PlaywrightContextManager,
 )
+from typing_extensions import Literal
 
-from .utils import launch_options
+from camoufox.virtdisplay import VirtualDisplay
+
+from .utils import async_attach_vd, launch_options
 
 
 class AsyncCamoufox(PlaywrightContextManager):
@@ -32,11 +35,33 @@ class AsyncCamoufox(PlaywrightContextManager):
         await super().__aexit__(*args)
 
 
+@overload
 async def AsyncNewBrowser(
     playwright: Playwright,
     *,
     from_options: Optional[Dict[str, Any]] = None,
+    persistent_context: Literal[False] = False,
+    **kwargs,
+) -> Browser: ...
+
+
+@overload
+async def AsyncNewBrowser(
+    playwright: Playwright,
+    *,
+    from_options: Optional[Dict[str, Any]] = None,
+    persistent_context: Literal[True],
+    **kwargs,
+) -> BrowserContext: ...
+
+
+async def AsyncNewBrowser(
+    playwright: Playwright,
+    *,
+    headless: Optional[Union[bool, Literal['virtual']]] = None,
+    from_options: Optional[Dict[str, Any]] = None,
     persistent_context: bool = False,
+    debug: Optional[bool] = None,
     **kwargs,
 ) -> Union[Browser, BrowserContext]:
     """
@@ -50,9 +75,20 @@ async def AsyncNewBrowser(
         **kwargs:
             All other keyword arugments passed to `launch_options()`.
     """
-    opt = launch_options(**kwargs)
+    if headless == 'virtual':
+        virtual_display = VirtualDisplay(debug=debug)
+        kwargs['virtual_display'] = virtual_display.get()
+        headless = False
+    else:
+        virtual_display = None
 
+    opt = from_options or launch_options(headless=headless, debug=debug, **kwargs)
+
+    # Persistent context
     if persistent_context:
-        return await playwright.firefox.launch_persistent_context(**opt)
+        context = await playwright.firefox.launch_persistent_context(**opt)
+        return await async_attach_vd(context, virtual_display)
 
-    return await playwright.firefox.launch(**opt)
+    # Browser
+    browser = await playwright.firefox.launch(**opt)
+    return await async_attach_vd(browser, virtual_display)

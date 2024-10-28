@@ -1,6 +1,8 @@
 import os
 import subprocess  # nosec
 from glob import glob
+from multiprocessing import Lock
+from random import randrange
 from shutil import which
 from typing import List, Optional
 
@@ -17,12 +19,14 @@ class VirtualDisplay:
     A minimal virtual display implementation for Linux.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, debug: Optional[bool] = False) -> None:
         """
         Constructor for the VirtualDisplay class (singleton object).
         """
+        self.debug = debug
         self.proc: Optional[subprocess.Popen] = None
         self._display: Optional[int] = None
+        self._lock = Lock()
 
     xvfb_args = (
         # fmt: off
@@ -61,36 +65,46 @@ class VirtualDisplay:
         """
         return [self.xvfb_path, f':{self.display}', *self.xvfb_args]
 
-    def execute_xvfb_singleton(self, debug: Optional[bool] = False):
+    def execute_xvfb(self):
         """
         Spawn a detatched process
         """
-        if debug:
+        if self.debug or True:
             print('Starting virtual display:', ' '.join(self.xvfb_cmd))
         self.proc = subprocess.Popen(  # nosec
             self.xvfb_cmd,
-            stdout=None if debug else subprocess.DEVNULL,
-            stderr=None if debug else subprocess.DEVNULL,
+            stdout=None if self.debug else subprocess.DEVNULL,
+            stderr=None if self.debug else subprocess.DEVNULL,
         )
 
-    def new_or_reuse(self, debug: Optional[bool] = False) -> str:
+    def get(self) -> str:
         """
         Get the display number
         """
         self.assert_linux()
 
-        if self.proc is None:
-            self.execute_xvfb_singleton(debug)
-        elif debug:
-            print(f'Using virtual display: {self.display}')
-        return f':{self.display}'
+        with self._lock:
+            if self.proc is None:
+                self.execute_xvfb()
+            elif self.debug:
+                print(f'Using virtual display: {self.display}')
+            return f':{self.display}'
 
-    def __del__(self):
+    def kill(self):
         """
         Terminate the xvfb process
         """
-        if self.proc:
-            self.proc.terminate()
+        with self._lock:
+            if self.proc and self.proc.poll() is None:
+                if self.debug:
+                    print('Terminating virtual display:', self.display)
+                self.proc.terminate()
+
+    def __del__(self):
+        """
+        Kill and delete the VirtualDisplay object
+        """
+        self.kill()
 
     @staticmethod
     def _get_lock_files() -> List[str]:
@@ -112,7 +126,7 @@ class VirtualDisplay:
         ls = list(
             map(lambda x: int(x.split("X")[1].split("-")[0]), VirtualDisplay._get_lock_files())
         )
-        return max(99, max(ls) + 3) if ls else 99
+        return max(99, max(ls) + randrange(3, 20)) if ls else 99  # nosec
 
     @property
     def display(self) -> int:
@@ -130,6 +144,3 @@ class VirtualDisplay:
         """
         if OS_NAME != 'lin':
             raise VirtualDisplayNotSupported("Virtual display is only supported on Linux.")
-
-
-VIRTUAL_DISPLAY = VirtualDisplay()
