@@ -30,11 +30,9 @@ from .fingerprints import from_browserforge, generate_fingerprint
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locale import geoip_allowed, get_geolocation, handle_locales
 from .pkgman import OS_NAME, get_path, installed_verstr
+from .virtdisplay import VirtualDisplay
 from .warnings import LeakWarning
 from .xpi_dl import add_default_addons
-
-if OS_NAME == 'lin':
-    from .virtdisplay import VirtualDisplay
 
 LAUNCH_FILE = {
     'win': 'camoufox.exe',
