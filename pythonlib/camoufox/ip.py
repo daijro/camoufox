@@ -30,13 +30,15 @@ class Proxy:
         """
         Parses the proxy server string.
         """
-        proxy_match = re.match(r'^(?P<schema>\w+)://(?P<url>.*?)(?:\:(?P<port>\d+))?$', server)
+        proxy_match = re.match(r'^(?:(?P<schema>\w+)://)?(?P<url>.*?)(?:\:(?P<port>\d+))?$', server)
         if not proxy_match:
             raise InvalidProxy(f"Invalid proxy server: {server}")
         return proxy_match['schema'], proxy_match['url'], proxy_match['port']
 
     def as_string(self) -> str:
         schema, url, port = self.parse_server(self.server)
+        if not schema:
+            schema = 'http'
         result = f"{schema}://"
         if self.username:
             result += f"{self.username}"
