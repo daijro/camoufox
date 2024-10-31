@@ -27,7 +27,10 @@ class ExtendedScreen(ScreenFingerprint):
 
 
 def _cast_to_properties(
-    camoufox_data: dict, cast_enum: dict, bf_dict: dict, ff_version: Optional[str] = None
+    camoufox_data: Dict[str, Any],
+    cast_enum: Dict[str, Any],
+    bf_dict: Dict[str, Any],
+    ff_version: Optional[str] = None,
 ) -> None:
     """
     Casts Browserforge fingerprints to Camoufox config properties.

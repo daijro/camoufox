@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from functools import total_ordering
 from io import BufferedWriter, BytesIO
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 from zipfile import ZipFile
 
 import click
@@ -440,7 +440,7 @@ def unzip(
             zf.extract(member, extract_path)
 
 
-def load_yaml(file: str) -> Dict:
+def load_yaml(file: str) -> Dict[str, Any]:
     """
     Loads a local YAML file and returns it as a dictionary.
     """
