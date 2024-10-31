@@ -26,7 +26,7 @@ from .exceptions import UnsupportedArchitecture, UnsupportedOS, UnsupportedVersi
 DownloadBuffer: TypeAlias = Union[BytesIO, tempfile._TemporaryFileWrapper, BufferedWriter]
 
 # Map machine architecture to Camoufox binary name
-ARCH_MAP: dict[str, str] = {
+ARCH_MAP: Dict[str, str] = {
     'amd64': 'x86_64',
     'x86_64': 'x86_64',
     'x86': 'x86_64',
@@ -163,7 +163,7 @@ class CamoufoxFetcher:
 
         return arch
 
-    def find_release(self, releases: List[dict]) -> Optional[Tuple[Version, str]]:
+    def find_release(self, releases: List[Dict]) -> Optional[Tuple[Version, str]]:
         """
         Finds the latest release from a GitHub releases API response that
         supports the Camoufox version constraints, the OS, and architecture.
@@ -440,7 +440,7 @@ def unzip(
             zf.extract(member, extract_path)
 
 
-def load_yaml(file: str) -> dict:
+def load_yaml(file: str) -> Dict:
     """
     Loads a local YAML file and returns it as a dictionary.
     """
