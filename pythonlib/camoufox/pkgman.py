@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from functools import total_ordering
 from io import BufferedWriter, BytesIO
 from pathlib import Path
-from typing import List, Literal, Optional, Tuple, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union
 from zipfile import ZipFile
 
 import click
@@ -38,7 +38,7 @@ ARCH_MAP: dict[str, str] = {
     'armv6l': 'arm64',
     'armv7l': 'arm64',
 }
-OS_MAP: dict[str, Literal['mac', 'win', 'lin']] = {'darwin': 'mac', 'linux': 'lin', 'win32': 'win'}
+OS_MAP: Dict[str, Literal['mac', 'win', 'lin']] = {'darwin': 'mac', 'linux': 'lin', 'win32': 'win'}
 
 if sys.platform not in OS_MAP:
     raise UnsupportedOS(f"OS {sys.platform} is not supported")
@@ -49,7 +49,7 @@ INSTALL_DIR: Path = Path(user_cache_dir("camoufox"))
 LOCAL_DATA: Path = Path(os.path.abspath(__file__)).parent
 
 # The supported architectures for each OS
-OS_ARCH_MATRIX: dict[str, List[str]] = {
+OS_ARCH_MATRIX: Dict[str, List[str]] = {
     'mac': ['x86_64', 'arm64'],
     'win': ['x86_64', 'i686'],
     'lin': ['x86_64', 'arm64', 'i686'],
