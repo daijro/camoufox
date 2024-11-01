@@ -4,6 +4,7 @@
 
 var EXPORTED_SYMBOLS = ["Juggler", "JugglerFactory"];
 
+const {AppConstants} = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
 const {XPCOMUtils} = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
 const {ComponentUtils} = ChromeUtils.import("resource://gre/modules/ComponentUtils.jsm");
 const {Dispatcher} = ChromeUtils.import("chrome://juggler/content/protocol/Dispatcher.js");
@@ -105,7 +106,12 @@ class Juggler {
         };
 
         // Force create hidden window here, otherwise its creation later closes the web socket!
-        Services.appShell.hiddenDOMWindow;
+        // In FF132, the hidden window has been removed on Linux and Windows. Only enable it on Mac.
+        // https://bugzilla.mozilla.org/show_bug.cgi?id=71895
+        if (AppConstants.platform === "macosx") {
+          ChromeUtils.camouDebug('Creating hidden window');
+          Services.appShell.hiddenDOMWindow;
+        }
 
         let pipeStopped = false;
         let browserHandler;

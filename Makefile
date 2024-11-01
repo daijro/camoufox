@@ -68,9 +68,10 @@ ff-dbg: setup
 	# Only apply patches to help debug vanilla Firefox
 	make patch ./patches/chromeutil.patch
 	make patch ./patches/debug-url-navigation.patch
-	echo "\nLOCAL_INCLUDES += ['/camoucfg']" >> $(cf_source_dir)/dom/base/moz.build
+	echo "LOCAL_INCLUDES += ['/camoucfg']" >> $(cf_source_dir)/dom/base/moz.build
 	touch $(cf_source_dir)/_READY
 	make checkpoint
+	make build
 
 revert:
 	cd $(cf_source_dir) && git reset --hard unpatched
