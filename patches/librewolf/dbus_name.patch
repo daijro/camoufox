@@ -1,0 +1,90 @@
+diff --git a/toolkit/components/remote/nsDBusRemoteClient.cpp b/toolkit/components/remote/nsDBusRemoteClient.cpp
+index aad9d7054af8..a926d8b6abdc 100644
+--- a/toolkit/components/remote/nsDBusRemoteClient.cpp
++++ b/toolkit/components/remote/nsDBusRemoteClient.cpp
+@@ -76,7 +76,7 @@ bool nsDBusRemoteClient::GetRemoteDestinationName(const char* aProgram,
+   mozilla::XREAppData::SanitizeNameForDBus(profileName);
+ 
+   aDestinationName =
+-      nsPrintfCString("org.mozilla.%s.%s", aProgram, profileName.get());
++      nsPrintfCString("com.camoufox.%s.%s", aProgram, profileName.get());
+   if (aDestinationName.Length() > DBUS_MAXIMUM_NAME_LENGTH)
+     aDestinationName.Truncate(DBUS_MAXIMUM_NAME_LENGTH);
+ 
+@@ -90,7 +90,7 @@ bool nsDBusRemoteClient::GetRemoteDestinationName(const char* aProgram,
+   if (!sDBusValidateBusName(aDestinationName.get(), nullptr)) {
+     // We don't have a valid busName yet - try to create a default one.
+     aDestinationName =
+-        nsPrintfCString("org.mozilla.%s.%s", aProgram, "default");
++        nsPrintfCString("com.camoufox.%s.%s", aProgram, "default");
+     if (!sDBusValidateBusName(aDestinationName.get(), nullptr)) {
+       // We failed completelly to get a valid bus name - just quit
+       // to prevent crash at dbus_bus_request_name().
+@@ -117,7 +117,7 @@ nsresult nsDBusRemoteClient::DoSendDBusCommandLine(const char* aProfile,
+   }
+ 
+   nsAutoCString pathName;
+-  pathName = nsPrintfCString("/org/mozilla/%s/Remote", appName.get());
++  pathName = nsPrintfCString("/io/gitlab/%s/Remote", appName.get());
+ 
+   static auto sDBusValidatePathName = (bool (*)(const char*, DBusError*))dlsym(
+       RTLD_DEFAULT, "dbus_validate_path");
+@@ -128,7 +128,7 @@ nsresult nsDBusRemoteClient::DoSendDBusCommandLine(const char* aProfile,
+   }
+ 
+   nsAutoCString remoteInterfaceName;
+-  remoteInterfaceName = nsPrintfCString("org.mozilla.%s", appName.get());
++  remoteInterfaceName = nsPrintfCString("com.camoufox.%s", appName.get());
+ 
+   LOG("  DBus destination: %s\n", destinationName.get());
+   LOG("  DBus path: %s\n", pathName.get());
+diff --git a/toolkit/components/remote/nsDBusRemoteServer.cpp b/toolkit/components/remote/nsDBusRemoteServer.cpp
+index 4afb8381d0bc..bd927334b817 100644
+--- a/toolkit/components/remote/nsDBusRemoteServer.cpp
++++ b/toolkit/components/remote/nsDBusRemoteServer.cpp
+@@ -29,7 +29,7 @@ static const char* introspect_template =
+     "1.0//EN\"\n"
+     "\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+     "<node>\n"
+-    " <interface name=\"org.mozilla.%s\">\n"
++    " <interface name=\"com.camoufox.%s\">\n"
+     "   <method name=\"OpenURL\">\n"
+     "     <arg name=\"url\" direction=\"in\" type=\"ay\"/>\n"
+     "   </method>\n"
+@@ -39,7 +39,7 @@ static const char* introspect_template =
+ bool nsDBusRemoteServer::HandleOpenURL(const gchar* aInterfaceName,
+                                        const gchar* aMethodName,
+                                        Span<const gchar> aParam) {
+-  nsPrintfCString ourInterfaceName("org.mozilla.%s", mAppName.get());
++  nsPrintfCString ourInterfaceName("com.camoufox.%s", mAppName.get());
+ 
+   if ((strcmp("OpenURL", aMethodName) != 0) ||
+       (strcmp(ourInterfaceName.get(), aInterfaceName) != 0)) {
+@@ -132,7 +132,7 @@ static const GDBusInterfaceVTable gInterfaceVTable = {
+     HandleMethodCall, HandleGetProperty, HandleSetProperty};
+ 
+ void nsDBusRemoteServer::OnBusAcquired(GDBusConnection* aConnection) {
+-  mPathName = nsPrintfCString("/org/mozilla/%s/Remote", mAppName.get());
++  mPathName = nsPrintfCString("/com/camoufox/%s/Remote", mAppName.get());
+   static auto sDBusValidatePathName = (bool (*)(const char*, DBusError*))dlsym(
+       RTLD_DEFAULT, "dbus_validate_path");
+   if (!sDBusValidatePathName ||
+@@ -206,8 +206,7 @@ nsresult nsDBusRemoteServer::Startup(const char* aAppName,
+ 
+   mozilla::XREAppData::SanitizeNameForDBus(profileName);
+ 
+-  nsPrintfCString busName("org.mozilla.%s.%s", mAppName.get(),
+-                          profileName.get());
++  nsPrintfCString busName("com.camoufox.%s.%s", mAppName.get(), profileName.get());
+   if (busName.Length() > DBUS_MAXIMUM_NAME_LENGTH) {
+     busName.Truncate(DBUS_MAXIMUM_NAME_LENGTH);
+   }
+@@ -221,7 +220,7 @@ nsresult nsDBusRemoteServer::Startup(const char* aAppName,
+ 
+   // We don't have a valid busName yet - try to create a default one.
+   if (!sDBusValidateBusName(busName.get(), nullptr)) {
+-    busName = nsPrintfCString("org.mozilla.%s.%s", mAppName.get(), "default");
++    busName = nsPrintfCString("com.camoufox.%s.%s", mAppName.get(), "default");
+     if (!sDBusValidateBusName(busName.get(), nullptr)) {
+       // We failed completelly to get a valid bus name - just quit
+       // to prevent crash at dbus_bus_request_name().
