@@ -1,4 +1,5 @@
 import os
+from multiprocessing import Lock
 from typing import List, Optional
 
 from .addons import DefaultAddons
@@ -17,7 +18,8 @@ def add_default_addons(
 
     addons = [addon for addon in DefaultAddons if addon not in exclude_list]
 
-    maybe_download_addons(addons, addons_list)
+    with Lock():
+        maybe_download_addons(addons, addons_list)
 
 
 def download_and_extract(url: str, extract_path: str, name: str) -> None:
@@ -25,8 +27,8 @@ def download_and_extract(url: str, extract_path: str, name: str) -> None:
     Downloads and extracts an addon from a given URL to a specified path
     """
     # Create a temporary file to store the downloaded zip
-    buffer = webdl(url, desc=f"Downloading addon ({name})")
-    unzip(buffer, extract_path, f"Extracting addon ({name})")
+    buffer = webdl(url, desc=f"Downloading addon ({name})", bar=False)
+    unzip(buffer, extract_path, f"Extracting addon ({name})", bar=False)
 
 
 def get_addon_path(addon_name: str) -> str:
@@ -36,7 +38,9 @@ def get_addon_path(addon_name: str) -> str:
     return get_path(os.path.join("addons", addon_name))
 
 
-def maybe_download_addons(addons: List[DefaultAddons], addons_list: List[str]) -> None:
+def maybe_download_addons(
+    addons: List[DefaultAddons], addons_list: Optional[List[str]] = None
+) -> None:
     """
     Downloads and extracts addons from a given dictionary to a specified list
     Skips downloading if the addon is already downloaded
@@ -48,7 +52,8 @@ def maybe_download_addons(addons: List[DefaultAddons], addons_list: List[str]) -
         # Check if the addon is already extracted
         if os.path.exists(addon_path):
             # Add the existing addon path to addons_list
-            addons_list.append(addon_path)
+            if addons_list is not None:
+                addons_list.append(addon_path)
             continue
 
         # Addon doesn't exist, create directory and download
@@ -56,6 +61,7 @@ def maybe_download_addons(addons: List[DefaultAddons], addons_list: List[str]) -
             os.makedirs(addon_path, exist_ok=True)
             download_and_extract(addon.value, addon_path, addon.name)
             # Add the new addon directory path to addons_list
-            addons_list.append(addon_path)
+            if addons_list is not None:
+                addons_list.append(addon_path)
         except Exception as e:
             print(f"Failed to download and extract {addon.name}: {e}")

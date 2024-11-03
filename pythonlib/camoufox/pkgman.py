@@ -389,6 +389,7 @@ def webdl(
     url: str,
     desc: Optional[str] = None,
     buffer: Optional[DownloadBuffer] = None,
+    bar: bool = True,
 ) -> DownloadBuffer:
     """
     Download a file from the given URL and return it as BytesIO.
@@ -396,6 +397,7 @@ def webdl(
     Args:
         url (str): The URL to download the file from
         buffer (Optional[BytesIO]): A BytesIO object to store the downloaded file
+        bar (bool): Whether to show the progress bar
 
     Returns:
         DownloadBuffer: The downloaded file content as a BytesIO object
@@ -411,7 +413,13 @@ def webdl(
     if buffer is None:
         buffer = BytesIO()
 
-    with tqdm(total=total_size, unit='iB', unit_scale=True, desc=desc) as progress_bar:
+    with tqdm(
+        total=total_size,
+        unit='iB',
+        bar_format=None if bar else '{desc}: {percentage:3.0f}%',
+        unit_scale=True,
+        desc=desc,
+    ) as progress_bar:
         for data in response.iter_content(block_size):
             size = buffer.write(data)
             progress_bar.update(size)
@@ -424,6 +432,7 @@ def unzip(
     zip_file: DownloadBuffer,
     extract_path: str,
     desc: Optional[str] = None,
+    bar: bool = True,
 ) -> None:
     """
     Extract the contents of a zip file to the installation directory.
@@ -436,7 +445,9 @@ def unzip(
         OSError: If there's an error creating directories or writing files
     """
     with ZipFile(zip_file) as zf:
-        for member in tqdm(zf.infolist(), desc=desc):
+        for member in tqdm(
+            zf.infolist(), desc=desc, bar_format=None if bar else '{desc}: {percentage:3.0f}%'
+        ):
             zf.extract(member, extract_path)
 
 
