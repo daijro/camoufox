@@ -1024,6 +1024,15 @@ class BrowserContext {
   }
 
   async setDefaultViewport(viewport) {
+    // Camoufox: only override the set viewport if a new one was passed
+    if (
+      ChromeUtils.camouGetInt("window.innerWidth")
+      || ChromeUtils.camouGetInt("window.innerHeight")
+    ) {
+      if (viewport.viewportSize?.width == 1280 && viewport.viewportSize?.height == 720) {
+        return;
+      }
+    }
     this.defaultViewportSize = viewport ? viewport.viewportSize : undefined;
     this.deviceScaleFactor = viewport ? viewport.deviceScaleFactor : undefined;
     await Promise.all(Array.from(this.pages).map(page => page.updateViewportSize()));

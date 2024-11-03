@@ -86,8 +86,8 @@ class PageHandler {
     
     // Try to fetch the viewport size
     this._defaultCursorPos = {
-      x: random_val(this._pageTarget._viewportSize.width),
-      y: random_val(this._pageTarget._viewportSize.height),
+      x: random_val(this._pageTarget._viewportSize?.width || 1280),
+      y: random_val(this._pageTarget._viewportSize?.height || 720),
     };
     this._lastMousePosition = { ...this._defaultCursorPos };
     this._lastTrackedPos = { ...this._defaultCursorPos };
