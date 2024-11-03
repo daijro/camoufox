@@ -9,16 +9,17 @@ launch.exe
 
 # Internal testing
 /extra-docs
-/tests
+pythonlib/test*
 /.vscode
 /bundle/fonts/extra
 pythonlib/*.png
 scripts/*.png
-test*
 .vscode
+/tests/*.disabled
 
 # Old data
 _old/
+_old_*/
 *.old
 
 # Logs

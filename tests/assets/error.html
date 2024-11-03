@@ -1,0 +1,17 @@
+<!DOCTYPE html> <script>
+console.error('Not a JS error');
+a();
+
+function a() {
+    b();
+}
+
+function b() {
+    c();
+}
+
+function c() {
+    throw new Error('Fancy error!');
+}
+//# sourceURL=myscript.js
+</script>
