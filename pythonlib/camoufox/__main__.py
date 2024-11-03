@@ -81,7 +81,7 @@ def fetch(browserforge=False) -> None:
         download_mmdb()
     
     if browserforge:
-        update_browserforge()
+        update_browserforge(headers=True, fingerprints=True)
 
 
 @cli.command(name='remove')
