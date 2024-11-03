@@ -10,10 +10,17 @@ from os import environ
 from typing import Optional
 
 import click
-from browserforge.download import download as update_browserforge
 
+from .addons import DefaultAddons
 from .locale import ALLOW_GEOIP, download_mmdb, remove_mmdb
 from .pkgman import INSTALL_DIR, CamoufoxFetcher, installed_verstr, rprint
+from .xpi_dl import maybe_download_addons
+
+try:
+    from browserforge.download import download as update_browserforge
+except ImportError:
+    # Account for other Browserforge versions
+    from browserforge.download import Download as update_browserforge
 
 
 class CamoufoxUpdate(CamoufoxFetcher):
@@ -70,16 +77,21 @@ def cli() -> None:
 
 
 @cli.command(name='fetch')
-@click.option('--browserforge', is_flag=True, help='Update browserforge\'s header and fingerprint definitions')
+@click.option(
+    '--browserforge', is_flag=True, help='Update browserforge\'s header and fingerprint definitions'
+)
 def fetch(browserforge=False) -> None:
     """
-    Fetch the latest version of Camoufox and optionally update the browserforge's database
+    Fetch the latest version of Camoufox and optionally update Browserforge's database
     """
     CamoufoxUpdate().update()
     # Fetch the GeoIP database
     if ALLOW_GEOIP:
         download_mmdb()
-    
+
+    # Download default addons
+    maybe_download_addons(list(DefaultAddons))
+
     if browserforge:
         update_browserforge(headers=True, fingerprints=True)
 
