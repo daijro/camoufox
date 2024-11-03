@@ -17,7 +17,8 @@ class DefaultAddons(Enum):
     """
 
     UBO = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
-    BPC = "https://gitflic.ru/project/magnolia1234/bpc_uploads/blob/raw?file=bypass_paywalls_clean-latest.xpi"
+    # Disable by default. Not always necessary, and increases the memory footprint of Camoufox.
+    # BPC = "https://gitflic.ru/project/magnolia1234/bpc_uploads/blob/raw?file=bypass_paywalls_clean-latest.xpi"
 
 
 def get_debug_port(args: List[str]) -> int:
