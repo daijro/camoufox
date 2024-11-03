@@ -1,0 +1,19 @@
+[tool.pytest.ini_options]
+addopts = "-Wall -rsx -vv -s"
+markers = [
+    "skip_browser",
+    "only_browser",
+    "skip_platform",
+    "only_platform"
+]
+junit_family = "xunit2"
+asyncio_mode = "auto"
+
+[tool.pyright]
+pythonVersion = "3.8"
+reportMissingImports = false
+reportTypedDictNotRequiredAccess = false
+reportCallInDefaultInitializer = true
+reportOptionalSubscript = false
+reportUnboundVariable = false
+strictParameterNoneValue = false

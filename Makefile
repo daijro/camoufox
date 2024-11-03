@@ -11,7 +11,7 @@ pacman := python python-pip p7zip go msitools wget aria2
 .PHONY: help fetch setup setup-minimal clean set-target distclean build package \
         build-launcher check-arch revert edits run bootstrap mozbootstrap dir \
         package-linux package-macos package-windows vcredist_arch patch unpatch \
-        workspace check-arg edit-cfg ff-dbg
+        workspace check-arg edit-cfg ff-dbg tests
 
 help:
 	@echo "Available targets:"
@@ -36,6 +36,7 @@ help:
 	@echo "  patch           - Apply a patch"
 	@echo "  unpatch         - Remove a patch"
 	@echo "  workspace       - Sets the workspace to a patch, assuming its applied"
+	@echo "  tests           - Runs the Playwright tests"
 
 _ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 $(eval $(_ARGS):;@:)
@@ -209,5 +210,11 @@ workspace:
 	fi
 	make checkpoint || true
 	make patch $(_ARGS)
+
+tests:
+	cd ./tests && \
+	bash run-tests.sh \
+		--executable-path ../$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
+		$(if $(filter true,$(headful)),--headful,)
 
 vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')
