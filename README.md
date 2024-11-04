@@ -14,43 +14,25 @@ Camoufox aims to be a minimalistic browser for robust fingerprint injection & an
 > [!NOTE]
 > All of the latest documentation is avaliable at [camoufox.com](https://camoufox.com).
 
-> [!WARNING]
-> Camoufox is in active development! Releases are avaliable, but are not recommended for production use.
+Camoufox is the most effective (and future-proof) open source solution for avoiding bot detection and intelligent fingerprint rotation. It's designed to run in the smallest memory footprint possible for datacenters.
 
 ## Features
 
-- Invisible to **all major anti-bot systems** 🎭
-- Fingerprint injection & rotation (without JS injection!) ✅
-- Spoof properties of device, viewport, screen, WebGL, battery API, location, etc. ✅
-- Font spoofing & anti-fingerprinting ✅
-- WebRTC IP spoofing ✅
-- Human-like mouse movement 🖱️
-- Blocks & circumvents ads 🛡️
-- Debloated & optimized for memory efficiency ⚡
-- [PyPi package](https://pypi.org/project/camoufox/) for updates & auto fingerprint injection 📦
-- Stays up to date with the latest Firefox version 🕓
+- Invisible to **all anti-bot systems** 🎭
+  - Camoufox peforms better than most commerical anti-bot browsers.
+* Fingerprint injection & rotation (without JS injection!)
+  * Spoof properties of device, viewport, screen, WebGL, location, battery API, etc. ✅
+  * Font spoofing & anti-fingerprinting ✅
+  * WebRTC IP spoofing ✅
+- Quality of life features
+  - Human-like mouse movement 🖱️
+  - Blocks & circumvents ads 🛡️
+  - No CSS animations 💨
+* Debloated & optimized for memory efficiency ⚡
+* [PyPi package](https://pypi.org/project/camoufox/) for updates & auto fingerprint injection 📦
+* Stays up to date with the latest Firefox version 🕓
 
 ---
-
-### Why Firefox instead of Chromium?
-
-Camoufox is built on top of Firefox/Juggler instead of Chromium because:
-
-- CDP is more widely used and known, so it's a more common target for bot detection
-- Juggler operates on a lower level than CDP, and has less JS leaks
-- WAFs are less likely to associate Firefox with automation
-
-### What's planned?
-
-- Continue research on potential leaks
-- Remote hosting Camoufox as a Playwright server
-- Integrate into [hrequests](https://github.com/daijro/hrequests)
-- Human-like typing & ~~mouse movement~~ ✔️
-- Auto-rotating WebGL fingerprints
-- Create integration tests
-- Chromium port (long term)
-
-<hr width=50>
 
 ## Fingerprint Injection
 
@@ -63,6 +45,11 @@ To spoof fingerprint properties, pass a JSON containing properties to spoof to t
 ```
 
 Config data not set by the user will be automatically populated using [BrowserForge](https://github.com/daijro/browserforge) fingerprints, which mimic the statistical distribution of device characteristics in real-world traffic.
+
+<details>
+<summary>
+Legacy documentation
+</summary>
 
 #### The following properties can be spoofed:
 
@@ -421,10 +408,6 @@ You can also exclude default addons with the `--exclude-addons` flag:
 
 </details>
 
-</details>
-
-</details>
-
 <details>
 <summary>
 Miscellaneous (battery status, etc)
@@ -437,6 +420,8 @@ Miscellaneous (battery status, etc)
 | battery:chargingTime    | ✅     | Spoofs the battery charging time.                                                                                               |
 | battery:dischargingTime | ✅     | Spoofs the battery discharging time.                                                                                            |
 | battery:level           | ✅     | Spoofs the battery level.                                                                                                       |
+
+</details>
 
 </details>
 
@@ -496,7 +481,6 @@ Miscellaneous (battery status, etc)
 
 - Firefox addons can be loaded with the `--addons` flag
 - Added uBlock Origin with custom privacy filters
-- Added B.P.C.
 - Addons are not allowed to open tabs
 - Addons are automatically enabled in Private Browsing mode
 - Addons are automatically pinned to the toolbar
