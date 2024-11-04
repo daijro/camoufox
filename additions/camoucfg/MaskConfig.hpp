@@ -283,4 +283,30 @@ inline std::optional<std::array<int32_t, 3UL>> MShaderData(
   return std::nullopt;
 }
 
+inline std::optional<
+    std::vector<std::tuple<std::string, std::string, std::string, bool, bool>>>
+MVoices() {
+  auto data = GetJson();
+  if (!data.contains("voices") || !data["voices"].is_array()) {
+    return std::nullopt;
+  }
+
+  std::vector<std::tuple<std::string, std::string, std::string, bool, bool>>
+      voices;
+  for (const auto& voice : data["voices"]) {
+    // Check if voice has all required fields
+    if (!voice.contains("lang") || !voice.contains("name") ||
+        !voice.contains("voiceUri") || !voice.contains("isDefault") ||
+        !voice.contains("isLocalService")) {
+      continue;
+    }
+
+    voices.emplace_back(
+        voice["lang"].get<std::string>(), voice["name"].get<std::string>(),
+        voice["voiceUri"].get<std::string>(), voice["isDefault"].get<bool>(),
+        voice["isLocalService"].get<bool>());
+  }
+  return voices;
+}
+
 }  // namespace MaskConfig
