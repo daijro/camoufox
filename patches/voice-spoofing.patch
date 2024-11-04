@@ -1,0 +1,90 @@
+diff --git a/dom/media/webspeech/synth/moz.build b/dom/media/webspeech/synth/moz.build
+index 2cf19982b2..dcdcdb5cbf 100644
+--- a/dom/media/webspeech/synth/moz.build
++++ b/dom/media/webspeech/synth/moz.build
+@@ -63,3 +63,6 @@ FINAL_LIBRARY = "xul"
+ LOCAL_INCLUDES += [
+     "ipc",
+ ]
++
++# DOM Mask
++LOCAL_INCLUDES += ['/camoucfg']
+\ No newline at end of file
+diff --git a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp b/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
+index e5a1353d6b..4a4a5b080b 100644
+--- a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
++++ b/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
+@@ -27,6 +27,7 @@
+ 
+ #include "SpeechSynthesisChild.h"
+ #include "SpeechSynthesisParent.h"
++#include "MaskConfig.hpp"
+ 
+ using mozilla::intl::LocaleService;
+ 
+@@ -169,6 +170,20 @@ nsSynthVoiceRegistry* nsSynthVoiceRegistry::GetInstance() {
+       // Start up all speech synth services.
+       NS_CreateServicesFromCategory(NS_SPEECH_SYNTH_STARTED, nullptr,
+                                     NS_SPEECH_SYNTH_STARTED);
++      // Load voices from MaskConfig
++      if (auto voices = MaskConfig::MVoices()) {
++        for (const auto& [lang, name, uri, isDefault, isLocal] :
++             voices.value()) {
++          gSynthVoiceRegistry->AddVoiceImpl(
++              nullptr, NS_ConvertUTF8toUTF16(uri), NS_ConvertUTF8toUTF16(name),
++              NS_ConvertUTF8toUTF16(lang), isLocal,
++              false);  // queuesUtterances set to false
++          if (isDefault) {
++            gSynthVoiceRegistry->SetDefaultVoice(NS_ConvertUTF8toUTF16(uri),
++                                                 true);
++          }
++        }
++      }
+     }
+   }
+ 
+@@ -305,6 +320,8 @@ nsSynthVoiceRegistry::AddVoice(nsISpeechService* aService,
+     return NS_ERROR_NOT_AVAILABLE;
+   }
+ 
++  if (MaskConfig::GetBool("voices:blockIfNotDefined")) return NS_OK;
++
+   return AddVoiceImpl(aService, aUri, aName, aLang, aLocalService,
+                       aQueuesUtterances);
+ }
+@@ -779,6 +796,35 @@ void nsSynthVoiceRegistry::SpeakImpl(VoiceData* aVoice, nsSpeechTask* aTask,
+        NS_ConvertUTF16toUTF8(aText).get(),
+        NS_ConvertUTF16toUTF8(aVoice->mUri).get(), aRate, aPitch));
+ 
++  // Check if this voice is in our MVoices config
++  if (auto voices = MaskConfig::MVoices()) {
++    for (const auto& [lang, name, uri, isDefault, isLocal] : voices.value()) {
++      if (NS_ConvertUTF8toUTF16(uri).Equals(aVoice->mUri)) {
++        printf_stderr("Tried to speak a fake voice: %s",
++                      NS_ConvertUTF16toUTF8(aVoice->mUri).get());
++        aTask->Init();
++        // If fake completion is disabled, throw an error
++        if (!MaskConfig::GetBool("voices:fakeCompletion")) {
++          aTask->DispatchError(0, 0);
++          return;
++        }
++        float charsPerSecond;
++        if (auto value =
++                MaskConfig::GetDouble("voices:fakeCompletion:charsPerSecond")) {
++          charsPerSecond = value.value();
++        } else {
++          charsPerSecond = 12.5f;
++        }
++        // Return a fake success with a speach rate of 150wpm
++        aTask->DispatchStart();
++        float fakeElapsedTime =
++            static_cast<float>(aText.Length()) / (charsPerSecond * aRate);
++        aTask->DispatchEnd(fakeElapsedTime, aText.Length());
++        return;
++      }
++    }
++  }
++
+   aTask->Init();
+ 
+   if (NS_FAILED(aVoice->mService->Speak(aText, aVoice->mUri, aVolume, aRate,
