@@ -5,8 +5,13 @@
 <h4 align="center">A stealthy, minimalistic, custom build of Firefox for web scraping 🦊</h4>
 
 <p align="center">                                      
-Camoufox aims to be a minimalistic browser for robust fingerprint injection & anti-bot evasion.
-    
+Camoufox is an open source anti-detect browser for robust fingerprint injection & anti-bot evasion.
+</p>
+
+<p align="center">
+  <a href="https://ko-fi.com/Z8Z2EFH5A">
+    <img src="https://ko-fi.com/img/githubbutton_sm.svg">
+  </a>
 </p>
 
 ---
@@ -19,11 +24,16 @@ Camoufox is the most effective (and future-proof) open source solution for avoid
 ## Features
 
 - Invisible to **all anti-bot systems** 🎭
-  - Camoufox peforms better than most commerical anti-bot browsers.
+  - Camoufox performs better than most commerical anti-bot browsers.
 * Fingerprint injection & rotation (without JS injection!)
-  * Spoof properties of device, viewport, screen, WebGL, location, battery API, etc. ✅
+  * All navigator properties (device, OS, hardware, browser, etc.) ✅
+  * Screen size, resolution, window, & viewport properties ✅
+  * Geolocation, timezone, & locale spoofing ✅
   * Font spoofing & anti-fingerprinting ✅
-  * WebRTC IP spoofing ✅
+  * WebGL parameters, supported extensions, context attributes, & shader precision formats ✅
+  * WebRTC IP spoofing at the protocol level ✅
+  * Voices, speech playback rate, etc. ✅
+  * And much, much more!
 - Quality of life features
   - Human-like mouse movement 🖱️
   - Blocks & circumvents ads 🛡️
@@ -438,6 +448,7 @@ Miscellaneous (battery status, etc)
 - Spoof WebGL parameters, supported extensions, context attributes, and shader precision formats.
 - Spoof inner and outer window viewport sizes
 - Spoof AudioContext sample rate, output latency, and max channel count
+- Spoof device voices & playback rates
 - Network headers (Accept-Languages and User-Agent) are spoofed to match the navigator properties
 - WebRTC IP spoofing at the protocol level
 - Geolocation, timezone, and locale spoofing
