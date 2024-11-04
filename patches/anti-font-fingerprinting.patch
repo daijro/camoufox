@@ -1,24 +1,29 @@
-cd camoufox-128.0.3-1 && git diff
 diff --git a/gfx/thebes/gfxHarfBuzzShaper.cpp b/gfx/thebes/gfxHarfBuzzShaper.cpp
-index 18bc08a6bf..b779ed6c0f 100644
+index 18bc08a6bf..46e0675aa2 100644
 --- a/gfx/thebes/gfxHarfBuzzShaper.cpp
 +++ b/gfx/thebes/gfxHarfBuzzShaper.cpp
-@@ -17,6 +17,8 @@
+@@ -17,6 +17,9 @@
  
  #include "harfbuzz/hb.h"
  #include "harfbuzz/hb-ot.h"
 +#include <cstdlib>
 +#include <chrono>
++#include "MaskConfig.hpp"
  
  #include <algorithm>
  
-@@ -1557,6 +1559,31 @@ bool gfxHarfBuzzShaper::ShapeText(DrawTarget* aDrawTarget,
+@@ -1557,6 +1560,36 @@ bool gfxHarfBuzzShaper::ShapeText(DrawTarget* aDrawTarget,
  
    hb_shape(mHBFont, mBuffer, features.Elements(), features.Length());
  
++  static uint32_t seed;
++  if (auto value = MaskConfig::GetUint32("fonts:spacing_seed"))
++    seed = value.value();
++  else
++    seed = static_cast<uint32_t>(
++        std::chrono::high_resolution_clock::now().time_since_epoch().count());
++
 +  // Generate a random float [0, 0.1] to offset the letter spacing
-+  static uint32_t seed = static_cast<uint32_t>(
-+      std::chrono::high_resolution_clock::now().time_since_epoch().count());
 +  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
 +  float randomFloat = (static_cast<float>(seed) / 0x7fffffff) * 0.1f;
 +  hb_position_t spacing = FloatToFixed(randomFloat);
