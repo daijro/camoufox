@@ -6,7 +6,7 @@ import orjson
 from playwright._impl._driver import compute_driver_executable
 
 from camoufox.pkgman import LOCAL_DATA
-from camoufox.utils import get_launch_options
+from camoufox.utils import launch_options
 
 LAUNCH_SCRIPT: Path = LOCAL_DATA / "launchServer.js"
 
@@ -44,7 +44,7 @@ def launch_server(**kwargs) -> NoReturn:
     Launch a Playwright server. Takes the same arguments as `Camoufox()`.
     Prints the websocket endpoint to the console.
     """
-    config = get_launch_options(**kwargs)
+    config = launch_options(**kwargs)
     nodejs = get_nodejs()
 
     data = orjson.dumps(to_camel_case_dict(config)).decode()
