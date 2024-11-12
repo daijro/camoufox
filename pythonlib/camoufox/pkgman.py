@@ -21,7 +21,12 @@ from typing_extensions import TypeAlias
 from yaml import CLoader, load
 
 from .__version__ import CONSTRAINTS
-from .exceptions import UnsupportedArchitecture, UnsupportedOS, UnsupportedVersion
+from .exceptions import (
+    CamoufoxNotInstalled,
+    UnsupportedArchitecture,
+    UnsupportedOS,
+    UnsupportedVersion,
+)
 
 DownloadBuffer: TypeAlias = Union[BytesIO, tempfile._TemporaryFileWrapper, BufferedWriter]
 
@@ -53,6 +58,13 @@ OS_ARCH_MATRIX: Dict[str, List[str]] = {
     'mac': ['x86_64', 'arm64'],
     'win': ['x86_64', 'i686'],
     'lin': ['x86_64', 'arm64', 'i686'],
+}
+
+# The relative path to the camoufox executable
+LAUNCH_FILE = {
+    'win': 'camoufox.exe',
+    'lin': 'camoufox-bin',
+    'mac': '../MacOS/camoufox',
 }
 
 
@@ -102,7 +114,7 @@ class Version:
         if not os.path.exists(version_path):
             raise FileNotFoundError(
                 f"Version information not found at {version_path}. "
-                "You are likely using an unsupported version of Camoufox."
+                "Please run `camoufox fetch` to install."
             )
         with open(version_path, 'rb') as f:
             version_data = orjson.loads(f.read())
@@ -358,13 +370,15 @@ def camoufox_path(download_if_missing: bool = True) -> Path:
     """
     Full path to the camoufox folder.
     """
-    if os.path.exists(INSTALL_DIR) and Version.from_path().is_supported():
-        return INSTALL_DIR
 
-    # Ensure the directory exists
-    if not os.path.exists(INSTALL_DIR):
+    # Ensure the directory exists and is not empty
+    if not os.path.exists(INSTALL_DIR) or not os.listdir(INSTALL_DIR):
         if not download_if_missing:
             raise FileNotFoundError(f"Camoufox executable not found at {INSTALL_DIR}")
+
+    # Camoufox exists and the the version is supported
+    elif os.path.exists(INSTALL_DIR) and Version.from_path().is_supported():
+        return INSTALL_DIR
 
     # Ensure the version is supported
     else:
@@ -383,6 +397,19 @@ def get_path(file: str) -> str:
     if OS_NAME == 'mac':
         return os.path.abspath(camoufox_path() / 'Camoufox.app' / 'Contents' / 'Resources' / file)
     return str(camoufox_path() / file)
+
+
+def launch_path() -> str:
+    """
+    Get the path to the camoufox executable.
+    """
+    launch_path = get_path(LAUNCH_FILE[OS_NAME])
+    if not os.path.exists(launch_path):
+        # Not installed error
+        raise CamoufoxNotInstalled(
+            f"Camoufox is not installed at {camoufox_path()}. Please run `camoufox fetch` to install."
+        )
+    return launch_path
 
 
 def webdl(
