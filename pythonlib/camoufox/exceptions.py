@@ -178,3 +178,11 @@ class VirtualDisplayNotSupported(VirtualDisplayError):
     """
 
     ...
+
+
+class CamoufoxNotInstalled(FileNotFoundError):
+    """
+    Raised when camoufox is not installed.
+    """
+
+    ...

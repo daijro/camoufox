@@ -4,7 +4,7 @@ from os import environ
 from os.path import abspath
 from pathlib import Path
 from pprint import pprint
-from random import randrange
+from random import randint, randrange
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -29,18 +29,21 @@ from .exceptions import (
 from .fingerprints import from_browserforge, generate_fingerprint
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locale import geoip_allowed, get_geolocation, handle_locales
-from .pkgman import OS_NAME, get_path, installed_verstr
+from .pkgman import OS_NAME, get_path, installed_verstr, launch_path
 from .virtdisplay import VirtualDisplay
 from .warnings import LeakWarning
 from .xpi_dl import add_default_addons
 
-LAUNCH_FILE = {
-    'win': 'camoufox.exe',
-    'lin': 'camoufox-bin',
-    'mac': '../MacOS/camoufox',
-}
-
 ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
+
+# Camoufox preferences to cache previous pages and requests
+CACHE_PREFS = {
+    'browser.sessionhistory.max_entries': 10,
+    'browser.sessionhistory.max_total_viewers': -1,
+    'browser.cache.memory.enable': True,
+    'browser.cache.disk_cache_ssl': True,
+    'browser.cache.disk.smart_size.enabled': True,
+}
 
 
 def get_env_vars(
@@ -354,9 +357,10 @@ def launch_options(
     fingerprint: Optional[Fingerprint] = None,
     ff_version: Optional[int] = None,
     headless: Optional[bool] = None,
-    executable_path: Optional[str] = None,
+    executable_path: Optional[Union[str, Path]] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     proxy: Optional[Dict[str, str]] = None,
+    enable_cache: Optional[bool] = None,
     args: Optional[List[str]] = None,
     env: Optional[Dict[str, Union[str, float, bool]]] = None,
     i_know_what_im_doing: Optional[bool] = None,
@@ -413,13 +417,15 @@ def launch_options(
             Whether to run the browser in headless mode. Defaults to False.
             Note: If you are running linux, passing headless='virtual' to Camoufox & AsyncCamoufox
             will use Xvfb.
-        executable_path (Optional[str]):
+        executable_path (Optional[Union[str, Path]]):
             Custom Camoufox browser executable path.
         firefox_user_prefs (Optional[Dict[str, Any]]):
             Firefox user preferences to set.
         proxy (Optional[Dict[str, str]]):
             Proxy to use for the browser.
             Note: If geoip is True, a request will be sent through this proxy to find the target IP.
+        enable_cache (Optional[bool]):
+            Cache previous pages, requests, etc (uses more memory).
         args (Optional[List[str]]):
             Arguments to pass to the browser.
         env (Optional[Dict[str, Union[str, float, bool]]]):
@@ -449,6 +455,7 @@ def launch_options(
     if env is None:
         env = cast(Dict[str, Union[str, float, bool]], environ)
     if isinstance(executable_path, str):
+        # Convert executable path to a Path object
         executable_path = Path(abspath(executable_path))
 
     # Handle virtual display
@@ -504,6 +511,8 @@ def launch_options(
     if fonts:
         config['fonts'] = fonts
     update_fonts(config, target_os)
+    # Set a fixed font spacing seed
+    set_into(config, 'fonts:spacing_seed', randint(0, 2147483647))  # nosec
 
     # Set geolocation
     if geoip:
@@ -563,6 +572,10 @@ def launch_options(
         LeakWarning.warn('allow_webgl', i_know_what_im_doing)
         firefox_user_prefs['webgl.disabled'] = False
 
+    # Cache previous pages, requests, etc (uses more memory)
+    if enable_cache:
+        firefox_user_prefs.update(CACHE_PREFS)
+
     # Load the addons
     threaded_try_load_addons(get_debug_port(args), addons)
 
@@ -571,8 +584,14 @@ def launch_options(
         **get_env_vars(config, target_os),
         **env,
     }
+    # Prepare the executable path
+    if executable_path:
+        executable_path = str(executable_path)
+    else:
+        executable_path = launch_path()
+
     return {
-        "executable_path": executable_path or get_path(LAUNCH_FILE[OS_NAME]),
+        "executable_path": executable_path,
         "args": args,
         "env": env_vars,
         "firefox_user_prefs": firefox_user_prefs,
