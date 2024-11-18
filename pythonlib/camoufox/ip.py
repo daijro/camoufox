@@ -22,8 +22,8 @@ class Proxy:
     """
 
     server: str
-    username: str
-    password: str
+    username: Optional[str] = None
+    password: Optional[str] = None
 
     @staticmethod
     def parse_server(server: str) -> Tuple[str, str, Optional[str]]:
@@ -44,8 +44,9 @@ class Proxy:
             result += f"{self.username}"
             if self.password:
                 result += f":{self.password}"
+            result += "@"
 
-        result += f"@{url}"
+        result += url
         if port:
             result += f":{port}"
         return result
