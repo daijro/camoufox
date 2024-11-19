@@ -1,0 +1,109 @@
+diff --git a/dom/media/MediaDevices.cpp b/dom/media/MediaDevices.cpp
+index 067094cb6b..9088f71793 100644
+--- a/dom/media/MediaDevices.cpp
++++ b/dom/media/MediaDevices.cpp
+@@ -26,6 +26,7 @@
+ #include "nsPIDOMWindow.h"
+ #include "nsGlobalWindowInner.h"
+ #include "nsQueryObject.h"
++#include "MaskConfig.hpp"
+ 
+ namespace mozilla::dom {
+ 
+@@ -329,52 +330,52 @@ RefPtr<MediaDeviceSetRefCnt> MediaDevices::FilterExposedDevices(
+     exposed->AppendElement(device);
+   }
+ 
+-  if (doc->ShouldResistFingerprinting(RFPTarget::MediaDevices)) {
+-    // We expose a single device of each kind.
+-    // Legacy mode also achieves the same thing, except for speakers.
+-    nsTHashSet<MediaDeviceKind> seenKinds;
++  // Replaces the RFP-based device count spoofing with one that controls the
++  // number of devices exposed.
+ 
+-    for (uint32_t i = 0; i < exposed->Length(); i++) {
+-      RefPtr<mozilla::MediaDevice> device = exposed->ElementAt(i);
+-      if (seenKinds.Contains(device->mKind)) {
+-        exposed->RemoveElementAt(i);
+-        i--;
+-        continue;
+-      }
+-      seenKinds.Insert(device->mKind);
+-    }
++  if (!MaskConfig::GetBool("mediaDevices:enabled")) {
++    return exposed;
++  }
+ 
+-    // We haven't seen at least one of each kind of device.
+-    // Audioinput, Videoinput, Audiooutput.
+-    // Insert fake devices.
+-    if (seenKinds.Count() != 3) {
+-      RefPtr fakeEngine = new MediaEngineFake();
+-      RefPtr fakeDevices = new MediaDeviceSetRefCnt();
+-      // The order in which we insert the fake devices is important.
+-      // Microphone is inserted first, then camera, then speaker.
+-      // If we haven't seen a microphone, insert a fake one.
+-      if (!seenKinds.Contains(MediaDeviceKind::Audioinput)) {
+-        fakeEngine->EnumerateDevices(MediaSourceEnum::Microphone,
+-                                     MediaSinkEnum::Other, fakeDevices);
+-        exposed->InsertElementAt(0, fakeDevices->LastElement());
+-      }
+-      // If we haven't seen a camera, insert a fake one.
+-      if (!seenKinds.Contains(MediaDeviceKind::Videoinput)) {
+-        fakeEngine->EnumerateDevices(MediaSourceEnum::Camera,
+-                                     MediaSinkEnum::Other, fakeDevices);
+-        exposed->InsertElementAt(1, fakeDevices->LastElement());
+-      }
+-      // If we haven't seen a speaker, insert a fake one.
+-      if (!seenKinds.Contains(MediaDeviceKind::Audiooutput) &&
+-          mCanExposeMicrophoneInfo) {
+-        RefPtr info = new AudioDeviceInfo(
+-            nullptr, u""_ns, u""_ns, u""_ns, CUBEB_DEVICE_TYPE_OUTPUT,
+-            CUBEB_DEVICE_STATE_ENABLED, CUBEB_DEVICE_PREF_ALL,
+-            CUBEB_DEVICE_FMT_ALL, CUBEB_DEVICE_FMT_S16NE, 2, 44100, 44100,
+-            44100, 128, 128);
+-        exposed->AppendElement(
+-            new MediaDevice(new MediaEngineFake(), info, u""_ns));
+-      }
++  uint32_t numMics = MaskConfig::GetUint32("mediaDevices:micros").value_or(3);
++  uint32_t numWebcams =
++      MaskConfig::GetUint32("mediaDevices:webcams").value_or(1);
++  uint32_t numSpeakers =
++      MaskConfig::GetUint32("mediaDevices:speakers").value_or(1);
++
++  // Clear existing devices. We'll add our own
++  exposed->Clear();
++
++  // We haven't seen at least one of each kind of device.
++  // Audioinput, Videoinput, Audiooutput.
++  // Insert fake devices.
++  RefPtr fakeEngine = new MediaEngineFake();
++  RefPtr fakeDevices = new MediaDeviceSetRefCnt();
++  // The order in which we insert the fake devices is important.
++  // Microphone is inserted first, then camera, then speaker
++
++  // Insert fake microphones
++  for (uint32_t i = 0; i < numMics; ++i) {
++    fakeEngine->EnumerateDevices(MediaSourceEnum::Microphone,
++                                 MediaSinkEnum::Other, fakeDevices);
++    exposed->InsertElementAt(0, fakeDevices->LastElement());
++  }
++  // Insert fake cameras
++  for (uint32_t i = 0; i < numWebcams; ++i) {
++    fakeEngine->EnumerateDevices(MediaSourceEnum::Camera, MediaSinkEnum::Other,
++                                 fakeDevices);
++    exposed->InsertElementAt(1, fakeDevices->LastElement());
++  }
++  // Insert fake speakers (this is only accessed if the site has permission)
++  if (mCanExposeMicrophoneInfo) {
++    for (uint32_t i = 0; i < numSpeakers; ++i) {
++      RefPtr info = new AudioDeviceInfo(
++          nullptr, u""_ns, u""_ns, u""_ns, CUBEB_DEVICE_TYPE_OUTPUT,
++          CUBEB_DEVICE_STATE_ENABLED, CUBEB_DEVICE_PREF_ALL,
++          CUBEB_DEVICE_FMT_ALL, CUBEB_DEVICE_FMT_S16NE, 2, 44100, 44100, 44100,
++          128, 128);
++      exposed->AppendElement(
++          new MediaDevice(new MediaEngineFake(), info, u""_ns));
+     }
+   }
+ 
