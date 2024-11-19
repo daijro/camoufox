@@ -19,7 +19,7 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 > [!NOTE]
 > All of the latest documentation is avaliable at [camoufox.com](https://camoufox.com).
 
-Camoufox is the most effective (and future-proof) open source solution for avoiding bot detection and intelligent fingerprint rotation. It's designed to run in the smallest memory footprint possible for datacenters.
+Camoufox is the most modern, effective & future-proof open source solution for avoiding bot detection and intelligent fingerprint rotation. It outperforms most commercial anti-bot browsers.
 
 ---
 
@@ -43,7 +43,7 @@ Camoufox is the most effective (and future-proof) open source solution for avoid
   - Font spoofing & anti-fingerprinting ✅
   - WebGL parameters, supported extensions, context attributes, & shader precision formats ✅
   - WebRTC IP spoofing at the protocol level ✅
-  - Voices, speech playback rate, etc. ✅
+  - Media devices, voices, speech playback rate, etc. ✅
   - And much, much more!
 
 - Quality of life features
