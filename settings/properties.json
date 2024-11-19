@@ -87,6 +87,10 @@
   { "property": "voices:blockIfNotDefined", "type": "bool" },
   { "property": "voices:fakeCompletion", "type": "bool" },
   { "property": "voices:fakeCompletion:charsPerSecond", "type": "double" },
+  { "property": "mediaDevices:micros", "type": "uint" },
+  { "property": "mediaDevices:webcams", "type": "uint" },
+  { "property": "mediaDevices:speakers", "type": "uint" },
+  { "property": "mediaDevices:enabled", "type": "bool" },
   { "property": "memorysaver", "type": "bool" },
   { "property": "debug", "type": "bool" }
 ]
