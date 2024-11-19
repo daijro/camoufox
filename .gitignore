@@ -16,6 +16,8 @@ pythonlib/*.png
 scripts/*.png
 .vscode
 /tests/*.disabled
+k8s/
+benchmark/
 
 # Old data
 _old/
