@@ -2302,21 +2302,18 @@ index 283e991f92..7ffc4ae0c3 100644
 +
  }  // namespace mozilla::net
 diff --git a/netwerk/base/LoadInfo.h b/netwerk/base/LoadInfo.h
-index 0598c9703f..96e0eb1c04 100644
+index 0598c9703f..10e1cdab3e 100644
 --- a/netwerk/base/LoadInfo.h
 +++ b/netwerk/base/LoadInfo.h
-@@ -414,8 +414,10 @@ class LoadInfo final : public nsILoadInfo {
-   bool mHasInjectedCookieForCookieBannerHandling = false;
-   bool mWasSchemelessInput = false;
+@@ -417,6 +417,8 @@ class LoadInfo final : public nsILoadInfo {
+   nsILoadInfo::HTTPSUpgradeTelemetryType mHttpsUpgradeTelemetry =
+       nsILoadInfo::NOT_INITIALIZED;
  
 +  uint64_t mJugglerLoadIdentifier = 0;
 +
-   nsILoadInfo::HTTPSUpgradeTelemetryType mHttpsUpgradeTelemetry =
--      nsILoadInfo::NOT_INITIALIZED;
-+      nsILoadInfo::NO_UPGRADE;
- 
    bool mIsNewWindowTarget = false;
    bool mSkipHTTPSUpgrade = false;
+ };
 diff --git a/netwerk/base/TRRLoadInfo.cpp b/netwerk/base/TRRLoadInfo.cpp
 index d1aad5d3a3..8b3640504c 100644
 --- a/netwerk/base/TRRLoadInfo.cpp
