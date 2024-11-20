@@ -36,10 +36,10 @@ jobs:
 
       - name: Remove unwanted tools
         # Originally from here: https://github.com/AdityaGarg8/remove-unwanted-software/blob/master/action.yml
-        # Modified to keep tools nessecary for llvm.
         run: |
           sudo apt-get remove -y '^aspnetcore-.*' > /dev/null
           sudo apt-get remove -y '^dotnet-.*' > /dev/null
+          sudo apt-get remove -y '^llvm-.*' > /dev/null
           sudo apt-get remove -y 'php.*' > /dev/null
           sudo apt-get remove -y '^mongodb-.*' > /dev/null
           sudo apt-get remove -y '^mysql-.*' > /dev/null
@@ -65,18 +65,15 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Set up Clang
-        uses: egor-tensin/setup-clang@v1
-        with:
-          version: latest
-          platform: ${{ matrix.arch == 'x86_64' && 'x64' || 'any' }}
-
       - name: Set up LLVM
         run: |
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 18
-          sudo apt-get install -y lld-18
+          sudo apt-get install -y lld-18 clang-18
+          if [ "${{ matrix.arch }}" != "x86_64" ]; then
+            sudo apt-get install -y libc6-i386 lib32gcc-s1 lib32stdc++6 gcc-multilib g++-multilib
+          fi
           sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-18 100
 
       - name: Check disk space
