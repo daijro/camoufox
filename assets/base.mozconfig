@@ -22,8 +22,6 @@ ac_add_options --with-branding=browser/branding/camoufox
 
 ac_add_options --with-unsigned-addon-scopes=app,system
 
-ac_add_options --with-l10n-base=$PWD/browser/locales/l10n
-
 ac_add_options --enable-bootstrap
 
 export MOZ_REQUIRE_SIGNING=
