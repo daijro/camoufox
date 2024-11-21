@@ -92,5 +92,6 @@
   { "property": "mediaDevices:speakers", "type": "uint" },
   { "property": "mediaDevices:enabled", "type": "bool" },
   { "property": "memorysaver", "type": "bool" },
+  { "property": "addons", "type": "array" },
   { "property": "debug", "type": "bool" }
 ]
