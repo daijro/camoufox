@@ -1,0 +1,152 @@
+diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
+index bb91ab8cfa..7496eb9a58 100644
+--- a/browser/base/content/browser-init.js
++++ b/browser/base/content/browser-init.js
+@@ -3,6 +3,16 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
++const { AddonManager } = ChromeUtils.importESModule(
++  "resource://gre/modules/AddonManager.sys.mjs",
++  { global: "shared" }
++);
++const { FileUtils } = ChromeUtils.importESModule(
++  "resource://gre/modules/FileUtils.sys.mjs",
++  { global: "contextual" }
++);
++
++
+ let _resolveDelayedStartup;
+ var delayedStartupPromise = new Promise(resolve => {
+   _resolveDelayedStartup = resolve;
+@@ -72,7 +82,7 @@ var gBrowserInit = {
+     updateBookmarkToolbarVisibility();
+ 
+     // Set a sane starting width/height for all resolutions on new profiles.
+-    if (ChromeUtils.shouldResistFingerprinting("RoundWindowSize", null)) {
++    if (true || ChromeUtils.shouldResistFingerprinting("RoundWindowSize", null)) {
+       // When the fingerprinting resistance is enabled, making sure that we don't
+       // have a maximum window to interfere with generating rounded window dimensions.
+       document.documentElement.setAttribute("sizemode", "normal");
+@@ -276,6 +286,22 @@ var gBrowserInit = {
+     // Update UI if browser is under remote control.
+     gRemoteControl.updateVisualCue();
+ 
++    // Camoufox: print URL changes to console
++    if (ChromeUtils.isCamouDebug()) {
++      ChromeUtils.camouDebug("Debug mode ON.");
++      gBrowser.addTabsProgressListener({
++        onLocationChange(aBrowser, aWebProgress, aRequest, aLocation, aFlags) {
++          if (aBrowser === gBrowser.selectedBrowser) {
++            ChromeUtils.camouDebug("URL changed to: " + aLocation.spec);
++          }
++        }
++      });
++      
++      gURLBar.addEventListener("change", () => {
++        ChromeUtils.camouDebug("URL bar value changed to: " + gURLBar.value);
++      });
++    }
++
+     // If we are given a tab to swap in, take care of it before first paint to
+     // avoid an about:blank flash.
+     let tabToAdopt = this.getTabToAdopt();
+@@ -311,6 +337,31 @@ var gBrowserInit = {
+       }
+     }
+ 
++    if (ChromeUtils.camouGetBool("showcursor", true)) {
++      let cursorFollower = document.createElement("div");
++      cursorFollower.id = "cursor-highlighter";
++      cursorFollower.style.cssText = `
++      position: fixed;
++      width: 10px;
++      height: 10px;
++      background-color: rgba(255,105,105,0.8);
++      border-radius: 50%;
++      pointer-events: none;
++      z-index: 2147483647;
++      transform: translate(-50%, -50%);
++      box-shadow: 
++      0 0 0 5px rgba(255,105,105,0.5),
++      0 0 0 10px rgba(255,105,105,0.3),
++      0 0 0 15px rgba(255,105,105,0.1);
++      `;
++      document.documentElement.appendChild(cursorFollower);
++      
++      window.addEventListener('mousemove', e => {
++        cursorFollower.style.left = `${e.clientX}px`;
++        cursorFollower.style.top = `${e.clientY}px`;
++      });
++    }
++
+     // Wait until chrome is painted before executing code not critical to making the window visible
+     this._boundDelayedStartup = this._delayedStartup.bind(this);
+     window.addEventListener("MozAfterPaint", this._boundDelayedStartup);
+@@ -332,9 +383,66 @@ var gBrowserInit = {
+       )?.removeAttribute("key");
+     }
+ 
++    // Set default size
++    window.resizeTo(1280, 1040);
++
++    // Hijack the outer window size
++    let outerWidth, outerHeight;
++    if ((outerWidth = ChromeUtils.camouGetInt("window.outerWidth"))) {
++      document.documentElement.style.setProperty('width', outerWidth + 'px');
++      browser.style.setProperty('width', outerWidth + 'px');
++      window.resizeTo(outerWidth, window.outerHeight);
++    }
++    if ((outerHeight = ChromeUtils.camouGetInt("window.outerHeight"))) {
++      document.documentElement.style.setProperty('height', outerHeight + 'px');
++      browser.style.setProperty('height', outerHeight + 'px');
++      window.resizeTo(window.outerWidth, outerHeight);
++    }
++    browser.style.setProperty('box-sizing', 'content-box');
++
++    // Hijack the inner window size
++    let innerWidth = ChromeUtils.camouGetInt("window.innerWidth") || ChromeUtils.camouGetInt("document.body.clientWidth");
++    let innerHeight = ChromeUtils.camouGetInt("window.innerHeight") || ChromeUtils.camouGetInt("document.body.clientHeight");
++
++    if (innerWidth || innerHeight) {
++      let win_inner_style = document.createElement('style');
++      win_inner_style.innerHTML = `
++        .browserStack {
++          ${innerWidth ? `width: ${innerWidth}px !important;` : ''}
++          ${innerHeight ? `height: ${innerHeight}px !important;` : ''}
++          ${innerHeight ? `flex: unset !important;` : ''}
++          overflow: auto;
++          contain: size;
++          scrollbar-width: none;
++        }
++      `;
++      document.head.appendChild(win_inner_style);
++    }
++
++    if (innerWidth && innerHeight && !(outerWidth || outerHeight)) {
++      let stackRect = __browserStack.getBoundingClientRect();
++      let toolbarTop = stackRect.y;
++      window.resizeBy(width - innerWidth, height + toolbarTop - innerHeight);
++    }
++
++    // Install addons if specified
++    let addonPaths = ChromeUtils.camouGetStringList("addons");
++    if (addonPaths?.length) {
++      Promise.all(addonPaths.map(path => this.installTemporaryAddon(path)))
++        .then(addons => ChromeUtils.camouDebug("Installed " + addons.length + " addon(s)"))
++        .catch(e => ChromeUtils.camouDebug("Failed to install addons:", e));
++    }
++
+     this._loadHandled = true;
+   },
+ 
++  async installTemporaryAddon(addonPath) {
++    const addonFile = new FileUtils.File(addonPath);
++    const addon = await AddonManager.installTemporaryAddon(addonFile);
++    Services.obs.notifyObservers(null, "devtools-installed-addon", addon.id);
++    return addon;
++  },
++
+   _cancelDelayedStartup() {
+     window.removeEventListener("MozAfterPaint", this._boundDelayedStartup);
+     this._boundDelayedStartup = null;
