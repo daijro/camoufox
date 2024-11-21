@@ -50,6 +50,3 @@ run 'cp -v ../scripts/mozfetch.sh lw/'
 for file in "browser/config/version.txt" "browser/config/version_display.txt"; do
     echo "${version}-${release}" > "$file"
 done
-
-# Generate locales
-run "bash ../scripts/generate-locales.sh"
