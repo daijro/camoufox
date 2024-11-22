@@ -51,7 +51,7 @@ def sample_webgl(
 
         if result[3] <= 0:  # Check OS-specific probability
             raise ValueError(
-                f'Vendor "{vendor}" and renderer "{renderer}" combination not valid for {os}'
+                f'Vendor "{vendor}" and renderer "{renderer}" combination not valid for {os.title()}.'
             )
 
         return {
