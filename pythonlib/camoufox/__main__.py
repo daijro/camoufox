@@ -11,10 +11,9 @@ from typing import Optional
 
 import click
 
-from .addons import DefaultAddons
+from .addons import DefaultAddons, maybe_download_addons
 from .locale import ALLOW_GEOIP, download_mmdb, remove_mmdb
 from .pkgman import INSTALL_DIR, CamoufoxFetcher, installed_verstr, rprint
-from .xpi_dl import maybe_download_addons
 
 try:
     from browserforge.download import download as update_browserforge
