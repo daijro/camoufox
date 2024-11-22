@@ -124,10 +124,9 @@ check-arch:
 	fi
 
 build-launcher: check-arch
-	cd launcher && bash build.sh $(arch) $(os)
+	cd legacy/launcher && bash build.sh $(arch) $(os)
 
 package-linux:
-	make build-launcher arch=$(arch) os=linux;
 	python3 scripts/package.py linux \
 		--includes \
 			settings/chrome.css \
@@ -139,7 +138,6 @@ package-linux:
 		--fonts windows macos linux
 
 package-macos:
-	make build-launcher arch=$(arch) os=macos;
 	python3 scripts/package.py macos \
 		--includes \
 			settings/chrome.css \
@@ -150,7 +148,6 @@ package-macos:
 		--fonts windows linux
 
 package-windows:
-	make build-launcher arch=$(arch) os=windows;
 	python3 scripts/package.py windows \
 		--includes \
 			settings/chrome.css \
@@ -164,7 +161,7 @@ package-windows:
 run-launcher:
 	rm -rf $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch;
 	make build-launcher arch=x86_64 os=linux;
-	cp launcher/dist/launch $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch;
+	cp legacy/launcher/dist/launch $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch;
 	$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch
 
 run-pw:

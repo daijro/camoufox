@@ -58,7 +58,7 @@ def main():
     src_dir = find_src_dir('.', args.version, args.release)
     moz_target = get_moz_target(target='linux', arch='x86_64')
 
-    launcher_path = os.path.abspath(os.path.join('.', 'launcher', 'dist', 'launch'))
+    launcher_path = os.path.abspath(os.path.join('.', 'legacy', 'launcher', 'dist', 'launch'))
 
     with temp_cd(src_dir):
         print(f'Looking for file: obj-{moz_target}/dist/bin/camoufox-bin')
