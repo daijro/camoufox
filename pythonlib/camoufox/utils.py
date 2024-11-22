@@ -456,6 +456,10 @@ def launch_options(
         # Convert executable path to a Path object
         executable_path = Path(abspath(executable_path))
 
+    # Block WebGL by default until a fix is avaliable.
+    if block_webgl is None:
+        block_webgl = True
+
     # Handle virtual display
     if virtual_display:
         env['DISPLAY'] = virtual_display
@@ -560,17 +564,20 @@ def launch_options(
     if block_webrtc:
         firefox_user_prefs['media.peerconnection.enabled'] = False
 
-    # Add back allow_webgl for compatibility
-    if block_webgl or not launch_options.pop('allow_webgl', True):
+    # Allow allow_webgl parameter for backwards compatibility
+    if block_webgl and not launch_options.pop('allow_webgl', False):
         firefox_user_prefs['webgl.disabled'] = True
     else:
-        # ROLLBACK: WebGL injection causing crashing on some devices.
-        """
+        # Warn the user about WebGL
+        if not i_know_what_im_doing:
+            print(
+                'NOTICE: WebGL is known to cause crashing or behave unexpectedly.'
+                'A fix will be avaliable soon.'
+            )
+
+        # If the user has provided a specific WebGL vendor/renderer pair, use it
         if webgl_config:
             merge_into(config, sample_webgl(target_os, *webgl_config))
-        else:
-            merge_into(config, sample_webgl(target_os))
-        """
 
         # Use software rendering to be less unique
         merge_into(
