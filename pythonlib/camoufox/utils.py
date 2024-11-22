@@ -14,12 +14,7 @@ from screeninfo import get_monitors
 from typing_extensions import TypeAlias
 from ua_parser import user_agent_parser
 
-from .addons import (
-    DefaultAddons,
-    confirm_paths,
-    get_debug_port,
-    threaded_try_load_addons,
-)
+from .addons import DefaultAddons, add_default_addons, confirm_paths
 from .exceptions import (
     InvalidOS,
     InvalidPropertyType,
@@ -32,7 +27,7 @@ from .locale import geoip_allowed, get_geolocation, handle_locales
 from .pkgman import OS_NAME, get_path, installed_verstr, launch_path
 from .virtdisplay import VirtualDisplay
 from .warnings import LeakWarning
-from .xpi_dl import add_default_addons
+from .webgl import sample_webgl
 
 ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
 
@@ -345,7 +340,8 @@ def launch_options(
     os: Optional[ListOrString] = None,
     block_images: Optional[bool] = None,
     block_webrtc: Optional[bool] = None,
-    allow_webgl: Optional[bool] = None,
+    block_webgl: Optional[bool] = None,
+    webgl_config: Optional[Tuple[str, str]] = None,
     geoip: Optional[Union[str, bool]] = None,
     humanize: Optional[Union[bool, float]] = None,
     locale: Optional[Union[str, List[str]]] = None,
@@ -383,7 +379,7 @@ def launch_options(
             Whether to block all images.
         block_webrtc (Optional[bool]):
             Whether to block WebRTC entirely.
-        allow_webgl (Optional[bool]):
+        block_webgl (Optional[bool]):
             Whether to allow WebGL. To prevent leaks, only use this for special cases.
         geoip (Optional[Union[str, bool]]):
             Calculate longitude, latitude, timezone, country, & locale based on the IP address.
@@ -434,6 +430,8 @@ def launch_options(
             Prints the config being sent to Camoufox.
         virtual_display (Optional[str]):
             Virtual display number. Ex: ':99'. This is handled by Camoufox & AsyncCamoufox.
+        webgl_config (Optional[Tuple[str, str]]):
+            Use a specific WebGL vendor/renderer pair. Passed as a tuple of (vendor, renderer).
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -476,6 +474,7 @@ def launch_options(
     # Confirm all addon paths are valid
     if addons:
         confirm_paths(addons)
+        config['addons'] = addons
 
     # Get the Firefox version
     if ff_version:
@@ -512,7 +511,7 @@ def launch_options(
         config['fonts'] = fonts
     update_fonts(config, target_os)
     # Set a fixed font spacing seed
-    set_into(config, 'fonts:spacing_seed', randint(0, 2147483647))  # nosec
+    set_into(config, 'fonts:spacing_seed', randint(0, 1_073_741_823))  # nosec
 
     # Set geolocation
     if geoip:
@@ -555,29 +554,40 @@ def launch_options(
         if isinstance(humanize, (int, float)):
             set_into(config, 'humanize:maxTime', humanize)
 
-    # Validate the config
-    validate_config(config, path=executable_path)
+    # Set Firefox user preferences
+    if block_images:
+        firefox_user_prefs['permissions.default.image'] = 2
+    if block_webrtc:
+        firefox_user_prefs['media.peerconnection.enabled'] = False
+    if block_webgl:
+        firefox_user_prefs['webgl.disabled'] = True
+    else:
+        # Select a random webgl pair
+        if webgl_config:
+            merge_into(config, sample_webgl(target_os, *webgl_config))
+        else:
+            merge_into(config, sample_webgl(target_os))
+        # Use software rendering to be less unique
+        merge_into(
+            firefox_user_prefs,
+            {
+                'webgl.forbid-software': False,
+                'webgl.forbid-hardware': True,
+                'webgl.force-enabled': True,
+            },
+        )
+
+    # Cache previous pages, requests, etc (uses more memory)
+    if enable_cache:
+        merge_into(firefox_user_prefs, CACHE_PREFS)
 
     # Print the config if debug is enabled
     if debug:
         print('[DEBUG] Config:')
         pprint(config)
 
-    # Set Firefox user preferences
-    if block_images:
-        firefox_user_prefs['permissions.default.image'] = 2
-    if block_webrtc:
-        firefox_user_prefs['media.peerconnection.enabled'] = False
-    if allow_webgl:
-        LeakWarning.warn('allow_webgl', i_know_what_im_doing)
-        firefox_user_prefs['webgl.disabled'] = False
-
-    # Cache previous pages, requests, etc (uses more memory)
-    if enable_cache:
-        firefox_user_prefs.update(CACHE_PREFS)
-
-    # Load the addons
-    threaded_try_load_addons(get_debug_port(args), addons)
+    # Validate the config
+    validate_config(config, path=executable_path)
 
     # Prepare environment variables to pass to Camoufox
     env_vars = {

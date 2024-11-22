@@ -8,7 +8,7 @@ class CONSTRAINTS:
     The minimum and maximum supported versions of the Camoufox browser.
     """
 
-    MIN_VERSION = 'beta.15'
+    MIN_VERSION = 'beta.17'
     MAX_VERSION = '1'
 
     @staticmethod
