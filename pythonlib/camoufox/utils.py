@@ -380,7 +380,7 @@ def launch_options(
         block_webrtc (Optional[bool]):
             Whether to block WebRTC entirely.
         block_webgl (Optional[bool]):
-            Whether to allow WebGL. To prevent leaks, only use this for special cases.
+            Whether to block WebGL. To prevent leaks, only use this for special cases.
         geoip (Optional[Union[str, bool]]):
             Calculate longitude, latitude, timezone, country, & locale based on the IP address.
             Pass the target IP address to use, or `True` to find the IP address automatically.
@@ -559,14 +559,19 @@ def launch_options(
         firefox_user_prefs['permissions.default.image'] = 2
     if block_webrtc:
         firefox_user_prefs['media.peerconnection.enabled'] = False
-    if block_webgl:
+
+    # Add back allow_webgl for compatibility
+    if block_webgl or not launch_options.pop('allow_webgl', True):
         firefox_user_prefs['webgl.disabled'] = True
     else:
-        # Select a random webgl pair
+        # ROLLBACK: WebGL injection causing crashing on some devices.
+        """
         if webgl_config:
             merge_into(config, sample_webgl(target_os, *webgl_config))
         else:
             merge_into(config, sample_webgl(target_os))
+        """
+
         # Use software rendering to be less unique
         merge_into(
             firefox_user_prefs,
