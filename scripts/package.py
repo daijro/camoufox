@@ -84,13 +84,6 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
                 for file in list_files(root_dir=os.path.join('bundle', 'fonts', font), suffix='*'):
                     shutil.copy2(file, os.path.join(fonts_dir, os.path.basename(file)))
 
-        # Add launcher from launcher/dist/launch to temp_dir
-        launch_file = 'launch' + ('.exe' if target == 'windows' else '')
-        shutil.copy2(
-            os.path.join('launcher', 'dist', launch_file),
-            os.path.join(temp_dir, launch_file),
-        )
-
         # Remove unneeded paths
         for path in UNNEEDED_PATHS:
             if os.path.isdir(os.path.join(target_dir, path)):
@@ -116,7 +109,6 @@ def get_args():
     parser.add_argument(
         '--arch', choices=['x86_64', 'i686', 'arm64'], help='Architecture for Windows build'
     )
-    parser.add_argument('--no-locales', action='store_true', help='Do not package locales')
     parser.add_argument('--fonts', nargs='+', help='Font directories to include under fonts/')
     return parser.parse_args()
 
@@ -134,10 +126,7 @@ def main():
     moz_target = get_moz_target(target=args.os, arch=args.arch)
     with temp_cd(src_dir):
         # Create package files
-        if args.no_locales:
-            run('./mach package')
-        else:
-            run('cat browser/locales/shipped-locales | xargs ./mach package-multi-locale --locales')
+        run('./mach package')
         # Find package files
         search_path = os.path.abspath(
             f'obj-{moz_target}/dist/camoufox-{args.version}-{args.release}.*.{file_ext}'
