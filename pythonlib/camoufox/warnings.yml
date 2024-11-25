@@ -36,3 +36,6 @@ ff_version: >-
 no_region: >-
     Because you did not pass in a locale region, Camoufox will generate one for you.
     This can cause suspicion if your IP does not match your locale region.
+
+block_webgl: >-
+    Disabling WebGL is not recommended. Many WAFs will check if WebGL is enabled.
