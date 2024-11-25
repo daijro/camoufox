@@ -44,21 +44,23 @@ def sample_webgl(
             (vendor, renderer),
         )
         result = cursor.fetchone()
-        conn.close()
 
         if not result:
             raise ValueError(f'No WebGL data found for vendor "{vendor}" and renderer "{renderer}"')
 
         if result[3] <= 0:  # Check OS-specific probability
+            # Get a list of possible (vendor, renderer) pairs for this OS
+            cursor.execute(
+                f'SELECT DISTINCT vendor, renderer FROM webgl_fingerprints WHERE {os} > 0'
+            )
+            possible_pairs = cursor.fetchall()
             raise ValueError(
-                f'Vendor "{vendor}" and renderer "{renderer}" combination not valid for {os.title()}.'
+                f'Vendor "{vendor}" and renderer "{renderer}" combination not valid for {os.title()}.\n'
+                f'Possible pairs: {", ".join(str(pair) for pair in possible_pairs)}'
             )
 
-        return {
-            'vendor': result[0],
-            'renderer': result[1],
-            **orjson.loads(result[2]),
-        }
+        conn.close()
+        return orjson.loads(result[2])
 
     # Get all vendor/renderer pairs and their probabilities for this OS
     cursor.execute(f'SELECT vendor, renderer, data, {os} FROM webgl_fingerprints WHERE {os} > 0')
