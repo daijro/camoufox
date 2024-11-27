@@ -10,6 +10,7 @@ launch.exe
 # Internal testing
 /extra-docs
 pythonlib/test*
+jsonvv/test*
 /.vscode
 /bundle/fonts/extra
 pythonlib/*.png
