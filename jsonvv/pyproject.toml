@@ -1,0 +1,25 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "jsonvv"
+version = "0.1.0"
+description = "JSON value validator"
+authors = ["daijro <daijro.dev@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/daijro/camoufox"
+homepage = "https://github.com/daijro/camoufox/tree/main/pythonlib/jsonvv"
+readme = "README.md"
+keywords = [
+    "json",
+    "validator",
+    "validation",
+    "typing",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+
+[tool.poetry.scripts]
+jsonvv = "jsonvv.__main__:main"
