@@ -25,5 +25,9 @@ class MissingRequiredKey(InvalidPropertyType):
     pass
 
 
+class MissingGroupKey(MissingRequiredKey):
+    pass
+
+
 class PropertySyntaxError(JvvSyntaxError):
     pass

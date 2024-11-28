@@ -76,7 +76,7 @@ validator = {
         "name,type": "str - str[Traveling]",  # Non-traveling types
         # If hour(s) is specified, require days have >0 hours
         "/hours?/": {
-            "*/.*day/": "int[>0]"
+            "*/day$/": "int[>0]"
         }
     }
 }
@@ -110,6 +110,7 @@ else:
   - [Regex patterns](#regex-patterns)
   - [Lists of possible values](#lists-of-possible-values)
   - [Required fields (`*`)](#required-fields-)
+  - [Grouping keys (`$`)](#grouping-keys-)
 - [Supported Types](#supported-types)
   - [String (`str`)](#string-str)
   - [Integer (`int`)](#integer-int)
@@ -160,7 +161,7 @@ To specify a list of keys, use a comma-separated string.
 "/k[ey]{2}1/,key2": "type"
 ```
 
-To escape a comma, use `_`.
+To escape a comma, use `!`.
 
 ### Required fields (`*`)
 
@@ -172,6 +173,20 @@ Fields marked with `*` are required. The validation will fail without them.
 "*key1": "type"
 "*/key\d+/": "type"
 ```
+
+### Grouping keys (`$`)
+
+Fields that end with `$group_name` are grouped together. If one of the keys is set, all of the keys in the group must also be set as well.
+
+**Syntax:**
+
+```python
+"isEnabled$group1": "bool"
+"value$group1": "int[>0]"
+```
+
+This will require both `value` is set if and only if `isEnabled` is set.
+
 
 ---
 
@@ -621,6 +636,7 @@ graph TD
     JvvRuntimeException --> UnknownProperty["UnknownProperty<br/><small>Raised when a key in config<br/>isn't defined in property types</small>"]
     JvvRuntimeException --> InvalidPropertyType["InvalidPropertyType<br/><small>Raised when a value doesn't<br/>match its type definition</small>"]
     InvalidPropertyType --> MissingRequiredKey["MissingRequiredKey<br/><small>Raised when a required key<br/>is missing from config</small>"]
+    MissingRequiredKey --> MissingGroupKey["MissingGroupKey<br/><small>Raised when some keys in a<br/>property group are missing</small>"]
 
     JvvSyntaxError --> PropertySyntaxError["PropertySyntaxError<br/><small>Raised when property type<br/>definitions have syntax errors</small>"]
 
@@ -634,7 +650,7 @@ graph TD
     class JvvException jvv;
     class JvvRuntimeException,JvvSyntaxError runtime;
     class PropertySyntaxError syntax;
-    class UnknownProperty,InvalidPropertyType,MissingRequiredKey error;
+    class UnknownProperty,InvalidPropertyType,MissingRequiredKey,MissingGroupKey error;
 ```
 
 ---
@@ -704,3 +720,8 @@ graph TD
 - **Subtracting Domains** (`-`): Value must match `typeA` but not `typeB`.
   - Syntax: `"typeA - typeB"`
   - Example: `"int - int[13]"` (any integer except 13)
+
+### Escaping Characters
+
+- `!`: Escapes commas, slashes, and other jsonvv characters within strings.
+- `\`: Escapes within a regex pattern.

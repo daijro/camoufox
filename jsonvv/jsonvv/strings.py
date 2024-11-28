@@ -14,12 +14,12 @@ class StringValidator:
         i = 0
 
         while i < len(p):
-            if p[i] == '/' and (i == 0 or p[i - 1] != '_'):
+            if p[i] == '/' and (i == 0 or p[i - 1] != '!'):
                 in_regex = not in_regex
                 current.append(p[i])
             elif p[i] == ',' and not in_regex:
                 # Check if comma is escaped
-                if i > 0 and p[i - 1] == '_':
+                if i > 0 and p[i - 1] == '!':
                     current.append(',')
                 else:
                     # End of pattern
@@ -36,23 +36,22 @@ class StringValidator:
         return result
 
     def _is_regex_pattern(self, p: str) -> bool:
-        is_regex = p.startswith('/') and p.endswith('/') and not p.endswith('_/')
+        is_regex = p.startswith('/') and p.endswith('/') and not p.endswith('!/')
         return is_regex
 
     def _clean_literal_pattern(self, p: str) -> str:
-        cleaned = re.sub(r'_[^_]', lambda m: m.group(0)[-1], p)
-        return cleaned
+        return re.sub(r'!(.)', r'\1', p)
 
     def validate(self, value: str) -> bool:
         for p in self.patterns:
+            p = self._clean_literal_pattern(p)
             if self._is_regex_pattern(p):
                 regex = p[1:-1]
                 match = bool(re.match(regex, value))
                 if match:
                     return True
             else:
-                cleaned = self._clean_literal_pattern(p)
-                match = value == cleaned
+                match = value == p
                 if match:
                     return True
 
