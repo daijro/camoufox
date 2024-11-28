@@ -1,6 +1,11 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 
-from .exceptions import MissingRequiredKey, PropertySyntaxError, UnknownProperty
+from .exceptions import (
+    MissingGroupKey,
+    MissingRequiredKey,
+    PropertySyntaxError,
+    UnknownProperty,
+)
 from .parser import parse_type_def
 from .strings import string_validator
 from .types import Type
@@ -12,10 +17,15 @@ class JsonValidator:
         # Create a registry for reference types and parsed type definitions
         self.type_registry = {}
         self.parsed_types = {}
+        # Track property groups
+        self.groups: Dict[str, List[str]] = {}
         # Validate and pre-parse all type definitions
         self.parse_types(property_types)
 
     def validate(self, config_map):
+        # First validate groups
+        self.validate_groups(config_map)
+        # Then validate the rest
         validate_config(config_map, self.property_types, self.type_registry, self.parsed_types)
 
     def parse_types(self, property_types: Dict[str, Any], path: str = ""):
@@ -37,6 +47,13 @@ class JsonValidator:
                     f"Invalid key '{current_path}': '*' must be followed by a property name"
                 )
 
+            # Register group dependencies
+            if (idx := key.rfind('$')) != -1:
+                base_key, group = key[:idx], key[idx + 1 :]
+                if group not in self.groups:
+                    self.groups[group] = []
+                self.groups[group].append(base_key)
+
             if isinstance(value, dict):
                 # Recursively validate and parse nested dictionaries
                 self.parse_types(value, current_path)
@@ -52,6 +69,32 @@ class JsonValidator:
                 raise PropertySyntaxError(
                     f"Invalid type definition for '{current_path}': must be a string or dictionary"
                 )
+
+    def validate_groups(self, config_map: Dict[str, Any]) -> None:
+        """Validates that grouped properties are all present or all absent."""
+        group_presence: Dict[str, bool] = {}
+
+        # Check which groups have any properties present
+        for group, props in self.groups.items():
+            group_presence[group] = any(prop in config_map for prop in props)
+
+        # Validate group completeness
+        for group, is_present in group_presence.items():
+            props = self.groups[group]
+            if is_present:
+                # If any property in group exists, all must exist
+                missing = [prop for prop in props if prop not in config_map]
+                if missing:
+                    raise MissingGroupKey(
+                        f"Incomplete property group ${group}: missing {', '.join(missing)}"
+                    )
+            else:
+                # If no property in group exists, none should exist
+                present = [prop for prop in props if prop in config_map]
+                if present:
+                    raise MissingGroupKey(
+                        f"Incomplete property group ${group}: found {', '.join(present)} but missing {', '.join(set(props) - set(present))}"
+                    )
 
 
 def validate_config(
@@ -75,8 +118,11 @@ def validate_config(
         type_def = None
         current_path = f"{path}.{key}" if path else key
 
-        if key in property_types:
-            type_def = property_types[key]
+        # Strip group suffix for type lookup
+        lookup_key = key.split('$')[0] if '$' in key else key
+
+        if lookup_key in property_types:
+            type_def = property_types[lookup_key]
 
             # If the value is a dict and type_def is also a dict, recurse with new scope
             if isinstance(value, dict) and isinstance(type_def, dict):
@@ -85,15 +131,16 @@ def validate_config(
                 )
                 continue
 
-        elif '*' + key in property_types:
-            type_def = property_types['*' + key]
-            required_props[key] = True
+        elif '*' + lookup_key in property_types:
+            type_def = property_types['*' + lookup_key]
+            required_props[lookup_key] = True
         else:
             # Check pattern matches
             for pattern, pattern_type in property_types.items():
                 if pattern.startswith('@') or pattern.startswith('*'):
                     continue
-                if string_validator(key, pattern):
+                pattern_base = pattern.split('$')[0] if '$' in pattern else pattern
+                if string_validator(lookup_key, pattern_base):
                     type_def = pattern_type
                     current_path = f"{path}.{pattern}" if path else pattern
                     break

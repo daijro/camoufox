@@ -7,7 +7,7 @@ from .exceptions import (
     PropertySyntaxError,
     UnknownProperty,
 )
-from .validator import JsonValidator, validate_config
+from .validator import JsonValidator
 
 __all__ = [
     'JvvRuntimeException',
@@ -18,5 +18,4 @@ __all__ = [
     'InvalidPropertyType',
     'UnknownProperty',
     'MissingRequiredKey',
-    'validate_config',
 ]
