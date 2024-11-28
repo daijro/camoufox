@@ -187,7 +187,7 @@ class Parser:
 
         # Only consume alphanumeric and underscore characters
         while self.pos < self.length and (
-            self.type_str[self.pos].isalnum() or self.type_str[self.pos] in '!@'
+            self.type_str[self.pos].isalnum() or self.type_str[self.pos] in '_.@!'
         ):
             self.pos += 1
 
