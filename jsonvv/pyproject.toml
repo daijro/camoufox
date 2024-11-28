@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "jsonvv"
-version = "0.2.0"
+version = "0.2.1"
 description = "JSON value validator"
 authors = ["daijro <daijro.dev@gmail.com>"]
 license = "MIT"

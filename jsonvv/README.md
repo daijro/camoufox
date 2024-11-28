@@ -187,6 +187,17 @@ Fields that end with `$group_name` are grouped together. If one of the keys is s
 
 This will require both `value` is set if and only if `isEnabled` is set.
 
+Multiple `$` can be used to create more complex group dependencies.
+
+```python
+keyOne$group1: "any"
+keyTwo$group2: "any"
+keyThree$group1$group2: "any"
+```
+
+If `keyThree` is set, both `keyOne` and `keyTwo` must also be set.
+
+However, if `keyOne` is set, `keyThree` needs to be set but `keyTwo` does not.
 
 ---
 

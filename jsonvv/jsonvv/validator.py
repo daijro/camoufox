@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .exceptions import (
     MissingGroupKey,
@@ -48,11 +48,16 @@ class JsonValidator:
                 )
 
             # Register group dependencies
-            if (idx := key.rfind('$')) != -1:
-                base_key, group = key[:idx], key[idx + 1 :]
+            orig_key: Optional[str] = None
+            while (idx := key.rfind('$')) != -1:
+                # Get the original key before all $
+                if orig_key is None:
+                    orig_key = key.split('$', 1)[0]
+                # Add to group registry
+                key, group = key[:idx], key[idx + 1 :]
                 if group not in self.groups:
                     self.groups[group] = []
-                self.groups[group].append(base_key)
+                self.groups[group].append(orig_key)
 
             if isinstance(value, dict):
                 # Recursively validate and parse nested dictionaries
