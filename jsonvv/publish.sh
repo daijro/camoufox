@@ -1,6 +1,6 @@
 rm -rf ./dist
 
-vermin . --eval-annotations --target=3.7  --violations jsonvv/ || exit 1
+vermin . --eval-annotations --target=3.8  --violations jsonvv/ || exit 1
 
 python -m build
 twine check dist/*
