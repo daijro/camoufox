@@ -18,7 +18,8 @@ navigator:
   # deviceMemory not in Firefox
   hardwareConcurrency: navigator.hardwareConcurrency
   product: navigator.product
-  productSub: navigator.productSub
+  # Never override productSub #105
+  # productSub: navigator.productSub
   # vendor is not necessary
   # vendorSub is not necessary
   maxTouchPoints: navigator.maxTouchPoints
