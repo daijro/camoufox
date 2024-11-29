@@ -347,6 +347,7 @@ def launch_options(
     locale: Optional[Union[str, List[str]]] = None,
     addons: Optional[List[str]] = None,
     fonts: Optional[List[str]] = None,
+    custom_fonts_only: Optional[bool] = None,
     exclude_addons: Optional[List[DefaultAddons]] = None,
     screen: Optional[Screen] = None,
     window: Optional[Tuple[int, int]] = None,
@@ -395,6 +396,8 @@ def launch_options(
         fonts (Optional[List[str]]):
             Fonts to load into Camoufox (in addition to the default fonts for the target `os`).
             Takes a list of font family names that are installed on the system.
+        custom_fonts_only (Optional[bool]):
+            If enabled, OS-specific system fonts will be not be passed to Camoufox.
         exclude_addons (Optional[List[DefaultAddons]]):
             Default addons to exclude. Passed as a list of camoufox.DefaultAddons enums.
         screen (Optional[Screen]):
@@ -448,6 +451,8 @@ def launch_options(
         args = []
     if firefox_user_prefs is None:
         firefox_user_prefs = {}
+    if custom_fonts_only is None:
+        custom_fonts_only = False
     if i_know_what_im_doing is None:
         i_know_what_im_doing = False
     if env is None:
@@ -513,7 +518,18 @@ def launch_options(
     # Update fonts list
     if fonts:
         config['fonts'] = fonts
-    update_fonts(config, target_os)
+
+    if custom_fonts_only:
+        firefox_user_prefs['gfx.bundled-fonts.activate'] = 0
+        if fonts:
+            # The user has passed their own fonts, and OS fonts are disabled.
+            LeakWarning.warn('custom_fonts_only')
+        else:
+            # OS fonts are disabled, and the user has not passed their own fonts either.
+            raise ValueError('No custom fonts were passed, but `custom_fonts_only` is enabled.')
+    else:
+        update_fonts(config, target_os)
+
     # Set a fixed font spacing seed
     set_into(config, 'fonts:spacing_seed', randint(0, 1_073_741_823))  # nosec
 
