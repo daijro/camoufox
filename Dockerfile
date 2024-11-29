@@ -12,10 +12,13 @@ RUN apt-get update && apt-get install -y \
     # Python
     python3 python3-dev python3-pip \
     # Camoufox build system tools
-    git p7zip-full golang-go aria2 \
+    git p7zip-full golang-go aria2 curl \
     # CA certificates
     ca-certificates \
     && update-ca-certificates
+
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Fetch Firefox & apply initial patches
 RUN make setup-minimal && \
