@@ -1,33 +1,23 @@
-# LibreWolf firefox-view.patch
-#
-# Author:        Malte Jürgens <maltejur@dismail.de>
-# Description:   Hide "Firefox View" by default
-# Last Updated:  2024-02-23
-# License:       MPL 2.0
-#
-# This patch removes the Firefox View from the toolbar by default. Users can
-# enable it again by using the "Customize Toolbar" mode and dragging it back to
-# the titlebar.
+diff --git a/browser/base/content/navigator-toolbox.inc.xhtml b/browser/base/content/navigator-toolbox.inc.xhtml
+index eb2d8670874b..e57694a72bd3 100644
 --- a/browser/base/content/navigator-toolbox.inc.xhtml
 +++ b/browser/base/content/navigator-toolbox.inc.xhtml
-@@ -35,16 +35,6 @@
-       <hbox flex="1" align="end" class="toolbar-items">
-         <toolbartabstop/>
-         <hbox id="TabsToolbar-customization-target" flex="1">
--          <toolbarbutton id="firefox-view-button"
--                         class="toolbarbutton-1 chromeclass-toolbar-additional"
--                         data-l10n-id="toolbar-button-firefox-view-2"
--                         role="button"
--                         aria-pressed="false"
--                         oncommand="FirefoxViewHandler.openTab();"
--                         onmousedown="FirefoxViewHandler.openToolbarMouseEvent(event);"
--                         cui-areatype="toolbar"
--                         removable="true"/>
+@@ -35,14 +35,6 @@
+     <hbox flex="1" align="end" class="toolbar-items">
+       <toolbartabstop/>
+       <hbox id="TabsToolbar-customization-target" flex="1">
+-        <toolbarbutton id="firefox-view-button"
+-                       class="toolbarbutton-1 chromeclass-toolbar-additional"
+-                       data-l10n-id="toolbar-button-firefox-view-2"
+-                       role="button"
+-                       aria-pressed="false"
+-                       cui-areatype="toolbar"
+-                       removable="true"/>
 -
-           <tabs id="tabbrowser-tabs"
-                 is="tabbrowser-tabs"
-                 aria-multiselectable="true"
-@@ -718,5 +708,15 @@
+         <tabs id="tabbrowser-tabs"
+               is="tabbrowser-tabs"
+               aria-multiselectable="true"
+@@ -667,5 +659,13 @@
                     closemenu="none"
                     cui-areatype="toolbar"
                     data-l10n-id="navbar-library"/>
@@ -37,15 +27,15 @@
 +                   data-l10n-id="toolbar-button-firefox-view-2"
 +                   role="button"
 +                   aria-pressed="false"
-+                   oncommand="FirefoxViewHandler.openTab();"
-+                   onmousedown="FirefoxViewHandler.openToolbarMouseEvent(event);"
 +                   cui-areatype="toolbar"
 +                   removable="true"/>
    </html:template>
  </toolbox>
+diff --git a/browser/components/customizableui/CustomizableUI.sys.mjs b/browser/components/customizableui/CustomizableUI.sys.mjs
+index 45d0e0e4872e..4ed336da6bb5 100644
 --- a/browser/components/customizableui/CustomizableUI.sys.mjs
 +++ b/browser/components/customizableui/CustomizableUI.sys.mjs
-@@ -287,7 +287,6 @@ var CustomizableUIInternal = {
+@@ -347,7 +347,6 @@ var CustomizableUIInternal = {
        {
          type: CustomizableUI.TYPE_TOOLBAR,
          defaultPlacements: [
@@ -53,7 +43,7 @@
            "tabbrowser-tabs",
            "new-tab-button",
            "alltabs-button",
-@@ -616,18 +615,6 @@ var CustomizableUIInternal = {
+@@ -707,18 +706,6 @@ var CustomizableUIInternal = {
        }
      }
  
