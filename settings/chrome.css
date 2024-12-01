@@ -171,6 +171,8 @@ panel {
 #unified-extensions-button,
 .customize-context-pinToToolbar,
 #PersonalToolbar,
+toolbar#nav-bar > .titlebar-buttonbox-container,
+toolbar#nav-bar > .titlebar-spacer,
 #appMenu-library-remotetabs-button {
   display: none !important;
 }
