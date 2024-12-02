@@ -18,13 +18,13 @@
     "screen.availLeft": "int[>=0]",
     "locale:language$__LOCALE": "str",
     "locale:region$__LOCALE": "str",
+    "locale:script": "str",
     "geolocation:latitude$__GEO": "double[-90 - 90]",
     "geolocation:longitude$__GEO": "double[-180 - 180]",
     "geolocation:accuracy": "double[>=0]",
     "timezone": "str[/^[\\w_]+/[\\w_]+$/]",
-    "locale:script": "str",
-    "locale:all": "str",
 
+    "locale:all": "str",
     "headers.Accept-Language": "str",
     "navigator.language": "str",
     "navigator.languages": "array[str]",
@@ -57,10 +57,10 @@
     "window.screenY": "int",
     "window.devicePixelRatio": "double[>0]",
     
-    "document.body.clientWidth$__DOC_BODY$__W_INNER": "int[>=0]",
-    "document.body.clientHeight$__DOC_BODY$__W_INNER": "int[>=0]",
-    "document.body.clientTop$__DOC_BODY": "int",
-    "document.body.clientLeft$__DOC_BODY": "int",
+    "document.body.clientWidth$__DOC_BODY": "int[>=0]",
+    "document.body.clientHeight$__DOC_BODY": "int[>=0]",
+    "document.body.clientTop": "int",
+    "document.body.clientLeft": "int",
 
     "webrtc:ipv4": "str[/^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$/]",
     "webrtc:ipv6": "str[/^(([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4})$/]",
@@ -84,7 +84,7 @@
 
     "webGl:renderer$__WEBGL": "str",
     "webGl:vendor$__WEBGL": "str",
-    
+
     "webGl:supportedExtensions": "array[str[/^[\\w_]+$/]]",
     "webGl2:supportedExtensions": "array[str[/^[\\w_]+$/]]",
 
@@ -92,7 +92,7 @@
     "webGl2:parameters": "@WEBGL_PARAMS",
     "webGl:parameters:blockIfNotDefined": "bool",
     "webGl2:parameters:blockIfNotDefined": "bool",
-    
+
     "webGl:shaderPrecisionFormats": "@WEBGL_SHADER_PRECISION_FORMATS",
     "webGl2:shaderPrecisionFormats": "@WEBGL_SHADER_PRECISION_FORMATS",
     "webGl:shaderPrecisionFormats:blockIfNotDefined": "bool",
@@ -258,7 +258,7 @@
             "*precision": "int[>=0]"
         }
     },
-    
+
     "@WEBGL_CONTEXT_ATTRIBUTES": {
         "alpha": "bool",
         "antialias": "bool",
