@@ -69,7 +69,7 @@ setup: setup-minimal
 ff-dbg: setup
 	# Only apply patches to help debug vanilla Firefox
 	make patch ./patches/chromeutil.patch
-	make patch ./patches/debug-url-navigation.patch
+	make patch ./patches/browser-init.patch
 	echo "LOCAL_INCLUDES += ['/camoucfg']" >> $(cf_source_dir)/dom/base/moz.build
 	touch $(cf_source_dir)/_READY
 	make checkpoint
@@ -130,6 +130,7 @@ package-linux:
 	python3 scripts/package.py linux \
 		--includes \
 			settings/chrome.css \
+			settings/camoucfg.jvv \
 			settings/properties.json \
 			bundle/fontconfigs \
 		--version $(version) \
@@ -141,6 +142,7 @@ package-macos:
 	python3 scripts/package.py macos \
 		--includes \
 			settings/chrome.css \
+			settings/camoucfg.jvv \
 			settings/properties.json \
 		--version $(version) \
 		--release $(release) \
@@ -151,6 +153,7 @@ package-windows:
 	python3 scripts/package.py windows \
 		--includes \
 			settings/chrome.css \
+			settings/camoucfg.jvv \
 			settings/properties.json \
 			~/.mozbuild/vs/VC/Redist/MSVC/14.38.33135/$(vcredist_arch)/Microsoft.VC143.CRT/*.dll \
 		--version $(version) \
