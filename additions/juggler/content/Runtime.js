@@ -118,15 +118,11 @@ class Runtime {
       }
       // Extract arguments for the main world function
       const functionArgs = args[5]?.value?.a || [];
-      try {
-        const exceptionDetails = {};
-        const result = mainContext.executeInGlobal(mainWorldScript, functionArgs, exceptionDetails);
-        if (!result)
-          return {exceptionDetails};
-        return {result};
-      } catch (e) {
-        throw e;
-      }
+      const exceptionDetails = {};
+      const result = mainContext.executeInGlobal(mainWorldScript, functionArgs, exceptionDetails);
+      if (!result)
+        return {exceptionDetails};
+      return {result};
     }
 
     const exceptionDetails = {};
@@ -136,7 +132,7 @@ class Runtime {
     if (returnByValue)
       result = executionContext.ensureSerializedToValue(result);
     return {result};
-}
+  }
 
   async getObjectProperties({executionContextId, objectId}) {
     const executionContext = this.findExecutionContext(executionContextId);
@@ -380,10 +376,11 @@ class MainWorldContext {
     try {
       const wrappedScript = `
         (() => {
-          const result = (${script});
-          return typeof result === 'function'
-            ? result(${args.map(arg => JSON.stringify(arg)).join(', ')})
-            : result;
+          let _s = (${script});
+          let _r = typeof _s === 'function'
+            ? _s(${args.map(arg => JSON.stringify(arg)).join(', ')})
+            : _s;
+          return JSON.stringify({value: _r});
         })()
       `;
 
@@ -393,8 +390,7 @@ class MainWorldContext {
       if (!success) {
         return {exceptionDetails};
       }
-      
-      return {value: obj};
+      return JSON.parse(obj);
     } catch (e) {
       exceptionDetails.text = e.message;
       exceptionDetails.stack = e.stack;
@@ -435,6 +431,8 @@ class ExecutionContext {
 
       return hasSymbol ? undefined : result;
     }).bind(null, JSON.stringify.bind(JSON))`).return;
+
+    this.mainEquivalent = undefined;
   }
 
   id() {
