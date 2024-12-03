@@ -288,6 +288,7 @@
     "humanize:minTime": "double[>=0]",
     "showcursor": "bool",
 
+    "allowMainWorld": "bool",
     "memorysaver": "bool",
     "addons": "array[str]",
     "debug": "bool"

@@ -517,6 +517,11 @@ class Frame {
       frameId: this.id(),
       name,
     });
+    // Camoufox: Create a main world for the isolated context
+    if (ChromeUtils.camouGetBool('allowMainWorld', false)) {
+      const mainWorld = this._runtime.createMW(this.domWindow(), this.domWindow());
+      world.mainEquivalent = mainWorld;
+    }
     this._worldNameToContext.set(name, world);
     return world;
   }
