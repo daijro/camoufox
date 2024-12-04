@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "camoufox"
-version = "0.4.5"
+version = "0.4.6-beta"
 description = "Wrapper around Playwright to help launch Camoufox"
 authors = ["daijro <daijro.dev@gmail.com>"]
 license = "MIT"
