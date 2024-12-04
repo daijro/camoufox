@@ -354,6 +354,7 @@ def launch_options(
     fingerprint: Optional[Fingerprint] = None,
     ff_version: Optional[int] = None,
     headless: Optional[bool] = None,
+    main_world_eval: Optional[bool] = None,
     executable_path: Optional[Union[str, Path]] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     proxy: Optional[Dict[str, str]] = None,
@@ -416,6 +417,9 @@ def launch_options(
             Whether to run the browser in headless mode. Defaults to False.
             Note: If you are running linux, passing headless='virtual' to Camoufox & AsyncCamoufox
             will use Xvfb.
+        main_world_eval (Optional[bool]):
+            Whether to enable running scripts in the main world.
+            To use this, prepend "mw:" to the script: page.evaluate("mw:" + script).
         executable_path (Optional[Union[str, Path]]):
             Custom Camoufox browser executable path.
         firefox_user_prefs (Optional[Dict[str, Any]]):
@@ -573,6 +577,10 @@ def launch_options(
         set_into(config, 'humanize', True)
         if isinstance(humanize, (int, float)):
             set_into(config, 'humanize:maxTime', humanize)
+
+    # Enable the main world context creation
+    if main_world_eval:
+        set_into(config, 'allowMainWorld', True)
 
     # Set Firefox user preferences
     if block_images:
