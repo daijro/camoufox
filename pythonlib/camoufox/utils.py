@@ -595,16 +595,18 @@ def launch_options(
     else:
         # If the user has provided a specific WebGL vendor/renderer pair, use it
         if webgl_config:
-            merge_into(config, sample_webgl(target_os, *webgl_config))
+            webgl_fp = sample_webgl(target_os, *webgl_config)
         else:
-            merge_into(config, sample_webgl(target_os))
+            webgl_fp = sample_webgl(target_os)
+        enable_webgl2 = webgl_fp.pop('webGl2Enabled')
 
-        # Use software rendering to be less unique
+        # Merge the WebGL fingerprint into the config
+        merge_into(config, webgl_fp)
+        # Set the WebGL preferences
         merge_into(
             firefox_user_prefs,
             {
-                'webgl.forbid-software': False,
-                'webgl.forbid-hardware': True,
+                'webgl.enable-webgl2': enable_webgl2,
                 'webgl.force-enabled': True,
             },
         )
