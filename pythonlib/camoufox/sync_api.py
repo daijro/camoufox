@@ -82,13 +82,14 @@ def NewBrowser(
     else:
         virtual_display = None
 
-    opt = from_options or launch_options(headless=headless, debug=debug, **kwargs)
+    if not from_options:
+        from_options = launch_options(headless=headless, debug=debug, **kwargs)
 
     # Persistent context
     if persistent_context:
-        context = playwright.firefox.launch_persistent_context(**opt)
+        context = playwright.firefox.launch_persistent_context(**from_options)
         return sync_attach_vd(context, virtual_display)
 
     # Browser
-    browser = playwright.firefox.launch(**opt)
+    browser = playwright.firefox.launch(**from_options)
     return sync_attach_vd(browser, virtual_display)

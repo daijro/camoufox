@@ -55,16 +55,16 @@ LOCAL_DATA: Path = Path(os.path.abspath(__file__)).parent
 
 # The supported architectures for each OS
 OS_ARCH_MATRIX: Dict[str, List[str]] = {
-    'mac': ['x86_64', 'arm64'],
     'win': ['x86_64', 'i686'],
+    'mac': ['x86_64', 'arm64'],
     'lin': ['x86_64', 'arm64', 'i686'],
 }
 
 # The relative path to the camoufox executable
 LAUNCH_FILE = {
     'win': 'camoufox.exe',
-    'lin': 'camoufox-bin',
     'mac': '../MacOS/camoufox',
+    'lin': 'camoufox-bin',
 }
 
 
