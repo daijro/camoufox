@@ -1,3 +1,5 @@
+import asyncio
+from functools import partial
 from typing import Any, Dict, Optional, Union, overload
 
 from playwright.async_api import (
@@ -82,13 +84,17 @@ async def AsyncNewBrowser(
     else:
         virtual_display = None
 
-    opt = from_options or launch_options(headless=headless, debug=debug, **kwargs)
+    if not from_options:
+        from_options = await asyncio.get_event_loop().run_in_executor(
+            None,
+            partial(launch_options, headless=headless, debug=debug, **kwargs),
+        )
 
     # Persistent context
     if persistent_context:
-        context = await playwright.firefox.launch_persistent_context(**opt)
+        context = await playwright.firefox.launch_persistent_context(**from_options)
         return await async_attach_vd(context, virtual_display)
 
     # Browser
-    browser = await playwright.firefox.launch(**opt)
+    browser = await playwright.firefox.launch(**from_options)
     return await async_attach_vd(browser, virtual_display)

@@ -1,9 +1,14 @@
 import sqlite3
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import orjson
+
+from camoufox.pkgman import OS_ARCH_MATRIX
+
+# Get database path relative to this file
+DB_PATH = Path(__file__).parent / 'webgl_data.db'
 
 
 def sample_webgl(
@@ -24,23 +29,19 @@ def sample_webgl(
     Raises:
         ValueError: If invalid OS provided or no data found for OS/vendor/renderer
     """
-    # Map OS to probability column
-    os_map = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}
-    if os not in os_map:
-        raise ValueError(f'Invalid OS: {os}. Must be one of: {", ".join(os_map)}')
-    os = os_map[os]
-
-    # Get database path relative to this file
-    db_path = Path(__file__).parent / 'webgl_data.db'
+    # Check that the OS is valid (avoid SQL injection)
+    if os not in OS_ARCH_MATRIX:
+        raise ValueError(f'Invalid OS: {os}. Must be one of: win, mac, lin')
 
     # Connect to database
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     if vendor and renderer:
         # Get specific vendor/renderer pair and verify it exists for this OS
         cursor.execute(
-            f'SELECT vendor, renderer, data, {os} FROM webgl_fingerprints WHERE vendor = ? AND renderer = ?',
+            f'SELECT vendor, renderer, data, {os} FROM webgl_fingerprints '  # nosec
+            'WHERE vendor = ? AND renderer = ?',
             (vendor, renderer),
         )
         result = cursor.fetchone()
@@ -51,7 +52,7 @@ def sample_webgl(
         if result[3] <= 0:  # Check OS-specific probability
             # Get a list of possible (vendor, renderer) pairs for this OS
             cursor.execute(
-                f'SELECT DISTINCT vendor, renderer FROM webgl_fingerprints WHERE {os} > 0'
+                f'SELECT DISTINCT vendor, renderer FROM webgl_fingerprints WHERE {os} > 0'  # nosec
             )
             possible_pairs = cursor.fetchall()
             raise ValueError(
@@ -63,7 +64,9 @@ def sample_webgl(
         return orjson.loads(result[2])
 
     # Get all vendor/renderer pairs and their probabilities for this OS
-    cursor.execute(f'SELECT vendor, renderer, data, {os} FROM webgl_fingerprints WHERE {os} > 0')
+    cursor.execute(
+        f'SELECT vendor, renderer, data, {os} FROM webgl_fingerprints WHERE {os} > 0'  # nosec
+    )
     results = cursor.fetchall()
     conn.close()
 
@@ -82,3 +85,24 @@ def sample_webgl(
 
     # Parse the JSON data string
     return orjson.loads(data_strs[idx])
+
+
+def get_possible_pairs() -> Dict[str, List[Tuple[str, str]]]:
+    """
+    Get all possible (vendor, renderer) pairs for all OS, where the probability is greater than 0.
+    """
+    # Connect to database
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Get all vendor/renderer pairs for each OS where probability > 0
+    result: Dict[str, List[Tuple[str, str]]] = {}
+    for os_type in OS_ARCH_MATRIX:
+        cursor.execute(
+            'SELECT DISTINCT vendor, renderer FROM webgl_fingerprints '
+            f'WHERE {os_type} > 0 ORDER BY {os_type} DESC',  # nosec
+        )
+        result[os_type] = cursor.fetchall()
+
+    conn.close()
+    return result

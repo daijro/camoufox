@@ -114,7 +114,7 @@ def test(url: Optional[str] = None) -> None:
     """
     from .sync_api import Camoufox
 
-    with Camoufox(headless=False, env=environ) as browser:
+    with Camoufox(headless=False, env=environ, config={'showcursor': False}) as browser:
         page = browser.new_page()
         if url:
             page.goto(url)
