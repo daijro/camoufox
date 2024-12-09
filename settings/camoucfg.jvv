@@ -270,6 +270,9 @@
         "stencil": "bool"
     },
 
+    "canvas:aaOffset": "int",
+    "canvas:aaCapOffset": "bool",
+
     "voices": "array[@VOICE_TYPE]",
     "voices:blockIfNotDefined": "bool",
     "voices:fakeCompletion": "bool",

@@ -43,6 +43,26 @@ _ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 $(eval $(_ARGS):;@:)
 
 fetch:
+	# Fetching private patches...
+	@if [ -d "patches/private" ]; then \
+		echo "Found patches/private. Skipping private patches fetch..."; \
+	else \
+		if [ -z "$$CAMOUFOX_PASSWD" ]; then \
+			echo "CAMOUFOX_PASSWD environment variable not set. Skipping private patches..."; \
+		else \
+			echo "Fetching private patches..."; \
+			mkdir -p patches/closedsrc; \
+			if ! aria2c --dry-run "https://camoufox.com/pipeline/rev-$(version)-$(release).7z" 2>/dev/null; then \
+				echo "No private patches found for this version"; \
+				exit 1; \
+			else \
+				aria2c -o rev-$(version)-$(release).7z "https://camoufox.com/pipeline/rev-$(version)-$(release).7z" && \
+				7z x -p"$$CAMOUFOX_PASSWD" rev-$(version)-$(release).7z -o./patches/closedsrc && \
+				rm rev-$(version)-$(release).7z; \
+			fi; \
+		fi; \
+	fi
+	# Fetching the Firefox source tarball...
 	aria2c -x16 -s16 -k1M -o $(ff_source_tarball) "https://archive.mozilla.org/pub/firefox/releases/$(version)/source/firefox-$(version).source.tar.xz"; \
 
 setup-minimal:
@@ -193,6 +213,9 @@ check-arg:
 		exit 1; \
 	fi
 
+grep:
+	grep "$(_ARGS)" -r ./patches/*.patch
+
 patch:
 	@make check-arg $(_ARGS);
 	cd $(cf_source_dir) && patch -p1 -i ../$(_ARGS)
@@ -220,5 +243,15 @@ tests:
 
 update-ubo-assets:
 	bash ./scripts/update-ubo-assets.sh
+
+upload:
+	# ===============================
+	# This is only for internal use. You can ignore this.
+	# ===============================
+
+	@test -f .passwd || { echo "Error: .passwd file not found"; exit 1; }
+	@mkdir -p ../camoufox-web/internal
+	@rm -rf ../camoufox-web/pipeline/rev-$(version)-$(release).7z
+	7z a "-p$$(cat ./.passwd)" -mhe=on ../camoufox-web/pipeline/rev-$(version)-$(release).7z "./patches/private/*.patch"
 
 vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')
