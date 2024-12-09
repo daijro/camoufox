@@ -164,8 +164,8 @@ index a1e5c4792d..be99491bf8 100644
 +    case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
 +      break;
 +    default:
-+      if (MaskConfig::GetBool(mIsWebGL2 ? "webGl2:parameters:blockIfNotDefined"
-+                                        : "webGl:parameters:blockIfNotDefined")) {
++      if (MaskConfig::CheckBool(mIsWebGL2 ? "webGl2:parameters:blockIfNotDefined"
++                                          : "webGl:parameters:blockIfNotDefined")) {
 +        retval.set(JS::NullValue());
 +        return;
 +      }
@@ -319,7 +319,7 @@ index a1e5c4792d..be99491bf8 100644
 +      });
 +    }
 +    // Check if block if not defined is on
-+    if (MaskConfig::GetBool(
++    if (MaskConfig::CheckBool(
 +            mIsWebGL2 ? "webGl2:shaderPrecisionFormats:blockIfNotDefined"
 +                      : "webGl:shaderPrecisionFormats:blockIfNotDefined")) {
 +      Maybe<webgl::ShaderPrecisionFormat> ret;

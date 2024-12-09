@@ -158,6 +158,10 @@ inline std::optional<bool> GetBool(const std::string& key) {
   return std::nullopt;
 }
 
+inline bool CheckBool(const std::string& key) {
+  return GetBool(key).value_or(false);
+}
+
 inline std::optional<std::array<uint32_t, 4>> GetRect(
     const std::string& left, const std::string& top, const std::string& width,
     const std::string& height) {

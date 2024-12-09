@@ -83,6 +83,8 @@
   { "property": "webGl2:shaderPrecisionFormats:blockIfNotDefined", "type": "bool" },
   { "property": "webGl:contextAttributes", "type": "dict" },
   { "property": "webGl2:contextAttributes", "type": "dict" },
+  { "property": "canvas:aaOffset", "type": "int" },
+  { "property": "canvas:aaCapOffset", "type": "bool" },
   { "property": "voices", "type": "array" },
   { "property": "voices:blockIfNotDefined", "type": "bool" },
   { "property": "voices:fakeCompletion", "type": "bool" },

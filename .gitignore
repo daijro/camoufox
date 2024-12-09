@@ -15,6 +15,7 @@ jsonvv/test*
 /bundle/fonts/extra
 pythonlib/*.png
 scripts/*.png
+scripts/test*
 .vscode
 /tests/*.disabled
 k8s/
@@ -34,3 +35,8 @@ venv/
 __pycache__/
 *.pyc
 *.mmdb
+
+# Closed source patches
+private
+.passwd
+closedsrc
