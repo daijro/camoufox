@@ -30,11 +30,11 @@ class VirtualDisplay:
 
     xvfb_args = (
         # fmt: off
-        "-screen", "0", "1x1x8",
+        "-screen", "0", "1x1x24",
         "-ac",
         "-nolisten", "tcp",
         "-extension", "RENDER",
-        "-extension", "GLX",
+        "+extension", "GLX",
         "-extension", "COMPOSITE",
         "-extension", "XVideo",
         "-extension", "XVideo-MotionCompensation",
