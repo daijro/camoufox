@@ -611,6 +611,15 @@ def launch_options(
             },
         )
 
+    # Canvas anti-fingerprinting
+    merge_into(
+        config,
+        {
+            'canvas:aaOffset': randint(-50, 50),  # nosec
+            'canvas:aaCapOffset': True,
+        },
+    )
+
     # Cache previous pages, requests, etc (uses more memory)
     if enable_cache:
         merge_into(firefox_user_prefs, CACHE_PREFS)
