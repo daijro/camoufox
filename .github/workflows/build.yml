@@ -84,6 +84,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y msitools p7zip-full aria2
 
+      - name: Fetch source
+        env:
+          CAMOUFOX_PASSWD: ${{ secrets.CAMOUFOX_PASSWD }}
+        run: |
+          make fetch
+
       - name: Setup and bootstrap
         run: |
           make setup-minimal
