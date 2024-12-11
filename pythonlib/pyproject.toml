@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "camoufox"
-version = "0.4.8-beta"
+version = "0.4.8"
 description = "Wrapper around Playwright to help launch Camoufox"
 authors = ["daijro <daijro.dev@gmail.com>"]
 license = "MIT"
@@ -31,7 +31,7 @@ python = "^3.8"
 click = "*"
 requests = "*"
 orjson = "*"
-browserforge = "*"
+browserforge = "^1.2.1"
 playwright = "*"
 pyyaml = "*"
 platformdirs = "*"
