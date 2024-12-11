@@ -34,7 +34,7 @@ Camoufox is the most modern, effective & future-proof open source solution for a
 ## Features
 
 - Invisible to **all anti-bot systems** 🎭
-  - Camoufox performs better than most commerical anti-bot browsers.
+  - Camoufox performs better than most commercial anti-bot browsers.
 
 * Fingerprint injection & rotation (without JS injection!)
   - All navigator properties (device, OS, hardware, browser, etc.) ✅
