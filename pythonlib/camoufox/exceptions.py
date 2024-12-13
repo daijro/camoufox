@@ -6,6 +6,14 @@ class UnsupportedVersion(Exception):
     ...
 
 
+class MissingRelease(Exception):
+    """
+    Raised when a required GitHub release asset is missing.
+    """
+
+    ...
+
+
 class UnsupportedArchitecture(Exception):
     """
     Raised when the architecture is not supported.

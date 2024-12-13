@@ -23,6 +23,7 @@ from yaml import CLoader, load
 from .__version__ import CONSTRAINTS
 from .exceptions import (
     CamoufoxNotInstalled,
+    MissingRelease,
     UnsupportedArchitecture,
     UnsupportedOS,
     UnsupportedVersion,
@@ -136,12 +137,59 @@ class Version:
 VERSION_MIN, VERSION_MAX = Version.build_minmax()
 
 
-class CamoufoxFetcher:
+class GitHubDownloader:
+    """
+    Manages fetching and installing GitHub releases.
+    """
+
+    def __init__(self, github_repo: str) -> None:
+        self.github_repo = github_repo
+        self.api_url = f"https://api.github.com/repos/{github_repo}/releases"
+
+    def check_asset(self, asset: Dict) -> Any:
+        """
+        Compare the asset to determine if it's the desired asset.
+
+        Args:
+            asset: Asset information from GitHub API
+
+        Returns:
+            Any: Data to be returned if this is the desired asset, or None/False if not
+        """
+        return asset.get('browser_download_url')
+
+    def missing_asset_error(self) -> None:
+        """
+        Raise a MissingRelease exception if no release is found.
+        """
+        raise MissingRelease(f"Could not find a release asset in {self.github_repo}.")
+
+    def get_asset(self) -> Any:
+        """
+        Fetch the latest release from the GitHub API.
+        Gets the first asset that returns a truthy value from check_asset.
+        """
+        resp = requests.get(self.api_url, timeout=20)
+        resp.raise_for_status()
+
+        releases = resp.json()
+
+        for release in releases:
+            for asset in release['assets']:
+                if data := self.check_asset(asset):
+                    return data
+
+        self.missing_asset_error()
+
+
+class CamoufoxFetcher(GitHubDownloader):
     """
     Handles fetching and installing the latest version of Camoufox.
     """
 
     def __init__(self) -> None:
+        super().__init__("daijro/camoufox")
+
         self.arch = self.get_platform_arch()
         self._version_obj: Optional[Version] = None
         self.pattern: re.Pattern = re.compile(
@@ -149,6 +197,37 @@ class CamoufoxFetcher:
         )
 
         self.fetch_latest()
+
+    def check_asset(self, asset: Dict) -> Optional[Tuple[Version, str]]:
+        """
+        Finds the latest release from a GitHub releases API response that
+        supports the Camoufox version constraints, the OS, and architecture.
+
+        Returns:
+            Optional[Tuple[Version, str]]: The version and URL of a release
+        """
+        # Search through releases for the first supported version
+        match = self.pattern.match(asset['name'])
+        if not match:
+            return None
+
+        # Check if the version is supported
+        version = Version(release=match['release'], version=match['version'])
+        if not version.is_supported():
+            return None
+
+        # Asset was found. Return data
+        return version, asset['browser_download_url']
+
+    def missing_asset_error(self) -> None:
+        """
+        Raise a MissingRelease exception if no release is found.
+        """
+        raise MissingRelease(
+            f"No matching release found for {OS_NAME} {self.arch} in the "
+            f"supported range: ({CONSTRAINTS.as_range()}). "
+            "Please update the Python library."
+        )
 
     @staticmethod
     def get_platform_arch() -> str:
@@ -175,30 +254,6 @@ class CamoufoxFetcher:
 
         return arch
 
-    def find_release(self, releases: List[Dict]) -> Optional[Tuple[Version, str]]:
-        """
-        Finds the latest release from a GitHub releases API response that
-        supports the Camoufox version constraints, the OS, and architecture.
-
-        Returns:
-            Optional[Tuple[Version, str]]: The version and URL of a release
-        """
-        # Search through releases for the first supported version
-        for release in releases:
-            for asset in release['assets']:
-                match = self.pattern.match(asset['name'])
-                if not match:
-                    continue
-
-                # Check if the version is supported
-                version = Version(release=match['release'], version=match['version'])
-                if not version.is_supported():
-                    continue
-
-                # Asset was found. Return data
-                return version, asset['browser_download_url']
-        return None
-
     def fetch_latest(self) -> None:
         """
         Fetch the URL of the latest camoufox release for the current platform.
@@ -208,20 +263,7 @@ class CamoufoxFetcher:
             requests.RequestException: If there's an error fetching release data
             ValueError: If no matching release is found for the current platform
         """
-        api_url = "https://api.github.com/repos/daijro/camoufox/releases"
-        resp = requests.get(api_url, timeout=20)
-        resp.raise_for_status()
-
-        # Find a release that fits the constraints
-        releases = resp.json()
-        release_data = self.find_release(releases)
-
-        if release_data is None:
-            raise UnsupportedVersion(
-                f"No matching release found for {OS_NAME} {self.arch} in the "
-                f"supported range: ({CONSTRAINTS.as_range()}). "
-                "Please update the Python library."
-            )
+        release_data = self.get_asset()
 
         # Set the version and URL
         self._version_obj, self._url = release_data
@@ -232,6 +274,7 @@ class CamoufoxFetcher:
         Download a file from the given URL and return it as BytesIO.
 
         Args:
+            file (DownloadBuffer): The buffer to download to
             url (str): The URL to download the file from
 
         Returns:

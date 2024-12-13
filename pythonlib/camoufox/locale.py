@@ -5,11 +5,12 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union, cast
 import numpy as np
 from language_tags import tags
 
-from camoufox.pkgman import LOCAL_DATA, rprint, webdl
+from camoufox.pkgman import LOCAL_DATA, GitHubDownloader, rprint, webdl
 from camoufox.warnings import LeakWarning
 
 from .exceptions import (
     InvalidLocale,
+    MissingRelease,
     NotInstalledGeoIPExtra,
     UnknownIPLocation,
     UnknownLanguage,
@@ -189,7 +190,22 @@ Helpers to fetch geolocation, timezone, and locale data given an IP.
 """
 
 MMDB_FILE = LOCAL_DATA / 'GeoLite2-City.mmdb'
-MMDB_URL = 'https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/GeoLite2-City.mmdb'
+MMDB_REPO = "P3TERX/GeoLite.mmdb"
+
+
+class MaxMindDownloader(GitHubDownloader):
+    """
+    MaxMind database downloader from a GitHub repository.
+    """
+
+    def check_asset(self, asset: Dict) -> Optional[str]:
+        # Check for the first -City.mmdb file
+        if asset['name'].endswith('-City.mmdb'):
+            return asset['browser_download_url']
+        return None
+
+    def missing_asset_error(self) -> None:
+        raise MissingRelease('Failed to find GeoIP database release asset')
 
 
 def geoip_allowed() -> None:
@@ -208,9 +224,11 @@ def download_mmdb() -> None:
     """
     geoip_allowed()
 
+    asset_url = MaxMindDownloader(MMDB_REPO).get_asset()
+
     with open(MMDB_FILE, 'wb') as f:
         webdl(
-            MMDB_URL,
+            asset_url,
             desc='Downloading GeoIP database',
             buffer=f,
         )
