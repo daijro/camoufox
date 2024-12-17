@@ -2,6 +2,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, NoReturn, Tuple, Union
 
+import base64
 import orjson
 from playwright._impl._driver import compute_driver_executable
 
@@ -47,7 +48,7 @@ def launch_server(**kwargs) -> NoReturn:
     config = launch_options(**kwargs)
     nodejs = get_nodejs()
 
-    data = orjson.dumps(to_camel_case_dict(config)).decode()
+    data = orjson.dumps(to_camel_case_dict(config))
 
     process = subprocess.Popen(  # nosec
         [
@@ -60,7 +61,7 @@ def launch_server(**kwargs) -> NoReturn:
     )
     # Write data to stdin and close the stream
     if process.stdin:
-        process.stdin.write(data)
+        process.stdin.write(base64.b64encode(data).decode())
         process.stdin.close()
 
     # Wait forever
