@@ -13,7 +13,7 @@ function collectData() {
         });
 
         process.stdin.on('end', () => {
-            resolve(JSON.parse(data));
+            resolve(JSON.parse(Buffer.from(data, "base64").toString()));
         });
     });
 }
