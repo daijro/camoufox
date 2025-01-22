@@ -69,7 +69,7 @@ class VirtualDisplay:
         """
         Spawn a detatched process
         """
-        if self.debug or True:
+        if self.debug:
             print('Starting virtual display:', ' '.join(self.xvfb_cmd))
         self.proc = subprocess.Popen(  # nosec
             self.xvfb_cmd,
