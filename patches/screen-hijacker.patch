@@ -47,7 +47,7 @@ index 7a4fa8d48f..1f560937a3 100644
 +  if (auto height = MaskConfig::GetInt32("screen.height"),
 +      width = MaskConfig::GetInt32("screen.width");
 +      height && width) {
-+    *outRect = LayoutDeviceIntRect::ToAppUnits(
++    nsRect outRect = LayoutDeviceIntRect::ToAppUnits(
 +        LayoutDeviceIntRect(0, 0, width.value(), height.value()),
 +        AppUnitsPerDevPixel());
 +    return outRect.Size();
