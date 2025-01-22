@@ -1,7 +1,7 @@
 # Remaps custom stylesheet path to the GRE directory
 
 diff --git a/layout/style/GlobalStyleSheetCache.cpp b/layout/style/GlobalStyleSheetCache.cpp
-index 6a8507a..e3c0be4 100644
+index 13d65c2d3e..22cad0f7ec 100644
 --- a/layout/style/GlobalStyleSheetCache.cpp
 +++ b/layout/style/GlobalStyleSheetCache.cpp
 @@ -5,6 +5,7 @@
@@ -12,7 +12,7 @@ index 6a8507a..e3c0be4 100644
  
  #include "nsAppDirectoryServiceDefs.h"
  #include "nsExceptionHandler.h"
-@@ -450,17 +451,17 @@ void GlobalStyleSheetCache::InitFromProfile() {
+@@ -459,9 +460,9 @@ void GlobalStyleSheetCache::InitFromProfile() {
    nsCOMPtr<nsIFile> contentFile;
    nsCOMPtr<nsIFile> chromeFile;
  
@@ -24,8 +24,9 @@ index 6a8507a..e3c0be4 100644
      return;
    }
  
-   contentFile->Clone(getter_AddRefs(chromeFile));
-   if (!chromeFile) return;
+@@ -470,8 +471,8 @@ void GlobalStyleSheetCache::InitFromProfile() {
+     return;
+   }
  
 -  contentFile->Append(u"userContent.css"_ns);
 -  chromeFile->Append(u"userChrome.css"_ns);

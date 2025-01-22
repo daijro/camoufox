@@ -1,5 +1,5 @@
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index f9ae3bb56c..3af597c40f 100644
+index 0f4b4b081c..0ec313f725 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
 @@ -65,6 +65,12 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
@@ -28,7 +28,7 @@ index a2b3e60fe5..faa0c113bc 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/gfx/src/nsDeviceContext.cpp b/gfx/src/nsDeviceContext.cpp
-index 2bb53010a8..0ff718c0f1 100644
+index 7a4fa8d48f..1f560937a3 100644
 --- a/gfx/src/nsDeviceContext.cpp
 +++ b/gfx/src/nsDeviceContext.cpp
 @@ -5,6 +5,7 @@
@@ -38,11 +38,11 @@ index 2bb53010a8..0ff718c0f1 100644
 +#include "MaskConfig.hpp"
  #include <algorithm>  // for max
  #include "gfxContext.h"
- #include "gfxImageSurface.h"  // for gfxImageSurface
-@@ -388,6 +389,17 @@ void nsDeviceContext::ComputeClientRectUsingScreen(nsRect* outRect) {
+ #include "gfxPoint.h"    // for gfxSize
+@@ -177,6 +178,15 @@ bool nsDeviceContext::GetScreenIsHDR() {
  }
  
- void nsDeviceContext::ComputeFullAreaUsingScreen(nsRect* outRect) {
+ nsSize nsDeviceContext::GetDeviceSurfaceDimensions() {
 +  // Check for height and width overrides from MaskConfig
 +  if (auto height = MaskConfig::GetInt32("screen.height"),
 +      width = MaskConfig::GetInt32("screen.width");
@@ -50,10 +50,8 @@ index 2bb53010a8..0ff718c0f1 100644
 +    *outRect = LayoutDeviceIntRect::ToAppUnits(
 +        LayoutDeviceIntRect(0, 0, width.value(), height.value()),
 +        AppUnitsPerDevPixel());
-+    mWidth = outRect->Width();
-+    mHeight = outRect->Height();
-+    return;
++    return outRect.Size();
 +  }
-   // if we have more than one screen, we always need to recompute the clientRect
-   // because the window may have moved onto a different screen. In the single
-   // monitor case, we only need to do the computation if we haven't done it
+   return GetRect().Size();
+ }
+ 
