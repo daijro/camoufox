@@ -62,10 +62,12 @@ class Proxy:
         }
 
 
+@lru_cache(128, typed=True)
 def valid_ipv4(ip: str) -> bool:
     return bool(re.match(r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$', ip))
 
 
+@lru_cache(128, typed=True)
 def valid_ipv6(ip: str) -> bool:
     return bool(re.match(r'^(([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4})$', ip))
 
