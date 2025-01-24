@@ -61,7 +61,7 @@ class Locale:
         return data
 
 
-@dataclass
+@dataclass(frozen=True)
 class Geolocation:
     """
     Stores geolocation information.
