@@ -103,11 +103,6 @@
   display: none !important;
 }
 
-/* Custom font */
-* {
-  font-family: monospace !important;
-}
-
 /* Context menu */
 menupopup,
 panel {
