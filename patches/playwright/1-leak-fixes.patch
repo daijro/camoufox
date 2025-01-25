@@ -1,0 +1,75 @@
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index e0cbb3f1f8..d7868e7ae0 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -2288,28 +2288,7 @@ dom::PrivateAttribution* Navigator::PrivateAttribution() {
+ 
+ /* static */
+ bool Navigator::Webdriver() {
+-#ifdef ENABLE_WEBDRIVER
+-  nsCOMPtr<nsIMarionette> marionette = do_GetService(NS_MARIONETTE_CONTRACTID);
+-  if (marionette) {
+-    bool marionetteRunning = false;
+-    marionette->GetRunning(&marionetteRunning);
+-    if (marionetteRunning) {
+-      return true;
+-    }
+-  }
+-
+-  nsCOMPtr<nsIRemoteAgent> agent = do_GetService(NS_REMOTEAGENT_CONTRACTID);
+-  if (agent) {
+-    bool remoteAgentRunning = false;
+-    agent->GetRunning(&remoteAgentRunning);
+-    if (remoteAgentRunning) {
+-      return true;
+-    }
+-  }
+-#endif
+-
+-  // Playwright is automating the browser, so we should pretend to be a webdriver
+-  return true;
++  return false;
+ }
+ 
+ AutoplayPolicy Navigator::GetAutoplayPolicy(AutoplayPolicyMediaType aType) {
+diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
+index 77d0de76f3..8d427db0a9 100644
+--- a/layout/base/nsLayoutUtils.cpp
++++ b/layout/base/nsLayoutUtils.cpp
+@@ -709,9 +709,6 @@ bool nsLayoutUtils::AllowZoomingForDocument(
+     return false;
+   }
+ 
+-  /* Playwright: disable zooming as we don't support meta viewport tag */
+-  if (1 == 1) return false;
+-
+   // True if we allow zooming for all documents on this platform, or if we are
+   // in RDM.
+   BrowsingContext* bc = aDocument->GetBrowsingContext();
+@@ -9713,9 +9710,6 @@ void nsLayoutUtils::ComputeSystemFont(nsFont* aSystemFont,
+ 
+ /* static */
+ bool nsLayoutUtils::ShouldHandleMetaViewport(const Document* aDocument) {
+-  /* Playwright: disable meta viewport handling since we don't require one */
+-  if (1 == 1) return false;
+-
+   BrowsingContext* bc = aDocument->GetBrowsingContext();
+   return StaticPrefs::dom_meta_viewport_enabled() || (bc && bc->InRDMPane());
+ }
+diff --git a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
+index 0eeb5924c4..8b975a8b11 100644
+--- a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
++++ b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
+@@ -108,12 +108,6 @@ EnterprisePoliciesManager.prototype = {
+       Services.prefs.clearUserPref(PREF_POLICIES_APPLIED);
+     }
+ 
+-    // Playwright: Disable enterprise policies
+-    if (true) {
+-      this.status = Ci.nsIEnterprisePolicies.INACTIVE;
+-      return;
+-    }
+-
+     let provider = this._chooseProvider();
+ 
+     if (provider.failed) {

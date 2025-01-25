@@ -9,7 +9,7 @@ import re
 import sys
 
 import easygui
-from _mixin import find_src_dir, list_patches, patch, run, temp_cd
+from _mixin import find_src_dir, is_bootstrap_patch, list_patches, patch, run, temp_cd
 
 
 def into_camoufox_dir():
@@ -189,7 +189,7 @@ def handle_choice(choice):
             for patch_file in list_patches():
                 print(f'FILE: {patch_file}')
                 # Ignore bootstrap files, these will always break.
-                if os.path.basename(patch_file).startswith('0-'):
+                if is_bootstrap_patch(patch_file):
                     apply_dict[patch_file] = 'IGNORED'
                     continue
                 # Check if the patch can be applied or reversed
@@ -246,7 +246,7 @@ def handle_choice(choice):
                         get_all = easygui.ynbox(
                             f"Reject was found: {patch_file}.\nGet the rest of them?",
                             "Get All Rejects",
-                            choices=["Yes", "No"]
+                            choices=["Yes", "No"],
                         )
                     # If the user closed the dialog, return
                     if get_all is None:
@@ -279,7 +279,7 @@ def handle_choice(choice):
             patch_files = list_patches()
             ui_choices = [
                 (
-                    f'{n+1}. {"BOOTSTRAP:" if os.path.basename(file_name).startswith("0-") else ""} '
+                    f'{n+1}. {"BOOTSTRAP:" if is_bootstrap_patch(file_name) else ""} '
                     f'{file_name[len("../patches/") :]}'
                 )
                 for n, file_name in enumerate(patch_files)
@@ -297,7 +297,7 @@ def handle_choice(choice):
             open_patch_workspace(
                 selected_patch,
                 # Patches starting with 0- rely on being ran first.
-                stop_at_patch=os.path.basename(selected_patch).startswith('0-'),
+                stop_at_patch=is_bootstrap_patch(selected_patch),
             )
 
         case "See current workspace":

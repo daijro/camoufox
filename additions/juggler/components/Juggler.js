@@ -106,10 +106,8 @@ class Juggler {
         };
 
         // Force create hidden window here, otherwise its creation later closes the web socket!
-        // In FF132, the hidden window has been removed on Linux and Windows. Only enable it on Mac.
-        // https://bugzilla.mozilla.org/show_bug.cgi?id=71895
-        if (AppConstants.platform === "macosx") {
-          ChromeUtils.camouDebug('Creating hidden window');
+        // Since https://phabricator.services.mozilla.com/D219834, hiddenDOMWindow is only available on MacOS.
+        if (Services.appShell.hasHiddenWindow) {
           Services.appShell.hiddenDOMWindow;
         }
 
