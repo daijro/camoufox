@@ -341,6 +341,7 @@ def launch_options(
     block_images: Optional[bool] = None,
     block_webrtc: Optional[bool] = None,
     block_webgl: Optional[bool] = None,
+    disable_coop: Optional[bool] = None,
     webgl_config: Optional[Tuple[str, str]] = None,
     geoip: Optional[Union[str, bool]] = None,
     humanize: Optional[Union[bool, float]] = None,
@@ -383,6 +384,9 @@ def launch_options(
             Whether to block WebRTC entirely.
         block_webgl (Optional[bool]):
             Whether to block WebGL. To prevent leaks, only use this for special cases.
+        disable_coop (Optional[bool]):
+            Disables the Cross-Origin-Opener-Policy, allowing elements in cross-origin iframes,
+            such as the Turnstile checkbox, to be clicked.
         geoip (Optional[Union[str, bool]]):
             Calculate longitude, latitude, timezone, country, & locale based on the IP address.
             Pass the target IP address to use, or `True` to find the IP address automatically.
@@ -587,11 +591,14 @@ def launch_options(
         firefox_user_prefs['permissions.default.image'] = 2
     if block_webrtc:
         firefox_user_prefs['media.peerconnection.enabled'] = False
+    if disable_coop:
+        LeakWarning.warn('disable_coop', i_know_what_im_doing)
+        firefox_user_prefs['browser.tabs.remote.useCrossOriginOpenerPolicy'] = False
 
     # Allow allow_webgl parameter for backwards compatibility
     if block_webgl or launch_options.pop('allow_webgl', True) is False:
         firefox_user_prefs['webgl.disabled'] = True
-        LeakWarning.warn('block_webgl')
+        LeakWarning.warn('block_webgl', i_know_what_im_doing)
     else:
         # If the user has provided a specific WebGL vendor/renderer pair, use it
         if webgl_config:

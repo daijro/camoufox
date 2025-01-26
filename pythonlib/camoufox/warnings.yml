@@ -43,3 +43,6 @@ block_webgl: >-
 custom_fonts_only: >-
     Disabling OS-specific fonts while spoofing your OS will make your browser fingerprint inconsistent.
     WAFs can detect this mismatch between your claimed OS and available system fonts.
+
+disable_coop: >-
+    Disabling Cross-Origin-Opener-Policy (COOP) handling can potentially be detected by sophisticated WAFs.
