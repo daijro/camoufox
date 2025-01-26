@@ -1,2 +1,2 @@
-version=134.0.1
+version=134.0.2
 release=beta.20
