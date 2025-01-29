@@ -588,6 +588,7 @@ def launch_options(
 
     # Set Firefox user preferences
     if block_images:
+        LeakWarning.warn('block_images', i_know_what_im_doing)
         firefox_user_prefs['permissions.default.image'] = 2
     if block_webrtc:
         firefox_user_prefs['media.peerconnection.enabled'] = False
