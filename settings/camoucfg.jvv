@@ -292,6 +292,7 @@
     "showcursor": "bool",
 
     "allowMainWorld": "bool",
+    "forceScopeAccess": "bool",
     "memorysaver": "bool",
     "addons": "array[str]",
     "debug": "bool"
