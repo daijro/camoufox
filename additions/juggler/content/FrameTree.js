@@ -546,7 +546,7 @@ class Frame {
     });
     // Camoufox: Create a main world for the isolated context
     if (this.allowMW) {
-      const mainWorld = this._runtime.createMW(this.domWindow(), sandbox);
+      const mainWorld = this._runtime.createMW(this.domWindow(), this.domWindow());
       world.mainEquivalent = mainWorld;
     }
     this._worldNameToContext.set(name, world);
