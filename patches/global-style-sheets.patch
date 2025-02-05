@@ -1,18 +1,27 @@
-# Remaps custom stylesheet path to the GRE directory
-
 diff --git a/layout/style/GlobalStyleSheetCache.cpp b/layout/style/GlobalStyleSheetCache.cpp
-index 13d65c2d3e..22cad0f7ec 100644
+index 13d65c2d3e..c51f1da030 100644
 --- a/layout/style/GlobalStyleSheetCache.cpp
 +++ b/layout/style/GlobalStyleSheetCache.cpp
-@@ -5,6 +5,7 @@
+@@ -5,6 +5,8 @@
   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
  
  #include "GlobalStyleSheetCache.h"
 +#include "nsDirectoryServiceDefs.h"
++#include "MaskConfig.hpp"
  
  #include "nsAppDirectoryServiceDefs.h"
  #include "nsExceptionHandler.h"
-@@ -459,9 +460,9 @@ void GlobalStyleSheetCache::InitFromProfile() {
+@@ -446,6 +448,9 @@ void GlobalStyleSheetCache::InitFromProfile() {
+   if (!Preferences::GetBool(PREF_LEGACY_STYLESHEET_CUSTOMIZATION)) {
+     return;
+   }
++  if (MaskConfig::GetBool("disableTheming")) {
++    return;
++  }
+ 
+   nsCOMPtr<nsIXULRuntime> appInfo =
+       do_GetService("@mozilla.org/xre/app-info;1");
+@@ -459,9 +464,9 @@ void GlobalStyleSheetCache::InitFromProfile() {
    nsCOMPtr<nsIFile> contentFile;
    nsCOMPtr<nsIFile> chromeFile;
  
@@ -24,7 +33,7 @@ index 13d65c2d3e..22cad0f7ec 100644
      return;
    }
  
-@@ -470,8 +471,8 @@ void GlobalStyleSheetCache::InitFromProfile() {
+@@ -470,8 +475,8 @@ void GlobalStyleSheetCache::InitFromProfile() {
      return;
    }
  
