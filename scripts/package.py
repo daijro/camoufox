@@ -118,7 +118,7 @@ def main():
     args = get_args()
 
     # Determine file extension based on OS
-    file_extensions = {'linux': 'tar.bz2', 'macos': 'dmg', 'windows': 'zip'}
+    file_extensions = {'linux': 'tar.xz', 'macos': 'dmg', 'windows': 'zip'}
     file_ext = file_extensions[args.os]
 
     # Build the package
