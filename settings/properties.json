@@ -95,6 +95,7 @@
   { "property": "mediaDevices:enabled", "type": "bool" },
   { "property": "allowMainWorld", "type": "bool" },
   { "property": "forceScopeAccess", "type": "bool" },
+  { "property": "enableRemoteSubframes", "type": "bool" },
   { "property": "memorysaver", "type": "bool" },
   { "property": "addons", "type": "array" },
   { "property": "debug", "type": "bool" }

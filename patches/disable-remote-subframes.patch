@@ -1,0 +1,35 @@
+diff --git a/docshell/base/BrowsingContext.cpp b/docshell/base/BrowsingContext.cpp
+index 2471976f64..d14edc9195 100644
+--- a/docshell/base/BrowsingContext.cpp
++++ b/docshell/base/BrowsingContext.cpp
+@@ -83,6 +83,7 @@
+ #include "nsScriptError.h"
+ #include "nsThreadUtils.h"
+ #include "xpcprivate.h"
++#include "MaskConfig.hpp"
+ 
+ #include "AutoplayPolicy.h"
+ #include "GVAutoplayRequestStatusIPC.h"
+@@ -1772,7 +1773,10 @@ NS_IMETHODIMP BrowsingContext::SetRemoteSubframes(bool aUseRemoteSubframes) {
+     return NS_ERROR_UNEXPECTED;
+   }
+ 
+-  mUseRemoteSubframes = aUseRemoteSubframes;
++  // Camoufox: Disable remote subframes by default
++  if (MaskConfig::GetBool("enableRemoteSubframes")) {
++    mUseRemoteSubframes = aUseRemoteSubframes;
++  }
+   return NS_OK;
+ }
+ 
+diff --git a/docshell/base/moz.build b/docshell/base/moz.build
+index 3520e9d75a..0f73f2dd82 100644
+--- a/docshell/base/moz.build
++++ b/docshell/base/moz.build
+@@ -124,3 +124,5 @@ LOCAL_INCLUDES += [
+ EXTRA_JS_MODULES += ["URIFixup.sys.mjs"]
+ 
+ include("/tools/fuzzing/libfuzzer-config.mozbuild")
++
++LOCAL_INCLUDES += ['/camoucfg']
+\ No newline at end of file
