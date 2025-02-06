@@ -19,9 +19,9 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
         run(join(['7z', 'x', package_file, f'-o{temp_dir}']), exit_on_fail=False)
         # Delete package_file
         os.remove(package_file)
-        if package_file.endswith('.tar.bz2'):
+        if package_file.endswith('.tar.xz'):
             # Rerun on the tar file
-            package_tar = package_file[:-4]  # Remove .bz2
+            package_tar = package_file[:-3]  # Remove ".xz"
             return add_includes_to_package(
                 package_file=os.path.join(temp_dir, package_tar),
                 includes=includes,
