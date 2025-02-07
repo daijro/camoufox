@@ -294,6 +294,7 @@
     "allowMainWorld": "bool",
     "forceScopeAccess": "bool",
     "enableRemoteSubframes": "bool",
+    "disableTheming": "bool",
     "memorysaver": "bool",
     "addons": "array[str]",
     "debug": "bool"
