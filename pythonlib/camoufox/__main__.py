@@ -13,7 +13,13 @@ import click
 
 from .addons import DefaultAddons, maybe_download_addons
 from .locale import ALLOW_GEOIP, download_mmdb, remove_mmdb
-from .pkgman import INSTALL_DIR, CamoufoxFetcher, installed_verstr, rprint
+from .pkgman import (
+    INSTALL_DIR,
+    CamoufoxFetcher,
+    installed_verstr,
+    list_available_versions,
+    rprint,
+)
 
 try:
     from browserforge.download import download as update_browserforge
@@ -173,6 +179,20 @@ def version() -> None:
         rprint(f"(Latest supported: v{updater.verstr})", fg="red")
     else:
         rprint("(Up to date!)", fg="yellow")
+
+
+@cli.command(name='list')
+def list_versions() -> None:
+    """
+    List all available release versions for Camoufox.
+    """
+    versions = list_available_versions()
+    if versions:
+        rprint("Available versions:", fg="green")
+        for ver in versions:
+            click.echo(ver)
+    else:
+        rprint("No available releases found.", fg="red")
 
 
 if __name__ == '__main__':

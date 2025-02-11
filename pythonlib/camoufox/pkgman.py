@@ -641,3 +641,24 @@ def load_yaml(file: str) -> Dict[str, Any]:
     """
     with open(LOCAL_DATA / file, 'r') as f:
         return load(f, Loader=CLoader)
+
+
+def list_available_versions() -> List[str]:
+    """
+    List the available versions of Camoufox on GitHub.
+    """
+
+    fetcher = CamoufoxFetcher()
+
+    releases: list[dict] = fetcher.fetch_all_releases()
+    versions: List[Version] = []
+    for release in releases:
+        for asset in release.get('assets', []):
+            try:
+                version = fetcher.convert_asset_to_version(asset)
+                if version.is_supported():
+                    versions.append(version)
+            except ValueError:
+                continue
+
+    return [version.full_string for version in sorted(versions, reverse=True)]
