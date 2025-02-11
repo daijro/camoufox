@@ -280,22 +280,6 @@ class CamoufoxFetcher(GitHubDownloader):
         # Asset was found. Return data
         return version, asset['browser_download_url']
 
-    def check_asset(
-        self,
-        asset: Dict,
-        predicate: Optional[Callable[[Dict], Optional[Tuple[Version, str]]]] = None
-    ) -> Optional[Tuple[Version, str]]:
-        """
-        Finds the latest or specified release from a GitHub releases API response that
-        supports the Camoufox version constraints, the OS, and architecture.
-
-        Returns:
-            Optional[Tuple[Version, str]]: The version and URL of a release
-        """
-
-        if checked_result := super().check_asset(asset, predicate):
-            return checked_result
-
     def missing_asset_error(self) -> None:
         """
         Raise a MissingRelease exception if no release is found.
@@ -378,8 +362,7 @@ class CamoufoxFetcher(GitHubDownloader):
             return None
 
         # get_asset will raise a MissingRelease exception if no release is found
-        specific_version, download_url = self.get_asset(_find_specific_version_predicate)
-        self._version_obj, self._url = specific_version, download_url
+        self._version_obj, self._url = self.get_asset(_find_specific_version_predicate)
 
 
     @staticmethod
