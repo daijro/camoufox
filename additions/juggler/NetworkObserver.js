@@ -870,7 +870,7 @@ function setPostData(httpChannel, postData, headers) {
     return;
   const synthesized = Cc["@mozilla.org/io/string-input-stream;1"].createInstance(Ci.nsIStringInputStream);
   const body = atob(postData);
-  synthesized.setData(body, body.length);
+  synthesized.setByteStringData(body, body.length);
 
   const overriddenHeader = (lowerCaseName) => {
     if (headers) {
@@ -902,7 +902,7 @@ function convertString(s, source, dest) {
   const is = Cc["@mozilla.org/io/string-input-stream;1"].createInstance(
     Ci.nsIStringInputStream
   );
-  is.setData(s, s.length);
+  is.setByteStringData(s, s.length);
   const listener = Cc["@mozilla.org/network/stream-loader;1"].createInstance(
     Ci.nsIStreamLoader
   );
