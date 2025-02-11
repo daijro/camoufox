@@ -24,6 +24,7 @@ class Proxy:
     server: str
     username: Optional[str] = None
     password: Optional[str] = None
+    bypass: Optional[str] = None
 
     @staticmethod
     def parse_server(server: str) -> Tuple[str, str, Optional[str]]:
