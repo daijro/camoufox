@@ -208,7 +208,7 @@ def handle_choice(choice):
                 '\n'.join(
                     sorted(
                         (
-                            f'{v}\t{k[len("../patches/"):-len('.patch')]}'
+                            f'{v}\t{k[len("../patches/"):-len(".patch")]}'
                             for k, v in apply_dict.items()
                         ),
                         reverse=True,
