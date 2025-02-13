@@ -3,12 +3,11 @@
 """
 GUI for managing Camoufox patches.
 """
-
 import os
 import re
 import sys
-
 import easygui
+
 from _mixin import find_src_dir, is_bootstrap_patch, list_patches, patch, run, temp_cd
 
 
@@ -30,17 +29,39 @@ def reset_camoufox():
 def run_patches(reverse=False):
     """Apply patches"""
     patch_files = list_patches()
-    if reverse:
-        title = "Unpatch files"
-    else:
-        title = "Patch files"
-    selected_patches = easygui.multchoicebox(title, "Patches", patch_files)
-    if not selected_patches:
-        return
 
-    for patch_file in selected_patches:
+    # Create a display list with status labels and a reverse lookup mapping
+    display_choices = []
+    mapping = {}
+    for patch_file in patch_files:
+        # If the patch is a bootstrap patch, mark it with the appropriate label
+        if is_bootstrap_patch(patch_file):
+            status = "BOOTSTRAP"
+        else:
+            can_apply, can_reverse, broken = check_patch(patch_file)
+            if broken:
+                status = "BROKEN"
+            elif can_reverse:
+                status = "APPLIED"
+            elif can_apply:
+                status = "NOT APPLIED"
+            else:
+                status = "UNKNOWN"
+        # Format the display string (remove the '../patches/' prefix)
+        display_name = f"[{status}] {patch_file[len('../patches/'):].strip()}"
+        display_choices.append(display_name)
+        mapping[display_name] = patch_file
+
+    title = "Unpatch files" if reverse else "Patch files"
+    selected_display = easygui.multchoicebox(title, "Patches", display_choices, preselect=[])
+    if not selected_display:
+        return False
+
+    # Convert the selected items back to filenames
+    for display_name in selected_display:
+        patch_file = mapping[display_name]
         patch(patch_file, reverse=reverse)
-
+    return True
 
 def open_patch_workspace(selected_patch, stop_at_patch=False):
     """
@@ -223,12 +244,14 @@ def handle_choice(choice):
             easygui.msgbox("Checkpoint set.", "Checkpoint Set")
 
         case "Select patches":
-            run_patches(reverse=False)
-            easygui.msgbox("Patching completed.", "Patching Complete")
-
+            result = run_patches(reverse=False)
+            if result:
+                easygui.msgbox("Patching completed.", "Patching Complete")
+        
         case "Reverse patches":
-            run_patches(reverse=True)
-            easygui.msgbox("Unpatching completed.", "Unpatching Complete")
+            result = run_patches(reverse=True)
+            if result:
+                easygui.msgbox("Unpatching completed.", "Unpatching Complete")
 
         case "Find broken patches (resets workspace)":
             reset_camoufox()
@@ -277,13 +300,24 @@ def handle_choice(choice):
 
         case "Edit a patch":
             patch_files = list_patches()
-            ui_choices = [
-                (
-                    f'{n+1}. {"BOOTSTRAP:" if is_bootstrap_patch(file_name) else ""} '
-                    f'{file_name[len("../patches/") :]}'
-                )
-                for n, file_name in enumerate(patch_files)
-            ]
+            ui_choices = []
+            for n, file_name in enumerate(patch_files):
+                # If the patch is bootstrap, label it
+                if is_bootstrap_patch(file_name):
+                    status = "BOOTSTRAP"
+                else:
+                    can_apply, can_reverse, broken = check_patch(file_name)
+                    if broken:
+                        status = "BROKEN"
+                    elif can_reverse:
+                        status = "APPLIED"
+                    elif can_apply:
+                        status = "NOT APPLIED"
+                    else:
+                        status = "UNKNOWN"
+                display_name = f"{n+1}. [{status}] {file_name[len('../patches/'):]}".strip()
+                ui_choices.append(display_name)
+            
             selected_patch = easygui.choicebox(
                 "Select patch to open in workspace",
                 "Patches",
