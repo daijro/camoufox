@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET  # nosec
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union, cast
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union, cast
 
 import numpy as np
 from language_tags import tags
@@ -198,7 +198,11 @@ class MaxMindDownloader(GitHubDownloader):
     MaxMind database downloader from a GitHub repository.
     """
 
-    def check_asset(self, asset: Dict) -> Optional[str]:
+    def check_asset(
+        self,
+        asset: Dict,
+        predicate: Optional[Callable[[Dict], Any]] = None
+    ) -> Optional[str]:
         # Check for the first -City.mmdb file
         if asset['name'].endswith('-City.mmdb'):
             return asset['browser_download_url']

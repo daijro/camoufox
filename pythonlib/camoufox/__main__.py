@@ -13,7 +13,13 @@ import click
 
 from .addons import DefaultAddons, maybe_download_addons
 from .locale import ALLOW_GEOIP, download_mmdb, remove_mmdb
-from .pkgman import INSTALL_DIR, CamoufoxFetcher, installed_verstr, rprint
+from .pkgman import (
+    INSTALL_DIR,
+    CamoufoxFetcher,
+    installed_verstr,
+    list_available_versions,
+    rprint,
+)
 
 try:
     from browserforge.download import download as update_browserforge
@@ -27,11 +33,11 @@ class CamoufoxUpdate(CamoufoxFetcher):
     Checks & updates Camoufox
     """
 
-    def __init__(self) -> None:
+    def __init__(self, specified_version: Optional[str] = None) -> None:
         """
         Initializes the CamoufoxUpdate class
         """
-        super().__init__()
+        super().__init__(specified_version=specified_version)
         self.current_verstr: Optional[str]
         try:
             self.current_verstr = installed_verstr()
@@ -53,7 +59,10 @@ class CamoufoxUpdate(CamoufoxFetcher):
         """
         # Check if the version is the same as the latest available version
         if not self.is_updated_needed():
-            rprint("Camoufox binaries up to date!", fg="green")
+            if not self.specified_version:
+                rprint("Camoufox binaries up to date!", fg="green")
+            else:
+                rprint("Target Camoufox binaries already installed!", fg="green")
             rprint(f"Current version: v{self.current_verstr}", fg="green")
             return
 
@@ -77,13 +86,18 @@ def cli() -> None:
 
 @cli.command(name='fetch')
 @click.option(
-    '--browserforge', is_flag=True, help='Update browserforge\'s header and fingerprint definitions'
+    '--browserforge', is_flag=True,
+    help='Update browserforge\'s header and fingerprint definitions'
 )
-def fetch(browserforge=False) -> None:
+@click.option(
+    '--version', type=str, default=None,
+    help='Download a specific release version instead of the latest'
+)
+def fetch(browserforge: bool, version: Optional[str]) -> None:
     """
-    Fetch the latest version of Camoufox and optionally update Browserforge's database
+    Fetch the latest or specified version of Camoufox.
     """
-    CamoufoxUpdate().update()
+    CamoufoxUpdate(specified_version=version).update()
     # Fetch the GeoIP database
     if ALLOW_GEOIP:
         download_mmdb()
@@ -165,6 +179,20 @@ def version() -> None:
         rprint(f"(Latest supported: v{updater.verstr})", fg="red")
     else:
         rprint("(Up to date!)", fg="yellow")
+
+
+@cli.command(name='list')
+def list_versions() -> None:
+    """
+    List all available release versions for Camoufox.
+    """
+    versions = list_available_versions()
+    if versions:
+        rprint("Available versions:", fg="green")
+        for ver in versions:
+            click.echo(ver)
+    else:
+        rprint("No available releases found.", fg="red")
 
 
 if __name__ == '__main__':
