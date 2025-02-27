@@ -1,6 +1,7 @@
 """
 Camoufox version constants.
 """
+import os
 
 
 class CONSTRAINTS:
@@ -8,8 +9,8 @@ class CONSTRAINTS:
     The minimum and maximum supported versions of the Camoufox browser.
     """
 
-    MIN_VERSION = 'beta.19'
-    MAX_VERSION = '1'
+    MIN_VERSION = os.getenv("CAMOUFOX_MIN_VERSION", 'beta.19')
+    MAX_VERSION = os.getenv("CAMOUFOX_MAX_VERSION", '1')
 
     @staticmethod
     def as_range() -> str:
