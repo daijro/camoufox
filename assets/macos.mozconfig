@@ -1,6 +1,10 @@
 ac_add_options --disable-update-agent
 # ac_add_options --disable-alsa
 
+# MacOS-specific memory-saving options
+ac_add_options --disable-install-strip  # Avoid extra memory usage during packaging
+ac_add_options --disable-unified-build  # Build files individually to reduce peak memory
+
 # Packaging related
 # #export DSYMUTIL="$MOZBUILD/clang/bin/dsymutil"
 # export DMG_TOOL="$MOZBUILD/dmg/dmg"
