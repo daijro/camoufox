@@ -49,9 +49,8 @@ inline const nlohmann::json& GetJson() {
 
   std::call_once(initFlag, []() {
     std::string jsonString;
-
-    // First try the chunked environment variables
     int index = 1;
+
     while (true) {
       std::string envName = "CAMOU_CONFIG_" + std::to_string(index);
       auto partialConfig = get_env_utf8(envName);
@@ -61,36 +60,27 @@ inline const nlohmann::json& GetJson() {
       index++;
     }
 
-    // If no chunked variables found, try the original CAMOU_CONFIG
     if (jsonString.empty()) {
+      // Check for the original CAMOU_CONFIG as fallback
       auto originalConfig = get_env_utf8("CAMOU_CONFIG");
-      if (originalConfig) {
-        jsonString = *originalConfig;
-      }
+      if (originalConfig) jsonString = *originalConfig;
     }
 
-    // If still empty, return an empty JSON object
     if (jsonString.empty()) {
       jsonConfig = nlohmann::json{};
       return;
     }
 
-    // Validate and parse the JSON
-    try {
-      if (!nlohmann::json::accept(jsonString)) {
-        printf_stderr("ERROR: Invalid JSON passed to CAMOU_CONFIG!\n");
-        jsonConfig = nlohmann::json{};
-        return;
-      }
-
-      jsonConfig = nlohmann::json::parse(jsonString);
-    } catch (const nlohmann::json::exception& e) {
-      printf_stderr("ERROR: JSON parsing failed: %s\n", e.what());
+    // Validate
+    if (!nlohmann::json::accept(jsonString)) {
+      printf_stderr("ERROR: Invalid JSON passed to CAMOU_CONFIG!\n");
       jsonConfig = nlohmann::json{};
+      return;
     }
+
+    jsonConfig = nlohmann::json::parse(jsonString);
   });
 
-  // Return the cached JSON object
   return jsonConfig;
 }
 
