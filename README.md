@@ -9,9 +9,8 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 </p>
 
 <p align="center">
-  <a href="https://ko-fi.com/Z8Z2EFH5A">
-    <img src="https://ko-fi.com/img/githubbutton_sm.svg">
-  </a>
+  <a href="https://trendshift.io/repositories/12224" target="_blank">
+  <img src="https://trendshift.io/api/badge/repositories/12224" alt="daijro%2Fcamoufox | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </p>
 
 ---
