@@ -22,6 +22,7 @@ import os
 import sys
 from dataclasses import dataclass
 from typing import List
+import shutil
 
 # Constants
 AVAILABLE_TARGETS = ["linux", "windows", "macos"]
@@ -86,7 +87,7 @@ def run_build(target, arch):
     # Move assets to dist
     print('Assets:', ', '.join(builder.assets))
     for asset in builder.assets:
-        os.rename(asset, f'dist/{asset}')
+        shutil.move(asset, f'dist/{asset}')
 
 
 def main():

@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     # Python
     python3 python3-dev python3-pip \
     # Camoufox build system tools
-    git p7zip-full golang-go aria2 curl \
+    git p7zip-full golang-go aria2 curl rsync \
     # CA certificates
     ca-certificates \
     && update-ca-certificates
@@ -23,7 +23,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Fetch Firefox & apply initial patches
 RUN make setup-minimal && \
     make mozbootstrap && \
-    mkdir /app/dist
+    mkdir -p /app/dist
 
 # Mount .mozbuild directory and dist folder
 VOLUME /root/.mozbuild
