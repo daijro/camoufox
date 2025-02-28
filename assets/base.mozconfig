@@ -1,9 +1,14 @@
 ac_add_options --enable-application=browser
- 
+
+# Memory-saving build configuration
+mk_add_options MOZ_MAKE_FLAGS="-j4"  # Reduce parallel jobs
+ac_add_options --disable-debug-symbols  # Reduce memory usage during linking
+ac_add_options --disable-debug
+ac_add_options --enable-optimize="-O2"  # Less aggressive optimization than -O3
+
 ac_add_options --allow-addon-sideload
 ac_add_options --disable-crashreporter
 ac_add_options --disable-backgroundtasks
-ac_add_options --disable-debug
 ac_add_options --disable-default-browser-agent
 ac_add_options --disable-tests
 ac_add_options --disable-updater
