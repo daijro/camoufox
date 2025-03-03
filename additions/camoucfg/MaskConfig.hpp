@@ -44,7 +44,10 @@ inline std::optional<std::string> get_env_utf8(const std::string& name) {
 }
 
 inline const nlohmann::json& GetJson() {
-  static const nlohmann::json jsonConfig = []() {
+  static std::once_flag initFlag;
+  static nlohmann::json jsonConfig;
+
+  std::call_once(initFlag, []() {
     std::string jsonString;
     int index = 1;
 
@@ -63,17 +66,21 @@ inline const nlohmann::json& GetJson() {
       if (originalConfig) jsonString = *originalConfig;
     }
 
-    if (jsonString.empty()) return nlohmann::json{};
+    if (jsonString.empty()) {
+      jsonConfig = nlohmann::json{};
+      return;
+    }
 
     // Validate
     if (!nlohmann::json::accept(jsonString)) {
       printf_stderr("ERROR: Invalid JSON passed to CAMOU_CONFIG!\n");
-      return nlohmann::json{};
+      jsonConfig = nlohmann::json{};
+      return;
     }
 
-    nlohmann::json result = nlohmann::json::parse(jsonString);
-    return result;
-  }();
+    jsonConfig = nlohmann::json::parse(jsonString);
+  });
+
   return jsonConfig;
 }
 
