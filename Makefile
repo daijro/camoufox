@@ -128,7 +128,7 @@ clean:
 distclean:
 	rm -rf $(cf_source_dir) $(ff_source_tarball)
 
-build:
+build: unbusy
 	@if [ ! -f $(cf_source_dir)/_READY ]; then \
 		make dir; \
 	fi
@@ -240,6 +240,14 @@ tests:
 	bash run-tests.sh \
 		--executable-path ../$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
 		$(if $(filter true,$(headful)),--headful,)
+
+unbusy:
+	rm -rf $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
+		$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox \
+		$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/launch
+
+path:
+	@realpath $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin
 
 update-ubo-assets:
 	bash ./scripts/update-ubo-assets.sh
