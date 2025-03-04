@@ -4,7 +4,6 @@ Written by daijro.
 */
 
 #pragma once
-
 #include "json.hpp"
 #include <memory>
 #include <string>
@@ -12,10 +11,13 @@ Written by daijro.
 #include <optional>
 #include <codecvt>
 #include "mozilla/glue/Debug.h"
-#include <stdlib.h>
-#include <stdio.h>
+#include <cstdlib>
+#include <cstdio>
+#include <mutex>
 #include <variant>
 #include <cstddef>
+#include <vector>
+#include <algorithm>
 
 #ifdef _WIN32
 #  include <windows.h>
@@ -23,6 +25,7 @@ Written by daijro.
 
 namespace MaskConfig {
 
+// Function to get the value of an environment variable as a UTF-8 string.
 inline std::optional<std::string> get_env_utf8(const std::string& name) {
 #ifdef _WIN32
   std::wstring wName(name.begin(), name.end());
@@ -37,7 +40,7 @@ inline std::optional<std::string> get_env_utf8(const std::string& name) {
   std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
   return converter.to_bytes(wValue);
 #else
-  const char* value = getenv(name.c_str());
+  const char* value = std::getenv(name.c_str());
   if (!value) return std::nullopt;
   return std::string(value);
 #endif
@@ -84,25 +87,20 @@ inline const nlohmann::json& GetJson() {
   return jsonConfig;
 }
 
-inline bool HasKey(const std::string& key, nlohmann::json& data) {
-  // printf_stderr("Property: %s\n", key.c_str());
-  // printf_stderr("WARNING: Key not found: %s\n", key.c_str());
+inline bool HasKey(const std::string& key, const nlohmann::json& data) {
   return data.contains(key);
 }
 
 inline std::optional<std::string> GetString(const std::string& key) {
-  // printf_stderr("GetString: %s\n", key.c_str());
-  auto data = GetJson();
+  const auto& data = GetJson();
   if (!HasKey(key, data)) return std::nullopt;
-  return std::make_optional(data[key].get<std::string>());
+  return data[key].get<std::string>();
 }
 
 inline std::vector<std::string> GetStringList(const std::string& key) {
   std::vector<std::string> result;
-
-  auto data = GetJson();
+  const auto& data = GetJson();
   if (!HasKey(key, data)) return {};
-  // Build vector
   for (const auto& item : data[key]) {
     result.push_back(item.get<std::string>());
   }
@@ -120,10 +118,9 @@ inline std::vector<std::string> GetStringListLower(const std::string& key) {
 
 template <typename T>
 inline std::optional<T> GetUintImpl(const std::string& key) {
-  auto data = GetJson();
+  const auto& data = GetJson();
   if (!HasKey(key, data)) return std::nullopt;
-  if (data[key].is_number_unsigned())
-    return std::make_optional(data[key].get<T>());
+  if (data[key].is_number_unsigned()) return data[key].get<T>();
   printf_stderr("ERROR: Value for key '%s' is not an unsigned integer\n",
                 key.c_str());
   return std::nullopt;
@@ -138,29 +135,27 @@ inline std::optional<uint32_t> GetUint32(const std::string& key) {
 }
 
 inline std::optional<int32_t> GetInt32(const std::string& key) {
-  auto data = GetJson();
+  const auto& data = GetJson();
   if (!HasKey(key, data)) return std::nullopt;
-  if (data[key].is_number_integer())
-    return std::make_optional(data[key].get<int32_t>());
+  if (data[key].is_number_integer()) return data[key].get<int32_t>();
   printf_stderr("ERROR: Value for key '%s' is not an integer\n", key.c_str());
   return std::nullopt;
 }
 
 inline std::optional<double> GetDouble(const std::string& key) {
-  auto data = GetJson();
+  const auto& data = GetJson();
   if (!HasKey(key, data)) return std::nullopt;
-  if (data[key].is_number_float())
-    return std::make_optional(data[key].get<double>());
+  if (data[key].is_number_float()) return data[key].get<double>();
   if (data[key].is_number_unsigned() || data[key].is_number_integer())
-    return std::make_optional(static_cast<double>(data[key].get<int64_t>()));
+    return static_cast<double>(data[key].get<int64_t>());
   printf_stderr("ERROR: Value for key '%s' is not a double\n", key.c_str());
   return std::nullopt;
 }
 
 inline std::optional<bool> GetBool(const std::string& key) {
-  auto data = GetJson();
+  const auto& data = GetJson();
   if (!HasKey(key, data)) return std::nullopt;
-  if (data[key].is_boolean()) return std::make_optional(data[key].get<bool>());
+  if (data[key].is_boolean()) return data[key].get<bool>();
   printf_stderr("ERROR: Value for key '%s' is not a boolean\n", key.c_str());
   return std::nullopt;
 }
@@ -172,22 +167,18 @@ inline bool CheckBool(const std::string& key) {
 inline std::optional<std::array<uint32_t, 4>> GetRect(
     const std::string& left, const std::string& top, const std::string& width,
     const std::string& height) {
-  // Make top and left default to 0
   std::array<std::optional<uint32_t>, 4> values = {
       GetUint32(left).value_or(0), GetUint32(top).value_or(0), GetUint32(width),
       GetUint32(height)};
 
-  // If height or width is std::nullopt, return std::nullopt
   if (!values[2].has_value() || !values[3].has_value()) {
     if (values[2].has_value() ^ values[3].has_value())
       printf_stderr(
-          "Both %s and %s must be provided. Using default "
-          "behavior.\n",
+          "Both %s and %s must be provided. Using default behavior.\n",
           height.c_str(), width.c_str());
     return std::nullopt;
   }
 
-  // Convert std::optional<uint32_t> to uint32_t
   std::array<uint32_t, 4> result;
   std::transform(values.begin(), values.end(), result.begin(),
                  [](const auto& value) { return value.value(); });
@@ -198,7 +189,6 @@ inline std::optional<std::array<uint32_t, 4>> GetRect(
 inline std::optional<std::array<int32_t, 4>> GetInt32Rect(
     const std::string& left, const std::string& top, const std::string& width,
     const std::string& height) {
-  // Calls GetRect but casts to int32_t
   if (auto optValue = GetRect(left, top, width, height)) {
     std::array<int32_t, 4> result;
     std::transform(optValue->begin(), optValue->end(), result.begin(),
