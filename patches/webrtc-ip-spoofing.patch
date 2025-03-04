@@ -1,5 +1,5 @@
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-index 5b70a58104..579a620c48 100644
+index 235d5dde8f..d0102a6746 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 @@ -116,6 +116,8 @@
@@ -11,7 +11,7 @@ index 5b70a58104..579a620c48 100644
  
  #ifdef XP_WIN
  // We need to undef the MS macro again in case the windows include file
-@@ -1705,7 +1707,15 @@ PeerConnectionImpl::SetLocalDescription(int32_t aAction, const char* aSDP) {
+@@ -1702,7 +1704,15 @@ PeerConnectionImpl::SetLocalDescription(int32_t aAction, const char* aSDP) {
      }
    };
  
@@ -28,7 +28,7 @@ index 5b70a58104..579a620c48 100644
  
    SyncToJsep();
  
-@@ -3275,12 +3285,22 @@ const std::string& PeerConnectionImpl::GetName() {
+@@ -3224,12 +3234,22 @@ const std::string& PeerConnectionImpl::GetName() {
    return mName;
  }
  
@@ -52,7 +52,7 @@ index 5b70a58104..579a620c48 100644
    if (mForceIceTcp && std::string::npos != candidate.find(" UDP ")) {
      CSFLogWarn(LOGTAG, "Blocking local UDP candidate: %s", candidate.c_str());
      STAMP_TIMECARD(mTimeCard, "UDP Ice Candidate blocked");
-@@ -3343,10 +3363,89 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
+@@ -3292,10 +3312,184 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
      uint16_t level, const std::string& mid, const std::string& candidate,
      const std::string& ufrag) {
    STAMP_TIMECARD(mTimeCard, "Send Ice Candidate to content");
@@ -79,74 +79,199 @@ index 5b70a58104..579a620c48 100644
 +bool PeerConnectionImpl::ShouldSpoofCandidateIP() const {
 +  // Checks if either webrtc:ipv4 or webrtc:ipv6 is set in the config
 +  return MaskConfig::GetString("webrtc:ipv4").has_value() ||
-+         MaskConfig::GetString("webrtc:ipv6").has_value();
++         MaskConfig::GetString("webrtc:ipv6").has_value() ||
++         MaskConfig::GetString("webrtc:localipv4").has_value() ||
++         MaskConfig::GetString("webrtc:localipv6").has_value();
 +}
 +
-+nsresult PeerConnectionImpl::SanitizeSDPForIPLeak(std::string& sdp) {
-+  auto replaceIP = [&sdp](const char* pattern, const char* pref) {
-+    if (auto value = MaskConfig::GetString(pref)) {
-+      mozilla::RustRegex regex(pattern);
-+      if (regex.IsValid()) {
-+        std::string result;
-+        auto iter = regex.IterMatches(sdp);
-+        size_t lastEnd = 0;
-+        while (auto match = iter.Next()) {
-+          result.append(sdp, lastEnd, match->start - lastEnd);
-+          result.append(value.value());
-+          lastEnd = match->end;
-+        }
-+        result.append(sdp, lastEnd);
-+        sdp = std::move(result);
-+      }
++// *****
++// Helper functions to determine if IPs should be masked or not
++// *****
++
++bool isSpecialIP(const std::string& ip) {
++  // Check if an IP should not be masked (special addresses)
++  return (ip == "0.0.0.0" || ip == "127.0.0.1" || 
++          ip == "::" || ip == "::1" || 
++          ip.compare(0, 8, "169.254.") == 0 || 
++          ip.compare(0, 4, "fe80") == 0);
++}
++
++bool isPrivateIP(const std::string& ip) {
++  // Check if an IP is on a private network
++  bool isIPv6 = (ip.find(':') != std::string::npos);
++  
++  if (isIPv6) {
++    // check for private ipv6 (fc00::/7)
++    return (ip.length() >= 4 && 
++            ((ip[0] == 'f' || ip[0] == 'F') && 
++             (ip[1] == 'c' || ip[1] == 'd' || 
++              ip[1] == 'C' || ip[1] == 'D')));
++  } else {
++    // check ipv4 private ranges (RFC1918)
++    return (ip.compare(0, 8, "192.168.") == 0 || 
++            ip.compare(0, 3, "10.") == 0 || 
++            (ip.compare(0, 4, "172.") == 0 && 
++             ip.length() >= 7 && 
++             ip[4] >= '1' && ip[4] <= '3' && 
++             (ip[5] >= '0' && ip[5] <= '9')));
++  }
++}
++
++std::string getMaskForIP(const std::string& ip) {
++  // Get the corresponding mask for an ip address
++  if (isSpecialIP(ip)) {
++    return ip;  // dont mask special IPs
++  }
++  bool isIPv6 = (ip.find(':') != std::string::npos);
++  bool isPrivate = isPrivateIP(ip);
++  auto ipv4Value = MaskConfig::GetString("webrtc:ipv4");
++  auto ipv6Value = MaskConfig::GetString("webrtc:ipv6");
++  auto localIpv4Value = MaskConfig::GetString("webrtc:localipv4");
++  auto localIpv6Value = MaskConfig::GetString("webrtc:localipv6");
++  
++  if (isIPv6) {
++    if (isPrivate && localIpv6Value) {
++      return localIpv6Value.value();
++    } else if (ipv6Value) {
++      return ipv6Value.value();
 +    }
-+  };
++  } else {
++    if (isPrivate && localIpv4Value) {
++      return localIpv4Value.value();
++    } else if (ipv4Value) {
++      return ipv4Value.value();
++    }
++  }
++  // return original ip if no mask is available
++  return ip;
++}
 +
-+  replaceIP("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b", "webrtc:ipv4");
-+  replaceIP("\\b(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}\\b", "webrtc:ipv6");
-+
-+  return NS_OK;
++std::string replaceIPAddresses(
++    const std::string& input, const char* pattern) {
++  // Replace IP addresses in a output line
++  mozilla::RustRegex regex(pattern);
++  if (!regex.IsValid()) {
++    return input;
++  }
++  
++  std::string result;
++  auto iter = regex.IterMatches(input);
++  size_t lastEnd = 0;
++  
++  while (auto match = iter.Next()) {
++    std::string ip = input.substr(match->start, match->end - match->start);
++    std::string mask = getMaskForIP(ip);
++    
++    if (mask != ip) {
++      result.append(input, lastEnd, match->start - lastEnd);
++      result.append(mask);
++    } else {
++      result.append(input, lastEnd, match->end - lastEnd);
++    }
++    
++    lastEnd = match->end;
++  }
++  
++  result.append(input, lastEnd);
++  return result;
 +}
 +
 +std::string PeerConnectionImpl::SpoofCandidateIP(const std::string& candidate) {
-+  CSFLogDebug(LOGTAG, "Original candidate: %s", candidate.c_str());
++  // Helper to spoof IPs in candidate strings
++  if (!ShouldSpoofCandidateIP() || candidate.empty()) {
++    return candidate;
++  }
++  // ipv4
++  const char* ipv4Pattern = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
++  std::string result = replaceIPAddresses(candidate, ipv4Pattern);
++  // ipv6
++  const char* ipv6Pattern = "(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}";
++  result = replaceIPAddresses(result, ipv6Pattern);
++  
++  return result;
++}
 +
-+  std::istringstream iss(candidate);
-+  std::vector<std::string> tokens{std::istream_iterator<std::string>{iss},
-+                                  std::istream_iterator<std::string>{}};
-+
-+  bool spoofed = false;
-+  // Check for IPv4 or .local address
-+  if (tokens.size() >= 8) {
-+    if (tokens[4].find('.') != std::string::npos) {  // IPv4 or .local
-+      if (auto value = MaskConfig::GetString("webrtc:ipv4")) {
-+        tokens[4] = value.value();
-+        spoofed = true;
-+      }
-+    }
-+    // Check for IPv6
-+    else if (tokens[4].find(':') != std::string::npos) {
-+      if (auto value = MaskConfig::GetString("webrtc:ipv6")) {
-+        tokens[4] = value.value();
-+        spoofed = true;
-+      }
-+    }
++nsresult PeerConnectionImpl::SanitizeSDPForIPLeak(std::string& sdp) {
++  // Sanitize sdp
++  auto ipv4Value = MaskConfig::GetString("webrtc:ipv4");
++  auto ipv6Value = MaskConfig::GetString("webrtc:ipv6");
++  auto localIpv4Value = MaskConfig::GetString("webrtc:localipv4");
++  auto localIpv6Value = MaskConfig::GetString("webrtc:localipv6");
++  
++  if (!ipv4Value && !ipv6Value && !localIpv4Value && !localIpv6Value) {
++    return NS_OK;
 +  }
 +
-+  if (spoofed) {
-+    std::ostringstream oss;
-+    std::copy(tokens.begin(), tokens.end(),
-+              std::ostream_iterator<std::string>(oss, " "));
-+    std::string result = oss.str();
-+    CSFLogDebug(LOGTAG, "Spoofed candidate: %s", result.c_str());
-+    return result;
-+  }
++  // process the SDP line by line to handle candidate lines
++  std::istringstream iss(sdp);
++  std::ostringstream oss;
++  std::string line;
 +
-+  CSFLogDebug(LOGTAG, "Candidate not spoofed: %s", candidate.c_str());
-+  return candidate;
++  while (std::getline(iss, line)) {
++    // process candidates and other lines that might contain IPs
++    if (line.compare(0, 12, "a=candidate:") == 0) {
++      std::string processed = SpoofCandidateIP(line);
++      if (processed != line) {
++        line = processed;
++      }
++    }
++    // add line back with proper line ending
++    if (line.empty() || (line.back() != '\r' && line.back() != '\n')) {
++      oss << line << "\r\n";
++    } else {
++      oss << line;
++    }
++  }
++  // process the entire SDP for any remaining IP addresses
++  std::string processedSdp = oss.str();
++  std::string originalSdp = processedSdp;
++  
++  // ipv4
++  const char* ipv4Pattern = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
++  processedSdp = replaceIPAddresses(processedSdp, ipv4Pattern);
++  // ipv6
++  const char* ipv6Pattern = "(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}";
++  processedSdp = replaceIPAddresses(processedSdp, ipv6Pattern);
++  
++  if (processedSdp != originalSdp) {
++    sdp = processedSdp;
++  }
++  
++  return NS_OK;
  }
  
  void PeerConnectionImpl::IceConnectionStateChange(
-@@ -4446,8 +4545,10 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
+@@ -3625,11 +3819,27 @@ void PeerConnectionImpl::UpdateDefaultCandidate(
+     const std::string& defaultRtcpAddr, uint16_t defaultRtcpPort,
+     const std::string& transportId) {
+   CSFLogDebug(LOGTAG, "%s", __FUNCTION__);
++  
++  // sanitize the default candidate addresses if IP spoofing is enabled
++  std::string sanitizedDefaultAddr = defaultAddr;
++  std::string sanitizedDefaultRtcpAddr = defaultRtcpAddr;
++  
++  if (ShouldSpoofCandidateIP()) {
++    // apply masking
++    if (!defaultAddr.empty()) {
++      sanitizedDefaultAddr = SpoofCandidateIP(defaultAddr);
++    }
++    if (!defaultRtcpAddr.empty()) {
++      sanitizedDefaultRtcpAddr = SpoofCandidateIP(defaultRtcpAddr);
++    }
++  }
++  
++  // use the sanitized addresses
+   mJsepSession->UpdateDefaultCandidate(
+-      defaultAddr, defaultPort, defaultRtcpAddr, defaultRtcpPort, transportId);
++      sanitizedDefaultAddr, defaultPort, sanitizedDefaultRtcpAddr, defaultRtcpPort, transportId);
+   if (mUncommittedJsepSession) {
+     mUncommittedJsepSession->UpdateDefaultCandidate(
+-        defaultAddr, defaultPort, defaultRtcpAddr, defaultRtcpPort,
++        sanitizedDefaultAddr, defaultPort, sanitizedDefaultRtcpAddr, defaultRtcpPort,
+         transportId);
+   }
+ }
+@@ -4399,8 +4609,10 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
  
    uint64_t winId = mWindow->WindowID();
  
@@ -160,10 +285,10 @@ index 5b70a58104..579a620c48 100644
        !MediaManager::Get()->IsActivelyCapturingOrHasAPermission(winId);
    return default_address_only;
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.h b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
-index d7b54ad721..8d8e92d14b 100644
+index 138cc07bd9..91cc12f87e 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.h
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
-@@ -624,8 +624,12 @@ class PeerConnectionImpl final
+@@ -621,8 +621,12 @@ class PeerConnectionImpl final
    RefPtr<MediaPipeline> GetMediaPipelineForTrack(
        dom::MediaStreamTrack& aRecvTrack);
  
@@ -178,7 +303,7 @@ index d7b54ad721..8d8e92d14b 100644
                                        const std::string& candidate,
                                        const std::string& ufrag);
 diff --git a/dom/media/webrtc/jsapi/moz.build b/dom/media/webrtc/jsapi/moz.build
-index 05920fc151..34dcf3b9a1 100644
+index 925190505a..878853f0f0 100644
 --- a/dom/media/webrtc/jsapi/moz.build
 +++ b/dom/media/webrtc/jsapi/moz.build
 @@ -62,3 +62,6 @@ EXPORTS.mozilla.dom += [
