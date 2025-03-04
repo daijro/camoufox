@@ -28,7 +28,7 @@ index a2b3e60fe5..faa0c113bc 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/gfx/src/nsDeviceContext.cpp b/gfx/src/nsDeviceContext.cpp
-index 7a4fa8d48f..1f560937a3 100644
+index 7a4fa8d48f..408b754d92 100644
 --- a/gfx/src/nsDeviceContext.cpp
 +++ b/gfx/src/nsDeviceContext.cpp
 @@ -5,6 +5,7 @@
@@ -39,7 +39,7 @@ index 7a4fa8d48f..1f560937a3 100644
  #include <algorithm>  // for max
  #include "gfxContext.h"
  #include "gfxPoint.h"    // for gfxSize
-@@ -177,6 +178,15 @@ bool nsDeviceContext::GetScreenIsHDR() {
+@@ -177,6 +178,13 @@ bool nsDeviceContext::GetScreenIsHDR() {
  }
  
  nsSize nsDeviceContext::GetDeviceSurfaceDimensions() {
@@ -47,11 +47,28 @@ index 7a4fa8d48f..1f560937a3 100644
 +  if (auto height = MaskConfig::GetInt32("screen.height"),
 +      width = MaskConfig::GetInt32("screen.width");
 +      height && width) {
-+    nsRect outRect = LayoutDeviceIntRect::ToAppUnits(
-+        LayoutDeviceIntRect(0, 0, width.value(), height.value()),
-+        AppUnitsPerDevPixel());
++    nsRect outRect = CSSPixel::ToAppUnits(CSSIntRect(0, 0, width.value(), height.value()));
 +    return outRect.Size();
 +  }
    return GetRect().Size();
  }
  
+diff --git a/layout/style/nsMediaFeatures.cpp b/layout/style/nsMediaFeatures.cpp
+index f83e2c21ca..5362dd77d4 100644
+--- a/layout/style/nsMediaFeatures.cpp
++++ b/layout/style/nsMediaFeatures.cpp
+@@ -66,14 +66,6 @@ static nsSize GetDeviceSize(const Document& aDocument) {
+     return GetSize(aDocument);
+   }
+ 
+-  // Media queries in documents in an RDM pane should use the simulated
+-  // device size.
+-  Maybe<CSSIntSize> deviceSize =
+-      nsGlobalWindowOuter::GetRDMDeviceSize(aDocument);
+-  if (deviceSize.isSome()) {
+-    return CSSPixel::ToAppUnits(deviceSize.value());
+-  }
+-
+   nsPresContext* pc = aDocument.GetPresContext();
+   // NOTE(emilio): We should probably figure out how to return an appropriate
+   // device size here, though in a multi-screen world that makes no sense
