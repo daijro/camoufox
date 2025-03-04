@@ -47,6 +47,8 @@
   { "property": "headers.Accept-Encoding", "type": "str" },
   { "property": "webrtc:ipv4", "type": "str" },
   { "property": "webrtc:ipv6", "type": "str" },
+  { "property": "webrtc:localipv4", "type": "str" },
+  { "property": "webrtc:localipv6", "type": "str" },
   { "property": "pdfViewerEnabled", "type": "bool" },
   { "property": "battery:charging", "type": "bool" },
   { "property": "battery:chargingTime", "type": "double" },
