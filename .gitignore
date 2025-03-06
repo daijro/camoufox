@@ -17,6 +17,7 @@ pythonlib/*.png
 scripts/*.png
 scripts/test*
 .vscode
+.idea
 /tests/*.disabled
 k8s/
 
