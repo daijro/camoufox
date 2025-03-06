@@ -100,6 +100,8 @@ def public_ip(proxy: Optional[str] = None) -> str:
         "https://ifconfig.co/ip",
         "https://ipecho.net/plain",
     ]
+
+    exception = None
     for url in URLS:
         try:
             with _suppress_insecure_warning():
@@ -113,8 +115,6 @@ def public_ip(proxy: Optional[str] = None) -> str:
             ip = resp.text.strip()
             validate_ip(ip)
             return ip
-        except requests.exceptions.ProxyError as e:
-            raise InvalidProxy(f"Failed to connect to proxy: {proxy}") from e
-        except (requests.RequestException, InvalidIP):
+        except (requests.exceptions.ProxyError, requests.RequestException, InvalidIP) as exception:
             pass
-    raise InvalidIP("Failed to get IP address")
+    raise InvalidIP(f"Failed to get IP address: {exception}")
