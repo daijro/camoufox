@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from functools import total_ordering
 from io import BufferedWriter, BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union, TypedDict
 from zipfile import ZipFile
 
 import click
@@ -137,6 +137,44 @@ class Version:
 VERSION_MIN, VERSION_MAX = Version.build_minmax()
 
 
+class GithubRelease(TypedDict):
+    id: int
+    noded_id: str
+    name: str
+    tag_name: str
+    author: Dict
+    target_commitish: str
+    draft: bool
+    prerelease: bool
+    created_at: str
+    published_at: str
+    assets: List[Dict]
+    url: str
+    assets_url: str
+    upload_url: str
+    html_url: str
+    tarball_url: str
+    zipball_url: str
+    body: str
+    reactions: Dict
+
+
+class GithubAsset(TypedDict):
+    id: int
+    node_id: str
+    name: str
+    label: str
+    uploader: dict
+    browser_download_url: str
+    content_type: str
+    state: str
+    size: int
+    download_count: int
+    created_at: str
+    updated_at: str
+    browser_download_url: str
+
+
 class GitHubDownloader:
     """
     Manages fetching and installing GitHub releases.
@@ -146,17 +184,40 @@ class GitHubDownloader:
         self.github_repo = github_repo
         self.api_url = f"https://api.github.com/repos/{github_repo}/releases"
 
-    def check_asset(self, asset: Dict) -> Any:
+    def fetch_all_releases(self, per_page: int = 100) -> List[GithubRelease]:
+        """
+        Internal function to iterate through GitHub release pages.
+        """
+        releases_all = []
+        page = 1
+        while True:
+            url = f"{self.api_url}?page={page}&per_page={per_page}"
+            resp = requests.get(url, timeout=20)
+            resp.raise_for_status()
+            releases_page = resp.json()
+            if not releases_page:
+                break
+            releases_all.extend(releases_page)
+            page += 1
+        return releases_all
+
+    def _default_predicate(self, asset: GithubAsset) -> str:
+        return asset.get('browser_download_url')
+
+    def check_asset(
+        self,
+        asset: Dict,
+        predicate: Optional[Callable[[GithubAsset], Optional[Tuple[Version, str]]]] = None
+    ) -> Optional[str]:
         """
         Compare the asset to determine if it's the desired asset.
-
-        Args:
-            asset: Asset information from GitHub API
-
-        Returns:
-            Any: Data to be returned if this is the desired asset, or None/False if not
+        If predicate is provided, it is applied to the asset; otherwise,
+        the default predicate is used.
         """
-        return asset.get('browser_download_url')
+
+        if predicate is None:
+            predicate = self._default_predicate
+        return predicate(asset)
 
     def missing_asset_error(self) -> None:
         """
@@ -164,19 +225,24 @@ class GitHubDownloader:
         """
         raise MissingRelease(f"Could not find a release asset in {self.github_repo}.")
 
-    def get_asset(self) -> Any:
+    def get_asset(
+        self,
+        predicate: Optional[Callable[[GithubAsset], Optional[str]]] = None
+    ) -> Any:
         """
         Fetch the latest release from the GitHub API.
-        Gets the first asset that returns a truthy value from check_asset.
+        Iterates over all pages and returns the first asset for which
+        check_asset (with the predicate) returns a truthy value.
         """
-        resp = requests.get(self.api_url, timeout=20)
-        resp.raise_for_status()
 
-        releases = resp.json()
+        if predicate is None:
+            predicate = self._default_predicate
 
+        # Search through releases for the first supported version
+        releases = self.fetch_all_releases()
         for release in releases:
-            for asset in release['assets']:
-                if data := self.check_asset(asset):
+            for asset in release.get('assets', []):
+                if data := self.check_asset(asset, predicate=predicate):
                     return data
 
         self.missing_asset_error()
@@ -187,26 +253,21 @@ class CamoufoxFetcher(GitHubDownloader):
     Handles fetching and installing the latest version of Camoufox.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, specified_version: Optional[str] = None) -> None:
         super().__init__("daijro/camoufox")
-
+        self.specified_version = specified_version
         self.arch = self.get_platform_arch()
         self._version_obj: Optional[Version] = None
         self.pattern: re.Pattern = re.compile(
             rf'camoufox-(?P<version>.+)-(?P<release>.+)-{OS_NAME}\.{self.arch}\.zip'
         )
 
-        self.fetch_latest()
+        if self.specified_version:
+            self.fetch_specific(self.specified_version)
+        else:
+            self.fetch_latest()
 
-    def check_asset(self, asset: Dict) -> Optional[Tuple[Version, str]]:
-        """
-        Finds the latest release from a GitHub releases API response that
-        supports the Camoufox version constraints, the OS, and architecture.
-
-        Returns:
-            Optional[Tuple[Version, str]]: The version and URL of a release
-        """
-        # Search through releases for the first supported version
+    def _default_predicate(self, asset: Dict) -> Optional[Tuple[Version, str]]:
         match = self.pattern.match(asset['name'])
         if not match:
             return None
@@ -254,6 +315,15 @@ class CamoufoxFetcher(GitHubDownloader):
 
         return arch
 
+    def convert_asset_to_version(self, asset: GithubAsset) -> Version:
+        """
+        Convert an github release asset info to a Version object.
+        """
+        match = self.pattern.match(asset['name'])
+        if not match:
+            raise ValueError(f"Invalid asset name: {asset['name']}")
+        return Version(release=match['release'], version=match['version'])
+
     def fetch_latest(self) -> None:
         """
         Fetch the URL of the latest camoufox release for the current platform.
@@ -267,6 +337,33 @@ class CamoufoxFetcher(GitHubDownloader):
 
         # Set the version and URL
         self._version_obj, self._url = release_data
+
+    def fetch_specific(self, version: str) -> None:
+        """
+        Fetch the URL of a specific camoufox release for the current platform.
+        Sets the version, release, and url properties.
+
+        Args:
+            version (str): The version to fetch
+
+        Raises:
+            requests.RequestException: If there's an error fetching release data
+            ValueError: If no matching release is found for the current platform
+        """
+
+        def _find_specific_version_predicate(asset: Dict) -> Optional[tuple[Version, str]]:
+            try:
+                candidate_version = self.convert_asset_to_version(asset)
+            except ValueError:
+                return None
+
+            if candidate_version.full_string == version:
+                return candidate_version, asset['browser_download_url']
+            return None
+
+        # get_asset will raise a MissingRelease exception if no release is found
+        self._version_obj, self._url = self.get_asset(_find_specific_version_predicate)
+
 
     @staticmethod
     def download_file(file: DownloadBuffer, url: str) -> DownloadBuffer:
@@ -527,3 +624,24 @@ def load_yaml(file: str) -> Dict[str, Any]:
     """
     with open(LOCAL_DATA / file, 'r') as f:
         return load(f, Loader=CLoader)
+
+
+def list_available_versions() -> List[str]:
+    """
+    List the available versions of Camoufox on GitHub.
+    """
+
+    fetcher = CamoufoxFetcher()
+
+    releases: list[dict] = fetcher.fetch_all_releases()
+    versions: List[Version] = []
+    for release in releases:
+        for asset in release.get('assets', []):
+            try:
+                version = fetcher.convert_asset_to_version(asset)
+                if version.is_supported():
+                    versions.append(version)
+            except ValueError:
+                continue
+
+    return [version.full_string for version in sorted(versions, reverse=True)]
