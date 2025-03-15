@@ -1,5 +1,5 @@
 diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
-index bb91ab8cfa..7496eb9a58 100644
+index 1cfa4b8497..bdf8d7202e 100644
 --- a/browser/base/content/browser-init.js
 +++ b/browser/base/content/browser-init.js
 @@ -3,6 +3,16 @@
@@ -28,7 +28,7 @@ index bb91ab8cfa..7496eb9a58 100644
        // When the fingerprinting resistance is enabled, making sure that we don't
        // have a maximum window to interfere with generating rounded window dimensions.
        document.documentElement.setAttribute("sizemode", "normal");
-@@ -276,6 +286,22 @@ var gBrowserInit = {
+@@ -310,6 +320,22 @@ var gBrowserInit = {
      // Update UI if browser is under remote control.
      gRemoteControl.updateVisualCue();
  
@@ -51,7 +51,7 @@ index bb91ab8cfa..7496eb9a58 100644
      // If we are given a tab to swap in, take care of it before first paint to
      // avoid an about:blank flash.
      let tabToAdopt = this.getTabToAdopt();
-@@ -311,6 +337,31 @@ var gBrowserInit = {
+@@ -345,6 +371,31 @@ var gBrowserInit = {
        }
      }
  
@@ -83,7 +83,7 @@ index bb91ab8cfa..7496eb9a58 100644
      // Wait until chrome is painted before executing code not critical to making the window visible
      this._boundDelayedStartup = this._delayedStartup.bind(this);
      window.addEventListener("MozAfterPaint", this._boundDelayedStartup);
-@@ -332,9 +383,66 @@ var gBrowserInit = {
+@@ -366,9 +417,152 @@ var gBrowserInit = {
        )?.removeAttribute("key");
      }
  
@@ -134,12 +134,98 @@ index bb91ab8cfa..7496eb9a58 100644
 +    if (addonPaths?.length) {
 +      Promise.all(addonPaths.map(path => this.installTemporaryAddon(path)))
 +        .then(addons => ChromeUtils.camouDebug("Installed " + addons.length + " addon(s)"))
-+        .catch(e => ChromeUtils.camouDebug("Failed to install addons:", e));
++        .catch(e => ChromeUtils.camouDebug("Failed to install addons: " + e));
++    }
++
++    // Certificate handling
++    let certsPaths = ChromeUtils.camouGetStringList("certificatePaths");
++    let certsRaw = ChromeUtils.camouGetStringList("certificates");
++    
++    if (certsPaths?.length || certsRaw?.length) {
++      ChromeUtils.camouDebug("Found certificates to import");
++      // Set up certificate database
++      var certdb = Cc["@mozilla.org/security/x509certdb;1"].getService(Ci.nsIX509CertDB);
++      var certdb2 = certdb;
++      try {
++        certdb2 = Cc["@mozilla.org/security/x509certdb;1"].getService(Ci.nsIX509CertDB2);
++      } catch (e) {}
++      
++      // Handle certificate files if any
++      if (certsPaths?.length) {
++        ChromeUtils.camouDebug("Processing " + certsPaths.length + " certificate files");
++        Promise.all(certsPaths.map(path => this.readCertFile(path)))
++          .then(certDataArray => {
++            // Import each certificate using map
++            certDataArray.map(certData => 
++              this.importCertificate(certdb2, certData, "from file")
++            );
++          })
++          .catch(e => ChromeUtils.camouDebug("Failed to read certificate files: " + e));
++      }
++      
++      // Handle raw certificate strings if any
++      if (certsRaw?.length) {
++        ChromeUtils.camouDebug("Processing " + certsRaw.length + " raw certificates");
++        // Process all raw certificates using map
++        certsRaw.map(rawCert => {
++          try {
++            let certData = this.processRawCertificate(rawCert);
++            ChromeUtils.camouDebug("Importing raw certificate: " + certData);
++            this.importCertificate(certdb2, certData, "raw");
++          } catch (e) {
++            ChromeUtils.camouDebug("Failed to process raw certificate: " + e);
++          }
++        });
++      }
 +    }
 +
      this._loadHandled = true;
    },
  
++  importCertificate(certdb, certData, source) {
++    try {
++      certdb.addCertFromBase64(certData, "C,C,C", "");
++      ChromeUtils.camouDebug("Successfully imported " + source + " certificate");
++    } catch (e) {
++      ChromeUtils.camouDebug("Failed to import " + source + " certificate: " + e);
++    }
++  },
++
++  processRawCertificate(content) {
++    // Process the certificate content (remove markers and newlines)
++    return content.replace(/\-{5}[\w]+\s[\w]+\-{5}/g, "").replace(/\s/g, "");
++  },
++
++  async readCertFile(path) {
++    try {
++      ChromeUtils.camouDebug("Reading certificate file: " + path);
++      const file = new FileUtils.File(path);
++      const ioService = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOService);
++      const channel = ioService.newChannelFromURI(
++        ioService.newFileURI(file),
++        null,
++        Services.scriptSecurityManager.getSystemPrincipal(),
++        null,
++        Ci.nsILoadInfo.SEC_ALLOW_CROSS_ORIGIN_SEC_CONTEXT_IS_NULL,
++        Ci.nsIContentPolicy.TYPE_OTHER
++      );
++      
++      const inputStream = Cc["@mozilla.org/scriptableinputstream;1"]
++                           .createInstance(Ci.nsIScriptableInputStream);
++      const input = channel.open();
++      inputStream.init(input);
++      
++      let content = inputStream.read(input.available());
++      inputStream.close();
++      input.close();
++      
++      return this.processRawCertificate(content);
++    } catch (e) {
++      ChromeUtils.camouDebug("Error reading certificate file: " + e);
++      throw e;
++    }
++  },
++
 +  async installTemporaryAddon(addonPath) {
 +    const addonFile = new FileUtils.File(addonPath);
 +    const addon = await AddonManager.installTemporaryAddon(addonFile);

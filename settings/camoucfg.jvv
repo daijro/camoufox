@@ -302,5 +302,7 @@
     "disableTheming": "bool",
     "memorysaver": "bool",
     "addons": "array[str]",
+    "certificatePaths": "array[str]",
+    "certificates": "array[str]",
     "debug": "bool"
 }

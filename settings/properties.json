@@ -101,5 +101,7 @@
   { "property": "disableTheming", "type": "bool" },
   { "property": "memorysaver", "type": "bool" },
   { "property": "addons", "type": "array" },
+  { "property": "certificatePaths", "type": "array" },
+  { "property": "certificates", "type": "array" },
   { "property": "debug", "type": "bool" }
 ]
