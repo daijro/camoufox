@@ -463,6 +463,12 @@ const Browser = {
         forcedColors: t.Nullable(t.Enum(['active', 'none'])),
       },
     },
+    'setContrast': {
+      params: {
+        browserContextId: t.Optional(t.String),
+        contrast: t.Nullable(t.Enum(['less', 'more', 'custom', 'no-preference'])),
+      },
+    },
     'setVideoRecordingOptions': {
       params: {
         browserContextId: t.Optional(t.String),
@@ -792,11 +798,6 @@ const Page = {
     'setViewportSize': {
       params: {
         viewportSize: t.Nullable(pageTypes.Size),
-      },
-    },
-    'setZoom': {
-      params: {
-        zoom: t.Number,
       },
     },
     'bringToFront': {
