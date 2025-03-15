@@ -52,13 +52,13 @@ fetch:
 		else \
 			echo "Fetching private patches..."; \
 			mkdir -p patches/closedsrc; \
-			if ! aria2c --dry-run "https://camoufox.com/pipeline/rev-$(version)-$(release).7z" 2>/dev/null; then \
+			if ! aria2c --dry-run "https://camoufox.com/pipeline/rev-$(closedsrc_rev).7z" 2>/dev/null; then \
 				echo "No private patches found for this version"; \
 				exit 1; \
 			else \
-				aria2c -o rev-$(version)-$(release).7z "https://camoufox.com/pipeline/rev-$(version)-$(release).7z" && \
-				7z x -p"$$CAMOUFOX_PASSWD" rev-$(version)-$(release).7z -o./patches/closedsrc && \
-				rm rev-$(version)-$(release).7z; \
+				aria2c -o rev-$(closedsrc_rev).7z "https://camoufox.com/pipeline/rev-$(closedsrc_rev).7z" && \
+				7z x -p"$$CAMOUFOX_PASSWD" rev-$(closedsrc_rev).7z -o./patches/closedsrc && \
+				rm rev-$(closedsrc_rev).7z; \
 			fi; \
 		fi; \
 	fi
@@ -259,7 +259,7 @@ upload:
 
 	@test -f .passwd || { echo "Error: .passwd file not found"; exit 1; }
 	@mkdir -p ../camoufox-web/internal
-	@rm -rf ../camoufox-web/pipeline/rev-$(version)-$(release).7z
-	7z a "-p$$(cat ./.passwd)" -mhe=on ../camoufox-web/pipeline/rev-$(version)-$(release).7z "./patches/private/*.patch"
+	@rm -rf ../camoufox-web/pipeline/rev-$(closedsrc_rev).7z
+	7z a "-p$$(cat ./.passwd)" -mhe=on ../camoufox-web/pipeline/rev-$(closedsrc_rev).7z "./patches/private/*.patch"
 
 vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')
