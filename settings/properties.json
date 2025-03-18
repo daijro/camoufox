@@ -96,6 +96,7 @@
   { "property": "mediaDevices:speakers", "type": "uint" },
   { "property": "mediaDevices:enabled", "type": "bool" },
   { "property": "allowMainWorld", "type": "bool" },
+  { "property": "allowAddonNewtab", "type": "bool" },
   { "property": "forceScopeAccess", "type": "bool" },
   { "property": "enableRemoteSubframes", "type": "bool" },
   { "property": "disableTheming", "type": "bool" },
