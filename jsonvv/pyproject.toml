@@ -9,14 +9,9 @@ description = "JSON value validator"
 authors = ["daijro <daijro.dev@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/daijro/camoufox"
-homepage = "https://github.com/daijro/camoufox/tree/main/pythonlib/jsonvv"
+homepage = "https://github.com/daijro/camoufox/tree/main/jsonvv"
 readme = "README.md"
-keywords = [
-    "json",
-    "validator",
-    "validation",
-    "typing",
-]
+keywords = ["json", "validator", "validation", "typing"]
 
 [tool.poetry.dependencies]
 python = "^3.8"

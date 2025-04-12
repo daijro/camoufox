@@ -1,5 +1,5 @@
 # Local builds
-/camoufox-*
+/camoufox-*-*
 /firefox-*
 /mozilla-unified
 dist/
@@ -8,12 +8,12 @@ launch
 launch.exe
 
 # Internal testing
+camoufox-py/test*
+camoufox-py/*.png
 /extra-docs
-pythonlib/test*
 jsonvv/test*
 /.vscode
 /bundle/fonts/extra
-pythonlib/*.png
 scripts/*.png
 scripts/test*
 .vscode
