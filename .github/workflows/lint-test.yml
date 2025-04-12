@@ -1,0 +1,25 @@
+name: Lint and Test
+
+on: [push, pull_request]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - "3.13"
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Lint project
+        run: make lint
+
+    # TODO: CI tests
+    #   - name: Run tests
+    #     run: uv run pytest tests
