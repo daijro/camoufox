@@ -29,4 +29,4 @@ RUN make setup-minimal && \
 VOLUME /root/.mozbuild
 VOLUME /app/dist
 
-ENTRYPOINT ["python3", "./multibuild.py"]
+ENTRYPOINT ["python3", "./scripts/multibuild.py"]

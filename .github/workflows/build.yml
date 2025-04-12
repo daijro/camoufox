@@ -105,7 +105,7 @@ jobs:
           free -h
 
       - name: Build
-        run: python3 ./multibuild.py --target ${{ matrix.target }} --arch ${{ matrix.arch }}
+        run: python3 ./scripts/multibuild.py --target ${{ matrix.target }} --arch ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

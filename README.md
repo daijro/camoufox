@@ -613,7 +613,7 @@ make bootstrap
 Finally you can build and package Camoufox the following command:
 
 ```bash
-python3 multibuild.py --target linux windows macos --arch x86_64 arm64 i686
+uv run scripts/multibuild.py --target linux windows macos --arch x86_64 arm64 i686
 ```
 
 <details>
@@ -632,7 +632,7 @@ Options:
   --clean               Clean the build directory before starting
 
 Example:
-$ python3 multibuild.py --target linux windows macos --arch x86_64 arm64
+$ uv run scripts/multibuild.py --target linux windows macos --arch x86_64 arm64
 ```
 
 </details>
