@@ -146,7 +146,6 @@ package-linux:
 	python3 scripts/package.py linux \
 		--includes \
 			firefox/settings/chrome.css \
-			firefox/settings/camoucfg.jvv \
 			firefox/settings/properties.json \
 			firefox/bundle/fontconfigs \
 		--version $(version) \
@@ -158,7 +157,6 @@ package-macos:
 	python3 scripts/package.py macos \
 		--includes \
 			firefox/settings/chrome.css \
-			firefox/settings/camoucfg.jvv \
 			firefox/settings/properties.json \
 		--version $(version) \
 		--release $(release) \
@@ -169,7 +167,6 @@ package-windows:
 	python3 scripts/package.py windows \
 		--includes \
 			firefox/settings/chrome.css \
-			firefox/settings/camoucfg.jvv \
 			firefox/settings/properties.json \
 			~/.mozbuild/vs/VC/Redist/MSVC/14.38.33135/$(vcredist_arch)/Microsoft.VC143.CRT/*.dll \
 		--version $(version) \
