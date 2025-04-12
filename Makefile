@@ -1,4 +1,4 @@
-include upstream.sh
+include scripts/upstream.sh
 export
 
 cf_source_dir := camoufox-$(version)-$(release)
