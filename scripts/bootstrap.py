@@ -11,20 +11,23 @@
 # Python environment (except that it's run with a sufficiently recent version of
 # Python 3), so we are restricted to stdlib modules.
 
-import sys
-
-major, minor = sys.version_info[:2]
-if (major < 3) or (major == 3 and minor < 8):
-    print("Bootstrap currently only runs on Python 3.8+." "Please try re-running with python3.8+.")
-    sys.exit(1)
-
 import ctypes
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from optparse import OptionParser
 from pathlib import Path
+
+major, minor = sys.version_info[:2]
+if (major < 3) or (major == 3 and minor < 8):
+    print(
+        "Bootstrap currently only runs on Python 3.8+."
+        "Please try re-running with python3.8+."
+    )
+    sys.exit(1)
+
 
 CLONE_MERCURIAL_PULL_FAIL = """
 Failed to pull from hg.mozilla.org.
@@ -144,7 +147,9 @@ def hg_clone_firefox(hg: Path, dest: Path, head_repo, head_rev):
         [str(hg), "pull", "https://hg.mozilla.org/mozilla-unified"], cwd=str(dest)
     )
     if not res and head_repo:
-        res = subprocess.call([str(hg), "pull", head_repo, "-r", head_rev], cwd=str(dest))
+        res = subprocess.call(
+            [str(hg), "pull", head_repo, "-r", head_rev], cwd=str(dest)
+        )
     print("")
     if res:
         print(CLONE_MERCURIAL_PULL_FAIL % dest)
@@ -154,7 +159,10 @@ def hg_clone_firefox(hg: Path, dest: Path, head_repo, head_rev):
     print(f'updating to "{head_rev}" - the development head of Gecko and Firefox')
     res = subprocess.call([str(hg), "update", "-r", head_rev], cwd=str(dest))
     if res:
-        print(f"error updating; you will need to `cd {dest} && hg update -r central` " "manually")
+        print(
+            f"error updating; you will need to `cd {dest} && hg update -r central` "
+            "manually"
+        )
     return dest
 
 
@@ -174,7 +182,9 @@ def git_clone_firefox(git: Path, dest: Path, watchman: Path, head_repo, head_rev
             # tiny bootstrapping script.
             tempdir = Path(tempfile.mkdtemp())
             with open(tempdir / "download.py", "wb") as fh:
-                shutil.copyfileobj(urlopen(f"{cinnabar_url}/raw/master/download.py"), fh)
+                shutil.copyfileobj(
+                    urlopen(f"{cinnabar_url}/raw/master/download.py"), fh
+                )
 
             subprocess.check_call(
                 [sys.executable, str(tempdir / "download.py")],
@@ -203,8 +213,12 @@ def git_clone_firefox(git: Path, dest: Path, watchman: Path, head_repo, head_rev
             ],
             env=env,
         )
-        subprocess.check_call([str(git), "config", "fetch.prune", "true"], cwd=str(dest), env=env)
-        subprocess.check_call([str(git), "config", "pull.ff", "only"], cwd=str(dest), env=env)
+        subprocess.check_call(
+            [str(git), "config", "fetch.prune", "true"], cwd=str(dest), env=env
+        )
+        subprocess.check_call(
+            [str(git), "config", "pull.ff", "only"], cwd=str(dest), env=env
+        )
 
         if head_repo:
             subprocess.check_call(
@@ -264,7 +278,9 @@ def add_microsoft_defender_antivirus_exclusions(dest, no_system_changes):
         return
 
     def print_attempt_exclusion(path):
-        print(f"Attempting to add exclusion path to Microsoft Defender Antivirus for: {path}")
+        print(
+            f"Attempting to add exclusion path to Microsoft Defender Antivirus for: {path}"
+        )
 
     powershell_exe = str(powershell_exe)
     paths = []
@@ -389,7 +405,7 @@ def main(args):
         "--no-system-changes",
         dest="no_system_changes",
         action="store_true",
-        help="Only executes actions that leave the system " "configuration alone.",
+        help="Only executes actions that leave the system configuration alone.",
     )
 
     options, leftover = parser.parse_args(args)

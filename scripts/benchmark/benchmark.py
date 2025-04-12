@@ -15,7 +15,9 @@ urls = ["about:blank", "https://google.com", "https://yahoo.com"]
 def get_firefox_memory(name):
     """Get the total memory usage of all processes named 'firefox'."""
     try:
-        result = subprocess.run(["ps", "-C", name, "-o", "rss="], capture_output=True, text=True)
+        result = subprocess.run(
+            ["ps", "-C", name, "-o", "rss="], capture_output=True, text=True
+        )
         memory_kb = sum(int(line.strip()) for line in result.stdout.splitlines())
         memory_mb = memory_kb / 1024  # Convert KB to MB
         return memory_mb
@@ -58,7 +60,8 @@ def run_playwright(mode, browser_name):
         page.goto(url)
         time.sleep(5)  # Allow the page to load
         memory = get_average_memory(
-            name="camoufox-bin" if browser_name.startswith('camoufox') else 'firefox', duration=10
+            name="camoufox-bin" if browser_name.startswith("camoufox") else "firefox",
+            duration=10,
         )
         memory_usage.append((url, memory))
         page.close()
