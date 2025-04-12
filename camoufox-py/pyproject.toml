@@ -51,3 +51,7 @@ camoufox = "camoufox.__main__:cli"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.mypy]
+follow_untyped_imports = true
+check_untyped_defs = true
