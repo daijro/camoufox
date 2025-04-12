@@ -24,24 +24,24 @@ run() {
 }
 
 # Copy the search-config.json file
-run 'cp -v ../assets/search-config.json services/settings/dumps/main/search-config.json'
+run 'cp -v ../firefox/assets/search-config.json services/settings/dumps/main/search-config.json'
 
 # vs_pack.py issue... should be temporary
-run 'cp -v ../patches/librewolf/pack_vs.py build/vs/'
+run 'cp -v ../firefox/patches/librewolf/pack_vs.py build/vs/'
 
 # Apply most recent `settings` repository files
 run 'mkdir -p lw'
 pushd lw > /dev/null
-run 'cp -v ../../settings/camoufox.cfg .'
-run 'cp -v ../../settings/distribution/policies.json .'
-run 'cp -v ../../settings/defaults/pref/local-settings.js .'
-run 'cp -v ../../settings/chrome.css .'
-run 'cp -v ../../settings/properties.json .'
+run 'cp -v ../../firefox/settings/camoufox.cfg .'
+run 'cp -v ../../firefox/settings/distribution/policies.json .'
+run 'cp -v ../../firefox/settings/defaults/pref/local-settings.js .'
+run 'cp -v ../../firefox/settings/chrome.css .'
+run 'cp -v ../../firefox/settings/properties.json .'
 run 'touch moz.build'
 popd > /dev/null
 
-# Copy ALL new files/folders from ../additions to .
-run 'cp -r ../additions/* .'
+# Copy ALL new files/folders from ../firefox/additions to .
+run 'cp -r ../firefox/additions/* .'
 
 # Provide a script that fetches and bootstraps Nightly and some mozconfigs
 run 'cp -v ../scripts/mozfetch.sh lw/'

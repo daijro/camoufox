@@ -3,6 +3,7 @@
 """
 GUI for managing Camoufox patches.
 """
+
 import os
 import re
 import sys
@@ -16,14 +17,14 @@ def into_camoufox_dir():
     this_script = os.path.dirname(os.path.abspath(__file__))
     # Go one directory up from the current script path
     os.chdir(os.path.dirname(this_script))
-    os.chdir(find_src_dir('.', version=sys.argv[1], release=sys.argv[2]))
+    os.chdir(find_src_dir(".", version=sys.argv[1], release=sys.argv[2]))
 
 
 def reset_camoufox():
     """Reset the Camoufox source"""
-    with temp_cd('..'):
-        run('make revert')
-    run('touch _READY')
+    with temp_cd(".."):
+        run("make revert")
+    run("touch _READY")
 
 
 def run_patches(reverse=False):
@@ -47,13 +48,15 @@ def run_patches(reverse=False):
                 status = "NOT APPLIED"
             else:
                 status = "UNKNOWN"
-        # Format the display string (remove the '../patches/' prefix)
-        display_name = f"[{status}] {patch_file[len('../patches/'):].strip()}"
+        # Format the display string (remove the '../firefox/patches/' prefix)
+        display_name = f"[{status}] {patch_file[len('../firefox/patches/') :].strip()}"
         display_choices.append(display_name)
         mapping[display_name] = patch_file
 
     title = "Unpatch files" if reverse else "Patch files"
-    selected_display = easygui.multchoicebox(title, "Patches", display_choices, preselect=[])
+    selected_display = easygui.multchoicebox(
+        title, "Patches", display_choices, preselect=[]
+    )
     if not selected_display:
         return False
 
@@ -62,6 +65,7 @@ def run_patches(reverse=False):
         patch_file = mapping[display_name]
         patch(patch_file, reverse=reverse)
     return True
+
 
 def open_patch_workspace(selected_patch, stop_at_patch=False):
     """
@@ -88,7 +92,7 @@ def open_patch_workspace(selected_patch, stop_at_patch=False):
                 break
             continue
         if is_broken(patch_file):
-            print(f'Skipping broken patch: {patch_file}')
+            print(f"Skipping broken patch: {patch_file}")
             skipped_patches.append(patch_file)
             continue
         patch(patch_file, silent=True)
@@ -96,8 +100,8 @@ def open_patch_workspace(selected_patch, stop_at_patch=False):
 
     # Set checkpoint
     if applied_patches:
-        with temp_cd('..'):
-            run('make checkpoint')
+        with temp_cd(".."):
+            run("make checkpoint")
 
     # Set message for patch result
     patch_broken = is_broken(selected_patch)
@@ -112,25 +116,25 @@ def open_patch_workspace(selected_patch, stop_at_patch=False):
     # Find any line containing a file .rej
     if patch_broken:
         for line in patch_result.splitlines():
-            if file := re.search(r'[^\s]+\.rej', line):
-                message += f'> {file[0]}' + '\n'
+            if file := re.search(r"[^\s]+\.rej", line):
+                message += f"> {file[0]}" + "\n"
 
     def msg_format_paths(file_list):
-        message = ''
+        message = ""
         for patch_file in file_list:
-            message += '> ' + patch_file[len('../patches/') :] + '\n'
+            message += "> " + patch_file[len("../firefox/patches/") :] + "\n"
         return message
 
     # Show which patches were applied if not all patches were allowed
     if stop_at_patch and applied_patches:
-        message += f'\n{"-" * 22} Applied patches {"-" * 22}\n'
+        message += f"\n{'-' * 22} Applied patches {'-' * 22}\n"
         message += msg_format_paths(applied_patches)
 
     if skipped_patches:
-        message += f'\n{"-" * 17} Skipped patches (broken!) {"-" * 17}\n'
+        message += f"\n{'-' * 17} Skipped patches (broken!) {'-' * 17}\n"
         message += msg_format_paths(skipped_patches)
 
-    message += f'\n{"-" * 24} Full output {"-" * 24}\n{patch_result}'
+    message += f"\n{'-' * 24} Full output {'-' * 24}\n{patch_result}"
     easygui.textbox("Patch Result", "Patch Result", message)
 
 
@@ -156,9 +160,9 @@ def is_broken(patch_file):
 
 def get_rejects(patch_file):
     """Get rejects from a patch file"""
-    cmd = f'patch -p1 -i "{patch_file}" | tee /dev/stderr | sed -n -E \'s/^.*saving rejects to file (.*\\.rej)$/\\1/p\''
+    cmd = f"patch -p1 -i \"{patch_file}\" | tee /dev/stderr | sed -n -E 's/^.*saving rejects to file (.*\\.rej)$/\\1/p'"
     result = os.popen(cmd).read().strip()
-    return result.split('\n') if result else []
+    return result.split("\n") if result else []
 
 
 # GUI Choicebox with options
@@ -195,9 +199,9 @@ def handle_choice(choice):
         case "Create new patch":
             # Reset camoufox, apply all patches, then create a checkpoint
             reset_camoufox()
-            with temp_cd('..'):
-                run('make dir')
-                run('make checkpoint')
+            with temp_cd(".."):
+                run("make dir")
+                run("make checkpoint")
             easygui.msgbox(
                 "Created new patch workspace. You can test Camoufox with 'make run'.\n\n"
                 "When you are finished, write your workspace back to a new patch.",
@@ -208,28 +212,28 @@ def handle_choice(choice):
             # Produces a list of patches that are applied
             apply_dict = {}
             for patch_file in list_patches():
-                print(f'FILE: {patch_file}')
+                print(f"FILE: {patch_file}")
                 # Ignore bootstrap files, these will always break.
                 if is_bootstrap_patch(patch_file):
-                    apply_dict[patch_file] = 'IGNORED'
+                    apply_dict[patch_file] = "IGNORED"
                     continue
                 # Check if the patch can be applied or reversed
                 can_apply, can_reverse, broken = check_patch(patch_file)
                 if broken:
-                    apply_dict[patch_file] = 'BROKEN'
+                    apply_dict[patch_file] = "BROKEN"
                 elif can_reverse:
-                    apply_dict[patch_file] = 'APPLIED'
+                    apply_dict[patch_file] = "APPLIED"
                 elif can_apply:
-                    apply_dict[patch_file] = 'NOT APPLIED'
+                    apply_dict[patch_file] = "NOT APPLIED"
                 else:
-                    apply_dict[patch_file] = 'UNKNOWN (broken .patch?)'
+                    apply_dict[patch_file] = "UNKNOWN (broken .patch?)"
             easygui.textbox(
                 "Patching Result",
                 "Patching Result",
-                '\n'.join(
+                "\n".join(
                     sorted(
                         (
-                            f'{v}\t{k[len("../patches/"):-len(".patch")]}'
+                            f"{v}\t{k[len('../firefox/patches/') : -len('.patch')]}"
                             for k, v in apply_dict.items()
                         ),
                         reverse=True,
@@ -239,15 +243,15 @@ def handle_choice(choice):
             )
 
         case "Set checkpoint":
-            with temp_cd('..'):
-                run('make checkpoint')
+            with temp_cd(".."):
+                run("make checkpoint")
             easygui.msgbox("Checkpoint set.", "Checkpoint Set")
 
         case "Select patches":
             result = run_patches(reverse=False)
             if result:
                 easygui.msgbox("Patching completed.", "Patching Complete")
-        
+
         case "Reverse patches":
             result = run_patches(reverse=True)
             if result:
@@ -260,7 +264,7 @@ def handle_choice(choice):
 
             broken_patches = []
             for patch_file in list_patches():
-                print(f'Testing: {patch_file}')
+                print(f"Testing: {patch_file}")
                 if reject_files := get_rejects(patch_file):
                     # Add the patch to the list
                     broken_patches.append((patch_file, reject_files))
@@ -285,17 +289,19 @@ def handle_choice(choice):
             # Display message
             message = "Some patches failed to apply:\n\n"
             for patch_file, rejects in broken_patches:
-                message += '> ' + patch_file[len('../patches/') :] + '\n'
-            message += '\n\n\n'
+                message += "> " + patch_file[len("../firefox/patches/") :] + "\n"
+            message += "\n\n\n"
 
             # Show file contents
             for patch_file, rejects in broken_patches:
-                message += f"Patch: {patch_file[len('../patches/'):]}\nRejects:\n"
+                message += (
+                    f"Patch: {patch_file[len('../firefox/patches/') :]}\nRejects:\n"
+                )
                 for reject in rejects:
-                    with open(reject, 'r') as f:
-                        count = len(re.findall('^@@.*', f.read(), re.MULTILINE))
+                    with open(reject, "r") as f:
+                        count = len(re.findall("^@@.*", f.read(), re.MULTILINE))
                     message += f"{count} reject(s) > {reject}\n"
-                message += '\n'
+                message += "\n"
             easygui.textbox("Patching Result", "Failed Patches", message)
 
         case "Edit a patch":
@@ -315,9 +321,9 @@ def handle_choice(choice):
                         status = "NOT APPLIED"
                     else:
                         status = "UNKNOWN"
-                display_name = f"{n+1}. [{status}] {file_name[len('../patches/'):]}".strip()
+                display_name = f"{n + 1}. [{status}] {file_name[len('../firefox/patches/') :]}".strip()
                 ui_choices.append(display_name)
-            
+
             selected_patch = easygui.choicebox(
                 "Select patch to open in workspace",
                 "Patches",
@@ -335,12 +341,12 @@ def handle_choice(choice):
             )
 
         case "See current workspace":
-            result = os.popen('git diff').read()
+            result = os.popen("git diff").read()
             easygui.textbox("Diff", "Diff", result)
 
         case "Write workspace to patch":
             # Open a file dialog to select a file to write the diff to
-            with temp_cd('../patches'):
+            with temp_cd("../firefox/patches"):
                 file_path = easygui.filesavebox(
                     "Select a file to write the patch to",
                     "Write Patch",
@@ -348,15 +354,17 @@ def handle_choice(choice):
                 )
             if not file_path:
                 exit()
-            run(f'git diff > {file_path}')
+            run(f"git diff > {file_path}")
             easygui.msgbox(f"Patch has been written to {file_path}.", "Patch Written")
 
         case _:
-            print('No choice selected')
+            print("No choice selected")
 
 
 if __name__ == "__main__":
     into_camoufox_dir()
 
-    while choice := easygui.choicebox("Select an option:", "Camoufox Dev Tools", choices):
+    while choice := easygui.choicebox(
+        "Select an option:", "Camoufox Dev Tools", choices
+    ):
         handle_choice(choice)

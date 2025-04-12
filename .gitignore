@@ -13,7 +13,7 @@ camoufox-py/*.png
 /extra-docs
 jsonvv/test*
 /.vscode
-/bundle/fonts/extra
+firefox/bundle/fonts/extra
 scripts/*.png
 scripts/test*
 .vscode
@@ -33,7 +33,9 @@ wget-log
 
 # Python interface
 venv/
+.venv/
 __pycache__/
+.mypy_cache/
 *.pyc
 *.mmdb
 

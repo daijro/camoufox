@@ -56,7 +56,7 @@ fetch:
 				exit 1; \
 			else \
 				aria2c -o rev-$(closedsrc_rev).7z "https://camoufox.com/pipeline/rev-$(closedsrc_rev).7z" && \
-				7z x -p"$$CAMOUFOX_PASSWD" rev-$(closedsrc_rev).7z -o./patches/closedsrc && \
+				7z x -p"$$CAMOUFOX_PASSWD" rev-$(closedsrc_rev).7z -o./firefox/patches/closedsrc && \
 				rm rev-$(closedsrc_rev).7z; \
 			fi; \
 		fi; \
@@ -87,8 +87,8 @@ setup: setup-minimal
 
 ff-dbg: setup
 	# Only apply patches to help debug vanilla Firefox
-	make patch ./patches/chromeutil.patch
-	make patch ./patches/browser-init.patch
+	make patch ./firefox/patches/chromeutil.patch
+	make patch ./firefox/patches/browser-init.patch
 	echo "LOCAL_INCLUDES += ['/camoucfg']" >> $(cf_source_dir)/dom/base/moz.build
 	touch $(cf_source_dir)/_READY
 	make checkpoint
@@ -145,10 +145,10 @@ check-arch:
 package-linux:
 	python3 scripts/package.py linux \
 		--includes \
-			settings/chrome.css \
-			settings/camoucfg.jvv \
-			settings/properties.json \
-			bundle/fontconfigs \
+			firefox/settings/chrome.css \
+			firefox/settings/camoucfg.jvv \
+			firefox/settings/properties.json \
+			firefox/bundle/fontconfigs \
 		--version $(version) \
 		--release $(release) \
 		--arch $(arch) \
@@ -157,9 +157,9 @@ package-linux:
 package-macos:
 	python3 scripts/package.py macos \
 		--includes \
-			settings/chrome.css \
-			settings/camoucfg.jvv \
-			settings/properties.json \
+			firefox/settings/chrome.css \
+			firefox/settings/camoucfg.jvv \
+			firefox/settings/properties.json \
 		--version $(version) \
 		--release $(release) \
 		--arch $(arch) \
@@ -168,9 +168,9 @@ package-macos:
 package-windows:
 	python3 scripts/package.py windows \
 		--includes \
-			settings/chrome.css \
-			settings/camoucfg.jvv \
-			settings/properties.json \
+			firefox/settings/chrome.css \
+			firefox/settings/camoucfg.jvv \
+			firefox/settings/properties.json \
 			~/.mozbuild/vs/VC/Redist/MSVC/14.38.33135/$(vcredist_arch)/Microsoft.VC143.CRT/*.dll \
 		--version $(version) \
 		--release $(release) \
@@ -192,12 +192,12 @@ edit-cfg:
 
 check-arg:
 	@if [ -z "$(_ARGS)" ]; then \
-		echo "Error: No file specified. Usage: make <command> ./patches/file.patch"; \
+		echo "Error: No file specified. Usage: make <command> ./firefox/patches/file.patch"; \
 		exit 1; \
 	fi
 
 grep:
-	grep "$(_ARGS)" -r ./patches/*.patch
+	grep "$(_ARGS)" -r ./firefox/patches/*.patch
 
 patch:
 	@make check-arg $(_ARGS);
@@ -243,6 +243,6 @@ upload:
 	@test -f .passwd || { echo "Error: .passwd file not found"; exit 1; }
 	@mkdir -p ../camoufox-web/internal
 	@rm -rf ../camoufox-web/pipeline/rev-$(closedsrc_rev).7z
-	7z a "-p$$(cat ./.passwd)" -mhe=on ../camoufox-web/pipeline/rev-$(closedsrc_rev).7z "./patches/private/*.patch"
+	7z a "-p$$(cat ./.passwd)" -mhe=on ../camoufox-web/pipeline/rev-$(closedsrc_rev).7z "./firefox/patches/private/*.patch"
 
 vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')

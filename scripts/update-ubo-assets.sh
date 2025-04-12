@@ -13,8 +13,8 @@ echo "-> Removing specified filter lists"
 assets=$(echo "$assets" | jq 'del(.["ublock-badware"], .["urlhaus-1"], .["curben-phishing"])')
 
 # Write the resulting json
-echo "-> Writing to assets/uBOAssets.json"
-echo $assets | jq . >./assets/uBOAssets.json
+echo "-> Writing to firefox/assets/uBOAssets.json"
+echo $assets | jq . >./firefox/assets/uBOAssets.json
 
 echo
 echo "Done!"

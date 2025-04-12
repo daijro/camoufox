@@ -44,11 +44,11 @@ class Patcher:
         Apply all patches
         """
         version, release = extract_args()
-        with temp_cd(find_src_dir('.', version, release)):
+        with temp_cd(find_src_dir(".", version, release)):
             # Create the base mozconfig file
-            run('cp -v ../assets/base.mozconfig mozconfig')
+            run("cp -v ../firefox/assets/base.mozconfig mozconfig")
             # Set cross building target
-            print(f'Using target: {self.moz_target}')
+            print(f"Using target: {self.moz_target}")
             self._update_mozconfig()
 
             if not options.mozconfig_only:
@@ -56,7 +56,7 @@ class Patcher:
                 for patch_file in list_patches():
                     patch(patch_file)
 
-            print('Complete!')
+            print("Complete!")
 
     def _update_mozconfig(self):
         """
@@ -71,11 +71,11 @@ class Patcher:
             if os.path.exists(mozconfig):
                 shutil.copy2(mozconfig, mozconfig_backup)
             else:
-                with open(mozconfig_backup, 'w', encoding='utf-8') as f:
+                with open(mozconfig_backup, "w", encoding="utf-8") as f:
                     pass
 
         # Read backup content
-        with open(mozconfig_backup, 'r', encoding='utf-8') as f:
+        with open(mozconfig_backup, "r", encoding="utf-8") as f:
             content = f.read()
 
         # Add target option
@@ -84,7 +84,7 @@ class Patcher:
         # Add target-specific mozconfig if it exists
         target_mozconfig = os.path.join("..", "assets", f"{self.target}.mozconfig")
         if os.path.exists(target_mozconfig):
-            with open(target_mozconfig, 'r', encoding='utf-8') as f:
+            with open(target_mozconfig, "r", encoding="utf-8") as f:
                 content += f.read()
 
         # Calculate new hash
@@ -92,9 +92,9 @@ class Patcher:
 
         # Update mozconfig
         print(f"-> Updating mozconfig, target is {self.moz_target}")
-        with open(mozconfig, 'w', encoding='utf-8') as f:
+        with open(mozconfig, "w", encoding="utf-8") as f:
             f.write(content)
-        with open(mozconfig_hash, 'w', encoding='utf-8') as f:
+        with open(mozconfig_hash, "w", encoding="utf-8") as f:
             f.write(new_hash)
 
 
@@ -109,7 +109,9 @@ def _update_rustup(target):
     if target == "linux":
         add_rustup("aarch64-unknown-linux-gnu", "i686-unknown-linux-gnu")
     elif target == "windows":
-        add_rustup("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc", "i686-pc-windows-msvc")
+        add_rustup(
+            "x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc", "i686-pc-windows-msvc"
+        )
     elif target == "macos":
         add_rustup("x86_64-apple-darwin", "aarch64-apple-darwin")
 
@@ -122,7 +124,7 @@ Preparation
 def extract_args():
     """Get version and release from args"""
     if len(args) != 2:
-        sys.stderr.write('error: please specify version and release of camoufox source')
+        sys.stderr.write("error: please specify version and release of camoufox source")
         sys.exit(1)
     return args[0], args[1]
 
@@ -134,8 +136,8 @@ AVAILABLE_ARCHS = ["x86_64", "arm64", "i686"]
 def extract_build_target():
     """Get moz_target if passed to BUILD_TARGET environment variable"""
 
-    if os.environ.get('BUILD_TARGET'):
-        target, arch = os.environ['BUILD_TARGET'].split(',')
+    if os.environ.get("BUILD_TARGET"):
+        target, arch = os.environ["BUILD_TARGET"].split(",")
         assert target in AVAILABLE_TARGETS, f"Unsupported target: {target}"
         assert arch in AVAILABLE_ARCHS, f"Unsupported architecture: {arch}"
     else:
@@ -156,8 +158,8 @@ if __name__ == "__main__":
     _update_rustup(TARGET)
 
     # Check if the folder exists
-    if not os.path.exists(f'camoufox-{VERSION}-{RELEASE}/configure.py'):
-        sys.stderr.write('error: folder doesn\'t look like a Firefox folder.')
+    if not os.path.exists(f"camoufox-{VERSION}-{RELEASE}/configure.py"):
+        sys.stderr.write("error: folder doesn't look like a Firefox folder.")
         sys.exit(1)
 
     # Apply the patches
