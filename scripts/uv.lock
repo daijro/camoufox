@@ -49,10 +49,12 @@ source = { virtual = "." }
 dev = [
     { name = "camoufox" },
     { name = "easygui" },
+    { name = "mercurial" },
     { name = "mypy" },
     { name = "playwright" },
     { name = "ruff" },
     { name = "tabulate" },
+    { name = "types-tabulate" },
 ]
 
 [package.metadata]
@@ -61,10 +63,12 @@ dev = [
 dev = [
     { name = "camoufox", specifier = ">=0.4.11" },
     { name = "easygui", specifier = ">=0.98.3" },
+    { name = "mercurial", specifier = ">=7.0.1" },
     { name = "mypy", specifier = ">=1.15.0" },
     { name = "playwright", specifier = ">=1.51.0" },
     { name = "ruff", specifier = ">=0.11.5" },
     { name = "tabulate", specifier = ">=0.9.0" },
+    { name = "types-tabulate", specifier = ">=0.9.0.20241207" },
 ]
 
 [[package]]
@@ -203,6 +207,22 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/33/6f40c09a5f7d7e7fcb85ef75072e53eba3fbadbf23e4991ca069ab2b1abb/lxml-5.3.2-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:6ba465a91acc419c5682f8b06bcc84a424a7aa5c91c220241c6fd31de2a72bc6", size = 5051899 },
     { url = "https://files.pythonhosted.org/packages/8b/3a/673bc5c0d5fb6596ee2963dd016fdaefaed2c57ede82c7634c08cbda86c1/lxml-5.3.2-cp313-cp313-win32.whl", hash = "sha256:56a1d56d60ea1ec940f949d7a309e0bff05243f9bd337f585721605670abb1c1", size = 3485315 },
     { url = "https://files.pythonhosted.org/packages/8c/be/cab8dd33b0dbe3af5b5d4d24137218f79ea75d540f74eb7d8581195639e0/lxml-5.3.2-cp313-cp313-win_amd64.whl", hash = "sha256:1a580dc232c33d2ad87d02c8a3069d47abbcdce974b9c9cc82a79ff603065dbe", size = 3814639 },
+]
+
+[[package]]
+name = "mercurial"
+version = "7.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/dd/6c32d8e8a7d74d9b890ab5e91f66e6830b93b3a76417886d1ea7c275b2e1/mercurial-7.0.1.tar.gz", hash = "sha256:0f4cde42ec6c15f7ff93d421e7a842fdb30ee7951b1dbc4aacaac06eac764b48", size = 8981165 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/da/c73d5d1fa9b838ba4da937ab70d290f0d1bd71006cbb708e5ada86e88885/mercurial-7.0.1-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:a6c231603a3778f94d5a36322793d72e3aad59758bb68cd5f28da63432a603ad", size = 5229146 },
+    { url = "https://files.pythonhosted.org/packages/5d/cd/88d5c72a3763686927f79e74f68e0dff1931d3207f321be17fb5978b9d9a/mercurial-7.0.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ada0ebc37b04adee15d157fa9e2f7c5ab69cb1f1a836e159437433b4fb81a0e8", size = 7392174 },
+    { url = "https://files.pythonhosted.org/packages/ef/3c/805cbf5846a7123abaff90320b61e49729d3a09fec7cd1de0ae48eebb1cb/mercurial-7.0.1-cp313-cp313-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:8bfa7b7b97ccbc0d73ff3c6dadb4727a68ba994dcc95e10cc3cc0c4f979e34f3", size = 7126114 },
+    { url = "https://files.pythonhosted.org/packages/f2/46/84d3366ebb0d0c5a91b5a946bf46dce656fbf7d2599d1191a48c6bf40809/mercurial-7.0.1-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:cafc3a55ee3465b2606cbce63d955594cbf8f6b0ef46d5597a4e8dd5ae31d9ff", size = 7040238 },
+    { url = "https://files.pythonhosted.org/packages/8b/ff/85f8033d256a919f016012b9c3234d424235cd36b7dc962743846fba1abf/mercurial-7.0.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:553f113932df25583c3ef48c3d8474cf3aaac90cc56abba61bc9b25712ccb4d1", size = 7277206 },
+    { url = "https://files.pythonhosted.org/packages/e9/0a/12ee9008f24fca2a0ade46bf516395ffa0cb2b504df0c919ed4120227610/mercurial-7.0.1-cp313-cp313-win32.whl", hash = "sha256:a24f559b466b9689f67788729a05cf6a8fa3a5a66546a0e8a364b10c2ad0d588", size = 6822102 },
+    { url = "https://files.pythonhosted.org/packages/72/95/e057869fc6cb4d9b1865c09fd7c0b83c47721d33910e3425163a5af6a245/mercurial-7.0.1-cp313-cp313-win_amd64.whl", hash = "sha256:1df05b47670870e866d76595c5dc983d7948a2378787b809c0213a8ad362da09", size = 7218114 },
+    { url = "https://files.pythonhosted.org/packages/b3/8e/ac2805618a7b50dec892034985a9984dafcbd0e57561af77833fef1e8e5c/mercurial-7.0.1-cp313-cp313-win_arm64.whl", hash = "sha256:78bcf322f6c0e7938473a5fc9101415f3d615d078409e9d645d8aebbd47e8abe", size = 7462640 },
 ]
 
 [[package]]
@@ -443,6 +463,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a8/4b/29b4ef32e036bb34e4ab51796dd745cdba7ed47ad142a9f4a1eb8e0c744d/tqdm-4.67.1.tar.gz", hash = "sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2", size = 169737 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d0/30/dc54f88dd4a2b5dc8a0279bdd7270e735851848b762aeb1c1184ed1f6b14/tqdm-4.67.1-py3-none-any.whl", hash = "sha256:26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2", size = 78540 },
+]
+
+[[package]]
+name = "types-tabulate"
+version = "0.9.0.20241207"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/43/16030404a327e4ff8c692f2273854019ed36718667b2993609dc37d14dd4/types_tabulate-0.9.0.20241207.tar.gz", hash = "sha256:ac1ac174750c0a385dfd248edc6279fa328aaf4ea317915ab879a2ec47833230", size = 8195 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/86/a9ebfd509cbe74471106dffed320e208c72537f9aeb0a55eaa6b1b5e4d17/types_tabulate-0.9.0.20241207-py3-none-any.whl", hash = "sha256:b8dad1343c2a8ba5861c5441370c3e35908edd234ff036d4298708a1d4cf8a85", size = 8307 },
 ]
 
 [[package]]
