@@ -247,8 +247,10 @@ vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')
 
 lint-scripts:
 	cd ./scripts && uv run ruff check .
+	cd ./scripts && uv run mypy .
 
 lint-tests:
 	cd ./tests && uv run ruff check .
+	cd ./tests && uv run mypy .
 
 lint: lint-scripts lint-tests
