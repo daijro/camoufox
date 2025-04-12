@@ -43,7 +43,9 @@ class Utils:
         return frame
 
     async def detach_frame(self, page: Page, frame_id: str) -> None:
-        await page.evaluate("frame_id => document.getElementById(frame_id).remove()", frame_id)
+        await page.evaluate(
+            "frame_id => document.getElementById(frame_id).remove()", frame_id
+        )
 
     def dump_frames(self, frame: Frame, indentation: str = "") -> List[str]:
         indentation = indentation or ""
@@ -51,7 +53,9 @@ class Utils:
         if frame.name:
             description += " (" + frame.name + ")"
         result = [indentation + description]
-        sorted_frames = sorted(frame.child_frames, key=lambda frame: frame.url + frame.name)
+        sorted_frames = sorted(
+            frame.child_frames, key=lambda frame: frame.url + frame.name
+        )
         for child in sorted_frames:
             result = result + utils.dump_frames(child, "    " + indentation)
         return result

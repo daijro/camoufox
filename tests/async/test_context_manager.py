@@ -19,7 +19,9 @@ import pytest
 from playwright.async_api import BrowserContext, BrowserType
 
 
-async def test_context_managers(browser_type: BrowserType, launch_arguments: Dict) -> None:
+async def test_context_managers(
+    browser_type: BrowserType, launch_arguments: Dict
+) -> None:
     async with await browser_type.launch(**launch_arguments) as browser:
         async with await browser.new_context() as context:
             async with await context.new_page():

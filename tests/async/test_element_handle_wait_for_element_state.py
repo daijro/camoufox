@@ -33,7 +33,9 @@ async def wait_for_state(div: ElementHandle, state: str, done: List[bool]) -> No
     done[0] = True
 
 
-async def wait_for_state_to_throw(div: ElementHandle, state: str) -> pytest.ExceptionInfo[Error]:
+async def wait_for_state_to_throw(
+    div: ElementHandle, state: str
+) -> pytest.ExceptionInfo[Error]:
     with pytest.raises(Error) as exc_info:
         await div.wait_for_element_state(state)  # type: ignore
     return exc_info

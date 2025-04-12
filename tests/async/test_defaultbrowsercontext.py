@@ -27,8 +27,8 @@ from typing import (
 )
 
 import pytest
-from playwright.async_api import BrowserContext, BrowserType, Error, Page, expect
 
+from playwright.async_api import BrowserContext, BrowserType, Error, Page, expect
 from tests.server import Server
 from tests.utils import must
 
@@ -287,8 +287,13 @@ async def test_should_support_color_scheme_option(
     launch_persistent: "Callable[..., asyncio.Future[Tuple[Page, BrowserContext]]]",
 ) -> None:
     (page, context) = await launch_persistent(color_scheme="dark")
-    assert await page.evaluate('() => matchMedia("(prefers-color-scheme: light)").matches') is False
-    assert await page.evaluate('() => matchMedia("(prefers-color-scheme: dark)").matches')
+    assert (
+        await page.evaluate('() => matchMedia("(prefers-color-scheme: light)").matches')
+        is False
+    )
+    assert await page.evaluate(
+        '() => matchMedia("(prefers-color-scheme: dark)").matches'
+    )
 
 
 async def test_should_support_timezone_id_option(

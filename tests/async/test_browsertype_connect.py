@@ -20,8 +20,8 @@ from typing import Callable
 
 import pytest
 from flaky import flaky
-from playwright.async_api import BrowserType, Error, Playwright, Route
 
+from playwright.async_api import BrowserType, Error, Playwright, Route
 from tests.conftest import RemoteServer
 from tests.server import Server, TestServerRequest, WebSocketProtocol
 from tests.utils import chromium_version_less_than, parse_trace
@@ -397,7 +397,9 @@ async def test_set_input_files_should_preserve_last_modified_timestamp(
     files = ["file-to-upload.txt", "file-to-upload-2.txt"]
     await input.set_input_files([assetdir / file for file in files])
     assert await input.evaluate("input => [...input.files].map(f => f.name)") == files
-    timestamps = await input.evaluate("input => [...input.files].map(f => f.lastModified)")
+    timestamps = await input.evaluate(
+        "input => [...input.files].map(f => f.lastModified)"
+    )
     expected_timestamps = [os.path.getmtime(assetdir / file) * 1000 for file in files]
 
     # On Linux browser sometimes reduces the timestamp by 1ms: 1696272058110.0715  -> 1696272058109 or even
@@ -430,7 +432,9 @@ async def test_should_upload_a_folder(
     (dir / "sub-dir").mkdir()
     (dir / "sub-dir" / "really.txt").write_text("sub-dir file content")
     await input.set_input_files(dir)
-    assert set(await input.evaluate("e => [...e.files].map(f => f.webkitRelativePath)")) == set(
+    assert set(
+        await input.evaluate("e => [...e.files].map(f => f.webkitRelativePath)")
+    ) == set(
         [
             "file-upload-test/file1.txt",
             "file-upload-test/file2",
@@ -444,7 +448,9 @@ async def test_should_upload_a_folder(
             ),
         ]
     )
-    webkit_relative_paths = await input.evaluate("e => [...e.files].map(f => f.webkitRelativePath)")
+    webkit_relative_paths = await input.evaluate(
+        "e => [...e.files].map(f => f.webkitRelativePath)"
+    )
     for i, webkit_relative_path in enumerate(webkit_relative_paths):
         content = await input.evaluate(
             """(e, i) => {

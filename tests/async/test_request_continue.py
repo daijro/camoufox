@@ -24,7 +24,9 @@ async def test_request_continue_should_work(page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
 
 
-async def test_request_continue_should_amend_http_headers(page: Page, server: Server) -> None:
+async def test_request_continue_should_amend_http_headers(
+    page: Page, server: Server
+) -> None:
     await page.route(
         "**/*",
         lambda route: asyncio.create_task(
@@ -43,7 +45,9 @@ async def test_request_continue_should_amend_http_headers(page: Page, server: Se
 async def test_request_continue_should_amend_method(page: Page, server: Server) -> None:
     server_request = asyncio.create_task(server.wait_for_request("/sleep.zzz"))
     await page.goto(server.EMPTY_PAGE)
-    await page.route("**/*", lambda route: asyncio.create_task(route.continue_(method="POST")))
+    await page.route(
+        "**/*", lambda route: asyncio.create_task(route.continue_(method="POST"))
+    )
     [request, _] = await asyncio.gather(
         server.wait_for_request("/sleep.zzz"),
         page.evaluate('() => fetch("/sleep.zzz")'),
@@ -56,12 +60,16 @@ async def test_request_continue_should_amend_method_on_main_request(
     page: Page, server: Server
 ) -> None:
     request = asyncio.create_task(server.wait_for_request("/empty.html"))
-    await page.route("**/*", lambda route: asyncio.create_task(route.continue_(method="POST")))
+    await page.route(
+        "**/*", lambda route: asyncio.create_task(route.continue_(method="POST"))
+    )
     await page.goto(server.EMPTY_PAGE)
     assert (await request).method.decode() == "POST"
 
 
-async def test_request_continue_should_amend_post_data(page: Page, server: Server) -> None:
+async def test_request_continue_should_amend_post_data(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.route(
         "**/*",
@@ -126,7 +134,9 @@ async def test_should_amend_binary_post_data(page: Page, server: Server) -> None
     await page.goto(server.EMPTY_PAGE)
     await page.route(
         "**/*",
-        lambda route: asyncio.create_task(route.continue_(post_data=b"\x00\x01\x02\x03\x04")),
+        lambda route: asyncio.create_task(
+            route.continue_(post_data=b"\x00\x01\x02\x03\x04")
+        ),
     )
 
     [server_request, result] = await asyncio.gather(

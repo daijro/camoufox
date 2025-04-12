@@ -19,9 +19,13 @@ from playwright.async_api import Browser, BrowserContext, Page
 from tests.server import Server
 
 
-async def test_should_clear_cookies(context: BrowserContext, page: Page, server: Server) -> None:
+async def test_should_clear_cookies(
+    context: BrowserContext, page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
-    await context.add_cookies([{"url": server.EMPTY_PAGE, "name": "cookie1", "value": "1"}])
+    await context.add_cookies(
+        [{"url": server.EMPTY_PAGE, "name": "cookie1", "value": "1"}]
+    )
     assert await page.evaluate("document.cookie") == "cookie1=1"
     await context.clear_cookies()
     assert await context.cookies() == []

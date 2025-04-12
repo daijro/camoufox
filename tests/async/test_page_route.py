@@ -133,7 +133,9 @@ async def test_page_route_should_work_when_header_manipulation_headers_with_redi
 
 
 # @see https://github.com/GoogleChrome/puppeteer/issues/4743
-async def test_page_route_should_be_able_to_remove_headers(page: Page, server: Server) -> None:
+async def test_page_route_should_be_able_to_remove_headers(
+    page: Page, server: Server
+) -> None:
     async def handle_request(route: Route) -> None:
         headers = route.request.headers
         if "origin" in headers:
@@ -151,7 +153,9 @@ async def test_page_route_should_be_able_to_remove_headers(page: Page, server: S
     assert serverRequest.getHeader("origin") is None
 
 
-async def test_page_route_should_contain_referer_header(page: Page, server: Server) -> None:
+async def test_page_route_should_contain_referer_header(
+    page: Page, server: Server
+) -> None:
     requests = []
 
     def _handle(route: Route, request: Request) -> None:
@@ -173,7 +177,9 @@ async def test_page_route_should_properly_return_navigation_response_when_URL_ha
 ) -> None:
     # Setup cookie.
     await page.goto(server.EMPTY_PAGE)
-    await context.add_cookies([{"url": server.EMPTY_PAGE, "name": "foo", "value": "bar"}])
+    await context.add_cookies(
+        [{"url": server.EMPTY_PAGE, "name": "foo", "value": "bar"}]
+    )
 
     # Setup request interception.
     await page.route("**/*", lambda route: route.continue_())
@@ -182,7 +188,9 @@ async def test_page_route_should_properly_return_navigation_response_when_URL_ha
     assert response.status == 200
 
 
-async def test_page_route_should_show_custom_HTTP_headers(page: Page, server: Server) -> None:
+async def test_page_route_should_show_custom_HTTP_headers(
+    page: Page, server: Server
+) -> None:
     await page.set_extra_http_headers({"foo": "bar"})
 
     def assert_headers(request: Request) -> None:
@@ -307,7 +315,9 @@ async def test_page_route_should_fail_navigation_when_aborting_main_resource(
         assert "net::ERR_FAILED" in exc.value.message
 
 
-async def test_page_route_should_not_work_with_redirects(page: Page, server: Server) -> None:
+async def test_page_route_should_not_work_with_redirects(
+    page: Page, server: Server
+) -> None:
     intercepted = []
 
     def _handle(route: Route, request: Request) -> None:
@@ -397,7 +407,9 @@ async def test_page_route_should_work_with_redirects_for_subresources(
     assert r is None
 
 
-async def test_page_route_should_work_with_equal_requests(page: Page, server: Server) -> None:
+async def test_page_route_should_work_with_equal_requests(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     hits = [True]
 
@@ -491,7 +503,9 @@ async def test_page_route_should_navigate_to_URL_with_hash_and_and_fire_requests
     assert requests[0].url == server.EMPTY_PAGE
 
 
-async def test_page_route_should_work_with_encoded_server(page: Page, server: Server) -> None:
+async def test_page_route_should_work_with_encoded_server(
+    page: Page, server: Server
+) -> None:
     # The requestWillBeSent will report encoded URL, whereas interception will
     # report URL as-is. @see crbug.com/759388
     await page.route("**/*", lambda route: route.continue_())
@@ -500,7 +514,9 @@ async def test_page_route_should_work_with_encoded_server(page: Page, server: Se
     assert response.status == 404
 
 
-async def test_page_route_should_work_with_encoded_server___2(page: Page, server: Server) -> None:
+async def test_page_route_should_work_with_encoded_server___2(
+    page: Page, server: Server
+) -> None:
     # The requestWillBeSent will report URL as-is, whereas interception will
     # report encoded URL for stylesheet. @see crbug.com/759388
     requests: List[Request] = []
@@ -588,7 +604,11 @@ async def test_page_route_should_support_cors_with_GET(
     await page.goto(server.EMPTY_PAGE)
 
     async def handle_route(route: Route, request: Request) -> None:
-        headers = {"access-control-allow-origin": "*" if request.url.endswith("allow") else "none"}
+        headers = {
+            "access-control-allow-origin": "*"
+            if request.url.endswith("allow")
+            else "none"
+        }
         await route.fulfill(
             content_type="application/json",
             headers=headers,
@@ -626,7 +646,9 @@ async def test_page_route_should_support_cors_with_GET(
         assert "NetworkError" in exc.value.message
 
 
-async def test_page_route_should_support_cors_with_POST(page: Page, server: Server) -> None:
+async def test_page_route_should_support_cors_with_POST(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.route(
         "**/cars",
@@ -715,7 +737,9 @@ async def test_request_fulfill_should_work_a(page: Page, server: Server) -> None
     assert await page.evaluate("() => document.body.textContent") == "Yo, page!"
 
 
-async def test_request_fulfill_should_work_with_status_code_422(page: Page, server: Server) -> None:
+async def test_request_fulfill_should_work_with_status_code_422(
+    page: Page, server: Server
+) -> None:
     await page.route(
         "**/*",
         lambda route: route.fulfill(status=422, body="Yo, page!"),
@@ -789,7 +813,9 @@ async def test_request_fulfill_should_work_with_file_path(
 ) -> None:
     await page.route(
         "**/*",
-        lambda route: route.fulfill(content_type="shouldBeIgnored", path=assetdir / "pptr.png"),
+        lambda route: route.fulfill(
+            content_type="shouldBeIgnored", path=assetdir / "pptr.png"
+        ),
     )
     await page.evaluate(
         """PREFIX => {
@@ -811,7 +837,9 @@ async def test_request_fulfill_should_stringify_intercepted_request_response_hea
     await page.route(
         "**/*",
         lambda route: route.fulfill(
-            status=200, headers={"foo": True}, body="Yo, page!"  # type: ignore
+            status=200,
+            headers={"foo": True},
+            body="Yo, page!",  # type: ignore
         ),
     )
 
@@ -870,10 +898,14 @@ async def test_request_fulfill_should_not_modify_the_headers_sent_to_the_server(
     assert textAfterRoute == "done"
 
     assert len(interceptedRequests) == 2
-    assert interceptedRequests[0].requestHeaders == interceptedRequests[1].requestHeaders
+    assert (
+        interceptedRequests[0].requestHeaders == interceptedRequests[1].requestHeaders
+    )
 
 
-async def test_request_fulfill_should_include_the_origin_header(page: Page, server: Server) -> None:
+async def test_request_fulfill_should_include_the_origin_header(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/empty.html")
     interceptedRequest = []
 
@@ -963,7 +995,9 @@ async def test_ignore_http_errors_service_worker_should_intercept_after_a_servic
     assert non_intercepted_response == "FAILURE: Not Found"
 
 
-async def test_page_route_should_support_times_parameter(page: Page, server: Server) -> None:
+async def test_page_route_should_support_times_parameter(
+    page: Page, server: Server
+) -> None:
     intercepted = []
 
     async def handle_request(route: Route) -> None:
@@ -1037,7 +1071,9 @@ async def test_glob_to_regex() -> None:
     assert glob_to_regex("**/*.{png,jpg,jpeg}").match("https://localhost:8080/c.jpg")
     assert glob_to_regex("**/*.{png,jpg,jpeg}").match("https://localhost:8080/c.jpeg")
     assert glob_to_regex("**/*.{png,jpg,jpeg}").match("https://localhost:8080/c.png")
-    assert not glob_to_regex("**/*.{png,jpg,jpeg}").match("https://localhost:8080/c.css")
+    assert not glob_to_regex("**/*.{png,jpg,jpeg}").match(
+        "https://localhost:8080/c.css"
+    )
     assert glob_to_regex("foo*").match("foo.js")
     assert not glob_to_regex("foo*").match("foo/bar.js")
     assert not glob_to_regex("http://localhost:3000/signin-oidc*").match(
@@ -1056,4 +1092,6 @@ async def test_glob_to_regex() -> None:
     assert glob_to_regex("\\\\") == re.compile(r"^\\$")
     assert glob_to_regex("\\[") == re.compile(r"^\[$")
     assert glob_to_regex("[a-z]") == re.compile(r"^[a-z]$")
-    assert glob_to_regex("$^+.\\*()|\\?\\{\\}\\[\\]") == re.compile(r"^\$\^\+\.\*\(\)\|\?\{\}\[\]$")
+    assert glob_to_regex("$^+.\\*()|\\?\\{\\}\\[\\]") == re.compile(
+        r"^\$\^\+\.\*\(\)\|\?\{\}\[\]$"
+    )

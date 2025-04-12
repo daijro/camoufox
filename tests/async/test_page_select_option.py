@@ -18,7 +18,9 @@ from playwright.async_api import Error, Page, TimeoutError
 from tests.server import Server
 
 
-async def test_select_option_should_select_single_option(page: Page, server: Server) -> None:
+async def test_select_option_should_select_single_option(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/select.html")
     await page.select_option("select", "blue")
     assert await page.evaluate("result.onInput") == ["blue"]
@@ -47,7 +49,9 @@ async def test_select_option_should_select_single_option_by_handle(
     page: Page, server: Server
 ) -> None:
     await page.goto(server.PREFIX + "/input/select.html")
-    await page.select_option("select", element=await page.query_selector("[id=whiteOption]"))
+    await page.select_option(
+        "select", element=await page.query_selector("[id=whiteOption]")
+    )
     assert await page.evaluate("result.onInput") == ["white"]
     assert await page.evaluate("result.onChange") == ["white"]
 
@@ -61,7 +65,9 @@ async def test_select_option_should_select_single_option_by_index(
     assert await page.evaluate("result.onChange") == ["brown"]
 
 
-async def test_select_option_should_select_only_first_option(page: Page, server: Server) -> None:
+async def test_select_option_should_select_only_first_option(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/select.html")
     await page.select_option("select", ["blue", "green", "red"])
     assert await page.evaluate("result.onInput") == ["blue"]
@@ -81,7 +87,9 @@ async def test_select_option_should_not_throw_when_select_causes_navigation(
     assert "empty.html" in page.url
 
 
-async def test_select_option_should_select_multiple_options(page: Page, server: Server) -> None:
+async def test_select_option_should_select_multiple_options(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/select.html")
     await page.evaluate("makeMultiple()")
     await page.select_option("select", ["blue", "green", "red"])
@@ -104,7 +112,9 @@ async def test_select_option_should_select_multiple_options_with_attributes(
     assert await page.evaluate("result.onChange") == ["blue", "gray", "green"]
 
 
-async def test_select_option_should_respect_event_bubbling(page: Page, server: Server) -> None:
+async def test_select_option_should_respect_event_bubbling(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/select.html")
     await page.select_option("select", "blue")
     assert await page.evaluate("result.onBubblingInput") == ["blue"]
@@ -120,7 +130,9 @@ async def test_select_option_should_throw_when_element_is_not_a__select_(
     assert "Element is not a <select> element" in exc_info.value.message
 
 
-async def test_select_option_should_return_on_no_matched_values(page: Page, server: Server) -> None:
+async def test_select_option_should_return_on_no_matched_values(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/select.html")
     with pytest.raises(TimeoutError) as exc_info:
         await page.select_option("select", ["42", "abc"], timeout=1000)
@@ -144,13 +156,17 @@ async def test_select_option_should_return_an_array_of_one_element_when_multiple
     assert len(result) == 1
 
 
-async def test_select_option_should_return_on_no_values(page: Page, server: Server) -> None:
+async def test_select_option_should_return_on_no_values(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/select.html")
     result = await page.select_option("select", [])
     assert result == []
 
 
-async def test_select_option_should_not_allow_null_items(page: Page, server: Server) -> None:
+async def test_select_option_should_not_allow_null_items(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/select.html")
     await page.evaluate("makeMultiple()")
     with pytest.raises(Error) as exc_info:
@@ -158,7 +174,9 @@ async def test_select_option_should_not_allow_null_items(page: Page, server: Ser
     assert "expected string, got object" in exc_info.value.message
 
 
-async def test_select_option_should_unselect_with_null(page: Page, server: Server) -> None:
+async def test_select_option_should_unselect_with_null(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/select.html")
     await page.evaluate("makeMultiple()")
     result = await page.select_option("select", ["blue", "black", "magenta"])

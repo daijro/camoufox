@@ -17,7 +17,9 @@ import pytest
 from playwright.async_api import Error, Page, Playwright
 
 
-async def test_should_use_data_test_id_in_strict_errors(page: Page, playwright: Playwright) -> None:
+async def test_should_use_data_test_id_in_strict_errors(
+    page: Page, playwright: Playwright
+) -> None:
     playwright.selectors.set_test_id_attribute("data-custom-id")
     try:
         await page.set_content(

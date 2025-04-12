@@ -70,7 +70,9 @@ async def test_goto_should_work_cross_process(page: Page, server: Server) -> Non
     assert response.url == url
 
 
-async def test_goto_should_capture_iframe_navigation_request(page: Page, server: Server) -> None:
+async def test_goto_should_capture_iframe_navigation_request(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     assert page.url == server.EMPTY_PAGE
 
@@ -116,7 +118,9 @@ async def test_goto_should_capture_cross_process_iframe_navigation_request(
     assert request_frames[0] == page.frames[1]
 
 
-async def test_goto_should_work_with_anchor_navigation(page: Page, server: Server) -> None:
+async def test_goto_should_work_with_anchor_navigation(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     assert page.url == server.EMPTY_PAGE
     await page.goto(server.EMPTY_PAGE + "#foo")
@@ -148,7 +152,9 @@ async def test_goto_should_return_response_when_page_changes_its_url_after_load(
 
 
 @pytest.mark.skip_browser("firefox")
-async def test_goto_should_work_with_subframes_return_204(page: Page, server: Server) -> None:
+async def test_goto_should_work_with_subframes_return_204(
+    page: Page, server: Server
+) -> None:
     def handle(request: TestServerRequest) -> None:
         request.setResponseCode(204)
         request.finish()
@@ -345,25 +351,33 @@ async def test_goto_should_prioritize_default_navigation_timeout_over_default_ti
     assert isinstance(exc_info.value, TimeoutError)
 
 
-async def test_goto_should_disable_timeout_when_its_set_to_0(page: Page, server: Server) -> None:
+async def test_goto_should_disable_timeout_when_its_set_to_0(
+    page: Page, server: Server
+) -> None:
     loaded: List[bool] = []
     page.once("load", lambda _: loaded.append(True))
     await page.goto(server.PREFIX + "/grid.html", timeout=0, wait_until="load")
     assert loaded == [True]
 
 
-async def test_goto_should_work_when_navigating_to_valid_url(page: Page, server: Server) -> None:
+async def test_goto_should_work_when_navigating_to_valid_url(
+    page: Page, server: Server
+) -> None:
     response = await page.goto(server.EMPTY_PAGE)
     assert response
     assert response.ok
 
 
-async def test_goto_should_work_when_navigating_to_data_url(page: Page, server: Server) -> None:
+async def test_goto_should_work_when_navigating_to_data_url(
+    page: Page, server: Server
+) -> None:
     response = await page.goto("data:text/html,hello")
     assert response is None
 
 
-async def test_goto_should_work_when_navigating_to_404(page: Page, server: Server) -> None:
+async def test_goto_should_work_when_navigating_to_404(
+    page: Page, server: Server
+) -> None:
     response = await page.goto(server.PREFIX + "/not-found")
     assert response
     assert response.ok is False
@@ -406,7 +420,9 @@ async def test_goto_should_navigate_to_url_with_hash_and_fire_requests_without_h
     assert requests[0].url == server.EMPTY_PAGE
 
 
-async def test_goto_should_work_with_self_requesting_page(page: Page, server: Server) -> None:
+async def test_goto_should_work_with_self_requesting_page(
+    page: Page, server: Server
+) -> None:
     response = await page.goto(server.PREFIX + "/self-request.html")
     assert response
     assert response.status == 200
@@ -448,7 +464,9 @@ async def test_goto_should_reject_referer_option_when_set_extra_http_headers_pro
     await page.set_extra_http_headers({"referer": "http://microsoft.com/"})
     with pytest.raises(Error) as exc_info:
         await page.goto(server.PREFIX + "/grid.html", referer="http://google.com/")
-    assert '"referer" is already specified as extra HTTP header' in exc_info.value.message
+    assert (
+        '"referer" is already specified as extra HTTP header' in exc_info.value.message
+    )
     assert server.PREFIX + "/grid.html" in exc_info.value.message
 
 
@@ -468,7 +486,9 @@ async def test_network_idle_should_navigate_to_empty_page_with_networkidle(
 async def test_wait_for_nav_should_work(page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
     async with page.expect_navigation() as response_info:
-        await page.evaluate("url => window.location.href = url", server.PREFIX + "/grid.html")
+        await page.evaluate(
+            "url => window.location.href = url", server.PREFIX + "/grid.html"
+        )
     response = await response_info.value
     assert response.ok
     assert "grid.html" in response.url
@@ -484,8 +504,9 @@ async def test_wait_for_nav_should_respect_timeout(page: Page, server: Server) -
 async def test_wait_for_nav_should_work_with_both_domcontentloaded_and_load(
     page: Page, server: Server
 ) -> None:
-    async with page.expect_navigation(wait_until="domcontentloaded"), page.expect_navigation(
-        wait_until="load"
+    async with (
+        page.expect_navigation(wait_until="domcontentloaded"),
+        page.expect_navigation(wait_until="load"),
     ):
         await page.goto(server.PREFIX + "/one-style.html")
 
@@ -513,7 +534,9 @@ async def test_wait_for_nav_should_work_with_clicking_on_links_which_do_not_comm
     expect_ssl_error(exc_info.value.message, browser_name)
 
 
-async def test_wait_for_nav_should_work_with_history_push_state(page: Page, server: Server) -> None:
+async def test_wait_for_nav_should_work_with_history_push_state(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.set_content(
         """
@@ -578,7 +601,9 @@ async def test_wait_for_nav_should_work_with_dom_history_back_forward(
     assert page.url == server.PREFIX + "/second.html"
 
 
-@pytest.mark.skip_browser("webkit")  # WebKit issues load event in some cases, but not always
+@pytest.mark.skip_browser(
+    "webkit"
+)  # WebKit issues load event in some cases, but not always
 async def test_wait_for_nav_should_work_when_subframe_issues_window_stop(
     page: Page, server: Server, is_webkit: bool
 ) -> None:
@@ -600,12 +625,16 @@ async def test_wait_for_nav_should_work_when_subframe_issues_window_stop(
         pass
     await frame.evaluate("() => window.stop()")
     await page.wait_for_timeout(2000)  # give it some time to erroneously resolve
-    assert done == (not is_webkit)  # Chromium and Firefox issue load event in this case.
+    assert done == (
+        not is_webkit
+    )  # Chromium and Firefox issue load event in this case.
     if is_webkit:
         task.cancel()
 
 
-async def test_wait_for_nav_should_work_with_url_match(page: Page, server: Server) -> None:
+async def test_wait_for_nav_should_work_with_url_match(
+    page: Page, server: Server
+) -> None:
     responses: List[Optional[Response]] = [None, None, None]
 
     async def wait_for_nav(url: Any, index: int) -> None:
@@ -613,9 +642,15 @@ async def test_wait_for_nav_should_work_with_url_match(page: Page, server: Serve
             pass
         responses[index] = await response_info.value
 
-    response0_promise = asyncio.create_task(wait_for_nav(re.compile(r"one-style\.html"), 0))
-    response1_promise = asyncio.create_task(wait_for_nav(re.compile(r"\/frame.html"), 1))
-    response2_promise = asyncio.create_task(wait_for_nav(lambda url: "foo=bar" in url, 2))
+    response0_promise = asyncio.create_task(
+        wait_for_nav(re.compile(r"one-style\.html"), 0)
+    )
+    response1_promise = asyncio.create_task(
+        wait_for_nav(re.compile(r"\/frame.html"), 1)
+    )
+    response2_promise = asyncio.create_task(
+        wait_for_nav(lambda url: "foo=bar" in url, 2)
+    )
     assert responses == [None, None, None]
     await page.goto(server.EMPTY_PAGE)
     assert responses == [None, None, None]
@@ -684,13 +719,17 @@ async def test_expect_navigation_should_work_for_cross_process_navigations(
 async def test_wait_for_nav_should_work_with_commit(page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
     async with page.expect_navigation(wait_until="commit") as response_info:
-        await page.evaluate("url => window.location.href = url", server.PREFIX + "/grid.html")
+        await page.evaluate(
+            "url => window.location.href = url", server.PREFIX + "/grid.html"
+        )
     response = await response_info.value
     assert response.ok
     assert "grid.html" in response.url
 
 
-async def test_wait_for_load_state_should_respect_timeout(page: Page, server: Server) -> None:
+async def test_wait_for_load_state_should_respect_timeout(
+    page: Page, server: Server
+) -> None:
     requests = []
 
     def handler(request: Any) -> None:
@@ -711,7 +750,9 @@ async def test_wait_for_load_state_should_resolve_immediately_if_loaded(
     await page.wait_for_load_state()
 
 
-async def test_wait_for_load_state_should_throw_for_bad_state(page: Page, server: Server) -> None:
+async def test_wait_for_load_state_should_throw_for_bad_state(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/one-style.html")
     with pytest.raises(Error) as exc_info:
         await page.wait_for_load_state("bad")  # type: ignore
@@ -738,7 +779,9 @@ async def test_wait_for_load_state_should_resolve_immediately_if_load_state_matc
 
 
 async def test_wait_for_load_state_networkidle(page: Page, server: Server) -> None:
-    wait_for_network_idle_future = asyncio.create_task(page.wait_for_load_state("networkidle"))
+    wait_for_network_idle_future = asyncio.create_task(
+        page.wait_for_load_state("networkidle")
+    )
     await page.goto(server.PREFIX + "/networkidle.html")
     await wait_for_network_idle_future
 
@@ -815,7 +858,9 @@ async def test_wait_for_load_state_should_wait_for_load_state_of_popup_with_netw
 ) -> None:
     await page.goto(server.EMPTY_PAGE)
     async with page.expect_popup() as popup_info:
-        await page.evaluate("url => window.open(url, null, 'noopener') && 1", server.EMPTY_PAGE)
+        await page.evaluate(
+            "url => window.open(url, null, 'noopener') && 1", server.EMPTY_PAGE
+        )
 
     popup = await popup_info.value
     await popup.wait_for_load_state()
@@ -826,7 +871,9 @@ async def test_wait_for_load_state_should_work_with_clicking_target__blank(
     page: Page, server: Server
 ) -> None:
     await page.goto(server.EMPTY_PAGE)
-    await page.set_content('<a target=_blank rel="opener" href="/one-style.html">yo</a>')
+    await page.set_content(
+        '<a target=_blank rel="opener" href="/one-style.html">yo</a>'
+    )
     async with page.expect_popup() as popup_info:
         await page.click("a")
     popup = await popup_info.value
@@ -844,7 +891,9 @@ async def test_wait_for_load_state_should_wait_for_load_state_of_new_page(
     assert await new_page.evaluate("document.readyState") == "complete"
 
 
-async def test_wait_for_load_state_in_popup(context: BrowserContext, server: Server) -> None:
+async def test_wait_for_load_state_in_popup(
+    context: BrowserContext, server: Server
+) -> None:
     page = await context.new_page()
     await page.goto(server.EMPTY_PAGE)
     css_requests = []
@@ -921,8 +970,12 @@ async def test_frame_goto_should_reject_when_frame_detaches(
     await page.goto(server.PREFIX + "/frames/one-frame.html")
 
     server.set_route("/one-style.css", lambda _: None)
-    wait_for_request_task = asyncio.create_task(server.wait_for_request("/one-style.css"))
-    navigation_task = asyncio.create_task(page.frames[1].goto(server.PREFIX + "/one-style.html"))
+    wait_for_request_task = asyncio.create_task(
+        server.wait_for_request("/one-style.css")
+    )
+    navigation_task = asyncio.create_task(
+        page.frames[1].goto(server.PREFIX + "/one-style.html")
+    )
     await wait_for_request_task
 
     await page.eval_on_selector("iframe", "frame => frame.remove()")
@@ -936,7 +989,9 @@ async def test_frame_goto_should_reject_when_frame_detaches(
         assert "frame was detached" in exc_info.value.message.lower()
 
 
-async def test_frame_goto_should_continue_after_client_redirect(page: Page, server: Server) -> None:
+async def test_frame_goto_should_continue_after_client_redirect(
+    page: Page, server: Server
+) -> None:
     server.set_route("/frames/script.js", lambda _: None)
     url = server.PREFIX + "/frames/child-redirect.html"
 
@@ -944,14 +999,18 @@ async def test_frame_goto_should_continue_after_client_redirect(page: Page, serv
         await page.goto(url, timeout=5000, wait_until="networkidle")
 
     assert "Timeout 5000ms exceeded." in exc_info.value.message
-    assert f'navigating to "{url}", waiting until "networkidle"' in exc_info.value.message
+    assert (
+        f'navigating to "{url}", waiting until "networkidle"' in exc_info.value.message
+    )
 
 
 async def test_frame_wait_for_nav_should_work(page: Page, server: Server) -> None:
     await page.goto(server.PREFIX + "/frames/one-frame.html")
     frame = page.frames[1]
     async with frame.expect_navigation() as response_info:
-        await frame.evaluate("url => window.location.href = url", server.PREFIX + "/grid.html")
+        await frame.evaluate(
+            "url => window.location.href = url", server.PREFIX + "/grid.html"
+        )
     response = await response_info.value
     assert response.ok
     assert "grid.html" in response.url
@@ -985,7 +1044,9 @@ async def test_frame_wait_for_nav_should_fail_when_frame_detaches(
     assert "frame was detached" in exc_info.value.message
 
 
-async def test_frame_wait_for_load_state_should_work(page: Page, server: Server) -> None:
+async def test_frame_wait_for_load_state_should_work(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/frames/one-frame.html")
     frame = page.frames[1]
 
@@ -1021,7 +1082,9 @@ async def test_reload_should_work_with_data_url(page: Page, server: Server) -> N
 
 async def test_should_work_with__blank_target(page: Page, server: Server) -> None:
     def handler(request: TestServerRequest) -> None:
-        request.write(f'<a href="{server.EMPTY_PAGE}" target="_blank">Click me</a>'.encode())
+        request.write(
+            f'<a href="{server.EMPTY_PAGE}" target="_blank">Click me</a>'.encode()
+        )
         request.finish()
 
     server.set_route("/empty.html", handler)
@@ -1030,7 +1093,9 @@ async def test_should_work_with__blank_target(page: Page, server: Server) -> Non
     await page.click('"Click me"')
 
 
-async def test_should_work_with_cross_process__blank_target(page: Page, server: Server) -> None:
+async def test_should_work_with_cross_process__blank_target(
+    page: Page, server: Server
+) -> None:
     def handler(request: TestServerRequest) -> None:
         request.write(
             f'<a href="{server.CROSS_PROCESS_PREFIX}/empty.html" target="_blank">Click me</a>'.encode()

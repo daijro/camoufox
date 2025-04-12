@@ -20,7 +20,9 @@ from playwright.async_api import Error, Page
 from tests.server import Server, TestServerRequest
 
 
-async def test_should_reject_response_finished_if_page_closes(page: Page, server: Server) -> None:
+async def test_should_reject_response_finished_if_page_closes(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
 
     def handle_get(request: TestServerRequest) -> None:

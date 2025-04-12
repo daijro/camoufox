@@ -72,10 +72,14 @@ async def test_should_fall_back_async_delayed(page: Page, server: Server) -> Non
 async def test_should_chain_once(page: Page, server: Server) -> None:
     await page.route(
         "**/madeup.txt",
-        lambda route: asyncio.create_task(route.fulfill(status=200, body="fulfilled one")),
+        lambda route: asyncio.create_task(
+            route.fulfill(status=200, body="fulfilled one")
+        ),
         times=1,
     )
-    await page.route("**/madeup.txt", lambda route: asyncio.create_task(route.fallback()), times=1)
+    await page.route(
+        "**/madeup.txt", lambda route: asyncio.create_task(route.fallback()), times=1
+    )
 
     resp = await page.goto(server.PREFIX + "/madeup.txt")
     assert resp
@@ -94,7 +98,9 @@ async def test_should_not_chain_fulfill(page: Page, server: Server) -> None:
         "**/empty.html",
         lambda route: asyncio.create_task(route.fulfill(status=200, body="fulfilled")),
     )
-    await page.route("**/empty.html", lambda route: asyncio.create_task(route.fallback()))
+    await page.route(
+        "**/empty.html", lambda route: asyncio.create_task(route.fallback())
+    )
 
     response = await page.goto(server.EMPTY_PAGE)
     assert response
@@ -113,7 +119,9 @@ async def test_should_not_chain_abort(
 
     await page.route("**/empty.html", handler)
     await page.route("**/empty.html", lambda route: asyncio.create_task(route.abort()))
-    await page.route("**/empty.html", lambda route: asyncio.create_task(route.fallback()))
+    await page.route(
+        "**/empty.html", lambda route: asyncio.create_task(route.fallback())
+    )
 
     with pytest.raises(Error) as excinfo:
         await page.goto(server.EMPTY_PAGE)
@@ -162,7 +170,9 @@ async def test_should_amend_http_headers(page: Page, server: Server) -> None:
     assert values == ["bar", "bar", "bar"]
 
 
-async def test_should_delete_header_with_undefined_value(page: Page, server: Server) -> None:
+async def test_should_delete_header_with_undefined_value(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     server.set_route(
         "/something",
@@ -223,7 +233,9 @@ async def test_should_amend_method(page: Page, server: Server) -> None:
         asyncio.create_task(route.continue_())
 
     await page.route("**/*", _handler)
-    await page.route("**/*", lambda route: asyncio.create_task(route.fallback(method="POST")))
+    await page.route(
+        "**/*", lambda route: asyncio.create_task(route.fallback(method="POST"))
+    )
 
     [request, _] = await asyncio.gather(
         server.wait_for_request("/sleep.zzz"),
@@ -271,7 +283,9 @@ async def test_should_amend_post_data(page: Page, server: Server) -> None:
         asyncio.create_task(route.continue_())
 
     await page.route("**/*", _handler)
-    await page.route("**/*", lambda route: asyncio.create_task(route.fallback(post_data="doggo")))
+    await page.route(
+        "**/*", lambda route: asyncio.create_task(route.fallback(post_data="doggo"))
+    )
     [server_request, _] = await asyncio.gather(
         server.wait_for_request("/sleep.zzz"),
         page.evaluate("() => fetch('/sleep.zzz', { method: 'POST', body: 'birdy' })"),
@@ -305,7 +319,9 @@ async def test_should_amend_binary_post_data(page: Page, server: Server) -> None
     assert server_request.post_body == b"\x00\x01\x02\x03\x04"
 
 
-async def test_should_chain_fallback_with_dynamic_url(server: Server, page: Page) -> None:
+async def test_should_chain_fallback_with_dynamic_url(
+    server: Server, page: Page
+) -> None:
     intercepted = []
 
     def _handler1(route: Route) -> None:

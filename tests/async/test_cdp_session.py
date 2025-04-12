@@ -55,7 +55,9 @@ async def test_should_be_able_to_detach_session(page: Page) -> None:
     assert eval_response["result"]["value"] == 3
     await client.detach()
     with pytest.raises(Error) as exc_info:
-        await client.send("Runtime.evaluate", {"expression": "3 + 1", "returnByValue": True})
+        await client.send(
+            "Runtime.evaluate", {"expression": "3 + 1", "returnByValue": True}
+        )
     assert TARGET_CLOSED_ERROR_MESSAGE in exc_info.value.message
 
 

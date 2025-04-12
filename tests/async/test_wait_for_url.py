@@ -22,7 +22,9 @@ from tests.server import Server
 
 async def test_wait_for_url_should_work(page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
-    await page.evaluate("url => window.location.href = url", server.PREFIX + "/grid.html")
+    await page.evaluate(
+        "url => window.location.href = url", server.PREFIX + "/grid.html"
+    )
     await page.wait_for_url("**/grid.html")
     assert "grid.html" in page.url
 
@@ -52,7 +54,9 @@ async def test_wait_for_url_should_work_with_clicking_on_anchor_links(
     assert page.url == server.EMPTY_PAGE + "#foobar"
 
 
-async def test_wait_for_url_should_work_with_history_push_state(page: Page, server: Server) -> None:
+async def test_wait_for_url_should_work_with_history_push_state(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.set_content(
         """
@@ -125,6 +129,8 @@ async def test_wait_for_url_should_work_with_url_match_for_same_document_navigat
 
 async def test_wait_for_url_should_work_with_commit(page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
-    await page.evaluate("url => window.location.href = url", server.PREFIX + "/grid.html")
+    await page.evaluate(
+        "url => window.location.href = url", server.PREFIX + "/grid.html"
+    )
     await page.wait_for_url("**/grid.html", wait_until="commit")
     assert "grid.html" in page.url

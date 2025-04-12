@@ -26,10 +26,14 @@ from playwright.async_api import APIResponse, Error, Playwright, StorageState
 from tests.server import Server, TestServerRequest
 
 
-@pytest.mark.parametrize("method", ["fetch", "delete", "get", "head", "patch", "post", "put"])
+@pytest.mark.parametrize(
+    "method", ["fetch", "delete", "get", "head", "patch", "post", "put"]
+)
 async def test_should_work(playwright: Playwright, method: str, server: Server) -> None:
     request = await playwright.request.new_context()
-    response: APIResponse = await getattr(request, method)(server.PREFIX + "/simple.json")
+    response: APIResponse = await getattr(request, method)(
+        server.PREFIX + "/simple.json"
+    )
     assert response.status == 200
     assert response.status_text == "OK"
     assert response.ok is True
@@ -42,7 +46,9 @@ async def test_should_work(playwright: Playwright, method: str, server: Server) 
     assert await response.text() == ("" if method == "head" else '{"foo": "bar"}\n')
 
 
-async def test_should_dispose_global_request(playwright: Playwright, server: Server) -> None:
+async def test_should_dispose_global_request(
+    playwright: Playwright, server: Server
+) -> None:
     request = await playwright.request.new_context()
     response = await request.get(server.PREFIX + "/simple.json")
     assert await response.json() == {"foo": "bar"}
@@ -74,7 +80,9 @@ async def test_should_support_global_user_agent_option(
     assert request.getHeader("user-agent") == "My Agent"
 
 
-async def test_should_support_global_timeout_option(playwright: Playwright, server: Server) -> None:
+async def test_should_support_global_timeout_option(
+    playwright: Playwright, server: Server
+) -> None:
     request = await playwright.request.new_context(timeout=100)
     server.set_route("/empty.html", lambda req: None)
     with pytest.raises(Error, match="Request timed out after 100ms"):
@@ -86,7 +94,9 @@ async def test_should_propagate_extra_http_headers_with_redirects(
 ) -> None:
     server.set_redirect("/a/redirect1", "/b/c/redirect2")
     server.set_redirect("/b/c/redirect2", "/simple.json")
-    request = await playwright.request.new_context(extra_http_headers={"My-Secret": "Value"})
+    request = await playwright.request.new_context(
+        extra_http_headers={"My-Secret": "Value"}
+    )
     [req1, req2, req3, _] = await asyncio.gather(
         server.wait_for_request("/a/redirect1"),
         server.wait_for_request("/b/c/redirect2"),
@@ -376,7 +386,9 @@ async def test_should_accept_already_serialized_data_as_bytes_when_content_type_
     await request.dispose()
 
 
-async def test_should_contain_default_user_agent(playwright: Playwright, server: Server) -> None:
+async def test_should_contain_default_user_agent(
+    playwright: Playwright, server: Server
+) -> None:
     request = await playwright.request.new_context()
     [server_request, _] = await asyncio.gather(
         server.wait_for_request("/empty.html"),
@@ -430,11 +442,15 @@ async def test_should_throw_an_error_when_max_redirects_is_less_than_0(
     request = await playwright.request.new_context()
     for method in ["GET", "PUT", "POST", "OPTIONS", "HEAD", "PATCH"]:
         with pytest.raises(AssertionError) as exc_info:
-            await request.fetch(server.PREFIX + "/a/redirect1", method=method, max_redirects=-1)
+            await request.fetch(
+                server.PREFIX + "/a/redirect1", method=method, max_redirects=-1
+            )
         assert "'max_redirects' must be greater than or equal to '0'" in str(exc_info)
 
 
-async def test_should_serialize_request_data(playwright: Playwright, server: Server) -> None:
+async def test_should_serialize_request_data(
+    playwright: Playwright, server: Server
+) -> None:
     request = await playwright.request.new_context()
     server.set_route("/echo", lambda req: (req.write(req.post_body), req.finish()))
     for data, expected in [

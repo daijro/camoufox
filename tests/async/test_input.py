@@ -22,9 +22,9 @@ from typing import Any
 
 import pytest
 from flaky import flaky
+
 from playwright._impl._path_utils import get_file_dirname
 from playwright.async_api import Error, FilePayload, Page
-
 from tests.server import Server
 from tests.utils import chromium_version_less_than, must
 
@@ -59,7 +59,8 @@ async def test_should_work(page: Page, assetdir: Path) -> None:
     await page.set_input_files("input", assetdir / "file-to-upload.txt")
     assert await page.eval_on_selector("input", "input => input.files.length") == 1
     assert (
-        await page.eval_on_selector("input", "input => input.files[0].name") == "file-to-upload.txt"
+        await page.eval_on_selector("input", "input => input.files[0].name")
+        == "file-to-upload.txt"
     )
 
 
@@ -75,7 +76,10 @@ async def test_should_set_from_memory(page: Page) -> None:
         files=[file],
     )
     assert await page.eval_on_selector("input", "input => input.files.length") == 1
-    assert await page.eval_on_selector("input", "input => input.files[0].name") == "test.txt"
+    assert (
+        await page.eval_on_selector("input", "input => input.files[0].name")
+        == "test.txt"
+    )
 
 
 async def test_should_emit_event(page: Page) -> None:
@@ -135,13 +139,16 @@ async def test_should_accept_single_file(page: Page) -> None:
     await file_chooser.set_files(FILE_TO_UPLOAD)
     assert await page.eval_on_selector("input", "input => input.files.length") == 1
     assert (
-        await page.eval_on_selector("input", "input => input.files[0].name") == "file-to-upload.txt"
+        await page.eval_on_selector("input", "input => input.files[0].name")
+        == "file-to-upload.txt"
     )
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
 async def test_should_be_able_to_read_selected_file(page: Page) -> None:
-    page.once("filechooser", lambda file_chooser: file_chooser.set_files(FILE_TO_UPLOAD))
+    page.once(
+        "filechooser", lambda file_chooser: file_chooser.set_files(FILE_TO_UPLOAD)
+    )
     await page.set_content("<input type=file>")
     content = await page.eval_on_selector(
         "input",
@@ -162,7 +169,9 @@ async def test_should_be_able_to_reset_selected_files_with_empty_file_list(
     page: Page,
 ) -> None:
     await page.set_content("<input type=file>")
-    page.once("filechooser", lambda file_chooser: file_chooser.set_files(FILE_TO_UPLOAD))
+    page.once(
+        "filechooser", lambda file_chooser: file_chooser.set_files(FILE_TO_UPLOAD)
+    )
     file_length = 0
     async with page.expect_file_chooser():
         file_length = await page.eval_on_selector(
@@ -316,7 +325,9 @@ async def _listen_for_wheel_events(page: Page, selector: str) -> None:
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
 @flaky
-async def test_should_upload_large_file(page: Page, server: Server, tmp_path: Path) -> None:
+async def test_should_upload_large_file(
+    page: Page, server: Server, tmp_path: Path
+) -> None:
     await page.goto(server.PREFIX + "/input/fileupload.html")
     large_file_path = tmp_path / "200MB.zip"
     data = b"A" * 1024
@@ -369,7 +380,9 @@ async def test_set_input_files_should_preserve_last_modified_timestamp(
     files = ["file-to-upload.txt", "file-to-upload-2.txt"]
     await input.set_input_files([assetdir / file for file in files])
     assert await input.evaluate("input => [...input.files].map(f => f.name)") == files
-    timestamps = await input.evaluate("input => [...input.files].map(f => f.lastModified)")
+    timestamps = await input.evaluate(
+        "input => [...input.files].map(f => f.lastModified)"
+    )
     expected_timestamps = [os.path.getmtime(assetdir / file) * 1000 for file in files]
 
     # On Linux browser sometimes reduces the timestamp by 1ms: 1696272058110.0715  -> 1696272058109 or even
@@ -400,7 +413,9 @@ async def test_should_upload_multiple_large_file(
         await input.click()
     file_chooser = await fc_info.value
     await file_chooser.set_files(upload_files)
-    files_len = await page.evaluate('document.getElementsByTagName("input")[0].files.length')
+    files_len = await page.evaluate(
+        'document.getElementsByTagName("input")[0].files.length'
+    )
     assert file_chooser.is_multiple()
     assert files_len == files_count
     for path in upload_files:
@@ -426,7 +441,9 @@ async def test_should_upload_a_folder(
     (dir / "sub-dir").mkdir()
     (dir / "sub-dir" / "really.txt").write_text("sub-dir file content")
     await input.set_input_files(dir)
-    assert set(await input.evaluate("e => [...e.files].map(f => f.webkitRelativePath)")) == set(
+    assert set(
+        await input.evaluate("e => [...e.files].map(f => f.webkitRelativePath)")
+    ) == set(
         [
             "file-upload-test/file1.txt",
             "file-upload-test/file2",
@@ -440,7 +457,9 @@ async def test_should_upload_a_folder(
             ),
         ]
     )
-    webkit_relative_paths = await input.evaluate("e => [...e.files].map(f => f.webkitRelativePath)")
+    webkit_relative_paths = await input.evaluate(
+        "e => [...e.files].map(f => f.webkitRelativePath)"
+    )
     for i, webkit_relative_path in enumerate(webkit_relative_paths):
         content = await input.evaluate(
             """(e, i) => {
@@ -480,7 +499,9 @@ async def test_should_throw_if_a_directory_and_files_are_passed(
     (dir / "file1.txt").write_text("file1 content")
     with pytest.raises(Error) as exc_info:
         await input.set_input_files([dir, dir / "file1.txt"])
-    assert "File paths must be all files or a single directory" in exc_info.value.message
+    assert (
+        "File paths must be all files or a single directory" in exc_info.value.message
+    )
 
 
 async def test_should_throw_when_upload_a_folder_in_a_normal_file_upload_input(

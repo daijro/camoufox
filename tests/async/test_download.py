@@ -51,7 +51,9 @@ def after_each_hook(server: Server) -> Generator[None, None, None]:
 async def test_should_report_downloads_with_accept_downloads_false(
     page: Page, server: Server
 ) -> None:
-    await page.set_content(f'<a href="{server.PREFIX}/downloadWithFilename">download</a>')
+    await page.set_content(
+        f'<a href="{server.PREFIX}/downloadWithFilename">download</a>'
+    )
     async with page.expect_download() as download_info:
         await page.click("a")
     download = await download_info.value
@@ -205,7 +207,9 @@ async def test_should_error_when_saving_after_deletion(
     await page.close()
 
 
-async def test_should_report_non_navigation_downloads(browser: Browser, server: Server) -> None:
+async def test_should_report_non_navigation_downloads(
+    browser: Browser, server: Server
+) -> None:
     # Mac WebKit embedder does not download in this case, although Safari does.
     def handle_download(request: TestServerRequest) -> None:
         request.setHeader("Content-Type", "application/octet-stream")
@@ -216,7 +220,9 @@ async def test_should_report_non_navigation_downloads(browser: Browser, server: 
 
     page = await browser.new_page(accept_downloads=True)
     await page.goto(server.EMPTY_PAGE)
-    await page.set_content(f'<a download="file.txt" href="{server.PREFIX}/download">download</a>')
+    await page.set_content(
+        f'<a download="file.txt" href="{server.PREFIX}/download">download</a>'
+    )
     async with page.expect_download() as download_info:
         await page.click("a")
     download = await download_info.value
@@ -269,7 +275,9 @@ async def test_download_report_download_path_within_page_on_handle_for_blobs(
 
 
 @pytest.mark.only_browser("chromium")
-async def test_should_report_alt_click_downloads(browser: Browser, server: Server) -> None:
+async def test_should_report_alt_click_downloads(
+    browser: Browser, server: Server
+) -> None:
     # Firefox does not download on alt-click by default.
     # Our WebKit embedder does not download on alt-click, although Safari does.
     def handle_download(request: TestServerRequest) -> None:
@@ -291,9 +299,13 @@ async def test_should_report_alt_click_downloads(browser: Browser, server: Serve
     await page.close()
 
 
-async def test_should_report_new_window_downloads(browser: Browser, server: Server) -> None:
+async def test_should_report_new_window_downloads(
+    browser: Browser, server: Server
+) -> None:
     page = await browser.new_page(accept_downloads=True)
-    await page.set_content(f'<a target=_blank href="{server.PREFIX}/download">download</a>')
+    await page.set_content(
+        f'<a target=_blank href="{server.PREFIX}/download">download</a>'
+    )
     async with page.expect_download() as download_info:
         await page.click("a")
     download = await download_info.value

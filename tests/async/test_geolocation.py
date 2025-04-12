@@ -14,8 +14,8 @@
 
 
 import pytest
-from playwright.async_api import Browser, BrowserContext, Error, Page
 
+from playwright.async_api import Browser, BrowserContext, Error, Page
 from tests.server import Server
 
 
@@ -35,7 +35,8 @@ async def test_should_throw_when_invalid_longitude(context: BrowserContext) -> N
     with pytest.raises(Error) as exc:
         await context.set_geolocation({"latitude": 10, "longitude": 200})
     assert (
-        "geolocation.longitude: precondition -180 <= LONGITUDE <= 180 failed." in exc.value.message
+        "geolocation.longitude: precondition -180 <= LONGITUDE <= 180 failed."
+        in exc.value.message
     )
 
 

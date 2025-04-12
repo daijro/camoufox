@@ -20,7 +20,9 @@ import pytest
 from playwright.async_api import Page
 
 
-async def test_accessibility_should_work(page: Page, is_firefox: bool, is_chromium: bool) -> None:
+async def test_accessibility_should_work(
+    page: Page, is_firefox: bool, is_chromium: bool
+) -> None:
     await page.set_content(
         """<head>
       <title>Accessibility Test</title>
@@ -101,7 +103,8 @@ async def test_accessibility_should_work(page: Page, is_firefox: bool, is_chromi
                     "name": (
                         "placeholder"
                         if (
-                            sys.platform == "darwin" and int(os.uname().release.split(".")[0]) >= 21
+                            sys.platform == "darwin"
+                            and int(os.uname().release.split(".")[0]) >= 21
                         )
                         else "This is a description!"
                     ),
@@ -112,7 +115,9 @@ async def test_accessibility_should_work(page: Page, is_firefox: bool, is_chromi
     assert await page.accessibility.snapshot() == golden
 
 
-async def test_accessibility_should_work_with_regular_text(page: Page, is_firefox: bool) -> None:
+async def test_accessibility_should_work_with_regular_text(
+    page: Page, is_firefox: bool
+) -> None:
     await page.set_content("<div>Hello World</div>")
     snapshot = await page.accessibility.snapshot()
     assert snapshot
@@ -130,7 +135,9 @@ async def test_accessibility_roledescription(page: Page) -> None:
 
 
 async def test_accessibility_orientation(page: Page) -> None:
-    await page.set_content('<a href="" role="slider" aria-orientation="vertical">11</a>')
+    await page.set_content(
+        '<a href="" role="slider" aria-orientation="vertical">11</a>'
+    )
     snapshot = await page.accessibility.snapshot()
     assert snapshot
     assert snapshot["children"][0]["orientation"] == "vertical"
@@ -144,14 +151,18 @@ async def test_accessibility_autocomplete(page: Page) -> None:
 
 
 async def test_accessibility_multiselectable(page: Page) -> None:
-    await page.set_content('<div role="grid" tabIndex=-1 aria-multiselectable=true>hey</div>')
+    await page.set_content(
+        '<div role="grid" tabIndex=-1 aria-multiselectable=true>hey</div>'
+    )
     snapshot = await page.accessibility.snapshot()
     assert snapshot
     assert snapshot["children"][0]["multiselectable"]
 
 
 async def test_accessibility_keyshortcuts(page: Page) -> None:
-    await page.set_content('<div role="grid" tabIndex=-1 aria-keyshortcuts="foo">hey</div>')
+    await page.set_content(
+        '<div role="grid" tabIndex=-1 aria-keyshortcuts="foo">hey</div>'
+    )
     snapshot = await page.accessibility.snapshot()
     assert snapshot
     assert snapshot["children"][0]["keyshortcuts"] == "foo"

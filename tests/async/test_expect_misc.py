@@ -32,7 +32,9 @@ async def test_to_be_in_viewport_should_work(page: Page, server: Server) -> None
     await expect(page.locator("#small")).to_be_in_viewport(ratio=1)
 
 
-async def test_to_be_in_viewport_should_respect_ratio_option(page: Page, server: Server) -> None:
+async def test_to_be_in_viewport_should_respect_ratio_option(
+    page: Page, server: Server
+) -> None:
     await page.set_content(
         """
       <style>body, div, html { padding: 0; margin: 0; }</style>
@@ -52,7 +54,9 @@ async def test_to_be_in_viewport_should_respect_ratio_option(page: Page, server:
     await expect(page.locator("div")).not_to_be_in_viewport(ratio=0.8)
 
 
-async def test_to_be_in_viewport_should_have_good_stack(page: Page, server: Server) -> None:
+async def test_to_be_in_viewport_should_have_good_stack(
+    page: Page, server: Server
+) -> None:
     with pytest.raises(AssertionError) as exc_info:
         await expect(page.locator("body")).not_to_be_in_viewport(timeout=100)
     assert 'unexpected value "viewport ratio' in str(exc_info.value)

@@ -20,7 +20,9 @@ from playwright.async_api import Browser, BrowserType
 from tests.server import Server
 
 
-async def test_should_expose_video_path(browser: Browser, tmpdir: Path, server: Server) -> None:
+async def test_should_expose_video_path(
+    browser: Browser, tmpdir: Path, server: Server
+) -> None:
     page = await browser.new_page(record_video_dir=tmpdir)
     await page.goto(server.PREFIX + "/grid.html")
     assert page.video
@@ -29,7 +31,9 @@ async def test_should_expose_video_path(browser: Browser, tmpdir: Path, server: 
     await page.context.close()
 
 
-async def test_short_video_should_throw(browser: Browser, tmpdir: Path, server: Server) -> None:
+async def test_short_video_should_throw(
+    browser: Browser, tmpdir: Path, server: Server
+) -> None:
     page = await browser.new_page(record_video_dir=tmpdir)
     await page.goto(server.PREFIX + "/grid.html")
     assert page.video

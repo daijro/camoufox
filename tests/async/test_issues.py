@@ -22,7 +22,9 @@ from playwright.async_api import Browser, BrowserType, Page, Playwright
 
 @pytest.mark.only_browser("chromium")
 async def test_issue_189(browser_type: BrowserType, launch_arguments: Dict) -> None:
-    browser = await browser_type.launch(**launch_arguments, ignore_default_args=["--mute-audio"])
+    browser = await browser_type.launch(
+        **launch_arguments, ignore_default_args=["--mute-audio"]
+    )
     page = await browser.new_page()
     assert await page.evaluate("1 + 1") == 2
     await browser.close()

@@ -49,5 +49,7 @@ async def test_version_should_work(browser: Browser, is_chromium: bool) -> None:
         assert re.match(r"^\d+\.\d+", version)
 
 
-async def test_should_return_browser_type(browser: Browser, browser_type: BrowserType) -> None:
+async def test_should_return_browser_type(
+    browser: Browser, browser_type: BrowserType
+) -> None:
     assert browser.browser_type is browser_type

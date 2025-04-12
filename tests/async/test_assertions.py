@@ -30,7 +30,9 @@ async def test_assertions_page_to_have_title(page: Page, server: Server) -> None
     with pytest.raises(AssertionError):
         await expect(page).to_have_title("not the current title", timeout=750)
     with pytest.raises(AssertionError):
-        await expect(page).to_have_title(re.compile("not the current title"), timeout=750)
+        await expect(page).to_have_title(
+            re.compile("not the current title"), timeout=750
+        )
     with pytest.raises(AssertionError):
         await expect(page).not_to_have_title(re.compile("new title"), timeout=750)
     with pytest.raises(AssertionError):
@@ -72,7 +74,9 @@ async def test_assertions_page_to_have_url(page: Page, server: Server) -> None:
     await expect(page).not_to_have_url("**/empty.html", timeout=750)
 
 
-async def test_assertions_page_to_have_url_with_base_url(browser: Browser, server: Server) -> None:
+async def test_assertions_page_to_have_url_with_base_url(
+    browser: Browser, server: Server
+) -> None:
     page = await browser.new_page(base_url=server.PREFIX)
     await page.goto("/empty.html")
     await expect(page).to_have_url("/empty.html")
@@ -108,13 +112,21 @@ async def test_assertions_locator_to_have_attribute(page: Page, server: Server) 
     await page.goto(server.EMPTY_PAGE)
     await page.set_content("<div id=foobar>kek</div>")
     await expect(page.locator("div#foobar")).to_have_attribute("id", "foobar")
-    await expect(page.locator("div#foobar")).to_have_attribute("id", re.compile("foobar"))
-    await expect(page.locator("div#foobar")).not_to_have_attribute("id", "kek", timeout=100)
+    await expect(page.locator("div#foobar")).to_have_attribute(
+        "id", re.compile("foobar")
+    )
+    await expect(page.locator("div#foobar")).not_to_have_attribute(
+        "id", "kek", timeout=100
+    )
     with pytest.raises(AssertionError):
-        await expect(page.locator("div#foobar")).to_have_attribute("id", "koko", timeout=100)
+        await expect(page.locator("div#foobar")).to_have_attribute(
+            "id", "koko", timeout=100
+        )
 
 
-async def test_assertions_locator_to_have_attribute_ignore_case(page: Page, server: Page) -> None:
+async def test_assertions_locator_to_have_attribute_ignore_case(
+    page: Page, server: Page
+) -> None:
     await page.set_content("<div id=NoDe>Text content</div>")
     locator = page.locator("#NoDe")
     await expect(locator).to_have_attribute("id", "node", ignore_case=True)
@@ -144,7 +156,9 @@ async def test_assertions_locator_to_have_count(page: Page, server: Server) -> N
 
 async def test_assertions_locator_to_have_css(page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
-    await page.set_content("<div class=foobar style='color: rgb(234, 74, 90);'>kek</div>")
+    await page.set_content(
+        "<div class=foobar style='color: rgb(234, 74, 90);'>kek</div>"
+    )
     await expect(page.locator("div.foobar")).to_have_css("color", "rgb(234, 74, 90)")
     await expect(page.locator("div.foobar")).not_to_have_css(
         "color", "rgb(42, 42, 42)", timeout=100
@@ -164,7 +178,9 @@ async def test_assertions_locator_to_have_id(page: Page, server: Server) -> None
         await expect(page.locator("div.foobar")).to_have_id("top", timeout=100)
 
 
-async def test_assertions_locator_to_have_js_property(page: Page, server: Server) -> None:
+async def test_assertions_locator_to_have_js_property(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.set_content("<div></div>")
     await page.eval_on_selector(
@@ -255,7 +271,9 @@ async def test_assertions_locator_to_have_text(page: Page, server: Server) -> No
 
     await page.set_content("<div>Text    \n1</div><div>Text   2a</div>")
     # Should only normalize whitespace in the first item.
-    await expect(page.locator("div")).to_have_text(["Text  1", re.compile(r"Text   \d+a")])
+    await expect(page.locator("div")).to_have_text(
+        ["Text  1", re.compile(r"Text   \d+a")]
+    )
 
 
 @pytest.mark.parametrize(
@@ -266,19 +284,27 @@ async def test_ignore_case(page: Page, server: Server, method: str) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.set_content("<div id=target>apple BANANA</div><div>orange</div>")
     await getattr(expect(page.locator("div#target")), method)("apple BANANA")
-    await getattr(expect(page.locator("div#target")), method)("apple banana", ignore_case=True)
+    await getattr(expect(page.locator("div#target")), method)(
+        "apple banana", ignore_case=True
+    )
     # defaults false
     with pytest.raises(AssertionError) as excinfo:
-        await getattr(expect(page.locator("div#target")), method)("apple banana", timeout=300)
+        await getattr(expect(page.locator("div#target")), method)(
+            "apple banana", timeout=300
+        )
     expected_error_msg = method.replace("_", " ")
     assert expected_error_msg in str(excinfo.value)
 
     # Array Variants
     await getattr(expect(page.locator("div")), method)(["apple BANANA", "orange"])
-    await getattr(expect(page.locator("div")), method)(["apple banana", "ORANGE"], ignore_case=True)
+    await getattr(expect(page.locator("div")), method)(
+        ["apple banana", "ORANGE"], ignore_case=True
+    )
     # defaults false
     with pytest.raises(AssertionError) as excinfo:
-        await getattr(expect(page.locator("div")), method)(["apple banana", "ORANGE"], timeout=300)
+        await getattr(expect(page.locator("div")), method)(
+            ["apple banana", "ORANGE"], timeout=300
+        )
     assert expected_error_msg in str(excinfo.value)
 
     # not variant
@@ -297,7 +323,9 @@ async def test_ignore_case(page: Page, server: Server, method: str) -> None:
 async def test_ignore_case_regex(page: Page, server: Server, method: str) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.set_content("<div id=target>apple BANANA</div><div>orange</div>")
-    await getattr(expect(page.locator("div#target")), method)(re.compile("apple BANANA"))
+    await getattr(expect(page.locator("div#target")), method)(
+        re.compile("apple BANANA")
+    )
     await getattr(expect(page.locator("div#target")), method)(
         re.compile("apple banana"), ignore_case=True
     )
@@ -341,7 +369,9 @@ async def test_ignore_case_regex(page: Page, server: Server, method: str) -> Non
     assert expected_error_msg in str(excinfo.value)
 
     # not variant
-    await getattr(expect(page.locator("div#target")), f"not_{method}")(re.compile("apple banana"))
+    await getattr(expect(page.locator("div#target")), f"not_{method}")(
+        re.compile("apple banana")
+    )
     with pytest.raises(AssertionError) as excinfo:
         await getattr(expect(page.locator("div#target")), f"not_{method}")(
             re.compile("apple banana"), ignore_case=True, timeout=300
@@ -422,7 +452,9 @@ async def test_to_have_values_works_with_regex(page: Page, server: Server) -> No
     await expect(locator).to_have_values([re.compile("R"), re.compile("G")])
 
 
-async def test_to_have_values_fails_when_items_not_selected(page: Page, server: Server) -> None:
+async def test_to_have_values_fails_when_items_not_selected(
+    page: Page, server: Server
+) -> None:
     await page.set_content(
         """
         <select multiple>
@@ -440,7 +472,9 @@ async def test_to_have_values_fails_when_items_not_selected(page: Page, server: 
     assert "Actual value: ['B']" in str(excinfo.value)
 
 
-async def test_to_have_values_fails_when_multiple_not_specified(page: Page, server: Server) -> None:
+async def test_to_have_values_fails_when_multiple_not_specified(
+    page: Page, server: Server
+) -> None:
     await page.set_content(
         """
         <select>
@@ -457,7 +491,9 @@ async def test_to_have_values_fails_when_multiple_not_specified(page: Page, serv
     assert "Error: Not a select element with a multiple attribute" in str(excinfo.value)
 
 
-async def test_to_have_values_fails_when_not_a_select_element(page: Page, server: Server) -> None:
+async def test_to_have_values_fails_when_not_a_select_element(
+    page: Page, server: Server
+) -> None:
     await page.set_content(
         """
         <input type="text">
@@ -486,7 +522,9 @@ async def test_assertions_locator_to_be_checked(page: Page, server: Server) -> N
     await expect(my_checkbox).to_be_checked()
 
 
-async def test_assertions_locator_to_be_disabled_enabled(page: Page, server: Server) -> None:
+async def test_assertions_locator_to_be_disabled_enabled(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.set_content("<input type=checkbox>")
     my_checkbox = page.locator("input")
@@ -511,7 +549,9 @@ async def test_assertions_locator_to_be_editable(page: Page, server: Server) -> 
 
 async def test_assertions_locator_to_be_empty(page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
-    await page.set_content("<input value=text name=input1></input><input name=input2></input>")
+    await page.set_content(
+        "<input value=text name=input1></input><input name=input2></input>"
+    )
     await expect(page.locator("input[name=input1]")).not_to_be_empty()
     await expect(page.locator("input[name=input2]")).to_be_empty()
     with pytest.raises(AssertionError):
@@ -528,7 +568,9 @@ async def test_assertions_locator_to_be_focused(page: Page, server: Server) -> N
     await expect(my_checkbox).to_be_focused()
 
 
-async def test_assertions_locator_to_be_hidden_visible(page: Page, server: Server) -> None:
+async def test_assertions_locator_to_be_hidden_visible(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.set_content("<div style='width: 50px; height: 50px;'>Something</div>")
     my_checkbox = page.locator("div")
@@ -541,10 +583,14 @@ async def test_assertions_locator_to_be_hidden_visible(page: Page, server: Serve
         await expect(my_checkbox).to_be_visible(timeout=100)
 
 
-async def test_assertions_should_serialize_regexp_correctly(page: Page, server: Server) -> None:
+async def test_assertions_should_serialize_regexp_correctly(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.set_content("<div>iGnOrEcAsE</div>")
-    await expect(page.locator("div")).to_have_text(re.compile(r"ignorecase", re.IGNORECASE))
+    await expect(page.locator("div")).to_have_text(
+        re.compile(r"ignorecase", re.IGNORECASE)
+    )
     await page.set_content(
         """<div>start
 some
@@ -566,7 +612,9 @@ async def test_assertions_response_is_ok_pass(page: Page, server: Server) -> Non
     await expect(response).to_be_ok()
 
 
-async def test_assertions_response_is_ok_pass_with_not(page: Page, server: Server) -> None:
+async def test_assertions_response_is_ok_pass_with_not(
+    page: Page, server: Server
+) -> None:
     response = await page.request.get(server.PREFIX + "/unknown")
     await expect(response).not_to_be_ok()
 
@@ -651,7 +699,9 @@ async def test_should_print_users_message_for_page_based_assertion(
     assert "Page title expected to be" in str(excinfo.value)
 
 
-async def test_should_print_expected_value_with_custom_message(page: Page, server: Server) -> None:
+async def test_should_print_expected_value_with_custom_message(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.set_content("<title>new title</title>")
     with pytest.raises(AssertionError) as excinfo:
@@ -659,7 +709,9 @@ async def test_should_print_expected_value_with_custom_message(page: Page, serve
     assert "custom-message" in str(excinfo.value)
     assert "Expected value: 'old title'" in str(excinfo.value)
     with pytest.raises(AssertionError) as excinfo:
-        await expect(page.get_by_text("hello"), "custom-message").to_be_visible(timeout=100)
+        await expect(page.get_by_text("hello"), "custom-message").to_be_visible(
+            timeout=100
+        )
     assert "custom-message" in str(excinfo.value)
     assert "Expected value" not in str(excinfo.value)
 
@@ -712,7 +764,9 @@ async def test_should_be_attached_eventually(page: Page) -> None:
 async def test_should_be_attached_eventually_with_not(page: Page) -> None:
     await page.set_content("<div><span>Hello</span></div>")
     locator = page.locator("span")
-    await page.locator("div").evaluate("(e) => setTimeout(() => e.textContent = '', 1000)")
+    await page.locator("div").evaluate(
+        "(e) => setTimeout(() => e.textContent = '', 1000)"
+    )
     await expect(locator).not_to_be_attached()
 
 
@@ -774,7 +828,9 @@ async def test_should_be_able_to_set_custom_global_timeout(page: Page) -> None:
         expect.set_options(timeout=111)
         with pytest.raises(AssertionError) as exc_info:
             await expect(page.locator("#a1")).to_be_visible()
-        assert "LocatorAssertions.to_be_visible with timeout 111ms" in str(exc_info.value)
+        assert "LocatorAssertions.to_be_visible with timeout 111ms" in str(
+            exc_info.value
+        )
     finally:
         expect.set_options(timeout=None)
 
@@ -787,7 +843,9 @@ async def test_to_have_accessible_name(page: Page) -> None:
     await expect(locator).to_have_accessible_name("hello", ignore_case=True)
     await expect(locator).to_have_accessible_name(re.compile(r"ell\w"))
     await expect(locator).not_to_have_accessible_name(re.compile(r"hello"))
-    await expect(locator).to_have_accessible_name(re.compile(r"hello"), ignore_case=True)
+    await expect(locator).to_have_accessible_name(
+        re.compile(r"hello"), ignore_case=True
+    )
 
 
 async def test_to_have_accessible_description(page: Page) -> None:
@@ -798,7 +856,9 @@ async def test_to_have_accessible_description(page: Page) -> None:
     await expect(locator).to_have_accessible_description("hello", ignore_case=True)
     await expect(locator).to_have_accessible_description(re.compile(r"ell\w"))
     await expect(locator).not_to_have_accessible_description(re.compile(r"hello"))
-    await expect(locator).to_have_accessible_description(re.compile(r"hello"), ignore_case=True)
+    await expect(locator).to_have_accessible_description(
+        re.compile(r"hello"), ignore_case=True
+    )
 
 
 async def test_to_have_role(page: Page) -> None:

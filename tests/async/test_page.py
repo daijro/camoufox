@@ -35,7 +35,9 @@ from tests.utils import TARGET_CLOSED_ERROR_MESSAGE, must
 async def test_close_should_reject_all_promises(context: BrowserContext) -> None:
     new_page = await context.new_page()
     with pytest.raises(Error) as exc_info:
-        await asyncio.gather(new_page.evaluate("() => new Promise(r => {})"), new_page.close())
+        await asyncio.gather(
+            new_page.evaluate("() => new Promise(r => {})"), new_page.close()
+        )
     assert " closed" in exc_info.value.message
 
 
@@ -68,7 +70,10 @@ async def test_close_should_run_beforeunload_if_asked_for(
     elif is_webkit:
         assert dialog.message == "Leave?"
     else:
-        assert "This page is asking you to confirm that you want to leave" in dialog.message
+        assert (
+            "This page is asking you to confirm that you want to leave"
+            in dialog.message
+        )
     async with page.expect_event("close"):
         await dialog.accept()
 
@@ -118,7 +123,9 @@ async def test_close_should_terminate_network_waiters(
                 pass
         return exc_info.value
 
-    results = await asyncio.gather(wait_for_request(), wait_for_response(), page.close())
+    results = await asyncio.gather(
+        wait_for_request(), wait_for_response(), page.close()
+    )
     for i in range(2):
         error = results[i]
         assert error
@@ -175,7 +182,9 @@ async def test_should_work_with_wait_for_loadstate(page: Page, server: Server) -
 
 
 async def test_async_stacks_should_work(page: Page, server: Server) -> None:
-    await page.route("**/empty.html", lambda route, response: asyncio.create_task(route.abort()))
+    await page.route(
+        "**/empty.html", lambda route, response: asyncio.create_task(route.abort())
+    )
     with pytest.raises(Error) as exc_info:
         await page.goto(server.EMPTY_PAGE)
     assert exc_info.value.stack
@@ -201,7 +210,9 @@ async def test_opener_should_return_null_if_parent_page_has_been_closed(
     assert opener is None
 
 
-async def test_domcontentloaded_should_fire_when_expected(page: Page, server: Server) -> None:
+async def test_domcontentloaded_should_fire_when_expected(
+    page: Page, server: Server
+) -> None:
     future = asyncio.create_task(page.goto("about:blank"))
     async with page.expect_event("domcontentloaded"):
         pass
@@ -222,7 +233,9 @@ async def test_wait_for_request(page: Page, server: Server) -> None:
     assert request.url == server.PREFIX + "/digits/2.png"
 
 
-async def test_wait_for_request_should_work_with_predicate(page: Page, server: Server) -> None:
+async def test_wait_for_request_should_work_with_predicate(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     async with page.expect_request(
         lambda request: request.url == server.PREFIX + "/digits/2.png"
@@ -245,7 +258,9 @@ async def test_wait_for_request_should_timeout(page: Page, server: Server) -> No
     assert exc_info.type is TimeoutError
 
 
-async def test_wait_for_request_should_respect_default_timeout(page: Page, server: Server) -> None:
+async def test_wait_for_request_should_respect_default_timeout(
+    page: Page, server: Server
+) -> None:
     page.set_default_timeout(1)
     with pytest.raises(Error) as exc_info:
         async with page.expect_event("request", lambda _: False):
@@ -253,9 +268,13 @@ async def test_wait_for_request_should_respect_default_timeout(page: Page, serve
     assert exc_info.type is TimeoutError
 
 
-async def test_wait_for_request_should_work_with_no_timeout(page: Page, server: Server) -> None:
+async def test_wait_for_request_should_work_with_no_timeout(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
-    async with page.expect_request(server.PREFIX + "/digits/2.png", timeout=0) as request_info:
+    async with page.expect_request(
+        server.PREFIX + "/digits/2.png", timeout=0
+    ) as request_info:
         await page.evaluate(
             """() => setTimeout(() => {
                 fetch('/digits/1.png')
@@ -267,7 +286,9 @@ async def test_wait_for_request_should_work_with_no_timeout(page: Page, server: 
     assert request.url == server.PREFIX + "/digits/2.png"
 
 
-async def test_wait_for_request_should_work_with_url_match(page: Page, server: Server) -> None:
+async def test_wait_for_request_should_work_with_url_match(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     async with page.expect_request(re.compile(r"digits\/\d\.png")) as request_info:
         await page.evaluate("fetch('/digits/1.png')")
@@ -313,7 +334,9 @@ async def test_wait_for_response_should_respect_default_timeout(page: Page) -> N
     assert exc_info.type is TimeoutError
 
 
-async def test_wait_for_response_should_work_with_predicate(page: Page, server: Server) -> None:
+async def test_wait_for_response_should_work_with_predicate(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     async with page.expect_response(
         lambda response: response.url == server.PREFIX + "/digits/2.png"
@@ -329,7 +352,9 @@ async def test_wait_for_response_should_work_with_predicate(page: Page, server: 
     assert response.url == server.PREFIX + "/digits/2.png"
 
 
-async def test_wait_for_response_should_work_with_no_timeout(page: Page, server: Server) -> None:
+async def test_wait_for_response_should_work_with_no_timeout(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     async with page.expect_response(server.PREFIX + "/digits/2.png") as response_info:
         await page.evaluate(
@@ -417,7 +442,9 @@ async def test_expose_function_should_be_callable_from_inside_add_init_script(
     assert called == [True]
 
 
-async def test_expose_function_should_survive_navigation(page: Page, server: Server) -> None:
+async def test_expose_function_should_survive_navigation(
+    page: Page, server: Server
+) -> None:
     await page.expose_function("compute", lambda a, b: a * b)
     await page.goto(server.EMPTY_PAGE)
     result = await page.evaluate("compute(9, 4)")
@@ -432,7 +459,9 @@ async def test_expose_function_should_await_returned_promise(page: Page) -> None
     assert await page.evaluate("compute(3, 5)") == 15
 
 
-async def test_expose_function_should_work_on_frames(page: Page, server: Server) -> None:
+async def test_expose_function_should_work_on_frames(
+    page: Page, server: Server
+) -> None:
     await page.expose_function("compute", lambda a, b: a * b)
     await page.goto(server.PREFIX + "/frames/nested-frames.html")
     frame = page.frames[1]
@@ -457,7 +486,9 @@ async def test_expose_function_should_work_after_cross_origin_navigation(
     assert await page.evaluate("compute(9, 4)") == 36
 
 
-async def test_expose_function_should_work_with_complex_objects(page: Page, server: Server) -> None:
+async def test_expose_function_should_work_with_complex_objects(
+    page: Page, server: Server
+) -> None:
     await page.expose_function("complexObject", lambda a, b: dict(x=a["x"] + b["x"]))
     result = await page.evaluate("complexObject({x: 5}, {x: 2})")
     assert result["x"] == 7
@@ -476,7 +507,9 @@ async def test_expose_bindinghandle_should_work(page: Page, server: Server) -> N
     assert result == 17
 
 
-async def test_page_error_should_fire(page: Page, server: Server, browser_name: str) -> None:
+async def test_page_error_should_fire(
+    page: Page, server: Server, browser_name: str
+) -> None:
     url = server.PREFIX + "/error.html"
     async with page.expect_event("pageerror") as error_info:
         await page.goto(url)
@@ -560,7 +593,9 @@ async def test_set_content_should_work(page: Page, server: Server) -> None:
     assert result == expected_output
 
 
-async def test_set_content_should_work_with_domcontentloaded(page: Page, server: Server) -> None:
+async def test_set_content_should_work_with_domcontentloaded(
+    page: Page, server: Server
+) -> None:
     await page.set_content("<div>hello</div>", wait_until="domcontentloaded")
     result = await page.content()
     assert result == expected_output
@@ -573,10 +608,10 @@ async def test_set_content_should_work_with_doctype(page: Page, server: Server) 
     assert result == f"{doctype}{expected_output}"
 
 
-async def test_set_content_should_work_with_HTML_4_doctype(page: Page, server: Server) -> None:
-    doctype = (
-        '<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">'
-    )
+async def test_set_content_should_work_with_HTML_4_doctype(
+    page: Page, server: Server
+) -> None:
+    doctype = '<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">'
     await page.set_content(f"{doctype}<div>hello</div>")
     result = await page.content()
     assert result == f"{doctype}{expected_output}"
@@ -587,7 +622,9 @@ async def test_set_content_should_respect_timeout(page: Page, server: Server) ->
     # stall for image
     server.set_route(img_path, lambda request: None)
     with pytest.raises(Error) as exc_info:
-        await page.set_content(f'<img src="{server.PREFIX + img_path}"></img>', timeout=1)
+        await page.set_content(
+            f'<img src="{server.PREFIX + img_path}"></img>', timeout=1
+        )
     assert exc_info.type is TimeoutError
 
 
@@ -605,7 +642,9 @@ async def test_set_content_should_respect_default_navigation_timeout(
     assert exc_info.type is TimeoutError
 
 
-async def test_set_content_should_await_resources_to_load(page: Page, server: Server) -> None:
+async def test_set_content_should_await_resources_to_load(
+    page: Page, server: Server
+) -> None:
     img_route: "asyncio.Future[Route]" = asyncio.Future()
     await page.route("**/img.png", lambda route, request: img_route.set_result(route))
     loaded = []
@@ -623,7 +662,7 @@ async def test_set_content_should_await_resources_to_load(page: Page, server: Se
 
 
 async def test_set_content_should_work_with_tricky_content(page: Page) -> None:
-    await page.set_content("<div>hello world</div>" + "\x7F")
+    await page.set_content("<div>hello world</div>" + "\x7f")
     assert await page.eval_on_selector("div", "div => div.textContent") == "hello world"
 
 
@@ -642,7 +681,9 @@ async def test_set_content_should_work_with_newline(page: Page) -> None:
     assert await page.eval_on_selector("div", "div => div.textContent") == "\n"
 
 
-async def test_add_script_tag_should_work_with_a_url(page: Page, server: Server) -> None:
+async def test_add_script_tag_should_work_with_a_url(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     script_handle = await page.add_script_tag(url="/injectedfile.js")
     assert script_handle.as_element()
@@ -707,7 +748,9 @@ async def test_add_script_tag_should_include_source_url_when_path_is_provided(
     assert os.path.join("assets", "injectedfile.js") in result
 
 
-async def test_add_script_tag_should_work_with_content(page: Page, server: Server) -> None:
+async def test_add_script_tag_should_work_with_content(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     script_handle = await page.add_script_tag(content="window.__injected = 35;")
     assert script_handle.as_element()
@@ -789,7 +832,9 @@ async def test_add_style_tag_should_include_source_url_when_path_is_provided(
     assert os.path.join("assets", "injectedstyle.css") in style_content
 
 
-async def test_add_style_tag_should_work_with_content(page: Page, server: Server) -> None:
+async def test_add_style_tag_should_work_with_content(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     style_handle = await page.add_style_tag(content="body { background-color: green; }")
     assert style_handle.as_element()
@@ -856,7 +901,9 @@ async def test_fill_should_fill_input(page: Page, server: Server) -> None:
     assert await page.evaluate("result") == "some value"
 
 
-async def test_fill_should_throw_on_unsupported_inputs(page: Page, server: Server) -> None:
+async def test_fill_should_throw_on_unsupported_inputs(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/textarea.html")
     for type in [
         "button",
@@ -875,7 +922,9 @@ async def test_fill_should_throw_on_unsupported_inputs(page: Page, server: Serve
         assert f'Input of type "{type}" cannot be filled' in exc_info.value.message
 
 
-async def test_fill_should_fill_different_input_types(page: Page, server: Server) -> None:
+async def test_fill_should_fill_different_input_types(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/textarea.html")
     for type in ["password", "search", "tel", "text", "url"]:
         await page.eval_on_selector(
@@ -885,7 +934,9 @@ async def test_fill_should_fill_different_input_types(page: Page, server: Server
         assert await page.evaluate("result") == "text " + type
 
 
-async def test_fill_should_fill_date_input_after_clicking(page: Page, server: Server) -> None:
+async def test_fill_should_fill_date_input_after_clicking(
+    page: Page, server: Server
+) -> None:
     await page.set_content("<input type=date>")
     await page.click("input")
     await page.fill("input", "2020-03-02")
@@ -916,10 +967,15 @@ async def test_fill_should_throw_on_incorrect_time(page: Page, server: Server) -
     assert "Malformed value" in exc_info.value.message
 
 
-async def test_fill_should_fill_datetime_local_input(page: Page, server: Server) -> None:
+async def test_fill_should_fill_datetime_local_input(
+    page: Page, server: Server
+) -> None:
     await page.set_content("<input type=datetime-local>")
     await page.fill("input", "2020-03-02T05:15")
-    assert await page.eval_on_selector("input", "input => input.value") == "2020-03-02T05:15"
+    assert (
+        await page.eval_on_selector("input", "input => input.value")
+        == "2020-03-02T05:15"
+    )
 
 
 @pytest.mark.only_browser("chromium")
@@ -987,14 +1043,18 @@ async def test_fill_should_throw_when_element_is_not_an_input_textarea_or_conten
     assert "Element is not an <input>" in exc_info.value.message
 
 
-async def test_fill_should_throw_if_passed_a_non_string_value(page: Page, server: Server) -> None:
+async def test_fill_should_throw_if_passed_a_non_string_value(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/textarea.html")
     with pytest.raises(Error) as exc_info:
         await page.fill("textarea", 123)  # type: ignore
     assert "expected string, got number" in exc_info.value.message
 
 
-async def test_fill_should_retry_on_disabled_element(page: Page, server: Server) -> None:
+async def test_fill_should_retry_on_disabled_element(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/textarea.html")
     await page.eval_on_selector("input", "i => i.disabled = true")
     done = []
@@ -1013,7 +1073,9 @@ async def test_fill_should_retry_on_disabled_element(page: Page, server: Server)
     assert await page.evaluate("result") == "some value"
 
 
-async def test_fill_should_retry_on_readonly_element(page: Page, server: Server) -> None:
+async def test_fill_should_retry_on_readonly_element(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/textarea.html")
     await page.eval_on_selector("textarea", "i => i.readOnly = true")
     done = []
@@ -1032,7 +1094,9 @@ async def test_fill_should_retry_on_readonly_element(page: Page, server: Server)
     assert await page.evaluate("result") == "some value"
 
 
-async def test_fill_should_retry_on_invisible_element(page: Page, server: Server) -> None:
+async def test_fill_should_retry_on_invisible_element(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/textarea.html")
     await page.eval_on_selector("input", "i => i.style.display = 'none'")
     done = []
@@ -1108,7 +1172,9 @@ async def test_fill_should_not_be_able_to_fill_text_into_the_input_type_number_(
     assert "Cannot type text into input[type=number]" in exc_info.value.message
 
 
-async def test_fill_should_be_able_to_clear_using_fill(page: Page, server: Server) -> None:
+async def test_fill_should_be_able_to_clear_using_fill(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/textarea.html")
     await page.fill("input", "some value")
     assert await page.evaluate("result") == "some value"
@@ -1116,7 +1182,9 @@ async def test_fill_should_be_able_to_clear_using_fill(page: Page, server: Serve
     assert await page.evaluate("result") == ""
 
 
-async def test_close_event_should_work_with_window_close(page: Page, server: Server) -> None:
+async def test_close_event_should_work_with_window_close(
+    page: Page, server: Server
+) -> None:
     async with page.expect_popup() as popup_info:
         await page.evaluate("window['newPage'] = window.open('about:blank')")
     popup = await popup_info.value
@@ -1170,13 +1238,21 @@ async def test_frame_press_should_work(page: Page, server: Server) -> None:
 
 
 async def test_should_emulate_reduced_motion(page: Page, server: Server) -> None:
-    assert await page.evaluate("matchMedia('(prefers-reduced-motion: no-preference)').matches")
+    assert await page.evaluate(
+        "matchMedia('(prefers-reduced-motion: no-preference)').matches"
+    )
     await page.emulate_media(reduced_motion="reduce")
     assert await page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches")
-    assert not await page.evaluate("matchMedia('(prefers-reduced-motion: no-preference)').matches")
+    assert not await page.evaluate(
+        "matchMedia('(prefers-reduced-motion: no-preference)').matches"
+    )
     await page.emulate_media(reduced_motion="no-preference")
-    assert not await page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches")
-    assert await page.evaluate("matchMedia('(prefers-reduced-motion: no-preference)').matches")
+    assert not await page.evaluate(
+        "matchMedia('(prefers-reduced-motion: reduce)').matches"
+    )
+    assert await page.evaluate(
+        "matchMedia('(prefers-reduced-motion: no-preference)').matches"
+    )
 
 
 async def test_input_value(page: Page, server: Server) -> None:

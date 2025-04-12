@@ -16,8 +16,8 @@ import asyncio
 from typing import Optional
 
 import pytest
-from playwright.async_api import Page
 
+from playwright.async_api import Page
 from tests.utils import must
 
 from ..server import Server, TestServerRequest
@@ -50,7 +50,9 @@ async def test_console_event_should_work_in_popup(page: Page) -> None:
 
 # console message from javascript: url is not reported at all
 @pytest.mark.skip_browser("firefox")
-async def test_console_event_should_work_in_popup_2(page: Page, browser_name: str) -> None:
+async def test_console_event_should_work_in_popup_2(
+    page: Page, browser_name: str
+) -> None:
     [message, popup, _] = await asyncio.gather(
         page.context.wait_for_event("console", lambda msg: msg.type == "log"),
         page.context.wait_for_event("page"),
@@ -111,7 +113,9 @@ async def test_dialog_event_should_work_in_popup(page: Page) -> None:
 
     async def open_dialog() -> None:
         nonlocal prompt_task
-        prompt_task = asyncio.create_task(page.evaluate("() => window.open('').prompt('hey?')"))
+        prompt_task = asyncio.create_task(
+            page.evaluate("() => window.open('').prompt('hey?')")
+        )
 
     [dialog, popup, _] = await asyncio.gather(
         page.context.wait_for_event("dialog"),
@@ -126,8 +130,12 @@ async def test_dialog_event_should_work_in_popup(page: Page) -> None:
 
 # console message from javascript: url is not reported at all
 @pytest.mark.skip_browser("firefox")
-async def test_dialog_event_should_work_in_popup_2(page: Page, browser_name: str) -> None:
-    promise = asyncio.create_task(page.evaluate("() => window.open('javascript:prompt(\"hey?\")')"))
+async def test_dialog_event_should_work_in_popup_2(
+    page: Page, browser_name: str
+) -> None:
+    promise = asyncio.create_task(
+        page.evaluate("() => window.open('javascript:prompt(\"hey?\")')")
+    )
     dialog = await page.context.wait_for_event("dialog")
     assert dialog.message == "hey?"
     assert dialog.page is None
@@ -154,7 +162,9 @@ async def test_dialog_event_should_work_in_immdiately_closed_popup(page: Page) -
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
-async def test_dialog_event_should_work_with_inline_script_tag(page: Page, server: Server) -> None:
+async def test_dialog_event_should_work_with_inline_script_tag(
+    page: Page, server: Server
+) -> None:
     def handle_route(request: TestServerRequest) -> None:
         request.setHeader("content-type", "text/html")
         request.write(b"""<script>window.result = prompt('hey?')</script>""")

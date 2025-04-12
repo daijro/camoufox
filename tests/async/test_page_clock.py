@@ -57,8 +57,12 @@ class TestRunFor:
         await page.clock.run_for(100)
         assert len(calls) == 1
 
-    async def test_run_for_triggers_simultaneous_timers(self, page: Page, calls: List[Any]) -> None:
-        await page.evaluate("setTimeout(window.stub, 100); setTimeout(window.stub, 100)")
+    async def test_run_for_triggers_simultaneous_timers(
+        self, page: Page, calls: List[Any]
+    ) -> None:
+        await page.evaluate(
+            "setTimeout(window.stub, 100); setTimeout(window.stub, 100)"
+        )
         await page.clock.run_for(100)
         assert len(calls) == 2
 
@@ -94,7 +98,9 @@ class TestRunFor:
         self, page: Page, calls: List[Any]
     ) -> None:
         await page.clock.set_system_time(0)
-        await page.evaluate("setInterval(() => { window.stub(new Date().getTime()); }, 10)")
+        await page.evaluate(
+            "setInterval(() => { window.stub(new Date().getTime()); }, 10)"
+        )
         await page.clock.run_for(100)
         assert calls == [
             [10],
@@ -126,7 +132,9 @@ class TestRunFor:
         await page.clock.run_for("02:34:10")
         assert len(calls) == 925
 
-    async def test_run_for_throws_for_invalid_format(self, page: Page, calls: List[Any]) -> None:
+    async def test_run_for_throws_for_invalid_format(
+        self, page: Page, calls: List[Any]
+    ) -> None:
         await page.evaluate("setInterval(window.stub, 10000)")
         with pytest.raises(Error):
             await page.clock.run_for("12:02:34:10")
@@ -146,8 +154,12 @@ class TestFastForward:
         await page.clock.pause_at(1)
         yield
 
-    async def test_ignores_timers_which_wouldnt_be_run(self, page: Page, calls: List[Any]) -> None:
-        await page.evaluate("setTimeout(() => { window.stub('should not be logged'); }, 1000)")
+    async def test_ignores_timers_which_wouldnt_be_run(
+        self, page: Page, calls: List[Any]
+    ) -> None:
+        await page.evaluate(
+            "setTimeout(() => { window.stub('should not be logged'); }, 1000)"
+        )
         await page.clock.fast_forward(500)
         assert len(calls) == 0
 
@@ -158,7 +170,9 @@ class TestFastForward:
         await page.clock.fast_forward(2000)
         assert calls == [[1000 + 2000]]
 
-    async def test_supports_string_time_arguments(self, page: Page, calls: List[Any]) -> None:
+    async def test_supports_string_time_arguments(
+        self, page: Page, calls: List[Any]
+    ) -> None:
         await page.evaluate(
             "setTimeout(() => { window.stub(Date.now()); }, 100000)"
         )  # 100000 = 1:40
@@ -177,7 +191,9 @@ class TestStubTimers:
         await page.clock.set_system_time(1.4)
         assert await page.evaluate("Date.now()") == 1400
 
-    async def test_replaces_global_setTimeout(self, page: Page, calls: List[Any]) -> None:
+    async def test_replaces_global_setTimeout(
+        self, page: Page, calls: List[Any]
+    ) -> None:
         await page.evaluate("setTimeout(window.stub, 1000)")
         await page.clock.run_for(1000)
         assert len(calls) == 1
@@ -186,7 +202,9 @@ class TestStubTimers:
         to = await page.evaluate("setTimeout(window.stub, 1000)")
         assert isinstance(to, int)
 
-    async def test_replaces_global_clearTimeout(self, page: Page, calls: List[Any]) -> None:
+    async def test_replaces_global_clearTimeout(
+        self, page: Page, calls: List[Any]
+    ) -> None:
         await page.evaluate(
             """
             const to = setTimeout(window.stub, 1000);
@@ -196,12 +214,16 @@ class TestStubTimers:
         await page.clock.run_for(1000)
         assert len(calls) == 0
 
-    async def test_replaces_global_setInterval(self, page: Page, calls: List[Any]) -> None:
+    async def test_replaces_global_setInterval(
+        self, page: Page, calls: List[Any]
+    ) -> None:
         await page.evaluate("setInterval(window.stub, 500)")
         await page.clock.run_for(1000)
         assert len(calls) == 2
 
-    async def test_replaces_global_clearInterval(self, page: Page, calls: List[Any]) -> None:
+    async def test_replaces_global_clearInterval(
+        self, page: Page, calls: List[Any]
+    ) -> None:
         await page.evaluate(
             """
             const to = setInterval(window.stub, 500);
@@ -277,7 +299,9 @@ class TestPopup:
         assert popup_time == int(now.timestamp() * 1000 + 1000)
         assert datetime.datetime.fromtimestamp(popup_time / 1_000).year == 2015
 
-    async def test_should_run_time_before_popup(self, page: Page, server: Server) -> None:
+    async def test_should_run_time_before_popup(
+        self, page: Page, server: Server
+    ) -> None:
         server.set_route(
             "/popup.html",
             lambda res: (
@@ -332,7 +356,9 @@ class TestSetFixedTime:
         await page.clock.set_fixed_time(0.2)
         assert await page.evaluate("Date.now()") == 200
 
-    async def test_fixed_time_is_not_affected_by_clock_manipulation(self, page: Page) -> None:
+    async def test_fixed_time_is_not_affected_by_clock_manipulation(
+        self, page: Page
+    ) -> None:
         await page.clock.set_fixed_time(0.1)
         assert await page.evaluate("Date.now()") == 100
         await page.clock.fast_forward(20)

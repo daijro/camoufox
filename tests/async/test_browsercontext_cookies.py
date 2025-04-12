@@ -80,9 +80,9 @@ async def test_should_get_a_non_session_cookie(
     # Chromium patch: https://chromium.googlesource.com/chromium/src/+/aaa5d2b55478eac2ee642653dcd77a50ac3faff6
     # We want to make sure that expires date is at least 400 days in future.
     # We use 355 to prevent flakes and not think about timezones!
-    assert datetime.datetime.fromtimestamp(expires) - datetime.datetime.now() > datetime.timedelta(
-        days=355
-    )
+    assert datetime.datetime.fromtimestamp(
+        expires
+    ) - datetime.datetime.now() > datetime.timedelta(days=355)
     assert cookies == [
         {
             "name": "username",

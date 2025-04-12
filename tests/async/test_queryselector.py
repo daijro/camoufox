@@ -49,13 +49,27 @@ async def test_selectors_register_should_work(
     page = await context.new_page()
     await page.set_content("<div><span></span></div><div></div>")
 
-    assert await page.eval_on_selector(f"{selector_name}=DIV", "e => e.nodeName") == "DIV"
-    assert await page.eval_on_selector(f"{selector_name}=SPAN", "e => e.nodeName") == "SPAN"
-    assert await page.eval_on_selector_all(f"{selector_name}=DIV", "es => es.length") == 2
+    assert (
+        await page.eval_on_selector(f"{selector_name}=DIV", "e => e.nodeName") == "DIV"
+    )
+    assert (
+        await page.eval_on_selector(f"{selector_name}=SPAN", "e => e.nodeName")
+        == "SPAN"
+    )
+    assert (
+        await page.eval_on_selector_all(f"{selector_name}=DIV", "es => es.length") == 2
+    )
 
-    assert await page.eval_on_selector(f"{selector2_name}=DIV", "e => e.nodeName") == "DIV"
-    assert await page.eval_on_selector(f"{selector2_name}=SPAN", "e => e.nodeName") == "SPAN"
-    assert await page.eval_on_selector_all(f"{selector2_name}=DIV", "es => es.length") == 2
+    assert (
+        await page.eval_on_selector(f"{selector2_name}=DIV", "e => e.nodeName") == "DIV"
+    )
+    assert (
+        await page.eval_on_selector(f"{selector2_name}=SPAN", "e => e.nodeName")
+        == "SPAN"
+    )
+    assert (
+        await page.eval_on_selector_all(f"{selector2_name}=DIV", "es => es.length") == 2
+    )
 
     # Selector names are case-sensitive.
     with pytest.raises(Error) as exc:
@@ -96,9 +110,19 @@ async def test_selectors_register_should_work_in_main_and_isolated_world(
     await page.evaluate('() => window.__answer = document.querySelector("span")')
     # Works in main if asked.
     assert await page.eval_on_selector("main=ignored", "e => e.nodeName") == "SPAN"
-    assert await page.eval_on_selector("css=div >> main=ignored", "e => e.nodeName") == "SPAN"
-    assert await page.eval_on_selector_all("main=ignored", "es => window.__answer !== undefined")
-    assert await page.eval_on_selector_all("main=ignored", "es => es.filter(e => e).length") == 3
+    assert (
+        await page.eval_on_selector("css=div >> main=ignored", "e => e.nodeName")
+        == "SPAN"
+    )
+    assert await page.eval_on_selector_all(
+        "main=ignored", "es => window.__answer !== undefined"
+    )
+    assert (
+        await page.eval_on_selector_all(
+            "main=ignored", "es => es.filter(e => e).length"
+        )
+        == 3
+    )
     # Works in isolated by default.
     assert await page.query_selector("isolated=ignored") is None
     assert await page.query_selector("css=div >> isolated=ignored") is None
@@ -107,18 +131,28 @@ async def test_selectors_register_should_work_in_main_and_isolated_world(
         "isolated=ignored", "es => window.__answer !== undefined"
     )
     assert (
-        await page.eval_on_selector_all("isolated=ignored", "es => es.filter(e => e).length") == 3
+        await page.eval_on_selector_all(
+            "isolated=ignored", "es => es.filter(e => e).length"
+        )
+        == 3
     )
     # At least one engine in main forces all to be in main.
     assert (
-        await page.eval_on_selector("main=ignored >> isolated=ignored", "e => e.nodeName") == "SPAN"
+        await page.eval_on_selector(
+            "main=ignored >> isolated=ignored", "e => e.nodeName"
+        )
+        == "SPAN"
     )
     assert (
-        await page.eval_on_selector("isolated=ignored >> main=ignored", "e => e.nodeName") == "SPAN"
+        await page.eval_on_selector(
+            "isolated=ignored >> main=ignored", "e => e.nodeName"
+        )
+        == "SPAN"
     )
     # Can be chained to css.
     assert (
-        await page.eval_on_selector("main=ignored >> css=section", "e => e.nodeName") == "SECTION"
+        await page.eval_on_selector("main=ignored >> css=section", "e => e.nodeName")
+        == "SECTION"
     )
 
 
@@ -152,8 +186,12 @@ async def test_selectors_register_should_handle_errors(
     )
 
     # Selector names are case-sensitive.
-    await utils.register_selector_engine(selectors, "dummy", dummy_selector_engine_script)
-    await utils.register_selector_engine(selectors, "duMMy", dummy_selector_engine_script)
+    await utils.register_selector_engine(
+        selectors, "dummy", dummy_selector_engine_script
+    )
+    await utils.register_selector_engine(
+        selectors, "duMMy", dummy_selector_engine_script
+    )
 
     with pytest.raises(Error) as exc:
         await selectors.register("dummy", dummy_selector_engine_script)
@@ -164,7 +202,9 @@ async def test_selectors_register_should_handle_errors(
 
     with pytest.raises(Error) as exc:
         await selectors.register("css", dummy_selector_engine_script)
-    assert exc.value.message == 'Selectors.register: "css" is a predefined selector engine'
+    assert (
+        exc.value.message == 'Selectors.register: "css" is a predefined selector engine'
+    )
 
 
 async def test_should_work_with_layout_selectors(page: Page) -> None:
@@ -234,7 +274,9 @@ async def test_should_work_with_layout_selectors(page: Page) -> None:
     assert await page.eval_on_selector("div:right-of(#id0)", "e => e.id") == "id7"
     assert await page.eval_on_selector("div:right-of(#id8)", "e => e.id") == "id9"
     assert (
-        await page.eval_on_selector_all("div:right-of(#id3)", "els => els.map(e => e.id).join(',')")
+        await page.eval_on_selector_all(
+            "div:right-of(#id3)", "els => els.map(e => e.id).join(',')"
+        )
         == "id4,id2,id5,id7,id8,id9"
     )
     assert (
@@ -256,7 +298,9 @@ async def test_should_work_with_layout_selectors(page: Page) -> None:
     assert await page.eval_on_selector("div:left-of(#id9)", "e => e.id") == "id8"
     assert await page.eval_on_selector("div:left-of(#id4)", "e => e.id") == "id3"
     assert (
-        await page.eval_on_selector_all("div:left-of(#id5)", "els => els.map(e => e.id).join(',')")
+        await page.eval_on_selector_all(
+            "div:left-of(#id5)", "els => els.map(e => e.id).join(',')"
+        )
         == "id0,id7,id3,id1,id6,id8"
     )
     assert (
@@ -273,7 +317,9 @@ async def test_should_work_with_layout_selectors(page: Page) -> None:
     assert await page.eval_on_selector("div:above(#id9)", "e => e.id") == "id8"
     assert await page.query_selector("div:above(#id2)") is None
     assert (
-        await page.eval_on_selector_all("div:above(#id5)", "els => els.map(e => e.id).join(',')")
+        await page.eval_on_selector_all(
+            "div:above(#id5)", "els => els.map(e => e.id).join(',')"
+        )
         == "id4,id2,id3,id1"
     )
     assert (
@@ -291,7 +337,9 @@ async def test_should_work_with_layout_selectors(page: Page) -> None:
     assert await page.eval_on_selector("div:below(#id8)", "e => e.id") == "id9"
     assert await page.query_selector("div:below(#id9)") is None
     assert (
-        await page.eval_on_selector_all("div:below(#id3)", "els => els.map(e => e.id).join(',')")
+        await page.eval_on_selector_all(
+            "div:below(#id3)", "els => els.map(e => e.id).join(',')"
+        )
         == "id0,id5,id6,id7,id8,id9"
     )
     assert (
@@ -303,19 +351,27 @@ async def test_should_work_with_layout_selectors(page: Page) -> None:
 
     assert await page.eval_on_selector("div:near(#id0)", "e => e.id") == "id3"
     assert (
-        await page.eval_on_selector_all("div:near(#id7)", "els => els.map(e => e.id).join(',')")
+        await page.eval_on_selector_all(
+            "div:near(#id7)", "els => els.map(e => e.id).join(',')"
+        )
         == "id0,id5,id3,id6"
     )
     assert (
-        await page.eval_on_selector_all("div:near(#id0)", "els => els.map(e => e.id).join(',')")
+        await page.eval_on_selector_all(
+            "div:near(#id0)", "els => els.map(e => e.id).join(',')"
+        )
         == "id3,id6,id7,id8,id1,id5"
     )
     assert (
-        await page.eval_on_selector_all("div:near(#id6)", "els => els.map(e => e.id).join(',')")
+        await page.eval_on_selector_all(
+            "div:near(#id6)", "els => els.map(e => e.id).join(',')"
+        )
         == "id0,id3,id7"
     )
     assert (
-        await page.eval_on_selector_all("div:near(#id6, 10)", "els => els.map(e => e.id).join(',')")
+        await page.eval_on_selector_all(
+            "div:near(#id6, 10)", "els => els.map(e => e.id).join(',')"
+        )
         == "id0"
     )
     assert (
@@ -331,7 +387,9 @@ async def test_should_work_with_layout_selectors(page: Page) -> None:
         )
         == "id7,id6"
     )
-    assert await page.eval_on_selector("div:below(#id5):above(#id8)", "e => e.id") == "id7"
+    assert (
+        await page.eval_on_selector("div:below(#id5):above(#id8)", "e => e.id") == "id7"
+    )
 
     assert (
         await page.eval_on_selector_all(

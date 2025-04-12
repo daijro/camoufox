@@ -88,7 +88,9 @@ class TestServerRequest(http.Request):
 
         request_subscriber = server.request_subscribers.get(path)
         if request_subscriber:
-            request_subscriber._loop.call_soon_threadsafe(request_subscriber.set_result, self)
+            request_subscriber._loop.call_soon_threadsafe(
+                request_subscriber.set_result, self
+            )
             server.request_subscribers.pop(path)
 
         if path == "/ws":
@@ -196,7 +198,9 @@ class Server:
         return await future
 
     @contextlib.contextmanager
-    def expect_request(self, path: str) -> Generator[ExpectResponse[TestServerRequest], None, None]:
+    def expect_request(
+        self, path: str
+    ) -> Generator[ExpectResponse[TestServerRequest], None, None]:
         future = asyncio.create_task(self.wait_for_request(path))
 
         cb_wrapper: ExpectResponse[TestServerRequest] = ExpectResponse()
@@ -221,7 +225,9 @@ class Server:
         self.routes.clear()
         self._ws_handlers.clear()
 
-    def set_route(self, path: str, callback: Callable[[TestServerRequest], Any]) -> None:
+    def set_route(
+        self, path: str, callback: Callable[[TestServerRequest], Any]
+    ) -> None:
         self.routes[path] = callback
 
     def enable_gzip(self, path: str) -> None:
@@ -238,7 +244,9 @@ class Server:
     def send_on_web_socket_connection(self, data: bytes) -> None:
         self.once_web_socket_connection(lambda ws: ws.sendMessage(data))
 
-    def once_web_socket_connection(self, handler: Callable[["WebSocketProtocol"], None]) -> None:
+    def once_web_socket_connection(
+        self, handler: Callable[["WebSocketProtocol"], None]
+    ) -> None:
         self._ws_handlers.append(handler)
 
 
@@ -256,7 +264,9 @@ class HTTPSServer(Server):
 
     def listen(self, factory: http.HTTPFactory) -> None:
         cert = ssl.PrivateCertificate.fromCertificateAndKeyPair(
-            ssl.Certificate.loadPEM((_dirname / "testserver" / "cert.pem").read_bytes()),
+            ssl.Certificate.loadPEM(
+                (_dirname / "testserver" / "cert.pem").read_bytes()
+            ),
             ssl.KeyPair.load(
                 (_dirname / "testserver" / "key.pem").read_bytes(), crypto.FILETYPE_PEM
             ),
@@ -284,7 +294,9 @@ class TestServer:
     def start(self) -> None:
         self.server.start()
         self.https_server.start()
-        self.thread = threading.Thread(target=lambda: reactor.run(installSignalHandlers=False))
+        self.thread = threading.Thread(
+            target=lambda: reactor.run(installSignalHandlers=False)
+        )
         self.thread.start()
 
     def stop(self) -> None:

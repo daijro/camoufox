@@ -34,10 +34,14 @@ async def test_should_be_able_capture_pdf_without_path(page: Page) -> None:
     assert buffer
 
 
-async def test_should_be_able_to_generate_outline(page: Page, server: Server, tmpdir: Path) -> None:
+async def test_should_be_able_to_generate_outline(
+    page: Page, server: Server, tmpdir: Path
+) -> None:
     await page.goto(server.PREFIX + "/headings.html")
     output_file_no_outline = tmpdir / "outputNoOutline.pdf"
     output_file_outline = tmpdir / "outputOutline.pdf"
     await page.pdf(path=output_file_no_outline)
     await page.pdf(path=output_file_outline, tagged=True, outline=True)
-    assert os.path.getsize(output_file_outline) > os.path.getsize(output_file_no_outline)
+    assert os.path.getsize(output_file_outline) > os.path.getsize(
+        output_file_no_outline
+    )

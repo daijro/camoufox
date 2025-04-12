@@ -53,7 +53,9 @@ async def test_should_construct_correctly_when_a_baseurl_without_a_trailing_slas
 ) -> None:
     page = await browser.new_page(base_url=server.PREFIX + "/url-construction")
     assert (must(await page.goto("mypage.html"))).url == server.PREFIX + "/mypage.html"
-    assert (must(await page.goto("./mypage.html"))).url == server.PREFIX + "/mypage.html"
+    assert (
+        must(await page.goto("./mypage.html"))
+    ).url == server.PREFIX + "/mypage.html"
     assert (must(await page.goto("/mypage.html"))).url == server.PREFIX + "/mypage.html"
     await page.close()
 
@@ -100,7 +102,9 @@ async def test_should_be_able_to_match_a_url_relative_to_its_given_url_with_urlm
     await page.wait_for_url("/kek/index.html")
     assert page.url == server.PREFIX + "/kek/index.html"
 
-    await page.route("./kek/index.html", lambda route: route.fulfill(body="base-url-matched-route"))
+    await page.route(
+        "./kek/index.html", lambda route: route.fulfill(body="base-url-matched-route")
+    )
 
     async with page.expect_request("./kek/index.html") as request_info:
         async with page.expect_response("./kek/index.html") as response_info:

@@ -15,7 +15,6 @@
 from typing import Callable
 
 from playwright.async_api import Page
-
 from tests.server import Server
 from tests.utils import must
 
@@ -39,6 +38,8 @@ async def test_should_screenshot_with_mask(
         "mask-should-work-with-locator.png",
     )
     assert_to_be_golden(
-        await must(await page.query_selector("body")).screenshot(mask=[page.locator("div").nth(5)]),
+        await must(await page.query_selector("body")).screenshot(
+            mask=[page.locator("div").nth(5)]
+        ),
         "mask-should-work-with-element-handle.png",
     )

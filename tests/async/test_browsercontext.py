@@ -17,6 +17,7 @@ from typing import Any, List
 from urllib.parse import urlparse
 
 import pytest
+
 from playwright.async_api import (
     Browser,
     BrowserContext,
@@ -25,7 +26,6 @@ from playwright.async_api import (
     Page,
     Playwright,
 )
-
 from tests.server import Server
 from tests.utils import TARGET_CLOSED_ERROR_MESSAGE
 
@@ -42,7 +42,9 @@ async def test_page_event_should_create_new_context(browser: Browser) -> None:
     assert context.browser == browser
 
 
-async def test_window_open_should_use_parent_tab_context(browser: Browser, server: Server) -> None:
+async def test_window_open_should_use_parent_tab_context(
+    browser: Browser, server: Server
+) -> None:
     context = await browser.new_context()
     page = await context.new_page()
     await page.goto(server.EMPTY_PAGE)
@@ -202,7 +204,9 @@ async def test_user_agent_should_work_for_subframes(
 async def test_user_agent_should_emulate_device_user_agent(
     playwright: Playwright, browser: Browser, server: Server
 ) -> None:
-    context = await browser.new_context(user_agent=playwright.devices["iPhone 6"]["user_agent"])
+    context = await browser.new_context(
+        user_agent=playwright.devices["iPhone 6"]["user_agent"]
+    )
     page = await context.new_page()
     await page.goto(server.PREFIX + "/mobile.html")
     assert "iPhone" in await page.evaluate("navigator.userAgent")
@@ -225,7 +229,9 @@ async def test_user_agent_should_make_a_copy_of_default_options(
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
-async def test_page_event_should_bypass_csp_meta_tag(browser: Browser, server: Server) -> None:
+async def test_page_event_should_bypass_csp_meta_tag(
+    browser: Browser, server: Server
+) -> None:
     async def baseline() -> None:
         context = await browser.new_context()
         page = await context.new_page()
@@ -252,7 +258,9 @@ async def test_page_event_should_bypass_csp_meta_tag(browser: Browser, server: S
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
-async def test_page_event_should_bypass_csp_header(browser: Browser, server: Server) -> None:
+async def test_page_event_should_bypass_csp_header(
+    browser: Browser, server: Server
+) -> None:
     # Make sure CSP prohibits add_script_tag.
     server.set_csp("/empty.html", 'default-src "self"')
 
@@ -437,7 +445,8 @@ async def test_expose_function_should_throw_for_duplicate_registrations(
     with pytest.raises(Error) as exc_info:
         await context.expose_function("baz", lambda: None)
     assert (
-        exc_info.value.message == 'Function "baz" has been already registered in one of the pages'
+        exc_info.value.message
+        == 'Function "baz" has been already registered in one of the pages'
     )
 
 
@@ -481,9 +490,13 @@ async def test_auth_should_fail_without_credentials(
     assert response.status == 401
 
 
-async def test_auth_should_work_with_correct_credentials(browser: Browser, server: Server) -> None:
+async def test_auth_should_work_with_correct_credentials(
+    browser: Browser, server: Server
+) -> None:
     server.set_auth("/empty.html", "user", "pass")
-    context = await browser.new_context(http_credentials={"username": "user", "password": "pass"})
+    context = await browser.new_context(
+        http_credentials={"username": "user", "password": "pass"}
+    )
     page = await context.new_page()
     response = await page.goto(server.EMPTY_PAGE)
     assert response
@@ -491,9 +504,13 @@ async def test_auth_should_work_with_correct_credentials(browser: Browser, serve
     await context.close()
 
 
-async def test_auth_should_fail_with_wrong_credentials(browser: Browser, server: Server) -> None:
+async def test_auth_should_fail_with_wrong_credentials(
+    browser: Browser, server: Server
+) -> None:
     server.set_auth("/empty.html", "user", "pass")
-    context = await browser.new_context(http_credentials={"username": "foo", "password": "bar"})
+    context = await browser.new_context(
+        http_credentials={"username": "foo", "password": "bar"}
+    )
     page = await context.new_page()
     response = await page.goto(server.EMPTY_PAGE)
     assert response
@@ -501,9 +518,13 @@ async def test_auth_should_fail_with_wrong_credentials(browser: Browser, server:
     await context.close()
 
 
-async def test_auth_should_return_resource_body(browser: Browser, server: Server) -> None:
+async def test_auth_should_return_resource_body(
+    browser: Browser, server: Server
+) -> None:
     server.set_auth("/playground.html", "user", "pass")
-    context = await browser.new_context(http_credentials={"username": "user", "password": "pass"})
+    context = await browser.new_context(
+        http_credentials={"username": "user", "password": "pass"}
+    )
     page = await context.new_page()
     response = await page.goto(server.PREFIX + "/playground.html")
     assert response
@@ -630,7 +651,9 @@ async def test_offline_should_emulate_navigator_online(
     assert await page.evaluate("window.navigator.onLine")
 
 
-async def test_page_event_should_have_url(context: BrowserContext, server: Server) -> None:
+async def test_page_event_should_have_url(
+    context: BrowserContext, server: Server
+) -> None:
     page = await context.new_page()
     async with context.expect_page() as other_page_info:
         await page.evaluate("url => window.open(url)", server.EMPTY_PAGE)
@@ -676,7 +699,9 @@ async def test_page_event_should_report_when_a_new_page_is_created_and_closed(
 ) -> None:
     page = await context.new_page()
     async with context.expect_page() as page_info:
-        await page.evaluate("url => window.open(url)", server.CROSS_PROCESS_PREFIX + "/empty.html")
+        await page.evaluate(
+            "url => window.open(url)", server.CROSS_PROCESS_PREFIX + "/empty.html"
+        )
     other_page = await page_info.value
 
     # The url is about:blank in FF when 'page' event is fired.
@@ -712,7 +737,9 @@ async def test_page_event_should_report_initialized_pages(
     assert popup.url == "about:blank"
 
 
-async def test_page_event_should_have_an_opener(context: BrowserContext, server: Server) -> None:
+async def test_page_event_should_have_an_opener(
+    context: BrowserContext, server: Server
+) -> None:
     page = await context.new_page()
     await page.goto(server.EMPTY_PAGE)
     async with context.expect_page() as page_info:

@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Awaitable, Callable, cast
 
 import pytest
-from playwright.async_api import Browser, BrowserContext, Error, Page, Route, expect
 
+from playwright.async_api import Browser, BrowserContext, Error, Page, Route, expect
 from tests.server import Server, TestServerRequest
 from tests.utils import must
 
@@ -38,7 +38,9 @@ async def test_should_work(browser: Browser, server: Server, tmpdir: Path) -> No
         assert "log" in data
 
 
-async def test_should_omit_content(browser: Browser, server: Server, tmpdir: Path) -> None:
+async def test_should_omit_content(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(
         record_har_path=path,
@@ -56,9 +58,13 @@ async def test_should_omit_content(browser: Browser, server: Server, tmpdir: Pat
         assert "encoding" not in content1
 
 
-async def test_should_omit_content_legacy(browser: Browser, server: Server, tmpdir: Path) -> None:
+async def test_should_omit_content_legacy(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
-    context = await browser.new_context(record_har_path=path, record_har_omit_content=True)
+    context = await browser.new_context(
+        record_har_path=path, record_har_omit_content=True
+    )
     page = await context.new_page()
     await page.goto(server.PREFIX + "/har.html")
     await context.close()
@@ -71,7 +77,9 @@ async def test_should_omit_content_legacy(browser: Browser, server: Server, tmpd
         assert "encoding" not in content1
 
 
-async def test_should_attach_content(browser: Browser, server: Server, tmpdir: Path) -> None:
+async def test_should_attach_content(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har.zip")
     context = await browser.new_context(
         record_har_path=path,
@@ -86,7 +94,10 @@ async def test_should_attach_content(browser: Browser, server: Server, tmpdir: P
             entries = json.load(har)["log"]["entries"]
 
             assert "encoding" not in entries[0]["response"]["content"]
-            assert entries[0]["response"]["content"]["mimeType"] == "text/html; charset=utf-8"
+            assert (
+                entries[0]["response"]["content"]["mimeType"]
+                == "text/html; charset=utf-8"
+            )
             assert (
                 "75841480e2606c03389077304342fac2c58ccb1b"
                 in entries[0]["response"]["content"]["_file"]
@@ -95,7 +106,10 @@ async def test_should_attach_content(browser: Browser, server: Server, tmpdir: P
             assert entries[0]["response"]["content"]["compression"] == 0
 
             assert "encoding" not in entries[1]["response"]["content"]
-            assert entries[1]["response"]["content"]["mimeType"] == "text/css; charset=utf-8"
+            assert (
+                entries[1]["response"]["content"]["mimeType"]
+                == "text/css; charset=utf-8"
+            )
             assert (
                 "79f739d7bc88e80f55b9891a22bf13a2b4e18adb"
                 in entries[1]["response"]["content"]["_file"]
@@ -122,9 +136,13 @@ async def test_should_attach_content(browser: Browser, server: Server, tmpdir: P
                 assert len(f.read()) == entries[2]["response"]["content"]["size"]
 
 
-async def test_should_not_omit_content(browser: Browser, server: Server, tmpdir: Path) -> None:
+async def test_should_not_omit_content(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
-    context = await browser.new_context(record_har_path=path, record_har_omit_content=False)
+    context = await browser.new_context(
+        record_har_path=path, record_har_omit_content=False
+    )
     page = await context.new_page()
     await page.goto(server.PREFIX + "/har.html")
     await context.close()
@@ -134,7 +152,9 @@ async def test_should_not_omit_content(browser: Browser, server: Server, tmpdir:
         assert "text" in content1
 
 
-async def test_should_include_content(browser: Browser, server: Server, tmpdir: Path) -> None:
+async def test_should_include_content(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(record_har_path=path)
     page = await context.new_page()
@@ -150,7 +170,9 @@ async def test_should_include_content(browser: Browser, server: Server, tmpdir: 
         assert "HAR Page" in content1["text"]
 
 
-async def test_should_default_to_full_mode(browser: Browser, server: Server, tmpdir: Path) -> None:
+async def test_should_default_to_full_mode(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(
         record_har_path=path,
@@ -165,7 +187,9 @@ async def test_should_default_to_full_mode(browser: Browser, server: Server, tmp
         assert log["entries"][0]["request"]["bodySize"] >= 0
 
 
-async def test_should_support_minimal_mode(browser: Browser, server: Server, tmpdir: Path) -> None:
+async def test_should_support_minimal_mode(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(
         record_har_path=path,
@@ -181,7 +205,9 @@ async def test_should_support_minimal_mode(browser: Browser, server: Server, tmp
         assert log["entries"][0]["request"]["bodySize"] == -1
 
 
-async def test_should_filter_by_glob(browser: Browser, server: Server, tmpdir: str) -> None:
+async def test_should_filter_by_glob(
+    browser: Browser, server: Server, tmpdir: str
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(
         base_url=server.PREFIX,
@@ -200,7 +226,9 @@ async def test_should_filter_by_glob(browser: Browser, server: Server, tmpdir: s
         assert log["entries"][0]["request"]["url"].endswith("one-style.css")
 
 
-async def test_should_filter_by_regexp(browser: Browser, server: Server, tmpdir: str) -> None:
+async def test_should_filter_by_regexp(
+    browser: Browser, server: Server, tmpdir: str
+) -> None:
     path = os.path.join(tmpdir, "log.har")
     context = await browser.new_context(
         base_url=server.PREFIX,
@@ -250,7 +278,9 @@ async def test_fallback_continue_should_continue_when_not_found_in_har(
     await context.route_from_har(har=assetdir / "har-fulfill.har", not_found="fallback")
     page = await context.new_page()
     await page.goto(server.PREFIX + "/one-style.html")
-    await expect(page.locator("body")).to_have_css("background-color", "rgb(255, 192, 203)")
+    await expect(page.locator("body")).to_have_css(
+        "background-color", "rgb(255, 192, 203)"
+    )
 
 
 async def test_by_default_should_abort_requests_not_found_in_har(
@@ -283,7 +313,9 @@ async def test_fallback_continue_should_continue_requests_on_bad_har(
     await context.route_from_har(har=path_to_invalid_har, not_found="fallback")
     page = await context.new_page()
     await page.goto(server.PREFIX + "/one-style.html")
-    await expect(page.locator("body")).to_have_css("background-color", "rgb(255, 192, 203)")
+    await expect(page.locator("body")).to_have_css(
+        "background-color", "rgb(255, 192, 203)"
+    )
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
@@ -306,7 +338,9 @@ async def test_should_only_handle_requests_matching_url_filter(
     await context.route("http://no.playwright/", handler)
     await page.goto("http://no.playwright/")
     assert await page.evaluate("window.value") == "foo"
-    await expect(page.locator("body")).to_have_css("background-color", "rgba(0, 0, 0, 0)")
+    await expect(page.locator("body")).to_have_css(
+        "background-color", "rgba(0, 0, 0, 0)"
+    )
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
@@ -327,7 +361,9 @@ async def test_should_only_handle_requests_matching_url_filter_no_fallback(
     await context.route("http://no.playwright/", handler)
     await page.goto("http://no.playwright/")
     assert await page.evaluate("window.value") == "foo"
-    await expect(page.locator("body")).to_have_css("background-color", "rgba(0, 0, 0, 0)")
+    await expect(page.locator("body")).to_have_css(
+        "background-color", "rgba(0, 0, 0, 0)"
+    )
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
@@ -347,7 +383,9 @@ async def test_should_only_handle_requests_matching_url_filter_no_fallback_page(
     await page.route("http://no.playwright/", handler)
     await page.goto("http://no.playwright/")
     assert await page.evaluate("window.value") == "foo"
-    await expect(page.locator("body")).to_have_css("background-color", "rgba(0, 0, 0, 0)")
+    await expect(page.locator("body")).to_have_css(
+        "background-color", "rgba(0, 0, 0, 0)"
+    )
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
@@ -473,7 +511,9 @@ async def test_should_round_trip_har_zip(
     browser: Browser, server: Server, assetdir: Path, tmpdir: Path
 ) -> None:
     har_path = tmpdir / "har.zip"
-    context_1 = await browser.new_context(record_har_mode="minimal", record_har_path=har_path)
+    context_1 = await browser.new_context(
+        record_har_mode="minimal", record_har_path=har_path
+    )
     page_1 = await context_1.new_page()
     await page_1.goto(server.PREFIX + "/one-style.html")
     await context_1.close()
@@ -483,7 +523,9 @@ async def test_should_round_trip_har_zip(
     page_2 = await context_2.new_page()
     await page_2.goto(server.PREFIX + "/one-style.html")
     assert "hello, world!" in await page_2.content()
-    await expect(page_2.locator("body")).to_have_css("background-color", "rgb(255, 192, 203)")
+    await expect(page_2.locator("body")).to_have_css(
+        "background-color", "rgb(255, 192, 203)"
+    )
 
 
 async def test_should_round_trip_har_with_post_data(
@@ -497,7 +539,9 @@ async def test_should_round_trip_har_with_post_data(
         };
     """
     har_path = tmpdir / "har.zip"
-    context_1 = await browser.new_context(record_har_mode="minimal", record_har_path=har_path)
+    context_1 = await browser.new_context(
+        record_har_mode="minimal", record_har_path=har_path
+    )
     page_1 = await context_1.new_page()
     await page_1.goto(server.EMPTY_PAGE)
 
@@ -539,7 +583,9 @@ async def test_should_disambiguate_by_header(
         };
     """
     har_path = tmpdir / "har.zip"
-    context_1 = await browser.new_context(record_har_mode="minimal", record_har_path=har_path)
+    context_1 = await browser.new_context(
+        record_har_mode="minimal", record_har_path=har_path
+    )
     page_1 = await context_1.new_page()
     await page_1.goto(server.EMPTY_PAGE)
 
@@ -558,7 +604,9 @@ async def test_should_disambiguate_by_header(
     assert await page_2.evaluate(fetch_function, "baz4") == "baz1"
 
 
-async def test_should_produce_extracted_zip(browser: Browser, server: Server, tmpdir: Path) -> None:
+async def test_should_produce_extracted_zip(
+    browser: Browser, server: Server, tmpdir: Path
+) -> None:
     har_path = tmpdir / "har.har"
     context = await browser.new_context(
         record_har_mode="minimal", record_har_path=har_path, record_har_content="attach"
@@ -578,7 +626,9 @@ async def test_should_produce_extracted_zip(browser: Browser, server: Server, tm
     page_2 = await context_2.new_page()
     await page_2.goto(server.PREFIX + "/one-style.html")
     assert "hello, world!" in await page_2.content()
-    await expect(page_2.locator("body")).to_have_css("background-color", "rgb(255, 192, 203)")
+    await expect(page_2.locator("body")).to_have_css(
+        "background-color", "rgb(255, 192, 203)"
+    )
 
 
 async def test_should_update_har_zip_for_context(
@@ -598,7 +648,9 @@ async def test_should_update_har_zip_for_context(
     page_2 = await context_2.new_page()
     await page_2.goto(server.PREFIX + "/one-style.html")
     assert "hello, world!" in await page_2.content()
-    await expect(page_2.locator("body")).to_have_css("background-color", "rgb(255, 192, 203)")
+    await expect(page_2.locator("body")).to_have_css(
+        "background-color", "rgb(255, 192, 203)"
+    )
 
 
 async def test_page_unroute_all_should_stop_page_route_from_har(
@@ -656,7 +708,9 @@ async def test_should_update_har_zip_for_page(
     await page_2.route_from_har(har_path, not_found="abort")
     await page_2.goto(server.PREFIX + "/one-style.html")
     assert "hello, world!" in await page_2.content()
-    await expect(page_2.locator("body")).to_have_css("background-color", "rgb(255, 192, 203)")
+    await expect(page_2.locator("body")).to_have_css(
+        "background-color", "rgb(255, 192, 203)"
+    )
 
 
 async def test_should_update_har_zip_for_page_with_different_options(
@@ -665,7 +719,9 @@ async def test_should_update_har_zip_for_page_with_different_options(
     har_path = tmpdir / "har.zip"
     context1 = await browser.new_context()
     page1 = await context1.new_page()
-    await page1.route_from_har(har_path, update=True, update_content="embed", update_mode="full")
+    await page1.route_from_har(
+        har_path, update=True, update_content="embed", update_mode="full"
+    )
     await page1.goto(server.PREFIX + "/one-style.html")
     await context1.close()
 
@@ -674,7 +730,9 @@ async def test_should_update_har_zip_for_page_with_different_options(
     await page2.route_from_har(har_path, not_found="abort")
     await page2.goto(server.PREFIX + "/one-style.html")
     assert "hello, world!" in await page2.content()
-    await expect(page2.locator("body")).to_have_css("background-color", "rgb(255, 192, 203)")
+    await expect(page2.locator("body")).to_have_css(
+        "background-color", "rgb(255, 192, 203)"
+    )
     await context2.close()
 
 
@@ -699,7 +757,9 @@ async def test_should_update_extracted_har_zip_for_page(
     await page_2.route_from_har(har_path, not_found="abort")
     await page_2.goto(server.PREFIX + "/one-style.html")
     assert "hello, world!" in await page_2.content()
-    await expect(page_2.locator("body")).to_have_css("background-color", "rgb(255, 192, 203)")
+    await expect(page_2.locator("body")).to_have_css(
+        "background-color", "rgb(255, 192, 203)"
+    )
 
 
 async def test_should_ignore_aborted_requests(
@@ -715,7 +775,9 @@ async def test_should_ignore_aborted_requests(
     await page1.goto(server.EMPTY_PAGE)
     req_promise = asyncio.create_task(server.wait_for_request("/x"))
     eval_task = asyncio.create_task(
-        page1.evaluate("url => fetch(url).catch(e => 'cancelled')", server.PREFIX + "/x")
+        page1.evaluate(
+            "url => fetch(url).catch(e => 'cancelled')", server.PREFIX + "/x"
+        )
     )
     await req_promise
     req = await eval_task
@@ -735,7 +797,9 @@ async def test_should_ignore_aborted_requests(
     page2 = await context2.new_page()
     await page2.goto(server.EMPTY_PAGE)
     eval_task = asyncio.create_task(
-        page2.evaluate("url => fetch(url).catch(e => 'cancelled')", server.PREFIX + "/x")
+        page2.evaluate(
+            "url => fetch(url).catch(e => 'cancelled')", server.PREFIX + "/x"
+        )
     )
 
     async def _timeout() -> str:

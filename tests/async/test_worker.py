@@ -30,7 +30,10 @@ async def test_workers_page_workers(page: Page, server: Server) -> None:
     assert "worker.js" in worker.url
     assert repr(worker) == f"<Worker url={worker.url!r}>"
 
-    assert await worker.evaluate('() => self["workerFunction"]()') == "worker function result"
+    assert (
+        await worker.evaluate('() => self["workerFunction"]()')
+        == "worker function result"
+    )
 
     await page.goto(server.EMPTY_PAGE)
     assert len(page.workers) == 0
@@ -138,13 +141,20 @@ async def test_workers_should_clear_upon_cross_process_navigation(
     assert len(page.workers) == 0
 
 
-@pytest.mark.skip_browser("firefox")  # https://github.com/microsoft/playwright/issues/21760
-async def test_workers_should_report_network_activity(page: Page, server: Server) -> None:
+@pytest.mark.skip_browser(
+    "firefox"
+)  # https://github.com/microsoft/playwright/issues/21760
+async def test_workers_should_report_network_activity(
+    page: Page, server: Server
+) -> None:
     async with page.expect_worker() as worker_info:
         await page.goto(server.PREFIX + "/worker/worker.html")
     worker = await worker_info.value
     url = server.PREFIX + "/one-style.css"
-    async with page.expect_request(url) as request_info, page.expect_response(url) as response_info:
+    async with (
+        page.expect_request(url) as request_info,
+        page.expect_response(url) as response_info,
+    ):
         await worker.evaluate(
             "url => fetch(url).then(response => response.text()).then(console.log)", url
         )
@@ -155,14 +165,19 @@ async def test_workers_should_report_network_activity(page: Page, server: Server
     assert response.ok
 
 
-@pytest.mark.skip_browser("firefox")  # https://github.com/microsoft/playwright/issues/21760
+@pytest.mark.skip_browser(
+    "firefox"
+)  # https://github.com/microsoft/playwright/issues/21760
 async def test_workers_should_report_network_activity_on_worker_creation(
     page: Page, server: Server
 ) -> None:
     # Chromium needs waitForDebugger enabled for this one.
     await page.goto(server.EMPTY_PAGE)
     url = server.PREFIX + "/one-style.css"
-    async with page.expect_request(url) as request_info, page.expect_response(url) as response_info:
+    async with (
+        page.expect_request(url) as request_info,
+        page.expect_response(url) as response_info,
+    ):
         await page.evaluate(
             """url => new Worker(URL.createObjectURL(new Blob([`
         fetch("${url}").then(response => response.text()).then(console.log);
@@ -187,5 +202,5 @@ async def test_workers_should_format_number_using_context_locale(
             "() => new Worker(URL.createObjectURL(new Blob(['console.log(1)'], {type: 'application/javascript'})))"
         )
     worker = await worker_info.value
-    assert await worker.evaluate("() => (10000.20).toLocaleString()") == "10\u00A0000,2"
+    assert await worker.evaluate("() => (10000.20).toLocaleString()") == "10\u00a0000,2"
     await context.close()

@@ -15,8 +15,8 @@
 from typing import List
 
 import pytest
-from playwright.async_api import ConsoleMessage, Page
 
+from playwright.async_api import ConsoleMessage, Page
 from tests.server import Server
 
 
@@ -89,7 +89,9 @@ async def test_console_should_work_for_different_console_api_calls(page: Page) -
     ]
 
 
-async def test_console_should_not_fail_for_window_object(page: Page, browser_name: str) -> None:
+async def test_console_should_not_fail_for_window_object(
+    page: Page, browser_name: str
+) -> None:
     async with page.expect_console_message() as message_info:
         await page.evaluate("console.error(window)")
     message = await message_info.value

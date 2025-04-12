@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import pytest
-from playwright.async_api import Error, JSHandle, Page
 
+from playwright.async_api import Error, JSHandle, Page
 from tests.server import Server
 
 from .utils import Utils
@@ -61,19 +61,26 @@ async def test_keyboard_type_into_a_textarea(page: Page) -> None:
 async def test_keyboard_move_with_the_arrow_keys(page: Page, server: Server) -> None:
     await page.goto(f"{server.PREFIX}/input/textarea.html")
     await page.type("textarea", "Hello World!")
-    assert await page.evaluate("document.querySelector('textarea').value") == "Hello World!"
+    assert (
+        await page.evaluate("document.querySelector('textarea').value")
+        == "Hello World!"
+    )
     for _ in "World!":
         await page.keyboard.press("ArrowLeft")
     await page.keyboard.type("inserted ")
     assert (
-        await page.evaluate("document.querySelector('textarea').value") == "Hello inserted World!"
+        await page.evaluate("document.querySelector('textarea').value")
+        == "Hello inserted World!"
     )
     await page.keyboard.down("Shift")
     for _ in "inserted ":
         await page.keyboard.press("ArrowLeft")
     await page.keyboard.up("Shift")
     await page.keyboard.press("Backspace")
-    assert await page.evaluate("document.querySelector('textarea').value") == "Hello World!"
+    assert (
+        await page.evaluate("document.querySelector('textarea').value")
+        == "Hello World!"
+    )
 
 
 async def test_keyboard_send_a_character_with_elementhandle_press(
@@ -84,19 +91,27 @@ async def test_keyboard_send_a_character_with_elementhandle_press(
     assert textarea
     await textarea.press("a")
     assert await page.evaluate("document.querySelector('textarea').value") == "a"
-    await page.evaluate("() => window.addEventListener('keydown', e => e.preventDefault(), true)")
+    await page.evaluate(
+        "() => window.addEventListener('keydown', e => e.preventDefault(), true)"
+    )
     await textarea.press("b")
     assert await page.evaluate("document.querySelector('textarea').value") == "a"
 
 
-async def test_should_send_a_character_with_send_character(page: Page, server: Server) -> None:
+async def test_should_send_a_character_with_send_character(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/textarea.html")
     await page.focus("textarea")
     await page.keyboard.insert_text("嗨")
     assert await page.evaluate('() => document.querySelector("textarea").value') == "嗨"
-    await page.evaluate('() => window.addEventListener("keydown", e => e.preventDefault(), true)')
+    await page.evaluate(
+        '() => window.addEventListener("keydown", e => e.preventDefault(), true)'
+    )
     await page.keyboard.insert_text("a")
-    assert await page.evaluate('() => document.querySelector("textarea").value') == "嗨a"
+    assert (
+        await page.evaluate('() => document.querySelector("textarea").value') == "嗨a"
+    )
 
 
 async def test_should_only_emit_input_event(page: Page, server: Server) -> None:
@@ -159,7 +174,8 @@ async def test_should_report_shiftkey(
 
         await keyboard.up("!")
         assert (
-            await page.evaluate("() => getResult()") == "Keyup: ! Digit1 49 [" + modifierKey + "]"
+            await page.evaluate("() => getResult()")
+            == "Keyup: ! Digit1 49 [" + modifierKey + "]"
         )
         await keyboard.up(modifierKey)
         assert (
@@ -179,21 +195,38 @@ async def test_should_report_multiple_modifiers(page: Page, server: Server) -> N
     await page.goto(server.PREFIX + "/input/keyboard.html")
     keyboard = page.keyboard
     await keyboard.down("Control")
-    assert await page.evaluate("() => getResult()") == "Keydown: Control ControlLeft 17 [Control]"
+    assert (
+        await page.evaluate("() => getResult()")
+        == "Keydown: Control ControlLeft 17 [Control]"
+    )
     await keyboard.down("Alt")
-    assert await page.evaluate("() => getResult()") == "Keydown: Alt AltLeft 18 [Alt Control]"
+    assert (
+        await page.evaluate("() => getResult()")
+        == "Keydown: Alt AltLeft 18 [Alt Control]"
+    )
     await keyboard.down(";")
-    assert await page.evaluate("() => getResult()") == "Keydown: ; Semicolon 186 [Alt Control]"
+    assert (
+        await page.evaluate("() => getResult()")
+        == "Keydown: ; Semicolon 186 [Alt Control]"
+    )
     await keyboard.up(";")
-    assert await page.evaluate("() => getResult()") == "Keyup: ; Semicolon 186 [Alt Control]"
+    assert (
+        await page.evaluate("() => getResult()")
+        == "Keyup: ; Semicolon 186 [Alt Control]"
+    )
     await keyboard.up("Control")
-    assert await page.evaluate("() => getResult()") == "Keyup: Control ControlLeft 17 [Alt]"
+    assert (
+        await page.evaluate("() => getResult()")
+        == "Keyup: Control ControlLeft 17 [Alt]"
+    )
     await keyboard.up("Alt")
     assert await page.evaluate("() => getResult()") == "Keyup: Alt AltLeft 18 []"
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
-async def test_should_send_proper_codes_while_typing(page: Page, server: Server) -> None:
+async def test_should_send_proper_codes_while_typing(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/keyboard.html")
     await page.keyboard.type("!")
     assert await page.evaluate("() => getResult()") == "\n".join(
@@ -214,7 +247,9 @@ async def test_should_send_proper_codes_while_typing(page: Page, server: Server)
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
-async def test_should_send_proper_codes_while_typing_with_shift(page: Page, server: Server) -> None:
+async def test_should_send_proper_codes_while_typing_with_shift(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/keyboard.html")
     keyboard = page.keyboard
     await keyboard.down("Shift")
@@ -247,7 +282,10 @@ async def test_should_not_type_canceled_events(page: Page, server: Server) -> No
     )
 
     await page.keyboard.type("Hello World!")
-    assert await page.eval_on_selector("textarea", "textarea => textarea.value") == "He Wrd!"
+    assert (
+        await page.eval_on_selector("textarea", "textarea => textarea.value")
+        == "He Wrd!"
+    )
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
@@ -279,7 +317,9 @@ async def test_should_press_shift_plus(page: Page, server: Server) -> None:
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
-async def test_should_support_plus_separated_modifiers(page: Page, server: Server) -> None:
+async def test_should_support_plus_separated_modifiers(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/keyboard.html")
     await page.keyboard.press("Shift+~")
     assert await page.evaluate("() => getResult()") == "\n".join(
@@ -294,7 +334,9 @@ async def test_should_support_plus_separated_modifiers(page: Page, server: Serve
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
-async def test_should_suport_multiple_plus_separated_modifiers(page: Page, server: Server) -> None:
+async def test_should_suport_multiple_plus_separated_modifiers(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/input/keyboard.html")
     await page.keyboard.press("Control+Shift+~")
     assert await page.evaluate("() => getResult()") == "\n".join(
@@ -413,7 +455,9 @@ async def test_should_type_emoji(page: Page, server: Server) -> None:
     )
 
 
-async def test_should_type_emoji_into_an_iframe(page: Page, server: Server, utils: Utils) -> None:
+async def test_should_type_emoji_into_an_iframe(
+    page: Page, server: Server, utils: Utils
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await utils.attach_frame(page, "emoji-test", server.PREFIX + "/input/textarea.html")
     frame = page.frames[1]
@@ -457,7 +501,10 @@ async def test_should_be_able_to_prevent_select_all(page: Page, server: Server) 
     await page.keyboard.press("a")
     await page.keyboard.up("ControlOrMeta")
     await page.keyboard.press("Backspace")
-    assert await page.eval_on_selector("textarea", "textarea => textarea.value") == "some tex"
+    assert (
+        await page.eval_on_selector("textarea", "textarea => textarea.value")
+        == "some tex"
+    )
 
 
 @pytest.mark.only_platform("darwin")
@@ -472,7 +519,9 @@ async def test_should_support_macos_shortcuts(
     # select one word backwards
     await page.keyboard.press("Shift+Control+Alt+KeyB")
     await page.keyboard.press("Backspace")
-    assert await page.eval_on_selector("textarea", "textarea => textarea.value") == "some "
+    assert (
+        await page.eval_on_selector("textarea", "textarea => textarea.value") == "some "
+    )
 
 
 async def test_should_press_the_meta_key(page: Page) -> None:
@@ -487,7 +536,9 @@ async def test_should_press_the_meta_key(page: Page) -> None:
     assert metaKey
 
 
-async def test_should_work_after_a_cross_origin_navigation(page: Page, server: Server) -> None:
+async def test_should_work_after_a_cross_origin_navigation(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.PREFIX + "/empty.html")
     await page.goto(server.CROSS_PROCESS_PREFIX + "/empty.html")
     lastEvent = await captureLastKeydown(page)
@@ -497,7 +548,9 @@ async def test_should_work_after_a_cross_origin_navigation(page: Page, server: S
 
 # event.keyIdentifier has been removed from all browsers except WebKit
 @pytest.mark.only_browser("webkit")
-async def test_should_expose_keyIdentifier_in_webkit(page: Page, server: Server) -> None:
+async def test_should_expose_keyIdentifier_in_webkit(
+    page: Page, server: Server
+) -> None:
     lastEvent = await captureLastKeydown(page)
     keyMap = {
         "ArrowUp": "Up",

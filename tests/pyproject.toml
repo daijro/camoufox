@@ -1,13 +1,43 @@
+[project]
+name = "camoufox-tests"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "autobahn==23.1.2",
+    "flaky==3.8.1",
+    "mypy>=1.15.0",
+    "objgraph==3.6.1",
+    "pillow==10.4.0",
+    "pixelmatch==0.3.0",
+    "pre-commit>=4.2.0",
+    "auditwheel==6.1.0",
+    "playwright>=1.51.0",
+    "pyopenssl==24.2.1",
+    "pytest==8.3.2",
+    "pytest-asyncio==0.21.2",
+    "pytest-cov==5.0.0",
+    "pytest-repeat==0.9.3",
+    "pytest-timeout==2.3.1",
+    "pytest-xdist==3.6.1",
+    "requests==2.32.3",
+    "service-identity==24.1.0",
+    "setuptools==72.1.0",
+    "twisted==24.7.0",
+    "types-pyopenssl==24.1.0.20240722",
+    "types-requests==2.32.0.20240712",
+    "wheel==0.42.0",
+    "ruff>=0.11.5",
+]
+
 [tool.pytest.ini_options]
 addopts = "-Wall -rsx -vv -s"
-markers = [
-    "skip_browser",
-    "only_browser",
-    "skip_platform",
-    "only_platform"
-]
+markers = ["skip_browser", "only_browser", "skip_platform", "only_platform"]
 junit_family = "xunit2"
 asyncio_mode = "auto"
+
 
 [tool.pyright]
 pythonVersion = "3.8"
@@ -17,3 +47,6 @@ reportCallInDefaultInitializer = true
 reportOptionalSubscript = false
 reportUnboundVariable = false
 strictParameterNoneValue = false
+
+[tool.ruff.lint.isort]
+known-first-party = ["playwright"]

@@ -25,11 +25,15 @@ from tests.utils import must
 
 async def test_should_work(context: BrowserContext, page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
-    await context.add_cookies([{"url": server.EMPTY_PAGE, "name": "password", "value": "123456"}])
+    await context.add_cookies(
+        [{"url": server.EMPTY_PAGE, "name": "password", "value": "123456"}]
+    )
     assert await page.evaluate("() => document.cookie") == "password=123456"
 
 
-async def test_should_roundtrip_cookie(context: BrowserContext, page: Page, server: Server) -> None:
+async def test_should_roundtrip_cookie(
+    context: BrowserContext, page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     # @see https://en.wikipedia.org/wiki/Year_2038_problem
     date = int(datetime.datetime(2038, 1, 1).timestamp() * 1000)
@@ -50,7 +54,9 @@ async def test_should_roundtrip_cookie(context: BrowserContext, page: Page, serv
     assert await context.cookies() == cookies
 
 
-async def test_should_send_cookie_header(server: Server, context: BrowserContext) -> None:
+async def test_should_send_cookie_header(
+    server: Server, context: BrowserContext
+) -> None:
     cookie: List[str] = []
 
     def handler(request: TestServerRequest) -> None:
@@ -58,7 +64,9 @@ async def test_should_send_cookie_header(server: Server, context: BrowserContext
         request.finish()
 
     server.set_route("/empty.html", handler)
-    await context.add_cookies([{"url": server.EMPTY_PAGE, "name": "cookie", "value": "value"}])
+    await context.add_cookies(
+        [{"url": server.EMPTY_PAGE, "name": "cookie", "value": "value"}]
+    )
     page = await context.new_page()
     await page.goto(server.EMPTY_PAGE)
     assert cookie == ["cookie=value"]
@@ -132,7 +140,9 @@ async def test_should_isolate_persistent_cookies(
     context_2 = await browser.new_context()
     [page_1, page_2] = await asyncio.gather(context_1.new_page(), context_2.new_page())
     await asyncio.gather(page_1.goto(server.EMPTY_PAGE), page_2.goto(server.EMPTY_PAGE))
-    [cookies_1, cookies_2] = await asyncio.gather(context_1.cookies(), context_2.cookies())
+    [cookies_1, cookies_2] = await asyncio.gather(
+        context_1.cookies(), context_2.cookies()
+    )
     assert len(cookies_1) == 1
     assert cookies_1[0]["name"] == "persistent"
     assert cookies_1[0]["value"] == "persistent-value"
@@ -151,7 +161,9 @@ async def test_should_isolate_send_cookie_header(
 
     server.set_route("/empty.html", handler)
 
-    await context.add_cookies([{"url": server.EMPTY_PAGE, "name": "sendcookie", "value": "value"}])
+    await context.add_cookies(
+        [{"url": server.EMPTY_PAGE, "name": "sendcookie", "value": "value"}]
+    )
 
     page_1 = await context.new_page()
     await page_1.goto(server.EMPTY_PAGE)
@@ -199,21 +211,20 @@ async def test_should_set_multiple_cookies(
             {"url": server.EMPTY_PAGE, "name": "multiple-2", "value": "bar"},
         ]
     )
-    assert (
-        await page.evaluate(
-            """() => {
+    assert await page.evaluate(
+        """() => {
     const cookies = document.cookie.split(';');
     return cookies.map(cookie => cookie.trim()).sort();
   }"""
-        )
-        == ["multiple-1=123456", "multiple-2=bar"]
-    )
+    ) == ["multiple-1=123456", "multiple-2=bar"]
 
 
 async def test_should_have_expires_set_to_neg_1_for_session_cookies(
     context: BrowserContext, server: Server
 ) -> None:
-    await context.add_cookies([{"url": server.EMPTY_PAGE, "name": "expires", "value": "123456"}])
+    await context.add_cookies(
+        [{"url": server.EMPTY_PAGE, "name": "expires", "value": "123456"}]
+    )
     cookies = await context.cookies()
     assert cookies[0]["expires"] == -1
 
@@ -223,7 +234,9 @@ async def test_should_set_cookie_with_reasonable_defaults(
     server: Server,
     default_same_site_cookie_value: str,
 ) -> None:
-    await context.add_cookies([{"url": server.EMPTY_PAGE, "name": "defaults", "value": "123456"}])
+    await context.add_cookies(
+        [{"url": server.EMPTY_PAGE, "name": "defaults", "value": "123456"}]
+    )
     cookies = await context.cookies()
     cookies.sort(key=lambda r: r["name"])
     assert cookies == [
@@ -286,7 +299,10 @@ async def test_should_not_set_a_cookie_with_blank_page_url(
                 {"url": "about:blank", "name": "example-cookie-blank", "value": "best"},
             ]
         )
-    assert 'Blank page can not have cookie "example-cookie-blank"' in exc_info.value.message
+    assert (
+        'Blank page can not have cookie "example-cookie-blank"'
+        in exc_info.value.message
+    )
 
 
 async def test_should_not_set_a_cookie_on_a_data_url_page(
@@ -302,7 +318,9 @@ async def test_should_not_set_a_cookie_on_a_data_url_page(
                 }
             ]
         )
-    assert 'Data URL page can not have cookie "example-cookie"' in exc_info.value.message
+    assert (
+        'Data URL page can not have cookie "example-cookie"' in exc_info.value.message
+    )
 
 
 async def test_should_default_to_setting_secure_cookie_for_https_websites(
@@ -354,7 +372,9 @@ async def test_should_set_cookies_for_a_frame(
     context: BrowserContext, page: Page, server: Server
 ) -> None:
     await page.goto(server.EMPTY_PAGE)
-    await context.add_cookies([{"url": server.PREFIX, "name": "frame-cookie", "value": "value"}])
+    await context.add_cookies(
+        [{"url": server.PREFIX, "name": "frame-cookie", "value": "value"}]
+    )
     await page.evaluate(
         """src => {
     let fulfill;

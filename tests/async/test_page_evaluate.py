@@ -82,14 +82,11 @@ async def test_evaluate_return_undefined_for_objects_with_symbols(page: Page) ->
         )
         == {}
     )
-    assert (
-        await page.evaluate(
-            """() => {
+    assert await page.evaluate(
+        """() => {
                 return { foo: [{ a: Symbol('foo4') }] };
             }"""
-        )
-        == {"foo": [{"a": None}]}
-    )
+    ) == {"foo": [{"a": None}]}
 
 
 async def test_evaluate_work_with_unicode_chars(page: Page) -> None:
@@ -100,7 +97,9 @@ async def test_evaluate_work_with_unicode_chars(page: Page) -> None:
 async def test_evaluate_throw_when_evaluation_triggers_reload(page: Page) -> None:
     error: Optional[Error] = None
     try:
-        await page.evaluate("() => { location.reload(); return new Promise(() => {}); }")
+        await page.evaluate(
+            "() => { location.reload(); return new Promise(() => {}); }"
+        )
     except Error as e:
         error = e
     assert error
@@ -255,9 +254,13 @@ async def test_should_pass_exception_argument(page: Page) -> None:
 
 
 async def test_evaluate_evaluate_date(page: Page) -> None:
-    result = await page.evaluate('() => ({ date: new Date("2020-05-27T01:31:38.506Z") })')
+    result = await page.evaluate(
+        '() => ({ date: new Date("2020-05-27T01:31:38.506Z") })'
+    )
     assert result == {
-        "date": datetime.fromisoformat("2020-05-27T01:31:38.506").replace(tzinfo=timezone.utc)
+        "date": datetime.fromisoformat("2020-05-27T01:31:38.506").replace(
+            tzinfo=timezone.utc
+        )
     }
 
 
@@ -268,7 +271,9 @@ async def test_evaluate_roundtrip_date_without_tzinfo(page: Page) -> None:
 
 
 async def test_evaluate_roundtrip_date(page: Page) -> None:
-    date = datetime.fromisoformat("2020-05-27T01:31:38.506").replace(tzinfo=timezone.utc)
+    date = datetime.fromisoformat("2020-05-27T01:31:38.506").replace(
+        tzinfo=timezone.utc
+    )
     result = await page.evaluate("date => date", date)
     assert result == date
 
@@ -281,8 +286,12 @@ async def test_evaluate_roundtrip_date_with_tzinfo(page: Page) -> None:
 
 
 async def test_evaluate_jsonvalue_date(page: Page) -> None:
-    date = datetime.fromisoformat("2020-05-27T01:31:38.506").replace(tzinfo=timezone.utc)
-    result = await page.evaluate('() => ({ date: new Date("2020-05-27T01:31:38.506Z") })')
+    date = datetime.fromisoformat("2020-05-27T01:31:38.506").replace(
+        tzinfo=timezone.utc
+    )
+    result = await page.evaluate(
+        '() => ({ date: new Date("2020-05-27T01:31:38.506Z") })'
+    )
     assert result == {"date": date}
 
 

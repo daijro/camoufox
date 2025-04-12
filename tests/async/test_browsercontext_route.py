@@ -65,8 +65,12 @@ async def test_route_should_unroute(context: BrowserContext, server: Server) -> 
         asyncio.create_task(route.continue_())
 
     await context.route("**/*", lambda route, request: handler(route, request, 1))
-    await context.route("**/empty.html", lambda route, request: handler(route, request, 2))
-    await context.route("**/empty.html", lambda route, request: handler(route, request, 3))
+    await context.route(
+        "**/empty.html", lambda route, request: handler(route, request, 2)
+    )
+    await context.route(
+        "**/empty.html", lambda route, request: handler(route, request, 3)
+    )
 
     def handler4(route: Route, request: Request) -> None:
         handler(route, request, 4)
@@ -87,16 +91,22 @@ async def test_route_should_unroute(context: BrowserContext, server: Server) -> 
     assert intercepted == [1]
 
 
-async def test_route_should_yield_to_page_route(context: BrowserContext, server: Server) -> None:
+async def test_route_should_yield_to_page_route(
+    context: BrowserContext, server: Server
+) -> None:
     await context.route(
         "**/empty.html",
-        lambda route, request: asyncio.create_task(route.fulfill(status=200, body="context")),
+        lambda route, request: asyncio.create_task(
+            route.fulfill(status=200, body="context")
+        ),
     )
 
     page = await context.new_page()
     await page.route(
         "**/empty.html",
-        lambda route, request: asyncio.create_task(route.fulfill(status=200, body="page")),
+        lambda route, request: asyncio.create_task(
+            route.fulfill(status=200, body="page")
+        ),
     )
 
     response = await page.goto(server.EMPTY_PAGE)
@@ -110,13 +120,17 @@ async def test_route_should_fall_back_to_context_route(
 ) -> None:
     await context.route(
         "**/empty.html",
-        lambda route, request: asyncio.create_task(route.fulfill(status=200, body="context")),
+        lambda route, request: asyncio.create_task(
+            route.fulfill(status=200, body="context")
+        ),
     )
 
     page = await context.new_page()
     await page.route(
         "**/non-empty.html",
-        lambda route, request: asyncio.create_task(route.fulfill(status=200, body="page")),
+        lambda route, request: asyncio.create_task(
+            route.fulfill(status=200, body="page")
+        ),
     )
 
     response = await page.goto(server.EMPTY_PAGE)
@@ -221,7 +235,9 @@ async def test_should_use_set_cookie_header_in_future_requests(
     assert cookie == "name=value"
 
 
-async def test_should_work_with_ignore_https_errors(browser: Browser, https_server: Server) -> None:
+async def test_should_work_with_ignore_https_errors(
+    browser: Browser, https_server: Server
+) -> None:
     context = await browser.new_context(ignore_https_errors=True)
     page = await context.new_page()
 
@@ -318,7 +334,9 @@ async def test_should_override_post_body_with_empty_string(
     assert req[0].post_body == b""
 
 
-async def test_should_chain_fallback(context: BrowserContext, page: Page, server: Server) -> None:
+async def test_should_chain_fallback(
+    context: BrowserContext, page: Page, server: Server
+) -> None:
     intercepted: List[int] = []
 
     async def _handler1(route: Route) -> None:
@@ -381,7 +399,9 @@ async def test_should_not_chain_fulfill(
         "**/empty.html",
         lambda route: asyncio.create_task(route.fulfill(status=200, body="fulfilled")),
     )
-    await context.route("**/empty.html", lambda route: asyncio.create_task(route.fallback()))
+    await context.route(
+        "**/empty.html", lambda route: asyncio.create_task(route.fallback())
+    )
 
     response = await page.goto(server.EMPTY_PAGE)
     assert response
@@ -403,8 +423,12 @@ async def test_should_not_chain_abort(
         failed[0] = True
 
     await context.route("**/empty.html", handler)
-    await context.route("**/empty.html", lambda route: asyncio.create_task(route.abort()))
-    await context.route("**/empty.html", lambda route: asyncio.create_task(route.fallback()))
+    await context.route(
+        "**/empty.html", lambda route: asyncio.create_task(route.abort())
+    )
+    await context.route(
+        "**/empty.html", lambda route: asyncio.create_task(route.fallback())
+    )
 
     with pytest.raises(Error) as excinfo:
         await page.goto(server.EMPTY_PAGE)
@@ -462,7 +486,9 @@ async def test_should_chain_fallback_into_page(
     assert intercepted == [6, 5, 4, 3, 2, 1]
 
 
-async def test_should_fall_back_async(page: Page, context: BrowserContext, server: Server) -> None:
+async def test_should_fall_back_async(
+    page: Page, context: BrowserContext, server: Server
+) -> None:
     intercepted = []
 
     async def _handler1(route: Route) -> None:

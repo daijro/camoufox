@@ -22,12 +22,13 @@ import sys
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, Dict, Generator, List, Optional, cast
 
-import playwright
-import playwright._impl._path_utils
 import pytest
 from PIL import Image
 from pixelmatch import pixelmatch
 from pixelmatch.contrib.PIL import from_PIL_to_raw_data
+
+import playwright
+import playwright._impl._path_utils
 from playwright._impl._path_utils import get_file_dirname
 
 from .server import Server, test_server
@@ -121,7 +122,7 @@ def after_each_hook() -> Generator[None, None, None]:
 @pytest.fixture(scope="session")
 def browser_name(pytestconfig: pytest.Config) -> str:
     # Always use Firefox
-    return 'firefox'
+    return "firefox"
 
 
 @pytest.fixture(scope="session")
@@ -164,7 +165,9 @@ Helper to skip tests by browser or platform.
 """
 
 
-def _get_skiplist(request: pytest.FixtureRequest, values: List[str], value_name: str) -> List[str]:
+def _get_skiplist(
+    request: pytest.FixtureRequest, values: List[str], value_name: str
+) -> List[str]:
     skipped_values = []
     # Allowlist
     only_marker = request.node.get_closest_marker(f"only_{value_name}")
@@ -182,7 +185,9 @@ def _get_skiplist(request: pytest.FixtureRequest, values: List[str], value_name:
 
 @pytest.fixture(autouse=True)
 def skip_by_browser(request: pytest.FixtureRequest, browser_name: str) -> None:
-    skip_browsers_names = _get_skiplist(request, ["chromium", "firefox", "webkit"], "browser")
+    skip_browsers_names = _get_skiplist(
+        request, ["chromium", "firefox", "webkit"], "browser"
+    )
 
     if browser_name in skip_browsers_names:
         pytest.skip(f"skipped for this browser: {browser_name}")
@@ -190,7 +195,9 @@ def skip_by_browser(request: pytest.FixtureRequest, browser_name: str) -> None:
 
 @pytest.fixture(autouse=True)
 def skip_by_platform(request: pytest.FixtureRequest) -> None:
-    skip_platform_names = _get_skiplist(request, ["win32", "linux", "darwin"], "platform")
+    skip_platform_names = _get_skiplist(
+        request, ["win32", "linux", "darwin"], "platform"
+    )
 
     if sys.platform in skip_platform_names:
         pytest.skip(f"skipped on this platform: {sys.platform}")
@@ -243,7 +250,9 @@ def assert_to_be_golden(browser_name: str) -> Callable[[bytes, str], None]:
 
 
 class RemoteServer:
-    def __init__(self, browser_name: str, launch_server_options: Dict, tmpfile: Path) -> None:
+    def __init__(
+        self, browser_name: str, launch_server_options: Dict, tmpfile: Path
+    ) -> None:
         driver_dir = Path(inspect.getfile(playwright)).parent / "driver"
         if sys.platform == "win32":
             node_executable = driver_dir / "node.exe"

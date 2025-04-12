@@ -49,7 +49,9 @@ async def test_should_fulfill_response_with_empty_body(
 ) -> None:
     async def handle(route: Route) -> None:
         response = await page.request.fetch(route.request)
-        await route.fulfill(response=response, status=201, body="", headers={"content-length": "0"})
+        await route.fulfill(
+            response=response, status=201, body="", headers={"content-length": "0"}
+        )
 
     await context.route("**/*", handle)
     response = await page.goto(server.PREFIX + "/title.html")

@@ -33,7 +33,9 @@ async def test_should_not_allow_to_access_frame_on_popup_main_request(
 
     with pytest.raises(Error) as exc_info:
         request.frame
-    assert "Frame for this navigation request is not available" in exc_info.value.message
+    assert (
+        "Frame for this navigation request is not available" in exc_info.value.message
+    )
 
     response = await request.response()
     assert response

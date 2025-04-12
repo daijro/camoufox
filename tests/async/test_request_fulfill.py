@@ -16,7 +16,9 @@ from playwright.async_api import Page, Route
 from tests.server import Server
 
 
-async def test_should_fetch_original_request_and_fulfill(page: Page, server: Server) -> None:
+async def test_should_fetch_original_request_and_fulfill(
+    page: Page, server: Server
+) -> None:
     async def handle(route: Route) -> None:
         response = await page.request.fetch(route.request)
         await route.fulfill(response=response)
@@ -41,7 +43,9 @@ async def test_should_fulfill_json(page: Page, server: Server) -> None:
     assert await response.json() == {"bar": "baz"}
 
 
-async def test_should_fulfill_json_overriding_existing_response(page: Page, server: Server) -> None:
+async def test_should_fulfill_json_overriding_existing_response(
+    page: Page, server: Server
+) -> None:
     server.set_route(
         "/tags",
         lambda request: (

@@ -41,10 +41,14 @@ async def test_should_fulfill_intercepted_response(page: Page, server: Server) -
     assert await page.evaluate("() => document.body.textContent") == "Yo, page!"
 
 
-async def test_should_fulfill_response_with_empty_body(page: Page, server: Server) -> None:
+async def test_should_fulfill_response_with_empty_body(
+    page: Page, server: Server
+) -> None:
     async def handle(route: Route) -> None:
         response = await page.request.fetch(route.request)
-        await route.fulfill(response=response, status=201, body="", headers={"content-length": "0"})
+        await route.fulfill(
+            response=response, status=201, body="", headers={"content-length": "0"}
+        )
 
     await page.route("**/*", handle)
     response = await page.goto(server.PREFIX + "/title.html")
@@ -117,7 +121,9 @@ async def test_should_support_fulfill_after_intercept(
     assert await response.text() == original
 
 
-async def test_should_give_access_to_the_intercepted_response(page: Page, server: Server) -> None:
+async def test_should_give_access_to_the_intercepted_response(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
 
     route_task: "asyncio.Future[Route]" = asyncio.Future()

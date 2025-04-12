@@ -97,6 +97,8 @@ async def test_should_auto_dismiss_the_prompt_without_listeners(page: Page) -> N
 
 
 async def test_should_auto_dismiss_the_alert_without_listeners(page: Page) -> None:
-    await page.set_content('<div onclick="window.alert(123); window._clicked=true">Click me</div>')
+    await page.set_content(
+        '<div onclick="window.alert(123); window._clicked=true">Click me</div>'
+    )
     await page.click("div")
     assert await page.evaluate('"window._clicked"')

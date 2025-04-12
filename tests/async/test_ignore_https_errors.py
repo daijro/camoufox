@@ -18,7 +18,9 @@ from playwright.async_api import Browser, Error
 from tests.server import Server
 
 
-async def test_ignore_https_error_should_work(browser: Browser, https_server: Server) -> None:
+async def test_ignore_https_error_should_work(
+    browser: Browser, https_server: Server
+) -> None:
     context = await browser.new_context(ignore_https_errors=True)
     page = await context.new_page()
     response = await page.goto(https_server.EMPTY_PAGE)

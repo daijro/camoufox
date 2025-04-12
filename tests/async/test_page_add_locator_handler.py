@@ -101,11 +101,15 @@ async def test_should_work_with_locator_hover(page: Page, server: Server) -> Non
     )
 
     await page.locator("#aside").hover()
-    await page.evaluate('() => { window.setupAnnoyingInterstitial("pointerover", 1, "capture"); }')
+    await page.evaluate(
+        '() => { window.setupAnnoyingInterstitial("pointerover", 1, "capture"); }'
+    )
     await page.locator("#target").hover()
     await expect(page.locator("#interstitial")).not_to_be_visible()
     assert (
-        await page.eval_on_selector("#target", "e => window.getComputedStyle(e).backgroundColor")
+        await page.eval_on_selector(
+            "#target", "e => window.getComputedStyle(e).backgroundColor"
+        )
         == "rgb(255, 255, 0)"
     )
 
@@ -153,7 +157,9 @@ async def test_should_throw_when_handler_times_out(page: Page, server: Server) -
         # Deliberately timeout.
         await stall_future
 
-    await page.add_locator_handler(page.get_by_text("This interstitial covers the button"), handler)
+    await page.add_locator_handler(
+        page.get_by_text("This interstitial covers the button"), handler
+    )
 
     await page.locator("#aside").hover()
     await page.evaluate(
@@ -182,7 +188,9 @@ async def test_should_work_with_to_be_visible(page: Page, server: Server) -> Non
         called += 1
         await page.locator("#close").click()
 
-    await page.add_locator_handler(page.get_by_text("This interstitial covers the button"), handler)
+    await page.add_locator_handler(
+        page.get_by_text("This interstitial covers the button"), handler
+    )
 
     await page.evaluate(
         '() => { window.clicked = 0; window.setupAnnoyingInterstitial("remove", 1); }'
@@ -192,7 +200,9 @@ async def test_should_work_with_to_be_visible(page: Page, server: Server) -> Non
     assert called == 1
 
 
-async def test_should_work_when_owner_frame_detaches(page: Page, server: Server) -> None:
+async def test_should_work_when_owner_frame_detaches(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.evaluate(
         """
@@ -232,7 +242,9 @@ async def test_should_work_with_times_option(page: Page, server: Server) -> None
         nonlocal called
         called += 1
 
-    await page.add_locator_handler(page.locator("body"), _handler, no_wait_after=True, times=2)
+    await page.add_locator_handler(
+        page.locator("body"), _handler, no_wait_after=True, times=2
+    )
     await page.locator("#aside").hover()
     await page.evaluate(
         """

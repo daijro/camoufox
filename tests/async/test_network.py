@@ -50,7 +50,9 @@ async def test_request_fulfill(page: Page, server: Server) -> None:
         assert request.resource_type == "document"
         assert request.frame == page.main_frame
         assert request.frame.url == "about:blank"
-        assert repr(request) == f"<Request url={request.url!r} method={request.method!r}>"
+        assert (
+            repr(request) == f"<Request url={request.url!r} method={request.method!r}>"
+        )
         await route.fulfill(body="Text")
 
     await page.route(
@@ -62,19 +64,25 @@ async def test_request_fulfill(page: Page, server: Server) -> None:
     assert response
 
     assert response.ok
-    assert repr(response) == f"<Response url={response.url!r} request={response.request}>"
+    assert (
+        repr(response) == f"<Response url={response.url!r} request={response.request}>"
+    )
     assert await response.text() == "Text"
 
 
 async def test_request_continue(page: Page, server: Server) -> None:
-    async def handle_request(route: Route, request: Request, intercepted: List[bool]) -> None:
+    async def handle_request(
+        route: Route, request: Request, intercepted: List[bool]
+    ) -> None:
         intercepted.append(True)
         await route.continue_()
 
     intercepted: List[bool] = []
     await page.route(
         "**/*",
-        lambda route, request: asyncio.create_task(handle_request(route, request, intercepted)),
+        lambda route, request: asyncio.create_task(
+            handle_request(route, request, intercepted)
+        ),
     )
 
     response = await page.goto(server.EMPTY_PAGE)
@@ -93,7 +101,9 @@ async def test_page_events_request_should_fire_for_navigation_requests(
     assert len(requests) == 1
 
 
-async def test_page_events_request_should_accept_method(page: Page, server: Server) -> None:
+async def test_page_events_request_should_accept_method(
+    page: Page, server: Server
+) -> None:
     class Log:
         def __init__(self) -> None:
             self.requests: List[Request] = []
@@ -117,7 +127,9 @@ async def test_page_events_request_should_fire_for_iframes(
     assert len(requests) == 2
 
 
-async def test_page_events_request_should_fire_for_fetches(page: Page, server: Server) -> None:
+async def test_page_events_request_should_fire_for_fetches(
+    page: Page, server: Server
+) -> None:
     requests = []
     page.on("request", lambda r: requests.append(r))
     await page.goto(server.EMPTY_PAGE)
@@ -163,7 +175,9 @@ async def test_request_frame_should_work_for_subframe_navigation_request(
     assert requests[0].frame == page.frames[1]
 
 
-async def test_request_frame_should_work_for_fetch_requests(page: Page, server: Server) -> None:
+async def test_request_frame_should_work_for_fetch_requests(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     requests: List[Request] = []
     page.on("request", lambda r: requests.append(r))
@@ -209,7 +223,9 @@ async def test_request_headers_should_get_the_same_headers_as_the_server(
     server.set_route("/empty.html", handle)
     response = await page.goto(server.EMPTY_PAGE)
     assert response
-    server_headers = adjust_server_headers(await server_request_headers_future, browser_name)
+    server_headers = adjust_server_headers(
+        await server_request_headers_future, browser_name
+    )
     assert await response.request.all_headers() == server_headers
 
 
@@ -244,7 +260,9 @@ async def test_request_headers_should_get_the_same_headers_as_the_server_cors(
         )
     request = await request_info.value
     assert text == "done"
-    server_headers = adjust_server_headers(await server_request_headers_future, browser_name)
+    server_headers = adjust_server_headers(
+        await server_request_headers_future, browser_name
+    )
     assert await request.all_headers() == server_headers
 
 
@@ -260,7 +278,9 @@ async def test_should_report_request_headers_array(
             for value in values:
                 if browser_name == "firefox" and name.decode().lower() == "priority":
                     continue
-                expected_headers.append({"name": name.decode().lower(), "value": value.decode()})
+                expected_headers.append(
+                    {"name": name.decode().lower(), "value": value.decode()}
+                )
         request.finish()
 
     server.set_route("/headers", handle)
@@ -290,7 +310,9 @@ async def test_should_report_request_headers_array(
         ),
         key=lambda header: header["name"],
     )
-    sorted_expected_headers = sorted(expected_headers, key=lambda header: header["name"])
+    sorted_expected_headers = sorted(
+        expected_headers, key=lambda header: header["name"]
+    )
     assert sorted_pw_request_headers == sorted_expected_headers
     assert await request.header_value("Header-A") == "value-a, value-a-1, value-a-2"
     assert await request.header_value("not-there") is None
@@ -397,13 +419,17 @@ async def test_should_parse_the_data_if_content_type_is_form_urlencoded(
     assert requests[0].post_data_json == {"foo": "bar", "baz": "123"}
 
 
-async def test_should_be_undefined_when_there_is_no_post_data(page: Page, server: Server) -> None:
+async def test_should_be_undefined_when_there_is_no_post_data(
+    page: Page, server: Server
+) -> None:
     response = await page.goto(server.EMPTY_PAGE)
     assert response
     assert response.request.post_data_json is None
 
 
-async def test_should_return_post_data_without_content_type(page: Page, server: Server) -> None:
+async def test_should_return_post_data_without_content_type(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     async with page.expect_request("**/*") as request_info:
         await page.evaluate(
@@ -421,7 +447,9 @@ async def test_should_return_post_data_without_content_type(page: Page, server: 
     assert request.post_data_json == {"value": 42}
 
 
-async def test_should_throw_on_invalid_json_in_post_data(page: Page, server: Server) -> None:
+async def test_should_throw_on_invalid_json_in_post_data(
+    page: Page, server: Server
+) -> None:
     await page.goto(server.EMPTY_PAGE)
     async with page.expect_request("**/*") as request_info:
         await page.evaluate(
@@ -484,7 +512,9 @@ async def test_response_text_should_work(page: Page, server: Server) -> None:
     assert await response.text() == '{"foo": "bar"}\n'
 
 
-async def test_response_text_should_return_uncompressed_text(page: Page, server: Server) -> None:
+async def test_response_text_should_return_uncompressed_text(
+    page: Page, server: Server
+) -> None:
     server.enable_gzip("/simple.json")
     response = await page.goto(server.PREFIX + "/simple.json")
     assert response
@@ -518,7 +548,9 @@ async def test_response_json_should_work(page: Page, server: Server) -> None:
     assert await response.json() == {"foo": "bar"}
 
 
-async def test_response_body_should_work(page: Page, server: Server, assetdir: Path) -> None:
+async def test_response_body_should_work(
+    page: Page, server: Server, assetdir: Path
+) -> None:
     response = await page.goto(server.PREFIX + "/pptr.png")
     assert response
     with open(
@@ -549,7 +581,9 @@ async def test_response_status_text_should_work(page: Page, server: Server) -> N
     assert response.status_text == "cool!"
 
 
-async def test_request_resource_type_should_return_event_source(page: Page, server: Server) -> None:
+async def test_request_resource_type_should_return_event_source(
+    page: Page, server: Server
+) -> None:
     SSE_MESSAGE = {"foo": "bar"}
     # 1. Setup server-sent events on server that immediately sends a message to the client.
     server.set_route(
@@ -635,7 +669,10 @@ async def test_network_events_request_failed(
         if is_mac:
             assert failed_requests[0].failure == "The network connection was lost."
         elif is_win:
-            assert failed_requests[0].failure == "Server returned nothing (no headers, no data)"
+            assert (
+                failed_requests[0].failure
+                == "Server returned nothing (no headers, no data)"
+            )
         else:
             assert failed_requests[0].failure in [
                 "Message Corrupt",
@@ -669,7 +706,9 @@ async def test_network_events_should_fire_events_in_proper_order(
     assert events == ["request", "response", "requestfinished"]
 
 
-async def test_network_events_should_support_redirects(page: Page, server: Server) -> None:
+async def test_network_events_should_support_redirects(
+    page: Page, server: Server
+) -> None:
     FOO_URL = server.PREFIX + "/foo.html"
     events: Dict[str, List[Union[str, int]]] = {}
     events[FOO_URL] = []
@@ -709,7 +748,9 @@ async def test_network_events_should_support_redirects(page: Page, server: Serve
     assert redirected_from.redirected_to == response.request
 
 
-async def test_request_is_navigation_request_should_work(page: Page, server: Server) -> None:
+async def test_request_is_navigation_request_should_work(
+    page: Page, server: Server
+) -> None:
     requests: Dict[str, Request] = {}
 
     def handle_request(request: Request) -> None:
@@ -861,14 +902,18 @@ async def test_response_security_details(
     await page.close()
 
 
-async def test_response_security_details_none_without_https(page: Page, server: Server) -> None:
+async def test_response_security_details_none_without_https(
+    page: Page, server: Server
+) -> None:
     response = await page.goto(server.EMPTY_PAGE)
     assert response
     security_details = await response.security_details()
     assert security_details is None
 
 
-async def test_should_report_if_request_was_from_service_worker(page: Page, server: Server) -> None:
+async def test_should_report_if_request_was_from_service_worker(
+    page: Page, server: Server
+) -> None:
     response = await page.goto(server.PREFIX + "/serviceworkers/fetch/sw.html")
     assert response
     assert not response.from_service_worker

@@ -56,7 +56,9 @@ async def test_should_set_local_storage(browser: Browser) -> None:
     )
 
     page = await context.new_page()
-    await page.route("**/*", lambda route: asyncio.create_task(route.fulfill(body="<html></html>")))
+    await page.route(
+        "**/*", lambda route: asyncio.create_task(route.fulfill(body="<html></html>"))
+    )
     await page.goto("https://www.example.com")
     local_storage = await page.evaluate("window.localStorage")
     assert local_storage == {"name1": "value1"}

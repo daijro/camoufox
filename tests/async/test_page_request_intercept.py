@@ -21,7 +21,9 @@ from playwright.async_api import Error, Page, Route, expect
 from tests.server import Server, TestServerRequest
 
 
-async def test_should_support_timeout_option_in_route_fetch(server: Server, page: Page) -> None:
+async def test_should_support_timeout_option_in_route_fetch(
+    server: Server, page: Page
+) -> None:
     def _handler(request: TestServerRequest) -> None:
         request.responseHeaders.addRawHeader("Content-Length", "4096")
         request.responseHeaders.addRawHeader("Content-Type", "text/html")
@@ -68,7 +70,9 @@ async def test_should_intercept_with_url_override(server: Server, page: Page) ->
     assert "one-style.css" in (await response.body()).decode("utf-8")
 
 
-async def test_should_intercept_with_post_data_override(server: Server, page: Page) -> None:
+async def test_should_intercept_with_post_data_override(
+    server: Server, page: Page
+) -> None:
     request_promise = asyncio.create_task(server.wait_for_request("/empty.html"))
 
     async def handle(route: Route) -> None:
@@ -82,7 +86,9 @@ async def test_should_intercept_with_post_data_override(server: Server, page: Pa
     assert request.post_body.decode("utf-8") == '{"foo": "bar"}'
 
 
-async def test_should_fulfill_popup_main_request_using_alias(page: Page, server: Server) -> None:
+async def test_should_fulfill_popup_main_request_using_alias(
+    page: Page, server: Server
+) -> None:
     async def route_handler(route: Route) -> None:
         response = await route.fetch()
         await route.fulfill(response=response, body="hello")

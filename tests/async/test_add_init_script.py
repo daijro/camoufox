@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 import pytest
+
 from playwright.async_api import BrowserContext, Error, Page
 
 

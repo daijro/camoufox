@@ -29,7 +29,9 @@ async def test_has_text_and_internal_text_should_match_full_node_text_in_strict_
     )
     await expect(page.get_by_text("helloworld", exact=True)).to_have_id("div1")
     await expect(page.get_by_text("hello", exact=True)).to_have_id("div2")
-    await expect(page.locator("div", has_text=re.compile("^helloworld$"))).to_have_id("div1")
+    await expect(page.locator("div", has_text=re.compile("^helloworld$"))).to_have_id(
+        "div1"
+    )
     await expect(page.locator("div", has_text=re.compile("^hello$"))).to_have_id("div2")
 
     await page.set_content(
@@ -42,7 +44,9 @@ async def test_has_text_and_internal_text_should_match_full_node_text_in_strict_
     assert await page.get_by_text("hello", exact=True).evaluate_all(
         "els => els.map(e => e.id)"
     ) == ["span1", "span2"]
-    await expect(page.locator("div", has_text=re.compile("^helloworld$"))).to_have_id("div1")
+    await expect(page.locator("div", has_text=re.compile("^helloworld$"))).to_have_id(
+        "div1"
+    )
     await expect(page.locator("div", has_text=re.compile("^hello$"))).to_have_id("div2")
 
 
@@ -53,10 +57,20 @@ async def test_should_work(page: Page) -> None:
     """
     )
     assert await page.eval_on_selector("text=ya", "e => e.outerHTML") == "<div>ya</div>"
-    assert await page.eval_on_selector('text="ya"', "e => e.outerHTML") == "<div>ya</div>"
-    assert await page.eval_on_selector("text=/^[ay]+$/", "e => e.outerHTML") == "<div>ya</div>"
-    assert await page.eval_on_selector("text=/Ya/i", "e => e.outerHTML") == "<div>ya</div>"
-    assert await page.eval_on_selector("text=ye", "e => e.outerHTML") == "<div>\nye  </div>"
+    assert (
+        await page.eval_on_selector('text="ya"', "e => e.outerHTML") == "<div>ya</div>"
+    )
+    assert (
+        await page.eval_on_selector("text=/^[ay]+$/", "e => e.outerHTML")
+        == "<div>ya</div>"
+    )
+    assert (
+        await page.eval_on_selector("text=/Ya/i", "e => e.outerHTML") == "<div>ya</div>"
+    )
+    assert (
+        await page.eval_on_selector("text=ye", "e => e.outerHTML")
+        == "<div>\nye  </div>"
+    )
     assert ">\nye  </div>" in await page.get_by_text("ye").evaluate("e => e.outerHTML")
 
     await page.set_content(
@@ -64,7 +78,10 @@ async def test_should_work(page: Page) -> None:
         <div> ye </div><div>ye</div>
     """
     )
-    assert await page.eval_on_selector('text="ye"', "e => e.outerHTML") == "<div> ye </div>"
+    assert (
+        await page.eval_on_selector('text="ye"', "e => e.outerHTML")
+        == "<div> ye </div>"
+    )
     assert "> ye </div>" in await page.get_by_text("ye", exact=True).first.evaluate(
         "e => e.outerHTML"
     )
@@ -74,7 +91,10 @@ async def test_should_work(page: Page) -> None:
         <div>yo</div><div>"ya</div><div> hello world! </div>
     """
     )
-    assert await page.eval_on_selector('text="\\"ya"', "e => e.outerHTML") == '<div>"ya</div>'
+    assert (
+        await page.eval_on_selector('text="\\"ya"', "e => e.outerHTML")
+        == '<div>"ya</div>'
+    )
     assert (
         await page.eval_on_selector("text=/hello/", "e => e.outerHTML")
         == "<div> hello world! </div>"
@@ -89,15 +109,33 @@ async def test_should_work(page: Page) -> None:
         <div>yo<div>ya</div>hey<div>hey</div></div>
     """
     )
-    assert await page.eval_on_selector("text=hey", "e => e.outerHTML") == "<div>hey</div>"
-    assert await page.eval_on_selector('text=yo>>text="ya"', "e => e.outerHTML") == "<div>ya</div>"
-    assert await page.eval_on_selector('text=yo>> text="ya"', "e => e.outerHTML") == "<div>ya</div>"
-    assert await page.eval_on_selector("text=yo >>text='ya'", "e => e.outerHTML") == "<div>ya</div>"
     assert (
-        await page.eval_on_selector("text=yo >> text='ya'", "e => e.outerHTML") == "<div>ya</div>"
+        await page.eval_on_selector("text=hey", "e => e.outerHTML") == "<div>hey</div>"
     )
-    assert await page.eval_on_selector("'yo'>>\"ya\"", "e => e.outerHTML") == "<div>ya</div>"
-    assert await page.eval_on_selector("\"yo\" >> 'ya'", "e => e.outerHTML") == "<div>ya</div>"
+    assert (
+        await page.eval_on_selector('text=yo>>text="ya"', "e => e.outerHTML")
+        == "<div>ya</div>"
+    )
+    assert (
+        await page.eval_on_selector('text=yo>> text="ya"', "e => e.outerHTML")
+        == "<div>ya</div>"
+    )
+    assert (
+        await page.eval_on_selector("text=yo >>text='ya'", "e => e.outerHTML")
+        == "<div>ya</div>"
+    )
+    assert (
+        await page.eval_on_selector("text=yo >> text='ya'", "e => e.outerHTML")
+        == "<div>ya</div>"
+    )
+    assert (
+        await page.eval_on_selector("'yo'>>\"ya\"", "e => e.outerHTML")
+        == "<div>ya</div>"
+    )
+    assert (
+        await page.eval_on_selector("\"yo\" >> 'ya'", "e => e.outerHTML")
+        == "<div>ya</div>"
+    )
 
     await page.set_content(
         """
@@ -105,19 +143,39 @@ async def test_should_work(page: Page) -> None:
         """
     )
     assert (
-        await page.eval_on_selector_all("text=yo", "es => es.map(e => e.outerHTML).join('\\n')")
+        await page.eval_on_selector_all(
+            "text=yo", "es => es.map(e => e.outerHTML).join('\\n')"
+        )
         == '<div>yo<span id="s1"></span></div>\n<div>yo<span id="s2"></span><span id="s3"></span></div>'
     )
 
     await page.set_content("<div>'</div><div>\"</div><div>\\</div><div>x</div>")
-    assert await page.eval_on_selector("text='\\''", "e => e.outerHTML") == "<div>'</div>"
-    assert await page.eval_on_selector("text='\"'", "e => e.outerHTML") == '<div>"</div>'
-    assert await page.eval_on_selector('text="\\""', "e => e.outerHTML") == '<div>"</div>'
-    assert await page.eval_on_selector('text="\'"', "e => e.outerHTML") == "<div>'</div>"
-    assert await page.eval_on_selector('text="\\x"', "e => e.outerHTML") == "<div>x</div>"
-    assert await page.eval_on_selector("text='\\x'", "e => e.outerHTML") == "<div>x</div>"
-    assert await page.eval_on_selector("text='\\\\'", "e => e.outerHTML") == "<div>\\</div>"
-    assert await page.eval_on_selector('text="\\\\"', "e => e.outerHTML") == "<div>\\</div>"
+    assert (
+        await page.eval_on_selector("text='\\''", "e => e.outerHTML") == "<div>'</div>"
+    )
+    assert (
+        await page.eval_on_selector("text='\"'", "e => e.outerHTML") == '<div>"</div>'
+    )
+    assert (
+        await page.eval_on_selector('text="\\""', "e => e.outerHTML") == '<div>"</div>'
+    )
+    assert (
+        await page.eval_on_selector('text="\'"', "e => e.outerHTML") == "<div>'</div>"
+    )
+    assert (
+        await page.eval_on_selector('text="\\x"', "e => e.outerHTML") == "<div>x</div>"
+    )
+    assert (
+        await page.eval_on_selector("text='\\x'", "e => e.outerHTML") == "<div>x</div>"
+    )
+    assert (
+        await page.eval_on_selector("text='\\\\'", "e => e.outerHTML")
+        == "<div>\\</div>"
+    )
+    assert (
+        await page.eval_on_selector('text="\\\\"', "e => e.outerHTML")
+        == "<div>\\</div>"
+    )
     assert await page.eval_on_selector('text="', "e => e.outerHTML") == '<div>"</div>'
     assert await page.eval_on_selector("text='", "e => e.outerHTML") == "<div>'</div>"
     assert await page.eval_on_selector('"x"', "e => e.outerHTML") == "<div>x</div>"
@@ -143,16 +201,26 @@ async def test_should_work(page: Page) -> None:
     )
 
     await page.set_content("<div>Hi&gt;&gt;<span></span></div>")
-    assert await page.eval_on_selector('text="Hi>>">>span', "e => e.outerHTML") == "<span></span>"
+    assert (
+        await page.eval_on_selector('text="Hi>>">>span', "e => e.outerHTML")
+        == "<span></span>"
+    )
     assert (
         await page.eval_on_selector("text=/Hi\\>\\>/ >> span", "e => e.outerHTML")
         == "<span></span>"
     )
 
     await page.set_content("<div>a<br>b</div><div>a</div>")
-    assert await page.eval_on_selector("text=a", "e => e.outerHTML") == "<div>a<br>b</div>"
-    assert await page.eval_on_selector("text=b", "e => e.outerHTML") == "<div>a<br>b</div>"
-    assert await page.eval_on_selector("text=ab", "e => e.outerHTML") == "<div>a<br>b</div>"
+    assert (
+        await page.eval_on_selector("text=a", "e => e.outerHTML") == "<div>a<br>b</div>"
+    )
+    assert (
+        await page.eval_on_selector("text=b", "e => e.outerHTML") == "<div>a<br>b</div>"
+    )
+    assert (
+        await page.eval_on_selector("text=ab", "e => e.outerHTML")
+        == "<div>a<br>b</div>"
+    )
     assert await page.query_selector("text=abc") is None
     assert await page.eval_on_selector_all("text=a", "els => els.length") == 2
     assert await page.eval_on_selector_all("text=b", "els => els.length") == 1
@@ -174,9 +242,14 @@ async def test_should_work(page: Page) -> None:
         span.appendChild(document.createTextNode('world'))
     }""",
     )
-    assert await page.eval_on_selector("text=lowo", "e => e.outerHTML") == "<div>helloworld</div>"
     assert (
-        await page.eval_on_selector_all("text=lowo", "els => els.map(e => e.outerHTML).join('')")
+        await page.eval_on_selector("text=lowo", "e => e.outerHTML")
+        == "<div>helloworld</div>"
+    )
+    assert (
+        await page.eval_on_selector_all(
+            "text=lowo", "els => els.map(e => e.outerHTML).join('')"
+        )
         == "<div>helloworld</div><span>helloworld</span>"
     )
 

@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import pytest
-from playwright.async_api import Browser
 
+from playwright.async_api import Browser
 from tests.server import Server
 
 
-async def test_should_allow_service_workers_by_default(browser: Browser, server: Server) -> None:
+async def test_should_allow_service_workers_by_default(
+    browser: Browser, server: Server
+) -> None:
     context = await browser.new_context()
     page = await context.new_page()
     await page.goto(server.PREFIX + "/serviceworkers/fetchdummy/sw.html")
@@ -26,7 +28,9 @@ async def test_should_allow_service_workers_by_default(browser: Browser, server:
 
 
 @pytest.mark.skip(reason="Not supported by Camoufox")
-async def test_block_blocks_service_worker_registration(browser: Browser, server: Server) -> None:
+async def test_block_blocks_service_worker_registration(
+    browser: Browser, server: Server
+) -> None:
     context = await browser.new_context(service_workers="block")
     page = await context.new_page()
     async with page.expect_console_message(

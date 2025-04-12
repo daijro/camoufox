@@ -89,7 +89,9 @@ async def test_should_authenticate(
     def handler(req: TestServerRequest) -> None:
         auth = req.getHeader("proxy-authorization")
         if not auth:
-            req.setHeader(b"Proxy-Authenticate", b'Basic realm="Access to internal site"')
+            req.setHeader(
+                b"Proxy-Authenticate", b'Basic realm="Access to internal site"'
+            )
             req.setResponseCode(407)
         else:
             req.write(f"<html><title>{auth}</title></html>".encode("utf-8"))
@@ -106,7 +108,9 @@ async def test_should_authenticate(
     )
     page = await browser.new_page()
     await page.goto("http://non-existent.com/target.html")
-    assert await page.title() == "Basic " + base64.b64encode(b"user:secret").decode("utf-8")
+    assert await page.title() == "Basic " + base64.b64encode(b"user:secret").decode(
+        "utf-8"
+    )
 
 
 async def test_should_authenticate_with_empty_password(
@@ -115,7 +119,9 @@ async def test_should_authenticate_with_empty_password(
     def handler(req: TestServerRequest) -> None:
         auth = req.getHeader("proxy-authorization")
         if not auth:
-            req.setHeader(b"Proxy-Authenticate", b'Basic realm="Access to internal site"')
+            req.setHeader(
+                b"Proxy-Authenticate", b'Basic realm="Access to internal site"'
+            )
             req.setResponseCode(407)
         else:
             req.write(f"<html><title>{auth}</title></html>".encode("utf-8"))
