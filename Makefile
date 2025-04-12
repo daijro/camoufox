@@ -12,7 +12,7 @@ pacman := python python-pip p7zip go msitools wget aria2
         check-arch revert edits run bootstrap mozbootstrap dir \
         package-linux package-macos package-windows vcredist_arch patch unpatch \
         workspace check-arg edit-cfg ff-dbg tests update-ubo-assets \
-		lint lint-scripts lint-tests \
+		lint lint-scripts lint-tests lint-lib \
 
 help:
 	@echo "Available targets:"
@@ -252,4 +252,7 @@ lint-scripts:
 lint-tests:
 	cd ./tests && uv run ruff check .
 
-lint: lint-scripts lint-tests
+lint-lib:
+	cd ./camoufox-py && uv run ruff check .
+
+lint: lint-scripts lint-tests lint-lib
