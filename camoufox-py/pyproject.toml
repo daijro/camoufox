@@ -1,16 +1,11 @@
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry]
+[project]
 name = "camoufox"
 version = "0.4.11"
 description = "Wrapper around Playwright to help launch Camoufox"
-authors = ["daijro <daijro.dev@gmail.com>"]
-license = "MIT"
-repository = "https://github.com/daijro/camoufox"
-homepage = "https://camoufox.com/python"
+authors = [{ name = "daijro", email = "daijro.dev@gmail.com" }]
+requires-python = "~=3.8"
 readme = "README.md"
+license = "MIT"
 keywords = [
     "client",
     "fingerprint",
@@ -25,28 +20,34 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP :: Browsers",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+dependencies = [
+    "click",
+    "requests",
+    "orjson",
+    "browserforge>=1.2.1,<2",
+    "playwright",
+    "pyyaml",
+    "platformdirs",
+    "tqdm",
+    "numpy",
+    "ua_parser",
+    "typing_extensions",
+    "screeninfo",
+    "lxml",
+    "language-tags",
+    "pysocks",
+]
 
-[tool.poetry.dependencies]
-python = "^3.8"
-click = "*"
-requests = "*"
-orjson = "*"
-browserforge = "^1.2.1"
-playwright = "*"
-pyyaml = "*"
-platformdirs = "*"
-tqdm = "*"
-numpy = "*"
-ua_parser = "*"
-typing_extensions = "*"
-screeninfo = "*"
-lxml = "*"
-language-tags = "*"
-pysocks = "*"
-geoip2 = {version = "*", optional = true}
-
-[tool.poetry.extras]
+[project.optional-dependencies]
 geoip = ["geoip2"]
 
-[tool.poetry.scripts]
+[project.urls]
+Homepage = "https://camoufox.com/python"
+Repository = "https://github.com/daijro/camoufox"
+
+[project.scripts]
 camoufox = "camoufox.__main__:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
