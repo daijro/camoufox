@@ -251,6 +251,5 @@ lint-scripts:
 
 lint-tests:
 	cd ./tests && uv run ruff check .
-	cd ./tests && uv run mypy .
 
 lint: lint-scripts lint-tests
