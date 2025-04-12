@@ -1,6 +1,11 @@
 [project]
 name = "camoufox-tests"
 version = "0.1.0"
+authors = [
+    { name = "Microsoft Corporation"},
+    { name = "daijro", email = "daijro.dev@gmail.com" },
+    { name = "Kornelijus Tvarijanavičius", email = "16837066+Kornelijus@users.noreply.github.com" },
+]
 requires-python = ">=3.13"
 dependencies = []
 
