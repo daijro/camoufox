@@ -55,3 +55,8 @@ build-backend = "hatchling.build"
 [tool.mypy]
 follow_untyped_imports = true
 check_untyped_defs = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.5",
+]
