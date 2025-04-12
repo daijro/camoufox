@@ -11,7 +11,8 @@ pacman := python python-pip p7zip go msitools wget aria2
 .PHONY: help fetch setup setup-minimal clean set-target distclean build package \
         check-arch revert edits run bootstrap mozbootstrap dir \
         package-linux package-macos package-windows vcredist_arch patch unpatch \
-        workspace check-arg edit-cfg ff-dbg tests update-ubo-assets
+        workspace check-arg edit-cfg ff-dbg tests update-ubo-assets \
+		lint lint-scripts lint-tests \
 
 help:
 	@echo "Available targets:"
@@ -243,3 +244,11 @@ upload:
 	7z a "-p$$(cat ./.passwd)" -mhe=on ../camoufox-web/pipeline/rev-$(closedsrc_rev).7z "./firefox/patches/private/*.patch"
 
 vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')
+
+lint-scripts:
+	cd ./scripts && uv run ruff check .
+
+lint-tests:
+	cd ./tests && uv run ruff check .
+
+lint: lint-scripts lint-tests
