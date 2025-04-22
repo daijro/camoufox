@@ -253,6 +253,6 @@ lint-tests:
 	cd ./tests && uv run ruff check .
 
 lint-lib:
-	cd ./camoufox-py && uv run ruff check .
+	cd ./pythonlib && uv run ruff check .
 
 lint: lint-scripts lint-tests lint-lib
