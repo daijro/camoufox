@@ -30,7 +30,7 @@ AVAILABLE_ARCHS = ["x86_64", "arm64", "i686"]
 
 
 def run(cmd, exit_on_fail=True):
-    print(f'\n------------\n{cmd}\n------------\n')
+    print(f"\n------------\n{cmd}\n------------\n")
     retval = os.system(cmd)
     if retval != 0 and exit_on_fail:
         print(f"fatal error: command '{cmd}' failed")
@@ -46,32 +46,32 @@ class BSYS:
     @staticmethod
     def bootstrap():
         """Bootstrap the build system"""
-        run('make bootstrap')
+        run("make bootstrap")
 
     def build(self):
         """Build the Camoufox source code"""
-        os.environ['BUILD_TARGET'] = f'{self.target},{self.arch}'
-        run('make build')
+        os.environ["BUILD_TARGET"] = f"{self.target},{self.arch}"
+        run("make build")
 
     def package(self):
         """Package the Camoufox source code"""
-        run(f'make package-{self.target} arch={self.arch}')
+        run(f"make package-{self.target} arch={self.arch}")
 
     def update_target(self):
         """Change the build target"""
-        os.environ['BUILD_TARGET'] = f'{self.target},{self.arch}'
-        run('make set-target')
+        os.environ["BUILD_TARGET"] = f"{self.target},{self.arch}"
+        run("make set-target")
 
     @property
     def assets(self) -> List[str]:
         """Get the list of assets"""
-        package_pattern = f'camoufox-*-{self.target[:3]}.{self.arch}.zip'
+        package_pattern = f"camoufox-*-{self.target[:3]}.{self.arch}.zip"
         return glob.glob(package_pattern)
 
     @staticmethod
     def clean():
         """Clean the Camoufox directory"""
-        run('make clean')
+        run("make clean")
 
 
 def run_build(target, arch):
@@ -85,9 +85,10 @@ def run_build(target, arch):
     # Run package
     builder.package()
     # Move assets to dist
-    print('Assets:', ', '.join(builder.assets))
+    print("Assets:", ", ".join(builder.assets))
+
     for asset in builder.assets:
-        shutil.move(asset, f'dist/{asset}')
+        shutil.move(asset, f"dist/{asset}")
 
 
 def main():
@@ -95,18 +96,20 @@ def main():
     parser.add_argument(
         "--target",
         choices=AVAILABLE_TARGETS,
-        nargs='+',
+        nargs="+",
         required=True,
         help="Target platform for the build",
     )
     parser.add_argument(
         "--arch",
         choices=AVAILABLE_ARCHS,
-        nargs='+',
+        nargs="+",
         required=True,
         help="Target architecture for the build",
     )
-    parser.add_argument("--bootstrap", action="store_true", help="Bootstrap the build system")
+    parser.add_argument(
+        "--bootstrap", action="store_true", help="Bootstrap the build system"
+    )
     parser.add_argument(
         "--clean", action="store_true", help="Clean the build directory before starting"
     )
