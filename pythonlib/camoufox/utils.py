@@ -5,6 +5,7 @@ from os.path import abspath
 from pathlib import Path
 from pprint import pprint
 from random import randint, randrange
+import secrets
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -15,6 +16,7 @@ from typing_extensions import TypeAlias
 from ua_parser import user_agent_parser
 
 from .addons import DefaultAddons, add_default_addons, confirm_paths
+from .antidetect import apply_advanced_antidetect
 from .exceptions import (
     InvalidOS,
     InvalidPropertyType,
@@ -521,7 +523,7 @@ def launch_options(
     target_os = get_target_os(config)
 
     # Set a random window.history.length
-    set_into(config, 'window.history.length', randrange(1, 6))  # nosec
+    set_into(config, 'window.history.length', secrets.randbelow(5) + 1)
 
     # Update fonts list
     if fonts:
@@ -539,7 +541,7 @@ def launch_options(
         update_fonts(config, target_os)
 
     # Set a fixed font spacing seed
-    set_into(config, 'fonts:spacing_seed', randint(0, 1_073_741_823))  # nosec
+    set_into(config, 'fonts:spacing_seed', secrets.randbelow(1_073_741_824))
 
     # Set geolocation
     if geoip:
@@ -623,9 +625,20 @@ def launch_options(
     merge_into(
         config,
         {
-            'canvas:aaOffset': randint(-50, 50),  # nosec
+            'canvas:aaOffset': secrets.randbelow(101) - 50,
             'canvas:aaCapOffset': True,
         },
+    )
+    
+    # Apply advanced anti-detection features
+    apply_advanced_antidetect(config, 
+        enable_client_hints=True,
+        enable_device_apis=True,
+        enable_canvas_protection=True,
+        enable_timing_fuzzing=True,
+        enable_scroll_humanization=False,  # Off by default for performance
+        enable_permissions=True,
+        enable_storage_quota=True
     )
 
     # Cache previous pages, requests, etc (uses more memory)

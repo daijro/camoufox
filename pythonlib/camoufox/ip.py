@@ -1,6 +1,6 @@
 import re
 import warnings
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Dict, Optional, Tuple
@@ -86,9 +86,14 @@ def _suppress_insecure_warning():
 
 
 @lru_cache(maxsize=None)
-def public_ip(proxy: Optional[str] = None) -> str:
+def public_ip(proxy: Optional[str] = None, verify_ssl: bool = False) -> str:
     """
     Sends a request to a public IP api
+    
+    Args:
+        proxy: Optional proxy string to use for the request
+        verify_ssl: Whether to verify SSL certificates (default: False for compatibility
+                   with various IP lookup services that may have certificate issues)
     """
     URLS = [
         # Prefers IPv4
@@ -104,12 +109,13 @@ def public_ip(proxy: Optional[str] = None) -> str:
     exception = None
     for url in URLS:
         try:
-            with _suppress_insecure_warning():
-                resp = requests.get(  # nosec
+            context = _suppress_insecure_warning() if not verify_ssl else nullcontext()
+            with context:
+                resp = requests.get(
                     url,
                     proxies=Proxy.as_requests_proxy(proxy) if proxy else None,
                     timeout=5,
-                    verify=False,
+                    verify=verify_ssl,
                 )
             resp.raise_for_status()
             ip = resp.text.strip()

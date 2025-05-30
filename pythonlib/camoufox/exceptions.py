@@ -169,7 +169,6 @@ class CannotFindXvfb(VirtualDisplayError):
     """
 
     ...
-    pass
 
 
 class CannotExecuteXvfb(VirtualDisplayError):

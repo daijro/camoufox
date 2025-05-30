@@ -75,7 +75,7 @@ async def AsyncNewBrowser(
         persistent_context (bool):
             Whether to use a persistent context.
         **kwargs:
-            All other keyword arugments passed to `launch_options()`.
+            All other keyword arguments passed to `launch_options()`.
     """
     if headless == 'virtual':
         virtual_display = VirtualDisplay(debug=debug)
