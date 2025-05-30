@@ -7,7 +7,25 @@ import secrets
 from typing import Any, Dict, List, Optional, Tuple
 from random import choice, uniform
 
-from .utils import merge_into, set_into
+
+def merge_into(target: Dict[str, Any], source: Dict[str, Any]) -> None:
+    """Merge source dict into target dict"""
+    for key, value in source.items():
+        if isinstance(value, dict) and key in target and isinstance(target[key], dict):
+            merge_into(target[key], value)
+        else:
+            target[key] = value
+
+
+def set_into(config: Dict[str, Any], key: str, value: Any) -> None:
+    """Set a value in config using dot notation"""
+    keys = key.split('.')
+    current = config
+    for k in keys[:-1]:
+        if k not in current:
+            current[k] = {}
+        current = current[k]
+    current[keys[-1]] = value
 
 
 def generate_client_hints(user_agent: str, mobile: bool = False) -> Dict[str, Any]:
