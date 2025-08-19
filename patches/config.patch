@@ -2,7 +2,7 @@ diff --git a/browser/installer/package-manifest.in b/browser/installer/package-m
 index bb0f71dd60..3ad3d84b82 100644
 --- a/browser/installer/package-manifest.in
 +++ b/browser/installer/package-manifest.in
-@@ -244,6 +244,11 @@
+@@ -260,6 +260,11 @@
  #endif
  #endif
  
@@ -37,8 +37,7 @@ diff --git a/moz.build b/moz.build
 index 9db27fd056..e1ec1dc872 100644
 --- a/moz.build
 +++ b/moz.build
-@@ -220,3 +220,5 @@ SPHINX_TREES["mots"] = "docs/mots"
- SPHINX_TREES["update-infrastructure"] = "docs/update-infrastructure"
+@@ -228,3 +228,5 @@ SPHINX_TREES["jsloader"] = "docs/jsloader"
  
  include("build/templates.mozbuild")
 +

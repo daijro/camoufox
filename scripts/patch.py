@@ -139,7 +139,7 @@ def extract_build_target():
         assert target in AVAILABLE_TARGETS, f"Unsupported target: {target}"
         assert arch in AVAILABLE_ARCHS, f"Unsupported architecture: {arch}"
     else:
-        target, arch = "linux", "x86_64"
+        target, arch = "macos", "arm64"
     return target, arch
 
 
