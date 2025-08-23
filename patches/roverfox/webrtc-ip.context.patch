@@ -1,0 +1,821 @@
+diff --git a/dom/base/WebRTCIPManager.cpp b/dom/base/WebRTCIPManager.cpp
+new file mode 100644
+index 0000000000..94575f2631
+--- /dev/null
++++ b/dom/base/WebRTCIPManager.cpp
+@@ -0,0 +1,218 @@
++#include "WebRTCIPManager.h"
++#include "nsPrintfCString.h"
++#include "nsGlobalWindowInner.h"
++#include "xpcpublic.h"
++
++namespace mozilla {
++namespace dom {
++
++/* static */ nsString
++WebRTCIPManager::IPv4KeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendLiteral(u"webrtc_ipv4_");
++  key.AppendInt(userContextId);
++  return key;
++}
++
++/* static */ nsString
++WebRTCIPManager::IPv6KeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendLiteral(u"webrtc_ipv6_");
++  key.AppendInt(userContextId);
++  return key;
++}
++
++/* static */ nsString
++WebRTCIPManager::IPv4DisabledKeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendLiteral(u"webrtc_ipv4_disabled_");
++  key.AppendInt(userContextId);
++  return key;
++}
++
++/* static */ nsString
++WebRTCIPManager::IPv6DisabledKeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendLiteral(u"webrtc_ipv6_disabled_");
++  key.AppendInt(userContextId);
++  return key;
++}
++
++
++
++/* static */ void
++WebRTCIPManager::SetIPv4(uint32_t userContextId, const nsAString& ipv4) {
++  nsString key = IPv4KeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutString(key, ipv4);
++  
++  // Mark the function as disabled for this context after first use
++  DisableIPv4Function(userContextId);
++}
++
++/* static */ bool
++WebRTCIPManager::GetIPv4(uint32_t userContextId, nsAString& outIPv4) {
++  nsString key = IPv4KeyForUserContext(userContextId);
++  return RoverfoxStorageManager::GetString(key, outIPv4);
++}
++
++/* static */ void
++WebRTCIPManager::SetIPv6(uint32_t userContextId, const nsAString& ipv6) {
++  nsString key = IPv6KeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutString(key, ipv6);
++  
++  // Mark the function as disabled for this context after first use
++  DisableIPv6Function(userContextId);
++}
++
++/* static */ bool
++WebRTCIPManager::GetIPv6(uint32_t userContextId, nsAString& outIPv6) {
++  nsString key = IPv6KeyForUserContext(userContextId);
++  return RoverfoxStorageManager::GetString(key, outIPv6);
++}
++
++
++
++/* static */ bool
++WebRTCIPManager::IsIPv4FunctionDisabled(uint32_t userContextId) {
++  nsString key = IPv4DisabledKeyForUserContext(userContextId);
++  bool disabled = false;
++  return RoverfoxStorageManager::GetBool(key, disabled) && disabled;
++}
++
++/* static */ void
++WebRTCIPManager::DisableIPv4Function(uint32_t userContextId) {
++  nsString key = IPv4DisabledKeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutBool(key, true);
++}
++
++/* static */ bool
++WebRTCIPManager::IsIPv6FunctionDisabled(uint32_t userContextId) {
++  nsString key = IPv6DisabledKeyForUserContext(userContextId);
++  bool disabled = false;
++  return RoverfoxStorageManager::GetBool(key, disabled) && disabled;
++}
++
++/* static */ void
++WebRTCIPManager::DisableIPv6Function(uint32_t userContextId) {
++  nsString key = IPv6DisabledKeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutBool(key, true);
++}
++
++
++
++/* static */ bool
++WebRTCIPManager::IsIPv4FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
++  // Get the window from the JS object
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) {
++    return false;
++  }
++
++  // Get the user context ID for this window
++  uint32_t userContextId = 0;
++
++  // 1) Prefer the document's principal when available (content contexts)
++  if (Document* doc = win->GetDoc()) {
++    if (nsIPrincipal* p = doc->NodePrincipal()) {
++      userContextId = p->OriginAttributesRef().mUserContextId;
++    }
++  }
++
++  // 2) Fallback: this inner window's docshell origin attributes
++  if (userContextId == 0) {
++    if (nsIDocShell* ds = win->GetDocShell()) {
++      auto* concrete = static_cast<nsDocShell*>(ds);
++      userContextId = concrete->GetOriginAttributes().mUserContextId;
++    }
++  }
++
++  // 3) Fallback: top browsing context's current inner window document/docshell
++  if (userContextId == 0) {
++    if (BrowsingContext* bc = win->GetBrowsingContext()) {
++      RefPtr<BrowsingContext> top = bc->Top();
++      if (top) {
++        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
++          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
++            if (Document* topDoc = topInner->GetExtantDoc()) {
++              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
++                userContextId = tp->OriginAttributesRef().mUserContextId;
++              }
++            }
++            if (userContextId == 0) {
++              if (nsIDocShell* topDS = topInner->GetDocShell()) {
++                auto* concreteTop = static_cast<nsDocShell*>(topDS);
++                userContextId = concreteTop->GetOriginAttributes().mUserContextId;
++              }
++            }
++          }
++        }
++      }
++    }
++  }
++
++  // Check if the function is disabled for this context
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(IPv4DisabledKeyForUserContext(userContextId), disabled);
++  return !disabled;
++}
++
++/* static */ bool
++WebRTCIPManager::IsIPv6FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
++  // Get the window from the JS object
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) {
++    return false;
++  }
++
++  // Get the user context ID for this window
++  uint32_t userContextId = 0;
++
++  // 1) Prefer the document's principal when available (content contexts)
++  if (Document* doc = win->GetDoc()) {
++    if (nsIPrincipal* p = doc->NodePrincipal()) {
++      userContextId = p->OriginAttributesRef().mUserContextId;
++    }
++  }
++
++  // 2) Fallback: this inner window's docshell origin attributes
++  if (userContextId == 0) {
++    if (nsIDocShell* ds = win->GetDocShell()) {
++      auto* concrete = static_cast<nsDocShell*>(ds);
++      userContextId = concrete->GetOriginAttributes().mUserContextId;
++    }
++  }
++
++  // 3) Fallback: top browsing context's current inner window document/docshell
++  if (userContextId == 0) {
++    if (BrowsingContext* bc = win->GetBrowsingContext()) {
++      RefPtr<BrowsingContext> top = bc->Top();
++      if (top) {
++        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
++          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
++            if (Document* topDoc = topInner->GetExtantDoc()) {
++              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
++                userContextId = tp->OriginAttributesRef().mUserContextId;
++              }
++            }
++            if (userContextId == 0) {
++              if (nsIDocShell* topDS = topInner->GetDocShell()) {
++                auto* concreteTop = static_cast<nsDocShell*>(topDS);
++                userContextId = concreteTop->GetOriginAttributes().mUserContextId;
++              }
++            }
++          }
++        }
++      }
++    }
++  }
++
++  // Check if the function is disabled for this context
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(IPv6DisabledKeyForUserContext(userContextId), disabled);
++  return !disabled;
++}
++
++
++
++} // namespace dom
++} // namespace mozilla
+diff --git a/dom/base/WebRTCIPManager.h b/dom/base/WebRTCIPManager.h
+new file mode 100644
+index 0000000000..c20cb032f6
+--- /dev/null
++++ b/dom/base/WebRTCIPManager.h
+@@ -0,0 +1,105 @@
++#ifndef mozilla_dom_WebRTCIPManager_h
++#define mozilla_dom_WebRTCIPManager_h
++
++#include "nsString.h"
++#include "RoverfoxStorageManager.h"
++
++namespace mozilla {
++namespace dom {
++
++/**
++ * WebRTCIPManager manages WebRTC IP addresses per user context.
++ * This enables privacy-preserving WebRTC IP spoofing by allowing deterministic
++ * IP address overrides that are isolated by user context.
++ */
++class WebRTCIPManager {
++public:
++  /**
++   * Set the WebRTC IPv4 address for a given user context.
++   * @param userContextId The user context ID (0 for default context)
++   * @param ipv4 The IPv4 address to use for WebRTC connections
++   */
++  static void SetIPv4(uint32_t userContextId, const nsAString& ipv4);
++
++  /**
++   * Get the WebRTC IPv4 address for a given user context.
++   * @param userContextId The user context ID
++   * @param outIPv4 The IPv4 address, empty if no address has been set
++   * @return true if an IPv4 address has been set, false otherwise
++   */
++  static bool GetIPv4(uint32_t userContextId, nsAString& outIPv4);
++
++  /**
++   * Set the WebRTC IPv6 address for a given user context.
++   * @param userContextId The user context ID (0 for default context)
++   * @param ipv6 The IPv6 address to use for WebRTC connections
++   */
++  static void SetIPv6(uint32_t userContextId, const nsAString& ipv6);
++
++  /**
++   * Get the WebRTC IPv6 address for a given user context.
++   * @param userContextId The user context ID
++   * @param outIPv6 The IPv6 address, empty if no address has been set
++   * @return true if an IPv6 address has been set, false otherwise
++   */
++  static bool GetIPv6(uint32_t userContextId, nsAString& outIPv6);
++
++
++
++  /**
++   * Check if the setWebRTCIPv4 function has been used and should be disabled for a context.
++   * @param userContextId The user context ID
++   * @return true if the function has been used for this context and should not appear on new windows
++   */
++  static bool IsIPv4FunctionDisabled(uint32_t userContextId);
++
++  /**
++   * Mark the setWebRTCIPv4 function as used/disabled for a context.
++   * @param userContextId The user context ID
++   */
++  static void DisableIPv4Function(uint32_t userContextId);
++
++  /**
++   * Check if the setWebRTCIPv6 function has been used and should be disabled for a context.
++   * @param userContextId The user context ID
++   * @return true if the function has been used for this context and should not appear on new windows
++   */
++  static bool IsIPv6FunctionDisabled(uint32_t userContextId);
++
++  /**
++   * Mark the setWebRTCIPv6 function as used/disabled for a context.
++   * @param userContextId The user context ID
++   */
++  static void DisableIPv6Function(uint32_t userContextId);
++
++
++
++  /**
++   * WebIDL-compatible function to check if setWebRTCIPv4 should be enabled.
++   * @param aCx The JavaScript context
++   * @param aObj The JavaScript object (window)
++   * @return true if the function should be enabled, false otherwise
++   */
++  static bool IsIPv4FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++
++  /**
++   * WebIDL-compatible function to check if setWebRTCIPv6 should be enabled.
++   * @param aCx The JavaScript context
++   * @param aObj The JavaScript object (window)
++   * @return true if the function should be enabled, false otherwise
++   */
++  static bool IsIPv6FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++
++
++
++private:
++  static nsString IPv4KeyForUserContext(uint32_t userContextId);
++  static nsString IPv6KeyForUserContext(uint32_t userContextId);
++  static nsString IPv4DisabledKeyForUserContext(uint32_t userContextId);
++  static nsString IPv6DisabledKeyForUserContext(uint32_t userContextId);
++};
++
++} // namespace dom
++} // namespace mozilla
++
++#endif // mozilla_dom_WebRTCIPManager_h
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index 59917269e5..66788dce3e 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -1,3 +1,8 @@
++# Link system SQLite for RoverfoxStorageManager embedded usage
++OS_LIBS += [
++    'sqlite3',
++]
++
+ # -*- Mode: python; indent-tabs-mode: nil; tab-width: 40 -*-
+ # vim: set filetype=python:
+ # This Source Code Form is subject to the terms of the Mozilla Public
+@@ -264,6 +269,7 @@ EXPORTS.mozilla.dom += [
+     "RequestCallbackManager.h",
+     "ResizeObserver.h",
+     "ResponsiveImageSelector.h",
++    "RoverfoxStorageManager.h",
+     "SameProcessMessageQueue.h",
+     "ScreenLuminance.h",
+     "ScreenOrientation.h",
+@@ -296,6 +302,7 @@ EXPORTS.mozilla.dom += [
+     "VideoFrameProvider.h",
+     "ViewportMetaData.h",
+     "VisualViewport.h",
++    "WebRTCIPManager.h",
+     "WindowFeatures.h",
+     "WindowProxyHolder.h",
+ ]
+@@ -468,6 +475,7 @@ UNIFIED_SOURCES += [
+     "RemoteOuterWindowProxy.cpp",
+     "ResizeObserver.cpp",
+     "ResponsiveImageSelector.cpp",
++    "RoverfoxStorageManager.cpp",
+     "SameProcessMessageQueue.cpp",
+     "ScreenLuminance.cpp",
+     "ScreenOrientation.cpp",
+@@ -502,6 +510,7 @@ UNIFIED_SOURCES += [
+     "UserActivation.cpp",
+     "ViewportMetaData.cpp",
+     "VisualViewport.cpp",
++    "WebRTCIPManager.cpp",
+     "WindowDestroyedEvent.cpp",
+     "WindowFeatures.cpp",
+     "WindowNamedPropertiesHandler.cpp",
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index 605f8bbb9f..83755fd8d5 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -325,6 +325,7 @@
+ #include "xpcpublic.h"
+ 
+ #include "FontSpacingSeedManager.h"
++#include "WebRTCIPManager.h"
+ #include "nsDocShell.h"
+ #include "mozilla/OriginAttributes.h"
+ #include "nsIDOMXULControlElement.h"
+@@ -7531,6 +7532,126 @@ void nsGlobalWindowInner::SetFontSpacingSeed(uint32_t seed, ErrorResult& aRv) {
+   }
+ }
+ 
++void nsGlobalWindowInner::SetWebRTCIPv4(const nsAString& ipv4, ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++
++  // 1) Prefer the document's principal when available (content contexts)
++  if (Document* doc = GetDoc()) {
++    if (nsIPrincipal* p = doc->NodePrincipal()) {
++      userContextId = p->OriginAttributesRef().mUserContextId;
++    }
++  }
++
++  // 2) Fallback: this inner window's docshell origin attributes
++  if (userContextId == 0) {
++    if (nsIDocShell* ds = GetDocShell()) {
++      auto* concrete = static_cast<nsDocShell*>(ds);
++      userContextId = concrete->GetOriginAttributes().mUserContextId;
++    }
++  }
++
++  // 3) Fallback: top browsing context's current inner window document/docshell
++  if (userContextId == 0) {
++    if (BrowsingContext* bc = GetBrowsingContext()) {
++      RefPtr<BrowsingContext> top = bc->Top();
++      if (top) {
++        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
++          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
++            if (Document* topDoc = topInner->GetExtantDoc()) {
++              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
++                userContextId = tp->OriginAttributesRef().mUserContextId;
++              }
++            }
++            if (userContextId == 0) {
++              if (nsIDocShell* topDS = topInner->GetDocShell()) {
++                auto* concreteTop = static_cast<nsDocShell*>(topDS);
++                userContextId =
++                    concreteTop->GetOriginAttributes().mUserContextId;
++              }
++            }
++          }
++        }
++      }
++    }
++  }
++
++  if (userContextId == 0) {
++    aRv.ThrowSecurityError("Unable to resolve user context ID for this context");
++    return;
++  }
++
++  WebRTCIPManager::SetIPv4(userContextId, ipv4);
++
++  // Self-destruct: remove this function from the window object after first use
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setWebRTCIPv4");
++    }
++  }
++}
++
++void nsGlobalWindowInner::SetWebRTCIPv6(const nsAString& ipv6, ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++
++  // 1) Prefer the document's principal when available (content contexts)
++  if (Document* doc = GetDoc()) {
++    if (nsIPrincipal* p = doc->NodePrincipal()) {
++      userContextId = p->OriginAttributesRef().mUserContextId;
++    }
++  }
++
++  // 2) Fallback: this inner window's docshell origin attributes
++  if (userContextId == 0) {
++    if (nsIDocShell* ds = GetDocShell()) {
++      auto* concrete = static_cast<nsDocShell*>(ds);
++      userContextId = concrete->GetOriginAttributes().mUserContextId;
++    }
++  }
++
++  // 3) Fallback: top browsing context's current inner window document/docshell
++  if (userContextId == 0) {
++    if (BrowsingContext* bc = GetBrowsingContext()) {
++      RefPtr<BrowsingContext> top = bc->Top();
++      if (top) {
++        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
++          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
++            if (Document* topDoc = topInner->GetExtantDoc()) {
++              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
++                userContextId = tp->OriginAttributesRef().mUserContextId;
++              }
++            }
++            if (userContextId == 0) {
++              if (nsIDocShell* topDS = topInner->GetDocShell()) {
++                auto* concreteTop = static_cast<nsDocShell*>(topDS);
++                userContextId =
++                    concreteTop->GetOriginAttributes().mUserContextId;
++              }
++            }
++          }
++        }
++      }
++    }
++  }
++
++  if (userContextId == 0) {
++    aRv.ThrowSecurityError("Unable to resolve user context ID for this context");
++    return;
++  }
++
++  WebRTCIPManager::SetIPv6(userContextId, ipv6);
++
++  // Self-destruct: remove this function from the window object after first use
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setWebRTCIPv6");
++    }
++  }
++}
++
++
++
+ void nsGlobalWindowInner::StoreSharedWorker(SharedWorker* aSharedWorker) {
+   MOZ_ASSERT(aSharedWorker);
+   MOZ_ASSERT(!mSharedWorkers.Contains(aSharedWorker));
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index e2daf33843..cfcff69332 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -685,6 +685,10 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+   // Font spacing seed for privacy-preserving font fingerprinting
+   void SetFontSpacingSeed(uint32_t seed, mozilla::ErrorResult& aRv);
+ 
++  // WebRTC IP addresses for privacy-preserving IP spoofing
++  void SetWebRTCIPv4(const nsAString& ipv4, mozilla::ErrorResult& aRv);
++  void SetWebRTCIPv6(const nsAString& ipv6, mozilla::ErrorResult& aRv);
++
+   void StoreSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+ 
+   void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
+index d0102a6746..ed524583bd 100644
+--- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
++++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
+@@ -118,6 +118,8 @@
+ #include "mozilla/net/WebrtcProxyConfig.h"
+ #include "MaskConfig.hpp"
+ #include "mozilla/RustRegex.h"
++#include "WebRTCIPManager.h"
++#include "nsDocShell.h"
+ 
+ #ifdef XP_WIN
+ // We need to undef the MS macro again in case the windows include file
+@@ -3329,11 +3331,56 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
+ }
+ 
+ bool PeerConnectionImpl::ShouldSpoofCandidateIP() const {
+-  // Checks if either webrtc:ipv4 or webrtc:ipv6 is set in the config
+-  return MaskConfig::GetString("webrtc:ipv4").has_value() ||
+-         MaskConfig::GetString("webrtc:ipv6").has_value() ||
+-         MaskConfig::GetString("webrtc:localipv4").has_value() ||
+-         MaskConfig::GetString("webrtc:localipv6").has_value();
++  if (!mWindow) {
++    return false;
++  }
++
++  // Get the user context ID for this window using the same logic as WebRTCIPManager
++  uint32_t userContextId = 0;
++
++  // 1) Prefer the document's principal when available (content contexts)
++  if (Document* doc = mWindow->GetDoc()) {
++    if (nsIPrincipal* p = doc->NodePrincipal()) {
++      userContextId = p->OriginAttributesRef().mUserContextId;
++    }
++  }
++
++  // 2) Fallback: this inner window's docshell origin attributes
++  if (userContextId == 0) {
++    if (nsIDocShell* ds = mWindow->GetDocShell()) {
++      auto* concrete = static_cast<nsDocShell*>(ds);
++      userContextId = concrete->GetOriginAttributes().mUserContextId;
++    }
++  }
++
++  // 3) Fallback: top browsing context's current inner window document/docshell
++  if (userContextId == 0) {
++    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++      RefPtr<BrowsingContext> top = bc->Top();
++      if (top) {
++        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
++          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
++            if (Document* topDoc = topInner->GetExtantDoc()) {
++              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
++                userContextId = tp->OriginAttributesRef().mUserContextId;
++              }
++            }
++            if (userContextId == 0) {
++              if (nsIDocShell* topDS = topInner->GetDocShell()) {
++                auto* concreteTop = static_cast<nsDocShell*>(topDS);
++                userContextId = concreteTop->GetOriginAttributes().mUserContextId;
++              }
++            }
++          }
++        }
++      }
++    }
++  }
++
++  // Check if either IPv4 or IPv6 addresses have been set for this user context
++  nsString ipv4, ipv6;
++  return WebRTCIPManager::GetIPv4(userContextId, ipv4) ||
++         WebRTCIPManager::GetIPv6(userContextId, ipv6);
+ }
+ 
+ // *****
+@@ -3369,29 +3416,25 @@ bool isPrivateIP(const std::string& ip) {
+   }
+ }
+ 
+-std::string getMaskForIP(const std::string& ip) {
++std::string getMaskForIP(const std::string& ip, uint32_t userContextId) {
+   // Get the corresponding mask for an ip address
+   if (isSpecialIP(ip)) {
+     return ip;  // dont mask special IPs
+   }
+   bool isIPv6 = (ip.find(':') != std::string::npos);
+-  bool isPrivate = isPrivateIP(ip);
+-  auto ipv4Value = MaskConfig::GetString("webrtc:ipv4");
+-  auto ipv6Value = MaskConfig::GetString("webrtc:ipv6");
+-  auto localIpv4Value = MaskConfig::GetString("webrtc:localipv4");
+-  auto localIpv6Value = MaskConfig::GetString("webrtc:localipv6");
++  
++  // Get IP addresses from WebRTCIPManager for this user context
++  nsString ipv4Value, ipv6Value;
++  bool hasIPv4 = WebRTCIPManager::GetIPv4(userContextId, ipv4Value);
++  bool hasIPv6 = WebRTCIPManager::GetIPv6(userContextId, ipv6Value);
+   
+   if (isIPv6) {
+-    if (isPrivate && localIpv6Value) {
+-      return localIpv6Value.value();
+-    } else if (ipv6Value) {
+-      return ipv6Value.value();
++    if (hasIPv6) {
++      return NS_ConvertUTF16toUTF8(ipv6Value).get();
+     }
+   } else {
+-    if (isPrivate && localIpv4Value) {
+-      return localIpv4Value.value();
+-    } else if (ipv4Value) {
+-      return ipv4Value.value();
++    if (hasIPv4) {
++      return NS_ConvertUTF16toUTF8(ipv4Value).get();
+     }
+   }
+   // return original ip if no mask is available
+@@ -3399,7 +3442,7 @@ std::string getMaskForIP(const std::string& ip) {
+ }
+ 
+ std::string replaceIPAddresses(
+-    const std::string& input, const char* pattern) {
++    const std::string& input, const char* pattern, uint32_t userContextId) {
+   // Replace IP addresses in a output line
+   mozilla::RustRegex regex(pattern);
+   if (!regex.IsValid()) {
+@@ -3412,7 +3455,7 @@ std::string replaceIPAddresses(
+   
+   while (auto match = iter.Next()) {
+     std::string ip = input.substr(match->start, match->end - match->start);
+-    std::string mask = getMaskForIP(ip);
++    std::string mask = getMaskForIP(ip, userContextId);
+     
+     if (mask != ip) {
+       result.append(input, lastEnd, match->start - lastEnd);
+@@ -3433,27 +3476,108 @@ std::string PeerConnectionImpl::SpoofCandidateIP(const std::string& candidate) {
+   if (!ShouldSpoofCandidateIP() || candidate.empty()) {
+     return candidate;
+   }
++
++  // Get the user context ID for this PeerConnection
++  uint32_t userContextId = 0;
++  if (mWindow) {
++    // 1) Prefer the document's principal when available (content contexts)
++    if (Document* doc = mWindow->GetDoc()) {
++      if (nsIPrincipal* p = doc->NodePrincipal()) {
++        userContextId = p->OriginAttributesRef().mUserContextId;
++      }
++    }
++
++    // 2) Fallback: this inner window's docshell origin attributes
++    if (userContextId == 0) {
++      if (nsIDocShell* ds = mWindow->GetDocShell()) {
++        auto* concrete = static_cast<nsDocShell*>(ds);
++        userContextId = concrete->GetOriginAttributes().mUserContextId;
++      }
++    }
++
++    // 3) Fallback: top browsing context's current inner window document/docshell
++    if (userContextId == 0) {
++      if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++        RefPtr<BrowsingContext> top = bc->Top();
++        if (top) {
++          if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
++            if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
++              if (Document* topDoc = topInner->GetExtantDoc()) {
++                if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
++                  userContextId = tp->OriginAttributesRef().mUserContextId;
++                }
++              }
++              if (userContextId == 0) {
++                if (nsIDocShell* topDS = topInner->GetDocShell()) {
++                  auto* concreteTop = static_cast<nsDocShell*>(topDS);
++                  userContextId = concreteTop->GetOriginAttributes().mUserContextId;
++                }
++              }
++            }
++          }
++        }
++      }
++    }
++  }
++
+   // ipv4
+   const char* ipv4Pattern = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
+-  std::string result = replaceIPAddresses(candidate, ipv4Pattern);
++  std::string result = replaceIPAddresses(candidate, ipv4Pattern, userContextId);
+   // ipv6
+   const char* ipv6Pattern = "(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}";
+-  result = replaceIPAddresses(result, ipv6Pattern);
++  result = replaceIPAddresses(result, ipv6Pattern, userContextId);
+   
+   return result;
+ }
+ 
+ nsresult PeerConnectionImpl::SanitizeSDPForIPLeak(std::string& sdp) {
+   // Sanitize sdp
+-  auto ipv4Value = MaskConfig::GetString("webrtc:ipv4");
+-  auto ipv6Value = MaskConfig::GetString("webrtc:ipv6");
+-  auto localIpv4Value = MaskConfig::GetString("webrtc:localipv4");
+-  auto localIpv6Value = MaskConfig::GetString("webrtc:localipv6");
+-  
+-  if (!ipv4Value && !ipv6Value && !localIpv4Value && !localIpv6Value) {
++  if (!ShouldSpoofCandidateIP()) {
+     return NS_OK;
+   }
+ 
++  // Resolve user context ID using the same logic as other functions
++  uint32_t userContextId = 0;
++
++  // 1) Prefer the document's principal when available (content contexts)
++  if (Document* doc = mWindow->GetDoc()) {
++    if (nsIPrincipal* p = doc->NodePrincipal()) {
++      userContextId = p->OriginAttributesRef().mUserContextId;
++    }
++  }
++
++  // 2) Fallback: this inner window's docshell origin attributes
++  if (userContextId == 0) {
++    if (nsIDocShell* ds = mWindow->GetDocShell()) {
++      auto* concrete = static_cast<nsDocShell*>(ds);
++      userContextId = concrete->GetOriginAttributes().mUserContextId;
++    }
++  }
++
++  // 3) Fallback: top browsing context's current inner window document/docshell
++  if (userContextId == 0) {
++    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++      RefPtr<BrowsingContext> top = bc->Top();
++      if (top) {
++        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
++          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
++            if (Document* topDoc = topInner->GetExtantDoc()) {
++              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
++                userContextId = tp->OriginAttributesRef().mUserContextId;
++              }
++            }
++            if (userContextId == 0) {
++              if (nsIDocShell* topDS = topInner->GetDocShell()) {
++                auto* concreteTop = static_cast<nsDocShell*>(topDS);
++                userContextId = concreteTop->GetOriginAttributes().mUserContextId;
++              }
++            }
++          }
++        }
++      }
++    }
++  }
++
+   // process the SDP line by line to handle candidate lines
+   std::istringstream iss(sdp);
+   std::ostringstream oss;
+@@ -3480,10 +3604,10 @@ nsresult PeerConnectionImpl::SanitizeSDPForIPLeak(std::string& sdp) {
+   
+   // ipv4
+   const char* ipv4Pattern = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
+-  processedSdp = replaceIPAddresses(processedSdp, ipv4Pattern);
++  processedSdp = replaceIPAddresses(processedSdp, ipv4Pattern, userContextId);
+   // ipv6
+   const char* ipv6Pattern = "(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}";
+-  processedSdp = replaceIPAddresses(processedSdp, ipv6Pattern);
++  processedSdp = replaceIPAddresses(processedSdp, ipv6Pattern, userContextId);
+   
+   if (processedSdp != originalSdp) {
+     sdp = processedSdp;
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index 2161066be1..47c7308a91 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -800,6 +800,19 @@ partial interface Window {
+   undefined setFontSpacingSeed(unsigned long seed);
+ };
+ 
++// WebRTC IP interfaces for privacy-preserving IP spoofing
++partial interface Window {
++  [Throws, Func="mozilla::dom::WebRTCIPManager::IsIPv4FunctionEnabledForWebIDL"]
++  undefined setWebRTCIPv4(DOMString ipv4);
++};
++
++partial interface Window {
++  [Throws, Func="mozilla::dom::WebRTCIPManager::IsIPv6FunctionEnabledForWebIDL"]
++  undefined setWebRTCIPv6(DOMString ipv6);
++};
++
++
++
+ // Used to assign marks to appear on the scrollbar when
+ // finding on a page.
+ partial interface Window {

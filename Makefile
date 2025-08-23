@@ -116,10 +116,18 @@ bootstrap: dir
 	make mozbootstrap
 
 diff:
-	@cd $(cf_source_dir) && git diff $(_ARGS)
+	@cd $(cf_source_dir) && git diff first-checkpoint $(_ARGS)
+
+first-checkpoint:
+	cd $(cf_source_dir) && \
+		git tag -d first-checkpoint || true && \
+		git add -A && \
+		git reset -q _READY || true && \
+		git commit -m "Checkpoint" -uno && \
+		git tag -a first-checkpoint -m "Checkpoint"
 
 checkpoint:
-	cd $(cf_source_dir) && git commit -m "Checkpoint" -a -uno
+	cd $(cf_source_dir) && git commit -m "Checkpoint" -uno
 
 clean:
 	cd $(cf_source_dir) && git clean -fdx && ./mach clobber
@@ -232,7 +240,7 @@ workspace:
 	else \
 		echo "Patch is not applied. Proceeding with application..."; \
 	fi
-	make checkpoint || true
+	make first-checkpoint || true
 	make patch $(_ARGS)
 
 tests:
