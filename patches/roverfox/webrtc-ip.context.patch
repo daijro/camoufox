@@ -796,10 +796,10 @@ index d0102a6746..ed524583bd 100644
    if (processedSdp != originalSdp) {
      sdp = processedSdp;
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index 2161066be1..47c7308a91 100644
+index 2161066be1..018dcc18e0 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -800,6 +800,19 @@ partial interface Window {
+@@ -800,6 +800,12 @@ partial interface Window {
    undefined setFontSpacingSeed(unsigned long seed);
  };
  
@@ -808,13 +808,6 @@ index 2161066be1..47c7308a91 100644
 +  [Throws, Func="mozilla::dom::WebRTCIPManager::IsIPv4FunctionEnabledForWebIDL"]
 +  undefined setWebRTCIPv4(DOMString ipv4);
 +};
-+
-+partial interface Window {
-+  [Throws, Func="mozilla::dom::WebRTCIPManager::IsIPv6FunctionEnabledForWebIDL"]
-+  undefined setWebRTCIPv6(DOMString ipv6);
-+};
-+
-+
 +
  // Used to assign marks to appear on the scrollbar when
  // finding on a page.
