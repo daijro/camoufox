@@ -348,7 +348,7 @@ def handle_choice(choice):
                 )
             if not file_path:
                 exit()
-            run(f'git diff > {file_path}')
+            run(f'git diff first-checkpoint > {file_path}')
             easygui.msgbox(f"Patch has been written to {file_path}.", "Patch Written")
 
         case _:
