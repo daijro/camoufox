@@ -4,7 +4,7 @@
 
 <h4 align="center">A stealthy, minimalistic, custom build of Firefox for web scraping 🦊</h4>
 
-<p align="center">                                      
+<p align="center">
 Camoufox is an open source anti-detect browser for robust fingerprint injection & anti-bot evasion.
 </p>
 
@@ -12,6 +12,39 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
   <a href="https://trendshift.io/repositories/12224" target="_blank">
   <img src="https://trendshift.io/api/badge/repositories/12224" alt="daijro%2Fcamoufox | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </p>
+
+---
+
+> [!IMPORTANT]
+> ## About This Fork (Firefox 142 Upgrade)
+>
+> This fork upgrades Camoufox to **Firefox 142.0.1** and is maintained by [@coryking](https://github.com/coryking) while the original maintainer [@daijro](https://github.com/daijro) is recovering from a medical emergency (hospitalized since March 2025).
+>
+> When the original maintainer returns, this work will be contributed back upstream. In the meantime, this fork provides working Firefox 142 builds.
+>
+> ❤️ **Wishing @daijro a full recovery.**
+>
+> ### Quick Start
+>
+> **Download pre-built binaries:** [Releases](https://github.com/coryking/camoufox/releases) (v142.0.1-bluetaka.25)
+>
+> **Install Python package:**
+> ```bash
+> pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
+> ```
+>
+> ### Note About This Branch
+>
+> This `main` branch includes the Firefox 142 upgrade work **plus** some additional workflow tooling and documentation I added while working with Claude Code to debug the upgrade. If you just want the core Firefox 142 patches without the extra workflow stuff, check out the `ff142` branch.
+>
+> ### For Developers
+>
+> - **Building or contributing patches?** See [WORKFLOW.md](WORKFLOW.md) and [FIREFOX_UPGRADE_WORKFLOW.md](FIREFOX_UPGRADE_WORKFLOW.md)
+> - **Want just the Firefox 142 upgrade work for an upstream PR?** Check out the `ff142` branch (clean patches, no workflow extras)
+>
+> ### Original Project
+>
+> Created by [@daijro](https://github.com/daijro): [daijro/camoufox](https://github.com/daijro/camoufox)
 
 ---
 
