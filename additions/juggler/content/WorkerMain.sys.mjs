@@ -3,8 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 "use strict";
-loadSubScript('chrome://juggler/content/content/Runtime.js');
-loadSubScript('chrome://juggler/content/SimpleChannel.js');
+loadSubScript('chrome://juggler/content/content/Runtime.sys.mjs');
+loadSubScript('chrome://juggler/content/SimpleChannel.sys.mjs');
 
 // SimpleChannel in worker is never replaced: its lifetime matches the lifetime
 // of the worker itself, so anything would work as a unique identifier.

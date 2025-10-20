@@ -2,17 +2,17 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var EXPORTED_SYMBOLS = ["Juggler", "JugglerFactory"];
+export { Juggler, JugglerFactory };
 
-const {AppConstants} = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
-const {XPCOMUtils} = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
-const {ComponentUtils} = ChromeUtils.import("resource://gre/modules/ComponentUtils.jsm");
-const {Dispatcher} = ChromeUtils.import("chrome://juggler/content/protocol/Dispatcher.js");
-const {BrowserHandler} = ChromeUtils.import("chrome://juggler/content/protocol/BrowserHandler.js");
-const {NetworkObserver} = ChromeUtils.import("chrome://juggler/content/NetworkObserver.js");
-const {TargetRegistry} = ChromeUtils.import("chrome://juggler/content/TargetRegistry.js");
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {ActorManagerParent} = ChromeUtils.import('resource://gre/modules/ActorManagerParent.jsm');
+import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
+import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
+import { ComponentUtils } from "resource://gre/modules/ComponentUtils.sys.mjs";
+import { Dispatcher } from "chrome://juggler/content/protocol/Dispatcher.sys.mjs";
+import { BrowserHandler } from "chrome://juggler/content/protocol/BrowserHandler.sys.mjs";
+import { NetworkObserver } from "chrome://juggler/content/NetworkObserver.sys.mjs";
+import { TargetRegistry } from "chrome://juggler/content/TargetRegistry.sys.mjs";
+import { Helper } from "chrome://juggler/content/Helper.sys.mjs";
+import { ActorManagerParent } from "resource://gre/modules/ActorManagerParent.sys.mjs";
 const helper = new Helper();
 
 const Cc = Components.classes;
@@ -22,10 +22,10 @@ const Ci = Components.interfaces;
 ActorManagerParent.addJSWindowActors({
   JugglerFrame: {
     parent: {
-      moduleURI: 'chrome://juggler/content/JugglerFrameParent.jsm',
+      esModuleURI: 'chrome://juggler/content/JugglerFrameParent.sys.mjs',
     },
     child: {
-      moduleURI: 'chrome://juggler/content/content/JugglerFrameChild.jsm',
+      esModuleURI: 'chrome://juggler/content/content/JugglerFrameChild.sys.mjs',
       events: {
         // Normally, we instantiate an actor when a new window is created.
         DOMWindowCreated: {},

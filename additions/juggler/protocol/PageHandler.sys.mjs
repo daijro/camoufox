@@ -4,11 +4,11 @@
 
 "use strict";
 
-const {Helper, EventWatcher} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {NetUtil} = ChromeUtils.import('resource://gre/modules/NetUtil.jsm');
-const {NetworkObserver, PageNetwork} = ChromeUtils.import('chrome://juggler/content/NetworkObserver.js');
-const {PageTarget} = ChromeUtils.import('chrome://juggler/content/TargetRegistry.js');
-const {setTimeout} = ChromeUtils.import('resource://gre/modules/Timer.jsm');
+import { Helper, EventWatcher } from "chrome://juggler/content/Helper.sys.mjs";
+import { NetUtil } from "resource://gre/modules/NetUtil.sys.mjs";
+import { NetworkObserver, PageNetwork } from "chrome://juggler/content/NetworkObserver.sys.mjs";
+import { PageTarget } from "chrome://juggler/content/TargetRegistry.sys.mjs";
+import { setTimeout } from "resource://gre/modules/Timer.sys.mjs";
 
 const Cc = Components.classes;
 const Ci = Components.interfaces;
@@ -308,10 +308,13 @@ class PageHandler {
     return await this._contentPage.send('setFileInputFiles', options);
   }
 
-  async ['Page.setEmulatedMedia']({colorScheme, type, reducedMotion, forcedColors}) {
+  async ['Page.setEmulatedMedia']({colorScheme, type, reducedMotion, forcedColors, contrast}) {
     this._pageTarget.setColorScheme(colorScheme || null);
     this._pageTarget.setReducedMotion(reducedMotion || null);
     this._pageTarget.setForcedColors(forcedColors || null);
+    // Note: contrast parameter accepted for Playwright 1.55+ protocol compatibility but not used.
+    // Camoufox prioritizes stealth over media query emulation - normal Firefox users don't typically
+    // change contrast preferences, so emulating it would be a detectable deviation from vanilla behavior.
     this._pageTarget.setEmulatedMedia(type);
   }
 
@@ -721,5 +724,4 @@ class PageHandler {
   }
 }
 
-var EXPORTED_SYMBOLS = ['PageHandler'];
-this.PageHandler = PageHandler;
+export { PageHandler };

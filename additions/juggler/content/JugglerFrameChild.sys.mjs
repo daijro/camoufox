@@ -1,7 +1,7 @@
 "use strict";
 
-const { Helper } = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const { initialize } = ChromeUtils.import('chrome://juggler/content/content/main.js');
+import {  Helper  } from "chrome://juggler/content/Helper.sys.mjs";
+import {  initialize  } from "chrome://juggler/content/content/main.sys.mjs";
 
 const Ci = Components.interfaces;
 const helper = new Helper();
@@ -83,4 +83,4 @@ class JugglerFrameChild extends JSWindowActorChild {
   receiveMessage() { }
 }
 
-var EXPORTED_SYMBOLS = ['JugglerFrameChild'];
+export { JugglerFrameChild };

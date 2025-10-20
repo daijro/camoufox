@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const {protocol, checkScheme} = ChromeUtils.import("chrome://juggler/content/protocol/Protocol.js");
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
+import { protocol, checkScheme } from "chrome://juggler/content/protocol/Protocol.sys.mjs";
+import { Helper } from "chrome://juggler/content/Helper.sys.mjs";
 
 const helper = new Helper();
 // Camoufox: Exclude redundant internal events from logs.
@@ -147,8 +147,7 @@ class ProtocolSession {
   }
 }
 
-this.EXPORTED_SYMBOLS = ['Dispatcher'];
-this.Dispatcher = Dispatcher;
+export { Dispatcher };
 
 
 function formatDate(date) {

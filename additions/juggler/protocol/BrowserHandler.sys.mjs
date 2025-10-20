@@ -4,11 +4,11 @@
 
 "use strict";
 
-const {AddonManager} = ChromeUtils.import("resource://gre/modules/AddonManager.jsm");
-const {TargetRegistry} = ChromeUtils.import("chrome://juggler/content/TargetRegistry.js");
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {PageHandler} = ChromeUtils.import("chrome://juggler/content/protocol/PageHandler.js");
-const {AppConstants} = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
+import { AddonManager } from "resource://gre/modules/AddonManager.sys.mjs";
+import { TargetRegistry } from "chrome://juggler/content/TargetRegistry.sys.mjs";
+import { Helper } from "chrome://juggler/content/Helper.sys.mjs";
+import { PageHandler } from "chrome://juggler/content/protocol/PageHandler.sys.mjs";
+import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
 
 const helper = new Helper();
 
@@ -314,5 +314,4 @@ function nullToUndefined(value) {
   return value === null ? undefined : value;
 }
 
-var EXPORTED_SYMBOLS = ['BrowserHandler'];
-this.BrowserHandler = BrowserHandler;
+export { BrowserHandler };

@@ -2,11 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { EventEmitter } from "resource://gre/modules/EventEmitter.sys.mjs";
+
 const uuidGen = Cc["@mozilla.org/uuid-generator;1"].getService(Ci.nsIUUIDGenerator);
 
 class Helper {
   decorateAsEventEmitter(objectToDecorate) {
-    const { EventEmitter } = ChromeUtils.import('resource://gre/modules/EventEmitter.jsm');
     const emitter = new EventEmitter();
     objectToDecorate.on = emitter.on.bind(emitter);
     objectToDecorate.addEventListener = emitter.on.bind(emitter);
@@ -233,7 +234,5 @@ class EventWatcher {
   }
 }
 
-var EXPORTED_SYMBOLS = [ "Helper", "EventWatcher" ];
-this.Helper = Helper;
-this.EventWatcher = EventWatcher;
+export { Helper, EventWatcher };
 

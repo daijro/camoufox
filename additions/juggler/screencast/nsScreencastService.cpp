@@ -7,6 +7,7 @@
 #include "ScreencastEncoder.h"
 #include "HeadlessWidget.h"
 #include "HeadlessWindowCapturer.h"
+#include "gfxPlatform.h"
 #include "mozilla/Base64.h"
 #include "mozilla/ClearOnShutdown.h"
 #include "mozilla/PresShell.h"

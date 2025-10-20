@@ -2,12 +2,12 @@
 * License, v. 2.0. If a copy of the MPL was not distributed with this
 * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {SimpleChannel} = ChromeUtils.import('chrome://juggler/content/SimpleChannel.js');
-const {Preferences} = ChromeUtils.import("resource://gre/modules/Preferences.jsm");
-const {ContextualIdentityService} = ChromeUtils.import("resource://gre/modules/ContextualIdentityService.jsm");
-const {NetUtil} = ChromeUtils.import('resource://gre/modules/NetUtil.jsm');
-const {AppConstants} = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
+import { Helper } from "chrome://juggler/content/Helper.sys.mjs";
+import { SimpleChannel } from "chrome://juggler/content/SimpleChannel.sys.mjs";
+import { Preferences } from "resource://gre/modules/Preferences.sys.mjs";
+import { ContextualIdentityService } from "resource://gre/modules/ContextualIdentityService.sys.mjs";
+import { NetUtil } from "resource://gre/modules/NetUtil.sys.mjs";
+import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
 
 const Cr = Components.results;
 
@@ -1268,6 +1268,4 @@ TargetRegistry.Events = {
   ScreencastStopped: Symbol('TargetRegistry.ScreencastStopped'),
 };
 
-var EXPORTED_SYMBOLS = ['TargetRegistry', 'PageTarget'];
-this.TargetRegistry = TargetRegistry;
-this.PageTarget = PageTarget;
+export { TargetRegistry, PageTarget };

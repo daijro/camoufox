@@ -4,9 +4,9 @@
 
 "use strict";
 
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {NetUtil} = ChromeUtils.import('resource://gre/modules/NetUtil.jsm');
-const { ChannelEventSinkFactory } = ChromeUtils.import("chrome://remote/content/cdp/observers/ChannelEventSink.jsm");
+import { Helper } from "chrome://juggler/content/Helper.sys.mjs";
+import { NetUtil } from "resource://gre/modules/NetUtil.sys.mjs";
+import { ChannelEventSinkFactory } from "chrome://remote/content/cdp/observers/ChannelEventSink.sys.mjs";
 
 
 const Cc = Components.classes;
@@ -962,6 +962,4 @@ PageNetwork.Events = {
   RequestFailed: Symbol('PageNetwork.Events.RequestFailed'),
 };
 
-var EXPORTED_SYMBOLS = ['NetworkObserver', 'PageNetwork'];
-this.NetworkObserver = NetworkObserver;
-this.PageNetwork = PageNetwork;
+export { NetworkObserver, PageNetwork };

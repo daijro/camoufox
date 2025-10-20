@@ -6,10 +6,10 @@
 // Note: this file should be loadabale with eval() into worker environment.
 // Avoid Components.*, ChromeUtils and global const variables.
 
-if (!this.Debugger) {
+if (typeof Debugger === 'undefined') {
   // Worker has a Debugger defined already.
-  const {addDebuggerToGlobal} = ChromeUtils.import("resource://gre/modules/jsdebugger.jsm", {});
-  addDebuggerToGlobal(Components.utils.getGlobalForObject(this));
+  const {addDebuggerToGlobal} = ChromeUtils.importESModule("resource://gre/modules/jsdebugger.sys.mjs");
+  addDebuggerToGlobal(globalThis);
 }
 
 let lastId = 0;
@@ -691,5 +691,10 @@ function emitEvent(event, ...args) {
     listener.call(null, ...args);
 }
 
-var EXPORTED_SYMBOLS = ['Runtime'];
-this.Runtime = Runtime;
+// Support both ES module import and loadSubScript() for worker contexts
+// When loaded via loadSubScript(), this assignment makes Runtime globally available
+if (typeof this !== 'undefined') {
+  this.Runtime = Runtime;
+}
+
+export { Runtime };

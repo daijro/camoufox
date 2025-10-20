@@ -1,21 +1,21 @@
 diff --git a/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs b/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
-index 988f5831f2..62f64589a4 100644
+index 22489ff66a8a..431d4fee3cd4 100644
 --- a/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
 +++ b/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
-@@ -494,7 +494,7 @@ class ProviderInterventions extends UrlbarProvider {
-    * @returns {boolean} Whether this provider should be invoked for the search.
+@@ -488,7 +488,7 @@ class ProviderInterventions extends UrlbarProvider {
+    * @param {UrlbarQueryContext} queryContext The query context object
     */
-   isActive(queryContext) {
+   async isActive(queryContext) {
 -    if (
 +    if (true ||
        !queryContext.searchString ||
        queryContext.searchString.length > UrlbarUtils.MAX_TEXT_LENGTH ||
        lazy.UrlbarTokenizer.REGEXP_LIKE_PROTOCOL.test(
 diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/components/search/SearchEngineSelector.sys.mjs
-index 3dab73ee2f..c5c1259217 100644
+index ee32b05d723a..6c0ab03739a6 100644
 --- a/toolkit/components/search/SearchEngineSelector.sys.mjs
 +++ b/toolkit/components/search/SearchEngineSelector.sys.mjs
-@@ -158,6 +158,21 @@ export class SearchEngineSelector {
+@@ -207,6 +207,21 @@ export class SearchEngineSelector {
     *   could be obtained.
     */
    async _getConfiguration(firstTime = true) {

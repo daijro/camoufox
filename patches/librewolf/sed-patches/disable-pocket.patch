@@ -1,34 +1,35 @@
 diff --git a/browser/base/content/browser.js b/browser/base/content/browser.js
-index 43c84c3..4b4aad2 100644
+index 5327db26073e..56f0e8ebd344 100644
 --- a/browser/base/content/browser.js
 +++ b/browser/base/content/browser.js
-@@ -5478,7 +5478,6 @@ var XULBrowserWindow = {
+@@ -2236,8 +2236,6 @@ var XULBrowserWindow = {
  
-     SafeBrowsingNotificationBox.onLocationChange(aLocationURI);
+     BrowserPageActions.onLocationChange();
  
 -    SaveToPocket.onLocationChange(window);
- 
-     let originalURI;
-     if (
-diff --git a/browser/components/BrowserGlue.jsm b/browser/components/BrowserGlue.sys.mjs
-index b2479db..7670f08 100644
---- a/browser/components/BrowserGlue.sys.mjs
-+++ b/browser/components/BrowserGlue.sys.mjs
-@@ -1274,7 +1274,6 @@ BrowserGlue.prototype = {
-       lazy.Normandy.init();
-     }
- 
--    lazy.SaveToPocket.init();
- 
-     AboutHomeStartupCache.init();
- 
+-
+     UrlbarProviderSearchTips.onLocationChange(
+       window,
+       aLocationURI,
+diff --git a/browser/components/BrowserComponents.manifest b/browser/components/BrowserComponents.manifest
+index 7f4fb28f4ed3..166e943dfadd 100644
+--- a/browser/components/BrowserComponents.manifest
++++ b/browser/components/BrowserComponents.manifest
+@@ -15,7 +15,6 @@ category browser-before-ui-startup resource:///modules/BuiltInThemes.sys.mjs Bui
+ #ifdef MOZ_NORMANDY
+ category browser-before-ui-startup resource://normandy/Normandy.sys.mjs Normandy.init
+ #endif
+-category browser-before-ui-startup chrome://pocket/content/SaveToPocket.sys.mjs SaveToPocket.init
+ category browser-before-ui-startup resource:///modules/ResetPBMPanel.sys.mjs ResetPBMPanel.init
+ category browser-before-ui-startup resource:///modules/AboutHomeStartupCache.sys.mjs AboutHomeStartupCache.init
+ category browser-before-ui-startup resource:///modules/AccountsGlue.sys.mjs AccountsGlue.init
 diff --git a/browser/components/moz.build b/browser/components/moz.build
-index 3b2126e..32b7831 100644
+index 3dc676af0e58..02e70c6bc97c 100644
 --- a/browser/components/moz.build
 +++ b/browser/components/moz.build
-@@ -44,7 +44,6 @@ DIRS += [
-     "originattributes",
+@@ -48,7 +48,6 @@ DIRS += [
      "pagedata",
+     "permissions",
      "places",
 -    "pocket",
      "preferences",

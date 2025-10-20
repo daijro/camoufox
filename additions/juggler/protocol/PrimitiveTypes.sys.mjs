@@ -142,6 +142,4 @@ test(t.Either(t.String, t.Number), {});
 
 */
 
-this.t = t;
-this.checkScheme = checkScheme;
-this.EXPORTED_SYMBOLS = ['t', 'checkScheme'];
+export { t, checkScheme };

@@ -2,10 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {FrameTree} = ChromeUtils.import('chrome://juggler/content/content/FrameTree.js');
-const {SimpleChannel} = ChromeUtils.import('chrome://juggler/content/SimpleChannel.js');
-const {PageAgent} = ChromeUtils.import('chrome://juggler/content/content/PageAgent.js');
+import { Helper } from "chrome://juggler/content/Helper.sys.mjs";
+import { FrameTree } from "chrome://juggler/content/content/FrameTree.sys.mjs";
+import { SimpleChannel } from "chrome://juggler/content/SimpleChannel.sys.mjs";
+import { PageAgent } from "chrome://juggler/content/content/PageAgent.sys.mjs";
 
 const helper = new Helper();
 
@@ -115,5 +115,4 @@ function initialize(browsingContext, docShell) {
   return data;
 }
 
-var EXPORTED_SYMBOLS = ['initialize'];
-this.initialize = initialize;
+export { initialize };

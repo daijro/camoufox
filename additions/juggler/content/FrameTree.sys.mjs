@@ -7,9 +7,9 @@ const Ci = Components.interfaces;
 const Cr = Components.results;
 const Cu = Components.utils;
 
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {SimpleChannel} = ChromeUtils.import('chrome://juggler/content/SimpleChannel.js');
-const {Runtime} = ChromeUtils.import('chrome://juggler/content/content/Runtime.js');
+import { Helper } from "chrome://juggler/content/Helper.sys.mjs";
+import { SimpleChannel } from "chrome://juggler/content/SimpleChannel.sys.mjs";
+import { Runtime } from "chrome://juggler/content/content/Runtime.sys.mjs";
 
 const helper = new Helper();
 
@@ -718,6 +718,4 @@ function channelId(channel) {
 }
 
 
-var EXPORTED_SYMBOLS = ['FrameTree'];
-this.FrameTree = FrameTree;
-
+export { FrameTree };

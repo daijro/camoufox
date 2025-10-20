@@ -1,11 +1,11 @@
 "use strict";
 
-const { TargetRegistry } = ChromeUtils.import('chrome://juggler/content/TargetRegistry.js');
-const { Helper } = ChromeUtils.import('chrome://juggler/content/Helper.js');
+import {  TargetRegistry  } from "chrome://juggler/content/TargetRegistry.sys.mjs";
+import {  Helper  } from "chrome://juggler/content/Helper.sys.mjs";
 
 const helper = new Helper();
 
-var EXPORTED_SYMBOLS = ['JugglerFrameParent'];
+export { JugglerFrameParent };
 
 class JugglerFrameParent extends JSWindowActorParent {
   constructor() {
