@@ -32,7 +32,7 @@ click = "*"
 requests = "*"
 orjson = "*"
 browserforge = "^1.2.1"
-playwright = "*"
+playwright = {git = "https://github.com/microsoft/playwright-python.git", branch = "main"}
 pyyaml = "*"
 platformdirs = "*"
 tqdm = "*"

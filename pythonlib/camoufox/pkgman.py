@@ -169,7 +169,13 @@ class GitHubDownloader:
         Fetch the latest release from the GitHub API.
         Gets the first asset that returns a truthy value from check_asset.
         """
-        resp = requests.get(self.api_url, timeout=20)
+        headers = {}
+        if "api.github.com" in self.api_url:
+            if token := os.environ.get("GITHUB_TOKEN"):
+                rprint("Using GITHUB_TOKEN to authenticate with GitHub API.")
+                headers["Authorization"] = f"Bearer {token}"
+
+        resp = requests.get(self.api_url, timeout=20, headers=headers)
         resp.raise_for_status()
 
         releases = resp.json()
@@ -188,7 +194,7 @@ class CamoufoxFetcher(GitHubDownloader):
     """
 
     def __init__(self) -> None:
-        super().__init__("daijro/camoufox")
+        super().__init__("coryking/camoufox")
 
         self.arch = self.get_platform_arch()
         self._version_obj: Optional[Version] = None
