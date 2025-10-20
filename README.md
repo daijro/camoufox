@@ -23,16 +23,43 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 > When the original maintainer returns, this work will be contributed back upstream. In the meantime, this fork provides working Firefox 142 builds.
 >
 > ❤️ **Wishing @daijro a full recovery.**
->
-> ### Quick Start
->
-> **Download pre-built binaries:** [Releases](https://github.com/coryking/camoufox/releases) (v142.0.1-bluetaka.25)
->
-> **Install Python package:**
-> ```bash
-> pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
-> ```
->
+
+---
+
+## 🚀 Quick Start & Upgrade Instructions
+
+### For New Users
+
+**Install the Python package (recommended):**
+```bash
+pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
+```
+
+**Or download pre-built binaries:** [Releases](https://github.com/coryking/camoufox/releases)
+
+### Upgrading from Firefox 135 or Earlier
+
+If you're currently using the original `daijro/camoufox` or an older version:
+
+```bash
+# Uninstall old version
+pip uninstall camoufox -y
+
+# Install Firefox 142 from this fork
+pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
+```
+
+**What's new in this upgrade:**
+- ✅ **Firefox 142.0.1** (upgraded from 135)
+- ✅ **Playwright 1.56** (latest unreleased version)
+- ✅ All fingerprint spoofing patches updated for Firefox 142
+- ✅ Juggler ESM migration (Firefox 142 requirement)
+- ✅ Pre-built binaries for Linux, macOS, and Windows
+
+**Your existing code will continue to work** - the API is unchanged.
+
+---
+
 > ### Note About This Branch
 >
 > This `main` branch includes the Firefox 142 upgrade work **plus** some additional workflow tooling and documentation I added while working with Claude Code to debug the upgrade. If you just want the core Firefox 142 patches without the extra workflow stuff, check out the `ff142` branch.
