@@ -9,9 +9,9 @@ rpms := python3 python3-devel p7zip golang msitools wget aria2
 pacman := python python-pip p7zip go msitools wget aria2
 
 .PHONY: help fetch setup setup-minimal clean set-target distclean build package \
-        build-launcher check-arch revert edits run bootstrap mozbootstrap dir \
+        build-launcher check-arch revert revert-checkpoint refresh-baseline edits run bootstrap mozbootstrap dir \
         package-linux package-macos package-windows vcredist_arch patch unpatch \
-        workspace check-arg edit-cfg ff-dbg tests update-ubo-assets
+        workspace check-arg edit-cfg ff-dbg tests tests-parallel update-ubo-assets tagged-checkpoint
 
 help:
 	@echo "Available targets:"
@@ -20,7 +20,10 @@ help:
 	@echo "  bootstrap       - Set up build environment"
 	@echo "  mozbootstrap    - Sets up mach"
 	@echo "  dir             - Prepare Camoufox source directory with BUILD_TARGET"
-	@echo "  revert          - Kill all working changes"
+	@echo "  revert          - Reset to 'unpatched' tag (vanilla Firefox + additions)"
+	@echo "  revert-checkpoint - Reset to 'checkpoint' tag (return to saved checkpoint)"
+	@echo "  refresh-baseline - Rebuild 'unpatched' tag with latest additions/ changes"
+	@echo "  tagged-checkpoint - Save current state with reusable 'checkpoint' tag"
 	@echo "  edits           - Camoufox developer UI"
 	@echo "  build-launcher  - Build launcher"
 	@echo "  clean           - Remove build artifacts"
@@ -37,6 +40,7 @@ help:
 	@echo "  unpatch         - Remove a patch"
 	@echo "  workspace       - Sets the workspace to a patch, assuming its applied"
 	@echo "  tests           - Runs the Playwright tests"
+	@echo "  tests-parallel  - Runs the Playwright tests in parallel (use workers=N to specify worker count)"
 	@echo "  update-ubo-assets - Update the uBOAssets.json file"
 
 _ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
@@ -96,7 +100,28 @@ ff-dbg: setup
 	make build
 
 revert:
-	cd $(cf_source_dir) && git reset --hard unpatched
+	cd $(cf_source_dir) && git reset --hard unpatched && rm -f _READY browser/app/camoufox.exe.manifest
+
+revert-checkpoint:
+	cd $(cf_source_dir) && git reset --hard checkpoint && rm -f _READY browser/app/camoufox.exe.manifest
+
+refresh-baseline:
+	@echo "Rebuilding 'unpatched' baseline with latest additions..."
+	@cd $(cf_source_dir) && \
+		if ! git rev-parse --verify unpatched^ >/dev/null 2>&1; then \
+			echo "ERROR: Cannot find parent of 'unpatched' tag."; \
+			echo "This target requires a Firefox git repository with history,"; \
+			echo "not a tarball-based setup. Your setup is incompatible."; \
+			exit 1; \
+		fi
+	cd $(cf_source_dir) && \
+		git reset --hard unpatched^ && \
+		git clean -dxf && \
+		bash ../scripts/copy-additions.sh $(version) $(release) && \
+		git add -A && \
+		git commit -m "Add Camoufox additions (Firefox $(version) compatibility)" && \
+		git tag -f -a unpatched -m "Initial commit with additions"
+	@echo "✓ Baseline refreshed. 'unpatched' tag updated with latest additions."
 
 dir:
 	@if [ ! -d $(cf_source_dir) ]; then \
@@ -120,6 +145,9 @@ diff:
 
 checkpoint:
 	cd $(cf_source_dir) && git commit -m "Checkpoint" -a -uno
+
+tagged-checkpoint:
+	cd $(cf_source_dir) && git commit -m "Checkpoint" -a -uno && git tag -f checkpoint
 
 clean:
 	cd $(cf_source_dir) && git clean -fdx && ./mach clobber
@@ -238,6 +266,12 @@ workspace:
 tests:
 	cd ./tests && \
 	bash run-tests.sh \
+		--executable-path ../$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
+		$(if $(filter true,$(headful)),--headful,)
+
+tests-parallel:
+	cd ./tests && \
+	PYTEST_WORKERS=$(if $(workers),$(workers),auto) bash run-tests.sh \
 		--executable-path ../$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
 		$(if $(filter true,$(headful)),--headful,)
 

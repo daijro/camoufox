@@ -1,0 +1,42 @@
+# Local builds
+/firefox-*
+/mozilla-unified
+dist/
+bin/
+launch
+launch.exe
+
+# Internal testing
+/extra-docs
+pythonlib/test*
+jsonvv/test*
+/.vscode
+/bundle/fonts/extra
+pythonlib/*.png
+scripts/*.png
+scripts/test*
+.vscode
+.idea
+/tests/*.disabled
+k8s/
+
+# Old data
+_old/
+_old_*/
+*.old
+
+# Logs
+wget-log
+*.kate-swp
+*.log
+
+# Python interface
+venv/
+__pycache__/
+*.pyc
+*.mmdb
+
+# Closed source patches
+private
+.passwd
+closedsrc

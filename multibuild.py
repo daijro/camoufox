@@ -85,6 +85,7 @@ def run_build(target, arch):
     # Run package
     builder.package()
     # Move assets to dist
+    os.makedirs('dist', exist_ok=True)
     print('Assets:', ', '.join(builder.assets))
     for asset in builder.assets:
         shutil.move(asset, f'dist/{asset}')
