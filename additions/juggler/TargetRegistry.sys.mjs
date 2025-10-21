@@ -1144,6 +1144,7 @@ class BrowserContext {
       [Ci.nsICookie.SAMESITE_NONE]: 'None',
       [Ci.nsICookie.SAMESITE_LAX]: 'Lax',
       [Ci.nsICookie.SAMESITE_STRICT]: 'Strict',
+      [Ci.nsICookie.SAMESITE_UNSET]: 'None',  // Firefox 142+: map UNSET to None like WebDriver BiDi
     };
     for (let cookie of Services.cookies.cookies) {
       if (cookie.originAttributes.userContextId !== this.userContextId)
