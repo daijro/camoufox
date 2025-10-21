@@ -651,12 +651,17 @@ def launch_options(
     else:
         executable_path = launch_path()
 
-    return {
+    result = {
         "executable_path": executable_path,
         "args": args,
         "env": env_vars,
         "firefox_user_prefs": firefox_user_prefs,
-        "proxy": proxy,
         "headless": headless,
         **(launch_options if launch_options is not None else {}),
     }
+
+    # Only include proxy if it's not None (Playwright 1.55+ validates this)
+    if proxy is not None:
+        result["proxy"] = proxy
+
+    return result
