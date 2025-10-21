@@ -61,9 +61,12 @@ make edits                               # Open developer UI (patch manager)
 make edit-cfg                            # Edit camoufox.cfg
 make ff-dbg                              # Setup vanilla Firefox for debugging
 
-# Release
-python3 multibuild.py --target linux windows macos --arch x86_64 arm64
+# Release builds
+python3 multibuild.py --target linux windows macos --arch x86_64 arm64           # Sequential (default)
+python3 multibuild.py --target linux windows macos --arch x86_64 arm64 --parallel # Parallel (faster)
 ```
+
+**Note:** `--parallel` builds multiple targets concurrently with isolated mozconfigs. No conflicts, supports incremental builds.
 
 **See [WORKFLOW.md](WORKFLOW.md) for detailed patch workflow instructions.**
 
