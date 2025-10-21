@@ -20,7 +20,7 @@ make setup        # Extracts → git init → single commit
 - ❌ No Firefox git history to debug upstream changes
 - ❌ Can't use `git log` / `git blame` on Firefox code
 - ❌ Can't use `git diff` to see what changed between versions
-- ❌ Can't use `refresh-baseline` to update additions/
+- ❌ Can't use `retag-baseline` to update additions/
 - ❌ `unpatched` tag has no parent (first commit in repo)
 - ❌ Harder to understand why patches break
 
@@ -37,7 +37,7 @@ git commit && git tag unpatched
 - ✅ Full Firefox git history for debugging
 - ✅ Can trace Firefox changes between versions with `git log`
 - ✅ Can use `git diff OLD_VERSION..NEW_VERSION` to see what changed
-- ✅ Can use `make refresh-baseline` when fixing additions/
+- ✅ Can use `make retag-baseline` when fixing additions/
 - ✅ `unpatched` tag has a parent (pristine Firefox commit)
 - ✅ Better for understanding upstream changes that break patches
 
@@ -60,7 +60,7 @@ setup: setup-minimal
 **Why it breaks:**
 - Runs `git init`, destroying existing Firefox git history
 - Creates `unpatched` tag with NO parent commit
-- Makes `make refresh-baseline` unusable
+- Makes `make retag-baseline` unusable
 
 **Don't use this with git repo approach!**
 
@@ -68,14 +68,15 @@ setup: setup-minimal
 
 Downloads Mozilla's tarball. Skip this entirely when using git clone.
 
-### 3. `make refresh-baseline` - ONLY Works with Git Repo
+### 3. `make retag-baseline` - ONLY Works with Git Repo
 
 ```makefile
-refresh-baseline:
+retag-baseline:
     cd $(cf_source_dir) && \
         git reset --hard unpatched^ && \  # Requires parent commit!
-        git clean -dxf && \
-        bash ../scripts/copy-additions.sh $(version) $(release) && \
+        git clean -dxf
+    $(MAKE) copy-additions
+    cd $(cf_source_dir) && \
         git add -A && \
         git commit -m "Add Camoufox additions" && \
         git tag -f -a unpatched -m "Initial commit with additions"
@@ -85,6 +86,7 @@ refresh-baseline:
 - `unpatched^` must exist (parent of unpatched tag)
 - Only works with git repo approach (tarball setup has no parent)
 - Will fail loudly if repository structure is incompatible
+- Calls `make copy-additions` to sync additions/ and settings/ files
 
 ### 4. Other Make Targets - Compatible
 
@@ -213,7 +215,7 @@ git log --oneline unpatched^
 
 **Problem:** The `additions/` directory is copied into the Firefox source when the `unpatched` baseline is created. If you fix something in `additions/` but the Firefox source still has the old broken version, every `make revert` restores the broken state.
 
-**Solution:** Use `make refresh-baseline` to rebuild the `unpatched` tag with updated additions.
+**Solution:** Use `make retag-baseline` to rebuild the `unpatched` tag with updated additions, or use `make copy-additions` for a quick sync without git operations.
 
 #### Example: Firefox 142 Juggler Component Fix
 
@@ -262,20 +264,22 @@ Classes = [
 vim additions/juggler/components/components.conf
 
 # 2. Rebuild the unpatched baseline
-make refresh-baseline
+make retag-baseline
 
 # Output:
 # Rebuilding 'unpatched' baseline with latest additions...
 # HEAD is now at 361373160356 Bug 1974259 - Hold an OwnedHandle...
+# Copying additions/ and settings/ to source tree...
+# ✓ Files copied. Run 'make build' for incremental rebuild.
 # [detached HEAD 39cf2dd] Add Camoufox additions (Firefox 142 compatibility)
 # Updated tag 'unpatched' (was 415a013b)
 # ✓ Baseline refreshed. 'unpatched' tag updated with latest additions.
 ```
 
-**What `refresh-baseline` does:**
+**What `retag-baseline` does:**
 1. Resets Firefox repo to `unpatched^` (pristine Firefox commit before additions)
 2. Runs `git clean -dxf` to remove all untracked files
-3. Re-copies `additions/` with the fix via `copy-additions.sh`
+3. Calls `make copy-additions` to re-copy `additions/` with the fix
 4. Commits the new additions
 5. Force-updates the `unpatched` tag to point to this new commit
 
@@ -287,16 +291,27 @@ make revert  # Should now include the fix
 make build   # Should build successfully
 ```
 
-#### When to Use `refresh-baseline`
+#### When to Use `retag-baseline` vs `copy-additions`
 
-Use this workflow when you fix:
+**Use `make copy-additions` when:**
+- You want to quickly test additions/ changes without git operations
+- You're iterating on Juggler or MaskConfig code
+- You want to preserve your current git state and build artifacts
+- You just need files synced for an incremental rebuild
+
+**Use `make retag-baseline` when:**
+- You want to update the `unpatched` baseline tag permanently
+- You're done iterating and want `make revert` to include your fixes
+- You need a clean state after fixing component registration or build configs
+
+**Files to fix with these commands:**
 - Component registration issues (`.conf` files)
 - Build configuration problems (`configure.sh`, `moz.build` in additions/)
 - Branding/configuration files in `additions/browser/branding/`
 - MaskConfig header files (`additions/camoucfg/`)
 - Juggler integration files (`additions/juggler/`)
 
-**Don't use it for:**
+**Don't use these for:**
 - Fixing patches in `patches/` directory (those are applied after baseline)
 - Changing Firefox source code directly (use git commits + checkpoints instead)
 
@@ -332,33 +347,36 @@ Understanding the dual-repo structure:
 
 1. **Don't run `make setup`** - It will destroy your Firefox git history
 2. **Don't run `make fetch`** - Unnecessary with git clone approach
-3. **Don't manually copy additions to Firefox source** - Use `refresh-baseline`
+3. **Don't manually copy additions to Firefox source** - Use `copy-additions` or `retag-baseline`
 4. **Don't modify Firefox source without committing** - You'll lose work on `git reset`
 
 ### ✅ Do This
 
-1. **Use `make refresh-baseline`** - After fixing anything in `additions/`
-2. **Use `make tagged-checkpoint`** - After successfully applying patches
-3. **Use `git log` in Firefox repo** - To understand upstream changes
-4. **Use `git diff OLD..NEW` in Firefox repo** - To see what changed between versions
-5. **Commit additions changes to Camoufox repo** - After testing they work
+1. **Use `make copy-additions`** - For quick iteration on `additions/` files
+2. **Use `make retag-baseline`** - After fixing anything in `additions/` permanently
+3. **Use `make tagged-checkpoint`** - After successfully applying patches
+4. **Use `git log` in Firefox repo** - To understand upstream changes
+5. **Use `git diff OLD..NEW` in Firefox repo** - To see what changed between versions
+6. **Commit additions changes to Camoufox repo** - After testing they work
 
 ### Workflow Checklist
 
-**When fixing an additions/ issue:**
+**When fixing an additions/ issue (quick iteration):**
 ```bash
 # 1. Identify the problem (build error, component registration, etc.)
 # 2. Edit the file in additions/ directory
 vim additions/path/to/file
 
-# 3. Rebuild baseline with fix
-make refresh-baseline
+# 3. Quickly sync the fix to source
+make copy-additions
 
-# 4. Test that it works
-make revert
+# 4. Test with incremental build
 make build
 
-# 5. Commit the fix to Camoufox repo
+# 5. Once confirmed working, update baseline permanently
+make retag-baseline
+
+# 6. Commit the fix to Camoufox repo
 git add additions/path/to/file
 git commit -m "Fix: Description of what broke and how we fixed it"
 ```
@@ -370,7 +388,8 @@ git commit -m "Fix: Description of what broke and how we fixed it"
 | **Setup Command** | `make setup` | Manual `git clone` + `copy-additions.sh` |
 | **Firefox History** | None (single commit) | Full git history |
 | **`unpatched` Tag** | No parent commit | Has parent (pristine Firefox) |
-| **`make refresh-baseline`** | ❌ Fails (no parent) | ✅ Works |
+| **`make retag-baseline`** | ❌ Fails (no parent) | ✅ Works |
+| **`make copy-additions`** | ✅ Works | ✅ Works |
 | **Debugging Patches** | Harder (no context) | Easier (can see Firefox changes) |
 | **Version Comparison** | Manual diff of tarballs | `git diff OLD..NEW` |
 | **Disk Space** | Smaller (~500MB) | Larger (~2GB with history) |
@@ -394,7 +413,7 @@ If you inherit a tarball-based setup and want to switch:
 3. Run `copy-additions.sh` to add Camoufox additions
 4. Commit and tag as `unpatched`
 5. Apply your patches with `make dir`
-6. You now have a git-repo-based setup with `refresh-baseline` support!
+6. You now have a git-repo-based setup with `retag-baseline` and `copy-additions` support!
 
 ## Related Documentation
 

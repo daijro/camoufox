@@ -29,9 +29,9 @@ The inner repo is **NOT** a submodule. It's a standalone Firefox git repository 
 **CRITICAL:** This repo uses Playwright's exact Firefox git commit, not Mozilla's release tarballs. This provides full Firefox git history for debugging upstream changes.
 
 **Key implications:**
-- `make refresh-baseline` ONLY works with git repo approach (requires `unpatched^` parent)
+- `make retag-baseline` ONLY works with git repo approach (requires `unpatched^` parent)
 - `make setup` is INCOMPATIBLE with git repo approach (destroys Firefox history)
-- When fixing `additions/`, use `make refresh-baseline` to update the baseline
+- When fixing `additions/`, use `make retag-baseline` to update the baseline (or `make copy-additions` for quick syncing)
 
 **For details, see [FIREFOX_UPGRADE_WORKFLOW.md](FIREFOX_UPGRADE_WORKFLOW.md)**
 
@@ -53,7 +53,8 @@ make run                                 # Run built browser
 make run args="--headless https://..."   # Run headless
 
 # Additions management
-make refresh-baseline                    # Rebuild 'unpatched' tag with updated additions/
+make copy-additions                      # Copy additions/ to source (fast, no git operations)
+make retag-baseline                      # Rebuild 'unpatched' tag with updated additions/ (full git reset)
 
 # Development
 make edits                               # Open developer UI (patch manager)
@@ -151,7 +152,7 @@ git commit -m "Fix remove-cfrprefs for FF142 JS config migration"
 4. **Additions vs patches**:
    - **Additions** (`additions/`): Copied at baseline creation (`unpatched` tag)
    - **Patches** (`patches/`): Applied after baseline
-   - If you modify `additions/`, run `make refresh-baseline` to update baseline
+   - If you modify `additions/`, run `make copy-additions` for quick sync or `make retag-baseline` to update baseline
 
 5. **Two git repos**: Changes to Firefox source go in inner repo (for generating patches). Changes to patch files go in outer repo (for version control).
 
@@ -169,7 +170,7 @@ git commit -m "Fix remove-cfrprefs for FF142 JS config migration"
 
 ## Key Documentation
 
-- **[FIREFOX_UPGRADE_WORKFLOW.md](FIREFOX_UPGRADE_WORKFLOW.md)**: Why git-based approach, how `refresh-baseline` works, repo-in-repo structure
+- **[FIREFOX_UPGRADE_WORKFLOW.md](FIREFOX_UPGRADE_WORKFLOW.md)**: Why git-based approach, how `retag-baseline` and `copy-additions` work, repo-in-repo structure
 - **[WORKFLOW.md](WORKFLOW.md)**: Patch investigation process, stealth intent analysis, checkpoint workflow
 - **[FIREFOX_142_UPGRADE_NOTES.md](FIREFOX_142_UPGRADE_NOTES.md)**: Version-specific changes and patch fixes
 - **[README.md](README.md)**: User-facing documentation (fingerprint injection, features, testing sites)
