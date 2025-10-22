@@ -187,28 +187,20 @@ class BSYS:
         else:
             run(cmd)
 
-    def package(self, prefix=None, mozconfig_path=None):
-        """Package the Camoufox source code"""
+    def package(self, prefix=None):
+        """Package the Camoufox source code using scripts/package.py"""
         version, release = load_upstream_config()
-        src_dir = f'camoufox-{version}-{release}'
 
-        if mozconfig_path:
-            # For parallel builds, run mach package with the correct mozconfig
-            # mach will automatically use the obj dir that matches the mozconfig target
-            abs_mozconfig = os.path.abspath(mozconfig_path)
-            cmd = f'cd {src_dir} && MOZCONFIG={abs_mozconfig} ./mach package'
+        # Build the package.py command (same for both sequential and parallel)
+        fonts = "windows macos linux"
+        includes = "settings/chrome.css settings/camoucfg.jvv settings/properties.json bundle/fontconfigs"
 
-            if prefix:
-                run_with_prefix(cmd, prefix)
-            else:
-                run(cmd)
+        cmd = f'python3 scripts/package.py {self.target} --version {version} --release {release} --arch {self.arch} --fonts {fonts} --includes {includes}'
+
+        if prefix:
+            run_with_prefix(cmd, prefix)
         else:
-            # Sequential mode: use Makefile
-            cmd = f'make package-{self.target} arch={self.arch}'
-            if prefix:
-                run_with_prefix(cmd, prefix)
-            else:
-                run(cmd)
+            run(cmd)
 
     def update_target(self):
         """Change the build target (legacy method for sequential builds)"""
@@ -270,8 +262,8 @@ def run_build_parallel(target, arch):
         # Build with isolated mozconfig
         builder.build(mozconfig_path=mozconfig_path, prefix=prefix)
 
-        # Package from the correct obj directory
-        builder.package(prefix=prefix, mozconfig_path=mozconfig_path)
+        # Package using scripts/package.py (runs ./mach package + post-processing)
+        builder.package(prefix=prefix)
 
         # Move assets to dist
         os.makedirs('dist', exist_ok=True)
@@ -362,15 +354,39 @@ def main():
 
     if args.parallel:
         # Parallel mode: use multiprocessing
-        with multiprocessing.Pool(processes=len(combinations)) as pool:
-            results = pool.starmap(run_build_parallel, combinations)
+        # CRITICAL: Hide in-tree mozconfig to prevent race conditions
+        # Multiple builds reading/checking the same file causes spurious reconfigures
+        version, release = load_upstream_config()
+        src_dir = f'camoufox-{version}-{release}'
+        in_tree_mozconfig = f'{src_dir}/mozconfig'
+        in_tree_mozconfig_backup = f'{in_tree_mozconfig}.parallel_backup'
+        in_tree_hash = f'{src_dir}/mozconfig.hash'
+        in_tree_hash_backup = f'{in_tree_hash}.parallel_backup'
 
-        # Check if any builds failed
-        if not all(results):
-            print("\nSome builds failed!")
-            sys.exit(1)
-        else:
-            print("\nAll builds completed successfully!")
+        # Temporarily hide in-tree mozconfig files
+        if os.path.exists(in_tree_mozconfig):
+            os.rename(in_tree_mozconfig, in_tree_mozconfig_backup)
+            print(f"Temporarily moved {in_tree_mozconfig} to prevent parallel build conflicts")
+        if os.path.exists(in_tree_hash):
+            os.rename(in_tree_hash, in_tree_hash_backup)
+
+        try:
+            with multiprocessing.Pool(processes=len(combinations)) as pool:
+                results = pool.starmap(run_build_parallel, combinations)
+
+            # Check if any builds failed
+            if not all(results):
+                print("\nSome builds failed!")
+                sys.exit(1)
+            else:
+                print("\nAll builds completed successfully!")
+        finally:
+            # Restore in-tree mozconfig for sequential builds
+            if os.path.exists(in_tree_mozconfig_backup):
+                os.rename(in_tree_mozconfig_backup, in_tree_mozconfig)
+                print(f"\nRestored {in_tree_mozconfig}")
+            if os.path.exists(in_tree_hash_backup):
+                os.rename(in_tree_hash_backup, in_tree_hash)
     else:
         # Sequential mode: original behavior
         for target, arch in combinations:
