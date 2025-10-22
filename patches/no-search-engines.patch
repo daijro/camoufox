@@ -15,23 +15,38 @@ diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/co
 index ee32b05d723a..6c0ab03739a6 100644
 --- a/toolkit/components/search/SearchEngineSelector.sys.mjs
 +++ b/toolkit/components/search/SearchEngineSelector.sys.mjs
-@@ -207,6 +207,21 @@ export class SearchEngineSelector {
+@@ -207,6 +207,36 @@ export class SearchEngineSelector {
     *   could be obtained.
     */
    async _getConfiguration(firstTime = true) {
 +    if (true) {
 +      return [
 +        {
-+          "appliesTo": [{
-+            "default": "yes",
-+            "included": {
-+              "everywhere": true
-+            },
-+            "webExtension": {
-+              "id": "none@mozilla.org"
++          "recordType": "engine",
++          "identifier": "dummy",
++          "base": {
++            "name": "Dummy",
++            "classification": "general",
++            "urls": {
++              "search": {
++                "base": "https://example.com/search",
++                "searchTermParamName": "q"
++              }
 +            }
-+          }],
++          },
++          "variants": [{
++            "environment": { "allRegionsAndLocales": true }
++          }]
 +        },
++        {
++          "recordType": "defaultEngines",
++          "globalDefault": "dummy",
++          "specificDefaults": []
++        },
++        {
++          "recordType": "engineOrders",
++          "orders": []
++        }
 +      ];
 +    }
      let result = [];
