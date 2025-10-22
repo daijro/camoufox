@@ -7,13 +7,11 @@ const Ci = Components.interfaces;
 const Cr = Components.results;
 const Cu = Components.utils;
 
-import { Helper } from "chrome://juggler/content/Helper.sys.mjs";
-import { SimpleChannel } from "chrome://juggler/content/SimpleChannel.sys.mjs";
-import { Runtime } from "chrome://juggler/content/content/Runtime.sys.mjs";
+const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
 
 const helper = new Helper();
 
-class FrameTree {
+export class FrameTree {
   constructor(rootBrowsingContext) {
     helper.decorateAsEventEmitter(this);
 
@@ -411,7 +409,7 @@ class Frame {
       this._parentFrame = parentFrame;
       parentFrame._children.add(this);
     }
-    
+
     this.allowMW = ChromeUtils.camouGetBool('allowMainWorld', false);
     this.forceScopeAccess = ChromeUtils.camouGetBool('forceScopeAccess', false);
 
@@ -582,6 +580,7 @@ class Frame {
       webSocketService.removeListener(this._webSocketListenerInnerWindowId, this._webSocketListener);
     this._webSocketListenerInnerWindowId = this.domWindow().windowGlobalChild.innerWindowId;
     webSocketService.addListener(this._webSocketListenerInnerWindowId, this._webSocketListener);
+
     for (const context of this._worldNameToContext.values())
       this._runtime.destroyExecutionContext(context);
     this._worldNameToContext.clear();
@@ -718,4 +717,3 @@ function channelId(channel) {
 }
 
 
-export { FrameTree };

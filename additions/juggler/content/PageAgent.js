@@ -8,9 +8,9 @@ const Ci = Components.interfaces;
 const Cr = Components.results;
 const Cu = Components.utils;
 
-import { Helper } from "chrome://juggler/content/Helper.sys.mjs";
-import { NetUtil } from "resource://gre/modules/NetUtil.sys.mjs";
-import { setTimeout } from "resource://gre/modules/Timer.sys.mjs";
+const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
+const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
 
 const dragService = Cc["@mozilla.org/widget/dragservice;1"].getService(
   Ci.nsIDragService
@@ -51,7 +51,7 @@ class WorkerData {
   }
 }
 
-class PageAgent {
+export class PageAgent {
   constructor(browserChannel, frameTree) {
     this._browserChannel = browserChannel;
     this._browserPage = browserChannel.connect('page');
@@ -575,7 +575,7 @@ class PageAgent {
     // We crash by using js-ctypes and dereferencing
     // a bad pointer. The crash should happen immediately
     // upon loading this frame script.
-    const { ctypes } = await import("resource://gre/modules/ctypes.sys.mjs");
+    const { ctypes } = ChromeUtils.importESModule('resource://gre/modules/ctypes.sys.mjs');
     ChromeUtils.privateNoteIntentionalCrash();
     const zero = new ctypes.intptr_t(8);
     const badptr = ctypes.cast(zero, ctypes.PointerType(ctypes.int32_t));
@@ -709,4 +709,3 @@ class PageAgent {
   }
 }
 
-export { PageAgent };

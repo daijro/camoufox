@@ -77,10 +77,9 @@ class SimpleChannel {
     this._setTimeout(() => this._deliverBufferedIncomingMessages(), 0);
   }
 
-  async _setTimeout(cb, timeout) {
+  _setTimeout(cb, timeout) {
     // Lazy load on first call.
-    const { setTimeout } = await import('resource://gre/modules/Timer.sys.mjs');
-    this._setTimeout = setTimeout;
+    this._setTimeout = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs').setTimeout;
     this._setTimeout(cb, timeout);
   }
 
@@ -252,11 +251,3 @@ class SimpleChannel {
     }
   }
 }
-
-// Support both ES module import and loadSubScript() for worker contexts
-// When loaded via loadSubScript(), this assignment makes SimpleChannel globally available
-if (typeof this !== 'undefined') {
-  this.SimpleChannel = SimpleChannel;
-}
-
-export { SimpleChannel };

@@ -4,15 +4,16 @@
 
 "use strict";
 
-import { AddonManager } from "resource://gre/modules/AddonManager.sys.mjs";
-import { TargetRegistry } from "chrome://juggler/content/TargetRegistry.sys.mjs";
-import { Helper } from "chrome://juggler/content/Helper.sys.mjs";
-import { PageHandler } from "chrome://juggler/content/protocol/PageHandler.sys.mjs";
-import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
+const {AddonManager} = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
+const {XPIProvider} = ChromeUtils.importESModule("resource://gre/modules/addons/XPIProvider.sys.mjs");
+const {TargetRegistry} = ChromeUtils.importESModule("chrome://juggler/content/TargetRegistry.js");
+const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const {PageHandler} = ChromeUtils.importESModule("chrome://juggler/content/protocol/PageHandler.js");
+const {AppConstants} = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
 
 const helper = new Helper();
 
-class BrowserHandler {
+export class BrowserHandler {
   constructor(session, dispatcher, targetRegistry, startCompletePromise, onclose) {
     this._session = session;
     this._dispatcher = dispatcher;
@@ -147,6 +148,10 @@ class BrowserHandler {
       ]);
     }
     await this._startCompletePromise;
+    await Promise.all([
+      ...XPIProvider.startupPromises,
+      ...XPIProvider.enabledAddonsStartupPromises,
+    ]);
     this._onclose();
     Services.startup.quit(Ci.nsIAppStartup.eForceQuit);
   }
@@ -166,7 +171,9 @@ class BrowserHandler {
   ['Browser.clearCache']() {
     // Clearing only the context cache does not work: https://bugzilla.mozilla.org/show_bug.cgi?id=1819147
     Services.cache2.clear();
-    ChromeUtils.clearStyleSheetCache();
+    ChromeUtils.clearResourceCache({
+      types: ["stylesheet"],
+    });
   }
 
   ['Browser.setHTTPCredentials']({browserContextId, credentials}) {
@@ -220,7 +227,7 @@ class BrowserHandler {
   }
 
   async ['Browser.setContrast']({browserContextId, contrast}) {
-    return;  // TODO: Implement
+    await this._targetRegistry.browserContextForId(browserContextId).setContrast(nullToUndefined(contrast));
   }
 
   async ['Browser.setVideoRecordingOptions']({browserContextId, options}) {
@@ -313,5 +320,3 @@ async function waitForWindowClosed(browserWindow) {
 function nullToUndefined(value) {
   return value === null ? undefined : value;
 }
-
-export { BrowserHandler };

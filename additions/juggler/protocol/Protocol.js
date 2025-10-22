@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { t, checkScheme } from "chrome://juggler/content/protocol/PrimitiveTypes.sys.mjs";
+const {t} = ChromeUtils.importESModule('chrome://juggler/content/protocol/PrimitiveTypes.js');
 
 // Protocol-specific types.
 const browserTypes = {};
@@ -800,6 +800,11 @@ const Page = {
         viewportSize: t.Nullable(pageTypes.Size),
       },
     },
+    'setZoom': {
+      params: {
+        zoom: t.Number,
+      },
+    },
     'bringToFront': {
       params: {
       },
@@ -810,7 +815,7 @@ const Page = {
         colorScheme: t.Optional(t.Enum(['dark', 'light', 'no-preference'])),
         reducedMotion: t.Optional(t.Enum(['reduce', 'no-preference'])),
         forcedColors: t.Optional(t.Enum(['active', 'none'])),
-        contrast: t.Optional(t.Enum(['more', 'less', 'no-preference'])),
+        contrast: t.Optional(t.Enum(['less', 'more', 'custom', 'no-preference'])),
       },
     },
     'setCacheDisabled': {
@@ -1013,8 +1018,6 @@ const Accessibility = {
   }
 }
 
-const protocol = {
+export const protocol = {
   domains: {Browser, Heap, Page, Runtime, Network, Accessibility},
 };
-
-export { protocol, checkScheme };

@@ -1,14 +1,14 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-* License, v. 2.0. If a copy of the MPL was not distributed with this
-* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 "use strict";
 
-import { Helper, EventWatcher } from "chrome://juggler/content/Helper.sys.mjs";
-import { NetUtil } from "resource://gre/modules/NetUtil.sys.mjs";
-import { NetworkObserver, PageNetwork } from "chrome://juggler/content/NetworkObserver.sys.mjs";
-import { PageTarget } from "chrome://juggler/content/TargetRegistry.sys.mjs";
-import { setTimeout } from "resource://gre/modules/Timer.sys.mjs";
+const {Helper, EventWatcher} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
+const {NetworkObserver, PageNetwork} = ChromeUtils.importESModule('chrome://juggler/content/NetworkObserver.js');
+const {PageTarget} = ChromeUtils.importESModule('chrome://juggler/content/TargetRegistry.js');
+const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
 
 const Cc = Components.classes;
 const Ci = Components.interfaces;
@@ -65,7 +65,7 @@ class WorkerHandler {
   }
 }
 
-class PageHandler {
+export class PageHandler {
   constructor(target, session, contentChannel) {
     this._session = session;
     this._contentChannel = contentChannel;
@@ -80,10 +80,10 @@ class PageHandler {
     }
 
     this._isDragging = false;
-    
+
     // Camoufox: set a random default cursor position
     let random_val = (max_val) => Math.floor(Math.random() * max_val);
-    
+
     // Try to fetch the viewport size
     this._defaultCursorPos = {
       x: random_val(this._pageTarget._viewportSize?.width || 1280),
@@ -250,6 +250,10 @@ class PageHandler {
     await this._pageTarget.setViewportSize(viewportSize === null ? undefined : viewportSize);
   }
 
+  async ['Page.setZoom']({zoom}) {
+    await this._pageTarget.setZoom(zoom);
+  }
+
   async ['Runtime.evaluate'](options) {
     return await this._contentPage.send('evaluate', options);
   }
@@ -312,9 +316,7 @@ class PageHandler {
     this._pageTarget.setColorScheme(colorScheme || null);
     this._pageTarget.setReducedMotion(reducedMotion || null);
     this._pageTarget.setForcedColors(forcedColors || null);
-    // Note: contrast parameter accepted for Playwright 1.55+ protocol compatibility but not used.
-    // Camoufox prioritizes stealth over media query emulation - normal Firefox users don't typically
-    // change contrast preferences, so emulating it would be a detectable deviation from vanilla behavior.
+    this._pageTarget.setContrast(contrast || null);
     this._pageTarget.setEmulatedMedia(type);
   }
 
@@ -723,5 +725,3 @@ class PageHandler {
     return await worker.sendMessage(JSON.parse(message));
   }
 }
-
-export { PageHandler };

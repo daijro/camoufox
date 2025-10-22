@@ -1,13 +1,11 @@
 "use strict";
 
-import {  TargetRegistry  } from "chrome://juggler/content/TargetRegistry.sys.mjs";
-import {  Helper  } from "chrome://juggler/content/Helper.sys.mjs";
+const { TargetRegistry } = ChromeUtils.importESModule('chrome://juggler/content/TargetRegistry.js');
+const { Helper } = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
 
 const helper = new Helper();
 
-export { JugglerFrameParent };
-
-class JugglerFrameParent extends JSWindowActorParent {
+export class JugglerFrameParent extends JSWindowActorParent {
   constructor() {
     super();
   }
@@ -18,7 +16,7 @@ class JugglerFrameParent extends JSWindowActorParent {
     // Actors are registered per the WindowGlobalParent / WindowGlobalChild pair. We are only
     // interested in those WindowGlobalParent actors that are matching current browsingContext
     // window global.
-    // See https://github.com/mozilla/gecko-dev/blob/cd2121e7d83af1b421c95e8c923db70e692dab5f/testing/mochitest/BrowserTestUtils/BrowserTestUtilsParent.sys.mjs#L15
+    // See https://github.com/mozilla-firefox/firefox/blob/35e22180b0b61413dd8eccf6c00b1c6fac073eee/testing/mochitest/BrowserTestUtils/BrowserTestUtilsParent.sys.mjs#L15
     if (!this.manager?.isCurrentGlobal)
       return;
 

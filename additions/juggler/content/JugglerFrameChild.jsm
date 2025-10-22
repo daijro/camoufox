@@ -1,7 +1,7 @@
 "use strict";
 
-import {  Helper  } from "chrome://juggler/content/Helper.sys.mjs";
-import {  initialize  } from "chrome://juggler/content/content/main.sys.mjs";
+const { Helper } = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const { initialize } = ChromeUtils.importESModule('chrome://juggler/content/content/main.js');
 
 const Ci = Components.interfaces;
 const helper = new Helper();
@@ -10,7 +10,7 @@ let sameProcessInstanceNumber = 0;
 
 const topBrowingContextToAgents = new Map();
 
-class JugglerFrameChild extends JSWindowActorChild {
+export class JugglerFrameChild extends JSWindowActorChild {
   constructor() {
     super();
 
@@ -83,4 +83,3 @@ class JugglerFrameChild extends JSWindowActorChild {
   receiveMessage() { }
 }
 
-export { JugglerFrameChild };

@@ -6,10 +6,10 @@
 // Note: this file should be loadabale with eval() into worker environment.
 // Avoid Components.*, ChromeUtils and global const variables.
 
-if (typeof Debugger === 'undefined') {
+if (!this.Debugger) {
   // Worker has a Debugger defined already.
   const {addDebuggerToGlobal} = ChromeUtils.importESModule("resource://gre/modules/jsdebugger.sys.mjs");
-  addDebuggerToGlobal(globalThis);
+  addDebuggerToGlobal(Components.utils.getGlobalForObject(globalThis));
 }
 
 let lastId = 0;
@@ -103,14 +103,14 @@ class Runtime {
     // Hijack the utilityScript.evaluate function to evaluate in the main world
     if (
         ChromeUtils.camouGetBool('allowMainWorld', false) &&
-        functionDeclaration.includes('utilityScript.evaluate') && 
-        args.length >= 4 && 
-        args[3].value && 
-        typeof args[3].value === 'string' && 
+        functionDeclaration.includes('utilityScript.evaluate') &&
+        args.length >= 4 &&
+        args[3].value &&
+        typeof args[3].value === 'string' &&
         args[3].value.startsWith('mw:')) {
       ChromeUtils.camouDebug(`Evaluating in main world: ${args[3].value}`);
       const mainWorldScript = args[3].value.substring(3);
-      
+
       // Get the main world execution context
       const mainContext = executionContext.mainEquivalent;
       if (!mainContext) {
@@ -337,68 +337,6 @@ class Runtime {
   }
 }
 
-class MainWorldContext {
-  constructor(runtime, domWindow, contextGlobal) {
-    this._runtime = runtime;
-    this._domWindow = domWindow;
-    this._contextGlobal = contextGlobal;
-    this._debuggee = runtime._debugger.addDebuggee(contextGlobal);
-  }
-
-  _getResult(completionValue, exceptionDetails = {}) {
-    if (!completionValue) {
-      exceptionDetails.text = "Evaluation terminated";
-      return {success: false, obj: null};
-    }
-
-    if (completionValue.throw) {
-      const result = this._debuggee.executeInGlobalWithBindings(`
-        (function(error) {
-          try {
-            if (error instanceof Error) {
-              return error.toString();
-            }
-            return String(error);
-          } catch(e) {
-            return "Unknown error occurred";
-          }
-        })(e)
-      `, { e: completionValue.throw });
-      
-      exceptionDetails.text = result.return || "Unknown error";
-      return {success: false, obj: null};
-    }
-
-    return {success: true, obj: completionValue.return};
-  }
-  
-  executeInGlobal(script, args = [], exceptionDetails = {}) {
-    try {
-      const wrappedScript = `
-        (() => {
-          let _s = (${script});
-          let _r = typeof _s === 'function'
-            ? _s(${args.map(arg => JSON.stringify(arg)).join(', ')})
-            : _s;
-          return JSON.stringify({value: _r});
-        })()
-      `;
-
-      const result = this._debuggee.executeInGlobal(wrappedScript);
-      
-      let {success, obj} = this._getResult(result, exceptionDetails);
-      if (!success) {
-        return {exceptionDetails};
-      }
-      return JSON.parse(obj);
-    } catch (e) {
-      exceptionDetails.text = e.message;
-      exceptionDetails.stack = e.stack;
-      return {exceptionDetails};
-    }
-  }
-}
-
 class ExecutionContext {
   constructor(runtime, domWindow, contextGlobal, auxData) {
     this._runtime = runtime;
@@ -431,8 +369,6 @@ class ExecutionContext {
 
       return hasSymbol ? undefined : result;
     }).bind(null, JSON.stringify.bind(JSON))`).return;
-
-    this.mainEquivalent = undefined;
   }
 
   id() {
@@ -691,10 +627,47 @@ function emitEvent(event, ...args) {
     listener.call(null, ...args);
 }
 
-// Support both ES module import and loadSubScript() for worker contexts
-// When loaded via loadSubScript(), this assignment makes Runtime globally available
-if (typeof this !== 'undefined') {
-  this.Runtime = Runtime;
+class MainWorldContext {
+  constructor(runtime, domWindow, contextGlobal) {
+    this._runtime = runtime;
+    this._domWindow = domWindow;
+    this._contextGlobal = contextGlobal;
+    this._debuggee = runtime._debugger.addDebuggee(contextGlobal);
+  }
+
+  _getResult(completionValue, exceptionDetails = {}) {
+    if (!completionValue) {
+      exceptionDetails.text = "Evaluation terminated";
+      return {success: false, obj: null};
+    }
+
+    if (completionValue.throw) {
+      const result = this._debuggee.executeInGlobalWithBindings(`
+        (function(error) {
+          try {
+            if (error instanceof Error) {
+              return error.toString();
+            }
+            return String(error);
+          } catch(e) {
+            return "Unknown error occurred";
+          }
+        })(e)
+      `, { e: completionValue.throw });
+
+      exceptionDetails.text = result.return || "Unknown error";
+      exceptionDetails.stack = this._debuggee.executeInGlobalWithBindings('e.stack', {e: completionValue.throw}, {useInnerBindings: true}).return;
+      return {success: false, obj: null};
+    }
+
+    return {success: true, obj: completionValue.return};
+  }
+
+  executeInGlobal(script, args, exceptionDetails = {}) {
+    const completionValue = this._debuggee.executeInGlobal(script);
+    return this._getResult(completionValue, exceptionDetails);
+  }
 }
 
-export { Runtime };
+// Export Runtime to global.
+globalThis.Runtime = Runtime;
