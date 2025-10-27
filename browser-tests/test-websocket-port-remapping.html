@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head><title>WebSocket Port Remapping Test (Kasada-style)</title></head>
+<body>
+<script>
+dump("==========================================\n");
+dump("WebSocket Port Remapping Test (Kasada-style)\n");
+dump("==========================================\n\n");
+
+// Test ports passed via URL params
+const params = new URLSearchParams(window.location.search);
+const testPorts = params.get('ports') ? params.get('ports').split(',').map(Number) : [];
+
+if (testPorts.length === 0) {
+  dump("ERROR: No test ports specified in URL params\n");
+  dump("Usage: ?ports=PORT1,PORT2,PORT3\n");
+  setTimeout(() => window.close(), 1000);
+} else {
+  let completed = 0;
+  const results = [];
+  const TIMEOUT_MS = 3000;
+
+  function testPort(port, index) {
+    const startTime = performance.now();
+    dump(`Testing port ${port}...\n`);
+
+    let ws;
+    try {
+      ws = new WebSocket(`ws://127.0.0.1:${port}/`);
+    } catch (e) {
+      const duration = parseFloat((performance.now() - startTime).toFixed(2));
+      dump(`Port ${port}: EXCEPTION after ${duration}ms - ${e.message}\n`);
+      results[index] = {port, status: 'EXCEPTION', duration, error: e.message};
+      completed++;
+      checkComplete();
+      return;
+    }
+
+    let isDone = false;
+
+    // Kasada's approach: Poll readyState every 10ms
+    function checkReadyState() {
+      const elapsed = performance.now() - startTime;
+
+      // Still connecting
+      if (ws.readyState === WebSocket.CONNECTING) {
+        if (elapsed > TIMEOUT_MS) {
+          // Timeout exceeded
+          const duration = parseFloat(elapsed.toFixed(2));
+          dump(`Port ${port}: TIMEOUT after ${duration}ms (readyState still CONNECTING)\n`);
+          results[index] = {port, status: 'TIMEOUT', duration};
+          isDone = true;
+          ws.close();
+          completed++;
+          checkComplete();
+        } else {
+          // Check again in 10ms (like Kasada)
+          setTimeout(checkReadyState, 10);
+        }
+      } else {
+        // State changed! Report timing
+        if (!isDone) {
+          const duration = parseFloat(elapsed.toFixed(2));
+          const stateNames = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
+          const stateName = stateNames[ws.readyState] || ws.readyState;
+          dump(`Port ${port}: State changed to ${stateName} after ${duration}ms\n`);
+          results[index] = {port, status: stateName, duration};
+          isDone = true;
+          ws.close();
+          completed++;
+          checkComplete();
+        }
+      }
+    }
+
+    // Start polling after 5ms (like Kasada)
+    setTimeout(checkReadyState, 5);
+  }
+
+  function checkComplete() {
+    if (completed === testPorts.length) {
+      dump("\n__TEST_RESULTS_JSON__\n");
+      dump(JSON.stringify({results}) + "\n");
+      dump("__END_TEST_RESULTS__\n");
+      dump("\n==========================================\n");
+      setTimeout(() => window.close(), 500);
+    }
+  }
+
+  // Test ports SEQUENTIALLY like Kasada does (not in parallel!)
+  let currentIndex = 0;
+
+  function testNextPort() {
+    if (currentIndex < testPorts.length) {
+      testPort(testPorts[currentIndex], currentIndex);
+    }
+  }
+
+  // Override checkComplete to test next port after current finishes
+  const originalCheckComplete = checkComplete;
+  checkComplete = function() {
+    currentIndex++;
+    if (completed === testPorts.length) {
+      originalCheckComplete();
+    } else {
+      // Wait 1ms before next port (like Kasada)
+      setTimeout(testNextPort, 1);
+    }
+  };
+
+  // Start with first port
+  testNextPort();
+}
+</script>
+</body>
+</html>

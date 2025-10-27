@@ -1,6 +1,43 @@
 # Local builds
-/firefox-*
-/mozilla-unified
+# NOTE: Root .gitignore excludes /camoufox-*, but we want to index Firefox source.
+# Override with ! to include, then explicitly exclude build artifacts.
+
+# Include Firefox source (override .gitignore)
+!camoufox-*/
+!firefox-*/
+!mozilla-unified/
+
+# Exclude Firefox build artifacts
+camoufox-*/obj*/
+camoufox-*/target/
+camoufox-*/*_DBG.OBJ/
+camoufox-*/*_OPT.OBJ/
+camoufox-*/node_modules/
+camoufox-*/**/node_modules/
+camoufox-*/.gradle/
+camoufox-*/.kotlin/
+camoufox-*/build/reports/
+camoufox-*/artifacts/
+camoufox-*/browsertime-results/
+
+firefox-*/obj*/
+firefox-*/target/
+firefox-*/*_DBG.OBJ/
+firefox-*/*_OPT.OBJ/
+firefox-*/node_modules/
+firefox-*/**/node_modules/
+
+mozilla-unified/obj*/
+mozilla-unified/target/
+mozilla-unified/*_DBG.OBJ/
+mozilla-unified/*_OPT.OBJ/
+mozilla-unified/node_modules/
+mozilla-unified/**/node_modules/
+
+# Backup directories
+*.bak/
+
+# Outer repo build artifacts
 dist/
 bin/
 launch

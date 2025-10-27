@@ -415,6 +415,134 @@ If you inherit a tarball-based setup and want to switch:
 5. Apply your patches with `make dir`
 6. You now have a git-repo-based setup with `retag-baseline` and `copy-additions` support!
 
+## Investigating Patch Failures: Is It a Bug or Expected Behavior?
+
+When upgrading Firefox, patches break. But before "fixing" them, you must ask: **Is this actually broken, or is this how vanilla Firefox is supposed to work?**
+
+### The Question Framework
+
+When you see unexpected behavior or API mismatches:
+
+1. **What does vanilla Firefox return?**
+   - Run stock Firefox (not Camoufox) on a real machine
+   - Compare with `firefox --headless` (often different!)
+   - Test with RFP enabled vs disabled
+
+2. **Check Mozilla's test files**
+   - Search `dom/canvas/test/` for relevant tests
+   - Example: `test_renderer_strings.html` shows expected WebGL behavior
+   - Mozilla's tests are ground truth for "correct" behavior
+
+3. **Only patch if:**
+   - ✅ Camoufox diverges from vanilla Firefox (detection risk)
+   - ✅ You're intentionally spoofing for stealth
+   - ❌ Don't patch just to "fix" Firefox quirks!
+
+### Case Study: WebGL Standard API Investigation
+
+**Observed behavior:**
+```
+gl.VENDOR:              "Mozilla"
+gl.RENDERER:            "llvmpipe, or similar"
+UNMASKED_VENDOR_WEBGL:  "Mesa"
+UNMASKED_RENDERER_WEBGL: "llvmpipe, or similar"
+```
+
+**Initial assumption:**
+> "This is a leak! Standard API returns 'Mozilla' but deprecated API returns 'Mesa'. They should match!"
+
+**Investigation process:**
+
+1. **Check Mozilla's test file:**
+```bash
+cat dom/canvas/test/webgl-mochitest/test_renderer_strings.html
+```
+
+Found (lines 174-183):
+```javascript
+const EXPECTED = {
+  renderer:           "ANGLE (...), or similar",  // Sanitized
+  vendor:             "Mozilla",                   // Always this!
+  unmasked_renderer:  "ANGLE (...), or similar",  // Also sanitized
+  unmasked_vendor:    "Google Inc.",               // Real vendor exposed
+};
+```
+
+2. **Checked when APIs were added:**
+```bash
+git log --all --oneline --grep="renderer.query" -- dom/canvas/
+# Output: Added in Firefox 92 (July 2021)
+```
+
+3. **Verified vanilla Firefox behavior:**
+- Standard `gl.VENDOR`: **Always "Mozilla"** (hardcoded)
+- Deprecated `UNMASKED_VENDOR_WEBGL`: **Real vendor** when RFP=false
+
+**Conclusion:**
+- ✅ Mismatch is EXPECTED in vanilla Firefox!
+- ✅ Standard API wasn't reading MaskConfig (actual bug to fix)
+- ❌ Making them "consistent" would break vanilla Firefox emulation!
+
+**The fix:**
+Only patch the standard API to read MaskConfig when configured. When unconfigured, maintain vanilla Firefox behavior (including the mismatch).
+
+### Using Mozilla Test Files
+
+**Where to find them:**
+```bash
+# WebGL tests
+find camoufox-*/dom/canvas/test -name "*.html"
+
+# Common test directories
+dom/canvas/test/webgl-mochitest/
+dom/canvas/test/chrome/
+dom/base/test/
+```
+
+**How to read them:**
+```javascript
+// test_renderer_strings.html shows expected behavior
+const EXPECTED = {
+  renderer: RTX3070_R_SANITIZED,  // What Firefox should return
+  vendor: 'Mozilla',               // Always this value
+  // ...
+};
+
+expectJsonEqual(was, EXPECTED, 'v92 behavior');
+```
+
+**What to look for:**
+- Expected values for different Firefox versions
+- RFP enabled vs disabled behavior
+- Pref-controlled variations
+- Known CI/test environment values
+
+### Validation Checklist
+
+Before considering a patch "fixed":
+
+- [ ] Test with MaskConfig configured (spoofed values work)
+- [ ] Test WITHOUT MaskConfig (matches vanilla Firefox fallback)
+- [ ] Compare to Mozilla's test expectations
+- [ ] Verify both APIs return consistent story (when configured)
+- [ ] Check that quirks/inconsistencies match vanilla Firefox
+- [ ] Test with `--headless` and without (may differ)
+- [ ] Verify behavior matches claimed hardware (no llvmpipe on Windows!)
+
+### Common Pitfalls
+
+**❌ Wrong: "Let's make all APIs consistent"**
+- Vanilla Firefox has intentional inconsistencies
+- Bot detectors expect these quirks
+- "Fixing" them makes you detectable
+
+**✅ Right: "Let's match vanilla Firefox exactly"**
+- Keep Firefox's quirks and bugs
+- Only spoof what MaskConfig configures
+- Fallback to vanilla Firefox behavior otherwise
+
+---
+
 ## Related Documentation
 
 - **WORKFLOW.md** - General patch application workflow

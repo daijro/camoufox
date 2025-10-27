@@ -137,7 +137,7 @@ Legacy documentation
 
 <details>
 <summary>
-Navigator 
+Navigator
 </summary>
 
 Navigator properties can be fully spoofed to other Firefox fingerprints, and it is **completely safe**! However, there are some issues when spoofing Chrome (leaks noted).
@@ -503,6 +503,58 @@ Miscellaneous (battery status, etc)
 | battery:dischargingTime | ✅     | Spoofs the battery discharging time.                                                                                            |
 | battery:level           | ✅     | Spoofs the battery level.                                                                                                       |
 
+<details>
+<summary>
+WebSocket Port Remapping
+</summary>
+
+Camoufox automatically remaps WebSocket connection attempts to localhost fingerprinting ports, preventing timing-based port scanning attacks (like Kasada uses) that detect automation environments. Each monitored port is remapped to a unique target port to prevent timing correlation attacks.
+
+| Property                              | Status | Description                                                                                      |
+| ------------------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
+| websocket:remapping:enabled           | ✅     | Enable/disable port remapping. Defaults to true.                                                 |
+| websocket:remapping:basePort          | ✅     | Base port for auto-assignment in default mode. Defaults to 1080.                                 |
+| websocket:remapping:manualPortMappings| ✅     | Array of `"source:target"` mappings. Replaces defaults if provided.                              |
+
+**Two Operating Modes:**
+
+1. **Default Mode** (no manual mappings configured):
+   - Uses hardcoded fingerprinting port list (see below)
+   - Each port auto-assigned unique sequential target starting at `basePort` (default: 1080)
+   - Example: 63333→1080, 5900→1081, 5901→1082, etc.
+
+2. **Manual Mode** (`manualPortMappings` provided):
+   - User specifies explicit `"source:target"` mappings
+   - Each source port must have unique target to prevent timing correlation
+   - Replaces default list entirely
+   - Example config:
+   ```json
+   {
+     "websocket:remapping:manualPortMappings": [
+       "9222:1080",
+       "4444:1081",
+       "5900:1082"
+     ]
+   }
+   ```
+
+**Default monitored ports** (used in default mode):
+- Remote desktop: VNC (5900-5903, 5931, 5938-5939, 5944, 5950, 6039-6040), RDP (3389)
+- Automation: Selenium/WebDriver (4444, 4445, 9515), Chrome DevTools (9222, 9223)
+- Development: 3000, 8080, 8081, 35729
+- Docker: 2375, 2376, 2377
+- Proxies: 1080, 3128, 8888, 9050
+- Android debugging: 5037
+- Other: 63333, 5279, 7070, 2112
+
+**Notes:**
+- Only affects WebSocket connections to localhost (127.0.0.1, localhost, ::1)
+- Connection attempts still occur (maintains timing), but redirected to different closed ports
+- Each source port maps to unique target to prevent fingerprinting via timing correlation
+- Test with: `python3 browser-tests/test-websocket-port-remapping.py`
+
+</details>
+
 </details>
 
 </details>
@@ -851,6 +903,29 @@ Patches can be edited, created, removed, and managed through here.
 1. In the developer UI, click **Edit a patch**.
 2. Select the patch you'd like to edit. Your workspace will be reset to the state of the selected patch.
 3. After you're done making changes, hit **Write workspace to patch** and overwrite the existing patch file.
+
+### Testing with the Python library (local development)
+
+After building Camoufox locally, you can test your changes with the Camoufox Python library without packaging:
+
+```bash
+make build              # Build your changes
+make setup-local-dev   # One-time setup (creates symlinks)
+```
+
+The `setup-local-dev` target creates symlinks so the Python library uses your local build instead of a downloaded release:
+- Symlinks bundled fonts and fontconfigs into the build directory
+- Creates `version.json` with current version info
+- Links `~/.cache/camoufox` to your build directory
+
+After setup, you can iterate quickly:
+```bash
+<edit Firefox source>
+make build             # Rebuild
+# Python library now uses your fresh build automatically
+```
+
+**Note:** Symlinks persist across rebuilds, so you only need to run `make setup-local-dev` once per build directory.
 
 ---
 

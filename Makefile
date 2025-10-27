@@ -9,7 +9,7 @@ rpms := python3 python3-devel p7zip golang msitools wget aria2
 pacman := python python-pip p7zip go msitools wget aria2
 
 .PHONY: help fetch setup setup-minimal clean set-target distclean build package \
-        build-launcher check-arch revert revert-checkpoint retag-baseline copy-additions edits run bootstrap mozbootstrap dir \
+        build-launcher check-arch revert revert-checkpoint retag-baseline copy-additions edits run setup-local-dev bootstrap mozbootstrap dir \
         package-linux package-macos package-windows vcredist_arch patch unpatch \
         workspace check-arg edit-cfg ff-dbg tests tests-parallel update-ubo-assets tagged-checkpoint
 
@@ -35,6 +35,7 @@ help:
 	@echo "  package-macos   - Package Camoufox for macOS"
 	@echo "  package-windows - Package Camoufox for Windows"
 	@echo "  run             - Run Camoufox"
+	@echo "  setup-local-dev - Set up build directory for local Python library testing"
 	@echo "  edit-cfg        - Edit camoufox.cfg"
 	@echo "  ff-dbg          - Setup vanilla Firefox with minimal patches"
 	@echo "  patch           - Apply a patch"
@@ -239,6 +240,31 @@ run:
 		CAMOU_CONFIG="$${CAMOU_CONFIG%?}, \"debug\": true}"; \
 	fi \
 	&& ./mach run $(args)
+
+setup-local-dev:
+	@echo "Setting up local development environment..."
+	@if [ ! -d $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin ]; then \
+		echo "Error: Build directory not found. Run 'make build' first."; \
+		exit 1; \
+	fi
+	@echo "Creating symlinks for bundled resources..."
+	cd $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin && \
+		ln -sf ../../../../bundle/fontconfigs fontconfigs && \
+		cd fonts && \
+		ln -sf ../../../../../bundle/fonts/linux linux && \
+		ln -sf ../../../../../bundle/fonts/windows windows && \
+		ln -sf ../../../../../bundle/fonts/macos macos
+	@echo "Creating version.json..."
+	@echo '{"version":"$(version)","release":"$(release)"}' > $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/version.json
+	@echo "Setting up cache symlink..."
+	@mkdir -p ~/.cache
+	@if [ -L ~/.cache/camoufox ] || [ -e ~/.cache/camoufox ]; then \
+		echo "~/.cache/camoufox already exists (skipping)"; \
+	else \
+		ln -s $(PWD)/$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin ~/.cache/camoufox && \
+		echo "Created ~/.cache/camoufox symlink"; \
+	fi
+	@echo "✓ Local dev setup complete! You can now use the Camoufox Python library with your local build."
 
 edit-cfg:
 	@if [ ! -f $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox.cfg ]; then \

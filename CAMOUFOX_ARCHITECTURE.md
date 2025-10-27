@@ -2,6 +2,120 @@
 
 This document explains Camoufox's architectural decisions, particularly how it differs from other Firefox forks and how patches should interact with Firefox's built-in features.
 
+## Design Philosophy: Indistinguishable from a Real Human
+
+**Camoufox's North Star:** Be indistinguishable from a real human using Firefox on a real machine.
+
+### What "Vanilla Firefox" Means
+
+NOT:
+- ❌ `firefox --headless` (detectable headless mode)
+- ❌ Firefox with Playwright/Puppeteer attached (automation flags visible)
+- ❌ Firefox in a VM with llvmpipe (no real human has software rendering)
+- ❌ Stock Firefox with random/inconsistent fingerprint
+
+YES:
+- ✅ Firefox as a **real human** would use it on their desktop/laptop
+- ✅ With **real hardware rendering** (NVIDIA, Intel, AMD - not llvmpipe)
+- ✅ With **internally consistent fingerprint** (GPU matches OS matches locale matches timezone)
+- ✅ With **human-like behavior** (mouse movements, timing patterns)
+
+### The "Authentically Fake" Principle
+
+When Camoufox spoofs a fingerprint, every piece must tell the same story.
+
+**Example: Spoofing as "Windows 11 with NVIDIA RTX 3080"**
+
+All fingerprints must be consistent:
+```javascript
+// Non-exhastive list...
+✅ navigator.userAgent        → "Windows NT 10.0"
+✅ screen.width/height        → 2560x1440 (realistic for gaming PC)
+✅ gl.RENDERER               → "ANGLE (NVIDIA GeForce RTX 3080...)"
+✅ gl.VENDOR                 → "Mozilla" (matches vanilla Firefox!)
+✅ UNMASKED_RENDERER_WEBGL   → "ANGLE (NVIDIA GeForce RTX 3080...)"
+✅ UNMASKED_VENDOR_WEBGL     → "Google Inc. (NVIDIA)"
+✅ hardwareConcurrency       → 16 (realistic for RTX 3080 system)
+✅ navigator.fonts           → Windows 11 default fonts
+✅ AudioContext.sampleRate   → 48000 (typical for gaming hardware)
+✅ timezone                  → Matches IP geolocation
+```
+
+**One inconsistency = detection:**
+```javascript
+❌ Windows user-agent + llvmpipe renderer = Linux VM detected
+❌ US timezone + non-US IP = VPN/proxy detected
+❌ Mobile user-agent + desktop screen = spoofing detected
+❌ 4 CPU cores + RTX 3090 = implausible hardware combo
+❌ Windows fonts + Linux audio device = OS mismatch detected
+```
+
+### How Camoufox Achieves This: Three Layers
+
+Camoufox implements stealth through **three coordinated layers**:
+
+#### 1. **Playwright Juggler Patches** (`additions/juggler/`)
+Custom Firefox protocol implementation forked from Playwright's Juggler:
+- Sandboxed page agent (invisible to page JavaScript)
+- No frame execution context leaks
+- `navigator.webdriver` fixed to return `undefined`
+- Compatible with modern Firefox component registration
+
+**Why Juggler over CDP?** Operates at lower level than Chrome DevTools Protocol, harder to detect through JavaScript inspection.
+
+#### 2. **Firefox Source Patches** (`patches/`)
+C++ patches to Firefox internals that spoof fingerprints **before** JavaScript can observe them:
+- **WebGL:** `webgl-spoofing.patch` - Renderer, vendor, parameters, extensions, shader precision
+- **Canvas:** Canvas fingerprint rotation (closed-source anti-detection)
+- **Audio:** `audio-context-spoofing.patch` - Sample rate, latency, channel count
+- **Fonts:** `font-hijacker.patch` - Available font enumeration
+- **Navigator:** User agent, platform, languages, hardware concurrency
+- **Screen:** Dimensions, color depth, pixel ratio
+- **Geolocation:** Coordinates, accuracy
+- **Media Devices:** Camera/microphone enumeration
+- **Battery:** Level, charging status
+- **Timezone/Locale:** `Intl` API spoofing
+
+**Critical:** All spoofing happens in **C++ before JavaScript execution**, not runtime injection. This makes it undetectable through JavaScript introspection.
+
+#### 3. **Python Library** (Camoufox Python package)
+User-facing API that:
+- Generates consistent fingerprints via BrowserForge
+- Manages MaskConfig runtime configuration
+- Handles browser lifecycle and process management
+- Provides easy-to-use async interface
+
+**Integration:** Python library → `CAMOU_CONFIG` environment variable → MaskConfig C++ headers → Firefox spoofing patches
+
+### Don't "Fix" Firefox - Emulate It
+
+**Wrong approach:**
+> "Firefox has this weird API inconsistency where `gl.VENDOR` returns 'Mozilla' but `UNMASKED_VENDOR_WEBGL` returns the real vendor. Let's make them consistent!"
+
+**Right approach:**
+> "Does vanilla Firefox (used by a real human) have this inconsistency? YES? Then keep it! Bot detectors expect it."
+
+**Key insight:** Kasada/DataDome/Imperva don't just check for fingerprint leaks - they check for **deviations from expected Firefox behavior**, including quirks, bugs, and API inconsistencies.
+
+If vanilla Firefox has a quirk, Camoufox should too. That's what "stealth" means.
+
+### Privacy vs. Stealth
+
+Camoufox's goal is **stealth**, not maximum privacy:
+
+| Feature | Privacy-Focused Browser | Camoufox |
+|---------|------------------------|----------|
+| Randomize fingerprints | ✅ More private | ❌ Detectable randomness |
+| Block all tracking | ✅ More private | ❌ Sites detect missing cookies/storage |
+| Resist fingerprinting (RFP) | ✅ More private | ❌ Creates unique fingerprint |
+| Remove automation flags | ⚠️ Some do | ✅ Critical for stealth |
+| Spoof consistent hardware | ⚠️ Rarely | ✅ Must match claimed environment |
+| Font randomization | ✅ More private | ❌ Use real OS fonts for claimed platform |
+
+**The difference:** A privacy browser protects YOU. Camoufox protects your SCRAPER by being invisible.
+
+---
+
 ## Core Mission: Stealth Over Privacy
 
 **Camoufox is NOT a privacy browser - it's a STEALTH browser.**

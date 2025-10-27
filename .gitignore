@@ -41,3 +41,4 @@ __pycache__/
 private
 .passwd
 closedsrc
+artifacts/

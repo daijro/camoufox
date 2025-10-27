@@ -1,5 +1,5 @@
 diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
-index ba79bca2c3b1..918ec811e2df 100644
+index ba79bca2c3b1..e13bc9a2b84c 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
 +++ b/dom/canvas/ClientWebGLContext.cpp
 @@ -4,6 +4,9 @@
@@ -115,7 +115,7 @@ index ba79bca2c3b1..918ec811e2df 100644
    }
  
    return ret;
-@@ -2073,6 +2118,57 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2073,6 +2118,59 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
    const auto& state = State();
  
    // -
@@ -162,6 +162,8 @@ index ba79bca2c3b1..918ec811e2df 100644
 +    case LOCAL_GL_COLOR_WRITEMASK:
 +    case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
 +    case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
++    case LOCAL_GL_RENDERER:
++    case LOCAL_GL_VENDOR:
 +      break;
 +    default:
 +      if (MaskConfig::CheckBool(mIsWebGL2 ? "webGl2:parameters:blockIfNotDefined"
@@ -173,7 +175,7 @@ index ba79bca2c3b1..918ec811e2df 100644
  
    const auto fnSetRetval_Buffer = [&](const GLenum target) {
      const auto buffer = *MaybeFind(state.mBoundBufferByTarget, target);
-@@ -2178,49 +2274,84 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2178,49 +2276,84 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
  
      // 2 floats
      case LOCAL_GL_DEPTH_RANGE:
@@ -271,7 +273,26 @@ index ba79bca2c3b1..918ec811e2df 100644
        return;
    }
  
-@@ -2400,6 +2531,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2355,10 +2488,18 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+ 
+     switch (pname) {
+       case LOCAL_GL_VENDOR:
++        if (auto value = MaskConfig::GetString("webGl:vendor")) {
++          ret = Some(value.value());
++          break;
++        }
+         ret = Some(std::string{"Mozilla"});
+         break;
+ 
+       case LOCAL_GL_RENDERER: {
++        if (auto value = MaskConfig::GetString("webGl:renderer")) {
++          ret = Some(value.value());
++          break;
++        }
+         bool allowRenderer = StaticPrefs::webgl_enable_renderer_query();
+         if (ShouldResistFingerprinting(RFPTarget::WebGLRenderInfo)) {
+           allowRenderer = false;
+@@ -2400,6 +2541,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
  
          switch (pname) {
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
@@ -282,7 +303,7 @@ index ba79bca2c3b1..918ec811e2df 100644
              if (ShouldResistFingerprinting(RFPTarget::WebGLRenderInfo)) {
                ret = Some("Mozilla"_ns);
              } else {
-@@ -2411,6 +2546,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2411,6 +2556,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
              break;
  
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
@@ -293,7 +314,7 @@ index ba79bca2c3b1..918ec811e2df 100644
              ret = ShouldResistFingerprinting(RFPTarget::WebGLRenderInfo)
                        ? Some("Mozilla"_ns)
                        : GetUnmaskedVendor();
-@@ -2504,7 +2643,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2504,7 +2653,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
          case LOCAL_GL_COLOR_WRITEMASK: {
            const auto mask = uint8_t(*maybe);
            const auto bs = std::bitset<4>(mask);
@@ -304,7 +325,7 @@ index ba79bca2c3b1..918ec811e2df 100644
            JS::Rooted<JS::Value> arr(cx);
            if (!dom::ToJSValue(cx, src.data(), src.size(), &arr)) {
              rv = NS_ERROR_OUT_OF_MEMORY;
-@@ -2898,6 +3039,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
+@@ -2898,6 +3049,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
    const FuncScope funcScope(*this, "getShaderPrecisionFormat");
    if (IsContextLost()) return nullptr;
  
@@ -329,7 +350,7 @@ index ba79bca2c3b1..918ec811e2df 100644
    const auto& shaderPrecisions = *mNotLost->info.shaderPrecisions;
    const auto args =
        webgl::GetShaderPrecisionFormatArgs{shadertype, precisiontype};
-@@ -5918,6 +6077,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
+@@ -5918,6 +6087,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
      return false;
    }
  
@@ -347,7 +368,7 @@ index ba79bca2c3b1..918ec811e2df 100644
    const auto& limits = Limits();
    return limits.supportedExtensions[ext];
  }
-@@ -5929,6 +6099,18 @@ void ClientWebGLContext::GetSupportedExtensions(
+@@ -5929,6 +6109,18 @@ void ClientWebGLContext::GetSupportedExtensions(
    if (!mNotLost) return;
  
    auto& retarr = retval.SetValue();
