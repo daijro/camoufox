@@ -187,7 +187,7 @@ class BSYS:
         else:
             run(cmd)
 
-    def package(self, prefix=None):
+    def package(self, mozconfig_path=None, prefix=None):
         """Package the Camoufox source code using scripts/package.py"""
         version, release = load_upstream_config()
 
@@ -195,7 +195,12 @@ class BSYS:
         fonts = "windows macos linux"
         includes = "settings/chrome.css settings/camoucfg.jvv settings/properties.json bundle/fontconfigs"
 
-        cmd = f'python3 scripts/package.py {self.target} --version {version} --release {release} --arch {self.arch} --fonts {fonts} --includes {includes}'
+        # Set MOZCONFIG environment for parallel builds to ensure correct obj directory
+        if mozconfig_path:
+            abs_mozconfig = os.path.abspath(mozconfig_path)
+            cmd = f'MOZCONFIG={abs_mozconfig} python3 scripts/package.py {self.target} --version {version} --release {release} --arch {self.arch} --fonts {fonts} --includes {includes}'
+        else:
+            cmd = f'python3 scripts/package.py {self.target} --version {version} --release {release} --arch {self.arch} --fonts {fonts} --includes {includes}'
 
         if prefix:
             run_with_prefix(cmd, prefix)
@@ -263,7 +268,7 @@ def run_build_parallel(target, arch):
         builder.build(mozconfig_path=mozconfig_path, prefix=prefix)
 
         # Package using scripts/package.py (runs ./mach package + post-processing)
-        builder.package(prefix=prefix)
+        builder.package(mozconfig_path=mozconfig_path, prefix=prefix)
 
         # Move assets to dist
         os.makedirs('dist', exist_ok=True)

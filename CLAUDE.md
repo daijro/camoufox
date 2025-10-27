@@ -20,7 +20,7 @@ Camoufox is an **open-source anti-detect browser** built on Firefox with robust 
 **Camoufox uses TWO git repositories:**
 
 1. **Outer Repo** (`/home/azureuser/camoufox/`): Tracks patches, scripts, docs, Makefile
-2. **Inner Repo** (`camoufox-142.0.1-bluetaka.25/`): Firefox source code with full git history
+2. **Inner Repo** (`camoufox-{version}/`): Firefox source code with full git history.  This changes depending upon what is in `upstream.sh`
 
 The inner repo is **NOT** a submodule. It's a standalone Firefox git repository cloned from the exact commit that Playwright targets. This enables `git log`, `git blame`, and `git diff` on Firefox code to understand upstream changes.
 

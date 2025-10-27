@@ -782,19 +782,34 @@ git clone --depth 1 https://github.com/daijro/camoufox
 cd camoufox
 ```
 
-Next, build the Camoufox source code with the following command:
+### Tarball Workflow (Original)
+
+This workflow downloads Firefox as a tarball and extracts it:
 
 ```bash
-make dir
+make dir        # Download & extract Firefox, apply patches
+make bootstrap  # Install dependencies (one-time)
 ```
 
-After that, you have to bootstrap your system to be able to build Camoufox. You only have to do this one time. It is done by running the following command:
+### Git Workflow (Recommended for Development)
+
+This workflow clones the Firefox git repository, preserving full commit history for debugging:
 
 ```bash
-make bootstrap
+make git-fetch      # Clone Firefox source from Mozilla
+make git-dir        # Apply patches and setup
+make git-bootstrap  # Install dependencies (one-time)
 ```
 
-Finally you can build and package Camoufox the following command:
+**Benefits of git workflow:**
+- Full Firefox git history for `git log`, `git blame`, `git diff`
+- Works with `make retag-baseline` (requires commit history)
+- Better for tracking upstream Firefox changes
+- Faster than tarball download (uses blobless clone)
+
+### Building
+
+Both workflows use the same build command:
 
 ```bash
 python3 multibuild.py --target linux windows macos --arch x86_64 arm64 i686
