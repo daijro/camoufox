@@ -9,7 +9,7 @@ version := $(FIREFOX_VERSION)
 ff_commit := $(FIREFOX_GIT_COMMIT)
 cf_source_dir := camoufox-$(version)-$(release)
 ff_source_tarball := firefox-$(version).source.tar.xz
-ff_repo := git@github.com:mozilla-firefox/firefox.git
+ff_repo := https://github.com/mozilla-firefox/firefox.git
 
 debs := python3 python3-dev python3-pip p7zip-full golang-go msitools wget aria2
 rpms := python3 python3-devel p7zip golang msitools wget aria2
