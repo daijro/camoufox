@@ -84,16 +84,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y msitools p7zip-full aria2
 
-      - name: Fetch source
-        env:
-          CAMOUFOX_PASSWD: ${{ secrets.CAMOUFOX_PASSWD }}
+      - name: Set release version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          make fetch
+          CAMOUFOX_RELEASE=${GITHUB_REF_NAME#v}
+          echo "CAMOUFOX_RELEASE=$CAMOUFOX_RELEASE" >> $GITHUB_ENV
+          echo "Release version set to $CAMOUFOX_RELEASE"
+
+      - name: Fetch source
+        run: |
+          make git-fetch
 
       - name: Setup and bootstrap
         run: |
-          # TODO: use new make targets
-          make setup-minimal
+          make git-dir
           make mozbootstrap
           mkdir -p dist
 
