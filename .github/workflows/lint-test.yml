@@ -8,7 +8,7 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - "3.13"
+          - "3.12"
     env:
       UV_PYTHON: ${{ matrix.python-version }}
     steps:

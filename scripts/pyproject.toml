@@ -5,7 +5,7 @@ authors = [
     { name = "daijro", email = "daijro.dev@gmail.com" },
     { name = "Kornelijus Tvarijanavičius", email = "16837066+Kornelijus@users.noreply.github.com" },
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = []
 
 [dependency-groups]
