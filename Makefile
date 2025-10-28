@@ -19,7 +19,7 @@ pacman := python python-pip p7zip go msitools wget aria2
         package-linux package-macos package-windows vcredist_arch patch unpatch \
         workspace check-arg edit-cfg ff-dbg tests tests-parallel update-ubo-assets tagged-checkpoint \
         git-fetch git-dir git-bootstrap check-not-git \
-		lint lint-scripts lint-tests lint-lib \
+		lint lint-scripts lint-tests lint-lib check-ff-version \
 
 help:
 	@echo "Available targets:"
@@ -392,3 +392,11 @@ lint-lib:
 	cd ./pythonlib && uv run ruff check .
 
 lint: lint-scripts lint-tests lint-lib
+
+check-ff-version:
+	@if [ "$(FIREFOX_VERSION)" != "$(_ARGS)" ]; then \
+		echo "🚫 Upstream FIREFOX_VERSION '$(FIREFOX_VERSION)' does not match expected version '$(_ARGS)'"; \
+		exit 1; \
+	else \
+		echo "✅ Upstream FIREFOX_VERSION matches expected version '$(_ARGS)'"; \
+	fi
