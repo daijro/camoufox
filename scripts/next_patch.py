@@ -22,7 +22,7 @@ def get_next_patch(current_patch, patches_dir):
         return None
 
     # Normalize the current patch path
-    current_patch = current_patch.replace('\\', '/')
+    current_patch = current_patch.replace("\\", "/")
 
     # Try to find the current patch in the list
     current_index = None
@@ -40,7 +40,9 @@ def get_next_patch(current_patch, patches_dir):
                 break
 
     if current_index is None:
-        sys.stderr.write(f'error: patch file "{current_patch}" not found in patch list\n')
+        sys.stderr.write(
+            f'error: patch file "{current_patch}" not found in patch list\n'
+        )
         return None
 
     # Check if there's a next patch
@@ -52,7 +54,7 @@ def get_next_patch(current_patch, patches_dir):
 
 def main():
     if len(sys.argv) != 2:
-        sys.stderr.write('Usage: python3 scripts/next_patch.py <patch_file>\n')
+        sys.stderr.write("Usage: python3 scripts/next_patch.py <patch_file>\n")
         sys.exit(1)
 
     current_patch = sys.argv[1]
@@ -60,18 +62,20 @@ def main():
     # Determine patches directory based on current working directory
     # If we're in the Firefox source dir, use '../patches'
     # If we're in the camoufox root, use 'patches'
-    if os.path.exists('../patches'):
-        patches_dir = '../patches'
-    elif os.path.exists('patches'):
-        patches_dir = 'patches'
+    if os.path.exists("../patches"):
+        patches_dir = "../patches"
+    elif os.path.exists("patches"):
+        patches_dir = "patches"
     else:
-        sys.stderr.write('error: could not find patches directory\n')
+        sys.stderr.write("error: could not find patches directory\n")
         sys.exit(1)
 
     next_patch = get_next_patch(current_patch, patches_dir)
 
     if next_patch is None:
-        if os.path.basename(current_patch) in [os.path.basename(p) for p in list_patches(patches_dir)]:
+        if os.path.basename(current_patch) in [
+            os.path.basename(p) for p in list_patches(patches_dir)
+        ]:
             print("no more patches left!")
             sys.exit(0)
         else:
@@ -83,4 +87,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

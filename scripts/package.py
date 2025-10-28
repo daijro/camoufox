@@ -9,15 +9,7 @@ import tempfile
 from shlex import join
 
 from _mixin import find_src_dir, get_moz_target, list_files, run, temp_cd
-
-PACKAGE_FILE_EXTENSIONS = {"linux": "tar.xz", "macos": "dmg", "windows": "zip"}
-PACKAGE_REMOVE_PATHS = {
-    "uninstall",
-    "pingsender.exe",
-    "pingsender",
-    "vaapitest",
-    "glxtest",
-}
+from const import PACKAGE_FILE_EXTENSIONS, PACKAGE_REMOVE_PATHS
 
 
 def add_includes_to_package(package_file, includes, fonts, new_file, target):

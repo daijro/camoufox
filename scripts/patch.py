@@ -24,6 +24,7 @@ from _mixin import (
     run,
     temp_cd,
 )
+from const import AVAILABLE_ARCHS, AVAILABLE_TARGETS
 
 options, args = get_options()
 
@@ -129,10 +130,6 @@ def extract_args():
         sys.stderr.write("error: please specify version and release of camoufox source")
         sys.exit(1)
     return args[0], args[1]
-
-
-AVAILABLE_TARGETS = ["linux", "windows", "macos"]
-AVAILABLE_ARCHS = ["x86_64", "arm64", "i686"]
 
 
 def extract_build_target():

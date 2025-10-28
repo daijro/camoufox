@@ -46,9 +46,7 @@ import shutil
 import multiprocessing
 import subprocess
 
-# Constants
-AVAILABLE_TARGETS = ["linux", "windows", "macos"]
-AVAILABLE_ARCHS = ["x86_64", "arm64", "i686"]
+from const import AVAILABLE_ARCHS, AVAILABLE_TARGETS
 
 
 # Load upstream config for version/release

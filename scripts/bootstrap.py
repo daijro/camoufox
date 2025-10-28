@@ -20,6 +20,8 @@ import tempfile
 from optparse import OptionParser
 from pathlib import Path
 
+from const import CLONE_MERCURIAL_PULL_FAIL, VCS_HUMAN_READABLE, WINDOWS
+
 major, minor = sys.version_info[:2]
 if (major < 3) or (major == 3 and minor < 8):
     print(
@@ -27,21 +29,6 @@ if (major < 3) or (major == 3 and minor < 8):
         "Please try re-running with python3.8+."
     )
     sys.exit(1)
-
-
-CLONE_MERCURIAL_PULL_FAIL = """
-Failed to pull from hg.mozilla.org.
-
-This is most likely because of unstable network connection.
-Try running `cd %s && hg pull https://hg.mozilla.org/mozilla-unified` manually,
-or download a mercurial bundle and use it:
-https://firefox-source-docs.mozilla.org/contributing/vcs/mercurial_bundles.html"""
-
-WINDOWS = sys.platform.startswith("win32") or sys.platform.startswith("msys")
-VCS_HUMAN_READABLE = {
-    "hg": "Mercurial",
-    "git": "Git",
-}
 
 
 def which(name):
