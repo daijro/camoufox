@@ -16,6 +16,7 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 ---
 
 > [!IMPORTANT]
+>
 > ## About This Fork (Firefox 142 Upgrade)
 >
 > This fork upgrades Camoufox to **Firefox 142.0.1** and is maintained by [@coryking](https://github.com/coryking) while the original maintainer [@daijro](https://github.com/daijro) is recovering from a medical emergency (hospitalized since March 2025).
@@ -31,6 +32,7 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 ### For New Users
 
 **Install the Python package (recommended):**
+
 ```bash
 pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
 ```
@@ -50,6 +52,7 @@ pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#su
 ```
 
 **What's new in this upgrade:**
+
 - ✅ **Firefox 142.0.1** (upgraded from 135)
 - ✅ **Playwright 1.56** (latest unreleased version)
 - ✅ All fingerprint spoofing patches updated for Firefox 142
@@ -66,7 +69,7 @@ pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#su
 >
 > ### For Developers
 >
-> - **Building or contributing patches?** See [WORKFLOW.md](WORKFLOW.md) and [FIREFOX_UPGRADE_WORKFLOW.md](FIREFOX_UPGRADE_WORKFLOW.md)
+> - **Building or contributing patches?** See [WORKFLOW.md](docs/WORKFLOW.md) and [FIREFOX_UPGRADE_WORKFLOW.md](docs/FIREFOX_UPGRADE_WORKFLOW.md)
 > - **Want just the Firefox 142 upgrade work for an upstream PR?** Check out the `ff142` branch (clean patches, no workflow extras)
 >
 > ### Original Project
@@ -510,15 +513,16 @@ WebSocket Port Remapping
 
 Camoufox automatically remaps WebSocket connection attempts to localhost fingerprinting ports, preventing timing-based port scanning attacks (like Kasada uses) that detect automation environments. Each monitored port is remapped to a unique target port to prevent timing correlation attacks.
 
-| Property                              | Status | Description                                                                                      |
-| ------------------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
-| websocket:remapping:enabled           | ✅     | Enable/disable port remapping. Defaults to true.                                                 |
-| websocket:remapping:basePort          | ✅     | Base port for auto-assignment in default mode. Defaults to 1080.                                 |
-| websocket:remapping:manualPortMappings| ✅     | Array of `"source:target"` mappings. Replaces defaults if provided.                              |
+| Property                               | Status | Description                                                         |
+| -------------------------------------- | ------ | ------------------------------------------------------------------- |
+| websocket:remapping:enabled            | ✅     | Enable/disable port remapping. Defaults to true.                    |
+| websocket:remapping:basePort           | ✅     | Base port for auto-assignment in default mode. Defaults to 1080.    |
+| websocket:remapping:manualPortMappings | ✅     | Array of `"source:target"` mappings. Replaces defaults if provided. |
 
 **Two Operating Modes:**
 
 1. **Default Mode** (no manual mappings configured):
+
    - Uses hardcoded fingerprinting port list (see below)
    - Each port auto-assigned unique sequential target starting at `basePort` (default: 1080)
    - Example: 63333→1080, 5900→1081, 5901→1082, etc.
@@ -539,6 +543,7 @@ Camoufox automatically remaps WebSocket connection attempts to localhost fingerp
    ```
 
 **Default monitored ports** (used in default mode):
+
 - Remote desktop: VNC (5900-5903, 5931, 5938-5939, 5944, 5950, 6039-6040), RDP (3389)
 - Automation: Selenium/WebDriver (4444, 4445, 9515), Chrome DevTools (9222, 9223)
 - Development: 3000, 8080, 8081, 35729
@@ -548,6 +553,7 @@ Camoufox automatically remaps WebSocket connection attempts to localhost fingerp
 - Other: 63333, 5279, 7070, 2112
 
 **Notes:**
+
 - Only affects WebSocket connections to localhost (127.0.0.1, localhost, ::1)
 - Connection attempts still occur (maintains timing), but redirected to different closed ports
 - Each source port maps to unique target to prevent fingerprinting via timing correlation
@@ -730,6 +736,7 @@ make git-bootstrap  # Install dependencies (one-time)
 ```
 
 **Benefits of git workflow:**
+
 - Full Firefox git history for `git log`, `git blame`, `git diff`
 - Works with `make retag-baseline` (requires commit history)
 - Better for tracking upstream Firefox changes
@@ -857,11 +864,13 @@ make setup-local-dev   # One-time setup (creates symlinks)
 ```
 
 The `setup-local-dev` target creates symlinks so the Python library uses your local build instead of a downloaded release:
+
 - Symlinks bundled fonts and fontconfigs into the build directory
 - Creates `version.json` with current version info
 - Links `~/.cache/camoufox` to your build directory
 
 After setup, you can iterate quickly:
+
 ```bash
 <edit Firefox source>
 make build             # Rebuild
