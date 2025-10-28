@@ -40,7 +40,6 @@ import argparse
 import glob
 import os
 import sys
-import tempfile
 from dataclasses import dataclass
 from typing import List
 import shutil
