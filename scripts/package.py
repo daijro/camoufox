@@ -10,7 +10,14 @@ from shlex import join
 
 from _mixin import find_src_dir, get_moz_target, list_files, run, temp_cd
 
-UNNEEDED_PATHS = {"uninstall", "pingsender.exe", "pingsender", "vaapitest", "glxtest"}
+PACKAGE_FILE_EXTENSIONS = {"linux": "tar.xz", "macos": "dmg", "windows": "zip"}
+PACKAGE_REMOVE_PATHS = {
+    "uninstall",
+    "pingsender.exe",
+    "pingsender",
+    "vaapitest",
+    "glxtest",
+}
 
 
 def add_includes_to_package(package_file, includes, fonts, new_file, target):
@@ -88,7 +95,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
                     shutil.copy2(file, os.path.join(fonts_dir, os.path.basename(file)))
 
         # Remove unneeded paths
-        for path in UNNEEDED_PATHS:
+        for path in PACKAGE_REMOVE_PATHS:
             if os.path.isdir(os.path.join(target_dir, path)):
                 shutil.rmtree(os.path.join(target_dir, path), ignore_errors=True)
             elif os.path.exists(os.path.join(target_dir, path)):
@@ -127,10 +134,7 @@ def get_args():
 def main():
     """The main packaging function"""
     args = get_args()
-
-    # Determine file extension based on OS
-    file_extensions = {"linux": "tar.xz", "macos": "dmg", "windows": "zip"}
-    file_ext = file_extensions[args.os]
+    file_ext = PACKAGE_FILE_EXTENSIONS[args.os]
 
     # Build the package
     src_dir = find_src_dir(".", args.version, args.release)
