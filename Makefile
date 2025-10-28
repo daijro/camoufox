@@ -1,6 +1,12 @@
 include scripts/upstream.sh
 export
 
+export CAMOUFOX_RELEASE ?= dev
+export CAMOUFOX_VERSION := $(FIREFOX_VERSION)-$(CAMOUFOX_RELEASE)
+
+release := $(CAMOUFOX_RELEASE)
+version := $(FIREFOX_VERSION)
+ff_commit := $(FIREFOX_GIT_COMMIT)
 cf_source_dir := camoufox-$(version)-$(release)
 ff_source_tarball := firefox-$(version).source.tar.xz
 ff_repo := git@github.com:mozilla-firefox/firefox.git
