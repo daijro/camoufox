@@ -48,17 +48,9 @@ import subprocess
 
 from const import AVAILABLE_ARCHS, AVAILABLE_TARGETS
 
-
-# Load upstream config for version/release
-def load_upstream_config():
-    """Load version and release from upstream.sh"""
-    config = {}
-    with open("scripts/upstream.sh", "r") as f:
-        for line in f:
-            if "=" in line and not line.strip().startswith("#"):
-                key, value = line.strip().split("=", 1)
-                config[key] = value.strip('"').strip("'")
-    return config["version"], config["release"]
+FIREFOX_VERSION = os.getenv("FIREFOX_VERSION")
+CAMOUFOX_RELEASE = os.getenv("CAMOUFOX_RELEASE", "dev")
+CAMOUFOX_SRC_DIR = f"camoufox-{FIREFOX_VERSION}-{CAMOUFOX_RELEASE}"
 
 
 def get_moz_target(target, arch):
@@ -177,14 +169,12 @@ class BSYS:
 
     def build(self, mozconfig_path=None, prefix=None):
         """Build the Camoufox source code"""
-        version, release = load_upstream_config()
-        src_dir = f"camoufox-{version}-{release}"
 
         # Set MOZCONFIG if provided, otherwise use BUILD_TARGET (legacy)
         if mozconfig_path:
             # For parallel builds, use absolute path to mozconfig
             abs_mozconfig = os.path.abspath(mozconfig_path)
-            cmd = f"cd {src_dir} && MOZCONFIG={abs_mozconfig} ./mach build"
+            cmd = f"cd {CAMOUFOX_SRC_DIR} && MOZCONFIG={abs_mozconfig} ./mach build"
         else:
             os.environ["BUILD_TARGET"] = f"{self.target},{self.arch}"
             cmd = "make build"
@@ -197,7 +187,6 @@ class BSYS:
 
     def package(self, mozconfig_path=None, prefix=None):
         """Package the Camoufox source code using scripts/package.py"""
-        version, release = load_upstream_config()
 
         # Build the package.py command (same for both sequential and parallel)
         fonts = "windows macos linux"
@@ -206,9 +195,9 @@ class BSYS:
         # Set MOZCONFIG environment for parallel builds to ensure correct obj directory
         if mozconfig_path:
             abs_mozconfig = os.path.abspath(mozconfig_path)
-            cmd = f"MOZCONFIG={abs_mozconfig} python3 scripts/package.py {self.target} --version {version} --release {release} --arch {self.arch} --fonts {fonts} --includes {includes}"
+            cmd = f"MOZCONFIG={abs_mozconfig} python3 scripts/package.py {self.target} --version {FIREFOX_VERSION} --release {CAMOUFOX_RELEASE} --arch {self.arch} --fonts {fonts} --includes {includes}"
         else:
-            cmd = f"python3 scripts/package.py {self.target} --version {version} --release {release} --arch {self.arch} --fonts {fonts} --includes {includes}"
+            cmd = f"python3 scripts/package.py {self.target} --version {FIREFOX_VERSION} --release {CAMOUFOX_RELEASE} --arch {self.arch} --fonts {fonts} --includes {includes}"
 
         if prefix:
             run_with_prefix(cmd, prefix)
@@ -373,11 +362,9 @@ def main():
         # Parallel mode: use multiprocessing
         # CRITICAL: Hide in-tree mozconfig to prevent race conditions
         # Multiple builds reading/checking the same file causes spurious reconfigures
-        version, release = load_upstream_config()
-        src_dir = f"camoufox-{version}-{release}"
-        in_tree_mozconfig = f"{src_dir}/mozconfig"
+        in_tree_mozconfig = f"{CAMOUFOX_SRC_DIR}/mozconfig"
         in_tree_mozconfig_backup = f"{in_tree_mozconfig}.parallel_backup"
-        in_tree_hash = f"{src_dir}/mozconfig.hash"
+        in_tree_hash = f"{CAMOUFOX_SRC_DIR}/mozconfig.hash"
         in_tree_hash_backup = f"{in_tree_hash}.parallel_backup"
 
         # Temporarily hide in-tree mozconfig files
