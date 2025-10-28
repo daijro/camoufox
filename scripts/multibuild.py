@@ -158,7 +158,7 @@ class BSYS:
     def generate_mozconfig(self, output_path, verbose=True):
         """Generate a mozconfig file for this target/arch at specified path"""
         # Read base mozconfig
-        with open("assets/base.mozconfig", "r") as f:
+        with open("firefox/assets/base.mozconfig", "r") as f:
             content = f.read()
 
         # Add target
@@ -166,7 +166,7 @@ class BSYS:
         content += f"\nac_add_options --target={moz_target}\n"
 
         # Add platform-specific mozconfig if it exists
-        platform_config = f"assets/{self.target}.mozconfig"
+        platform_config = f"firefox/assets/{self.target}.mozconfig"
         if os.path.exists(platform_config):
             with open(platform_config, "r") as f:
                 content += f.read()

@@ -82,7 +82,9 @@ class Patcher:
         content += f"\nac_add_options --target={self.moz_target}\n"
 
         # Add target-specific mozconfig if it exists
-        target_mozconfig = os.path.join("..", "assets", f"{self.target}.mozconfig")
+        target_mozconfig = os.path.join(
+            "..", "firefox", "assets", f"{self.target}.mozconfig"
+        )
         if os.path.exists(target_mozconfig):
             with open(target_mozconfig, "r", encoding="utf-8") as f:
                 content += f.read()
