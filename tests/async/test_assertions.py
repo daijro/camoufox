@@ -145,6 +145,32 @@ async def test_assertions_locator_to_have_class(page: Page, server: Server) -> N
         await expect(page.locator("div.foobar")).to_have_class("oh-no", timeout=100)
 
 
+async def test_assertions_locator_to_contain_class(page: Page, server: Server) -> None:
+    await page.goto(server.EMPTY_PAGE)
+    await page.set_content("<div class='foo bar baz'></div>")
+    locator = page.locator("div")
+    await expect(locator).to_contain_class("")
+    await expect(locator).to_contain_class("bar")
+    await expect(locator).to_contain_class("baz bar")
+    await expect(locator).to_contain_class("  bar   foo ")
+    await expect(locator).not_to_contain_class(
+        "  baz   not-matching "
+    )  # Strip whitespace and match individual classes
+    with pytest.raises(AssertionError) as excinfo:
+        await expect(locator).to_contain_class("does-not-exist", timeout=100)
+
+    assert excinfo.match("Locator expected to contain class 'does-not-exist'")
+    assert excinfo.match("Actual value: foo bar baz")
+    assert excinfo.match('Expect "to_contain_class" with timeout 100ms')
+
+    await page.set_content(
+        '<div class="foo"></div><div class="hello bar"></div><div class="baz"></div>'
+    )
+    await expect(locator).to_contain_class(["foo", "hello", "baz"])
+    await expect(locator).not_to_contain_class(["not-there", "hello", "baz"])
+    await expect(locator).not_to_contain_class(["foo", "hello"])
+
+
 async def test_assertions_locator_to_have_count(page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
     await page.set_content("<div class=foobar>kek</div><div class=foobar>kek</div>")
@@ -273,6 +299,10 @@ async def test_assertions_locator_to_have_text(page: Page, server: Server) -> No
     # Should only normalize whitespace in the first item.
     await expect(page.locator("div")).to_have_text(
         ["Text  1", re.compile(r"Text   \d+a")]
+    )
+    # Should work with a tuple
+    await expect(page.locator("div")).to_have_text(
+        ("Text  1", re.compile(r"Text   \d+a"))
     )
 
 
@@ -486,7 +516,7 @@ async def test_to_have_values_fails_when_multiple_not_specified(
     )
     locator = page.locator("select")
     await locator.select_option(["B"])
-    with pytest.raises(Error) as excinfo:
+    with pytest.raises(AssertionError) as excinfo:
         await expect(locator).to_have_values(["R", "G"], timeout=500)
     assert "Error: Not a select element with a multiple attribute" in str(excinfo.value)
 
@@ -500,7 +530,7 @@ async def test_to_have_values_fails_when_not_a_select_element(
     """
     )
     locator = page.locator("input")
-    with pytest.raises(Error) as excinfo:
+    with pytest.raises(AssertionError) as excinfo:
         await expect(locator).to_have_values(["R", "G"], timeout=500)
     assert "Error: Not a select element with a multiple attribute" in str(excinfo.value)
 
@@ -510,16 +540,45 @@ async def test_assertions_locator_to_be_checked(page: Page, server: Server) -> N
     await page.set_content("<input type=checkbox>")
     my_checkbox = page.locator("input")
     await expect(my_checkbox).not_to_be_checked()
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match="Locator expected to be checked"):
         await expect(my_checkbox).to_be_checked(timeout=100)
     await expect(my_checkbox).to_be_checked(timeout=100, checked=False)
     with pytest.raises(AssertionError):
         await expect(my_checkbox).to_be_checked(timeout=100, checked=True)
     await my_checkbox.check()
     await expect(my_checkbox).to_be_checked(timeout=100, checked=True)
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match="Locator expected to be unchecked"):
         await expect(my_checkbox).to_be_checked(timeout=100, checked=False)
     await expect(my_checkbox).to_be_checked()
+
+
+async def test_assertions_boolean_checked_with_intermediate_true(page: Page) -> None:
+    await page.set_content("<input type=checkbox></input>")
+    await page.locator("input").evaluate("e => e.indeterminate = true")
+    await expect(page.locator("input")).to_be_checked(indeterminate=True)
+
+
+async def test_assertions_boolean_checked_with_intermediate_true_and_checked(
+    page: Page,
+) -> None:
+    await page.set_content("<input type=checkbox></input>")
+    await page.locator("input").evaluate("e => e.indeterminate = true")
+    with pytest.raises(
+        AssertionError, match="Can't assert indeterminate and checked at the same time"
+    ):
+        await expect(page.locator("input")).to_be_checked(
+            checked=False, indeterminate=True
+        )
+
+
+async def test_assertions_boolean_fail_with_indeterminate_true(page: Page) -> None:
+    await page.set_content("<input type=checkbox></input>")
+    with pytest.raises(
+        AssertionError, match='Expect "to_be_checked" with timeout 1000ms'
+    ):
+        await expect(page.locator("input")).to_be_checked(
+            indeterminate=True, timeout=1000
+        )
 
 
 async def test_assertions_locator_to_be_disabled_enabled(
@@ -534,17 +593,98 @@ async def test_assertions_locator_to_be_disabled_enabled(
         await expect(my_checkbox).to_be_disabled(timeout=100)
     await my_checkbox.evaluate("e => e.disabled = true")
     await expect(my_checkbox).to_be_disabled()
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match="Locator expected to be enabled"):
         await expect(my_checkbox).to_be_enabled(timeout=100)
+
+
+async def test_assertions_locator_to_be_enabled_with_true(page: Page) -> None:
+    await page.set_content("<button>Text</button>")
+    await expect(page.locator("button")).to_be_enabled(enabled=True)
+
+
+async def test_assertions_locator_to_be_enabled_with_false_throws_good_exception(
+    page: Page,
+) -> None:
+    await page.set_content("<button>Text</button>")
+    with pytest.raises(AssertionError, match="Locator expected to be disabled"):
+        await expect(page.locator("button")).to_be_enabled(enabled=False)
+
+
+async def test_assertions_locator_to_be_enabled_with_false(page: Page) -> None:
+    await page.set_content("<button disabled>Text</button>")
+    await expect(page.locator("button")).to_be_enabled(enabled=False)
+
+
+async def test_assertions_locator_to_be_enabled_with_not_and_false(page: Page) -> None:
+    await page.set_content("<button>Text</button>")
+    await expect(page.locator("button")).not_to_be_enabled(enabled=False)
+
+
+async def test_assertions_locator_to_be_enabled_eventually(page: Page) -> None:
+    await page.set_content("<button disabled>Text</button>")
+    await page.eval_on_selector(
+        "button",
+        """
+        button => setTimeout(() => {
+            button.removeAttribute('disabled');
+        }, 700);
+    """,
+    )
+    await expect(page.locator("button")).to_be_enabled()
+
+
+async def test_assertions_locator_to_be_enabled_eventually_with_not(page: Page) -> None:
+    await page.set_content("<button>Text</button>")
+    await page.eval_on_selector(
+        "button",
+        """
+        button => setTimeout(() => {
+            button.setAttribute('disabled', '');
+        }, 700);
+    """,
+    )
+    await expect(page.locator("button")).not_to_be_enabled()
 
 
 async def test_assertions_locator_to_be_editable(page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
-    await page.set_content("<input></input><button disabled>Text</button>")
-    await expect(page.locator("button")).not_to_be_editable()
+    await page.set_content("<input></input>")
     await expect(page.locator("input")).to_be_editable()
-    with pytest.raises(AssertionError):
-        await expect(page.locator("button")).to_be_editable(timeout=100)
+
+
+async def test_assertions_locator_to_be_editable_throws(
+    page: Page, server: Server
+) -> None:
+    await page.goto(server.EMPTY_PAGE)
+    await page.set_content("<button disabled>Text</button>")
+    with pytest.raises(
+        AssertionError,
+        match=r"Element is not an <input>, <textarea>, <select> or \[contenteditable\] and does not have a role allowing \[aria-readonly\]",
+    ):
+        await expect(page.locator("button")).not_to_be_editable()
+
+
+async def test_assertions_locator_to_be_editable_with_true(page: Page) -> None:
+    await page.set_content("<input></input>")
+    await expect(page.locator("input")).to_be_editable(editable=True)
+
+
+async def test_assertions_locator_to_be_editable_with_false(page: Page) -> None:
+    await page.set_content("<input readonly></input>")
+    await expect(page.locator("input")).to_be_editable(editable=False)
+
+
+async def test_assertions_locator_to_be_editable_with_false_and_throw_good_exception(
+    page: Page,
+) -> None:
+    await page.set_content("<input></input>")
+    with pytest.raises(AssertionError, match="Locator expected to be readonly"):
+        await expect(page.locator("input")).to_be_editable(editable=False)
+
+
+async def test_assertions_locator_to_be_editable_with_not_and_false(page: Page) -> None:
+    await page.set_content("<input></input>")
+    await expect(page.locator("input")).not_to_be_editable(editable=False)
 
 
 async def test_assertions_locator_to_be_empty(page: Page, server: Server) -> None:
@@ -579,8 +719,57 @@ async def test_assertions_locator_to_be_hidden_visible(
         await expect(my_checkbox).to_be_hidden(timeout=100)
     await my_checkbox.evaluate("e => e.style.display = 'none'")
     await expect(my_checkbox).to_be_hidden()
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match="Locator expected to be visible"):
         await expect(my_checkbox).to_be_visible(timeout=100)
+
+
+async def test_assertions_locator_to_be_visible_with_true(page: Page) -> None:
+    await page.set_content("<button>hello</button>")
+    await expect(page.locator("button")).to_be_visible(visible=True)
+
+
+async def test_assertions_locator_to_be_visible_with_false(page: Page) -> None:
+    await page.set_content("<button hidden>hello</button>")
+    await expect(page.locator("button")).to_be_visible(visible=False)
+
+
+async def test_assertions_locator_to_be_visible_with_false_throws_good_exception(
+    page: Page,
+) -> None:
+    await page.set_content("<button>hello</button>")
+    with pytest.raises(AssertionError, match="Locator expected to be hidden"):
+        await expect(page.locator("button")).to_be_visible(visible=False)
+
+
+async def test_assertions_locator_to_be_visible_with_not_and_false(page: Page) -> None:
+    await page.set_content("<button>hello</button>")
+    await expect(page.locator("button")).not_to_be_visible(visible=False)
+
+
+async def test_assertions_locator_to_be_visible_eventually(page: Page) -> None:
+    await page.set_content("<div></div>")
+    await page.eval_on_selector(
+        "div",
+        """
+        div => setTimeout(() => {
+            div.innerHTML = '<span>Hello</span>';
+        }, 700);
+    """,
+    )
+    await expect(page.locator("span")).to_be_visible()
+
+
+async def test_assertions_locator_to_be_visible_eventually_with_not(page: Page) -> None:
+    await page.set_content("<div><span>Hello</span></div>")
+    await page.eval_on_selector(
+        "span",
+        """
+        span => setTimeout(() => {
+            span.textContent = '';
+        }, 700);
+    """,
+    )
+    await expect(page.locator("span")).not_to_be_visible()
 
 
 async def test_assertions_should_serialize_regexp_correctly(
@@ -746,6 +935,15 @@ async def test_should_be_attached_with_attached_false(page: Page) -> None:
     await expect(locator).to_be_attached(attached=False)
 
 
+async def test_should_be_attached_with_attached_false_and_throw_good_error(
+    page: Page,
+) -> None:
+    await page.set_content("<button>hello</button>")
+    locator = page.locator("button")
+    with pytest.raises(AssertionError, match="Locator expected to be detached"):
+        await expect(locator).to_be_attached(attached=False, timeout=1)
+
+
 async def test_should_be_attached_with_not_and_attached_false(page: Page) -> None:
     await page.set_content("<button>hello</button>")
     locator = page.locator("button")
@@ -773,7 +971,9 @@ async def test_should_be_attached_eventually_with_not(page: Page) -> None:
 async def test_should_be_attached_fail(page: Page) -> None:
     await page.set_content("<button>Hello</button>")
     locator = page.locator("input")
-    with pytest.raises(AssertionError) as exc_info:
+    with pytest.raises(
+        AssertionError, match="Locator expected to be attached"
+    ) as exc_info:
         await expect(locator).to_be_attached(timeout=1000)
     assert "locator resolved to" not in exc_info.value.args[0]
 
@@ -820,7 +1020,7 @@ async def test_should_be_attached_over_navigation(page: Page, server: Server) ->
 async def test_should_be_able_to_set_custom_timeout(page: Page) -> None:
     with pytest.raises(AssertionError) as exc_info:
         await expect(page.locator("#a1")).to_be_visible(timeout=111)
-    assert "LocatorAssertions.to_be_visible with timeout 111ms" in str(exc_info.value)
+    assert 'Expect "to_be_visible" with timeout 111ms' in str(exc_info.value)
 
 
 async def test_should_be_able_to_set_custom_global_timeout(page: Page) -> None:
@@ -828,9 +1028,7 @@ async def test_should_be_able_to_set_custom_global_timeout(page: Page) -> None:
         expect.set_options(timeout=111)
         with pytest.raises(AssertionError) as exc_info:
             await expect(page.locator("#a1")).to_be_visible()
-        assert "LocatorAssertions.to_be_visible with timeout 111ms" in str(
-            exc_info.value
-        )
+        assert 'Expect "to_be_visible" with timeout 111ms' in str(exc_info.value)
     finally:
         expect.set_options(timeout=None)
 
@@ -847,6 +1045,64 @@ async def test_to_have_accessible_name(page: Page) -> None:
         re.compile(r"hello"), ignore_case=True
     )
 
+    await page.set_content("<button>foo&nbsp;bar\nbaz</button>")
+    await expect(page.locator("button")).to_have_accessible_name("foo bar baz")
+
+
+async def test_to_have_accessible_error_message(page: Page) -> None:
+    await page.set_content(
+        """
+      <form>
+        <input role="textbox" aria-invalid="true" aria-errormessage="error-message" />
+        <div id="error-message">Hello</div>
+        <div id="irrelevant-error">This should not be considered.</div>
+      </form>
+    """
+    )
+
+    locator = page.locator('input[role="textbox"]')
+    await expect(locator).to_have_accessible_error_message("Hello")
+    await expect(locator).not_to_have_accessible_error_message("hello")
+    await expect(locator).to_have_accessible_error_message("hello", ignore_case=True)
+    await expect(locator).to_have_accessible_error_message(re.compile(r"ell\w"))
+    await expect(locator).not_to_have_accessible_error_message(re.compile(r"hello"))
+    await expect(locator).to_have_accessible_error_message(
+        re.compile(r"hello"), ignore_case=True
+    )
+    await expect(locator).not_to_have_accessible_error_message(
+        "This should not be considered."
+    )
+
+
+async def test_to_have_accessible_error_message_should_handle_multiple_aria_error_message_references(
+    page: Page,
+) -> None:
+    await page.set_content(
+        """
+      <form>
+        <input role="textbox" aria-invalid="true" aria-errormessage="error1 error2" />
+        <div id="error1">First error message.</div>
+        <div id="error2">Second error message.</div>
+        <div id="irrelevant-error">This should not be considered.</div>
+      </form>
+    """
+    )
+
+    locator = page.locator('input[role="textbox"]')
+
+    await expect(locator).to_have_accessible_error_message(
+        "First error message. Second error message."
+    )
+    await expect(locator).to_have_accessible_error_message(
+        re.compile(r"first error message.", re.IGNORECASE)
+    )
+    await expect(locator).to_have_accessible_error_message(
+        re.compile(r"second error message.", re.IGNORECASE)
+    )
+    await expect(locator).not_to_have_accessible_error_message(
+        re.compile(r"This should not be considered.", re.IGNORECASE)
+    )
+
 
 async def test_to_have_accessible_description(page: Page) -> None:
     await page.set_content('<div role="button" aria-description="Hello"></div>')
@@ -859,6 +1115,14 @@ async def test_to_have_accessible_description(page: Page) -> None:
     await expect(locator).to_have_accessible_description(
         re.compile(r"hello"), ignore_case=True
     )
+
+    await page.set_content(
+        """
+        <div role="button" aria-describedby="desc"></div>
+        <span id="desc">foo&nbsp;bar\nbaz</span>
+    """
+    )
+    await expect(page.locator("div")).to_have_accessible_description("foo bar baz")
 
 
 async def test_to_have_role(page: Page) -> None:

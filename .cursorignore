@@ -1,0 +1,79 @@
+# Local builds
+# NOTE: Root .gitignore excludes /camoufox-*, but we want to index Firefox source.
+# Override with ! to include, then explicitly exclude build artifacts.
+
+# Include Firefox source (override .gitignore)
+!camoufox-*/
+!firefox-*/
+!mozilla-unified/
+
+# Exclude Firefox build artifacts
+camoufox-*/obj*/
+camoufox-*/target/
+camoufox-*/*_DBG.OBJ/
+camoufox-*/*_OPT.OBJ/
+camoufox-*/node_modules/
+camoufox-*/**/node_modules/
+camoufox-*/.gradle/
+camoufox-*/.kotlin/
+camoufox-*/build/reports/
+camoufox-*/artifacts/
+camoufox-*/browsertime-results/
+
+firefox-*/obj*/
+firefox-*/target/
+firefox-*/*_DBG.OBJ/
+firefox-*/*_OPT.OBJ/
+firefox-*/node_modules/
+firefox-*/**/node_modules/
+
+mozilla-unified/obj*/
+mozilla-unified/target/
+mozilla-unified/*_DBG.OBJ/
+mozilla-unified/*_OPT.OBJ/
+mozilla-unified/node_modules/
+mozilla-unified/**/node_modules/
+
+# Backup directories
+*.bak/
+
+# Outer repo build artifacts
+dist/
+bin/
+launch
+launch.exe
+
+# Internal testing
+/extra-docs
+pythonlib/test*
+jsonvv/test*
+/.vscode
+/bundle/fonts/extra
+pythonlib/*.png
+scripts/*.png
+scripts/test*
+.vscode
+.idea
+/tests/*.disabled
+k8s/
+
+# Old data
+_old/
+_old_*/
+*.old
+
+# Logs
+wget-log
+*.kate-swp
+*.log
+
+# Python interface
+venv/
+__pycache__/
+*.pyc
+*.mmdb
+
+# Closed source patches
+private
+.passwd
+closedsrc

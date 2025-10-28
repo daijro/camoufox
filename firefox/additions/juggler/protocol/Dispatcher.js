@@ -2,14 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const {protocol, checkScheme} = ChromeUtils.import("chrome://juggler/content/protocol/Protocol.js");
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
+const {protocol} = ChromeUtils.importESModule("chrome://juggler/content/protocol/Protocol.js");
+const {checkScheme} = ChromeUtils.importESModule("chrome://juggler/content/protocol/PrimitiveTypes.js");
+const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
 
 const helper = new Helper();
-// Camoufox: Exclude redundant internal events from logs.
-const EXCLUDED_DBG = ['Page.navigationStarted', 'Page.frameAttached', 'Runtime.executionContextCreated', 'Runtime.console', 'Page.navigationAborted', 'Page.eventFired'];
 
-class Dispatcher {
+export class Dispatcher {
   /**
    * @param {Connection} connection
    */
@@ -46,11 +45,6 @@ class Dispatcher {
 
   async _dispatch(event) {
     const data = JSON.parse(event.data);
-
-    if (ChromeUtils.isCamouDebug())
-      ChromeUtils.camouDebug(`[${new Date().toLocaleString()}]`
-        + `\nReceived message: ${safeJsonStringify(data)}`);
-
     const id = data.id;
     const sessionId = data.sessionId;
     delete data.sessionId;
@@ -93,13 +87,6 @@ class Dispatcher {
 
   _emitEvent(sessionId, eventName, params) {
     const [domain, eName] = eventName.split('.');
-    
-    // Camoufox: Log internal events
-    if (ChromeUtils.isCamouDebug() && !EXCLUDED_DBG.includes(eventName) && domain !== 'Network') {
-      ChromeUtils.camouDebug(`[${new Date().toLocaleString()}]`
-        + `\nInternal event: ${eventName}\nParams: ${JSON.stringify(params, null, 2)}`);
-    }
-    
     const scheme = protocol.domains[domain] ? protocol.domains[domain].events[eName] : null;
     if (!scheme)
       throw new Error(`ERROR: event '${eventName}' is not supported`);
@@ -144,50 +131,5 @@ class ProtocolSession {
     if (!this._handler[method])
       throw new Error(`Handler for does not implement method "${method}"`);
     return await this._handler[method](params);
-  }
-}
-
-this.EXPORTED_SYMBOLS = ['Dispatcher'];
-this.Dispatcher = Dispatcher;
-
-
-function formatDate(date) {
-  const pad = (num) => String(num).padStart(2, '0');
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
-function truncateObject(obj, maxDepth = 8, maxLength = 100) {
-  if (maxDepth < 0) return '[Max Depth Reached]';
-  
-  if (typeof obj !== 'object' || obj === null) {
-    return typeof obj === 'string' ? truncateString(obj, maxLength) : obj;
-  }
-  
-  if (Array.isArray(obj)) {
-    return obj.slice(0, 10).map(item => truncateObject(item, maxDepth - 1, maxLength));
-  }
-  
-  const truncated = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (Object.keys(truncated).length >= 10) {
-      truncated['...'] = '[Truncated]';
-      break;
-    }
-    truncated[key] = truncateObject(value, maxDepth - 1, maxLength);
-  }
-  return truncated;
-}
-
-function truncateString(str, maxLength) {
-  if (str.length <= maxLength) return str;
-  ChromeUtils.camouDebug(`String length: ${str.length}`);
-  return str.substr(0, maxLength) + '... [truncated]';
-}
-
-function safeJsonStringify(data) {
-  try {
-    return JSON.stringify(truncateObject(data), null, 2);
-  } catch (error) {
-    return `[Unable to stringify: ${error.message}]`;
   }
 }

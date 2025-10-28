@@ -1,20 +1,55 @@
---- a/browser/components/preferences/main.inc.xhtml
-+++ b/browser/components/preferences/main.inc.xhtml
-@@ -742,7 +742,7 @@
-           support-page="media-keyboard-control"
-     />
-   </hbox>
--  <hbox align="center" data-subcategory="cfraddons">
-+  <hbox align="center" data-subcategory="cfraddons" hidden="true">
-     <checkbox id="cfrRecommendations"
-             class="tail-with-learn-more"
-             data-l10n-id="browsing-cfr-recommendations"
-@@ -752,7 +752,7 @@
-           support-page="extensionrecommendations"
-     />
-   </hbox>
--  <hbox align="center" data-subcategory="cfrfeatures">
-+  <hbox align="center" data-subcategory="cfrfeatures" hidden="true">
-     <checkbox id="cfrRecommendations-features"
-             class="tail-with-learn-more"
-             data-l10n-id="browsing-cfr-features"
+diff --git a/browser/components/preferences/main.js b/browser/components/preferences/main.js
+index 5878132edfe5..8719a0a382fc 100644
+--- a/browser/components/preferences/main.js
++++ b/browser/components/preferences/main.js
+@@ -96,16 +96,6 @@ Preferences.addAll([
+   { id: "sidebar.verticalTabs", type: "bool" },
+   { id: "sidebar.revamp", type: "bool" },
+ 
+-  // CFR
+-  {
+-    id: "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons",
+-    type: "bool",
+-  },
+-  {
+-    id: "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features",
+-    type: "bool",
+-  },
+-
+   // High Contrast
+   { id: "browser.display.document_color_use", type: "int" },
+ 
+@@ -322,14 +312,6 @@ Preferences.addSetting({
+     AppConstants.platform == "macosx" ||
+     AppConstants.MOZ_WIDGET_GTK,
+ });
+-Preferences.addSetting({
+-  id: "cfrRecommendations",
+-  pref: "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons",
+-});
+-Preferences.addSetting({
+-  id: "cfrRecommendations-features",
+-  pref: "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features",
+-});
+ 
+ let SETTINGS_CONFIG = {
+   browsing: {
+@@ -377,18 +359,6 @@ let SETTINGS_CONFIG = {
+         l10nId: "browsing-media-control",
+         supportPage: "media-keyboard-control",
+       },
+-      {
+-        id: "cfrRecommendations",
+-        l10nId: "browsing-cfr-recommendations",
+-        supportPage: "extensionrecommendations",
+-        subcategory: "cfraddons",
+-      },
+-      {
+-        id: "cfrRecommendations-features",
+-        l10nId: "browsing-cfr-features",
+-        supportPage: "extensionrecommendations",
+-        subcategory: "cfrfeatures",
+-      },
+       {
+         id: "linkPreviewEnabled",
+         l10nId: "link-preview-settings-enable",

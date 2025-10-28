@@ -1,0 +1,143 @@
+diff --git a/netwerk/protocol/websocket/WebSocketChannelChild.cpp b/netwerk/protocol/websocket/WebSocketChannelChild.cpp
+index 8ded3296bf37..1afdce2dbc02 100644
+--- a/netwerk/protocol/websocket/WebSocketChannelChild.cpp
++++ b/netwerk/protocol/websocket/WebSocketChannelChild.cpp
+@@ -18,6 +18,8 @@
+ #include "SerializedLoadContext.h"
+ #include "mozilla/dom/ContentChild.h"
+ #include "nsITransportProvider.h"
++#include "MaskConfig.hpp"
++#include <unordered_map>
+ 
+ using namespace mozilla::ipc;
+ using mozilla::dom::ContentChild;
+@@ -497,6 +499,117 @@ WebSocketChannelChild::AsyncOpenNative(
+ 
+   if (!mIsServerSide) {
+     uri = aURI;
++
++    // Camoufox: Remap localhost WebSocket fingerprinting port scans
++    if (MaskConfig::GetBool("websocket:remapping:enabled").value_or(true)) {
++      nsAutoCString host;
++      int32_t port = -1;
++      uri->GetHost(host);
++      uri->GetPort(&port);
++
++
++      bool isLocalhost = host.EqualsLiteral("127.0.0.1") ||
++                         host.EqualsLiteral("localhost") ||
++                         host.EqualsLiteral("::1");
++
++      if (isLocalhost && port > 0) {
++        static const int32_t defaultFingerprintPorts[] = {
++          // Remote desktop / VNC
++          63333, 5900, 5901, 5902, 5903, 3389, 5950, 5931,
++          5939, 6039, 5944, 6040, 5938, 5279, 7070, 2112,
++          // Selenium/WebDriver
++          4444, 4445, 9515,
++          // Chrome DevTools / Remote Debugging
++          9222, 9223,
++          // Docker
++          2375, 2376, 2377,
++          // Common proxies
++          1080, 3128, 8888, 9050,
++          // Android debugging
++          5037,
++          // Development servers
++          3000, 8080, 8081, 35729
++        };
++
++        // Static mapping table - initialized once for consistent remapping
++        static std::unordered_map<int32_t, int32_t> portMappings;
++        static bool mappingsInitialized = false;
++
++        if (!mappingsInitialized) {
++          // Check for manual port mappings
++          std::vector<std::string> manualMappings = MaskConfig::GetStringList("websocket:remapping:manualPortMappings");
++
++          if (!manualMappings.empty()) {
++            // Manual mode: parse "from:to" format
++            for (const auto& mapping : manualMappings) {
++              size_t colonPos = mapping.find(':');
++              if (colonPos == std::string::npos || colonPos == 0 || colonPos == mapping.length() - 1) {
++                printf_stderr("WebSocket: Invalid mapping format (expected 'from:to'): '%s'\n", mapping.c_str());
++                continue;
++              }
++
++              std::string fromStr = mapping.substr(0, colonPos);
++              std::string toStr = mapping.substr(colonPos + 1);
++
++              // Parse source port
++              char* endptr;
++              errno = 0;
++              long fromVal = strtol(fromStr.c_str(), &endptr, 10);
++              if (errno != 0 || endptr == fromStr.c_str() || *endptr != '\0' ||
++                  fromVal <= 0 || fromVal > 65535) {
++                printf_stderr("WebSocket: Invalid source port in mapping: '%s'\n", mapping.c_str());
++                continue;
++              }
++
++              // Parse target port
++              errno = 0;
++              long toVal = strtol(toStr.c_str(), &endptr, 10);
++              if (errno != 0 || endptr == toStr.c_str() || *endptr != '\0' ||
++                  toVal <= 0 || toVal > 65535) {
++                printf_stderr("WebSocket: Invalid target port in mapping: '%s'\n", mapping.c_str());
++                continue;
++              }
++
++              portMappings[static_cast<int32_t>(fromVal)] = static_cast<int32_t>(toVal);
++            }
++          } else {
++            // Default mode: auto-assign sequential ports to default fingerprint list
++            const int32_t DEFAULT_BASE_PORT = 1080;
++            int32_t basePort = MaskConfig::GetInt32("websocket:remapping:basePort")
++                                   .value_or(DEFAULT_BASE_PORT);
++
++            int32_t targetPort = basePort;
++            for (int32_t fingerprintPort : defaultFingerprintPorts) {
++              portMappings[fingerprintPort] = targetPort;
++              targetPort++;
++            }
++          }
++
++          mappingsInitialized = true;
++        }
++
++        // Look up port in mapping table
++        auto it = portMappings.find(port);
++        if (it != portMappings.end()) {
++          int32_t targetPort = it->second;
++
++          nsCOMPtr<nsIURI> remappedURI;
++          nsresult rv = NS_MutateURI(uri).SetPort(targetPort).Finalize(remappedURI);
++          if (NS_SUCCEEDED(rv)) {
++            MOZ_LOG(webSocketLog, mozilla::LogLevel::Info,
++                    ("CamoufoxPortRemapping: Remapped %d -> %d (URI: %s -> %s)",
++                     port, targetPort,
++                     uri->GetSpecOrDefault().get(), remappedURI->GetSpecOrDefault().get()));
++            uri = remappedURI;
++          } else {
++            MOZ_LOG(webSocketLog, mozilla::LogLevel::Warning,
++                    ("CamoufoxPortRemapping: FAILED to remap port %d -> %d (rv=0x%08x)",
++                     port, targetPort, static_cast<uint32_t>(rv)));
++          }
++        }
++      }
++    }
++
+     nsresult rv = LoadInfoToLoadInfoArgs(mLoadInfo, &loadInfoArgs);
+     NS_ENSURE_SUCCESS(rv, rv);
+ 
+diff --git a/netwerk/protocol/websocket/moz.build b/netwerk/protocol/websocket/moz.build
+index 123d364b7040..da52adc74881 100644
+--- a/netwerk/protocol/websocket/moz.build
++++ b/netwerk/protocol/websocket/moz.build
+@@ -64,4 +64,7 @@ LOCAL_INCLUDES += [
+     "/netwerk/base",
+ ]
+ 
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
++
+ include("/tools/fuzzing/libfuzzer-config.mozbuild")

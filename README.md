@@ -4,7 +4,7 @@
 
 <h4 align="center">A stealthy, minimalistic, custom build of Firefox for web scraping 🦊</h4>
 
-<p align="center">                                      
+<p align="center">
 Camoufox is an open source anti-detect browser for robust fingerprint injection & anti-bot evasion.
 </p>
 
@@ -12,6 +12,66 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
   <a href="https://trendshift.io/repositories/12224" target="_blank">
   <img src="https://trendshift.io/api/badge/repositories/12224" alt="daijro%2Fcamoufox | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </p>
+
+---
+
+> [!IMPORTANT]
+> ## About This Fork (Firefox 142 Upgrade)
+>
+> This fork upgrades Camoufox to **Firefox 142.0.1** and is maintained by [@coryking](https://github.com/coryking) while the original maintainer [@daijro](https://github.com/daijro) is recovering from a medical emergency (hospitalized since March 2025).
+>
+> When the original maintainer returns, this work will be contributed back upstream. In the meantime, this fork provides working Firefox 142 builds.
+>
+> ❤️ **Wishing @daijro a full recovery.**
+
+---
+
+## 🚀 Quick Start & Upgrade Instructions
+
+### For New Users
+
+**Install the Python package (recommended):**
+```bash
+pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
+```
+
+**Or download pre-built binaries:** [Releases](https://github.com/coryking/camoufox/releases)
+
+### Upgrading from Firefox 135 or Earlier
+
+If you're currently using the original `daijro/camoufox` or an older version:
+
+```bash
+# Uninstall old version
+pip uninstall camoufox -y
+
+# Install Firefox 142 from this fork
+pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
+```
+
+**What's new in this upgrade:**
+- ✅ **Firefox 142.0.1** (upgraded from 135)
+- ✅ **Playwright 1.56** (latest unreleased version)
+- ✅ All fingerprint spoofing patches updated for Firefox 142
+- ✅ Juggler ESM migration (Firefox 142 requirement)
+- ✅ Pre-built binaries for Linux, macOS, and Windows
+
+**Your existing code will continue to work** - the API is unchanged.
+
+---
+
+> ### Note About This Branch
+>
+> This `main` branch includes the Firefox 142 upgrade work **plus** some additional workflow tooling and documentation I added while working with Claude Code to debug the upgrade. If you just want the core Firefox 142 patches without the extra workflow stuff, check out the `ff142` branch.
+>
+> ### For Developers
+>
+> - **Building or contributing patches?** See [WORKFLOW.md](WORKFLOW.md) and [FIREFOX_UPGRADE_WORKFLOW.md](FIREFOX_UPGRADE_WORKFLOW.md)
+> - **Want just the Firefox 142 upgrade work for an upstream PR?** Check out the `ff142` branch (clean patches, no workflow extras)
+>
+> ### Original Project
+>
+> Created by [@daijro](https://github.com/daijro): [daijro/camoufox](https://github.com/daijro/camoufox)
 
 ---
 
@@ -77,7 +137,7 @@ Legacy documentation
 
 <details>
 <summary>
-Navigator 
+Navigator
 </summary>
 
 Navigator properties can be fully spoofed to other Firefox fingerprints, and it is **completely safe**! However, there are some issues when spoofing Chrome (leaks noted).
@@ -443,6 +503,58 @@ Miscellaneous (battery status, etc)
 | battery:dischargingTime | ✅     | Spoofs the battery discharging time.                                                                                            |
 | battery:level           | ✅     | Spoofs the battery level.                                                                                                       |
 
+<details>
+<summary>
+WebSocket Port Remapping
+</summary>
+
+Camoufox automatically remaps WebSocket connection attempts to localhost fingerprinting ports, preventing timing-based port scanning attacks (like Kasada uses) that detect automation environments. Each monitored port is remapped to a unique target port to prevent timing correlation attacks.
+
+| Property                              | Status | Description                                                                                      |
+| ------------------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
+| websocket:remapping:enabled           | ✅     | Enable/disable port remapping. Defaults to true.                                                 |
+| websocket:remapping:basePort          | ✅     | Base port for auto-assignment in default mode. Defaults to 1080.                                 |
+| websocket:remapping:manualPortMappings| ✅     | Array of `"source:target"` mappings. Replaces defaults if provided.                              |
+
+**Two Operating Modes:**
+
+1. **Default Mode** (no manual mappings configured):
+   - Uses hardcoded fingerprinting port list (see below)
+   - Each port auto-assigned unique sequential target starting at `basePort` (default: 1080)
+   - Example: 63333→1080, 5900→1081, 5901→1082, etc.
+
+2. **Manual Mode** (`manualPortMappings` provided):
+   - User specifies explicit `"source:target"` mappings
+   - Each source port must have unique target to prevent timing correlation
+   - Replaces default list entirely
+   - Example config:
+   ```json
+   {
+     "websocket:remapping:manualPortMappings": [
+       "9222:1080",
+       "4444:1081",
+       "5900:1082"
+     ]
+   }
+   ```
+
+**Default monitored ports** (used in default mode):
+- Remote desktop: VNC (5900-5903, 5931, 5938-5939, 5944, 5950, 6039-6040), RDP (3389)
+- Automation: Selenium/WebDriver (4444, 4445, 9515), Chrome DevTools (9222, 9223)
+- Development: 3000, 8080, 8081, 35729
+- Docker: 2375, 2376, 2377
+- Proxies: 1080, 3128, 8888, 9050
+- Android debugging: 5037
+- Other: 63333, 5279, 7070, 2112
+
+**Notes:**
+- Only affects WebSocket connections to localhost (127.0.0.1, localhost, ::1)
+- Connection attempts still occur (maintains timing), but redirected to different closed ports
+- Each source port maps to unique target to prevent fingerprinting via timing correlation
+- Test with: `python3 browser-tests/test-websocket-port-remapping.py`
+
+</details>
+
 </details>
 
 </details>
@@ -598,19 +710,34 @@ git clone --depth 1 https://github.com/daijro/camoufox
 cd camoufox
 ```
 
-Next, build the Camoufox source code with the following command:
+### Tarball Workflow (Original)
+
+This workflow downloads Firefox as a tarball and extracts it:
 
 ```bash
-make dir
+make dir        # Download & extract Firefox, apply patches
+make bootstrap  # Install dependencies (one-time)
 ```
 
-After that, you have to bootstrap your system to be able to build Camoufox. You only have to do this one time. It is done by running the following command:
+### Git Workflow (Recommended for Development)
+
+This workflow clones the Firefox git repository, preserving full commit history for debugging:
 
 ```bash
-make bootstrap
+make git-fetch      # Clone Firefox source from Mozilla
+make git-dir        # Apply patches and setup
+make git-bootstrap  # Install dependencies (one-time)
 ```
 
-Finally you can build and package Camoufox the following command:
+**Benefits of git workflow:**
+- Full Firefox git history for `git log`, `git blame`, `git diff`
+- Works with `make retag-baseline` (requires commit history)
+- Better for tracking upstream Firefox changes
+- Faster than tarball download (uses blobless clone)
+
+### Building
+
+Both workflows use the same build command:
 
 ```bash
 uv run scripts/multibuild.py --target linux windows macos --arch x86_64 arm64 i686
@@ -719,6 +846,29 @@ Patches can be edited, created, removed, and managed through here.
 1. In the developer UI, click **Edit a patch**.
 2. Select the patch you'd like to edit. Your workspace will be reset to the state of the selected patch.
 3. After you're done making changes, hit **Write workspace to patch** and overwrite the existing patch file.
+
+### Testing with the Python library (local development)
+
+After building Camoufox locally, you can test your changes with the Camoufox Python library without packaging:
+
+```bash
+make build              # Build your changes
+make setup-local-dev   # One-time setup (creates symlinks)
+```
+
+The `setup-local-dev` target creates symlinks so the Python library uses your local build instead of a downloaded release:
+- Symlinks bundled fonts and fontconfigs into the build directory
+- Creates `version.json` with current version info
+- Links `~/.cache/camoufox` to your build directory
+
+After setup, you can iterate quickly:
+```bash
+<edit Firefox source>
+make build             # Rebuild
+# Python library now uses your fresh build automatically
+```
+
+**Note:** Symlinks persist across rebuilds, so you only need to run `make setup-local-dev` once per build directory.
 
 ---
 

@@ -1,4 +1,4 @@
-playwright
+git+https://github.com/microsoft/playwright-python.git@main
 auditwheel==6.1.0
 autobahn==23.1.2
 black==24.8.0

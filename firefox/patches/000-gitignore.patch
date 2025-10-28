@@ -1,0 +1,13 @@
+diff --git a/.gitignore b/.gitignore
+index 54128923383b..b7bc9a976dac 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -369,3 +369,7 @@ toolkit/crashreporter/minidump-analyzer/analyzer-test/target/
+ 
+ # Ignore mozperftest artifacts folder
+ /artifacts/
++
++# Camoufox build marker file
++_READY
++browser/app/camoufox.exe.manifest
+\ No newline at end of file

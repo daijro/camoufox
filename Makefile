@@ -3,40 +3,61 @@ export
 
 cf_source_dir := camoufox-$(version)-$(release)
 ff_source_tarball := firefox-$(version).source.tar.xz
+ff_repo := git@github.com:mozilla-firefox/firefox.git
 
 debs := python3 python3-dev python3-pip p7zip-full golang-go msitools wget aria2
 rpms := python3 python3-devel p7zip golang msitools wget aria2
 pacman := python python-pip p7zip go msitools wget aria2
 
-.PHONY: help fetch setup setup-minimal clean set-target distclean build package \
-        check-arch revert edits run bootstrap mozbootstrap dir \
+.PHONY: build-launcher check-arch revert revert-checkpoint retag-baseline copy-additions edits run setup-local-dev bootstrap mozbootstrap dir \
         package-linux package-macos package-windows vcredist_arch patch unpatch \
-        workspace check-arg edit-cfg ff-dbg tests update-ubo-assets \
+        workspace check-arg edit-cfg ff-dbg tests tests-parallel update-ubo-assets tagged-checkpoint \
+        git-fetch git-dir git-bootstrap check-not-git \
 		lint lint-scripts lint-tests lint-lib \
 
 help:
 	@echo "Available targets:"
-	@echo "  fetch           - Fetch the Firefox source code"
+	@echo ""
+	@echo "Tarball Workflow (original):"
+	@echo "  fetch           - Fetch Firefox source tarball"
 	@echo "  setup           - Setup Camoufox & local git repo for development"
+	@echo "  dir             - Prepare source & apply patches"
 	@echo "  bootstrap       - Set up build environment"
-	@echo "  mozbootstrap    - Sets up mach"
-	@echo "  dir             - Prepare Camoufox source directory with BUILD_TARGET"
-	@echo "  revert          - Kill all working changes"
+	@echo ""
+	@echo "Git Workflow (preserves Firefox history, recommended for development):"
+	@echo "  git-fetch       - Clone Firefox source from Mozilla (blobless clone)"
+	@echo "  git-dir         - Setup git source & apply patches"
+	@echo "  git-bootstrap   - Set up build environment"
+	@echo ""
+	@echo "Development:"
+	@echo "  revert          - Reset to 'unpatched' tag (vanilla Firefox + additions)"
+	@echo "  revert-checkpoint - Reset to 'checkpoint' tag (return to saved checkpoint)"
+	@echo "  copy-additions  - Copy additions/ and settings/ to source (fast, no git operations)"
+	@echo "  retag-baseline  - Rebuild 'unpatched' tag with latest additions/ changes (git only)"
+	@echo "  tagged-checkpoint - Save current state with reusable 'checkpoint' tag"
 	@echo "  edits           - Camoufox developer UI"
-	@echo "  clean           - Remove build artifacts"
-	@echo "  distclean       - Remove everything including downloads"
+	@echo "  edit-cfg        - Edit camoufox.cfg"
+	@echo "  workspace       - Sets the workspace to a patch, assuming its applied"
+	@echo "  patch           - Apply a patch"
+	@echo "  unpatch         - Remove a patch"
+	@echo ""
+	@echo "Building:"
 	@echo "  build           - Build Camoufox"
 	@echo "  set-target      - Change the build target with BUILD_TARGET"
 	@echo "  package-linux   - Package Camoufox for Linux"
 	@echo "  package-macos   - Package Camoufox for macOS"
 	@echo "  package-windows - Package Camoufox for Windows"
 	@echo "  run             - Run Camoufox"
-	@echo "  edit-cfg        - Edit camoufox.cfg"
+	@echo ""
+	@echo "Other:"
+	@echo "  mozbootstrap    - Sets up mach"
+	@echo "  build-launcher  - Build launcher"
+	@echo "  clean           - Remove build artifacts"
+	@echo "  distclean       - Remove everything including downloads"
+	@echo "  setup-local-dev - Set up build directory for local Python library testing"
 	@echo "  ff-dbg          - Setup vanilla Firefox with minimal patches"
-	@echo "  patch           - Apply a patch"
-	@echo "  unpatch         - Remove a patch"
-	@echo "  workspace       - Sets the workspace to a patch, assuming its applied"
 	@echo "  tests           - Runs the Playwright tests"
+	@echo "  tests-parallel  - Runs the Playwright tests in parallel (use workers=N to specify worker count)"
 	@echo "  update-ubo-assets - Update the uBOAssets.json file"
 
 _ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
@@ -96,7 +117,34 @@ ff-dbg: setup
 	make build
 
 revert:
-	cd $(cf_source_dir) && git reset --hard unpatched
+	cd $(cf_source_dir) && git reset --hard unpatched && rm -f _READY browser/app/camoufox.exe.manifest
+
+revert-checkpoint:
+	cd $(cf_source_dir) && git reset --hard checkpoint && rm -f _READY browser/app/camoufox.exe.manifest
+
+copy-additions:
+	@echo "Copying additions/ and settings/ to source tree..."
+	cd $(cf_source_dir) && bash ../scripts/copy-additions.sh $(version) $(release)
+	@echo "✓ Files copied. Run 'make build' for incremental rebuild."
+
+retag-baseline:
+	@echo "Rebuilding 'unpatched' baseline with latest additions..."
+	@cd $(cf_source_dir) && \
+		if ! git rev-parse --verify unpatched^ >/dev/null 2>&1; then \
+			echo "ERROR: Cannot find parent of 'unpatched' tag."; \
+			echo "This target requires a Firefox git repository with history,"; \
+			echo "not a tarball-based setup. Your setup is incompatible."; \
+			exit 1; \
+		fi
+	cd $(cf_source_dir) && \
+		git reset --hard unpatched^ && \
+		git clean -dxf
+	$(MAKE) copy-additions
+	cd $(cf_source_dir) && \
+		git add -A && \
+		git commit -m "Add Camoufox additions (Firefox $(version) compatibility)" && \
+		git tag -f -a unpatched -m "Initial commit with additions"
+	@echo "✓ Baseline refreshed. 'unpatched' tag updated with latest additions."
 
 dir:
 	@if [ ! -d $(cf_source_dir) ]; then \
@@ -115,11 +163,86 @@ bootstrap: dir
 	(sudo apt-get -y install $(debs) || sudo dnf -y install $(rpms) || sudo pacman -Sy $(pacman))
 	make mozbootstrap
 
+# ============================================================================
+# Git-based workflow (preserves Firefox git history)
+# ============================================================================
+
+# Safety check: prevent tarball workflow from destroying git repos
+check-not-git:
+	@if [ -d $(cf_source_dir)/.git ] && cd $(cf_source_dir) && git remote -v | grep -q "mozilla"; then \
+		echo ""; \
+		echo "ERROR: Git-based Firefox repo detected!"; \
+		echo "This target will DESTROY your git history."; \
+		echo ""; \
+		echo "Use git workflow instead:"; \
+		echo "  make git-dir       # Setup git-based source"; \
+		echo "  make git-bootstrap # Bootstrap build system"; \
+		echo ""; \
+		exit 1; \
+	fi
+
+# Clone Firefox source from Mozilla
+git-fetch:
+	@if [ -d $(cf_source_dir) ]; then \
+		echo "$(cf_source_dir) already exists. Skipping clone."; \
+		echo "To re-clone, run: rm -rf $(cf_source_dir)"; \
+		exit 0; \
+	fi
+	@echo "Cloning Firefox source (commit $(ff_commit))..."
+	@echo "Using blobless clone for faster download..."
+	git clone --filter=blob:none $(ff_repo) $(cf_source_dir)
+	cd $(cf_source_dir) && git checkout $(ff_commit)
+	@echo "✓ Firefox source ready at $(cf_source_dir)"
+
+# Setup git-based source and apply patches
+git-dir:
+	@if [ ! -d $(cf_source_dir) ]; then \
+		echo "Firefox source not found. Run 'make git-fetch' first."; \
+		exit 1; \
+	fi
+	@if [ ! -d $(cf_source_dir)/.git ]; then \
+		echo "ERROR: $(cf_source_dir) is not a git repo."; \
+		echo "Use 'make dir' for tarball workflow."; \
+		exit 1; \
+	fi
+	@if [ -f $(cf_source_dir)/_READY ]; then \
+		echo "Already setup (found _READY). Run 'make revert' to reset."; \
+		exit 0; \
+	fi
+	@echo "Setting up git-based Firefox source..."
+	$(MAKE) copy-additions
+	cd $(cf_source_dir) && \
+		git add -A && \
+		git commit -m "Add Camoufox additions (Firefox $(version) compatibility)" && \
+		git tag -f -a unpatched -m "Initial commit with additions"
+	python3 scripts/patch.py $(version) $(release)
+	touch $(cf_source_dir)/_READY
+	@echo "✓ Setup complete! Run 'make git-bootstrap' next."
+
+# Bootstrap for git workflow
+git-bootstrap:
+	@if [ ! -f $(cf_source_dir)/_READY ]; then \
+		echo "ERROR: Run 'make git-dir' first"; \
+		exit 1; \
+	fi
+	(sudo apt-get -y install $(debs) || sudo dnf -y install $(rpms) || sudo pacman -Sy $(pacman))
+	make mozbootstrap
+	@echo "✓ Bootstrap complete!"
+	@echo "Now build with: python3 multibuild.py --target linux --arch x86_64"
+
+# Protect dangerous tarball targets
+setup-minimal: check-not-git
+setup: check-not-git
+distclean: check-not-git
+
 diff:
 	@cd $(cf_source_dir) && git diff $(_ARGS)
 
 checkpoint:
 	cd $(cf_source_dir) && git commit -m "Checkpoint" -a -uno
+
+tagged-checkpoint:
+	cd $(cf_source_dir) && git commit -m "Checkpoint" -a -uno && git tag -f checkpoint
 
 clean:
 	cd $(cf_source_dir) && git clean -fdx && ./mach clobber
@@ -179,7 +302,37 @@ run:
 	cd $(cf_source_dir) \
 	&& rm -rf ~/.camoufox obj-x86_64-pc-linux-gnu/tmp/profile-default \
 	&& CAMOU_CONFIG=$${CAMOU_CONFIG:-'{}'} \
-	&& CAMOU_CONFIG="$${CAMOU_CONFIG%?}, \"debug\": true}" ./mach run $(args)
+	&& if [ "$$CAMOU_CONFIG" = "{}" ]; then \
+		CAMOU_CONFIG='{"debug": true}'; \
+	else \
+		CAMOU_CONFIG="$${CAMOU_CONFIG%?}, \"debug\": true}"; \
+	fi \
+	&& ./mach run $(args)
+
+setup-local-dev:
+	@echo "Setting up local development environment..."
+	@if [ ! -d $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin ]; then \
+		echo "Error: Build directory not found. Run 'make build' first."; \
+		exit 1; \
+	fi
+	@echo "Creating symlinks for bundled resources..."
+	cd $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin && \
+		ln -sf ../../../../bundle/fontconfigs fontconfigs && \
+		cd fonts && \
+		ln -sf ../../../../../bundle/fonts/linux linux && \
+		ln -sf ../../../../../bundle/fonts/windows windows && \
+		ln -sf ../../../../../bundle/fonts/macos macos
+	@echo "Creating version.json..."
+	@echo '{"version":"$(version)","release":"$(release)"}' > $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/version.json
+	@echo "Setting up cache symlink..."
+	@mkdir -p ~/.cache
+	@if [ -L ~/.cache/camoufox ] || [ -e ~/.cache/camoufox ]; then \
+		echo "~/.cache/camoufox already exists (skipping)"; \
+	else \
+		ln -s $(PWD)/$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin ~/.cache/camoufox && \
+		echo "Created ~/.cache/camoufox symlink"; \
+	fi
+	@echo "✓ Local dev setup complete! You can now use the Camoufox Python library with your local build."
 
 edit-cfg:
 	@if [ ! -f $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox.cfg ]; then \
@@ -219,6 +372,12 @@ workspace:
 tests:
 	cd ./tests && \
 	bash run-tests.sh \
+		--executable-path ../$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
+		$(if $(filter true,$(headful)),--headful,)
+
+tests-parallel:
+	cd ./tests && \
+	PYTEST_WORKERS=$(if $(workers),$(workers),auto) bash run-tests.sh \
 		--executable-path ../$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
 		$(if $(filter true,$(headful)),--headful,)
 

@@ -103,5 +103,8 @@
   { "property": "addons", "type": "array" },
   { "property": "certificatePaths", "type": "array" },
   { "property": "certificates", "type": "array" },
-  { "property": "debug", "type": "bool" }
+  { "property": "debug", "type": "bool" },
+  { "property": "websocket:remapping:enabled", "type": "bool" },
+  { "property": "websocket:remapping:manualPortMappings", "type": "array" },
+  { "property": "websocket:remapping:basePort", "type": "uint" }
 ]

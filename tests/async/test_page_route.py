@@ -20,7 +20,7 @@ from typing import Callable, List, Optional
 
 import pytest
 
-from playwright._impl._glob import glob_to_regex
+from playwright._impl._glob import glob_to_regex_pattern as glob_to_regex
 from playwright.async_api import (
     Browser,
     BrowserContext,

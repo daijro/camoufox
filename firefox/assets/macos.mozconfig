@@ -16,5 +16,6 @@ ac_add_options --disable-update-agent
 # export HOST_CC="$CROSS/clang/bin/clang"
 # export HOST_CXX="$CROSS/cla   ng/bin/clang++"
 
-# Only temporary
-# ac_add_options --with-macos-sdk="$MOZBUILD/MacOSX14.4.sdk"
+# macOS SDK (Firefox 142 requires minimum 15.4)
+# Uncomment to build outside of the mac!
+# ac_add_options --with-macos-sdk="$HOME/.mozbuild/MacOSX15.4.sdk"

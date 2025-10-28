@@ -95,7 +95,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
                 os.remove(os.path.join(target_dir, path))
 
         # Update package
-        run(join(["7z", "u", new_file, f"{temp_dir}/*", "-r", "-mx=9"]))
+        run(join(["7z", "u", new_file, f"{temp_dir}/*", "-r", "-mx=5"]))
 
 
 def get_args():
@@ -143,31 +143,28 @@ def main():
             f"obj-{moz_target}/dist/camoufox-{args.version}-{args.release}.*.{file_ext}"
         )
 
-    # Copy package files
+    # Find package file
+    package_file = None
     for file in glob.glob(search_path):
         if "xpt_artifacts" in file:
             print(f"Skipping xpt artifacts: {file}")
             continue
         print(f"Found package: {file}")
-        # Copy to root
-        shutil.copy2(file, ".")
+        package_file = file
         break
     else:
         print(f"Error: No package file found matching pattern: {search_path}")
         sys.exit(1)
 
-    # Find the package file
-    package_pattern = f"camoufox-{args.version}-{args.release}.en-US.*.{file_ext}"
-    package_files = glob.glob(package_pattern)
-    if not package_files:
-        print(f"Error: No package file found matching pattern: {package_pattern}")
-        exit(1)
-    package_file = package_files[0]
+    # Copy to a unique temp location to avoid parallel build conflicts
+    # Use architecture in temp name to ensure uniqueness
+    temp_package = f"temp-{args.os}-{args.arch}-{os.path.basename(package_file)}"
+    shutil.copy2(package_file, temp_package)
 
     # Add includes to the package
     new_name = f"camoufox-{args.version}-{args.release}-{args.os[:3]}.{args.arch}.zip"
     add_includes_to_package(
-        package_file=package_file,
+        package_file=temp_package,
         includes=args.includes,
         fonts=args.fonts,
         new_file=new_name,

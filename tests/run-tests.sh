@@ -73,5 +73,12 @@ if [ -n "$CAMOUFOX_EXECUTABLE_PATH" ]; then
     echo "CAMOUFOX_EXECUTABLE_PATH set to: $CAMOUFOX_EXECUTABLE_PATH"
 fi
 
-echo venv/bin/pytest -vv "${VALID_ARGS[@]}" async/
-venv/bin/pytest -vv "${VALID_ARGS[@]}" async/
+# Check for PYTEST_WORKERS environment variable for parallel execution
+PARALLEL_ARGS=()
+if [ -n "$PYTEST_WORKERS" ]; then
+    PARALLEL_ARGS=("-n" "$PYTEST_WORKERS")
+    echo "Running tests in parallel with $PYTEST_WORKERS workers"
+fi
+
+echo venv/bin/pytest -vv "${VALID_ARGS[@]}" "${PARALLEL_ARGS[@]}" async/
+venv/bin/pytest -vv "${VALID_ARGS[@]}" "${PARALLEL_ARGS[@]}" async/

@@ -1,31 +1,20 @@
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index e0cbb3f1f8..d7868e7ae0 100644
+index 7c1bcfdba325..14af0ac65ce5 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
-@@ -2288,28 +2288,7 @@ dom::PrivateAttribution* Navigator::PrivateAttribution() {
+@@ -358,7 +358,7 @@ void Navigator::GetAcceptLanguages(const nsString* aLanguageOverride, nsTArray<n
+     acceptLang = *aLanguageOverride;
+   else
+     Preferences::GetLocalizedString("intl.accept_languages", acceptLang);
+-    
++
  
- /* static */
- bool Navigator::Webdriver() {
--#ifdef ENABLE_WEBDRIVER
--  nsCOMPtr<nsIMarionette> marionette = do_GetService(NS_MARIONETTE_CONTRACTID);
--  if (marionette) {
--    bool marionetteRunning = false;
--    marionette->GetRunning(&marionetteRunning);
--    if (marionetteRunning) {
--      return true;
--    }
--  }
--
--  nsCOMPtr<nsIRemoteAgent> agent = do_GetService(NS_REMOTEAGENT_CONTRACTID);
--  if (agent) {
--    bool remoteAgentRunning = false;
--    agent->GetRunning(&remoteAgentRunning);
--    if (remoteAgentRunning) {
--      return true;
--    }
--  }
--#endif
--
+   // Split values on commas.
+   for (nsDependentSubstring lang :
+@@ -2319,8 +2319,7 @@ bool Navigator::Webdriver() {
+   }
+ #endif
+ 
 -  // Playwright is automating the browser, so we should pretend to be a webdriver
 -  return true;
 +  return false;
@@ -33,19 +22,37 @@ index e0cbb3f1f8..d7868e7ae0 100644
  
  AutoplayPolicy Navigator::GetAutoplayPolicy(AutoplayPolicyMediaType aType) {
 diff --git a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-index 0eeb5924c4..8b975a8b11 100644
+index 867ce2efaa10..3d8837cdb38f 100644
 --- a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
 +++ b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-@@ -108,12 +108,6 @@ EnterprisePoliciesManager.prototype = {
+@@ -106,9 +106,7 @@ EnterprisePoliciesManager.prototype = {
        Services.prefs.clearUserPref(PREF_POLICIES_APPLIED);
      }
  
--    // Playwright: Disable enterprise policies
--    if (true) {
--      this.status = Ci.nsIEnterprisePolicies.INACTIVE;
--      return;
--    }
--
-     let provider = this._chooseProvider();
+-    // --- Playwright begin ---
+-    let provider = new PlaywrightPoliciesProvider();
+-    // --- Playwright end ---
++    let provider = this._chooseProvider();
  
      if (provider.failed) {
+       this.status = Ci.nsIEnterprisePolicies.FAILED;
+@@ -608,19 +606,6 @@ class JSONPoliciesProvider {
+   }
+ }
+ 
+-class PlaywrightPoliciesProvider extends JSONPoliciesProvider {
+-  _getConfigurationFile() {
+-    let prefPath = Services.prefs.getStringPref(PREF_ALTERNATE_PATH, "");
+-    if (!prefPath)
+-      return null;
+-
+-    dump(`Playwright: loading enterprise policies from ${prefPath}\n`);
+-    let configFile = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+-    configFile.initWithPath(prefPath);
+-    return configFile;
+-  }
+-}
+-
+ class WindowsGPOPoliciesProvider {
+   constructor() {
+     this._policies = null;

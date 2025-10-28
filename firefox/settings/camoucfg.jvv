@@ -304,5 +304,9 @@
     "addons": "array[str]",
     "certificatePaths": "array[str]",
     "certificates": "array[str]",
-    "debug": "bool"
+    "debug": "bool",
+
+    "websocket:remapping:enabled": "bool",
+    "websocket:remapping:manualPortMappings": "array[str]",
+    "websocket:remapping:basePort": "int[>0]"
 }
