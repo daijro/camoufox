@@ -11,7 +11,7 @@ Usage:
 import os
 import sys
 
-from _mixin import list_patches
+from _utils import list_patches
 
 
 def get_next_patch(current_patch, patches_dir):

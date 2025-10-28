@@ -8,7 +8,7 @@ import sys
 import tempfile
 from shlex import join
 
-from _mixin import find_src_dir, get_moz_target, list_files, run, temp_cd
+from _utils import find_src_dir, get_moz_target, list_files, run, temp_cd
 from const import PACKAGE_FILE_EXTENSIONS, PACKAGE_REMOVE_PATHS
 
 

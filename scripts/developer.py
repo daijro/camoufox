@@ -10,7 +10,7 @@ import sys
 
 import easygui
 
-from _mixin import find_src_dir, is_bootstrap_patch, list_patches, patch, run, temp_cd
+from _utils import find_src_dir, is_bootstrap_patch, list_patches, patch, run, temp_cd
 
 
 def into_camoufox_dir():

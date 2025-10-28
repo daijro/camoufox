@@ -15,7 +15,7 @@ import shutil
 import sys
 from dataclasses import dataclass
 
-from _mixin import (
+from _utils import (
     find_src_dir,
     get_moz_target,
     get_options,
@@ -157,8 +157,11 @@ if __name__ == "__main__":
     _update_rustup(TARGET)
 
     # Check if the folder exists
-    if not os.path.exists(f"camoufox-{VERSION}-{RELEASE}/configure.py"):
-        sys.stderr.write("error: folder doesn't look like a Firefox folder.")
+    camoufox_src_dir = f"camoufox-{VERSION}-{RELEASE}/configure.py"
+    if not os.path.exists(camoufox_src_dir):
+        sys.stderr.write(
+            f"error: folder '{camoufox_src_dir}' doesn't look like a Firefox folder."
+        )
         sys.exit(1)
 
     # Apply the patches
