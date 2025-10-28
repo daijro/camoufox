@@ -92,6 +92,7 @@ jobs:
 
       - name: Setup and bootstrap
         run: |
+          # TODO: use new make targets
           make setup-minimal
           make mozbootstrap
           mkdir -p dist

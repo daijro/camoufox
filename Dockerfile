@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
+# TODO: use new make targets
 # Fetch Firefox & apply initial patches
 RUN make setup-minimal && \
     make mozbootstrap && \
