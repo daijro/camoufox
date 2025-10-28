@@ -56,7 +56,7 @@ AVAILABLE_ARCHS = ["x86_64", "arm64", "i686"]
 def load_upstream_config():
     """Load version and release from upstream.sh"""
     config = {}
-    with open("upstream.sh", "r") as f:
+    with open("scripts/upstream.sh", "r") as f:
         for line in f:
             if "=" in line and not line.strip().startswith("#"):
                 key, value = line.strip().split("=", 1)
