@@ -33,15 +33,6 @@ VCS_HUMAN_READABLE = {
     "git": "Git",
 }
 
-# Bootstrap error messages
-CLONE_MERCURIAL_PULL_FAIL = """
-Failed to pull from hg.mozilla.org.
-
-This is most likely because of unstable network connection.
-Try running `cd %s && hg pull https://hg.mozilla.org/mozilla-unified` manually,
-or download a mercurial bundle and use it:
-https://firefox-source-docs.mozilla.org/contributing/vcs/mercurial_bundles.html"""
-
 # Package configuration
 PACKAGE_FILE_EXTENSIONS = {
     BuildTarget.LINUX: "tar.xz",
