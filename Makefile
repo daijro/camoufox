@@ -19,7 +19,7 @@ pacman := python python-pip p7zip go msitools wget aria2
         package-linux package-macos package-windows vcredist_arch patch unpatch \
         workspace check-arg edit-cfg ff-dbg tests tests-parallel update-ubo-assets tagged-checkpoint \
         git-fetch git-dir git-bootstrap check-not-git \
-		lint lint-scripts lint-tests lint-lib check-ff-version \
+		lint lint-scripts lint-tests lint-lib check-ff-version get-ff-commit \
 
 help:
 	@echo "Available targets:"
@@ -400,3 +400,6 @@ check-ff-version:
 	else \
 		echo "✅ Upstream FIREFOX_VERSION matches expected version '$(_ARGS)'"; \
 	fi
+
+get-ff-commit:
+	@echo $(FIREFOX_GIT_COMMIT)
