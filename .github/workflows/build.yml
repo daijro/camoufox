@@ -87,7 +87,8 @@ jobs:
       - name: Set release version
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          FIREFOX_VERSION_EXPECTED=${${GITHUB_REF_NAME#v}%%-*}
+          FIREFOX_VERSION_EXPECTED=${GITHUB_REF_NAME#v}
+          FIREFOX_VERSION_EXPECTED=${FIREFOX_VERSION_EXPECTED%%-*}
           make check-ff-version $FIREFOX_VERSION_EXPECTED
           echo "FIREFOX_VERSION=$FIREFOX_VERSION_EXPECTED" >> $GITHUB_ENV
           CAMOUFOX_RELEASE=${GITHUB_REF_NAME#*-}
