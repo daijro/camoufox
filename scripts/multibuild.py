@@ -46,7 +46,7 @@ import shutil
 import multiprocessing
 import subprocess
 
-from const import AVAILABLE_ARCHS, AVAILABLE_TARGETS
+from const import AVAILABLE_ARCHS, AVAILABLE_TARGETS, BuildArch, BuildTarget
 
 FIREFOX_VERSION = os.getenv("FIREFOX_VERSION")
 CAMOUFOX_RELEASE = os.getenv("CAMOUFOX_RELEASE", "dev")
@@ -55,27 +55,33 @@ CAMOUFOX_SRC_DIR = f"camoufox-{FIREFOX_VERSION}-{CAMOUFOX_RELEASE}"
 
 def get_moz_target(target, arch):
     """Get moz_target from target and arch (copied from _mixin.py)"""
-    if target == "linux":
+    if target == BuildTarget.LINUX:
         return (
-            "aarch64-unknown-linux-gnu" if arch == "arm64" else f"{arch}-pc-linux-gnu"
+            "aarch64-unknown-linux-gnu"
+            if arch == BuildArch.ARM64
+            else f"{arch}-pc-linux-gnu"
         )
-    if target == "windows":
+    if target == BuildTarget.WINDOWS:
         return f"{arch}-pc-mingw32"
-    if target == "macos":
-        return "aarch64-apple-darwin" if arch == "arm64" else f"{arch}-apple-darwin"
+    if target == BuildTarget.MACOS:
+        return (
+            "aarch64-apple-darwin"
+            if arch == BuildArch.ARM64
+            else f"{arch}-apple-darwin"
+        )
     raise ValueError(f"Unsupported target: {target}")
 
 
 def update_rustup(target):
     """Add rust targets for the given platform"""
     rust_targets = {
-        "linux": ["aarch64-unknown-linux-gnu", "i686-unknown-linux-gnu"],
-        "windows": [
+        BuildTarget.LINUX: ["aarch64-unknown-linux-gnu", "i686-unknown-linux-gnu"],
+        BuildTarget.WINDOWS: [
             "x86_64-pc-windows-msvc",
             "aarch64-pc-windows-msvc",
             "i686-pc-windows-msvc",
         ],
-        "macos": ["x86_64-apple-darwin", "aarch64-apple-darwin"],
+        BuildTarget.MACOS: ["x86_64-apple-darwin", "aarch64-apple-darwin"],
     }
     for rust_target in rust_targets.get(target, []):
         os.system(f'~/.cargo/bin/rustup target add "{rust_target}"')
@@ -348,7 +354,8 @@ def main():
         (target, arch)
         for target in args.target
         for arch in args.arch
-        if (target, arch) not in [("windows", "arm64"), ("macos", "i686")]
+        if (target, arch)
+        not in [(BuildTarget.WINDOWS, BuildArch.ARM64), (BuildTarget.MACOS, BuildArch.I686)]
     ]
 
     if not combinations:

@@ -9,7 +9,13 @@ import tempfile
 from shlex import join
 
 from _utils import find_src_dir, get_moz_target, list_files, run, temp_cd
-from const import PACKAGE_FILE_EXTENSIONS, PACKAGE_REMOVE_PATHS
+from const import (
+    AVAILABLE_ARCHS,
+    AVAILABLE_TARGETS,
+    PACKAGE_FILE_EXTENSIONS,
+    PACKAGE_REMOVE_PATHS,
+    BuildTarget,
+)
 
 
 def add_includes_to_package(package_file, includes, fonts, new_file, target):
@@ -29,7 +35,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
                 target=target,
             )
 
-        if target == "macos":
+        if target == BuildTarget.MACOS:
             # Move Camoufox/Camoufox.app -> Camoufox.app
             nightly_dir = os.path.join(temp_dir, "Camoufox")
             shutil.move(
@@ -50,7 +56,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
                 os.rmdir(camoufox_dir)
 
         # Create target_dir
-        if target == "macos":
+        if target == BuildTarget.MACOS:
             target_dir = os.path.join(temp_dir, "Camoufox.app", "Contents", "Resources")
         else:
             target_dir = temp_dir
@@ -69,7 +75,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
 
         # Add the font folders under fonts/
         fonts_dir = os.path.join(target_dir, "fonts")
-        if target == "linux":
+        if target == BuildTarget.LINUX:
             for font in fonts or []:
                 shutil.copytree(
                     os.path.join("firefox/bundle", "fonts", font),
@@ -102,9 +108,7 @@ def get_args():
     parser = argparse.ArgumentParser(
         description="Package Camoufox for different operating systems."
     )
-    parser.add_argument(
-        "os", choices=["linux", "macos", "windows"], help="Target operating system"
-    )
+    parser.add_argument("os", choices=AVAILABLE_TARGETS, help="Target operating system")
     parser.add_argument(
         "--includes",
         nargs="+",
@@ -114,7 +118,7 @@ def get_args():
     parser.add_argument("--release", required=True, help="Camoufox release number")
     parser.add_argument(
         "--arch",
-        choices=["x86_64", "i686", "arm64"],
+        choices=AVAILABLE_ARCHS,
         help="Architecture for Windows build",
     )
     parser.add_argument(

@@ -13,6 +13,8 @@ import re
 import sys
 import time
 
+from const import BuildArch, BuildTarget
+
 start_time = time.time()
 
 
@@ -61,14 +63,20 @@ def find_src_dir(root_dir=".", version=None, release=None):
 
 def get_moz_target(target, arch):
     """Get moz_target from target and arch"""
-    if target == "linux":
+    if target == BuildTarget.LINUX:
         return (
-            "aarch64-unknown-linux-gnu" if arch == "arm64" else f"{arch}-pc-linux-gnu"
+            "aarch64-unknown-linux-gnu"
+            if arch == BuildArch.ARM64
+            else f"{arch}-pc-linux-gnu"
         )
-    if target == "windows":
+    if target == BuildTarget.WINDOWS:
         return f"{arch}-pc-mingw32"
-    if target == "macos":
-        return "aarch64-apple-darwin" if arch == "arm64" else f"{arch}-apple-darwin"
+    if target == BuildTarget.MACOS:
+        return (
+            "aarch64-apple-darwin"
+            if arch == BuildArch.ARM64
+            else f"{arch}-apple-darwin"
+        )
     raise ValueError(f"Unsupported target: {target}")
 
 

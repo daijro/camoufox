@@ -24,7 +24,7 @@ from _utils import (
     run,
     temp_cd,
 )
-from const import AVAILABLE_ARCHS, AVAILABLE_TARGETS
+from const import AVAILABLE_ARCHS, AVAILABLE_TARGETS, BuildArch, BuildTarget
 
 options, args = get_options()
 
@@ -109,13 +109,13 @@ def add_rustup(*targets):
 
 def _update_rustup(target):
     """Add rust targets for the given target"""
-    if target == "linux":
+    if target == BuildTarget.LINUX:
         add_rustup("aarch64-unknown-linux-gnu", "i686-unknown-linux-gnu")
-    elif target == "windows":
+    elif target == BuildTarget.WINDOWS:
         add_rustup(
             "x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc", "i686-pc-windows-msvc"
         )
-    elif target == "macos":
+    elif target == BuildTarget.MACOS:
         add_rustup("x86_64-apple-darwin", "aarch64-apple-darwin")
 
 
@@ -140,7 +140,7 @@ def extract_build_target():
         assert target in AVAILABLE_TARGETS, f"Unsupported target: {target}"
         assert arch in AVAILABLE_ARCHS, f"Unsupported architecture: {arch}"
     else:
-        target, arch = "linux", "x86_64"
+        target, arch = BuildTarget.LINUX, BuildArch.X86_64
     return target, arch
 
 

@@ -4,14 +4,28 @@
 Centralized constants for Camoufox build scripts.
 """
 
+from enum import StrEnum
 import sys
+
+
+class BuildTarget(StrEnum):
+    LINUX = "linux"
+    WINDOWS = "windows"
+    MACOS = "macos"
+
+
+class BuildArch(StrEnum):
+    X86_64 = "x86_64"
+    ARM64 = "arm64"
+    I686 = "i686"
+
+
+AVAILABLE_TARGETS = [target.value for target in BuildTarget]
+AVAILABLE_ARCHS = [arch.value for arch in BuildArch]
+
 
 # Platform detection
 WINDOWS = sys.platform.startswith("win32") or sys.platform.startswith("msys")
-
-# Build targets and architectures
-AVAILABLE_TARGETS = ["linux", "windows", "macos"]
-AVAILABLE_ARCHS = ["x86_64", "arm64", "i686"]
 
 # VCS configuration
 VCS_HUMAN_READABLE = {
@@ -29,7 +43,11 @@ or download a mercurial bundle and use it:
 https://firefox-source-docs.mozilla.org/contributing/vcs/mercurial_bundles.html"""
 
 # Package configuration
-PACKAGE_FILE_EXTENSIONS = {"linux": "tar.xz", "macos": "dmg", "windows": "zip"}
+PACKAGE_FILE_EXTENSIONS = {
+    BuildTarget.LINUX: "tar.xz",
+    BuildTarget.MACOS: "dmg",
+    BuildTarget.WINDOWS: "zip",
+}
 PACKAGE_REMOVE_PATHS = {
     "uninstall",
     "pingsender.exe",
