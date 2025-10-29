@@ -94,7 +94,7 @@ jobs:
 
       - uses: actions/checkout@v5
         with:
-          repository: "https://github.com/mozilla-firefox/firefox"
+          repository: mozilla-firefox/firefox
           ref: ${{ env.FIREFOX_GIT_COMMIT }}
           path: camoufox-${{ env.FIREFOX_VERSION }}-${{ env.CAMOUFOX_RELEASE }}
           filter: "blob:none"
