@@ -11,8 +11,10 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        target: [linux, windows, macos]
-        arch: [x86_64, arm64, i686]
+        # target: [linux, windows, macos]
+        # arch: [x86_64, arm64, i686]
+        target: [linux]
+        arch: [x86_64]
         exclude:
           # Fails (.mozbuild does not include clang++-cl)
           - target: windows
