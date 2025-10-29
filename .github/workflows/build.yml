@@ -97,6 +97,8 @@ jobs:
 
       - name: Fetch source
         run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
           make git-fetch
 
       - name: Setup and bootstrap
