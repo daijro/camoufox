@@ -1,4 +1,4 @@
-include scripts/upstream.sh
+include upstream.sh
 export
 
 export CAMOUFOX_RELEASE ?= dev
