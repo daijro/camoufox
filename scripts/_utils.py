@@ -12,14 +12,16 @@ import os
 import re
 import sys
 import time
+from typing import NoReturn
 
 from const import BuildArch, BuildTarget
+from pathlib import Path
 
 start_time = time.time()
 
 
 @contextlib.contextmanager
-def temp_cd(path):
+def temp_cd(path: Path | str):
     """Temporarily change to a different working directory"""
     _old_cwd = os.getcwd()
     abs_path = os.path.abspath(path)
@@ -48,7 +50,11 @@ def get_options():
     return parser.parse_args()
 
 
-def find_src_dir(root_dir=".", version=None, release=None):
+def find_src_dir(
+    root_dir: str = ".",
+    version: str | None = None,
+    release: str | None = None,
+):
     """Get the source directory"""
     if version and release:
         name = os.path.join(root_dir, f"camoufox-{version}-{release}")
@@ -61,7 +67,7 @@ def find_src_dir(root_dir=".", version=None, release=None):
     raise FileNotFoundError("No camoufox-* folder found")
 
 
-def get_moz_target(target, arch):
+def get_moz_target(target: str | BuildTarget, arch: str | BuildArch) -> str:
     """Get moz_target from target and arch"""
     if target == BuildTarget.LINUX:
         return (
@@ -80,7 +86,7 @@ def get_moz_target(target, arch):
     raise ValueError(f"Unsupported target: {target}")
 
 
-def list_files(root_dir, suffix):
+def list_files(root_dir: str, suffix: str):
     """List files in a directory"""
     for root, _, files in os.walk(root_dir):
         for file in fnmatch.filter(files, suffix):
@@ -89,16 +95,19 @@ def list_files(root_dir, suffix):
             yield os.path.join(root_dir, relative_path).replace("\\", "/")
 
 
-def list_patches(root_dir="../firefox/patches", suffix="*.patch"):
+def list_patches(
+    root_dir: str = "../firefox/patches",
+    suffix: str = "*.patch",
+):
     """List all patch files"""
     return sorted(list_files(root_dir, suffix), key=os.path.basename)
 
 
-def is_bootstrap_patch(name):
+def is_bootstrap_patch(name: str) -> bool:
     return bool(re.match(r"\d+\-.*", os.path.basename(name)))
 
 
-def script_exit(statuscode):
+def script_exit(statuscode) -> NoReturn:
     """Exit the script"""
     if (time.time() - start_time) > 60:
         elapsed = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
@@ -106,10 +115,14 @@ def script_exit(statuscode):
     sys.exit(statuscode)
 
 
-def run(cmd, exit_on_fail=True, do_print=True):
+def run(
+    cmd: str,
+    exit_on_fail: bool = True,
+    do_print: bool = True,
+) -> int | None:
     """Run a command"""
     if not cmd:
-        return
+        return None
     if do_print:
         print(cmd, flush=True)
     retval = os.system(cmd)
@@ -119,7 +132,11 @@ def run(cmd, exit_on_fail=True, do_print=True):
     return retval
 
 
-def patch(patchfile, reverse=False, silent=False):
+def patch(
+    patchfile: str,
+    reverse: bool = False,
+    silent: bool = False,
+) -> None:
     """Run a patch file"""
     if reverse:
         cmd = f"patch -p1 -R -i {patchfile}"
@@ -132,7 +149,7 @@ def patch(patchfile, reverse=False, silent=False):
     run(cmd)
 
 
-def panic(msg: str) -> None:
+def panic(msg: str) -> NoReturn:
     sys.stderr.write(msg)
     sys.exit(1)
 
