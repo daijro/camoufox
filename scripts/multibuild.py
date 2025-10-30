@@ -45,7 +45,7 @@ import multiprocessing
 import subprocess
 
 from const import AVAILABLE_ARCHS, AVAILABLE_TARGETS, BuildArch, BuildTarget
-from _utils import panic
+from _utils import panic, update_rustup
 
 FIREFOX_VERSION = os.getenv("FIREFOX_VERSION")
 CAMOUFOX_RELEASE = os.getenv("CAMOUFOX_RELEASE", "dev")
@@ -69,21 +69,6 @@ def get_moz_target(target: BuildTarget | str, arch: BuildArch | str) -> str:
             else f"{arch}-apple-darwin"
         )
     raise ValueError(f"Unsupported target: {target}")
-
-
-def update_rustup(target: BuildTarget):
-    """Add rust targets for the given platform"""
-    rust_targets = {
-        BuildTarget.LINUX: ["aarch64-unknown-linux-gnu", "i686-unknown-linux-gnu"],
-        BuildTarget.WINDOWS: [
-            "x86_64-pc-windows-msvc",
-            "aarch64-pc-windows-msvc",
-            "i686-pc-windows-msvc",
-        ],
-        BuildTarget.MACOS: ["x86_64-apple-darwin", "aarch64-apple-darwin"],
-    }
-    for rust_target in rust_targets.get(target, []):
-        os.system(f'~/.cargo/bin/rustup target add "{rust_target}"')
 
 
 def run(cmd: str, exit_on_fail: bool = True):

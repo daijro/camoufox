@@ -154,6 +154,21 @@ def panic(msg: str) -> NoReturn:
     sys.exit(1)
 
 
+def update_rustup(target: BuildTarget):
+    """Add rust targets for the given platform"""
+    rust_targets = {
+        BuildTarget.LINUX: ["aarch64-unknown-linux-gnu", "i686-unknown-linux-gnu"],
+        BuildTarget.WINDOWS: [
+            "x86_64-pc-windows-msvc",
+            "aarch64-pc-windows-msvc",
+            "i686-pc-windows-msvc",
+        ],
+        BuildTarget.MACOS: ["x86_64-apple-darwin", "aarch64-apple-darwin"],
+    }
+    for rust_target in rust_targets.get(target, []):
+        os.system(f'~/.cargo/bin/rustup target add "{rust_target}"')
+
+
 __all__ = [
     "get_moz_target",
     "list_patches",
@@ -163,6 +178,7 @@ __all__ = [
     "temp_cd",
     "get_options",
     "panic",
+    "update_rustup",
 ]
 
 

@@ -24,6 +24,7 @@ from _utils import (
     patch,
     run,
     temp_cd,
+    update_rustup,
 )
 from const import AVAILABLE_ARCHS, AVAILABLE_TARGETS, BuildArch, BuildTarget
 
@@ -108,18 +109,6 @@ def add_rustup(*targets):
         run(f'~/.cargo/bin/rustup target add "{rust_target}"')
 
 
-def _update_rustup(target):
-    """Add rust targets for the given target"""
-    if target == BuildTarget.LINUX:
-        add_rustup("aarch64-unknown-linux-gnu", "i686-unknown-linux-gnu")
-    elif target == BuildTarget.WINDOWS:
-        add_rustup(
-            "x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc", "i686-pc-windows-msvc"
-        )
-    elif target == BuildTarget.MACOS:
-        add_rustup("x86_64-apple-darwin", "aarch64-apple-darwin")
-
-
 """
 Preparation
 """
@@ -154,7 +143,7 @@ if __name__ == "__main__":
 
     TARGET, ARCH = extract_build_target()
     MOZ_TARGET = get_moz_target(TARGET, ARCH)
-    _update_rustup(TARGET)
+    update_rustup(TARGET)
 
     # Check if the folder exists
     camoufox_src_dir = f"camoufox-{VERSION}-{RELEASE}/configure.py"
