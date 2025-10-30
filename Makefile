@@ -19,7 +19,7 @@ pacman := python python-pip p7zip go msitools wget aria2
         package-linux package-macos package-windows vcredist_arch patch unpatch \
         workspace check-arg edit-cfg ff-dbg tests tests-parallel update-ubo-assets tagged-checkpoint \
         git-fetch git-dir git-bootstrap check-not-git \
-		lint lint-scripts lint-tests lint-lib check-ff-version get-ff-commit \
+		lint lint-fix check-ff-version get-ff-commit \
 
 help:
 	@echo "Available targets:"
@@ -381,17 +381,16 @@ update-ubo-assets:
 
 vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')
 
-lint-scripts:
+lint:
 	cd ./scripts && uv run ruff check .
 	cd ./scripts && uv run mypy .
-
-lint-tests:
 	cd ./tests && uv run ruff check .
-
-lint-lib:
 	cd ./pythonlib && uv run ruff check .
 
-lint: lint-scripts lint-tests lint-lib
+lint-fix:
+	cd ./scripts && uv run ruff check . --fix
+	cd ./tests && uv run ruff check . --fix
+	cd ./pythonlib && uv run ruff check . --fix
 
 check-ff-version:
 	@if [ "$(FIREFOX_VERSION)" != "$(_ARGS)" ]; then \
