@@ -27,12 +27,6 @@ AVAILABLE_ARCHS = [arch.value for arch in BuildArch]
 # Platform detection
 WINDOWS = sys.platform.startswith("win32") or sys.platform.startswith("msys")
 
-# VCS configuration
-VCS_HUMAN_READABLE = {
-    "hg": "Mercurial",
-    "git": "Git",
-}
-
 # Package configuration
 PACKAGE_FILE_EXTENSIONS = {
     BuildTarget.LINUX: "tar.xz",
