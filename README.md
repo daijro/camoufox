@@ -27,59 +27,8 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 
 ---
 
-## 🚀 Quick Start & Upgrade Instructions
-
-### For New Users
-
-**Install the Python package (recommended):**
-
-```bash
-pip install git+https://github.com/Kornelijus/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
-```
-
-**Or download pre-built binaries:** [Releases](https://github.com/Kornelijus/camoufox/releases)
-
-### Upgrading from Firefox 135 or Earlier
-
-If you're currently using the original `daijro/camoufox` or an older version:
-
-```bash
-# Uninstall old version
-pip uninstall camoufox -y
-
-# Install Firefox 142 from this fork
-pip install git+https://github.com/Kornelijus/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
-```
-
-**What's new in this upgrade:**
-
-- ✅ **Firefox 142.0.1** (upgraded from 135)
-- ✅ **Playwright 1.56** (latest unreleased version)
-- ✅ All fingerprint spoofing patches updated for Firefox 142
-- ✅ Juggler ESM migration (Firefox 142 requirement)
-- ✅ Pre-built binaries for Linux, macOS, and Windows
-
-**Your existing code will continue to work** - the API is unchanged.
-
----
-
-> ### Note About This Branch
->
-> This `main` branch includes the Firefox 142 upgrade work **plus** some additional workflow tooling and documentation I added while working with Claude Code to debug the upgrade. If you just want the core Firefox 142 patches without the extra workflow stuff, check out the `ff142` branch.
->
-> ### For Developers
->
-> - **Building or contributing patches?** See [WORKFLOW.md](docs/WORKFLOW.md) and [FIREFOX_UPGRADE_WORKFLOW.md](docs/FIREFOX_UPGRADE_WORKFLOW.md)
-> - **Want just the Firefox 142 upgrade work for an upstream PR?** Check out the `ff142` branch (clean patches, no workflow extras)
->
-> ### Original Project
->
-> Created by [@daijro](https://github.com/daijro): [daijro/camoufox](https://github.com/daijro/camoufox)
-
----
-
 > [!NOTE]
-> All of the latest documentation is avaliable at [camoufox.com](https://camoufox.com).
+> The documentation for upstream is available at [camoufox.com](https://camoufox.com).
 
 Camoufox is the most modern, effective & future-proof open source solution for avoiding bot detection and intelligent fingerprint rotation. It outperforms most commercial anti-bot browsers.
 
