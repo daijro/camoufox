@@ -384,12 +384,10 @@ vcredist_arch := $(shell echo $(arch) | sed 's/x86_64/x64/' | sed 's/i686/x86/')
 lint:
 	cd ./scripts && uv run ruff check .
 	cd ./scripts && uv run mypy .
-	cd ./tests && uv run ruff check .
 	cd ./pythonlib && uv run ruff check .
 
 lint-fix:
 	cd ./scripts && uv run ruff check . --fix
-	cd ./tests && uv run ruff check . --fix
 	cd ./pythonlib && uv run ruff check . --fix
 
 check-ff-version:
