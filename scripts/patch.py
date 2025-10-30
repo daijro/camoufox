@@ -20,6 +20,7 @@ from _utils import (
     get_moz_target,
     get_options,
     list_patches,
+    panic,
     patch,
     run,
     temp_cd,
@@ -127,8 +128,7 @@ Preparation
 def extract_args():
     """Get version and release from args"""
     if len(args) != 2:
-        sys.stderr.write("error: please specify version and release of camoufox source")
-        sys.exit(1)
+        panic("error: please specify version and release of camoufox source")
     return args[0], args[1]
 
 
@@ -159,10 +159,7 @@ if __name__ == "__main__":
     # Check if the folder exists
     camoufox_src_dir = f"camoufox-{VERSION}-{RELEASE}/configure.py"
     if not os.path.exists(camoufox_src_dir):
-        sys.stderr.write(
-            f"error: folder '{camoufox_src_dir}' doesn't look like a Firefox folder."
-        )
-        sys.exit(1)
+        panic(f"error: folder '{camoufox_src_dir}' doesn't look like a Firefox folder.")
 
     # Apply the patches
     patcher = Patcher(MOZ_TARGET, TARGET)

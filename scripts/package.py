@@ -8,7 +8,7 @@ import sys
 import tempfile
 from shlex import join
 
-from _utils import find_src_dir, get_moz_target, list_files, run, temp_cd
+from _utils import find_src_dir, get_moz_target, list_files, panic, run, temp_cd
 from const import (
     AVAILABLE_ARCHS,
     AVAILABLE_TARGETS,
@@ -153,8 +153,7 @@ def main():
         package_file = file
         break
     else:
-        print(f"Error: No package file found matching pattern: {search_path}")
-        sys.exit(1)
+        panic(f"Error: No package file found matching pattern: {search_path}")
 
     # Copy to a unique temp location to avoid parallel build conflicts
     # Use architecture in temp name to ensure uniqueness

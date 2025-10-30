@@ -101,11 +101,8 @@ def is_bootstrap_patch(name):
 def script_exit(statuscode):
     """Exit the script"""
     if (time.time() - start_time) > 60:
-        # print elapsed time
         elapsed = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
-        print(f"\n\aElapsed time: {elapsed}")
-        sys.stdout.flush()
-
+        print(f"\n\aElapsed time: {elapsed}", flush=True)
     sys.exit(statuscode)
 
 
@@ -114,12 +111,10 @@ def run(cmd, exit_on_fail=True, do_print=True):
     if not cmd:
         return
     if do_print:
-        print(cmd)
-        sys.stdout.flush()
+        print(cmd, flush=True)
     retval = os.system(cmd)
     if retval != 0 and exit_on_fail:
-        print(f"fatal error: command '{cmd}' failed")
-        sys.stdout.flush()
+        print(f"fatal error: command '{cmd}' failed", flush=True)
         script_exit(1)
     return retval
 
@@ -133,9 +128,13 @@ def patch(patchfile, reverse=False, silent=False):
     if silent:
         cmd += " > /dev/null"
     else:
-        print(f"\n*** -> {cmd}")
-    sys.stdout.flush()
+        print(f"\n*** -> {cmd}", flush=True)
     run(cmd)
+
+
+def panic(msg: str) -> None:
+    sys.stderr.write(msg)
+    sys.exit(1)
 
 
 __all__ = [
@@ -146,9 +145,9 @@ __all__ = [
     "script_exit",
     "temp_cd",
     "get_options",
+    "panic",
 ]
 
 
 if __name__ == "__main__":
-    print("This is a module, not meant to be called directly.")
-    sys.exit(1)
+    panic("This is a module, not meant to be called directly.")

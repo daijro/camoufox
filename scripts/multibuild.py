@@ -47,6 +47,7 @@ import multiprocessing
 import subprocess
 
 from const import AVAILABLE_ARCHS, AVAILABLE_TARGETS, BuildArch, BuildTarget
+from scripts._utils import panic
 
 FIREFOX_VERSION = os.getenv("FIREFOX_VERSION")
 CAMOUFOX_RELEASE = os.getenv("CAMOUFOX_RELEASE", "dev")
@@ -91,8 +92,7 @@ def run(cmd, exit_on_fail=True):
     print(f"\n------------\n{cmd}\n------------\n")
     retval = os.system(cmd)
     if retval != 0 and exit_on_fail:
-        print(f"fatal error: command '{cmd}' failed")
-        sys.exit(1)
+        panic(f"fatal error: command '{cmd}' failed")
     return retval
 
 
@@ -355,7 +355,10 @@ def main():
         for target in args.target
         for arch in args.arch
         if (target, arch)
-        not in [(BuildTarget.WINDOWS, BuildArch.ARM64), (BuildTarget.MACOS, BuildArch.I686)]
+        not in [
+            (BuildTarget.WINDOWS, BuildArch.ARM64),
+            (BuildTarget.MACOS, BuildArch.I686),
+        ]
     ]
 
     if not combinations:
@@ -389,8 +392,7 @@ def main():
 
             # Check if any builds failed
             if not all(results):
-                print("\nSome builds failed!")
-                sys.exit(1)
+                panic("\nSome builds failed!")
             else:
                 print("\nAll builds completed successfully!")
         finally:

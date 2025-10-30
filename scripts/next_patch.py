@@ -11,7 +11,7 @@ Usage:
 import os
 import sys
 
-from _utils import list_patches
+from _utils import list_patches, panic
 
 
 def get_next_patch(current_patch, patches_dir):
@@ -54,8 +54,7 @@ def get_next_patch(current_patch, patches_dir):
 
 def main():
     if len(sys.argv) != 2:
-        sys.stderr.write("Usage: python3 scripts/next_patch.py <patch_file>\n")
-        sys.exit(1)
+        panic("Usage: python3 scripts/next_patch.py <patch_file>\n")
 
     current_patch = sys.argv[1]
 
@@ -67,8 +66,7 @@ def main():
     elif os.path.exists("patches"):
         patches_dir = "patches"
     else:
-        sys.stderr.write("error: could not find patches directory\n")
-        sys.exit(1)
+        panic("error: could not find patches directory\n")
 
     next_patch = get_next_patch(current_patch, patches_dir)
 
