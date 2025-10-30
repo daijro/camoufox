@@ -39,7 +39,6 @@ Since Camoufox is NOT meant to be used as a daily driver, no installers are prov
 import argparse
 import glob
 import os
-import sys
 from dataclasses import dataclass
 from typing import List
 import shutil

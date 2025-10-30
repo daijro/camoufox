@@ -4,7 +4,6 @@ import argparse
 import glob
 import os
 import shutil
-import sys
 import tempfile
 from shlex import join
 
