@@ -21,7 +21,7 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 >
 > The original maintainer [@daijro](https://github.com/daijro) is recovering from a medical emergency (hospitalized since March 2025).
 >
-> When the original maintainer returns, this work will be contributed back upstream. In the meantime, this fork provides working Firefox 142 builds.
+> When the original maintainer returns, this work will be contributed back upstream. In the meantime, this fork provides newer Firefox builds.
 >
 > ❤️ **Wishing @daijro a full recovery.**
 
