@@ -17,9 +17,9 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 
 > [!IMPORTANT]
 >
-> ## About This Fork (Firefox 142 Upgrade)
+> ## About This Fork
 >
-> This fork upgrades Camoufox to **Firefox 142.0.1** and is maintained by [@coryking](https://github.com/coryking) while the original maintainer [@daijro](https://github.com/daijro) is recovering from a medical emergency (hospitalized since March 2025).
+> The original maintainer [@daijro](https://github.com/daijro) is recovering from a medical emergency (hospitalized since March 2025).
 >
 > When the original maintainer returns, this work will be contributed back upstream. In the meantime, this fork provides working Firefox 142 builds.
 >
@@ -34,10 +34,10 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 **Install the Python package (recommended):**
 
 ```bash
-pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
+pip install git+https://github.com/Kornelijus/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
 ```
 
-**Or download pre-built binaries:** [Releases](https://github.com/coryking/camoufox/releases)
+**Or download pre-built binaries:** [Releases](https://github.com/Kornelijus/camoufox/releases)
 
 ### Upgrading from Firefox 135 or Earlier
 
@@ -48,7 +48,7 @@ If you're currently using the original `daijro/camoufox` or an older version:
 pip uninstall camoufox -y
 
 # Install Firefox 142 from this fork
-pip install git+https://github.com/coryking/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
+pip install git+https://github.com/Kornelijus/camoufox.git@v142.0.1-bluetaka.25#subdirectory=pythonlib
 ```
 
 **What's new in this upgrade:**
