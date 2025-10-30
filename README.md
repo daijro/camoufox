@@ -866,6 +866,8 @@ flowchart TD
 
 ## Thanks
 
+- [daijro](https://github.com/daijro/camoufox)
+- [coryking](https://github.com/coryking/camoufox)
 - [LibreWolf](https://gitlab.com/librewolf-community/browser/source) - Debloat patches & build system inspiration
 - [BetterFox](https://github.com/yokoffing/BetterFox) - Debloat & optimizations
 - [Ghostery](https://github.com/ghostery/user-agent-desktop) - Debloat reference
