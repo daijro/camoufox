@@ -133,9 +133,8 @@ class BSYS:
         """Bootstrap the build system"""
         run("make bootstrap")
 
-    def generate_mozconfig(self, output_path: str, verbose: bool = True):
+    def generate_mozconfig(self, output_path: str):
         """Generate a mozconfig file for this target/arch at specified path"""
-        # Read base mozconfig
         with open("firefox/assets/base.mozconfig", "r") as f:
             content = f.read()
 
@@ -149,12 +148,8 @@ class BSYS:
             with open(platform_config, "r") as f:
                 content += f.read()
 
-        # Write to output path
         with open(output_path, "w") as f:
             f.write(content)
-
-        if verbose:
-            print(f"Generated mozconfig for {self.target}/{self.arch} at {output_path}")
 
     def build(self, mozconfig_path: str | None = None, prefix: str | None = None):
         """Build the Camoufox source code"""
@@ -174,7 +169,7 @@ class BSYS:
         else:
             run(cmd)
 
-    def package(self, mozconfig_path=None, prefix=None):
+    def package(self, mozconfig_path: str | None = None, prefix: str | None = None):
         """Package the Camoufox source code using scripts/package.py"""
 
         # Build the package.py command (same for both sequential and parallel)
@@ -248,7 +243,7 @@ def run_build_parallel(target: str, arch: str) -> bool:
     try:
         # Generate mozconfig
         print(f"[{prefix}] Generating mozconfig at {mozconfig_path}")
-        builder.generate_mozconfig(mozconfig_path, verbose=False)
+        builder.generate_mozconfig(mozconfig_path)
 
         # Build with isolated mozconfig
         builder.build(mozconfig_path=mozconfig_path, prefix=prefix)
