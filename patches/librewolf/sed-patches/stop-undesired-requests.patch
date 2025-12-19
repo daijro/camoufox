@@ -1,6 +1,6 @@
 --- a/browser/components/asrouter/content/asrouter-admin.bundle.js
 +++ b/browser/components/asrouter/content/asrouter-admin.bundle.js
-@@ -1641,7 +1641,7 @@ class ASRouterAdminInner extends (react__WEBPACK_IMPORTED_MODULE_1___default().P
+@@ -1650,7 +1650,7 @@ class ASRouterAdminInner extends (react__WEBPACK_IMPORTED_MODULE_1___default().P
          label = /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_1___default().createElement("span", null, "remote settings (", /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_1___default().createElement("a", {
            className: "providerUrl",
            target: "_blank",
@@ -21,9 +21,17 @@
    if (!AppConstants.RELEASE_OR_BETA) {
      // Always allow to override the server URL on Nightly/DevEdition.
      return true;
+@@ -134,6 +137,7 @@ export var Utils = {
+     // Load dumps only if pulling data from the production server, or in tests.
+     return (
+       this.SERVER_URL == AppConstants.REMOTE_SETTINGS_SERVER_URL ||
++      this.SERVER_URL == "https://%.invalid" ||
+       lazy.isRunningTests
+     );
+   },
 --- a/toolkit/components/search/SearchUtils.sys.mjs
 +++ b/toolkit/components/search/SearchUtils.sys.mjs
-@@ -193,9 +193,9 @@ export var SearchUtils = {
+@@ -206,9 +206,9 @@ export var SearchUtils = {
  
    ENGINES_URLS: {
      "prod-main":
