@@ -22,9 +22,13 @@ def tzstd_path(path):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Download and build a Visual Studio artifact")
+    parser = argparse.ArgumentParser(
+        description="Download and build a Visual Studio artifact"
+    )
     parser.add_argument("manifest", help="YAML manifest of the contents to download")
-    parser.add_argument("-o", dest="output", type=tzstd_path, required=True, help="Output file")
+    parser.add_argument(
+        "-o", dest="output", type=tzstd_path, required=True, help="Output file"
+    )
     args = parser.parse_args()
 
     with open(args.manifest) as f:
