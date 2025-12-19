@@ -11,7 +11,9 @@ Run:
 
 import hashlib
 import os
+import re
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 
@@ -45,6 +47,10 @@ class Patcher:
         """
         version, release = extract_args()
         with temp_cd(find_src_dir('.', version, release)):
+            # Reset to unpatched state first (like "Find broken patches")
+            print("Resetting to unpatched state...")
+            run('git reset --hard unpatched', exit_on_fail=False)
+
             # Create the base mozconfig file
             run('cp -v ../assets/base.mozconfig mozconfig')
             # Set cross building target
@@ -65,14 +71,65 @@ class Patcher:
                     else:
                         non_roverfox.append(p)
 
+                # Track patch failures
+                failed_patches = []
+
                 # Apply non-roverfox patches first
                 for patch_file in non_roverfox:
-                    patch(patch_file)
+                    rejects = self._apply_and_check(patch_file)
+                    if rejects:
+                        failed_patches.append((patch_file, rejects))
+
                 # Apply roverfox patches last
                 for patch_file in roverfox:
-                    patch(patch_file)
+                    rejects = self._apply_and_check(patch_file)
+                    if rejects:
+                        failed_patches.append((patch_file, rejects))
+
+                # Report failures
+                if failed_patches:
+                    print('\n' + '='*70)
+                    print(f'ERROR: {len(failed_patches)} patch(es) failed to apply cleanly:')
+                    print('='*70)
+                    for patch_file, rejects in failed_patches:
+                        print(f'\n{patch_file}:')
+                        for reject in rejects:
+                            print(f'  - {reject}')
+                    print('='*70)
+                    sys.exit(1)
 
             print('Complete!')
+
+    def _apply_and_check(self, patch_file):
+        """
+        Apply a patch and check for reject files.
+        Returns list of reject files if any, empty list otherwise.
+        """
+        import subprocess
+
+        # Apply the patch and capture output
+        result = subprocess.run(
+            ['patch', '-p1', '-i', patch_file],
+            capture_output=True,
+            text=True
+        )
+
+        print(f"\n*** -> patch -p1 -i {patch_file}")
+        if result.stdout:
+            print(result.stdout, end='')
+        if result.stderr:
+            print(result.stderr, end='', file=sys.stderr)
+
+        # Look for reject files in the output
+        rejects = []
+        for line in (result.stdout + result.stderr).splitlines():
+            if '.rej' in line and 'saving rejects to file' in line:
+                # Extract the reject file path
+                match = re.search(r'saving rejects to file (.+\.rej)', line)
+                if match:
+                    rejects.append(match.group(1))
+
+        return rejects
 
     def _update_mozconfig(self):
         """
