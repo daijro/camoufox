@@ -982,7 +982,7 @@ diff --git a/dom/base/Navigator.h b/dom/base/Navigator.h
 index 893947475fbb8688becb1c1495385e4048d4927d..dfb50acf689223fdab7ef6f42afbbd53341e1b0b 100644
 --- a/dom/base/Navigator.h
 +++ b/dom/base/Navigator.h
-@@ -220,7 +220,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+@@ -228,7 +228,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
  
    StorageManager* Storage();
  
@@ -2344,7 +2344,7 @@ diff --git a/layout/style/GeckoBindings.h b/layout/style/GeckoBindings.h
 index 9527443c79077e0a728d78c3184ab7319f1c9efd..4e193ed114b4f70fb72bea928709fc7723f35b88 100644
 --- a/layout/style/GeckoBindings.h
 +++ b/layout/style/GeckoBindings.h
-@@ -593,6 +593,7 @@ float Gecko_MediaFeatures_GetResolution(const mozilla::dom::Document*);
+@@ -591,6 +591,7 @@ float Gecko_MediaFeatures_GetResolution(const mozilla::dom::Document*);
  bool Gecko_MediaFeatures_PrefersReducedMotion(const mozilla::dom::Document*);
  bool Gecko_MediaFeatures_PrefersReducedTransparency(
      const mozilla::dom::Document*);
