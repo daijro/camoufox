@@ -2,9 +2,9 @@ diff --git a/browser/app/moz.build b/browser/app/moz.build
 index 434167c996..e18a16aee0 100644
 --- a/browser/app/moz.build
 +++ b/browser/app/moz.build
-@@ -174,3 +174,6 @@ for icon in ("firefox", "document", "newwindow", "newtab", "pbmode", "document_p
+@@ -183,3 +183,6 @@ for icon in ("firefox", "document", "newwindow", "newtab", "pbmode", "document_p
          CONFIG["MOZ_BRANDING_DIRECTORY"],
-         icon,
+        icon,
      )
 +
 +# DOM Mask
@@ -407,7 +407,7 @@ diff --git a/dom/battery/BatteryManager.cpp b/dom/battery/BatteryManager.cpp
 index a42ac3017d..fadae4a714 100644
 --- a/dom/battery/BatteryManager.cpp
 +++ b/dom/battery/BatteryManager.cpp
-@@ -7,6 +7,7 @@
+@@ -9,6 +9,7 @@
  #include <cmath>
  #include <limits>
  #include "BatteryManager.h"
