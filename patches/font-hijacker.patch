@@ -149,9 +149,11 @@ diff --git a/layout/style/moz.build b/layout/style/moz.build
 index a14ab6a7ac..6e6a727abf 100644
 --- a/layout/style/moz.build
 +++ b/layout/style/moz.build
-@@ -351,3 +351,6 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
-     CONFIGURE_SUBST_FILES += [
-         "extra-bindgen-flags",
+@@ -379,3 +379,6 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
+    CbindgenHeader(
+        "ServoStyleConsts.h",
+        inputs=["/servo/ports/geckolib", "/servo/components/style"],
+    )
      ]
 +
 +# DOM Mask
