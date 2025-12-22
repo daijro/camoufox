@@ -2,14 +2,16 @@ diff --git a/browser/app/moz.build b/browser/app/moz.build
 index 434167c996..e18a16aee0 100644
 --- a/browser/app/moz.build
 +++ b/browser/app/moz.build
-@@ -188,3 +188,6 @@ for icon in ("firefox", "document", "newwindow", "newtab", "pbmode", "document_p
-         CONFIG["MOZ_BRANDING_DIRECTORY"],
-        icon,
+@@ -183,6 +183,9 @@
+         icon,
      )
+ 
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
-\ No newline at end of file
+ if CONFIG["MOZ_ASAN"] or CONFIG["MOZ_DEBUG"]:
+     WINCONSOLE = True
+ else:
 diff --git a/dom/base/Element.cpp b/dom/base/Element.cpp
 index 807cb4ec25..3df0e0f70f 100644
 --- a/dom/base/Element.cpp
