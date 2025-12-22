@@ -14,12 +14,11 @@ diff --git a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp b/dom/media/webs
 index e5a1353d6b..4a4a5b080b 100644
 --- a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
 +++ b/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
-@@ -11,6 +11,7 @@
- 
- #include "SpeechSynthesisChild.h"
- #include "SpeechSynthesisParent.h"
+@@ -26,6 +26,7 @@
+ #include "nsSpeechTask.h"
+ #include "nsString.h"
+
 +#include "MaskConfig.hpp"
- 
  using mozilla::intl::LocaleService;
  
 @@ -169,6 +170,20 @@ nsSynthVoiceRegistry* nsSynthVoiceRegistry::GetInstance() {
