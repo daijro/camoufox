@@ -23,13 +23,14 @@ diff --git a/dom/media/moz.build b/dom/media/moz.build
 index 21063575d7..9e7c9f3e84 100644
 --- a/dom/media/moz.build
 +++ b/dom/media/moz.build
-@@ -419,3 +419,5 @@ if CONFIG["CC_TYPE"] in ("clang", "gcc"):
+@@ -418,4 +418,6 @@
  CXXFLAGS += ["-Werror=switch"]
  
  FINAL_LIBRARY = "xul"
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
-\ No newline at end of file
+ 
+ SPHINX_TREES["/media"] = "docs"
 diff --git a/dom/media/webaudio/AudioContext.cpp b/dom/media/webaudio/AudioContext.cpp
 index 66184b683b..daf30882ea 100644
 --- a/dom/media/webaudio/AudioContext.cpp
