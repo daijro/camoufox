@@ -973,7 +973,7 @@ index 11a57adbb57b0adccf7ae491e7d7757f838bd9dc..e478244cedc2089fb99b3153d7493b7d
 +    GetAcceptLanguages(nullptr, aLanguages);
 +  }
 
- @@ -2337,7 +2347,8 @@ bool Navigator::Webdriver() {
+ @@ -2336,6 +2336,7 @@ bool Navigator::Webdriver() {
    }
  #endif
 
