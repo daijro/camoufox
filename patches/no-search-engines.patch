@@ -15,10 +15,10 @@ diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/co
 index 3dab73ee2f..c5c1259217 100644
 --- a/toolkit/components/search/SearchEngineSelector.sys.mjs
 +++ b/toolkit/components/search/SearchEngineSelector.sys.mjs
-@@ -158,6 +158,21 @@ export class SearchEngineSelector {
+@@ -333,6 +333,21 @@ export class SearchEngineSelector {
     *   could be obtained.
     */
-   async _getConfiguration(firstTime = true) {
+   async #getConfiguration(firstTime = true) {
 +    if (true) {
 +      return [
 +        {
