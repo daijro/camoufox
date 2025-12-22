@@ -418,16 +418,17 @@ index 7ef493156f..605f8bbb9f 100644
  #include "mozilla/ExtensionPolicyService.h"
  #include "mozilla/FloatingPoint.h"
  #include "mozilla/FlushType.h"
-@@ -323,6 +324,9 @@
+@@ -325,6 +326,10 @@
  #include "xpcprivate.h"
  #include "xpcpublic.h"
- 
+
 +#include "FontSpacingSeedManager.h"
 +#include "nsDocShell.h"
 +#include "mozilla/OriginAttributes.h"
- #include "nsIDOMXULControlElement.h"
- 
++
  #ifdef NS_PRINTING
+ #  include "nsIPrintSettings.h"
+ #endif
 @@ -7467,6 +7471,66 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
    return mIntlUtils;
  }

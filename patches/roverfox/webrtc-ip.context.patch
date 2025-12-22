@@ -382,14 +382,12 @@ diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index 605f8bbb9f..83755fd8d5 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -325,6 +325,7 @@
- #include "xpcpublic.h"
- 
+@@ -328,6 +328,7 @@
+
  #include "FontSpacingSeedManager.h"
 +#include "WebRTCIPManager.h"
  #include "nsDocShell.h"
  #include "mozilla/OriginAttributes.h"
- #include "nsIDOMXULControlElement.h"
 @@ -7531,6 +7532,126 @@ void nsGlobalWindowInner::SetFontSpacingSeed(uint32_t seed, ErrorResult& aRv) {
    }
  }
