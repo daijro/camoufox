@@ -2,7 +2,7 @@ diff --git a/browser/app/moz.build b/browser/app/moz.build
 index 434167c996..e18a16aee0 100644
 --- a/browser/app/moz.build
 +++ b/browser/app/moz.build
-@@ -183,3 +183,6 @@ for icon in ("firefox", "document", "newwindow", "newtab", "pbmode", "document_p
+@@ -188,3 +188,6 @@ for icon in ("firefox", "document", "newwindow", "newtab", "pbmode", "document_p
          CONFIG["MOZ_BRANDING_DIRECTORY"],
         icon,
      )
