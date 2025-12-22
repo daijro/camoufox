@@ -367,8 +367,7 @@ diff --git a/docshell/base/nsDocShell.cpp b/docshell/base/nsDocShell.cpp
 index bf702818cf4116ec1cd911b6e7b5f7ddafa3e508..d846e5f6f900d2d69228331b80031bd1c18b08ed 100644
 --- a/docshell/base/nsDocShell.cpp
 +++ b/docshell/base/nsDocShell.cpp
-@@ -16,6 +16,12 @@
- #  include <unistd.h>  // for getpid()
+@@ -18,6 +18,12 @@
  #endif
  
 +#if JS_HAS_INTL_API && !MOZ_SYSTEM_ICU
@@ -377,9 +376,9 @@ index bf702818cf4116ec1cd911b6e7b5f7ddafa3e508..d846e5f6f900d2d69228331b80031bd1
 +
 +#include "js/LocaleSensitive.h"
 +
- #include "mozilla/ArrayUtils.h"
  #include "mozilla/Attributes.h"
  #include "mozilla/AutoRestore.h"
+ #include "mozilla/BasePrincipal.h"
 @@ -67,6 +73,7 @@
  #include "mozilla/dom/DocGroup.h"
  #include "mozilla/dom/Element.h"
