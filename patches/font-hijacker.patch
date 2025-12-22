@@ -116,14 +116,12 @@ diff --git a/layout/style/FontFaceImpl.h b/layout/style/FontFaceImpl.h
 index 70c06609e9..66b2666621 100644
 --- a/layout/style/FontFaceImpl.h
 +++ b/layout/style/FontFaceImpl.h
-@@ -8,6 +8,7 @@
- #define mozilla_dom_FontFaceImpl_h
- 
+@@ -14,6 +14,7 @@
  #include "mozilla/dom/FontFaceBinding.h"
 +#include "MaskConfig.hpp"
- #include "mozilla/FontPropertyTypes.h"
- #include "mozilla/Maybe.h"
- #include "mozilla/Mutex.h"
+ #include "nsTHashSet.h"
+ 
+ namespace mozilla {
 @@ -35,6 +36,20 @@ class UTF8StringOrArrayBufferOrArrayBufferView;
  
  namespace mozilla::dom {

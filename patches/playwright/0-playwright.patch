@@ -2352,7 +2352,7 @@ diff --git a/layout/style/GeckoBindings.h b/layout/style/GeckoBindings.h
 index 9527443c79077e0a728d78c3184ab7319f1c9efd..4e193ed114b4f70fb72bea928709fc7723f35b88 100644
 --- a/layout/style/GeckoBindings.h
 +++ b/layout/style/GeckoBindings.h
-@@ -591,6 +591,7 @@ float Gecko_MediaFeatures_GetResolution(const mozilla::dom::Document*);
+@@ -591,6 +592,7 @@ float Gecko_MediaFeatures_GetResolution(const mozilla::dom::Document*);
  bool Gecko_MediaFeatures_PrefersReducedMotion(const mozilla::dom::Document*);
  bool Gecko_MediaFeatures_PrefersReducedTransparency(
      const mozilla::dom::Document*);
