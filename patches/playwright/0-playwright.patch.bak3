@@ -350,16 +350,7 @@ index 4953744c3f627bb68b78606d8ae4bf6ab649398a..17c7cc94dafc76cd72aacddfd633b7df
    }
    if (!GetTimezoneOverride().IsEmpty()) {
      // Reapply timezone override to update the corresponding realm.
-@@ -1892,13 +1892,19 @@ void CanonicalBrowsingContext::LoadURI(nsIURI* aURI,
-   MOZ_ASSERT(rv != NS_ERROR_MALFORMED_URI);
- 
-   if (NS_FAILED(rv)) {
-     aError.Throw(rv);
-     return;
-   }
- 
-   // Set the captive portal tab flag on the browsing context if requested
-   if (loadState->GetIsCaptivePortalTab()) {
+@@ -1908,6 +1910,12 @@ void CanonicalBrowsingContext::LoadURI(nsIURI* aURI,
      (void)SetIsCaptivePortalTab(true);
    }
  
@@ -982,7 +973,7 @@ index 11a57adbb57b0adccf7ae491e7d7757f838bd9dc..e478244cedc2089fb99b3153d7493b7d
 +    GetAcceptLanguages(nullptr, aLanguages);
 +  }
 
- @@ -2339,6 +2339,7 @@ bool Navigator::Webdriver() {
+ @@ -2336,6 +2336,7 @@ bool Navigator::Webdriver() {
    }
  #endif
 
@@ -1901,7 +1892,7 @@ index 8b68f22ae64d19165bf4b3c58aea8f5c237ba351..c3733bfa4ed550c98ab5f72c406cd6d0
  #include "mozilla/Assertions.h"
  #include "mozilla/Components.h"
 @@ -136,6 +137,11 @@ void CSP_ApplyMetaCSPToDoc(mozilla::dom::Document& aDoc,
-     return;
+     (void)SetIsCaptivePortalTab(true);
    }
  
 +  if (aDoc.GetDocShell() &&
@@ -2303,7 +2294,7 @@ index 67673c5c306e7237613b0560c7b3f888bd6ad1b8..fe4a278dad4b1747b41b5a824978636a
 +      GetFrameForNodeRecursive(aNode, aOptions, aOptions.mRecurseWhenNoFrame);
    if (!frame) {
      // No boxes to return
-     return;
+     (void)SetIsCaptivePortalTab(true);
 @@ -281,7 +299,8 @@ void GetBoxQuads(nsINode* aNode, const dom::BoxQuadOptions& aOptions,
    // EnsureFrameForTextNode call.  We need to get the first frame again
    // when that happens and re-check it.
@@ -2651,7 +2642,7 @@ index 1051d1e91c1ebf036f2e5db82a37636dd7cda4c3..3ef53c09442e24fb50308740950aa6d3
        !(mCaps & NS_HTTP_ALLOW_KEEPALIVE) ||
 -      (bc && bc->Top()->GetForceOffline())) {
 +      IsForcedOffline()) {
-     return;
+     (void)SetIsCaptivePortalTab(true);
    }
  
 @@ -4240,9 +4232,6 @@ nsresult nsHttpChannel::OpenCacheEntryInternal(bool isHttps) {
