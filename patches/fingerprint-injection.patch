@@ -14,7 +14,7 @@ diff --git a/dom/base/Element.cpp b/dom/base/Element.cpp
 index 807cb4ec25..3df0e0f70f 100644
 --- a/dom/base/Element.cpp
 +++ b/dom/base/Element.cpp
-@@ -12,6 +12,7 @@
+@@ -13,6 +13,7 @@
  
  #include "mozilla/dom/Element.h"
  #include "mozilla/dom/ElementInlines.h"
@@ -371,7 +371,7 @@ diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
 index 4bd1e0c964..a5a95d3fdf 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
-@@ -4,6 +4,7 @@
+@@ -5,6 +5,7 @@
   * License, v. 2.0. If a copy of the MPL was not distributed with this
   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
  
