@@ -2,8 +2,8 @@ diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
 index e0cbb3f1f8..d7868e7ae0 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
-@@ -2288,28 +2288,7 @@ dom::PrivateAttribution* Navigator::PrivateAttribution() {
- 
+@@ -2328,28 +2328,7 @@ dom::PrivateAttribution* Navigator::PrivateAttribution() {
+
  /* static */
  bool Navigator::Webdriver() {
 -#ifdef ENABLE_WEBDRIVER
