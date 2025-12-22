@@ -1,3 +1,34 @@
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index e0cbb3f1f8..d7868e7ae0 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -2318,22 +2318,7 @@ dom::PrivateAttribution* Navigator::PrivateAttribution() {
+
+ /* static */
+ bool Navigator::Webdriver() {
+-#ifdef ENABLE_WEBDRIVER
+-  nsCOMPtr<nsIMarionette> marionette = do_GetService(NS_MARIONETTE_CONTRACTID);
+-  if (marionette) {
+-    bool marionetteRunning = false;
+-    marionette->GetRunning(&marionetteRunning);
+-    if (marionetteRunning) {
+-      return true;
+-    }
+-  }
+-
+-  nsCOMPtr<nsIRemoteAgent> agent = do_GetService(NS_REMOTEAGENT_CONTRACTID);
+-  if (agent) {
+-    bool remoteAgentRunning = false;
+-    agent->GetRunning(&remoteAgentRunning);
+-    if (remoteAgentRunning) {
+-      return true;
+-    }
+-  }
+-#endif
+-
+   return false;
+ }
+
 diff --git a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
 index 0eeb5924c4..8b975a8b11 100644
 --- a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
@@ -5,7 +36,7 @@ index 0eeb5924c4..8b975a8b11 100644
 @@ -108,12 +108,6 @@ EnterprisePoliciesManager.prototype = {
        Services.prefs.clearUserPref(PREF_POLICIES_APPLIED);
      }
- 
+
 -    // Playwright: Disable enterprise policies
 -    if (true) {
 -      this.status = Ci.nsIEnterprisePolicies.INACTIVE;
@@ -13,5 +44,5 @@ index 0eeb5924c4..8b975a8b11 100644
 -    }
 -
      let provider = this._chooseProvider();
- 
+
      if (provider.failed) {
