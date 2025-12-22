@@ -245,20 +245,21 @@ diff --git a/docshell/base/BrowsingContext.h b/docshell/base/BrowsingContext.h
 index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c460a69e2b 100644
 --- a/docshell/base/BrowsingContext.h
 +++ b/docshell/base/BrowsingContext.h
-@@ -205,10 +205,10 @@ struct EmbedderColorSchemes {
+@@ -209,11 +209,11 @@ struct EmbedderColorSchemes {
    FIELD(GVInaudibleAutoplayRequestStatus, GVAutoplayRequestStatus)            \
    /* ScreenOrientation-related APIs */                                        \
    FIELD(CurrentOrientationAngle, float)                                       \
 -  FIELD(CurrentOrientationType, mozilla::dom::OrientationType)                \
 +  FIELD(CurrentOrientationType, dom::OrientationType)                \
    FIELD(OrientationLock, mozilla::hal::ScreenOrientation)                     \
+   FIELD(HasOrientationOverride, bool)                                         \
    FIELD(UserAgentOverride, nsString)                                          \
 -  FIELD(TouchEventsOverrideInternal, mozilla::dom::TouchEventsOverride)       \
 +  FIELD(TouchEventsOverrideInternal, dom::TouchEventsOverride)       \
    FIELD(EmbedderElementType, Maybe<nsString>)                                 \
    FIELD(MessageManagerGroup, nsString)                                        \
    FIELD(MaxTouchPointsOverride, uint8_t)                                      \
-@@ -246,6 +246,9 @@ struct EmbedderColorSchemes {
+@@ -253,6 +256,9 @@ struct EmbedderColorSchemes {
     * <browser> embedder element. */                                           \
    FIELD(EmbedderColorSchemes, EmbedderColorSchemes)                           \
    FIELD(DisplayMode, dom::DisplayMode)                                        \
@@ -295,7 +296,7 @@ index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c4
    bool CanSet(FieldIndex<IDX_ForcedColorsOverride>, dom::ForcedColorsOverride,
                ContentParent*) {
      return IsTop();
-@@ -1164,12 +1180,24 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
+@@ -1278,13 +1297,25 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
    void DidSet(FieldIndex<IDX_ForcedColorsOverride>,
                dom::ForcedColorsOverride aOldValue);
  
@@ -306,7 +307,9 @@ index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c4
    void WalkPresContexts(Callback&&);
    void PresContextAffectingFieldChanged();
  
-   void DidSet(FieldIndex<IDX_LanguageOverride>, nsString&& aOldValue);
+   void DidSet(FieldIndex<IDX_LanguageOverride>, nsCString&& aOldValue);
+ 
+   void DidSet(FieldIndex<IDX_TimezoneOverride>, nsString&& aOldValue);
  
 +  bool CanSet(FieldIndex<IDX_PrefersReducedMotionOverride>,
 +              dom::PrefersReducedMotionOverride, ContentParent*) {
@@ -333,15 +336,20 @@ diff --git a/docshell/base/CanonicalBrowsingContext.cpp b/docshell/base/Canonica
 index 4953744c3f627bb68b78606d8ae4bf6ab649398a..17c7cc94dafc76cd72aacddfd633b7df58eeae78 100644
 --- a/docshell/base/CanonicalBrowsingContext.cpp
 +++ b/docshell/base/CanonicalBrowsingContext.cpp
-@@ -274,6 +274,8 @@ void CanonicalBrowsingContext::ReplacedBy(
+@@ -274,7 +274,9 @@ void CanonicalBrowsingContext::ReplacedBy(
    txn.SetForceOffline(GetForceOffline());
    txn.SetTopInnerSizeForRFP(GetTopInnerSizeForRFP());
    txn.SetIPAddressSpace(GetIPAddressSpace());
 +  txn.SetPrefersReducedMotionOverride(GetPrefersReducedMotionOverride());
 +  txn.SetForcedColorsOverride(GetForcedColorsOverride());
+   txn.SetParentalControlsEnabled(GetParentalControlsEnabled());
  
-   // Propagate some settings on BrowsingContext replacement so they're not lost
-   // on bfcached navigations. These are important for GeckoView (see bug
+   if (!GetLanguageOverride().IsEmpty()) {
+     // Reapply language override to update the corresponding realm.
+     txn.SetLanguageOverride(GetLanguageOverride());
+   }
+   if (!GetTimezoneOverride().IsEmpty()) {
+     // Reapply timezone override to update the corresponding realm.
 @@ -1705,6 +1707,12 @@ void CanonicalBrowsingContext::LoadURI(nsIURI* aURI,
      return;
    }
