@@ -350,17 +350,8 @@ index 4953744c3f627bb68b78606d8ae4bf6ab649398a..17c7cc94dafc76cd72aacddfd633b7df
    }
    if (!GetTimezoneOverride().IsEmpty()) {
      // Reapply timezone override to update the corresponding realm.
-@@ -1892,13 +1892,19 @@ void CanonicalBrowsingContext::LoadURI(nsIURI* aURI,
-   MOZ_ASSERT(rv != NS_ERROR_MALFORMED_URI);
- 
-   if (NS_FAILED(rv)) {
-     aError.Throw(rv);
+@@ -1903,6 +1905,12 @@ void CanonicalBrowsingContext::LoadURI(nsIURI* aURI,
      return;
-   }
- 
-   // Set the captive portal tab flag on the browsing context if requested
-   if (loadState->GetIsCaptivePortalTab()) {
-     (void)SetIsCaptivePortalTab(true);
    }
  
 +  {
@@ -982,7 +973,7 @@ index 11a57adbb57b0adccf7ae491e7d7757f838bd9dc..e478244cedc2089fb99b3153d7493b7d
 +    GetAcceptLanguages(nullptr, aLanguages);
 +  }
 
- @@ -2339,6 +2339,7 @@ bool Navigator::Webdriver() {
+ @@ -2336,6 +2336,7 @@ bool Navigator::Webdriver() {
    }
  #endif
 
