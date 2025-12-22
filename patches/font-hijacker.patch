@@ -126,8 +126,8 @@ index 70c06609e9..66b2666621 100644
 
  class FontFace;
 
-@@ -35,6 +37,20 @@ class UTF8StringOrArrayBufferOrArrayBufferView;
- 
+@@ -35,6 +37,20 @@
+
  namespace mozilla::dom {
  
 +// Helper function to check if a font is in the allowed list

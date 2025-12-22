@@ -16,7 +16,7 @@ diff --git a/accessible/xpcom/xpcAccessibleDocument.cpp b/accessible/xpcom/xpcAc
 index 3229ee415b93b9a47d7d40605ed7b509744c94ad..c2cc38ded257a02de8922312057892bf9d0cad7b 100644
 --- a/accessible/xpcom/xpcAccessibleDocument.cpp
 +++ b/accessible/xpcom/xpcAccessibleDocument.cpp
-@@ -151,6 +151,13 @@ xpcAccessibleDocument::GetBrowsingContext(
+@@ -151,6 +151,13 @@
    return NS_OK;
  }
  

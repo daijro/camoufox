@@ -382,9 +382,9 @@ index 4bd1e0c964..a5a95d3fdf 100644
  #include "mozilla/GeckoBindings.h"
  #include "mozilla/dom/Document.h"
  #include "mozilla/dom/DocumentInlines.h"
-@@ -40,6 +41,10 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
+@@ -40,6 +41,10 @@
                                     mScreenOrientation)
- 
+
  int32_t nsScreen::PixelDepth() {
 +  if (auto value = MaskConfig::GetUint32("screen.colorDepth"))
 +    return value.value();
