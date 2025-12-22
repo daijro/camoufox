@@ -336,7 +336,7 @@ diff --git a/docshell/base/CanonicalBrowsingContext.cpp b/docshell/base/Canonica
 index 4953744c3f627bb68b78606d8ae4bf6ab649398a..17c7cc94dafc76cd72aacddfd633b7df58eeae78 100644
 --- a/docshell/base/CanonicalBrowsingContext.cpp
 +++ b/docshell/base/CanonicalBrowsingContext.cpp
-@@ -274,7 +274,9 @@ void CanonicalBrowsingContext::ReplacedBy(
+@@ -274,5 +274,7 @@ void CanonicalBrowsingContext::ReplacedBy(
    txn.SetForceOffline(GetForceOffline());
    txn.SetTopInnerSizeForRFP(GetTopInnerSizeForRFP());
    txn.SetIPAddressSpace(GetIPAddressSpace());
