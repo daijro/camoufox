@@ -112,17 +112,21 @@ index 9d1f7c8c5b..926315ca2f 100644
    if (mInFontFaceSet) {
      mFontFaceSet->OnFontFaceStatusChanged(this);
    }
+
 diff --git a/layout/style/FontFaceImpl.h b/layout/style/FontFaceImpl.h
 index 70c06609e9..66b2666621 100644
 --- a/layout/style/FontFaceImpl.h
 +++ b/layout/style/FontFaceImpl.h
-@@ -14,6 +14,7 @@
+@@ -14,8 +14,9 @@
  #include "mozilla/dom/FontFaceBinding.h"
 +#include "MaskConfig.hpp"
  #include "nsTHashSet.h"
- 
+
  namespace mozilla {
-@@ -35,6 +36,20 @@ class UTF8StringOrArrayBufferOrArrayBufferView;
+
+ class FontFace;
+
+@@ -35,6 +37,20 @@ class UTF8StringOrArrayBufferOrArrayBufferView;
  
  namespace mozilla::dom {
  
