@@ -308,7 +308,7 @@ index a1e5c4792d..be99491bf8 100644
           JS::Rooted<JS::Value> arr(cx);
           if (!dom::ToJSValue(cx, src.data(), src.size(), &arr)) {
             rv = NS_ERROR_OUT_OF_MEMORY;
-@@ -3091,8 +3103,26 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
+@@ -3091,8 +3103,26 @@
   const FuncScope funcScope(*this, "getShaderPrecisionFormat");
   if (IsContextLost()) return nullptr;
 

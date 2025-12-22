@@ -10,7 +10,7 @@ index 235d5dde8f..d0102a6746 100644
  #include "nsContentUtils.h"
  #include "nsDOMJSUtils.h"
  #include "nsGlobalWindowInner.h"
-@@ -1582,7 +1584,15 @@ PeerConnectionImpl::SetLocalDescription(int32_t aAction, const char* aSDP) {
+@@ -1582,7 +1584,15 @@
      }
    };
 

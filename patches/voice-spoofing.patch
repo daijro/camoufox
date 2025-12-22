@@ -23,7 +23,7 @@ index e5a1353d6b..4a4a5b080b 100644
 
  namespace mozilla::dom {
 
-@@ -169,6 +171,20 @@ nsSynthVoiceRegistry* nsSynthVoiceRegistry::GetInstance() {
+@@ -169,6 +171,20 @@
        // Start up all speech synth services.
        NS_CreateServicesFromCategory(NS_SPEECH_SYNTH_STARTED, nullptr,
                                      NS_SPEECH_SYNTH_STARTED);

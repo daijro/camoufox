@@ -388,7 +388,7 @@ index 605f8bbb9f..83755fd8d5 100644
 +#include "WebRTCIPManager.h"
  #include "nsDocShell.h"
  #include "mozilla/OriginAttributes.h"
-@@ -7531,6 +7532,126 @@ void nsGlobalWindowInner::SetFontSpacingSeed(uint32_t seed, ErrorResult& aRv) {
+@@ -7531,6 +7532,126 @@
    }
  }
  

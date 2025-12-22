@@ -520,7 +520,7 @@ index 403fe3fabe..dae1655f29 100644
  #include "mozilla/dom/FontFaceSetImpl.h"
  #include "mozilla/dom/FontFaceSet.h"
  #include "mozilla/dom/HTMLCanvasElement.h"
-@@ -4526,10 +4527,20 @@ struct MOZ_STACK_CLASS CanvasBidiProcessor final
+@@ -4526,10 +4527,20 @@
      } else {
        flags &= ~gfx::ShapedTextFlags::TEXT_IS_RTL;
      }
