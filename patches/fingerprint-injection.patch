@@ -14,15 +14,15 @@ diff --git a/dom/base/Element.cpp b/dom/base/Element.cpp
 index 807cb4ec25..3df0e0f70f 100644
 --- a/dom/base/Element.cpp
 +++ b/dom/base/Element.cpp
-@@ -13,6 +13,7 @@
- 
+@@ -13,6 +13,8 @@
  #include "mozilla/dom/Element.h"
- #include "mozilla/dom/ElementInlines.h"
-+#include "MaskConfig.hpp"
  
++#include "MaskConfig.hpp"
++
  #include <inttypes.h>
- #include <initializer_list>
-@@ -984,6 +985,18 @@ nsRect Element::GetClientAreaRect() {
+ 
+ #include <cstddef>
+@@ -1005,6 +1007,18 @@ nsRect Element::GetClientAreaRect() {
    Document* doc = OwnerDoc();
    nsPresContext* presContext = doc->GetPresContext();
  
@@ -371,15 +371,15 @@ diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
 index 4bd1e0c964..a5a95d3fdf 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
-@@ -5,6 +5,7 @@
-  * License, v. 2.0. If a copy of the MPL was not distributed with this
-  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+@@ -7,6 +7,8 @@
+ #include "nsScreen.h"
  
 +#include "MaskConfig.hpp"
- #include "nsContentUtils.h"
- #include "nsScreen.h"
++
+ #include "mozilla/GeckoBindings.h"
  #include "mozilla/dom/Document.h"
-@@ -37,6 +38,10 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
+ #include "mozilla/dom/DocumentInlines.h"
+@@ -40,6 +41,10 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
                                     mScreenOrientation)
  
  int32_t nsScreen::PixelDepth() {
@@ -390,7 +390,7 @@ index 4bd1e0c964..a5a95d3fdf 100644
    // Return 24 to prevent fingerprinting.
    if (ShouldResistFingerprinting(RFPTarget::ScreenPixelDepth)) {
      return 24;
-@@ -89,6 +94,12 @@ CSSIntRect nsScreen::GetRect() {
+@@ -75,6 +80,12 @@ CSSIntRect nsScreen::GetRect() {
  }
  
  CSSIntRect nsScreen::GetAvailRect() {
