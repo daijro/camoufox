@@ -975,10 +975,10 @@ index 11a57adbb57b0adccf7ae491e7d7757f838bd9dc..e478244cedc2089fb99b3153d7493b7d
  
    // The returned value is cached by the binding code. The window listens to the
    // accept languages change and will clear the cache when needed. It has to
-@@ -2315,7 +2325,8 @@ bool Navigator::Webdriver() {
+@@ -2318,7 +2328,8 @@ bool Navigator::Webdriver() {
    }
  #endif
- 
+
 -  return false;
 +  // Playwright is automating the browser, so we should pretend to be a webdriver
 +  return true;
