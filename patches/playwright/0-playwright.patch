@@ -350,7 +350,7 @@ index 4953744c3f627bb68b78606d8ae4bf6ab649398a..17c7cc94dafc76cd72aacddfd633b7df
    }
    if (!GetTimezoneOverride().IsEmpty()) {
      // Reapply timezone override to update the corresponding realm.
-@@ -1705,6 +1707,12 @@ void CanonicalBrowsingContext::LoadURI(nsIURI* aURI,
+@@ -1903,6 +1905,12 @@ void CanonicalBrowsingContext::LoadURI(nsIURI* aURI,
      return;
    }
  
