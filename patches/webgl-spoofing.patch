@@ -271,8 +271,7 @@ index a1e5c4792d..be99491bf8 100644
        return;
    }
  
-@@ -2574,7 +2574,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
-
+@@ -2573,7 +2573,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
          switch (pname) {
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
 +            if (auto value = MaskConfig::GetString("webGl:renderer")) {
@@ -285,7 +284,7 @@ index a1e5c4792d..be99491bf8 100644
               ret = GetUnmaskedRenderer();
              if (ret && StaticPrefs::webgl_sanitize_unmasked_renderer()) {
                ret = Some(webgl::SanitizeRenderer(*ret));
-@@ -2585,6 +2589,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2584,6 +2588,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
              break;
 
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
@@ -298,7 +297,7 @@ index a1e5c4792d..be99491bf8 100644
                       : GetUnmaskedVendor();
              break;
  
-@@ -2676,7 +2684,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2675,7 +2683,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
          case LOCAL_GL_COLOR_WRITEMASK: {
            const auto mask = uint8_t(*maybe);
            const auto bs = std::bitset<4>(mask);
@@ -309,7 +308,7 @@ index a1e5c4792d..be99491bf8 100644
            JS::Rooted<JS::Value> arr(cx);
            if (!dom::ToJSValue(cx, src.data(), src.size(), &arr)) {
              rv = NS_ERROR_OUT_OF_MEMORY;
-@@ -3092,6 +3102,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
+@@ -3091,6 +3101,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
   const FuncScope funcScope(*this, "getShaderPrecisionFormat");
   if (IsContextLost()) return nullptr;
 
@@ -334,7 +333,7 @@ index a1e5c4792d..be99491bf8 100644
   const auto& shaderPrecisions = *notLost->info.shaderPrecisions;
   const auto args =
       webgl::GetShaderPrecisionFormatArgs{shadertype, precisiontype};
-@@ -6234,6 +6262,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
+@@ -6233,6 +6261,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
      return false;
    }
 
@@ -352,7 +351,7 @@ index a1e5c4792d..be99491bf8 100644
    const auto& limits = Limits();
    return limits.supportedExtensions[ext];
  }
-@@ -6245,6 +6284,18 @@ void ClientWebGLContext::GetSupportedExtensions(
+@@ -6244,6 +6283,18 @@ void ClientWebGLContext::GetSupportedExtensions(
    if (IsContextLost()) return;
 
    auto& retarr = retval.SetValue();
