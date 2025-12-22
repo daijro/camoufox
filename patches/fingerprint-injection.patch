@@ -22,8 +22,9 @@ index 807cb4ec25..3df0e0f70f 100644
 +#include "MaskConfig.hpp"
 +
  #include <inttypes.h>
- 
+
  #include <cstddef>
+
 @@ -1005,6 +1007,18 @@ nsRect Element::GetClientAreaRect() {
    Document* doc = OwnerDoc();
    nsPresContext* presContext = doc->GetPresContext();

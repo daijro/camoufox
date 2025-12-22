@@ -10,6 +10,7 @@ index 988f5831f2..62f64589a4 100644
       !queryContext.searchString ||
       queryContext.searchString.length > UrlbarUtils.MAX_TEXT_LENGTH ||
       lazy.UrlUtils.REGEXP_LIKE_PROTOCOL.test(queryContext.searchString) ||
+
 diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/components/search/SearchEngineSelector.sys.mjs
 index 3dab73ee2f..c5c1259217 100644
 --- a/toolkit/components/search/SearchEngineSelector.sys.mjs
