@@ -323,7 +323,7 @@ index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c4
    void DidSet(FieldIndex<IDX_MediumOverride>, nsString&& aOldValue);
  
    bool CanSet(FieldIndex<IDX_SuspendMediaWhenInactive>, bool, ContentParent*) {
-@@ -1360,6 +1388,8 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
+@@ -1485,6 +1485,8 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
  
    void DidSet(FieldIndex<IDX_IsUnderHiddenEmbedderElement>, bool aOldValue);
  
