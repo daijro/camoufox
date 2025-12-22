@@ -271,7 +271,7 @@ index a1e5c4792d..be99491bf8 100644
        return;
    }
  
-@@ -2574,7 +2575,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2574,7 +2576,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
         switch (pname) {
           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
 +            if (auto value = MaskConfig::GetString("webGl:renderer")) {
