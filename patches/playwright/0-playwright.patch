@@ -972,10 +972,8 @@ index 11a57adbb57b0adccf7ae491e7d7757f838bd9dc..e478244cedc2089fb99b3153d7493b7d
 +  } else {
 +    GetAcceptLanguages(nullptr, aLanguages);
 +  }
- 
-   // The returned value is cached by the binding code. The window listens to the
-   // accept languages change and will clear the cache when needed. It has to
-@@ -2318,7 +2328,8 @@ bool Navigator::Webdriver() {
+
+ @@ -2337,7 +2347,8 @@ bool Navigator::Webdriver() {
    }
  #endif
 
@@ -983,7 +981,7 @@ index 11a57adbb57b0adccf7ae491e7d7757f838bd9dc..e478244cedc2089fb99b3153d7493b7d
 +  // Playwright is automating the browser, so we should pretend to be a webdriver
 +  return true;
  }
- 
+
  AutoplayPolicy Navigator::GetAutoplayPolicy(AutoplayPolicyMediaType aType) {
 diff --git a/dom/base/Navigator.h b/dom/base/Navigator.h
 index 893947475fbb8688becb1c1495385e4048d4927d..dfb50acf689223fdab7ef6f42afbbd53341e1b0b 100644
