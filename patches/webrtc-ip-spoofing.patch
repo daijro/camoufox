@@ -2,19 +2,18 @@ diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/js
 index 235d5dde8f..d0102a6746 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-@@ -116,6 +116,8 @@
- 
- #include "mozilla/dom/BrowserChild.h"
+@@ -101,6 +101,8 @@
+ #include "mozilla/net/DataChannelProtocol.h"
  #include "mozilla/net/WebrtcProxyConfig.h"
 +#include "MaskConfig.hpp"
 +#include "mozilla/RustRegex.h"
- 
- #ifdef XP_WIN
- // We need to undef the MS macro again in case the windows include file
-@@ -1702,7 +1704,15 @@ PeerConnectionImpl::SetLocalDescription(int32_t aAction, const char* aSDP) {
+ #include "nsContentUtils.h"
+ #include "nsDOMJSUtils.h"
+ #include "nsGlobalWindowInner.h"
+@@ -1582,7 +1584,15 @@ PeerConnectionImpl::SetLocalDescription(int32_t aAction, const char* aSDP) {
      }
    };
- 
+
 -  mLocalRequestedSDP = aSDP;
 +  // Sanitize the SDP to prevent IP leaks
 +  std::string sanitizedSDP(aSDP);
@@ -28,17 +27,17 @@ index 235d5dde8f..d0102a6746 100644
  
    SyncToJsep();
  
-@@ -3224,12 +3234,22 @@ const std::string& PeerConnectionImpl::GetName() {
+@@ -3240,12 +3250,22 @@ const std::string& PeerConnectionImpl::GetName() {
    return mName;
  }
- 
+
 -void PeerConnectionImpl::CandidateReady(const std::string& candidate,
 +void PeerConnectionImpl::CandidateReady(const std::string& candidate_,
                                          const std::string& transportId,
                                          const std::string& ufrag) {
    STAMP_TIMECARD(mTimeCard, "Ice Candidate gathered");
    PC_AUTO_ENTER_API_CALL_VOID_RETURN(false);
- 
+
 +  const std::string& candidate = [&]() -> const std::string& {
 +    if (ShouldSpoofCandidateIP()) {
 +      static std::string spoofedCandidate;
