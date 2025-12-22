@@ -407,15 +407,15 @@ diff --git a/dom/battery/BatteryManager.cpp b/dom/battery/BatteryManager.cpp
 index a42ac3017d..fadae4a714 100644
 --- a/dom/battery/BatteryManager.cpp
 +++ b/dom/battery/BatteryManager.cpp
-@@ -9,6 +9,7 @@
+@@ -7,6 +7,7 @@
+ #include "BatteryManager.h"
+ 
  #include <cmath>
  #include <limits>
- #include "BatteryManager.h"
+ 
 +#include "MaskConfig.hpp"
  #include "Constants.h"
- #include "mozilla/DOMEventTargetHelper.h"
- #include "mozilla/Hal.h"
-@@ -51,6 +52,9 @@ JSObject* BatteryManager::WrapObject(JSContext* aCx,
+@@ -49,6 +50,9 @@ JSObject* BatteryManager::WrapObject(JSContext* aCx,
  
  bool BatteryManager::Charging() const {
    MOZ_ASSERT(NS_IsMainThread());
