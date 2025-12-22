@@ -272,7 +272,7 @@ index a1e5c4792d..be99491bf8 100644
    }
  
 @@ -2574,7 +2574,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
- 
+
          switch (pname) {
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
 +            if (auto value = MaskConfig::GetString("webGl:renderer")) {
@@ -284,7 +284,7 @@ index a1e5c4792d..be99491bf8 100644
             } else {
               ret = GetUnmaskedRenderer();
              if (ret && StaticPrefs::webgl_sanitize_unmasked_renderer()) {
-               *ret = webgl::SanitizeRenderer(*ret);
+               ret = Some(webgl::SanitizeRenderer(*ret));
 @@ -2585,6 +2535,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
              break;
  
@@ -298,7 +298,7 @@ index a1e5c4792d..be99491bf8 100644
                       : GetUnmaskedVendor();
              break;
  
-@@ -2683,7 +2683,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2676,7 +2676,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
          case LOCAL_GL_COLOR_WRITEMASK: {
            const auto mask = uint8_t(*maybe);
            const auto bs = std::bitset<4>(mask);
@@ -309,7 +309,8 @@ index a1e5c4792d..be99491bf8 100644
            JS::Rooted<JS::Value> arr(cx);
            if (!dom::ToJSValue(cx, src.data(), src.size(), &arr)) {
              rv = NS_ERROR_OUT_OF_MEMORY;
-@@ -3094,5 +3094,23 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
+@@ -3092,6 +3092,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
+  const FuncScope funcScope(*this, "getShaderPrecisionFormat");
   if (IsContextLost()) return nullptr;
 
 +  // Check for spoofed value
@@ -333,10 +334,10 @@ index a1e5c4792d..be99491bf8 100644
   const auto& shaderPrecisions = *notLost->info.shaderPrecisions;
   const auto args =
       webgl::GetShaderPrecisionFormatArgs{shadertype, precisiontype};
-@@ -6233,6 +6248,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
+@@ -6234,6 +6234,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
      return false;
    }
- 
+
 +  if (std::vector<std::string> maskValues =
 +          MaskConfig::GetStringList(mIsWebGL2 ? "webGl2:supportedExtensions"
 +                                              : "webGl:supportedExtensions");
@@ -351,8 +352,8 @@ index a1e5c4792d..be99491bf8 100644
    const auto& limits = Limits();
    return limits.supportedExtensions[ext];
  }
-@@ -6243,6 +6269,18 @@ void ClientWebGLContext::GetSupportedExtensions(
-   if (!mNotLost) return;
+@@ -6245,6 +6245,18 @@ void ClientWebGLContext::GetSupportedExtensions(
+   if (IsContextLost()) return;
  
    auto& retarr = retval.SetValue();
 +
