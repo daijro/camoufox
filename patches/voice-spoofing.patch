@@ -14,7 +14,7 @@ diff --git a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp b/dom/media/webs
 index e5a1353d6b..4a4a5b080b 100644
 --- a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
 +++ b/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
-@@ -27,6 +27,7 @@
+@@ -11,6 +11,7 @@
  
  #include "SpeechSynthesisChild.h"
  #include "SpeechSynthesisParent.h"
