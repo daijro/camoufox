@@ -344,12 +344,6 @@ index 4953744c3f627bb68b78606d8ae4bf6ab649398a..17c7cc94dafc76cd72aacddfd633b7df
 +  txn.SetForcedColorsOverride(GetForcedColorsOverride());
    txn.SetParentalControlsEnabled(GetParentalControlsEnabled());
  
-   if (!GetLanguageOverride().IsEmpty()) {
-     // Reapply language override to update the corresponding realm.
-     txn.SetLanguageOverride(GetLanguageOverride());
-   }
-   if (!GetTimezoneOverride().IsEmpty()) {
-     // Reapply timezone override to update the corresponding realm.
 @@ -1892,13 +1892,19 @@ void CanonicalBrowsingContext::LoadURI(nsIURI* aURI,
    MOZ_ASSERT(rv != NS_ERROR_MALFORMED_URI);
  
