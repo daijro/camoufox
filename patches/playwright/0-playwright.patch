@@ -3127,20 +3127,20 @@ diff --git a/widget/InProcessCompositorWidget.cpp b/widget/InProcessCompositorWi
 index 7098db301770ecb5b9a506d7caec89d5cf63384b..aff8d7562f8a3e595a077ce8e591008762479587 100644
 --- a/widget/InProcessCompositorWidget.cpp
 +++ b/widget/InProcessCompositorWidget.cpp
-@@ -4,7 +4,10 @@
- 
+@@ -5,8 +5,11 @@
  #include "InProcessCompositorWidget.h"
  
 +#include "HeadlessCompositorWidget.h"
 +#include "HeadlessWidget.h"
  #include "mozilla/VsyncDispatcher.h"
 +#include "mozilla/widget/PlatformWidgetTypes.h"
- #include "nsBaseWidget.h"
+ #include "mozilla/layers/NativeLayer.h"
+ #include "nsIWidget.h"
  
  namespace mozilla {
-@@ -23,6 +26,12 @@ RefPtr<CompositorWidget> CompositorWidget::CreateLocal(
+@@ -26,6 +29,12 @@ RefPtr<CompositorWidget> CompositorWidget::CreateLocal(
    // do it after the static_cast.
-   nsBaseWidget* widget = static_cast<nsBaseWidget*>(aWidget);
+   nsIWidget* widget = static_cast<nsIWidget*(aWidget);
    MOZ_RELEASE_ASSERT(widget);
 +  if (aInitData.type() ==
 +      CompositorWidgetInitData::THeadlessCompositorWidgetInitData) {
@@ -3240,11 +3240,12 @@ diff --git a/widget/gtk/nsFilePicker.cpp b/widget/gtk/nsFilePicker.cpp
 index f09b0e4994304413cbd75f14e6650cf3f9df9025..41c184e74df2b9c59315a236506946bcb5d69216 100644
 --- a/widget/gtk/nsFilePicker.cpp
 +++ b/widget/gtk/nsFilePicker.cpp
-@@ -21,6 +21,7 @@
+@@ -21,7 +21,8 @@
  #include "mozilla/Components.h"
  #include "mozilla/Preferences.h"
  #include "mozilla/dom/Promise.h"
 +#include "gfxPlatform.h"
+ #include "mozilla/dom/Document.h"
  
  #include "nsArrayEnumerator.h"
  #include "nsEnumeratorUtils.h"
@@ -3398,7 +3399,7 @@ diff --git a/widget/headless/HeadlessWidget.cpp b/widget/headless/HeadlessWidget
 index 290de12f9d0ff858474564fa8ce54814a04f6088..c144a891b84c3c57f394d6d551e6c89dcd6d9829 100644
 --- a/widget/headless/HeadlessWidget.cpp
 +++ b/widget/headless/HeadlessWidget.cpp
-@@ -111,6 +111,8 @@ void HeadlessWidget::Destroy() {
+@@ -112,6 +112,8 @@ void HeadlessWidget::Destroy() {
      }
    }
  
