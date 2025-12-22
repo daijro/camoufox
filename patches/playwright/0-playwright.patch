@@ -323,14 +323,6 @@ index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c4
    void DidSet(FieldIndex<IDX_MediumOverride>, nsString&& aOldValue);
  
    bool CanSet(FieldIndex<IDX_SuspendMediaWhenInactive>, bool, ContentParent*) {
-@@ -1485,6 +1485,8 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
- 
-   void DidSet(FieldIndex<IDX_IsUnderHiddenEmbedderElement>, bool aOldValue);
- 
-+  void DidSet(FieldIndex<IDX_ForceOffline>, bool aOldValue);
-+
-   // Allow if the process attemping to set field is the same as the owning
-   // process. Deprecated. New code that might use this should generally be moved
    // to WindowContext or be settable only by the parent process.
 diff --git a/docshell/base/CanonicalBrowsingContext.cpp b/docshell/base/CanonicalBrowsingContext.cpp
 index 4953744c3f627bb68b78606d8ae4bf6ab649398a..17c7cc94dafc76cd72aacddfd633b7df58eeae78 100644
