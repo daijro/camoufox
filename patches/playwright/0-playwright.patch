@@ -1556,15 +1556,15 @@ diff --git a/dom/html/HTMLInputElement.cpp b/dom/html/HTMLInputElement.cpp
 index 5b0228d4a61dfe2b95e7a3ce016217007e8dee12..b753b0fceeec3278cb026d9137aafab5fb6ef968 100644
 --- a/dom/html/HTMLInputElement.cpp
 +++ b/dom/html/HTMLInputElement.cpp
-@@ -64,6 +64,7 @@
- #include "mozilla/dom/Document.h"
+@@ -45,6 +45,7 @@
+ #include "mozilla/dom/GetFilesHelper.h"
  #include "mozilla/dom/HTMLDataListElement.h"
  #include "mozilla/dom/HTMLOptionElement.h"
 +#include "nsDocShell.h"
- #include "nsIFrame.h"
- #include "nsRangeFrame.h"
- #include "nsError.h"
-@@ -817,6 +818,13 @@ nsresult HTMLInputElement::InitFilePicker(FilePickerType aType) {
+ #include "mozilla/dom/InputType.h"
+ #include "mozilla/dom/MouseEvent.h"
+ #include "mozilla/dom/MutationEventBinding.h"
+@@ -842,6 +843,13 @@ nsresult HTMLInputElement::InitFilePicker(FilePickerType aType) {
      return NS_ERROR_FAILURE;
    }
  
