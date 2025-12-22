@@ -271,7 +271,7 @@ index a1e5c4792d..be99491bf8 100644
        return;
    }
  
-@@ -2573,7 +2573,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2573,8 +2573,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
         switch (pname) {
           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
 +            if (auto value = MaskConfig::GetString("webGl:renderer")) {
@@ -284,7 +284,7 @@ index a1e5c4792d..be99491bf8 100644
               ret = GetUnmaskedRenderer();
               if (ret && StaticPrefs::webgl_sanitize_unmasked_renderer()) {
                 ret = Some(webgl::SanitizeRenderer(*ret));
-@@ -2584,6 +2588,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2584,8 +2588,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
             break;
 
           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
