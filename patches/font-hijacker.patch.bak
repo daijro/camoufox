@@ -1,0 +1,163 @@
+diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
+index bc0e123f85..52ec46f76b 100644
+--- a/gfx/thebes/gfxPlatformFontList.cpp
++++ b/gfx/thebes/gfxPlatformFontList.cpp
+@@ -13,6 +13,7 @@
+ #include "gfxTextRun.h"
+ #include "gfxUserFontSet.h"
+ #include "SharedFontList-impl.h"
++#include "MaskConfig.hpp"
+ 
+ #include "GeckoProfiler.h"
+ #include "nsCRT.h"
+@@ -303,6 +304,16 @@ gfxPlatformFontList::gfxPlatformFontList(bool aNeedFullnamePostscriptNames)
+ 
+   mFontPrefs = MakeUnique<FontPrefs>();
+ 
++  // Hijack the kFontSystemWhitelistPref pref
++  if (std::vector<std::string> fontValues = MaskConfig::GetStringList("fonts");
++      !fontValues.empty()) {
++    std::string fontValuesJoined =
++        std::accumulate(fontValues.begin(), fontValues.end(), std::string(),
++                        [](const std::string& acc, const std::string& s) {
++                          return acc.empty() ? s : acc + "," + s;
++                        });
++    Preferences::SetCString(kFontSystemWhitelistPref, fontValuesJoined.data());
++  }
+   gfxFontUtils::GetPrefsFontList(kFontSystemWhitelistPref, mEnabledFontsList);
+   mFontFamilyWhitelistActive = !mEnabledFontsList.IsEmpty();
+ 
+diff --git a/gfx/thebes/moz.build b/gfx/thebes/moz.build
+index 3d99906827..a9d1191688 100644
+--- a/gfx/thebes/moz.build
++++ b/gfx/thebes/moz.build
+@@ -305,3 +305,6 @@ DEFINES["GRAPHITE2_STATIC"] = True
+ CXXFLAGS += ["-Werror=switch"]
+ 
+ include("/tools/fuzzing/libfuzzer-config.mozbuild")
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+\ No newline at end of file
+diff --git a/layout/style/FontFace.cpp b/layout/style/FontFace.cpp
+index f1a90334ea..47d3a881ac 100644
+--- a/layout/style/FontFace.cpp
++++ b/layout/style/FontFace.cpp
+@@ -237,7 +237,16 @@ void FontFace::SetSizeAdjust(const nsACString& aValue, ErrorResult& aRv) {
+   mImpl->SetSizeAdjust(aValue, aRv);
+ }
+ 
+-FontFaceLoadStatus FontFace::Status() { return mImpl->Status(); }
++FontFaceLoadStatus FontFace::Status() {
++  nsAutoCString fontFamily;
++  GetFamily(fontFamily);
++
++  if (mozilla::dom::IsFontAllowed(fontFamily)) {
++    return FontFaceLoadStatus::Loaded;
++  } else {
++    return FontFaceLoadStatus::Error;
++  }
++}
+ 
+ Promise* FontFace::Load(ErrorResult& aRv) {
+   EnsurePromise();
+@@ -247,7 +256,17 @@ Promise* FontFace::Load(ErrorResult& aRv) {
+     return nullptr;
+   }
+ 
+-  mImpl->Load(aRv);
++  nsAutoCString fontFamily;
++  GetFamily(fontFamily);
++
++  if (mozilla::dom::IsFontAllowed(fontFamily)) {
++    // For allowed fonts, always resolve the promise
++    mLoaded->MaybeResolve(this);
++  } else {
++    // For non-allowed fonts, always reject the promise
++    mLoaded->MaybeReject(NS_ERROR_FAILURE);
++  }
++
+   return mLoaded;
+ }
+ 
+diff --git a/layout/style/FontFaceImpl.cpp b/layout/style/FontFaceImpl.cpp
+index 9d1f7c8c5b..926315ca2f 100644
+--- a/layout/style/FontFaceImpl.cpp
++++ b/layout/style/FontFaceImpl.cpp
+@@ -357,21 +357,15 @@ void FontFaceImpl::DoLoad() {
+ void FontFaceImpl::SetStatus(FontFaceLoadStatus aStatus) {
+   gfxFontUtils::AssertSafeThreadOrServoFontMetricsLocked();
+ 
+-  if (mStatus == aStatus) {
+-    return;
+-  }
++  nsAutoCString fontFamily;
++  GetFamily(fontFamily);
+ 
+-  if (aStatus < mStatus) {
+-    // We're being asked to go backwards in status!  Normally, this shouldn't
+-    // happen.  But it can if the FontFace had a user font entry that had
+-    // loaded, but then was given a new one by FontFaceSet::InsertRuleFontFace
+-    // if we used a local() rule.  For now, just ignore the request to
+-    // go backwards in status.
+-    return;
++  if (IsFontAllowed(fontFamily)) {
++    mStatus = FontFaceLoadStatus::Loaded;
++  } else {
++    mStatus = FontFaceLoadStatus::Error;
+   }
+ 
+-  mStatus = aStatus;
+-
+   if (mInFontFaceSet) {
+     mFontFaceSet->OnFontFaceStatusChanged(this);
+   }
+
+diff --git a/layout/style/FontFaceImpl.h b/layout/style/FontFaceImpl.h
+index 70c06609e9..66b2666621 100644
+--- a/layout/style/FontFaceImpl.h
++++ b/layout/style/FontFaceImpl.h
+@@ -14,8 +14,9 @@
+ #include "mozilla/dom/FontFaceBinding.h"
++#include "MaskConfig.hpp"
+ #include "nsTHashSet.h"
+
+ namespace mozilla {
+
+ class FontFace;
+
+@@ -35,6 +37,20 @@
+
+ namespace mozilla::dom {
+ 
++// Helper function to check if a font is in the allowed list
++inline bool IsFontAllowed(const nsACString& aFontName) {
++  if (std::vector<std::string> maskValues =
++          MaskConfig::GetStringListLower("fonts");
++      !maskValues.empty()) {
++    std::string fontName(aFontName.BeginReading(), aFontName.EndReading());
++    std::transform(fontName.begin(), fontName.end(), fontName.begin(),
++                   ::tolower);
++    return std::find(maskValues.begin(), maskValues.end(), fontName) !=
++           maskValues.end();
++  }
++  return true;
++}
++
+ class FontFaceImpl final {
+   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(FontFaceImpl)
+ 
+diff --git a/layout/style/moz.build b/layout/style/moz.build
+index a14ab6a7ac..6e6a727abf 100644
+--- a/layout/style/moz.build
++++ b/layout/style/moz.build
+@@ -379,3 +379,6 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
+    CbindgenHeader(
+        "ServoStyleConsts.h",
+        inputs=["/servo/ports/geckolib", "/servo/components/style"],
+    )
+     ]
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+\ No newline at end of file
