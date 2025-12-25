@@ -1,0 +1,23 @@
+From: Jenkins <jenkins@magrathea>
+Date: Fri, 3 Mar 2023 09:03:01 +0100
+Subject: Disable Onboarding Messages
+
+---
+ browser/components/asrouter/modules/OnboardingMessageProvider.sys.mjs | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/browser/components/asrouter/modules/OnboardingMessageProvider.sys.mjs b/browser/components/asrouter/modules/OnboardingMessageProvider.sys.mjs
+index ceded6b755..90aa3abe36 100644
+--- a/browser/components/asrouter/modules/OnboardingMessageProvider.sys.mjs
++++ b/browser/components/asrouter/modules/OnboardingMessageProvider.sys.mjs
+@@ -1213,11 +1213,9 @@ const BASE_MESSAGES = () => [
+ ];
+ 
+ // Eventually, move Feature Callout messages to their own provider
+-const ONBOARDING_MESSAGES = () =>
+-  BASE_MESSAGES().concat(FeatureCalloutMessages.getMessages());
++const ONBOARDING_MESSAGES = () => ([]);
+ 
+ export const OnboardingMessageProvider = {
+   async getExtraAttributes() {
+ 

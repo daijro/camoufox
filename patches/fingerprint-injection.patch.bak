@@ -57,7 +57,7 @@ index 8e577bd9fd..3ed748a75f 100644
  #include "Geolocation.h"
  #include "base/basictypes.h"
  #include "mozilla/Components.h"
-@@ -173,6 +173,8 @@ void Navigator::Invalidate() {
+@@ -267,6 +268,8 @@ void Navigator::Invalidate() {
  
  void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
                               ErrorResult& aRv) const {
@@ -66,7 +66,7 @@ index 8e577bd9fd..3ed748a75f 100644
    nsCOMPtr<nsPIDOMWindowInner> window;
  
    if (mWindow) {
-@@ -262,6 +262,8 @@ void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
+@@ -293,6 +296,8 @@ void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
  }
  
  void Navigator::GetAppCodeName(nsAString& aAppCodeName, ErrorResult& aRv) {
@@ -75,7 +75,7 @@ index 8e577bd9fd..3ed748a75f 100644
    nsresult rv;
  
    nsCOMPtr<nsIHttpProtocolHandler> service(
-@@ -291,6 +291,8 @@ void Navigator::GetAppCodeName(nsAString& aAppCodeName, ErrorResult& aRv) {
+@@ -314,6 +319,8 @@ void Navigator::GetAppCodeName(nsAString& aAppCodeName, ErrorResult& aRv) {
  
  void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
                                ErrorResult& aRv) const {
@@ -84,7 +84,7 @@ index 8e577bd9fd..3ed748a75f 100644
    nsCOMPtr<Document> doc = mWindow->GetExtantDoc();
  
    nsresult rv = GetAppVersion(
-@@ -313,6 +313,8 @@ void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
+@@ -325,6 +332,8 @@ void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
  }
  
  void Navigator::GetAppName(nsAString& aAppName) const {
@@ -118,7 +118,7 @@ index 8e577bd9fd..3ed748a75f 100644
    nsTArray<nsString> languages;
    GetLanguages(languages);
    MOZ_ASSERT(languages.Length() >= 1);
-@@ -423,6 +423,8 @@ void Navigator::GetLanguages(nsTArray<nsString>& aLanguages) {
+@@ -423,6 +443,8 @@ void Navigator::GetLanguages(nsTArray<nsString>& aLanguages) {
  
  void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
                              ErrorResult& aRv) const {
@@ -127,7 +127,7 @@ index 8e577bd9fd..3ed748a75f 100644
    if (mWindow) {
      BrowsingContext* bc = mWindow->GetBrowsingContext();
      nsString customPlatform;
-@@ -443,6 +443,8 @@ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
+@@ -449,6 +471,8 @@ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
  void Navigator::GetOscpu(nsAString& aOSCPU, CallerType aCallerType,
                           ErrorResult& aRv) const {
    if (aCallerType != CallerType::System) {
@@ -136,7 +136,7 @@ index 8e577bd9fd..3ed748a75f 100644
      // If fingerprinting resistance is on, we will spoof this value. See
      // nsRFPService.h for details about spoofed values.
      if (nsContentUtils::ShouldResistFingerprinting(GetDocShell(),
-@@ -511,10 +511,14 @@ void Navigator::GetVendor(nsAString& aVendor) { aVendor.Truncate(); }
+@@ -488,10 +512,14 @@ void Navigator::GetVendor(nsAString& aVendor) { aVendor.Truncate(); }
  void Navigator::GetVendorSub(nsAString& aVendorSub) { aVendorSub.Truncate(); }
  
  void Navigator::GetProduct(nsAString& aProduct) {
@@ -174,7 +174,7 @@ index 8e577bd9fd..3ed748a75f 100644
    // Check whether an exception overrides the global cookie behavior
    // Note that the code for getting the URI here matches that in
    // nsHTMLDocument::SetCookie.
-@@ -578,6 +578,8 @@ bool Navigator::CookieEnabled() {
+@@ -589,6 +624,8 @@ bool Navigator::CookieEnabled() {
  }
  
  bool Navigator::OnLine() {
@@ -183,7 +183,7 @@ index 8e577bd9fd..3ed748a75f 100644
    if (mWindow) {
      // Check if this tab is set to be offline.
      BrowsingContext* bc = mWindow->GetBrowsingContext();
-@@ -625,6 +625,8 @@ bool Navigator::OnLine() {
+@@ -603,6 +640,8 @@ bool Navigator::OnLine() {
  void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
                             ErrorResult& aRv) const {
    if (aCallerType != CallerType::System) {
@@ -192,7 +192,7 @@ index 8e577bd9fd..3ed748a75f 100644
      // If fingerprinting resistance is on, we will spoof this value. See
      // nsRFPService.h for details about spoofed values.
      if (nsContentUtils::ShouldResistFingerprinting(
-@@ -642,6 +642,8 @@ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
+@@ -659,6 +698,8 @@ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
  }
  
  void Navigator::GetDoNotTrack(nsAString& aResult) {
@@ -201,7 +201,7 @@ index 8e577bd9fd..3ed748a75f 100644
    bool doNotTrack = StaticPrefs::privacy_donottrackheader_enabled();
    if (!doNotTrack) {
      nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(mWindow);
-@@ -702,6 +702,9 @@ void Navigator::GetDoNotTrack(nsAString& aResult) {
+@@ -673,6 +714,9 @@ void Navigator::GetDoNotTrack(nsAString& aResult) {
  }
  
  bool Navigator::GlobalPrivacyControl() {
@@ -211,7 +211,7 @@ index 8e577bd9fd..3ed748a75f 100644
    bool gpcStatus = StaticPrefs::privacy_globalprivacycontrol_enabled();
    if (!gpcStatus) {
      nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(mWindow);
-@@ -710,6 +710,8 @@ bool Navigator::GlobalPrivacyControl() {
+@@ -684,6 +728,8 @@ bool Navigator::GlobalPrivacyControl() {
  }
  
  uint64_t Navigator::HardwareConcurrency() {
@@ -220,7 +220,7 @@ index 8e577bd9fd..3ed748a75f 100644
    workerinternals::RuntimeService* rts =
        workerinternals::RuntimeService::GetOrCreateService();
    if (!rts) {
-@@ -868,6 +868,8 @@ bool Navigator::Vibrate(const nsTArray<uint32_t>& aPattern) {
+@@ -882,6 +928,8 @@ bool Navigator::Vibrate(const nsTArray<uint32_t>& aPattern) {
  //*****************************************************************************
  
  uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
