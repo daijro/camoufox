@@ -286,7 +286,7 @@ index a1e5c4792d..be99491bf8 100644
                 ret = Some(webgl::SanitizeRenderer(*ret));
 @@ -2584,8 +2590,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
             break;
-
+ 
           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
 +            if (auto value = MaskConfig::GetString("webGl:vendor")) {
 +              ret = Some(value.value());
@@ -297,7 +297,7 @@ index a1e5c4792d..be99491bf8 100644
                       : GetUnmaskedVendor();
             break;
  
-@@ -2675,9 +2685,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2675,7 +2685,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
         case LOCAL_GL_COLOR_WRITEMASK: {
           const auto mask = uint8_t(*maybe);
           const auto bs = std::bitset<4>(mask);
@@ -308,10 +308,10 @@ index a1e5c4792d..be99491bf8 100644
           JS::Rooted<JS::Value> arr(cx);
           if (!dom::ToJSValue(cx, src.data(), src.size(), &arr)) {
             rv = NS_ERROR_OUT_OF_MEMORY;
-@@ -3091,8 +3103,26 @@
+@@ -3091,6 +3103,24 @@
   const FuncScope funcScope(*this, "getShaderPrecisionFormat");
   if (IsContextLost()) return nullptr;
-
+ 
 +  // Check for spoofed value
 +  if (auto value =
 +          MaskConfig::MShaderData(shadertype, precisiontype, mIsWebGL2)) {
@@ -333,10 +333,10 @@ index a1e5c4792d..be99491bf8 100644
   const auto& shaderPrecisions = *notLost->info.shaderPrecisions;
   const auto args =
       webgl::GetShaderPrecisionFormatArgs{shadertype, precisiontype};
-@@ -6233,8 +6267,19 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
+@@ -6233,6 +6267,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
      return false;
    }
-
+ 
 +  if (std::vector<std::string> maskValues =
 +          MaskConfig::GetStringList(mIsWebGL2 ? "webGl2:supportedExtensions"
 +                                              : "webGl:supportedExtensions");
@@ -351,9 +351,9 @@ index a1e5c4792d..be99491bf8 100644
    const auto& limits = Limits();
    return limits.supportedExtensions[ext];
  }
-@@ -6244,8 +6290,20 @@ void ClientWebGLContext::GetSupportedExtensions(
+@@ -6244,6 +6290,18 @@ void ClientWebGLContext::GetSupportedExtensions(
    if (IsContextLost()) return;
-
+ 
    auto& retarr = retval.SetValue();
 +
 +  // Implement separately to prevent O(n^2) timing

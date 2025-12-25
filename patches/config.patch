@@ -37,7 +37,7 @@ diff --git a/moz.build b/moz.build
 index 9db27fd056..e1ec1dc872 100644
 --- a/moz.build
 +++ b/moz.build
-@@ -228,3 +228,5 @@ SPHINX_TREES["jsloader"] = "docs/jsloader"
+@@ -228,2 +228,4 @@ SPHINX_TREES["jsloader"] = "docs/jsloader"
  
  include("build/templates.mozbuild")
 +

@@ -22,9 +22,9 @@ index 807cb4ec25..3df0e0f70f 100644
 +#include "MaskConfig.hpp"
 +
  #include <inttypes.h>
-
+ 
  #include <cstddef>
-
+ 
 @@ -1005,6 +1007,18 @@ nsRect Element::GetClientAreaRect() {
    Document* doc = OwnerDoc();
    nsPresContext* presContext = doc->GetPresContext();
@@ -48,14 +48,15 @@ diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
 index 8e577bd9fd..3ed748a75f 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
-@@ -8,6 +8,7 @@
- #include "base/basictypes.h"
- 
+@@ -7,6 +7,8 @@
+ // Needs to be first.
  #include "Navigator.h"
+ 
 +#include "MaskConfig.hpp"
- #include "nsIXULAppInfo.h"
- #include "nsPluginArray.h"
- #include "nsMimeTypeArray.h"
++
+ #include "Geolocation.h"
+ #include "base/basictypes.h"
+ #include "mozilla/Components.h"
 @@ -267,6 +268,8 @@ void Navigator::Invalidate() {
  
  void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
@@ -182,7 +183,7 @@ index 8e577bd9fd..3ed748a75f 100644
    if (mWindow) {
      // Check if this tab is set to be offline.
      BrowsingContext* bc = mWindow->GetBrowsingContext();
-@@ -603,6 +640,8 @@ bool Navigator::OnLine() {
+@@ -625,6 +662,8 @@ bool Navigator::OnLine() {
  void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
                             ErrorResult& aRv) const {
    if (aCallerType != CallerType::System) {
@@ -200,7 +201,7 @@ index 8e577bd9fd..3ed748a75f 100644
    bool doNotTrack = StaticPrefs::privacy_donottrackheader_enabled();
    if (!doNotTrack) {
      nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(mWindow);
-@@ -673,6 +714,9 @@ void Navigator::GetDoNotTrack(nsAString& aResult) {
+@@ -702,6 +743,9 @@ void Navigator::GetDoNotTrack(nsAString& aResult) {
  }
  
  bool Navigator::GlobalPrivacyControl() {
@@ -374,9 +375,9 @@ diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
 index 4bd1e0c964..a5a95d3fdf 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
-@@ -7,10 +7,16 @@
+@@ -7,5 +7,7 @@
  #include "nsScreen.h"
-
+ 
 +#include "MaskConfig.hpp"
 +
  #include "mozilla/GeckoBindings.h"
@@ -384,7 +385,7 @@ index 4bd1e0c964..a5a95d3fdf 100644
  #include "mozilla/dom/DocumentInlines.h"
 @@ -40,6 +46,10 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
                                     mScreenOrientation)
-
+ 
  int32_t nsScreen::PixelDepth() {
 +  if (auto value = MaskConfig::GetUint32("screen.colorDepth"))
 +    return value.value();

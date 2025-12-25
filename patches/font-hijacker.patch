@@ -84,7 +84,7 @@ diff --git a/layout/style/FontFaceImpl.cpp b/layout/style/FontFaceImpl.cpp
 index 9d1f7c8c5b..926315ca2f 100644
 --- a/layout/style/FontFaceImpl.cpp
 +++ b/layout/style/FontFaceImpl.cpp
-@@ -357,21 +357,15 @@ void FontFaceImpl::DoLoad() {
+@@ -357,22 +357,16 @@ void FontFaceImpl::DoLoad() {
  void FontFaceImpl::SetStatus(FontFaceLoadStatus aStatus) {
    gfxFontUtils::AssertSafeThreadOrServoFontMetricsLocked();
  
@@ -112,22 +112,22 @@ index 9d1f7c8c5b..926315ca2f 100644
    if (mInFontFaceSet) {
      mFontFaceSet->OnFontFaceStatusChanged(this);
    }
-
+ 
 diff --git a/layout/style/FontFaceImpl.h b/layout/style/FontFaceImpl.h
 index 70c06609e9..66b2666621 100644
 --- a/layout/style/FontFaceImpl.h
 +++ b/layout/style/FontFaceImpl.h
-@@ -14,8 +14,9 @@
+@@ -14,7 +14,8 @@
  #include "mozilla/dom/FontFaceBinding.h"
 +#include "MaskConfig.hpp"
  #include "nsTHashSet.h"
-
+ 
  namespace mozilla {
-
+ 
  class FontFace;
-
+ 
 @@ -35,6 +37,20 @@
-
+ 
  namespace mozilla::dom {
  
 +// Helper function to check if a font is in the allowed list
@@ -151,7 +151,7 @@ diff --git a/layout/style/moz.build b/layout/style/moz.build
 index a14ab6a7ac..6e6a727abf 100644
 --- a/layout/style/moz.build
 +++ b/layout/style/moz.build
-@@ -379,3 +379,6 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
+@@ -379,5 +379,8 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
     CbindgenHeader(
         "ServoStyleConsts.h",
         inputs=["/servo/ports/geckolib", "/servo/components/style"],
