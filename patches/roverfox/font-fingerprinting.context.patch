@@ -514,12 +514,12 @@ diff --git a/dom/canvas/CanvasRenderingContext2D.cpp b/dom/canvas/CanvasRenderin
 index 403fe3fabe..dae1655f29 100644
 --- a/dom/canvas/CanvasRenderingContext2D.cpp
 +++ b/dom/canvas/CanvasRenderingContext2D.cpp
-@@ -59,4 +59,5 @@
- #include "mozilla/dom/Document.h"
+@@ -39,4 +39,5 @@
+ #include "mozilla/MathAlgorithms.h"
 +#include "mozilla/OriginAttributes.h"
- #include "mozilla/dom/FontFaceSetImpl.h"
- #include "mozilla/dom/FontFaceSet.h"
- #include "mozilla/dom/HTMLCanvasElement.h"
+ #include "mozilla/Preferences.h"
+ #include "mozilla/PresShell.h"
+ #include "mozilla/PresShellInlines.h"
 @@ -4526,10 +4527,20 @@
      } else {
        flags &= ~gfx::ShapedTextFlags::TEXT_IS_RTL;
