@@ -374,15 +374,15 @@ diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
 index 4bd1e0c964..a5a95d3fdf 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
-@@ -7,6 +7,8 @@
+@@ -7,10 +7,16 @@
  #include "nsScreen.h"
- 
+
 +#include "MaskConfig.hpp"
 +
  #include "mozilla/GeckoBindings.h"
  #include "mozilla/dom/Document.h"
  #include "mozilla/dom/DocumentInlines.h"
-@@ -40,6 +41,10 @@
+@@ -40,6 +46,10 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
                                     mScreenOrientation)
 
  int32_t nsScreen::PixelDepth() {
