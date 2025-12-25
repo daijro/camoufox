@@ -868,25 +868,19 @@ index a8fac45e67..d59815f2d5 100644
  
    EmphasisMarkDrawParams params(aContext, aPaletteCache);
    params.mark = aMark;
-@@ -1873,6 +1877,8 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+@@ -1872,6 +1876,22 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
       mPageLang(gfxPlatformFontList::GetFontPrefLangFor(aLanguage)),
       mExplicitLanguage(aExplicitLanguage),
 -      mFontVariantEmoji(aVariantEmoji) {
 +      mFontVariantEmoji(aVariantEmoji),
 +      mUserContextId(0) {
-+      mUserContextId(0) {
-   switch (aVariantEmoji) {
-     case StyleFontVariantEmoji::Normal:
-     case StyleFontVariantEmoji::Unicode:
-@@ -1875,7 +1880,19 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
    // We don't use SetUserFontSet() here, as we want to unconditionally call
    // EnsureFontList() rather than only do UpdateUserFonts() if it changed.
-   mCurrGeneration = 0;
 +
 +  // Initialize cached user context ID from the document principal.
 +  mUserContextId = 0;
 +  if (mFontVisibilityProvider) {
-    if (auto* doc = mFontVisibilityProvider ? mFontVisibilityProvider->GetDocument() : nullptr) {
++    if (auto* doc = mFontVisibilityProvider->GetDocument()) {
 +      if (auto* principal = doc->NodePrincipal()) {
 +        auto* bp = mozilla::BasePrincipal::Cast(principal);
 +        if (bp) {
