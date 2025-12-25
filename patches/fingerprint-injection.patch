@@ -174,14 +174,20 @@ index 8e577bd9fd..3ed748a75f 100644
    // Check whether an exception overrides the global cookie behavior
    // Note that the code for getting the URI here matches that in
    // nsHTMLDocument::SetCookie.
-@@ -578,6 +578,8 @@ bool Navigator::CookieEnabled() {
+@@ -625,8 +625,12 @@ bool Navigator::CookieEnabled() {
  }
  
  bool Navigator::OnLine() {
 +  if (auto value = MaskConfig::GetBool("navigator.onLine"); value.has_value())
-+    return value.value();
++    return value.value();            
++  if (nsContentUtils::ShouldResistFingerprinting(
++          GetDocShell(), RFPTarget::NetworkConnection)) {
++    return true;
++  }
++
    if (mWindow) {
      // Check if this tab is set to be offline.
+     BrowsingContext* bc = mWindow->GetBrowsingContext();
      BrowsingContext* bc = mWindow->GetBrowsingContext();
 @@ -625,6 +625,8 @@ bool Navigator::OnLine() {
  void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
@@ -201,16 +207,15 @@ index 8e577bd9fd..3ed748a75f 100644
    bool doNotTrack = StaticPrefs::privacy_donottrackheader_enabled();
    if (!doNotTrack) {
      nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(mWindow);
-@@ -702,6 +702,9 @@ void Navigator::GetDoNotTrack(nsAString& aResult) {
+@@ -702,6 +702,8 @@ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
  }
  
- bool Navigator::GlobalPrivacyControl() {
-+  if (auto value = MaskConfig::GetBool("navigator.globalPrivacyControl");
-+      value.has_value())
-+    return value.value();
-   bool gpcStatus = StaticPrefs::privacy_globalprivacycontrol_enabled();
-   if (!gpcStatus) {
-     nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(mWindow);
+ void Navigator::GetDoNotTrack(nsAString& aResult) {
++  if (auto value = MaskConfig::GetString("navigator.doNotTrack"))
++    return aResult.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   if (StaticPrefs::privacy_donottrackheader_enabled()) {
+     aResult.AssignLiteral("1");
+   } else {
 @@ -710,6 +710,8 @@ bool Navigator::GlobalPrivacyControl() {
  }
  
