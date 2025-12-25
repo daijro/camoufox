@@ -245,7 +245,7 @@ diff --git a/docshell/base/BrowsingContext.h b/docshell/base/BrowsingContext.h
 index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c460a69e2b 100644
 --- a/docshell/base/BrowsingContext.h
 +++ b/docshell/base/BrowsingContext.h
-@@ -205,10 +205,10 @@ struct EmbedderColorSchemes {
+@@ -209,10 +209,10 @@ struct EmbedderColorSchemes {
    FIELD(GVInaudibleAutoplayRequestStatus, GVAutoplayRequestStatus)            \
    /* ScreenOrientation-related APIs */                                        \
    FIELD(CurrentOrientationAngle, float)                                       \
@@ -1934,7 +1934,7 @@ index 83cef5b52b8f5c3168cd1d59266b4149425647fd..a80e89ec26a7e049c8ed84687ba2cd49
  
    RuntimeService* runtime = RuntimeService::GetService();
    if (runtime) {
-@@ -1272,8 +1272,7 @@ bool RuntimeService::RegisterWorker(WorkerPrivate& aWorkerPrivate) {
+@@ -1307,8 +1307,7 @@ bool RuntimeService::RegisterWorker(WorkerPrivate& aWorkerPrivate) {
        }
  
        // The navigator overridden properties should have already been read.
@@ -3440,7 +3440,7 @@ index 2f4c33f151870bb9233899b186a5eccfaa6f5da6..6acf66e4938e3f9727916824a08d6294
    }
  
    static bool Read(MessageReader* aReader, paramType* aResult) {
-@@ -275,6 +276,7 @@ struct ParamTraits<mozilla::WidgetMouseEvent> {
+@@ -278,6 +278,7 @@ struct ParamTraits<mozilla::WidgetMouseEvent> {
        aResult->mExitFrom = Some(static_cast<paramType::ExitFrom>(exitFrom));
      }
      rv = rv && ReadParam(aReader, &aResult->mClickCount);
