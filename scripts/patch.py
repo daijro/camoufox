@@ -49,7 +49,7 @@ class Patcher:
         with temp_cd(find_src_dir('.', version, release)):
             # Reset to unpatched state first (like "Find broken patches")
             print("Resetting to unpatched state...")
-            run('git reset --hard unpatched', exit_on_fail=False)
+            run('git clean -fdx && ./mach clobber && git reset --hard unpatched', exit_on_fail=False)
 
             # Create the base mozconfig file
             run('cp -v ../assets/base.mozconfig mozconfig')

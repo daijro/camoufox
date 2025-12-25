@@ -16,7 +16,7 @@ diff --git a/accessible/xpcom/xpcAccessibleDocument.cpp b/accessible/xpcom/xpcAc
 index 3229ee415b93b9a47d7d40605ed7b509744c94ad..c2cc38ded257a02de8922312057892bf9d0cad7b 100644
 --- a/accessible/xpcom/xpcAccessibleDocument.cpp
 +++ b/accessible/xpcom/xpcAccessibleDocument.cpp
-@@ -151,6 +151,13 @@
+@@ -151,6 +151,13 @@ xpcAccessibleDocument::GetBrowsingContext(
    return NS_OK;
  }
  
@@ -245,21 +245,20 @@ diff --git a/docshell/base/BrowsingContext.h b/docshell/base/BrowsingContext.h
 index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c460a69e2b 100644
 --- a/docshell/base/BrowsingContext.h
 +++ b/docshell/base/BrowsingContext.h
-@@ -209,11 +209,11 @@ struct EmbedderColorSchemes {
+@@ -205,10 +205,10 @@ struct EmbedderColorSchemes {
    FIELD(GVInaudibleAutoplayRequestStatus, GVAutoplayRequestStatus)            \
    /* ScreenOrientation-related APIs */                                        \
    FIELD(CurrentOrientationAngle, float)                                       \
 -  FIELD(CurrentOrientationType, mozilla::dom::OrientationType)                \
 +  FIELD(CurrentOrientationType, dom::OrientationType)                \
    FIELD(OrientationLock, mozilla::hal::ScreenOrientation)                     \
-   FIELD(HasOrientationOverride, bool)                                         \
    FIELD(UserAgentOverride, nsString)                                          \
 -  FIELD(TouchEventsOverrideInternal, mozilla::dom::TouchEventsOverride)       \
 +  FIELD(TouchEventsOverrideInternal, dom::TouchEventsOverride)       \
    FIELD(EmbedderElementType, Maybe<nsString>)                                 \
    FIELD(MessageManagerGroup, nsString)                                        \
    FIELD(MaxTouchPointsOverride, uint8_t)                                      \
-@@ -253,6 +256,9 @@ struct EmbedderColorSchemes {
+@@ -246,6 +246,9 @@ struct EmbedderColorSchemes {
     * <browser> embedder element. */                                           \
    FIELD(EmbedderColorSchemes, EmbedderColorSchemes)                           \
    FIELD(DisplayMode, dom::DisplayMode)                                        \
@@ -296,7 +295,7 @@ index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c4
    bool CanSet(FieldIndex<IDX_ForcedColorsOverride>, dom::ForcedColorsOverride,
                ContentParent*) {
      return IsTop();
-@@ -1278,13 +1297,25 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
+@@ -1164,12 +1180,24 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
    void DidSet(FieldIndex<IDX_ForcedColorsOverride>,
                dom::ForcedColorsOverride aOldValue);
  
@@ -307,9 +306,7 @@ index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c4
    void WalkPresContexts(Callback&&);
    void PresContextAffectingFieldChanged();
  
-   void DidSet(FieldIndex<IDX_LanguageOverride>, nsCString&& aOldValue);
- 
-   void DidSet(FieldIndex<IDX_TimezoneOverride>, nsString&& aOldValue);
+   void DidSet(FieldIndex<IDX_LanguageOverride>, nsString&& aOldValue);
  
 +  bool CanSet(FieldIndex<IDX_PrefersReducedMotionOverride>,
 +              dom::PrefersReducedMotionOverride, ContentParent*) {
@@ -323,30 +320,30 @@ index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c4
    void DidSet(FieldIndex<IDX_MediumOverride>, nsString&& aOldValue);
  
    bool CanSet(FieldIndex<IDX_SuspendMediaWhenInactive>, bool, ContentParent*) {
+@@ -1360,6 +1388,8 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
+ 
+   void DidSet(FieldIndex<IDX_IsUnderHiddenEmbedderElement>, bool aOldValue);
+ 
++  void DidSet(FieldIndex<IDX_ForceOffline>, bool aOldValue);
++
+   // Allow if the process attemping to set field is the same as the owning
+   // process. Deprecated. New code that might use this should generally be moved
    // to WindowContext or be settable only by the parent process.
 diff --git a/docshell/base/CanonicalBrowsingContext.cpp b/docshell/base/CanonicalBrowsingContext.cpp
 index 4953744c3f627bb68b78606d8ae4bf6ab649398a..17c7cc94dafc76cd72aacddfd633b7df58eeae78 100644
 --- a/docshell/base/CanonicalBrowsingContext.cpp
 +++ b/docshell/base/CanonicalBrowsingContext.cpp
-@@ -274,5 +274,7 @@ void CanonicalBrowsingContext::ReplacedBy(
+@@ -274,6 +274,8 @@ void CanonicalBrowsingContext::ReplacedBy(
    txn.SetForceOffline(GetForceOffline());
    txn.SetTopInnerSizeForRFP(GetTopInnerSizeForRFP());
    txn.SetIPAddressSpace(GetIPAddressSpace());
 +  txn.SetPrefersReducedMotionOverride(GetPrefersReducedMotionOverride());
 +  txn.SetForcedColorsOverride(GetForcedColorsOverride());
-   txn.SetParentalControlsEnabled(GetParentalControlsEnabled());
  
-@@ -1892,13 +1892,19 @@ void CanonicalBrowsingContext::LoadURI(nsIURI* aURI,
-   MOZ_ASSERT(rv != NS_ERROR_MALFORMED_URI);
- 
-   if (NS_FAILED(rv)) {
-     aError.Throw(rv);
+   // Propagate some settings on BrowsingContext replacement so they're not lost
+   // on bfcached navigations. These are important for GeckoView (see bug
+@@ -1705,6 +1707,12 @@ void CanonicalBrowsingContext::LoadURI(nsIURI* aURI,
      return;
-   }
- 
-   // Set the captive portal tab flag on the browsing context if requested
-   if (loadState->GetIsCaptivePortalTab()) {
-     (void)SetIsCaptivePortalTab(true);
    }
  
 +  {
@@ -362,7 +359,8 @@ diff --git a/docshell/base/nsDocShell.cpp b/docshell/base/nsDocShell.cpp
 index bf702818cf4116ec1cd911b6e7b5f7ddafa3e508..d846e5f6f900d2d69228331b80031bd1c18b08ed 100644
 --- a/docshell/base/nsDocShell.cpp
 +++ b/docshell/base/nsDocShell.cpp
-@@ -1,5 +1,11 @@
+@@ -16,6 +16,12 @@
+ #  include <unistd.h>  // for getpid()
  #endif
  
 +#if JS_HAS_INTL_API && !MOZ_SYSTEM_ICU
@@ -371,10 +369,10 @@ index bf702818cf4116ec1cd911b6e7b5f7ddafa3e508..d846e5f6f900d2d69228331b80031bd1
 +
 +#include "js/LocaleSensitive.h"
 +
+ #include "mozilla/ArrayUtils.h"
  #include "mozilla/Attributes.h"
  #include "mozilla/AutoRestore.h"
- #include "mozilla/BasePrincipal.h"
-@@ -47,6 +53,7 @@
+@@ -67,6 +73,7 @@
  #include "mozilla/dom/DocGroup.h"
  #include "mozilla/dom/Element.h"
  #include "mozilla/dom/FragmentDirective.h"
@@ -382,7 +380,7 @@ index bf702818cf4116ec1cd911b6e7b5f7ddafa3e508..d846e5f6f900d2d69228331b80031bd1
  #include "mozilla/dom/HTMLAnchorElement.h"
  #include "mozilla/dom/HTMLIFrameElement.h"
  #include "mozilla/dom/Navigation.h"
-@@ -79,6 +86,7 @@
+@@ -98,6 +105,7 @@
  #include "mozilla/dom/DocumentBinding.h"
  #include "mozilla/glean/DocshellMetrics.h"
  #include "mozilla/ipc/ProtocolUtils.h"
@@ -390,7 +388,7 @@ index bf702818cf4116ec1cd911b6e7b5f7ddafa3e508..d846e5f6f900d2d69228331b80031bd1
  #include "mozilla/net/DocumentChannel.h"
  #include "mozilla/net/DocumentChannelChild.h"
  #include "mozilla/net/ParentChannelWrapper.h"
-@@ -103,6 +111,7 @@
+@@ -122,6 +130,7 @@
  #include "nsIDocumentViewer.h"
  #include "mozilla/dom/Document.h"
  #include "nsHTMLDocument.h"
@@ -398,7 +396,7 @@ index bf702818cf4116ec1cd911b6e7b5f7ddafa3e508..d846e5f6f900d2d69228331b80031bd1
  #include "nsIDocumentLoaderFactory.h"
  #include "nsIDOMWindow.h"
  #include "nsIEditingSession.h"
-@@ -198,6 +207,7 @@
+@@ -217,6 +226,7 @@
  #include "nsGlobalWindowInner.h"
  #include "nsGlobalWindowOuter.h"
  #include "nsJSEnvironment.h"
@@ -406,7 +404,7 @@ index bf702818cf4116ec1cd911b6e7b5f7ddafa3e508..d846e5f6f900d2d69228331b80031bd1
  #include "nsNetCID.h"
  #include "nsNetUtil.h"
  #include "nsObjectLoadingContent.h"
-@@ -339,6 +349,14 @@
+@@ -358,6 +368,14 @@ nsDocShell::nsDocShell(BrowsingContext* aBrowsingContext,
        mAllowDNSPrefetch(true),
        mAllowWindowControl(true),
        mCSSErrorReportingEnabled(false),
@@ -967,22 +965,24 @@ index 11a57adbb57b0adccf7ae491e7d7757f838bd9dc..e478244cedc2089fb99b3153d7493b7d
 +  } else {
 +    GetAcceptLanguages(nullptr, aLanguages);
 +  }
-
- @@ -2336,6 +2336,7 @@ bool Navigator::Webdriver() {
+ 
+   // The returned value is cached by the binding code. The window listens to the
+   // accept languages change and will clear the cache when needed. It has to
+@@ -2315,7 +2325,8 @@ bool Navigator::Webdriver() {
    }
  #endif
-
+ 
 -  return false;
 +  // Playwright is automating the browser, so we should pretend to be a webdriver
 +  return true;
  }
-
+ 
  AutoplayPolicy Navigator::GetAutoplayPolicy(AutoplayPolicyMediaType aType) {
 diff --git a/dom/base/Navigator.h b/dom/base/Navigator.h
 index 893947475fbb8688becb1c1495385e4048d4927d..dfb50acf689223fdab7ef6f42afbbd53341e1b0b 100644
 --- a/dom/base/Navigator.h
 +++ b/dom/base/Navigator.h
-@@ -228,7 +228,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+@@ -220,7 +220,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
  
    StorageManager* Storage();
  
@@ -1548,15 +1548,15 @@ diff --git a/dom/html/HTMLInputElement.cpp b/dom/html/HTMLInputElement.cpp
 index 5b0228d4a61dfe2b95e7a3ce016217007e8dee12..b753b0fceeec3278cb026d9137aafab5fb6ef968 100644
 --- a/dom/html/HTMLInputElement.cpp
 +++ b/dom/html/HTMLInputElement.cpp
-@@ -45,6 +45,7 @@
- #include "mozilla/dom/GetFilesHelper.h"
+@@ -64,6 +64,7 @@
+ #include "mozilla/dom/Document.h"
  #include "mozilla/dom/HTMLDataListElement.h"
  #include "mozilla/dom/HTMLOptionElement.h"
 +#include "nsDocShell.h"
- #include "mozilla/dom/InputType.h"
- #include "mozilla/dom/MouseEvent.h"
- #include "mozilla/dom/MutationEventBinding.h"
-@@ -842,6 +843,13 @@ nsresult HTMLInputElement::InitFilePicker(FilePickerType aType) {
+ #include "nsIFrame.h"
+ #include "nsRangeFrame.h"
+ #include "nsError.h"
+@@ -817,6 +818,13 @@ nsresult HTMLInputElement::InitFilePicker(FilePickerType aType) {
      return NS_ERROR_FAILURE;
    }
  
@@ -1925,7 +1925,7 @@ diff --git a/dom/workers/RuntimeService.cpp b/dom/workers/RuntimeService.cpp
 index 83cef5b52b8f5c3168cd1d59266b4149425647fd..a80e89ec26a7e049c8ed84687ba2cd49597be05f 100644
 --- a/dom/workers/RuntimeService.cpp
 +++ b/dom/workers/RuntimeService.cpp
-@@ -1082,7 +1082,7 @@ void PrefLanguagesChanged(const char* /* aPrefName */, void* /* aClosure */) {
+@@ -1117,7 +1117,7 @@ void PrefLanguagesChanged(const char* /* aPrefName */, void* /* aClosure */) {
    AssertIsOnMainThread();
  
    nsTArray<nsString> languages;
@@ -2344,7 +2344,7 @@ diff --git a/layout/style/GeckoBindings.h b/layout/style/GeckoBindings.h
 index 9527443c79077e0a728d78c3184ab7319f1c9efd..4e193ed114b4f70fb72bea928709fc7723f35b88 100644
 --- a/layout/style/GeckoBindings.h
 +++ b/layout/style/GeckoBindings.h
-@@ -591,6 +592,7 @@ float Gecko_MediaFeatures_GetResolution(const mozilla::dom::Document*);
+@@ -591,6 +591,7 @@ float Gecko_MediaFeatures_GetResolution(const mozilla::dom::Document*);
  bool Gecko_MediaFeatures_PrefersReducedMotion(const mozilla::dom::Document*);
  bool Gecko_MediaFeatures_PrefersReducedTransparency(
      const mozilla::dom::Document*);
@@ -2799,7 +2799,7 @@ diff --git a/toolkit/components/resistfingerprinting/nsUserCharacteristics.cpp b
 index 52fa968554a88d1624bf9403b07781a8b42c93b6..2bd5162859dbc482361e2f6aaf5b7a732e9a5929 100644
 --- a/toolkit/components/resistfingerprinting/nsUserCharacteristics.cpp
 +++ b/toolkit/components/resistfingerprinting/nsUserCharacteristics.cpp
-@@ -588,7 +588,7 @@ void PopulateLanguages() {
+@@ -589,7 +589,7 @@ void PopulateLanguages() {
    // sufficient to only collect this information as the other properties are
    // just reformats of Navigator::GetAcceptLanguages.
    nsTArray<nsString> languages;
@@ -3119,17 +3119,20 @@ diff --git a/widget/InProcessCompositorWidget.cpp b/widget/InProcessCompositorWi
 index 7098db301770ecb5b9a506d7caec89d5cf63384b..aff8d7562f8a3e595a077ce8e591008762479587 100644
 --- a/widget/InProcessCompositorWidget.cpp
 +++ b/widget/InProcessCompositorWidget.cpp
-@@ -1,5 +1,7 @@
+@@ -4,7 +4,10 @@
+ 
  #include "InProcessCompositorWidget.h"
  
 +#include "HeadlessCompositorWidget.h"
 +#include "HeadlessWidget.h"
  #include "mozilla/VsyncDispatcher.h"
- #include "mozilla/layers/NativeLayer.h"
- #include "nsIWidget.h"
-@@ -23,6 +25,12 @@
++#include "mozilla/widget/PlatformWidgetTypes.h"
+ #include "nsBaseWidget.h"
+ 
+ namespace mozilla {
+@@ -23,6 +26,12 @@ RefPtr<CompositorWidget> CompositorWidget::CreateLocal(
    // do it after the static_cast.
-   nsIWidget* widget = static_cast<nsIWidget*>(aWidget);
+   nsBaseWidget* widget = static_cast<nsBaseWidget*>(aWidget);
    MOZ_RELEASE_ASSERT(widget);
 +  if (aInitData.type() ==
 +      CompositorWidgetInitData::THeadlessCompositorWidgetInitData) {
@@ -3229,12 +3232,11 @@ diff --git a/widget/gtk/nsFilePicker.cpp b/widget/gtk/nsFilePicker.cpp
 index f09b0e4994304413cbd75f14e6650cf3f9df9025..41c184e74df2b9c59315a236506946bcb5d69216 100644
 --- a/widget/gtk/nsFilePicker.cpp
 +++ b/widget/gtk/nsFilePicker.cpp
-@@ -21,7 +21,8 @@
+@@ -21,6 +21,7 @@
  #include "mozilla/Components.h"
  #include "mozilla/Preferences.h"
  #include "mozilla/dom/Promise.h"
 +#include "gfxPlatform.h"
- #include "mozilla/dom/Document.h"
  
  #include "nsArrayEnumerator.h"
  #include "nsEnumeratorUtils.h"
@@ -3388,7 +3390,7 @@ diff --git a/widget/headless/HeadlessWidget.cpp b/widget/headless/HeadlessWidget
 index 290de12f9d0ff858474564fa8ce54814a04f6088..c144a891b84c3c57f394d6d551e6c89dcd6d9829 100644
 --- a/widget/headless/HeadlessWidget.cpp
 +++ b/widget/headless/HeadlessWidget.cpp
-@@ -112,6 +112,8 @@ void HeadlessWidget::Destroy() {
+@@ -85,6 +85,8 @@ void HeadlessWidget::Destroy() {
      }
    }
  
@@ -3430,7 +3432,7 @@ diff --git a/widget/nsGUIEventIPC.h b/widget/nsGUIEventIPC.h
 index 2f4c33f151870bb9233899b186a5eccfaa6f5da6..6acf66e4938e3f9727916824a08d6294f8993452 100644
 --- a/widget/nsGUIEventIPC.h
 +++ b/widget/nsGUIEventIPC.h
-@@ -251,6 +251,7 @@ struct ParamTraits<mozilla::WidgetMouseEvent> {
+@@ -250,6 +250,7 @@ struct ParamTraits<mozilla::WidgetMouseEvent> {
                                aParam.mExitFrom.value()));
      }
      WriteParam(aWriter, aParam.mClickCount);
