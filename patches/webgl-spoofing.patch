@@ -271,16 +271,7 @@ index a1e5c4792d..be99491bf8 100644
        return;
    }
  
-@@ -2433,11 +2435,15 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
-        break;
-
-      case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
-      case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL: {
-        if (!IsExtensionEnabled(WebGLExtensionID::WEBGL_debug_renderer_info)) {
-          EnqueueError_ArgEnum("pname", pname);
-          return;
-        }
-
+@@ -2573,8 +2575,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
         switch (pname) {
           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
 +            if (auto value = MaskConfig::GetString("webGl:renderer")) {
@@ -293,9 +284,9 @@ index a1e5c4792d..be99491bf8 100644
               ret = GetUnmaskedRenderer();
               if (ret && StaticPrefs::webgl_sanitize_unmasked_renderer()) {
                 ret = Some(webgl::SanitizeRenderer(*ret));
-@@ -2451,8 +2457,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2584,8 +2590,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
             break;
-
+ 
           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
 +            if (auto value = MaskConfig::GetString("webGl:vendor")) {
 +              ret = Some(value.value());
@@ -306,8 +297,7 @@ index a1e5c4792d..be99491bf8 100644
                       : GetUnmaskedVendor();
             break;
  
-@@ -2675,8 +2685,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
-        // 4 bools
+@@ -2675,7 +2685,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
         case LOCAL_GL_COLOR_WRITEMASK: {
           const auto mask = uint8_t(*maybe);
           const auto bs = std::bitset<4>(mask);
