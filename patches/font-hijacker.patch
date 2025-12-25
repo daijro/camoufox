@@ -117,14 +117,13 @@ diff --git a/layout/style/FontFaceImpl.h b/layout/style/FontFaceImpl.h
 index 70c06609e9..66b2666621 100644
 --- a/layout/style/FontFaceImpl.h
 +++ b/layout/style/FontFaceImpl.h
-@@ -14,7 +14,8 @@
+@@ -13,7 +13,8 @@
+ #include "mozilla/ServoStyleConsts.h"
  #include "mozilla/dom/FontFaceBinding.h"
 +#include "MaskConfig.hpp"
  #include "nsTHashSet.h"
- 
- namespace mozilla {
- 
- class FontFace;
+
+ class gfxFontFaceBufferSource;
  
 @@ -35,6 +37,20 @@
  
@@ -151,13 +150,11 @@ diff --git a/layout/style/moz.build b/layout/style/moz.build
 index a14ab6a7ac..6e6a727abf 100644
 --- a/layout/style/moz.build
 +++ b/layout/style/moz.build
-@@ -379,5 +379,8 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
+@@ -378,4 +378,7 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
     CbindgenHeader(
         "ServoStyleConsts.h",
         inputs=["/servo/ports/geckolib", "/servo/components/style"],
     )
-     ]
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
-\ No newline at end of file
