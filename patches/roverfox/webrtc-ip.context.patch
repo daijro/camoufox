@@ -382,8 +382,8 @@ diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index 605f8bbb9f..83755fd8d5 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -328,6 +328,7 @@
-
+@@ -328,4 +328,5 @@
+ 
  #include "FontSpacingSeedManager.h"
 +#include "WebRTCIPManager.h"
  #include "nsDocShell.h"

@@ -2,7 +2,7 @@ diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/js
 index 235d5dde8f..d0102a6746 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-@@ -101,6 +101,8 @@
+@@ -101,5 +101,7 @@
  #include "mozilla/net/DataChannelProtocol.h"
  #include "mozilla/net/WebrtcProxyConfig.h"
 +#include "MaskConfig.hpp"
@@ -13,7 +13,7 @@ index 235d5dde8f..d0102a6746 100644
 @@ -1582,7 +1584,15 @@
      }
    };
-
+ 
 -  mLocalRequestedSDP = aSDP;
 +  // Sanitize the SDP to prevent IP leaks
 +  std::string sanitizedSDP(aSDP);
@@ -30,14 +30,14 @@ index 235d5dde8f..d0102a6746 100644
 @@ -3240,12 +3250,22 @@ const std::string& PeerConnectionImpl::GetName() {
    return mName;
  }
-
+ 
 -void PeerConnectionImpl::CandidateReady(const std::string& candidate,
 +void PeerConnectionImpl::CandidateReady(const std::string& candidate_,
                                          const std::string& transportId,
                                          const std::string& ufrag) {
    STAMP_TIMECARD(mTimeCard, "Ice Candidate gathered");
    PC_AUTO_ENTER_API_CALL_VOID_RETURN(false);
-
+ 
 +  const std::string& candidate = [&]() -> const std::string& {
 +    if (ShouldSpoofCandidateIP()) {
 +      static std::string spoofedCandidate;
