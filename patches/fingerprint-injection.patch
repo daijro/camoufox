@@ -174,21 +174,16 @@ index 8e577bd9fd..3ed748a75f 100644
    // Check whether an exception overrides the global cookie behavior
    // Note that the code for getting the URI here matches that in
    // nsHTMLDocument::SetCookie.
-@@ -625,6 +625,13 @@ bool Navigator::CookieEnabled() {
+@@ -625,6 +625,8 @@ bool Navigator::CookieEnabled() {
  }
- 
+
  bool Navigator::OnLine() {
 +  if (auto value = MaskConfig::GetBool("navigator.onLine"); value.has_value())
 +    return value.value();
-+  if (nsContentUtils::ShouldResistFingerprinting(
-+          GetDocShell(), RFPTarget::NetworkConnection)) {
-+    return true;
-+  }
-+
-   if (mWindow) {
-     // Check if this tab is set to be offline.
-     BrowsingContext* bc = mWindow->GetBrowsingContext();
-@@ -634,6 +634,8 @@ bool Navigator::OnLine() {
+   if (nsContentUtils::ShouldResistFingerprinting(
+           GetDocShell(), RFPTarget::NetworkConnection)) {
+     return true;
+@@ -644,6 +647,8 @@ bool Navigator::OnLine() {
  void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
                             ErrorResult& aRv) const {
    if (aCallerType != CallerType::System) {
@@ -197,16 +192,7 @@ index 8e577bd9fd..3ed748a75f 100644
      // If fingerprinting resistance is on, we will spoof this value. See
      // nsRFPService.h for details about spoofed values.
      if (nsContentUtils::ShouldResistFingerprinting(
-@@ -642,6 +642,8 @@ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
- }
- 
- void Navigator::GetDoNotTrack(nsAString& aResult) {
-+  if (auto value = MaskConfig::GetString("navigator.doNotTrack"))
-+    return aResult.Assign(NS_ConvertUTF8toUTF16(value.value()));
-   bool doNotTrack = StaticPrefs::privacy_donottrackheader_enabled();
-   if (!doNotTrack) {
-     nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(mWindow);
-@@ -702,6 +702,8 @@ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
+@@ -702,6 +704,8 @@ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
  }
  
  void Navigator::GetDoNotTrack(nsAString& aResult) {
