@@ -49,7 +49,7 @@ index d0aebdf965..01472ec205 100644
 
    mAcceptLanguagesIsDirty = false;
 
-@@ -2093,8 +2107,12 @@ nsresult nsHttpHandler::SetAcceptLanguages() {
+@@ -2093,8 +2107,12 @@
    if (NS_SUCCEEDED(rv)) {
      mAcceptLanguages.Assign(buf);
    }
