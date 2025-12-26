@@ -117,14 +117,14 @@ diff --git a/layout/style/FontFaceImpl.h b/layout/style/FontFaceImpl.h
 index 70c06609e9..66b2666621 100644
 --- a/layout/style/FontFaceImpl.h
 +++ b/layout/style/FontFaceImpl.h
-@@ -13,7 +13,8 @@
+@@ -13,6 +13,7 @@
  #include "mozilla/ServoStyleConsts.h"
  #include "mozilla/dom/FontFaceBinding.h"
 +#include "MaskConfig.hpp"
  #include "nsTHashSet.h"
- 
+
  class gfxFontFaceBufferSource;
- 
+
 @@ -33,6 +34,20 @@
  
  namespace mozilla::dom {
