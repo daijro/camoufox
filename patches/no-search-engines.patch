@@ -1,29 +1,24 @@
 diff --git a/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs b/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
-index 988f5831f2..62f64589a4 100644
+index e5bda9f62c..f8988a4430 100644
 --- a/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
 +++ b/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
-@@ -484,11 +484,11 @@ export class UrlbarProviderInterventions extends UrlbarProvider {
-  async isActive(queryContext) {
+@@ -482,7 +482,7 @@ export class UrlbarProviderInterventions extends UrlbarProvider {
+    * @param {UrlbarQueryContext} queryContext The query context object
+    */
+   async isActive(queryContext) {
 -    if (
 +    if (true ||
-      !queryContext.searchString ||
-      queryContext.searchString.length > UrlbarUtils.MAX_TEXT_LENGTH ||
-      lazy.UrlUtils.REGEXP_LIKE_PROTOCOL.test(queryContext.searchString) ||
-      !EN_LOCALE_MATCH.test(Services.locale.appLocaleAsBCP47) ||
-      !Services.policies.isAllowed("urlbarinterventions") ||
-      (await this.queryInstance
-        .getProvider(lazy.UrlbarProviderGlobalActions.name)
-        ?.isActive(queryContext))
-    ) {
-
+       !queryContext.searchString ||
+       queryContext.searchString.length > UrlbarUtils.MAX_TEXT_LENGTH ||
+       lazy.UrlUtils.REGEXP_LIKE_PROTOCOL.test(queryContext.searchString) ||
 diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/components/search/SearchEngineSelector.sys.mjs
-index 3dab73ee2f..c5c1259217 100644
+index 85c9d83282..15cfeac054 100644
 --- a/toolkit/components/search/SearchEngineSelector.sys.mjs
 +++ b/toolkit/components/search/SearchEngineSelector.sys.mjs
-@@ -333,6 +333,21 @@ export class SearchEngineSelector {
-   *   could be obtained.
-   */
-  async #getConfiguration(firstTime = true) {
+@@ -331,6 +331,21 @@ export class SearchEngineSelector {
+    *   could be obtained.
+    */
+   async #getConfiguration(firstTime = true) {
 +    if (true) {
 +      return [
 +        {
@@ -39,6 +34,6 @@ index 3dab73ee2f..c5c1259217 100644
 +        },
 +      ];
 +    }
-    let result = [];
-    let failed = false;
-    try {
+     let result = [];
+     let failed = false;
+     try {

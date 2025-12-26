@@ -150,8 +150,8 @@ diff --git a/layout/style/moz.build b/layout/style/moz.build
 index a14ab6a7ac..6e6a727abf 100644
 --- a/layout/style/moz.build
 +++ b/layout/style/moz.build
-@@ -378,4 +378,7 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
-    CbindgenHeader(
+@@ -379,3 +379,6 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
+        "ServoStyleConsts.h",
         "ServoStyleConsts.h",
         inputs=["/servo/ports/geckolib", "/servo/components/style"],
     )

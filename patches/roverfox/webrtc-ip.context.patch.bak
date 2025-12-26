@@ -534,15 +534,15 @@ diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/js
 index d0102a6746..ed524583bd 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-@@ -101,6 +101,8 @@
+@@ -118,6 +118,8 @@
  #include "mozilla/net/WebrtcProxyConfig.h"
  #include "MaskConfig.hpp"
  #include "mozilla/RustRegex.h"
 +#include "WebRTCIPManager.h"
 +#include "nsDocShell.h"
- #include "nsContentUtils.h"
- #include "nsDOMJSUtils.h"
- #include "nsGlobalWindowInner.h"
+ 
+ #ifdef XP_WIN
+ // We need to undef the MS macro again in case the windows include file
 @@ -3329,11 +3331,56 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
  }
  

@@ -122,11 +122,11 @@ index 70c06609e9..66b2666621 100644
  #include "mozilla/dom/FontFaceBinding.h"
 +#include "MaskConfig.hpp"
  #include "nsTHashSet.h"
-
+ 
  class gfxFontFaceBufferSource;
  
-@@ -35,6 +37,20 @@
- 
+@@ -33,6 +34,20 @@
+
  namespace mozilla::dom {
  
 +// Helper function to check if a font is in the allowed list

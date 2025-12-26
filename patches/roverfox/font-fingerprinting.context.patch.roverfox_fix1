@@ -1,0 +1,1291 @@
+diff --git a/dom/base/RoverfoxStorageManager.cpp b/dom/base/RoverfoxStorageManager.cpp
+new file mode 100644
+index 0000000000..f38394d39d
+--- /dev/null
++++ b/dom/base/RoverfoxStorageManager.cpp
+@@ -0,0 +1,58 @@
++#include "RoverfoxStorageManager.h"
++
++namespace mozilla {
++namespace dom {
++
++ThreadSafeKV RoverfoxStorageManager::sUintStorage;
++ThreadSafeStringKV RoverfoxStorageManager::sStringStorage;
++
++/* static */ void
++RoverfoxStorageManager::PutUint(const nsAString& key, uint32_t value)
++{
++  sUintStorage.Put(key, value);
++}
++
++/* static */ bool
++RoverfoxStorageManager::GetUint(const nsAString& key, uint32_t& outValue)
++{
++  return sUintStorage.Get(key, outValue);
++}
++
++/* static */ void
++RoverfoxStorageManager::PutBool(const nsAString& key, bool value)
++{
++  sUintStorage.Put(key, value ? 1 : 0);
++}
++
++/* static */ bool
++RoverfoxStorageManager::GetBool(const nsAString& key, bool& outValue)
++{
++  uint32_t intValue;
++  if (sUintStorage.Get(key, intValue)) {
++    outValue = (intValue != 0);
++    return true;
++  }
++  return false;
++}
++
++/* static */ void
++RoverfoxStorageManager::PutString(const nsAString& key, const nsAString& value)
++{
++  sStringStorage.Put(key, value);
++}
++
++/* static */ bool
++RoverfoxStorageManager::GetString(const nsAString& key, nsAString& outValue)
++{
++  return sStringStorage.Get(key, outValue);
++}
++
++/* static */ void
++RoverfoxStorageManager::Remove(const nsAString& key)
++{
++  sUintStorage.Remove(key);
++  sStringStorage.Remove(key);
++}
++
++} // namespace dom
++} // namespace mozilla
+diff --git a/dom/base/RoverfoxStorageManager.h b/dom/base/RoverfoxStorageManager.h
+new file mode 100644
+index 0000000000..d5700aea62
+--- /dev/null
++++ b/dom/base/RoverfoxStorageManager.h
+@@ -0,0 +1,112 @@
++#ifndef mozilla_dom_RoverfoxStorageManager_h
++#define mozilla_dom_RoverfoxStorageManager_h
++
++#include "mozilla/Mutex.h"
++#include "nsBaseHashtable.h"
++#include "nsString.h"
++#include "nsHashKeys.h"
++
++namespace mozilla {
++namespace dom {
++
++/**
++ * Thread-safe hashtable for storing key-value pairs.
++ * Based on nsClassHashtable with mutex protection for thread safety.
++ */
++class ThreadSafeKV {
++public:
++  ThreadSafeKV()
++    : mMutex("ThreadSafeKV::mMutex") {}
++
++  void Put(const nsAString& key, uint32_t value) {
++    mozilla::MutexAutoLock lock(mMutex);
++    mTable.InsertOrUpdate(key, value);
++  }
++
++  bool Get(const nsAString& key, uint32_t& outValue) {
++    mozilla::MutexAutoLock lock(mMutex);
++    return mTable.Get(key, &outValue);
++  }
++
++  void Remove(const nsAString& key) {
++    mozilla::MutexAutoLock lock(mMutex);
++    mTable.Remove(key);
++  }
++
++private:
++  mozilla::Mutex mMutex;
++  nsTHashMap<nsString, uint32_t> mTable;
++};
++
++/**
++ * Thread-safe hashtable for storing string key-value pairs.
++ */
++class ThreadSafeStringKV {
++public:
++  ThreadSafeStringKV()
++    : mMutex("ThreadSafeStringKV::mMutex") {}
++
++  void Put(const nsAString& key, const nsAString& value) {
++    mozilla::MutexAutoLock lock(mMutex);
++    mTable.InsertOrUpdate(key, nsString(value));
++  }
++
++  bool Get(const nsAString& key, nsAString& outValue) {
++    mozilla::MutexAutoLock lock(mMutex);
++    nsString value;
++    if (mTable.Get(key, &value)) {
++      outValue = value;
++      return true;
++    }
++    return false;
++  }
++
++  void Remove(const nsAString& key) {
++    mozilla::MutexAutoLock lock(mMutex);
++    mTable.Remove(key);
++  }
++
++private:
++  mozilla::Mutex mMutex;
++  nsTHashMap<nsString, nsString> mTable;
++};
++
++/**
++ * Thread-safe key-value storage manager for whole-browser session scope.
++ * Uses in-memory ThreadSafeKV storage with no SQLite dependencies.
++ */
++class RoverfoxStorageManager {
++public:
++  // Store a uint32_t value under a string key.
++  static void PutUint(const nsAString& key, uint32_t value);
++
++  // Retrieve a uint32_t value. Returns true if present.
++  static bool GetUint(const nsAString& key, uint32_t& outValue);
++
++  // Store a boolean value.
++  static void PutBool(const nsAString& key, bool value);
++
++  // Retrieve a boolean value. Returns true if present.
++  static bool GetBool(const nsAString& key, bool& outValue);
++
++  // Store a UTF-16 string value.
++  static void PutString(const nsAString& key, const nsAString& value);
++
++  // Retrieve a UTF-16 string value. Returns true if present.
++  static bool GetString(const nsAString& key, nsAString& outValue);
++
++  // Remove a key for all supported types (best-effort), no-op if absent.
++  static void Remove(const nsAString& key);
++
++private:
++  // Thread-safe storage for uint32_t values
++  static ThreadSafeKV sUintStorage;
++  
++  // Thread-safe storage for string values
++  static ThreadSafeStringKV sStringStorage;
++};
++
++} // namespace dom
++} // namespace mozilla
++
++#endif // mozilla_dom_RoverfoxStorageManager_h
+diff --git a/dom/base/FontSpacingSeedManager.cpp b/dom/base/FontSpacingSeedManager.cpp
+new file mode 100644
+index 0000000000..73db372895
+--- /dev/null
++++ b/dom/base/FontSpacingSeedManager.cpp
+@@ -0,0 +1,121 @@
++#include "FontSpacingSeedManager.h"
++#include "nsPrintfCString.h"
++#include "nsGlobalWindowInner.h"
++#include "xpcpublic.h"
++
++namespace mozilla {
++namespace dom {
++
++/* static */ nsString
++FontSpacingSeedManager::KeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendLiteral(u"seed_");
++  key.AppendInt(userContextId);
++  return key;
++}
++
++/* static */ nsString
++FontSpacingSeedManager::DisabledKeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendLiteral(u"disabled_");
++  key.AppendInt(userContextId);
++  return key;
++}
++
++/* static */ void
++FontSpacingSeedManager::SetSeed(uint32_t userContextId, uint32_t seed) {
++  nsString key = KeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutUint(key, seed);
++  
++  // Mark the function as disabled for this context after first use
++  DisableFunction(userContextId);
++}
++
++/* static */ uint32_t
++FontSpacingSeedManager::GetSeed(uint32_t userContextId) {
++  nsString key = KeyForUserContext(userContextId);
++  uint32_t seed = 0;
++  if (RoverfoxStorageManager::GetUint(key, seed)) {
++    return seed;
++  }
++  return 0;
++}
++
++/* static */ bool
++FontSpacingSeedManager::HasSeed(uint32_t userContextId) {
++  nsString key = KeyForUserContext(userContextId);
++  uint32_t seed = 0;
++  return RoverfoxStorageManager::GetUint(key, seed);
++}
++
++/* static */ bool
++FontSpacingSeedManager::IsFunctionDisabled(uint32_t userContextId) {
++  nsString key = DisabledKeyForUserContext(userContextId);
++  bool disabled = false;
++  return RoverfoxStorageManager::GetBool(key, disabled) && disabled;
++}
++
++/* static */ void
++FontSpacingSeedManager::DisableFunction(uint32_t userContextId) {
++  nsString key = DisabledKeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutBool(key, true);
++}
++
++/* static */ bool
++FontSpacingSeedManager::IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
++  // Get the window from the JS object
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) {
++    return false;
++  }
++
++  // Get the user context ID for this window
++  uint32_t userContextId = 0;
++
++  // 1) Prefer the document's principal when available (content contexts)
++  if (Document* doc = win->GetDoc()) {
++    if (nsIPrincipal* p = doc->NodePrincipal()) {
++      userContextId = p->OriginAttributesRef().mUserContextId;
++    }
++  }
++
++  // 2) Fallback: this inner window's docshell origin attributes
++  if (userContextId == 0) {
++    if (nsIDocShell* ds = win->GetDocShell()) {
++      auto* concrete = static_cast<nsDocShell*>(ds);
++      userContextId = concrete->GetOriginAttributes().mUserContextId;
++    }
++  }
++
++  // 3) Fallback: top browsing context's current inner window document/docshell
++  if (userContextId == 0) {
++    if (BrowsingContext* bc = win->GetBrowsingContext()) {
++      RefPtr<BrowsingContext> top = bc->Top();
++      if (top) {
++        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
++          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
++            if (Document* topDoc = topInner->GetExtantDoc()) {
++              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
++                userContextId = tp->OriginAttributesRef().mUserContextId;
++              }
++            }
++            if (userContextId == 0) {
++              if (nsIDocShell* topDS = topInner->GetDocShell()) {
++                auto* concreteTop = static_cast<nsDocShell*>(topDS);
++                userContextId = concreteTop->GetOriginAttributes().mUserContextId;
++              }
++            }
++          }
++        }
++      }
++    }
++  }
++
++  // Check if the function is disabled for this context
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(userContextId), disabled);
++  return !disabled;
++}
++
++} // namespace dom
++} // namespace mozilla
+\ No newline at end of file
+diff --git a/dom/base/FontSpacingSeedManager.h b/dom/base/FontSpacingSeedManager.h
+new file mode 100644
+index 0000000000..63d43f3b86
+--- /dev/null
++++ b/dom/base/FontSpacingSeedManager.h
+@@ -0,0 +1,71 @@
++#ifndef mozilla_dom_FontSpacingSeedManager_h
++#define mozilla_dom_FontSpacingSeedManager_h
++
++#include "nsString.h"
++#include "RoverfoxStorageManager.h"
++
++namespace mozilla {
++namespace dom {
++
++/**
++ * FontSpacingSeedManager manages font spacing seeds per user context.
++ * This enables privacy-preserving font fingerprinting by allowing deterministic
++ * font spacing modifications that are isolated by user context.
++ */
++class FontSpacingSeedManager {
++public:
++  /**
++   * Set the font spacing seed for a given user context.
++   * @param userContextId The user context ID (0 for default context)
++   * @param seed The seed value to use for font spacing modifications
++   */
++  static void SetSeed(uint32_t userContextId, uint32_t seed);
++
++  /**
++   * Get the font spacing seed for a given user context.
++   * @param userContextId The user context ID
++   * @return The seed value, or 0 if no seed has been set
++   */
++  static uint32_t GetSeed(uint32_t userContextId);
++
++  /**
++   * Check if a seed has been set for a given user context.
++   * @param userContextId The user context ID
++   * @return true if a seed has been set, false otherwise
++   */
++  static bool HasSeed(uint32_t userContextId);
++
++  /**
++   * Check if the setFontSpacingSeed function has been used and should be disabled for a context.
++   * @param userContextId The user context ID
++   * @return true if the function has been used for this context and should not appear on new windows
++   */
++  static bool IsFunctionDisabled(uint32_t userContextId);
++
++  /**
++   * Mark the setFontSpacingSeed function as used/disabled for a context.
++   * @param userContextId The user context ID
++   */
++  static void DisableFunction(uint32_t userContextId);
++
++  /**
++   * WebIDL-compatible function to check if setFontSpacingSeed should be enabled.
++   * This extracts the user context from the window and checks if disabled.
++   * @param aCx JavaScript context
++   * @param aObj JavaScript object (window)
++   * @return true if function should be available, false otherwise
++   */
++  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++
++private:
++  // Helper to convert userContextId to string key
++  static nsString KeyForUserContext(uint32_t userContextId);
++  
++  // Helper to create key for tracking function disabled state
++  static nsString DisabledKeyForUserContext(uint32_t userContextId);
++};
++
++} // namespace dom
++} // namespace mozilla
++
++#endif // mozilla_dom_FontSpacingSeedManager_h
+\ No newline at end of file
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index 0e26e575e4..59917269e5 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -198,6 +198,7 @@ EXPORTS.mozilla.dom += [
+     "EventSourceEventService.h",
+     "External.h",
+     "FilteredNodeIterator.h",
++    "FontSpacingSeedManager.h",
+     "FormData.h",
+     "FragmentDirective.h",
+     "FragmentOrElement.h",
+@@ -374,6 +375,7 @@ UNIFIED_SOURCES += [
+     "EventSource.cpp",
+     "EventSourceEventService.cpp",
+     "External.cpp",
++    "FontSpacingSeedManager.cpp",
+     "FormData.cpp",
+     "FragmentDirective.cpp",
+     "FragmentOrElement.cpp",
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index 7ef493156f..605f8bbb9f 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -58,6 +58,7 @@
+ #include "mozilla/EventDispatcher.h"
+ #include "mozilla/EventListenerManager.h"
+ #include "mozilla/EventQueue.h"
++#include "nsIScriptError.h"
+ #include "mozilla/ExtensionPolicyService.h"
+ #include "mozilla/FloatingPoint.h"
+ #include "mozilla/FlushType.h"
+@@ -325,6 +326,10 @@
+ #include "xpcprivate.h"
+ #include "xpcpublic.h"
+ 
++#include "FontSpacingSeedManager.h"
++#include "nsDocShell.h"
++#include "mozilla/OriginAttributes.h"
++
+ #ifdef NS_PRINTING
+ #  include "nsIPrintSettings.h"
+ #endif
+@@ -7467,6 +7471,66 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
+   return mIntlUtils;
+ }
+ 
++void nsGlobalWindowInner::SetFontSpacingSeed(uint32_t seed, ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++
++  // 1) Prefer the document's principal when available (content contexts)
++  if (Document* doc = GetDoc()) {
++    if (nsIPrincipal* p = doc->NodePrincipal()) {
++      userContextId = p->OriginAttributesRef().mUserContextId;
++    }
++  }
++
++  // 2) Fallback: this inner window's docshell origin attributes
++  if (userContextId == 0) {
++    if (nsIDocShell* ds = GetDocShell()) {
++      auto* concrete = static_cast<nsDocShell*>(ds);
++      userContextId = concrete->GetOriginAttributes().mUserContextId;
++    }
++  }
++
++  // 3) Fallback: top browsing context's current inner window document/docshell
++  if (userContextId == 0) {
++    if (BrowsingContext* bc = GetBrowsingContext()) {
++      RefPtr<BrowsingContext> top = bc->Top();
++      if (top) {
++        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
++          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
++            if (Document* topDoc = topInner->GetExtantDoc()) {
++              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
++                userContextId = tp->OriginAttributesRef().mUserContextId;
++              }
++            }
++            if (userContextId == 0) {
++              if (nsIDocShell* topDS = topInner->GetDocShell()) {
++                auto* concreteTop = static_cast<nsDocShell*>(topDS);
++                userContextId =
++                    concreteTop->GetOriginAttributes().mUserContextId;
++              }
++            }
++          }
++        }
++      }
++    }
++  }
++
++
++  if (userContextId == 0) {
++    aRv.ThrowSecurityError("Unable to resolve user context ID for this context");
++    return;
++  }
++
++  FontSpacingSeedManager::SetSeed(userContextId, seed);
++
++  // Self-destruct: remove this function from the window object after first use
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setFontSpacingSeed");
++    }
++  }
++}
++
+ void nsGlobalWindowInner::StoreSharedWorker(SharedWorker* aSharedWorker) {
+   MOZ_ASSERT(aSharedWorker);
+   MOZ_ASSERT(!mSharedWorkers.Contains(aSharedWorker));
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index 520d8fae37..e2daf33843 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -682,6 +682,9 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+ 
+   mozilla::dom::IntlUtils* GetIntlUtils(mozilla::ErrorResult& aRv);
+ 
++  // Font spacing seed for privacy-preserving font fingerprinting
++  void SetFontSpacingSeed(uint32_t seed, mozilla::ErrorResult& aRv);
++
+   void StoreSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+ 
+   void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+diff --git a/dom/canvas/CanvasRenderingContext2D.cpp b/dom/canvas/CanvasRenderingContext2D.cpp
+index 403fe3fabe..dae1655f29 100644
+--- a/dom/canvas/CanvasRenderingContext2D.cpp
++++ b/dom/canvas/CanvasRenderingContext2D.cpp
+@@ -39,4 +39,5 @@
+ #include "mozilla/MathAlgorithms.h"
++#include "mozilla/OriginAttributes.h"
+ #include "mozilla/Preferences.h"
+ #include "mozilla/PresShell.h"
+ #include "mozilla/PresShellInlines.h"
+@@ -4526,10 +4527,20 @@
+     } else {
+       flags &= ~gfx::ShapedTextFlags::TEXT_IS_RTL;
+     }
++    // Extract user context ID from Canvas element's document
++    uint32_t userContextId = 0;
++    if (mCtx && mCtx->mCanvasElement) {
++      if (Document* doc = mCtx->mCanvasElement->GetOwnerDocument()) {
++        if (nsIPrincipal* principal = doc->NodePrincipal()) {
++          const OriginAttributes& attrs = principal->OriginAttributesRef();
++          userContextId = attrs.mUserContextId;
++        }
++      }
++    }
+     mTextRun = mFontgrp->MakeTextRun(
+         aText, aLength, mDrawTarget, mAppUnitsPerDevPixel, flags,
+         nsTextFrameUtils::Flags::DontSkipDrawingForPendingUserFonts,
+-        mMissingFonts.get());
++        mMissingFonts.get(), userContextId);
+     pfl->Unlock();
+   }
+ 
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index ab89253de3..2161066be1 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -794,6 +794,12 @@ partial interface Window {
+   readonly attribute VisualViewport visualViewport;
+ };
+ 
++// Font spacing seed interface for privacy-preserving font fingerprinting
++partial interface Window {
++  [Throws, Func="mozilla::dom::FontSpacingSeedManager::IsFunctionEnabledForWebIDL"]
++  undefined setFontSpacingSeed(unsigned long seed);
++};
++
+ // Used to assign marks to appear on the scrollbar when
+ // finding on a page.
+ partial interface Window {
+diff --git a/gfx/src/nsFontMetrics.cpp b/gfx/src/nsFontMetrics.cpp
+index a1fa4e69ec..d3a1f6e393 100644
+--- a/gfx/src/nsFontMetrics.cpp
++++ b/gfx/src/nsFontMetrics.cpp
+@@ -23,9 +23,12 @@
+ #include "nsStyleConsts.h"       // for StyleHyphens::None
+ #include "mozilla/Assertions.h"  // for MOZ_ASSERT
+ #include "mozilla/UniquePtr.h"   // for UniquePtr
++#include "mozilla/dom/Document.h"  // for Document
++#include "mozilla/OriginAttributes.h"  // for OriginAttributes
+ 
+ class gfxUserFontSet;
+ using namespace mozilla;
++using namespace mozilla::dom;
+ 
+ namespace {
+ 
+@@ -35,17 +38,37 @@ class AutoTextRun {
+ 
+   AutoTextRun(const nsFontMetrics* aMetrics, DrawTarget* aDrawTarget,
+               const char* aString, uint32_t aLength) {
++    // Extract user context ID from PresContext document if available
++    uint32_t userContextId = 0;
++    if (aMetrics->mPresContext) {
++      if (Document* doc = aMetrics->mPresContext->Document()) {
++        if (nsIPrincipal* principal = doc->NodePrincipal()) {
++          const OriginAttributes& attrs = principal->OriginAttributesRef();
++          userContextId = attrs.mUserContextId;
++        }
++      }
++    }
+     mTextRun = aMetrics->GetThebesFontGroup()->MakeTextRun(
+         reinterpret_cast<const uint8_t*>(aString), aLength, aDrawTarget,
+         aMetrics->AppUnitsPerDevPixel(), ComputeFlags(aMetrics),
+-        nsTextFrameUtils::Flags(), nullptr);
++        nsTextFrameUtils::Flags(), nullptr, userContextId);
+   }
+ 
+   AutoTextRun(const nsFontMetrics* aMetrics, DrawTarget* aDrawTarget,
+               const char16_t* aString, uint32_t aLength) {
++    // Extract user context ID from PresContext document if available
++    uint32_t userContextId = 0;
++    if (aMetrics->mPresContext) {
++      if (Document* doc = aMetrics->mPresContext->Document()) {
++        if (nsIPrincipal* principal = doc->NodePrincipal()) {
++          const OriginAttributes& attrs = principal->OriginAttributesRef();
++          userContextId = attrs.mUserContextId;
++        }
++      }
++    }
+     mTextRun = aMetrics->GetThebesFontGroup()->MakeTextRun(
+         aString, aLength, aDrawTarget, aMetrics->AppUnitsPerDevPixel(),
+-        ComputeFlags(aMetrics), nsTextFrameUtils::Flags(), nullptr);
++        ComputeFlags(aMetrics), nsTextFrameUtils::Flags(), nullptr, userContextId);
+   }
+ 
+   gfxTextRun* get() const { return mTextRun.get(); }
+diff --git a/gfx/src/nsFontMetrics.h b/gfx/src/nsFontMetrics.h
+index 2dab6152bf..90f6d5d724 100644
+--- a/gfx/src/nsFontMetrics.h
++++ b/gfx/src/nsFontMetrics.h
+@@ -253,6 +253,10 @@ class nsFontMetrics final {
+   bool AllowForceGDIClassic() const { return mAllowForceGDIClassic; }
+ #endif
+ 
++  // Pointer to the pres context for which this fontMetrics object was
++  // created.
++  nsPresContext* MOZ_NON_OWNING_REF mPresContext;
++
+  private:
+   // Private destructor, to discourage deletion outside of Release():
+   ~nsFontMetrics();
+@@ -260,9 +264,6 @@ class nsFontMetrics final {
+   const nsFont mFont;
+   RefPtr<gfxFontGroup> mFontGroup;
+   RefPtr<nsAtom> const mLanguage;
+-  // Pointer to the pres context for which this fontMetrics object was
+-  // created.
+-  nsPresContext* MOZ_NON_OWNING_REF mPresContext;
+   const int32_t mP2A;
+ 
+   // The font orientation (horizontal or vertical) for which these metrics
+diff --git a/gfx/thebes/gfxFont.cpp b/gfx/thebes/gfxFont.cpp
+index 4661bc986b..0f1d5af596 100644
+--- a/gfx/thebes/gfxFont.cpp
++++ b/gfx/thebes/gfxFont.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include "gfxGlyphExtents.h"
+ #include "gfxPlatform.h"
++#include "mozilla/dom/FontSpacingSeedManager.h"
+ #include "gfxTextRun.h"
+ #include "nsGkAtoms.h"
+ 
+@@ -49,6 +50,7 @@
+ #include "gfxSVGGlyphs.h"
+ #include "gfx2DGlue.h"
+ #include "TextDrawTarget.h"
++#include "mozilla/dom/FontSpacingSeedManager.h"
+ 
+ #include "ThebesRLBox.h"
+ 
+@@ -3260,7 +3262,7 @@ bool gfxFont::ProcessShapedWordInternal(
+     Script aRunScript, nsAtom* aLanguage, bool aVertical,
+     int32_t aAppUnitsPerDevUnit, gfx::ShapedTextFlags aFlags,
+     RoundingFlags aRounding, gfxTextPerfMetrics* aTextPerf GFX_MAYBE_UNUSED,
+-    Func aCallback) {
++    uint32_t aUserContextId, Func aCallback) {
+   WordCacheKey key(aText, aLength, aHash, aRunScript, aLanguage,
+                    aAppUnitsPerDevUnit, aFlags, aRounding);
+   {
+@@ -3293,6 +3295,8 @@ bool gfxFont::ProcessShapedWordInternal(
+     NS_WARNING("failed to create gfxShapedWord - expect missing text");
+     return false;
+   }
++  // Propagate user context ID for HarfBuzz shaping/logging.
++  newShapedWord->SetUserContextId(aUserContextId);
+   DebugOnly<bool> ok =
+       ShapeText(aDrawTarget, aText, 0, aLength, aRunScript, aLanguage,
+                 aVertical, aRounding, newShapedWord.get());
+@@ -3396,7 +3400,7 @@ bool gfxFont::ProcessSingleSpaceShapedWord(
+   return ProcessShapedWordInternal(
+       aDrawTarget, &space, 1, gfxShapedWord::HashMix(0, ' '), Script::LATIN,
+       /* aLanguage = */ nullptr, aVertical, aAppUnitsPerDevUnit, aFlags,
+-      aRounding, nullptr, aCallback);
++      aRounding, nullptr, 0 /* pbid */, aCallback);
+ }
+ 
+ bool gfxFont::ShapeText(DrawTarget* aDrawTarget, const uint8_t* aText,
+@@ -3754,6 +3758,7 @@ bool gfxFont::SplitAndInitTextRun(
+       bool processed = ProcessShapedWordInternal(
+           aDrawTarget, aString + wordStart, length, hash, aRunScript, aLanguage,
+           vertical, appUnitsPerDevUnit, wordFlags, rounding, tp,
++          aTextRun->GetUserContextId(),
+           [&](gfxShapedWord* aShapedWord) {
+             aTextRun->CopyGlyphDataFrom(aShapedWord, aRunStart + wordStart);
+           });
+@@ -3779,6 +3784,7 @@ bool gfxFont::SplitAndInitTextRun(
+             aDrawTarget, &boundary, 1, gfxShapedWord::HashMix(0, boundary),
+             aRunScript, aLanguage, vertical, appUnitsPerDevUnit,
+             flags | gfx::ShapedTextFlags::TEXT_IS_8BIT, rounding, tp,
++            aTextRun->GetUserContextId(),
+             [&](gfxShapedWord* aShapedWord) {
+               aTextRun->CopyGlyphDataFrom(aShapedWord, aRunStart + i);
+               if (boundary == ' ') {
+diff --git a/gfx/thebes/gfxFont.h b/gfx/thebes/gfxFont.h
+index 4b0da03abe..4b2828b803 100644
+--- a/gfx/thebes/gfxFont.h
++++ b/gfx/thebes/gfxFont.h
+@@ -736,6 +736,10 @@ class gfxShapedText {
+ 
+   virtual ~gfxShapedText() = default;
+ 
++  // Optional accessor overridden by gfxTextRun to expose the private browsing ID.
++  // Default returns 0 for non-textrun shaped text objects.
++  virtual uint32_t GetUserContextId() const { return 0; }
++
+   /**
+    * This class records the information associated with a character in the
+    * input string. It's optimized for the case where there is one glyph
+@@ -1325,6 +1329,11 @@ class gfxShapedWord final : public gfxShapedText {
+   // allocated via malloc.
+   void operator delete(void* p) { free(p); }
+ 
++  // User Context ID plumbing for shaping-time access.
++  // HarfBuzz shaper will query this via gfxShapedText::GetUserContextId().
++  void SetUserContextId(uint32_t aId) { mUserContextId = aId; }
++  uint32_t GetUserContextId() const override { return mUserContextId; }
++
+   const CompressedGlyph* GetCharacterGlyphs() const override {
+     return &mCharGlyphsStorage[0];
+   }
+@@ -1408,6 +1417,9 @@ class gfxShapedWord final : public gfxShapedText {
+   // With multithreaded shaping, this may be updated by any thread.
+   std::atomic<uint32_t> mAgeCounter;
+ 
++  // User Context ID carried with the shaped word for shaper access.
++  uint32_t mUserContextId = 0;
++
+   // The mCharGlyphsStorage array is actually a variable-size member;
+   // when the ShapedWord is created, its size will be increased as necessary
+   // to allow the proper number of glyphs to be stored.
+@@ -2092,12 +2104,14 @@ class gfxFont {
+   // for use in setting up a gfxTextRun.
+   template <typename T, typename Func>
+   bool ProcessShapedWordInternal(DrawTarget* aDrawTarget, const T* aText,
+-                                 uint32_t aLength, uint32_t aHash,
+-                                 Script aRunScript, nsAtom* aLanguage,
+-                                 bool aVertical, int32_t aAppUnitsPerDevUnit,
+-                                 mozilla::gfx::ShapedTextFlags aFlags,
+-                                 RoundingFlags aRounding,
+-                                 gfxTextPerfMetrics* aTextPerf, Func aCallback);
++                                  uint32_t aLength, uint32_t aHash,
++                                  Script aRunScript, nsAtom* aLanguage,
++                                  bool aVertical, int32_t aAppUnitsPerDevUnit,
++                                  mozilla::gfx::ShapedTextFlags aFlags,
++                                  RoundingFlags aRounding,
++                                  gfxTextPerfMetrics* aTextPerf,
++                                  uint32_t aUserContextId,
++                                  Func aCallback);
+ 
+   // whether a given feature is included in feature settings from both the
+   // font and the style. aFeatureOn set if resolved feature value is non-zero
+diff --git a/gfx/thebes/gfxHarfBuzzShaper.cpp b/gfx/thebes/gfxHarfBuzzShaper.cpp
+index 8a0e4db75f..fe7f286562 100644
+--- a/gfx/thebes/gfxHarfBuzzShaper.cpp
++++ b/gfx/thebes/gfxHarfBuzzShaper.cpp
+@@ -20,6 +20,7 @@
+ #include <cstdlib>
+ #include <chrono>
+ #include "MaskConfig.hpp"
++#include "mozilla/dom/FontSpacingSeedManager.h"
+ 
+ #include <algorithm>
+ 
+@@ -1560,16 +1561,21 @@ bool gfxHarfBuzzShaper::ShapeText(DrawTarget* aDrawTarget,
+ 
+   hb_shape(mHBFont, mBuffer, features.Elements(), features.Length());
+ 
+-  static uint32_t seed;
+-  if (auto value = MaskConfig::GetUint32("fonts:spacing_seed"))
+-    seed = value.value();
+-  else
+-    seed = static_cast<uint32_t>(
+-        std::chrono::high_resolution_clock::now().time_since_epoch().count());
++  // Resolve seed from manager using user context ID, with deterministic fallback.
++  uint32_t pbid = aShapedText ? aShapedText->GetUserContextId() : 0;
++  uint32_t seed = mozilla::dom::FontSpacingSeedManager::GetSeed(pbid);
++  bool seedFromManager = (seed != 0);
++  if (!seedFromManager) {
++    seed = 0x6D2B79F5u; // fixed constant to avoid time-based variance
++  }
++  printf("HarfBuzzShaper: pbid=%u seed=%u (from_manager=%d)\n",
++         pbid,
++         seed,
++         seedFromManager ? 1 : 0);
+ 
+   // Generate a random float [0, 0.1] to offset the letter spacing
+   seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+-  float randomFloat = (static_cast<float>(seed) / 0x7fffffff) * 0.1f;
++  float randomFloat = (static_cast<float>(seed) / 2147483647.0f) * 0.1f;
+   hb_position_t spacing = FloatToFixed(randomFloat);
+ 
+   uint32_t glyphCount;
+@@ -1895,3 +1901,4 @@ nsresult gfxHarfBuzzShaper::SetGlyphsFromRun(gfxShapedText* aShapedText,
+ 
+   return NS_OK;
+ }
++
+diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
+index a8fac45e67..d59815f2d5 100644
+--- a/gfx/thebes/gfxTextRun.cpp
++++ b/gfx/thebes/gfxTextRun.cpp
+@@ -25,6 +25,7 @@
+ #include "mozilla/Likely.h"
+ #include "mozilla/MruCache.h"
+ #include "mozilla/ServoStyleSet.h"
++#include "mozilla/ServoStyleSetInlines.h"
+ #include "mozilla/Sprintf.h"
+ #include "mozilla/StaticPresData.h"
+ #include "mozilla/UniquePtr.h"
+@@ -34,6 +35,7 @@
+ #include "nsUnicodeProperties.h"
+ #include "SharedFontList-impl.h"
+ #include "TextDrawTarget.h"
++#include "mozilla/BasePrincipal.h"
+ 
+ #ifdef XP_WIN
+ #  include "gfxWindowsPlatform.h"
+@@ -145,25 +147,26 @@ void* gfxTextRun::AllocateStorageForTextRun(size_t aSize, uint32_t aLength) {
+ already_AddRefed<gfxTextRun> gfxTextRun::Create(
+     const gfxTextRunFactory::Parameters* aParams, uint32_t aLength,
+     gfxFontGroup* aFontGroup, gfx::ShapedTextFlags aFlags,
+-    nsTextFrameUtils::Flags aFlags2) {
++    nsTextFrameUtils::Flags aFlags2, uint32_t aUserContextId) {
+   void* storage = AllocateStorageForTextRun(sizeof(gfxTextRun), aLength);
+   if (!storage) {
+     return nullptr;
+   }
+ 
+   RefPtr<gfxTextRun> result =
+-      new (storage) gfxTextRun(aParams, aLength, aFontGroup, aFlags, aFlags2);
++      new (storage) gfxTextRun(aParams, aLength, aFontGroup, aFlags, aFlags2, aUserContextId);
+   return result.forget();
+ }
+ 
+ gfxTextRun::gfxTextRun(const gfxTextRunFactory::Parameters* aParams,
+                        uint32_t aLength, gfxFontGroup* aFontGroup,
+                        gfx::ShapedTextFlags aFlags,
+-                       nsTextFrameUtils::Flags aFlags2)
++                       nsTextFrameUtils::Flags aFlags2, uint32_t aUserContextId)
+     : gfxShapedText(aLength, aFlags, aParams->mAppUnitsPerDevUnit),
+       mUserData(aParams->mUserData),
+       mFontGroup(aFontGroup),
+       mFlags2(aFlags2),
++      mUserContextId(aUserContextId),
+       mReleasedFontGroup(false),
+       mReleasedFontGroupSkippedDrawing(false),
+       mShapingState(eShapingState_Normal) {
+@@ -720,7 +723,8 @@ void gfxTextRun::DrawEmphasisMarks(
+     gfxContext* aContext, gfxTextRun* aMark, gfxFloat aMarkAdvance,
+     gfx::Point aPt, Range aRange, const PropertyProvider* aProvider,
+     mozilla::gfx::PaletteCache& aPaletteCache) const {
+-  MOZ_ASSERT(aRange.end <= GetLength());
++  MOZ_ASSERT(
++      aRange.end <= GetLength());
+ 
+   EmphasisMarkDrawParams params(aContext, aPaletteCache);
+   params.mark = aMark;
+@@ -1872,6 +1876,22 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+      mPageLang(gfxPlatformFontList::GetFontPrefLangFor(aLanguage)),
+      mExplicitLanguage(aExplicitLanguage),
+-      mFontVariantEmoji(aVariantEmoji) {
++      mFontVariantEmoji(aVariantEmoji),
++      mUserContextId(0) {
+   // We don't use SetUserFontSet() here, as we want to unconditionally call
+   // EnsureFontList() rather than only do UpdateUserFonts() if it changed.
++
++  // Initialize cached user context ID from the document principal.
++  mUserContextId = 0;
++  if (mFontVisibilityProvider) {
++    if (auto* doc = mFontVisibilityProvider->GetDocument()) {
++      if (auto* principal = doc->NodePrincipal()) {
++        auto* bp = mozilla::BasePrincipal::Cast(principal);
++        if (bp) {
++          mUserContextId = bp->OriginAttributesRef().mUserContextId;
++        }
++      }
++    }
++  }
+ }
+ 
+ gfxFontGroup::~gfxFontGroup() {
+@@ -2490,12 +2508,12 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeHyphenTextRun(
+   RefPtr<gfxFont> font = GetFirstValidFont(uint32_t(hyphen));
+   if (font->HasCharacter(hyphen)) {
+     return MakeTextRun(&hyphen, 1, aDrawTarget, aAppUnitsPerDevUnit, aFlags,
+-                       nsTextFrameUtils::Flags(), nullptr);
++                       nsTextFrameUtils::Flags(), nullptr, mUserContextId);
+   }
+ 
+   static const uint8_t dash = '-';
+   return MakeTextRun(&dash, 1, aDrawTarget, aAppUnitsPerDevUnit, aFlags,
+-                     nsTextFrameUtils::Flags(), nullptr);
++                     nsTextFrameUtils::Flags(), nullptr, mUserContextId);
+ }
+ 
+ gfxFloat gfxFontGroup::GetHyphenWidth(
+@@ -2516,7 +2534,7 @@ template <typename T>
+ already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
+     const T* aString, uint32_t aLength, const Parameters* aParams,
+     gfx::ShapedTextFlags aFlags, nsTextFrameUtils::Flags aFlags2,
+-    gfxMissingFontRecorder* aMFR) {
++    gfxMissingFontRecorder* aMFR, uint32_t aUserContextId) {
+   if (aLength == 0) {
+     return MakeEmptyTextRun(aParams, aFlags, aFlags2);
+   }
+@@ -2535,8 +2553,16 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
+     return MakeBlankTextRun(aString, aLength, aParams, aFlags, aFlags2);
+   }
+ 
++  // If caller didn't provide an ID, default to the group's cached value.
++  if (aUserContextId == 0) {
++    aUserContextId = mUserContextId;
++  }
++
++  // Log the user context id used for this text run creation
++  printf("MakeTextRun: userContextId=%u\n", aUserContextId);
++
+   RefPtr<gfxTextRun> textRun =
+-      gfxTextRun::Create(aParams, aLength, this, aFlags, aFlags2);
++      gfxTextRun::Create(aParams, aLength, this, aFlags, aFlags2, aUserContextId);
+   if (!textRun) {
+     return nullptr;
+   }
+@@ -2552,11 +2578,11 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
+ template already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
+     const uint8_t* aString, uint32_t aLength, const Parameters* aParams,
+     gfx::ShapedTextFlags aFlags, nsTextFrameUtils::Flags aFlags2,
+-    gfxMissingFontRecorder* aMFR);
++    gfxMissingFontRecorder* aMFR, uint32_t aUserContextId);
+ template already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
+     const char16_t* aString, uint32_t aLength, const Parameters* aParams,
+     gfx::ShapedTextFlags aFlags, nsTextFrameUtils::Flags aFlags2,
+-    gfxMissingFontRecorder* aMFR);
++    gfxMissingFontRecorder* aMFR, uint32_t aUserContextId);
+ 
+ // Helper to get a hashtable that maps tags to Script codes, created on first
+ // use.
+@@ -2614,8 +2640,9 @@ static Script ResolveScriptForLang(const nsAtom* aLanguage, Script aDefault) {
+   static LangScriptCache sCache;
+   static RWLock sLock("LangScriptCache lock");
+ 
+-  MOZ_ASSERT(aDefault != Script::INVALID &&
+-             aDefault < Script::NUM_SCRIPT_CODES);
++  MOZ_ASSERT(
++      aDefault != Script::INVALID &&
++      aDefault < Script::NUM_SCRIPT_CODES);
+ 
+   {
+     // Try to use a cached value without taking an exclusive lock.
+@@ -3050,7 +3077,7 @@ gfxTextRun* gfxFontGroup::GetEllipsisTextRun(
+                        nullptr, 0,       aAppUnitsPerDevPixel};
+   mCachedEllipsisTextRun =
+       MakeTextRun(ellipsis.BeginReading(), ellipsis.Length(), &params, aFlags,
+-                  nsTextFrameUtils::Flags(), nullptr);
++                  nsTextFrameUtils::Flags(), nullptr, mUserContextId);
+   if (!mCachedEllipsisTextRun) {
+     return nullptr;
+   }
+@@ -3450,7 +3477,7 @@ already_AddRefed<gfxFont> gfxFontGroup::FindFontForChar(
+         font = FindFallbackFaceForChar(ff, aCh, aNextCh, presentation);
+         if (font) {
+           if (CheckCandidate(font,
+-                             {FontMatchType::Kind::kFontGroup, ff.Generic()})) {
++                             {FontMatchType::Kind::kFontGroup, mFonts[i].Generic()})) {
+             return font.forget();
+           }
+         }
+diff --git a/gfx/thebes/gfxTextRun.h b/gfx/thebes/gfxTextRun.h
+index 53ec85cbf7..fd62e57b75 100644
+--- a/gfx/thebes/gfxTextRun.h
++++ b/gfx/thebes/gfxTextRun.h
+@@ -480,13 +480,14 @@ class gfxTextRun : public gfxShapedText {
+   void ClearFlagBits(nsTextFrameUtils::Flags aFlags) { mFlags2 &= ~aFlags; }
+   const gfxSkipChars& GetSkipChars() const { return mSkipChars; }
+   gfxFontGroup* GetFontGroup() const { return mFontGroup; }
++  uint32_t GetUserContextId() const override { return mUserContextId; }
+ 
+   // Call this, don't call "new gfxTextRun" directly. This does custom
+   // allocation and initialization
+   static already_AddRefed<gfxTextRun> Create(
+       const gfxTextRunFactory::Parameters* aParams, uint32_t aLength,
+       gfxFontGroup* aFontGroup, mozilla::gfx::ShapedTextFlags aFlags,
+-      nsTextFrameUtils::Flags aFlags2);
++      nsTextFrameUtils::Flags aFlags2, uint32_t aUserContextId = 0);
+ 
+   // The text is divided into GlyphRuns as necessary. (In the vast majority
+   // of cases, a gfxTextRun contains just a single GlyphRun.)
+@@ -795,7 +796,7 @@ class gfxTextRun : public gfxShapedText {
+    */
+   gfxTextRun(const gfxTextRunFactory::Parameters* aParams, uint32_t aLength,
+              gfxFontGroup* aFontGroup, mozilla::gfx::ShapedTextFlags aFlags,
+-             nsTextFrameUtils::Flags aFlags2);
++             nsTextFrameUtils::Flags aFlags2, uint32_t aUserContextId = 0);
+ 
+   // Whether we need to fetch actual glyph extents from the fonts.
+   bool NeedsGlyphExtents() const;
+@@ -887,6 +888,8 @@ class gfxTextRun : public gfxShapedText {
+   nsTextFrameUtils::Flags
+       mFlags2;  // additional flags (see also gfxShapedText::mFlags)
+ 
++  uint32_t mUserContextId;  // user context ID for font spacing seed
++
+   bool mDontSkipDrawing;  // true if the text run must not skip drawing, even if
+                           // waiting for a user font download, e.g. because we
+                           // are using it to draw canvas text
+@@ -965,7 +968,8 @@ class gfxFontGroup final : public gfxTextRunFactory {
+                                            const Parameters* aParams,
+                                            mozilla::gfx::ShapedTextFlags aFlags,
+                                            nsTextFrameUtils::Flags aFlags2,
+-                                           gfxMissingFontRecorder* aMFR);
++                                           gfxMissingFontRecorder* aMFR,
++                                           uint32_t aUserContextId = 0);
+ 
+   /**
+    * Textrun creation helper for clients that don't want to pass
+@@ -977,10 +981,11 @@ class gfxFontGroup final : public gfxTextRunFactory {
+                                            int32_t aAppUnitsPerDevUnit,
+                                            mozilla::gfx::ShapedTextFlags aFlags,
+                                            nsTextFrameUtils::Flags aFlags2,
+-                                           gfxMissingFontRecorder* aMFR) {
++                                           gfxMissingFontRecorder* aMFR,
++                                           uint32_t aUserContextId = 0) {
+     gfxTextRunFactory::Parameters params = {
+         aRefDrawTarget, nullptr, nullptr, nullptr, 0, aAppUnitsPerDevUnit};
+-    return MakeTextRun(aString, aLength, &params, aFlags, aFlags2, aMFR);
++    return MakeTextRun(aString, aLength, &params, aFlags, aFlags2, aMFR, aUserContextId);
+   }
+ 
+   // Get the (possibly-cached) width of the hyphen character.
+@@ -1403,6 +1408,8 @@ class gfxFontGroup final : public gfxTextRunFactory {
+   uint32_t mFontListGeneration = 0;  // platform font list generation for this
+                                      // fontgroup
+ 
++  uint32_t mUserContextId = 0;  // user context ID for font spacing seed
++
+   /**
+    * Textrun creation short-cuts for special cases where we don't need to
+    * call a font shaper to generate glyphs.
+diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
+index 1600435c40..c2f64265b5 100644
+--- a/layout/base/nsLayoutUtils.cpp
++++ b/layout/base/nsLayoutUtils.cpp
+@@ -141,7 +141,9 @@
+ #include "nsIFrameInlines.h"
+ #include "nsIImageLoadingContent.h"
+ #include "nsIInterfaceRequestorUtils.h"
++#include "nsILoadContext.h"
+ #include "nsIWidget.h"
++#include "mozilla/OriginAttributes.h"
+ #include "nsListControlFrame.h"
+ #include "nsMenuPopupFrame.h"
+ #include "nsPIDOMWindow.h"
+@@ -1222,6 +1224,33 @@ nsIFrame* nsLayoutUtils::GetLastSibling(nsIFrame* aFrame) {
+   return aFrame;
+ }
+ 
++/* static */ uint32_t
++nsLayoutUtils::GetUserContextId(nsIFrame* aFrame)
++{
++    if (!aFrame || !aFrame->GetContent()) {
++        return 0;
++    }
++    
++    mozilla::dom::Document* doc = aFrame->GetContent()->GetComposedDoc();
++    if (!doc) {
++        return 0;
++    }
++    
++    nsIDocShell* docShell = doc->GetDocShell();
++    if (!docShell) {
++        return 0;
++    }
++    
++    nsCOMPtr<nsILoadContext> loadContext = do_QueryInterface(docShell);
++    if (!loadContext) {
++        return 0;
++    }
++    
++    mozilla::OriginAttributes attrs;
++    loadContext->GetOriginAttributes(attrs);
++    return attrs.mUserContextId;
++}
++
+ // static
+ nsView* nsLayoutUtils::FindSiblingViewFor(nsView* aParentView,
+                                           nsIFrame* aFrame) {
+diff --git a/layout/base/nsLayoutUtils.h b/layout/base/nsLayoutUtils.h
+index 68334ed6ae..dc84142555 100644
+--- a/layout/base/nsLayoutUtils.h
++++ b/layout/base/nsLayoutUtils.h
+@@ -413,6 +413,11 @@ class nsLayoutUtils {
+    */
+   static nsIFrame* GetLastSibling(nsIFrame* aFrame);
+ 
++  /**
++   * Get the user context ID from a frame's document context
++   */
++  static uint32_t GetUserContextId(nsIFrame* aFrame);
++
+   /**
+    * FindSiblingViewFor locates the child of aParentView that aFrame's
+    * view should be inserted 'above' (i.e., before in sibling view
+diff --git a/layout/generic/MathMLTextRunFactory.cpp b/layout/generic/MathMLTextRunFactory.cpp
+index d27ab55be6..22cf71b7f3 100644
+--- a/layout/generic/MathMLTextRunFactory.cpp
++++ b/layout/generic/MathMLTextRunFactory.cpp
+@@ -12,6 +12,7 @@
+ #include "mozilla/ComputedStyleInlines.h"
+ #include "mozilla/StaticPrefs_mathml.h"
+ #include "mozilla/intl/UnicodeScriptCodes.h"
++#include "mozilla/OriginAttributes.h"
+ 
+ #include "nsStyleConsts.h"
+ #include "nsTextFrameUtils.h"
+@@ -639,6 +640,17 @@ void MathMLTextRunFactory::RebuildTextRun(
+     newFontGroup = fontGroup;
+   }
+ 
++  // Extract user context ID from PresContext document if available
++  uint32_t userContextId = 0;
++  if (length && styles[0]->mPresContext) {
++    if (mozilla::dom::Document* doc = styles[0]->mPresContext->Document()) {
++      if (nsIPrincipal* principal = doc->NodePrincipal()) {
++        const mozilla::OriginAttributes& attrs = principal->OriginAttributesRef();
++        userContextId = attrs.mUserContextId;
++      }
++    }
++  }
++  
+   if (mInnerTransformingTextRunFactory) {
+     transformedChild = mInnerTransformingTextRunFactory->MakeTextRun(
+         convertedString.BeginReading(), convertedString.Length(), &innerParams,
+@@ -648,7 +660,7 @@ void MathMLTextRunFactory::RebuildTextRun(
+   } else {
+     cachedChild = newFontGroup->MakeTextRun(
+         convertedString.BeginReading(), convertedString.Length(), &innerParams,
+-        flags, nsTextFrameUtils::Flags(), aMFR);
++        flags, nsTextFrameUtils::Flags(), aMFR, userContextId);
+     child = cachedChild.get();
+   }
+   if (!child) {
+diff --git a/layout/generic/nsTextFrame.cpp b/layout/generic/nsTextFrame.cpp
+index 77b65b6d13..575162d6c3 100644
+--- a/layout/generic/nsTextFrame.cpp
++++ b/layout/generic/nsTextFrame.cpp
+@@ -2179,10 +2179,11 @@ static already_AddRefed<gfxTextRun> GetHyphenTextRun(nsTextFrame* aTextFrame,
+     return fontGroup->MakeHyphenTextRun(dt, flags, appPerDev);
+   }
+   auto* missingFonts = aTextFrame->PresContext()->MissingFontRecorder();
++  uint32_t userContextId = nsLayoutUtils::GetUserContextId(aTextFrame);
+   const NS_ConvertUTF8toUTF16 hyphenStr(hyphenateChar.AsString().AsString());
+   return fontGroup->MakeTextRun(hyphenStr.BeginReading(), hyphenStr.Length(),
+                                 dt, appPerDev, flags, nsTextFrameUtils::Flags(),
+-                                missingFonts);
++                                missingFonts, userContextId);
+ }
+ 
+ already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
+@@ -2529,6 +2530,9 @@ already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
+                  "We didn't cover all the characters in the text run!");
+   }
+ 
++  // Get user context ID for font spacing seed
++  uint32_t userContextId = nsLayoutUtils::GetUserContextId(firstFrame);
++
+   RefPtr<gfxTextRun> textRun;
+   gfxTextRunFactory::Parameters params = {
+       mDrawTarget,
+@@ -2546,7 +2550,7 @@ already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
+           std::move(styles), true);
+     } else {
+       textRun = fontGroup->MakeTextRun(text, transformedLength, &params, flags,
+-                                       flags2, mMissingFonts);
++                                       flags2, mMissingFonts, userContextId);
+     }
+   } else {
+     const uint8_t* text = static_cast<const uint8_t*>(textPtr);
+@@ -2557,7 +2561,7 @@ already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
+           std::move(styles), true);
+     } else {
+       textRun = fontGroup->MakeTextRun(text, transformedLength, &params, flags,
+-                                       flags2, mMissingFonts);
++                                       flags2, mMissingFonts, userContextId);
+     }
+   }
+   if (!textRun) {
+@@ -5073,6 +5077,7 @@ static already_AddRefed<gfxTextRun> GenerateTextRunForEmphasisMarks(
+ 
+   RefPtr<DrawTarget> dt = CreateReferenceDrawTarget(aFrame);
+   auto appUnitsPerDevUnit = aFrame->PresContext()->AppUnitsPerDevPixel();
++  uint32_t userContextId = nsLayoutUtils::GetUserContextId(aFrame);
+   gfx::ShapedTextFlags flags =
+       nsLayoutUtils::GetTextRunOrientFlagsForStyle(aComputedStyle);
+   if (flags == gfx::ShapedTextFlags::TEXT_ORIENT_VERTICAL_MIXED) {
+@@ -5081,7 +5086,8 @@ static already_AddRefed<gfxTextRun> GenerateTextRunForEmphasisMarks(
+   }
+   return aFontGroup->MakeTextRun<char16_t>(string.get(), string.Length(), dt,
+                                            appUnitsPerDevUnit, flags,
+-                                           nsTextFrameUtils::Flags(), nullptr);
++                                           nsTextFrameUtils::Flags(), nullptr,
++                                           userContextId);
+ }
+ 
+ static nsRubyFrame* FindFurthestInlineRubyAncestor(nsTextFrame* aFrame) {
+diff --git a/layout/generic/nsTextRunTransformations.cpp b/layout/generic/nsTextRunTransformations.cpp
+index a1ba57fb6c..56c0937e45 100644
+--- a/layout/generic/nsTextRunTransformations.cpp
++++ b/layout/generic/nsTextRunTransformations.cpp
+@@ -918,6 +918,10 @@ void nsCaseTransformTextRunFactory::RebuildTextRun(
+   RefPtr<gfxTextRun> cachedChild;
+   gfxTextRun* child;
+ 
++  // Text transformation contexts don't have direct access to document/frame context,
++  // so we cannot extract private browsing ID. Use 0 (default context).
++  uint32_t privateBrowsingId = 0;
++  
+   if (mInnerTransformingTextRunFactory) {
+     transformedChild = mInnerTransformingTextRunFactory->MakeTextRun(
+         convertedString.BeginReading(), convertedString.Length(), &innerParams,
+@@ -927,7 +931,7 @@ void nsCaseTransformTextRunFactory::RebuildTextRun(
+   } else {
+     cachedChild = fontGroup->MakeTextRun(
+         convertedString.BeginReading(), convertedString.Length(), &innerParams,
+-        flags, nsTextFrameUtils::Flags(), aMFR);
++        flags, nsTextFrameUtils::Flags(), aMFR, privateBrowsingId);
+     child = cachedChild.get();
+   }
+   if (!child) {
+diff --git a/layout/mathml/nsMathMLChar.cpp b/layout/mathml/nsMathMLChar.cpp
+index 1c8c5bde49..9a21317f08 100644
+--- a/layout/mathml/nsMathMLChar.cpp
++++ b/layout/mathml/nsMathMLChar.cpp
+@@ -10,6 +10,7 @@
+ #include "gfxTextRun.h"
+ #include "gfxUtils.h"
+ #include "mozilla/dom/Document.h"
++#include "mozilla/OriginAttributes.h"
+ #include "mozilla/gfx/2D.h"
+ #include "mozilla/intl/UnicodeScriptCodes.h"
+ #include "mozilla/ComputedStyle.h"
+@@ -361,7 +362,7 @@ already_AddRefed<gfxTextRun> nsPropertiesTable::MakeTextRun(
+                "nsPropertiesTable can only access glyphs by code point");
+   return aFontGroup->MakeTextRun(aGlyph.code, aGlyph.Length(), aDrawTarget,
+                                  aAppUnitsPerDevPixel, gfx::ShapedTextFlags(),
+-                                 nsTextFrameUtils::Flags(), nullptr);
++                                 nsTextFrameUtils::Flags(), nullptr, 0); // TODO: Extract private browsing ID
+ }
+ 
+ // An instance of nsOpenTypeTable is associated with one gfxFontEntry that
+@@ -426,7 +427,7 @@ void nsOpenTypeTable::UpdateCache(DrawTarget* aDrawTarget,
+   if (mCharCache != aChar) {
+     RefPtr<gfxTextRun> textRun = aFontGroup->MakeTextRun(
+         &aChar, 1, aDrawTarget, aAppUnitsPerDevPixel, gfx::ShapedTextFlags(),
+-        nsTextFrameUtils::Flags(), nullptr);
++        nsTextFrameUtils::Flags(), nullptr, 0); // TODO: Extract private browsing ID
+     const gfxTextRun::CompressedGlyph& data = textRun->GetCharacterGlyphs()[0];
+     if (data.IsSimpleGlyph()) {
+       mGlyphID = data.GetSimpleGlyph();
+@@ -1427,10 +1428,18 @@ nsresult nsMathMLChar::StretchInternal(
+   params.textPerf = presContext->GetTextPerfMetrics();
+   RefPtr<nsFontMetrics> fm = presContext->GetMetricsFor(font, params);
+   uint32_t len = uint32_t(mData.Length());
++  // Extract user context ID from frame or presContext
++  uint32_t userContextId = 0;
++  if (mozilla::dom::Document* doc = presContext->Document()) {
++    if (nsIPrincipal* principal = doc->NodePrincipal()) {
++      const mozilla::OriginAttributes& attrs = principal->OriginAttributesRef();
++      userContextId = attrs.mUserContextId;
++    }
++  }
+   mGlyphs[0] = fm->GetThebesFontGroup()->MakeTextRun(
+       static_cast<const char16_t*>(mData.get()), len, aDrawTarget,
+       presContext->AppUnitsPerDevPixel(), gfx::ShapedTextFlags(),
+-      nsTextFrameUtils::Flags(), presContext->MissingFontRecorder());
++      nsTextFrameUtils::Flags(), presContext->MissingFontRecorder(), userContextId);
+   aDesiredStretchSize = MeasureTextRun(aDrawTarget, mGlyphs[0].get());
+ 
+   bool maxWidth = (NS_STRETCH_MAXWIDTH & aStretchHint) != 0;
