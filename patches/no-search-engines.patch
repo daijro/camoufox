@@ -2,14 +2,20 @@ diff --git a/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs b/bro
 index 988f5831f2..62f64589a4 100644
 --- a/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
 +++ b/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
-@@ -484,6 +484,6 @@ export class UrlbarProviderInterventions extends UrlbarProvider {
+@@ -484,11 +484,11 @@ export class UrlbarProviderInterventions extends UrlbarProvider {
   async isActive(queryContext) {
 -    if (
 +    if (true ||
       !queryContext.searchString ||
       queryContext.searchString.length > UrlbarUtils.MAX_TEXT_LENGTH ||
       lazy.UrlUtils.REGEXP_LIKE_PROTOCOL.test(queryContext.searchString) ||
- 
+      !EN_LOCALE_MATCH.test(Services.locale.appLocaleAsBCP47) ||
+      !Services.policies.isAllowed("urlbarinterventions") ||
+      (await this.queryInstance
+        .getProvider(lazy.UrlbarProviderGlobalActions.name)
+        ?.isActive(queryContext))
+    ) {
+
 diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/components/search/SearchEngineSelector.sys.mjs
 index 3dab73ee2f..c5c1259217 100644
 --- a/toolkit/components/search/SearchEngineSelector.sys.mjs
