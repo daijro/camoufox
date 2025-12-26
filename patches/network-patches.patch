@@ -49,7 +49,7 @@ index d0aebdf965..01472ec205 100644
  
    mAcceptLanguagesIsDirty = false;
  
-@@ -2113,8 +2117,12 @@ nsresult nsHttpHandler::SetAcceptLanguages() {
+@@ -2113,8 +2126,12 @@ nsresult nsHttpHandler::SetAcceptLanguages() {
  
  nsresult nsHttpHandler::SetAcceptEncodings(const char* aAcceptEncodings,
                                             bool isSecure, bool isDictionary) {

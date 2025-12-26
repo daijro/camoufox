@@ -534,7 +534,7 @@ diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/js
 index d0102a6746..ed524583bd 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-@@ -118,6 +118,8 @@
+@@ -103,6 +103,8 @@
  #include "mozilla/net/WebrtcProxyConfig.h"
  #include "MaskConfig.hpp"
  #include "mozilla/RustRegex.h"
