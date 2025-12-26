@@ -125,7 +125,7 @@ index 70c06609e9..66b2666621 100644
  
  class gfxFontFaceBufferSource;
  
-@@ -35,6 +37,20 @@
+@@ -33,6 +34,20 @@
  
  namespace mozilla::dom {
  
