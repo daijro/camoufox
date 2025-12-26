@@ -188,8 +188,7 @@ index 8e577bd9fd..3ed748a75f 100644
    if (mWindow) {
      // Check if this tab is set to be offline.
      BrowsingContext* bc = mWindow->GetBrowsingContext();
-     BrowsingContext* bc = mWindow->GetBrowsingContext();
-@@ -625,6 +625,8 @@ bool Navigator::OnLine() {
+@@ -634,6 +634,8 @@ bool Navigator::OnLine() {
  void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
                             ErrorResult& aRv) const {
    if (aCallerType != CallerType::System) {
