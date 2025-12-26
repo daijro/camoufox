@@ -174,12 +174,12 @@ index 8e577bd9fd..3ed748a75f 100644
    // Check whether an exception overrides the global cookie behavior
    // Note that the code for getting the URI here matches that in
    // nsHTMLDocument::SetCookie.
-@@ -625,8 +625,12 @@ bool Navigator::CookieEnabled() {
+@@ -625,6 +625,13 @@ bool Navigator::CookieEnabled() {
  }
  
  bool Navigator::OnLine() {
 +  if (auto value = MaskConfig::GetBool("navigator.onLine"); value.has_value())
-+    return value.value();            
++    return value.value();
 +  if (nsContentUtils::ShouldResistFingerprinting(
 +          GetDocShell(), RFPTarget::NetworkConnection)) {
 +    return true;
