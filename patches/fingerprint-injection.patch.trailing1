@@ -44,6 +44,195 @@ index 807cb4ec25..3df0e0f70f 100644
    // We can avoid a layout flush if this is the scrolling element of the
    // document, we have overlay scrollbars, and we aren't embedded in another
    // document
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index 8e577bd9fd..3ed748a75f 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -7,6 +7,8 @@
+ // Needs to be first.
+ #include "Navigator.h"
+ 
++#include "MaskConfig.hpp"
++
+ #include "Geolocation.h"
+ #include "base/basictypes.h"
+ #include "mozilla/Components.h"
+@@ -173,6 +173,8 @@ void Navigator::Invalidate() {
+ 
+ void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
+                              ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.userAgent"))
++    return aUserAgent.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsCOMPtr<nsPIDOMWindowInner> window;
+ 
+   if (mWindow) {
+@@ -262,6 +262,8 @@ void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
+ }
+ 
+ void Navigator::GetAppCodeName(nsAString& aAppCodeName, ErrorResult& aRv) {
++  if (auto value = MaskConfig::GetString("navigator.appCodeName"))
++    return aAppCodeName.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsresult rv;
+ 
+   nsCOMPtr<nsIHttpProtocolHandler> service(
+@@ -291,6 +291,8 @@ void Navigator::GetAppCodeName(nsAString& aAppCodeName, ErrorResult& aRv) {
+ 
+ void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
+                               ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.appVersion"))
++    return aAppVersion.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsCOMPtr<Document> doc = mWindow->GetExtantDoc();
+ 
+   nsresult rv = GetAppVersion(
+@@ -313,6 +313,8 @@ void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
+ }
+ 
+ void Navigator::GetAppName(nsAString& aAppName) const {
++  if (auto value = MaskConfig::GetString("navigator.appName"))
++    return aAppName.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   aAppName.AssignLiteral("Netscape");
+ }
+ 
+@@ -350,6 +359,15 @@ void Navigator::GetAcceptLanguages(const nsString* aLanguageOverride,
+ 
+   aLanguages.Clear();
+ 
++  if (std::vector<std::string> maskValues =
++          MaskConfig::GetStringList("navigator.languages");
++      !maskValues.empty()) {
++    for (const auto& lang : maskValues) {
++      aLanguages.AppendElement(NS_ConvertUTF8toUTF16(lang));
++    }
++    return;
++  }
++
+   // E.g. "de-de, en-us,en".
+   nsAutoString acceptLang;
+   if (aLanguageOverride && aLanguageOverride->Length())
+@@ -400,6 +418,8 @@ void Navigator::GetAcceptLanguages(const nsString* aLanguageOverride,
+  * Full details above in GetAcceptLanguages.
+  */
+ void Navigator::GetLanguage(nsAString& aLanguage) {
++  if (auto value = MaskConfig::GetString("navigator.language"))
++    return aLanguage.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsTArray<nsString> languages;
+   GetLanguages(languages);
+   MOZ_ASSERT(languages.Length() >= 1);
+@@ -423,6 +423,8 @@ void Navigator::GetLanguages(nsTArray<nsString>& aLanguages) {
+ 
+ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
+                             ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.platform"))
++    return aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   if (mWindow) {
+     BrowsingContext* bc = mWindow->GetBrowsingContext();
+     nsString customPlatform;
+@@ -443,6 +443,8 @@ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
+ void Navigator::GetOscpu(nsAString& aOSCPU, CallerType aCallerType,
+                          ErrorResult& aRv) const {
+   if (aCallerType != CallerType::System) {
++    if (auto value = MaskConfig::GetString("navigator.oscpu"))
++      return aOSCPU.Assign(NS_ConvertUTF8toUTF16(value.value()));
+     // If fingerprinting resistance is on, we will spoof this value. See
+     // nsRFPService.h for details about spoofed values.
+     if (nsContentUtils::ShouldResistFingerprinting(GetDocShell(),
+@@ -511,10 +511,14 @@ void Navigator::GetVendor(nsAString& aVendor) { aVendor.Truncate(); }
+ void Navigator::GetVendorSub(nsAString& aVendorSub) { aVendorSub.Truncate(); }
+ 
+ void Navigator::GetProduct(nsAString& aProduct) {
++  if (auto value = MaskConfig::GetString("navigator.product"))
++    return aProduct.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   aProduct.AssignLiteral("Gecko");
+ }
+ 
+ void Navigator::GetProductSub(nsAString& aProductSub) {
++  if (auto value = MaskConfig::GetString("navigator.productSub"))
++    return aProductSub.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   // Legacy build date hardcoded for backward compatibility (bug 776376)
+   aProductSub.AssignLiteral(LEGACY_UA_GECKO_TRAIL);
+ }
+@@ -517,7 +545,11 @@ nsPluginArray* Navigator::GetPlugins(ErrorResult& aRv) {
+   return mPlugins;
+ }
+ 
+-bool Navigator::PdfViewerEnabled() { return !StaticPrefs::pdfjs_disabled(); }
++bool Navigator::PdfViewerEnabled() {
++  if (auto value = MaskConfig::GetBool("pdfViewerEnabled"); value.has_value())
++    return value.value();
++  return !StaticPrefs::pdfjs_disabled();
++}
+ 
+ Permissions* Navigator::GetPermissions(ErrorResult& aRv) {
+   if (!mWindow) {
+@@ -543,6 +575,9 @@ StorageManager* Navigator::Storage() {
+ }
+ 
+ bool Navigator::CookieEnabled() {
++  if (auto value = MaskConfig::GetBool("navigator.cookieEnabled");
++      value.has_value())
++    return value.value();
+   // Check whether an exception overrides the global cookie behavior
+   // Note that the code for getting the URI here matches that in
+   // nsHTMLDocument::SetCookie.
+@@ -625,6 +625,13 @@ bool Navigator::CookieEnabled() {
+ }
+ 
+ bool Navigator::OnLine() {
++  if (auto value = MaskConfig::GetBool("navigator.onLine"); value.has_value())
++    return value.value();            
++  if (nsContentUtils::ShouldResistFingerprinting(
++          GetDocShell(), RFPTarget::NetworkConnection)) {
++    return true;
++  }
++
+   if (mWindow) {
+     // Check if this tab is set to be offline.
+     BrowsingContext* bc = mWindow->GetBrowsingContext();
+@@ -634,6 +634,8 @@ bool Navigator::OnLine() {
+ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
+                            ErrorResult& aRv) const {
+   if (aCallerType != CallerType::System) {
++    if (auto value = MaskConfig::GetString("navigator.buildID"))
++      return aBuildID.Assign(NS_ConvertUTF8toUTF16(value.value()));
+     // If fingerprinting resistance is on, we will spoof this value. See
+     // nsRFPService.h for details about spoofed values.
+     if (nsContentUtils::ShouldResistFingerprinting(
+@@ -642,6 +642,8 @@ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
+ }
+ 
+ void Navigator::GetDoNotTrack(nsAString& aResult) {
++  if (auto value = MaskConfig::GetString("navigator.doNotTrack"))
++    return aResult.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   bool doNotTrack = StaticPrefs::privacy_donottrackheader_enabled();
+   if (!doNotTrack) {
+     nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(mWindow);
+@@ -702,6 +702,8 @@ void Navigator::GetBuildID(nsAString& aBuildID, CallerType aCallerType,
+ }
+ 
+ void Navigator::GetDoNotTrack(nsAString& aResult) {
++  if (auto value = MaskConfig::GetString("navigator.doNotTrack"))
++    return aResult.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   if (StaticPrefs::privacy_donottrackheader_enabled()) {
+     aResult.AssignLiteral("1");
+   } else {
+@@ -710,6 +710,8 @@ bool Navigator::GlobalPrivacyControl() {
+ }
+ 
+ uint64_t Navigator::HardwareConcurrency() {
++  if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency"))
++    return value.value();
+   workerinternals::RuntimeService* rts =
+       workerinternals::RuntimeService::GetOrCreateService();
+   if (!rts) {
+@@ -868,6 +868,8 @@ bool Navigator::Vibrate(const nsTArray<uint32_t>& aPattern) {
+ //*****************************************************************************
+ 
+ uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
++  if (auto value = MaskConfig::GetUint32("navigator.maxTouchPoints"))
++    return value.value();
+   nsIDocShell* docshell = GetDocShell();
+   BrowsingContext* bc = docshell ? docshell->GetBrowsingContext() : nullptr;
+ 
 diff --git a/dom/base/moz.build b/dom/base/moz.build
 index 114402c4a1..55daeabe7a 100644
 --- a/dom/base/moz.build
