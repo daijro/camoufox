@@ -868,7 +868,7 @@ index a8fac45e67..d59815f2d5 100644
  
    EmphasisMarkDrawParams params(aContext, aPaletteCache);
    params.mark = aMark;
-@@ -1872,6 +1876,22 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+@@ -1872,6 +1876,20 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
       mPageLang(gfxPlatformFontList::GetFontPrefLangFor(aLanguage)),
       mExplicitLanguage(aExplicitLanguage),
 -      mFontVariantEmoji(aVariantEmoji) {
