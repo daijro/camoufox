@@ -245,7 +245,7 @@ diff --git a/docshell/base/BrowsingContext.h b/docshell/base/BrowsingContext.h
 index b42c32133c6490755ae4e1c599255418e6443011..afa502833ba55c94dbd30726d37450c460a69e2b 100644
 --- a/docshell/base/BrowsingContext.h
 +++ b/docshell/base/BrowsingContext.h
-@@ -209,10 +209,11 @@ struct EmbedderColorSchemes {
+@@ -209,11 +209,11 @@ struct EmbedderColorSchemes {
    FIELD(GVInaudibleAutoplayRequestStatus, GVAutoplayRequestStatus)            \
    /* ScreenOrientation-related APIs */                                        \
    FIELD(CurrentOrientationAngle, float)                                       \
