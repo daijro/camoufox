@@ -98,6 +98,15 @@ class Patcher:
                     print('='*70)
                     sys.exit(1)
 
+                # Copy fixed juggler components.conf for Firefox 146+
+                # This fixes component registration for externally-constructed components
+                print('-> Copying fixed juggler components.conf...')
+                juggler_src = '../additions/juggler/components/components.conf'
+                juggler_dst = 'juggler/components/components.conf'
+                if os.path.exists(juggler_src) and os.path.exists(os.path.dirname(juggler_dst)):
+                    shutil.copy2(juggler_src, juggler_dst)
+                    print(f'   Copied {juggler_src} -> {juggler_dst}')
+
             print('Complete!')
 
     def _apply_and_check(self, patch_file):
