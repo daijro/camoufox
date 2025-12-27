@@ -217,27 +217,10 @@ index 81896a2c74..bc192c25c3 100644
      }
      mGeolocationServiceOverride->Update(aGeolocationOverride.Value());
    } else if (RefPtr<nsGeolocationService> serviceOverride =
-@@ -4230,6 +4263,23 @@ void BrowsingContext::DidSet(FieldIndex<IDX_ForceOffline>, bool aOldValue) {
+@@ -4230,6 +4263,6 @@ void BrowsingContext::DidSet(FieldIndex<IDX_ForceOffline>, bool aOldValue) {
    });
  }
- 
-+void BrowsingContext::DidSet(FieldIndex<IDX_ForceOffline>, bool aOldValue) {
-+  const bool newValue = ForceOffline();
-+  if (newValue == aOldValue) {
-+    return;
-+  }
-+  PreOrderWalk([&](BrowsingContext* aContext) {
-+    if (Document* doc = aContext->GetDocument()) {
-+      if (nsPIDOMWindowOuter* win = aContext->GetDOMWindow()) {
-+        nsContentUtils::DispatchTrustedEvent(
-+            doc, nsGlobalWindowOuter::Cast(win),
-+            newValue ? u"offline"_ns : u"online"_ns,
-+            CanBubble::eYes, Cancelable::eYes, nullptr);
-+      }
-+    }
-+  });
-+}
-+
+
  bool BrowsingContext::IsPopupAllowed() {
    for (auto* context = GetCurrentWindowContext(); context;
         context = context->GetParentWindowContext()) {
