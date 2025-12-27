@@ -48,7 +48,7 @@ diff --git a/dom/base/moz.build b/dom/base/moz.build
 index 114402c4a1..55daeabe7a 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -641,3 +641,6 @@ GeneratedFile(
+@@ -636,3 +636,6 @@ GeneratedFile(
          "/servo/components/style/properties/counted_unknown_properties.py",
      ],
  )

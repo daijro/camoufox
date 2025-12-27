@@ -2,14 +2,14 @@ diff --git a/dom/media/webspeech/synth/moz.build b/dom/media/webspeech/synth/moz
 index 2cf19982b2..dcdcdb5cbf 100644
 --- a/dom/media/webspeech/synth/moz.build
 +++ b/dom/media/webspeech/synth/moz.build
-@@ -63,4 +63,7 @@ FINAL_LIBRARY = "xul"
+@@ -61,3 +61,6 @@ FINAL_LIBRARY = "xul"
  LOCAL_INCLUDES += [
      "ipc",
  ]
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ['/camoucfg']
- 
+
 diff --git a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp b/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
 index e5a1353d6b..4a4a5b080b 100644
 --- a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp

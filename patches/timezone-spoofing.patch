@@ -2,9 +2,9 @@ diff --git a/intl/components/moz.build b/intl/components/moz.build
 index b0af60b999..28c221136e 100644
 --- a/intl/components/moz.build
 +++ b/intl/components/moz.build
-@@ -89,3 +89,6 @@ if CONFIG["MOZ_ICU4X"]:
+@@ -87,3 +87,6 @@ if not CONFIG["MOZ_SYSTEM_ICU"]:
  DEFINES["MOZ_HAS_MOZGLUE"] = True
- 
+
  Library("intlcomponents")
 +
 +# DOM Mask
