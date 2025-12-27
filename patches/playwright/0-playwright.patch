@@ -320,12 +320,10 @@ index 724326453f..2f5717b47c 100644
    void DidSet(FieldIndex<IDX_TimezoneOverride>, nsString&& aOldValue);
  
    void DidSet(FieldIndex<IDX_MediumOverride>, nsString&& aOldValue);
-@@ -1458,6 +1485,8 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
- 
+@@ -1458,6 +1485,6 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
+
    void DidSet(FieldIndex<IDX_ForceOffline>, bool aOldValue);
- 
-+  void DidSet(FieldIndex<IDX_ForceOffline>, bool aOldValue);
-+
+
    // Allow if the process attemping to set field is the same as the owning
    // process. Deprecated. New code that might use this should generally be moved
    // to WindowContext or be settable only by the parent process.
