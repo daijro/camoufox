@@ -11,6 +11,20 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
  LOCAL_INCLUDES += [
      "/js/xpconnect/wrappers",
  ]
+diff --git a/dom/canvas/ClientWebGLContext.h b/dom/canvas/ClientWebGLContext.h
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/canvas/ClientWebGLContext.h
++++ b/dom/canvas/ClientWebGLContext.h
+@@ -1083,6 +1083,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
+   void GetContextAttributes(dom::Nullable<dom::WebGLContextAttributes>& retval);
+
+  private:
++  // Helper for mask config values
++  bool MBoolVal(const std::string& key, bool defaultValue);
++
+   webgl::SwapChainOptions PrepareAsyncSwapChainOptions(
+       WebGLFramebufferJS* fb, bool webvr,
+       const webgl::SwapChainOptions& options = webgl::SwapChainOptions());
 diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
 index 11578f425f..6c77acd7f3 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
@@ -326,9 +340,9 @@ index 11578f425f..6c77acd7f3 100644
 +          MaskConfig::MShaderData(shadertype, precisiontype, mIsWebGL2)) {
 +    const auto& format = value.value();
 +    const auto spoofed = webgl::ShaderPrecisionFormat{
-+        format[0],  // rangeMin
-+        format[1],  // rangeMax
-+        format[2]   // precision
++        static_cast<uint8_t>(format[0]),  // rangeMin
++        static_cast<uint8_t>(format[1]),  // rangeMax
++        static_cast<uint8_t>(format[2])   // precision
 +    };
 +    return AsAddRefed(new WebGLShaderPrecisionFormatJS(spoofed));
 +  }
