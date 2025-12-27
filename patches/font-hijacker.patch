@@ -31,9 +31,9 @@ diff --git a/gfx/thebes/moz.build b/gfx/thebes/moz.build
 index 3d99906827..a9d1191688 100644
 --- a/gfx/thebes/moz.build
 +++ b/gfx/thebes/moz.build
-@@ -305,3 +305,6 @@ DEFINES["GRAPHITE2_STATIC"] = True
+@@ -301,3 +301,6 @@ DEFINES["GRAPHITE2_STATIC"] = True
  CXXFLAGS += ["-Werror=switch"]
- 
+
  include("/tools/fuzzing/libfuzzer-config.mozbuild")
 +
 +# DOM Mask
@@ -150,11 +150,11 @@ diff --git a/layout/style/moz.build b/layout/style/moz.build
 index a14ab6a7ac..6e6a727abf 100644
 --- a/layout/style/moz.build
 +++ b/layout/style/moz.build
-@@ -379,3 +379,6 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
-        "ServoStyleConsts.h",
-        "ServoStyleConsts.h",
-        inputs=["/servo/ports/geckolib", "/servo/components/style"],
-    )
+@@ -378,4 +378,7 @@
+     CbindgenHeader(
+         "ServoStyleConsts.h",
+         inputs=["/servo/ports/geckolib", "/servo/components/style"],
+     )
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]

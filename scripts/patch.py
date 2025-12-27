@@ -106,28 +106,34 @@ class Patcher:
         Returns list of reject files if any, empty list otherwise.
         """
         import subprocess
+        import os
 
-        # Apply the patch and capture output
+        print(f"\n*** -> patch -p1 -i {patch_file}")
+        sys.stdout.flush()
+
+        # Apply patch interactively - don't capture stdout/stderr at all
+        # This allows prompts to show immediately and user can respond
+        # --forward flag: skip patches that appear to be already applied
         result = subprocess.run(
-            ['patch', '-p1', '-i', patch_file],
-            capture_output=True,
+            ['patch', '-p1', '--forward', '-i', patch_file],
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
             text=True
         )
 
-        print(f"\n*** -> patch -p1 -i {patch_file}")
-        if result.stdout:
-            print(result.stdout, end='')
-        if result.stderr:
-            print(result.stderr, end='', file=sys.stderr)
-
-        # Look for reject files in the output
+        # After patch completes, search for any .rej files created
         rejects = []
-        for line in (result.stdout + result.stderr).splitlines():
-            if '.rej' in line and 'saving rejects to file' in line:
-                # Extract the reject file path
-                match = re.search(r'saving rejects to file (.+\.rej)', line)
-                if match:
-                    rejects.append(match.group(1))
+        for root, dirs, files in os.walk('.'):
+            for file in files:
+                if file.endswith('.rej'):
+                    # Check if this is a newly created reject file
+                    reject_path = os.path.join(root, file)
+                    # Only include if it was just created (within last minute)
+                    if os.path.exists(reject_path):
+                        import time
+                        if time.time() - os.path.getmtime(reject_path) < 60:
+                            rejects.append(reject_path)
 
         return rejects
 
