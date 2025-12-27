@@ -1,3 +1,16 @@
+diff --git a/dom/canvas/moz.build b/dom/canvas/moz.build
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/canvas/moz.build
++++ b/dom/canvas/moz.build
+@@ -188,6 +188,8 @@ SOURCES += [
+ # Suppress warnings from third-party code.
+ SOURCES["MurmurHash3.cpp"].flags += ["-Wno-implicit-fallthrough"]
+
++LOCAL_INCLUDES += ["/camoucfg"]
++
+ LOCAL_INCLUDES += [
+     "/js/xpconnect/wrappers",
+ ]
 diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
 index 11578f425f..6c77acd7f3 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
