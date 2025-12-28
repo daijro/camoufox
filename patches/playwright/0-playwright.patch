@@ -2070,22 +2070,95 @@ index 2d177b5aad..28af5d41eb 100644
    }
  
 diff --git a/js/src/vm/DateTime.cpp b/js/src/vm/DateTime.cpp
-index 5f329ff0f6..bfeec77700 100644
+index 5f329ff0f6..709cd2b90d 100644
 --- a/js/src/vm/DateTime.cpp
 +++ b/js/src/vm/DateTime.cpp
-@@ -225,6 +225,11 @@ void js::DateTimeInfo::updateTimeZoneOverride(
- }
+@@ -167,7 +167,7 @@ static int32_t UTCToLocalStandardOffsetSeconds() {
+ 
+ void js::DateTimeInfo::internalResetTimeZone(ResetTimeZoneMode mode) {
+ #if JS_HAS_INTL_API
+-  MOZ_ASSERT(!timeZoneOverride_, "only valid for default instance");
++  MOZ_ASSERT(timeZoneOverride_.empty(), "only valid for default instance");
  #endif
  
+   // Nothing to do when an update request is already enqueued.
+@@ -207,28 +207,16 @@ void js::DateTimeInfo::resetState() {
+ #endif /* JS_HAS_INTL_API */
+ }
+ 
+-#if JS_HAS_INTL_API
+-void js::DateTimeInfo::updateTimeZoneOverride(
+-    RefPtr<JS::TimeZoneString> timeZone) {
+-  MOZ_RELEASE_ASSERT(timeZoneOverride_, "can't change default instance");
+-  MOZ_ASSERT(timeZone);
+-
+-  // Reset state when time zone override changed.
+-  if (std::strcmp(timeZoneOverride_->chars(), timeZone->chars()) != 0) {
+-    timeZoneOverride_ = timeZone;
+-
+-    // Reuse the |utcToLocalStandardOffsetSeconds_| as the cache key.
+-    utcToLocalStandardOffsetSeconds_++;
+ 
+-    resetState();
+-  }
 +void js::DateTimeInfo::internalSetTimeZoneOverride(std::string timeZone) {
 +  timeZoneOverride_ = std::move(timeZone);
 +  internalResetTimeZone(ResetTimeZoneMode::ResetEvenIfOffsetUnchanged);
-+}
-+
+ }
+-#endif
+ 
  void js::DateTimeInfo::updateTimeZone() {
    MOZ_ASSERT(timeZoneStatus_ != TimeZoneStatus::Valid);
  #if JS_HAS_INTL_API
-@@ -596,10 +601,24 @@ void js::ResetTimeZoneInternal(ResetTimeZoneMode mode) {
+-  MOZ_ASSERT(!timeZoneOverride_, "only valid for default instance");
++  MOZ_ASSERT(timeZoneOverride_.empty(), "only valid for default instance");
+ #endif
+ 
+   bool updateIfChanged = timeZoneStatus_ == TimeZoneStatus::UpdateIfChanged;
+@@ -266,21 +254,6 @@ js::DateTimeInfo::DateTimeInfo() {
+   timeZoneStatus_ = TimeZoneStatus::NeedsUpdate;
+ }
+ 
+-#if JS_HAS_INTL_API
+-js::DateTimeInfo::DateTimeInfo(RefPtr<JS::TimeZoneString> timeZone)
+-    : utcToLocalStandardOffsetSeconds_(SecondsPerDay),
+-      timeZoneOverride_(timeZone) {
+-  MOZ_ASSERT(timeZone);
+-
+-  // |utcToLocalStandardOffsetSeconds_| is initialized to |SecondsPerDay| to
+-  // ensure it's larger than any valid time zone offset as computed by
+-  // |UTCToLocalStandardOffsetSeconds()|.
+-
+-  // Manually reset all internal state, because |updateTimeZone| is never called
+-  // when a time zone override is used.
+-  resetState();
+-}
+-#endif
+ 
+ js::DateTimeInfo::~DateTimeInfo() = default;
+ 
+@@ -549,9 +522,9 @@ bool js::DateTimeInfo::internalTimeZoneId(TimeZoneIdentifierVector& result) {
+ mozilla::intl::TimeZone* js::DateTimeInfo::timeZone() {
+   if (!timeZone_) {
+     mozilla::Maybe<mozilla::Span<const char>> timeZoneOverride;
+-    if (timeZoneOverride_) {
++    if (!timeZoneOverride_.empty()) {
+       timeZoneOverride =
+-          mozilla::Some(mozilla::MakeStringSpan(timeZoneOverride_->chars()));
++          mozilla::Some(mozilla::MakeStringSpan(timeZoneOverride_.c_str()));
+     }
+ 
+     auto timeZone = mozilla::intl::TimeZone::TryCreate(timeZoneOverride);
+@@ -559,7 +532,7 @@ mozilla::intl::TimeZone* js::DateTimeInfo::timeZone() {
+     // If a time zone override was specified, but couldn't be resolved to a
+     // valid time zone, then we ignore the override request and instead use the
+     // system default time zone.
+-    if (timeZone.isErr() && timeZoneOverride_) {
++    if (timeZone.isErr() && !timeZoneOverride_.empty()) {
+       timeZone = mozilla::intl::TimeZone::TryCreate();
+     }
+ 
+@@ -596,10 +569,24 @@ void js::ResetTimeZoneInternal(ResetTimeZoneMode mode) {
    js::DateTimeInfo::resetTimeZone(mode);
  }
  
@@ -2110,7 +2183,7 @@ index 5f329ff0f6..bfeec77700 100644
  #if JS_HAS_INTL_API
  #  if defined(XP_WIN)
  static bool IsOlsonCompatibleWindowsTimeZoneId(std::string_view tz) {
-@@ -813,9 +832,17 @@ static bool ReadTimeZoneLink(std::string_view tz,
+@@ -813,9 +800,17 @@ static bool ReadTimeZoneLink(std::string_view tz,
  
  void js::DateTimeInfo::internalResyncICUDefaultTimeZone() {
  #if JS_HAS_INTL_API
@@ -2130,7 +2203,7 @@ index 5f329ff0f6..bfeec77700 100644
  
  #  if defined(XP_WIN)
 diff --git a/js/src/vm/DateTime.h b/js/src/vm/DateTime.h
-index 30b172e197..668569e57f 100644
+index 30b172e197..110824439c 100644
 --- a/js/src/vm/DateTime.h
 +++ b/js/src/vm/DateTime.h
 @@ -77,6 +77,8 @@ using TimeZoneIdentifierVector =
@@ -2142,7 +2215,24 @@ index 30b172e197..668569e57f 100644
  /**
   * Stores date/time information, particularly concerning the current local
   * time zone, and implements a small cache for daylight saving time offset
-@@ -287,6 +289,7 @@ class DateTimeInfo {
+@@ -151,9 +153,6 @@ class DateTimeInfo {
+   }
+ 
+  public:
+-#if JS_HAS_INTL_API
+-  explicit DateTimeInfo(RefPtr<JS::TimeZoneString> timeZone);
+-#endif
+   ~DateTimeInfo();
+ 
+   // The spec implicitly assumes DST and time zone adjustment information
+@@ -280,13 +279,10 @@ class DateTimeInfo {
+     return &DateTimeInfo::utcToLocalOffsetSeconds;
+   }
+ 
+-#if JS_HAS_INTL_API
+-  void updateTimeZoneOverride(RefPtr<JS::TimeZoneString> timeZone);
+-#endif
+-
   private:
    // The method below should only be called via js::ResetTimeZoneInternal().
    friend void js::ResetTimeZoneInternal(ResetTimeZoneMode);
@@ -2150,7 +2240,7 @@ index 30b172e197..668569e57f 100644
  
    static void resetTimeZone(ResetTimeZoneMode mode) {
      auto guard = instance->lock();
-@@ -367,11 +370,6 @@ class DateTimeInfo {
+@@ -367,11 +363,6 @@ class DateTimeInfo {
    RangeCache utcRange_;    // localtime-based ranges
    RangeCache localRange_;  // UTC-based ranges
  
@@ -2162,7 +2252,7 @@ index 30b172e197..668569e57f 100644
    /**
     * The current time zone. Lazily constructed to avoid potential I/O access
     * when initializing this class.
-@@ -390,6 +388,8 @@ class DateTimeInfo {
+@@ -390,6 +381,8 @@ class DateTimeInfo {
    JS::UniqueChars locale_;
    JS::UniqueTwoByteChars standardName_;
    JS::UniqueTwoByteChars daylightSavingsName_;
@@ -2171,7 +2261,7 @@ index 30b172e197..668569e57f 100644
  #else
    // Restrict the data-time range to the minimum required time_t range as
    // specified in POSIX. Most operating systems support 64-bit time_t
-@@ -407,6 +407,8 @@ class DateTimeInfo {
+@@ -407,6 +400,8 @@ class DateTimeInfo {
  
    void resetState();
  
