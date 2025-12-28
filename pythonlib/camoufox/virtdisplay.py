@@ -84,7 +84,7 @@ class VirtualDisplay:
         self.assert_linux()
 
         with self._lock:
-            if self.proc is None:
+            if self.proc is None or self.proc.poll() is not None:
                 self.execute_xvfb()
             elif self.debug:
                 print(f'Using virtual display: {self.display}')
@@ -99,6 +99,11 @@ class VirtualDisplay:
                 if self.debug:
                     print('Terminating virtual display:', self.display)
                 self.proc.terminate()
+                try:
+                    self.proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.proc.kill()
+                    self.proc.wait()
 
     def __del__(self):
         """
