@@ -52,8 +52,24 @@ class Patcher:
             self._update_mozconfig()
 
             if not options.mozconfig_only:
-                # Apply all other patches
-                for patch_file in list_patches():
+                # Apply patches with roverfox patches at the very end
+                all_patches = list_patches()
+                # Normalize paths and partition into non-roverfox and roverfox
+                non_roverfox = []
+                roverfox = []
+                for p in all_patches:
+                    norm = os.path.normpath(p)
+                    parts = norm.split(os.sep)
+                    if 'roverfox' in parts:
+                        roverfox.append(p)
+                    else:
+                        non_roverfox.append(p)
+
+                # Apply non-roverfox patches first
+                for patch_file in non_roverfox:
+                    patch(patch_file)
+                # Apply roverfox patches last
+                for patch_file in roverfox:
                     patch(patch_file)
 
             print('Complete!')
@@ -139,7 +155,7 @@ def extract_build_target():
         assert target in AVAILABLE_TARGETS, f"Unsupported target: {target}"
         assert arch in AVAILABLE_ARCHS, f"Unsupported architecture: {arch}"
     else:
-        target, arch = "linux", "x86_64"
+        target, arch = "macos", "arm64"
     return target, arch
 
 
