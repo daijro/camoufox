@@ -2130,7 +2130,7 @@ index 5f329ff0f6..bfeec77700 100644
  
  #  if defined(XP_WIN)
 diff --git a/js/src/vm/DateTime.h b/js/src/vm/DateTime.h
-index 30b172e197..6212636bca 100644
+index 30b172e197..668569e57f 100644
 --- a/js/src/vm/DateTime.h
 +++ b/js/src/vm/DateTime.h
 @@ -77,6 +77,8 @@ using TimeZoneIdentifierVector =
@@ -2150,7 +2150,19 @@ index 30b172e197..6212636bca 100644
  
    static void resetTimeZone(ResetTimeZoneMode mode) {
      auto guard = instance->lock();
-@@ -390,6 +393,8 @@ class DateTimeInfo {
+@@ -367,11 +370,6 @@ class DateTimeInfo {
+   RangeCache utcRange_;    // localtime-based ranges
+   RangeCache localRange_;  // UTC-based ranges
+ 
+-  /**
+-   * Time zone override for realms with non-default time zone.
+-   */
+-  RefPtr<JS::TimeZoneString> timeZoneOverride_;
+-
+   /**
+    * The current time zone. Lazily constructed to avoid potential I/O access
+    * when initializing this class.
+@@ -390,6 +388,8 @@ class DateTimeInfo {
    JS::UniqueChars locale_;
    JS::UniqueTwoByteChars standardName_;
    JS::UniqueTwoByteChars daylightSavingsName_;
@@ -2159,7 +2171,7 @@ index 30b172e197..6212636bca 100644
  #else
    // Restrict the data-time range to the minimum required time_t range as
    // specified in POSIX. Most operating systems support 64-bit time_t
-@@ -407,6 +412,8 @@ class DateTimeInfo {
+@@ -407,6 +407,8 @@ class DateTimeInfo {
  
    void resetState();
  
