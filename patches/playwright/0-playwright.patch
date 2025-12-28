@@ -154,7 +154,7 @@ index d49c6fbf1b..7ea3540947 100644
    const transportProvider = {
      setListener(upgradeListener) {
 diff --git a/docshell/base/BrowsingContext.cpp b/docshell/base/BrowsingContext.cpp
-index 81896a2c74..bc192c25c3 100644
+index 81896a2c74..86f3d642b7 100644
 --- a/docshell/base/BrowsingContext.cpp
 +++ b/docshell/base/BrowsingContext.cpp
 @@ -116,8 +116,15 @@ struct ParamTraits<mozilla::dom::DisplayMode>
@@ -217,15 +217,8 @@ index 81896a2c74..bc192c25c3 100644
      }
      mGeolocationServiceOverride->Update(aGeolocationOverride.Value());
    } else if (RefPtr<nsGeolocationService> serviceOverride =
-@@ -4230,6 +4263,6 @@ void BrowsingContext::DidSet(FieldIndex<IDX_ForceOffline>, bool aOldValue) {
-   });
- }
-
- bool BrowsingContext::IsPopupAllowed() {
-   for (auto* context = GetCurrentWindowContext(); context;
-        context = context->GetParentWindowContext()) {
 diff --git a/docshell/base/BrowsingContext.h b/docshell/base/BrowsingContext.h
-index 724326453f..2f5717b47c 100644
+index 724326453f..ffa90c3247 100644
 --- a/docshell/base/BrowsingContext.h
 +++ b/docshell/base/BrowsingContext.h
 @@ -209,11 +209,11 @@ struct EmbedderColorSchemes {
@@ -303,13 +296,6 @@ index 724326453f..2f5717b47c 100644
    void DidSet(FieldIndex<IDX_TimezoneOverride>, nsString&& aOldValue);
  
    void DidSet(FieldIndex<IDX_MediumOverride>, nsString&& aOldValue);
-@@ -1458,6 +1485,6 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
-
-   void DidSet(FieldIndex<IDX_ForceOffline>, bool aOldValue);
-
-   // Allow if the process attemping to set field is the same as the owning
-   // process. Deprecated. New code that might use this should generally be moved
-   // to WindowContext or be settable only by the parent process.
 diff --git a/docshell/base/CanonicalBrowsingContext.cpp b/docshell/base/CanonicalBrowsingContext.cpp
 index 6109e20259..9ccc289e8a 100644
 --- a/docshell/base/CanonicalBrowsingContext.cpp
@@ -1540,7 +1526,7 @@ index a4ccc0049d..36b4c59369 100644
      return false;
    }
 diff --git a/dom/media/systemservices/video_engine/desktop_capture_impl.cc b/dom/media/systemservices/video_engine/desktop_capture_impl.cc
-index ad5f871cf6..171c647963 100644
+index ad5f871cf6..41ff4f49ac 100644
 --- a/dom/media/systemservices/video_engine/desktop_capture_impl.cc
 +++ b/dom/media/systemservices/video_engine/desktop_capture_impl.cc
 @@ -53,9 +53,10 @@ namespace webrtc {
@@ -1591,12 +1577,12 @@ index ad5f871cf6..171c647963 100644
  }
  
 +void DesktopCaptureImpl::RegisterRawFrameCallback(RawFrameCallback* rawFrameCallback) {
-+  rtc::CritScope lock(&mApiCs);
++  webrtc::CritScope lock(&mApiCs);
 +  _rawFrameCallbacks.insert(rawFrameCallback);
 +}
 +
 +void DesktopCaptureImpl::DeRegisterRawFrameCallback(RawFrameCallback* rawFrameCallback) {
-+  rtc::CritScope lock(&mApiCs);
++  webrtc::CritScope lock(&mApiCs);
 +  auto it = _rawFrameCallbacks.find(rawFrameCallback);
 +  if (it != _rawFrameCallbacks.end()) {
 +    _rawFrameCallbacks.erase(it);
@@ -1606,6 +1592,15 @@ index ad5f871cf6..171c647963 100644
  int32_t DesktopCaptureImpl::StopCaptureIfAllClientsClose() {
    {
      auto callbacks = mCallbacks.Lock();
+@@ -326,7 +344,7 @@ int32_t DesktopCaptureImpl::StartCapture(
+     mRequestedCapability = mozilla::Some(aCapability);
+     MOZ_ALWAYS_SUCCEEDS(mCaptureThread->Dispatch(
+         NS_NewRunnableFunction("DesktopCaptureImpl::UpdateOnThread",
+-                               [this, self = RefPtr(this), maxFps]() mutable {
++                               [this, maxFps]() mutable {
+                                  UpdateOnThread(maxFps);
+                                })));
+     return 0;
 @@ -350,7 +368,7 @@ int32_t DesktopCaptureImpl::StartCapture(
      return -1;
    }
@@ -1615,6 +1610,15 @@ index ad5f871cf6..171c647963 100644
  
    MOZ_ASSERT(!capturer == !mCaptureThread);
    if (!capturer) {
+@@ -362,7 +380,7 @@ int32_t DesktopCaptureImpl::StartCapture(
+ 
+   MOZ_ALWAYS_SUCCEEDS(mCaptureThread->Dispatch(NS_NewRunnableFunction(
+       "DesktopCaptureImpl::InitOnThread",
+-      [this, self = RefPtr(this), capturer = std::move(capturer),
++      [this, capturer = std::move(capturer),
+        maxFps]() mutable { InitOnThread(std::move(capturer), maxFps); })));
+ 
+   return 0;
 @@ -458,6 +476,15 @@ void DesktopCaptureImpl::OnCaptureResult(DesktopCapturer::Result aResult,
    frameInfo.height = aFrame->size().height();
    frameInfo.videoType = VideoType::kARGB;
@@ -1622,7 +1626,7 @@ index ad5f871cf6..171c647963 100644
 +  size_t videoFrameStride =
 +      frameInfo.width * DesktopFrame::kBytesPerPixel;
 +  {
-+    rtc::CritScope cs(&mApiCs);
++    webrtc::CritScope cs(&mApiCs);
 +    for (auto rawFrameCallback : _rawFrameCallbacks) {
 +      rawFrameCallback->OnRawFrame(videoFrame, videoFrameStride, frameInfo);
 +    }
@@ -1632,7 +1636,7 @@ index ad5f871cf6..171c647963 100644
        frameInfo.width * frameInfo.height * DesktopFrame::kBytesPerPixel;
  
 diff --git a/dom/media/systemservices/video_engine/desktop_capture_impl.h b/dom/media/systemservices/video_engine/desktop_capture_impl.h
-index 498de96bf6..e221396633 100644
+index 498de96bf6..967cc4d8dc 100644
 --- a/dom/media/systemservices/video_engine/desktop_capture_impl.h
 +++ b/dom/media/systemservices/video_engine/desktop_capture_impl.h
 @@ -26,6 +26,7 @@
@@ -1714,7 +1718,7 @@ index 498de96bf6..e221396633 100644
    void UpdateOnThread(int aFramerate);
    void ShutdownOnThread();
 +
-+  rtc::RecursiveCriticalSection mApiCs;
++  webrtc::RecursiveCriticalSection mApiCs;
 +  std::set<RawFrameCallback*> _rawFrameCallbacks;
    // DesktopCapturer::Callback interface.
    void OnCaptureResult(DesktopCapturer::Result aResult,
