@@ -97,7 +97,7 @@ def open_patch_workspace(selected_patch, stop_at_patch=False):
     # Set checkpoint
     if applied_patches:
         with temp_cd('..'):
-            run('make checkpoint')
+            run('make first-checkpoint')
 
     # Set message for patch result
     patch_broken = is_broken(selected_patch)
@@ -197,7 +197,7 @@ def handle_choice(choice):
             reset_camoufox()
             with temp_cd('..'):
                 run('make dir')
-                run('make checkpoint')
+                run('make first-checkpoint')
             easygui.msgbox(
                 "Created new patch workspace. You can test Camoufox with 'make run'.\n\n"
                 "When you are finished, write your workspace back to a new patch.",
@@ -348,7 +348,7 @@ def handle_choice(choice):
                 )
             if not file_path:
                 exit()
-            run(f'git diff > {file_path}')
+            run(f'git diff first-checkpoint > {file_path}')
             easygui.msgbox(f"Patch has been written to {file_path}.", "Patch Written")
 
         case _:
