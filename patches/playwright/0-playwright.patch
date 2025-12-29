@@ -2301,6 +2301,23 @@ index cebc5d1eb1..81b4d13cdb 100644
    return nullptr;
  }
  
+diff --git a/juggler/screencast/HeadlessWindowCapturer.h b/juggler/screencast/HeadlessWindowCapturer.h
+index cb1bcbbfd7..3072b67208 100644
+--- a/juggler/screencast/HeadlessWindowCapturer.h
++++ b/juggler/screencast/HeadlessWindowCapturer.h
+@@ -6,10 +6,12 @@
+ 
+ #include <memory>
+ #include <set>
++#include "api/scoped_refptr.h"
+ #include "api/video/video_frame.h"
+ #include "api/video/video_sink_interface.h"
+ #include "modules/video_capture/video_capture.h"
+ #include "rtc_base/deprecated/recursive_critical_section.h"
++#include "rtc_base/ref_counted_object.h"
+ #include "video_engine/desktop_capture_impl.h"
+ 
+ class nsIWidget;
 diff --git a/layout/base/GeometryUtils.cpp b/layout/base/GeometryUtils.cpp
 index 67673c5c30..fe4a278dad 100644
 --- a/layout/base/GeometryUtils.cpp
