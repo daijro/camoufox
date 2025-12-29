@@ -124,7 +124,7 @@ class Patcher:
         # This allows prompts to show immediately and user can respond
         # --forward flag: skip patches that appear to be already applied
         result = subprocess.run(
-            ['patch', '-p1', '--forward', '-i', patch_file],
+            ['patch', '-p1', '--forward', '--fuzz=3', '-i', patch_file],
             stdin=sys.stdin,
             stdout=sys.stdout,
             stderr=sys.stderr,
