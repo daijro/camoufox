@@ -2788,6 +2788,38 @@ index 8cd4afc313..60f5eb6e52 100644
      return (
        (lazy.isRunningTests || Cu.isInAutomation) &&
        this.SERVER_URL == "data:,#remote-settings-dummy/v1"
+diff --git a/third_party/libwebrtc/api/location.h b/third_party/libwebrtc/api/location.h
+new file mode 100644
+index 0000000000..26012615ba
+--- /dev/null
++++ b/third_party/libwebrtc/api/location.h
+@@ -0,0 +1,26 @@
++// Copyright (c) 2024 The WebRTC project authors. All Rights Reserved.
++//
++// Stub header for Firefox 146 compatibility.
++// This file is missing in Firefox 146's WebRTC but is required by
++// api/task_queue/task_queue_base.h for task posting debugging.
++
++#ifndef API_LOCATION_H_
++#define API_LOCATION_H_
++
++namespace webrtc {
++
++// Minimal stub for Location class used for debugging task queue operations.
++// The real implementation would track file/line/function for debugging.
++class Location {
++ public:
++  // Creates a location representing the current code location.
++  static constexpr Location Current() { return Location(); }
++
++  constexpr Location() = default;
++  constexpr Location(const Location&) = default;
++  constexpr Location& operator=(const Location&) = default;
++};
++
++}  // namespace webrtc
++
++#endif  // API_LOCATION_H_
 diff --git a/toolkit/components/browser/nsIWebBrowserChrome.idl b/toolkit/components/browser/nsIWebBrowserChrome.idl
 index 75555352b8..72855a404e 100644
 --- a/toolkit/components/browser/nsIWebBrowserChrome.idl
