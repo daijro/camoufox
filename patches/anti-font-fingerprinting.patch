@@ -543,6 +543,26 @@ index 989dba05ca..14f8be6dcd 100644
      pfl->Unlock();
    }
  
+diff --git a/dom/canvas/OffscreenCanvas.cpp b/dom/canvas/OffscreenCanvas.cpp
+index e32eeaeeab..fed027072c 100644
+--- a/dom/canvas/OffscreenCanvas.cpp
++++ b/dom/canvas/OffscreenCanvas.cpp
+@@ -635,6 +635,15 @@ void OffscreenCanvas::ReportBlockedFontFamily(const nsCString& aMsg) const {
+   }
+ }
+ 
++mozilla::dom::Document* OffscreenCanvas::GetDocument() const {
++  if (NS_IsMainThread()) {
++    if (nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(GetOwnerGlobal())) {
++      return win->GetExtantDoc();
++    }
++  }
++  return nullptr;
++}
++
+ bool OffscreenCanvas::IsChrome() const {
+   if (NS_IsMainThread()) {
+     nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(GetOwnerGlobal());
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
 index 7c509eb87e..7a076768d0 100644
 --- a/dom/webidl/Window.webidl
@@ -560,6 +580,19 @@ index 7c509eb87e..7a076768d0 100644
  // Used to assign marks to appear on the scrollbar when
  // finding on a page.
  partial interface Window {
+diff --git a/dom/workers/WorkerPrivate.h b/dom/workers/WorkerPrivate.h
+index c5d17c1c0a..065c8116b6 100644
+--- a/dom/workers/WorkerPrivate.h
++++ b/dom/workers/WorkerPrivate.h
+@@ -1103,7 +1103,7 @@ class WorkerPrivate final
+ 
+   void WorkerScriptLoaded();
+ 
+-  Document* GetDocument() const;
++  Document* GetDocument() const override;
+ 
+   void MemoryPressure();
+ 
 diff --git a/gfx/src/nsFontMetrics.cpp b/gfx/src/nsFontMetrics.cpp
 index ef081ebe40..a921c49f43 100644
 --- a/gfx/src/nsFontMetrics.cpp
@@ -1126,6 +1159,21 @@ index 6c7d485e38..da404c0e5c 100644
    /**
     * FindSiblingViewFor locates the child of aParentView that aFrame's
     * view should be inserted 'above' (i.e., before in sibling view
+diff --git a/layout/base/nsPresContext.cpp b/layout/base/nsPresContext.cpp
+index 9bb509ed5f..a5e21d2f57 100644
+--- a/layout/base/nsPresContext.cpp
++++ b/layout/base/nsPresContext.cpp
+@@ -425,6 +425,10 @@ bool nsPresContext::IsChrome() const {
+   return Document()->IsInChromeDocShell();
+ }
+ 
++mozilla::dom::Document* nsPresContext::GetDocument() const {
++  return Document();
++}
++
+ void nsPresContext::GetUserPreferences() {
+   if (!GetPresShell()) {
+     // No presshell means nothing to do here.  We'll do this when we
 diff --git a/layout/generic/MathMLTextRunFactory.cpp b/layout/generic/MathMLTextRunFactory.cpp
 index 13c9cc5c11..b940be8790 100644
 --- a/layout/generic/MathMLTextRunFactory.cpp
@@ -1305,3 +1353,23 @@ index 58f9670e7f..577fd833ce 100644
    aDesiredStretchSize = MeasureTextRun(aDrawTarget, mGlyphs[0].get());
  
    bool maxWidth = (NS_STRETCH_MAXWIDTH & aStretchHint) != 0;
+diff --git a/toolkit/components/resistfingerprinting/FontVisibilityProvider.h b/toolkit/components/resistfingerprinting/FontVisibilityProvider.h
+index 51a754b76e..ea41fde83b 100644
+--- a/toolkit/components/resistfingerprinting/FontVisibilityProvider.h
++++ b/toolkit/components/resistfingerprinting/FontVisibilityProvider.h
+@@ -43,6 +43,7 @@ class FontVisibilityProvider {
+   virtual nsICookieJarSettings* GetCookieJarSettings() const = 0;
+   virtual mozilla::Maybe<FontVisibility> MaybeInheritFontVisibility() const = 0;
+   virtual void UserFontSetUpdated(gfxUserFontEntry* aUpdatedFont = nullptr) = 0;
++  virtual mozilla::dom::Document* GetDocument() const = 0;
+ 
+   void ReportBlockedFontFamily(const gfxFontFamily& aFamily) const;
+   void ReportBlockedFontFamily(const mozilla::fontlist::Family& aFamily) const;
+@@ -59,6 +60,7 @@ class FontVisibilityProvider {
+   nsICookieJarSettings* GetCookieJarSettings() const override;                \
+   mozilla::Maybe<FontVisibility> MaybeInheritFontVisibility() const override; \
+   void UserFontSetUpdated(gfxUserFontEntry* aUpdatedFont = nullptr) override; \
++  mozilla::dom::Document* GetDocument() const override;                       \
+   using FontVisibilityProvider::ReportBlockedFontFamily;
+ };
+ 
