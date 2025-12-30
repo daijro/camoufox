@@ -1253,18 +1253,19 @@ index 93419af8bb..b524540ec6 100644
    }
    if (!child) {
 diff --git a/layout/mathml/nsMathMLChar.cpp b/layout/mathml/nsMathMLChar.cpp
-index 58f9670e7f..979506ec42 100644
+index 58f9670e7f..577fd833ce 100644
 --- a/layout/mathml/nsMathMLChar.cpp
 +++ b/layout/mathml/nsMathMLChar.cpp
-@@ -20,6 +20,7 @@
+@@ -20,6 +20,8 @@
  #include "mozilla/StaticPrefs_mathml.h"
  #include "mozilla/UniquePtr.h"
  #include "mozilla/dom/Document.h"
 +#include "mozilla/OriginAttributes.h"
++#include "mozilla/BasePrincipal.h"
  #include "mozilla/gfx/2D.h"
  #include "mozilla/intl/UnicodeScriptCodes.h"
  #include "nsCOMPtr.h"
-@@ -360,7 +361,7 @@ already_AddRefed<gfxTextRun> nsPropertiesTable::MakeTextRun(
+@@ -360,7 +362,7 @@ already_AddRefed<gfxTextRun> nsPropertiesTable::MakeTextRun(
                 "nsPropertiesTable can only access glyphs by code point");
    return aFontGroup->MakeTextRun(aGlyph.code, aGlyph.Length(), aDrawTarget,
                                   aAppUnitsPerDevPixel, mFlags,
@@ -1273,7 +1274,7 @@ index 58f9670e7f..979506ec42 100644
  }
  
  // An instance of nsOpenTypeTable is associated with one gfxFontEntry that
-@@ -431,7 +432,7 @@ void nsOpenTypeTable::UpdateCache(DrawTarget* aDrawTarget,
+@@ -431,7 +433,7 @@ void nsOpenTypeTable::UpdateCache(DrawTarget* aDrawTarget,
    if (mCharCache != aChar) {
      RefPtr<gfxTextRun> textRun =
          aFontGroup->MakeTextRun(&aChar, 1, aDrawTarget, aAppUnitsPerDevPixel,
@@ -1282,7 +1283,7 @@ index 58f9670e7f..979506ec42 100644
      const gfxTextRun::CompressedGlyph& data = textRun->GetCharacterGlyphs()[0];
      if (data.IsSimpleGlyph()) {
        mGlyphID = data.GetSimpleGlyph();
-@@ -1396,10 +1397,20 @@ nsresult nsMathMLChar::StretchInternal(
+@@ -1396,10 +1398,20 @@ nsresult nsMathMLChar::StretchInternal(
      flags |= gfx::ShapedTextFlags::TEXT_IS_RTL;
    }
  
