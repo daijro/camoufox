@@ -1,19 +1,18 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-* License, v. 2.0. If a copy of the MPL was not distributed with this
-* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {SimpleChannel} = ChromeUtils.import('chrome://juggler/content/SimpleChannel.js');
-const {Preferences} = ChromeUtils.import("resource://gre/modules/Preferences.jsm");
-const {ContextualIdentityService} = ChromeUtils.import("resource://gre/modules/ContextualIdentityService.jsm");
-const {NetUtil} = ChromeUtils.import('resource://gre/modules/NetUtil.jsm');
-const {AppConstants} = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
+const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const {Preferences} = ChromeUtils.importESModule("resource://gre/modules/Preferences.sys.mjs");
+const {ContextualIdentityService} = ChromeUtils.importESModule("resource://gre/modules/ContextualIdentityService.sys.mjs");
+const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
+const {AppConstants} = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
 
 const Cr = Components.results;
 
 const helper = new Helper();
 
-const IDENTITY_NAME = 'Camoufox ';
+const IDENTITY_NAME = 'JUGGLER ';
 const HUNDRED_YEARS = 60 * 60 * 24 * 365 * 100;
 
 const ALL_PERMISSIONS = [
@@ -22,6 +21,9 @@ const ALL_PERMISSIONS = [
 ];
 
 let globalTabAndWindowActivationChain = Promise.resolve();
+// This is a workaround for https://github.com/microsoft/playwright/issues/34586
+let didCreateFirstPage = false;
+let globalNewPageChain = Promise.resolve();
 
 class DownloadInterceptor {
   constructor(registry) {
@@ -102,7 +104,7 @@ class DownloadInterceptor {
 
 const screencastService = Cc['@mozilla.org/juggler/screencast;1'].getService(Ci.nsIScreencastService);
 
-class TargetRegistry {
+export class TargetRegistry {
   static instance() {
     return TargetRegistry._instance || null;
   }
@@ -308,6 +310,16 @@ class TargetRegistry {
   }
 
   async newPage({browserContextId}) {
+    // When creating the very first page, we cannot create multiple in parallel.
+    // See https://github.com/microsoft/playwright/issues/34586.
+    if (didCreateFirstPage)
+      return this._newPageInternal({browserContextId});
+    const result = globalNewPageChain.then(() => this._newPageInternal({browserContextId}));
+    globalNewPageChain = result.catch(error => { /* swallow errors to keep chain running */ });
+    return result;
+  }
+
+  async _newPageInternal({browserContextId}) {
     const browserContext = this.browserContextForId(browserContextId);
     const features = "chrome,dialog=no,all";
     // See _callWithURIToLoad in browser.js for the structure of window.arguments
@@ -356,6 +368,7 @@ class TargetRegistry {
       if (await target.hasFailedToOverrideTimezone())
         throw new Error('Failed to override timezone');
     }
+    didCreateFirstPage = true;
     return target.id();
   }
 
@@ -372,7 +385,7 @@ class TargetRegistry {
   }
 }
 
-class PageTarget {
+export class PageTarget {
   constructor(registry, win, tab, browserContext, opener) {
     helper.decorateAsEventEmitter(this);
 
@@ -384,16 +397,7 @@ class PageTarget {
     this._linkedBrowser = tab.linkedBrowser;
     this._browserContext = browserContext;
     this._viewportSize = undefined;
-    // Set the viewport size to Camoufox's default value.
-    if (
-      ChromeUtils.camouGetInt("window.innerWidth")
-      || ChromeUtils.camouGetInt("window.innerHeight")
-    ) {
-      this._viewportSize = {
-        width: ChromeUtils.camouGetInt("window.innerWidth") || 1280,
-        height: ChromeUtils.camouGetInt("window.innerHeight") || 720,
-      };
-    }
+    this._zoom = 1;
     this._initialDPPX = this._linkedBrowser.browsingContext.overrideDPPX;
     this._url = 'about:blank';
     this._openerId = opener ? opener.id() : undefined;
@@ -506,9 +510,11 @@ class PageTarget {
     this.updateUserAgent(browsingContext);
     this.updatePlatform(browsingContext);
     this.updateDPPXOverride(browsingContext);
+    this.updateZoom(browsingContext);
     this.updateEmulatedMedia(browsingContext);
     this.updateColorSchemeOverride(browsingContext);
     this.updateReducedMotionOverride(browsingContext);
+    this.updateContrastOverride(browsingContext);
     this.updateForcedColorsOverride(browsingContext);
     this.updateForceOffline(browsingContext);
     this.updateCacheDisabled(browsingContext);
@@ -544,7 +550,16 @@ class PageTarget {
   }
 
   updateDPPXOverride(browsingContext = undefined) {
-    (browsingContext || this._linkedBrowser.browsingContext).overrideDPPX = this._browserContext.deviceScaleFactor || this._initialDPPX;
+    browsingContext ||= this._linkedBrowser.browsingContext;
+    const dppx = this._zoom * (this._browserContext.deviceScaleFactor || this._initialDPPX);
+    browsingContext.overrideDPPX = dppx;
+  }
+
+  async updateZoom(browsingContext = undefined) {
+    browsingContext ||= this._linkedBrowser.browsingContext;
+    // Update dpr first, and then UI zoom.
+    this.updateDPPXOverride(browsingContext);
+    browsingContext.fullZoom = this._zoom;
   }
 
   _updateModalDialogs() {
@@ -579,19 +594,7 @@ class PageTarget {
     // The "default size" (1) is only respected when the page is opened.
     // Otherwise, explicitly set page viewport prevales over browser context
     // default viewport.
-    
-    // Camoufox is already handling viewport size, so we don't need to set it here.
-    if (
-      ChromeUtils.camouGetInt("window.outerWidth") ||
-      ChromeUtils.camouGetInt("window.outerHeight") ||
-      ChromeUtils.camouGetInt("window.innerWidth") ||
-      ChromeUtils.camouGetInt("window.innerHeight")
-    ) {
-      return;
-    }
-    
     const viewportSize = this._viewportSize || this._browserContext.defaultViewportSize;
-
     if (viewportSize) {
       const {width, height} = viewportSize;
       this._linkedBrowser.style.setProperty('width', width + 'px');
@@ -606,7 +609,7 @@ class PageTarget {
       const toolbarTop = stackRect.y;
       this._window.resizeBy(width - this._window.innerWidth, height + toolbarTop - this._window.innerHeight);
 
-      await this._channel.connect('').send('awaitViewportDimensions', { width, height });
+      await this._channel.connect('').send('awaitViewportDimensions', { width: width / this._zoom, height: height / this._zoom });
     } else {
       this._linkedBrowser.style.removeProperty('width');
       this._linkedBrowser.style.removeProperty('height');
@@ -618,8 +621,8 @@ class PageTarget {
 
       const actualSize = this._linkedBrowser.getBoundingClientRect();
       await this._channel.connect('').send('awaitViewportDimensions', {
-        width: actualSize.width,
-        height: actualSize.height,
+        width: actualSize.width / this._zoom,
+        height: actualSize.height / this._zoom,
       });
     }
   }
@@ -639,7 +642,7 @@ class PageTarget {
   }
 
   updateColorSchemeOverride(browsingContext = undefined) {
-    (browsingContext || this._linkedBrowser.browsingContext).prefersColorSchemeOverride = this.colorScheme || 'dark';
+    (browsingContext || this._linkedBrowser.browsingContext).prefersColorSchemeOverride = this.colorScheme || this._browserContext.colorScheme || 'none';
   }
 
   setReducedMotion(reducedMotion) {
@@ -649,6 +652,15 @@ class PageTarget {
 
   updateReducedMotionOverride(browsingContext = undefined) {
     (browsingContext || this._linkedBrowser.browsingContext).prefersReducedMotionOverride = this.reducedMotion || this._browserContext.reducedMotion || 'none';
+  }
+
+  setContrast(contrast) {
+    this.contrast = fromProtocolContrast(contrast);
+    this.updateContrastOverride();
+  }
+
+  updateContrastOverride(browsingContext = undefined) {
+    (browsingContext || this._linkedBrowser.browsingContext).prefersContrastOverride = this.contrast || this._browserContext.contrast || 'none';
   }
 
   setForcedColors(forcedColors) {
@@ -670,6 +682,14 @@ class PageTarget {
   async setViewportSize(viewportSize) {
     this._viewportSize = viewportSize;
     await this.updateViewportSize();
+  }
+
+  async setZoom(zoom) {
+    // This is default range from the ZoomManager.
+    if (zoom < 0.3 || zoom > 5)
+      throw new Error('Invalid zoom value, must be between 0.3 and 5');
+    this._zoom = zoom;
+    await this.updateZoom();
   }
 
   close(runBeforeUnload = false) {
@@ -878,6 +898,14 @@ function fromProtocolReducedMotion(reducedMotion) {
   throw new Error('Unknown reduced motion: ' + reducedMotion);
 }
 
+function fromProtocolContrast(contrast) {
+  if (contrast === 'more' || contrast === 'less' || contrast === 'custom' || contrast === 'no-preference')
+    return contrast;
+  if (contrast === null)
+    return undefined;
+  throw new Error('Unknown contrast: ' + contrast);
+}
+
 function fromProtocolForcedColors(forcedColors) {
   if (forcedColors === 'active' || forcedColors === 'none')
     return forcedColors;
@@ -918,6 +946,7 @@ class BrowserContext {
     this.colorScheme = 'none';
     this.forcedColors = 'none';
     this.reducedMotion = 'none';
+    this.contrast = 'none';
     this.videoRecordingOptions = undefined;
     this.crossProcessCookie = {
       initScripts: [],
@@ -942,6 +971,12 @@ class BrowserContext {
     this.reducedMotion = fromProtocolReducedMotion(reducedMotion);
     for (const page of this.pages)
       page.updateReducedMotionOverride();
+  }
+
+  setContrast(contrast) {
+    this.contrast = fromProtocolContrast(contrast);
+    for (const page of this.pages)
+      page.updateContrastOverride();
   }
 
   setForcedColors(forcedColors) {
@@ -988,9 +1023,9 @@ class BrowserContext {
     if (ignoreHTTPSErrors) {
       Preferences.set("network.stricttransportsecurity.preloadlist", false);
       Preferences.set("security.cert_pinning.enforcement_level", 0);
-      certOverrideService.setDisableAllSecurityChecksAndLetAttackersInterceptMyData(true, this.userContextId);
+      certOverrideService.setDisableAllSecurityChecksAndLetAttackersInterceptMyDataForUserContext(this.userContextId, true);
     } else {
-      certOverrideService.setDisableAllSecurityChecksAndLetAttackersInterceptMyData(false, this.userContextId);
+      certOverrideService.setDisableAllSecurityChecksAndLetAttackersInterceptMyDataForUserContext(this.userContextId, false);
     }
   }
 
@@ -1025,15 +1060,6 @@ class BrowserContext {
   }
 
   async setDefaultViewport(viewport) {
-    // Camoufox: only override the set viewport if a new one was passed
-    if (
-      ChromeUtils.camouGetInt("window.innerWidth")
-      || ChromeUtils.camouGetInt("window.innerHeight")
-    ) {
-      if (viewport.viewportSize?.width == 1280 && viewport.viewportSize?.height == 720) {
-        return;
-      }
-    }
     this.defaultViewportSize = viewport ? viewport.viewportSize : undefined;
     this.deviceScaleFactor = viewport ? viewport.deviceScaleFactor : undefined;
     await Promise.all(Array.from(this.pages).map(page => page.updateViewportSize()));
@@ -1098,7 +1124,8 @@ class BrowserContext {
 
   setCookies(cookies) {
     const protocolToSameSite = {
-      [undefined]: Ci.nsICookie.SAMESITE_NONE,
+      [undefined]: Ci.nsICookie.SAMESITE_UNSET,
+      'None': Ci.nsICookie.SAMESITE_UNSET,
       'Lax': Ci.nsICookie.SAMESITE_LAX,
       'Strict': Ci.nsICookie.SAMESITE_STRICT,
     };
@@ -1126,7 +1153,7 @@ class BrowserContext {
         secure,
         cookie.httpOnly || false,
         cookie.expires === undefined || cookie.expires === -1 /* isSession */,
-        cookie.expires === undefined ? Date.now() + HUNDRED_YEARS : cookie.expires,
+        cookie.expires === undefined ? Date.now() + HUNDRED_YEARS : cookie.expires * 1000,
         { userContextId: this.userContextId || undefined } /* originAttributes */,
         protocolToSameSite[cookie.sameSite],
         Ci.nsICookie.SCHEME_UNSET
@@ -1141,6 +1168,7 @@ class BrowserContext {
   getCookies() {
     const result = [];
     const sameSiteToProtocol = {
+      [Ci.nsICookie.SAMESITE_UNSET]: 'None',
       [Ci.nsICookie.SAMESITE_NONE]: 'None',
       [Ci.nsICookie.SAMESITE_LAX]: 'Lax',
       [Ci.nsICookie.SAMESITE_STRICT]: 'Strict',
@@ -1155,7 +1183,7 @@ class BrowserContext {
         value: cookie.value,
         domain: cookie.host,
         path: cookie.path,
-        expires: cookie.isSession ? -1 : cookie.expiry,
+        expires: cookie.isSession ? -1 : cookie.expiry / 1000,
         size: cookie.name.length + cookie.value.length,
         httpOnly: cookie.isHttpOnly,
         secure: cookie.isSecure,
@@ -1267,7 +1295,3 @@ TargetRegistry.Events = {
   DownloadFinished: Symbol('TargetRegistry.Events.DownloadFinished'),
   ScreencastStopped: Symbol('TargetRegistry.ScreencastStopped'),
 };
-
-var EXPORTED_SYMBOLS = ['TargetRegistry', 'PageTarget'];
-this.TargetRegistry = TargetRegistry;
-this.PageTarget = PageTarget;

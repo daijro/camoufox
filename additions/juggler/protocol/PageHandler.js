@@ -1,14 +1,14 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
-* License, v. 2.0. If a copy of the MPL was not distributed with this
-* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 "use strict";
 
-const {Helper, EventWatcher} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {NetUtil} = ChromeUtils.import('resource://gre/modules/NetUtil.jsm');
-const {NetworkObserver, PageNetwork} = ChromeUtils.import('chrome://juggler/content/NetworkObserver.js');
-const {PageTarget} = ChromeUtils.import('chrome://juggler/content/TargetRegistry.js');
-const {setTimeout} = ChromeUtils.import('resource://gre/modules/Timer.jsm');
+const {Helper, EventWatcher} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
+const {NetworkObserver, PageNetwork} = ChromeUtils.importESModule('chrome://juggler/content/NetworkObserver.js');
+const {PageTarget} = ChromeUtils.importESModule('chrome://juggler/content/TargetRegistry.js');
+const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
 
 const Cc = Components.classes;
 const Ci = Components.interfaces;
@@ -65,7 +65,7 @@ class WorkerHandler {
   }
 }
 
-class PageHandler {
+export class PageHandler {
   constructor(target, session, contentChannel) {
     this._session = session;
     this._contentChannel = contentChannel;
@@ -80,17 +80,7 @@ class PageHandler {
     }
 
     this._isDragging = false;
-    
-    // Camoufox: set a random default cursor position
-    let random_val = (max_val) => Math.floor(Math.random() * max_val);
-    
-    // Try to fetch the viewport size
-    this._defaultCursorPos = {
-      x: random_val(this._pageTarget._viewportSize?.width || 1280),
-      y: random_val(this._pageTarget._viewportSize?.height || 720),
-    };
-    this._lastMousePosition = { ...this._defaultCursorPos };
-    this._lastTrackedPos = { ...this._defaultCursorPos };
+    this._lastMousePosition = { x: 0, y: 0 };
 
     this._reportedFrameIds = new Set();
     this._networkEventsForUnreportedFrameIds = new Map();
@@ -250,6 +240,10 @@ class PageHandler {
     await this._pageTarget.setViewportSize(viewportSize === null ? undefined : viewportSize);
   }
 
+  async ['Page.setZoom']({zoom}) {
+    await this._pageTarget.setZoom(zoom);
+  }
+
   async ['Runtime.evaluate'](options) {
     return await this._contentPage.send('evaluate', options);
   }
@@ -308,10 +302,11 @@ class PageHandler {
     return await this._contentPage.send('setFileInputFiles', options);
   }
 
-  async ['Page.setEmulatedMedia']({colorScheme, type, reducedMotion, forcedColors}) {
+  async ['Page.setEmulatedMedia']({colorScheme, type, reducedMotion, forcedColors, contrast}) {
     this._pageTarget.setColorScheme(colorScheme || null);
     this._pageTarget.setReducedMotion(reducedMotion || null);
     this._pageTarget.setForcedColors(forcedColors || null);
+    this._pageTarget.setContrast(contrast || null);
     this._pageTarget.setEmulatedMedia(type);
   }
 
@@ -432,14 +427,6 @@ class PageHandler {
     });
     unsubscribe();
 
-    if (ChromeUtils.camouGetBool('memorysaver', false)) {
-      ChromeUtils.camouDebug('Clearing all memory...');
-      Services.obs.notifyObservers(null, "child-gc-request");
-      Cu.forceGC();
-      Services.obs.notifyObservers(null, "child-cc-request");
-      Cu.forceCC();
-    }
-
     return {
       navigationId: sameDocumentNavigation ? null : navigationId,
     };
@@ -518,43 +505,28 @@ class PageHandler {
         await helper.awaitTopic('apz-repaints-flushed');
 
       const watcher = new EventWatcher(this._pageEventSink, types, this._pendingEventWatchers);
-      const sendMouseEvent = async (eventType, eventX, eventY) => {
+      const promises = [];
+      for (const type of types) {
+        // This dispatches to the renderer synchronously.
         const jugglerEventId = win.windowUtils.jugglerSendMouseEvent(
-          eventType,
-          eventX + boundingBox.left,
-          eventY + boundingBox.top,
+          type,
+          x + boundingBox.left,
+          y + boundingBox.top,
           button,
           clickCount,
           modifiers,
           false /* aIgnoreRootScrollFrame */,
           0.0 /* pressure */,
           0 /* inputSource */,
-          false /* isDOMEventSynthesized */,
+          true /* isDOMEventSynthesized */,
           false /* isWidgetEventSynthesized */,
           buttons,
           win.windowUtils.DEFAULT_MOUSE_POINTER_ID /* pointerIdentifier */,
           false /* disablePointerEvent */
         );
-        await watcher.ensureEvent(eventType, eventObject => eventObject.jugglerEventId === jugglerEventId);
-      };
-      for (const type of types) {
-        if (type === 'mousemove' && ChromeUtils.camouGetBool('humanize', false)) {
-          let trajectory = ChromeUtils.camouGetMouseTrajectory(this._lastTrackedPos.x, this._lastTrackedPos.y, x, y);
-          for (let i = 2; i < trajectory.length - 2; i += 2) {
-            let currentX = trajectory[i];
-            let currentY = trajectory[i + 1];
-            // Skip movement that is out of bounds
-            if (currentX < 0 || currentY < 0 || currentX > boundingBox.width || currentY > boundingBox.height) {
-              continue;
-            }
-            await sendMouseEvent(type, currentX, currentY);
-            await new Promise(resolve => setTimeout(resolve, 10));
-          }
-        } else {
-          // Call the function for the current event
-          await sendMouseEvent(type, x, y);
-        }
+        promises.push(watcher.ensureEvent(type, eventObject => eventObject.jugglerEventId === jugglerEventId));
       }
+      await Promise.all(promises);
       await watcher.dispose();
     };
 
@@ -575,15 +547,15 @@ class PageHandler {
         // NOTE: since this won't go inside the renderer, there's no need to wait for ACK.
         win.windowUtils.sendMouseEvent(
           'mousemove',
-          this._defaultCursorPos.x,
-          this._defaultCursorPos.y,
+          0 /* x */,
+          0 /* y */,
           button,
           clickCount,
           modifiers,
           false /* aIgnoreRootScrollFrame */,
           0.0 /* pressure */,
           0 /* inputSource */,
-          false /* isDOMEventSynthesized */,
+          true /* isDOMEventSynthesized */,
           false /* isWidgetEventSynthesized */,
           buttons,
           win.windowUtils.DEFAULT_MOUSE_POINTER_ID /* pointerIdentifier */,
@@ -612,7 +584,6 @@ class PageHandler {
 
         const watcher = new EventWatcher(this._pageEventSink, ['dragstart', 'juggler-drag-finalized'], this._pendingEventWatchers);
         await sendEvents(['mousemove']);
-        this._lastTrackedPos = { x, y };
 
         // The order of events after 'mousemove' is sent:
         // 1. [dragstart] - might or might NOT be emitted
@@ -720,6 +691,3 @@ class PageHandler {
     return await worker.sendMessage(JSON.parse(message));
   }
 }
-
-var EXPORTED_SYMBOLS = ['PageHandler'];
-this.PageHandler = PageHandler;
