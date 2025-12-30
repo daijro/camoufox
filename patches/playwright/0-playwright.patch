@@ -1019,7 +1019,7 @@ index 60e805446a..eb6216e7af 100644
  
    nsPresContext* presContext = aPresShell->GetPresContext();
 diff --git a/dom/base/nsDOMWindowUtils.cpp b/dom/base/nsDOMWindowUtils.cpp
-index d27975b2a3..8709b564de 100644
+index d27975b2a3..d48f4c2285 100644
 --- a/dom/base/nsDOMWindowUtils.cpp
 +++ b/dom/base/nsDOMWindowUtils.cpp
 @@ -710,6 +710,55 @@ nsDOMWindowUtils::GetPresShellId(uint32_t* aPresShellId) {
@@ -1055,8 +1055,8 @@ index d27975b2a3..8709b564de 100644
 +  SynthesizeMouseEventData mouseEventData;
 +  mouseEventData.mIdentifier = aIdentifier;
 +  mouseEventData.mButton = aButton;
-+  mouseEventData.mButtons = aButtons;
-+  mouseEventData.mClickCount = aClickCount;
++  mouseEventData.mButtons.Construct(aButtons);
++  mouseEventData.mClickCount.Construct(aClickCount);
 +  mouseEventData.mPressure = aPressure;
 +  mouseEventData.mInputSource = aInputSourceArg;
 +  mouseEventData.mModifiers = aModifiers;
@@ -3081,20 +3081,19 @@ index ef95040ffc..f62a103de6 100644
                // nsDocumentViewer::LoadComplete that doesn't do various things
                // that are not relevant here because this wasn't an actual
 diff --git a/uriloader/exthandler/nsExternalHelperAppService.cpp b/uriloader/exthandler/nsExternalHelperAppService.cpp
-index 04c46fda68..d291b70ec0 100644
+index 04c46fda68..6244819e8c 100644
 --- a/uriloader/exthandler/nsExternalHelperAppService.cpp
 +++ b/uriloader/exthandler/nsExternalHelperAppService.cpp
-@@ -111,6 +111,9 @@
+@@ -111,6 +111,8 @@
  
  #include "mozilla/Components.h"
  #include "mozilla/ClearOnShutdown.h"
 +#include "mozilla/ErrorNames.h"
-+#include "mozilla/Unused.h"
 +
  #include "mozilla/Preferences.h"
  #include "mozilla/ipc/URIUtils.h"
  
-@@ -866,6 +869,12 @@ NS_IMETHODIMP nsExternalHelperAppService::ApplyDecodingForExtension(
+@@ -866,6 +868,12 @@ NS_IMETHODIMP nsExternalHelperAppService::ApplyDecodingForExtension(
    return NS_OK;
  }
  
@@ -3107,7 +3106,7 @@ index 04c46fda68..d291b70ec0 100644
  nsresult nsExternalHelperAppService::GetFileTokenForPath(
      const char16_t* aPlatformAppPath, nsIFile** aFile) {
    nsDependentString platformAppPath(aPlatformAppPath);
-@@ -1497,7 +1506,12 @@ nsresult nsExternalAppHandler::SetUpTempFile(nsIChannel* aChannel) {
+@@ -1497,7 +1505,12 @@ nsresult nsExternalAppHandler::SetUpTempFile(nsIChannel* aChannel) {
    // Strip off the ".part" from mTempLeafName
    mTempLeafName.Truncate(mTempLeafName.Length() - std::size(".part") + 1);
  
@@ -3120,7 +3119,7 @@ index 04c46fda68..d291b70ec0 100644
    mSaver =
        do_CreateInstance(NS_BACKGROUNDFILESAVERSTREAMLISTENER_CONTRACTID, &rv);
    NS_ENSURE_SUCCESS(rv, rv);
-@@ -1681,7 +1695,36 @@ NS_IMETHODIMP nsExternalAppHandler::OnStartRequest(nsIRequest* request) {
+@@ -1681,7 +1694,36 @@ NS_IMETHODIMP nsExternalAppHandler::OnStartRequest(nsIRequest* request) {
      return NS_OK;
    }
  
@@ -3158,7 +3157,7 @@ index 04c46fda68..d291b70ec0 100644
    if (NS_FAILED(rv)) {
      nsresult transferError = rv;
  
-@@ -1742,6 +1785,9 @@ NS_IMETHODIMP nsExternalAppHandler::OnStartRequest(nsIRequest* request) {
+@@ -1742,6 +1784,9 @@ NS_IMETHODIMP nsExternalAppHandler::OnStartRequest(nsIRequest* request) {
  
    bool alwaysAsk = true;
    mMimeInfo->GetAlwaysAskBeforeHandling(&alwaysAsk);
@@ -3168,7 +3167,7 @@ index 04c46fda68..d291b70ec0 100644
    if (alwaysAsk) {
      // But we *don't* ask if this mimeInfo didn't come from
      // our user configuration datastore and the user has said
-@@ -2258,6 +2304,16 @@ nsExternalAppHandler::OnSaveComplete(nsIBackgroundFileSaver* aSaver,
+@@ -2258,6 +2303,16 @@ nsExternalAppHandler::OnSaveComplete(nsIBackgroundFileSaver* aSaver,
      NotifyTransfer(aStatus);
    }
  
@@ -3178,14 +3177,14 @@ index 04c46fda68..d291b70ec0 100644
 +      nsCString noError;
 +      nsresult rv = interceptor->OnDownloadComplete(this, noError);
 +      MOZ_ASSERT(NS_SUCCEEDED(rv), "Failed to call nsIDowloadInterceptor.OnDownloadComplete");
-+      Unused << rv;
++      (void)rv;
 +    }
 +  }
 +
    return NS_OK;
  }
  
-@@ -2741,6 +2797,15 @@ NS_IMETHODIMP nsExternalAppHandler::Cancel(nsresult aReason) {
+@@ -2741,6 +2796,15 @@ NS_IMETHODIMP nsExternalAppHandler::Cancel(nsresult aReason) {
      }
    }
  
