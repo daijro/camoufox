@@ -3081,7 +3081,7 @@ index ef95040ffc..f62a103de6 100644
                // nsDocumentViewer::LoadComplete that doesn't do various things
                // that are not relevant here because this wasn't an actual
 diff --git a/uriloader/exthandler/nsExternalHelperAppService.cpp b/uriloader/exthandler/nsExternalHelperAppService.cpp
-index 04c46fda68..6244819e8c 100644
+index 04c46fda68..21b2fcf861 100644
 --- a/uriloader/exthandler/nsExternalHelperAppService.cpp
 +++ b/uriloader/exthandler/nsExternalHelperAppService.cpp
 @@ -111,6 +111,8 @@
@@ -3194,7 +3194,7 @@ index 04c46fda68..6244819e8c 100644
 +    GetErrorName(aReason, errorName);
 +    nsresult rv = interceptor->OnDownloadComplete(this, errorName);
 +    MOZ_ASSERT(NS_SUCCEEDED(rv), "Failed notify nsIDowloadInterceptor about cancel");
-+    Unused << rv;
++    (void)rv;
 +  }
 +
    // Break our reference cycle with the helper app dialog (set up in
