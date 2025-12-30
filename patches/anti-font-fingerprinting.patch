@@ -1,13 +1,17 @@
 diff --git a/dom/base/FontSpacingSeedManager.cpp b/dom/base/FontSpacingSeedManager.cpp
 new file mode 100644
-index 0000000000..73db372895
+index 0000000000..fe74a1f432
 --- /dev/null
 +++ b/dom/base/FontSpacingSeedManager.cpp
-@@ -0,0 +1,121 @@
+@@ -0,0 +1,125 @@
 +#include "FontSpacingSeedManager.h"
 +#include "nsPrintfCString.h"
 +#include "nsGlobalWindowInner.h"
 +#include "xpcpublic.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "mozilla/dom/Document.h"
++#include "nsDocShell.h"
++#include "nsPIDOMWindow.h"
 +
 +namespace mozilla {
 +namespace dom {
