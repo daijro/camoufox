@@ -1,8 +1,8 @@
 diff --git a/browser/installer/package-manifest.in b/browser/installer/package-manifest.in
-index bb0f71dd60..3ad3d84b82 100644
+index 6bb2e64906..fbdb0b26ea 100644
 --- a/browser/installer/package-manifest.in
 +++ b/browser/installer/package-manifest.in
-@@ -260,6 +260,11 @@
+@@ -250,6 +250,11 @@
  #endif
  #endif
  
@@ -15,7 +15,7 @@ index bb0f71dd60..3ad3d84b82 100644
  ; All the pref files must be part of base to prevent migration bugs
  @RESPATH@/browser/@PREF_DIR@/firefox.js
 diff --git a/lw/moz.build b/lw/moz.build
-index e69de29bb2..208184547e 100644
+index e69de29bb2..5459e4ac36 100644
 --- a/lw/moz.build
 +++ b/lw/moz.build
 @@ -0,0 +1,14 @@
@@ -34,11 +34,13 @@ index e69de29bb2..208184547e 100644
 +  "local-settings.js",
 +]
 diff --git a/moz.build b/moz.build
-index 9db27fd056..e1ec1dc872 100644
+index 4d0f3d6ba9..0f07f37e92 100644
 --- a/moz.build
 +++ b/moz.build
-@@ -228,2 +228,4 @@ SPHINX_TREES["jsloader"] = "docs/jsloader"
+@@ -235,3 +235,5 @@ SPHINX_TREES["content-security"] = "docs/content-security"
+ SPHINX_TREES["jsloader"] = "docs/jsloader"
  
  include("build/templates.mozbuild")
 +
 +DIRS += ["lw"]
+\ No newline at end of file

@@ -1,8 +1,8 @@
 diff --git a/browser/app/moz.build b/browser/app/moz.build
-index 434167c996..e18a16aee0 100644
+index a23bb7812a..58942ccb13 100644
 --- a/browser/app/moz.build
 +++ b/browser/app/moz.build
-@@ -183,6 +183,9 @@
+@@ -182,6 +182,9 @@ for icon in ("firefox", "document", "newwindow", "newtab", "pbmode", "document_p
          icon,
      )
  
@@ -13,10 +13,11 @@ index 434167c996..e18a16aee0 100644
      WINCONSOLE = True
  else:
 diff --git a/dom/base/Element.cpp b/dom/base/Element.cpp
-index 807cb4ec25..3df0e0f70f 100644
+index 101590d8c8..f004930b20 100644
 --- a/dom/base/Element.cpp
 +++ b/dom/base/Element.cpp
-@@ -13,6 +13,8 @@
+@@ -12,6 +12,8 @@
+ 
  #include "mozilla/dom/Element.h"
  
 +#include "MaskConfig.hpp"
@@ -24,8 +25,7 @@ index 807cb4ec25..3df0e0f70f 100644
  #include <inttypes.h>
  
  #include <cstddef>
- 
-@@ -1005,6 +1007,18 @@ nsRect Element::GetClientAreaRect() {
+@@ -1006,6 +1008,18 @@ nsRect Element::GetClientAreaRect() {
    Document* doc = OwnerDoc();
    nsPresContext* presContext = doc->GetPresContext();
  
@@ -45,10 +45,10 @@ index 807cb4ec25..3df0e0f70f 100644
    // document, we have overlay scrollbars, and we aren't embedded in another
    // document
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 114402c4a1..55daeabe7a 100644
+index cd9090cda3..37a053579e 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -636,3 +636,6 @@ GeneratedFile(
+@@ -634,3 +634,6 @@ GeneratedFile(
          "/servo/components/style/properties/counted_unknown_properties.py",
      ],
  )
@@ -57,7 +57,7 @@ index 114402c4a1..55daeabe7a 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 3678ebc59c..03a72fe242 100644
+index 330a707789..241f87780b 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -5,6 +5,7 @@
@@ -68,7 +68,7 @@ index 3678ebc59c..03a72fe242 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -3410,6 +3411,8 @@ void nsGlobalWindowInner::SetName(const nsAString& aName,
+@@ -3439,6 +3440,8 @@ void nsGlobalWindowInner::SetName(const nsAString& aName,
  }
  
  double nsGlobalWindowInner::GetInnerWidth(ErrorResult& aError) {
@@ -77,7 +77,7 @@ index 3678ebc59c..03a72fe242 100644
    FORWARD_TO_OUTER_OR_THROW(GetInnerWidthOuter, (aError), aError, 0);
  }
  
-@@ -3421,6 +3424,8 @@ nsresult nsGlobalWindowInner::GetInnerWidth(double* aWidth) {
+@@ -3450,6 +3453,8 @@ nsresult nsGlobalWindowInner::GetInnerWidth(double* aWidth) {
  }
  
  double nsGlobalWindowInner::GetInnerHeight(ErrorResult& aError) {
@@ -86,7 +86,7 @@ index 3678ebc59c..03a72fe242 100644
    // We ignore aCallerType; we only have that argument because some other things
    // called by GetReplaceableWindowCoord need it.  If this ever changes, fix
    //   nsresult nsGlobalWindowInner::GetInnerHeight(double* aInnerWidth)
-@@ -3437,12 +3442,16 @@ nsresult nsGlobalWindowInner::GetInnerHeight(double* aHeight) {
+@@ -3466,12 +3471,16 @@ nsresult nsGlobalWindowInner::GetInnerHeight(double* aHeight) {
  
  int32_t nsGlobalWindowInner::GetOuterWidth(CallerType aCallerType,
                                             ErrorResult& aError) {
@@ -103,7 +103,7 @@ index 3678ebc59c..03a72fe242 100644
    FORWARD_TO_OUTER_OR_THROW(GetOuterHeightOuter, (aCallerType, aError), aError,
                              0);
  }
-@@ -3457,11 +3466,13 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
+@@ -3486,11 +3495,13 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
  
  int32_t nsGlobalWindowInner::GetScreenX(CallerType aCallerType,
                                          ErrorResult& aError) {
@@ -117,7 +117,7 @@ index 3678ebc59c..03a72fe242 100644
    FORWARD_TO_OUTER_OR_THROW(GetScreenYOuter, (aCallerType, aError), aError, 0);
  }
  
-@@ -3495,6 +3506,8 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
+@@ -3524,6 +3535,8 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
  double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
                                                  ErrorResult& aError) {
    ENSURE_ACTIVE_DOCUMENT(aError, 0.0);
@@ -126,7 +126,7 @@ index 3678ebc59c..03a72fe242 100644
  
    RefPtr<nsPresContext> presContext = GetPresContextForRatio(mDoc);
    if (NS_WARN_IF(!presContext)) {
-@@ -3565,26 +3578,38 @@ already_AddRefed<MediaQueryList> nsGlobalWindowInner::MatchMedia(
+@@ -3594,26 +3607,38 @@ already_AddRefed<MediaQueryList> nsGlobalWindowInner::MatchMedia(
  }
  
  int32_t nsGlobalWindowInner::GetScrollMinX(ErrorResult& aError) {
@@ -166,7 +166,7 @@ index 3678ebc59c..03a72fe242 100644
  }
  
 diff --git a/dom/base/nsHistory.cpp b/dom/base/nsHistory.cpp
-index 99994a73cc..837214d872 100644
+index e2fd8e6389..e5ddf4e08c 100644
 --- a/dom/base/nsHistory.cpp
 +++ b/dom/base/nsHistory.cpp
 @@ -5,6 +5,7 @@
@@ -176,8 +176,8 @@ index 99994a73cc..837214d872 100644
 +#include "MaskConfig.hpp"
  
  #include "jsapi.h"
- #include "nsCOMPtr.h"
-@@ -55,6 +56,8 @@ JSObject* nsHistory::WrapObject(JSContext* aCx,
+ #include "mozilla/RefPtr.h"
+@@ -64,6 +65,8 @@ JSObject* nsHistory::WrapObject(JSContext* aCx,
  }
  
  uint32_t nsHistory::GetLength(ErrorResult& aRv) const {
@@ -187,10 +187,11 @@ index 99994a73cc..837214d872 100644
    if (!win || !win->HasActiveDocument()) {
      aRv.Throw(NS_ERROR_DOM_SECURITY_ERR);
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index 4bd1e0c964..a5a95d3fdf 100644
+index 306ab35772..7f7728a6cc 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
-@@ -7,5 +7,7 @@
+@@ -6,6 +6,8 @@
+ 
  #include "nsScreen.h"
  
 +#include "MaskConfig.hpp"
@@ -198,7 +199,7 @@ index 4bd1e0c964..a5a95d3fdf 100644
  #include "mozilla/GeckoBindings.h"
  #include "mozilla/dom/Document.h"
  #include "mozilla/dom/DocumentInlines.h"
-@@ -40,6 +46,10 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
+@@ -40,6 +42,10 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
                                     mScreenOrientation)
  
  int32_t nsScreen::PixelDepth() {
@@ -209,7 +210,7 @@ index 4bd1e0c964..a5a95d3fdf 100644
    // Return 24 to prevent fingerprinting.
    if (ShouldResistFingerprinting(RFPTarget::ScreenPixelDepth)) {
      return 24;
-@@ -75,6 +80,12 @@ CSSIntRect nsScreen::GetRect() {
+@@ -89,6 +95,12 @@ CSSIntRect nsScreen::GetRect() {
  }
  
  CSSIntRect nsScreen::GetAvailRect() {
@@ -221,20 +222,20 @@ index 4bd1e0c964..a5a95d3fdf 100644
 +  }
    // Return window inner rect to prevent fingerprinting.
    if (ShouldResistFingerprinting(RFPTarget::ScreenAvailRect)) {
-     return GetWindowInnerRect();
+     return GetTopWindowInnerRectForRFP();
 diff --git a/dom/battery/BatteryManager.cpp b/dom/battery/BatteryManager.cpp
-index a42ac3017d..fadae4a714 100644
+index 6322093fd9..264cc91bd1 100644
 --- a/dom/battery/BatteryManager.cpp
 +++ b/dom/battery/BatteryManager.cpp
-@@ -7,6 +7,7 @@
- #include "BatteryManager.h"
- 
+@@ -9,6 +9,7 @@
  #include <cmath>
  #include <limits>
  
 +#include "MaskConfig.hpp"
  #include "Constants.h"
-@@ -49,6 +50,9 @@ JSObject* BatteryManager::WrapObject(JSContext* aCx,
+ #include "mozilla/DOMEventTargetHelper.h"
+ #include "mozilla/Hal.h"
+@@ -53,6 +54,9 @@ JSObject* BatteryManager::WrapObject(JSContext* aCx,
  
  bool BatteryManager::Charging() const {
    MOZ_ASSERT(NS_IsMainThread());
@@ -244,7 +245,7 @@ index a42ac3017d..fadae4a714 100644
    // For testing, unable to report the battery status information
    if (Preferences::GetBool("dom.battery.test.default", false)) {
      return true;
-@@ -67,6 +71,8 @@ bool BatteryManager::Charging() const {
+@@ -69,6 +73,8 @@ bool BatteryManager::Charging() const {
  
  double BatteryManager::DischargingTime() const {
    MOZ_ASSERT(NS_IsMainThread());
@@ -253,7 +254,7 @@ index a42ac3017d..fadae4a714 100644
    // For testing, unable to report the battery status information
    if (Preferences::GetBool("dom.battery.test.default", false)) {
      return std::numeric_limits<double>::infinity();
-@@ -84,6 +90,8 @@ double BatteryManager::DischargingTime() const {
+@@ -86,6 +92,8 @@ double BatteryManager::DischargingTime() const {
  
  double BatteryManager::ChargingTime() const {
    MOZ_ASSERT(NS_IsMainThread());
@@ -262,7 +263,7 @@ index a42ac3017d..fadae4a714 100644
    // For testing, unable to report the battery status information
    if (Preferences::GetBool("dom.battery.test.default", false)) {
      return 0.0;
-@@ -101,6 +109,7 @@ double BatteryManager::ChargingTime() const {
+@@ -103,6 +111,7 @@ double BatteryManager::ChargingTime() const {
  
  double BatteryManager::Level() const {
    MOZ_ASSERT(NS_IsMainThread());
@@ -283,7 +284,7 @@ index 3a90c93c01..91d673039b 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
-index b05e409a84..8e0f7ea657 100644
+index 622724b529..c9a65ff013 100644
 --- a/dom/workers/WorkerNavigator.cpp
 +++ b/dom/workers/WorkerNavigator.cpp
 @@ -5,6 +5,7 @@
@@ -294,7 +295,7 @@ index b05e409a84..8e0f7ea657 100644
  
  #include <utility>
  
-@@ -92,6 +93,9 @@ JSObject* WorkerNavigator::WrapObject(JSContext* aCx,
+@@ -103,6 +104,9 @@ JSObject* WorkerNavigator::WrapObject(JSContext* aCx,
  }
  
  bool WorkerNavigator::GlobalPrivacyControl() const {
@@ -304,7 +305,7 @@ index b05e409a84..8e0f7ea657 100644
    bool gpcStatus = StaticPrefs::privacy_globalprivacycontrol_enabled();
    if (!gpcStatus) {
      JSObject* jso = GetWrapper();
-@@ -114,6 +118,8 @@ void WorkerNavigator::SetLanguages(const nsTArray<nsString>& aLanguages) {
+@@ -125,6 +129,8 @@ void WorkerNavigator::SetLanguages(const nsTArray<nsString>& aLanguages) {
  void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
                                      CallerType aCallerType,
                                      ErrorResult& aRv) const {
@@ -313,7 +314,7 @@ index b05e409a84..8e0f7ea657 100644
    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
    MOZ_ASSERT(workerPrivate);
  
-@@ -136,6 +142,8 @@ void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
+@@ -147,6 +153,8 @@ void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
  
  void WorkerNavigator::GetPlatform(nsString& aPlatform, CallerType aCallerType,
                                    ErrorResult& aRv) const {
@@ -322,7 +323,7 @@ index b05e409a84..8e0f7ea657 100644
    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
    MOZ_ASSERT(workerPrivate);
  
-@@ -200,6 +208,8 @@ class GetUserAgentRunnable final : public WorkerMainThreadRunnable {
+@@ -207,6 +215,8 @@ class GetUserAgentRunnable final : public WorkerMainThreadRunnable {
  
  void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
                                     ErrorResult& aRv) const {
@@ -331,7 +332,7 @@ index b05e409a84..8e0f7ea657 100644
    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
    MOZ_ASSERT(workerPrivate);
  
-@@ -211,6 +221,8 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
+@@ -218,6 +228,8 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
  }
  
  uint64_t WorkerNavigator::HardwareConcurrency() const {
@@ -341,10 +342,10 @@ index b05e409a84..8e0f7ea657 100644
    MOZ_ASSERT(rts);
  
 diff --git a/dom/workers/moz.build b/dom/workers/moz.build
-index c7818826d1..2e2e6526e7 100644
+index 2f2948a729..b8ad10403f 100644
 --- a/dom/workers/moz.build
 +++ b/dom/workers/moz.build
-@@ -112,3 +112,6 @@ MARIONETTE_MANIFESTS += ["test/marionette/manifest.toml"]
+@@ -114,3 +114,6 @@ MARIONETTE_MANIFESTS += ["test/marionette/manifest.toml"]
  XPCSHELL_TESTS_MANIFESTS += ["test/xpcshell/xpcshell.toml"]
  
  BROWSER_CHROME_MANIFESTS += ["test/browser.toml"]
