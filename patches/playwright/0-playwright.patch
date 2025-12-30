@@ -2323,6 +2323,34 @@ index cb1bcbbfd7..6b39dfbea0 100644
  class nsIWidget;
  
  namespace mozilla {
+diff --git a/juggler/screencast/ScreencastEncoder.cpp b/juggler/screencast/ScreencastEncoder.cpp
+index 701361add0..08e4fb9667 100644
+--- a/juggler/screencast/ScreencastEncoder.cpp
++++ b/juggler/screencast/ScreencastEncoder.cpp
+@@ -41,6 +41,10 @@
+ #include "WebMFileWriter.h"
+ #include "api/video/video_frame.h"
+ 
++
++// Compatibility namespace aliases for WebRTC types
++namespace rtc = webrtc;
++
+ namespace mozilla {
+ 
+ namespace {
+diff --git a/juggler/screencast/nsScreencastService.cpp b/juggler/screencast/nsScreencastService.cpp
+index 062a851429..953d973a3b 100644
+--- a/juggler/screencast/nsScreencastService.cpp
++++ b/juggler/screencast/nsScreencastService.cpp
+@@ -25,6 +25,8 @@
+ #include "mozilla/widget/PlatformWidgetTypes.h"
+ #include "video_engine/desktop_capture_impl.h"
+ #include "VideoEngine.h"
++#include "gfxPlatform.h"
++
+ 
+ extern "C" {
+ #include "jpeglib.h"
 diff --git a/layout/base/GeometryUtils.cpp b/layout/base/GeometryUtils.cpp
 index 67673c5c30..fe4a278dad 100644
 --- a/layout/base/GeometryUtils.cpp
