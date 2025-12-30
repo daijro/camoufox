@@ -123,8 +123,10 @@ class Patcher:
         # Apply patch interactively - don't capture stdout/stderr at all
         # This allows prompts to show immediately and user can respond
         # --forward flag: skip patches that appear to be already applied
+        # --binary flag: preserve line endings (helps with CRLF vs LF differences)
+        # -l flag: ignore whitespace differences
         result = subprocess.run(
-            ['patch', '-p1', '--forward', '-l', '-F3', '-i', patch_file],
+            ['patch', '-p1', '--forward', '-l', '--binary', '-i', patch_file],
             stdin=sys.stdin,
             stdout=sys.stdout,
             stderr=sys.stderr,
