@@ -2,17 +2,17 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var EXPORTED_SYMBOLS = ["Juggler", "JugglerFactory"];
+// Load SimpleChannel in browser-process global.
+Services.scriptloader.loadSubScript('chrome://juggler/content/SimpleChannel.js');
 
-const {AppConstants} = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
-const {XPCOMUtils} = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
-const {ComponentUtils} = ChromeUtils.import("resource://gre/modules/ComponentUtils.jsm");
-const {Dispatcher} = ChromeUtils.import("chrome://juggler/content/protocol/Dispatcher.js");
-const {BrowserHandler} = ChromeUtils.import("chrome://juggler/content/protocol/BrowserHandler.js");
-const {NetworkObserver} = ChromeUtils.import("chrome://juggler/content/NetworkObserver.js");
-const {TargetRegistry} = ChromeUtils.import("chrome://juggler/content/TargetRegistry.js");
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {ActorManagerParent} = ChromeUtils.import('resource://gre/modules/ActorManagerParent.jsm');
+const {XPCOMUtils} = ChromeUtils.importESModule("resource://gre/modules/XPCOMUtils.sys.mjs");
+const {ComponentUtils} = ChromeUtils.importESModule("resource://gre/modules/ComponentUtils.sys.mjs");
+const {Dispatcher} = ChromeUtils.importESModule("chrome://juggler/content/protocol/Dispatcher.js");
+const {BrowserHandler} = ChromeUtils.importESModule("chrome://juggler/content/protocol/BrowserHandler.js");
+const {NetworkObserver} = ChromeUtils.importESModule("chrome://juggler/content/NetworkObserver.js");
+const {TargetRegistry} = ChromeUtils.importESModule("chrome://juggler/content/TargetRegistry.js");
+const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const {ActorManagerParent} = ChromeUtils.importESModule('resource://gre/modules/ActorManagerParent.sys.mjs');
 const helper = new Helper();
 
 const Cc = Components.classes;
@@ -22,10 +22,10 @@ const Ci = Components.interfaces;
 ActorManagerParent.addJSWindowActors({
   JugglerFrame: {
     parent: {
-      moduleURI: 'chrome://juggler/content/JugglerFrameParent.jsm',
+      esModuleURI: 'chrome://juggler/content/JugglerFrameParent.jsm',
     },
     child: {
-      moduleURI: 'chrome://juggler/content/content/JugglerFrameChild.jsm',
+      esModuleURI: 'chrome://juggler/content/content/JugglerFrameChild.jsm',
       events: {
         // Normally, we instantiate an actor when a new window is created.
         DOMWindowCreated: {},
@@ -46,7 +46,7 @@ ActorManagerParent.addJSWindowActors({
 let browserStartupFinishedCallback;
 let browserStartupFinishedPromise = new Promise(x => browserStartupFinishedCallback = x);
 
-class Juggler {
+export class Juggler {
   get classDescription() { return "Sample command-line handler"; }
   get classID() { return Components.ID('{f7a74a33-e2ab-422d-b022-4fb213dd2639}'); }
   get contractID() { return "@mozilla.org/remote/juggler;1" }
@@ -65,7 +65,7 @@ class Juggler {
   }
 
   // This flow is taken from Remote agent and Marionette.
-  // See https://github.com/mozilla/gecko-dev/blob/0c1b4921830e6af8bc951da01d7772de2fe60a08/remote/components/RemoteAgent.jsm#L302
+  // See https://github.com/mozilla-firefox/firefox/blob/35e22180b0b61413dd8eccf6c00b1c6fac073eee/remote/components/RemoteAgent.sys.mjs#L417
   async observe(subject, topic) {
     switch (topic) {
       case "profile-after-change":
@@ -135,20 +135,15 @@ class Juggler {
           },
         };
         pipe.init(connection);
-        ChromeUtils.camouDebug('Juggler pipe initialized');
         const dispatcher = new Dispatcher(connection);
-        ChromeUtils.camouDebug('Dispatcher created');
         browserHandler = new BrowserHandler(dispatcher.rootSession(), dispatcher, targetRegistry, browserStartupFinishedPromise, () => {
-          ChromeUtils.camouDebug('BrowserHandler cleanup callback called');
           if (this._silent)
             Services.startup.exitLastWindowClosingSurvivalArea();
           connection.onclose();
           pipe.stop();
           pipeStopped = true;
         });
-        ChromeUtils.camouDebug('BrowserHandler created');
         dispatcher.rootSession().setHandler(browserHandler);
-        ChromeUtils.camouDebug('BrowserHandler set as root session handler');
         loadStyleSheet();
         dump(`\nJuggler listening to the pipe\n`);
         break;
@@ -160,7 +155,6 @@ class Juggler {
 const jugglerInstance = new Juggler();
 
 // This is used by the XPCOM codepath which expects a constructor
-var JugglerFactory = function() {
+export var JugglerFactory = function() {
   return jugglerInstance;
 };
-
