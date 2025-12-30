@@ -961,10 +961,19 @@ index ebbf1b34c3..2d972742c3 100644
    dom::MediaCapabilities* MediaCapabilities();
    dom::MediaSession* MediaSession();
 diff --git a/dom/base/nsContentUtils.cpp b/dom/base/nsContentUtils.cpp
-index 60e805446a..211f565f6e 100644
+index 60e805446a..eb6216e7af 100644
 --- a/dom/base/nsContentUtils.cpp
 +++ b/dom/base/nsContentUtils.cpp
-@@ -9555,13 +9555,26 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
+@@ -9529,6 +9529,8 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
+   EventMessage msg;
+   Maybe<WidgetMouseEvent::ExitFrom> exitFrom;
+   bool contextMenuKey = false;
++  bool isPWDragEventMessage = false;
++
+   if (aType.EqualsLiteral("mousedown")) {
+     msg = eMouseDown;
+   } else if (aType.EqualsLiteral("mouseup")) {
+@@ -9555,13 +9557,26 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
      msg = eMouseHitTest;
    } else if (aType.EqualsLiteral("MozMouseExploreByTouch")) {
      msg = eMouseExploreByTouch;
@@ -992,7 +1001,7 @@ index 60e805446a..211f565f6e 100644
      if (MOZ_UNLIKELY(aOptions.mIsWidgetEventSynthesized)) {
        MOZ_ASSERT_UNREACHABLE(
            "The event shouldn't be dispatched as a synthesized event");
-@@ -9589,6 +9602,7 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
+@@ -9589,6 +9604,7 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
    mozilla::widget::AutoSynthesizedEventCallbackNotifier notifier(callback);
  
    WidgetMouseEvent& mouseOrPointerEvent =
@@ -1000,7 +1009,7 @@ index 60e805446a..211f565f6e 100644
        pointerEvent.isSome() ? pointerEvent.ref() : mouseEvent.ref();
    mouseOrPointerEvent.pointerId = aMouseEventData.mIdentifier;
    mouseOrPointerEvent.mModifiers =
-@@ -9609,6 +9623,8 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
+@@ -9609,6 +9625,8 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
    mouseOrPointerEvent.mFlags.mIsSynthesizedForTests =
        aOptions.mIsDOMEventSynthesized;
    mouseOrPointerEvent.mExitFrom = exitFrom;
@@ -1010,10 +1019,10 @@ index 60e805446a..211f565f6e 100644
  
    nsPresContext* presContext = aPresShell->GetPresContext();
 diff --git a/dom/base/nsDOMWindowUtils.cpp b/dom/base/nsDOMWindowUtils.cpp
-index d27975b2a3..290e5a13e9 100644
+index d27975b2a3..ccec5a4362 100644
 --- a/dom/base/nsDOMWindowUtils.cpp
 +++ b/dom/base/nsDOMWindowUtils.cpp
-@@ -710,6 +710,26 @@ nsDOMWindowUtils::GetPresShellId(uint32_t* aPresShellId) {
+@@ -710,6 +710,22 @@ nsDOMWindowUtils::GetPresShellId(uint32_t* aPresShellId) {
    return NS_ERROR_FAILURE;
  }
  
@@ -1028,13 +1037,9 @@ index d27975b2a3..290e5a13e9 100644
 +    int32_t aButtons, uint32_t aIdentifier, bool aDisablePointerEvent,
 +    uint32_t* aJugglerEventId) {
 +  *aJugglerEventId = ++sJugglerEventId;
-+  return SendMouseEventCommon(
-+      aType, aX, aY, aButton, aClickCount, aModifiers, aIgnoreRootScrollFrame,
-+      aPressure, aInputSourceArg,
-+      aIdentifier, false,
-+      nullptr, aIsDOMEventSynthesized,
-+      aIsWidgetEventSynthesized,
-+      aButtons, !aDisablePointerEvent, *aJugglerEventId);
++  // TODO: SendMouseEventCommon is not implemented in Firefox 146
++  // This function needs to be properly implemented or removed
++  return NS_ERROR_NOT_IMPLEMENTED;
 +}
 +
  NS_IMETHODIMP
