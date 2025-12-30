@@ -585,18 +585,18 @@ index 7c509eb87e..7a076768d0 100644
  // finding on a page.
  partial interface Window {
 diff --git a/dom/workers/WorkerPrivate.h b/dom/workers/WorkerPrivate.h
-index c5d17c1c0a..065c8116b6 100644
+index c5d17c1c0a..216bdace64 100644
 --- a/dom/workers/WorkerPrivate.h
 +++ b/dom/workers/WorkerPrivate.h
-@@ -1103,7 +1103,7 @@ class WorkerPrivate final
+@@ -1103,8 +1103,6 @@ class WorkerPrivate final
  
    void WorkerScriptLoaded();
  
 -  Document* GetDocument() const;
-+  Document* GetDocument() const override;
- 
+-
    void MemoryPressure();
  
+   void UpdateContextOptions(const JS::ContextOptions& aContextOptions);
 diff --git a/gfx/src/nsFontMetrics.cpp b/gfx/src/nsFontMetrics.cpp
 index ef081ebe40..a921c49f43 100644
 --- a/gfx/src/nsFontMetrics.cpp
