@@ -1019,10 +1019,10 @@ index 60e805446a..eb6216e7af 100644
  
    nsPresContext* presContext = aPresShell->GetPresContext();
 diff --git a/dom/base/nsDOMWindowUtils.cpp b/dom/base/nsDOMWindowUtils.cpp
-index d27975b2a3..ccec5a4362 100644
+index d27975b2a3..8709b564de 100644
 --- a/dom/base/nsDOMWindowUtils.cpp
 +++ b/dom/base/nsDOMWindowUtils.cpp
-@@ -710,6 +710,22 @@ nsDOMWindowUtils::GetPresShellId(uint32_t* aPresShellId) {
+@@ -710,6 +710,55 @@ nsDOMWindowUtils::GetPresShellId(uint32_t* aPresShellId) {
    return NS_ERROR_FAILURE;
  }
  
@@ -1037,9 +1037,42 @@ index d27975b2a3..ccec5a4362 100644
 +    int32_t aButtons, uint32_t aIdentifier, bool aDisablePointerEvent,
 +    uint32_t* aJugglerEventId) {
 +  *aJugglerEventId = ++sJugglerEventId;
-+  // TODO: SendMouseEventCommon is not implemented in Firefox 146
-+  // This function needs to be properly implemented or removed
-+  return NS_ERROR_NOT_IMPLEMENTED;
++
++  RefPtr<PresShell> presShell = GetPresShell();
++  if (!presShell) {
++    return NS_ERROR_FAILURE;
++  }
++
++  nsPoint offset;
++  RefPtr<nsIWidget> widget = GetWidget(&offset);
++  if (!widget) {
++    return NS_ERROR_FAILURE;
++  }
++
++  LayoutDeviceIntPoint refPoint = nsContentUtils::ToWidgetPoint(
++      CSSPoint(aX, aY), offset, presShell->GetPresContext());
++
++  SynthesizeMouseEventData mouseEventData;
++  mouseEventData.mIdentifier = aIdentifier;
++  mouseEventData.mButton = aButton;
++  mouseEventData.mButtons = aButtons;
++  mouseEventData.mClickCount = aClickCount;
++  mouseEventData.mPressure = aPressure;
++  mouseEventData.mInputSource = aInputSourceArg;
++  mouseEventData.mModifiers = aModifiers;
++  mouseEventData.mJugglerEventId = *aJugglerEventId;
++
++  SynthesizeMouseEventOptions options;
++  options.mIgnoreRootScrollFrame = aIgnoreRootScrollFrame;
++  options.mIsDOMEventSynthesized = aIsDOMEventSynthesized;
++  options.mIsWidgetEventSynthesized = aIsWidgetEventSynthesized;
++  options.mConvertToPointer = !aDisablePointerEvent;
++  options.mIsAsyncEnabled = false;
++
++  auto result = nsContentUtils::SynthesizeMouseEvent(
++      presShell, widget, aType, refPoint, mouseEventData, options,
++      Optional<OwningNonNull<VoidFunction>>{});
++  return result.isOk() ? NS_OK : result.unwrapErr();
 +}
 +
  NS_IMETHODIMP
@@ -2845,33 +2878,21 @@ index 8cd4afc313..60f5eb6e52 100644
        this.SERVER_URL == "data:,#remote-settings-dummy/v1"
 diff --git a/third_party/libwebrtc/api/location.h b/third_party/libwebrtc/api/location.h
 new file mode 100644
-index 0000000000..26012615ba
+index 0000000000..040cbc972b
 --- /dev/null
 +++ b/third_party/libwebrtc/api/location.h
-@@ -0,0 +1,26 @@
-+// Copyright (c) 2024 The WebRTC project authors. All Rights Reserved.
-+//
-+// Stub header for Firefox 146 compatibility.
-+// This file is missing in Firefox 146's WebRTC but is required by
-+// api/task_queue/task_queue_base.h for task posting debugging.
-+
+@@ -0,0 +1,14 @@
 +#ifndef API_LOCATION_H_
 +#define API_LOCATION_H_
 +
 +namespace webrtc {
-+
-+// Minimal stub for Location class used for debugging task queue operations.
-+// The real implementation would track file/line/function for debugging.
 +class Location {
 + public:
-+  // Creates a location representing the current code location.
 +  static constexpr Location Current() { return Location(); }
-+
 +  constexpr Location() = default;
 +  constexpr Location(const Location&) = default;
 +  constexpr Location& operator=(const Location&) = default;
 +};
-+
 +}  // namespace webrtc
 +
 +#endif  // API_LOCATION_H_
