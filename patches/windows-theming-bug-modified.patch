@@ -1,22 +1,8 @@
-# LibreWolf windows-theming-bug.patch
-#
-# Author:        Malte Jürgens <maltejur@dismail.de>
-# Description:   Fix broken titlebar on Windows
-# Last Updated:  2023-03-17
-# License:       MPL 2.0
-#
-# If we use `--with-app-name=librewolf`, Firefox will think it is running on a
-# super old windows version. This will cause it to make some changes
-# which break the titlebar styling (and probably also some other things).
-#
-# See:
-# https://gitlab.com/librewolf-community/browser/windows/-/issues/146
-# https://bugzilla.mozilla.org/show_bug.cgi?id=1801640
 diff --git a/browser/app/Makefile.in b/browser/app/Makefile.in
-index 54d6b43fe126..116410bb89d9 100644
+index d11c35ff9d..0aa4b9058b 100644
 --- a/browser/app/Makefile.in
 +++ b/browser/app/Makefile.in
-@@ -31,7 +31,7 @@ ifeq ($(OS_ARCH),WINNT)
+@@ -23,7 +23,7 @@ ifeq ($(OS_ARCH),WINNT)
  # (this dependency should really be just for firefox.exe, not other targets)
  # Note the manifest file exists in the tree, so we use the explicit filename
  # here.
@@ -25,12 +11,19 @@ index 54d6b43fe126..116410bb89d9 100644
  endif
  
  PROGRAMS_DEST = $(DIST)/bin
-diff --git a/browser/app/firefox.exe.manifest b/browser/app/camoufox.manifest
-similarity index 96%
-rename from browser/app/firefox.exe.manifest
-rename to browser/app/camoufox.exe.manifest
+@@ -92,7 +92,7 @@ tools repackage:: $(DIST)/bin/$(MOZ_APP_NAME) $(objdir)/macbuild/Contents/MacOS-
+ 	rsync -aL $(DIST)/bin/$(MOZ_APP_NAME) '$(dist_dest)/Contents/MacOS'
+ 	cp -RL $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/firefox.icns '$(dist_dest)/Contents/Resources/firefox.icns'
+ 	cp -RL $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/document.icns '$(dist_dest)/Contents/Resources/document.icns'
+-	cp -RL $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/Assets.car '$(dist_dest)/Contents/Resources/Assets.car'
++	test ! -f $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/Assets.car || cp -RL $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/Assets.car '$(dist_dest)/Contents/Resources/Assets.car'
+ 	$(MKDIR) -p '$(dist_dest)/Contents/Library/LaunchServices'
+ ifdef MOZ_UPDATER
+ 	cp -f '$(dist_dest)/Contents/MacOS/updater.app/Contents/MacOS/org.mozilla.updater' '$(dist_dest)/Contents/Library/LaunchServices'
+diff --git a/browser/app/firefox.exe.manifest b/browser/app/firefox.exe.manifest
+index 995b2fc869..4a03da3064 100644
 --- a/browser/app/firefox.exe.manifest
-+++ b/browser/app/camoufox.exe.manifest
++++ b/browser/app/firefox.exe.manifest
 @@ -3,10 +3,10 @@
  <assemblyIdentity
          version="1.0.0.0"
