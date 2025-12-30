@@ -2,11 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Load SimpleChannel in browser-process global.
-Services.scriptloader.loadSubScript('chrome://juggler/content/SimpleChannel.js');
-
 const {XPCOMUtils} = ChromeUtils.importESModule("resource://gre/modules/XPCOMUtils.sys.mjs");
 const {ComponentUtils} = ChromeUtils.importESModule("resource://gre/modules/ComponentUtils.sys.mjs");
+
+ChromeUtils.defineLazyGetter(this, "Services", () => {
+  return ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").Services;
+});
+
+// Load SimpleChannel in browser-process global.
+Services.scriptloader.loadSubScript('chrome://juggler/content/SimpleChannel.js');
 const {Dispatcher} = ChromeUtils.importESModule("chrome://juggler/content/protocol/Dispatcher.js");
 const {BrowserHandler} = ChromeUtils.importESModule("chrome://juggler/content/protocol/BrowserHandler.js");
 const {NetworkObserver} = ChromeUtils.importESModule("chrome://juggler/content/NetworkObserver.js");
