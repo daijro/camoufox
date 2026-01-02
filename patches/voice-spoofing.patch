@@ -2,27 +2,28 @@ diff --git a/dom/media/webspeech/synth/moz.build b/dom/media/webspeech/synth/moz
 index 2cf19982b2..dcdcdb5cbf 100644
 --- a/dom/media/webspeech/synth/moz.build
 +++ b/dom/media/webspeech/synth/moz.build
-@@ -63,3 +63,6 @@ FINAL_LIBRARY = "xul"
+@@ -61,3 +61,6 @@ FINAL_LIBRARY = "xul"
  LOCAL_INCLUDES += [
      "ipc",
  ]
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ['/camoucfg']
-\ No newline at end of file
+
 diff --git a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp b/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
 index e5a1353d6b..4a4a5b080b 100644
 --- a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
 +++ b/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
-@@ -27,6 +27,7 @@
+@@ -26,7 +26,8 @@
+ #include "nsSpeechTask.h"
+ #include "nsString.h"
  
- #include "SpeechSynthesisChild.h"
- #include "SpeechSynthesisParent.h"
 +#include "MaskConfig.hpp"
- 
  using mozilla::intl::LocaleService;
  
-@@ -169,6 +170,20 @@ nsSynthVoiceRegistry* nsSynthVoiceRegistry::GetInstance() {
+ namespace mozilla::dom {
+ 
+@@ -169,6 +171,20 @@
        // Start up all speech synth services.
        NS_CreateServicesFromCategory(NS_SPEECH_SYNTH_STARTED, nullptr,
                                      NS_SPEECH_SYNTH_STARTED);
