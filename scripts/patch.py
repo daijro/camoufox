@@ -49,7 +49,7 @@ class Patcher:
         with temp_cd(find_src_dir('.', version, release)):
             # Reset to unpatched state first (like "Find broken patches")
             print("Resetting to unpatched state...")
-            run('git reset --hard unpatched', exit_on_fail=False)
+            run('git clean -fdx && ./mach clobber && git reset --hard unpatched', exit_on_fail=False)
 
             # Create the base mozconfig file
             run('cp -v ../assets/base.mozconfig mozconfig')
@@ -98,6 +98,15 @@ class Patcher:
                     print('='*70)
                     sys.exit(1)
 
+                # Copy fixed juggler components.conf for Firefox 146+
+                # This fixes component registration for externally-constructed components
+                print('-> Copying fixed juggler components.conf...')
+                juggler_src = '../additions/juggler/components/components.conf'
+                juggler_dst = 'juggler/components/components.conf'
+                if os.path.exists(juggler_src) and os.path.exists(os.path.dirname(juggler_dst)):
+                    shutil.copy2(juggler_src, juggler_dst)
+                    print(f'   Copied {juggler_src} -> {juggler_dst}')
+
             print('Complete!')
 
     def _apply_and_check(self, patch_file):
@@ -106,28 +115,36 @@ class Patcher:
         Returns list of reject files if any, empty list otherwise.
         """
         import subprocess
+        import os
 
-        # Apply the patch and capture output
+        print(f"\n*** -> patch -p1 -i {patch_file}")
+        sys.stdout.flush()
+
+        # Apply patch interactively - don't capture stdout/stderr at all
+        # This allows prompts to show immediately and user can respond
+        # --forward flag: skip patches that appear to be already applied
+        # --binary flag: preserve line endings (helps with CRLF vs LF differences)
+        # -l flag: ignore whitespace differences
         result = subprocess.run(
-            ['patch', '-p1', '-i', patch_file],
-            capture_output=True,
+            ['patch', '-p1', '--forward', '-l', '--binary', '-i', patch_file],
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
             text=True
         )
 
-        print(f"\n*** -> patch -p1 -i {patch_file}")
-        if result.stdout:
-            print(result.stdout, end='')
-        if result.stderr:
-            print(result.stderr, end='', file=sys.stderr)
-
-        # Look for reject files in the output
+        # After patch completes, search for any .rej files created
         rejects = []
-        for line in (result.stdout + result.stderr).splitlines():
-            if '.rej' in line and 'saving rejects to file' in line:
-                # Extract the reject file path
-                match = re.search(r'saving rejects to file (.+\.rej)', line)
-                if match:
-                    rejects.append(match.group(1))
+        for root, dirs, files in os.walk('.'):
+            for file in files:
+                if file.endswith('.rej'):
+                    # Check if this is a newly created reject file
+                    reject_path = os.path.join(root, file)
+                    # Only include if it was just created (within last minute)
+                    if os.path.exists(reject_path):
+                        import time
+                        if time.time() - os.path.getmtime(reject_path) < 60:
+                            rejects.append(reject_path)
 
         return rejects
 

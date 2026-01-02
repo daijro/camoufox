@@ -10,7 +10,7 @@ diff --git a/browser/components/asrouter/modules/OnboardingMessageProvider.sys.m
 index ceded6b755..90aa3abe36 100644
 --- a/browser/components/asrouter/modules/OnboardingMessageProvider.sys.mjs
 +++ b/browser/components/asrouter/modules/OnboardingMessageProvider.sys.mjs
-@@ -1213,8 +1213,7 @@ const BASE_MESSAGES = () => [
+@@ -1213,11 +1213,9 @@ const BASE_MESSAGES = () => [
  ];
  
  // Eventually, move Feature Callout messages to their own provider
@@ -20,3 +20,4 @@ index ceded6b755..90aa3abe36 100644
  
  export const OnboardingMessageProvider = {
    async getExtraAttributes() {
+ 

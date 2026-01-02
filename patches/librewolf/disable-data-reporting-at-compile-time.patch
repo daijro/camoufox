@@ -1,8 +1,8 @@
 diff --git a/browser/moz.configure b/browser/moz.configure
-index e605019172ad..73268e5d353d 100644
+index e8b401a7df..7b63573c17 100644
 --- a/browser/moz.configure
 +++ b/browser/moz.configure
-@@ -5,11 +5,11 @@
+@@ -5,15 +5,16 @@
  # file, You can obtain one at http://mozilla.org/MPL/2.0/.
  
  imply_option("MOZ_PLACES", True)
@@ -16,11 +16,17 @@ index e605019172ad..73268e5d353d 100644
  imply_option("MOZ_PROFILE_MIGRATOR", True)
  
  
+-imply_option("MOZ_APP_VENDOR", "Mozilla")
++imply_option("MOZ_APP_VENDOR", "Camoufox")
++imply_option("MOZ_APP_PROFILE", "camoufox")
+ imply_option("MOZ_APP_ID", "{ec8030f7-c20a-464f-9b0e-13a3a9e97384}")
+ # Include the DevTools client, not just the server (which is the default)
+ imply_option("MOZ_DEVTOOLS", "all")
 diff --git a/python/mach/mach/telemetry.py b/python/mach/mach/telemetry.py
-index 40d5cc221644..36db9a9e45b1 100644
+index bdc3b958b3..1d42c0b927 100644
 --- a/python/mach/mach/telemetry.py
 +++ b/python/mach/mach/telemetry.py
-@@ -98,10 +98,7 @@ def is_applicable_telemetry_environment():
+@@ -92,10 +92,7 @@ def is_applicable_telemetry_environment():
  
  
  def is_telemetry_enabled(settings):

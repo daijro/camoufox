@@ -16,7 +16,7 @@ diff --git a/devtools/server/actors/webconsole/listeners/console-api.js b/devtoo
 index 3e5d0bc..8260e2b 100644
 --- a/devtools/server/actors/webconsole/listeners/console-api.js
 +++ b/devtools/server/actors/webconsole/listeners/console-api.js
-@@ -97,7 +97,8 @@ class ConsoleAPIListener {
+@@ -97,6 +97,7 @@ class ConsoleAPIListener {
     *        The message object receives from the ConsoleAPIStorage service.
     */
    onConsoleAPILogEvent(message) {
