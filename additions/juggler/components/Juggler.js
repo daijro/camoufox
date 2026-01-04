@@ -5,7 +5,9 @@
 const {XPCOMUtils} = ChromeUtils.importESModule("resource://gre/modules/XPCOMUtils.sys.mjs");
 const {ComponentUtils} = ChromeUtils.importESModule("resource://gre/modules/ComponentUtils.sys.mjs");
 
-const { Services } = ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs");
+ChromeUtils.defineLazyGetter(this, "Services", () => {
+  return ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").Services;
+});
 
 // Load SimpleChannel in browser-process global.
 Services.scriptloader.loadSubScript('chrome://juggler/content/SimpleChannel.js');
