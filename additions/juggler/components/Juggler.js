@@ -2,12 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const {XPCOMUtils} = ChromeUtils.importESModule("resource://gre/modules/XPCOMUtils.sys.mjs");
-const {ComponentUtils} = ChromeUtils.importESModule("resource://gre/modules/ComponentUtils.sys.mjs");
-
-ChromeUtils.defineLazyGetter(this, "Services", () => {
-  return ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").Services;
-});
+// Services is available as a global in XPCOM component context
 
 // Load SimpleChannel in browser-process global.
 Services.scriptloader.loadSubScript('chrome://juggler/content/SimpleChannel.js');
@@ -29,7 +24,7 @@ ActorManagerParent.addJSWindowActors({
       esModuleURI: 'chrome://juggler/content/JugglerFrameParent.sys.mjs',
     },
     child: {
-      esModuleURI: 'chrome://juggler/content/content/JugglerFrameChild.sys.mjs',
+      esModuleURI: 'chrome://juggler/content/JugglerFrameChild.sys.mjs',
       events: {
         // Normally, we instantiate an actor when a new window is created.
         DOMWindowCreated: {},

@@ -51,6 +51,10 @@ class Patcher:
             print("Resetting to unpatched state...")
             run('git clean -fdx && ./mach clobber && git reset --hard unpatched', exit_on_fail=False)
 
+            # Re-copy additions and settings after reset
+            print("Re-copying additions and settings...")
+            run(f'bash ../scripts/copy-additions.sh {version} {release}')
+
             # Create the base mozconfig file
             run('cp -v ../assets/base.mozconfig mozconfig')
             # Set cross building target
@@ -97,15 +101,6 @@ class Patcher:
                             print(f'  - {reject}')
                     print('='*70)
                     sys.exit(1)
-
-                # Copy fixed juggler components.conf for Firefox 146+
-                # This fixes component registration for externally-constructed components
-                print('-> Copying fixed juggler components.conf...')
-                juggler_src = '../additions/juggler/components/components.conf'
-                juggler_dst = 'juggler/components/components.conf'
-                if os.path.exists(juggler_src) and os.path.exists(os.path.dirname(juggler_dst)):
-                    shutil.copy2(juggler_src, juggler_dst)
-                    print(f'   Copied {juggler_src} -> {juggler_dst}')
 
             print('Complete!')
 
