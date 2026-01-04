@@ -98,20 +98,14 @@ class Patcher:
                     print('='*70)
                     sys.exit(1)
 
-                # Copy fixed juggler components for Firefox 146+
+                # Copy fixed juggler components.conf for Firefox 146+
                 # This fixes component registration for externally-constructed components
-                # and the ESM compatibility issue with ChromeUtils.defineLazyGetter
-                print('-> Copying fixed juggler components...')
-                juggler_components = [
-                    ('components.conf', 'components.conf'),
-                    ('Juggler.js', 'Juggler.js'),
-                ]
-                for src_file, dst_file in juggler_components:
-                    juggler_src = f'../additions/juggler/components/{src_file}'
-                    juggler_dst = f'juggler/components/{dst_file}'
-                    if os.path.exists(juggler_src) and os.path.exists(os.path.dirname(juggler_dst)):
-                        shutil.copy2(juggler_src, juggler_dst)
-                        print(f'   Copied {juggler_src} -> {juggler_dst}')
+                print('-> Copying fixed juggler components.conf...')
+                juggler_src = '../additions/juggler/components/components.conf'
+                juggler_dst = 'juggler/components/components.conf'
+                if os.path.exists(juggler_src) and os.path.exists(os.path.dirname(juggler_dst)):
+                    shutil.copy2(juggler_src, juggler_dst)
+                    print(f'   Copied {juggler_src} -> {juggler_dst}')
 
             print('Complete!')
 
