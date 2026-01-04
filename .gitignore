@@ -46,4 +46,3 @@ closedsrc
 .venv
 bundle
 *.pem
-.DS_Store
