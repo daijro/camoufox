@@ -2,18 +2,10 @@ diff --git a/browser/installer/package-manifest.in b/browser/installer/package-m
 index 6bb2e64906..fbdb0b26ea 100644
 --- a/browser/installer/package-manifest.in
 +++ b/browser/installer/package-manifest.in
-@@ -42,7 +42,6 @@
- @APPNAME@/Contents/PkgInfo
- @RESPATH@/firefox.icns
- @RESPATH@/document.icns
--@RESPATH@/Assets.car
- @RESPATH@/@LPROJ_ROOT@.lproj/*
- #endif
-
-@@ -250,6 +249,11 @@
+@@ -250,6 +250,11 @@
  #endif
  #endif
-
+ 
 +; Camoufox specific files
 +@RESPATH@/defaults/pref/local-settings.js
 +@RESPATH@/distribution/policies.json
