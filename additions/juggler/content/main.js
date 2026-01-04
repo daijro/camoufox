@@ -2,9 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-ChromeUtils.defineLazyGetter(this, "Services", () => {
-  return ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").Services;
-});
+// Services is available as a global
 
 // Load SimpleChannel and Runtime in content process's global.
 // NOTE: since these have to exist in both Worker and main threads, and we do
