@@ -11,7 +11,7 @@ pacman := python python-pip p7zip go msitools wget aria2
 .PHONY: help fetch setup setup-minimal clean set-target distclean build package \
         build-launcher check-arch revert edits run bootstrap mozbootstrap dir \
         package-linux package-macos package-windows vcredist_arch patch unpatch \
-        workspace check-arg edit-cfg ff-dbg tests update-ubo-assets
+        workspace check-arg edit-cfg ff-dbg tests update-ubo-assets generate-assets-car
 
 help:
 	@echo "Available targets:"
@@ -259,6 +259,9 @@ path:
 
 update-ubo-assets:
 	bash ./scripts/update-ubo-assets.sh
+
+generate-assets-car:
+	bash ./scripts/generate-assets-car.sh
 
 upload:
 	# ===============================
