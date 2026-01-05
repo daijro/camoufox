@@ -40,7 +40,7 @@ The current main branch is built for Firefox v146. It is an experimental change 
 <img src="https://i.imgur.com/I3oe7xG.jpeg" alt="cloverlabs.ai" width="149">
 </a>
 
-[Clover Labs](https://cloverlabs.ai/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox) is a Toronto based venture studio building AI agents for growth and distribution. They are the official maintainer of Camoufox.
+[Clover Labs](https://cloverlabs.ai/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox) is a Toronto based venture studio building AI agents for growth and distribution.
 
 
 ## Features
