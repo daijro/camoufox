@@ -1,0 +1,39 @@
+diff --git a/dom/ipc/ContentParent.cpp b/dom/ipc/ContentParent.cpp
+index fbd24a5d00..1ff3195235 100644
+--- a/dom/ipc/ContentParent.cpp
++++ b/dom/ipc/ContentParent.cpp
+@@ -2324,22 +2324,24 @@ static void CacheSandboxParams(std::vector<std::string>& aCachedParams) {
+     // Repo dir
+     nsCOMPtr<nsIFile> repoDir;
+     rv = nsMacUtilsImpl::GetRepoDir(getter_AddRefs(repoDir));
+-    if (NS_FAILED(rv)) {
+-      MOZ_CRASH("Failed to get path to repo dir");
++    if (NS_SUCCEEDED(rv)) {
++      nsCString repoDirPath;
++      (void)repoDir->GetNativePath(repoDirPath);
++      info.testingReadPath3 = repoDirPath.get();
++    } else {
++      NS_WARNING("Failed to get repo dir path for sandbox, skipping testingReadPath3");
+     }
+-    nsCString repoDirPath;
+-    (void)repoDir->GetNativePath(repoDirPath);
+-    info.testingReadPath3 = repoDirPath.get();
+ 
+     // Object dir
+     nsCOMPtr<nsIFile> objDir;
+     rv = nsMacUtilsImpl::GetObjDir(getter_AddRefs(objDir));
+-    if (NS_FAILED(rv)) {
+-      MOZ_CRASH("Failed to get path to build object dir");
++    if (NS_SUCCEEDED(rv)) {
++      nsCString objDirPath;
++      (void)objDir->GetNativePath(objDirPath);
++      info.testingReadPath4 = objDirPath.get();
++    } else {
++      NS_WARNING("Failed to get obj dir path for sandbox, skipping testingReadPath4");
+     }
+-    nsCString objDirPath;
+-    (void)objDir->GetNativePath(objDirPath);
+-    info.testingReadPath4 = objDirPath.get();
+   }
+ 
+   // DEBUG_WRITE_DIR

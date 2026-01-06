@@ -7,13 +7,11 @@ const Ci = Components.interfaces;
 const Cr = Components.results;
 const Cu = Components.utils;
 
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {SimpleChannel} = ChromeUtils.import('chrome://juggler/content/SimpleChannel.js');
-const {Runtime} = ChromeUtils.import('chrome://juggler/content/content/Runtime.js');
+const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
 
 const helper = new Helper();
 
-class FrameTree {
+export class FrameTree {
   constructor(rootBrowsingContext) {
     helper.decorateAsEventEmitter(this);
 
@@ -411,11 +409,7 @@ class Frame {
       this._parentFrame = parentFrame;
       parentFrame._children.add(this);
     }
-    
-    this.allowMW = ChromeUtils.camouGetBool('allowMainWorld', false);
-    this.forceScopeAccess = ChromeUtils.camouGetBool('forceScopeAccess', false);
 
-    this.masterSandbox = undefined;
     this._lastCommittedNavigationId = null;
     this._pendingNavigationId = null;
 
@@ -509,46 +503,18 @@ class Frame {
     };
   }
 
-  // Camoufox: Add a "God mode" master sandbox with it's own compartment
-  getMasterSandbox() {
-    if (!this.masterSandbox) {
-      this.masterSandbox = Cu.Sandbox(
-        Services.scriptSecurityManager.getSystemPrincipal(),
-        {
-          sandboxPrototype: this.domWindow(),
-          wantComponents: false,
-          wantExportHelpers: false,
-          wantXrays: true,
-          freshCompartment: true,
-        }
-      );
-    }
-    return this.masterSandbox;
-  }
-
-  _createIsolatedContext(name, useMaster=false) {
-    let sandbox;
-    // Camoufox: Use the master sandbox (with system principle scope access)
-    if (useMaster && this.forceScopeAccess) {
-      sandbox = this.getMasterSandbox();
-    } else {
-      // Standard access (run in domWindow principal)
-      sandbox = Cu.Sandbox([this.domWindow()], {
-        sandboxPrototype: this.domWindow(),
-        wantComponents: false,
-        wantExportHelpers: false,
-        wantXrays: true,
-      });
-    }
+  _createIsolatedContext(name) {
+    const principal = [this.domWindow()]; // extended principal
+    const sandbox = Cu.Sandbox(principal, {
+      sandboxPrototype: this.domWindow(),
+      wantComponents: false,
+      wantExportHelpers: false,
+      wantXrays: true,
+    });
     const world = this._runtime.createExecutionContext(this.domWindow(), sandbox, {
       frameId: this.id(),
       name,
     });
-    // Camoufox: Create a main world for the isolated context
-    if (this.allowMW) {
-      const mainWorld = this._runtime.createMW(this.domWindow(), this.domWindow());
-      world.mainEquivalent = mainWorld;
-    }
     this._worldNameToContext.set(name, world);
     return world;
   }
@@ -582,11 +548,15 @@ class Frame {
       webSocketService.removeListener(this._webSocketListenerInnerWindowId, this._webSocketListener);
     this._webSocketListenerInnerWindowId = this.domWindow().windowGlobalChild.innerWindowId;
     webSocketService.addListener(this._webSocketListenerInnerWindowId, this._webSocketListener);
+
     for (const context of this._worldNameToContext.values())
       this._runtime.destroyExecutionContext(context);
     this._worldNameToContext.clear();
-    // Camoufox: Scope the initial execution context to prevent leaks
-    this._createIsolatedContext('', true);
+
+    this._worldNameToContext.set('', this._runtime.createExecutionContext(this.domWindow(), this.domWindow(), {
+      frameId: this._frameId,
+      name: '',
+    }));
     for (const [name, world] of this._frameTree._isolatedWorlds) {
       if (name)
         this._createIsolatedContext(name);
@@ -717,7 +687,4 @@ function channelId(channel) {
   return helper.generateId();
 }
 
-
-var EXPORTED_SYMBOLS = ['FrameTree'];
-this.FrameTree = FrameTree;
 

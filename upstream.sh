@@ -1,3 +1,3 @@
-version=135.0.1
-release=beta.24
+version=146.0.1
+release=beta.25
 closedsrc_rev=1.0.0

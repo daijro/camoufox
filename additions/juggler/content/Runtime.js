@@ -8,8 +8,8 @@
 
 if (!this.Debugger) {
   // Worker has a Debugger defined already.
-  const {addDebuggerToGlobal} = ChromeUtils.import("resource://gre/modules/jsdebugger.jsm", {});
-  addDebuggerToGlobal(Components.utils.getGlobalForObject(this));
+  const {addDebuggerToGlobal} = ChromeUtils.importESModule("resource://gre/modules/jsdebugger.sys.mjs");
+  addDebuggerToGlobal(Components.utils.getGlobalForObject(globalThis));
 }
 
 let lastId = 0;
@@ -99,32 +99,6 @@ class Runtime {
     const executionContext = this.findExecutionContext(executionContextId);
     if (!executionContext)
       throw new Error('Failed to find execution context with id = ' + executionContextId);
-
-    // Hijack the utilityScript.evaluate function to evaluate in the main world
-    if (
-        ChromeUtils.camouGetBool('allowMainWorld', false) &&
-        functionDeclaration.includes('utilityScript.evaluate') && 
-        args.length >= 4 && 
-        args[3].value && 
-        typeof args[3].value === 'string' && 
-        args[3].value.startsWith('mw:')) {
-      ChromeUtils.camouDebug(`Evaluating in main world: ${args[3].value}`);
-      const mainWorldScript = args[3].value.substring(3);
-      
-      // Get the main world execution context
-      const mainContext = executionContext.mainEquivalent;
-      if (!mainContext) {
-        throw new Error(`Main world injection is not enabled.`);
-      }
-      // Extract arguments for the main world function
-      const functionArgs = args[5]?.value?.a || [];
-      const exceptionDetails = {};
-      const result = mainContext.executeInGlobal(mainWorldScript, functionArgs, exceptionDetails);
-      if (!result)
-        return {exceptionDetails};
-      return {result};
-    }
-
     const exceptionDetails = {};
     let result = await executionContext.evaluateFunction(functionDeclaration, args, exceptionDetails);
     if (!result)
@@ -190,7 +164,7 @@ class Runtime {
           emitEvent(this.events.onRuntimeError, {
             executionContext,
             message: message.errorMessage,
-            stack: message.stack?.toString() || '',
+            stack: message.stack.toString(),
           });
         }
       },
@@ -308,11 +282,6 @@ class Runtime {
     return context;
   }
 
-  createMW(domWindow, contextGlobal) {
-    const context = new MainWorldContext(this, domWindow, contextGlobal);
-    return context;
-  }
-
   findExecutionContext(executionContextId) {
     const executionContext = this._executionContexts.get(executionContextId);
     if (!executionContext)
@@ -334,68 +303,6 @@ class Runtime {
     if (destroyedContext._domWindow)
       this._windowToExecutionContext.delete(destroyedContext._domWindow);
     emitEvent(this.events.onExecutionContextDestroyed, destroyedContext);
-  }
-}
-
-class MainWorldContext {
-  constructor(runtime, domWindow, contextGlobal) {
-    this._runtime = runtime;
-    this._domWindow = domWindow;
-    this._contextGlobal = contextGlobal;
-    this._debuggee = runtime._debugger.addDebuggee(contextGlobal);
-  }
-
-  _getResult(completionValue, exceptionDetails = {}) {
-    if (!completionValue) {
-      exceptionDetails.text = "Evaluation terminated";
-      return {success: false, obj: null};
-    }
-
-    if (completionValue.throw) {
-      const result = this._debuggee.executeInGlobalWithBindings(`
-        (function(error) {
-          try {
-            if (error instanceof Error) {
-              return error.toString();
-            }
-            return String(error);
-          } catch(e) {
-            return "Unknown error occurred";
-          }
-        })(e)
-      `, { e: completionValue.throw });
-      
-      exceptionDetails.text = result.return || "Unknown error";
-      return {success: false, obj: null};
-    }
-
-    return {success: true, obj: completionValue.return};
-  }
-  
-  executeInGlobal(script, args = [], exceptionDetails = {}) {
-    try {
-      const wrappedScript = `
-        (() => {
-          let _s = (${script});
-          let _r = typeof _s === 'function'
-            ? _s(${args.map(arg => JSON.stringify(arg)).join(', ')})
-            : _s;
-          return JSON.stringify({value: _r});
-        })()
-      `;
-
-      const result = this._debuggee.executeInGlobal(wrappedScript);
-      
-      let {success, obj} = this._getResult(result, exceptionDetails);
-      if (!success) {
-        return {exceptionDetails};
-      }
-      return JSON.parse(obj);
-    } catch (e) {
-      exceptionDetails.text = e.message;
-      exceptionDetails.stack = e.stack;
-      return {exceptionDetails};
-    }
   }
 }
 
@@ -431,8 +338,6 @@ class ExecutionContext {
 
       return hasSymbol ? undefined : result;
     }).bind(null, JSON.stringify.bind(JSON))`).return;
-
-    this.mainEquivalent = undefined;
   }
 
   id() {
@@ -691,5 +596,5 @@ function emitEvent(event, ...args) {
     listener.call(null, ...args);
 }
 
-var EXPORTED_SYMBOLS = ['Runtime'];
-this.Runtime = Runtime;
+// Export Runtime to global.
+globalThis.Runtime = Runtime;

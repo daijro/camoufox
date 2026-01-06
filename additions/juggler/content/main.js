@@ -2,20 +2,28 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const {Helper} = ChromeUtils.import('chrome://juggler/content/Helper.js');
-const {FrameTree} = ChromeUtils.import('chrome://juggler/content/content/FrameTree.js');
-const {SimpleChannel} = ChromeUtils.import('chrome://juggler/content/SimpleChannel.js');
-const {PageAgent} = ChromeUtils.import('chrome://juggler/content/content/PageAgent.js');
+// Services is available as a global
+
+// Load SimpleChannel and Runtime in content process's global.
+// NOTE: since these have to exist in both Worker and main threads, and we do
+// not know a way to load ES Modules in worker threads, we have to use the loadSubScript
+// utility instead.
+Services.scriptloader.loadSubScript('chrome://juggler/content/SimpleChannel.js');
+Services.scriptloader.loadSubScript('chrome://juggler/content/content/Runtime.js');
+
+const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const {FrameTree} = ChromeUtils.importESModule('chrome://juggler/content/content/FrameTree.js');
+const {PageAgent} = ChromeUtils.importESModule('chrome://juggler/content/content/PageAgent.js');
 
 const helper = new Helper();
 
-function initialize(browsingContext, docShell) {
+export function initialize(browsingContext, docShell) {
   const data = { channel: undefined, pageAgent: undefined, frameTree: undefined, failedToOverrideTimezone: false };
 
   const applySetting = {
     geolocation: (geolocation) => {
       if (geolocation) {
-        docShell.setGeolocationOverride({
+        browsingContext.setGeolocationServiceOverride({
           coords: {
             latitude: geolocation.latitude,
             longitude: geolocation.longitude,
@@ -25,14 +33,12 @@ function initialize(browsingContext, docShell) {
             heading: NaN,
             speed: NaN,
           },
-          address: null,
-          timestamp: Date.now()
+          timestamp: Date.now() + 24 * 60 * 60 * 1000,  // Make sure it does not expire for a day.
         });
       } else {
-        docShell.setGeolocationOverride(null);
+        browsingContext.setGeolocationServiceOverride();
       }
     },
-
     bypassCSP: (bypassCSP) => {
       docShell.bypassCSPEnabled = bypassCSP;
     },
@@ -95,16 +101,20 @@ function initialize(browsingContext, docShell) {
     },
 
     async awaitViewportDimensions({width, height}) {
-      const win = docShell.domWindow;
-      if (win.innerWidth === width && win.innerHeight === height)
-        return;
       await new Promise(resolve => {
-        const listener = helper.addEventListener(win, 'resize', () => {
-          if (win.innerWidth === width && win.innerHeight === height) {
-            helper.removeListeners([listener]);
+        const listeners = [];
+        const check = () => {
+          helper.removeListeners(listeners);
+          if (docShell.domWindow.innerWidth === width && docShell.domWindow.innerHeight === height) {
             resolve();
+            return;
           }
-        });
+          // Note: "domWindow" listeners are often removed upon navigation, as specced.
+          // To survive viewport changes across navigations, re-install listeners upon commit.
+          listeners.push(helper.addEventListener(docShell.domWindow, 'resize', check));
+          listeners.push(helper.addEventListener(data.frameTree, 'navigationcommitted', check));
+        };
+        check();
       });
     },
 
@@ -114,6 +124,3 @@ function initialize(browsingContext, docShell) {
 
   return data;
 }
-
-var EXPORTED_SYMBOLS = ['initialize'];
-this.initialize = initialize;
