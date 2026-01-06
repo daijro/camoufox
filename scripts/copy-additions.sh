@@ -40,6 +40,12 @@ run 'cp -v ../../settings/properties.json .'
 run 'touch moz.build'
 popd > /dev/null
 
+# Generate Assets.car for macOS builds (if on macOS) or ensure it exists
+if [[ ! -f ../additions/browser/branding/camoufox/Assets.car ]]; then
+    echo "Generating Assets.car..."
+    bash ../scripts/generate-assets-car.sh
+fi
+
 # Copy ALL new files/folders from ../additions to .
 run 'cp -r ../additions/* .'
 

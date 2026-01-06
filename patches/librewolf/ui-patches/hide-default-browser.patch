@@ -1,22 +1,102 @@
-diff --git a/browser/components/preferences/main.inc.xhtml b/browser/components/preferences/main.inc.xhtml
-index 8485423..b007b96 100644
---- a/browser/components/preferences/main.inc.xhtml
-+++ b/browser/components/preferences/main.inc.xhtml
-@@ -29,6 +29,8 @@
-   <vbox id="startupPageBox">
-     <checkbox id="browserRestoreSession"
-               data-l10n-id="startup-restore-windows-and-tabs"/>
-+    <html:a is="moz-support-link" support-page="session-restore" data-l10n-id="session-restore-learn-more" />
-+
- #ifdef XP_WIN
-     <hbox id="windowsLaunchOnLoginBox" align="center" hidden="true">
-       <checkbox id="windowsLaunchOnLogin"
-@@ -46,7 +48,7 @@
-   </vbox>
+diff --git a/browser/components/preferences/main.js b/browser/components/preferences/main.js
+index 46283d3..9e14d59 100644
+--- a/browser/components/preferences/main.js
++++ b/browser/components/preferences/main.js
+@@ -1000,65 +1000,6 @@ const DefaultBrowserHelper = {
+   },
+ };
  
- #ifdef HAVE_SHELL_SERVICE
--  <vbox id="defaultBrowserBox">
-+  <vbox id="defaultBrowserBox" hidden="true">
-     <checkbox id="alwaysCheckDefault" preference="browser.shell.checkDefaultBrowser"
-               disabled="true"
-               data-l10n-id="always-check-default"/>
+-Preferences.addSetting({
+-  id: "alwaysCheckDefault",
+-  pref: "browser.shell.checkDefaultBrowser",
+-  setup: emitChange => {
+-    if (!DefaultBrowserHelper.canCheck) {
+-      return;
+-    }
+-    DefaultBrowserHelper.pollForDefaultChanges(emitChange);
+-    // eslint-disable-next-line consistent-return
+-    return () => DefaultBrowserHelper.clearPollingForDefaultChanges();
+-  },
+-  /**
+-   * Show button for setting browser as default browser or information that
+-   * browser is already the default browser.
+-   */
+-  visible: () => DefaultBrowserHelper.canCheck,
+-  disabled: (deps, setting) =>
+-    !DefaultBrowserHelper.canCheck ||
+-    setting.locked ||
+-    DefaultBrowserHelper.isBrowserDefault,
+-});
+-
+-Preferences.addSetting({
+-  id: "isDefaultPane",
+-  deps: ["alwaysCheckDefault"],
+-  visible: () =>
+-    DefaultBrowserHelper.canCheck && DefaultBrowserHelper.isBrowserDefault,
+-});
+-
+-Preferences.addSetting({
+-  id: "isNotDefaultPane",
+-  deps: ["alwaysCheckDefault"],
+-  visible: () =>
+-    DefaultBrowserHelper.canCheck && !DefaultBrowserHelper.isBrowserDefault,
+-  onUserClick: (e, { alwaysCheckDefault }) => {
+-    if (!DefaultBrowserHelper.canCheck) {
+-      return;
+-    }
+-    const setDefaultButton = /** @type {MozButton} */ (e.target);
+-
+-    if (!setDefaultButton) {
+-      return;
+-    }
+-    if (setDefaultButton.disabled) {
+-      return;
+-    }
+-
+-    /**
+-     * Disable the set default button, so that the user
+-     * doesn't try to hit it again while browser is being set to default.
+-     */
+-    setDefaultButton.disabled = true;
+-    alwaysCheckDefault.value = true;
+-    DefaultBrowserHelper.setDefaultBrowser().finally(() => {
+-      setDefaultButton.disabled = false;
+-    });
+-  },
+-});
+-
+ // Performance settings
+ Preferences.addSetting({
+   id: "contentProcessCount",
+@@ -1141,31 +1082,6 @@ let SETTINGS_CONFIG = {
+         control: "moz-message-bar",
+         l10nId: "startup-windows-launch-on-login-profile-disabled",
+       },
+-      {
+-        id: "alwaysCheckDefault",
+-        l10nId: "always-check-default",
+-      },
+-      {
+-        id: "isDefaultPane",
+-        l10nId: "is-default-browser",
+-        control: "moz-promo",
+-      },
+-      {
+-        id: "isNotDefaultPane",
+-        l10nId: "is-not-default-browser",
+-        control: "moz-promo",
+-        options: [
+-          {
+-            control: "moz-button",
+-            l10nId: "set-as-my-default-browser",
+-            id: "setDefaultButton",
+-            controlAttrs: {
+-              slot: "actions",
+-              type: "primary",
+-            },
+-          },
+-        ],
+-      },
+     ],
+   },
+   zoom: {

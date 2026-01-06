@@ -45,3 +45,4 @@ closedsrc
 
 .venv
 bundle
+*.pem

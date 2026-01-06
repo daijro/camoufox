@@ -31,9 +31,9 @@ diff --git a/gfx/thebes/moz.build b/gfx/thebes/moz.build
 index 3d99906827..a9d1191688 100644
 --- a/gfx/thebes/moz.build
 +++ b/gfx/thebes/moz.build
-@@ -305,3 +305,6 @@ DEFINES["GRAPHITE2_STATIC"] = True
+@@ -301,3 +301,6 @@ DEFINES["GRAPHITE2_STATIC"] = True
  CXXFLAGS += ["-Werror=switch"]
- 
+
  include("/tools/fuzzing/libfuzzer-config.mozbuild")
 +
 +# DOM Mask
@@ -84,7 +84,7 @@ diff --git a/layout/style/FontFaceImpl.cpp b/layout/style/FontFaceImpl.cpp
 index 9d1f7c8c5b..926315ca2f 100644
 --- a/layout/style/FontFaceImpl.cpp
 +++ b/layout/style/FontFaceImpl.cpp
-@@ -357,21 +357,15 @@ void FontFaceImpl::DoLoad() {
+@@ -357,22 +357,16 @@ void FontFaceImpl::DoLoad() {
  void FontFaceImpl::SetStatus(FontFaceLoadStatus aStatus) {
    gfxFontUtils::AssertSafeThreadOrServoFontMetricsLocked();
  
@@ -112,19 +112,20 @@ index 9d1f7c8c5b..926315ca2f 100644
    if (mInFontFaceSet) {
      mFontFaceSet->OnFontFaceStatusChanged(this);
    }
+ 
 diff --git a/layout/style/FontFaceImpl.h b/layout/style/FontFaceImpl.h
 index 70c06609e9..66b2666621 100644
 --- a/layout/style/FontFaceImpl.h
 +++ b/layout/style/FontFaceImpl.h
-@@ -8,6 +8,7 @@
- #define mozilla_dom_FontFaceImpl_h
- 
+@@ -13,6 +13,7 @@
+ #include "mozilla/ServoStyleConsts.h"
  #include "mozilla/dom/FontFaceBinding.h"
 +#include "MaskConfig.hpp"
- #include "mozilla/FontPropertyTypes.h"
- #include "mozilla/Maybe.h"
- #include "mozilla/Mutex.h"
-@@ -35,6 +36,20 @@ class UTF8StringOrArrayBufferOrArrayBufferView;
+ #include "nsTHashSet.h"
+
+ class gfxFontFaceBufferSource;
+
+@@ -33,6 +34,20 @@
  
  namespace mozilla::dom {
  
@@ -149,11 +150,11 @@ diff --git a/layout/style/moz.build b/layout/style/moz.build
 index a14ab6a7ac..6e6a727abf 100644
 --- a/layout/style/moz.build
 +++ b/layout/style/moz.build
-@@ -351,3 +351,6 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
-     CONFIGURE_SUBST_FILES += [
-         "extra-bindgen-flags",
-     ]
+@@ -378,4 +378,7 @@
+     CbindgenHeader(
+         "ServoStyleConsts.h",
+         inputs=["/servo/ports/geckolib", "/servo/components/style"],
+     )
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
-\ No newline at end of file

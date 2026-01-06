@@ -48,6 +48,11 @@ class BSYS:
         """Bootstrap the build system"""
         run('make bootstrap')
 
+    @staticmethod
+    def generate_assets_car():
+        """Generate Assets.car for macOS builds"""
+        run('make generate-assets-car')
+
     def build(self):
         """Build the Camoufox source code"""
         os.environ['BUILD_TARGET'] = f'{self.target},{self.arch}'
@@ -119,11 +124,18 @@ def main():
     # Clean if requested
     if args.clean:
         BSYS.clean()
+    # Generate Assets.car if building for macOS
+    if 'macos' in args.target:
+        BSYS.generate_assets_car()
+
+    # Ensure dist directory exists
+    os.makedirs('dist', exist_ok=True)
+
     # Run build
     for target in args.target:
         for arch in args.arch:
             if (target, arch) in [("windows", "arm64"), ("macos", "i686")]:
-                print(f"Skipping {target} {arch}: Unsuported architecture.")
+                print(f"Skipping {target} {arch}: Unsupported architecture.")
                 continue
             run_build(target, arch)
 

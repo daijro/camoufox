@@ -1,8 +1,8 @@
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index e0cbb3f1f8..d7868e7ae0 100644
+index 9880047350..318d2edba8 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
-@@ -2288,28 +2288,7 @@ dom::PrivateAttribution* Navigator::PrivateAttribution() {
+@@ -2316,28 +2316,7 @@ dom::PrivateAttribution* Navigator::PrivateAttribution() {
  
  /* static */
  bool Navigator::Webdriver() {
@@ -33,19 +33,17 @@ index e0cbb3f1f8..d7868e7ae0 100644
  
  AutoplayPolicy Navigator::GetAutoplayPolicy(AutoplayPolicyMediaType aType) {
 diff --git a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-index 0eeb5924c4..8b975a8b11 100644
+index cf5ae51466..97efc14262 100644
 --- a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
 +++ b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-@@ -108,12 +108,6 @@ EnterprisePoliciesManager.prototype = {
+@@ -106,9 +106,7 @@ EnterprisePoliciesManager.prototype = {
        Services.prefs.clearUserPref(PREF_POLICIES_APPLIED);
      }
  
--    // Playwright: Disable enterprise policies
--    if (true) {
--      this.status = Ci.nsIEnterprisePolicies.INACTIVE;
--      return;
--    }
--
-     let provider = this._chooseProvider();
+-    // --- Playwright begin ---
+-    let provider = new PlaywrightPoliciesProvider();
+-    // --- Playwright end ---
++    let provider = this._chooseProvider();
  
      if (provider.failed) {
+       this.status = Ci.nsIEnterprisePolicies.FAILED;
