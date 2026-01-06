@@ -23,6 +23,8 @@ Camoufox is the most modern, effective & future-proof open source solution for a
 ## <span style="color:yellow">Firefox Version Upgrade Notice</span>
 The current main branch is built for Firefox v146. It is an experimental change and may contain several bugs. If you are building from source and require a stable production version, use branch `releases/135`.
 
+See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on testing FF146.
+
 ---
 
 ## Sponsors
