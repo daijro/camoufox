@@ -30,19 +30,26 @@ AVAILABLE_TARGETS = ["linux", "windows", "macos"]
 AVAILABLE_ARCHS = ["x86_64", "arm64", "i686"]
 
 
-def setup_linux_arm64_sysroot():
+def setup_linux_sysroots():
     """
-    Set up symlinks required for Linux ARM64 cross-compilation.
-    The sysroot may be missing the libsqlite3.so symlink needed for linking.
+    Set up symlinks required for Linux cross-compilation.
+    The sysroots may be missing the libsqlite3.so symlink needed for linking.
     """
     mozbuild = Path.home() / '.mozbuild'
-    sysroot_lib = mozbuild / 'sysroot-aarch64-linux-gnu' / 'usr' / 'lib' / 'aarch64-linux-gnu'
-    sqlite_so = sysroot_lib / 'libsqlite3.so'
-    sqlite_so_0 = sysroot_lib / 'libsqlite3.so.0'
+    sysroots = [
+        ('sysroot-aarch64-linux-gnu', 'aarch64-linux-gnu'),
+        ('sysroot-x86_64-linux-gnu', 'x86_64-linux-gnu'),
+        ('sysroot-i686-linux-gnu', 'i686-linux-gnu'),
+    ]
 
-    if sysroot_lib.exists() and sqlite_so_0.exists() and not sqlite_so.exists():
-        print(f"Creating libsqlite3.so symlink in {sysroot_lib}")
-        sqlite_so.symlink_to('libsqlite3.so.0')
+    for sysroot_name, lib_arch in sysroots:
+        sysroot_lib = mozbuild / sysroot_name / 'usr' / 'lib' / lib_arch
+        sqlite_so = sysroot_lib / 'libsqlite3.so'
+        sqlite_so_0 = sysroot_lib / 'libsqlite3.so.0'
+
+        if sysroot_lib.exists() and sqlite_so_0.exists() and not sqlite_so.exists():
+            print(f"Creating libsqlite3.so symlink in {sysroot_lib}")
+            sqlite_so.symlink_to('libsqlite3.so.0')
 
 
 def run(cmd, exit_on_fail=True):
@@ -147,9 +154,9 @@ def main():
     # Ensure dist directory exists
     os.makedirs('dist', exist_ok=True)
 
-    # Set up Linux ARM64 sysroot if needed
-    if 'linux' in args.target and 'arm64' in args.arch:
-        setup_linux_arm64_sysroot()
+    # Set up Linux sysroot symlinks if needed
+    if 'linux' in args.target:
+        setup_linux_sysroots()
 
     # Run build
     for target in args.target:
