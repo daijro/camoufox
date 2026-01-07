@@ -19,6 +19,7 @@ Since Camoufox is NOT meant to be used as a daily driver, no installers are prov
 import argparse
 import glob
 import os
+from pathlib import Path
 import sys
 from dataclasses import dataclass
 from typing import List
@@ -27,6 +28,21 @@ import shutil
 # Constants
 AVAILABLE_TARGETS = ["linux", "windows", "macos"]
 AVAILABLE_ARCHS = ["x86_64", "arm64", "i686"]
+
+
+def setup_linux_arm64_sysroot():
+    """
+    Set up symlinks required for Linux ARM64 cross-compilation.
+    The sysroot may be missing the libsqlite3.so symlink needed for linking.
+    """
+    mozbuild = Path.home() / '.mozbuild'
+    sysroot_lib = mozbuild / 'sysroot-aarch64-linux-gnu' / 'usr' / 'lib' / 'aarch64-linux-gnu'
+    sqlite_so = sysroot_lib / 'libsqlite3.so'
+    sqlite_so_0 = sysroot_lib / 'libsqlite3.so.0'
+
+    if sysroot_lib.exists() and sqlite_so_0.exists() and not sqlite_so.exists():
+        print(f"Creating libsqlite3.so symlink in {sysroot_lib}")
+        sqlite_so.symlink_to('libsqlite3.so.0')
 
 
 def run(cmd, exit_on_fail=True):
@@ -130,6 +146,10 @@ def main():
 
     # Ensure dist directory exists
     os.makedirs('dist', exist_ok=True)
+
+    # Set up Linux ARM64 sysroot if needed
+    if 'linux' in args.target and 'arm64' in args.arch:
+        setup_linux_arm64_sysroot()
 
     # Run build
     for target in args.target:
