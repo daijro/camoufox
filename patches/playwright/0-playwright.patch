@@ -3395,15 +3395,16 @@ diff --git a/widget/headless/HeadlessCompositorWidget.cpp b/widget/headless/Head
 index bb4ee9175e..6814ae8503 100644
 --- a/widget/headless/HeadlessCompositorWidget.cpp
 +++ b/widget/headless/HeadlessCompositorWidget.cpp
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,8 @@
   * License, v. 2.0. If a copy of the MPL was not distributed with this
   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
  
++#include "mozilla/gfx/2D.h"
 +#include "mozilla/layers/CompositorThread.h"
  #include "mozilla/widget/PlatformWidgetTypes.h"
  #include "HeadlessCompositorWidget.h"
  #include "VsyncDispatcher.h"
-@@ -15,9 +16,30 @@ HeadlessCompositorWidget::HeadlessCompositorWidget(
+@@ -15,9 +17,30 @@ HeadlessCompositorWidget::HeadlessCompositorWidget(
      const layers::CompositorOptions& aOptions, HeadlessWidget* aWindow)
      : CompositorWidget(aOptions),
        mWidget(aWindow),
@@ -3434,7 +3435,7 @@ index bb4ee9175e..6814ae8503 100644
  void HeadlessCompositorWidget::ObserveVsync(VsyncObserver* aObserver) {
    if (RefPtr<CompositorVsyncDispatcher> cvd =
            mWidget->GetCompositorVsyncDispatcher()) {
-@@ -31,6 +53,59 @@ void HeadlessCompositorWidget::NotifyClientSizeChanged(
+@@ -31,6 +54,59 @@ void HeadlessCompositorWidget::NotifyClientSizeChanged(
      const LayoutDeviceIntSize& aClientSize) {
    auto size = mClientSize.Lock();
    *size = aClientSize;
