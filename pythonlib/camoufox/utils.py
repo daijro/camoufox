@@ -365,6 +365,8 @@ def launch_options(
     i_know_what_im_doing: Optional[bool] = None,
     debug: Optional[bool] = None,
     virtual_display: Optional[str] = None,
+    persistent_context: Optional[bool] = None,
+    user_data_dir: Optional[Union[str, Path]] = None,
     **launch_options: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
@@ -658,5 +660,6 @@ def launch_options(
         "firefox_user_prefs": firefox_user_prefs,
         "proxy": proxy,
         "headless": headless,
+        "_user_data_dir": str(user_data_dir) if user_data_dir else None,
         **(launch_options if launch_options is not None else {}),
     }
