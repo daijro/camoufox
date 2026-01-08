@@ -297,6 +297,47 @@
     "showcursor": "bool",
 
     "allowMainWorld": "bool",
+    
+    "navigator.deviceMemory": "int[2, 4, 8]",
+    "navigator.connection.effectiveType": "str[slow-2g, 2g, 3g, 4g]",
+    "navigator.connection.rtt": "int[50 - 2000]",
+    "navigator.connection.downlink": "double[0.1 - 10.0]",
+    "navigator.connection.saveData": "bool",
+    
+    "performance:timingFuzz": "bool",
+    "performance:timingFuzz:maxJitter": "double[0.01 - 5.0]",
+    
+    "canvas:noise": "bool",
+    "canvas:noiseLevel": "double[0.0001 - 0.01]",
+    "canvas:textNoise": "bool",
+    "canvas:textNoiseLevel": "double[0.01 - 0.5]",
+    
+    "navigator.userAgentData.brands": "array[@UA_BRAND]",
+    "navigator.userAgentData.mobile": "bool",
+    "navigator.userAgentData.platform": "str",
+    
+    "@UA_BRAND": {
+        "*brand": "str",
+        "*version": "str"
+    },
+    
+    "scroll:humanize": "bool",
+    "scroll:humanize:speed": "double[0.5 - 2.0]",
+    "scroll:humanize:acceleration": "double[0.8 - 1.2]",
+    
+    "storage:quota:total": "int[1073741824 - 10737418240]",
+    "storage:quota:usage": "int[0 - 1073741824]",
+    
+    "permissions:state": "@PERMISSION_STATES",
+    
+    "@PERMISSION_STATES": {
+        "geolocation": "str[granted, denied, prompt]",
+        "notifications": "str[granted, denied, prompt]",
+        "camera": "str[granted, denied, prompt]",
+        "microphone": "str[granted, denied, prompt]",
+        "clipboard-read": "str[granted, denied, prompt]",
+        "clipboard-write": "str[granted, denied, prompt]"
+    },
     "forceScopeAccess": "bool",
     "enableRemoteSubframes": "bool",
     "disableTheming": "bool",
