@@ -297,6 +297,7 @@
     "showcursor": "bool",
 
     "allowMainWorld": "bool",
+    "allowAddonNewtab": "bool",
     "forceScopeAccess": "bool",
     "enableRemoteSubframes": "bool",
     "disableTheming": "bool",
