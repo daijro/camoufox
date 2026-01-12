@@ -317,9 +317,13 @@ async def async_attach_vd(
     _close = browser.close
 
     async def new_close(*args: Any, **kwargs: Any):
-        await _close(*args, **kwargs)
-        if virtual_display:
-            virtual_display.kill()
+        try:
+            await _close(*args, **kwargs)
+        except Exception:
+            raise
+        finally:
+            if virtual_display:
+                virtual_display.kill()
 
     browser.close = new_close
     browser._virtual_display = virtual_display
@@ -339,9 +343,13 @@ def sync_attach_vd(
     _close = browser.close
 
     def new_close(*args: Any, **kwargs: Any):
-        _close(*args, **kwargs)
-        if virtual_display:
-            virtual_display.kill()
+        try:
+            _close(*args, **kwargs)
+        except Exception:
+            raise
+        finally:
+            if virtual_display:
+                virtual_display.kill()
 
     browser.close = new_close
     browser._virtual_display = virtual_display
