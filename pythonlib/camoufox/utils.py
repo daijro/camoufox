@@ -68,8 +68,23 @@ def get_env_vars(
             sys.exit(1)
 
     if OS_NAME == 'lin':
-        fontconfig_path = get_path(os.path.join("fontconfig", user_agent_os))
-        env_vars['FONTCONFIG_PATH'] = fontconfig_path
+        # https://github.com/coryking/camoufox/commit/f21eeb2850a74cc104fb57e17e0a2fa27b7a2a28
+        # Thanks @coryking
+        # the user_agent_os is either 'lin', 'mac', or 'win' but our fontconfigs directory is 'linux', 'macos', or 'windows'
+        directory_map = {
+            'lin': 'linux',
+            'mac': 'macos',
+            'win': 'windows',
+        }
+        os_dir = directory_map.get(user_agent_os, user_agent_os)
+        fontconfig_path = get_path(os.path.join("fontconfigs", os_dir))
+
+        # assert that fonts.conf exists in the directory
+        if not os.path.exists(os.path.join(fontconfig_path, "fonts.conf")):
+            # puke violently if fonts.conf doesn't exist!!
+            raise FileNotFoundError(
+                f"fonts.conf not found in {fontconfig_path}!  Something ain't right with your camoufox bundle."
+            )
 
     return env_vars
 
@@ -651,12 +666,18 @@ def launch_options(
     else:
         executable_path = launch_path()
 
-    return {
+    result = {
         "executable_path": executable_path,
         "args": args,
         "env": env_vars,
         "firefox_user_prefs": firefox_user_prefs,
-        "proxy": proxy,
         "headless": headless,
         **(launch_options if launch_options is not None else {}),
     }
+    # Only include proxy if it's not None (Playwright 1.55+ validates this)
+    # https://github.com/coryking/camoufox/commit/1336e8e509e8c12a896a09d9ee51f131f739f106
+    # Thanks @coryking
+    if proxy is not None:
+        result["proxy"] = proxy
+
+    return result
