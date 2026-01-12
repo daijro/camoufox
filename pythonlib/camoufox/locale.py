@@ -259,7 +259,7 @@ def get_geolocation(ip: str) -> Geolocation:
 
     with geoip2.database.Reader(str(MMDB_FILE)) as reader:
         resp = reader.city(ip)
-        iso_code = cast(str, resp.registered_country.iso_code).upper()
+        iso_code = cast(str, resp.country.iso_code).upper()
         location = resp.location
 
         # Check if any required attributes are missing
