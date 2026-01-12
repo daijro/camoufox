@@ -68,6 +68,7 @@ LAUNCH_FILE = {
     'lin': 'camoufox-bin',
 }
 
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 def rprint(*a, **k):
     click.secho(*a, **k, bold=True)
@@ -169,7 +170,8 @@ class GitHubDownloader:
         Fetch the latest release from the GitHub API.
         Gets the first asset that returns a truthy value from check_asset.
         """
-        resp = requests.get(self.api_url, timeout=20)
+        headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
+        resp = requests.get(self.api_url, timeout=20, headers=headers)
         resp.raise_for_status()
 
         releases = resp.json()
@@ -475,7 +477,8 @@ def webdl(
     Raises:
         requests.RequestException: If there's an error downloading the file
     """
-    response = requests.get(url, stream=True)
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if "api.github" in url and GITHUB_TOKEN else {}
+    response = requests.get(url, stream=True, headers=headers)
     response.raise_for_status()
 
     total_size = int(response.headers.get('content-length', 0))
