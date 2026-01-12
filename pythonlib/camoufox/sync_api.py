@@ -26,7 +26,11 @@ class Camoufox(PlaywrightContextManager):
 
     def __enter__(self) -> Union[Browser, BrowserContext]:
         super().__enter__()
-        self.browser = NewBrowser(self._playwright, **self.launch_options)
+        try:
+            self.browser = NewBrowser(self._playwright, **self.launch_options)
+        except camoufox.exceptions.InvalidProxy as e:
+            super().__exit__(camoufox.exceptions.InvalidProxy, e, None)
+            raise
         return self.browser
 
     def __exit__(self, *args: Any):
