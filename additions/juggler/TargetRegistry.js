@@ -321,6 +321,45 @@ export class TargetRegistry {
 
   async _newPageInternal({browserContextId}) {
     const browserContext = this.browserContextForId(browserContextId);
+
+    // Look for an existing window (via an existing PageTarget) with the same BrowserContext.
+    let existingWindow = null;
+    for (const target of this._browserToTarget.values()) {
+      if (target._browserContext === browserContext && !target._disposed) {
+        existingWindow = target._window;
+        break;
+      }
+    }
+
+    if (existingWindow) {
+      // Open a new tab in the existing window using the same userContextId.
+      const gBrowser = existingWindow.gBrowser;
+      // When opening a tab programmatically, pass the userContextId option so it's created in the right container.
+      const newTab = gBrowser.addTab('about:blank', {
+        triggeringPrincipal:
+          Services.scriptSecurityManager.getSystemPrincipal(),
+        userContextId: browserContext.userContextId
+      });
+      if (!newTab)
+        throw new Error('Failed to create tab in existing window');
+
+      const browser = newTab.linkedBrowser;
+      // Wait for the PageTarget to be created for this tab's linkedBrowser.
+      let target = this._browserToTarget.get(browser);
+      while (!target) {
+        await helper.awaitEvent(this, TargetRegistry.Events.TargetCreated);
+        target = this._browserToTarget.get(browser);
+      }
+      
+      browser.focus();
+      if (browserContext.crossProcessCookie.settings.timezoneId) {
+        if (await target.hasFailedToOverrideTimezone())
+          throw new Error('Failed to override timezone');
+      }
+      return target.id();
+    }
+
+    // No existing window for this browserContext — create a new window (original behavior).
     const features = "chrome,dialog=no,all";
     // See _callWithURIToLoad in browser.js for the structure of window.arguments
     // window.arguments[1]: unused (bug 871161)
