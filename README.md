@@ -28,7 +28,7 @@ See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on tes
 
 ---
 
-## Sponsors
+# Sponsors
 
 <a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
 <img src="https://raw.githubusercontent.com/daijro/camoufox/main/assets/scrapfly.png" alt="Scrapfly.io" width="149">
@@ -47,7 +47,7 @@ See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on tes
 ---
 
 <a href="https://www.thordata.com/?ls=github&lk=camoufox" target="_blank">
-  <img alt="Thordata Banner" src="https://camoufox.com/static/thordata.png" style="width: 50% !important;"/>
+  <img alt="thordata" src="https://github.com/user-attachments/assets/fa79fe26-633b-44a4-a2a8-bce570f180ca" width=325/>
 </a>
 
 [Thordata](https://www.thordata.com/?ls=github&lk=camoufox) - Your First Plan is on Us! 💰 Get 100% of your first residential proxy purchase back as wallet balance, up to $900.
