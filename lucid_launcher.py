@@ -5,11 +5,23 @@ import os
 import subprocess
 import threading
 import time
+import re
+from typing import Optional, Tuple
+import geoip2.database
+import geoip2.errors
+import geoip2.models
+import geoip2.reader
+from geopy.distance import geodesic
 
 
 # CONFIGURATION
 LUCID_BINARY_PATH = "bin/lucid.exe"
 PROFILE_BASE_DIR = "profiles"
+
+
+class GeoMismatchWarning(Exception):
+    """Raised when proxy location doesn't match identity ZIP"""
+    pass
 
 
 class LucidLauncherApp:
@@ -18,7 +30,9 @@ class LucidLauncherApp:
         self.root.title("LUCID EMPIRE // COMMAND CONSOLE")
         self.root.geometry("800x600")
         self.root.configure(bg="#0a0a0a")
-
+        
+        # NEW: Aging slider value
+        self.aging_days = tk.IntVar(value=7)  # Default to 7 days
 
         # STYLES (Cyberpunk Theme)
         style = ttk.Style()
@@ -77,6 +91,19 @@ class LucidLauncherApp:
         self.identity_text = tk.Text(self.tab1, height=8, bg="#111", fg="white", insertbackground="white")
         self.identity_text.pack(fill=tk.X, padx=10)
 
+        # NEW: Forensic Aging Slider
+        aging_frame = ttk.LabelFrame(self.tab1, text="FORENSIC AGING (DAYS)", padding=10)
+        aging_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Scale(
+            aging_frame, 
+            from_=1, 
+            to=90, 
+            variable=self.aging_days,
+            command=lambda v: self.log(f"Forensic Aging set to {int(float(v))} days")
+        ).pack(fill=tk.X)
+        
+        ttk.Label(aging_frame, textvariable=self.aging_days).pack()
 
         # Network Vector
         lbl2 = ttk.Label(self.tab1, text="NETWORK VECTOR (SOCKS5 PROXY):")
@@ -192,6 +219,18 @@ class LucidLauncherApp:
         cmd = [LUCID_BINARY_PATH, "-profile", self.profile_path_var.get(), "-no-remote"]
         self.log(f"EXEC: {' '.join(cmd)}")
         # subprocess.Popen(cmd) # Uncomment in production
+
+
+    def get_zip_coords(self, zip_code: str) -> Tuple[float, float]:
+        """Mock implementation - would use real ZIP code DB in production"""
+        # Default coordinates for common ZIP codes
+        zip_mapping = {
+            "90210": (34.0901, -118.4065),  # Beverly Hills
+            "10001": (40.7506, -73.9975),   # NYC
+            "60601": (41.8858, -87.6181),   # Chicago
+            "33101": (25.7743, -80.1937)    # Miami
+        }
+        return zip_mapping.get(zip_code, (34.0522, -118.2437))  # Default to LA
 
 
 if __name__ == "__main__":
