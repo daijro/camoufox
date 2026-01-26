@@ -31,6 +31,8 @@ jobs:
       - name: Fetch and Patch Source Code
         run: |
           echo "Running Genesis Setup..."
+          git config --global user.email "ci@lucid.local"
+          git config --global user.name "Lucid CI"
           make setup
         shell: bash
 
