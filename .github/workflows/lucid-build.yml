@@ -1,91 +1,126 @@
-name: Lucid Windows Build
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+name: Lucid Empire Production Build (Phase 4+5)
+
+on: [push, workflow_dispatch]
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    name: Build Camoufox Windows Native
+    runs-on: windows-2019 # Pinned for MSVC/MozillaBuild 4.4 compatibility
+    
+    env:
+      MOZILLABUILD: C:\mozilla-build
+      MOZ_OBJDIR: obj-lucid-release
+      # PREVENTS BOOTSTRAP HANGS
+      MACH_NO_INTERACTIVE: 1
+      # PREVENTS PYTHON ENCODING ERRORS
+      PYTHONUTF8: 1
+      # ENSURES MOZILLA BUILD FINDS TOOLS
+      MOZ_ILL_BUILD_TOOLS: 1
+
     steps:
+      # 1. CHECKOUT REPOSITORY
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
-      # 1. PREPARE ENVIRONMENT
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install Build Dependencies
+      # 2. INSTALL SYSTEM PREREQUISITES (CRITICAL FIX)
+      # Installs the tools that 'mach bootstrap' expects but are missing on the runner
+      - name: Install Prerequisite Tools
+        shell: powershell
         run: |
-          pip install requests tqdm colorama psutil
-          choco install 7zip aria2 make mozillabuild -y
+          choco install make aria2 7zip wget -y --no-progress
+          Write-Host "Attempting optional package: msitools (may not be available via Chocolatey)"
+          try { choco install msitools -y --no-progress } catch { Write-Host "msitools not available via Chocolatey; skipping..." }
           
-          echo "--- Dependency Verification ---"
-          choco --version
-          aria2c --version
-          make --version
-          echo "Build dependencies installed and verified."
-        shell: bash
-
-      # 2. FETCH THE ENGINE
-      - name: Fetch and Patch Source Code
+      # 3. INSTALL MOZILLA BUILD ENVIRONMENT
+      - name: Install MozillaBuild 4.4
+        shell: powershell
         run: |
-          git config --global user.email "ci-bot@users.noreply.github.com"
-          git config --global user.name "CI Bot"
-          echo "Running Genesis Setup..."
-          make setup
-        shell: bash
+          choco feature enable -n allowGlobalConfirmation || true
+          Write-Host "Searching for mozillabuild..."; choco search mozillabuild || true
+          try { choco install mozillabuild --version=4.4.0 -y --no-progress } catch { Write-Host "mozillabuild install failed; attempting unversioned install..."; choco install mozillabuild -y --no-progress }
+          Write-Host "mozillabuild install step complete."
+      
+      # 4. CONFIGURE GIT IDENTITY (Required for Patching)
+      - name: Configure Git Identity
+        shell: powershell
+        run: |
+          git config --global user.email "ci-bot@lucid.empire"
+          git config --global user.name "Lucid Builder"
 
-      # 3. LOCATE SOURCE DIRECTORY
-      - name: Find Source Directory
+      # 5. BOOTSTRAP SOURCE (Fetches the Firefox code)
+      - name: Bootstrap Source
+        shell: cmd
+        run: |
+          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive"
+
+      # 6. INJECT SOVEREIGN CODE (PHASE 4 & 5)
+      # Injects the Python logic into the browser's internal engine
+      - name: Inject Sovereign Code
+        shell: powershell
+        run: |
+          # Dynamic Source Directory Detection (Handles camoufox-115/128 etc)
+          $SourceDir = Get-ChildItem -Directory "camoufox-*" | Select-Object -First 1 -ExpandProperty Name
+          Write-Host "TARGET SOURCE DIRECTORY: $SourceDir"
+          
+          # --- PHASE 4: GENESIS & COMMERCE ---
+          if (Test-Path "core/genesis_engine.py") {
+             Copy-Item "core/genesis_engine.py" -Destination "$SourceDir/python/mozbuild/mozbuild/" -Force
+             Write-Host "Injecting Genesis Engine... OK"
+          }
+          if (Test-Path "modules/commerce_injector.py") {
+             Copy-Item "modules/commerce_injector.py" -Destination "$SourceDir/python/mozbuild/mozbuild/" -Force
+             Write-Host "Injecting Commerce Injector... OK"
+          }
+          
+          # --- PHASE 5: SOVEREIGN BIOMETRICS ---
+          if (Test-Path "modules/humanization.py") {
+            Copy-Item "modules/humanization.py" -Destination "$SourceDir/python/mozbuild/mozbuild/" -Force
+            Write-Host "Injecting Phase 5 Biometrics... OK"
+          }
+
+      # 7. CONFIGURE BUILD OPTIONS (.mozconfig)
+      - name: Configure MozConfig
+        shell: cmd
         run: |
           cd camoufox-*
-          echo "SOURCE_DIR=$(pwd)" >> $GITHUB_ENV
+          echo Configuring Build Options...
+          
+          REM --- ARCHITECTURE ---
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --target=x86_64-pc-windows-msvc' >> .mozconfig"
+          
+          REM --- TELEMETRY & REPORTING (STRICT) ---
+          REM NOTE: --disable-telemetry is deprecated and breaks builds. Using specific disablers instead.
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-crashreporter' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-maintenance-service' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-updater' >> .mozconfig"
+          
+          REM --- OPTIMIZATION ---
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-tests' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-debug' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --enable-optimize' >> .mozconfig"
 
-      # 4. BOOTSTRAP
-      - name: Bootstrap Mozilla Build Environment
+      # 8. COMPILE (The Long Step)
+      - name: Compile Binary
+        shell: cmd
+        timeout-minutes: 360 # 6 Hours Max
         run: |
-          cd ${{ env.SOURCE_DIR }}
-          echo "Bootstrapping in $PWD..."
-          ./mach bootstrap --application-choice browser
-        shell: bash
+          cd camoufox-*
+          call "C:\mozilla-build\start-shell.bat" -c "./mach build"
 
-      # 5. HARDENING
-      - name: Inject Sovereign Config
+      # 9. PACKAGE INSTALLER
+      - name: Package Release
+        shell: cmd
         run: |
-          cd ${{ env.SOURCE_DIR }}
-          echo "Injecting Telemetry Kill Switches..."
-          echo "ac_add_options --disable-telemetry" >> .mozconfig
-          echo "ac_add_options --disable-crashreporter" >> .mozconfig
-          echo "ac_add_options --disable-updater" >> .mozconfig
-          echo "ac_add_options --disable-maintenance-service" >> .mozconfig
-          echo "ac_add_options --target=x86_64-pc-windows-msvc" >> .mozconfig
-          echo "ac_add_options --enable-optimize" >> .mozconfig
-          echo "ac_add_options --disable-debug" >> .mozconfig
-        shell: bash
+          cd camoufox-*
+          call "C:\mozilla-build\start-shell.bat" -c "./mach package"
 
-      # 6. COMPILATION
-      - name: Build Lucid Binary
-        run: |
-          cd ${{ env.SOURCE_DIR }}
-          echo "Initiating Compilation..."
-          ./mach build
-          echo "Packaging Binary..."
-          ./mach package
-        shell: bash
-
-      # 7. ARTIFACT RETRIEVAL
-      - name: Verify Artifacts
-        run: |
-          echo "Checking for build artifacts..."
-          ls -l ${{ env.SOURCE_DIR }}/obj-x86_64-pc-windows-msvc/dist/install/sea/*.exe
-        shell: bash
-
-      - name: Upload Lucid Binary
+      # 10. VERIFY & UPLOAD ARTIFACT
+      - name: Harvest Lucid Binary
         uses: actions/upload-artifact@v4
         with:
-          name: lucid-browser-win64
-          path: ${{ env.SOURCE_DIR }}/obj-x86_64-pc-windows-msvc/dist/install/sea/*.exe
+          name: lucid-empire-phase5-release
+          path: camoufox-*/obj-*/dist/install/sea/*.zip
+          retention-days: 7
+          if-no-files-found: error
