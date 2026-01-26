@@ -185,13 +185,18 @@ def update_fonts(config: Dict[str, Any], target_os: str) -> None:
         config['fonts'] = fonts
 
 
-def check_custom_fingerprint(fingerprint: Fingerprint) -> None:
+def check_custom_fingerprint(fingerprint: Union[Fingerprint, Dict[str, Any]]) -> None:
     """
     Asserts that the passed BrowserForge fingerprint is a valid Firefox fingerprint.
     and warns the user that passing their own fingerprint is not recommended.
     """
     # Check what the browser is
-    browser_name = user_agent_parser.ParseUserAgent(fingerprint.navigator.userAgent).get(
+    if isinstance(fingerprint, dict):
+        user_agent = fingerprint.get('navigator', {}).get('userAgent', '')
+    else:
+        user_agent = fingerprint.navigator.userAgent
+
+    browser_name = user_agent_parser.ParseUserAgent(user_agent).get(
         'family', 'Non-Firefox'
     )
     if browser_name != 'Firefox':
@@ -352,7 +357,7 @@ def launch_options(
     exclude_addons: Optional[List[DefaultAddons]] = None,
     screen: Optional[Screen] = None,
     window: Optional[Tuple[int, int]] = None,
-    fingerprint: Optional[Fingerprint] = None,
+    fingerprint: Optional[Union[Fingerprint, Dict[str, Any]]] = None,
     ff_version: Optional[int] = None,
     headless: Optional[bool] = None,
     main_world_eval: Optional[bool] = None,

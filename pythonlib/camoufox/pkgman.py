@@ -12,8 +12,26 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 from zipfile import ZipFile
 
-import click
-import orjson
+try:
+    import click
+except ImportError:
+    click = None
+
+try:
+    import orjson
+except ImportError:
+    import json
+    class orjson:
+        @staticmethod
+        def loads(content):
+            if isinstance(content, bytes):
+                content = content.decode('utf-8')
+            return json.loads(content)
+        
+        @staticmethod
+        def dumps(content):
+            return json.dumps(content).encode('utf-8')
+
 import requests
 from platformdirs import user_cache_dir
 from tqdm import tqdm
@@ -70,7 +88,12 @@ LAUNCH_FILE = {
 
 
 def rprint(*a, **k):
-    click.secho(*a, **k, bold=True)
+    if click:
+        click.secho(*a, **k, bold=True)
+    else:
+        # Fallback if click is not installed
+        msg = " ".join(str(x) for x in a)
+        print(msg)
 
 
 @total_ordering
