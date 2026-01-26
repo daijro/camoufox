@@ -28,9 +28,32 @@ jobs:
         shell: pwsh
         run: |
           choco feature enable -n allowGlobalConfirmation || true
+          Write-Host "Chocolatey version:"; choco --version
           choco install make aria2 7zip wget -y || true
-          Write-Host "Attempting optional package: msitools (may not be available on Chocolatey)"
+          Write-Host "Attempting optional package: msitools (may not be available via Chocolatey)"
           try { choco install msitools -y || true } catch { Write-Host "msitools not available via Chocolatey; skipping..." }
+
+      - name: Install MozillaBuild (retries + debug logs)
+        shell: pwsh
+        run: |
+          Write-Host "Searching for mozillabuild package..."; choco search mozillabuild || true
+          $installed = $false
+          for ($i=1; $i -le 3; $i++) {
+            Write-Host "Attempt #$i: installing mozillabuild (4.4.0)"
+            try { choco install mozillabuild --version=4.4.0 -y --no-progress --debug | Tee-Object -FilePath choco_mozillabuild_install.log; $installed=$true; break } catch { Write-Host "Attempt #$i failed: $_" ; Start-Sleep -Seconds (5 * $i) }
+          }
+          if (-not $installed) {
+            Write-Host "Versioned install failed; trying unversioned install"
+            try { choco install mozillabuild -y --no-progress --debug | Tee-Object -FilePath choco_mozillabuild_install.log; $installed=$true } catch { Write-Host "Unversioned install failed: $_" }
+          }
+          if (-not $installed) {
+            Write-Host "ERROR: mozillabuild could not be installed via Chocolatey."
+            choco search mozillabuild || true
+            choco list --local-only || true
+            if (Test-Path choco_mozillabuild_install.log) { Get-Content choco_mozillabuild_install.log -Tail 200 }
+            exit 1
+          }
+          Write-Host "mozillabuild installed successfully."
 
       - name: Install MSVC (optional)
         if: ${{ env.INSTALL_MSVC == 'true' }}

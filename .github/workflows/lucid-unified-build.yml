@@ -33,29 +33,36 @@ jobs:
           try { choco install msitools -y --no-progress } catch { Write-Host "msitools not available via Chocolatey; skipping..." }
 
       # 3. INSTALL MOZILLABUILD
-      - name: Install MozillaBuild Environment (resilient)
+      - name: Install MozillaBuild Environment (retries + debug logs)
         shell: powershell
         run: |
           choco feature enable -n allowGlobalConfirmation || true
           Write-Host "Chocolatey version:"; choco --version
           Write-Host "Searching for mozillabuild package..."; choco search mozillabuild || true
 
-          function Try-ChocoInstall($pkg, $ver) {
-            if ($ver) {
-              Write-Host "Attempting: choco install $pkg --version=$ver -y --no-progress"
-              try { choco install $pkg --version=$ver -y --no-progress; return $true } catch { Write-Host "Failed (versioned): $_"; return $false }
-            } else {
-              Write-Host "Attempting: choco install $pkg -y --no-progress"
-              try { choco install $pkg -y --no-progress; return $true } catch { Write-Host "Failed: $_"; return $false }
+          $installed = $false
+          for ($i=1; $i -le 3; $i++) {
+            Write-Host "Attempt #$i: installing mozillabuild (4.4.0)"
+            try {
+              choco install mozillabuild --version=4.4.0 -y --no-progress --debug | Tee-Object -FilePath choco_mozillabuild_install.log
+              $installed = $true
+              break
+            } catch {
+              Write-Host "Attempt #$i failed: $_"
+              Start-Sleep -Seconds (5 * $i)
             }
           }
 
-          $installed = Try-ChocoInstall -pkg "mozillabuild" -ver "4.4.0"
-          if (-not $installed) { $installed = Try-ChocoInstall -pkg "mozillabuild" -ver $null }
+          if (-not $installed) {
+            Write-Host "Versioned install failed; trying unversioned install"
+            try { choco install mozillabuild -y --no-progress --debug | Tee-Object -FilePath choco_mozillabuild_install.log; $installed = $true } catch { Write-Host "Unversioned install failed: $_" }
+          }
 
           if (-not $installed) {
             Write-Host "ERROR: mozillabuild could not be installed via Chocolatey."
-            Write-Host "If this persists, consider adding a self-hosted runner with mozillabuild preinstalled, or providing an internal package feed." 
+            Write-Host "choco search mozillabuild output:"; choco search mozillabuild || true
+            Write-Host "Listing local packages:"; choco list --local-only || true
+            Write-Host "Contents of choco_mozillabuild_install.log:"; if (Test-Path choco_mozillabuild_install.log) { Get-Content choco_mozillabuild_install.log -Tail 200 } else { Write-Host "No choco log found" }
             exit 1
           }
           Write-Host "mozillabuild installed successfully."
