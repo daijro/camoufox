@@ -29,9 +29,32 @@ jobs:
           try { choco install msitools -y --no-progress } catch { Write-Host "msitools not available via Chocolatey; skipping..." }
 
       # 3. INSTALL MOZILLABUILD
-      - name: Install MozillaBuild Environment
+      - name: Install MozillaBuild Environment (resilient)
+        shell: powershell
         run: |
-          choco install mozillabuild --version=4.4.0 -y --no-progress
+          choco feature enable -n allowGlobalConfirmation || true
+          Write-Host "Chocolatey version:"; choco --version
+          Write-Host "Searching for mozillabuild package..."; choco search mozillabuild || true
+
+          function Try-ChocoInstall($pkg, $ver) {
+            if ($ver) {
+              Write-Host "Attempting: choco install $pkg --version=$ver -y --no-progress"
+              try { choco install $pkg --version=$ver -y --no-progress; return $true } catch { Write-Host "Failed (versioned): $_"; return $false }
+            } else {
+              Write-Host "Attempting: choco install $pkg -y --no-progress"
+              try { choco install $pkg -y --no-progress; return $true } catch { Write-Host "Failed: $_"; return $false }
+            }
+          }
+
+          $installed = Try-ChocoInstall -pkg "mozillabuild" -ver "4.4.0"
+          if (-not $installed) { $installed = Try-ChocoInstall -pkg "mozillabuild" -ver $null }
+
+          if (-not $installed) {
+            Write-Host "ERROR: mozillabuild could not be installed via Chocolatey."
+            Write-Host "If this persists, consider adding a self-hosted runner with mozillabuild preinstalled, or providing an internal package feed." 
+            exit 1
+          }
+          Write-Host "mozillabuild installed successfully."
       
       # 4. SET GIT IDENTITY (Required for Patching)
       - name: Configure Git Identity
