@@ -1,38 +1,85 @@
 name: Lucid Windows Build
-on: [push, workflow_dispatch]
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
+    env:
+      MOZ_TELEMETRY_REPORTING: 0
+      MOZ_DATA_REPORTING: 0
     steps:
-      - uses: actions/checkout@v3
-      - name: Install MozillaBuild
-        run: choco install mozillabuild
-      - name: Create Build Script
-        shell: bash
-        run: |
-          echo '#!/bin/bash' > build_script.sh
-          echo 'set -e' >> build_script.sh
-          echo 'cd $GITHUB_WORKSPACE || exit 1' >> build_script.sh
-          echo 'echo "--- Current Directory (after cd) ---"' >> build_script.sh
-          echo 'pwd' >> build_script.sh
-          echo 'echo "--- Listing Files ---"' >> build_script.sh
-          echo 'ls -la' >> build_script.sh
-          echo 'echo "--- System PATH ---"' >> build_script.sh
-          echo 'echo $PATH' >> build_script.sh
-          echo 'echo "--- Starting Build Process ---"' >> build_script.sh
-          echo './mach bootstrap --application-choice browser --no-interactive' >> build_script.sh
-          echo "echo 'ac_add_options --disable-telemetry' >> .mozconfig" >> build_script.sh
-          echo "echo 'ac_add_options --target=x86_64-pc-windows-msvc' >> .mozconfig" >> build_script.sh
-          echo './mach build' >> build_script.sh
-          echo './mach package' >> build_script.sh
-          chmod +x build_script.sh
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Run Build
-        shell: cmd
-        run: C:\mozilla-build\start-shell.bat build_script.sh
-      - name: Upload
+      # 1. PREPARE ENVIRONMENT
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Build Dependencies
+        run: |
+          pip install requests tqdm colorama psutil
+          choco install 7zip aria2 make mozillabuild -y
+        shell: bash
+
+      # 2. FETCH THE ENGINE (The Missing Step)
+      - name: Fetch and Patch Source Code
+        run: |
+          echo "Running Genesis Setup..."
+          make setup
+        shell: bash
+
+      # 3. LOCATE SOURCE DIRECTORY
+      # The setup script creates a folder like 'camoufox-115.0esr-1'. We must find it dynamically.
+      - name: Locate Source Engine
+        id: locate-src
+        run: |
+          DIR_NAME=$(ls -d camoufox-* | head -n 1)
+          echo "SOURCE_DIR=$DIR_NAME" >> $GITHUB_ENV
+          echo "Found Engine Source: $DIR_NAME"
+        shell: bash
+
+      # 4. BOOTSTRAP (Install Compilers/Rust/SDKs)
+      # We must execute this INSIDE the detected directory
+      - name: Bootstrap Mozilla Build Environment
+        run: |
+          cd ${{ env.SOURCE_DIR }}
+          ./mach bootstrap --application-choice browser --no-interactive
+        shell: bash
+
+      # 5. HARDENING (Injecting the Kill Switch)
+      - name: Inject Sovereign Config
+        run: |
+          cd ${{ env.SOURCE_DIR }}
+          echo "Injecting Telemetry Kill Switches..."
+          echo "ac_add_options --disable-telemetry" >> .mozconfig
+          echo "ac_add_options --disable-crashreporter" >> .mozconfig
+          echo "ac_add_options --disable-updater" >> .mozconfig
+          echo "ac_add_options --disable-maintenance-service" >> .mozconfig
+          echo "ac_add_options --target=x86_64-pc-windows-msvc" >> .mozconfig
+          echo "ac_add_options --enable-optimize" >> .mozconfig
+          echo "ac_add_options --disable-debug" >> .mozconfig
+        shell: bash
+
+      # 6. COMPILATION
+      - name: Build Lucid Binary
+        run: |
+          cd ${{ env.SOURCE_DIR }}
+          echo "Initiating Compilation..."
+          ./mach build
+          echo "Packaging Binary..."
+          ./mach package
+        shell: bash
+
+      # 7. ARTIFACT RETRIEVAL
+      # Path is usually obj-x86_64-pc-windows-msvc/dist/install/sea/
+      - name: Upload Lucid Binary
         uses: actions/upload-artifact@v4
         with:
-          name: lucid-browser-bin
-          path: obj-x86_64-pc-windows-msvc/dist/install/sea/*.zip
+          name: lucid-browser-win64
+          path: ${{ env.SOURCE_DIR }}/obj-x86_64-pc-windows-msvc/dist/install/sea/*.exe
