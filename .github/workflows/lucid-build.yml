@@ -1,38 +1,25 @@
-name: Lucid Empire Windows Build
-
-on:
-  push:
-    branches: [ "main" ]
+name: Lucid Windows Build
+on: [push, workflow_dispatch]
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
-
-    - name: Install MozillaBuild
-      run: |
-        choco install mozillabuild
-
-    - name: Bootstrap Environment
-      run: |
-        ./mach bootstrap --application-choice=browser --no-interactive
-
-    - name: Inject Mozconfig (Telemetry Kill Switch)
-      run: |
-        echo "ac_add_options --disable-telemetry" >> .mozconfig
-        echo "ac_add_options --disable-crashreporter" >> .mozconfig
-        echo "ac_add_options --disable-updater" >> .mozconfig
-        echo "ac_add_options --disable-maintenance-service" >> .mozconfig
-        echo "ac_add_options --target=x86_64-pc-windows-msvc" >> .mozconfig
-
-    - name: Build Lucid Binary
-      run: |
-        ./mach build
-        ./mach package
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: lucid-browser-bin
-        path: obj-x86_64-pc-windows-msvc/dist/install/sea/*.exe
+      - uses: actions/checkout@v3
+      - name: Install MozillaBuild
+        run: choco install mozillabuild
+      - name: Bootstrap
+        run: ./mach bootstrap --application-choice browser --no-interactive
+      - name: Configure
+        run: |
+          echo "ac_add_options --disable-telemetry" >> .mozconfig
+          echo "ac_add_options --target=x86_64-pc-windows-msvc" >> .mozconfig
+      - name: Build
+        run: |
+          ./mach build
+          ./mach package
+      - name: Upload
+        uses: actions/upload-artifact@v3
+        with:
+          name: lucid-browser-bin
+          path: obj-x86_64-pc-windows-msvc/dist/install/sea/*.zip
