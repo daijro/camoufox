@@ -1,0 +1,96 @@
+name: Lucid Empire Unified Build (Phase 4+5)
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    name: Build Camoufox Windows
+    runs-on: windows-2019 # Critical: Pinned for MSVC compatibility
+    
+    env:
+      MOZILLABUILD: C:\mozilla-build
+      MOZ_OBJDIR: obj-lucid-release
+      # Phase 5: Ensure strict mode is set for compiler
+      LUCID_STRICT_MODE: 1
+
+    steps:
+      # 1. CHECKOUT REPOSITORY
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # 2. INSTALL BUILD PREREQUISITES
+      - name: Install Build Prerequisites
+        shell: powershell
+        run: |
+          choco install make aria2 7zip wget msitools -y --no-progress
+
+      # 3. INSTALL MOZILLABUILD
+      - name: Install MozillaBuild Environment
+        run: |
+          choco install mozillabuild --version=4.4.0 -y --no-progress
+      
+      # 4. SET GIT IDENTITY (Required for Patching)
+      - name: Configure Git Identity
+        run: |
+          git config --global user.email "ci-bot@lucid.empire"
+          git config --global user.name "Lucid Builder"
+
+      # 5. BOOTSTRAP SOURCE CODE
+      - name: Bootstrap Source
+        shell: cmd
+        run: |
+          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive"
+
+      # 6. INJECT LUCID MODIFICATIONS (PHASE 4 & 5)
+      - name: Inject Sovereign Code
+        shell: powershell
+        run: |
+          $SourceDir = Get-ChildItem -Directory "camoufox-*" | Select-Object -First 1 -ExpandProperty Name
+          Write-Host "TARGET SOURCE DIRECTORY: $SourceDir"
+          # --- PHASE 4 INJECTIONS ---
+          Copy-Item "core/genesis_engine.py" -Destination "$SourceDir/python/mozbuild/mozbuild/" -Force
+          Copy-Item "modules/commerce_injector.py" -Destination "$SourceDir/python/mozbuild/mozbuild/" -Force
+          # --- PHASE 5 INJECTIONS (SOVEREIGNTY) ---
+          if (Test-Path "modules/humanization.py") {
+            Copy-Item "modules/humanization.py" -Destination "$SourceDir/python/mozbuild/mozbuild/" -Force
+          }
+          if (Test-Path "network/xdp_outbound.c") {
+            New-Item -ItemType Directory -Force -Path "$SourceDir/distribution/extensions"
+            Copy-Item "network/xdp_outbound.c" -Destination "$SourceDir/distribution/extensions/" -Force
+          }
+
+      # 7. CONFIGURE BUILD OPTIONS (.mozconfig)
+      - name: Configure MozConfig
+        shell: cmd
+        run: |
+          cd camoufox-*
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --target=x86_64-pc-windows-msvc' >> .mozconfig"
+          REM call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-telemetry' >> .mozconfig"   REMOVED for compatibility
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-tests' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-debug' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --enable-optimize' >> .mozconfig"
+
+      # 8. COMPILE (THE BUILD)
+      - name: Compile Binary
+        shell: cmd
+        timeout-minutes: 360
+        run: |
+          cd camoufox-*
+          call "C:\mozilla-build\start-shell.bat" -c "./mach build"
+
+      # 9. PACKAGE INSTALLER
+      - name: Package Release
+        shell: cmd
+        run: |
+          cd camoufox-*
+          call "C:\mozilla-build\start-shell.bat" -c "./mach package"
+
+      # 10. UPLOAD ARTIFACT (THE FINAL EXE)
+      - name: Harvest Lucid Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: lucid-empire-phase5-release
+          path: camoufox-*/obj-*/dist/install/sea/*.zip
+          retention-days: 7
