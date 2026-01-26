@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lucid Empire :: Golden Template Harvester</title>
+<style>
+          body { font-family: 'Courier New', monospace; background: #0a0a0a; color: #00ff00; padding: 20px; }
+h1 { border-bottom: 1px solid #00ff00; padding-bottom: 10px; }
+          .data-block { background: #111; padding: 15px; border: 1px solid #333; margin-bottom: 20px; }
+          button { background: #00ff00; color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; font-size: 16px; }
+button:hover { background: #fff; }
+pre { white-space: pre-wrap; word-wrap: break-word; }
+</style>
+</head>
+<body>
+<h1>LUCID EMPIRE // IDENTITY HARVESTER</h1>
+     <p>INSTRUCTIONS: Open this file on the REAL device you wish to clone (e.g., your gaming PC or a clean laptop). Click "HARVEST SOUL" to generate the Golden Template JSON.</p>
+
+<div class="data-block">
+<h3>STATUS: <span id="status">WAITING_FOR_INPUT</span></h3>
+</div>
+
+<button onclick="harvest()">HARVEST SOUL (GENERATE JSON)</button>
+<button onclick="download()">DOWNLOAD TEMPLATE</button>
+
+<div class="data-block">
+<h3>GENERATED TEMPLATE (golden_template.json)</h3>
+<pre id="output">No data harvested yet.</pre>
+</div>
+
+<script>
+let harvestedData = null;
+
+function getUnmaskedWebGL() {
+const canvas = document.createElement('canvas'); const gl = canvas.getContext('webgl') ||
+canvas.getContext('experimental-webgl');
+if (!gl) return { vendor: "Generic", renderer: "Software"
+};
+const debugInfo =
+gl.getExtension('WEBGL_debug_renderer_info'); return {
+
+                   vendor: gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL),
+                   renderer: gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+};
+}
+
+function harvest() { document.getElementById('status').innerText =
+"EXTRACTING_VECTORS...";
+const webgl = getUnmaskedWebGL(); harvestedData = {
+"navigator": {
+"userAgent": navigator.userAgent, "appVersion": navigator.appVersion, "platform": navigator.platform, "hardwareConcurrency":
+navigator.hardwareConcurrency,
+"deviceMemory": navigator.deviceMemory || 8, "language": navigator.language, "languages": navigator.languages
+},
+"screen": {
+"width": screen.width, "height": screen.height, "availWidth": screen.availWidth,
+"availHeight": screen.availHeight, "colorDepth": screen.colorDepth, "pixelDepth": screen.pixelDepth
+},
+"webgl": {
+"vendor": webgl.vendor, "renderer": webgl.renderer
+},
+                   "timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
+                   "canvas_noise_hash": "DISABLE_RANDOMIZATION_FOR_LUCID_CORE",
+                   "audio_context_hash": "DISABLE_RANDOMIZATION_FOR_LUCID_CORE"
+};
+
+const jsonString = JSON.stringify(harvestedData, null, 4); document.getElementById('output').innerText = jsonString; document.getElementById('status').innerText =
+"EXTRACTION_COMPLETE";
+
+}
+
+function download() {
+if (!harvestedData) { alert("Harvest data first.");
+return; }
+const dataStr = "data:text/json;charset=utf-8," +
+encodeURIComponent(JSON.stringify(harvestedData, null, 4));
+const downloadAnchorNode = document.createElement('a'); downloadAnchorNode.setAttribute("href", dataStr); downloadAnchorNode.setAttribute("download",
+"golden_template.json");
+document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove();
+}
+</script>
+</body>
+</html>

@@ -36,6 +36,7 @@ index 11578f425f..6c77acd7f3 100644
 +#include "MaskConfig.hpp"
 +#include <algorithm>
 +#include <cstddef>
++#include <cstdlib>
  
  #include <fmt/format.h>
  
@@ -302,6 +303,10 @@ index 11578f425f..6c77acd7f3 100644
  
          switch (pname) {
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
++            if (const char* env_val = std::getenv("LUCID_WEBGL_RENDERER")) {
++              ret = Some(nsCString(env_val));
++              break;
++            }
 +            if (auto value = MaskConfig::GetString("webGl:renderer")) {
 +              ret = Some(value.value());
 +              break;
@@ -313,6 +318,10 @@ index 11578f425f..6c77acd7f3 100644
              break;
  
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
++            if (const char* env_val = std::getenv("LUCID_WEBGL_VENDOR")) {
++              ret = Some(nsCString(env_val));
++              break;
++            }
 +            if (auto value = MaskConfig::GetString("webGl:vendor")) {
 +              ret = Some(value.value());
 +              break;

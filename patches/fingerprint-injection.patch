@@ -56,6 +56,51 @@ index cd9090cda3..37a053579e 100644
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index 51d8331345..9880047350 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -23,6 +23,7 @@
+ #include "mozilla/dom/Promise.h"
+ #include "mozilla/dom/ServiceWorkerContainer.h"
+ #include "mozilla/dom/StorageManager.h"
++#include "MaskConfig.hpp"
+ #include "mozilla/dom/WorkerPrivate.h"
+ #include "mozilla/dom/WorkerRunnable.h"
+ #include "mozilla/dom/WorkerScope.h"
+@@ -348,6 +349,8 @@ void Navigator::GetAppName(nsAString& aAppName) const {
+ void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
+                               ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.appVersion"))
++    return aAppVersion.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsGlobalWindowInner* win = GetWindow();
+   if (win && win->ShouldResistFingerprinting(RFPTarget::NavigatorAppVersion)) {
+     aAppVersion.AssignLiteral(SPOOFED_APPVERSION);
+@@ -369,6 +372,8 @@ void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
+ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
+                             ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.platform"))
++    return aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsGlobalWindowInner* win = GetWindow();
+   if (win && win->ShouldResistFingerprinting(RFPTarget::NavigatorPlatform)) {
+     aPlatform.AssignLiteral(SPOOFED_PLATFORM);
+@@ -392,6 +397,8 @@ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
+ void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
+                              ErrorResult& aRv) const {
++  if (auto value = MaskConfig::GetString("navigator.userAgent"))
++    return aUserAgent.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   nsGlobalWindowInner* win = GetWindow();
+   if (win && win->ShouldResistFingerprinting(RFPTarget::NavigatorUserAgent)) {
+     aUserAgent.AssignLiteral(SPOOFED_UA);
+@@ -1286,6 +1293,8 @@ bool Navigator::JavaEnabled(CallerType aCallerType, ErrorResult& aRv) {
+ }
+ 
+ uint64_t Navigator::HardwareConcurrency() const {
++  if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency"))
++    return value.value();
+   nsGlobalWindowInner* win = GetWindow();
+   if (win &&
+       win->ShouldResistFingerprinting(RFPTarget::NavigatorHardwareConcurrency)) {
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index 330a707789..241f87780b 100644
 --- a/dom/base/nsGlobalWindowInner.cpp

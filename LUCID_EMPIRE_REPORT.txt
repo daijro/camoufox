@@ -1,0 +1,117 @@
+LUCID EMPIRE: CLASSIFIED MODIFICATION REPORT
+==========================================
+DATE: 2026-01-26
+SUBJECT: MASTER BUILD DIRECTIVE - EXECUTION SUMMARY
+TARGET: CAMOUFOX BROWSER (MODIFIED FOR LUCID EMPIRE)
+
+1. MISSION OBJECTIVE
+--------------------
+Transform standard Camoufox browser into "Lucid Empire" - a military-grade antidetect browser with:
+- Strict "Golden Template" fingerprint enforcement (no random generation).
+- Deep C++ level hardening for WebGL, Navigator, and Locale vectors.
+- Automated forensic artifact injection (behavioral biometrics, commerce trust anchors).
+- Temporal displacement capabilities (profile aging).
+- Native Windows user-mode installation.
+
+2. NEWLY CREATED ASSETS
+-----------------------
+[CORE MODULES]
++ e:\camoufox\camoufox\genesis_engine.py
+  - Purpose: Primary orchestration engine for profile aging and initialization.
+  - Features: Temporal displacement (90-day past offset), integrates Humanization and Commerce modules.
+
++ e:\camoufox\camoufox\humanization.py
+  - Purpose: Behavioral biometrics simulation.
+  - Features: Cubic Bezier curve mouse movements, Fitts' Law velocity profiles, "hesitation" emulation.
+
++ e:\camoufox\camoufox\commerce_injector.py
+  - Purpose: Commercial trust anchor injection.
+  - Features: "Double-tap" localStorage injection for major e-commerce platforms (Amazon, eBay, Walmart, Shopify) to simulate prior browsing history.
+
+[INSTALLATION & DEPLOYMENT]
++ e:\camoufox\camoufox\setup.iss
+  - Purpose: Inno Setup script for Windows deployment.
+  - Features: User-mode installation (LocalAppData), registry association for `.lucid` profiles, custom launcher icons.
+
++ e:\camoufox\camoufox\harvester.html
+  - Purpose: Golden Template extraction tool.
+  - Features: Extracts raw, unmasked WebGL/Navigator/Screen properties from real physical devices for cloning.
+
+[TESTING INFRASTRUCTURE]
++ e:\camoufox\camoufox\tests\test_fingerprint_dict.py
+  - Purpose: Verification harness for strict fingerprint propagation.
+  - Features: Mocked dependencies (no browser required), validates JSON -> Config -> EnvVar chain for WebGL and Timezone.
+
+3. CRITICAL MODIFICATIONS
+-------------------------
+[PYTHON INTERFACE (FRONTEND)]
+* e:\camoufox\camoufox\pythonlib\camoufox\sync_api.py & async_api.py
+  - MODIFICATION: Enforced `must_provide_fingerprint` policy.
+  - EFFECT: Browser refuses to launch without a valid Golden Template. Disabled random fingerprint generation logic.
+
+* e:\camoufox\camoufox\pythonlib\camoufox\utils.py
+  - MODIFICATION: Updated `get_firefox_config` to accept Dictionary objects (not just file paths).
+  - EFFECT: Allows direct memory injection of fingerprint data from Genesis Engine.
+
+* e:\camoufox\camoufox\pythonlib\camoufox\fingerprints.py
+  - MODIFICATION: Enhanced `from_browserforge` to process `webgl` (vendor/renderer) and `timezone` keys.
+  - EFFECT: Bridges the gap between JSON data and internal config structures.
+
+* e:\camoufox\camoufox\pythonlib\camoufox\browserforge.yml
+  - MODIFICATION: Added mappings for `webgl:vendor`, `webgl:renderer`, and `timezone`.
+  - EFFECT: Ensures these critical vectors are passed to the C++ backend via environment variables.
+
+[C++ BACKEND (PATCHES)]
+* e:\camoufox\camoufox\patches\webgl-spoofing.patch
+  - STATUS: ACTIVE / HARDENED
+  - ACTION: Intercepts `glGetString` and `glGetParameter`.
+  - MECHANISM: Reads `CAMOU_CONFIG_webGl_vendor` and `renderer` via `MaskConfig` class.
+
+* e:\camoufox\camoufox\patches\navigator.patch (Integrated into source)
+  - STATUS: ACTIVE
+  - ACTION: Overrides `navigator.userAgent`, `platform`, `hardwareConcurrency`.
+  - MECHANISM: Direct substitution from `MaskConfig` values.
+
+* e:\camoufox\camoufox\patches\timezone-spoofing.patch
+  - STATUS: ACTIVE
+  - ACTION: Overrides system timezone via `PR_GetSystemInfo`.
+  - MECHANISM: Reads `CAMOU_CONFIG_timezone`.
+
+* e:\camoufox\camoufox\patches\geolocation-spoofing.patch
+  - STATUS: ACTIVE
+  - ACTION: Injects fixed lat/long/accuracy into Geolocation API.
+  - MECHANISM: Reads `CAMOU_CONFIG_geolocation_*`.
+
+4. SYSTEM ARCHITECTURE DATA FLOW
+--------------------------------
+1. [INPUT] Golden Template JSON (extracted via harvester.html)
+   ↓
+2. [GENESIS ENGINE] genesis_engine.py
+   - Applies Temporal Displacement (Time travel).
+   - Injects Commerce Cookies/LocalStorage.
+   ↓
+3. [PYTHON API] sync_api.py
+   - Validates Integrity.
+   - Converts to Internal Config (utils.py).
+   ↓
+4. [LAUNCHER]
+   - Serializes Config to Environment Variables (`CAMOU_CONFIG_...`).
+   - Launches Firefox Process.
+   ↓
+5. [C++ BACKEND]
+   - `MaskConfig.hpp` reads Environment Variables.
+   - Patches (WebGL, Navigator, Timezone) query `MaskConfig`.
+   ↓
+6. [OUTPUT] "Lucid" Browser Instance
+   - Perfect digital clone of the target device.
+
+5. SECURITY & FORENSIC NOTES
+----------------------------
+- **Golden Template Enforcement**: PREVENTS "impossible" configurations (e.g., iPhone screen size with Windows UserAgent).
+- **Behavioral Masking**: Mouse movements are now non-linear (Bezier), defeating simple bot detection heuristics.
+- **Trust Anchors**: Pre-loaded commerce data makes the browser appear "aged" and trustworthy to risk engines.
+
+6. PENDING ACTIONS
+------------------
+- Final compilation via GitHub Actions (Windows MSVC).
+- Compilation of `setup.iss` into `LucidSetup.exe`.
