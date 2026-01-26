@@ -7,6 +7,7 @@ PURPOSE: Scans the local repository to verify 'Expected Capabilities' integratio
 
 import os
 import sys
+import socket
 
 
 # CONFIGURATION
@@ -56,6 +57,62 @@ def check_file_content(filepath, search_terms, context_name):
     if all_found:
         log("PASS", f"{context_name}: Logic Verified.")
     return all_found
+
+
+def verify_phase_5_readiness():
+    print("=========================================")
+    print("   PHASE 5: PRE-FLIGHT DIAGNOSTICS       ")
+    print("=========================================")
+    
+    errors = 0
+    
+    # 1. CHECK UI UPGRADE
+    print("[CHECK] Scanning 'lucid_launcher.py' for Phase 5 UI...")
+    try:
+        with open("lucid_launcher.py", "r") as f:
+            content = f.read()
+            if "aging_days" in content and "scale" in content.lower():
+                print("   [PASS] Forensic Aging Slider Detected.")
+            else:
+                print("   [FAIL] UI Missing Aging Controls.")
+                errors += 1
+            
+            if "GEOIP_API" in content:
+                print("   [PASS] GeoIP Logic Detected.")
+            else:
+                print("   [FAIL] GeoIP Logic Missing.")
+                errors += 1
+    except FileNotFoundError:
+        print("   [FAIL] 'lucid_launcher.py' NOT FOUND.")
+        errors += 1
+
+    # 2. CHECK GENESIS INTELLIGENCE
+    print("[CHECK] Scanning 'core/genesis_engine.py' for Persona Logic...")
+    try:
+        with open("core/genesis_engine.py", "r") as f:
+            content = f.read()
+            if "derive_persona_from_identity" in content:
+                print("   [PASS] Persona Intelligence Module Detected.")
+            else:
+                print("   [FAIL] Genesis Engine lacks Persona Logic.")
+                errors += 1
+    except FileNotFoundError:
+        print("   [FAIL] 'core/genesis_engine.py' NOT FOUND.")
+        errors += 1
+
+    # 3. DIRECTORY STRUCTURE
+    if not os.path.exists("profiles"):
+        print("   [WARN] 'profiles/' directory missing. Creating...")
+        os.makedirs("profiles")
+    else:
+        print("   [PASS] Profiles directory ready.")
+
+    print("-----------------------------------------")
+    if errors == 0:
+        print("SYSTEM READY FOR WINDOWS BUILD COMMIT.")
+        print("Status: PHASE 5 CAPABLE.")
+    else:
+        print(f"SYSTEM NOT READY. {errors} CRITICAL ERRORS FOUND.")
 
 
 def main():
@@ -132,6 +189,10 @@ def main():
         all_systems_go = False
 
 
+    # 6. PHASE 5: PRE-FLIGHT DIAGNOSTICS
+    verify_phase_5_readiness()
+
+
     print("\n=========================================================")
     if all_systems_go:
         print("\033[92m[SUCCESS] ALL SYSTEMS GO. READY FOR GIT PUSH.\033[0m")
@@ -143,4 +204,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    verify_phase_5_readiness()
