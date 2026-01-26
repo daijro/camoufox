@@ -25,9 +25,15 @@ jobs:
         run: |
           pip install requests tqdm colorama psutil
           choco install 7zip aria2 make mozillabuild -y
+          
+          echo "--- Dependency Verification ---"
+          choco --version
+          aria2c --version
+          make --version
+          echo "Build dependencies installed and verified."
         shell: bash
 
-      # 2. FETCH THE ENGINE (The Missing Step)
+      # 2. FETCH THE ENGINE
       - name: Fetch and Patch Source Code
         run: |
           git config --global user.email "ci-bot@users.noreply.github.com"
@@ -37,24 +43,27 @@ jobs:
         shell: bash
 
       # 3. LOCATE SOURCE DIRECTORY
-      # The setup script creates a folder like 'camoufox-115.0esr-1'. We must find it dynamically.
       - name: Locate Source Engine
         id: locate-src
         run: |
           DIR_NAME=$(ls -d camoufox-* | head -n 1)
+          if [ -z "$DIR_NAME" ]; then
+            echo "::error::Could not find camoufox source directory! 'make setup' might have failed."
+            exit 1
+          fi
           echo "SOURCE_DIR=$DIR_NAME" >> $GITHUB_ENV
           echo "Found Engine Source: $DIR_NAME"
         shell: bash
 
-      # 4. BOOTSTRAP (Install Compilers/Rust/SDKs)
-      # We must execute this INSIDE the detected directory
+      # 4. BOOTSTRAP
       - name: Bootstrap Mozilla Build Environment
         run: |
           cd ${{ env.SOURCE_DIR }}
-          ./mach bootstrap --application-choice browser --no-interactive
+          echo "Bootstrapping in $PWD..."
+          ./mach bootstrap --application-choice browser
         shell: bash
 
-      # 5. HARDENING (Injecting the Kill Switch)
+      # 5. HARDENING
       - name: Inject Sovereign Config
         run: |
           cd ${{ env.SOURCE_DIR }}
@@ -79,7 +88,12 @@ jobs:
         shell: bash
 
       # 7. ARTIFACT RETRIEVAL
-      # Path is usually obj-x86_64-pc-windows-msvc/dist/install/sea/
+      - name: Verify Artifacts
+        run: |
+          echo "Checking for build artifacts..."
+          ls -l ${{ env.SOURCE_DIR }}/obj-x86_64-pc-windows-msvc/dist/install/sea/*.exe
+        shell: bash
+
       - name: Upload Lucid Binary
         uses: actions/upload-artifact@v4
         with:
