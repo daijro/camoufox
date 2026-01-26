@@ -7,6 +7,10 @@ on:
 
 jobs:
   build-windows:
+    concurrency:
+      group: 'windows-build-${{ github.ref }}'
+      cancel-in-progress: false
+
     runs-on: windows-latest
     env:
       INSTALL_MSVC: 'false'  # Set to 'true' to enable MSVC toolchain installation on the runner
