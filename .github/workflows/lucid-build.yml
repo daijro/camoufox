@@ -29,7 +29,11 @@ jobs:
           if ($env:CI_CHOCOLATEY_DEBUG -eq '1') { Set-PSDebug -Trace 1 } else { Set-PSDebug -Trace 0 }
           choco install make aria2 7zip wget -y --no-progress
           Write-Host "Searching for optional package: msitools..."
-          choco search msitools -s https://community.chocolatey.org/api/v2/ || Write-Host "msitools not found in search results (or search failed); will attempt prerelease install"
+          try {
+            choco search msitools -s https://community.chocolatey.org/api/v2/
+          } catch {
+            Write-Host "msitools not found in search results (or search failed); will attempt prerelease install"
+          }
           Write-Host "Attempting optional package: msitools (may be prerelease; trying with --pre)"
           try {
             choco install msitools -y --no-progress --pre -s https://community.chocolatey.org/api/v2/ | Tee-Object -FilePath choco_msitools_install.log
