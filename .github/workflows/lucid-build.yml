@@ -19,7 +19,7 @@ jobs:
           ./mach build
           ./mach package
       - name: Upload
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lucid-browser-bin
           path: obj-x86_64-pc-windows-msvc/dist/install/sea/*.zip
