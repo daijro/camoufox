@@ -7,13 +7,16 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    env:
-      MOZ_TELEMETRY_REPORTING: 0
-      MOZ_DATA_REPORTING: 0
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Set telemetry environment variables
+        run: |
+          echo "MOZ_TELEMETRY_REPORTING=0" >> $GITHUB_ENV
+          echo "MOZ_DATA_REPORTING=0" >> $GITHUB_ENV
+        shell: bash
 
       # 1. PREPARE ENVIRONMENT
       - name: Set up Python
