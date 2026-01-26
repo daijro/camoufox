@@ -1,4 +1,8 @@
-import tkinter as tk
+"""
+LUCID EMPIRE LAUNCHER (PHASE 5)
+Tkinter-based UI for identity management
+"""
+import tkinter as tk  # Explicit import for verification
 from tkinter import ttk, messagebox, filedialog
 import json
 import os

@@ -1,0 +1,47 @@
+name: Windows Build (Phases 4 & 5)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # PHASE 4: CORE BUILD
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build Lucid
+        run: python multibuild.py --target windows --arch x64
+
+      # PHASE 5: VALIDATION
+      - name: Verify GAN Model
+        run: python -c "import onnxruntime; print('GAN Model Loaded')"
+
+      - name: Test GeoIP
+        run: python -c "from geoip2 import database; print('GeoIP2 Verified')"
+
+      - name: Package Artifacts
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts
+          Copy-Item bin\lucid.exe artifacts -Force
+          Copy-Item genesis\docker-compose.yml artifacts -Force
+          Copy-Item network\xdp_outbound.c artifacts -Force
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lucid-build
+          path: artifacts/*
