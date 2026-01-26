@@ -1,24 +1,16 @@
-name: Lucid Empire Production Build (Phase 4+5)
-
+name: Lucid Windows Native Build
 on: [push, workflow_dispatch]
 
 jobs:
   build:
-    concurrency:
-      group: 'lucid-build-${{ github.ref }}'
-      cancel-in-progress: false
-
-    name: Build Camoufox Windows Native
-    runs-on: windows-2019 # Pinned for MSVC/MozillaBuild 4.4 compatibility
+    name: Build Camoufox (Windows MSVC)
+    runs-on: windows-2019 # Pinned for Maximum Stability
     
     env:
       MOZILLABUILD: C:\mozilla-build
       MOZ_OBJDIR: obj-lucid-release
-      # PREVENTS BOOTSTRAP HANGS
       MACH_NO_INTERACTIVE: 1
-      # PREVENTS PYTHON ENCODING ERRORS
       PYTHONUTF8: 1
-      # ENSURES MOZILLA BUILD FINDS TOOLS
       MOZ_ILL_BUILD_TOOLS: 1
 
     steps:
@@ -151,11 +143,11 @@ jobs:
           cd camoufox-*
           call "C:\mozilla-build\start-shell.bat" -c "./mach package"
 
-      # 10. VERIFY & UPLOAD ARTIFACT
-      - name: Harvest Lucid Binary
+      # 10. UPLOAD ARTIFACT
+      - name: Upload Lucid Binary
         uses: actions/upload-artifact@v4
         with:
-          name: lucid-empire-phase5-release
+          name: lucid-empire-release
           path: camoufox-*/obj-*/dist/install/sea/*.zip
-          retention-days: 7
+          retention-days: 5
           if-no-files-found: error
