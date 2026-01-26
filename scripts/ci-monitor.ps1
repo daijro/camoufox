@@ -5,8 +5,10 @@ $owner = 'malithwishwa02-dot'
 $repo = 'Lucid'
 $maxAttempts = 60
 $intervalSec = 60
+# Monitor-only mode by default: set to $true to allow auto re-trigger via empty commit
+$retrigger = $false
 
-Write-Host "Starting CI monitor for ${owner}/${repo} - maxAttempts=${maxAttempts} interval=${intervalSec}s"
+Write-Host "Starting CI monitor for ${owner}/${repo} - maxAttempts=${maxAttempts} interval=${intervalSec}s (retrigger=$retrigger)"
 
 function Get-LatestWorkflowStatus([string]$workflowFile) {
     $url = "https://github.com/$owner/$repo/actions/workflows/$workflowFile"
@@ -32,9 +34,14 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
         $status = Get-LatestWorkflowStatus -workflowFile $wf
         Write-Host "  ${wf} -> ${status}"
         if ($status -eq 'failed') {
-            Write-Host "  -> Detected failed run for ${wf}. Triggering a re-run via empty commit"
-            git commit --allow-empty -m "ci: retry $wf (auto)" | Out-Null
-            git push origin main | Out-Null
+            Write-Host "  -> Detected failed run for ${wf}."
+            if ($retrigger) {
+                Write-Host "  -> Re-triggering a re-run via empty commit"
+                git commit --allow-empty -m "ci: retry ${wf} (auto)" | Out-Null
+                git push origin main | Out-Null
+            } else {
+                Write-Host "  -> Re-trigger disabled (monitor-only mode)"
+            }
             $allSuccess = $false
         } elseif ($status -eq 'in_progress') {
             $allSuccess = $false

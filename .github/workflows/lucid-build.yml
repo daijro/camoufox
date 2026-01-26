@@ -4,6 +4,10 @@ on: [push, workflow_dispatch]
 
 jobs:
   build:
+    concurrency:
+      group: 'lucid-build-${{ github.ref }}'
+      cancel-in-progress: false
+
     name: Build Camoufox Windows Native
     runs-on: windows-2019 # Pinned for MSVC/MozillaBuild 4.4 compatibility
     
