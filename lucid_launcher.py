@@ -5,18 +5,23 @@ import os
 import subprocess
 import threading
 import time
-import re
+import requests  # Added for GeoIP
 from typing import Optional, Tuple
+import re
+
+# GeoIP imports
 import geoip2.database
-import geoip2.errors
-import geoip2.models
-import geoip2.reader
+from geoip2.errors import AddressNotFoundError
+from geoip2.models import City
+
+# Geopy import
 from geopy.distance import geodesic
 
 
 # CONFIGURATION
 LUCID_BINARY_PATH = "bin/lucid.exe"
 PROFILE_BASE_DIR = "profiles"
+GEOIP_API = "http://ip-api.com/json/"  # Simplified for Phase 5
 
 
 class GeoMismatchWarning(Exception):
@@ -26,145 +31,201 @@ class GeoMismatchWarning(Exception):
 
 class LucidLauncherApp:
     def __init__(self, root):
-        self.root = root
-        self.root.title("LUCID EMPIRE // COMMAND CONSOLE")
-        self.root.geometry("800x600")
-        self.root.configure(bg="#0a0a0a")
+        # Enable Windows compatibility mode
+        os.environ['LUCID_SKIP_HARDWARE_CHECKS'] = '1'
         
-        # NEW: Aging slider value
-        self.aging_days = tk.IntVar(value=7)  # Default to 7 days
+        self.root = root
+        self.root.title("LUCID EMPIRE // COMMAND CONSOLE [PHASE 5]")
+        self.root.geometry("900x650")  # Expanded for new controls
+        self.root.configure(bg="#0a0a0a")
 
-        # STYLES (Cyberpunk Theme)
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure("TFrame", background="#0a0a0a")
-        style.configure("TLabel", background="#0a0a0a", foreground="#00ff00", font=("Consolas", 10))
-        style.configure("TButton", background="#111", foreground="#00ff00", borderwidth=1, font=("Consolas", 10, "bold"))
-        style.map("TButton", background=[("active", "#00ff00")], foreground=[("active", "black")])
-        style.configure("TNotebook", background="#0a0a0a", borderwidth=0)
-        style.configure("TNotebook.Tab", background="#222", foreground="#888", padding=[10, 5], font=("Consolas", 10))
-        style.map("TNotebook.Tab", background=[("selected", "#00ff00")], foreground=[("selected", "black")])
+        # STATE VARIABLES
+        self.profile_name = tk.StringVar()
+        self.proxy_string = tk.StringVar()
+        self.fullz_data = tk.StringVar()
+        self.aging_days = tk.IntVar(value=90)  # Default to 90 days (Phase 5)
+        self.warmup_active = False
+        self.log_messages = []
 
-
-        # HEADER
-        header_frm = ttk.Frame(root)
-        header_frm.pack(fill=tk.X, pady=10, padx=10)
-        ttk.Label(header_frm, text="LUCID EMPIRE v1.0 [SOVEREIGN]", font=("Consolas", 20, "bold")).pack(side=tk.LEFT)
-        self.status_lbl = ttk.Label(header_frm, text="STATUS: IDLE", foreground="#555")
-        self.status_lbl.pack(side=tk.RIGHT, anchor=tk.S)
-
-
-        # TABS
-        self.notebook = ttk.Notebook(root)
-        self.notebook.pack(expand=True, fill=tk.BOTH, padx=10, pady=5)
-
-
-        # TAB 1: CREATION (Identity & Network)
-        self.tab1 = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab1, text=" [1] CREATION ")
-        self.build_creation_tab()
-
-
-        # TAB 2: OPERATION (Warm-Up & Launch)
-        self.tab2 = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab2, text=" [2] OPERATION ")
-        self.build_operation_tab()
-
-
-        # CONSOLE
-        ttk.Label(root, text="SYSTEM LOG >>").pack(anchor=tk.W, padx=10)
-        self.console = tk.Text(root, height=8, bg="#050505", fg="#00ff00", font=("Consolas", 9), state=tk.DISABLED, bd=0)
-        self.console.pack(fill=tk.X, padx=10, pady=(0, 10))
+        self._build_ui()
 
 
     def log(self, msg):
-        self.console.config(state=tk.NORMAL)
-        self.console.insert(tk.END, f"> {msg}\n")
-        self.console.see(tk.END)
-        self.console.config(state=tk.DISABLED)
+        self.log_text.config(state=tk.NORMAL)
+        self.log_text.insert(tk.END, f"> {msg}\n")
+        self.log_text.see(tk.END)
+        self.log_text.config(state=tk.DISABLED)
 
 
-    def build_creation_tab(self):
-        # Identity Vector
-        lbl = ttk.Label(self.tab1, text="IDENTITY VECTOR (FULLZ JSON/TEXT):")
-        lbl.pack(anchor=tk.W, pady=(15, 5), padx=10)
-        self.identity_text = tk.Text(self.tab1, height=8, bg="#111", fg="white", insertbackground="white")
-        self.identity_text.pack(fill=tk.X, padx=10)
+    def _build_ui(self):
+        # HEADER
+        header_frame = ttk.Frame(self.root)
+        header_frame.pack(fill=tk.X, padx=10, pady=10)
+        ttk.Label(header_frame, text="PROMETHEUS-CORE :: PHASE 5 UPGRADE", font=("Consolas", 16, "bold")).pack(side=tk.LEFT)
+        self.status_label = ttk.Label(header_frame, text="SYSTEM: IDLE", foreground="#ff0000")
+        self.status_label.pack(side=tk.RIGHT)
 
-        # NEW: Forensic Aging Slider
-        aging_frame = ttk.LabelFrame(self.tab1, text="FORENSIC AGING (DAYS)", padding=10)
-        aging_frame.pack(fill=tk.X, padx=10, pady=10)
+        # NOTEBOOK
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        # TAB 1: IDENTITY & CONFIGURATION
+        self.tab_config = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_config, text="IDENTITY_MATRIX")
+        self._build_config_tab()
+
+        # TAB 2: OPERATIONS (WARM-UP)
+        self.tab_ops = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_ops, text="KINETIC_OPS")
+        self._build_ops_tab()
         
-        ttk.Scale(
-            aging_frame, 
-            from_=1, 
-            to=90, 
-            variable=self.aging_days,
-            command=lambda v: self.log(f"Forensic Aging set to {int(float(v))} days")
-        ).pack(fill=tk.X)
+        # TAB 3: SYSTEM LOGS
+        self.tab_logs = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_logs, text="SYSTEM_LOGS")
+        self._build_logs_tab()
+
+
+    def _build_config_tab(self):
+        frame = ttk.Frame(self.tab_config)
+        frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        # PROFILE NAME
+        ttk.Label(frame, text="GHOST IDENTITY ID:").grid(row=0, column=0, sticky="w", pady=5)
+        ttk.Entry(frame, textvariable=self.profile_name, width=40).grid(row=0, column=1, sticky="ew", pady=5)
+
+        # PROXY INPUT
+        ttk.Label(frame, text="NETWORK VECTOR (SOCKS5):").grid(row=1, column=0, sticky="w", pady=5)
+        proxy_entry = ttk.Entry(frame, textvariable=self.proxy_string, width=40)
+        proxy_entry.grid(row=1, column=1, sticky="ew", pady=5)
+        ttk.Button(frame, text="TEST UPLINK", command=self._test_proxy).grid(row=1, column=2, padx=5)
+
+        # FULLZ DATA (IDENTITY)
+        ttk.Label(frame, text="IDENTITY ASSETS (FULLZ):").grid(row=2, column=0, sticky="nw", pady=5)
+        self.fullz_text = tk.Text(frame, height=8, width=50, bg="#222", fg="#00ff00", insertbackground="#00ff00", relief="flat")
+        self.fullz_text.grid(row=2, column=1, columnspan=2, sticky="ew", pady=5)
+
+        # FORENSIC AGING SLIDER
+        ttk.Label(frame, text="FORENSIC AGING (DAYS):").grid(row=3, column=0, sticky="w", pady=15)
+        aging_frame = ttk.Frame(frame)
+        aging_frame.grid(row=3, column=1, columnspan=2, sticky="ew")
         
-        ttk.Label(aging_frame, textvariable=self.aging_days).pack()
-
-        # Network Vector
-        lbl2 = ttk.Label(self.tab1, text="NETWORK VECTOR (SOCKS5 PROXY):")
-        lbl2.pack(anchor=tk.W, pady=(15, 5), padx=10)
+        self.aging_scale = tk.Scale(aging_frame, from_=7, to=180, orient=tk.HORIZONTAL, 
+                                  variable=self.aging_days, bg="#0a0a0a", fg="#00ff00", 
+                                  highlightthickness=0, troughcolor="#222")
+        self.aging_scale.pack(fill=tk.X, side=tk.LEFT, expand=True)
+        ttk.Label(aging_frame, textvariable=self.aging_days).pack(side=tk.RIGHT, padx=5)
         
-        net_frame = ttk.Frame(self.tab1)
-        net_frame.pack(fill=tk.X, padx=10)
-        self.proxy_var = tk.StringVar()
-        ttk.Entry(net_frame, textvariable=self.proxy_var, font=("Consolas", 10)).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(net_frame, text="TEST CONNECTION", command=self.test_proxy).pack(side=tk.LEFT, padx=(5, 0))
+        # ACTION BUTTONS
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=4, column=0, columnspan=3, pady=20)
+        ttk.Button(btn_frame, text="GENERATE GHOST", command=self._generate_profile).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btn_frame, text="LAUNCH CONSOLE", command=self._launch_browser).pack(side=tk.LEFT, padx=10)
 
 
-        # Save Profile
-        ttk.Button(self.tab1, text="[ COMPILE DIGITAL GHOST ]", command=self.compile_profile).pack(pady=20, fill=tk.X, padx=50)
+    def _build_ops_tab(self):
+        frame = ttk.Frame(self.tab_ops)
+        frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
+        self.timer_label = ttk.Label(frame, text="WARM-UP PROTOCOL: STANDBY", font=("Consolas", 14))
+        self.timer_label.pack(pady=20)
 
-    def build_operation_tab(self):
-        # Profile Select
-        frm = ttk.Frame(self.tab2)
-        frm.pack(fill=tk.X, pady=15, padx=10)
-        ttk.Label(frm, text="SELECT PROFILE:").pack(side=tk.LEFT)
-        self.profile_path_var = tk.StringVar()
-        ttk.Entry(frm, textvariable=self.profile_path_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        ttk.Button(frm, text="BROWSE", command=self.browse_profile).pack(side=tk.LEFT)
+        self.progress = ttk.Progressbar(frame, orient="horizontal", length=600, mode="determinate")
+        self.progress.pack(pady=10)
 
-
-        # Warm-Up Timer Visualization
-        timer_frame = ttk.LabelFrame(self.tab2, text=" WARM-UP CYCLE (15:00) ", padding=10)
-        timer_frame.pack(fill=tk.X, padx=10, pady=10)
+        self.phase_label = ttk.Label(frame, text="CURRENT PHASE: NULL", font=("Consolas", 12))
+        self.phase_label.pack(pady=5)
         
-        self.timer_lbl = ttk.Label(timer_frame, text="00:00", font=("Consolas", 30, "bold"), foreground="#444")
-        self.timer_lbl.pack(anchor=tk.CENTER)
+        # PHASE INDICATORS
+        phase_frame = ttk.Frame(frame)
+        phase_frame.pack(pady=20)
+        self.lbl_p1 = ttk.Label(phase_frame, text="[ PHASE 1: RAM PRIMING ]", foreground="#555")
+        self.lbl_p1.pack(side=tk.LEFT, padx=10)
+        self.lbl_p2 = ttk.Label(phase_frame, text="[ PHASE 2: TRUST ANCHORS ]", foreground="#555")
+        self.lbl_p2.pack(side=tk.LEFT, padx=10)
+        self.lbl_p3 = ttk.Label(phase_frame, text="[ PHASE 3: KILL CHAIN ]", foreground="#555")
+        self.lbl_p3.pack(side=tk.LEFT, padx=10)
+
+        ttk.Button(frame, text="INITIATE WARM-UP CYCLE", command=self._start_warmup).pack(pady=20)
+
+
+    def _build_logs_tab(self):
+        frame = ttk.Frame(self.tab_logs)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        self.phase_lbl = ttk.Label(timer_frame, text="WAITING FOR INJECTION...", font=("Consolas", 10))
-        self.phase_lbl.pack(anchor=tk.CENTER)
+        ttk.Label(frame, text="SYSTEM LOG >>").pack(anchor=tk.W)
+        self.log_text = tk.Text(frame, height=20, bg="#111", fg="#00ff00", state="disabled")
+        self.log_text.pack(fill=tk.BOTH, expand=True)
 
 
-        # Progress Bar
-        self.progress = ttk.Progressbar(timer_frame, orient=tk.HORIZONTAL, length=100, mode='determinate')
-        self.progress.pack(fill=tk.X, pady=10)
-
-
-        # Launch Button
-        ttk.Button(self.tab2, text="[ INITIATE LAUNCH SEQUENCE ]", command=self.launch_sequence).pack(fill=tk.X, padx=50, pady=20)
-
-
-    def test_proxy(self):
-        p = self.proxy_var.get()
+    def _test_proxy(self):
+        p = self.proxy_string.get()
+        identity = self.fullz_text.get("1.0", tk.END)
         if not p:
             self.log("ERROR: No proxy specified.")
             return
-        self.log(f"Testing Proxy: {p} ... [SIMULATED SUCCESS]")
-        messagebox.showinfo("Network", "Proxy Connection Verified (Latency: 45ms)")
+        
+        # Extract ZIP from identity
+        zip_match = re.search(r'"zip"\s*:\s*"(\d+)"', identity)
+        if not zip_match:
+            self.log("WARNING: No ZIP code found in identity")
+            return
+            
+        zip_code = zip_match.group(1)
+        
+        try:
+            # GeoIP Check
+            proxies = {'http': p, 'https': p}
+            r = requests.get(GEOIP_API, proxies=proxies, timeout=10)
+            data = r.json()
+            
+            if data.get('zip') and data['zip'] != zip_code:
+                self.log(f"GEO-MISMATCH: Proxy ZIP ({data['zip']}) != Identity ZIP ({zip_code})")
+                self.log("[WARNING] Geographic anomaly detected")
+            else:
+                self.log(f"Geo-Verified: Proxy matches identity location (ZIP: {zip_code})")
+                
+            self.log(f"Testing Proxy: {p} ... [SUCCESS]")
+            messagebox.showinfo("Network", "Proxy Connection Verified")
+            
+        except Exception as e:
+            self.log(f"GeoIP error: {str(e)}")
+            messagebox.showerror("Error", f"Proxy validation failed: {str(e)}")
 
 
-    def compile_profile(self):
-        # In a real app, this would save the JSON and config
-        self.log("Compiling Identity Assets...")
-        self.log("Identity Vector Hashed.")
-        self.log("Profile Ready for Genesis.")
-        messagebox.showinfo("Success", "Digital Ghost Compiled.")
+    def _generate_profile(self):
+        name = self.profile_name.get()
+        if not name:
+            messagebox.showerror("Error", "Profile Name Required")
+            return
+        
+        path = os.path.join(PROFILE_BASE_DIR, name)
+        if not os.path.exists(path):
+            os.makedirs(path)
+            # Create Flag for Aging
+            aging_val = self.aging_days.get()
+            with open(os.path.join(path, "aging_config.json"), "w") as f:
+                json.dump({"days": aging_val, "created": time.time()}, f)
+            
+            self.log(f"Profile '{name}' Created. Forensic Age set to -{aging_val} days.")
+            messagebox.showinfo("Success", f"Ghost Identity '{name}' Initialized.")
+        else:
+            self.log(f"Profile '{name}' loaded.")
+
+
+    def _launch_browser(self):
+        profile = self.profile_name.get()
+        if not profile:
+            messagebox.showerror("Error", "Profile not selected")
+            return
+            
+        # Basic Launch - No Warmup
+        self.log("Launching Manual Session...")
+        subprocess.Popen([
+            "python", "genesis_engine.py", 
+            "--mode", "manual", 
+            "--profile", profile,
+            "--aging", str(self.aging_days.get())
+        ])
 
 
     def browse_profile(self):
@@ -197,7 +258,7 @@ class LucidLauncherApp:
             time_str = f"{mins:02d}:{secs:02d}"
             
             # Update UI
-            self.root.after(0, lambda: self.timer_lbl.config(text=time_str, foreground="#00ff00"))
+            self.root.after(0, lambda: self.timer_label.config(text=time_str, foreground="#00ff00"))
             self.root.after(0, lambda: self.progress.config(value=(elapsed/total_seconds)*100))
 
 
@@ -205,20 +266,14 @@ class LucidLauncherApp:
             current_phase = phases[0][1]
             if elapsed >= 600: current_phase = phases[2][1]
             elif elapsed >= 300: current_phase = phases[1][1]
-            self.root.after(0, lambda: self.phase_lbl.config(text=current_phase))
+            self.root.after(0, lambda: self.phase_label.config(text=current_phase))
 
 
             time.sleep(1) # Fast forward for demo, use 1 for real time
 
 
         self.log("WARM-UP COMPLETE. LAUNCHING BROWSER.")
-        self.launch_browser()
-
-
-    def launch_browser(self):
-        cmd = [LUCID_BINARY_PATH, "-profile", self.profile_path_var.get(), "-no-remote"]
-        self.log(f"EXEC: {' '.join(cmd)}")
-        # subprocess.Popen(cmd) # Uncomment in production
+        self._launch_browser()
 
 
     def get_zip_coords(self, zip_code: str) -> Tuple[float, float]:
@@ -233,7 +288,55 @@ class LucidLauncherApp:
         return zip_mapping.get(zip_code, (34.0522, -118.2437))  # Default to LA
 
 
+    def _start_warmup(self):
+        if self.warmup_active: return
+        self.warmup_active = True
+        self.log("INITIATING 15-MINUTE WARM-UP PROTOCOL...")
+        
+        # Start Thread for Timer
+        threading.Thread(target=self._run_timer, daemon=True).start()
+        
+        # Start Genesis Engine in Background
+        profile = self.profile_name.get()
+        if profile:
+            subprocess.Popen(["python", "genesis_engine.py", "--mode", "warmup", "--profile", profile])
+
+    def _run_timer(self):
+        total_seconds = 15 * 60  # 15 minutes
+        for i in range(total_seconds):
+            if not self.warmup_active: break
+            
+            # Update Logic
+            phase = "PHASE 1: RAM PRIMING"
+            if i > 300: phase = "PHASE 2: TRUST ANCHORS" 
+            if i > 600: phase = "PHASE 3: KILL CHAIN"
+            
+            # Update UI
+            self.root.after(0, self._update_timer_ui, i, total_seconds, phase)
+            time.sleep(1)
+        
+        self.warmup_active = False
+        self.root.after(0, lambda: self.log("WARM-UP COMPLETE. READY FOR TRANSACTION."))
+
+    def _update_timer_ui(self, current, total, phase):
+        remaining = total - current
+        mins, secs = divmod(remaining, 60)
+        self.timer_label.config(text=f"T-MINUS {mins:02}:{secs:02}")
+        self.progress['value'] = (current / total) * 100
+        self.phase_label.config(text=phase)
+        
+        # Color Logic
+        if "PHASE 1" in phase: self.lbl_p1.config(foreground="#00ff00")
+        elif "PHASE 2" in phase: 
+            self.lbl_p1.config(foreground="#555")
+            self.lbl_p2.config(foreground="#00ff00")
+        elif "PHASE 3" in phase:
+            self.lbl_p2.config(foreground="#555")
+            self.lbl_p3.config(foreground="#00ff00")
+
+
 if __name__ == "__main__":
+    import os
     root = tk.Tk()
     app = LucidLauncherApp(root)
     root.mainloop()
