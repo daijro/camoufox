@@ -14,13 +14,23 @@ function Get-LatestWorkflowStatus([string]$workflowFile) {
     $url = "https://github.com/$owner/$repo/actions/workflows/$workflowFile"
     try {
         $html = (Invoke-WebRequest -Uri $url -UseBasicParsing -ErrorAction Stop).Content
-        if ($html -match 'completed successfully') { return 'success' }
-        if ($html -match 'failed') { return 'failed' }
-        if ($html -match 'in progress' -or $html -match 'nowIn progress') { return 'in_progress' }
-        return 'unknown'
+        if ($html -match 'completed successfully') { return @{ status='success'; runUrl=$null } }
+        if ($html -match 'failed') {
+            $m = [regex]::Match($html, '/actions/runs/([0-9]+)')
+            $runUrl = $null
+            if ($m.Success) { $runUrl = "https://github.com/$owner/$repo" + $m.Value }
+            return @{ status='failed'; runUrl=$runUrl }
+        }
+        if ($html -match 'in progress' -or $html -match 'nowIn progress') {
+            $m = [regex]::Match($html, '/actions/runs/([0-9]+)')
+            $runUrl = $null
+            if ($m.Success) { $runUrl = "https://github.com/$owner/$repo" + $m.Value }
+            return @{ status='in_progress'; runUrl=$runUrl }
+        }
+        return @{ status='unknown'; runUrl=$null }
     } catch {
         Write-Host "Error fetching workflow page ${workflowFile}: ${_}"
-        return 'error'
+        return @{ status='error'; runUrl=$null }
     }
 }
 
@@ -31,10 +41,17 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
     $allSuccess = $true
     $anyInProgress = $false
     foreach ($wf in $workflowFiles) {
-        $status = Get-LatestWorkflowStatus -workflowFile $wf
-        Write-Host "  ${wf} -> ${status}"
+        $result = Get-LatestWorkflowStatus -workflowFile $wf
+        $status = $result.status
+        $runUrl = $result.runUrl
+        Write-Host "  ${wf} -> ${status} (${runUrl})"
         if ($status -eq 'failed') {
             Write-Host "  -> Detected failed run for ${wf}."
+            if ($runUrl) {
+                $outfile = "scripts/last_failed_${wf}.html"
+                Write-Host "  -> Saving run page to ${outfile}"
+                try { Invoke-WebRequest -Uri $runUrl -OutFile $outfile -UseBasicParsing -ErrorAction Stop; Write-Host "  -> Run page saved" } catch { Write-Host "  -> Failed to save run page: $_" }
+            }
             if ($retrigger) {
                 Write-Host "  -> Re-triggering a re-run via empty commit"
                 git commit --allow-empty -m "ci: retry ${wf} (auto)" | Out-Null
