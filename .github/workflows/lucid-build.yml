@@ -12,12 +12,6 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set telemetry environment variables
-        run: |
-          echo "MOZ_TELEMETRY_REPORTING=0" >> $GITHUB_ENV
-          echo "MOZ_DATA_REPORTING=0" >> $GITHUB_ENV
-        shell: bash
-
       # 1. PREPARE ENVIRONMENT
       - name: Set up Python
         uses: actions/setup-python@v4
