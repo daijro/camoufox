@@ -8,21 +8,17 @@ jobs:
       - uses: actions/checkout@v3
       - name: Install MozillaBuild
         run: choco install mozillabuild
-      - name: List files for debugging
-        run: ls -la
-        shell: bash
-
-      - name: Bootstrap
-        shell: bash
-        run: C:/mozilla-build/start-shell.bat -c "./mach bootstrap --application-choice browser --no-interactive"
-      - name: Configure
+      - name: Create and Run Build Script
         shell: bash
         run: |
-          C:/mozilla-build/start-shell.bat -c "echo ac_add_options --disable-telemetry >> .mozconfig"
-          C:/mozilla-build/start-shell.bat -c "echo ac_add_options --target=x86_64-pc-windows-msvc >> .mozconfig"
-      - name: Build
-        shell: bash
-        run: C:/mozilla-build/start-shell.bat -c "./mach build && ./mach package"
+          echo '#!/bin/bash' > build_script.sh
+          echo './mach bootstrap --application-choice browser --no-interactive' >> build_script.sh
+          echo "echo 'ac_add_options --disable-telemetry' >> .mozconfig" >> build_script.sh
+          echo "echo 'ac_add_options --target=x86_64-pc-windows-msvc' >> .mozconfig" >> build_script.sh
+          echo './mach build' >> build_script.sh
+          echo './mach package' >> build_script.sh
+          chmod +x build_script.sh
+          C:/mozilla-build/start-shell.bat ./build_script.sh
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
