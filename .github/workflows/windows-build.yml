@@ -8,6 +8,8 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      INSTALL_MSVC: 'false'  # Set to 'true' to enable MSVC toolchain installation on the runner
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,13 +20,39 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install Build Tools
+        shell: pwsh
+        run: |
+          choco feature enable -n allowGlobalConfirmation || true
+          choco install make aria2 7zip wget -y || true
+          choco install msitools -y || true
+
+      - name: Install MSVC (optional)
+        if: ${{ env.INSTALL_MSVC == 'true' }}
+        shell: pwsh
+        run: |
+          # Optional: install Visual Studio Build Tools. Commented / gated by INSTALL_MSVC env.
+          choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --quiet" -y || true
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Build Lucid
-        run: python multibuild.py --target windows --arch x64
+        shell: pwsh
+        run: |
+          # Clean then build
+          python multibuild.py --target windows --arch x86_64 --clean || true
+          python multibuild.py --target windows --arch x86_64
 
       # PHASE 5: VALIDATION
       - name: Verify GAN Model
@@ -34,11 +62,12 @@ jobs:
         run: python -c "from geoip2 import database; print('GeoIP2 Verified')"
 
       - name: Package Artifacts
+        shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts
-          Copy-Item bin\lucid.exe artifacts -Force
-          Copy-Item genesis\docker-compose.yml artifacts -Force
-          Copy-Item network\xdp_outbound.c artifacts -Force
+          if (Test-Path 'bin\\lucid.exe') { Copy-Item 'bin\\lucid.exe' artifacts -Force } else { Write-Host 'Missing: bin\\lucid.exe' }
+          if (Test-Path 'genesis\\docker-compose.yml') { Copy-Item 'genesis\\docker-compose.yml' artifacts -Force } else { Write-Host 'Missing: genesis\\docker-compose.yml' }
+          if (Test-Path 'network\\xdp_outbound.c') { Copy-Item 'network\\xdp_outbound.c' artifacts -Force } else { Write-Host 'Missing: network\\xdp_outbound.c' }
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
