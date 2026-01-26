@@ -26,27 +26,20 @@ class Camoufox(PlaywrightContextManager):
 
         # LUCID EMPIRE MODIFICATION: STRICT TEMPLATE ENFORCEMENT
         fingerprint = self.launch_options.get('fingerprint')
-        
+
         if fingerprint is None:
-             # We DO NOT generate random fingerprints. We demand explicit injection.
-             raise ValueError("LUCID CORE PANIC: No Identity Profile provided. Randomization Protocols Disabled.")
-        
-        # If a string path is provided, load the JSON
+            raise ValueError("LUCID CORE PANIC: Randomization Disabled. Golden Template Required.")
+
         if isinstance(fingerprint, str):
             import json
             with open(fingerprint, 'r') as f:
-                self.launch_options['fingerprint'] = json.load(f)
+                self.fingerprint = json.load(f)
         else:
-             # It might be a dict or Fingerprint object already, but we strictly validate structure below if possible
-             pass
-        
-        # Validation Schema Enforcement (Basic check if it's a dict)
-        fp_data = self.launch_options.get('fingerprint')
-        if isinstance(fp_data, dict):
-            required_vectors = ['navigator', 'webgl'] # Minimal check based on directive
-            for vector in required_vectors:
-                if vector not in fp_data:
-                     raise ValueError(f"LUCID CORE PANIC: Golden Template missing vector: {vector}")
+            self.fingerprint = fingerprint
+
+        # Verify Critical Vectors
+        if 'navigator' not in self.fingerprint or 'webgl' not in self.fingerprint:
+            raise ValueError("LUCID CORE PANIC: Invalid Golden Template.")
 
     def __enter__(self) -> Union[Browser, BrowserContext]:
         super().__enter__()
