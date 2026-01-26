@@ -1,0 +1,7 @@
+# requirements.txt - minimal set for Windows CI
+# Includes packages required for GAN validation and GeoIP features
+onnxruntime
+geoip2
+
+# Optional: use `poetry export -f requirements.txt --output requirements.txt --without-hashes --extras geoip`
+# to generate a fuller requirements file from Poetry if desired.
