@@ -108,6 +108,38 @@ Config data not set by the user will be automatically populated using [BrowserFo
 
 [[See implemented properties](https://camoufox.com/fingerprint/)]
 
+## Windows Build Prerequisites
+
+To build Camoufox on Windows locally or in CI, make sure the host has the following tools installed. Using Chocolatey simplifies setup on Windows.
+
+Recommended Chocolatey packages:
+- `make` (GNU Make): `choco install make -y`
+- `aria2` (downloads): `choco install aria2 -y`
+- `7zip` (archive tools): `choco install 7zip -y`
+- `wget` (downloads): `choco install wget -y`
+- `msitools` (packaging utilities): `choco install msitools -y` (if available)
+
+Optional / advanced:
+- Visual Studio Build Tools (MSVC) — only required if your build compiles C/C++ components. Install via Chocolatey or the Visual Studio installer.
+
+Example PowerShell sequence:
+
+```powershell
+choco feature enable -n allowGlobalConfirmation || true
+choco install make aria2 7zip wget msitools -y
+```
+
+Local verification steps:
+
+```powershell
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python -c "import onnxruntime; print('onnxruntime')"
+python -c "from geoip2 import database; print('geoip2 import OK')"
+python multibuild.py --target windows --arch x86_64 --clean
+python multibuild.py --target windows --arch x86_64
+```
+
 ---
 
 ## Python Usage
