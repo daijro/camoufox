@@ -40,17 +40,10 @@ jobs:
         shell: bash
 
       # 3. LOCATE SOURCE DIRECTORY
-      - name: Locate Source Engine
-        id: locate-src
+      - name: Find Source Directory
         run: |
-          DIR_NAME=$(ls -d camoufox-* | head -n 1)
-          if [ -z "$DIR_NAME" ]; then
-            echo "::error::Could not find camoufox source directory! 'make setup' might have failed."
-            exit 1
-          fi
-          echo "SOURCE_DIR=$DIR_NAME" >> $GITHUB_ENV
-          echo "Found Engine Source: $DIR_NAME"
-        shell: bash
+          cd camoufox-*
+          echo "SOURCE_DIR=$(pwd)" >> $GITHUB_ENV
 
       # 4. BOOTSTRAP
       - name: Bootstrap Mozilla Build Environment
