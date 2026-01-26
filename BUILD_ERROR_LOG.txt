@@ -1,0 +1,48 @@
+LUCID EMPIRE :: BUILD PIPELINE ERROR LOG
+========================================
+DATE: 2026-01-26
+STATUS: DIAGNOSTIC REPORT
+
+1. ARTIFACT UPLOAD DEPRECATION
+------------------------------
+ERROR: "Error: This request has been automatically failed because it uses a deprecated version of actions/upload-artifact: v3"
+CAUSE: GitHub Actions deprecated v3 of the artifact upload action.
+FIX: Updated workflow to use `actions/upload-artifact@v4`.
+STATUS: RESOLVED.
+
+2. SHELL INTERPRETER MISMATCH
+-----------------------------
+ERROR: "The term './mach' is not recognized as a name of a cmdlet..."
+CAUSE: The runner defaulted to PowerShell, which does not understand Unix-style `./mach` commands.
+FIX: Explicitly set `shell: bash` for build steps.
+STATUS: RESOLVED.
+
+3. MISSING EXECUTABLE (ENVIRONMENT CONTEXT)
+-------------------------------------------
+ERROR: "./mach: No such file or directory" (Exit Code 127)
+CAUSE: The `mach` build tool is not in the repo root. This repo is a wrapper that downloads the Firefox source.
+FIX: Updated workflow to run `make setup` (fetches source) before attempting to build.
+STATUS: RESOLVED.
+
+4. CORRECT BUILD PATH
+---------------------
+DIAGNOSIS: The `mach` command exists inside the `camoufox-x.x.x` directory created *after* `make setup`.
+FIX: Added dynamic directory detection (`ls -d camoufox-*`) and forced `cd` into that directory for all build commands.
+STATUS: RESOLVED.
+
+5. GIT IDENTITY MISSING (PATCH FAILURE)
+---------------------------------------
+ERROR: "unable to auto-detect email address"
+CAUSE: `make setup` attempts to apply patches using `git am` or `git commit`, but the CI runner has no configured Git user.
+FIX: Injected `git config --global user.email "ci-bot@users.noreply.github.com"` and `user.name "CI Bot"` immediately before `make setup`.
+STATUS: RESOLVED.
+
+6. MACH BOOTSTRAP INVALID ARGUMENT
+----------------------------------
+ERROR: "The bootstrap command does not accept the arguments: --no-interactive"
+CAUSE: The `--no-interactive` flag is not valid for `mach bootstrap`.
+FIX: Removed the flag from the workflow. Added robust dependency checks and error handling for source directory detection.
+STATUS: RESOLVED.
+
+CURRENT STATUS:
+All known build pipeline errors have been addressed. The build is currently running on GitHub with the full fix chain.

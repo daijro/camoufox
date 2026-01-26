@@ -1,0 +1,104 @@
+LUCID EMPIRE :: MASTER BUILD DIRECTIVE
+Classification: COMMAND_EYES_ONLY Target: Windows 10/11 x64 Executable
+This document contains the specific code patches and build workflows required to assemble the Lucid Empire browser.
+
+PHASE 1: THE LOBOTOMY (Code Modifications)
+These changes must be applied to the lucid source code (or the underlying Firefox source it fetches) before compilation.
+
+1. Enforce Golden Template (lucid/pythonlib/lucid/sync_api.py)
+Prevent the browser from generating random fingerprints. It must fail if no template is provided.
+
+# FIND: def
+
+	init	(self, ...)
+
+# REPLACE fingerprint logic with:
+
+if fingerprint is None:
+raise ValueError("LUCID PANIC: No Golden Template provided.
+Randomization Disabled.")
+
+if isinstance(fingerprint, str): import json
+with open(fingerprint, 'r') as f: self.fingerprint = json.load(f)
+else:
+self.fingerprint = fingerprint
+
+# Strict validation
+if 'webgl' not in self.fingerprint or 'navigator' not in self.fingerprint:
+raise ValueError("LUCID PANIC: Invalid Template Structure.")
+
+
+2. C++ WebGL Hardening (dom/canvas/WebGLContext.cpp)
+Mask the Linux/Docker renderer strings.
+// FIND: WebGLContext::GetParameter(...)
+// LOCATE cases for UNMASKED_VENDOR_WEBGL and UNMASKED_RENDERER_WEBGL
+
+case LOCAL_GL_UNMASKED_VENDOR_WEBGL:
+{
+
+// LUCID PATCH
+const char* spoofed_vendor = std::getenv("LUCID_WEBGL_VENDOR"); if (spoofed_vendor) {
+return NS_NewString(spoofed_vendor);
+}
+return NS_NewString("Google Inc. (NVIDIA)"); // Default Fallback
+}
+
+case LOCAL_GL_UNMASKED_RENDERER_WEBGL:
+{
+// LUCID PATCH
+     const char* spoofed_renderer = std::getenv("LUCID_WEBGL_RENDERER");
+if (spoofed_renderer) {
+return NS_NewString(spoofed_renderer);
+}
+     return NS_NewString("ANGLE (NVIDIA, NVIDIA GeForce RTX 3080, OpenGL 4.5)"); // Default Fallback
+}
+
+
+PHASE 2: THE HYBRID BUILD (GitHub Actions)
+Create this file at .github/workflows/lucid-build.yml. This offloads the Windows compilation to GitHub's cloud runners, bypassing the Linux cross-compilation issues.
+name: Lucid Empire Windows Build
+
+on:
+push:
+branches: [ "main" ]
+
+jobs:
+build-windows:
+runs-on: windows-latest steps:
+- uses: actions/checkout@v3
+
+- name: Install MozillaBuild run: |
+choco install mozillabuild
+
+- name: Bootstrap Environment run: |
+./mach bootstrap --application-choice=browser --no-interactive
+
+- name: Inject Mozconfig (Telemetry Kill Switch) run: |
+
+echo "ac_add_options --disable-telemetry" >> .mozconfig echo "ac_add_options --disable-crashreporter" >> .mozconfig echo "ac_add_options --disable-updater" >> .mozconfig
+echo "ac_add_options --disable-maintenance-service" >>
+.mozconfig
+echo "ac_add_options --target=x86_64-pc-windows-msvc" >>
+.mozconfig
+
+- name: Build Lucid Binary run: |
+./mach build
+./mach package
+
+- name: Upload Artifact
+uses: actions/upload-artifact@v3 with:
+name: lucid-browser-bin
+path:  obj-x86_64-pc-windows-msvc/dist/install/sea/*.exe
+
+
+PHASE 3: FINAL ASSEMBLY (Installation)
+1. Harvest: Run harvester.html on your target "clean" PC. Save golden_template.json.
+2. Age: Upload golden_template.json to your Codespace. Run python genesis_engine.py. This creates the lucid_profile_data folder.
+3. Build: Push the code changes to GitHub. Wait for the Action to complete. Download the lucid-browser-bin.
+4. Package:
+? Place the downloaded browser .exe (and files) in a folder named bin.
+? Compile the launcher: pyinstaller --onefile --noconsole lucid_launcher.py.
+? Move lucid_launcher.exe to the root folder.
+? Move lucid_profile_data to a profiles/default folder.
+5. Execute: Run lucid_launcher.exe. Select the profile. Click Initiate.
+AUTHORITY: Dva.12 | BUILD SEQUENCE FINALIZED.
