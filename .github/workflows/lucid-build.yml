@@ -30,9 +30,9 @@ jobs:
       # 2. FETCH THE ENGINE (The Missing Step)
       - name: Fetch and Patch Source Code
         run: |
+          git config --global user.email "ci-bot@users.noreply.github.com"
+          git config --global user.name "CI Bot"
           echo "Running Genesis Setup..."
-          git config --global user.email "ci@lucid.local"
-          git config --global user.name "Lucid CI"
           make setup
         shell: bash
 
