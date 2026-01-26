@@ -8,17 +8,29 @@ jobs:
       - uses: actions/checkout@v3
       - name: Install MozillaBuild
         run: choco install mozillabuild
-      - name: Create and Run Build Script
+      - name: Create Build Script
         shell: bash
         run: |
           echo '#!/bin/bash' > build_script.sh
+          echo 'set -e' >> build_script.sh
+          echo 'cd $GITHUB_WORKSPACE || exit 1' >> build_script.sh
+          echo 'echo "--- Current Directory (after cd) ---"' >> build_script.sh
+          echo 'pwd' >> build_script.sh
+          echo 'echo "--- Listing Files ---"' >> build_script.sh
+          echo 'ls -la' >> build_script.sh
+          echo 'echo "--- System PATH ---"' >> build_script.sh
+          echo 'echo $PATH' >> build_script.sh
+          echo 'echo "--- Starting Build Process ---"' >> build_script.sh
           echo './mach bootstrap --application-choice browser --no-interactive' >> build_script.sh
           echo "echo 'ac_add_options --disable-telemetry' >> .mozconfig" >> build_script.sh
           echo "echo 'ac_add_options --target=x86_64-pc-windows-msvc' >> .mozconfig" >> build_script.sh
           echo './mach build' >> build_script.sh
           echo './mach package' >> build_script.sh
           chmod +x build_script.sh
-          C:/mozilla-build/start-shell.bat ./build_script.sh
+
+      - name: Run Build
+        shell: cmd
+        run: C:\mozilla-build\start-shell.bat build_script.sh
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
