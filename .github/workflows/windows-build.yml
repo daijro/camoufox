@@ -25,7 +25,8 @@ jobs:
         run: |
           choco feature enable -n allowGlobalConfirmation || true
           choco install make aria2 7zip wget -y || true
-          choco install msitools -y || true
+          Write-Host "Attempting optional package: msitools (may not be available on Chocolatey)"
+          try { choco install msitools -y || true } catch { Write-Host "msitools not available via Chocolatey; skipping..." }
 
       - name: Install MSVC (optional)
         if: ${{ env.INSTALL_MSVC == 'true' }}

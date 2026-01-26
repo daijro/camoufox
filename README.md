@@ -117,7 +117,7 @@ Recommended Chocolatey packages:
 - `aria2` (downloads): `choco install aria2 -y`
 - `7zip` (archive tools): `choco install 7zip -y`
 - `wget` (downloads): `choco install wget -y`
-- `msitools` (packaging utilities): `choco install msitools -y` (if available)
+- `msitools` (packaging utilities): **Note:** `msitools` is not available in the Chocolatey community repository; install manually or replace with an alternative packaging tool (e.g., WiX toolset) if packaging requires MSI tooling.
 
 Optional / advanced:
 - Visual Studio Build Tools (MSVC) — only required if your build compiles C/C++ components. Install via Chocolatey or the Visual Studio installer.

@@ -24,7 +24,9 @@ jobs:
       - name: Install Build Prerequisites
         shell: powershell
         run: |
-          choco install make aria2 7zip wget msitools -y --no-progress
+          choco install make aria2 7zip wget -y --no-progress
+          Write-Host "Attempting optional package: msitools (may not be available on Chocolatey)"
+          try { choco install msitools -y --no-progress } catch { Write-Host "msitools not available via Chocolatey; skipping..." }
 
       # 3. INSTALL MOZILLABUILD
       - name: Install MozillaBuild Environment
