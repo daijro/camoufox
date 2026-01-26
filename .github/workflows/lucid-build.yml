@@ -9,12 +9,15 @@ jobs:
       - name: Install MozillaBuild
         run: choco install mozillabuild
       - name: Bootstrap
+        shell: bash
         run: ./mach bootstrap --application-choice browser --no-interactive
       - name: Configure
+        shell: bash
         run: |
           echo "ac_add_options --disable-telemetry" >> .mozconfig
           echo "ac_add_options --target=x86_64-pc-windows-msvc" >> .mozconfig
       - name: Build
+        shell: bash
         run: |
           ./mach build
           ./mach package
