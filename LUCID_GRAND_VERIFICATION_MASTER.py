@@ -23,7 +23,7 @@ REQUIREMENTS = {
         "network/xdp_outbound.c": ["xdp_outbound", "rewrite_tcp_headers"], # eBPF Mask
         "genesis/docker-compose.yml": ["vtpm_sidecar", "swtpm"], # vTPM
         # INFRASTRUCTURE
-        ".github/workflows/lucid-build.yml": ["multibuild.py setup", "workflow_dispatch"], # Build Logic
+        ".github/workflows/lucid-build.yml": ["multibuild.py --bootstrap", "workflow_dispatch"], # Build Logic
         "multibuild.py": [] # The Repo Wrapper Script
     }
 }

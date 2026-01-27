@@ -105,7 +105,8 @@ jobs:
         shell: cmd
         run: |
           echo "STARTING SOURCE DOWNLOAD VIA MULTIBUILD..."
-          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py setup"
+          REM Use the multibuild CLI with --bootstrap and explicit target/arch to trigger the Make bootstrap step
+          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py --bootstrap --target windows --arch x86_64"
 
       # 6. BOOTSTRAP SOURCE (Fetches the Firefox code)
       - name: Bootstrap Source

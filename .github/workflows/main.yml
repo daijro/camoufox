@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: Build Camoufox Windows
-    runs-on: windows-2019 # Pinned for Stability
+    runs-on: windows-2022 # Upgraded from windows-2019 for runner availability
 
     env:
       MOZILLABUILD: C:\mozilla-build
@@ -43,7 +43,8 @@ jobs:
         shell: cmd
         run: |
           echo "STARTING SOURCE DOWNLOAD VIA MULTIBUILD..."
-          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py setup"
+          REM Use multibuild CLI with --bootstrap to trigger make bootstrap
+          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py --bootstrap --target windows --arch x86_64"
 
       - name: Inject Sovereign Code
         shell: powershell
