@@ -1,0 +1,17 @@
+# Development / Test dependencies for CI
+playwright
+Pillow
+pixelmatch
+pytest
+pytest-asyncio
+autobahn
+twisted
+aiohttp
+pyOpenSSL
+cryptography
+geopy
+flaky
+service_identity
+pytest-xdist
+python-dotenv
+# Optional: add extras like 'onnxruntime' in plain requirements.txt for runtime

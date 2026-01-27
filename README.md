@@ -168,6 +168,33 @@ async with AsyncCamoufox() as browser:
 
 [[Installation & usage](https://camoufox.com/python/)]
 
+## Testing 🧪
+
+Quick dev test setup:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+```
+
+Run the curated non-Playwright tests (fast):
+
+```bash
+pytest -q tests/test_fingerprint_dict.py
+```
+
+Full Playwright tests (heavy):
+
+```bash
+# On Ubuntu runners
+sudo apt-get update && sudo apt-get install -y libx11-xcb1 libxrandr2 libxcomposite1 libxcursor1 libxdamage1 libxfixes3 libxi6 libgtk-3-0 libatk1.0-0 libcairo-gobject2 libgdk-pixbuf2.0-0 libasound2 xvfb
+python -m pip install -r requirements-dev.txt
+python -m playwright install --with-deps
+xvfb-run -a -s "-screen 0 1280x720x24" pytest -q
+```
+
+Note: Full test runs are resource intensive and may fail on GitHub-hosted runners by default. Use the CI flag `RUN_FULL_TESTS=1` to enable them in the GitHub Actions `CI — Tests` workflow.
+
 ---
 
 ## Capabilities

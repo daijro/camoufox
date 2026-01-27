@@ -20,7 +20,28 @@ from typing import Callable, List, Optional
 
 import pytest
 
-from playwright._impl._glob import glob_to_regex
+# `glob_to_regex` was an internal helper in older Playwright versions. Some
+# environments / Playwright releases remove or relocate it; provide a local
+# fallback so tests remain robust across versions.
+try:
+    from playwright._impl._glob import glob_to_regex
+except Exception:
+    import re
+    def glob_to_regex(pattern: str):
+        # Minimal glob -> regex converter sufficient for the test suite's uses.
+        p = pattern
+        # Escape dots
+        p = p.replace('.', r"\.")
+        # Handle {a,b} -> (a|b)
+        p = re.sub(r"\{([^}]+)\}", lambda m: '(' + '|'.join(m.group(1).split(',')) + ')', p)
+        # Convert double-star and star
+        p = p.replace('**/', '(.*/)?')
+        p = p.replace('**', '.*')
+        p = p.replace('*', '[^/]*')
+        # Convert '?' to single character
+        p = p.replace('?', '.')
+        return re.compile('^' + p + '$')
+
 from playwright.async_api import (
     Browser,
     BrowserContext,

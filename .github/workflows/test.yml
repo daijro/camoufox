@@ -1,0 +1,54 @@
+name: CI — Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.11, 3.12]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install OS dependencies for Playwright
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-xcb1 libxrandr2 libxcomposite1 libxcursor1 libxdamage1 libxfixes3 libxi6 libgtk-3-0 libatk1.0-0 libcairo-gobject2 libgdk-pixbuf2.0-0 libasound2 xvfb
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Install Playwright browsers
+        run: |
+          python -m playwright install --with-deps || python -m playwright install
+
+      - name: Run preflight checks
+        run: |
+          python3 LUCID_PREFLIGHT_CHECK.py
+          python3 LUCID_GRAND_VERIFICATION_MASTER.py
+          python3 LUCID_UNIFIED_PREFLIGHT.py
+
+      - name: Run a curated unit test subset (fast, non-Playwright)
+        run: |
+          pytest -q tests/test_fingerprint_dict.py
+
+      - name: (Optional) Run full Playwright tests
+        if: env.RUN_FULL_TESTS == '1'
+        env:
+          HEADLESS: 1
+        run: |
+          xvfb-run -a -s "-screen 0 1280x720x24" pytest -q
+

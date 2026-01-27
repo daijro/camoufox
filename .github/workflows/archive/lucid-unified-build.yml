@@ -9,7 +9,7 @@ jobs:
       cancel-in-progress: false
 
     name: Build Camoufox Windows
-    runs-on: windows-2019 # Critical: Pinned for MSVC compatibility
+    runs-on: windows-2022 # Upgraded from windows-2019 for runner availability
     
     env:
       MOZILLABUILD: C:\mozilla-build
@@ -23,6 +23,13 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+
+      # DEBUG: List workspace to assist with transient failures
+      - name: Debug: Workspace contents
+        shell: powershell
+        run: |
+          Write-Host "Listing top-level workspace entries (limited)..."
+          Get-ChildItem -Force | Select-Object -First 200 | Format-Table -AutoSize
 
       # 2. INSTALL BUILD PREREQUISITES
       - name: Install Build Prerequisites
@@ -79,6 +86,14 @@ jobs:
         run: |
           call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive"
 
+      # VERIFY: Ensure multibuild created a camoufox-* directory
+      - name: Verify Source Directory
+        shell: powershell
+        run: |
+          $SourceDir = Get-ChildItem -Directory "camoufox-*" | Select-Object -First 1 -ExpandProperty Name
+          if (-not $SourceDir) { Write-Host "ERROR: No camoufox-* directory found; multibuild.py setup or bootstrap may have failed."; exit 1 }
+          Write-Host "Detected SOURCE DIRECTORY: $SourceDir"
+
       # 6. INJECT LUCID MODIFICATIONS (PHASE 4 & 5)
       - name: Inject Sovereign Code
         shell: powershell
@@ -130,3 +145,4 @@ jobs:
           name: lucid-empire-phase5-release
           path: camoufox-*/obj-*/dist/install/sea/*.zip
           retention-days: 7
+          if-no-files-found: warn

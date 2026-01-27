@@ -1,5 +1,11 @@
+import os
+import pytest
 from lucid_launcher import LucidLauncherApp
 import tkinter as tk
+
+# Skip GUI tests if no display is available (CI / headless environments)
+if not os.getenv("DISPLAY"):
+    pytest.skip("No display; skipping GUI test", allow_module_level=True)
 
 # Create minimal window
 root = tk.Tk()
