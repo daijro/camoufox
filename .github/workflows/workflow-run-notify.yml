@@ -45,3 +45,36 @@ jobs:
                 core.info(`Posted comment to PR #${pr.number}`);
               }
             }
+
+            // --- Additional: create an issue if there are N consecutive failures ---
+            const FAILURE_THRESHOLD = 3;
+            if (conclusion === 'failure') {
+              // List recent workflow runs for this repository and branch
+              const recentRuns = await github.rest.actions.listWorkflowRunsForRepo({ owner: context.repo.owner, repo: context.repo.repo, branch: branch, per_page: 20 });
+              const relevant = recentRuns.data.workflow_runs.filter(r => r.name === run.name).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+              // Count consecutive failures from the most recent run
+              let failureCount = 0;
+              for (const r of relevant) {
+                if (r.conclusion === 'failure') { failureCount++; } else { break; }
+              }
+
+              core.info(`Detected ${failureCount} consecutive failures for workflow ${run.name} on branch ${branch}`);
+
+              if (failureCount >= FAILURE_THRESHOLD) {
+                // Avoid duplicate issues: check open issues that mention the workflow and branch
+                const issues = await github.rest.issues.listForRepo({ owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100 });
+                const title = `[CI] ${run.name} failed ${failureCount} times in a row on branch ${branch}`;
+                const existing = issues.data.find(i => i.title && i.title.includes(`${run.name}`) && i.title.includes(branch));
+                if (existing) {
+                  // Comment on existing issue
+                  await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number, body: `Build ${runUrl} failed again (current count: ${failureCount}). See run details and artifacts: ${runUrl}` });
+                  core.info(`Commented on existing issue #${existing.number}`);
+                } else {
+                  // Create a new issue summarizing the problem
+                  const issueBody = `The **${run.name}** workflow has failed **${failureCount}** consecutive times on branch **${branch}**.\n\nLatest run: ${runUrl}\n\nArtifacts:\n${artifactList}\n\nPlease investigate the failure and see attached logs.`;
+                  const newIssue = await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title: title, body: issueBody });
+                  core.info(`Created issue #${newIssue.data.number} for repeated failures`);
+                }
+              }
+            }
