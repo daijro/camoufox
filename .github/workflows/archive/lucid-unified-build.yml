@@ -49,13 +49,13 @@ jobs:
 
           $installed = $false
           for ($i=1; $i -le 3; $i++) {
-            Write-Host "Attempt #$i: installing mozillabuild (4.4.0)"
+            Write-Host "Attempt #${i}: installing mozillabuild (4.4.0)"
             try {
               choco install mozillabuild --version=4.4.0 -y --no-progress --debug | Tee-Object -FilePath choco_mozillabuild_install.log
               $installed = $true
               break
             } catch {
-              Write-Host "Attempt #$i failed: $_"
+              Write-Host "Attempt #${i} failed: $_"
               Start-Sleep -Seconds (5 * $i)
             }
           }
