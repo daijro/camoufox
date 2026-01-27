@@ -24,7 +24,9 @@ jobs:
       - name: Install OS dependencies for Playwright
         run: |
           sudo apt-get update
-          sudo apt-get install -y libx11-xcb1 libxrandr2 libxcomposite1 libxcursor1 libxdamage1 libxfixes3 libxi6 libgtk-3-0 libatk1.0-0 libcairo-gobject2 libgdk-pixbuf2.0-0 libasound2 xvfb
+          # Install common Playwright dependencies; if a package is not available
+          # on the runner image we tolerate that and continue so tests can proceed.
+          sudo apt-get install -y libx11-xcb1 libxrandr2 libxcomposite1 libxcursor1 libxdamage1 libxfixes3 libxi6 libgtk-3-0 libatk1.0-0 libcairo-gobject2 libgdk-pixbuf2.0-0 libasound2 xvfb || true
 
       - name: Install Python dependencies
         run: |
