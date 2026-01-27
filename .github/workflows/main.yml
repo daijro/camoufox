@@ -46,17 +46,18 @@ jobs:
           call "C:\mozilla-build\start-shell.bat" -c "echo PATH: $PATH; which aria2c || echo 'aria2c MISSING'; which make || echo 'make MISSING'; which 7z || echo '7z MISSING'; python3 --version || echo 'python3 MISSING'; make -n bootstrap" > multibuild_dryrun.log 2>&1
 
       - name: Attempt Direct Multibuild (runner)
+        continue-on-error: true
         shell: cmd
         run: |
           echo "ATTEMPT: Direct multibuild on runner (captures output to multibuild_download_direct.log)"
-          python -u multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_download_direct.log 2>&1 || echo "DIRECT_RUN_FAILED" >> multibuild_download_direct.log
+          python -u multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_download_direct.log 2>&1 || echo "DIRECT_RUN_FAILED" >> multibuild_download_direct.log || true
 
       - name: Attempt Start-Shell Multibuild (internal logging)
+        continue-on-error: true
         shell: cmd
         run: |
           echo "ATTEMPT: multibuild inside start-shell (internal redirection to multibuild_inner.log)"
-          call "C:\mozilla-build\start-shell.bat" -c "python -u multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_inner.log 2>&1" || echo "START_SHELL_FAILED" >> multibuild_inner.log
-
+          call "C:\mozilla-build\start-shell.bat" -c "python -u multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_inner.log 2>&1" || echo "START_SHELL_FAILED" >> multibuild_inner.log || true
       - name: Dump Multibuild & Mach Logs (for diagnostics)
         shell: cmd
         run: |
