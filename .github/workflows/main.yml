@@ -46,6 +46,7 @@ jobs:
           call "C:\mozilla-build\start-shell.bat" -c "echo PATH: $PATH; which aria2c || echo 'aria2c MISSING'; which make || echo 'make MISSING'; which 7z || echo '7z MISSING'; python3 --version || echo 'python3 MISSING'; make -n bootstrap" > multibuild_dryrun.log 2>&1
 
       - name: Attempt Direct Multibuild (runner)
+        if: runner.os != 'Windows'
         continue-on-error: true
         shell: cmd
         run: |

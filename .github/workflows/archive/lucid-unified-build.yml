@@ -94,6 +94,14 @@ jobs:
           echo "ATTEMPT: multibuild inside start-shell (internal redirection to multibuild_inner.log)"
           call "C:\mozilla-build\start-shell.bat" -c "python -u multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_inner.log 2>&1" || echo "START_SHELL_FAILED" >> multibuild_inner.log || true
 
+      - name: Attempt Direct Multibuild (runner)
+        if: runner.os != 'Windows'
+        continue-on-error: true
+        shell: cmd
+        run: |
+          echo "ATTEMPT: Direct multibuild on runner (captures output to multibuild_download_direct.log)"
+          python -u multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_download_direct.log 2>&1 || echo "DIRECT_RUN_FAILED" >> multibuild_download_direct.log || true
+
       - name: Bootstrap Source
         continue-on-error: true
         shell: cmd

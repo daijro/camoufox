@@ -112,7 +112,19 @@ mozbootstrap:
 	cd $(cf_source_dir) && MOZBUILD_STATE_PATH=$$HOME/.mozbuild ./mach --no-interactive bootstrap --application-choice=browser
 
 bootstrap: dir
-	(sudo apt-get -y install $(debs) || sudo dnf -y install $(rpms) || sudo pacman -Sy $(pacman))
+	@echo "Detecting package manager for bootstrap..."
+	@if command -v apt-get >/dev/null 2>&1; then \
+		echo "Detected apt-get; installing deb packages..."; \
+		sudo apt-get -y install $(debs); \
+	elif command -v dnf >/dev/null 2>&1; then \
+		echo "Detected dnf; installing rpm packages..."; \
+		sudo dnf -y install $(rpms); \
+	elif command -v pacman >/dev/null 2>&1; then \
+		echo "Detected pacman; installing pacman packages..."; \
+		pacman -Sy $(pacman); \
+	else \
+		echo "No supported package manager found; skipping package installs (CI runner may supply dependencies)."; \
+	fi
 	make mozbootstrap
 
 diff:

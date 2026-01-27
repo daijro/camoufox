@@ -102,6 +102,7 @@ jobs:
 
       # 5. DOWNLOAD FIREFOX SOURCE (multibuild setup)
       - name: Attempt Direct Multibuild (runner)
+        if: runner.os != 'Windows'
         continue-on-error: true
         shell: cmd
         run: |
