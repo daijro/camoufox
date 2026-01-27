@@ -84,7 +84,20 @@ jobs:
       - name: Bootstrap Source
         shell: cmd
         run: |
-          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive"
+          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive" > multibuild_bootstrap.log 2>&1
+
+      # DEBUG: Post-bootstrap workspace and logs
+      - name: "Debug: Post-bootstrap workspace & multibuild logs"
+        shell: powershell
+        run: |
+          Write-Host "Listing workspace after bootstrap (top-level)..."
+          Get-ChildItem -Force | Select-Object -First 200 | Format-Table -AutoSize
+
+          Write-Host "Listing camoufox-* directories (if any):"
+          Get-ChildItem -Directory "camoufox-*" -ErrorAction SilentlyContinue | Format-Table -AutoSize
+
+          Write-Host "Mach bootstrap tail (if present):"
+          if (Test-Path multibuild_bootstrap.log) { Get-Content multibuild_bootstrap.log -Tail 200 } else { Write-Host "No multibuild_bootstrap.log found" }
 
       # VERIFY: Ensure multibuild created a camoufox-* directory
       - name: Verify Source Directory

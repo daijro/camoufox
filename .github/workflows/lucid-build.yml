@@ -106,13 +106,29 @@ jobs:
         run: |
           echo "STARTING SOURCE DOWNLOAD VIA MULTIBUILD..."
           REM Use the multibuild CLI with --bootstrap and explicit target/arch to trigger the Make bootstrap step
-          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py --bootstrap --target windows --arch x86_64"
+          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py --bootstrap --target windows --arch x86_64" > multibuild_download.log 2>&1
 
       # 6. BOOTSTRAP SOURCE (Fetches the Firefox code)
       - name: Bootstrap Source
         shell: cmd
         run: |
-          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive"
+          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive" > multibuild_bootstrap.log 2>&1
+
+      # DEBUG: Post-bootstrap workspace and logs
+      - name: "Debug: Post-bootstrap workspace & multibuild logs"
+        shell: powershell
+        run: |
+          Write-Host "Listing workspace after bootstrap (top-level)..."
+          Get-ChildItem -Force | Select-Object -First 200 | Format-Table -AutoSize
+
+          Write-Host "Listing camoufox-* directories (if any):"
+          Get-ChildItem -Directory "camoufox-*" -ErrorAction SilentlyContinue | Format-Table -AutoSize
+
+          Write-Host "Multibuild download tail (if present):"
+          if (Test-Path multibuild_download.log) { Get-Content multibuild_download.log -Tail 200 } else { Write-Host "No multibuild_download.log found" }
+
+          Write-Host "Mach bootstrap tail (if present):"
+          if (Test-Path multibuild_bootstrap.log) { Get-Content multibuild_bootstrap.log -Tail 200 } else { Write-Host "No multibuild_bootstrap.log found" }
 
       # VERIFY: Ensure multibuild created a camoufox-* directory
       - name: Verify Source Directory
