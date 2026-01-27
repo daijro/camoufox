@@ -3,12 +3,46 @@ name: Lucid Empire Unified Build (Phase 4+5)
 on: [push, workflow_dispatch]
 
 jobs:
+  prepare-source:
+    name: Prepare Camoufox Source (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y aria2 p7zip-full python3 python3-pip
+
+      - name: Run multibuild bootstrap (Linux)
+        run: |
+          python3 -u multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_prepare.log 2>&1 || true
+          ls -la
+
+      - name: Archive camoufox-* directory
+        run: |
+          if ls camoufox-* 1> /dev/null 2>&1; then
+            tar -cJf camoufox-source.tar.xz camoufox-*
+          else
+            echo "No camoufox-* directory found; failing prepare job"; exit 1
+          fi
+
+      - name: Upload camoufox source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: camoufox-source
+          path: camoufox-source.tar.xz
+
   build:
     concurrency:
       group: 'lucid-unified-build-${{ github.ref }}'
       cancel-in-progress: false
 
     name: Build Camoufox Windows
+    needs: prepare-source
     runs-on: windows-2022 # Upgraded from windows-2019 for runner availability
     
     env:
@@ -119,6 +153,23 @@ jobs:
           ) else (
             echo "Dry-run looks safe for Windows (no Linux package commands found)."
           )
+
+      - name: Download prepared camoufox source artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: camoufox-source
+          path: .
+
+      - name: Extract camoufox source artifact (if present)
+        shell: powershell
+        run: |
+          if (Test-Path camoufox-source.tar.xz) {
+            Write-Host "Extracting camoufox-source.tar.xz..."
+            tar -xJf camoufox-source.tar.xz
+            Write-Host "Source extraction complete.";
+          } else {
+            Write-Host "No prepared source artifact found; falling back to multibuild bootstrap";
+          }
 
       - name: Attempt Start-Shell Multibuild (internal logging)
         continue-on-error: true
