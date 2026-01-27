@@ -99,6 +99,27 @@ jobs:
           echo "STARTING START-SHELL DIAGNOSTIC..."
           call "C:\mozilla-build\start-shell.bat" -c "echo PATH: $PATH; which aria2c || echo 'aria2c MISSING'; which make || echo 'make MISSING'; which 7z || echo '7z MISSING'; python3 --version || echo 'python3 MISSING'; make -n bootstrap" > multibuild_dryrun.log 2>&1
 
+      - name: Start-shell Multibuild Dry-run (inspect for unsafe commands)
+        continue-on-error: false
+        shell: cmd
+        run: |
+          echo "ATTEMPT: Dry-run multibuild inside start-shell (captures output to multibuild_dryrun.log)"
+          call "C:\mozilla-build\start-shell.bat" -c "python -u multibuild.py --bootstrap --target windows --arch x86_64 --dry-run" > multibuild_dryrun.log 2>&1 || echo "DRYRUN_FAILED" >> multibuild_dryrun.log || true
+
+      - name: Inspect Dry-run for Linux package manager calls
+        shell: cmd
+        run: |
+          echo "Checking dry-run for apt/dnf/pacman/sudo usage..."
+          type multibuild_dryrun.log || echo "(no dryrun log)"
+          findstr /R /C:"apt-get" /C:"dnf" /C:"pacman" /C:"sudo" multibuild_dryrun.log > dryrun_unsafe.txt || echo "No matches"
+          if exist dryrun_unsafe.txt (
+            echo "ERROR: Dry-run included Linux-only package commands or sudo. See multibuild_dryrun.log" 
+            type dryrun_unsafe.txt
+            exit 1
+          ) else (
+            echo "Dry-run looks safe for Windows (no Linux package commands found)."
+          )
+
       - name: Attempt Start-Shell Multibuild (internal logging)
         continue-on-error: true
         shell: cmd

@@ -54,6 +54,9 @@ def setup_linux_sysroots():
 
 def run(cmd, exit_on_fail=True):
     print(f'\n------------\n{cmd}\n------------\n')
+    if globals().get('DRY_RUN', False):
+        print("DRY-RUN: not executing command")
+        return 0
     retval = os.system(cmd)
     if retval != 0 and exit_on_fail:
         print(f"fatal error: command '{cmd}' failed")
@@ -138,6 +141,19 @@ def main():
     parser.add_argument(
         "--clean", action="store_true", help="Clean the build directory before starting"
     )
+    parser.add_argument("--dry-run", action="store_true", help="Show the commands that would be executed, do not run them")
+
+    args = parser.parse_args()
+
+    # Support a dry-run mode used by CI to inspect what actions would be taken
+    DRY_RUN = getattr(args, 'dry_run', False)
+
+    # Run bootstrap if requested
+    if args.bootstrap:
+        BSYS.bootstrap()
+    # Clean if requested
+    if args.clean:
+        BSYS.clean()
 
     args = parser.parse_args()
 
