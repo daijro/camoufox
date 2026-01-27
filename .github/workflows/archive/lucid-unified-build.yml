@@ -91,8 +91,8 @@ jobs:
         continue-on-error: true
         shell: cmd
         run: |
-          echo "ATTEMPT: multibuild inside start-shell (internal redirection to multibuild_inner.log)"
-          call "C:\mozilla-build\start-shell.bat" -c "python -u multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_inner.log 2>&1" || echo "START_SHELL_FAILED" >> multibuild_inner.log || true
+          echo "ATTEMPT: multibuild inside start-shell (captures output to multibuild_inner.log)"
+          call "C:\mozilla-build\start-shell.bat" -c "python -u multibuild.py --bootstrap --target windows --arch x86_64" > multibuild_inner.log 2>&1 || echo "START_SHELL_FAILED" >> multibuild_inner.log || true
 
       - name: Attempt Direct Multibuild (runner)
         if: runner.os != 'Windows'
@@ -106,8 +106,8 @@ jobs:
         continue-on-error: true
         shell: cmd
         run: |
-          echo "ATTEMPT: mach bootstrap inside start-shell (internal redirection to multibuild_bootstrap_inner.log)"
-          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive > multibuild_bootstrap_inner.log 2>&1" || echo "MACH_BOOTSTRAP_FAILED" >> multibuild_bootstrap_inner.log || true
+          echo "ATTEMPT: mach bootstrap inside start-shell (captures output to multibuild_bootstrap_inner.log)"
+          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive" > multibuild_bootstrap_inner.log 2>&1 || echo "MACH_BOOTSTRAP_FAILED" >> multibuild_bootstrap_inner.log || true
 
       # DEBUG: Post-bootstrap workspace and logs
       - name: "Debug: Post-bootstrap workspace & multibuild logs"
