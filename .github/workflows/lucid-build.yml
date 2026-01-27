@@ -28,26 +28,12 @@ jobs:
           # Enable verbose PS debug if CI wants extra traces. Set CI_CHOCOLATEY_DEBUG=1 to enable.
           if ($env:CI_CHOCOLATEY_DEBUG -eq '1') { Set-PSDebug -Trace 1 } else { Set-PSDebug -Trace 0 }
           choco install make aria2 7zip wget -y --no-progress
-          Write-Host "Searching for optional package: msitools..."
-          try {
-            choco search msitools -s https://community.chocolatey.org/api/v2/
-          } catch {
-            Write-Host "msitools not found in search results (or search failed); will attempt prerelease install"
-          }
-          Write-Host "Attempting optional package: msitools (may be prerelease; trying with --pre)"
-          try {
-            choco install msitools -y --no-progress --pre -s https://community.chocolatey.org/api/v2/ | Tee-Object -FilePath choco_msitools_install.log
-            Write-Host "msitools install attempt finished; check choco_msitools_install.log for details."
-          } catch {
-            Write-Host "msitools install failed or package not available; proceeding without msitools."
-            if (Test-Path choco_msitools_install.log) { Get-Content choco_msitools_install.log -Tail 200 }
-          }
+          Write-Host "msitools package is unavailable on Windows runners; skipping install."
 
       # 3. INSTALL MOZILLA BUILD ENVIRONMENT (retries + debug logs)
       - name: Install MozillaBuild 4.4
-        shell: powershell
+        shell: pwsh
         run: |
-          choco feature enable -n allowGlobalConfirmation || true
           Write-Host "Chocolatey version:"; choco --version
           Write-Host "Searching for mozillabuild package..."
           $search = choco search mozillabuild -s https://community.chocolatey.org/api/v2/ || Write-Host "choco search returned no results"
