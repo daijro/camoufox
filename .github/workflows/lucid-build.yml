@@ -101,6 +101,13 @@ jobs:
           git config --global user.name "Lucid Builder"
 
       # 5. DOWNLOAD FIREFOX SOURCE (multibuild setup)
+      - name: Start-Shell Pre-Bootstrap Diagnostic
+        shell: cmd
+        run: |
+          echo "STARTING START-SHELL DIAGNOSTIC..."
+          REM Run a quick dry-run of the bootstrap and check tool availability inside the mozillabuild shell
+          call "C:\mozilla-build\start-shell.bat" -c "echo PATH: $PATH; which aria2c || echo 'aria2c MISSING'; which make || echo 'make MISSING'; which 7z || echo '7z MISSING'; python3 --version || echo 'python3 MISSING'; make -n bootstrap" > multibuild_dryrun.log 2>&1
+
       - name: Download Firefox Source
         shell: cmd
         run: |
