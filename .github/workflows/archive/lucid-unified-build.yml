@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 0
 
       # DEBUG: List workspace to assist with transient failures
-      - name: Debug: Workspace contents
+      - name: "Debug: Workspace contents"
         shell: powershell
         run: |
           Write-Host "Listing top-level workspace entries (limited)..."
