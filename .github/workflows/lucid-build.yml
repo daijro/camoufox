@@ -93,7 +93,14 @@ jobs:
           git config --global user.email "ci-bot@lucid.empire"
           git config --global user.name "Lucid Builder"
 
-      # 5. BOOTSTRAP SOURCE (Fetches the Firefox code)
+      # 5. DOWNLOAD FIREFOX SOURCE (multibuild setup)
+      - name: Download Firefox Source
+        shell: cmd
+        run: |
+          echo "STARTING SOURCE DOWNLOAD VIA MULTIBUILD..."
+          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py setup"
+
+      # 6. BOOTSTRAP SOURCE (Fetches the Firefox code)
       - name: Bootstrap Source
         shell: cmd
         run: |
