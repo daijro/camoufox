@@ -1,0 +1,47 @@
+name: Notify on Windows Build Completion
+
+on:
+  workflow_run:
+    workflows: [ "Lucid Windows Native Build" ]
+    types: [ completed ]
+
+permissions:
+  issues: write
+  actions: read
+
+jobs:
+  notify:
+    name: Notify PRs about Windows build result
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify via GitHub Script
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const conclusion = run.conclusion || 'unknown';
+            const branch = run.head_branch || 'unknown';
+            const runUrl = run.html_url || `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${run.id}`;
+
+            // Gather artifacts for the run
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: run.id,
+            });
+
+            const artifactList = artifacts.data.artifacts.map(a => `- ${a.name}`).join('\n') || 'None';
+
+            const body = `**Workflow \`${run.name}\` completed**\n\n- **Conclusion**: ${conclusion}\n- **Branch**: ${branch}\n- **Run**: ${runUrl}\n- **Artifacts:**\n${artifactList}\n\n_This comment was created automatically by the CI monitor workflow._`;
+
+            // Find open PRs that match the branch
+            const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' });
+
+            if (prs.data.length === 0) {
+              core.info(`No open PR found for branch ${branch}; not posting a PR comment.`);
+            } else {
+              for (const pr of prs.data) {
+                await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: pr.number, body });
+                core.info(`Posted comment to PR #${pr.number}`);
+              }
+            }
