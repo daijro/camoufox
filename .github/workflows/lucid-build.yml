@@ -105,13 +105,13 @@ jobs:
         shell: cmd
         run: |
           echo "ATTEMPT: Direct multibuild on runner (captures output to multibuild_download_direct.log)"
-          python3 multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_download_direct.log 2>&1 || echo "DIRECT_RUN_FAILED" >> multibuild_download_direct.log
+          python -u multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_download_direct.log 2>&1 || echo "DIRECT_RUN_FAILED" >> multibuild_download_direct.log
 
       - name: Attempt Start-Shell Multibuild (internal logging)
         shell: cmd
         run: |
           echo "ATTEMPT: multibuild inside start-shell (internal redirection to multibuild_inner.log)"
-          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_inner.log 2>&1" || echo "START_SHELL_FAILED" >> multibuild_inner.log
+          call "C:\mozilla-build\start-shell.bat" -c "python -u multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_inner.log 2>&1" || echo "START_SHELL_FAILED" >> multibuild_inner.log
 
       # 6. BOOTSTRAP SOURCE (Fetches the Firefox code)
       - name: Attempt Start-Shell Mach Bootstrap (internal logging)
@@ -120,6 +120,19 @@ jobs:
           echo "ATTEMPT: mach bootstrap inside start-shell (internal redirection to multibuild_bootstrap_inner.log)"
           call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive > multibuild_bootstrap_inner.log 2>&1" || echo "MACH_BOOTSTRAP_FAILED" >> multibuild_bootstrap_inner.log
 
+      - name: Dump Multibuild & Mach Logs (for diagnostics)
+        shell: cmd
+        run: |
+          echo "--- multibuild_download_direct.log ---"
+          type multibuild_download_direct.log || echo "(no direct log)"
+          echo "--- multibuild_inner.log ---"
+          type multibuild_inner.log || echo "(no inner log)"
+          echo "--- multibuild_bootstrap_inner.log ---"
+          type multibuild_bootstrap_inner.log || echo "(no bootstrap inner log)"
+          echo "--- multibuild_dryrun.log ---"
+          type multibuild_dryrun.log || echo "(no dryrun log)"
+          echo "--- choco_mozillabuild_install.log ---"
+          type choco_mozillabuild_install.log || echo "(no choco log)"
       # DEBUG: Post-bootstrap workspace and logs
       - name: "Debug: Post-bootstrap workspace & multibuild logs"
         shell: powershell

@@ -109,11 +109,17 @@ jobs:
           Write-Host "Listing camoufox-* directories (if any):"
           Get-ChildItem -Directory "camoufox-*" -ErrorAction SilentlyContinue | Format-Table -AutoSize
 
-          Write-Host "Start-shell multibuild tail (if present):"
+          Write-Host "--- multibuild_inner.log ---"
           if (Test-Path multibuild_inner.log) { Get-Content multibuild_inner.log -Tail 200 } else { Write-Host "No multibuild_inner.log found" }
 
-          Write-Host "Mach bootstrap tail (if present):"
+          Write-Host "--- multibuild_bootstrap_inner.log ---"
           if (Test-Path multibuild_bootstrap_inner.log) { Get-Content multibuild_bootstrap_inner.log -Tail 400 } else { Write-Host "No multibuild_bootstrap_inner.log found" }
+
+          Write-Host "--- multibuild_download_direct.log ---"
+          if (Test-Path multibuild_download_direct.log) { Get-Content multibuild_download_direct.log -Tail 200 } else { Write-Host "No multibuild_download_direct.log found" }
+
+          Write-Host "--- multibuild_dryrun.log ---"
+          if (Test-Path multibuild_dryrun.log) { Get-Content multibuild_dryrun.log -Tail 200 } else { Write-Host "No multibuild_dryrun.log found" }
 
       # VERIFY: Ensure multibuild created a camoufox-* directory
       - name: Verify Source Directory
