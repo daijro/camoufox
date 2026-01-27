@@ -1,0 +1,96 @@
+name: Lucid Production Build (Phase 4/5)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Manual trigger enabled
+
+jobs:
+  build:
+    name: Build Camoufox Windows
+    runs-on: windows-2019 # Pinned for Stability
+
+    env:
+      MOZILLABUILD: C:\mozilla-build
+      MOZ_OBJDIR: obj-lucid-release
+      MACH_NO_INTERACTIVE: 1
+      PYTHONUTF8: 1
+      MOZ_ILL_BUILD_TOOLS: 1
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Prerequisite Tools
+        shell: powershell
+        run: |
+          choco install make aria2 7zip wget msitools -y --no-progress
+
+      - name: Install MozillaBuild 4.4
+        shell: powershell
+        run: |
+          choco install mozillabuild --version=4.4.0 -y --no-progress
+
+      - name: Configure Git Identity
+        shell: powershell
+        run: |
+          git config --global user.email "ci-bot@lucid.empire"
+          git config --global user.name "Lucid Builder"
+
+      - name: Download Firefox Source
+        shell: cmd
+        run: |
+          echo "STARTING SOURCE DOWNLOAD VIA MULTIBUILD..."
+          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py setup"
+
+      - name: Inject Sovereign Code
+        shell: powershell
+        run: |
+          $SourceDir = Get-ChildItem -Directory "camoufox-*" | Select-Object -First 1 -ExpandProperty Name
+          if (-not $SourceDir) { Write-Error "Source code not found! multibuild.py failed." }
+          Write-Host "Targeting Source: $SourceDir"
+          $TargetDir = "$SourceDir/python/mozbuild/mozbuild"
+          if (Test-Path "core/genesis_engine.py") { Copy-Item "core/genesis_engine.py" -Destination $TargetDir -Force; Write-Host "Genesis Engine: INJECTED" }
+          if (Test-Path "modules/commerce_injector.py") { Copy-Item "modules/commerce_injector.py" -Destination $TargetDir -Force; Write-Host "Commerce Injector: INJECTED" }
+          if (Test-Path "modules/humanization.py") { Copy-Item "modules/humanization.py" -Destination $TargetDir -Force; Write-Host "Biometric Engine: INJECTED" }
+
+      - name: Bootstrap Dependencies
+        shell: cmd
+        run: |
+          cd camoufox-*
+          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive"
+
+      - name: Write MozConfig
+        shell: cmd
+        run: |
+          cd camoufox-*
+          echo Configuring Build Options...
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --target=x86_64-pc-windows-msvc' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-crashreporter' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-updater' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-tests' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --disable-debug' >> .mozconfig"
+          call "C:\mozilla-build\start-shell.bat" -c "echo 'ac_add_options --enable-optimize' >> .mozconfig"
+
+      - name: Compile Binary
+        shell: cmd
+        timeout-minutes: 360
+        run: |
+          cd camoufox-*
+          call "C:\mozilla-build\start-shell.bat" -c "./mach build"
+
+      - name: Package & Upload
+        shell: cmd
+        run: |
+          cd camoufox-*
+          call "C:\mozilla-build\start-shell.bat" -c "./mach package"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lucid-empire-release
+          path: camoufox-*/obj-*/dist/install/sea/*.zip
+          retention-days: 5
+          if-no-files-found: error
