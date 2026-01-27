@@ -123,6 +123,33 @@ jobs:
           cd camoufox-*
           call "C:\mozilla-build\start-shell.bat" -c "./mach package"
 
+      - name: Verify Packages
+        shell: powershell
+        run: |
+          $zips = Get-ChildItem -Path "camoufox-*/obj-*/dist/install/sea/*.zip" -File -ErrorAction SilentlyContinue
+          if (-not $zips) {
+            Write-Host "ERROR: No packaged installers found at camoufox-*/obj-*/dist/install/sea/*.zip"
+            Write-Host "Dumping diagnostic logs for review..."
+            if (Test-Path ..\multibuild_download_direct.log) { Get-Content ..\multibuild_download_direct.log -Raw } else { Write-Host "No multibuild_download_direct.log found" }
+            if (Test-Path ..\multibuild_inner.log) { Get-Content ..\multibuild_inner.log -Raw } else { Write-Host "No multibuild_inner.log found" }
+            if (Test-Path ..\multibuild_bootstrap.log) { Get-Content ..\multibuild_bootstrap.log -Raw } else { Write-Host "No multibuild_bootstrap.log found" }
+            exit 1
+          } else {
+            Write-Host "Found packaged installers: $($zips.Name -join ', ')"
+          }
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lucid-build-logs
+          path: |
+            multibuild_download_direct.log
+            multibuild_inner.log
+            multibuild_bootstrap.log
+            choco_mozillabuild_install.log
+          if-no-files-found: warn
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:

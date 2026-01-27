@@ -199,6 +199,19 @@ def _update_rustup(target):
         add_rustup("x86_64-apple-darwin", "aarch64-apple-darwin")
 
 
+def add_rustup(*targets):
+    """Add rust targets (portable across environments). Looks for rustup in PATH and falls back to ~/.cargo/bin/rustup; if not found, skips gracefully."""
+    # Prefer an in-PATH rustup, fallback to the user's cargo bin. If neither is available, skip rather than failing the entire bootstrap.
+    rustup_cmd = shutil.which('rustup') or os.path.expanduser('~/.cargo/bin/rustup')
+    if not rustup_cmd or not os.path.exists(rustup_cmd):
+        print(f"-> rustup not found at {rustup_cmd}; skipping rust target add for: {targets}")
+        return
+
+    for rust_target in targets:
+        # Use run with exit_on_fail=False to avoid aborting bootstrap if a single rust target add fails
+        run(f'"{rustup_cmd}" target add "{rust_target}"', exit_on_fail=False)
+
+
 """
 Preparation
 """
