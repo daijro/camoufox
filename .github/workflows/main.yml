@@ -33,6 +33,18 @@ jobs:
         run: |
           choco install mozillabuild --version=4.4.0 -y --no-progress
 
+      - name: Windows Preflight Check
+        shell: powershell
+        run: |
+          Write-Host "Running Windows preflight checks..."
+          if (-not (Test-Path 'C:\mozilla-build\start-shell.bat')) {
+            Write-Host "ERROR: mozillabuild start-shell not found at C:\mozilla-build\start-shell.bat. Ensure mozillabuild installed via Chocolatey or preinstalled on runner.";
+            exit 1
+          }
+          $out = & 'C:\mozilla-build\start-shell.bat' -c "echo START_SHELL_OK" 2>&1
+          if ($out -notmatch 'START_SHELL_OK') { Write-Host "ERROR: start-shell execution failed: $out"; exit 1 }
+          Write-Host "Start-shell sanity check: OK"
+
       - name: Configure Git Identity
         shell: powershell
         run: |

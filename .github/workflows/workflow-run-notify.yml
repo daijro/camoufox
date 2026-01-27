@@ -72,7 +72,7 @@ jobs:
                   core.info(`Commented on existing issue #${existing.number}`);
                 } else {
                   // Create a new issue summarizing the problem
-                  const issueBody = `The **${run.name}** workflow has failed **${failureCount}** consecutive times on branch **${branch}**.\n\nLatest run: ${runUrl}\n\nArtifacts:\n${artifactList}\n\nPlease investigate the failure and see attached logs.`;
+                  const issueBody = `The **${run.name}** workflow has failed **${failureCount}** consecutive times on branch **${branch}**.\n\nLatest run: ${runUrl}\n\nArtifacts:\n${artifactList}\n\n**Remediation checklist (start here):**\n- [ ] Review \`multibuild_inner.log\` and \`multibuild_bootstrap_inner.log\` artifacts for errors and stack traces\n- [ ] Review any attached Chocolatey/multibuild logs for install failures\n- [ ] Confirm that **mozillabuild** and required dependencies (Python, Rust, make, aria2, 7zip) are present on the runner\n- [ ] Check that a \`camoufox-*\` source directory was created in the workspace\n- [ ] Ensure that no Linux-only package manager commands (apt/dnf/pacman) were invoked on Windows\n- [ ] Consider using a pre-built bootstrap artifact or a self-hosted Windows runner with dependencies preinstalled\n\nPlease investigate the failure and see attached logs. (See PR_NOTES/DIAGNOSTICS_ADDED.md for guidance)`;
                   const newIssue = await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title: title, body: issueBody });
                   core.info(`Created issue #${newIssue.data.number} for repeated failures`);
                 }
