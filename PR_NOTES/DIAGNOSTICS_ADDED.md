@@ -12,7 +12,9 @@ Details:
   - `.github/workflows/main.yml`
   - `.github/workflows/archive/lucid-unified-build.yml`
 
-Current run id: 21382826667
+Current run id: 21383413241 (in progress)
+
+Finding: Previous Windows runs failed because multibuild did not create a `camoufox-*` source directory; the Verify step exited with "No camoufox-* directory found." I added direct and internal start-shell logging to capture `multibuild` and `mach` output and will paste relevant excerpts below when available.
 
 Next steps:
-- When the run completes I will extract and post relevant log excerpts and suggested fixes.
+- Monitor run 21383413241; when it completes I will extract and append the multibuild/mach logs here and recommend targeted fixes.
