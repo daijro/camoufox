@@ -135,9 +135,28 @@ jobs:
       - name: Verify Source Directory
         shell: powershell
         run: |
-          $SourceDir = Get-ChildItem -Directory "camoufox-*" | Select-Object -First 1 -ExpandProperty Name
-          if (-not $SourceDir) { Write-Host "ERROR: No camoufox-* directory found; multibuild.py setup or bootstrap may have failed."; exit 1 }
-          Write-Host "Detected SOURCE DIRECTORY: $SourceDir"
+          # Try top-level first, then search recursively if not found
+          $SourceDir = Get-ChildItem -Directory "camoufox-*" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Name
+          if (-not $SourceDir) {
+            $recursive = Get-ChildItem -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'camoufox-*' } | Select-Object -First 1
+            if ($recursive) { $SourceDir = $recursive.FullName }
+          }
+
+          if ($SourceDir) {
+            Write-Host "Detected SOURCE DIRECTORY: $SourceDir"
+          } else {
+            Write-Host "ERROR: No camoufox-* directory found; multibuild.py setup or bootstrap may have failed."
+            Write-Host "Listing workspace top-level (limited):"
+            Get-ChildItem -Force | Select-Object -First 200 | Format-Table -AutoSize
+            Write-Host "Looking for camoufox-* recursively (depth unlimited):"
+            Get-ChildItem -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'camoufox-*' } | Format-Table -AutoSize
+
+            Write-Host "--- multibuild logs (if present) ---"
+            if (Test-Path multibuild_download_direct.log) { Get-Content multibuild_download_direct.log -Raw } else { Write-Host "No multibuild_download_direct.log found" }
+            if (Test-Path multibuild_inner.log) { Get-Content multibuild_inner.log -Raw } else { Write-Host "No multibuild_inner.log found" }
+            if (Test-Path multibuild_bootstrap_inner.log) { Get-Content multibuild_bootstrap_inner.log -Raw } else { Write-Host "No multibuild_bootstrap_inner.log found" }
+            exit 1
+          }
 
       # 6. INJECT LUCID MODIFICATIONS (PHASE 4 & 5)
       - name: Inject Sovereign Code

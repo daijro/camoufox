@@ -75,8 +75,25 @@ jobs:
       - name: Inject Sovereign Code
         shell: powershell
         run: |
-          $SourceDir = Get-ChildItem -Directory "camoufox-*" | Select-Object -First 1 -ExpandProperty Name
-          if (-not $SourceDir) { Write-Error "Source code not found! multibuild.py failed." }
+          # Try top-level first, then search recursively
+          $SourceDir = Get-ChildItem -Directory "camoufox-*" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Name
+          if (-not $SourceDir) {
+            $recursive = Get-ChildItem -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'camoufox-*' } | Select-Object -First 1
+            if ($recursive) { $SourceDir = $recursive.FullName }
+          }
+
+          if (-not $SourceDir) {
+            Write-Error "Source code not found! multibuild.py setup or bootstrap may have failed."
+            Write-Host "Listing workspace top-level (limited):"
+            Get-ChildItem -Force | Select-Object -First 200 | Format-Table -AutoSize
+            Write-Host "Looking for camoufox-* recursively (depth unlimited):"
+            Get-ChildItem -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'camoufox-*' } | Format-Table -AutoSize
+            if (Test-Path multibuild_download_direct.log) { Get-Content multibuild_download_direct.log -Raw } else { Write-Host "No multibuild_download_direct.log found" }
+            if (Test-Path multibuild_inner.log) { Get-Content multibuild_inner.log -Raw } else { Write-Host "No multibuild_inner.log found" }
+            if (Test-Path multibuild_bootstrap.log) { Get-Content multibuild_bootstrap.log -Raw } else { Write-Host "No multibuild_bootstrap.log found" }
+            exit 1
+          }
+
           Write-Host "Targeting Source: $SourceDir"
           $TargetDir = "$SourceDir/python/mozbuild/mozbuild"
           if (Test-Path "core/genesis_engine.py") { Copy-Item "core/genesis_engine.py" -Destination $TargetDir -Force; Write-Host "Genesis Engine: INJECTED" }
