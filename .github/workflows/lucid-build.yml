@@ -101,25 +101,24 @@ jobs:
           git config --global user.name "Lucid Builder"
 
       # 5. DOWNLOAD FIREFOX SOURCE (multibuild setup)
-      - name: Start-Shell Pre-Bootstrap Diagnostic
+      - name: Attempt Direct Multibuild (runner)
         shell: cmd
         run: |
-          echo "STARTING START-SHELL DIAGNOSTIC..."
-          REM Run a quick dry-run of the bootstrap and check tool availability inside the mozillabuild shell
-          call "C:\mozilla-build\start-shell.bat" -c "echo PATH: $PATH; which aria2c || echo 'aria2c MISSING'; which make || echo 'make MISSING'; which 7z || echo '7z MISSING'; python3 --version || echo 'python3 MISSING'; make -n bootstrap" > multibuild_dryrun.log 2>&1
+          echo "ATTEMPT: Direct multibuild on runner (captures output to multibuild_download_direct.log)"
+          python3 multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_download_direct.log 2>&1 || echo "DIRECT_RUN_FAILED" >> multibuild_download_direct.log
 
-      - name: Download Firefox Source
+      - name: Attempt Start-Shell Multibuild (internal logging)
         shell: cmd
         run: |
-          echo "STARTING SOURCE DOWNLOAD VIA MULTIBUILD..."
-          REM Use the multibuild CLI with --bootstrap and explicit target/arch to trigger the Make bootstrap step
-          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py --bootstrap --target windows --arch x86_64" > multibuild_download.log 2>&1
+          echo "ATTEMPT: multibuild inside start-shell (internal redirection to multibuild_inner.log)"
+          call "C:\mozilla-build\start-shell.bat" -c "python3 multibuild.py --bootstrap --target windows --arch x86_64 > multibuild_inner.log 2>&1" || echo "START_SHELL_FAILED" >> multibuild_inner.log
 
       # 6. BOOTSTRAP SOURCE (Fetches the Firefox code)
-      - name: Bootstrap Source
+      - name: Attempt Start-Shell Mach Bootstrap (internal logging)
         shell: cmd
         run: |
-          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive" > multibuild_bootstrap.log 2>&1
+          echo "ATTEMPT: mach bootstrap inside start-shell (internal redirection to multibuild_bootstrap_inner.log)"
+          call "C:\mozilla-build\start-shell.bat" -c "./mach bootstrap --application-choice=browser --no-interactive > multibuild_bootstrap_inner.log 2>&1" || echo "MACH_BOOTSTRAP_FAILED" >> multibuild_bootstrap_inner.log
 
       # DEBUG: Post-bootstrap workspace and logs
       - name: "Debug: Post-bootstrap workspace & multibuild logs"
@@ -131,11 +130,14 @@ jobs:
           Write-Host "Listing camoufox-* directories (if any):"
           Get-ChildItem -Directory "camoufox-*" -ErrorAction SilentlyContinue | Format-Table -AutoSize
 
-          Write-Host "Multibuild download tail (if present):"
-          if (Test-Path multibuild_download.log) { Get-Content multibuild_download.log -Tail 200 } else { Write-Host "No multibuild_download.log found" }
+          Write-Host "Direct multibuild tail (if present):"
+          if (Test-Path multibuild_download_direct.log) { Get-Content multibuild_download_direct.log -Tail 200 } else { Write-Host "No multibuild_download_direct.log found" }
+
+          Write-Host "Start-shell multibuild tail (if present):"
+          if (Test-Path multibuild_inner.log) { Get-Content multibuild_inner.log -Tail 200 } else { Write-Host "No multibuild_inner.log found" }
 
           Write-Host "Mach bootstrap tail (if present):"
-          if (Test-Path multibuild_bootstrap.log) { Get-Content multibuild_bootstrap.log -Tail 200 } else { Write-Host "No multibuild_bootstrap.log found" }
+          if (Test-Path multibuild_bootstrap_inner.log) { Get-Content multibuild_bootstrap_inner.log -Tail 400 } else { Write-Host "No multibuild_bootstrap_inner.log found" }
 
       # VERIFY: Ensure multibuild created a camoufox-* directory
       - name: Verify Source Directory
