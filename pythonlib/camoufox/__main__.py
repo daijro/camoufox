@@ -107,14 +107,15 @@ def remove() -> None:
 
 
 @cli.command(name='test')
+@click.option('--executable-path', help='Path to the Camoufox executable', default=None)
 @click.argument('url', default=None, required=False)
-def test(url: Optional[str] = None) -> None:
+def test(url: Optional[str] = None, executable_path: Optional[str] = None) -> None:
     """
     Open the Playwright inspector
     """
     from .sync_api import Camoufox
 
-    with Camoufox(headless=False, env=environ, config={'showcursor': False}) as browser:
+    with Camoufox(headless=False, env=environ, config={'showcursor': False}, executable_path=executable_path) as browser:
         page = browser.new_page()
         if url:
             page.goto(url)
