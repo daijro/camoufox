@@ -572,6 +572,9 @@ def launch_options(
     ):
         LeakWarning.warn('proxy_without_geoip')
 
+    if 'Accept-Encoding' in fingerprint.headers and 'network.http.accept-encoding.secure' not in firefox_user_prefs:
+        firefox_user_prefs['network.http.accept-encoding.secure'] = fingerprint.headers['Accept-Encoding']
+
     # Set locale
     if locale:
         handle_locales(locale, config)
