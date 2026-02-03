@@ -402,7 +402,13 @@ index cd9090cda3..609d3b71be 100644
      "FormData.h",
      "FragmentDirective.h",
      "FragmentOrElement.h",
-@@ -369,6 +370,7 @@ UNIFIED_SOURCES += [
+@@ -253,4 +254,5 @@ EXPORTS.mozilla.dom += [
+     "ResizeObserver.h",
+     "ResponsiveImageSelector.h",
++    "RoverfoxStorageManager.h",
+     "SameProcessMessageQueue.h",
+     "ScreenLuminance.h",
+@@ -369,6 +371,7 @@ UNIFIED_SOURCES += [
      "EventSource.cpp",
      "EventSourceEventService.cpp",
      "External.cpp",
@@ -410,6 +416,12 @@ index cd9090cda3..609d3b71be 100644
      "FormData.cpp",
      "FragmentDirective.cpp",
      "FragmentOrElement.cpp",
+@@ -457,4 +461,5 @@ UNIFIED_SOURCES += [
+     "ResizeObserver.cpp",
+     "ResponsiveImageSelector.cpp",
++    "RoverfoxStorageManager.cpp",
+     "SameProcessMessageQueue.cpp",
+     "ScreenLuminance.cpp",
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index 330a707789..fb3ba4d3fb 100644
 --- a/dom/base/nsGlobalWindowInner.cpp

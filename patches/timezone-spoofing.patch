@@ -1,49 +1,253 @@
-diff --git a/intl/components/moz.build b/intl/components/moz.build
-index 8e854bba70..72213b13cf 100644
---- a/intl/components/moz.build
-+++ b/intl/components/moz.build
-@@ -85,3 +85,6 @@ if not CONFIG["MOZ_SYSTEM_ICU"]:
- DEFINES["MOZ_HAS_MOZGLUE"] = True
- 
- Library("intlcomponents")
+diff --git a/dom/base/TimezoneManager.cpp b/dom/base/TimezoneManager.cpp
+new file mode 100644
+index 0000000000..7ec236d160
+--- /dev/null
++++ b/dom/base/TimezoneManager.cpp
+@@ -0,0 +1,14 @@
++#include "TimezoneManager.h"
++#include "nsGlobalWindowInner.h"
++#include "xpcpublic.h"
 +
-+# DOM Mask
-+LOCAL_INCLUDES += ["/camoucfg"]
-\ No newline at end of file
-diff --git a/intl/components/src/TimeZone.cpp b/intl/components/src/TimeZone.cpp
-index fb4c0657ba..1b18d87681 100644
---- a/intl/components/src/TimeZone.cpp
-+++ b/intl/components/src/TimeZone.cpp
-@@ -8,7 +8,8 @@
- 
- #include <algorithm>
- #include <string_view>
--
-+#include "unicode/unistr.h"
-+#include "MaskConfig.hpp"
- #include "unicode/uenum.h"
- #if MOZ_INTL_USE_ICU_CPP_TIMEZONE
- #  include "unicode/basictz.h"
-@@ -21,7 +22,21 @@ Result<UniquePtr<TimeZone>, ICUError> TimeZone::TryCreate(
-     Maybe<Span<const char>> aTimeZoneOverride) {
-   const char* zoneID = nullptr;
-   int32_t zoneIDLen = 0;
--  if (aTimeZoneOverride) {
++namespace mozilla {
++namespace dom {
 +
-+  if (auto value = MaskConfig::GetString("timezone")) {
-+    std::string camouTimeZone = value.value();
++bool TimezoneManager::IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  return win != nullptr;
++}
 +
-+    // Because we don't have access to NS_ConvertUTF8toUTF16 here,
-+    // convert UTF-8 to UTF-16 using ICU's UnicodeString
-+    icu::UnicodeString uniStr = icu::UnicodeString::fromUTF8(camouTimeZone);
++}  // namespace dom
++}  // namespace mozilla
+diff --git a/dom/base/TimezoneManager.h b/dom/base/TimezoneManager.h
+new file mode 100644
+index 0000000000..a7f5735e53
+--- /dev/null
++++ b/dom/base/TimezoneManager.h
+@@ -0,0 +1,33 @@
++#ifndef mozilla_dom_TimezoneManager_h
++#define mozilla_dom_TimezoneManager_h
 +
-+    if (uniStr.isBogus()) {
-+      return Err(ICUError::InternalError);
-+    }
++#include "nsString.h"
++#include "RoverfoxStorageManager.h"
 +
-+    zoneIDLen = uniStr.length();
-+    zoneID = reinterpret_cast<const char*>(uniStr.getBuffer());
-+  } else if (aTimeZoneOverride) {
-     zoneIDLen = static_cast<int32_t>(aTimeZoneOverride->Length());
-     zoneID = aTimeZoneOverride->Elements();
++struct JSContext;
++class JSObject;
++
++namespace mozilla {
++namespace dom {
++
++class TimezoneManager {
++ public:
++  static void SetTimezone(uint32_t userContextId, const nsAString& timezone) {
++    nsAutoString key;
++    key.AppendPrintf("timezone_%u", userContextId);
++    RoverfoxStorageManager::PutString(key, timezone);
++  }
++
++  static bool GetTimezone(uint32_t userContextId, nsAString& outTimezone) {
++    nsAutoString key;
++    key.AppendPrintf("timezone_%u", userContextId);
++    return RoverfoxStorageManager::GetString(key, outTimezone);
++  }
++
++  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++};
++
++}  // namespace dom
++}  // namespace mozilla
++
++#endif  // mozilla_dom_TimezoneManager_h
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index 617d0152bd..dc13a2b4ac 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -285,6 +285,7 @@ EXPORTS.mozilla.dom += [
+     "TimeoutBudgetManager.h",
+     "TimeoutHandler.h",
+     "TimeoutManager.h",
++    "TimezoneManager.h",
+     "TreeIterator.h",
+     "TreeOrderedArray.h",
+     "TreeOrderedArrayInlines.h",
+@@ -499,6 +500,7 @@ UNIFIED_SOURCES += [
+     "TimeoutExecutor.cpp",
+     "TimeoutHandler.cpp",
+     "TimeoutManager.cpp",
++    "TimezoneManager.cpp",
+     "TreeWalker.cpp",
+     "UIDirectionManager.cpp",
+     "UserActivation.cpp",
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index ea66d28e53..2abb83c3a6 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -246,6 +246,8 @@
+ #include "nsID.h"
+ #include "nsIDOMStorageManager.h"
+ #include "FontSpacingSeedManager.h"
++#include "TimezoneManager.h"
++#include "js/Date.h"
+ #include "nsDocShell.h"
+ #include "mozilla/OriginAttributes.h"
+ #include "nsIDOMXULControlElement.h"
+@@ -7525,6 +7527,37 @@ void nsGlobalWindowInner::SetFontSpacingSeed(uint32_t seed, ErrorResult& aRv) {
    }
+ }
+
++void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++
++  if (Document* doc = GetDoc()) {
++    if (nsIPrincipal* p = doc->NodePrincipal()) {
++      userContextId = p->OriginAttributesRef().mUserContextId;
++    }
++  }
++
++  // Fallback to DocShell if principal returned 0
++  if (userContextId == 0) {
++    if (nsIDocShell* ds = GetDocShell()) {
++      auto* concrete = static_cast<nsDocShell*>(ds);
++      uint32_t dsId = concrete->GetOriginAttributes().mUserContextId;
++      if (dsId != 0) userContextId = dsId;
++    }
++  }
++  // Note: userContextId == 0 is valid for default context
++
++  NS_LossyConvertUTF16toASCII timezoneASCII(timezone);
++
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    if (!JS::SetRealmTimeZoneOverride(cx, timezoneASCII.get())) {
++      aRv.ThrowTypeError("Invalid timezone identifier");
++      return;
++    }
++  }
++
++  TimezoneManager::SetTimezone(userContextId, timezone);
++}
++
+ void nsGlobalWindowInner::StoreSharedWorker(SharedWorker* aSharedWorker) {
+   MOZ_ASSERT(aSharedWorker);
+   MOZ_ASSERT(!mSharedWorkers.Contains(aSharedWorker));
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index 5f9a11b0d3..3183172d29 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -683,6 +683,7 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+
+   // Font spacing seed for privacy-preserving font fingerprinting
+   void SetFontSpacingSeed(uint32_t seed, mozilla::ErrorResult& aRv);
++  void SetTimezone(const nsAString& timezone, mozilla::ErrorResult& aRv);
+
+   void StoreSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index 7a076768d0..a6f0d96a36 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -892,6 +892,12 @@ partial interface Window {
+   readonly attribute VisualViewport visualViewport;
+ };
+
++// Timezone interface for per-context timezone spoofing
++partial interface Window {
++  [Throws, Func="mozilla::dom::TimezoneManager::IsFunctionEnabledForWebIDL"]
++  undefined setTimezone(DOMString timezone);
++};
++
+ // Used to assign marks to appear on the scrollbar when
+ // finding on a page.
+ partial interface Window {
+diff --git a/js/public/Date.h b/js/public/Date.h
+index 98d5b1176e..89c2942a68 100644
+--- a/js/public/Date.h
++++ b/js/public/Date.h
+@@ -56,6 +56,9 @@ namespace JS {
+ extern JS_PUBLIC_API void ResetTimeZone();
+
+ extern JS_PUBLIC_API bool SetTimeZoneOverride(const char* timezoneId);
++// Camoufox: per-context timezone override
++extern JS_PUBLIC_API bool SetRealmTimeZoneOverride(JSContext* cx, const char* timezoneId);
++
+
+ class ClippedTime;
+ inline ClippedTime TimeClip(double time);
+diff --git a/js/src/vm/DateTime.cpp b/js/src/vm/DateTime.cpp
+index 709cd2b90d..af5abb38be 100644
+--- a/js/src/vm/DateTime.cpp
++++ b/js/src/vm/DateTime.cpp
+@@ -39,6 +39,7 @@
+ #include "util/Text.h"
+ #include "vm/MutexIDs.h"
+ #include "vm/Realm.h"
++#include "jspubtd.h"
+
+ static bool ComputeLocalTime(time_t local, struct tm* ptm) {
+   // Neither localtime_s nor localtime_r are required to act as if tzset has
+@@ -257,6 +258,12 @@ js::DateTimeInfo::DateTimeInfo() {
+
+ js::DateTimeInfo::~DateTimeInfo() = default;
+
++js::DateTimeInfo::DateTimeInfo(const char* timezone) : DateTimeInfo() {
++#if JS_HAS_INTL_API
++  timeZoneOverride_ = timezone ? std::string(timezone) : std::string();
++#endif
++}
++
+ int64_t js::DateTimeInfo::toClampedSeconds(int64_t milliseconds) {
+   int64_t seconds = milliseconds / msPerSecond;
+   int64_t millis = milliseconds % msPerSecond;
+@@ -587,6 +594,18 @@ JS_PUBLIC_API bool JS::SetTimeZoneOverride(const char* timeZoneId) {
+   return true;
+ }
+
++JS_PUBLIC_API bool JS::SetRealmTimeZoneOverride(JSContext* cx, const char* timeZoneId) {
++  if (!timeZoneId || !mozilla::intl::TimeZone::IsValidTimeZoneId(timeZoneId)) {
++    return false;
++  }
++  JS::Realm* realm = js::GetContextRealm(cx);
++  if (!realm) {
++    return false;
++  }
++  realm->setTimeZoneOverride(timeZoneId);
++  return true;
++}
++
+ #if JS_HAS_INTL_API
+ #  if defined(XP_WIN)
+ static bool IsOlsonCompatibleWindowsTimeZoneId(std::string_view tz) {
+diff --git a/js/src/vm/DateTime.h b/js/src/vm/DateTime.h
+index 110824439c..dfc88898f5 100644
+--- a/js/src/vm/DateTime.h
++++ b/js/src/vm/DateTime.h
+@@ -154,6 +154,7 @@ class DateTimeInfo {
+
+  public:
+   ~DateTimeInfo();
++  explicit DateTimeInfo(const char* timezone);
+
+   // The spec implicitly assumes DST and time zone adjustment information
+   // never change in the course of a function -- sometimes even across
+diff --git a/js/src/vm/Realm.cpp b/js/src/vm/Realm.cpp
+index 81b4d13cdb..ca04167603 100644
+--- a/js/src/vm/Realm.cpp
++++ b/js/src/vm/Realm.cpp
+@@ -545,10 +545,15 @@ void Realm::setLocaleOverride(const char* locale) {
+ }
+
+ js::DateTimeInfo* Realm::getDateTimeInfo() {
+-  // Playwright patch: Per-realm timezone overrides are disabled in favor of
+-  // global timezone overrides via JS::SetTimeZoneOverride().
+-  // The DateTimeInfo class was refactored to use std::string instead of
+-  // RefPtr<TimeZoneString>, and no longer supports per-realm timezones.
++  // Camoufox: restore per-context timezone support
++#if JS_HAS_INTL_API
++  RefPtr<JS::TimeZoneString> tzOverride = behaviors_.timeZoneOverride();
++  if (tzOverride) {
++    // Always create fresh to handle timezone changes correctly
++    dateTimeInfo_ = js::MakeUnique<js::DateTimeInfo>(tzOverride->chars());
++    return dateTimeInfo_.get();
++  }
++#endif
+   return nullptr;
+ }
+
