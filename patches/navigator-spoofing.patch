@@ -12,30 +12,30 @@ index 51d8331345..abc1234567 100644
  
  #include "Geolocation.h"
  #include "base/basictypes.h"
-@@ -52,6 +55,19 @@
+@@ -52,6 +55,17 @@
  #include "mozilla/dom/workerinternals/RuntimeService.h"
  #include "nsRFPService.h"
  
-+// Camoufox: Static initialization for global timezone config
-+namespace {
-+static bool sCamoufoxTimezoneInitialized = []() {
++// Camoufox: Lazy initialization for global timezone config.
++// Cannot use static init because SpiderMonkey may not be ready yet.
++static void EnsureGlobalTimezoneInitialized() {
++  static bool sInitialized = false;
++  if (sInitialized) return;
++  sInitialized = true;
 +  if (auto tz = MaskConfig::GetString("timezone")) {
-+    if (nsJSUtils::SetTimeZoneOverride(tz.value().c_str())) {
-+      return true;
-+    }
++    nsJSUtils::SetTimeZoneOverride(tz.value().c_str());
 +  }
-+  return false;
-+}();
-+[[maybe_unused]] static bool sDummy = sCamoufoxTimezoneInitialized;
-+}  // namespace
++}
 +
  namespace mozilla::dom {
  
  static const char kVibsatorPerm[] = "vibration";
-@@ -422,6 +438,11 @@ void Navigator::GetAppName(nsAString& aAppName) const {
- 
+@@ -422,6 +436,13 @@ void Navigator::GetAppName(nsAString& aAppName) const {
+
  void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
                              ErrorResult& aRv) const {
++  // Camoufox: ensure global timezone is initialized (lazy, runs once)
++  EnsureGlobalTimezoneInitialized();
 +  // Camoufox: global config takes priority
 +  if (auto value = MaskConfig::GetString("navigator.platform")) {
 +    aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
