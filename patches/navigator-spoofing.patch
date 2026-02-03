@@ -1,0 +1,57 @@
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index 51d8331345..abc1234567 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -6,6 +6,9 @@
+ 
+ // Needs to be first.
+ #include "Navigator.h"
++// Camoufox: global config for navigator spoofing
++#include "MaskConfig.hpp"
++#include "nsJSUtils.h"
+ 
+ #include "Geolocation.h"
+ #include "base/basictypes.h"
+@@ -52,6 +55,19 @@
+ #include "mozilla/dom/workerinternals/RuntimeService.h"
+ #include "nsRFPService.h"
+ 
++// Camoufox: Static initialization for global timezone config
++namespace {
++static bool sCamoufoxTimezoneInitialized = []() {
++  if (auto tz = MaskConfig::GetString("timezone")) {
++    if (nsJSUtils::SetTimeZoneOverride(tz.value().c_str())) {
++      return true;
++    }
++  }
++  return false;
++}();
++[[maybe_unused]] static bool sDummy = sCamoufoxTimezoneInitialized;
++}  // namespace
++
+ namespace mozilla::dom {
+ 
+ static const char kVibsatorPerm[] = "vibration";
+@@ -422,6 +438,11 @@ void Navigator::GetAppName(nsAString& aAppName) const {
+ 
+ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
+                             ErrorResult& aRv) const {
++  // Camoufox: global config takes priority
++  if (auto value = MaskConfig::GetString("navigator.platform")) {
++    aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
++    return;
++  }
+   if (mWindow) {
+     BrowsingContext* bc = mWindow->GetBrowsingContext();
+     nsString customPlatform;
+@@ -683,6 +704,10 @@ bool Navigator::CookieEnabled() {
+ }
+ 
+ uint64_t Navigator::HardwareConcurrency() {
++  // Camoufox: global config takes priority
++  if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency")) {
++    return value.value();
++  }
+   workerinternals::RuntimeService* rts =
+       workerinternals::RuntimeService::GetOrCreateService();
+   if (!rts) {
