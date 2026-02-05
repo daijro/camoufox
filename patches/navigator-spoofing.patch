@@ -44,10 +44,12 @@ index 51d8331345..abc1234567 100644
    if (mWindow) {
      BrowsingContext* bc = mWindow->GetBrowsingContext();
      nsString customPlatform;
-@@ -683,6 +704,10 @@ bool Navigator::CookieEnabled() {
+@@ -683,6 +704,12 @@ bool Navigator::CookieEnabled() {
  }
- 
+
  uint64_t Navigator::HardwareConcurrency() {
++  // Camoufox: ensure global timezone is initialized (lazy, runs once)
++  EnsureGlobalTimezoneInitialized();
 +  // Camoufox: global config takes priority
 +  if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency")) {
 +    return value.value();
