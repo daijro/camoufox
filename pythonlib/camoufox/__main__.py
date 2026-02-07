@@ -200,14 +200,18 @@ def cli() -> None:
 
 
 @cli.command(name='sync')
-@click.option('--spoof-os', type=click.Choice(['mac', 'win', 'lin']), help='Spoof OS')
+@click.option('--spoof-os', type=click.Choice(['auto', 'mac', 'win', 'lin']), help='Spoof OS (auto = native)')
 @click.option(
-    '--spoof-arch', type=click.Choice(['x86_64', 'i686', 'arm64']), help='Spoof architecture'
+    '--spoof-arch', type=click.Choice(['auto', 'x86_64', 'i686', 'arm64']), help='Spoof architecture (auto = native)'
 )
 def sync(spoof_os, spoof_arch):
     """
     Sync available versions from remote repositories.
     """
+    if spoof_os == 'auto':
+        spoof_os = None
+    if spoof_arch == 'auto':
+        spoof_arch = None
     _do_sync(spoof_os=spoof_os, spoof_arch=spoof_arch)
 
 

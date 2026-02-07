@@ -608,6 +608,8 @@ def installed_verstr() -> str:
     from .multiversion import get_active_path
 
     active = get_active_path()
+    if active is None:
+        raise FileNotFoundError("No active version. Please run `camoufox fetch` to install.")
     return Version.from_path(active).full_string
 
 

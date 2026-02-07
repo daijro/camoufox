@@ -10,6 +10,7 @@ from typing_extensions import Literal
 
 from camoufox.virtdisplay import VirtualDisplay
 
+from .exceptions import InvalidProxy
 from .utils import launch_options, sync_attach_vd
 
 
@@ -28,8 +29,8 @@ class Camoufox(PlaywrightContextManager):
         super().__enter__()
         try:
             self.browser = NewBrowser(self._playwright, **self.launch_options)
-        except camoufox.exceptions.InvalidProxy as e:
-            super().__exit__(camoufox.exceptions.InvalidProxy, e, None)
+        except InvalidProxy as e:
+            super().__exit__(InvalidProxy, e, None)
             raise
         return self.browser
 
