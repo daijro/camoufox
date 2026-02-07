@@ -1,29 +1,18 @@
 import xml.etree.ElementTree as ET  # nosec
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union, cast
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import numpy as np
 from language_tags import tags
 
-from camoufox.pkgman import LOCAL_DATA, GitHubDownloader, rprint, webdl
+from camoufox.pkgman import LOCAL_DATA
 from camoufox.warnings import LeakWarning
 
 from .exceptions import (
     InvalidLocale,
-    MissingRelease,
-    NotInstalledGeoIPExtra,
-    UnknownIPLocation,
     UnknownLanguage,
     UnknownTerritory,
 )
-from .ip import validate_ip
-
-try:
-    import geoip2.database  # type: ignore
-except ImportError:
-    ALLOW_GEOIP = False
-else:
-    ALLOW_GEOIP = True
 
 
 """
@@ -183,98 +172,6 @@ def _join_unique(seq: Iterable[str]) -> str:
     """
     seen: Set[str] = set()
     return ', '.join(x for x in seq if not (x in seen or seen.add(x)))
-
-
-"""
-Helpers to fetch geolocation, timezone, and locale data given an IP.
-"""
-
-MMDB_FILE = LOCAL_DATA / 'GeoLite2-City.mmdb'
-MMDB_REPO = "P3TERX/GeoLite.mmdb"
-
-
-class MaxMindDownloader(GitHubDownloader):
-    """
-    MaxMind database downloader from a GitHub repository.
-    """
-
-    def check_asset(self, asset: Dict) -> Optional[str]:
-        # Check for the first -City.mmdb file
-        if asset['name'].endswith('-City.mmdb'):
-            return asset['browser_download_url']
-        return None
-
-    def missing_asset_error(self) -> None:
-        raise MissingRelease('Failed to find GeoIP database release asset')
-
-
-def geoip_allowed() -> None:
-    """
-    Checks if the geoip2 module is available.
-    """
-    if not ALLOW_GEOIP:
-        raise NotInstalledGeoIPExtra(
-            'Please install the geoip extra to use this feature: pip install camoufox[geoip]'
-        )
-
-
-def download_mmdb() -> None:
-    """
-    Downloads the MaxMind GeoIP2 database.
-    """
-    geoip_allowed()
-
-    asset_url = MaxMindDownloader(MMDB_REPO).get_asset()
-
-    with open(MMDB_FILE, 'wb') as f:
-        webdl(
-            asset_url,
-            desc='Downloading GeoIP database',
-            buffer=f,
-        )
-
-
-def remove_mmdb() -> None:
-    """
-    Removes the MaxMind GeoIP2 database.
-    """
-    if not MMDB_FILE.exists():
-        rprint("GeoIP database not found.")
-        return
-
-    MMDB_FILE.unlink()
-    rprint("GeoIP database removed.")
-
-
-def get_geolocation(ip: str) -> Geolocation:
-    """
-    Gets the geolocation for an IP address.
-    """
-    # Check if the database is downloaded
-    if not MMDB_FILE.exists():
-        download_mmdb()
-
-    # Validate the IP address
-    validate_ip(ip)
-
-    with geoip2.database.Reader(str(MMDB_FILE)) as reader:
-        resp = reader.city(ip)
-        iso_code = cast(str, resp.registered_country.iso_code).upper()
-        location = resp.location
-
-        # Check if any required attributes are missing
-        if any(not getattr(location, attr) for attr in ('longitude', 'latitude', 'time_zone')):
-            raise UnknownIPLocation(f"Unknown IP location: {ip}")
-
-        # Get a statistically correct locale based on the country code
-        locale = SELECTOR.from_region(iso_code)
-
-        return Geolocation(
-            locale=locale,
-            longitude=cast(float, resp.location.longitude),
-            latitude=cast(float, resp.location.latitude),
-            timezone=cast(str, resp.location.time_zone),
-        )
 
 
 """

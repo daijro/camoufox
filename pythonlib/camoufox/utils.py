@@ -23,7 +23,8 @@ from .exceptions import (
 )
 from .fingerprints import from_browserforge, generate_fingerprint
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
-from .locale import geoip_allowed, get_geolocation, handle_locales
+from .geolocation import geoip_allowed, get_geolocation
+from .locale import handle_locales
 from .pkgman import OS_NAME, get_path, installed_verstr, launch_path
 from .virtdisplay import VirtualDisplay
 from .warnings import LeakWarning
@@ -344,6 +345,7 @@ def launch_options(
     disable_coop: Optional[bool] = None,
     webgl_config: Optional[Tuple[str, str]] = None,
     geoip: Optional[Union[str, bool]] = None,
+    geoip_db: Optional[str] = None,
     humanize: Optional[Union[bool, float]] = None,
     locale: Optional[Union[str, List[str]]] = None,
     addons: Optional[List[str]] = None,
@@ -357,6 +359,7 @@ def launch_options(
     headless: Optional[bool] = None,
     main_world_eval: Optional[bool] = None,
     executable_path: Optional[Union[str, Path]] = None,
+    browser: Optional[str] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     proxy: Optional[Dict[str, str]] = None,
     enable_cache: Optional[bool] = None,
@@ -390,6 +393,9 @@ def launch_options(
         geoip (Optional[Union[str, bool]]):
             Calculate longitude, latitude, timezone, country, & locale based on the IP address.
             Pass the target IP address to use, or `True` to find the IP address automatically.
+        geoip_db (Optional[str]):
+            Name of the GeoIP database to use (e.g., "MaxMind").
+            If not specified, uses the configured default.
         humanize (Optional[Union[bool, float]]):
             Humanize the cursor movement.
             Takes either `True`, or the MAX duration in seconds of the cursor movement.
@@ -426,6 +432,12 @@ def launch_options(
             To use this, prepend "mw:" to the script: page.evaluate("mw:" + script).
         executable_path (Optional[Union[str, Path]]):
             Custom Camoufox browser executable path.
+        browser (Optional[str]):
+            Select a specific installed browser version. Can be:
+            - Repo/build like "official/beta.20"
+            - Build alone like "beta.20"
+            - Full version like "134.0.2-beta.20"
+            If not specified, uses the active version.
         firefox_user_prefs (Optional[Dict[str, Any]]):
             Firefox user preferences to set.
         proxy (Optional[Dict[str, str]]):
@@ -560,7 +572,7 @@ def launch_options(
             elif valid_ipv6(geoip):
                 set_into(config, 'webrtc:ipv6', geoip)
 
-        geolocation = get_geolocation(geoip)
+        geolocation = get_geolocation(geoip, geoip_db=geoip_db)
         config.update(geolocation.as_config())
 
     # Raise a warning when a proxy is being used without spoofing geolocation.
@@ -648,15 +660,27 @@ def launch_options(
     # Prepare the executable path
     if executable_path:
         executable_path = str(executable_path)
+    elif browser:
+        # Select a specific installed browser version
+        from .multiversion import find_installed_version
+
+        browser_path = find_installed_version(browser)
+        if not browser_path:
+            raise ValueError(
+                f"Browser version '{browser}' not found. Run `camoufox list` to see installed versions."
+            )
+        executable_path = launch_path(browser_path)
     else:
         executable_path = launch_path()
 
-    return {
+    resp = {
         "executable_path": executable_path,
         "args": args,
         "env": env_vars,
         "firefox_user_prefs": firefox_user_prefs,
-        "proxy": proxy,
         "headless": headless,
         **(launch_options if launch_options is not None else {}),
     }
+    if proxy:
+        resp["proxy"] = proxy
+    return resp

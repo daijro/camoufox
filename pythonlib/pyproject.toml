@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "camoufox"
-version = "0.4.11"
+version = "0.5.0"
 description = "Wrapper around Playwright to help launch Camoufox"
 authors = ["daijro <daijro.dev@gmail.com>"]
 license = "MIT"
@@ -28,14 +28,14 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.10"
-click = "*"
+rich-click = "*"
+rich = "*"
 requests = "*"
 orjson = "*"
 browserforge = "^1.2.1"
 playwright = "*"
 pyyaml = "*"
 platformdirs = "*"
-tqdm = "*"
 numpy = "*"
 ua_parser = "*"
 typing_extensions = "*"
@@ -43,10 +43,13 @@ screeninfo = "*"
 lxml = "*"
 language-tags = "*"
 pysocks = "*"
+inquirer = "*"
 geoip2 = {version = "*", optional = true}
+PySide6 = {version = "*", optional = true}
 
 [tool.poetry.extras]
 geoip = ["geoip2"]
+gui = ["PySide6"]
 
 [tool.poetry.scripts]
 camoufox = "camoufox.__main__:cli"
