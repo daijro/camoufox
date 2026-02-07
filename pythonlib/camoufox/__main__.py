@@ -104,7 +104,7 @@ def _get_geoip_source_name() -> str:
 
 def _do_sync(spoof_os=None, spoof_arch=None) -> bool:
     """
-    Sync repos and browserforge data. Returns True on success
+    Sync available versions from remote repositories. Returns True on success
     """
     rprint("Syncing repositories...", fg="yellow")
 
@@ -144,13 +144,6 @@ def _do_sync(spoof_os=None, spoof_arch=None) -> bool:
     total = sum(len(r['versions']) for r in cache['repos'])
     platform_str = f" ({spoof_os}/{spoof_arch})" if spoof_os else ""
     rprint(f"\nSynced {total} versions from {len(cache['repos'])} repos{platform_str}.", fg="green")
-
-    rprint("Updating browserforge...", fg="yellow")
-    try:
-        from browserforge.download import download as update_browserforge
-    except ImportError:
-        from browserforge.download import Download as update_browserforge
-    update_browserforge(headers=True, fingerprints=True)
 
     return True
 
