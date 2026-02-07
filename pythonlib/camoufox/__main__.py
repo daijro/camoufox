@@ -753,9 +753,9 @@ def version():
     Display version info
     """
     try:
-        rprint(f"Pip package:\t\tv{pkg_version('camoufox')}", fg="green")
+        rprint(f"Pip package:\t   v{pkg_version('camoufox')}", fg="green")
     except PackageNotFoundError:
-        rprint("Pip package:\t\tNot installed!", fg="red")
+        rprint("Pip package:\t   Not installed!", fg="red")
 
     active_v = None
     for v in list_installed():
@@ -764,7 +764,7 @@ def version():
             break
 
     if not active_v:
-        rprint("Active:\t\t\tNot installed!", fg="red")
+        rprint("Active:\t\t   Not installed!", fg="red")
         return
 
     config = load_config()
@@ -773,12 +773,12 @@ def version():
 
     # Channel
     if pinned:
-        rprint(f"Channel:\t\t{channel.lower()} (Version pinned)", fg="cyan")
+        rprint(f"Channel:\t   {channel.lower()} (Version pinned)", fg="cyan")
     elif channel:
-        rprint(f"Channel:\t\t{channel.lower()} (Following updates)", fg="cyan")
+        rprint(f"Channel:\t   {channel.lower()} (Following updates)", fg="cyan")
 
     # Version with update status
-    rprint(f"Version:\t\tv{active_v.version.full_string} ", fg="green", nl=False)
+    rprint(f"Version:\t   v{active_v.version.full_string} ", fg="green", nl=False)
     if pinned:
         click.echo()
     elif channel:
@@ -807,7 +807,7 @@ def version():
 
         mtime = REPO_CACHE_FILE.stat().st_mtime
         dt = datetime.fromtimestamp(mtime, tz=timezone.utc).astimezone()
-        rprint(f"Last repos sync:\t{dt.strftime('%Y-%m-%d %H:%M')}", fg="bright_black")
+        rprint(f"Last repo sync:\t   {dt.strftime('%Y-%m-%d %H:%M')}", fg="bright_black")
 
 
 @cli.command(name='active')
