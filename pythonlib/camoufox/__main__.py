@@ -820,7 +820,18 @@ def active_cmd():
         if v.is_active:
             click.echo(v.channel_path)
             return
-    rprint("No active version.", fg="yellow")
+
+    config = load_config()
+    pinned = config.get('pinned')
+    channel = config.get('channel', '')
+    if pinned:
+        click.echo(f"{channel.lower()}/{pinned}")
+        rprint("(not installed)", fg="yellow")
+    elif channel:
+        click.echo(channel.lower())
+        rprint("(not installed)", fg="yellow")
+    else:
+        rprint("No active version.", fg="yellow")
 
 
 @cli.command(name='path')
