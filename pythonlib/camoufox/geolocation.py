@@ -143,13 +143,16 @@ def download_mmdb(
     MMDB_DIR.mkdir(parents=True, exist_ok=True)
 
     extract = config.get('extract', False)
-    dl_desc = f'Downloading {config["name"]}'
-    ex_desc = f'Extracting {config["name"]}'
-    max_len = max(len(dl_desc), len(ex_desc))
-    dl_desc = dl_desc.ljust(max_len)
-    ex_desc = ex_desc.ljust(max_len)
+    is_combined = 'combined' in urls
 
     for ip_ver, url_list in urls.items():
+        suffix = '' if is_combined else f' ({ip_ver})'
+        dl_desc = f'Downloading {config["name"]}{suffix}'
+        ex_desc = f'Extracting {config["name"]}{suffix}'
+        max_len = max(len(dl_desc), len(ex_desc))
+        dl_desc = dl_desc.ljust(max_len)
+        ex_desc = ex_desc.ljust(max_len)
+
         mmdb_path = MMDB_DIR / f"{name}-{ip_ver}.mmdb"
 
         if isinstance(url_list, str):

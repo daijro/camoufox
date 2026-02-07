@@ -825,10 +825,10 @@ def active_cmd():
     pinned = config.get('pinned')
     channel = config.get('channel', '')
     if pinned:
-        click.echo(f"{channel.lower()}/{pinned}")
+        click.echo(f"{channel.lower()}/{pinned} ", nl=False)
         rprint("(not installed)", fg="yellow")
     elif channel:
-        click.echo(channel.lower())
+        click.echo(f"{channel.lower()} ", nl=False)
         rprint("(not installed)", fg="yellow")
     else:
         rprint("No active version.", fg="yellow")
@@ -843,5 +843,4 @@ def path_cmd():
 
 
 if __name__ == '__main__':
-    cli()
     cli()
