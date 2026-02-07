@@ -49,19 +49,38 @@ To uninstall, run `camoufox remove`.
 
 ---
 
-## Installing browser versions
+# Installing multiple Camoufox versions & from other repos
 
-### UI Manager
+## UI Manager
 
-To use the gui, install the needed library:
+Manage installed browsers, active version, IP geolocation databases, and package info. Basically a Qt front end for the Python CLI tool.
+
+More updates on it will be coming soon.
+
+<img width="1199" height="815" alt="manager-ui" src="https://github.com/user-attachments/assets/aeef1b58-64ea-45f8-8d01-ac646366169d" />
+
+<hr width=50>
+
+To use the gui, install Camoufox with the `[gui]` extra:
 
 ```bash
 pip install 'camoufox[gui]'
 ```
 
+To launch:
+
+```bash
+camoufox gui
+```
+
 ---
 
-### CLI Commands
+## CLI Mananger
+
+#### Demonstration
+
+https://github.com/user-attachments/assets/992b1830-6b21-4024-9165-728854df1473
+
 
 <details>
 <summary>See help message</summary>
@@ -125,7 +144,7 @@ Interactive selector:
 You can also pass a specifier to pin a specific version or choose a channel to follow directly. This will pull the latest stable version from the official repo on `camoufox fetch`.
 
 ```bash
-> camoufox set official/stable  # This is the default setting
+> camoufox set official/stable  # default setting
 ```
 
 Follow latest prerelease version from the official repo:
@@ -167,8 +186,8 @@ coryking/stable/142.0.1-fork.26 (not installed)
 Install the active version, or a specific version. This will also automatically sync repository assets.
 
 ```bash
-> camoufox fetch                              # install active channel's latest
-> camoufox fetch official/135.0-beta.25       # install a specific version
+> camoufox fetch                          # install active channel's latest
+> camoufox fetch official/135.0-beta.25   # install a specific version
 ```
 
 <hr width=50>
@@ -178,9 +197,9 @@ Install the active version, or a specific version. This will also automatically 
 List installed or all available Camoufox versions as a tree.
 
 ```bash
-> camoufox list                       # show installed versions
-> camoufox list all                   # show all available versions from synced repos
-> camoufox list --path                # show full install paths
+> camoufox list          # show installed versions
+> camoufox list all      # show all available versions from synced repos
+> camoufox list --path   # show full install paths
 ```
 
 <hr width=50>
@@ -192,20 +211,24 @@ Remove installed browser versions and/or GeoIP data. Opens an interactive select
 Interactively select a specific version to remove:
 
 ```bash
-camoufox remove                                     # interactive selection
+> camoufox remove  # interactive selection
+Pip package:    v0.5.0
+Channel:        official/prerelease (Version pinned)
+Version:        v146.0.1-beta.25 
+Last repo sync: 2026-02-07 04:36
 ```
 
 Remove a specific version:
 
 ```bash
-camoufox remove official/stable/134.0.2-beta.20     # remove a specific version
+> camoufox remove official/stable/134.0.2-beta.20
 ```
 
 Remove all:
 
 ```bash
-camoufox remove --all                               # remove everything
-camoufox remove --all -y                            # skip confirmation prompts
+> camoufox remove --all
+> camoufox remove --all -y  # skip confirmation prompts
 ```
 
 <hr width=50>
@@ -215,7 +238,11 @@ camoufox remove --all -y                            # skip confirmation prompts
 Display the Python package version, active browser version, channel, and update status.
 
 ```bash
-camoufox version
+> camoufox version
+Pip package:       v0.5.0
+Channel:           official/prerelease (Version pinned)
+Version:           v146.0.1-beta.25 
+Last repo sync:    2026-02-07 04:36
 ```
 
 <hr width=50>
@@ -254,4 +281,4 @@ Launch a remote Playwright server.
 
 ## Usage
 
-All of the latest documentation is avaliable at [camoufox.com/python](https://camoufox.com/python).
+All of the latest stable documentation is avaliable at [camoufox.com/python](https://camoufox.com/python).
