@@ -73,6 +73,7 @@ LAUNCH_FILE = {
     'lin': 'camoufox-bin',
 }
 
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 console = Console()
 
@@ -356,7 +357,8 @@ class GitHubDownloader:
         """
         Fetch the first matching release asset from GitHub
         """
-        resp = requests.get(self.api_url, timeout=20)
+        headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
+        resp = requests.get(self.api_url, timeout=20, headers=headers)
         resp.raise_for_status()
 
         releases = resp.json()
@@ -677,7 +679,8 @@ def webdl(
     """
     Download a file from the given URL
     """
-    response = requests.get(url, stream=True)
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if "api.github" in url and GITHUB_TOKEN else {}
+    response = requests.get(url, stream=True, headers=headers)
     response.raise_for_status()
 
     total_size = int(response.headers.get('content-length', 0))
