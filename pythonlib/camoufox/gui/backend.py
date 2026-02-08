@@ -126,7 +126,8 @@ class SyncWorker(Worker):
 
             cache['spoof_os'] = self.spoof_os
             cache['spoof_arch'] = self.spoof_arch
-            cache['sync_time'] = datetime.now().strftime('%-m/%-d/%Y %-I:%M %p')
+            _dfmt = '%#m/%#d/%Y %#I:%M %p' if sys.platform == 'win32' else '%-m/%-d/%Y %-I:%M %p'
+            cache['sync_time'] = datetime.now().strftime(_dfmt)
             save_repo_cache(cache)
             total = sum(len(r['versions']) for r in cache['repos'])
             self.done.emit(True, f"Synced {total} versions")
@@ -446,7 +447,8 @@ class Backend(QObject):
             from datetime import datetime
 
             dt = datetime.strptime(raw, '%Y-%m-%d %H:%M')
-            return dt.strftime('%-m/%-d/%Y %-I:%M %p')
+            _dfmt = '%#m/%#d/%Y %#I:%M %p' if sys.platform == 'win32' else '%-m/%-d/%Y %-I:%M %p'
+            return dt.strftime(_dfmt)
         except ValueError:
             return raw
 
