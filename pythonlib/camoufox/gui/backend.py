@@ -272,6 +272,7 @@ class Backend(QObject):
         self._worker = None
         self._channel_data = None
 
+        self._geoip_available = False
         self._geoip_sources = []
         self._geoip_names = []
         self._geoip_installed = ""
@@ -334,6 +335,10 @@ class Backend(QObject):
     def selectedIsPrerelease(self):
         item = self._version_model.get(self._selected)
         return item.is_prerelease if item else False
+
+    @Property(bool, notify=geoipChanged)
+    def geoipAvailable(self):
+        return self._geoip_available
 
     @Property(list, notify=geoipChanged)
     def geoipSources(self):
@@ -788,9 +793,11 @@ class Backend(QObject):
             )
 
             if not ALLOW_GEOIP:
+                self._geoip_available = False
                 self.geoipChanged.emit()
                 return
 
+            self._geoip_available = True
             repos, _ = _load_geoip_repos()
             self._geoip_names = self._geoip_sources = [r.get('name', '?') for r in repos]
 

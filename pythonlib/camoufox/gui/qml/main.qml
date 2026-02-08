@@ -861,8 +861,35 @@ ApplicationWindow {
                             }
                         }
 
+                        Rectangle {
+                            Layout.fillWidth: true
+                            visible: !backend.geoipAvailable
+                            height: visible ? notInstalledCol.height + s4 * 2 : 0
+                            color: c.fg
+
+                            ColumnLayout {
+                                id: notInstalledCol
+                                anchors.centerIn: parent
+                                spacing: s2
+
+                                T {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: "IP Geolocation support is missing."
+                                    font.pixelSize: textMd
+                                }
+
+                                T {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: "Run: pip install camoufox[geoip]"
+                                    color: c.muted
+                                    font.family: root.fontMain
+                                }
+                            }
+                        }
+
                         Column {
                             Layout.fillWidth: true
+                            visible: backend.geoipAvailable
                             spacing: 0
 
                             Repeater {
@@ -940,10 +967,11 @@ ApplicationWindow {
                             }
                         }
 
-                        Rule { Layout.fillWidth: true; Layout.topMargin: s3 }
+                        Rule { Layout.fillWidth: true; Layout.topMargin: s3; visible: backend.geoipAvailable }
 
                         // IP Lookup
                         ColumnLayout {
+                            visible: backend.geoipAvailable
                             Layout.fillWidth: true
                             Layout.margins: s4
                             spacing: s2
