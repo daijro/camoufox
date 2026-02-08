@@ -374,7 +374,7 @@ ApplicationWindow {
             spacing: s3
 
             Bold {
-                text: dlgAct === "install" || dlgAct === "promptInstall" ? "Install"
+                text: (dlgAct === "install" || dlgAct === "promptInstall") ? "Install"
                      : dlgAct === "uninstall" ? "Uninstall" : "Set Active"
                 font.pixelSize: textMd
             }
@@ -386,7 +386,7 @@ ApplicationWindow {
                     ? "Camoufox " + dlgVer + "-" + dlgBuild + " is now active but not installed. Install it now?"
                     : (dlgAct === "install" ? "Install" : dlgAct === "uninstall" ? "Remove" : "Set") +
                       " Camoufox " + dlgVer + "-" + dlgBuild +
-                      (dlgAct === "uninstall" ? " from disk?" : dlgAct === "setActive" ? " as active?" : "?")
+                      (dlgAct === "install" ? "?" : dlgAct === "uninstall" ? " from disk?" : " as active?")
             }
 
             T {
@@ -409,14 +409,21 @@ ApplicationWindow {
                 }
 
                 Btn {
-                    text: dlgAct === "install" || dlgAct === "promptInstall" ? "Install"
+                    text: (dlgAct === "install" || dlgAct === "promptInstall") ? "Install"
                         : dlgAct === "uninstall" ? "Uninstall" : "Set Active"
-                    accent: dlgAct === "uninstall" ? c.err : dlgAct === "setActive" ? c.accent : c.ok
+                    accent: dlgAct === "uninstall" ? c.err
+                        : (dlgAct === "install" || dlgAct === "promptInstall") ? c.ok : c.accent
                     onClicked: {
                         if (dlgAct === "install" || dlgAct === "promptInstall") {
                             backend.installSelected()
                         } else if (dlgAct === "uninstall") {
                             backend.uninstallSelected()
+                        } else if (dlgAct === "channel") {
+                            backend.confirmFollowChannel()
+                            if (backend.canInstall) {
+                                dlgAct = "promptInstall"
+                                return
+                            }
                         } else {
                             backend.setActive(dlgIdx)
                             backend.selectVersion(dlgIdx)
@@ -437,8 +444,8 @@ ApplicationWindow {
         function onCurrentRepoChanged() {
             repoList.currentIndex = backend.currentRepoIndex
         }
-        function onInstallPrompt(idx, display, build) {
-            showDlg("promptInstall", idx, display, build)
+        function onChannelPrompt(idx, display, build) {
+            showDlg("channel", idx, display, build)
         }
     }
 
@@ -697,7 +704,7 @@ ApplicationWindow {
                                 width: vList.width - vList.scrollBarWidth
                                 height: row
                                 color: model.isHeader ? c.fg :
-                                       model.isActive ? Qt.rgba(c.accent.r, c.accent.g, c.accent.b, 0.06) :
+                                       model.isPinned ? Qt.rgba(c.accent.r, c.accent.g, c.accent.b, 0.06) :
                                        hov ? Qt.rgba(1, 1, 1, 0.02) : "transparent"
 
                                 Rectangle {
@@ -717,7 +724,7 @@ ApplicationWindow {
                                 Rectangle {
                                     width: s1
                                     height: parent.height
-                                    color: model.isActive && !model.isHeader ? c.accent : "transparent"
+                                    color: model.isPinned && !model.isHeader ? c.accent : "transparent"
                                 }
 
                                 HoverHandler { id: hover }

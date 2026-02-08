@@ -256,7 +256,7 @@ class Backend(QObject):
     infoChanged = Signal()
     debugChanged = Signal()
     currentRepoChanged = Signal()
-    installPrompt = Signal(int, str, str)
+    channelPrompt = Signal(int, str, str)
 
     def __init__(self):
         super().__init__()
@@ -291,6 +291,7 @@ class Backend(QObject):
         self._spoof_os_idx = 0
         self._spoof_arch_idx = 0
         self._spoof_lib_ver = ""
+        self._pending_channel = None
         self._load_spoof_from_cache()
         self._load_geoip()
 
@@ -600,51 +601,61 @@ class Backend(QObject):
 
         key = keys[index]
         cfg = load_config()
-        is_follow = cfg.get('channel', '') != key
+        cfg['channel'] = key
+        cfg.pop('pinned', None)
 
-        if not is_follow:
-            cfg.pop('channel', None)
-        else:
-            cfg['channel'] = key
-            cfg.pop('pinned', None)
-
-            repo_name, ctype = (key.split('/', 1) + ['stable'])[:2]
-            cache = load_repo_cache()
-            if cache:
-                for repo in cache.get('repos', []):
-                    if repo['name'].lower() == repo_name.lower():
-                        is_pre = ctype == 'prerelease'
-                        candidates = [
-                            v for v in repo.get('versions', [])
-                            if v.get('is_prerelease') == is_pre
-                        ]
-                        if candidates:
-                            cfg['active_build'] = candidates[0]['build']
-                            cfg['active_version'] = candidates[0]['version']
-                            cfg['active_repo'] = repo_name
-                        break
-
-            for rc in self._repo_configs:
-                if rc.name.lower() == repo_name.lower():
-                    self._current_repo = rc
-                    self.currentRepoChanged.emit()
+        repo_name, ctype = (key.split('/', 1) + ['stable'])[:2]
+        is_pre = ctype == 'prerelease'
+        display, build = "", ""
+        cache = load_repo_cache()
+        if cache:
+            for repo in cache.get('repos', []):
+                if repo['name'].lower() == repo_name.lower():
+                    candidates = [
+                        v for v in repo.get('versions', [])
+                        if v.get('is_prerelease') == is_pre
+                    ]
+                    if candidates:
+                        cfg['active_build'] = candidates[0]['build']
+                        cfg['active_version'] = candidates[0]['version']
+                        cfg['active_repo'] = repo_name
+                        display = f"v{candidates[0]['version']}"
+                        build = candidates[0]['build']
                     break
 
+        if not display:
+            return
+
+        # Send everything to pending until the prompt closes
+        self._pending_channel = (cfg, repo_name, is_pre)
+        self.channelPrompt.emit(-1, display, build)
+
+    @Slot()
+    def confirmFollowChannel(self):
+        if self._pending_channel is None:
+            return
+        cfg, repo_name, is_pre = self._pending_channel
+        self._pending_channel = None
         save_config(cfg)
+
+        for rc in self._repo_configs:
+            if rc.name.lower() == repo_name.lower():
+                self._current_repo = rc
+                self.currentRepoChanged.emit()
+                break
+
         self._refresh()
         self.infoChanged.emit()
 
-        if is_follow:
-            is_pre = '/' in key and key.split('/')[1] == 'prerelease'
-            for idx, item in enumerate(self._version_model._items):
-                if item.is_header:
-                    continue
-                if item.is_prerelease == is_pre:
-                    if not item.is_installed:
-                        self._selected = idx
-                        self.selectionChanged.emit()
-                        self.installPrompt.emit(idx, item.display, item.build)
-                    break
+        for idx, item in enumerate(self._version_model._items):
+            if item.is_header:
+                continue
+            if item.is_prerelease == is_pre:
+                self._selected = idx
+                self.selectionChanged.emit()
+                if item.installed_data:
+                    set_active(item.installed_data.relative_path)
+                break
 
     @Slot()
     def installSelected(self):
