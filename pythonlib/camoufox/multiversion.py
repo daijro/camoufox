@@ -35,6 +35,15 @@ def load_config() -> Dict:
     return {}
 
 
+def get_default_channel() -> str:
+    """
+    Get the default repo's stable channel string (like official/stable)
+    """
+    from .pkgman import RepoConfig
+
+    return f"{RepoConfig.get_default_name().lower()}/stable"
+
+
 def save_config(config: Dict) -> None:
     """
     Save user config to disk

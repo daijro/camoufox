@@ -22,6 +22,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from ..multiversion import (
     BROWSERS_DIR,
     get_cached_versions,
+    get_default_channel,
     get_repo_name,
     list_installed,
     load_config,
@@ -85,10 +86,11 @@ class DownloadWorker(Worker):
 
 
 class SyncWorker(Worker):
-    def __init__(self, spoof_os=None, spoof_arch=None):
+    def __init__(self, spoof_os=None, spoof_arch=None, spoof_lib_ver=None):
         super().__init__()
         self.spoof_os = spoof_os
         self.spoof_arch = spoof_arch
+        self.spoof_lib_ver = spoof_lib_ver
 
     def run(self):
         try:
@@ -99,7 +101,7 @@ class SyncWorker(Worker):
             self.status.emit("Syncing...")
             cache = {'repos': []}
 
-            for rc in RepoConfig.load_repos():
+            for rc in RepoConfig.load_repos(spoof_library_version=self.spoof_lib_ver):
                 self.status.emit(f"Syncing {rc.name}...")
                 versions = list_available_versions(
                     rc,
@@ -126,6 +128,7 @@ class SyncWorker(Worker):
 
             cache['spoof_os'] = self.spoof_os
             cache['spoof_arch'] = self.spoof_arch
+            cache['spoof_lib_ver'] = self.spoof_lib_ver
             _dfmt = '%#m/%#d/%Y %#I:%M %p' if sys.platform == 'win32' else '%-m/%-d/%Y %-I:%M %p'
             cache['sync_time'] = datetime.now().strftime(_dfmt)
             save_repo_cache(cache)
@@ -287,6 +290,7 @@ class Backend(QObject):
 
         self._spoof_os_idx = 0
         self._spoof_arch_idx = 0
+        self._spoof_lib_ver = ""
         self._load_spoof_from_cache()
         self._load_geoip()
 
@@ -385,23 +389,20 @@ class Backend(QObject):
         cfg = load_config()
         if cfg.get('pinned'):
             return f"v{cfg['pinned']}"
-        channel = cfg.get('channel', '')
-        if channel:
-            _, keys, latest = self._build_channels()
-            try:
-                return latest[keys.index(channel)] or channel
-            except ValueError:
-                return channel
-        return "(no channel set)"
+        channel = cfg.get('channel') or get_default_channel()
+        _, keys, latest = self._build_channels()
+        try:
+            return latest[keys.index(channel)] or channel
+        except ValueError:
+            return channel
 
     @Property(str, notify=infoChanged)
     def activeBrowserColor(self):
-        cfg = load_config()
-        return "#26a69a" if cfg.get('channel') or cfg.get('pinned') else "#888888"
+        return "#26a69a"
 
     @Property(str, notify=infoChanged)
     def followedChannel(self):
-        return load_config().get('channel', '')
+        return load_config().get('channel') or get_default_channel()
 
     @Property(list, notify=infoChanged)
     def channels(self):
@@ -416,19 +417,23 @@ class Backend(QObject):
         return self._build_channels()[2]
 
     @Property(str, notify=infoChanged)
+    def activeBrowserLabel(self):
+        cfg = load_config()
+        return "Pinned Version" if cfg.get('pinned') else "Active Channel"
+
+    @Property(str, notify=infoChanged)
     def activeLabel(self):
         cfg = load_config()
-        channel = cfg.get('channel', '')
         pinned = cfg.get('pinned')
-        if channel:
-            channels, keys, _ = self._build_channels()
-            try:
-                return f"Active: following {channels[keys.index(channel)]}"
-            except ValueError:
-                return f"Active: following {channel}"
         if pinned:
-            return f"Active: pinned to v{pinned}"
-        return ""
+            return f"Pinned version: v{pinned}"
+        channel = cfg.get('channel') or get_default_channel()
+        parts = channel.split('/', 1)
+        repo = parts[0].capitalize()
+        ctype = parts[1] if len(parts) > 1 else 'stable'
+        if ctype == 'stable':
+            return f"Following channel: {repo}"
+        return f"Following channel: {repo}/{ctype}"
 
     @Property(str, notify=infoChanged)
     def libraryVersion(self):
@@ -443,11 +448,15 @@ class Backend(QObject):
         return self._pkg_version('browserforge')
 
     @Property(str, notify=infoChanged)
+    def fingerprintVersion(self):
+        return self._pkg_version('apify_fingerprint_datapoints')
+
+    @Property(str, notify=infoChanged)
     def lastSyncTime(self):
         cache = load_repo_cache()
-        raw = cache.get('sync_time', 'Never') if cache else 'Never'
-        if raw == 'Never':
-            return raw
+        raw = cache.get('sync_time') if cache else None
+        if not raw:
+            return ""
         try:
             from datetime import datetime
 
@@ -481,6 +490,10 @@ class Backend(QObject):
     @Property(int, notify=debugChanged)
     def spoofArchIndex(self):
         return self._spoof_arch_idx
+
+    @Property(str, notify=debugChanged)
+    def spoofLibVer(self):
+        return self._spoof_lib_ver
 
     @Property(int, notify=currentRepoChanged)
     def currentRepoIndex(self):
@@ -661,7 +674,8 @@ class Backend(QObject):
     def sync(self):
         spoof_os = OS_OPTIONS[self._spoof_os_idx] if self._spoof_os_idx > 0 else None
         spoof_arch = ARCH_OPTIONS[self._spoof_arch_idx] if self._spoof_arch_idx > 0 else None
-        self._run_worker(SyncWorker(spoof_os, spoof_arch), self._on_done)
+        spoof_lib = self._spoof_lib_ver or None
+        self._run_worker(SyncWorker(spoof_os, spoof_arch, spoof_lib), self._on_done)
 
     @Slot()
     def cancelOperation(self):
@@ -725,6 +739,11 @@ class Backend(QObject):
     @Slot(int)
     def setSpoofArch(self, index):
         self._spoof_arch_idx = index
+        self.debugChanged.emit()
+
+    @Slot(str)
+    def setSpoofLibVer(self, ver):
+        self._spoof_lib_ver = ver.strip()
         self.debugChanged.emit()
 
     @Slot()
@@ -836,10 +855,13 @@ class Backend(QObject):
             return
         spoof_os = cache.get('spoof_os')
         spoof_arch = cache.get('spoof_arch')
+        spoof_lib = cache.get('spoof_lib_ver')
         if spoof_os and spoof_os in OS_OPTIONS:
             self._spoof_os_idx = OS_OPTIONS.index(spoof_os)
         if spoof_arch and spoof_arch in ARCH_OPTIONS:
             self._spoof_arch_idx = ARCH_OPTIONS.index(spoof_arch)
+        if spoof_lib:
+            self._spoof_lib_ver = spoof_lib
 
     def _refresh(self):
         items = []
@@ -856,7 +878,6 @@ class Backend(QObject):
         versions = get_cached_versions(self._current_repo.name)
 
         if not versions:
-            self._set_status("No cache. Run Sync.", "#f39c12")
             self._version_model.set_items(items)
             return
 

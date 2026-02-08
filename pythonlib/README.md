@@ -57,7 +57,7 @@ Manage installed browsers, active version, IP geolocation databases, and package
 
 More updates on it will be coming soon.
 
-<img width="1199" height="815" alt="manager-ui" src="https://github.com/user-attachments/assets/aeef1b58-64ea-45f8-8d01-ac646366169d" />
+<img width="1207" height="830" alt="ui-screenshot" src="https://github.com/user-attachments/assets/6668f8f0-5b08-4c36-bbea-fea4baeccc9c" />
 
 <hr width=50>
 

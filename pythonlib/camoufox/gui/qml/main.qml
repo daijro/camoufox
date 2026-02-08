@@ -528,60 +528,6 @@ ApplicationWindow {
                             anchors.left: parent.left
                             anchors.leftMargin: s3
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "CHANNEL"
-                        }
-                    }
-
-                    Repeater {
-                        model: backend.channels
-
-                        Rectangle {
-                            width: parent ? parent.width : 0
-                            height: row + s2
-                            color: chMa.containsMouse ? c.raised : "transparent"
-
-                            Column {
-                                anchors.left: parent.left
-                                anchors.leftMargin: s4
-                                anchors.right: parent.right
-                                anchors.rightMargin: s3
-                                anchors.verticalCenter: parent.verticalCenter
-                                spacing: 1
-
-                                Row {
-                                    spacing: s2
-                                    Check { on: backend.followedChannel === backend.channelKeys[index]; anchors.verticalCenter: parent.verticalCenter }
-                                    T { text: (backend.followedChannel === backend.channelKeys[index] ? "Following " : "Follow ") + modelData; anchors.verticalCenter: parent.verticalCenter }
-                                }
-
-                                Muted {
-                                    leftPadding: s3 + s2
-                                    text: backend.channelLatest[index] ? ("(latest: " + backend.channelLatest[index] + ")") : "(sync first)"
-                                    font.pixelSize: Math.round(10 * scale)
-                                }
-                            }
-
-                            MouseArea {
-                                id: chMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: backend.setFollowedChannel(index)
-                            }
-                        }
-                    }
-
-                    Rule {}
-
-                    Rectangle {
-                        width: parent.width
-                        height: row
-                        color: "transparent"
-
-                        Header {
-                            anchors.left: parent.left
-                            anchors.leftMargin: s3
-                            anchors.verticalCenter: parent.verticalCenter
                             text: "REPOSITORIES"
                         }
                     }
@@ -611,6 +557,60 @@ ApplicationWindow {
                         }
 
                         Component.onCompleted: backend.selectRepo(0)
+                    }
+
+                    Rule {}
+
+                    Rectangle {
+                        width: parent.width
+                        height: row
+                        color: "transparent"
+
+                        Header {
+                            anchors.left: parent.left
+                            anchors.leftMargin: s3
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "FOLLOW CHANNEL"
+                        }
+                    }
+
+                    Repeater {
+                        model: backend.channels
+
+                        Rectangle {
+                            width: parent ? parent.width : 0
+                            height: row + s2
+                            color: chMa.containsMouse ? c.raised : "transparent"
+
+                            Column {
+                                anchors.left: parent.left
+                                anchors.leftMargin: s4
+                                anchors.right: parent.right
+                                anchors.rightMargin: s3
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 1
+
+                                Row {
+                                    spacing: s2
+                                    Check { on: backend.followedChannel === backend.channelKeys[index]; anchors.verticalCenter: parent.verticalCenter }
+                                    T { text: (backend.followedChannel === backend.channelKeys[index] ? "Following " : "Follow ") + modelData; anchors.verticalCenter: parent.verticalCenter }
+                                }
+
+                                Muted {
+                                    leftPadding: s3 + s2
+                                    text: backend.channelLatest[index] ? ("Latest: " + backend.channelLatest[index]) : "(sync first)"
+                                    font.pixelSize: Math.round(10 * scale)
+                                }
+                            }
+
+                            MouseArea {
+                                id: chMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: backend.setFollowedChannel(index)
+                            }
+                        }
                     }
                 }
 
@@ -678,7 +678,11 @@ ApplicationWindow {
                             clip: true
                             model: backend.versionModel
 
+                            property real scrollBarWidth: vScrollBar.visible ? vScrollBar.width : 0
+
                             ScrollBar.vertical: ScrollBar {
+                                id: vScrollBar
+                                policy: vList.contentHeight > vList.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
                                 contentItem: Rectangle {
                                     implicitWidth: s2
                                     radius: s1
@@ -690,7 +694,7 @@ ApplicationWindow {
                                 id: vrow
                                 property bool hov: hover.hovered
 
-                                width: vList.width
+                                width: vList.width - vList.scrollBarWidth
                                 height: row
                                 color: model.isHeader ? c.fg :
                                        model.isActive ? Qt.rgba(c.accent.r, c.accent.g, c.accent.b, 0.06) :
@@ -1101,7 +1105,7 @@ ApplicationWindow {
                         columnSpacing: s4 * 2
                         rowSpacing: s2
 
-                        Muted { text: "Active Browser" }
+                        Muted { text: backend.activeBrowserLabel }
                         Bold { text: backend.activeBrowserText; color: backend.activeBrowserColor }
 
                         Muted { text: "Python Library" }
@@ -1113,11 +1117,11 @@ ApplicationWindow {
                         Muted { text: "Browserforge" }
                         T { text: backend.browserforgeVersion }
 
-                        Muted { text: "Last Sync" }
-                        T { text: backend.lastSyncTime }
+                        Muted { text: "Fingerprints" }
+                        T { text: backend.fingerprintVersion }
 
-                        Muted { text: "Repos" }
-                        T { text: backend.reposInfo }
+                        Muted { text: "Last Sync" }
+                        T { text: backend.lastSyncTime || "Never" }
 
                         Muted { text: "Website" }
                         T {
@@ -1156,13 +1160,38 @@ ApplicationWindow {
                                 implicitWidth: Math.round(90 * scale)
                             }
                         }
+
+                        Row {
+                            spacing: s2
+                            Muted { text: "Lib Version"; anchors.verticalCenter: parent.verticalCenter }
+                            Rectangle {
+                                width: Math.round(80 * scale)
+                                height: Math.round(24 * scale)
+                                color: "#1affffff"
+                                radius: Math.round(3 * scale)
+                                TextInput {
+                                    anchors.fill: parent
+                                    anchors.margins: Math.round(4 * scale)
+                                    color: "#fff"
+                                    font.pixelSize: Math.round(11 * scale)
+                                    text: backend.spoofLibVer
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    clip: true
+                                    selectByMouse: true
+                                    property string placeholder: "(auto)"
+                                    Text {
+                                        text: parent.placeholder
+                                        color: "#80ffffff"
+                                        font: parent.font
+                                        visible: !parent.text && !parent.activeFocus
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    onEditingFinished: backend.setSpoofLibVer(text)
+                                }
+                            }
+                        }
                     }
 
-                    Muted {
-                        visible: debugMode
-                        text: "Set spoof options then Sync on Browsers tab"
-                        font.pixelSize: Math.round(10 * scale)
-                    }
 
                     Rule { visible: debugMode }
 
@@ -1238,14 +1267,14 @@ ApplicationWindow {
 
                 Btn {
                     icon: "\uE895"
-                    text: "Sync Upstream"
+                    text: "Sync Repos"
                     accent: c.accent
                     on: !backend.busy
                     onClicked: backend.sync()
                 }
 
                 Muted {
-                    text: "Synced: " + backend.lastSyncTime
+                    text: backend.lastSyncTime ? "Synced: " + backend.lastSyncTime : "Sync has not been ran yet."
                     visible: !backend.busy
                 }
 

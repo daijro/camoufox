@@ -144,14 +144,14 @@ class RepoConfig:
     build_max: Optional[str] = None
 
     @staticmethod
-    def load_repos() -> List['RepoConfig']:
+    def load_repos(spoof_library_version: Optional[str] = None) -> List['RepoConfig']:
         """
         Load repository configurations from repos.yml
         """
         repos_path = LOCAL_DATA / 'repos.yml'
         with open(repos_path, 'r') as f:
             data = load(f, Loader=CLoader)
-        return [RepoConfig.from_dict(r) for r in data.get('browsers', [])]
+        return [RepoConfig.from_dict(r, spoof_library_version) for r in data.get('browsers', [])]
 
     @staticmethod
     def get_default_name() -> str:
@@ -164,7 +164,7 @@ class RepoConfig:
         return data.get('default', {}).get('browser', 'Official')
 
     @staticmethod
-    def from_dict(d: Dict) -> 'RepoConfig':
+    def from_dict(d: Dict, spoof_library_version: Optional[str] = None) -> 'RepoConfig':
         """
         Create RepoConfig from dictionary
         """
@@ -174,7 +174,7 @@ class RepoConfig:
         build_min: Optional[str] = None
         build_max: Optional[str] = None
         if d.get('versions'):
-            library_version = _get_library_version()
+            library_version = spoof_library_version or _get_library_version()
             browser = _find_version_constraints(d['versions'], library_version)
             if browser:
                 build_min = browser.get('min')
