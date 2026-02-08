@@ -614,51 +614,6 @@ ApplicationWindow {
                     }
                 }
 
-                Column {
-                    anchors.bottom: parent.bottom
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.rightMargin: 1
-
-                    Rule {}
-
-                    Rectangle {
-                        width: parent.width
-                        height: row
-                        color: "transparent"
-
-                        Header {
-                            anchors.left: parent.left
-                            anchors.leftMargin: s3
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "FILTERS"
-                        }
-                    }
-
-                    SideRow {
-                        Row {
-                            anchors.left: parent.left
-                            anchors.leftMargin: s4
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: s2
-
-                            Check {
-                                id: filterChk
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-
-                            T {
-                                text: "Installed only"
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
-
-                        onClicked: {
-                            filterChk.on = !filterChk.on
-                            backend.setInstalledOnly(filterChk.on)
-                        }
-                    }
-                }
             }
 
             StackLayout {
