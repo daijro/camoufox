@@ -139,7 +139,7 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +#include "WebGLParamsManager.h"
  #include "WindowDestroyedEvent.h"
  #include "WindowNamedPropertiesHandler.h"
-@@ -7477,6 +7478,40 @@
+@@ -7477,6 +7478,38 @@
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
 
@@ -155,7 +155,6 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
 +      JS_DeleteProperty(cx, global, "setWebGLVendor");
-+      JS_DeleteProperty(cx, global, "setWebGLRenderer");
 +    }
 +  }
 +}
@@ -171,7 +170,6 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
-+      JS_DeleteProperty(cx, global, "setWebGLVendor");
 +      JS_DeleteProperty(cx, global, "setWebGLRenderer");
 +    }
 +  }
