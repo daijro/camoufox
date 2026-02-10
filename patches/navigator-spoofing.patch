@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..1234567890
 --- /dev/null
 +++ b/dom/base/NavigatorManager.h
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,75 @@
 +/* Camoufox: Per-context navigator property manager */
 +#ifndef mozilla_dom_NavigatorManager_h
 +#define mozilla_dom_NavigatorManager_h
@@ -66,7 +66,11 @@ index 0000000000..1234567890
 +  static uint32_t GetHardwareConcurrency(uint32_t aId) {
 +    nsAutoString key;
 +    key.AppendPrintf("nav_hwc_%u", aId);
-+    return RoverfoxStorageManager::GetUint(key);
++    uint32_t value = 0;
++    if (RoverfoxStorageManager::GetUint(key, value)) {
++      return value;
++    }
++    return 0;
 +  }
 +
 +  static bool IsHwcFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
