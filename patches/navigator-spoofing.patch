@@ -374,11 +374,14 @@ index abcdef1234..5678901234 100644
      "NodeInfo.h",
      "NodeInfoInlines.h",
      "NodeIterator.h",
-@@ -412,5 +413,6 @@ UNIFIED_SOURCES += [
-     "MozQueryInterface.cpp",
-     "Navigator.cpp",
-+    "NavigatorManager.cpp",
-     "NodeInfo.cpp",
-     "NodeIterator.cpp",
-     "NodeUbiReporting.cpp",
+@@ -326,6 +327,9 @@ SOURCES += [
+     "nsWindowSizes.cpp",
+ ]
+
++# NavigatorManager compiled separately to avoid scope leakage in unified builds
++SOURCES += ["NavigatorManager.cpp"]
++
+ UNIFIED_SOURCES += [
+     "AbstractRange.cpp",
+     "AnonymousContent.cpp",
  
