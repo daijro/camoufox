@@ -3,12 +3,14 @@ new file mode 100644
 index 0000000000..1234567890
 --- /dev/null
 +++ b/dom/base/NavigatorManager.h
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,78 @@
 +/* Camoufox: Per-context navigator property manager */
 +#ifndef mozilla_dom_NavigatorManager_h
 +#define mozilla_dom_NavigatorManager_h
 +
 +#include "nsString.h"
++#include "nsTHashMap.h"
++#include "nsHashKeys.h"
 +#include "RoverfoxStorageManager.h"
 +
 +namespace mozilla {
