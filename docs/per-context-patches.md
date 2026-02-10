@@ -11,6 +11,9 @@ Camoufox spoofs fingerprints globally via `CAMOU_CONFIG` — every browser conte
 | `window.setTimezone(tz)` | `timezone-spoofing.patch` | `Date`, `Intl.DateTimeFormat`, all time APIs |
 | `window.setScreenDimensions(w, h)` | `screen-spoofing.patch` | `screen.width`, `screen.height` |
 | `window.setScreenColorDepth(depth)` | `screen-spoofing.patch` | `screen.colorDepth` |
+| `window.setNavigatorPlatform(platform)` | `navigator-spoofing.patch` | `navigator.platform` |
+| `window.setNavigatorOscpu(oscpu)` | `navigator-spoofing.patch` | `navigator.oscpu` |
+| `window.setNavigatorHardwareConcurrency(cores)` | `navigator-spoofing.patch` | `navigator.hardwareConcurrency` |
 | `window.setWebRTCIPv4(ip)` | `webrtc-ip-spoofing.patch` | WebRTC ICE candidates, SDP, getStats() |
 | `window.setWebRTCIPv6(ip)` | `webrtc-ip-spoofing.patch` | WebRTC IPv6 addresses |
 
@@ -55,6 +58,15 @@ await context.addInitScript((values) => {
   if (typeof w.setWebRTCIPv4 === 'function') {
     w.setWebRTCIPv4(values.webrtcIPv4);
   }
+  if (typeof w.setNavigatorPlatform === 'function') {
+    w.setNavigatorPlatform(values.navigatorPlatform);
+  }
+  if (typeof w.setNavigatorOscpu === 'function') {
+    w.setNavigatorOscpu(values.navigatorOscpu);
+  }
+  if (typeof w.setNavigatorHardwareConcurrency === 'function') {
+    w.setNavigatorHardwareConcurrency(values.hardwareConcurrency);
+  }
 }, {
   fontSpacingSeed: 12345678,
   audioFingerprintSeed: 87654321,
@@ -63,6 +75,9 @@ await context.addInitScript((values) => {
   screenHeight: 1080,
   screenColorDepth: 24,
   webrtcIPv4: '203.0.113.1',  // your proxy IP
+  navigatorPlatform: 'Win32',
+  navigatorOscpu: 'Windows NT 10.0; Win64; x64',
+  hardwareConcurrency: 8,
 });
 
 const page = await context.newPage();
@@ -252,21 +267,34 @@ window.setWebRTCIPv6('2001:db8::1');   // proxy exit IPv6 (optional)
 
 ---
 
-## Global-Only Patches (No JavaScript API)
+### 6. navigator-spoofing.patch
 
-These patches read from `CAMOU_CONFIG` at startup and apply to all contexts equally. They don't expose any `window.setXxx()` functions.
+**Controls:** `navigator.platform`, `navigator.oscpu`, `navigator.hardwareConcurrency` — per-context with global `CAMOU_CONFIG` fallback.
 
-### navigator-spoofing.patch
-
-**What it adds:** Hooks `Navigator::GetPlatform()` and `Navigator::HardwareConcurrency()` in the main window's `Navigator.cpp`. The existing `fingerprint-injection.patch` only hooked `WorkerNavigator.cpp` (Web Workers), so the main window was missing these overrides.
+**How it works:** Stores values per context via `NavigatorManager`, then hooks `Navigator::GetPlatform()`, `Navigator::GetOscpu()`, and `Navigator::HardwareConcurrency()` with a three-tier fallback: per-context values → global `CAMOU_CONFIG` → vanilla Firefox.
 
 Also adds `EnsureGlobalTimezoneInitialized()` — a lazy initializer that reads `timezone` from `CAMOU_CONFIG` on first access. This replaced a static initializer that caused SIGSEGV crashes because SpiderMonkey wasn't ready at init time.
 
+**API:**
+```javascript
+window.setNavigatorPlatform('Win32');              // navigator.platform
+window.setNavigatorOscpu('Windows NT 10.0; Win64; x64');  // navigator.oscpu
+window.setNavigatorHardwareConcurrency(8);         // navigator.hardwareConcurrency
+```
+
+**Global config fallback (no JavaScript needed):**
 ```json
 { "navigator.platform": "MacIntel", "navigator.hardwareConcurrency": 8, "timezone": "America/Los_Angeles" }
 ```
 
-**Modified:** `Navigator.cpp`
+**New C++ files:** `NavigatorManager.h/cpp`
+**Modified Firefox files:** `Navigator.cpp`, `nsGlobalWindowInner.cpp/h`, `Window.webidl`, `moz.build`
+
+---
+
+## Global-Only Patches (No JavaScript API)
+
+These patches read from `CAMOU_CONFIG` at startup and apply to all contexts equally. They don't expose any `window.setXxx()` functions.
 
 ### geolocation-spoofing.patch
 
