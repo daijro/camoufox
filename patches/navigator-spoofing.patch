@@ -85,7 +85,7 @@ new file mode 100644
 index 0000000000..2345678901
 --- /dev/null
 +++ b/dom/base/NavigatorManager.cpp
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,66 @@
 +/* Camoufox: Per-context navigator property manager */
 +#include "NavigatorManager.h"
 +
@@ -374,14 +374,13 @@ index abcdef1234..5678901234 100644
      "NodeInfo.h",
      "NodeInfoInlines.h",
      "NodeIterator.h",
-@@ -326,6 +327,9 @@ SOURCES += [
+@@ -326,4 +327,8 @@ SOURCES += [
      "nsWindowSizes.cpp",
  ]
 
-+# NavigatorManager compiled separately to avoid scope leakage in unified builds
++# NavigatorManager compiled separately to avoid unified build scope issues
++# (includes RoverfoxStorageManager.h which can affect compilation units)
 +SOURCES += ["NavigatorManager.cpp"]
 +
  UNIFIED_SOURCES += [
-     "AbstractRange.cpp",
-     "AnonymousContent.cpp",
  
