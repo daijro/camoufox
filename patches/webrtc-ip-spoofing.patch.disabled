@@ -3,11 +3,15 @@ new file mode 100644
 index 0000000000..94575f2631
 --- /dev/null
 +++ b/dom/base/WebRTCIPManager.cpp
-@@ -0,0 +1,218 @@
+@@ -0,0 +1,222 @@
 +#include "WebRTCIPManager.h"
 +#include "nsPrintfCString.h"
 +#include "nsGlobalWindowInner.h"
++#include "nsDocShell.h"
 +#include "xpcpublic.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "mozilla/dom/Document.h"
++#include "nsPIDOMWindow.h"
 +
 +namespace mozilla {
 +namespace dom {
@@ -337,24 +341,7 @@ diff --git a/dom/base/moz.build b/dom/base/moz.build
 index cd9090cda3..93cea20206 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -1,3 +1,8 @@
-+# Link system SQLite for RoverfoxStorageManager embedded usage
-+OS_LIBS += [
-+    'sqlite3',
-+]
-+
- # -*- Mode: python; indent-tabs-mode: nil; tab-width: 40 -*-
- # vim: set filetype=python:
- # This Source Code Form is subject to the terms of the Mozilla Public
-@@ -255,6 +260,7 @@ EXPORTS.mozilla.dom += [
-     "RequestCallbackManager.h",
-     "ResizeObserver.h",
-     "ResponsiveImageSelector.h",
-+    "RoverfoxStorageManager.h",
-     "SameProcessMessageQueue.h",
-     "ScreenLuminance.h",
-     "ScreenOrientation.h",
-@@ -289,6 +295,7 @@ EXPORTS.mozilla.dom += [
+@@ -289,6 +289,7 @@ EXPORTS.mozilla.dom += [
      "VideoFrameProvider.h",
      "ViewportMetaData.h",
      "VisualViewport.h",
@@ -362,15 +349,7 @@ index cd9090cda3..93cea20206 100644
      "WindowFeatures.h",
      "WindowProxyHolder.h",
  ]
-@@ -459,6 +466,7 @@ UNIFIED_SOURCES += [
-     "RemoteOuterWindowProxy.cpp",
-     "ResizeObserver.cpp",
-     "ResponsiveImageSelector.cpp",
-+    "RoverfoxStorageManager.cpp",
-     "SameProcessMessageQueue.cpp",
-     "ScreenLuminance.cpp",
-     "ScreenOrientation.cpp",
-@@ -494,6 +502,7 @@ UNIFIED_SOURCES += [
+@@ -494,6 +495,7 @@ UNIFIED_SOURCES += [
      "UserActivation.cpp",
      "ViewportMetaData.cpp",
      "VisualViewport.cpp",
@@ -974,19 +953,23 @@ index 62bb6eecff..da26fe05ee 100644
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
-\ No newline at end of file
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
 index 7c509eb87e..0a9010c2d1 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -892,6 +892,12 @@ partial interface Window {
+@@ -892,6 +892,17 @@ partial interface Window {
    readonly attribute VisualViewport visualViewport;
  };
- 
+
 +// WebRTC IP interfaces for privacy-preserving IP spoofing
 +partial interface Window {
 +  [Throws, Func="mozilla::dom::WebRTCIPManager::IsIPv4FunctionEnabledForWebIDL"]
 +  undefined setWebRTCIPv4(DOMString ipv4);
++};
++
++partial interface Window {
++  [Throws, Func="mozilla::dom::WebRTCIPManager::IsIPv6FunctionEnabledForWebIDL"]
++  undefined setWebRTCIPv6(DOMString ipv6);
 +};
 +
  // Used to assign marks to appear on the scrollbar when
