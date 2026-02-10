@@ -240,8 +240,8 @@ index 11578f425f..6c77acd7f3 100644
 +}
 +
 +uint32_t ClientWebGLContext::GetUserContextId() const {
-+  if (HTMLCanvasElement* element = GetCanvasElement()) {
-+    if (Document* doc = element->OwnerDoc()) {
++  if (mCanvasElement) {
++    if (Document* doc = mCanvasElement->OwnerDoc()) {
 +      if (BrowsingContext* bc = doc->GetBrowsingContext()) {
 +        return bc->OriginAttributesRef().mUserContextId;
 +      }
