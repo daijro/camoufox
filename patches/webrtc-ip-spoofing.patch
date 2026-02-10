@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..94575f2631
 --- /dev/null
 +++ b/dom/base/WebRTCIPManager.cpp
-@@ -0,0 +1,224 @@
+@@ -0,0 +1,146 @@
 +#include "WebRTCIPManager.h"
 +#include "nsTHashMap.h"
 +#include "RoverfoxStorageManager.h"
@@ -114,55 +114,16 @@ index 0000000000..94575f2631
 +
 +/* static */ bool
 +WebRTCIPManager::IsIPv4FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
-+  // Get the window from the JS object
 +  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
 +  if (!win) {
 +    return false;
 +  }
 +
-+  // Get the user context ID for this window
 +  uint32_t userContextId = 0;
-+
-+  // 1) Prefer the document's principal when available (content contexts)
-+  if (Document* doc = win->GetDoc()) {
-+    if (nsIPrincipal* p = doc->NodePrincipal()) {
-+      userContextId = p->OriginAttributesRef().mUserContextId;
-+    }
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +
-+  // 2) Fallback: this inner window's docshell origin attributes
-+  if (userContextId == 0) {
-+    if (nsIDocShell* ds = win->GetDocShell()) {
-+      auto* concrete = static_cast<nsDocShell*>(ds);
-+      userContextId = concrete->GetOriginAttributes().mUserContextId;
-+    }
-+  }
-+
-+  // 3) Fallback: top browsing context's current inner window document/docshell
-+  if (userContextId == 0) {
-+    if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+      RefPtr<BrowsingContext> top = bc->Top();
-+      if (top) {
-+        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
-+          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
-+            if (Document* topDoc = topInner->GetExtantDoc()) {
-+              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
-+                userContextId = tp->OriginAttributesRef().mUserContextId;
-+              }
-+            }
-+            if (userContextId == 0) {
-+              if (nsIDocShell* topDS = topInner->GetDocShell()) {
-+                auto* concreteTop = static_cast<nsDocShell*>(topDS);
-+                userContextId = concreteTop->GetOriginAttributes().mUserContextId;
-+              }
-+            }
-+          }
-+        }
-+      }
-+    }
-+  }
-+
-+  // Check if the function is disabled for this context
 +  bool disabled = false;
 +  RoverfoxStorageManager::GetBool(IPv4DisabledKeyForUserContext(userContextId), disabled);
 +  return !disabled;
@@ -170,55 +131,16 @@ index 0000000000..94575f2631
 +
 +/* static */ bool
 +WebRTCIPManager::IsIPv6FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
-+  // Get the window from the JS object
 +  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
 +  if (!win) {
 +    return false;
 +  }
 +
-+  // Get the user context ID for this window
 +  uint32_t userContextId = 0;
-+
-+  // 1) Prefer the document's principal when available (content contexts)
-+  if (Document* doc = win->GetDoc()) {
-+    if (nsIPrincipal* p = doc->NodePrincipal()) {
-+      userContextId = p->OriginAttributesRef().mUserContextId;
-+    }
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +
-+  // 2) Fallback: this inner window's docshell origin attributes
-+  if (userContextId == 0) {
-+    if (nsIDocShell* ds = win->GetDocShell()) {
-+      auto* concrete = static_cast<nsDocShell*>(ds);
-+      userContextId = concrete->GetOriginAttributes().mUserContextId;
-+    }
-+  }
-+
-+  // 3) Fallback: top browsing context's current inner window document/docshell
-+  if (userContextId == 0) {
-+    if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+      RefPtr<BrowsingContext> top = bc->Top();
-+      if (top) {
-+        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
-+          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
-+            if (Document* topDoc = topInner->GetExtantDoc()) {
-+              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
-+                userContextId = tp->OriginAttributesRef().mUserContextId;
-+              }
-+            }
-+            if (userContextId == 0) {
-+              if (nsIDocShell* topDS = topInner->GetDocShell()) {
-+                auto* concreteTop = static_cast<nsDocShell*>(topDS);
-+                userContextId = concreteTop->GetOriginAttributes().mUserContextId;
-+              }
-+            }
-+          }
-+        }
-+      }
-+    }
-+  }
-+
-+  // Check if the function is disabled for this context
 +  bool disabled = false;
 +  RoverfoxStorageManager::GetBool(IPv6DisabledKeyForUserContext(userContextId), disabled);
 +  return !disabled;
@@ -375,56 +297,14 @@ index 330a707789..4f87317dbb 100644
  #ifdef NS_PRINTING
  #  include "nsIPrintSettings.h"
  #endif
-@@ -7463,6 +7467,126 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
+@@ -7463,6 +7467,42 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
    return mIntlUtils;
  }
  
 +void nsGlobalWindowInner::SetWebRTCIPv4(const nsAString& ipv4, ErrorResult& aRv) {
 +  uint32_t userContextId = 0;
-+
-+  // 1) Prefer the document's principal when available (content contexts)
-+  if (Document* doc = GetDoc()) {
-+    if (nsIPrincipal* p = doc->NodePrincipal()) {
-+      userContextId = p->OriginAttributesRef().mUserContextId;
-+    }
-+  }
-+
-+  // 2) Fallback: this inner window's docshell origin attributes
-+  if (userContextId == 0) {
-+    if (nsIDocShell* ds = GetDocShell()) {
-+      auto* concrete = static_cast<nsDocShell*>(ds);
-+      userContextId = concrete->GetOriginAttributes().mUserContextId;
-+    }
-+  }
-+
-+  // 3) Fallback: top browsing context's current inner window document/docshell
-+  if (userContextId == 0) {
-+    if (BrowsingContext* bc = GetBrowsingContext()) {
-+      RefPtr<BrowsingContext> top = bc->Top();
-+      if (top) {
-+        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
-+          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
-+            if (Document* topDoc = topInner->GetExtantDoc()) {
-+              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
-+                userContextId = tp->OriginAttributesRef().mUserContextId;
-+              }
-+            }
-+            if (userContextId == 0) {
-+              if (nsIDocShell* topDS = topInner->GetDocShell()) {
-+                auto* concreteTop = static_cast<nsDocShell*>(topDS);
-+                userContextId =
-+                    concreteTop->GetOriginAttributes().mUserContextId;
-+              }
-+            }
-+          }
-+        }
-+      }
-+    }
-+  }
-+
-+  if (userContextId == 0) {
-+    aRv.ThrowSecurityError("Unable to resolve user context ID for this context");
-+    return;
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +
 +  WebRTCIPManager::SetIPv4(userContextId, ipv4);
@@ -440,50 +320,8 @@ index 330a707789..4f87317dbb 100644
 +
 +void nsGlobalWindowInner::SetWebRTCIPv6(const nsAString& ipv6, ErrorResult& aRv) {
 +  uint32_t userContextId = 0;
-+
-+  // 1) Prefer the document's principal when available (content contexts)
-+  if (Document* doc = GetDoc()) {
-+    if (nsIPrincipal* p = doc->NodePrincipal()) {
-+      userContextId = p->OriginAttributesRef().mUserContextId;
-+    }
-+  }
-+
-+  // 2) Fallback: this inner window's docshell origin attributes
-+  if (userContextId == 0) {
-+    if (nsIDocShell* ds = GetDocShell()) {
-+      auto* concrete = static_cast<nsDocShell*>(ds);
-+      userContextId = concrete->GetOriginAttributes().mUserContextId;
-+    }
-+  }
-+
-+  // 3) Fallback: top browsing context's current inner window document/docshell
-+  if (userContextId == 0) {
-+    if (BrowsingContext* bc = GetBrowsingContext()) {
-+      RefPtr<BrowsingContext> top = bc->Top();
-+      if (top) {
-+        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
-+          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
-+            if (Document* topDoc = topInner->GetExtantDoc()) {
-+              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
-+                userContextId = tp->OriginAttributesRef().mUserContextId;
-+              }
-+            }
-+            if (userContextId == 0) {
-+              if (nsIDocShell* topDS = topInner->GetDocShell()) {
-+                auto* concreteTop = static_cast<nsDocShell*>(topDS);
-+                userContextId =
-+                    concreteTop->GetOriginAttributes().mUserContextId;
-+              }
-+            }
-+          }
-+        }
-+      }
-+    }
-+  }
-+
-+  if (userContextId == 0) {
-+    aRv.ThrowSecurityError("Unable to resolve user context ID for this context");
-+    return;
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +
 +  WebRTCIPManager::SetIPv6(userContextId, ipv6);
@@ -549,23 +387,15 @@ index ca237977cd..abfc081ae7 100644
 
    SyncToJsep();
 
-@@ -1760,11 +1772,48 @@ already_AddRefed<dom::Promise> PeerConnectionImpl::GetStats(
+@@ -1760,11 +1772,41 @@ already_AddRefed<dom::Promise> PeerConnectionImpl::GetStats(
    }
  
    if (!IsClosed()) {
 +    // Camoufox: Capture userContextId for stats sanitization
 +    uint32_t statsUserContextId = 0;
 +    if (mWindow) {
-+      if (Document* doc = mWindow->GetDoc()) {
-+        if (nsIPrincipal* p = doc->NodePrincipal()) {
-+          statsUserContextId = p->OriginAttributesRef().mUserContextId;
-+        }
-+      }
-+      if (statsUserContextId == 0) {
-+        if (nsIDocShell* ds = mWindow->GetDocShell()) {
-+          auto* concrete = static_cast<nsDocShell*>(ds);
-+          statsUserContextId = concrete->GetOriginAttributes().mUserContextId;
-+        }
++      if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++        statsUserContextId = bc->OriginAttributesRef().mUserContextId;
 +      }
 +    }
 +    bool shouldSanitizeStats = ShouldSpoofCandidateIP();
@@ -587,7 +417,8 @@ index ca237977cd..abfc081ae7 100644
 +                  if (candStat.mAddress.WasPassed() && !candStat.mAddress.Value().IsEmpty()) {
 +                    nsAutoCString addr;
 +                    addr.Assign(NS_ConvertUTF16toUTF8(candStat.mAddress.Value()));
-+                    bool isIPv6 = addr.FindChar(':') != kNotFound;
++                    // Check for colons AND no periods to avoid IPv4:port false positives
++                    bool isIPv6 = addr.FindChar(':') != kNotFound && addr.FindChar('.') == kNotFound;
 +                    if (isIPv6 && !ipv6.IsEmpty()) {
 +                      candStat.mAddress.Value() = NS_ConvertUTF8toUTF16(ipv6Utf8);
 +                    } else if (!isIPv6 && !ipv4.IsEmpty()) {
@@ -623,7 +454,7 @@ index ca237977cd..abfc081ae7 100644
    if (mForceIceTcp && std::string::npos != candidate.find(" UDP ")) {
      CSFLogWarn(LOGTAG, "Blocking local UDP candidate: %s", candidate.c_str());
      STAMP_TIMECARD(mTimeCard, "UDP Ice Candidate blocked");
-@@ -3297,10 +3364,306 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
+@@ -3297,10 +3364,197 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
      uint16_t level, const std::string& mid, const std::string& candidate,
      const std::string& ufrag) {
    STAMP_TIMECARD(mTimeCard, "Send Ice Candidate to content");
@@ -652,49 +483,11 @@ index ca237977cd..abfc081ae7 100644
 +    return false;
 +  }
 +
-+  // Get the user context ID for this window using the same logic as WebRTCIPManager
 +  uint32_t userContextId = 0;
-+
-+  // 1) Prefer the document's principal when available (content contexts)
-+  if (Document* doc = mWindow->GetDoc()) {
-+    if (nsIPrincipal* p = doc->NodePrincipal()) {
-+      userContextId = p->OriginAttributesRef().mUserContextId;
-+    }
++  if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +
-+  // 2) Fallback: this inner window's docshell origin attributes
-+  if (userContextId == 0) {
-+    if (nsIDocShell* ds = mWindow->GetDocShell()) {
-+      auto* concrete = static_cast<nsDocShell*>(ds);
-+      userContextId = concrete->GetOriginAttributes().mUserContextId;
-+    }
-+  }
-+
-+  // 3) Fallback: top browsing context's current inner window document/docshell
-+  if (userContextId == 0) {
-+    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
-+      RefPtr<BrowsingContext> top = bc->Top();
-+      if (top) {
-+        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
-+          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
-+            if (Document* topDoc = topInner->GetExtantDoc()) {
-+              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
-+                userContextId = tp->OriginAttributesRef().mUserContextId;
-+              }
-+            }
-+            if (userContextId == 0) {
-+              if (nsIDocShell* topDS = topInner->GetDocShell()) {
-+                auto* concreteTop = static_cast<nsDocShell*>(topDS);
-+                userContextId = concreteTop->GetOriginAttributes().mUserContextId;
-+              }
-+            }
-+          }
-+        }
-+      }
-+    }
-+  }
-+
-+  // Check if either IPv4 or IPv6 addresses have been set for this user context
 +  nsString ipv4, ipv6;
 +  return WebRTCIPManager::GetIPv4(userContextId, ipv4) ||
 +         WebRTCIPManager::GetIPv6(userContextId, ipv6);
@@ -714,7 +507,8 @@ index ca237977cd..abfc081ae7 100644
 +
 +bool isPrivateIP(const std::string& ip) {
 +  // Check if an IP is on a private network
-+  bool isIPv6 = (ip.find(':') != std::string::npos);
++  // Use colons AND no periods to avoid IPv4:port false positives
++  bool isIPv6 = (ip.find(':') != std::string::npos) && (ip.find('.') == std::string::npos);
 +  
 +  if (isIPv6) {
 +    // check for private ipv6 (fc00::/7)
@@ -738,8 +532,9 @@ index ca237977cd..abfc081ae7 100644
 +  if (isSpecialIP(ip)) {
 +    return ip;  // dont mask special IPs
 +  }
-+  bool isIPv6 = (ip.find(':') != std::string::npos);
-+  
++  // Use colons AND no periods to avoid IPv4:port false positives
++  bool isIPv6 = (ip.find(':') != std::string::npos) && (ip.find('.') == std::string::npos);
++
 +  // Get IP addresses from WebRTCIPManager for this user context
 +  nsString ipv4Value, ipv6Value;
 +  bool hasIPv4 = WebRTCIPManager::GetIPv4(userContextId, ipv4Value);
@@ -789,51 +584,14 @@ index ca237977cd..abfc081ae7 100644
 +}
 +
 +std::string PeerConnectionImpl::SpoofCandidateIP(const std::string& candidate) {
-+  // Helper to spoof IPs in candidate strings
 +  if (!ShouldSpoofCandidateIP() || candidate.empty()) {
 +    return candidate;
 +  }
 +
-+  // Get the user context ID for this PeerConnection
 +  uint32_t userContextId = 0;
 +  if (mWindow) {
-+    // 1) Prefer the document's principal when available (content contexts)
-+    if (Document* doc = mWindow->GetDoc()) {
-+      if (nsIPrincipal* p = doc->NodePrincipal()) {
-+        userContextId = p->OriginAttributesRef().mUserContextId;
-+      }
-+    }
-+
-+    // 2) Fallback: this inner window's docshell origin attributes
-+    if (userContextId == 0) {
-+      if (nsIDocShell* ds = mWindow->GetDocShell()) {
-+        auto* concrete = static_cast<nsDocShell*>(ds);
-+        userContextId = concrete->GetOriginAttributes().mUserContextId;
-+      }
-+    }
-+
-+    // 3) Fallback: top browsing context's current inner window document/docshell
-+    if (userContextId == 0) {
-+      if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
-+        RefPtr<BrowsingContext> top = bc->Top();
-+        if (top) {
-+          if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
-+            if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
-+              if (Document* topDoc = topInner->GetExtantDoc()) {
-+                if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
-+                  userContextId = tp->OriginAttributesRef().mUserContextId;
-+                }
-+              }
-+              if (userContextId == 0) {
-+                if (nsIDocShell* topDS = topInner->GetDocShell()) {
-+                  auto* concreteTop = static_cast<nsDocShell*>(topDS);
-+                  userContextId = concreteTop->GetOriginAttributes().mUserContextId;
-+                }
-+              }
-+            }
-+          }
-+        }
-+      }
++    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++      userContextId = bc->OriginAttributesRef().mUserContextId;
 +    }
 +  }
 +
@@ -848,50 +606,14 @@ index ca237977cd..abfc081ae7 100644
 +}
 +
 +nsresult PeerConnectionImpl::SanitizeSDPForIPLeak(std::string& sdp) {
-+  // Sanitize sdp
 +  if (!ShouldSpoofCandidateIP()) {
 +    return NS_OK;
 +  }
 +
-+  // Resolve user context ID using the same logic as other functions
 +  uint32_t userContextId = 0;
-+
-+  // 1) Prefer the document's principal when available (content contexts)
-+  if (Document* doc = mWindow->GetDoc()) {
-+    if (nsIPrincipal* p = doc->NodePrincipal()) {
-+      userContextId = p->OriginAttributesRef().mUserContextId;
-+    }
-+  }
-+
-+  // 2) Fallback: this inner window's docshell origin attributes
-+  if (userContextId == 0) {
-+    if (nsIDocShell* ds = mWindow->GetDocShell()) {
-+      auto* concrete = static_cast<nsDocShell*>(ds);
-+      userContextId = concrete->GetOriginAttributes().mUserContextId;
-+    }
-+  }
-+
-+  // 3) Fallback: top browsing context's current inner window document/docshell
-+  if (userContextId == 0) {
++  if (mWindow) {
 +    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
-+      RefPtr<BrowsingContext> top = bc->Top();
-+      if (top) {
-+        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
-+          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
-+            if (Document* topDoc = topInner->GetExtantDoc()) {
-+              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
-+                userContextId = tp->OriginAttributesRef().mUserContextId;
-+              }
-+            }
-+            if (userContextId == 0) {
-+              if (nsIDocShell* topDS = topInner->GetDocShell()) {
-+                auto* concreteTop = static_cast<nsDocShell*>(topDS);
-+                userContextId = concreteTop->GetOriginAttributes().mUserContextId;
-+              }
-+            }
-+          }
-+        }
-+      }
++      userContextId = bc->OriginAttributesRef().mUserContextId;
 +    }
 +  }
 +
