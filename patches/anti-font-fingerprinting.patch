@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..fe74a1f432
 --- /dev/null
 +++ b/dom/base/FontSpacingSeedManager.cpp
-@@ -0,0 +1,125 @@
+@@ -0,0 +1,86 @@
 +#include "FontSpacingSeedManager.h"
 +#include "nsPrintfCString.h"
 +#include "nsGlobalWindowInner.h"
@@ -73,55 +73,16 @@ index 0000000000..fe74a1f432
 +
 +/* static */ bool
 +FontSpacingSeedManager::IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
-+  // Get the window from the JS object
 +  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
 +  if (!win) {
 +    return false;
 +  }
 +
-+  // Get the user context ID for this window
 +  uint32_t userContextId = 0;
-+
-+  // 1) Prefer the document's principal when available (content contexts)
-+  if (Document* doc = win->GetDoc()) {
-+    if (nsIPrincipal* p = doc->NodePrincipal()) {
-+      userContextId = p->OriginAttributesRef().mUserContextId;
-+    }
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +
-+  // 2) Fallback: this inner window's docshell origin attributes
-+  if (userContextId == 0) {
-+    if (nsIDocShell* ds = win->GetDocShell()) {
-+      auto* concrete = static_cast<nsDocShell*>(ds);
-+      userContextId = concrete->GetOriginAttributes().mUserContextId;
-+    }
-+  }
-+
-+  // 3) Fallback: top browsing context's current inner window document/docshell
-+  if (userContextId == 0) {
-+    if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+      RefPtr<BrowsingContext> top = bc->Top();
-+      if (top) {
-+        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
-+          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
-+            if (Document* topDoc = topInner->GetExtantDoc()) {
-+              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
-+                userContextId = tp->OriginAttributesRef().mUserContextId;
-+              }
-+            }
-+            if (userContextId == 0) {
-+              if (nsIDocShell* topDS = topInner->GetDocShell()) {
-+                auto* concreteTop = static_cast<nsDocShell*>(topDS);
-+                userContextId = concreteTop->GetOriginAttributes().mUserContextId;
-+              }
-+            }
-+          }
-+        }
-+      }
-+    }
-+  }
-+
-+  // Check if the function is disabled for this context
 +  bool disabled = false;
 +  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(userContextId), disabled);
 +  return !disabled;
@@ -444,57 +405,14 @@ index 330a707789..fb3ba4d3fb 100644
  #include "nsIDOMXULControlElement.h"
  #include "nsIDeviceSensors.h"
  #include "nsIDocShell.h"
-@@ -7463,6 +7467,66 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
+@@ -7463,6 +7467,23 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
    return mIntlUtils;
  }
  
 +void nsGlobalWindowInner::SetFontSpacingSeed(uint32_t seed, ErrorResult& aRv) {
 +  uint32_t userContextId = 0;
-+
-+  // 1) Prefer the document's principal when available (content contexts)
-+  if (Document* doc = GetDoc()) {
-+    if (nsIPrincipal* p = doc->NodePrincipal()) {
-+      userContextId = p->OriginAttributesRef().mUserContextId;
-+    }
-+  }
-+
-+  // 2) Fallback: this inner window's docshell origin attributes
-+  if (userContextId == 0) {
-+    if (nsIDocShell* ds = GetDocShell()) {
-+      auto* concrete = static_cast<nsDocShell*>(ds);
-+      userContextId = concrete->GetOriginAttributes().mUserContextId;
-+    }
-+  }
-+
-+  // 3) Fallback: top browsing context's current inner window document/docshell
-+  if (userContextId == 0) {
-+    if (BrowsingContext* bc = GetBrowsingContext()) {
-+      RefPtr<BrowsingContext> top = bc->Top();
-+      if (top) {
-+        if (nsPIDOMWindowOuter* topOuter = top->GetDOMWindow()) {
-+          if (nsPIDOMWindowInner* topInner = topOuter->GetCurrentInnerWindow()) {
-+            if (Document* topDoc = topInner->GetExtantDoc()) {
-+              if (nsIPrincipal* tp = topDoc->NodePrincipal()) {
-+                userContextId = tp->OriginAttributesRef().mUserContextId;
-+              }
-+            }
-+            if (userContextId == 0) {
-+              if (nsIDocShell* topDS = topInner->GetDocShell()) {
-+                auto* concreteTop = static_cast<nsDocShell*>(topDS);
-+                userContextId =
-+                    concreteTop->GetOriginAttributes().mUserContextId;
-+              }
-+            }
-+          }
-+        }
-+      }
-+    }
-+  }
-+
-+
-+  if (userContextId == 0) {
-+    aRv.ThrowSecurityError("Unable to resolve user context ID for this context");
-+    return;
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +
 +  FontSpacingSeedManager::SetSeed(userContextId, seed);

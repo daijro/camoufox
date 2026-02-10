@@ -1,0 +1,59 @@
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index 51d8331345..abc1234567 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -6,6 +6,9 @@
+ 
+ // Needs to be first.
+ #include "Navigator.h"
++// Camoufox: global config for navigator spoofing
++#include "MaskConfig.hpp"
++#include "nsJSUtils.h"
+ 
+ #include "Geolocation.h"
+ #include "base/basictypes.h"
+@@ -52,6 +55,17 @@
+ #include "mozilla/dom/workerinternals/RuntimeService.h"
+ #include "nsRFPService.h"
+ 
++// Camoufox: Lazy initialization for global timezone config.
++// Cannot use static init because SpiderMonkey may not be ready yet.
++static void EnsureGlobalTimezoneInitialized() {
++  static bool sInitialized = false;
++  if (sInitialized) return;
++  sInitialized = true;
++  if (auto tz = MaskConfig::GetString("timezone")) {
++    nsJSUtils::SetTimeZoneOverride(tz.value().c_str());
++  }
++}
++
+ namespace mozilla::dom {
+ 
+ static const char kVibsatorPerm[] = "vibration";
+@@ -422,6 +436,13 @@ void Navigator::GetAppName(nsAString& aAppName) const {
+
+ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
+                             ErrorResult& aRv) const {
++  // Camoufox: ensure global timezone is initialized (lazy, runs once)
++  EnsureGlobalTimezoneInitialized();
++  // Camoufox: global config takes priority
++  if (auto value = MaskConfig::GetString("navigator.platform")) {
++    aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
++    return;
++  }
+   if (mWindow) {
+     BrowsingContext* bc = mWindow->GetBrowsingContext();
+     nsString customPlatform;
+@@ -683,6 +704,12 @@ bool Navigator::CookieEnabled() {
+ }
+
+ uint64_t Navigator::HardwareConcurrency() {
++  // Camoufox: ensure global timezone is initialized (lazy, runs once)
++  EnsureGlobalTimezoneInitialized();
++  // Camoufox: global config takes priority
++  if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency")) {
++    return value.value();
++  }
+   workerinternals::RuntimeService* rts =
+       workerinternals::RuntimeService::GetOrCreateService();
+   if (!rts) {

@@ -3,23 +3,40 @@ new file mode 100644
 index 0000000000..f47a35b2e3
 --- /dev/null
 +++ b/dom/base/AudioFingerprintManager.cpp
-@@ -0,0 +1,73 @@
+@@ -0,0 +1,101 @@
 +#include "AudioFingerprintManager.h"
 +#include "nsTHashMap.h"  // Must come before RoverfoxStorageManager.h for template defs
 +#include "nsHashKeys.h"  // For nsStringHashKey
 +#include "RoverfoxStorageManager.h"
 +#include "nsGlobalWindowInner.h"
 +#include "xpcpublic.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "mozilla/dom/Document.h"
++#include "nsDocShell.h"
 +#include <algorithm>
 +
 +namespace mozilla {
 +namespace dom {
++
++/* static */ nsString
++AudioFingerprintManager::DisabledKeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendPrintf("audio_disabled_%u", userContextId);
++  return key;
++}
++
++/* static */ void
++AudioFingerprintManager::DisableFunction(uint32_t userContextId) {
++  nsString key = DisabledKeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutBool(key, true);
++}
 +
 +/* static */ void
 +AudioFingerprintManager::SetSeed(uint32_t aUserContextId, uint32_t aSeed) {
 +  nsString key;
 +  key.AppendPrintf("audioFingerprintSeed_%u", aUserContextId);
 +  RoverfoxStorageManager::PutUint(key, aSeed);
++  DisableFunction(aUserContextId);
 +}
 +
 +/* static */ uint32_t
@@ -72,7 +89,18 @@ index 0000000000..f47a35b2e3
 +/* static */ bool
 +AudioFingerprintManager::IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
 +  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  return win != nullptr;
++  if (!win) {
++    return false;
++  }
++
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(userContextId), disabled);
++  return !disabled;
 +}
 +
 +}  // namespace dom
@@ -83,7 +111,7 @@ new file mode 100644
 index 0000000000..535ce3a6f9
 --- /dev/null
 +++ b/dom/base/AudioFingerprintManager.h
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,31 @@
 +#ifndef mozilla_dom_AudioFingerprintManager_h
 +#define mozilla_dom_AudioFingerprintManager_h
 +
@@ -104,7 +132,11 @@ index 0000000000..535ce3a6f9
 +  static void ApplyTransformation(float* data, uint32_t length, uint32_t seed);
 +  static void ApplyTransformationToBytes(uint8_t* data, uint32_t length, uint32_t seed);
 +
++  static void DisableFunction(uint32_t userContextId);
 +  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++
++ private:
++  static nsString DisabledKeyForUserContext(uint32_t userContextId);
 +};
 +
 +}  // namespace dom
@@ -147,7 +179,7 @@ index 748ae6cf83..b2c3d4e5f6 100644
  #include "AutoplayPolicy.h"
  #include "Crypto.h"
  #include "MainThreadUtils.h"
-@@ -7430,7 +7431,25 @@ Worklet* nsGlobalWindowInner::GetPaintWorklet(ErrorResult& aRv) {
+@@ -7430,7 +7431,30 @@ Worklet* nsGlobalWindowInner::GetPaintWorklet(ErrorResult& aRv) {
 
    return mPaintWorklet;
  }
@@ -158,16 +190,21 @@ index 748ae6cf83..b2c3d4e5f6 100644
 +    aRv.ThrowTypeError("Audio fingerprint seed must be a non-zero integer");
 +    return;
 +  }
-+  // Get userContextId from this window's document principal
++
 +  uint32_t userContextId = 0;
-+  Document* doc = GetExtantDoc();
-+  if (doc) {
-+    nsIPrincipal* principal = doc->NodePrincipal();
-+    if (principal) {
-+      userContextId = principal->GetUserContextId();
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++
++  AudioFingerprintManager::SetSeed(userContextId, seed);
++
++  // Self-destruct: remove this function from the window object after first use
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setAudioFingerprintSeed");
 +    }
 +  }
-+  AudioFingerprintManager::SetSeed(userContextId, seed);
 +}
 +
  void nsGlobalWindowInner::GetRegionalPrefsLocales(

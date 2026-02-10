@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..1a2b3c4d5e
 --- /dev/null
 +++ b/dom/base/ScreenDimensionManager.cpp
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,104 @@
 +/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 +/* vim: set ts=8 sts=2 et sw=2 tw=80: */
 +/* This Source Code Form is subject to the terms of the Mozilla Public
@@ -14,6 +14,7 @@ index 0000000000..1a2b3c4d5e
 +#include "RoverfoxStorageManager.h"
 +#include "nsGlobalWindowInner.h"
 +#include "xpcpublic.h"
++#include "mozilla/dom/BrowsingContext.h"
 +#include "mozilla/dom/Document.h"
 +#include "nsDocShell.h"
 +
@@ -25,15 +26,11 @@ index 0000000000..1a2b3c4d5e
 +  if (!aWindow) {
 +    return 0;
 +  }
-+  Document* doc = aWindow->GetExtantDoc();
-+  if (!doc) {
-+    return 0;
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = aWindow->GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
-+  nsIPrincipal* principal = doc->NodePrincipal();
-+  if (!principal) {
-+    return 0;
-+  }
-+  return principal->GetUserContextId();
++  return userContextId;
 +}
 +
 +/* static */ void
@@ -79,13 +76,34 @@ index 0000000000..1a2b3c4d5e
 +  return static_cast<int32_t>(depth);
 +}
 +
++/* static */ nsString
++ScreenDimensionManager::DisabledKeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendPrintf("screen_disabled_%u", userContextId);
++  return key;
++}
++
++/* static */ void
++ScreenDimensionManager::DisableFunction(uint32_t userContextId) {
++  nsString key = DisabledKeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutBool(key, true);
++}
++
 +/* static */ bool
 +ScreenDimensionManager::IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
 +  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
 +  if (!win) {
 +    return false;
 +  }
-+  return true;
++
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(userContextId), disabled);
++  return !disabled;
 +}
 +
 +}  // namespace dom
@@ -96,7 +114,7 @@ new file mode 100644
 index 0000000000..2b3c4d5e6f
 --- /dev/null
 +++ b/dom/base/ScreenDimensionManager.h
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,47 @@
 +/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 +/* vim: set ts=8 sts=2 et sw=2 tw=80: */
 +/* This Source Code Form is subject to the terms of the Mozilla Public
@@ -130,8 +148,14 @@ index 0000000000..2b3c4d5e6f
 +  static void SetColorDepth(uint32_t aUserContextId, int32_t aColorDepth);
 +  static int32_t GetColorDepth(uint32_t aUserContextId);
 +
++  // Self-destruct support
++  static void DisableFunction(uint32_t userContextId);
++
 +  // WebIDL exposure check
 +  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++
++ private:
++  static nsString DisabledKeyForUserContext(uint32_t userContextId);
 +};
 +
 +}  // namespace dom
@@ -172,7 +196,7 @@ index 748ae6cf83..c3d4e5f6a7 100644
  #include "nsIThread.h"
  #include "nsITimedChannel.h"
  #include "nsIURI.h"
-@@ -7420,6 +7421,30 @@ nsGlobalWindowInner::GetAudioWorklet(ErrorResult& aRv) {
+@@ -7420,7 +7421,49 @@ nsGlobalWindowInner::GetAudioWorklet(ErrorResult& aRv) {
    return mAudioWorklet;
  }
 
@@ -186,6 +210,15 @@ index 748ae6cf83..c3d4e5f6a7 100644
 +  }
 +
 +  ScreenDimensionManager::SetDimensions(userContextId, aWidth, aHeight);
++  ScreenDimensionManager::DisableFunction(userContextId);
++
++  // Self-destruct: remove this function from the window object after first use
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setScreenDimensions");
++    }
++  }
 +}
 +
 +void nsGlobalWindowInner::SetScreenColorDepth(int32_t aColorDepth,
@@ -198,6 +231,15 @@ index 748ae6cf83..c3d4e5f6a7 100644
 +  }
 +
 +  ScreenDimensionManager::SetColorDepth(userContextId, aColorDepth);
++  ScreenDimensionManager::DisableFunction(userContextId);
++
++  // Self-destruct: remove this function from the window object after first use
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setScreenColorDepth");
++    }
++  }
 +}
 +
  Worklet* nsGlobalWindowInner::GetPaintWorklet(ErrorResult& aRv) {

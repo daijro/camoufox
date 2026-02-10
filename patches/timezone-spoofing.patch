@@ -3,17 +3,46 @@ new file mode 100644
 index 0000000000..7ec236d160
 --- /dev/null
 +++ b/dom/base/TimezoneManager.cpp
-@@ -0,0 +1,14 @@
+@@ -0,0 +1,43 @@
 +#include "TimezoneManager.h"
++#include "RoverfoxStorageManager.h"
 +#include "nsGlobalWindowInner.h"
 +#include "xpcpublic.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "mozilla/dom/Document.h"
++#include "nsDocShell.h"
 +
 +namespace mozilla {
 +namespace dom {
 +
-+bool TimezoneManager::IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
++/* static */ nsString
++TimezoneManager::DisabledKeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendPrintf("tz_disabled_%u", userContextId);
++  return key;
++}
++
++/* static */ void
++TimezoneManager::DisableFunction(uint32_t userContextId) {
++  nsString key = DisabledKeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutBool(key, true);
++}
++
++/* static */ bool
++TimezoneManager::IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
 +  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  return win != nullptr;
++  if (!win) {
++    return false;
++  }
++
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(userContextId), disabled);
++  return !disabled;
 +}
 +
 +}  // namespace dom
@@ -23,7 +52,7 @@ new file mode 100644
 index 0000000000..a7f5735e53
 --- /dev/null
 +++ b/dom/base/TimezoneManager.h
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,38 @@
 +#ifndef mozilla_dom_TimezoneManager_h
 +#define mozilla_dom_TimezoneManager_h
 +
@@ -42,6 +71,7 @@ index 0000000000..a7f5735e53
 +    nsAutoString key;
 +    key.AppendPrintf("timezone_%u", userContextId);
 +    RoverfoxStorageManager::PutString(key, timezone);
++    DisableFunction(userContextId);
 +  }
 +
 +  static bool GetTimezone(uint32_t userContextId, nsAString& outTimezone) {
@@ -50,7 +80,11 @@ index 0000000000..a7f5735e53
 +    return RoverfoxStorageManager::GetString(key, outTimezone);
 +  }
 +
++  static void DisableFunction(uint32_t userContextId);
 +  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++
++ private:
++  static nsString DisabledKeyForUserContext(uint32_t userContextId);
 +};
 +
 +}  // namespace dom
@@ -90,28 +124,15 @@ index ea66d28e53..2abb83c3a6 100644
  #include "nsDocShell.h"
  #include "mozilla/OriginAttributes.h"
  #include "nsIDOMXULControlElement.h"
-@@ -7525,6 +7527,37 @@ void nsGlobalWindowInner::SetFontSpacingSeed(uint32_t seed, ErrorResult& aRv) {
+@@ -7525,6 +7527,32 @@ void nsGlobalWindowInner::SetFontSpacingSeed(uint32_t seed, ErrorResult& aRv) {
    }
  }
-
+ 
 +void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aRv) {
 +  uint32_t userContextId = 0;
-+
-+  if (Document* doc = GetDoc()) {
-+    if (nsIPrincipal* p = doc->NodePrincipal()) {
-+      userContextId = p->OriginAttributesRef().mUserContextId;
-+    }
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
-+
-+  // Fallback to DocShell if principal returned 0
-+  if (userContextId == 0) {
-+    if (nsIDocShell* ds = GetDocShell()) {
-+      auto* concrete = static_cast<nsDocShell*>(ds);
-+      uint32_t dsId = concrete->GetOriginAttributes().mUserContextId;
-+      if (dsId != 0) userContextId = dsId;
-+    }
-+  }
-+  // Note: userContextId == 0 is valid for default context
 +
 +  NS_LossyConvertUTF16toASCII timezoneASCII(timezone);
 +
@@ -123,6 +144,14 @@ index ea66d28e53..2abb83c3a6 100644
 +  }
 +
 +  TimezoneManager::SetTimezone(userContextId, timezone);
++
++  // Self-destruct: remove this function from the window object after first use
++  if (JSContext* selfDestructCx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(selfDestructCx, JS::CurrentGlobalOrNull(selfDestructCx));
++    if (global) {
++      JS_DeleteProperty(selfDestructCx, global, "setTimezone");
++    }
++  }
 +}
 +
  void nsGlobalWindowInner::StoreSharedWorker(SharedWorker* aSharedWorker) {
@@ -227,6 +256,42 @@ index 110824439c..dfc88898f5 100644
 
    // The spec implicitly assumes DST and time zone adjustment information
    // never change in the course of a function -- sometimes even across
+diff --git a/dom/base/nsGlobalWindowOuter.cpp b/dom/base/nsGlobalWindowOuter.cpp
+index a1b2c3d4e5..f6g7h8i9j0 100644
+--- a/dom/base/nsGlobalWindowOuter.cpp
++++ b/dom/base/nsGlobalWindowOuter.cpp
+@@ -86,6 +86,8 @@
+ #include "js/friend/WindowProxy.h"  // js::IsWindowProxy, js::SetWindowProxy
+ #include "jsapi.h"
+ #include "jsfriendapi.h"
++#include "TimezoneManager.h"
++#include "js/Date.h"
+ #include "mozilla/Likely.h"
+ #include "mozilla/Preferences.h"
+ #include "mozilla/SchedulerGroup.h"
+@@ -2480,6 +2482,22 @@ nsresult nsGlobalWindowOuter::SetNewDocument(Document* aDocument,
+   if (bc->IsOwnedByProcess()) {
+     MOZ_ALWAYS_SUCCEEDS(bc->SetCurrentInnerWindowId(mInnerWindow->WindowID()));
+   }
++
++  // Camoufox: Auto-apply stored timezone when navigating to new document
++  // This ensures timezone persists across page navigations within same context
++  {
++    uint32_t userContextId = 0;
++    if (bc) {
++      userContextId = bc->OriginAttributesRef().mUserContextId;
++    }
++    nsAutoString storedTimezone;
++    if (mozilla::dom::TimezoneManager::GetTimezone(userContextId, storedTimezone)) {
++      if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++        NS_LossyConvertUTF16toASCII timezoneASCII(storedTimezone);
++        JS::SetRealmTimeZoneOverride(cx, timezoneASCII.get());
++      }
++    }
++  }
+ 
+   // We no longer need the old inner window.  Start its destruction if
+   // its not being reused and clear our reference.
 diff --git a/js/src/vm/Realm.cpp b/js/src/vm/Realm.cpp
 index 81b4d13cdb..ca04167603 100644
 --- a/js/src/vm/Realm.cpp
