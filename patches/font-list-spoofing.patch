@@ -281,8 +281,8 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
                                              ErrorResult& aRv) {
 +  // Per-context font list filtering
 +  uint32_t fontListCtxId = 0;
-+  if (nsPIDOMWindowInner* owner = GetOwner()) {
-+    if (auto* bc = nsGlobalWindowInner::Cast(owner)->GetBrowsingContext()) {
++  if (nsGlobalWindowInner* owner = GetOwnerWindow()) {
++    if (auto* bc = owner->GetBrowsingContext()) {
 +      fontListCtxId = bc->OriginAttributesRef().mUserContextId;
 +    }
 +  }
@@ -293,8 +293,8 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
                          ErrorResult& aRv) {
 +  // Per-context font list filtering
 +  uint32_t fontListCtxId = 0;
-+  if (nsPIDOMWindowInner* owner = GetOwner()) {
-+    if (auto* bc = nsGlobalWindowInner::Cast(owner)->GetBrowsingContext()) {
++  if (nsGlobalWindowInner* owner = GetOwnerWindow()) {
++    if (auto* bc = owner->GetBrowsingContext()) {
 +      fontListCtxId = bc->OriginAttributesRef().mUserContextId;
 +    }
 +  }
