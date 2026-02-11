@@ -152,13 +152,11 @@ diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index xxxxxxxxxx..yyyyyyyyyy 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -24,5 +24,6 @@
- #include "PaintWorkletImpl.h"
- #include "SessionStorageCache.h"
+@@ -22,3 +22,4 @@
+ #include "AutoplayPolicy.h"
+ #include "Crypto.h"
 +#include "SpeechVoicesManager.h"
- #include "Units.h"
- #include "VRManagerChild.h"
- #include "WindowDestroyedEvent.h"
+ #include "MainThreadUtils.h"
 @@ -7477,6 +7478,22 @@
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
