@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..abcdef1234
 --- /dev/null
 +++ b/dom/base/CanvasFingerprintManager.cpp
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,65 @@
 +/* Camoufox: Per-context canvas fingerprint manager */
 +#include "CanvasFingerprintManager.h"
 +
@@ -43,6 +43,7 @@ index 0000000000..abcdef1234
 +    state = (state * 1664525u + 1013904223u);
 +    if (state & 0x100) {
 +      int32_t val = static_cast<int32_t>(data[i]);
++      if (val == 0) continue;  // Skip zero pixels (preserves clearRect/transparency)
 +      data[i] = static_cast<uint8_t>(
 +          (state & 0x200) ? std::min(val + 1, 255) : std::max(val - 1, 0));
 +    }
@@ -170,9 +171,10 @@ diff --git a/dom/canvas/CanvasRenderingContext2D.cpp b/dom/canvas/CanvasRenderin
 index xxxxxxxxxx..yyyyyyyyyy 100644
 --- a/dom/canvas/CanvasRenderingContext2D.cpp
 +++ b/dom/canvas/CanvasRenderingContext2D.cpp
-@@ -9,5 +9,6 @@
+@@ -9,5 +9,7 @@
  #include "CanvasImageCache.h"
 +#include "CanvasFingerprintManager.h"
++#include "nsPIDOMWindow.h"
  #include "CanvasUtils.h"
  #include "GeckoBindings.h"
  #include "ImageEncoder.h"
@@ -185,7 +187,7 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
  #include "mozilla/dom/CanvasGradient.h"
  #include "mozilla/dom/CanvasPath.h"
  #include "mozilla/dom/CanvasPattern.h"
-@@ -2287,5 +2289,23 @@
+@@ -2287,5 +2289,32 @@
          SurfaceFormat::A8R8G8B8_UINT32);
    }
 
@@ -196,6 +198,15 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +      if (Document* doc = mCanvasElement->OwnerDoc()) {
 +        if (BrowsingContext* bc = doc->GetBrowsingContext()) {
 +          userContextId = bc->OriginAttributesRef().mUserContextId;
++        }
++      }
++    } else if (mOffscreenCanvas) {
++      if (nsIGlobalObject* global = mOffscreenCanvas->GetOwnerGlobal()) {
++        nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(global);
++        if (win) {
++          if (BrowsingContext* bc = win->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
 +        }
 +      }
 +    }
@@ -209,7 +220,7 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +
    return ret;
  }
-@@ -6615,5 +6635,26 @@
+@@ -6615,5 +6644,35 @@
    } while (false);
 
 +  // Per-context canvas fingerprint noise
@@ -219,6 +230,15 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +      if (Document* doc = mCanvasElement->OwnerDoc()) {
 +        if (BrowsingContext* bc = doc->GetBrowsingContext()) {
 +          userContextId = bc->OriginAttributesRef().mUserContextId;
++        }
++      }
++    } else if (mOffscreenCanvas) {
++      if (nsIGlobalObject* global = mOffscreenCanvas->GetOwnerGlobal()) {
++        nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(global);
++        if (win) {
++          if (BrowsingContext* bc = win->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
 +        }
 +      }
 +    }
