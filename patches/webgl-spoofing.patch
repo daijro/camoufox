@@ -213,7 +213,7 @@ diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.c
 index 11578f425f..6c77acd7f3 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
 +++ b/dom/canvas/ClientWebGLContext.cpp
-@@ -4,6 +4,12 @@
+@@ -4,6 +4,13 @@
   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
  #include "ClientWebGLContext.h"
@@ -221,12 +221,13 @@ index 11578f425f..6c77acd7f3 100644
 +#include "WebGLParamsManager.h"
 +#include "mozilla/dom/BrowsingContext.h"
 +#include "mozilla/dom/Document.h"
++#include "nsPIDOMWindow.h"
 +#include <algorithm>
 +#include <cstddef>
 
  #include <fmt/format.h>
 
-@@ -754,6 +760,24 @@ void ClientWebGLContext::SetUnpackColorSpace(
+@@ -754,6 +760,33 @@ void ClientWebGLContext::SetUnpackColorSpace(
    Run<RPROC(SetUnpackColorSpace)>(*mUnpackColorSpace);
  }
 
@@ -242,6 +243,15 @@ index 11578f425f..6c77acd7f3 100644
 +    if (Document* doc = mCanvasElement->OwnerDoc()) {
 +      if (BrowsingContext* bc = doc->GetBrowsingContext()) {
 +        return bc->OriginAttributesRef().mUserContextId;
++      }
++    }
++  } else if (mOffscreenCanvas) {
++    if (nsIGlobalObject* global = mOffscreenCanvas->GetOwnerGlobal()) {
++      nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(global);
++      if (win) {
++        if (BrowsingContext* bc = win->GetBrowsingContext()) {
++          return bc->OriginAttributesRef().mUserContextId;
++        }
 +      }
 +    }
 +  }
