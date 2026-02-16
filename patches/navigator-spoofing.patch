@@ -385,4 +385,53 @@ index abcdef1234..5678901234 100644
 +SOURCES += ["NavigatorManager.cpp"]
 +
  UNIFIED_SOURCES += [
+
+diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
+index 622724b529..35e436cd16 100644
+--- a/dom/workers/WorkerNavigator.cpp
++++ b/dom/workers/WorkerNavigator.cpp
+@@ -7,4 +7,6 @@
+ #include "mozilla/dom/WorkerNavigator.h"
+ #include "MaskConfig.hpp"
++#include "mozilla/dom/NavigatorManager.h"
++#include "mozilla/dom/WorkerPrivate.h"
+
+ #include <utility>
+@@ -155,6 +157,18 @@
+
+ void WorkerNavigator::GetPlatform(nsString& aPlatform, CallerType aCallerType,
+                                   ErrorResult& aRv) const {
++  // Camoufox: per-context navigator platform for workers
++  {
++    WorkerPrivate* wp = GetCurrentThreadWorkerPrivate();
++    if (wp) {
++      uint32_t ucid = wp->GetOriginAttributes().mUserContextId;
++      nsAutoString stored;
++      if (mozilla::dom::NavigatorManager::GetPlatform(ucid, stored)) {
++        aPlatform = stored;
++        return;
++      }
++    }
++  }
+   if (auto value = MaskConfig::GetString("navigator.platform"))
+     return aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+@@ -242,6 +256,17 @@
+ }
+
+ uint64_t WorkerNavigator::HardwareConcurrency() const {
++  // Camoufox: per-context hardware concurrency for workers
++  {
++    WorkerPrivate* wp = GetCurrentThreadWorkerPrivate();
++    if (wp) {
++      uint32_t ucid = wp->GetOriginAttributes().mUserContextId;
++      uint32_t stored = mozilla::dom::NavigatorManager::GetHardwareConcurrency(ucid);
++      if (stored > 0) {
++        return static_cast<uint64_t>(stored);
++      }
++    }
++  }
+   if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency"))
+     return value.value();
+   RuntimeService* rts = RuntimeService::GetService();
  
