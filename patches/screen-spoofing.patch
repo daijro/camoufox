@@ -370,7 +370,14 @@ diff --git a/layout/style/nsMediaFeatures.cpp b/layout/style/nsMediaFeatures.cpp
 index f83e2c21ca..5362dd77d4 100644
 --- a/layout/style/nsMediaFeatures.cpp
 +++ b/layout/style/nsMediaFeatures.cpp
-@@ -66,14 +66,6 @@ static nsSize GetDeviceSize(const Document& aDocument) {
+@@ -26,4 +26,6 @@
+ #include "nsGlobalWindowOuter.h"
++#include "nsGlobalWindowInner.h"
++#include "mozilla/dom/ScreenDimensionManager.h"
+ #include "nsIBaseWindow.h"
+ #include "nsIDocShell.h"
+ #include "nsIPrintSettings.h"
+@@ -66,14 +68,18 @@ static nsSize GetDeviceSize(const Document& aDocument) {
      return GetSize(aDocument);
    }
 
@@ -382,6 +389,18 @@ index f83e2c21ca..5362dd77d4 100644
 -    return CSSPixel::ToAppUnits(deviceSize.value());
 -  }
 -
++  // Camoufox: per-context screen dimensions for CSS device-width/height queries
++  if (nsPIDOMWindowInner* inner = aDocument.GetInnerWindow()) {
++    nsGlobalWindowInner* win = nsGlobalWindowInner::Cast(inner);
++    if (win) {
++      uint32_t ucid = mozilla::dom::ScreenDimensionManager::GetUserContextIdFromWindow(win);
++      int32_t w = 0, h = 0;
++      if (mozilla::dom::ScreenDimensionManager::GetDimensions(ucid, &w, &h)) {
++        return CSSPixel::ToAppUnits(CSSIntSize(w, h));
++      }
++    }
++  }
++
    nsPresContext* pc = aDocument.GetPresContext();
    // NOTE(emilio): We should probably figure out how to return an appropriate
    // device size here, though in a multi-screen world that makes no sense
