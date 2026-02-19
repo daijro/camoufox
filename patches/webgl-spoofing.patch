@@ -1,26 +1,210 @@
-diff --git a/dom/canvas/moz.build b/dom/canvas/moz.build
-index xxxxxxxxxx..yyyyyyyyyy 100644
---- a/dom/canvas/moz.build
-+++ b/dom/canvas/moz.build
-@@ -188,6 +188,8 @@ SOURCES += [
- # Suppress warnings from third-party code.
- SOURCES["MurmurHash3.cpp"].flags += ["-Wno-implicit-fallthrough"]
-
-+LOCAL_INCLUDES += ["/camoucfg"]
+diff --git a/dom/base/WebGLParamsManager.cpp b/dom/base/WebGLParamsManager.cpp
+new file mode 100644
+index 0000000000..abcdef1234
+--- /dev/null
++++ b/dom/base/WebGLParamsManager.cpp
+@@ -0,0 +1,72 @@
++/* Camoufox: Per-context WebGL parameter manager */
++#include "WebGLParamsManager.h"
 +
- LOCAL_INCLUDES += [
-     "/js/xpconnect/wrappers",
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsGlobalWindowInner.h"
++#include "xpcpublic.h"
++
++namespace mozilla {
++namespace dom {
++
++nsString WebGLParamsManager::DisabledKeyForUserContext(uint32_t aId) {
++  nsAutoString key;
++  key.AppendPrintf("webgl_d_%u", aId);
++  return key;
++}
++
++void WebGLParamsManager::SetVendor(uint32_t aId, const nsAString& aValue) {
++  nsAutoString key;
++  key.AppendPrintf("webgl_vendor_%u", aId);
++  RoverfoxStorageManager::PutString(key, aValue);
++}
++
++bool WebGLParamsManager::GetVendor(uint32_t aId, nsAString& aOut) {
++  nsAutoString key;
++  key.AppendPrintf("webgl_vendor_%u", aId);
++  return RoverfoxStorageManager::GetString(key, aOut);
++}
++
++void WebGLParamsManager::SetRenderer(uint32_t aId, const nsAString& aValue) {
++  nsAutoString key;
++  key.AppendPrintf("webgl_renderer_%u", aId);
++  RoverfoxStorageManager::PutString(key, aValue);
++}
++
++bool WebGLParamsManager::GetRenderer(uint32_t aId, nsAString& aOut) {
++  nsAutoString key;
++  key.AppendPrintf("webgl_renderer_%u", aId);
++  return RoverfoxStorageManager::GetString(key, aOut);
++}
++
++void WebGLParamsManager::DisableFunction(uint32_t aId) {
++  RoverfoxStorageManager::PutBool(DisabledKeyForUserContext(aId), true);
++}
++
++bool WebGLParamsManager::IsVendorFunctionEnabledForWebIDL(JSContext* aCx,
++                                                           JSObject* aObj) {
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) return false;
++  uint32_t id = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    id = bc->OriginAttributesRef().mUserContextId;
++  }
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(id), disabled);
++  return !disabled;
++}
++
++bool WebGLParamsManager::IsRendererFunctionEnabledForWebIDL(JSContext* aCx,
++                                                             JSObject* aObj) {
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) return false;
++  uint32_t id = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    id = bc->OriginAttributesRef().mUserContextId;
++  }
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(id), disabled);
++  return !disabled;
++}
++
++}  // namespace dom
++}  // namespace mozilla
+diff --git a/dom/base/WebGLParamsManager.h b/dom/base/WebGLParamsManager.h
+new file mode 100644
+index 0000000000..bcdef12345
+--- /dev/null
++++ b/dom/base/WebGLParamsManager.h
+@@ -0,0 +1,30 @@
++/* Camoufox: Per-context WebGL parameter manager */
++#ifndef mozilla_dom_WebGLParamsManager_h
++#define mozilla_dom_WebGLParamsManager_h
++
++#include "nsString.h"
++#include "nsTHashMap.h"
++#include "nsHashKeys.h"
++#include "RoverfoxStorageManager.h"
++
++namespace mozilla {
++namespace dom {
++
++class WebGLParamsManager {
++ public:
++  static void SetVendor(uint32_t aId, const nsAString& aValue);
++  static bool GetVendor(uint32_t aId, nsAString& aOut);
++  static void SetRenderer(uint32_t aId, const nsAString& aValue);
++  static bool GetRenderer(uint32_t aId, nsAString& aOut);
++  static void DisableFunction(uint32_t aId);
++  static bool IsVendorFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++  static bool IsRendererFunctionEnabledForWebIDL(JSContext* aCx,
++                                                  JSObject* aObj);
++ private:
++  static nsString DisabledKeyForUserContext(uint32_t aId);
++};
++
++}  // namespace dom
++}  // namespace mozilla
++
++#endif  // mozilla_dom_WebGLParamsManager_h
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -534,5 +534,13 @@
+     "nsPluginArray.cpp",
  ]
+
++# WebGLParamsManager compiled separately to avoid unified build scope issues
++# (includes RoverfoxStorageManager.h which can affect compilation units)
++SOURCES += ["WebGLParamsManager.cpp"]
++
++EXPORTS.mozilla.dom += [
++    "WebGLParamsManager.h",
++]
++
+ # Are we targeting x86-32 or x86-64?  If so, we want to include SSE2 code for
+ # CharacterDataBuffer.cpp
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -27,3 +27,4 @@
+ #include "VRManagerChild.h"
++#include "WebGLParamsManager.h"
+ #include "WindowDestroyedEvent.h"
+ #include "WindowNamedPropertiesHandler.h"
+@@ -7477,6 +7478,38 @@
+   mSharedWorkers.RemoveElement(aSharedWorker);
+ }
+
++void nsGlobalWindowInner::SetWebGLVendor(const nsAString& vendor,
++                                          ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++  WebGLParamsManager::SetVendor(userContextId, vendor);
++  WebGLParamsManager::DisableFunction(userContextId);
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setWebGLVendor");
++    }
++  }
++}
++
++void nsGlobalWindowInner::SetWebGLRenderer(const nsAString& renderer,
++                                            ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++  WebGLParamsManager::SetRenderer(userContextId, renderer);
++  WebGLParamsManager::DisableFunction(userContextId);
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setWebGLRenderer");
++    }
++  }
++}
++
+ RefPtr<GenericPromise> nsGlobalWindowInner::StorageAccessPermissionChanged(
+     bool aGranted) {
+   // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -685,6 +685,10 @@
+
+   void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+
++  // Per-context WebGL parameter spoofing
++  void SetWebGLVendor(const nsAString& vendor, mozilla::ErrorResult& aRv);
++  void SetWebGLRenderer(const nsAString& renderer, mozilla::ErrorResult& aRv);
++
+  public:
+   void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
+   void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
 diff --git a/dom/canvas/ClientWebGLContext.h b/dom/canvas/ClientWebGLContext.h
 index xxxxxxxxxx..yyyyyyyyyy 100644
 --- a/dom/canvas/ClientWebGLContext.h
 +++ b/dom/canvas/ClientWebGLContext.h
-@@ -1083,6 +1083,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
+@@ -1083,6 +1083,11 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
    void GetContextAttributes(dom::Nullable<dom::WebGLContextAttributes>& retval);
 
   private:
 +  // Helper for mask config values
 +  bool MBoolVal(const std::string& key, bool defaultValue);
++  // Per-context WebGL parameter support
++  uint32_t GetUserContextId() const;
 +
    webgl::SwapChainOptions PrepareAsyncSwapChainOptions(
        WebGLFramebufferJS* fb, bool webvr,
@@ -29,20 +213,24 @@ diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.c
 index 11578f425f..6c77acd7f3 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
 +++ b/dom/canvas/ClientWebGLContext.cpp
-@@ -4,6 +4,9 @@
+@@ -4,6 +4,13 @@
   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
- 
+
  #include "ClientWebGLContext.h"
 +#include "MaskConfig.hpp"
++#include "WebGLParamsManager.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "mozilla/dom/Document.h"
++#include "nsPIDOMWindow.h"
 +#include <algorithm>
 +#include <cstddef>
- 
+
  #include <fmt/format.h>
- 
-@@ -754,6 +757,13 @@ void ClientWebGLContext::SetUnpackColorSpace(
+
+@@ -754,6 +760,33 @@ void ClientWebGLContext::SetUnpackColorSpace(
    Run<RPROC(SetUnpackColorSpace)>(*mUnpackColorSpace);
  }
- 
+
 +bool ClientWebGLContext::MBoolVal(const std::string& key, bool defaultValue) {
 +  if (auto value = MaskConfig::GetAttribute<bool>(key, mIsWebGL2);
 +      value.has_value())
@@ -50,13 +238,33 @@ index 11578f425f..6c77acd7f3 100644
 +  return defaultValue;
 +}
 +
++uint32_t ClientWebGLContext::GetUserContextId() const {
++  if (mCanvasElement) {
++    if (Document* doc = mCanvasElement->OwnerDoc()) {
++      if (BrowsingContext* bc = doc->GetBrowsingContext()) {
++        return bc->OriginAttributesRef().mUserContextId;
++      }
++    }
++  } else if (mOffscreenCanvas) {
++    if (nsIGlobalObject* global = mOffscreenCanvas->GetOwnerGlobal()) {
++      nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(global);
++      if (win) {
++        if (BrowsingContext* bc = win->GetBrowsingContext()) {
++          return bc->OriginAttributesRef().mUserContextId;
++        }
++      }
++    }
++  }
++  return 0;
++}
++
  void ClientWebGLContext::GetContextAttributes(
      dom::Nullable<dom::WebGLContextAttributes>& retval) {
    retval.SetNull();
-@@ -764,15 +774,40 @@ void ClientWebGLContext::GetContextAttributes(
- 
+@@ -764,15 +787,40 @@ void ClientWebGLContext::GetContextAttributes(
+
    const auto& options = mNotLost->info.options;
- 
+
 -  result.mAlpha.Construct(options.alpha);
 -  result.mDepth = options.depth;
 -  result.mStencil = options.stencil;
@@ -101,12 +309,12 @@ index 11578f425f..6c77acd7f3 100644
 +  result.mForceSoftwareRendering = MBoolVal(
 +      "forceSoftwareRendering", options.forceSoftwareRendering);
  }
- 
+
  // -----------------------
-@@ -991,18 +1026,28 @@ bool ClientWebGLContext::CreateHostContext(const uvec2& requestedSize) {
+@@ -991,18 +1039,28 @@ bool ClientWebGLContext::CreateHostContext(const uvec2& requestedSize) {
  std::unordered_map<GLenum, bool> webgl::MakeIsEnabledMap(const bool webgl2) {
    auto ret = std::unordered_map<GLenum, bool>{};
- 
+
 -  ret[LOCAL_GL_BLEND] = false;
 -  ret[LOCAL_GL_CULL_FACE] = false;
 -  ret[LOCAL_GL_DEPTH_TEST] = false;
@@ -134,17 +342,17 @@ index 11578f425f..6c77acd7f3 100644
 +      MaskConfig::MParamGL<bool>(LOCAL_GL_SCISSOR_TEST, false, webgl2);
 +  ret[LOCAL_GL_STENCIL_TEST] =
 +      MaskConfig::MParamGL<bool>(LOCAL_GL_STENCIL_TEST, false, webgl2);
- 
+
    if (webgl2) {
 -    ret[LOCAL_GL_RASTERIZER_DISCARD] = false;
 +    ret[LOCAL_GL_RASTERIZER_DISCARD] =
 +        MaskConfig::MParamGL<bool>(LOCAL_GL_RASTERIZER_DISCARD, false, webgl2);
    }
- 
+
    return ret;
-@@ -2114,6 +2159,57 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2114,6 +2172,57 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
    const auto& state = State();
- 
+
    // -
 +  std::optional<
 +      std::variant<int64_t, bool, double, std::string, std::nullptr_t>>
@@ -197,11 +405,11 @@ index 11578f425f..6c77acd7f3 100644
 +        return;
 +      }
 +  }
- 
+
    const auto fnSetRetval_Buffer = [&](const GLenum target) {
      const auto buffer = *MaybeFind(state.mBoundBufferByTarget, target);
-@@ -2219,49 +2315,84 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
- 
+@@ -2219,49 +2328,84 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+
      // 2 floats
      case LOCAL_GL_DEPTH_RANGE:
 -      retval.set(Create<dom::Float32Array>(cx, this, state.mDepthRange, rv));
@@ -211,7 +419,7 @@ index 11578f425f..6c77acd7f3 100644
 +                                                       mIsWebGL2),
 +          rv));
        return;
- 
+
      case LOCAL_GL_ALIASED_POINT_SIZE_RANGE:
 -      retval.set(
 -          Create<dom::Float32Array>(cx, this, limits.pointSizeRange, rv));
@@ -221,7 +429,7 @@ index 11578f425f..6c77acd7f3 100644
 +              pname, limits.pointSizeRange, mIsWebGL2),
 +          rv));
        return;
- 
+
      case LOCAL_GL_ALIASED_LINE_WIDTH_RANGE:
 -      retval.set(
 -          Create<dom::Float32Array>(cx, this, limits.lineWidthRange, rv));
@@ -231,7 +439,7 @@ index 11578f425f..6c77acd7f3 100644
 +              pname, limits.lineWidthRange, mIsWebGL2),
 +          rv));
        return;
- 
+
      // 4 floats
      case LOCAL_GL_COLOR_CLEAR_VALUE:
 -      retval.set(Create<dom::Float32Array>(cx, this, state.mClearColor, rv));
@@ -241,7 +449,7 @@ index 11578f425f..6c77acd7f3 100644
 +                                                       mIsWebGL2),
 +          rv));
        return;
- 
+
      case LOCAL_GL_BLEND_COLOR:
 -      retval.set(Create<dom::Float32Array>(cx, this, state.mBlendColor, rv));
 +      retval.set(Create<dom::Float32Array>(
@@ -250,7 +458,7 @@ index 11578f425f..6c77acd7f3 100644
 +                                                       mIsWebGL2),
 +          rv));
        return;
- 
+
      // 2 ints
      case LOCAL_GL_MAX_VIEWPORT_DIMS: {
        auto maxViewportDim = BitwiseCast<int32_t>(limits.maxViewportDim);
@@ -263,7 +471,7 @@ index 11578f425f..6c77acd7f3 100644
 +          rv));
        return;
      }
- 
+
      // 4 ints
      case LOCAL_GL_SCISSOR_BOX:
 -      retval.set(Create<dom::Int32Array>(cx, this, state.mScissor, rv));
@@ -273,7 +481,7 @@ index 11578f425f..6c77acd7f3 100644
 +                                                         mIsWebGL2),
 +          rv));
        return;
- 
+
      case LOCAL_GL_VIEWPORT:
 -      retval.set(Create<dom::Int32Array>(cx, this, state.mViewport, rv));
 +      retval.set(Create<dom::Int32Array>(
@@ -282,7 +490,7 @@ index 11578f425f..6c77acd7f3 100644
 +                                                         mIsWebGL2),
 +          rv));
        return;
- 
+
 -    // any
      case LOCAL_GL_COMPRESSED_TEXTURE_FORMATS:
 -      retval.set(Create<dom::Uint32Array>(cx, this,
@@ -297,11 +505,18 @@ index 11578f425f..6c77acd7f3 100644
 +          rv));
        return;
    }
- 
-@@ -2441,6 +2572,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
- 
+
+@@ -2441,6 +2585,17 @@
+
          switch (pname) {
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
++            {
++              nsAutoString stored;
++              if (WebGLParamsManager::GetRenderer(GetUserContextId(), stored)) {
++                ret = Some(NS_ConvertUTF16toUTF8(stored));
++                break;
++              }
++            }
 +            if (auto value = MaskConfig::GetString("webGl:renderer")) {
 +              ret = Some(value.value());
 +              break;
@@ -309,10 +524,17 @@ index 11578f425f..6c77acd7f3 100644
              if (ShouldResistFingerprinting(RFPTarget::WebGLRenderInfo)) {
                ret = Some("Mozilla"_ns);
              } else {
-@@ -2452,6 +2587,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2452,6 +2607,17 @@
              break;
- 
+
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
++            {
++              nsAutoString stored;
++              if (WebGLParamsManager::GetVendor(GetUserContextId(), stored)) {
++                ret = Some(NS_ConvertUTF16toUTF8(stored));
++                break;
++              }
++            }
 +            if (auto value = MaskConfig::GetString("webGl:vendor")) {
 +              ret = Some(value.value());
 +              break;
@@ -320,7 +542,7 @@ index 11578f425f..6c77acd7f3 100644
              ret = ShouldResistFingerprinting(RFPTarget::WebGLRenderInfo)
                        ? Some("Mozilla"_ns)
                        : GetUnmaskedVendor();
-@@ -2545,7 +2684,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2545,7 +2711,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
          case LOCAL_GL_COLOR_WRITEMASK: {
            const auto mask = uint8_t(*maybe);
            const auto bs = std::bitset<4>(mask);
@@ -331,10 +553,10 @@ index 11578f425f..6c77acd7f3 100644
            JS::Rooted<JS::Value> arr(cx);
            if (!dom::ToJSValue(cx, src.data(), src.size(), &arr)) {
              rv = NS_ERROR_OUT_OF_MEMORY;
-@@ -2960,6 +3101,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
+@@ -2960,6 +3128,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
    const FuncScope funcScope(*this, "getShaderPrecisionFormat");
    if (IsContextLost()) return nullptr;
- 
+
 +  // Check for spoofed value
 +  if (auto value =
 +          MaskConfig::MShaderData(shadertype, precisiontype, mIsWebGL2)) {
@@ -356,10 +578,10 @@ index 11578f425f..6c77acd7f3 100644
    const auto& shaderPrecisions = *notLost->info.shaderPrecisions;
    const auto args =
        webgl::GetShaderPrecisionFormatArgs{shadertype, precisiontype};
-@@ -6101,6 +6260,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
+@@ -6101,6 +6287,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
      return false;
    }
- 
+
 +  if (std::vector<std::string> maskValues =
 +          MaskConfig::GetStringList(mIsWebGL2 ? "webGl2:supportedExtensions"
 +                                              : "webGl:supportedExtensions");
@@ -374,9 +596,9 @@ index 11578f425f..6c77acd7f3 100644
    const auto& limits = Limits();
    return limits.supportedExtensions[ext];
  }
-@@ -6112,6 +6282,18 @@ void ClientWebGLContext::GetSupportedExtensions(
+@@ -6112,6 +6309,18 @@ void ClientWebGLContext::GetSupportedExtensions(
    if (IsContextLost()) return;
- 
+
    auto& retarr = retval.SetValue();
 +
 +  // Implement separately to prevent O(n^2) timing
@@ -392,4 +614,42 @@ index 11578f425f..6c77acd7f3 100644
 +
    for (const auto i : MakeEnumeratedRange(WebGLExtensionID::Max)) {
      if (!IsSupported(i, callerType)) continue;
- 
+
+diff --git a/dom/canvas/moz.build b/dom/canvas/moz.build
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/canvas/moz.build
++++ b/dom/canvas/moz.build
+@@ -188,6 +188,9 @@ SOURCES += [
+ # Suppress warnings from third-party code.
+ SOURCES["MurmurHash3.cpp"].flags += ["-Wno-implicit-fallthrough"]
+
++LOCAL_INCLUDES += ["/camoucfg"]
++LOCAL_INCLUDES += ["/dom/base"]
++
+ LOCAL_INCLUDES += [
+     "/js/xpconnect/wrappers",
+ ]
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -900,6 +900,18 @@
+   undefined setScrollMarks(sequence<unsigned long> marks,
+                            optional boolean onHorizontalScrollbar = false);
+ };
+
++// Per-context WebGL vendor spoofing
++partial interface Window {
++  [Throws, Func="mozilla::dom::WebGLParamsManager::IsVendorFunctionEnabledForWebIDL"]
++  undefined setWebGLVendor(DOMString vendor);
++};
++
++// Per-context WebGL renderer spoofing
++partial interface Window {
++  [Throws, Func="mozilla::dom::WebGLParamsManager::IsRendererFunctionEnabledForWebIDL"]
++  undefined setWebGLRenderer(DOMString renderer);
++};
++
+ dictionary WindowPostMessageOptions : StructuredSerializeOptions {
+   USVString targetOrigin = "/";
+ };

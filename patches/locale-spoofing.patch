@@ -1,3 +1,13 @@
+diff --git a/intl/components/moz.build b/intl/components/moz.build
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/intl/components/moz.build
++++ b/intl/components/moz.build
+@@ -1,3 +1,5 @@
++LOCAL_INCLUDES += ["/camoucfg"]
++
+ # -*- Mode: python; indent-tabs-mode: nil; tab-width: 40 -*-
+ # vim: set filetype=python:
+ # This Source Code Form is subject to the terms of the Mozilla Public
 diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
 index 2456c5b4c6..826404b1b7 100644
 --- a/browser/base/content/browser-init.js
