@@ -316,3 +316,36 @@ index 81b4d13cdb..ca04167603 100644
    return nullptr;
  }
 
+diff --git a/dom/workers/WorkerPrivate.cpp b/dom/workers/WorkerPrivate.cpp
+index c8e44687b7..9a2bae61e7 100644
+--- a/dom/workers/WorkerPrivate.cpp
++++ b/dom/workers/WorkerPrivate.cpp
+@@ -23,6 +23,8 @@
+ #include "js/CallAndConstruct.h"  // JS_CallFunctionValue
+ #include "js/CompilationAndEvaluation.h"
+ #include "js/ContextOptions.h"
++#include "js/Date.h"
++#include "TimezoneManager.h"
+ #include "js/Exception.h"
+ #include "js/LocaleSensitive.h"
+ #include "js/MemoryMetrics.h"
+@@ -6350,6 +6352,19 @@ WorkerGlobalScope* WorkerPrivate::GetOrCreateGlobalScope(JSContext* aCx) {
+     data->mScope->DisconnectGlobalTeardownObservers();
+   }
+
++  // Camoufox: Apply per-context timezone override to this worker's JS realm.
++  // Service Workers, Shared Workers, and Dedicated Workers all create their
++  // own JS Realm which does not inherit timezone from the parent page.
++  // Look up stored timezone by userContextId and apply it here.
++  {
++    uint32_t ucid = GetOriginAttributes().mUserContextId;
++    nsAutoString tz;
++    if (mozilla::dom::TimezoneManager::GetTimezone(ucid, tz)) {
++      NS_LossyConvertUTF16toASCII tzASCII(tz);
++      JS::SetRealmTimeZoneOverride(aCx, tzASCII.get());
++    }
++  }
++
+   JS_FireOnNewGlobalObject(aCx, global);
+
+   return data->mScope;

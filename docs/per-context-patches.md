@@ -11,10 +11,18 @@ Camoufox spoofs fingerprints globally via `CAMOU_CONFIG` — every browser conte
 | `window.setTimezone(tz)` | `timezone-spoofing.patch` | `Date`, `Intl.DateTimeFormat`, all time APIs |
 | `window.setScreenDimensions(w, h)` | `screen-spoofing.patch` | `screen.width`, `screen.height` |
 | `window.setScreenColorDepth(depth)` | `screen-spoofing.patch` | `screen.colorDepth` |
+| `window.setNavigatorPlatform(platform)` | `navigator-spoofing.patch` | `navigator.platform` |
+| `window.setNavigatorOscpu(oscpu)` | `navigator-spoofing.patch` | `navigator.oscpu` |
+| `window.setNavigatorHardwareConcurrency(cores)` | `navigator-spoofing.patch` | `navigator.hardwareConcurrency` |
 | `window.setWebRTCIPv4(ip)` | `webrtc-ip-spoofing.patch` | WebRTC ICE candidates, SDP, getStats() |
 | `window.setWebRTCIPv6(ip)` | `webrtc-ip-spoofing.patch` | WebRTC IPv6 addresses |
+| `window.setWebGLVendor(vendor)` | `webgl-spoofing.patch` | `UNMASKED_VENDOR_WEBGL` parameter |
+| `window.setWebGLRenderer(renderer)` | `webgl-spoofing.patch` | `UNMASKED_RENDERER_WEBGL` parameter |
+| `window.setCanvasSeed(seed)` | `canvas-spoofing.patch` | Canvas 2D `toDataURL()`/`getImageData()` hash |
+| `window.setFontList(fonts)` | `font-list-spoofing.patch` | Which fonts appear "installed" to fingerprinters |
+| `window.setSpeechVoices(voices)` | `speech-voices-spoofing.patch` | `speechSynthesis.getVoices()` filtering |
 
-All functions **self-destruct after the first call** — page JavaScript cannot detect them via `typeof window.setTimezone`.
+All 14 functions **self-destruct after the first call** — page JavaScript cannot detect them via `typeof window.setTimezone`.
 
 ---
 
@@ -55,6 +63,30 @@ await context.addInitScript((values) => {
   if (typeof w.setWebRTCIPv4 === 'function') {
     w.setWebRTCIPv4(values.webrtcIPv4);
   }
+  if (typeof w.setNavigatorPlatform === 'function') {
+    w.setNavigatorPlatform(values.navigatorPlatform);
+  }
+  if (typeof w.setNavigatorOscpu === 'function') {
+    w.setNavigatorOscpu(values.navigatorOscpu);
+  }
+  if (typeof w.setNavigatorHardwareConcurrency === 'function') {
+    w.setNavigatorHardwareConcurrency(values.hardwareConcurrency);
+  }
+  if (typeof w.setWebGLVendor === 'function') {
+    w.setWebGLVendor(values.webglVendor);
+  }
+  if (typeof w.setWebGLRenderer === 'function') {
+    w.setWebGLRenderer(values.webglRenderer);
+  }
+  if (typeof w.setCanvasSeed === 'function') {
+    w.setCanvasSeed(values.canvasSeed);
+  }
+  if (values.fontList && values.fontList.length > 0 && typeof w.setFontList === 'function') {
+    w.setFontList(values.fontList.join(','));
+  }
+  if (values.speechVoices && typeof w.setSpeechVoices === 'function') {
+    w.setSpeechVoices(values.speechVoices);
+  }
 }, {
   fontSpacingSeed: 12345678,
   audioFingerprintSeed: 87654321,
@@ -63,6 +95,14 @@ await context.addInitScript((values) => {
   screenHeight: 1080,
   screenColorDepth: 24,
   webrtcIPv4: '203.0.113.1',  // your proxy IP
+  navigatorPlatform: 'MacIntel',
+  navigatorOscpu: 'Intel Mac OS X 10.15',
+  hardwareConcurrency: 8,
+  webglVendor: 'Intel Inc.',
+  webglRenderer: 'Intel Iris OpenGL Engine',
+  canvasSeed: 55555555,
+  fontList: ['Arial', 'Helvetica', 'Georgia', 'Courier New', 'Verdana', 'Times New Roman'],
+  speechVoices: 'Microsoft David,Microsoft Zira,Google US English',
 });
 
 const page = await context.newPage();
@@ -77,21 +117,25 @@ await page.goto('https://example.com');
 ### Running Multiple Isolated Contexts
 
 ```javascript
-// Context A — appears as a New York user
+// Context A — appears as a New York user with Intel GPU
 const ctxA = await browser.newContext();
 await ctxA.addInitScript((v) => {
   if (typeof window.setTimezone === 'function') window.setTimezone(v.tz);
   if (typeof window.setAudioFingerprintSeed === 'function') window.setAudioFingerprintSeed(v.audio);
   if (typeof window.setScreenDimensions === 'function') window.setScreenDimensions(v.sw, v.sh);
-}, { tz: 'America/New_York', audio: 11111, sw: 1920, sh: 1080 });
+  if (typeof window.setCanvasSeed === 'function') window.setCanvasSeed(v.canvas);
+  if (typeof window.setWebGLRenderer === 'function') window.setWebGLRenderer(v.gpu);
+}, { tz: 'America/New_York', audio: 11111, sw: 1920, sh: 1080, canvas: 44444, gpu: 'Intel Iris OpenGL Engine' });
 
-// Context B — appears as a Tokyo user (fully isolated from A)
+// Context B — appears as a Tokyo user with Apple GPU (fully isolated from A)
 const ctxB = await browser.newContext();
 await ctxB.addInitScript((v) => {
   if (typeof window.setTimezone === 'function') window.setTimezone(v.tz);
   if (typeof window.setAudioFingerprintSeed === 'function') window.setAudioFingerprintSeed(v.audio);
   if (typeof window.setScreenDimensions === 'function') window.setScreenDimensions(v.sw, v.sh);
-}, { tz: 'Asia/Tokyo', audio: 99999, sw: 2560, sh: 1440 });
+  if (typeof window.setCanvasSeed === 'function') window.setCanvasSeed(v.canvas);
+  if (typeof window.setWebGLRenderer === 'function') window.setWebGLRenderer(v.gpu);
+}, { tz: 'Asia/Tokyo', audio: 99999, sw: 2560, sh: 1440, canvas: 88888, gpu: 'Apple M1' });
 ```
 
 ---
@@ -178,8 +222,6 @@ window.setAudioFingerprintSeed(87654321); // uint32 seed
 **New C++ files:** `AudioFingerprintManager.h/cpp`
 **Modified Firefox files:** `nsGlobalWindowInner.cpp`, `AudioBuffer.cpp`, `AnalyserNode.cpp`, `Window.webidl`, `moz.build` (dom/base + dom/media/webaudio)
 
-**Build note:** Uses `SOURCES` (separate compilation) because the filename sorts before `BarProps.cpp`, which triggers namespace pollution in unified builds.
-
 ---
 
 ### 3. timezone-spoofing.patch
@@ -190,6 +232,8 @@ window.setAudioFingerprintSeed(87654321); // uint32 seed
 
 **Navigation persistence:** Hooks `nsGlobalWindowOuter::SetNewDocument()` to automatically re-apply the stored timezone when the user navigates to a new page within the same context. Without this, navigations would create a new Realm that loses the override.
 
+**Worker propagation:** Hooks `WorkerPrivate::GetOrCreateGlobalScope()` to apply the stored timezone to the worker's JS Realm. Dedicated Workers, Shared Workers, and Service Workers all create their own Realm that doesn't inherit the parent page's timezone — this hook ensures they stay consistent.
+
 **API:**
 ```javascript
 window.setTimezone('America/New_York'); // IANA timezone ID
@@ -197,7 +241,7 @@ window.setTimezone('America/New_York'); // IANA timezone ID
 ```
 
 **New C++ files:** `TimezoneManager.h/cpp`
-**Modified Firefox files:** `nsGlobalWindowInner.cpp`, `nsGlobalWindowOuter.cpp`, `Window.webidl`, `moz.build`
+**Modified Firefox files:** `nsGlobalWindowInner.cpp`, `nsGlobalWindowOuter.cpp`, `WorkerPrivate.cpp`, `Window.webidl`, `moz.build`
 **Modified SpiderMonkey files:** `js/public/Date.h`, `js/src/vm/DateTime.h/cpp`, `js/src/vm/Realm.cpp`
 
 ---
@@ -206,7 +250,9 @@ window.setTimezone('America/New_York'); // IANA timezone ID
 
 **Controls:** `screen.width`, `screen.height`, `screen.colorDepth`, and related CSS media queries.
 
-**How it works:** Stores dimensions per context, then hooks `nsScreen::GetRect()` with a three-tier fallback: per-context values → global `CAMOU_CONFIG` → vanilla Firefox. Also hooks `nsDeviceContext` and CSS media features for consistency.
+**How it works:** Stores dimensions per context, then hooks `nsScreen::GetRect()` with a three-tier fallback: per-context values → global `CAMOU_CONFIG` → vanilla Firefox.
+
+Also hooks `nsMediaFeatures.cpp` so CSS media queries like `matchMedia('(device-width: 1920px)')` return results consistent with `screen.width`. Without this, fingerprinters can detect a mismatch between the JavaScript API and CSS media queries.
 
 This replaces the old `screen-hijacker.patch` (which only supported global config). It includes the same global `CAMOU_CONFIG` fallback, so it works for both single-context and multi-context use cases.
 
@@ -248,25 +294,136 @@ window.setWebRTCIPv6('2001:db8::1');   // proxy exit IPv6 (optional)
 **New C++ files:** `WebRTCIPManager.h/cpp`
 **Modified Firefox files:** `nsGlobalWindowInner.cpp`, `PeerConnectionImpl.cpp/h`, `Window.webidl`, `moz.build` (dom/base + dom/media/webrtc)
 
-**Build note:** Uses `SOURCES` (separate compilation) like audio-fingerprint-manager.
+---
+
+### 6. navigator-spoofing.patch
+
+**Controls:** `navigator.platform`, `navigator.oscpu`, `navigator.hardwareConcurrency` — per-context with global `CAMOU_CONFIG` fallback.
+
+**How it works:** Stores values per context via `NavigatorManager`, then hooks `Navigator::GetPlatform()`, `Navigator::GetOscpu()`, and `Navigator::HardwareConcurrency()` with a three-tier fallback: per-context values → global `CAMOU_CONFIG` → vanilla Firefox.
+
+**Worker propagation:** Also hooks `WorkerNavigator::GetPlatform()` and `WorkerNavigator::HardwareConcurrency()` so Web Workers inherit the per-context values. Workers resolve `userContextId` via `WorkerPrivate::GetOriginAttributes()`.
+
+Also adds `EnsureGlobalTimezoneInitialized()` — a lazy initializer that reads `timezone` from `CAMOU_CONFIG` on first access. This replaced a static initializer that caused SIGSEGV crashes because SpiderMonkey wasn't ready at init time.
+
+**API:**
+```javascript
+window.setNavigatorPlatform('Win32');              // navigator.platform
+window.setNavigatorOscpu('Windows NT 10.0; Win64; x64');  // navigator.oscpu
+window.setNavigatorHardwareConcurrency(8);         // navigator.hardwareConcurrency
+```
+
+**Global config fallback (no JavaScript needed):**
+```json
+{ "navigator.platform": "MacIntel", "navigator.hardwareConcurrency": 8, "timezone": "America/Los_Angeles" }
+```
+
+**New C++ files:** `NavigatorManager.h/cpp`
+**Modified Firefox files:** `Navigator.cpp`, `WorkerNavigator.cpp`, `nsGlobalWindowInner.cpp/h`, `Window.webidl`, `moz.build`
+
+---
+
+### 7. webgl-spoofing.patch
+
+**Controls:** `UNMASKED_VENDOR_WEBGL` and `UNMASKED_RENDERER_WEBGL` — the WebGL debug extension parameters that reveal GPU hardware. These are one of the strongest fingerprint vectors since GPU model + driver version is highly unique.
+
+**How it works:** Stores vendor and renderer strings per context via `WebGLParamsManager`, then hooks `ClientWebGLContext::GetParameter()` to intercept `WEBGL_debug_renderer_info` queries. Three-tier fallback: per-context values → global `CAMOU_CONFIG` → real hardware values.
+
+Note: `GL_VENDOR` and `GL_RENDERER` (without the debug extension) already return `"Mozilla"` universally in Firefox — those don't need spoofing.
+
+**Coupled self-destruct:** Calling either `setWebGLVendor()` or `setWebGLRenderer()` removes **both** functions and sets a shared disabled flag. This prevents partial configuration.
+
+**API:**
+```javascript
+window.setWebGLVendor('Intel Inc.');              // UNMASKED_VENDOR_WEBGL
+window.setWebGLRenderer('Intel Iris OpenGL Engine');  // UNMASKED_RENDERER_WEBGL
+```
+
+**New C++ files:** `WebGLParamsManager.h/cpp`
+**Modified Firefox files:** `nsGlobalWindowInner.cpp`, `ClientWebGLContext.cpp`, `Window.webidl`, `moz.build`
+
+---
+
+### 8. canvas-spoofing.patch
+
+**Controls:** Canvas 2D fingerprint hash — websites draw text, shapes, and gradients on a canvas, then call `toDataURL()` or `getImageData()` to hash the pixel output. GPU, driver, and font rendering differences make this hash highly unique.
+
+**How it works:** Stores a seed per context via `CanvasFingerprintManager`, then hooks both canvas data extraction paths in `CanvasRenderingContext2D.cpp`:
+- `GetImageBuffer()` — used by `toDataURL()` and `toBlob()`, returns pixels in **BGRA** format
+- `GetImageData()` — used by `ctx.getImageData()`, returns pixels in **RGBA** format
+
+The noise algorithm is **format-agnostic**: for each selected pixel, it iterates RGB channels (skipping alpha) and modifies the first non-zero channel by ±1. This works correctly regardless of whether byte 0 is Red (RGBA) or Blue (BGRA).
+
+**Zero-pixel preservation:** Channels with value 0 are skipped. This means `clearRect()` followed by `getImageData()` returns all zeros — no false noise on transparent pixels. This is important because CreepJS specifically tests for noise in cleared canvas regions as a detection vector.
+
+**Noise is deterministic, not random:** Same seed always produces the same pixel modifications, so fingerprinters calling `toDataURL()` multiple times get identical results. This is critical — random noise is trivially detected by calling the API twice and comparing outputs.
+
+**API:**
+```javascript
+window.setCanvasSeed(55555555); // uint32 seed
+```
+
+**New C++ files:** `CanvasFingerprintManager.h/cpp`
+**Modified Firefox files:** `nsGlobalWindowInner.cpp`, `CanvasRenderingContext2D.cpp`, `Window.webidl`, `moz.build`
+
+---
+
+### 9. font-list-spoofing.patch
+
+**Controls:** Which fonts appear "installed" to fingerprinting scripts. Websites detect fonts by measuring text widths (canvas `measureText()`) — if the width changes compared to a fallback font, the font is present. Each context can have a different subset of fonts.
+
+**How it works:** Stores a set of allowed font names (lowercase) per context in `FontListManager`. Uses a **thread-local** `uint32_t` to propagate the context ID deep into the font resolution stack without changing any function signatures.
+
+The hook is in `gfxPlatformFontList::FindAndAddFamiliesLocked()` — the single function that all font lookups pass through. When a font name isn't in the allowed set for the current context, the function returns `false` (font "not found"), and CSS falls back to the next font in `font-family`.
+
+**Thread-local context propagation:**
+```
+1. Entry point sets thread_local = userContextId
+   - FontFaceSet::Check() / FontFaceSet::Load() (JS API: document.fonts)
+   - gfxFontGroup::EnsureFontList() (CSS rendering + canvas text)
+2. Deep in font stack: FindAndAddFamiliesLocked() reads thread_local
+   → If font not in allowed list → return false
+3. Entry point resets thread_local = 0
+```
+
+An RAII guard (`AutoFontListContext`) handles the set/reset automatically.
+
+**Why thread-local?** `FindAndAddFamiliesLocked()` is called from 20+ locations including font fallback, CSS matching, and generic font resolution. Threading a parameter through all callers would require modifying ~50 functions.
+
+**API:**
+```javascript
+window.setFontList('Arial,Helvetica,Georgia,Courier New,Verdana');
+// Comma-separated list of font names. Fonts NOT in this list will appear "not installed".
+// Case-insensitive matching. Essential web fonts (serif/sans-serif/monospace fallbacks) always work.
+```
+
+**New C++ files:** `FontListManager.h/cpp`
+**Modified Firefox files:** `nsGlobalWindowInner.cpp`, `gfxPlatformFontList.cpp`, `gfxTextRun.cpp`, `FontFaceSet.cpp`, `Window.webidl`, `moz.build`
+
+---
+
+### 10. speech-voices-spoofing.patch
+
+**Controls:** `speechSynthesis.getVoices()` — the list of installed text-to-speech voices. This varies by OS and installed language packs, making it a fingerprinting vector. Each context can expose a different subset of voices.
+
+**How it works:** Stores a set of allowed voice names per context in `SpeechVoicesManager`. Hooks `SpeechSynthesis::GetVoices()` to filter the real voice list, returning only voices whose names match the allowed set.
+
+**API:**
+```javascript
+window.setSpeechVoices('Microsoft David,Samantha,Alex');
+// Comma-separated list of voice names. Only voices matching these names will
+// appear in getVoices(). If the browser doesn't have a matching voice installed,
+// it's simply omitted from the result (no error).
+```
+
+**New C++ files:** `SpeechVoicesManager.h/cpp`
+**Modified Firefox files:** `nsGlobalWindowInner.cpp`, `SpeechSynthesis.cpp`, `Window.webidl`, `moz.build`
 
 ---
 
 ## Global-Only Patches (No JavaScript API)
 
 These patches read from `CAMOU_CONFIG` at startup and apply to all contexts equally. They don't expose any `window.setXxx()` functions.
-
-### navigator-spoofing.patch
-
-**What it adds:** Hooks `Navigator::GetPlatform()` and `Navigator::HardwareConcurrency()` in the main window's `Navigator.cpp`. The existing `fingerprint-injection.patch` only hooked `WorkerNavigator.cpp` (Web Workers), so the main window was missing these overrides.
-
-Also adds `EnsureGlobalTimezoneInitialized()` — a lazy initializer that reads `timezone` from `CAMOU_CONFIG` on first access. This replaced a static initializer that caused SIGSEGV crashes because SpiderMonkey wasn't ready at init time.
-
-```json
-{ "navigator.platform": "MacIntel", "navigator.hardwareConcurrency": 8, "timezone": "America/Los_Angeles" }
-```
-
-**Modified:** `Navigator.cpp`
 
 ### geolocation-spoofing.patch
 
@@ -300,8 +457,28 @@ For per-context geolocation, use Playwright's built-in `context.setGeolocation()
 
 ## Build Notes
 
-**SOURCES vs UNIFIED_SOURCES:** New `.cpp` files that include `RoverfoxStorageManager.h` and sort alphabetically before `BarProps.cpp` must use `SOURCES` (separate compilation) in `moz.build`. This avoids namespace pollution (`mozilla::dom::mozilla::dom::`) caused by unified build concatenation. Currently applies to: `AudioFingerprintManager.cpp`, `WebRTCIPManager.cpp`.
+**SOURCES vs UNIFIED_SOURCES:** All new `.cpp` manager files use `SOURCES` (separate compilation) in `moz.build`. This avoids namespace pollution (`mozilla::dom::mozilla::dom::`) that occurs when files including `RoverfoxStorageManager.h` are concatenated in unified builds. Currently applies to: `AudioFingerprintManager.cpp`, `WebRTCIPManager.cpp`, `NavigatorManager.cpp`, `WebGLParamsManager.cpp`, `CanvasFingerprintManager.cpp`, `FontListManager.cpp`, `SpeechVoicesManager.cpp`.
+
+**EXPORTS sort conflicts:** Each patch uses a separate `EXPORTS.mozilla.dom += ["Header.h"]` statement near its `SOURCES` block, rather than inserting into the main sorted EXPORTS list. This avoids sort conflicts when multiple patches add headers at similar alphabetical positions.
 
 **WebIDL:** Each `window.setXxx()` function needs its own `partial interface Window` block. Combining multiple in one block triggers namespace pollution in the binding generator.
 
 **Patch independence:** All patches apply independently to vanilla Firefox. Context lines in hunks reference unpatched source files. Patches apply alphabetically and use fuzzy matching for line shifts caused by other patches.
+
+---
+
+## Known Limitations
+
+These patches control what JavaScript APIs report, but they cannot change how the underlying OS renders content. Several detection vectors operate below the browser layer and will leak the real OS identity:
+
+| Vector | Why it can't be spoofed |
+|--------|------------------------|
+| **Font rendering** | macOS uses Core Text, Windows uses DirectWrite, Linux uses FreeType. Same font, same size, different subpixel hinting and glyph outlines. Canvas `measureText()` widths and `toDataURL()` hashes differ at the rendering engine level. |
+| **Canvas device class** | GPU drivers produce OS-specific rasterization. A "MacIntel" profile running on Linux will have Linux GPU output — detectable by comparing canvas hashes against known-good samples per platform. |
+| **Scrollbar rendering** | macOS overlay scrollbars vs Windows/Linux classic scrollbars affect layout metrics (`offsetWidth` with/without scrollbar) and are visible in screenshots. |
+| **System color schemes** | CSS `prefers-color-scheme`, `AccentColor`, and system colors differ by OS and desktop environment. |
+| **WebGL shader precision** | `getShaderPrecisionFormat()` returns driver-specific values that vary by OS + GPU combination. |
+
+Advanced fingerprinting services (reCAPTCHA, hCaptcha, Kasada, etc.) cross-reference these signals against what `navigator.platform` and the User-Agent claim. A mismatch is a strong bot signal.
+
+**Recommendation:** Always run Camoufox on the OS that matches the fingerprint profile. Use macOS fingerprints on macOS workers, Linux fingerprints on Linux workers. The per-context patches are designed to make each context look like a *different person on the same OS*, not to impersonate a different OS entirely.

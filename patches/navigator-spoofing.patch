@@ -1,18 +1,175 @@
+diff --git a/dom/base/NavigatorManager.h b/dom/base/NavigatorManager.h
+new file mode 100644
+index 0000000000..1234567890
+--- /dev/null
++++ b/dom/base/NavigatorManager.h
+@@ -0,0 +1,78 @@
++/* Camoufox: Per-context navigator property manager */
++#ifndef mozilla_dom_NavigatorManager_h
++#define mozilla_dom_NavigatorManager_h
++
++#include "nsString.h"
++#include "nsTHashMap.h"
++#include "nsHashKeys.h"
++#include "RoverfoxStorageManager.h"
++
++namespace mozilla {
++namespace dom {
++
++class NavigatorManager {
++ public:
++  // Platform (e.g. "Win32", "MacIntel", "Linux x86_64")
++  static void SetPlatform(uint32_t aId, const nsAString& aValue) {
++    nsAutoString key;
++    key.AppendPrintf("nav_plat_%u", aId);
++    RoverfoxStorageManager::PutString(key, aValue);
++    nsAutoString dKey;
++    dKey.AppendPrintf("nav_plat_d_%u", aId);
++    RoverfoxStorageManager::PutBool(dKey, true);
++  }
++
++  static bool GetPlatform(uint32_t aId, nsAString& aOut) {
++    nsAutoString key;
++    key.AppendPrintf("nav_plat_%u", aId);
++    return RoverfoxStorageManager::GetString(key, aOut);
++  }
++
++  static bool IsPlatformFunctionEnabledForWebIDL(JSContext* aCx,
++                                                 JSObject* aObj);
++
++  // Oscpu (e.g. "Windows NT 10.0; Win64; x64")
++  static void SetOscpu(uint32_t aId, const nsAString& aValue) {
++    nsAutoString key;
++    key.AppendPrintf("nav_oscpu_%u", aId);
++    RoverfoxStorageManager::PutString(key, aValue);
++    nsAutoString dKey;
++    dKey.AppendPrintf("nav_oscpu_d_%u", aId);
++    RoverfoxStorageManager::PutBool(dKey, true);
++  }
++
++  static bool GetOscpu(uint32_t aId, nsAString& aOut) {
++    nsAutoString key;
++    key.AppendPrintf("nav_oscpu_%u", aId);
++    return RoverfoxStorageManager::GetString(key, aOut);
++  }
++
++  static bool IsOscpuFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++
++  // HardwareConcurrency (CPU core count)
++  static void SetHardwareConcurrency(uint32_t aId, uint32_t aValue) {
++    nsAutoString key;
++    key.AppendPrintf("nav_hwc_%u", aId);
++    RoverfoxStorageManager::PutUint(key, aValue);
++    nsAutoString dKey;
++    dKey.AppendPrintf("nav_hwc_d_%u", aId);
++    RoverfoxStorageManager::PutBool(dKey, true);
++  }
++
++  static uint32_t GetHardwareConcurrency(uint32_t aId) {
++    nsAutoString key;
++    key.AppendPrintf("nav_hwc_%u", aId);
++    uint32_t value = 0;
++    if (RoverfoxStorageManager::GetUint(key, value)) {
++      return value;
++    }
++    return 0;
++  }
++
++  static bool IsHwcFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++};
++
++}  // namespace dom
++}  // namespace mozilla
++
++#endif  // mozilla_dom_NavigatorManager_h
+diff --git a/dom/base/NavigatorManager.cpp b/dom/base/NavigatorManager.cpp
+new file mode 100644
+index 0000000000..2345678901
+--- /dev/null
++++ b/dom/base/NavigatorManager.cpp
+@@ -0,0 +1,66 @@
++/* Camoufox: Per-context navigator property manager */
++#include "NavigatorManager.h"
++
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsGlobalWindowInner.h"
++#include "xpcpublic.h"
++
++namespace mozilla {
++namespace dom {
++
++static uint32_t GetUserContextId(JSObject* aObj) {
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) return 0;
++  uint32_t id = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    id = bc->OriginAttributesRef().mUserContextId;
++  }
++  return id;
++}
++
++static bool IsDisabled(const char* aPrefix, uint32_t aId) {
++  nsAutoString dKey;
++  dKey.AppendPrintf("%s_d_%u", aPrefix, aId);
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(dKey, disabled);
++  return disabled;
++}
++
++/* static */
++bool NavigatorManager::IsPlatformFunctionEnabledForWebIDL(JSContext* aCx,
++                                                          JSObject* aObj) {
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) return false;
++  uint32_t id = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    id = bc->OriginAttributesRef().mUserContextId;
++  }
++  return !IsDisabled("nav_plat", id);
++}
++
++/* static */
++bool NavigatorManager::IsOscpuFunctionEnabledForWebIDL(JSContext* aCx,
++                                                       JSObject* aObj) {
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) return false;
++  uint32_t id = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    id = bc->OriginAttributesRef().mUserContextId;
++  }
++  return !IsDisabled("nav_oscpu", id);
++}
++
++/* static */
++bool NavigatorManager::IsHwcFunctionEnabledForWebIDL(JSContext* aCx,
++                                                     JSObject* aObj) {
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) return false;
++  uint32_t id = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    id = bc->OriginAttributesRef().mUserContextId;
++  }
++  return !IsDisabled("nav_hwc", id);
++}
++
++}  // namespace dom
++}  // namespace mozilla
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index 51d8331345..abc1234567 100644
+index 51d8331345..fedcba9876 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
-@@ -6,6 +6,9 @@
+@@ -6,6 +6,10 @@
  
  // Needs to be first.
  #include "Navigator.h"
-+// Camoufox: global config for navigator spoofing
++// Camoufox: per-context + global navigator spoofing
++#include "NavigatorManager.h"
 +#include "MaskConfig.hpp"
 +#include "nsJSUtils.h"
  
  #include "Geolocation.h"
  #include "base/basictypes.h"
-@@ -52,6 +55,17 @@
+@@ -52,6 +56,17 @@
  #include "mozilla/dom/workerinternals/RuntimeService.h"
  #include "nsRFPService.h"
  
@@ -30,13 +187,24 @@ index 51d8331345..abc1234567 100644
  namespace mozilla::dom {
  
  static const char kVibsatorPerm[] = "vibration";
-@@ -422,6 +436,13 @@ void Navigator::GetAppName(nsAString& aAppName) const {
-
+@@ -436,6 +451,24 @@
+ 
  void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
-                             ErrorResult& aRv) const {
-+  // Camoufox: ensure global timezone is initialized (lazy, runs once)
+                              ErrorResult& aRv) const {
 +  EnsureGlobalTimezoneInitialized();
-+  // Camoufox: global config takes priority
++  // Camoufox: per-context navigator platform
++  if (mWindow) {
++    uint32_t userContextId = 0;
++    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++      userContextId = bc->OriginAttributesRef().mUserContextId;
++    }
++    nsAutoString stored;
++    if (NavigatorManager::GetPlatform(userContextId, stored)) {
++      aPlatform = stored;
++      return;
++    }
++  }
++  // Camoufox: global config fallback
 +  if (auto value = MaskConfig::GetString("navigator.platform")) {
 +    aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
 +    return;
@@ -44,16 +212,226 @@ index 51d8331345..abc1234567 100644
    if (mWindow) {
      BrowsingContext* bc = mWindow->GetBrowsingContext();
      nsString customPlatform;
-@@ -683,6 +704,12 @@ bool Navigator::CookieEnabled() {
+@@ -468,6 +501,18 @@
+ 
+ void Navigator::GetOscpu(nsAString& aOSCPU, CallerType aCallerType,
+                           ErrorResult& aRv) const {
++  // Camoufox: per-context navigator oscpu
++  if (mWindow) {
++    uint32_t userContextId = 0;
++    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++      userContextId = bc->OriginAttributesRef().mUserContextId;
++    }
++    nsAutoString stored;
++    if (NavigatorManager::GetOscpu(userContextId, stored)) {
++      aOSCPU = stored;
++      return;
++    }
++  }
+   if (aCallerType != CallerType::System) {
+     // If fingerprinting resistance is on, we will spoof this value. See
+     // nsRFPService.h for details about spoofed values.
+@@ -681,6 +726,22 @@
  }
-
+ 
  uint64_t Navigator::HardwareConcurrency() {
-+  // Camoufox: ensure global timezone is initialized (lazy, runs once)
 +  EnsureGlobalTimezoneInitialized();
-+  // Camoufox: global config takes priority
++  // Camoufox: per-context hardware concurrency
++  if (mWindow) {
++    uint32_t userContextId = 0;
++    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++      userContextId = bc->OriginAttributesRef().mUserContextId;
++    }
++    uint32_t stored = NavigatorManager::GetHardwareConcurrency(userContextId);
++    if (stored > 0) {
++      return static_cast<uint64_t>(stored);
++    }
++  }
++  // Camoufox: global config fallback
 +  if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency")) {
 +    return value.value();
 +  }
    workerinternals::RuntimeService* rts =
        workerinternals::RuntimeService::GetOrCreateService();
    if (!rts) {
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index abcdef1234..5678901234 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -17,6 +17,7 @@
+ #include <type_traits>
+ #include <utility>
+ 
++#include "NavigatorManager.h"
+ #include "AudioChannelService.h"
+ #include "AutoplayPolicy.h"
+ #include "Crypto.h"
+@@ -7477,6 +7478,51 @@
+   mSharedWorkers.RemoveElement(aSharedWorker);
+ }
+ 
++void nsGlobalWindowInner::SetNavigatorPlatform(const nsAString& platform,
++                                               ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++  NavigatorManager::SetPlatform(userContextId, platform);
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setNavigatorPlatform");
++    }
++  }
++}
++
++void nsGlobalWindowInner::SetNavigatorOscpu(const nsAString& oscpu,
++                                            ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++  NavigatorManager::SetOscpu(userContextId, oscpu);
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setNavigatorOscpu");
++    }
++  }
++}
++
++void nsGlobalWindowInner::SetNavigatorHardwareConcurrency(uint32_t cores,
++                                                          ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++  NavigatorManager::SetHardwareConcurrency(userContextId, cores);
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setNavigatorHardwareConcurrency");
++    }
++  }
++}
++
+ RefPtr<GenericPromise> nsGlobalWindowInner::StorageAccessPermissionChanged(
+     bool aGranted) {
+   // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index 1234567890..abcdef5678 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -685,6 +685,13 @@
+ 
+   void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+ 
++  // Per-context navigator property spoofing
++  void SetNavigatorPlatform(const nsAString& platform,
++                            mozilla::ErrorResult& aRv);
++  void SetNavigatorOscpu(const nsAString& oscpu, mozilla::ErrorResult& aRv);
++  void SetNavigatorHardwareConcurrency(uint32_t cores,
++                                       mozilla::ErrorResult& aRv);
++
+  public:
+   void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
+   void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index 9876543210..1234567890 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -902,6 +902,24 @@
+                            optional boolean onHorizontalScrollbar = false);
+ };
+ 
++// Per-context navigator platform spoofing
++partial interface Window {
++  [Throws, Func="mozilla::dom::NavigatorManager::IsPlatformFunctionEnabledForWebIDL"]
++  undefined setNavigatorPlatform(DOMString platform);
++};
++
++// Per-context navigator oscpu spoofing
++partial interface Window {
++  [Throws, Func="mozilla::dom::NavigatorManager::IsOscpuFunctionEnabledForWebIDL"]
++  undefined setNavigatorOscpu(DOMString oscpu);
++};
++
++// Per-context navigator hardware concurrency spoofing
++partial interface Window {
++  [Throws, Func="mozilla::dom::NavigatorManager::IsHwcFunctionEnabledForWebIDL"]
++  undefined setNavigatorHardwareConcurrency(unsigned long cores);
++};
++
+ dictionary WindowPostMessageOptions : StructuredSerializeOptions {
+   USVString targetOrigin = "/";
+ };
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index abcdef1234..5678901234 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -222,5 +222,6 @@ EXPORTS.mozilla.dom += [
+     "MozQueryInterface.h",
+     "Navigator.h",
++    "NavigatorManager.h",
+     "NodeInfo.h",
+     "NodeInfoInlines.h",
+     "NodeIterator.h",
+@@ -326,4 +327,8 @@ SOURCES += [
+     "nsWindowSizes.cpp",
+ ]
+
++# NavigatorManager compiled separately to avoid unified build scope issues
++# (includes RoverfoxStorageManager.h which can affect compilation units)
++SOURCES += ["NavigatorManager.cpp"]
++
+ UNIFIED_SOURCES += [
+
+diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
+index 622724b529..35e436cd16 100644
+--- a/dom/workers/WorkerNavigator.cpp
++++ b/dom/workers/WorkerNavigator.cpp
+@@ -7,4 +7,6 @@
+ #include "mozilla/dom/WorkerNavigator.h"
+ #include "MaskConfig.hpp"
++#include "mozilla/dom/NavigatorManager.h"
++#include "mozilla/dom/WorkerPrivate.h"
+
+ #include <utility>
+@@ -155,6 +157,18 @@
+
+ void WorkerNavigator::GetPlatform(nsString& aPlatform, CallerType aCallerType,
+                                   ErrorResult& aRv) const {
++  // Camoufox: per-context navigator platform for workers
++  {
++    WorkerPrivate* wp = GetCurrentThreadWorkerPrivate();
++    if (wp) {
++      uint32_t ucid = wp->GetOriginAttributes().mUserContextId;
++      nsAutoString stored;
++      if (mozilla::dom::NavigatorManager::GetPlatform(ucid, stored)) {
++        aPlatform = stored;
++        return;
++      }
++    }
++  }
+   if (auto value = MaskConfig::GetString("navigator.platform"))
+     return aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
+   WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+@@ -242,6 +256,17 @@
+ }
+
+ uint64_t WorkerNavigator::HardwareConcurrency() const {
++  // Camoufox: per-context hardware concurrency for workers
++  {
++    WorkerPrivate* wp = GetCurrentThreadWorkerPrivate();
++    if (wp) {
++      uint32_t ucid = wp->GetOriginAttributes().mUserContextId;
++      uint32_t stored = mozilla::dom::NavigatorManager::GetHardwareConcurrency(ucid);
++      if (stored > 0) {
++        return static_cast<uint64_t>(stored);
++      }
++    }
++  }
+   if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency"))
+     return value.value();
+   RuntimeService* rts = RuntimeService::GetService();
+ 

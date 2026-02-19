@@ -1,0 +1,302 @@
+diff --git a/dom/base/FontListManager.cpp b/dom/base/FontListManager.cpp
+new file mode 100644
+index 0000000000..abcdef0001
+--- /dev/null
++++ b/dom/base/FontListManager.cpp
+@@ -0,0 +1,85 @@
++/* Camoufox: Per-context font list manager */
++#include "FontListManager.h"
++
++#include "mozilla/Mutex.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsGlobalWindowInner.h"
++#include "xpcpublic.h"
++
++namespace mozilla {
++namespace dom {
++
++static Mutex sFontListMutex("FontListManager");
++static nsTHashMap<nsUint32HashKey, nsTHashSet<nsCString>> sFontLists;
++static thread_local uint32_t sCurrentContextId = 0;
++
++nsString FontListManager::DisabledKeyForUserContext(uint32_t aId) {
++  nsAutoString key;
++  key.AppendPrintf("fontlist_d_%u", aId);
++  return key;
++}
++
++void FontListManager::SetFontList(uint32_t aId, const nsAString& aFontList) {
++  nsTHashSet<nsCString> fontSet;
++  nsAutoString remaining(aFontList);
++  while (!remaining.IsEmpty()) {
++    int32_t commaPos = remaining.FindChar(',');
++    nsAutoString fontName;
++    if (commaPos >= 0) {
++      fontName = Substring(remaining, 0, commaPos);
++      remaining.Cut(0, commaPos + 1);
++    } else {
++      fontName = remaining;
++      remaining.Truncate();
++    }
++    fontName.Trim(" \t");
++    if (fontName.IsEmpty()) continue;
++    nsAutoCString utf8;
++    CopyUTF16toUTF8(fontName, utf8);
++    ToLowerCase(utf8);
++    fontSet.Insert(utf8);
++  }
++  MutexAutoLock lock(sFontListMutex);
++  sFontLists.InsertOrUpdate(aId, std::move(fontSet));
++}
++
++bool FontListManager::HasFontList(uint32_t aId) {
++  MutexAutoLock lock(sFontListMutex);
++  return sFontLists.Contains(aId);
++}
++
++bool FontListManager::IsFontAllowed(uint32_t aId,
++                                     const nsACString& aFontName) {
++  MutexAutoLock lock(sFontListMutex);
++  auto entry = sFontLists.Lookup(aId);
++  if (!entry) return true;
++  return entry.Data().Contains(aFontName);
++}
++
++void FontListManager::SetCurrentContext(uint32_t aId) {
++  sCurrentContextId = aId;
++}
++
++uint32_t FontListManager::GetCurrentContext() {
++  return sCurrentContextId;
++}
++
++void FontListManager::DisableFunction(uint32_t aId) {
++  RoverfoxStorageManager::PutBool(DisabledKeyForUserContext(aId), true);
++}
++
++bool FontListManager::IsFunctionEnabledForWebIDL(JSContext* aCx,
++                                                  JSObject* aObj) {
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) return false;
++  uint32_t id = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    id = bc->OriginAttributesRef().mUserContextId;
++  }
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(id), disabled);
++  return !disabled;
++}
++
++}  // namespace dom
++}  // namespace mozilla
+diff --git a/dom/base/FontListManager.h b/dom/base/FontListManager.h
+new file mode 100644
+index 0000000000..abcdef0002
+--- /dev/null
++++ b/dom/base/FontListManager.h
+@@ -0,0 +1,45 @@
++/* Camoufox: Per-context font list manager */
++#ifndef mozilla_dom_FontListManager_h
++#define mozilla_dom_FontListManager_h
++
++#include "nsString.h"
++#include "nsTHashMap.h"
++#include "nsHashKeys.h"
++#include "nsTHashSet.h"
++#include "RoverfoxStorageManager.h"
++
++namespace mozilla {
++namespace dom {
++
++class FontListManager {
++ public:
++  static void SetFontList(uint32_t aUserContextId, const nsAString& aFontList);
++  static bool HasFontList(uint32_t aUserContextId);
++  static bool IsFontAllowed(uint32_t aUserContextId,
++                             const nsACString& aFontName);
++  static void SetCurrentContext(uint32_t aUserContextId);
++  static uint32_t GetCurrentContext();
++  static void DisableFunction(uint32_t aId);
++  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++ private:
++  static nsString DisabledKeyForUserContext(uint32_t aId);
++};
++
++// RAII guard for setting/clearing the thread-local context
++class MOZ_RAII AutoFontListContext {
++ public:
++  explicit AutoFontListContext(uint32_t aId)
++      : mOldId(FontListManager::GetCurrentContext()) {
++    FontListManager::SetCurrentContext(aId);
++  }
++  ~AutoFontListContext() {
++    FontListManager::SetCurrentContext(mOldId);
++  }
++ private:
++  uint32_t mOldId;
++};
++
++}  // namespace dom
++}  // namespace mozilla
++
++#endif  // mozilla_dom_FontListManager_h
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -534,5 +534,12 @@
+     "nsPluginArray.cpp",
+ ]
+
++# FontListManager compiled separately (includes RoverfoxStorageManager.h)
++SOURCES += ["FontListManager.cpp"]
++
++EXPORTS.mozilla.dom += [
++    "FontListManager.h",
++]
++
+ # Are we targeting x86-32 or x86-64?  If so, we want to include SSE2 code for
+ # CharacterDataBuffer.cpp
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -25,5 +25,6 @@
+ #include "PaintWorkletImpl.h"
+ #include "SessionStorageCache.h"
++#include "FontListManager.h"
+ #include "Units.h"
+ #include "VRManagerChild.h"
+ #include "WindowDestroyedEvent.h"
+@@ -7477,6 +7478,22 @@
+   mSharedWorkers.RemoveElement(aSharedWorker);
+ }
+
++void nsGlobalWindowInner::SetFontList(const nsAString& aFontList,
++                                      ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++  FontListManager::SetFontList(userContextId, aFontList);
++  FontListManager::DisableFunction(userContextId);
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setFontList");
++    }
++  }
++}
++
+ RefPtr<GenericPromise> nsGlobalWindowInner::StorageAccessPermissionChanged(
+     bool aGranted) {
+   // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -685,6 +685,9 @@
+
+   void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+
++  // Per-context font list spoofing
++  void SetFontList(const nsAString& aFontList, mozilla::ErrorResult& aRv);
++
+  public:
+   void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
+   void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -892,6 +892,12 @@ partial interface Window {
+   readonly attribute VisualViewport visualViewport;
+ };
+
++// Per-context font list
++partial interface Window {
++  [Throws, Func="mozilla::dom::FontListManager::IsFunctionEnabledForWebIDL"]
++  undefined setFontList(DOMString fontList);
++};
++
+ // Used to assign marks to appear on the scrollbar when
+ // finding on a page.
+ partial interface Window {
+diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/gfx/thebes/gfxPlatformFontList.cpp
++++ b/gfx/thebes/gfxPlatformFontList.cpp
+@@ -42,4 +42,5 @@
+ #include "mozilla/dom/Document.h"
++#include "mozilla/dom/FontListManager.h"
+ #include "mozilla/gfx/2D.h"
+ #include "mozilla/ipc/FileDescriptorUtils.h"
+ #include "mozilla/TextUtils.h"
+@@ -1632,6 +1633,16 @@
+   nsAutoCString key;
+   GenerateFontListKey(aFamily, key);
+
++  // Per-context font list filtering
++  {
++    uint32_t ctx = mozilla::dom::FontListManager::GetCurrentContext();
++    if (ctx != 0 && mozilla::dom::FontListManager::HasFontList(ctx)) {
++      if (!mozilla::dom::FontListManager::IsFontAllowed(ctx, key)) {
++        return false;
++      }
++    }
++  }
++
+   bool allowHidden = bool(aFlags & FindFamiliesFlags::eSearchHiddenFamilies);
+   FontVisibility visibilityLevel =
+       aFontVisibilityProvider ? aFontVisibilityProvider->GetFontVisibility()
+diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/gfx/thebes/gfxTextRun.cpp
++++ b/gfx/thebes/gfxTextRun.cpp
+@@ -36,3 +36,4 @@
+ #include "TextDrawTarget.h"
++#include "mozilla/dom/FontListManager.h"
+
+ #ifdef XP_WIN
+@@ -1910,4 +1911,6 @@
+ void gfxFontGroup::EnsureFontList() {
++  mozilla::dom::AutoFontListContext autoFontListCtx(mUserContextId);
++
+   // Ensure resolved font instances are valid; discard them if necessary.
+   auto* pfl = gfxPlatformFontList::PlatformFontList();
+   if (mFontListGeneration != pfl->GetGeneration()) {
+diff --git a/layout/style/FontFaceSet.cpp b/layout/style/FontFaceSet.cpp
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/layout/style/FontFaceSet.cpp
++++ b/layout/style/FontFaceSet.cpp
+@@ -30,4 +30,7 @@
+ #include "mozilla/dom/Document.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "mozilla/dom/FontListManager.h"
++#include "nsGlobalWindowInner.h"
+ #include "mozilla/dom/DocumentInlines.h"
+ #include "mozilla/dom/Event.h"
+ #include "mozilla/dom/FontFaceImpl.h"
+@@ -139,2 +142,10 @@
+                                             ErrorResult& aRv) {
++  // Per-context font list filtering
++  uint32_t fontListCtxId = 0;
++  if (nsGlobalWindowInner* owner = GetOwnerWindow()) {
++    if (auto* bc = owner->GetBrowsingContext()) {
++      fontListCtxId = bc->OriginAttributesRef().mUserContextId;
++    }
++  }
++  AutoFontListContext autoFontListCtx(fontListCtxId);
+   FlushUserFontSet();
+@@ -169,3 +178,11 @@
+ bool FontFaceSet::Check(const nsACString& aFont, const nsAString& aText,
+                         ErrorResult& aRv) {
++  // Per-context font list filtering
++  uint32_t fontListCtxId = 0;
++  if (nsGlobalWindowInner* owner = GetOwnerWindow()) {
++    if (auto* bc = owner->GetBrowsingContext()) {
++      fontListCtxId = bc->OriginAttributesRef().mUserContextId;
++    }
++  }
++  AutoFontListContext autoFontListCtx(fontListCtxId);
+   FlushUserFontSet();

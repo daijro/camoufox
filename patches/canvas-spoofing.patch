@@ -1,0 +1,282 @@
+diff --git a/dom/base/CanvasFingerprintManager.cpp b/dom/base/CanvasFingerprintManager.cpp
+new file mode 100644
+index 0000000000..abcdef1234
+--- /dev/null
++++ b/dom/base/CanvasFingerprintManager.cpp
+@@ -0,0 +1,72 @@
++/* Camoufox: Per-context canvas fingerprint manager */
++#include "CanvasFingerprintManager.h"
++
++#include <algorithm>
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsGlobalWindowInner.h"
++#include "xpcpublic.h"
++
++namespace mozilla {
++namespace dom {
++
++nsString CanvasFingerprintManager::DisabledKeyForUserContext(uint32_t aId) {
++  nsAutoString key;
++  key.AppendPrintf("canvas_d_%u", aId);
++  return key;
++}
++
++void CanvasFingerprintManager::SetSeed(uint32_t aId, uint32_t aSeed) {
++  nsAutoString key;
++  key.AppendPrintf("canvasSeed_%u", aId);
++  RoverfoxStorageManager::PutUint(key, aSeed);
++}
++
++uint32_t CanvasFingerprintManager::GetSeed(uint32_t aId) {
++  nsAutoString key;
++  key.AppendPrintf("canvasSeed_%u", aId);
++  uint32_t seed = 0;
++  RoverfoxStorageManager::GetUint(key, seed);
++  return seed;
++}
++
++void CanvasFingerprintManager::ApplyCanvasNoise(uint8_t* data, uint32_t length,
++                                                 uint32_t seed) {
++  if (seed == 0 || length == 0 || !data) return;
++  uint32_t state = seed;
++  for (uint32_t i = 0; i + 3 < length; i += 4) {
++    state = (state * 1664525u + 1013904223u);
++    if (state & 0x100) {
++      // Iterate RGB channels (skip alpha at i+3) to find first non-zero.
++      // This is format-agnostic: works for both RGBA (getImageData) and
++      // BGRA (GetImageBuffer/toDataURL). Skipping zero channels preserves
++      // clearRect transparency and avoids the CreepJS post-clear trap.
++      for (uint32_t c = 0; c < 3; c++) {
++        int32_t val = static_cast<int32_t>(data[i + c]);
++        if (val == 0) continue;
++        data[i + c] = static_cast<uint8_t>(
++            (state & 0x200) ? std::min(val + 1, 255) : std::max(val - 1, 0));
++        break;  // Only modify one channel per pixel
++      }
++    }
++  }
++}
++
++void CanvasFingerprintManager::DisableFunction(uint32_t aId) {
++  RoverfoxStorageManager::PutBool(DisabledKeyForUserContext(aId), true);
++}
++
++bool CanvasFingerprintManager::IsFunctionEnabledForWebIDL(JSContext* aCx,
++                                                           JSObject* aObj) {
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) return false;
++  uint32_t id = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    id = bc->OriginAttributesRef().mUserContextId;
++  }
++  bool disabled = false;
++  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(id), disabled);
++  return !disabled;
++}
++
++}  // namespace dom
++}  // namespace mozilla
+diff --git a/dom/base/CanvasFingerprintManager.h b/dom/base/CanvasFingerprintManager.h
+new file mode 100644
+index 0000000000..bcdef12345
+--- /dev/null
++++ b/dom/base/CanvasFingerprintManager.h
+@@ -0,0 +1,27 @@
++/* Camoufox: Per-context canvas fingerprint manager */
++#ifndef mozilla_dom_CanvasFingerprintManager_h
++#define mozilla_dom_CanvasFingerprintManager_h
++
++#include "nsString.h"
++#include "nsTHashMap.h"
++#include "nsHashKeys.h"
++#include "RoverfoxStorageManager.h"
++
++namespace mozilla {
++namespace dom {
++
++class CanvasFingerprintManager {
++ public:
++  static void SetSeed(uint32_t aUserContextId, uint32_t aSeed);
++  static uint32_t GetSeed(uint32_t aUserContextId);
++  static void ApplyCanvasNoise(uint8_t* data, uint32_t length, uint32_t seed);
++  static void DisableFunction(uint32_t aId);
++  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++ private:
++  static nsString DisabledKeyForUserContext(uint32_t aId);
++};
++
++}  // namespace dom
++}  // namespace mozilla
++
++#endif  // mozilla_dom_CanvasFingerprintManager_h
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -534,5 +534,13 @@
+     "nsPluginArray.cpp",
+ ]
+
++# CanvasFingerprintManager compiled separately to avoid unified build scope issues
++# (includes RoverfoxStorageManager.h which can affect compilation units)
++SOURCES += ["CanvasFingerprintManager.cpp"]
++
++EXPORTS.mozilla.dom += [
++    "CanvasFingerprintManager.h",
++]
++
+ # Are we targeting x86-32 or x86-64?  If so, we want to include SSE2 code for
+ # CharacterDataBuffer.cpp
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -685,6 +685,9 @@
+
+   void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+
++  // Per-context canvas fingerprint seed
++  void SetCanvasSeed(uint32_t seed, mozilla::ErrorResult& aRv);
++
+  public:
+   void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
+   void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -23,5 +23,6 @@
+ #include "MainThreadUtils.h"
++#include "CanvasFingerprintManager.h"
+ #include "Navigator.h"
+ #include "PaintWorkletImpl.h"
+ #include "SessionStorageCache.h"
+ #include "Units.h"
+@@ -7477,6 +7478,21 @@
+   mSharedWorkers.RemoveElement(aSharedWorker);
+ }
+
++void nsGlobalWindowInner::SetCanvasSeed(uint32_t seed, ErrorResult& aRv) {
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++  CanvasFingerprintManager::SetSeed(userContextId, seed);
++  CanvasFingerprintManager::DisableFunction(userContextId);
++  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
++    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++    if (global) {
++      JS_DeleteProperty(cx, global, "setCanvasSeed");
++    }
++  }
++}
++
+ RefPtr<GenericPromise> nsGlobalWindowInner::StorageAccessPermissionChanged(
+     bool aGranted) {
+   // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
+diff --git a/dom/canvas/CanvasRenderingContext2D.cpp b/dom/canvas/CanvasRenderingContext2D.cpp
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/canvas/CanvasRenderingContext2D.cpp
++++ b/dom/canvas/CanvasRenderingContext2D.cpp
+@@ -9,5 +9,7 @@
+ #include "CanvasImageCache.h"
++#include "CanvasFingerprintManager.h"
++#include "nsPIDOMWindow.h"
+ #include "CanvasUtils.h"
+ #include "GeckoBindings.h"
+ #include "ImageEncoder.h"
+ #include "ImageRegion.h"
+@@ -51,6 +52,7 @@
+ #include "mozilla/StaticPrefs_gfx.h"
+ #include "mozilla/TimeStamp.h"
+ #include "mozilla/UniquePtr.h"
++#include "mozilla/dom/BrowsingContext.h"
+ #include "mozilla/dom/CanvasGradient.h"
+ #include "mozilla/dom/CanvasPath.h"
+ #include "mozilla/dom/CanvasPattern.h"
+@@ -2287,5 +2289,32 @@
+         SurfaceFormat::A8R8G8B8_UINT32);
+   }
+
++  // Per-context canvas fingerprint noise
++  if (ret) {
++    uint32_t userContextId = 0;
++    if (mCanvasElement) {
++      if (Document* doc = mCanvasElement->OwnerDoc()) {
++        if (BrowsingContext* bc = doc->GetBrowsingContext()) {
++          userContextId = bc->OriginAttributesRef().mUserContextId;
++        }
++      }
++    } else if (mOffscreenCanvas) {
++      if (nsIGlobalObject* global = mOffscreenCanvas->GetOwnerGlobal()) {
++        nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(global);
++        if (win) {
++          if (BrowsingContext* bc = win->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
++        }
++      }
++    }
++    uint32_t canvasSeed = CanvasFingerprintManager::GetSeed(userContextId);
++    if (canvasSeed != 0) {
++      CanvasFingerprintManager::ApplyCanvasNoise(
++          ret.get(), out_imageSize->width * out_imageSize->height * 4,
++          canvasSeed);
++    }
++  }
++
+   return ret;
+ }
+@@ -6615,5 +6644,35 @@
+   } while (false);
+
++  // Per-context canvas fingerprint noise
++  {
++    uint32_t userContextId = 0;
++    if (mCanvasElement) {
++      if (Document* doc = mCanvasElement->OwnerDoc()) {
++        if (BrowsingContext* bc = doc->GetBrowsingContext()) {
++          userContextId = bc->OriginAttributesRef().mUserContextId;
++        }
++      }
++    } else if (mOffscreenCanvas) {
++      if (nsIGlobalObject* global = mOffscreenCanvas->GetOwnerGlobal()) {
++        nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(global);
++        if (win) {
++          if (BrowsingContext* bc = win->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
++        }
++      }
++    }
++    uint32_t canvasSeed = CanvasFingerprintManager::GetSeed(userContextId);
++    if (canvasSeed != 0) {
++      JS::AutoCheckCannotGC nogc2;
++      bool isShared2;
++      uint8_t* pixelData =
++          JS_GetUint8ClampedArrayData(darray, &isShared2, nogc2);
++      CanvasFingerprintManager::ApplyCanvasNoise(pixelData, len.value(),
++                                                  canvasSeed);
++    }
++  }
++
+   readback->Unmap();
+   *aRetval = darray;
+   return NS_OK;
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -892,6 +892,12 @@ partial interface Window {
+   readonly attribute VisualViewport visualViewport;
+ };
+
++// Per-context canvas fingerprint seed
++partial interface Window {
++  [Throws, Func="mozilla::dom::CanvasFingerprintManager::IsFunctionEnabledForWebIDL"]
++  undefined setCanvasSeed(unsigned long seed);
++};
++
+ // Used to assign marks to appear on the scrollbar when
+ // finding on a page.
+ partial interface Window {
