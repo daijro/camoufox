@@ -62,6 +62,32 @@ See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on tes
 
 ---
 
+## 🚀 Camoufox × ProxyEmpire
+
+<img width="350" alt="proxylayer" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f" />
+
+Running Camoufox? Your proxy layer decides whether you scale — or get blocked.
+
+[ProxyEmpire](https://proxyempire.io/?ref=camoufox) delivers:
+
+- 🌍 30M+ Residential IPs (170+ countries)
+- 📱 4G/5G Mobile Proxies
+- 🔄 Rotating & Sticky Sessions
+- ⚡ Unlimited Concurrent Sessions
+- 🎯 Precise geo-targeting
+- HTTP, HTTPS & SOCKS5 Support
+
+Built for scraping, automation, and high-stealth workflows.
+
+#### 🔥 Exclusive Offer
+
+Use code **Camoufox30**\
+Get **30% recurring discount** (not just first month).
+
+Upgrade your proxies. Reduce bans. Scale properly
+
+---
+
 # Introduction
 
 Camoufox is a modern & effective open source solution for avoiding bot detection and intelligent fingerprint rotation.
