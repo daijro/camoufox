@@ -651,12 +651,17 @@ def launch_options(
     else:
         executable_path = launch_path()
 
-    return {
-        "executable_path": executable_path,
-        "args": args,
-        "env": env_vars,
-        "firefox_user_prefs": firefox_user_prefs,
-        "proxy": proxy,
-        "headless": headless,
-        **(launch_options if launch_options is not None else {}),
+    result = {
+      "executable_path": executable_path,
+      "args": args,
+      "env": env_vars,
+      "firefox_user_prefs": firefox_user_prefs,
+      "headless": headless,
+      **(launch_options if launch_options is not None else {}),
     }
+
+  # Only include proxy if it's not None
+    if proxy is not None:
+      result["proxy"] = proxy
+
+    return result
