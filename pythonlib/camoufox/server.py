@@ -19,7 +19,7 @@ def camel_case(snake_str: str) -> str:
     if len(snake_str) < 2:
         return snake_str
     camel_case_str = ''.join(x.capitalize() for x in snake_str.lower().split('_'))
-    return camel_case_str[0].lower() + camel_case_str[1:]
+    return ("_" if snake_str[0] == "_" else "") + camel_case_str[0].lower() + camel_case_str[1:]
 
 
 def to_camel_case_dict(data: Dict[str, Any]) -> Dict[str, Any]:
