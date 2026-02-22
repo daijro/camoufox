@@ -54,6 +54,14 @@ screen:
 #  renderer: webgl:renderer
 #  vendor: webgl:vendor
 
+videoCard:
+  renderer: webGl:renderer
+  vendor: webGl:vendor
+
+webgl:
+  renderer: webGl:renderer
+  vendor: webGl:vendor
+
 headers:
   # headers.User-Agent is redundant with navigator.userAgent
   # headers.Accept-Language is redundant with locale:*
@@ -63,6 +71,8 @@ battery:
   charging: battery:charging
   chargingTime: battery:chargingTime
   dischargingTime: battery:dischargingTime
+
+timezone: timezone
 
 # Unsupported: videoCodecs, audioCodecs, pluginsData, multimediaDevices
 # Fonts are listed through the launcher.

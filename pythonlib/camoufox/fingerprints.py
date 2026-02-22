@@ -1,7 +1,7 @@
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from random import randrange
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 from browserforge.fingerprints import (
     Fingerprint,
@@ -56,7 +56,7 @@ def _cast_to_properties(
         camoufox_data[type_key] = data
 
 
-def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: ScreenFingerprint) -> None:
+def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: Union[ScreenFingerprint, Dict[str, Any]]) -> None:
     """
     Helper method to set window.screenY based on Browserforge's screenX value.
     """
@@ -64,7 +64,7 @@ def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: ScreenFingerprint)
     if 'window.screenY' in camoufox_data:
         return
     # Default screenX to 0 if not provided
-    screenX = fp_screen.screenX
+    screenX = fp_screen.screenX if not isinstance(fp_screen, dict) else fp_screen.get('screenX')
     if not screenX:
         camoufox_data['window.screenX'] = 0
         camoufox_data['window.screenY'] = 0
@@ -76,7 +76,14 @@ def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: ScreenFingerprint)
         return
 
     # Browserforge thinks the browser is windowed. # Randomly generate a screenY value.
-    screenY = fp_screen.availHeight - fp_screen.outerHeight
+    if not isinstance(fp_screen, dict):
+        availHeight = fp_screen.availHeight
+        outerHeight = fp_screen.outerHeight
+    else:
+        availHeight = fp_screen.get('availHeight', 0)
+        outerHeight = fp_screen.get('outerHeight', 0)
+
+    screenY = availHeight - outerHeight
     if screenY == 0:
         camoufox_data['window.screenY'] = 0
     elif screenY > 0:
@@ -85,18 +92,23 @@ def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: ScreenFingerprint)
         camoufox_data['window.screenY'] = randrange(screenY, 0)  # nosec
 
 
-def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None) -> Dict[str, Any]:
+def from_browserforge(fingerprint: Union[Fingerprint, Dict[str, Any]], ff_version: Optional[str] = None) -> Dict[str, Any]:
     """
     Converts a Browserforge fingerprint to a Camoufox config.
     """
     camoufox_data: Dict[str, Any] = {}
+    
+    bf_dict = asdict(fingerprint) if is_dataclass(fingerprint) else fingerprint
+    
     _cast_to_properties(
         camoufox_data,
         cast_enum=BROWSERFORGE_DATA,
-        bf_dict=asdict(fingerprint),
+        bf_dict=bf_dict,
         ff_version=ff_version,
     )
-    handle_screenXY(camoufox_data, fingerprint.screen)
+    
+    screen = fingerprint.screen if not isinstance(fingerprint, dict) else fingerprint.get('screen', {})
+    handle_screenXY(camoufox_data, screen)
 
     return camoufox_data
 
