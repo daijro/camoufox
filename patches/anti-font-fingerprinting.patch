@@ -451,21 +451,22 @@ index 989dba05ca..14f8be6dcd 100644
  #include "mozilla/dom/CanvasRenderingContext2DBinding.h"
  #include "mozilla/dom/DOMMatrix.h"
  #include "mozilla/dom/Document.h"
-+#include "mozilla/OriginAttributes.h"
++#include "mozilla/dom/BrowsingContext.h"
  #include "mozilla/dom/FontFaceSet.h"
  #include "mozilla/dom/FontFaceSetImpl.h"
  #include "mozilla/dom/GeneratePlaceholderCanvasData.h"
-@@ -4719,10 +4720,20 @@ struct MOZ_STACK_CLASS CanvasBidiProcessor final
+@@ -4719,10 +4720,21 @@ struct MOZ_STACK_CLASS CanvasBidiProcessor final
      } else {
        flags &= ~gfx::ShapedTextFlags::TEXT_IS_RTL;
      }
-+    // Extract user context ID from Canvas element's document
++    // Extract user context ID via BrowsingContext (canonical source)
 +    uint32_t userContextId = 0;
 +    if (mCtx && mCtx->mCanvasElement) {
 +      if (Document* doc = mCtx->mCanvasElement->GetOwnerDocument()) {
-+        if (nsIPrincipal* principal = doc->NodePrincipal()) {
-+          const OriginAttributes& attrs = principal->OriginAttributesRef();
-+          userContextId = attrs.mUserContextId;
++        if (nsPIDOMWindowInner* win = doc->GetInnerWindow()) {
++          if (BrowsingContext* bc = win->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
 +        }
 +      }
 +    }
@@ -531,12 +532,13 @@ diff --git a/gfx/src/nsFontMetrics.cpp b/gfx/src/nsFontMetrics.cpp
 index ef081ebe40..a921c49f43 100644
 --- a/gfx/src/nsFontMetrics.cpp
 +++ b/gfx/src/nsFontMetrics.cpp
-@@ -23,9 +23,12 @@
+@@ -23,9 +23,13 @@
  #include "nsStyleConsts.h"       // for StyleHyphens::None
  #include "mozilla/Assertions.h"  // for MOZ_ASSERT
  #include "mozilla/UniquePtr.h"   // for UniquePtr
 +#include "mozilla/dom/Document.h"  // for Document
-+#include "mozilla/OriginAttributes.h"  // for OriginAttributes
++#include "mozilla/dom/BrowsingContext.h"  // for BrowsingContext
++#include "nsPIDOMWindow.h"  // for nsPIDOMWindowInner
  
  class gfxUserFontSet;
  using namespace mozilla;
@@ -544,17 +546,18 @@ index ef081ebe40..a921c49f43 100644
  
  namespace {
  
-@@ -35,17 +38,37 @@ class AutoTextRun {
+@@ -35,17 +39,39 @@ class AutoTextRun {
  
    AutoTextRun(const nsFontMetrics* aMetrics, DrawTarget* aDrawTarget,
                const char* aString, uint32_t aLength) {
-+    // Extract user context ID from PresContext document if available
++    // Extract user context ID via BrowsingContext (canonical source)
 +    uint32_t userContextId = 0;
 +    if (aMetrics->mPresContext) {
 +      if (Document* doc = aMetrics->mPresContext->Document()) {
-+        if (nsIPrincipal* principal = doc->NodePrincipal()) {
-+          const OriginAttributes& attrs = principal->OriginAttributesRef();
-+          userContextId = attrs.mUserContextId;
++        if (nsPIDOMWindowInner* win = doc->GetInnerWindow()) {
++          if (BrowsingContext* bc = win->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
 +        }
 +      }
 +    }
@@ -567,13 +570,14 @@ index ef081ebe40..a921c49f43 100644
  
    AutoTextRun(const nsFontMetrics* aMetrics, DrawTarget* aDrawTarget,
                const char16_t* aString, uint32_t aLength) {
-+    // Extract user context ID from PresContext document if available
++    // Extract user context ID via BrowsingContext (canonical source)
 +    uint32_t userContextId = 0;
 +    if (aMetrics->mPresContext) {
 +      if (Document* doc = aMetrics->mPresContext->Document()) {
-+        if (nsIPrincipal* principal = doc->NodePrincipal()) {
-+          const OriginAttributes& attrs = principal->OriginAttributesRef();
-+          userContextId = attrs.mUserContextId;
++        if (nsPIDOMWindowInner* win = doc->GetInnerWindow()) {
++          if (BrowsingContext* bc = win->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
 +        }
 +      }
 +    }
@@ -804,12 +808,13 @@ index de9a9661a1..f878bdb36c 100644
  #include "mozilla/Sprintf.h"
  #include "mozilla/StaticPresData.h"
  #include "mozilla/UniquePtr.h"
-@@ -34,6 +35,7 @@
+@@ -34,6 +35,8 @@
  #include "nsUnicodeProperties.h"
  #include "SharedFontList-impl.h"
  #include "TextDrawTarget.h"
-+#include "mozilla/BasePrincipal.h"
- 
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsPIDOMWindow.h"
+
  #ifdef XP_WIN
  #  include "gfxWindowsPlatform.h"
 @@ -145,25 +147,26 @@ void* gfxTextRun::AllocateStorageForTextRun(size_t aSize, uint32_t aLength) {
@@ -852,19 +857,18 @@ index de9a9661a1..f878bdb36c 100644
  
    EmphasisMarkDrawParams params(aContext, aPaletteCache);
    params.mark = aMark;
-@@ -1870,6 +1874,19 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+@@ -1870,6 +1874,18 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
        mFontVariantEmoji(aVariantEmoji) {
    // We don't use SetUserFontSet() here, as we want to unconditionally call
    // EnsureFontList() rather than only do UpdateUserFonts() if it changed.
 +
-+  // Initialize cached user context ID from the font visibility provider if available.
++  // Initialize cached user context ID via BrowsingContext (canonical source).
 +  mUserContextId = 0;
 +  if (mFontVisibilityProvider) {
 +    if (auto* doc = mFontVisibilityProvider->GetDocument()) {
-+      if (auto* principal = doc->NodePrincipal()) {
-+        auto* bp = mozilla::BasePrincipal::Cast(principal);
-+        if (bp) {
-+          mUserContextId = bp->OriginAttributesRef().mUserContextId;
++      if (auto* win = doc->GetInnerWindow()) {
++        if (auto* bc = win->GetBrowsingContext()) {
++          mUserContextId = bc->OriginAttributesRef().mUserContextId;
 +        }
 +      }
 +    }
@@ -1033,17 +1037,16 @@ diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
 index 89ed5fec3e..32920e9b71 100644
 --- a/layout/base/nsLayoutUtils.cpp
 +++ b/layout/base/nsLayoutUtils.cpp
-@@ -144,7 +144,9 @@
+@@ -144,7 +144,8 @@
  #include "nsIFrameInlines.h"
  #include "nsIImageLoadingContent.h"
  #include "nsIInterfaceRequestorUtils.h"
-+#include "nsILoadContext.h"
++#include "mozilla/dom/BrowsingContext.h"
  #include "nsIWidget.h"
-+#include "mozilla/OriginAttributes.h"
  #include "nsListControlFrame.h"
  #include "nsMenuPopupFrame.h"
  #include "nsPIDOMWindow.h"
-@@ -1210,6 +1212,33 @@ nsIFrame* nsLayoutUtils::GetLastSibling(nsIFrame* aFrame) {
+@@ -1210,6 +1211,31 @@ nsIFrame* nsLayoutUtils::GetLastSibling(nsIFrame* aFrame) {
    return aFrame;
  }
  
@@ -1053,25 +1056,23 @@ index 89ed5fec3e..32920e9b71 100644
 +    if (!aFrame || !aFrame->GetContent()) {
 +        return 0;
 +    }
-+    
++
 +    mozilla::dom::Document* doc = aFrame->GetContent()->GetComposedDoc();
 +    if (!doc) {
 +        return 0;
 +    }
-+    
-+    nsIDocShell* docShell = doc->GetDocShell();
-+    if (!docShell) {
++
++    nsPIDOMWindowInner* win = doc->GetInnerWindow();
++    if (!win) {
 +        return 0;
 +    }
-+    
-+    nsCOMPtr<nsILoadContext> loadContext = do_QueryInterface(docShell);
-+    if (!loadContext) {
++
++    mozilla::dom::BrowsingContext* bc = win->GetBrowsingContext();
++    if (!bc) {
 +        return 0;
 +    }
-+    
-+    mozilla::OriginAttributes attrs;
-+    loadContext->GetOriginAttributes(attrs);
-+    return attrs.mUserContextId;
++
++    return bc->OriginAttributesRef().mUserContextId;
 +}
 +
  // static
@@ -1112,25 +1113,27 @@ diff --git a/layout/generic/MathMLTextRunFactory.cpp b/layout/generic/MathMLText
 index 13c9cc5c11..b940be8790 100644
 --- a/layout/generic/MathMLTextRunFactory.cpp
 +++ b/layout/generic/MathMLTextRunFactory.cpp
-@@ -11,6 +11,7 @@
+@@ -11,6 +11,8 @@
  #include "mozilla/ComputedStyleInlines.h"
  #include "mozilla/StaticPrefs_mathml.h"
  #include "mozilla/intl/UnicodeScriptCodes.h"
-+#include "mozilla/OriginAttributes.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsPIDOMWindow.h"
  #include "nsDeviceContext.h"
  #include "nsFontMetrics.h"
  #include "nsStyleConsts.h"
-@@ -637,6 +638,17 @@ void MathMLTextRunFactory::RebuildTextRun(
+@@ -637,6 +639,18 @@ void MathMLTextRunFactory::RebuildTextRun(
      newFontGroup = fontGroup;
    }
  
-+  // Extract user context ID from PresContext document if available
++  // Extract user context ID via BrowsingContext (canonical source)
 +  uint32_t userContextId = 0;
 +  if (length && styles[0]->mPresContext) {
 +    if (mozilla::dom::Document* doc = styles[0]->mPresContext->Document()) {
-+      if (nsIPrincipal* principal = doc->NodePrincipal()) {
-+        const mozilla::OriginAttributes& attrs = principal->OriginAttributesRef();
-+        userContextId = attrs.mUserContextId;
++      if (nsPIDOMWindowInner* win = doc->GetInnerWindow()) {
++        if (mozilla::dom::BrowsingContext* bc = win->GetBrowsingContext()) {
++          userContextId = bc->OriginAttributesRef().mUserContextId;
++        }
 +      }
 +    }
 +  }
@@ -1138,7 +1141,7 @@ index 13c9cc5c11..b940be8790 100644
    if (mInnerTransformingTextRunFactory) {
      transformedChild = mInnerTransformingTextRunFactory->MakeTextRun(
          convertedString.BeginReading(), convertedString.Length(), &innerParams,
-@@ -646,7 +658,7 @@ void MathMLTextRunFactory::RebuildTextRun(
+@@ -646,7 +660,7 @@ void MathMLTextRunFactory::RebuildTextRun(
    } else {
      cachedChild = newFontGroup->MakeTextRun(
          convertedString.BeginReading(), convertedString.Length(), &innerParams,
@@ -1242,8 +1245,8 @@ index 58f9670e7f..577fd833ce 100644
  #include "mozilla/StaticPrefs_mathml.h"
  #include "mozilla/UniquePtr.h"
  #include "mozilla/dom/Document.h"
-+#include "mozilla/OriginAttributes.h"
-+#include "mozilla/BasePrincipal.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsPIDOMWindow.h"
  #include "mozilla/gfx/2D.h"
  #include "mozilla/intl/UnicodeScriptCodes.h"
  #include "nsCOMPtr.h"
@@ -1265,16 +1268,15 @@ index 58f9670e7f..577fd833ce 100644
      const gfxTextRun::CompressedGlyph& data = textRun->GetCharacterGlyphs()[0];
      if (data.IsSimpleGlyph()) {
        mGlyphID = data.GetSimpleGlyph();
-@@ -1396,10 +1398,20 @@ nsresult nsMathMLChar::StretchInternal(
+@@ -1396,10 +1398,19 @@ nsresult nsMathMLChar::StretchInternal(
      flags |= gfx::ShapedTextFlags::TEXT_IS_RTL;
    }
  
 +  uint32_t userContextId = 0;
 +  if (mozilla::dom::Document* doc = presContext->Document()) {
-+    if (nsIPrincipal* principal = doc->NodePrincipal()) {
-+      auto* bp = mozilla::BasePrincipal::Cast(principal);
-+      if (bp) {
-+        userContextId = bp->OriginAttributesRef().mUserContextId;
++    if (nsPIDOMWindowInner* win = doc->GetInnerWindow()) {
++      if (mozilla::dom::BrowsingContext* bc = win->GetBrowsingContext()) {
++        userContextId = bc->OriginAttributesRef().mUserContextId;
 +      }
 +    }
 +  }
