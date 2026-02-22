@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..f47a35b2e3
 --- /dev/null
 +++ b/dom/base/AudioFingerprintManager.cpp
-@@ -0,0 +1,101 @@
+@@ -0,0 +1,99 @@
 +#include "AudioFingerprintManager.h"
 +#include "nsTHashMap.h"  // Must come before RoverfoxStorageManager.h for template defs
 +#include "nsHashKeys.h"  // For nsStringHashKey
@@ -11,8 +11,6 @@ index 0000000000..f47a35b2e3
 +#include "nsGlobalWindowInner.h"
 +#include "xpcpublic.h"
 +#include "mozilla/dom/BrowsingContext.h"
-+#include "mozilla/dom/Document.h"
-+#include "nsDocShell.h"
 +#include <algorithm>
 +
 +namespace mozilla {
@@ -236,11 +234,11 @@ index f59d01944a..d21c86e030 100644
  #include "nsTHashSet.h"
 +#include "AudioFingerprintManager.h"
 +#include "nsPIDOMWindow.h"
-+#include "mozilla/dom/Document.h"
++#include "mozilla/dom/BrowsingContext.h"
 
  namespace mozilla::dom {
 
-@@ -303,5 +306,30 @@ bool AudioBuffer::RestoreJSChannelData(JSContext* aJSContext) {
+@@ -303,5 +306,25 @@ bool AudioBuffer::RestoreJSChannelData(JSContext* aJSContext) {
        MOZ_ASSERT(!isShared);  // Was created as unshared above
        CopyChannelDataToFloat(mSharedChannels, i, 0, jsData, Length());
      }
@@ -249,14 +247,9 @@ index f59d01944a..d21c86e030 100644
 +    {
 +      nsPIDOMWindowInner* global = GetParentObject();
 +      if (global) {
-+        // Get userContextId from window's document principal
 +        uint32_t userContextId = 0;
-+        Document* doc = global->GetExtantDoc();
-+        if (doc) {
-+          nsIPrincipal* principal = doc->NodePrincipal();
-+          if (principal) {
-+            userContextId = principal->GetUserContextId();
-+          }
++        if (BrowsingContext* bc = global->GetBrowsingContext()) {
++          userContextId = bc->OriginAttributesRef().mUserContextId;
 +        }
 +        uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
 +        if (seed != 0) {
@@ -272,7 +265,7 @@ index f59d01944a..d21c86e030 100644
      mJSChannels[i] = array;
    }
 
-@@ -373,5 +401,23 @@ void AudioBuffer::CopyFromChannel(const Float32Array& aDestination,
+@@ -373,5 +396,18 @@ void AudioBuffer::CopyFromChannel(const Float32Array& aDestination,
    aDestination.ProcessData([&](const Span<float>& aData, JS::AutoCheckCannotGC&&) {
      CopyChannelDataToFloat(data, aChannelNumber, aBufferOffset, aData.Elements(),
                             length);
@@ -280,14 +273,9 @@ index f59d01944a..d21c86e030 100644
 +    // Apply audio fingerprint transformation after copying
 +    nsPIDOMWindowInner* global = GetParentObject();
 +    if (global) {
-+      // Get userContextId from window's document principal
 +      uint32_t userContextId = 0;
-+      Document* doc = global->GetExtantDoc();
-+      if (doc) {
-+        nsIPrincipal* principal = doc->NodePrincipal();
-+        if (principal) {
-+          userContextId = principal->GetUserContextId();
-+        }
++      if (BrowsingContext* bc = global->GetBrowsingContext()) {
++        userContextId = bc->OriginAttributesRef().mUserContextId;
 +      }
 +      uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
 +      if (seed != 0) {
@@ -308,10 +296,10 @@ index 4fd7c8be9a..e5f6a7b8c9 100644
 +#include "AudioFingerprintManager.h"
 +#include "nsPIDOMWindow.h"
 +#include "nsIGlobalObject.h"
-+#include "mozilla/dom/Document.h"
++#include "mozilla/dom/BrowsingContext.h"
 
  namespace mozilla {
-@@ -216,4 +220,23 @@ void AnalyserNode::GetFloatFrequencyData(const Float32Array& aArray) {
+@@ -216,4 +220,18 @@ void AnalyserNode::GetFloatFrequencyData(const Float32Array& aArray) {
      return;
    }
 
@@ -320,14 +308,9 @@ index 4fd7c8be9a..e5f6a7b8c9 100644
 +  nsIGlobalObject* globalObj = context ? context->GetParentObject() : nullptr;
 +  nsPIDOMWindowInner* global = globalObj ? globalObj->GetAsInnerWindow() : nullptr;
 +  if (global) {
-+    // Get userContextId from window's document principal
 +    uint32_t userContextId = 0;
-+    Document* doc = global->GetExtantDoc();
-+    if (doc) {
-+      nsIPrincipal* principal = doc->NodePrincipal();
-+      if (principal) {
-+        userContextId = principal->GetUserContextId();
-+      }
++    if (BrowsingContext* bc = global->GetBrowsingContext()) {
++      userContextId = bc->OriginAttributesRef().mUserContextId;
 +    }
 +    uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
 +    if (seed != 0) {
@@ -335,7 +318,7 @@ index 4fd7c8be9a..e5f6a7b8c9 100644
 +    }
 +  }
    aArray.ProcessData([&](const Span<float>& aData, JS::AutoCheckCannotGC&&) {
-@@ -232,4 +255,23 @@ void AnalyserNode::GetByteFrequencyData(const Uint8Array& aArray) {
+@@ -232,4 +250,18 @@ void AnalyserNode::GetByteFrequencyData(const Uint8Array& aArray) {
      return;
    }
 
@@ -344,14 +327,9 @@ index 4fd7c8be9a..e5f6a7b8c9 100644
 +  nsIGlobalObject* globalObj = context ? context->GetParentObject() : nullptr;
 +  nsPIDOMWindowInner* global = globalObj ? globalObj->GetAsInnerWindow() : nullptr;
 +  if (global) {
-+    // Get userContextId from window's document principal
 +    uint32_t userContextId = 0;
-+    Document* doc = global->GetExtantDoc();
-+    if (doc) {
-+      nsIPrincipal* principal = doc->NodePrincipal();
-+      if (principal) {
-+        userContextId = principal->GetUserContextId();
-+      }
++    if (BrowsingContext* bc = global->GetBrowsingContext()) {
++      userContextId = bc->OriginAttributesRef().mUserContextId;
 +    }
 +    uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
 +    if (seed != 0) {
@@ -359,7 +337,7 @@ index 4fd7c8be9a..e5f6a7b8c9 100644
 +    }
 +  }
    const double rangeScaleFactor = 1.0 / (mMaxDecibels - mMinDecibels);
-@@ -255,5 +297,24 @@ void AnalyserNode::GetFloatTimeDomainData(const Float32Array& aArray) {
+@@ -255,5 +287,19 @@ void AnalyserNode::GetFloatTimeDomainData(const Float32Array& aArray) {
      size_t length = std::min(aData.Length(), size_t(FftSize()));
 
      GetTimeDomainData(aData.Elements(), length);
@@ -368,14 +346,9 @@ index 4fd7c8be9a..e5f6a7b8c9 100644
 +    nsIGlobalObject* globalObj = context ? context->GetParentObject() : nullptr;
 +    nsPIDOMWindowInner* global = globalObj ? globalObj->GetAsInnerWindow() : nullptr;
 +    if (global) {
-+      // Get userContextId from window's document principal
 +      uint32_t userContextId = 0;
-+      Document* doc = global->GetExtantDoc();
-+      if (doc) {
-+        nsIPrincipal* principal = doc->NodePrincipal();
-+        if (principal) {
-+          userContextId = principal->GetUserContextId();
-+        }
++      if (BrowsingContext* bc = global->GetBrowsingContext()) {
++        userContextId = bc->OriginAttributesRef().mUserContextId;
 +      }
 +      uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
 +      if (seed != 0) {
@@ -384,7 +357,7 @@ index 4fd7c8be9a..e5f6a7b8c9 100644
 +    }
    });
  }
-@@ -269,6 +330,25 @@ void AnalyserNode::GetByteTimeDomainData(const Uint8Array& aArray) {
+@@ -269,6 +315,20 @@ void AnalyserNode::GetByteTimeDomainData(const Uint8Array& aArray) {
 
      GetTimeDomainData(tmpBuffer.Elements(), length);
 
@@ -393,14 +366,9 @@ index 4fd7c8be9a..e5f6a7b8c9 100644
 +    nsIGlobalObject* globalObj = context ? context->GetParentObject() : nullptr;
 +    nsPIDOMWindowInner* global = globalObj ? globalObj->GetAsInnerWindow() : nullptr;
 +    if (global) {
-+      // Get userContextId from window's document principal
 +      uint32_t userContextId = 0;
-+      Document* doc = global->GetExtantDoc();
-+      if (doc) {
-+        nsIPrincipal* principal = doc->NodePrincipal();
-+        if (principal) {
-+          userContextId = principal->GetUserContextId();
-+        }
++      if (BrowsingContext* bc = global->GetBrowsingContext()) {
++        userContextId = bc->OriginAttributesRef().mUserContextId;
 +      }
 +      uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
 +      if (seed != 0) {
