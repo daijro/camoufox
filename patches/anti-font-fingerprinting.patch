@@ -417,10 +417,12 @@ index 330a707789..fb3ba4d3fb 100644
 +
 +  FontSpacingSeedManager::SetSeed(userContextId, seed);
 +
-+  // Self-destruct: remove this function from the window object after first use
++  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
++      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
++      JS_SetProperty(cx, global, "setFontSpacingSeed", undef);
 +      JS_DeleteProperty(cx, global, "setFontSpacingSeed");
 +    }
 +  }

@@ -198,10 +198,12 @@ index 748ae6cf83..b2c3d4e5f6 100644
 +
 +  AudioFingerprintManager::SetSeed(userContextId, seed);
 +
-+  // Self-destruct: remove this function from the window object after first use
++  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
++      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
++      JS_SetProperty(cx, global, "setAudioFingerprintSeed", undef);
 +      JS_DeleteProperty(cx, global, "setAudioFingerprintSeed");
 +    }
 +  }

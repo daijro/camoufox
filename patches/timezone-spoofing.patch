@@ -145,10 +145,15 @@ index ea66d28e53..2abb83c3a6 100644
 +
 +  TimezoneManager::SetTimezone(userContextId, timezone);
 +
-+  // Self-destruct: remove this function from the window object after first use
++  // Self-destruct: remove this function from the window object after first use.
++  // Set to undefined first to bust IC/shape caches on ARM64 (macOS Apple Silicon),
++  // then delete. Without this, the resolve hook may not re-fire on ARM64 and the
++  // Func guard never gets checked, causing the property to survive deletion.
 +  if (JSContext* selfDestructCx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(selfDestructCx, JS::CurrentGlobalOrNull(selfDestructCx));
 +    if (global) {
++      JS::Rooted<JS::Value> undef(selfDestructCx, JS::UndefinedValue());
++      JS_SetProperty(selfDestructCx, global, "setTimezone", undef);
 +      JS_DeleteProperty(selfDestructCx, global, "setTimezone");
 +    }
 +  }
