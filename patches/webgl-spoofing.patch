@@ -151,9 +151,12 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +  }
 +  WebGLParamsManager::SetVendor(userContextId, vendor);
 +  WebGLParamsManager::DisableFunction(userContextId);
++  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
++      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
++      JS_SetProperty(cx, global, "setWebGLVendor", undef);
 +      JS_DeleteProperty(cx, global, "setWebGLVendor");
 +    }
 +  }
@@ -167,9 +170,12 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +  }
 +  WebGLParamsManager::SetRenderer(userContextId, renderer);
 +  WebGLParamsManager::DisableFunction(userContextId);
++  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
++      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
++      JS_SetProperty(cx, global, "setWebGLRenderer", undef);
 +      JS_DeleteProperty(cx, global, "setWebGLRenderer");
 +    }
 +  }

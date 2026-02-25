@@ -163,9 +163,12 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +  }
 +  CanvasFingerprintManager::SetSeed(userContextId, seed);
 +  CanvasFingerprintManager::DisableFunction(userContextId);
++  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
++      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
++      JS_SetProperty(cx, global, "setCanvasSeed", undef);
 +      JS_DeleteProperty(cx, global, "setCanvasSeed");
 +    }
 +  }

@@ -277,9 +277,12 @@ index abcdef1234..5678901234 100644
 +    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +  NavigatorManager::SetPlatform(userContextId, platform);
++  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
++      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
++      JS_SetProperty(cx, global, "setNavigatorPlatform", undef);
 +      JS_DeleteProperty(cx, global, "setNavigatorPlatform");
 +    }
 +  }
@@ -292,9 +295,12 @@ index abcdef1234..5678901234 100644
 +    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +  NavigatorManager::SetOscpu(userContextId, oscpu);
++  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
++      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
++      JS_SetProperty(cx, global, "setNavigatorOscpu", undef);
 +      JS_DeleteProperty(cx, global, "setNavigatorOscpu");
 +    }
 +  }
@@ -307,9 +313,12 @@ index abcdef1234..5678901234 100644
 +    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +  NavigatorManager::SetHardwareConcurrency(userContextId, cores);
++  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
++      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
++      JS_SetProperty(cx, global, "setNavigatorHardwareConcurrency", undef);
 +      JS_DeleteProperty(cx, global, "setNavigatorHardwareConcurrency");
 +    }
 +  }
