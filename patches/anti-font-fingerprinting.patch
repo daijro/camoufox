@@ -405,7 +405,7 @@ index 330a707789..fb3ba4d3fb 100644
  #include "nsIDOMXULControlElement.h"
  #include "nsIDeviceSensors.h"
  #include "nsIDocShell.h"
-@@ -7463,6 +7467,23 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
+@@ -7463,6 +7467,25 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
    return mIntlUtils;
  }
  
@@ -642,7 +642,8 @@ index 6f02e3a566..ca3b60d550 100644
 -    Func aCallback) {
 +    uint32_t aUserContextId, Func aCallback) {
    WordCacheKey key(aText, aLength, aHash, aRunScript, aLanguage,
-                    aAppUnitsPerDevUnit, aFlags, aRounding);
+-                   aAppUnitsPerDevUnit, aFlags, aRounding);
++                   aAppUnitsPerDevUnit, aFlags, aRounding, aUserContextId);
    {
 @@ -3317,6 +3319,8 @@ bool gfxFont::ProcessShapedWordInternal(
      NS_WARNING("failed to create gfxShapedWord - expect missing text");
@@ -653,16 +654,26 @@ index 6f02e3a566..ca3b60d550 100644
    DebugOnly<bool> ok =
        ShapeText(aDrawTarget, aText, 0, aLength, aRunScript, aLanguage,
                  aVertical, aRounding, newShapedWord.get());
-@@ -3420,7 +3424,7 @@ bool gfxFont::ProcessSingleSpaceShapedWord(
+@@ -3383,7 +3387,8 @@ bool gfxFont::WordCacheKey::HashPolicy::match(const Key& aKey,
+   if (aKey.mLength != aLookup.mLength || aKey.mFlags != aLookup.mFlags ||
+       aKey.mRounding != aLookup.mRounding ||
+       aKey.mAppUnitsPerDevUnit != aLookup.mAppUnitsPerDevUnit ||
+-      aKey.mScript != aLookup.mScript || aKey.mLanguage != aLookup.mLanguage) {
++      aKey.mScript != aLookup.mScript || aKey.mLanguage != aLookup.mLanguage ||
++      aKey.mUserContextId != aLookup.mUserContextId) {
+     return false;
+   }
+
+@@ -3420,7 +3425,7 @@ bool gfxFont::ProcessSingleSpaceShapedWord(
    return ProcessShapedWordInternal(
        aDrawTarget, &space, 1, gfxShapedWord::HashMix(0, ' '), Script::LATIN,
        /* aLanguage = */ nullptr, aVertical, aAppUnitsPerDevUnit, aFlags,
 -      aRounding, nullptr, aCallback);
 +      aRounding, nullptr, 0 /* pbid */, aCallback);
  }
- 
+
  bool gfxFont::ShapeText(DrawTarget* aDrawTarget, const uint8_t* aText,
-@@ -3778,6 +3782,7 @@ bool gfxFont::SplitAndInitTextRun(
+@@ -3778,6 +3784,7 @@ bool gfxFont::SplitAndInitTextRun(
        bool processed = ProcessShapedWordInternal(
            aDrawTarget, aString + wordStart, length, hash, aRunScript, aLanguage,
            vertical, appUnitsPerDevUnit, wordFlags, rounding, tp,
@@ -733,9 +744,54 @@ index 4601fc3f17..78c2f1116c 100644
 +                                  gfxTextPerfMetrics* aTextPerf,
 +                                  uint32_t aUserContextId,
 +                                  Func aCallback);
- 
+
    // whether a given feature is included in feature settings from both the
    // font and the style. aFeatureOn set if resolved feature value is non-zero
+@@ -2127,11 +2141,12 @@ class gfxFont {
+     PLDHashNumber mHashKey;
+     bool mTextIs8Bit;
+     RoundingFlags mRounding;
++    uint32_t mUserContextId;
+
+     WordCacheKey(const uint8_t* aText, uint32_t aLength, uint32_t aStringHash,
+                  Script aScriptCode, nsAtom* aLanguage,
+                  int32_t aAppUnitsPerDevUnit, ShapedTextFlags aFlags,
+-                 RoundingFlags aRounding)
++                 RoundingFlags aRounding, uint32_t aUserContextId = 0)
+         : mLength(aLength),
+           mFlags(aFlags),
+           mScript(aScriptCode),
+@@ -2139,8 +2154,9 @@ class gfxFont {
+           mAppUnitsPerDevUnit(aAppUnitsPerDevUnit),
+           mHashKey(aStringHash + static_cast<int32_t>(aScriptCode) +
+                    aAppUnitsPerDevUnit * 0x100 + uint16_t(aFlags) * 0x10000 +
+-                   int(aRounding) + (aLanguage ? aLanguage->hash() : 0)),
++                   int(aRounding) + (aLanguage ? aLanguage->hash() : 0) + aUserContextId * 0x1000000),
+           mTextIs8Bit(true),
++          mUserContextId(aUserContextId),
+           mRounding(aRounding) {
+       NS_ASSERTION(aFlags & ShapedTextFlags::TEXT_IS_8BIT,
+                    "8-bit flag should have been set");
+@@ -2150,7 +2166,7 @@ class gfxFont {
+     WordCacheKey(const char16_t* aText, uint32_t aLength, uint32_t aStringHash,
+                  Script aScriptCode, nsAtom* aLanguage,
+                  int32_t aAppUnitsPerDevUnit, ShapedTextFlags aFlags,
+-                 RoundingFlags aRounding)
++                 RoundingFlags aRounding, uint32_t aUserContextId = 0)
+         : mLength(aLength),
+           mFlags(aFlags),
+           mScript(aScriptCode),
+@@ -2158,8 +2174,9 @@ class gfxFont {
+           mAppUnitsPerDevUnit(aAppUnitsPerDevUnit),
+           mHashKey(aStringHash + static_cast<int32_t>(aScriptCode) +
+                    aAppUnitsPerDevUnit * 0x100 + uint16_t(aFlags) * 0x10000 +
+-                   int(aRounding)),
++                   int(aRounding) + aUserContextId * 0x1000000),
+           mTextIs8Bit(false),
++          mUserContextId(aUserContextId),
+           mRounding(aRounding) {
+       // We can NOT assert that TEXT_IS_8BIT is false in aFlags here,
+       // because this might be an 8bit-only word from a 16-bit textrun,
 diff --git a/gfx/thebes/gfxHarfBuzzShaper.cpp b/gfx/thebes/gfxHarfBuzzShaper.cpp
 index 1a5bdaba99..46226fc88d 100644
 --- a/gfx/thebes/gfxHarfBuzzShaper.cpp
