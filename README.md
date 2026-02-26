@@ -26,10 +26,12 @@ FF146 only works for MacOS. Linux support is coming in the next week and windows
 
 See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on testing FF146.
 
+[[⤵︎ Introduction](#introduction)]
+
 ---
 
 # Sponsors
-
+  
 <a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
 <img src="https://raw.githubusercontent.com/daijro/camoufox/main/assets/scrapfly.png" alt="Scrapfly.io" width="149">
 </a>
@@ -43,6 +45,14 @@ See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on tes
 </a>
 
 [Clover Labs](https://cloverlabs.ai/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox) is a Toronto based venture studio building AI agents for growth and distribution.
+
+---
+
+<a href="https://serpapi.com/use-cases/web-search-api?utm_source=camoufox" target="_blank">
+    <img width="275" alt="color horizontal" src="https://github.com/user-attachments/assets/cdf90178-869e-4f85-8288-3fe32da319d9"/>
+</a>
+
+[SerpApi, a web search API](https://serpapi.com/use-cases/web-search-api?utm_source=camoufox) to scrape Google and other search engines with a simple API.
 
 ---
 
@@ -64,7 +74,9 @@ See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on tes
 
 ## 🚀 Camoufox × ProxyEmpire
 
-<img width="350" alt="proxylayer" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f" />
+<a href="https://proxyempire.io/?ref=camoufox" target="_blank">
+  <img width="400" alt="proxyempire" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f" />
+</a>
 
 Running Camoufox? Your proxy layer decides whether you scale — or get blocked.
 
