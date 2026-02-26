@@ -74,13 +74,13 @@ See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on tes
 
 ## 🚀 Camoufox × ProxyEmpire
 
-<a href="https://proxyempire.io/?ref=camoufox" target="_blank">
+<a href="https://proxyempire.io/?ref=camoufox&utm_source=camoufox" target="_blank">
   <img width="400" alt="proxyempire" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f" />
 </a>
 
 Running Camoufox? Your proxy layer decides whether you scale — or get blocked.
 
-[ProxyEmpire](https://proxyempire.io/?ref=camoufox) delivers:
+[ProxyEmpire](https://proxyempire.io/?ref=camoufox&utm_source=camoufox) delivers:
 
 - 🌍 30M+ Residential IPs (170+ countries)
 - 📱 4G/5G Mobile Proxies
