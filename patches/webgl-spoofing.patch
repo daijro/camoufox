@@ -139,7 +139,7 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +#include "WebGLParamsManager.h"
  #include "WindowDestroyedEvent.h"
  #include "WindowNamedPropertiesHandler.h"
-@@ -7477,6 +7478,38 @@
+@@ -7477,6 +7478,44 @@
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
 

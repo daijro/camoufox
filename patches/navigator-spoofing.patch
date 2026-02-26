@@ -266,7 +266,7 @@ index abcdef1234..5678901234 100644
  #include "AudioChannelService.h"
  #include "AutoplayPolicy.h"
  #include "Crypto.h"
-@@ -7477,6 +7478,51 @@
+@@ -7477,6 +7478,60 @@
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
  

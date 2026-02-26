@@ -152,7 +152,7 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
  #include "PaintWorkletImpl.h"
  #include "SessionStorageCache.h"
  #include "Units.h"
-@@ -7477,6 +7478,21 @@
+@@ -7477,6 +7478,24 @@
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
 
