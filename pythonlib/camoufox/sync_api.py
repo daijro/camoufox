@@ -24,6 +24,23 @@ class Camoufox(PlaywrightContextManager):
         self.launch_options = launch_options
         self.browser: Optional[Union[Browser, BrowserContext]] = None
 
+        # LUCID EMPIRE MODIFICATION: STRICT TEMPLATE ENFORCEMENT
+        fingerprint = self.launch_options.get('fingerprint')
+
+        if fingerprint is None:
+            raise ValueError("LUCID CORE PANIC: Randomization Disabled. Golden Template Required.")
+
+        if isinstance(fingerprint, str):
+            import json
+            with open(fingerprint, 'r') as f:
+                self.fingerprint = json.load(f)
+        else:
+            self.fingerprint = fingerprint
+
+        # Verify Critical Vectors
+        if 'navigator' not in self.fingerprint or 'webgl' not in self.fingerprint:
+            raise ValueError("LUCID CORE PANIC: Invalid Golden Template.")
+
     def __enter__(self) -> Union[Browser, BrowserContext]:
         super().__enter__()
         self.browser = NewBrowser(self._playwright, **self.launch_options)

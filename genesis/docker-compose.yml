@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  lucid_browser:
+    image: lucid/engine:v5
+    container_name: lucid_genesis_node
+    restart: always
+    volumes:
+      - ./profiles:/data/profiles
+      - /tmp/swtpm:/tmp/swtpm
+    environment:
+      - TPM_SOCKET=/tmp/swtpm/swtpm-sock
+      - TPM_STATE_PATH=/data/profiles/active_ghost/tpm_state
+      - MOZ_HEADLESS=1
+      - DISPLAY=:99
+    depends_on:
+      - vtpm_emulator
+    networks:
+      - lucid_sovereign_net
+
+  vtpm_emulator:
+    image: tpmdev/tpm2-runtime
+    container_name: vtpm_sidecar
+    restart: always
+    command: >
+      swtpm socket 
+      --tpmstate dir=/data/profiles/active_ghost/tpm_state 
+      --ctrl type=unixio,path=/tmp/swtpm/swtpm-sock 
+      --tpm2 
+      --log level=20
+      --flags not-need-init
+    volumes:
+      - ./profiles:/data/profiles
+      - /tmp/swtpm:/tmp/swtpm
+    networks:
+      - lucid_sovereign_net
+
+networks:
+  lucid_sovereign_net:
+    driver: bridge

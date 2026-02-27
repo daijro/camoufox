@@ -26,6 +26,30 @@ class AsyncCamoufox(PlaywrightContextManager):
         self.launch_options = launch_options
         self.browser: Optional[Union[Browser, BrowserContext]] = None
 
+        # LUCID EMPIRE MODIFICATION: STRICT TEMPLATE ENFORCEMENT
+        fingerprint = self.launch_options.get('fingerprint')
+        
+        if fingerprint is None:
+             # We DO NOT generate random fingerprints. We demand explicit injection.
+             raise ValueError("LUCID CORE PANIC: No Identity Profile provided. Randomization Protocols Disabled.")
+        
+        # If a string path is provided, load the JSON
+        if isinstance(fingerprint, str):
+            import json
+            with open(fingerprint, 'r') as f:
+                self.launch_options['fingerprint'] = json.load(f)
+        else:
+             # It might be a dict or Fingerprint object already, but we strictly validate structure below if possible
+             pass
+        
+        # Validation Schema Enforcement (Basic check if it's a dict)
+        fp_data = self.launch_options.get('fingerprint')
+        if isinstance(fp_data, dict):
+            required_vectors = ['navigator', 'webgl'] # Minimal check based on directive
+            for vector in required_vectors:
+                if vector not in fp_data:
+                     raise ValueError(f"LUCID CORE PANIC: Golden Template missing vector: {vector}")
+
     async def __aenter__(self) -> Union[Browser, BrowserContext]:
         _playwright = await super().__aenter__()
         self.browser = await AsyncNewBrowser(_playwright, **self.launch_options)
