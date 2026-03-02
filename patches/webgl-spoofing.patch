@@ -134,15 +134,19 @@ diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index xxxxxxxxxx..yyyyyyyyyy 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -27,3 +27,4 @@
+@@ -25,6 +25,7 @@
+ #include "SessionStorageCache.h"
+ #include "Units.h"
  #include "VRManagerChild.h"
 +#include "WebGLParamsManager.h"
  #include "WindowDestroyedEvent.h"
  #include "WindowNamedPropertiesHandler.h"
-@@ -7477,6 +7478,44 @@
+ #include "js/ComparisonOperators.h"
+@@ -7477,6 +7478,55 @@ void nsGlobalWindowInner::ForgetSharedWorker(SharedWorker* aSharedWorker) {
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
 
++
 +void nsGlobalWindowInner::SetWebGLVendor(const nsAString& vendor,
 +                                          ErrorResult& aRv) {
 +  uint32_t userContextId = 0;
@@ -150,6 +154,9 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +  WebGLParamsManager::SetVendor(userContextId, vendor);
++  if (userContextId != 0) {
++    WebGLParamsManager::SetVendor(0, vendor);
++  }
 +  WebGLParamsManager::DisableFunction(userContextId);
 +  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
@@ -157,7 +164,9 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +    if (global) {
 +      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
 +      JS_SetProperty(cx, global, "setWebGLVendor", undef);
++      JS_SetProperty(cx, global, "setWebGLRenderer", undef);
 +      JS_DeleteProperty(cx, global, "setWebGLVendor");
++      JS_DeleteProperty(cx, global, "setWebGLRenderer");
 +    }
 +  }
 +}
@@ -169,13 +178,18 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +  WebGLParamsManager::SetRenderer(userContextId, renderer);
++  if (userContextId != 0) {
++    WebGLParamsManager::SetRenderer(0, renderer);
++  }
 +  WebGLParamsManager::DisableFunction(userContextId);
 +  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
 +      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
++      JS_SetProperty(cx, global, "setWebGLVendor", undef);
 +      JS_SetProperty(cx, global, "setWebGLRenderer", undef);
++      JS_DeleteProperty(cx, global, "setWebGLVendor");
 +      JS_DeleteProperty(cx, global, "setWebGLRenderer");
 +    }
 +  }
