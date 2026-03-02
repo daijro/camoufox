@@ -145,23 +145,28 @@ diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index xxxxxxxxxx..yyyyyyyyyy 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -23,5 +23,6 @@
+@@ -20,6 +20,7 @@
+ #include "AutoplayPolicy.h"
+ #include "Crypto.h"
  #include "MainThreadUtils.h"
 +#include "CanvasFingerprintManager.h"
  #include "Navigator.h"
  #include "PaintWorkletImpl.h"
  #include "SessionStorageCache.h"
- #include "Units.h"
-@@ -7477,6 +7478,24 @@
+@@ -7477,6 +7478,28 @@ void nsGlobalWindowInner::ForgetSharedWorker(SharedWorker* aSharedWorker) {
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
 
++
 +void nsGlobalWindowInner::SetCanvasSeed(uint32_t seed, ErrorResult& aRv) {
 +  uint32_t userContextId = 0;
 +  if (BrowsingContext* bc = GetBrowsingContext()) {
 +    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +  CanvasFingerprintManager::SetSeed(userContextId, seed);
++  if (userContextId != 0) {
++    CanvasFingerprintManager::SetSeed(0, seed);
++  }
 +  CanvasFingerprintManager::DisableFunction(userContextId);
 +  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
