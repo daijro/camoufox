@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..abcdef1234
 --- /dev/null
 +++ b/dom/base/WebGLParamsManager.cpp
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,82 @@
 +/* Camoufox: Per-context WebGL parameter manager */
 +#include "WebGLParamsManager.h"
 +
@@ -14,9 +14,15 @@ index 0000000000..abcdef1234
 +namespace mozilla {
 +namespace dom {
 +
-+nsString WebGLParamsManager::DisabledKeyForUserContext(uint32_t aId) {
++nsString WebGLParamsManager::VendorDisabledKey(uint32_t aId) {
 +  nsAutoString key;
-+  key.AppendPrintf("webgl_d_%u", aId);
++  key.AppendPrintf("webgl_vd_%u", aId);
++  return key;
++}
++
++nsString WebGLParamsManager::RendererDisabledKey(uint32_t aId) {
++  nsAutoString key;
++  key.AppendPrintf("webgl_rd_%u", aId);
 +  return key;
 +}
 +
@@ -44,8 +50,12 @@ index 0000000000..abcdef1234
 +  return RoverfoxStorageManager::GetString(key, aOut);
 +}
 +
-+void WebGLParamsManager::DisableFunction(uint32_t aId) {
-+  RoverfoxStorageManager::PutBool(DisabledKeyForUserContext(aId), true);
++void WebGLParamsManager::DisableVendorFunction(uint32_t aId) {
++  RoverfoxStorageManager::PutBool(VendorDisabledKey(aId), true);
++}
++
++void WebGLParamsManager::DisableRendererFunction(uint32_t aId) {
++  RoverfoxStorageManager::PutBool(RendererDisabledKey(aId), true);
 +}
 +
 +bool WebGLParamsManager::IsVendorFunctionEnabledForWebIDL(JSContext* aCx,
@@ -57,7 +67,7 @@ index 0000000000..abcdef1234
 +    id = bc->OriginAttributesRef().mUserContextId;
 +  }
 +  bool disabled = false;
-+  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(id), disabled);
++  RoverfoxStorageManager::GetBool(VendorDisabledKey(id), disabled);
 +  return !disabled;
 +}
 +
@@ -70,7 +80,7 @@ index 0000000000..abcdef1234
 +    id = bc->OriginAttributesRef().mUserContextId;
 +  }
 +  bool disabled = false;
-+  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(id), disabled);
++  RoverfoxStorageManager::GetBool(RendererDisabledKey(id), disabled);
 +  return !disabled;
 +}
 +
@@ -81,7 +91,7 @@ new file mode 100644
 index 0000000000..bcdef12345
 --- /dev/null
 +++ b/dom/base/WebGLParamsManager.h
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,32 @@
 +/* Camoufox: Per-context WebGL parameter manager */
 +#ifndef mozilla_dom_WebGLParamsManager_h
 +#define mozilla_dom_WebGLParamsManager_h
@@ -100,12 +110,14 @@ index 0000000000..bcdef12345
 +  static bool GetVendor(uint32_t aId, nsAString& aOut);
 +  static void SetRenderer(uint32_t aId, const nsAString& aValue);
 +  static bool GetRenderer(uint32_t aId, nsAString& aOut);
-+  static void DisableFunction(uint32_t aId);
++  static void DisableVendorFunction(uint32_t aId);
++  static void DisableRendererFunction(uint32_t aId);
 +  static bool IsVendorFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
 +  static bool IsRendererFunctionEnabledForWebIDL(JSContext* aCx,
 +                                                  JSObject* aObj);
 + private:
-+  static nsString DisabledKeyForUserContext(uint32_t aId);
++  static nsString VendorDisabledKey(uint32_t aId);
++  static nsString RendererDisabledKey(uint32_t aId);
 +};
 +
 +}  // namespace dom
@@ -142,7 +154,7 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
  #include "WindowDestroyedEvent.h"
  #include "WindowNamedPropertiesHandler.h"
  #include "js/ComparisonOperators.h"
-@@ -7477,6 +7478,55 @@ void nsGlobalWindowInner::ForgetSharedWorker(SharedWorker* aSharedWorker) {
+@@ -7477,6 +7478,51 @@ void nsGlobalWindowInner::ForgetSharedWorker(SharedWorker* aSharedWorker) {
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
 
@@ -157,16 +169,14 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +  if (userContextId != 0) {
 +    WebGLParamsManager::SetVendor(0, vendor);
 +  }
-+  WebGLParamsManager::DisableFunction(userContextId);
-+  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
++  WebGLParamsManager::DisableVendorFunction(userContextId);
++  // Self-destruct: only remove setWebGLVendor (renderer must remain callable)
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
 +      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
 +      JS_SetProperty(cx, global, "setWebGLVendor", undef);
-+      JS_SetProperty(cx, global, "setWebGLRenderer", undef);
 +      JS_DeleteProperty(cx, global, "setWebGLVendor");
-+      JS_DeleteProperty(cx, global, "setWebGLRenderer");
 +    }
 +  }
 +}
@@ -181,15 +191,13 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +  if (userContextId != 0) {
 +    WebGLParamsManager::SetRenderer(0, renderer);
 +  }
-+  WebGLParamsManager::DisableFunction(userContextId);
-+  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
++  WebGLParamsManager::DisableRendererFunction(userContextId);
++  // Self-destruct: only remove setWebGLRenderer (vendor must remain callable)
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
 +      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
-+      JS_SetProperty(cx, global, "setWebGLVendor", undef);
 +      JS_SetProperty(cx, global, "setWebGLRenderer", undef);
-+      JS_DeleteProperty(cx, global, "setWebGLVendor");
 +      JS_DeleteProperty(cx, global, "setWebGLRenderer");
 +    }
 +  }
