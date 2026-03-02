@@ -266,26 +266,30 @@ index f59d01944a..d21c86e030 100644
 +    }
      mJSChannels[i] = array;
    }
-
-@@ -373,5 +396,18 @@ void AudioBuffer::CopyFromChannel(const Float32Array& aDestination,
-   aDestination.ProcessData([&](const Span<float>& aData, JS::AutoCheckCannotGC&&) {
-     CopyChannelDataToFloat(data, aChannelNumber, aBufferOffset, aData.Elements(),
-                            length);
-+
-+    // Apply audio fingerprint transformation after copying
-+    nsPIDOMWindowInner* global = GetParentObject();
-+    if (global) {
-+      uint32_t userContextId = 0;
-+      if (BrowsingContext* bc = global->GetBrowsingContext()) {
-+        userContextId = bc->OriginAttributesRef().mUserContextId;
+@@ -354,6 +377,23 @@ void AudioBuffer::CopyFromChannel(const Float32Array& aDestination,
+                                  JS::AutoCheckCannotGC&&) {
+       CopyChannelDataToFloat(mSharedChannels, aChannelNumber, aBufferOffset,
+                              aData.Elements(), calculateCount(aData.Length()));
++      // Apply audio fingerprint transformation to raw copied data.
++      // Path 1 (mJSChannels) already has transformed data from
++      // RestoreJSChannelData, so only transform here in Path 2.
++      {
++        nsPIDOMWindowInner* global = GetParentObject();
++        if (global) {
++          uint32_t userContextId = 0;
++          if (BrowsingContext* bc = global->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
++          uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
++          if (seed != 0) {
++            AudioFingerprintManager::ApplyTransformation(
++                aData.Elements(), calculateCount(aData.Length()), seed);
++          }
++        }
 +      }
-+      uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
-+      if (seed != 0) {
-+        AudioFingerprintManager::ApplyTransformation(aData.Elements(), length, seed);
-+      }
-+    }
-   });
- }
+     });
+     return;
+   }
 
 diff --git a/dom/media/webaudio/AnalyserNode.cpp b/dom/media/webaudio/AnalyserNode.cpp
 index 4fd7c8be9a..e5f6a7b8c9 100644
