@@ -219,8 +219,26 @@ index 318d2edba8..12feb91573 100644
  namespace mozilla::dom {
  
  static const nsLiteralCString kVibrationPermissionType = "vibration"_ns;
-@@ -423,6 +439,24 @@ void Navigator::GetLanguages(nsTArray<nsString>& aLanguages) {
- 
+@@ -262,5 +278,17 @@ void Navigator::Invalidate() {
+ void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
+                              ErrorResult& aRv) const {
++  // Camoufox: per-context user agent
++  if (mWindow) {
++    uint32_t userContextId = 0;
++    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++      userContextId = bc->OriginAttributesRef().mUserContextId;
++    }
++    nsAutoString stored;
++    if (NavigatorManager::GetUserAgent(userContextId, stored)) {
++      aUserAgent = stored;
++      return;
++    }
++  }
+   nsCOMPtr<nsPIDOMWindowInner> window;
+
+   if (mWindow) {
+@@ -423,6 +451,24 @@
+
  void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
                              ErrorResult& aRv) const {
 +  EnsureGlobalTimezoneInitialized();
