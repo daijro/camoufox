@@ -651,12 +651,20 @@ def launch_options(
     else:
         executable_path = launch_path()
 
-    return {
+    # Prepare base return dictionary (without proxy)
+    result = {
         "executable_path": executable_path,
         "args": args,
         "env": env_vars,
         "firefox_user_prefs": firefox_user_prefs,
-        "proxy": proxy,
         "headless": headless,
-        **(launch_options if launch_options is not None else {}),
     }
+
+    # Only add proxy key if proxy is not None
+    if proxy is not None:
+        result["proxy"] = proxy
+
+    # Merge additional launch_options (if any)
+    result.update(launch_options if launch_options is not None else {})
+
+    return result
