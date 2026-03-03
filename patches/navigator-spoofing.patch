@@ -237,7 +237,19 @@ index 318d2edba8..12feb91573 100644
    nsCOMPtr<nsPIDOMWindowInner> window;
 
    if (mWindow) {
-@@ -423,6 +451,24 @@
+@@ -308,6 +336,11 @@ void Navigator::GetAppCodeName(nsAString& aAppCodeName, ErrorResult& aRv) {
+ 
+ void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
+                               ErrorResult& aRv) const {
++  // Camoufox: global config fallback for appVersion
++  if (auto value = MaskConfig::GetString("navigator.appVersion")) {
++    aAppVersion.Assign(NS_ConvertUTF8toUTF16(value.value()));
++    return;
++  }
+   nsCOMPtr<Document> doc = mWindow->GetExtantDoc();
+ 
+   nsresult rv = GetAppVersion(
+@@ -423,6 +456,24 @@
 
  void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
                              ErrorResult& aRv) const {
@@ -499,32 +511,7 @@ index c9a65ff013..d8268dd9ce 100644
  
  #include <utility>
  
-@@ -129,6 +131,24 @@ void WorkerNavigator::SetLanguages(const nsTArray<nsString>& aLanguages) {
- void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
-                                     CallerType aCallerType,
-                                     ErrorResult& aRv) const {
-+  // Camoufox: per-context app version for workers
-+  {
-+    WorkerPrivate* wp = GetCurrentThreadWorkerPrivate();
-+    if (wp) {
-+      uint32_t ucid = wp->GetOriginAttributes().mUserContextId;
-+      nsAutoString stored;
-+      if (mozilla::dom::NavigatorManager::GetUserAgent(ucid, stored)) {
-+        // Derive appVersion from UA: everything after "Mozilla/"
-+        int32_t idx = stored.Find(u"Mozilla/");
-+        if (idx != kNotFound) {
-+          aAppVersion = Substring(stored, idx + 8);
-+        } else {
-+          aAppVersion = stored;
-+        }
-+        return;
-+      }
-+    }
-+  }
-   if (auto value = MaskConfig::GetString("navigator.appVersion"))
-     return aAppVersion.Assign(NS_ConvertUTF8toUTF16(value.value()));
-   WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
-@@ -153,6 +173,18 @@ void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
+@@ -153,6 +155,18 @@ void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
  
  void WorkerNavigator::GetPlatform(nsString& aPlatform, CallerType aCallerType,
                                    ErrorResult& aRv) const {
@@ -543,7 +530,7 @@ index c9a65ff013..d8268dd9ce 100644
    if (auto value = MaskConfig::GetString("navigator.platform"))
      return aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
-@@ -215,6 +247,18 @@ class GetUserAgentRunnable final : public WorkerMainThreadRunnable {
+@@ -215,6 +229,18 @@ class GetUserAgentRunnable final : public WorkerMainThreadRunnable {
  
  void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
                                     ErrorResult& aRv) const {
@@ -562,7 +549,7 @@ index c9a65ff013..d8268dd9ce 100644
    if (auto value = MaskConfig::GetString("navigator.userAgent"))
      return aUserAgent.Assign(NS_ConvertUTF8toUTF16(value.value()));
    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
-@@ -228,6 +272,17 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
+@@ -228,6 +254,17 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
  }
  
  uint64_t WorkerNavigator::HardwareConcurrency() const {
