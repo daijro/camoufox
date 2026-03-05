@@ -160,7 +160,7 @@ package-linux:
 			settings/chrome.css \
 			settings/camoucfg.jvv \
 			settings/properties.json \
-			bundle/fontconfigs \
+			bundle/fontconfig \
 		--version $(version) \
 		--release $(release) \
 		--arch $(arch) \
