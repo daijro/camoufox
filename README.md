@@ -10,7 +10,7 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 
 <p align="center">
   <a href="https://trendshift.io/repositories/12224" target="_blank">
-  <img src="https://trendshift.io/api/badge/repositories/12224" alt="daijro%2Fcamoufox | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+  <img src="https://trendshift.io/api/badge/repositories/12224" alt="daijro%2Fcamoufox | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a><br>
 </p>
 
 ---
@@ -18,7 +18,12 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 > [!NOTE]
 > All of the latest documentation is avaliable at [camoufox.com](https://camoufox.com).
 
-## <span style="color:yellow">Firefox Version Upgrade Notice</span>
+> [!NOTE]
+> Development is active at [github.com/CloverLabsAI/camoufox](https://github.com/CloverLabsAI/camoufox). This repo is being used for checkpoint releases.
+
+<hr width=50>
+
+## Firefox Version Upgrade Notice
 
 The current main branch is built for Firefox v146. It is an experimental change and may contain several bugs. If you are building from source and require a stable production version, use branch `releases/135`.
 
@@ -26,77 +31,95 @@ FF146 only works for MacOS. Linux support is coming in the next week and windows
 
 See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on testing FF146.
 
-[[⤵︎ Introduction](#introduction)]
-
 ---
 
 # Sponsors
-  
-<a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
-<img src="https://raw.githubusercontent.com/daijro/camoufox/main/assets/scrapfly.png" alt="Scrapfly.io" width="149">
-</a>
 
-[Scrapfly](https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox) is an enterprise-grade solution providing Web Scraping API that aims to simplify the scraping process by managing everything: real browser rendering, rotating proxies, and fingerprints (TLS, HTTP, browser) to bypass all major anti-bots. Scrapfly also unlocks the observability by providing an analytical dashboard and measuring the success rate/block rate in detail.
-
----
-
-<a href="https://cloverlabs.ai/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
-<img src="https://i.imgur.com/I3oe7xG.jpeg" alt="cloverlabs.ai" width="149">
-</a>
-
-[Clover Labs](https://cloverlabs.ai/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox) is a Toronto based venture studio building AI agents for growth and distribution.
-
----
-
-<a href="https://serpapi.com/use-cases/web-search-api?utm_source=camoufox" target="_blank">
-    <img width="275" alt="color horizontal" src="https://github.com/user-attachments/assets/cdf90178-869e-4f85-8288-3fe32da319d9"/>
-</a>
-
-[SerpApi, a web search API](https://serpapi.com/use-cases/web-search-api?utm_source=camoufox) to scrape Google and other search engines with a simple API.
-
----
-
-<a href="https://www.thordata.com/?ls=github&lk=camoufox" target="_blank">
-  <img alt="thordata" src="https://github.com/user-attachments/assets/fa79fe26-633b-44a4-a2a8-bce570f180ca" width=325/>
-</a>
-
-[Thordata](https://www.thordata.com/?ls=github&lk=camoufox) - Your First Plan is on Us! 💰 Get 100% of your first residential proxy purchase back as wallet balance, up to $900.
-
-#### **⚡ Why Thordata?**
-
-🌍 190+ real residential & ISP IP locations\
-🔐 Fully encrypted, ultra-secure connections\
-🚀 Optimized for web scraping, ad verification & automation workflows
-
-🔥 Don't wait - this is your **best time to start** with [Thordata](https://www.thordata.com/?ls=github&lk=camoufox) and experience the safest, fastest proxy network.
-
----
-
-## 🚀 Camoufox × ProxyEmpire
-
-<a href="https://proxyempire.io/?ref=camoufox&utm_source=camoufox" target="_blank">
-  <img width="400" alt="proxyempire" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f" />
-</a>
-
-Running Camoufox? Your proxy layer decides whether you scale — or get blocked.
-
-[ProxyEmpire](https://proxyempire.io/?ref=camoufox&utm_source=camoufox) delivers:
-
-- 🌍 30M+ Residential IPs (170+ countries)
-- 📱 4G/5G Mobile Proxies
-- 🔄 Rotating & Sticky Sessions
-- ⚡ Unlimited Concurrent Sessions
-- 🎯 Precise geo-targeting
-- HTTP, HTTPS & SOCKS5 Support
-
-Built for scraping, automation, and high-stealth workflows.
-
-#### 🔥 Exclusive Offer
-
-Use code **Camoufox30**\
-Get **30% recurring discount** (not just first month).
-
-Upgrade your proxies. Reduce bans. Scale properly
+<details open>
+<summary>View</summary>
+<table>
+  <tr>
+    <td width="30%" align="center" valign="middle">
+      <a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
+        <img src="https://raw.githubusercontent.com/daijro/camoufox/main/assets/scrapfly.png" alt="Scrapfly.io" width="200">
+      </a>
+    </td>
+    <td valign="middle">
+      <a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox">Scrapfly</a> is an enterprise-grade solution providing Web Scraping API that aims to simplify the scraping process by managing everything: real browser rendering, rotating proxies, and fingerprints (TLS, HTTP, browser) to bypass all major anti-bots. Scrapfly also unlocks the observability by providing an analytical dashboard and measuring the success rate/block rate in detail.
+    </td>
+  </tr>
+  <tr>
+    <td width="30%" align="center" valign="middle">
+      <a href="https://cloverlabs.ai/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
+        <img src="https://i.imgur.com/I3oe7xG.jpeg" alt="cloverlabs.ai" width="200">
+      </a>
+    </td>
+    <td valign="middle">
+      <a href="https://cloverlabs.ai/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox">Clover Labs</a> is a Toronto based venture studio building AI agents for growth and distribution.
+    </td>
+  </tr>
+  <tr>
+    <td width="30%" align="center" valign="middle" height="100">
+      <a href="https://serpapi.com/use-cases/web-search-api?utm_source=camoufox" target="_blank">
+        <img width="350" alt="color horizontal" src="https://github.com/user-attachments/assets/cdf90178-869e-4f85-8288-3fe32da319d9"/>
+      </a>
+    </td>
+    <td valign="middle">
+      <a href="https://serpapi.com/use-cases/web-search-api?utm_source=camoufox">SerpApi, a web search API</a> to scrape Google and other search engines with a simple API.
+    </td>
+  </tr>
+  <tr>
+    <td width="30%" align="center" valign="middle">
+      <a href="https://www.thordata.com/?ls=github&lk=camoufox" target="_blank">
+        <img alt="thordata" src="https://github.com/user-attachments/assets/fa79fe26-633b-44a4-a2a8-bce570f180ca" width="350"/>
+      </a>
+    </td>
+    <td valign="middle">
+      <a href="https://www.thordata.com/?ls=github&lk=camoufox">Thordata</a> - Your First Plan is on Us! 💰 Get 100% of your first residential proxy purchase back as wallet balance, up to $900.<br><br>
+      <b>⚡ Why Thordata?</b><br><br>
+      🌍 190+ real residential & ISP IP locations<br>
+      🔐 Fully encrypted, ultra-secure connections<br>
+      🚀 Optimized for web scraping, ad verification & automation workflows<br><br>
+      🔥 Don't wait - this is your <b>best time to start</b> with <a href="https://www.thordata.com/?ls=github&lk=camoufox">Thordata</a> and experience the safest, fastest proxy network.
+    </td>
+  </tr>
+  <tr>
+    <td width="30%" align="center" valign="middle">
+      <a href="https://proxyempire.io/?ref=camoufox&utm_source=camoufox" target="_blank">
+        <img width="380" alt="proxyempire" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f"/>
+      </a>
+    </td>
+    <td valign="middle">
+      <b>🚀 Camoufox × ProxyEmpire</b><br><br>
+      Running Camoufox? Your proxy layer decides whether you scale — or get blocked.<br><br>
+      <a href="https://proxyempire.io/?ref=camoufox&utm_source=camoufox">ProxyEmpire</a> delivers:<br>
+      🌍 30M+ Residential IPs (170+ countries)<br>
+      📱 4G/5G Mobile Proxies<br>
+      🔄 Rotating & Sticky Sessions<br>
+      ⚡ Unlimited Concurrent Sessions<br>
+      🎯 Precise geo-targeting<br>
+      HTTP, HTTPS & SOCKS5 Support<br><br>
+      Built for scraping, automation, and high-stealth workflows.<br><br>
+      <b>🔥 Exclusive Offer</b><br>
+      Use code <b>Camoufox30</b><br>
+      Get <b>30% recurring discount</b> (not just first month).<br>
+      Upgrade your proxies. Reduce bans. Scale properly
+    </td>
+  </tr>
+  <tr>
+    <td width="30%" align="center" valign="middle">
+      <a href="https://birdproxies.com/t/camoufox" target="_blank">
+        <img width="380" alt="birdproxies" src="https://github.com/user-attachments/assets/ea4e41e5-843e-43aa-ba55-77a6bf4c256f"/>
+      </a>
+    </td>
+    <td valign="middle">
+      Hey, we built BirdProxies because proxies shouldn't be complicated or overpriced. Fast residential and ISP proxies in 195+ locations, fair pricing, and real support.<br>
+      Try our FlappyBird game on the landing page for free data!<br>
+      <a href="https://birdproxies.com/t/camoufox">Try Now</a> | <a href="https://discord.com/invite/birdproxies">Discord</a>
+    </td>
+  </tr>
+</table>
+</details>
 
 ---
 

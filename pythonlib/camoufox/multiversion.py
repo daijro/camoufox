@@ -21,6 +21,7 @@ from .pkgman import INSTALL_DIR, OS_NAME, Version, rprint, unzip
 BROWSERS_DIR: Path = INSTALL_DIR / "browsers"
 CONFIG_FILE: Path = INSTALL_DIR / "config.json"
 REPO_CACHE_FILE: Path = INSTALL_DIR / "repo_cache.json"
+COMPAT_FLAG: Path = INSTALL_DIR / ".0.5_FLAG"
 
 
 def load_config() -> Dict:
@@ -117,7 +118,7 @@ def get_repo_name(github_repo: str) -> str:
     from .pkgman import RepoConfig
 
     for repo in RepoConfig.load_repos():
-        if repo.repo == github_repo:
+        if github_repo in repo.repos:
             return repo.name.lower()
     return github_repo.split('/')[0].lower()
 
@@ -340,6 +341,9 @@ def install_versioned(fetcher, replace: bool = False) -> bool:
             os.system(f'chmod -R 755 {shlex.quote(str(install_path))}')  # nosec
 
         set_active(f"browsers/{repo_name}/{version_folder}")
+
+        # Mark the install dir as compatible with this version
+        COMPAT_FLAG.touch()
 
         rprint(f'\nCamoufox v{fetcher.verstr} installed.', fg="green")
         rprint(f'Path: {install_path}', fg="green")

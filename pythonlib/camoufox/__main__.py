@@ -17,11 +17,11 @@ from .geolocation import (
     download_mmdb,
     get_mmdb_path,
     load_geoip_config,
-    remove_mmdb,
     save_geoip_config,
 )
 from .multiversion import (
     BROWSERS_DIR,
+    COMPAT_FLAG,
     CONFIG_FILE,
     REPO_CACHE_FILE,
     InstalledVersion,
@@ -58,10 +58,10 @@ def _inquirer_select(
 
     try:
         result = inquirer.prompt(
-            [inquirer.List('item', message=message, choices=choices, carousel=True)],
+            [inquirer.List("item", message=message, choices=choices, carousel=True)],
             theme=GreenPassion(),
         )
-        return result['item'] if result else None
+        return result["item"] if result else None
     except KeyboardInterrupt:
         return None
 
@@ -84,7 +84,7 @@ def _find_installed(specifier: str) -> Optional[InstalledVersion]:
         ):
             return v
 
-    parts = spec.split('/')
+    parts = spec.split("/")
     if len(parts) == 2:
         repo, ctype = parts
         is_pre = ctype == "prerelease"
@@ -100,7 +100,7 @@ def _get_geoip_source_name() -> str:
     Get the name of the active GeoIP source
     """
     try:
-        return load_geoip_config().get('name', 'Default')
+        return load_geoip_config().get("name", "Default")
     except Exception:
         return "Default"
 
@@ -111,7 +111,7 @@ def _do_sync(spoof_os=None, spoof_arch=None) -> bool:
     """
     rprint("Syncing repositories...", fg="yellow")
 
-    cache = {'repos': [], 'spoof_os': spoof_os, 'spoof_arch': spoof_arch}
+    cache = {"repos": [], "spoof_os": spoof_os, "spoof_arch": spoof_arch}
 
     for repo_config in RepoConfig.load_repos():
         rprint(f"  {repo_config.name}...", fg="cyan", nl=False)
@@ -123,30 +123,33 @@ def _do_sync(spoof_os=None, spoof_arch=None) -> bool:
                 spoof_arch=spoof_arch,
             )
             repo_data = {
-                'name': repo_config.name,
-                'repo': repo_config.repo,
-                'versions': [
+                "name": repo_config.name,
+                "repo": repo_config.repo,
+                "versions": [
                     {
-                        'version': v.version.version,
-                        'build': v.version.build,
-                        'url': v.url,
-                        'is_prerelease': v.is_prerelease,
-                        'asset_id': v.asset_id,
-                        'asset_size': v.asset_size,
-                        'asset_updated_at': v.asset_updated_at,
+                        "version": v.version.version,
+                        "build": v.version.build,
+                        "url": v.url,
+                        "is_prerelease": v.is_prerelease,
+                        "asset_id": v.asset_id,
+                        "asset_size": v.asset_size,
+                        "asset_updated_at": v.asset_updated_at,
                     }
                     for v in versions
                 ],
             }
-            cache['repos'].append(repo_data)
+            cache["repos"].append(repo_data)
             rprint(f" {len(versions)} versions", fg="green")
         except Exception as e:
             rprint(f" Error: {e}", fg="red")
 
     save_repo_cache(cache)
-    total = sum(len(r['versions']) for r in cache['repos'])
+    total = sum(len(r["versions"]) for r in cache["repos"])
     platform_str = f" ({spoof_os}/{spoof_arch})" if spoof_os else ""
-    rprint(f"\nSynced {total} versions from {len(cache['repos'])} repos{platform_str}.", fg="green")
+    rprint(
+        f"\nSynced {total} versions from {len(cache['repos'])} repos{platform_str}.",
+        fg="green",
+    )
 
     return True
 
@@ -202,24 +205,30 @@ def cli() -> None:
     pass
 
 
-@cli.command(name='sync')
-@click.option('--spoof-os', type=click.Choice(['auto', 'mac', 'win', 'lin']), help='Spoof OS (auto = native)')
+@cli.command(name="sync")
 @click.option(
-    '--spoof-arch', type=click.Choice(['auto', 'x86_64', 'i686', 'arm64']), help='Spoof architecture (auto = native)'
+    "--spoof-os",
+    type=click.Choice(["auto", "mac", "win", "lin"]),
+    help="Spoof OS (auto = native)",
+)
+@click.option(
+    "--spoof-arch",
+    type=click.Choice(["auto", "x86_64", "i686", "arm64"]),
+    help="Spoof architecture (auto = native)",
 )
 def sync(spoof_os, spoof_arch):
     """
     Sync available versions from remote repositories.
     """
-    if spoof_os == 'auto':
+    if spoof_os == "auto":
         spoof_os = None
-    if spoof_arch == 'auto':
+    if spoof_arch == "auto":
         spoof_arch = None
     _do_sync(spoof_os=spoof_os, spoof_arch=spoof_arch)
 
 
-@cli.command(name='fetch')
-@click.argument('version', default=None, required=False)
+@cli.command(name="fetch")
+@click.argument("version", default=None, required=False)
 def fetch(version):
     """
     Install the active version, or a specific version.
@@ -229,35 +238,45 @@ def fetch(version):
       camoufox fetch                         # install active version
       camoufox fetch official/135.0-beta.25  # install specific version
     """
+    # Clean up incompatible old data directory
+    if INSTALL_DIR.exists() and any(INSTALL_DIR.iterdir()) and not COMPAT_FLAG.exists():
+        import shutil
+
+        rprint("Cleaning old data...", fg="yellow")
+        shutil.rmtree(INSTALL_DIR)
+
     _do_sync()
 
     cache = load_repo_cache()
     config = load_config()
 
     if version:
-        if '/' not in version:
-            rprint("Format: <repo>/<version>-<build> (e.g., official/135.0-beta.25)", fg="red")
+        if "/" not in version:
+            rprint(
+                "Format: <repo>/<version>-<build> (e.g., official/135.0-beta.25)",
+                fg="red",
+            )
             return
-        repo_name, ver_str = version.split('/', 1)
-        ver_str = ver_str.lstrip('v')
-    elif config.get('pinned'):
-        channel = config.get('channel', '')
-        repo_name = channel.split('/')[0] if '/' in channel else channel
-        ver_str = config['pinned']
+        repo_name, ver_str = version.split("/", 1)
+        ver_str = ver_str.lstrip("v")
+    elif config.get("pinned"):
+        channel = config.get("channel", "")
+        repo_name = channel.split("/")[0] if "/" in channel else channel
+        ver_str = config["pinned"]
     else:
-        channel = config.get('channel') or get_default_channel()
-        if '/' in channel:
-            repo_name, ctype = channel.split('/', 1)
+        channel = config.get("channel") or get_default_channel()
+        if "/" in channel:
+            repo_name, ctype = channel.split("/", 1)
         else:
-            repo_name, ctype = channel, 'stable'
-        for repo_data in cache.get('repos', []):
-            if repo_data['name'].lower() != repo_name.lower():
+            repo_name, ctype = channel, "stable"
+        for repo_data in cache.get("repos", []):
+            if repo_data["name"].lower() != repo_name.lower():
                 continue
-            versions = repo_data.get('versions', [])
-            if ctype == 'prerelease':
-                candidates = [v for v in versions if v.get('is_prerelease')]
+            versions = repo_data.get("versions", [])
+            if ctype == "prerelease":
+                candidates = [v for v in versions if v.get("is_prerelease")]
             else:
-                candidates = [v for v in versions if not v.get('is_prerelease')]
+                candidates = [v for v in versions if not v.get("is_prerelease")]
             if candidates:
                 ver_str = f"{candidates[0]['version']}-{candidates[0]['build']}"
                 break
@@ -265,26 +284,32 @@ def fetch(version):
             rprint(f"No versions found for channel '{channel}'.", fg="red")
             return
 
-    for repo_data in cache.get('repos', []):
-        if repo_data['name'].lower() != repo_name.lower():
+    for repo_data in cache.get("repos", []):
+        if repo_data["name"].lower() != repo_name.lower():
             continue
-        for v in repo_data['versions']:
+        for v in repo_data["versions"]:
             if f"{v['version']}-{v['build']}" == ver_str:
                 from .pkgman import Version
 
                 selected = AvailableVersion(
-                    version=Version(v['build'], v['version']),
-                    url=v['url'],
-                    is_prerelease=v.get('is_prerelease', False),
+                    version=Version(v["build"], v["version"]),
+                    url=v["url"],
+                    is_prerelease=v.get("is_prerelease", False),
                 )
-                repo_config = RepoConfig.find_by_name(repo_data['name'])
+                repo_config = RepoConfig.find_by_name(repo_data["name"])
                 try:
                     CamoufoxUpdate(repo_config=repo_config, selected_version=selected).update()
                 except Exception as e:
                     msg = str(e)
-                    if '404' in msg or 'Not Found' in msg:
-                        rprint("Release not found (404). Asset may have been removed.", fg="red")
-                        rprint("Run 'camoufox sync' to refresh available versions.", fg="yellow")
+                    if "404" in msg or "Not Found" in msg:
+                        rprint(
+                            "Release not found (404). Asset may have been removed.",
+                            fg="red",
+                        )
+                        rprint(
+                            "Run 'camoufox sync' to refresh available versions.",
+                            fg="yellow",
+                        )
                     else:
                         rprint(f"Error: {msg}", fg="red")
                     return
@@ -301,21 +326,21 @@ def _set_channel(repo_name: str, channel_type: str):
     Set to track a channel (fetches latest on fetch)
     """
     config = load_config()
-    config['channel'] = f"{repo_name}/{channel_type}"
-    config.pop('pinned', None)
+    config["channel"] = f"{repo_name}/{channel_type}"
+    config.pop("pinned", None)
     save_config(config)
     click.secho(f"Channel: {repo_name.lower()}/{channel_type}", fg="cyan", bold=True)
 
     # Check if latest for this channel is already installed
     is_pre = channel_type == "prerelease"
     cache = load_repo_cache()
-    for repo_data in cache.get('repos', []):
-        if repo_data['name'].lower() != repo_name.lower():
+    for repo_data in cache.get("repos", []):
+        if repo_data["name"].lower() != repo_name.lower():
             continue
-        versions = repo_data.get('versions', [])
-        candidates = [v for v in versions if v.get('is_prerelease', False) == is_pre]
+        versions = repo_data.get("versions", [])
+        candidates = [v for v in versions if v.get("is_prerelease", False) == is_pre]
         if candidates:
-            latest_build = candidates[0]['build']
+            latest_build = candidates[0]["build"]
             for inst in list_installed():
                 if inst.version.build == latest_build and inst.repo_name == repo_name.lower():
                     set_active(inst.relative_path)
@@ -331,8 +356,8 @@ def _set_pinned(repo_name: str, channel_type: str, ver_data: dict, inst):
     Pin to a specific version
     """
     config = load_config()
-    config['channel'] = f"{repo_name}/{channel_type}"
-    config['pinned'] = f"{ver_data['version']}-{ver_data['build']}"
+    config["channel"] = f"{repo_name}/{channel_type}"
+    config["pinned"] = f"{ver_data['version']}-{ver_data['build']}"
     save_config(config)
     ver_str = f"{ver_data['version']}-{ver_data['build']}"
     display = f"{repo_name.lower()}/{channel_type}/{ver_str}"
@@ -344,9 +369,9 @@ def _set_pinned(repo_name: str, channel_type: str, ver_data: dict, inst):
         click.secho("Run 'camoufox fetch' to install.", fg="yellow")
 
 
-@cli.command(name='set')
-@click.argument('specifier', required=False)
-@click.option('--geoip', is_flag=True, help='Select GeoIP source instead')
+@cli.command(name="set")
+@click.argument("specifier", required=False)
+@click.option("--geoip", is_flag=True, help="Select GeoIP source instead")
 def set_cmd(specifier, geoip):
     """
     \b
@@ -360,13 +385,16 @@ def set_cmd(specifier, geoip):
         return
 
     if specifier:
-        parts = specifier.lower().split('/')
+        parts = specifier.lower().split("/")
 
         # 2-part: set channel (e.g. official/stable)
         if len(parts) == 2:
             repo_name, ctype = parts
-            if ctype not in ('stable', 'prerelease'):
-                rprint(f"Unknown channel type '{ctype}'. Use 'stable' or 'prerelease'.", fg="red")
+            if ctype not in ("stable", "prerelease"):
+                rprint(
+                    f"Unknown channel type '{ctype}'. Use 'stable' or 'prerelease'.",
+                    fg="red",
+                )
                 return
             _set_channel(repo_name, ctype)
             return
@@ -374,8 +402,11 @@ def set_cmd(specifier, geoip):
         # 3-part: pin version (e.g. official/stable/146.0.1-beta.25)
         if len(parts) == 3:
             repo_name, ctype, ver_str = parts
-            if ctype not in ('stable', 'prerelease'):
-                rprint(f"Unknown channel type '{ctype}'. Use 'stable' or 'prerelease'.", fg="red")
+            if ctype not in ("stable", "prerelease"):
+                rprint(
+                    f"Unknown channel type '{ctype}'. Use 'stable' or 'prerelease'.",
+                    fg="red",
+                )
                 return
             # Activate if already installed
             target = _find_installed(specifier)
@@ -387,8 +418,8 @@ def set_cmd(specifier, geoip):
                 rprint("Run 'camoufox fetch' to install.", fg="yellow")
             # Save pin config either way
             config = load_config()
-            config['channel'] = f"{repo_name}/{ctype}"
-            config['pinned'] = ver_str
+            config["channel"] = f"{repo_name}/{ctype}"
+            config["pinned"] = ver_str
             save_config(config)
             return
 
@@ -405,24 +436,24 @@ def set_cmd(specifier, geoip):
     cache = load_repo_cache()
     installed = {v.version.build: v for v in list_installed()}
 
-    if not cache.get('repos'):
+    if not cache.get("repos"):
         rprint("No versions in cache. Run 'camoufox sync' first.", fg="red")
         return
 
     channels = []
-    for repo_data in cache['repos']:
-        name = repo_data['name']
-        versions = repo_data.get('versions', [])
-        stable = [v for v in versions if not v.get('is_prerelease')]
-        prereleases = [v for v in versions if v.get('is_prerelease')]
+    for repo_data in cache["repos"]:
+        name = repo_data["name"]
+        versions = repo_data.get("versions", [])
+        stable = [v for v in versions if not v.get("is_prerelease")]
+        prereleases = [v for v in versions if v.get("is_prerelease")]
         if stable:
-            channels.append((name, 'stable', stable[0]))
+            channels.append((name, "stable", stable[0]))
         if prereleases:
-            channels.append((name, 'prerelease', prereleases[0]))
+            channels.append((name, "prerelease", prereleases[0]))
 
     config = load_config()
-    channel = config.get('channel') or get_default_channel()
-    pinned = config.get('pinned')
+    channel = config.get("channel") or get_default_channel()
+    pinned = config.get("pinned")
 
     if pinned:
         click.secho(f"Pinned: {channel.lower()}/{pinned}", fg="cyan")
@@ -431,36 +462,36 @@ def set_cmd(specifier, geoip):
     click.echo()
 
     channel_versions = {}
-    for repo_data in cache['repos']:
-        name = repo_data['name']
-        versions = repo_data.get('versions', [])
-        stable = [v for v in versions if not v.get('is_prerelease')]
-        prereleases = [v for v in versions if v.get('is_prerelease')]
+    for repo_data in cache["repos"]:
+        name = repo_data["name"]
+        versions = repo_data.get("versions", [])
+        stable = [v for v in versions if not v.get("is_prerelease")]
+        prereleases = [v for v in versions if v.get("is_prerelease")]
         if stable:
-            channel_versions[(name, 'stable')] = stable
+            channel_versions[(name, "stable")] = stable
         if prereleases:
-            channel_versions[(name, 'prerelease')] = prereleases
+            channel_versions[(name, "prerelease")] = prereleases
 
     while True:
-        choices = [("Set channel", 'channel')]
+        choices = [("Set channel", "channel")]
         for (name, ctype), versions in channel_versions.items():
             label = f"Pin version: {click.style(f'{name.lower()}/{ctype}', fg='cyan', bold=True)}"
-            choices.append((label, ('pin', name, ctype, versions)))
-        choices.append((click.style("Exit", fg="bright_black"), 'exit'))
+            choices.append((label, ("pin", name, ctype, versions)))
+        choices.append((click.style("Exit", fg="bright_black"), "exit"))
 
         answer = inquirer.prompt(
-            [inquirer.List('action', message="Select", choices=choices, carousel=True)],
+            [inquirer.List("action", message="Select", choices=choices, carousel=True)],
             theme=GreenPassion(),
         )
         if not answer:
             return
 
-        action = answer['action']
+        action = answer["action"]
 
-        if action == 'exit':
+        if action == "exit":
             return
 
-        elif action == 'channel':
+        elif action == "channel":
             ch_choices = []
             for name, ctype, latest in channels:
                 ver_str = f"v{latest['version']}-{latest['build']}"
@@ -474,24 +505,27 @@ def set_cmd(specifier, geoip):
             ch_answer = inquirer.prompt(
                 [
                     inquirer.List(
-                        'channel', message="Set channel", choices=ch_choices, carousel=True
+                        "channel",
+                        message="Set channel",
+                        choices=ch_choices,
+                        carousel=True,
                     )
                 ],
                 theme=GreenPassion(),
             )
-            if not ch_answer or ch_answer['channel'] is None:
+            if not ch_answer or ch_answer["channel"] is None:
                 continue
 
-            repo_name, ctype, _ = ch_answer['channel']
+            repo_name, ctype, _ = ch_answer["channel"]
             _set_channel(repo_name, ctype)
             return
 
-        elif isinstance(action, tuple) and action[0] == 'pin':
+        elif isinstance(action, tuple) and action[0] == "pin":
             _, rname, ctype, versions = action
 
             v_choices = []
             for i, v in enumerate(versions):
-                build = v['build']
+                build = v["build"]
                 full_ver = f"{v['version']}-{build}"
                 inst = installed.get(build)
                 is_last = i == len(versions) - 1
@@ -525,7 +559,7 @@ def set_cmd(specifier, geoip):
             v_answer = inquirer.prompt(
                 [
                     inquirer.List(
-                        'version',
+                        "version",
                         message=f"Pin version ({rname.lower()}/{ctype})",
                         choices=v_choices,
                         default=default_val,
@@ -533,11 +567,11 @@ def set_cmd(specifier, geoip):
                 ],
                 theme=GreenPassion(),
             )
-            if not v_answer or v_answer['version'] is None:
+            if not v_answer or v_answer["version"] is None:
                 continue
 
-            ver_data = v_answer['version']
-            inst = installed.get(ver_data['build'])
+            ver_data = v_answer["version"]
+            inst = installed.get(ver_data["build"])
             _set_pinned(rname, ctype, ver_data, inst)
             return
 
@@ -551,8 +585,8 @@ def _select_geoip_source():
         rprint("No GeoIP sources configured.", fg="red")
         return
 
-    current = load_geoip_config().get('name', '')
-    choices = [(r['name'] + (" [active]" if r.get('name') == current else ""), r) for r in repos]
+    current = load_geoip_config().get("name", "")
+    choices = [(r["name"] + (" [active]" if r.get("name") == current else ""), r) for r in repos]
 
     selected = _inquirer_select(choices, "Select GeoIP source")
     if not selected:
@@ -562,19 +596,17 @@ def _select_geoip_source():
     rprint(f"GeoIP source: {selected['name']}", fg="green")
 
 
-@cli.command(name='list')
-@click.argument('mode', default='installed', type=click.Choice(['installed', 'all']))
-@click.option('--path', 'show_paths', is_flag=True, help='Show full paths')
+@cli.command(name="list")
+@click.argument("mode", default="installed", type=click.Choice(["installed", "all"]))
+@click.option("--path", "show_paths", is_flag=True, help="Show full paths")
 def list_cmd(mode, show_paths):
     """
-    List Camoufox versions.
+    List Camoufox versions
 
-    \b
-    MODES:
-      installed  Show installed versions (default)
-      all        Show all available versions from synced repos
+    installed  Show installed versions (default)
+    all        Show all available versions from synced repos
     """
-    if mode == 'all':
+    if mode == "all":
         _list_all(show_paths)
     else:
         _list_installed(show_paths)
@@ -616,14 +648,14 @@ def _list_all(_show_paths: bool):
 
     rprint("Available versions:\n", fg="yellow")
 
-    for repo_data in cache.get('repos', []):
-        rname = repo_data['name']
-        versions = repo_data.get('versions', [])
+    for repo_data in cache.get("repos", []):
+        rname = repo_data["name"]
+        versions = repo_data.get("versions", [])
 
         click.secho(f"{rname}/", fg="cyan", bold=True)
 
         for i, v in enumerate(versions):
-            build = v['build']
+            build = v["build"]
             full_ver = f"{v['version']}-{build}"
             inst = installed.get(build)
             is_last = i == len(versions) - 1
@@ -634,7 +666,7 @@ def _list_all(_show_paths: bool):
             click.echo(f"    {prefix}", nl=False)
             click.secho(f"v{full_ver}", fg=color, bold=inst and inst.is_active, nl=False)
 
-            if v.get('is_prerelease'):
+            if v.get("is_prerelease"):
                 click.secho(" (prerelease)", fg="yellow", nl=False)
             else:
                 click.secho(" (stable)", fg="blue", nl=False)
@@ -650,86 +682,79 @@ def _list_all(_show_paths: bool):
         click.echo()
 
 
-@cli.command(name='remove')
-@click.argument('version_path', required=False)
-@click.option('--all', 'remove_all', is_flag=True, help='Remove everything')
-@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
-def remove(version_path, remove_all, yes):
+@cli.command(name="remove")
+@click.argument("version_path", required=False)
+@click.option("--select", is_flag=True, help="Interactively select a version to remove")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompts")
+def remove(version_path, select, yes):
     """
     \b
-    Remove installed version(s)
-    Or, pass a specifier to remove directly:
-      camoufox remove official/stable/134.0.2-beta.20
+    Remove Camoufox data directory, or an installed browser version
+    Or, remove a specific version:
+        Select a version:     camoufox remove --select
+        Remove a version:     camoufox remove official/stable/134.0.2-beta.20
     """
-    installed = list_installed()
-    has_geoip = GEOIP_DIR.exists()
+    import shutil
 
-    if remove_all or version_path == 'all':
-        has_config = CONFIG_FILE.exists() or REPO_CACHE_FILE.exists()
-        if not installed and not has_geoip and not has_config:
-            rprint("Nothing to remove.", fg="yellow")
+    # Select mode: interactively pick a single version
+    if select:
+        installed = list_installed()
+        if not installed:
+            rprint("No browser versions installed.", fg="yellow")
             return
-        if installed and (yes or click.confirm(f"Remove all {len(installed)} browser version(s)?")):
-            for v in installed:
-                remove_version(v.path)
-            rprint(f"Removed {len(installed)} version(s).", fg="green")
-        if has_geoip and (yes or click.confirm("Remove GeoIP database?")):
-            remove_mmdb()
-        # Clean up config files
-        for f in (CONFIG_FILE, REPO_CACHE_FILE):
-            if f.exists():
-                f.unlink()
-        # Remove install dir if empty
-        if INSTALL_DIR.exists() and not any(INSTALL_DIR.iterdir()):
-            INSTALL_DIR.rmdir()
+        choices = [(v.channel_path + (" [active]" if v.is_active else ""), v) for v in installed]
+        target = _inquirer_select(choices, "Select version to remove")
+        if not target:
+            rprint("Cancelled.", fg="yellow")
+            return
+        if yes or click.confirm(f"Remove {target.channel_path}?"):
+            remove_version(target.path)
+            rprint(f"Removed {target.channel_path}", fg="green")
         return
 
-    if not installed:
-        rprint("No browser versions installed.", fg="yellow")
-        if has_geoip and (yes or click.confirm("Remove GeoIP database?")):
-            remove_mmdb()
-        return
-
+    # Specific version: remove just that one
     if version_path:
         target = _find_installed(version_path)
         if not target:
             rprint(f"Version '{version_path}' not found.", fg="red")
             return
-    else:
-        choices = [
-            (v.channel_path + (" [active]" if v.is_active else ""), v)
-            for v in installed
-        ]
-        target = _inquirer_select(choices, "Select version to remove")
-        if not target:
-            rprint("Cancelled.", fg="yellow")
-            return
+        if yes or click.confirm(f"Remove {target.channel_path}?"):
+            remove_version(target.path)
+            rprint(f"Removed {target.channel_path}", fg="green")
+        return
 
-    if yes or click.confirm(f"Remove {target.channel_path}?"):
-        remove_version(target.path)
-        rprint(f"Removed {target.channel_path}", fg="green")
+    # Default: remove everything
+    if not INSTALL_DIR.exists() or not any(INSTALL_DIR.iterdir()):
+        rprint("Nothing to remove.", fg="yellow")
+        return
 
-    if has_geoip and (yes or click.confirm("Also remove GeoIP?", default=False)):
-        remove_mmdb()
+    if yes or click.confirm(f"Remove the camoufox data directory ({INSTALL_DIR})?"):
+        shutil.rmtree(INSTALL_DIR)
+        rprint("Removed camoufox data directory.", fg="green")
 
 
-@cli.command(name='test')
-@click.option('--executable-path', help='Path to the Camoufox executable', default=None)
-@click.argument('url', default=None, required=False)
+@cli.command(name="test")
+@click.option("--executable-path", help="Path to the Camoufox executable", default=None)
+@click.argument("url", default=None, required=False)
 def test(url: Optional[str] = None, executable_path: Optional[str] = None) -> None:
     """
     Open the Playwright inspector
     """
     from .sync_api import Camoufox
 
-    with Camoufox(headless=False, env=environ, config={'showcursor': False}, executable_path=executable_path) as browser:
+    with Camoufox(
+        headless=False,
+        env=environ,
+        config={"showcursor": False},
+        executable_path=executable_path,
+    ) as browser:
         page = browser.new_page()
         if url:
             page.goto(url)
         page.pause()
 
 
-@cli.command(name='server')
+@cli.command(name="server")
 def server():
     """
     Launch a Playwright server
@@ -739,18 +764,21 @@ def server():
     launch_server()
 
 
-@cli.command(name='gui')
-@click.option('--debug', is_flag=True, help="Enable debug options in the GUI.")
+@cli.command(name="gui")
+@click.option("--debug", is_flag=True, help="Enable debug options in the GUI.")
 def gui(debug):
     """
-    Launch the Camouman GUI (requires PySide6)
+    Launch the Camoufox Manager GUI (requires PySide6)
     """
     try:
         from .gui import main
 
         main(debug=debug)
     except ImportError:
-        rprint("GUI requires PySide6. Install with: pip install 'camoufox\\[gui]'", fg="red")
+        rprint(
+            "GUI requires PySide6. Install with: pip install 'camoufox\\[gui]'",
+            fg="red",
+        )
 
 
 class VersionInfo:
@@ -801,8 +829,8 @@ class VersionInfo:
         self._header("Browser")
 
         config = load_config()
-        pinned = config.get('pinned')
-        channel = config.get('channel') or get_default_channel()
+        pinned = config.get("pinned")
+        channel = config.get("channel") or get_default_channel()
 
         # Active: what was set (channel or pinned version)
         if pinned:
@@ -835,11 +863,15 @@ class VersionInfo:
             repo_ch = f"{active_v.repo_name}/{ctype}"
             is_latest = False
             cache = load_repo_cache()
-            for repo_data in cache.get('repos', []):
-                if repo_data['name'].lower() != active_v.repo_name.lower():
+            for repo_data in cache.get("repos", []):
+                if repo_data["name"].lower() != active_v.repo_name.lower():
                     continue
-                candidates = [v for v in repo_data.get('versions', []) if v.get('is_prerelease', False) == active_v.is_prerelease]
-                if candidates and active_v.version.build == candidates[0]['build']:
+                candidates = [
+                    v
+                    for v in repo_data.get("versions", [])
+                    if v.get("is_prerelease", False) == active_v.is_prerelease
+                ]
+                if candidates and active_v.version.build == candidates[0]["build"]:
                     is_latest = True
                 break
             self._row(
@@ -852,7 +884,7 @@ class VersionInfo:
         if REPO_CACHE_FILE.exists():
             mtime = REPO_CACHE_FILE.stat().st_mtime
             dt = datetime.fromtimestamp(mtime, tz=timezone.utc).astimezone()
-            self._row("Last Sync", dt.strftime('%Y-%m-%d %H:%M'), style="dim")
+            self._row("Last Sync", dt.strftime("%Y-%m-%d %H:%M"), style="dim")
         else:
             self._row("Last Sync", "Never", style="red")
 
@@ -871,20 +903,20 @@ class VersionInfo:
             if mmdb_path.exists():
                 # Show active database name and last update time
                 geoip_cfg = load_geoip_config()
-                self._row("Database", geoip_cfg.get('name', 'Unknown'))
+                self._row("Database", geoip_cfg.get("name", "Unknown"))
                 mtime = mmdb_path.stat().st_mtime
                 dt = datetime.fromtimestamp(mtime, tz=timezone.utc).astimezone()
-                self._row("Updated", dt.strftime('%Y-%m-%d %H:%M'), style="dim")
+                self._row("Updated", dt.strftime("%Y-%m-%d %H:%M"), style="dim")
             else:
                 self._row("Database", "Not installed", style="dim")
 
     def _dir_size(self, path) -> str:
         if not path.exists():
             return "—"
-        total = sum(f.stat().st_size for f in path.rglob('*') if f.is_file())
-        for unit in ('B', 'KB', 'MB'):
+        total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+        for unit in ("B", "KB", "MB"):
             if total < 1024:
-                return f"{total:.1f} {unit}" if unit != 'B' else f"{total} B"
+                return f"{total:.1f} {unit}" if unit != "B" else f"{total} B"
             total /= 1024
         return f"{total:.1f} GB"
 
@@ -908,7 +940,7 @@ class VersionInfo:
         self.console.print(self.t)
 
 
-@cli.command(name='version')
+@cli.command(name="version")
 def version():
     """
     Display version, package, browser, and storage info
@@ -916,7 +948,7 @@ def version():
     VersionInfo().print_all()
 
 
-@cli.command(name='active')
+@cli.command(name="active")
 def active_cmd():
     """
     Print the current active version
@@ -928,8 +960,8 @@ def active_cmd():
             return
 
     config = load_config()
-    pinned = config.get('pinned')
-    channel = config.get('channel') or get_default_channel()
+    pinned = config.get("pinned")
+    channel = config.get("channel") or get_default_channel()
     if pinned:
         click.echo(f"{channel.lower()}/{pinned} ", nl=False)
         rprint("(not installed)", fg="yellow")
@@ -938,7 +970,7 @@ def active_cmd():
         rprint("(not installed)", fg="yellow")
 
 
-@cli.command(name='path')
+@cli.command(name="path")
 def path_cmd():
     """
     Print the install directory path
@@ -946,5 +978,5 @@ def path_cmd():
     click.echo(INSTALL_DIR)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

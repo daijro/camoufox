@@ -14,7 +14,7 @@ from yaml import load as yaml_load
 
 from .exceptions import NotInstalledGeoIPExtra, UnknownIPLocation
 from .ip import validate_ip
-from .locale import SELECTOR, Geolocation
+from .locales import SELECTOR, Geolocation
 from .pkgman import LOCAL_DATA, rprint, unzip, webdl
 
 try:

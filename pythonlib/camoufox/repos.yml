@@ -5,7 +5,8 @@ default:
 
 # Browser repositories
 browsers:
-  - repo: daijro/camoufox
+  # Fallback to camoufox org
+  - repo: daijro/camoufox, camoufox/camoufox
     name: Official
     pattern: "{name}-{version}-{build}-{os}.{arch}.zip"
     versions:
@@ -43,7 +44,7 @@ geoip:
       timezone: timezone
 
   # GeoIP All-in-One - Combined IPv4/IPv6 with all fields
-  - name: GeoIP AIO by daijro (experimental)
+  - name: GeoIP AIO by daijro
     extract: true
     urls:
       combined:

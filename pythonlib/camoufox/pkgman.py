@@ -135,13 +135,20 @@ class RepoConfig:
     Configuration for a Camoufox repository
     """
 
-    repo: str
+    repos: List[str]  # Primary + fallback GitHub repos
     name: str
     pattern: str
     os_map: Dict[str, str]
     arch_map: Dict[str, str]
     build_min: Optional[str] = None
     build_max: Optional[str] = None
+
+    @property
+    def repo(self) -> str:
+        """
+        Primary GitHub repo
+        """
+        return self.repos[0]
 
     @staticmethod
     def load_repos(spoof_library_version: Optional[str] = None) -> List['RepoConfig']:
@@ -180,8 +187,12 @@ class RepoConfig:
                 build_min = browser.get('min')
                 build_max = browser.get('max')
 
+        # Parse comma separated repos list (primary + fallbacks)
+        raw_repo = d['repo']
+        repos = [r.strip() for r in raw_repo.split(',')] if isinstance(raw_repo, str) else raw_repo
+
         return RepoConfig(
-            repo=d['repo'],
+            repos=repos,
             name=d['name'],
             pattern=d['pattern'],
             os_map=OS_MAP,
@@ -333,12 +344,14 @@ VERSION_MIN, VERSION_MAX = Version.build_minmax()
 
 class GitHubDownloader:
     """
-    Manages fetching GitHub releases
+    Manages fetching GitHub releases with fallback repos
     """
 
-    def __init__(self, github_repo: str) -> None:
-        self.github_repo = github_repo
-        self.api_url = f"https://api.github.com/repos/{github_repo}/releases"
+    def __init__(self, github_repos: Union[str, List[str]]) -> None:
+        if isinstance(github_repos, str):
+            github_repos = [github_repos]
+        self.github_repos = github_repos
+        self.github_repo = github_repos[0]
         self.is_prerelease: bool = False
 
     def check_asset(self, asset: Dict, release: Optional[Dict] = None) -> Any:
@@ -353,22 +366,36 @@ class GitHubDownloader:
         """
         raise MissingRelease(f"Could not find a release asset in {self.github_repo}.")
 
-    def get_asset(self) -> Any:
+    def _get_releases(self, github_repo: str) -> List[Dict]:
         """
-        Fetch the first matching release asset from GitHub
+        Fetch releases from a single GitHub repo
         """
         headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
-        resp = requests.get(self.api_url, timeout=20, headers=headers)
+        api_url = f"https://api.github.com/repos/{github_repo}/releases"
+        resp = requests.get(api_url, timeout=20, headers=headers)
         resp.raise_for_status()
+        return resp.json()
 
-        releases = resp.json()
+    def get_asset(self) -> Any:
+        """
+        Fetch the first matching release asset, trying fallback repos on failure
+        """
+        last_error = None
+        for repo in self.github_repos:
+            try:
+                releases = self._get_releases(repo)
+                for release in releases:
+                    for asset in release['assets']:
+                        if data := self.check_asset(asset, release):
+                            self.github_repo = repo
+                            self.is_prerelease = release.get('prerelease', False)
+                            return data
+            except Exception as e:
+                last_error = e
+                continue
 
-        for release in releases:
-            for asset in release['assets']:
-                if data := self.check_asset(asset, release):
-                    self.is_prerelease = release.get('prerelease', False)
-                    return data
-
+        if last_error:
+            raise last_error
         self.missing_asset_error()
 
 
@@ -419,7 +446,7 @@ class CamoufoxFetcher(GitHubDownloader):
         selected_version: Optional[AvailableVersion] = None,
     ) -> None:
         self.repo_config = repo_config or RepoConfig.get_default()
-        super().__init__(self.repo_config.repo)
+        super().__init__(self.repo_config.repos)
 
         self.arch = self.get_platform_arch()
         self._version_obj: Optional[Version] = None
@@ -552,7 +579,6 @@ def list_available_versions(
     Fetch all supported versions from GitHub for the current platform
     """
     config = repo_config or RepoConfig.get_default()
-    api_url = f"https://api.github.com/repos/{config.repo}/releases"
     pattern = config.build_pattern(spoof_os=spoof_os, spoof_arch=spoof_arch)
 
     os_name = spoof_os or OS_NAME
@@ -560,9 +586,21 @@ def list_available_versions(
     if arch not in OS_ARCH_MATRIX.get(os_name, []):
         raise UnsupportedArchitecture(f"Architecture {arch} is not supported for {os_name}")
 
-    resp = requests.get(api_url, timeout=20)
-    resp.raise_for_status()
-    releases = resp.json()
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
+    releases = []
+    last_error = None
+    for repo in config.repos:
+        try:
+            api_url = f"https://api.github.com/repos/{repo}/releases"
+            resp = requests.get(api_url, timeout=20, headers=headers)
+            resp.raise_for_status()
+            releases = resp.json()
+            break
+        except Exception as e:
+            last_error = e
+            continue
+    if not releases and last_error:
+        raise last_error
 
     versions: List[AvailableVersion] = []
     seen_builds: set = set()
@@ -617,7 +655,14 @@ def camoufox_path(download_if_missing: bool = True) -> Path:
     """
     Full path to the active camoufox folder
     """
-    from .multiversion import get_active_path
+    from .multiversion import COMPAT_FLAG, get_active_path
+
+    # Clean up incompatible old data directory
+    if os.path.exists(INSTALL_DIR) and os.listdir(INSTALL_DIR) and not COMPAT_FLAG.exists():
+        import shutil
+
+        rprint("Cleaning old data...", fg="yellow")
+        shutil.rmtree(INSTALL_DIR)
 
     active = get_active_path()
     if active and Version.from_path(active).is_supported():
@@ -681,7 +726,9 @@ def webdl(
     """
     Download a file from the given URL
     """
-    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if "api.github" in url and GITHUB_TOKEN else {}
+    headers = (
+        {"Authorization": f"Bearer {GITHUB_TOKEN}"} if "api.github" in url and GITHUB_TOKEN else {}
+    )
     response = requests.get(url, stream=True, headers=headers)
     response.raise_for_status()
 

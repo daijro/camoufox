@@ -93,24 +93,25 @@ $ python -m camoufox --help
 ╭─ Options ─────────────────────────────────────────────────────────────────────────╮
 │ --help  Show this message and exit.                                               │
 ╰───────────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ────────────────────────────────────────────────────────────────────────╮
-│ active    Print the current active version                                        │
-│ fetch     Install the active version, or a specific version.                      │
-│ gui       Launch the Camouman GUI (requires PySide6)                              │
-│ list      List Camoufox versions.                                                 │
-│ path      Print the install directory path                                        │
-│ remove    Remove installed version(s)                                             │
-│           Or, pass a specifier to remove directly:                                │
-│             camoufox remove official/stable/134.0.2-beta.20                       │
-│ server    Launch a Playwright server                                              │
-│ set       Interactive selector for versions and settings                          │
-│           Or, pass a specifier to activate directly:                              │
-│               Pin version:          camoufox set official/stable/134.0.2-beta.20  │
-│               Auto-update channel:  camoufox set official/stable                  │
-│ sync      Sync available versions from remote repositories.                       │
-│ test      Open the Playwright inspector                                           │
-│ version   Display version info                                                    │
-╰───────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ──────────────────────────────────────────────────────────────────────────────────╮
+│ active      Print the current active version                                                 │
+│ fetch       Install the active version, or a specific version.                               │
+│ gui         Launch the Camoufox Manager GUI (requires PySide6)                               │
+│ list        List Camoufox versions                                                           │
+│ path        Print the install directory path                                                 │
+│ remove      Remove Camoufox data directory, or an installed browser version                  │
+│             Or, remove a specific version:                                                   │
+│                 Select a version:     camoufox remove --select                               │
+│                 Remove a version:     camoufox remove official/stable/134.0.2-beta.20        │
+│ server      Launch a Playwright server                                                       │
+│ set         Interactive selector for versions and settings                                   │
+│             Or, pass a specifier to activate directly:                                       │
+│                 Pin version:          camoufox set official/stable/134.0.2-beta.20            │
+│                 Auto-update channel:  camoufox set official/stable                           │
+│ sync        Sync available versions from remote repositories.                                │
+│ test        Open the Playwright inspector                                                    │
+│ version     Display version, package, browser, and storage info                              │
+╰─────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 </details>
@@ -206,29 +207,23 @@ List installed or all available Camoufox versions as a tree.
 
 ### `remove`
 
-Remove installed browser versions and/or GeoIP data. Opens an interactive selector, or pass a specifier to remove directly.
-
-Interactively select a specific version to remove:
+By default, removes the entire camoufox data directory.
 
 ```bash
-> camoufox remove  # interactive selection
-Pip package:    v0.5.0
-Channel:        official/prerelease (Version pinned)
-Version:        v146.0.1-beta.25 
-Last repo sync: 2026-02-07 04:36
+> camoufox remove
+> camoufox remove -y  # skip confirmation prompt
 ```
 
 Remove a specific version:
 
 ```bash
-> camoufox remove official/stable/134.0.2-beta.20
+> camoufox remove official/134.0.2-beta.20
 ```
 
-Remove all:
+Interactively select a version to remove:
 
 ```bash
-> camoufox remove --all
-> camoufox remove --all -y  # skip confirmation prompts
+> camoufox remove --select
 ```
 
 <hr width=50>

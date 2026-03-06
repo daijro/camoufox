@@ -6,7 +6,7 @@ import numpy as np
 from language_tags import tags
 
 from camoufox.pkgman import LOCAL_DATA
-from camoufox.warnings import LeakWarning
+from camoufox._warnings import LeakWarning
 
 from .exceptions import InvalidLocale, UnknownLanguage, UnknownTerritory
 

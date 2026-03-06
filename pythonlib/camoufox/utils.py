@@ -24,10 +24,10 @@ from .exceptions import (
 from .fingerprints import from_browserforge, generate_fingerprint
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
-from .locale import handle_locales
+from .locales import handle_locales
 from .pkgman import OS_NAME, get_path, installed_verstr, launch_path
 from .virtdisplay import VirtualDisplay
-from .warnings import LeakWarning
+from ._warnings import LeakWarning
 from .webgl import sample_webgl
 
 ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]

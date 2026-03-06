@@ -36,6 +36,7 @@ from ..pkgman import RepoConfig, unzip, webdl
 
 # Workers
 
+
 class Worker(QThread):
     progress = Signal(float)
     status = Signal(str)
@@ -109,22 +110,24 @@ class SyncWorker(Worker):
                     spoof_os=self.spoof_os,
                     spoof_arch=self.spoof_arch,
                 )
-                cache['repos'].append({
-                    'name': rc.name,
-                    'repo': rc.repo,
-                    'versions': [
-                        {
-                            'version': v.version.version,
-                            'build': v.version.build,
-                            'url': v.url,
-                            'is_prerelease': v.is_prerelease,
-                            'asset_id': v.asset_id,
-                            'asset_size': v.asset_size,
-                            'asset_updated_at': v.asset_updated_at,
-                        }
-                        for v in versions
-                    ],
-                })
+                cache['repos'].append(
+                    {
+                        'name': rc.name,
+                        'repo': rc.repo,
+                        'versions': [
+                            {
+                                'version': v.version.version,
+                                'build': v.version.build,
+                                'url': v.url,
+                                'is_prerelease': v.is_prerelease,
+                                'asset_id': v.asset_id,
+                                'asset_size': v.asset_size,
+                                'asset_updated_at': v.asset_updated_at,
+                            }
+                            for v in versions
+                        ],
+                    }
+                )
 
             cache['spoof_os'] = self.spoof_os
             cache['spoof_arch'] = self.spoof_arch
@@ -155,6 +158,7 @@ class GeoIPWorker(Worker):
 
 # Models
 
+
 class Roles(IntEnum):
     Display = Qt.ItemDataRole.UserRole + 1
     Build = Qt.ItemDataRole.UserRole + 2
@@ -168,38 +172,67 @@ class Roles(IntEnum):
 
 
 _ROLE_ATTRS = {
-    Roles.Display: 'display', Roles.Build: 'build',
-    Roles.IsHeader: 'is_header', Roles.IsPrerelease: 'is_prerelease',
-    Roles.IsActive: 'is_active', Roles.IsInstalled: 'is_installed',
-    Roles.Section: 'section', Roles.Expanded: 'expanded',
+    Roles.Display: 'display',
+    Roles.Build: 'build',
+    Roles.IsHeader: 'is_header',
+    Roles.IsPrerelease: 'is_prerelease',
+    Roles.IsActive: 'is_active',
+    Roles.IsInstalled: 'is_installed',
+    Roles.Section: 'section',
+    Roles.Expanded: 'expanded',
     Roles.IsPinned: 'is_pinned',
 }
 
 _BOOL_ROLES = {
-    Roles.IsHeader, Roles.IsPrerelease, Roles.IsActive,
-    Roles.IsInstalled, Roles.Expanded, Roles.IsPinned,
+    Roles.IsHeader,
+    Roles.IsPrerelease,
+    Roles.IsActive,
+    Roles.IsInstalled,
+    Roles.Expanded,
+    Roles.IsPinned,
 }
 
 _ROLE_NAMES = {
-    Roles.Display: b"display", Roles.Build: b"build",
-    Roles.IsHeader: b"isHeader", Roles.IsPrerelease: b"isPrerelease",
-    Roles.IsActive: b"isActive", Roles.IsInstalled: b"isInstalled",
-    Roles.Section: b"section", Roles.Expanded: b"expanded",
+    Roles.Display: b"display",
+    Roles.Build: b"build",
+    Roles.IsHeader: b"isHeader",
+    Roles.IsPrerelease: b"isPrerelease",
+    Roles.IsActive: b"isActive",
+    Roles.IsInstalled: b"isInstalled",
+    Roles.Section: b"section",
+    Roles.Expanded: b"expanded",
     Roles.IsPinned: b"isPinned",
 }
 
 
 class VersionItem:
     __slots__ = (
-        'display', 'build', 'is_header', 'is_prerelease', 'is_active',
-        'is_pinned', 'is_installed', 'section', 'expanded',
-        'version_data', 'installed_data',
+        'display',
+        'build',
+        'is_header',
+        'is_prerelease',
+        'is_active',
+        'is_pinned',
+        'is_installed',
+        'section',
+        'expanded',
+        'version_data',
+        'installed_data',
     )
 
     def __init__(
-        self, display, build="", is_header=False, is_prerelease=False,
-        is_active=False, is_pinned=False, is_installed=False,
-        section="", expanded=True, version_data=None, installed_data=None,
+        self,
+        display,
+        build="",
+        is_header=False,
+        is_prerelease=False,
+        is_active=False,
+        is_pinned=False,
+        is_installed=False,
+        section="",
+        expanded=True,
+        version_data=None,
+        installed_data=None,
     ):
         self.display = display
         self.build = build
@@ -245,6 +278,7 @@ ARCH_OPTIONS = ["(auto)", "x86_64", "i686", "arm64"]
 
 
 # Backend
+
 
 class Backend(QObject):
     reposChanged = Signal()
@@ -580,11 +614,13 @@ class Backend(QObject):
         cfg = load_config()
         cfg.pop('channel', None)
         cfg['pinned'] = f"{item.version_data.version.version}-{item.version_data.version.build}"
-        cfg.update({
-            'active_repo': self._current_repo.name,
-            'active_build': item.version_data.version.build,
-            'active_version': item.version_data.version.version,
-        })
+        cfg.update(
+            {
+                'active_repo': self._current_repo.name,
+                'active_build': item.version_data.version.build,
+                'active_version': item.version_data.version.version,
+            }
+        )
         save_config(cfg)
 
         if item.installed_data:
@@ -612,8 +648,7 @@ class Backend(QObject):
             for repo in cache.get('repos', []):
                 if repo['name'].lower() == repo_name.lower():
                     candidates = [
-                        v for v in repo.get('versions', [])
-                        if v.get('is_prerelease') == is_pre
+                        v for v in repo.get('versions', []) if v.get('is_prerelease') == is_pre
                     ]
                     if candidates:
                         cfg['active_build'] = candidates[0]['build']
@@ -792,11 +827,13 @@ class Backend(QObject):
                 return
 
             geo = get_geolocation(ip.strip())
-            self._lookup_result = "<br>".join([
-                f"<b>Country:</b> {geo.locale.region}",
-                f"<b>TZ:</b> {geo.timezone}",
-                f"<b>Lat/Lon:</b> {geo.latitude:.4f}, {geo.longitude:.4f}",
-            ])
+            self._lookup_result = "<br>".join(
+                [
+                    f"<b>Country:</b> {geo.locale.region}",
+                    f"<b>TZ:</b> {geo.timezone}",
+                    f"<b>Lat/Lon:</b> {geo.latitude:.4f}, {geo.longitude:.4f}",
+                ]
+            )
             self._lookup_ok = True
         except Exception as e:
             self._lookup_result = str(e)
@@ -834,8 +871,9 @@ class Backend(QObject):
             if MMDB_DIR.exists():
                 for repo in repos:
                     nm = repo.get('name', '').lower()
-                    if (MMDB_DIR / f"{nm}-combined.mmdb").exists() or \
-                       (MMDB_DIR / f"{nm}-ipv4.mmdb").exists():
+                    if (MMDB_DIR / f"{nm}-combined.mmdb").exists() or (
+                        MMDB_DIR / f"{nm}-ipv4.mmdb"
+                    ).exists():
                         self._geoip_downloaded.append(repo.get('name', ''))
 
             config = load_geoip_config()
@@ -852,9 +890,7 @@ class Backend(QObject):
                     if ipv6.exists():
                         size += ipv6.stat().st_size
                 self._geoip_size = f"{size / (1024 * 1024):.1f} MB"
-                self._geoip_mtime = datetime.fromtimestamp(stat.st_mtime).strftime(
-                    '%Y-%m-%d %H:%M'
-                )
+                self._geoip_mtime = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M')
         except Exception:
             pass
 
@@ -898,24 +934,33 @@ class Backend(QObject):
                 continue
 
             expanded = self._sections.get(section, True)
-            items.append(VersionItem(
-                section.capitalize(), is_header=True,
-                is_prerelease=is_prerelease, section=section, expanded=expanded,
-            ))
+            items.append(
+                VersionItem(
+                    section.capitalize(),
+                    is_header=True,
+                    is_prerelease=is_prerelease,
+                    section=section,
+                    expanded=expanded,
+                )
+            )
 
             if expanded:
                 for v in version_list:
                     inst = installed.get(v.version.build)
                     if self._installed_only and not inst:
                         continue
-                    items.append(VersionItem(
-                        f"v{v.version.version}", v.version.build,
-                        is_prerelease=is_prerelease,
-                        is_active=(active == v.version.build),
-                        is_pinned=(pinned == v.version.full_string if pinned else False),
-                        is_installed=bool(inst),
-                        version_data=v, installed_data=inst,
-                    ))
+                    items.append(
+                        VersionItem(
+                            f"v{v.version.version}",
+                            v.version.build,
+                            is_prerelease=is_prerelease,
+                            is_active=(active == v.version.build),
+                            is_pinned=(pinned == v.version.full_string if pinned else False),
+                            is_installed=bool(inst),
+                            version_data=v,
+                            installed_data=inst,
+                        )
+                    )
 
         self._version_model.set_items(items)
         self.selectionChanged.emit()
