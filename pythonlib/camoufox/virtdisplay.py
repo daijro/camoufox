@@ -19,32 +19,46 @@ class VirtualDisplay:
     A minimal virtual display implementation for Linux.
     """
 
-    def __init__(self, debug: Optional[bool] = False) -> None:
+    _DEFAULT_SCREEN = "1920x1080x24"
+
+    def __init__(
+        self,
+        debug: Optional[bool] = False,
+        screen: Optional[str] = None,
+    ) -> None:
         """
         Constructor for the VirtualDisplay class (singleton object).
+
+        Parameters:
+            debug: Print debug information.
+            screen: Xvfb screen size in WIDTHxHEIGHTxDEPTH format.
+                Defaults to '1920x1080x24'.
         """
         self.debug = debug
+        self.screen = screen or self._DEFAULT_SCREEN
         self.proc: Optional[subprocess.Popen] = None
         self._display: Optional[int] = None
         self._lock = Lock()
 
-    xvfb_args = (
-        # fmt: off
-        "-screen", "0", "1x1x24",
-        "-ac",
-        "-nolisten", "tcp",
-        "-extension", "RENDER",
-        "+extension", "GLX",
-        "-extension", "COMPOSITE",
-        "-extension", "XVideo",
-        "-extension", "XVideo-MotionCompensation",
-        "-extension", "XINERAMA",
-        "-shmem",
-        "-fp", "built-ins",
-        "-nocursor",
-        "-br",
-        # fmt: on
-    )
+    @property
+    def xvfb_args(self) -> tuple:
+        return (
+            # fmt: off
+            "-screen", "0", self.screen,
+            "-ac",
+            "-nolisten", "tcp",
+            "-extension", "RENDER",
+            "+extension", "GLX",
+            "-extension", "COMPOSITE",
+            "-extension", "XVideo",
+            "-extension", "XVideo-MotionCompensation",
+            "-extension", "XINERAMA",
+            "-shmem",
+            "-fp", "built-ins",
+            "-nocursor",
+            "-br",
+            # fmt: on
+        )
 
     @property
     def xvfb_path(self) -> str:

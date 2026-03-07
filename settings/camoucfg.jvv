@@ -25,12 +25,9 @@
     "timezone": "str[/^[\\w_]+/[\\w_]+$/]",
 
     "locale:all": "str",
-    "headers.Accept-Language": "str",
     "navigator.language": "str",
     "navigator.languages": "array[str]",
-    
-    "headers.User-Agent": "str",
-    "headers.Accept-Encoding": "str",
+
     "navigator.doNotTrack": "str[0, 1, unspecified]",
     "navigator.hardwareConcurrency": "int[>0]",
     "navigator.maxTouchPoints": "int[>=0]",

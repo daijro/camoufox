@@ -1,11 +1,11 @@
-diff --git a/toolkit/components/extensions/Extension.jsm b/toolkit/components/extensions/Extension.jsm
-index 7281518..322dc09 100644
+diff --git a/toolkit/components/extensions/Extension.sys.mjs b/toolkit/components/extensions/Extension.sys.mjs
+index ea27b4d41a..7f608512bd 100644
 --- a/toolkit/components/extensions/Extension.sys.mjs
 +++ b/toolkit/components/extensions/Extension.sys.mjs
-@@ -3286,6 +3286,14 @@ class Extension extends ExtensionData {
-       this.permissions.add(PRIVATE_ALLOWED_PERMISSION);
+@@ -4305,6 +4305,14 @@ export class Extension extends ExtensionData {
+       }
      }
- 
+
 +    // Allow all addons in private mode.
 +    lazy.ExtensionPermissions.add(this.id, {
 +	   permissions: [PRIVATE_ALLOWED_PERMISSION],

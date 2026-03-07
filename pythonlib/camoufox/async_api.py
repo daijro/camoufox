@@ -78,7 +78,12 @@ async def AsyncNewBrowser(
             All other keyword arugments passed to `launch_options()`.
     """
     if headless == 'virtual':
-        virtual_display = VirtualDisplay(debug=debug)
+        # Use window dimensions for Xvfb screen size if provided
+        screen_size = None
+        window = kwargs.get('window')
+        if window:
+            screen_size = f"{window[0]}x{window[1]}x24"
+        virtual_display = VirtualDisplay(debug=debug, screen=screen_size)
         kwargs['virtual_display'] = virtual_display.get()
         headless = False
     else:

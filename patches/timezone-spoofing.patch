@@ -24,25 +24,17 @@ index fb4c0657ba..1b18d87681 100644
  #include "unicode/uenum.h"
  #if MOZ_INTL_USE_ICU_CPP_TIMEZONE
  #  include "unicode/basictz.h"
-@@ -21,7 +22,21 @@ Result<UniquePtr<TimeZone>, ICUError> TimeZone::TryCreate(
+@@ -21,7 +22,14 @@ Result<UniquePtr<TimeZone>, ICUError> TimeZone::TryCreate(
      Maybe<Span<const char>> aTimeZoneOverride) {
    const char* zoneID = nullptr;
    int32_t zoneIDLen = 0;
 -  if (aTimeZoneOverride) {
 +
++  std::string camouTimeZone;
 +  if (auto value = MaskConfig::GetString("timezone")) {
-+    std::string camouTimeZone = value.value();
-+
-+    // Because we don't have access to NS_ConvertUTF8toUTF16 here,
-+    // convert UTF-8 to UTF-16 using ICU's UnicodeString
-+    icu::UnicodeString uniStr = icu::UnicodeString::fromUTF8(camouTimeZone);
-+
-+    if (uniStr.isBogus()) {
-+      return Err(ICUError::InternalError);
-+    }
-+
-+    zoneIDLen = uniStr.length();
-+    zoneID = reinterpret_cast<const char*>(uniStr.getBuffer());
++    camouTimeZone = value.value();
++    zoneIDLen = static_cast<int32_t>(camouTimeZone.length());
++    zoneID = camouTimeZone.c_str();
 +  } else if (aTimeZoneOverride) {
      zoneIDLen = static_cast<int32_t>(aTimeZoneOverride->Length());
      zoneID = aTimeZoneOverride->Elements();
