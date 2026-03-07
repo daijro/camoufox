@@ -755,8 +755,8 @@ index 4601fc3f17..78c2f1116c 100644
 @@ -2127,11 +2141,12 @@ class gfxFont {
      PLDHashNumber mHashKey;
      bool mTextIs8Bit;
-     RoundingFlags mRounding;
 +    uint32_t mUserContextId;
+     RoundingFlags mRounding;
 
      WordCacheKey(const uint8_t* aText, uint32_t aLength, uint32_t aStringHash,
                   Script aScriptCode, nsAtom* aLanguage,
