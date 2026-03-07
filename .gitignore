@@ -37,6 +37,8 @@ venv/
 __pycache__/
 *.pyc
 *.mmdb
+pythonlib-dev/
+run-pw-dev.py
 
 # Closed source patches
 private
@@ -47,3 +49,5 @@ closedsrc
 bundle
 *.pem
 .DS_store
+
+settings/

@@ -4,7 +4,10 @@ from multiprocessing import Lock
 from typing import List, Optional
 
 from .exceptions import InvalidAddonPath
-from .pkgman import get_path, unzip, webdl
+from .pkgman import INSTALL_DIR, unzip, webdl
+
+# Addons are stored in a shared folder, not per-browser version
+ADDONS_DIR = INSTALL_DIR / "addons"
 
 
 class DefaultAddons(Enum):
@@ -55,9 +58,9 @@ def download_and_extract(url: str, extract_path: str, name: str) -> None:
 
 def get_addon_path(addon_name: str) -> str:
     """
-    Returns a path to the addon
+    Returns a path to the addon in the shared addons folder.
     """
-    return get_path(os.path.join("addons", addon_name))
+    return str(ADDONS_DIR / addon_name)
 
 
 def maybe_download_addons(
