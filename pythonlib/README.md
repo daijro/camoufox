@@ -81,7 +81,6 @@ camoufox gui
 
 https://github.com/user-attachments/assets/992b1830-6b21-4024-9165-728854df1473
 
-
 <details>
 <summary>See help message</summary>
 
@@ -90,32 +89,32 @@ $ python -m camoufox --help
 
  Usage: python -m camoufox [OPTIONS] COMMAND [ARGS]...
 
-╭─ Options ─────────────────────────────────────────────────────────────────────────╮
-│ --help  Show this message and exit.                                               │
-╰───────────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ──────────────────────────────────────────────────────────────────────────────────╮
-│ active      Print the current active version                                                 │
-│ fetch       Install the active version, or a specific version.                               │
-│ gui         Launch the Camoufox Manager GUI (requires PySide6)                               │
-│ list        List Camoufox versions                                                           │
-│ path        Print the install directory path                                                 │
-│ remove      Remove Camoufox data directory, or an installed browser version                  │
-│             Or, remove a specific version:                                                   │
-│                 Select a version:     camoufox remove --select                               │
-│                 Remove a version:     camoufox remove official/stable/134.0.2-beta.20        │
-│ server      Launch a Playwright server                                                       │
-│ set         Interactive selector for versions and settings                                   │
-│             Or, pass a specifier to activate directly:                                       │
-│                 Pin version:          camoufox set official/stable/134.0.2-beta.20            │
-│                 Auto-update channel:  camoufox set official/stable                           │
-│ sync        Sync available versions from remote repositories.                                │
-│ test        Open the Playwright inspector                                                    │
-│ version     Display version, package, browser, and storage info                              │
-╰─────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ─────────────────────────────────────────────────────────────────────────────╮
+│ --help  Show this message and exit.                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ────────────────────────────────────────────────────────────────────────────╮
+│ active    Print the current active version                                            │
+│ fetch     Install the active version, or a specific version                           │
+│ gui       Launch the Camoufox Manager GUI (requires PySide6)                          │
+│ list      List Camoufox versions                                                      │
+│ path      Print the install directory path                                            │
+│ remove    Remove downloaded data. By default, this removes everything.                │
+│           Pass --select to pick a browser version to remove.                          │
+│ server    Launch a Playwright server                                                  │
+│ set       Set the active Camoufox version to use & fetch.                             │
+│           By default, this opens an interactive selector for versions and settings.   │
+│           You can also pass a specifier to activate directly:                         │
+│           Pin version:                                                                │
+│               camoufox set official/stable/134.0.2-beta.20                            │
+│           Automatically find latest in a channel source:                              │
+│               camoufox set official/stable                                            │
+│ sync      Sync available versions from remote repositories                            │
+│ test      Open the Playwright inspector                                               │
+│ version   Display version, package, browser, and storage info                         │
+╰───────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 </details>
-
 
 ### `sync`
 
@@ -253,7 +252,7 @@ Python Packages
   Playwright                  v1.57.1.dev0+g732639b35.d20251217
 Browser
   Active                      official/stable/135.0.1-beta.24
-  Browser                     v135.0.1-beta.24
+  Current browser             v135.0.1-beta.24
   Installed                   Yes
   Latest in official/stable?  Yes
   Last Sync                   2026-03-07 00:23

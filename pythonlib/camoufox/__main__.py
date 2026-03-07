@@ -226,7 +226,7 @@ def cli() -> None:
 )
 def sync(spoof_os, spoof_arch):
     """
-    Sync available versions from remote repositories.
+    Sync available versions from remote repositories
     """
     if spoof_os == "auto":
         spoof_os = None
@@ -239,7 +239,7 @@ def sync(spoof_os, spoof_arch):
 @click.argument("version", default=None, required=False)
 def fetch(version):
     """
-    Install the active version, or a specific version.
+    Install the active version, or a specific version
 
     \b
     Examples:
@@ -343,8 +343,6 @@ def _set_channel(repo_name: str, channel_type: str):
     config = load_config()
     config["channel"] = f"{repo_name}/{channel_type}"
     config.pop("pinned", None)
-    save_config(config)
-    click.secho(f"Channel: {repo_name.lower()}/{channel_type}", fg="cyan", bold=True)
 
     # Check if latest for this channel is already installed
     is_pre = channel_type == "prerelease"
@@ -358,11 +356,18 @@ def _set_channel(repo_name: str, channel_type: str):
             latest_build = candidates[0]["build"]
             for inst in list_installed():
                 if inst.version.build == latest_build and inst.repo_name == repo_name.lower():
-                    set_active(inst.relative_path)
+                    config["active_version"] = inst.relative_path
+                    save_config(config)
+                    click.secho(
+                        f"Channel: {repo_name.lower()}/{channel_type}", fg="cyan", bold=True
+                    )
                     click.secho(f"Using latest: {inst.channel_path} (installed)", fg="green")
                     return
         break
 
+    config.pop("active_version", None)
+    save_config(config)
+    click.secho(f"Channel: {repo_name.lower()}/{channel_type}", fg="cyan", bold=True)
     click.secho("Run 'camoufox fetch' to install latest.", fg="yellow")
 
 
@@ -373,13 +378,15 @@ def _set_pinned(repo_name: str, channel_type: str, ver_data: dict, inst):
     config = load_config()
     config["channel"] = f"{repo_name}/{channel_type}"
     config["pinned"] = f"{ver_data['version']}-{ver_data['build']}"
-    save_config(config)
     ver_str = f"{ver_data['version']}-{ver_data['build']}"
     display = f"{repo_name.lower()}/{channel_type}/{ver_str}"
     if inst:
-        set_active(inst.relative_path)
+        config["active_version"] = inst.relative_path
+        save_config(config)
         click.secho(f"Pinned: {display} (installed)", fg="green")
     else:
+        config.pop("active_version", None)
+        save_config(config)
         click.secho(f"Pinned: {display}", fg="cyan", bold=True)
         click.secho("Run 'camoufox fetch' to install.", fg="yellow")
 
@@ -390,10 +397,13 @@ def _set_pinned(repo_name: str, channel_type: str, ver_data: dict, inst):
 def set_cmd(specifier, geoip):
     """
     \b
-    Interactive selector for versions and settings
-    Or, pass a specifier to activate directly:
-        Pin version:          camoufox set official/stable/134.0.2-beta.20
-        Auto-update channel:  camoufox set official/stable
+    Set the active Camoufox version to use & fetch.
+    By default, this opens an interactive selector for versions and settings.
+    You can also pass a specifier to activate directly:
+    Pin version:
+        camoufox set official/stable/134.0.2-beta.20
+    Automatically find latest in a channel source:
+        camoufox set official/stable
     """
     if geoip:
         _select_geoip_source()
@@ -704,10 +714,8 @@ def _list_all(_show_paths: bool):
 def remove(version_path, select, yes):
     """
     \b
-    Remove Camoufox data directory, or an installed browser version
-    Or, remove a specific version:
-        Select a version:     camoufox remove --select
-        Remove a version:     camoufox remove official/stable/134.0.2-beta.20
+    Remove downloaded data. By default, this removes everything.
+    Pass --select to pick a browser version to remove.
     """
     import shutil
 
@@ -862,9 +870,9 @@ class VersionInfo:
 
         # Browser version
         if active_v:
-            self._row("Browser", f"v{active_v.version.full_string}")
+            self._row("Current browser", f"v{active_v.version.full_string}")
         else:
-            self._row("Browser", "—", style="dim")
+            self._row("Current browser", "Not installed", style="dim")
 
         # Is installed?
         if active_v:
@@ -927,7 +935,7 @@ class VersionInfo:
 
     def _dir_size(self, path) -> str:
         if not path.exists():
-            return "—"
+            return "Nothing here"
         total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
         for unit in ("B", "KB", "MB"):
             if total < 1024:
@@ -968,21 +976,28 @@ def active_cmd():
     """
     Print the current active version
     """
-    installed = list_installed()
-    for v in installed:
-        if v.is_active:
-            click.echo(v.channel_path)
-            return
-
     config = load_config()
     pinned = config.get("pinned")
     channel = config.get("channel") or get_default_channel()
+
     if pinned:
-        click.echo(f"{channel.lower()}/{pinned} ", nl=False)
-        rprint("(not installed)", fg="yellow")
+        # Check if the pinned version is installed
+        display = f"{channel.lower()}/{pinned}"
+        target = _find_installed(display)
+        if target:
+            click.echo(target.channel_path)
+        else:
+            click.echo(f"{display} ", nl=False)
+            rprint("(not fetched)", fg="yellow")
     else:
+        # Using channel, so find active installed version
+        installed = list_installed()
+        for v in installed:
+            if v.is_active:
+                click.echo(v.channel_path)
+                return
         click.echo(f"{channel.lower()} ", nl=False)
-        rprint("(not installed)", fg="yellow")
+        rprint("(not fetched)", fg="yellow")
 
 
 @cli.command(name="path")

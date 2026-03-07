@@ -647,7 +647,15 @@ def installed_verstr() -> str:
 
     active = get_active_path()
     if active is None:
-        raise FileNotFoundError("No active version. Please run `camoufox fetch` to install.")
+        from .multiversion import get_default_channel, load_config
+
+        config = load_config()
+        pinned = config.get("pinned")
+        channel = config.get("channel") or get_default_channel()
+        active_display = f"{channel}/{pinned}" if pinned else channel
+        raise CamoufoxNotInstalled(
+            f"{active_display} is not installed. " f"Please run `camoufox fetch` to install."
+        )
     return Version.from_path(active).full_string
 
 
@@ -670,7 +678,18 @@ def camoufox_path(download_if_missing: bool = True) -> Path:
 
     if not os.path.exists(INSTALL_DIR) or not os.listdir(INSTALL_DIR):
         if not download_if_missing:
-            raise FileNotFoundError(f"Camoufox executable not found at {INSTALL_DIR}")
+            from .multiversion import load_config, get_default_channel
+
+            config = load_config()
+            pinned = config.get("pinned")
+            channel = config.get("channel") or get_default_channel()
+            if pinned:
+                active_display = f"{channel}/{pinned}"
+            else:
+                active_display = channel
+            raise CamoufoxNotInstalled(
+                f"{active_display} is not installed. " f"Please run `camoufox fetch` to install."
+            )
 
     elif os.path.exists(INSTALL_DIR) and Version.from_path().is_supported():
         return INSTALL_DIR

@@ -235,7 +235,8 @@ def list_installed() -> List[InstalledVersion]:
 
 def get_active_path() -> Optional[Path]:
     """
-    Get path to active version. Auto-selects newest if none set
+    Get path to active version. Returns None if no version is active.
+    Only auto-selects if no channel/pin was been set
     """
     config = load_config()
     active = config.get('active_version')
@@ -245,11 +246,13 @@ def get_active_path() -> Optional[Path]:
         if path.exists() and (path / 'version.json').exists():
             return path
 
-    installed = list_installed()
-    if installed:
-        config['active_version'] = installed[0].relative_path
-        save_config(config)
-        return installed[0].path
+    # Only auto-select if user didnt set a channel or pin
+    if not config.get('channel') and not config.get('pinned'):
+        installed = list_installed()
+        if installed:
+            config['active_version'] = installed[0].relative_path
+            save_config(config)
+            return installed[0].path
 
     return None
 
