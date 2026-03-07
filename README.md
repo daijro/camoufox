@@ -20,7 +20,7 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 
 > [!NOTE]
 > Browser development is active at [github.com/CloverLabsAI/camoufox](https://github.com/CloverLabsAI/camoufox). ([See activity](https://github.com/CloverLabsAI/camoufox/activity))<br>
-> This repo is being used for Python library updates and mirroring checkpoint browser releases.
+> This repo hosts Python library updates and mirrors upstream browser releases.
 
 <hr width=50>
 
