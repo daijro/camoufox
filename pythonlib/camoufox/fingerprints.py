@@ -1,7 +1,9 @@
+import json
 import re
 from dataclasses import asdict, dataclass
-from random import randrange
-from typing import Any, Dict, Optional, Tuple
+from pathlib import Path
+from random import choice, randint, randrange
+from typing import Any, Dict, List, Optional, Tuple
 
 from browserforge.fingerprints import (
     Fingerprint,
@@ -15,6 +17,123 @@ from camoufox.pkgman import load_yaml
 BROWSERFORGE_DATA = load_yaml('browserforge.yml')
 
 FP_GENERATOR = FingerprintGenerator(browser='firefox', os=('linux', 'macos', 'windows'))
+
+# Bundled real fingerprint presets
+PRESETS_FILE = Path(__file__).parent / 'fingerprint-presets.json'
+_PRESETS_CACHE: Optional[Dict] = None
+
+
+def load_presets() -> Optional[Dict]:
+    """Load bundled fingerprint presets from JSON file."""
+    global _PRESETS_CACHE
+    if _PRESETS_CACHE is not None:
+        return _PRESETS_CACHE
+    if not PRESETS_FILE.exists():
+        return None
+    with open(PRESETS_FILE) as f:
+        _PRESETS_CACHE = json.load(f)
+    return _PRESETS_CACHE
+
+
+# Map OS names to preset keys
+_OS_TO_PRESET_KEY = {
+    'windows': 'windows',
+    'macos': 'macos',
+    'linux': 'linux',
+    'win': 'windows',
+    'mac': 'macos',
+    'lin': 'linux',
+}
+
+
+def get_random_preset(
+    os: Optional[str] = None,
+) -> Optional[Dict]:
+    """
+    Get a random preset for the given OS.
+    Returns None if no presets are available.
+    """
+    presets = load_presets()
+    if not presets:
+        return None
+
+    all_os_keys = ['macos', 'windows', 'linux']
+
+    if os:
+        # Normalize OS name
+        if isinstance(os, (list, tuple)):
+            os_keys = [_OS_TO_PRESET_KEY.get(o, o) for o in os]
+        else:
+            os_keys = [_OS_TO_PRESET_KEY.get(os, os)]
+    else:
+        os_keys = all_os_keys
+
+    # Collect all matching presets
+    candidates: List[Dict] = []
+    for key in os_keys:
+        candidates.extend(presets.get('presets', {}).get(key, []))
+
+    if not candidates:
+        return None
+
+    return choice(candidates)  # nosec
+
+
+def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Convert a real fingerprint preset to CAMOU_CONFIG format.
+    """
+    config: Dict[str, Any] = {}
+
+    nav = preset.get('navigator', {})
+    if nav.get('userAgent'):
+        ua = nav['userAgent']
+        # Replace Firefox version in UA if ff_version is provided
+        if ff_version:
+            ua = re.sub(r'Firefox/\d+\.0', f'Firefox/{ff_version}.0', ua)
+            ua = re.sub(r'rv:\d+\.0', f'rv:{ff_version}.0', ua)
+        config['navigator.userAgent'] = ua
+    if nav.get('platform'):
+        config['navigator.platform'] = nav['platform']
+    if nav.get('language'):
+        config['navigator.language'] = nav['language']
+    if nav.get('languages'):
+        config['navigator.languages'] = nav['languages']
+    if nav.get('hardwareConcurrency'):
+        config['navigator.hardwareConcurrency'] = nav['hardwareConcurrency']
+    if 'maxTouchPoints' in nav:
+        config['navigator.maxTouchPoints'] = nav['maxTouchPoints']
+
+    screen = preset.get('screen', {})
+    if screen.get('width'):
+        config['screen.width'] = screen['width']
+    if screen.get('height'):
+        config['screen.height'] = screen['height']
+    if screen.get('colorDepth'):
+        config['screen.colorDepth'] = screen['colorDepth']
+        config['screen.pixelDepth'] = screen['colorDepth']
+    if screen.get('availWidth'):
+        config['screen.availWidth'] = screen['availWidth']
+    if screen.get('availHeight'):
+        config['screen.availHeight'] = screen['availHeight']
+
+    webgl = preset.get('webgl', {})
+    if webgl.get('unmaskedVendor'):
+        config['webGl:vendor'] = webgl['unmaskedVendor']
+    if webgl.get('unmaskedRenderer'):
+        config['webGl:renderer'] = webgl['unmaskedRenderer']
+
+    # Generate unique random seeds per launch
+    config['fonts:spacing_seed'] = randint(0, 1_073_741_823)  # nosec
+    config['audio:seed'] = randint(0, 1_073_741_823)  # nosec
+    config['canvas:seed'] = randint(0, 1_073_741_823)  # nosec
+
+    if preset.get('fonts'):
+        config['fonts'] = preset['fonts']
+    if preset.get('speechVoices'):
+        config['voices'] = preset['speechVoices']
+
+    return config
 
 
 @dataclass

@@ -21,7 +21,7 @@ from .exceptions import (
     NonFirefoxFingerprint,
     UnknownProperty,
 )
-from .fingerprints import from_browserforge, generate_fingerprint
+from .fingerprints import from_browserforge, from_preset, generate_fingerprint, get_random_preset
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locale import geoip_allowed, get_geolocation, handle_locales
 from .pkgman import OS_NAME, get_path, installed_verstr, launch_path
@@ -501,22 +501,31 @@ def launch_options(
         ff_version_str = installed_verstr().split('.', 1)[0]
 
     # Generate a fingerprint
+    _used_preset = False
     if fingerprint is None:
-        fingerprint = generate_fingerprint(
-            screen=screen or get_screen_cons(headless or 'DISPLAY' in env),
-            window=window,
-            os=os,
-        )
+        # Try real fingerprint presets first
+        preset = get_random_preset(os=os)
+        if preset:
+            merge_into(config, from_preset(preset, ff_version_str))
+            _used_preset = True
+        else:
+            # Fall back to BrowserForge synthetic generation
+            fingerprint = generate_fingerprint(
+                screen=screen or get_screen_cons(headless or 'DISPLAY' in env),
+                window=window,
+                os=os,
+            )
     else:
         # Or use the one passed by the user
         if not i_know_what_im_doing:
             check_custom_fingerprint(fingerprint)
 
-    # Inject the fingerprint into the config
-    merge_into(
-        config,
-        from_browserforge(fingerprint, ff_version_str),
-    )
+    if not _used_preset and fingerprint is not None:
+        # Inject the BrowserForge fingerprint into the config
+        merge_into(
+            config,
+            from_browserforge(fingerprint, ff_version_str),
+        )
 
     target_os = get_target_os(config)
 
@@ -538,8 +547,10 @@ def launch_options(
     else:
         update_fonts(config, target_os)
 
-    # Set a fixed font spacing seed
+    # Set random seeds for fingerprint noise (per launch)
     set_into(config, 'fonts:spacing_seed', randint(0, 1_073_741_823))  # nosec
+    set_into(config, 'audio:seed', randint(0, 1_073_741_823))  # nosec
+    set_into(config, 'canvas:seed', randint(0, 1_073_741_823))  # nosec
 
     # Set geolocation
     if geoip:
@@ -604,6 +615,9 @@ def launch_options(
         # If the user has provided a specific WebGL vendor/renderer pair, use it
         if webgl_config:
             webgl_fp = sample_webgl(target_os, *webgl_config)
+        elif config.get('webGl:vendor') and config.get('webGl:renderer'):
+            # Preset already set vendor/renderer — sample matching WebGL params
+            webgl_fp = sample_webgl(target_os, config['webGl:vendor'], config['webGl:renderer'])
         else:
             webgl_fp = sample_webgl(target_os)
         enable_webgl2 = webgl_fp.pop('webGl2Enabled')
