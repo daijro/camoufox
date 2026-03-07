@@ -145,10 +145,10 @@ Interactive selector:
 You can also pass a specifier to pin a specific version or choose a channel to follow directly. This will pull the latest stable version from the official repo on `camoufox fetch`.
 
 ```bash
-> camoufox set official/stable  # default setting
+> camoufox set official/stable  # Default setting
 ```
 
-Follow latest prerelease version from the official repo:
+Follow latest prerelease version from the official repo, if applicable:
 
 ```bash
 > camoufox set official/prerelease
@@ -167,7 +167,7 @@ Pin a specific version:
 Prints the current active version string:
 
 ```bash
-> camoufox active
+> camoufox active  # Default channel is active
 official/stable
 ```
 
@@ -176,7 +176,7 @@ official/stable
 Pinned: coryking/stable/142.0.1-fork.26
 Run 'camoufox fetch' to install.
 
-> camoufox active
+> camoufox active  # A specific version is pinned
 coryking/stable/142.0.1-fork.26 (not installed)
 ```
 
@@ -184,11 +184,23 @@ coryking/stable/142.0.1-fork.26 (not installed)
 
 ### `fetch`
 
-Install the active version, or a specific version. This will also automatically sync repository assets.
+Install the latest version from the active channel. By default, this is official/stable. This will also automatically sync repository assets.
 
 ```bash
-> camoufox fetch                          # install active channel's latest
-> camoufox fetch official/135.0-beta.25   # install a specific version
+> camoufox fetch  # Install the latest in the channel
+```
+
+To download the latest from a different channel, or pin a version:
+
+```bash
+> camoufox set coryking/stable
+> camoufox fetch  # Will download the latest release from CoryKing's repo for now on
+```
+
+Or pass in the identifier to download directly without activating it:
+
+```bash
+> camoufox fetch official/stable/135.0-beta.25   # Install a specific version
 ```
 
 <hr width=50>
@@ -217,7 +229,7 @@ By default, removes the entire camoufox data directory.
 Remove a specific version:
 
 ```bash
-> camoufox remove official/134.0.2-beta.20
+> camoufox remove official/stable/134.0.2-beta.20
 ```
 
 Interactively select a version to remove:
@@ -234,10 +246,26 @@ Display the Python package version, active browser version, channel, and update 
 
 ```bash
 > camoufox version
-Pip package:       v0.5.0
-Channel:           official/prerelease (Version pinned)
-Version:           v146.0.1-beta.25 
-Last repo sync:    2026-02-07 04:36
+Python Packages
+  Camoufox                    v0.5.0
+  Browserforge                v1.2.4
+  Apify Fingerprints          v0.10.0
+  Playwright                  v1.57.1.dev0+g732639b35.d20251217
+Browser
+  Active                      official/stable/135.0.1-beta.24
+  Browser                     v135.0.1-beta.24
+  Installed                   Yes
+  Latest in official/stable?  Yes
+  Last Sync                   2026-03-07 00:23
+GeoIP
+  Database                    MaxMind GeoLite2
+  Updated                     2026-03-07 00:24
+Storage
+  Install path                /home/name/.cache/camoufox
+  Browser(s) directory size   1.2 GB
+  GeoIP database size         40.7 MB
+  Config file                 /home/name/.cache/camoufox/config.json
+  Repo cache                  /home/name/.cache/camoufox/repo_cache.json
 ```
 
 <hr width=50>
@@ -255,7 +283,7 @@ Print the install directory path.
 
 ### `test`
 
-Open the Playwright inspector for debugging.
+Open Camoufox with the Playwright inspector for debugging.
 
 ```bash
 > camoufox test
