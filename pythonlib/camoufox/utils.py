@@ -22,11 +22,12 @@ from .exceptions import (
     UnknownProperty,
 )
 from .fingerprints import from_browserforge, from_preset, generate_fingerprint, get_random_preset
+from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
-from .locale import geoip_allowed, get_geolocation, handle_locales
+from .locales import handle_locales
 from .pkgman import OS_NAME, get_path, installed_verstr, launch_path
 from .virtdisplay import VirtualDisplay
-from .warnings import LeakWarning
+from ._warnings import LeakWarning
 from .webgl import sample_webgl
 
 ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
@@ -68,8 +69,23 @@ def get_env_vars(
             sys.exit(1)
 
     if OS_NAME == 'lin':
-        fontconfig_path = get_path(os.path.join("fontconfig", user_agent_os))
-        env_vars['FONTCONFIG_PATH'] = fontconfig_path
+        # https://github.com/coryking/camoufox/commit/f21eeb2850a74cc104fb57e17e0a2fa27b7a2a28
+        # Thanks @coryking
+        # the user_agent_os is either 'lin', 'mac', or 'win' but our fontconfigs directory is 'linux', 'macos', or 'windows'
+        directory_map = {
+            'lin': 'linux',
+            'mac': 'macos',
+            'win': 'windows',
+        }
+        os_dir = directory_map.get(user_agent_os, user_agent_os)
+        fontconfig_path = get_path(os.path.join("fontconfigs", os_dir))
+
+        # assert that fonts.conf exists in the directory
+        if not os.path.exists(os.path.join(fontconfig_path, "fonts.conf")):
+            # puke violently if fonts.conf doesn't exist!!
+            raise FileNotFoundError(
+                f"fonts.conf not found in {fontconfig_path}!  Something ain't right with your camoufox bundle."
+            )
 
     return env_vars
 
@@ -302,9 +318,13 @@ async def async_attach_vd(
     _close = browser.close
 
     async def new_close(*args: Any, **kwargs: Any):
-        await _close(*args, **kwargs)
-        if virtual_display:
-            virtual_display.kill()
+        try:
+            await _close(*args, **kwargs)
+        except Exception:
+            raise
+        finally:
+            if virtual_display:
+                virtual_display.kill()
 
     browser.close = new_close
     browser._virtual_display = virtual_display
@@ -324,9 +344,13 @@ def sync_attach_vd(
     _close = browser.close
 
     def new_close(*args: Any, **kwargs: Any):
-        _close(*args, **kwargs)
-        if virtual_display:
-            virtual_display.kill()
+        try:
+            _close(*args, **kwargs)
+        except Exception:
+            raise
+        finally:
+            if virtual_display:
+                virtual_display.kill()
 
     browser.close = new_close
     browser._virtual_display = virtual_display
@@ -344,6 +368,7 @@ def launch_options(
     disable_coop: Optional[bool] = None,
     webgl_config: Optional[Tuple[str, str]] = None,
     geoip: Optional[Union[str, bool]] = None,
+    geoip_db: Optional[str] = None,
     humanize: Optional[Union[bool, float]] = None,
     locale: Optional[Union[str, List[str]]] = None,
     addons: Optional[List[str]] = None,
@@ -357,6 +382,7 @@ def launch_options(
     headless: Optional[bool] = None,
     main_world_eval: Optional[bool] = None,
     executable_path: Optional[Union[str, Path]] = None,
+    browser: Optional[str] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
     proxy: Optional[Dict[str, str]] = None,
     enable_cache: Optional[bool] = None,
@@ -390,6 +416,9 @@ def launch_options(
         geoip (Optional[Union[str, bool]]):
             Calculate longitude, latitude, timezone, country, & locale based on the IP address.
             Pass the target IP address to use, or `True` to find the IP address automatically.
+        geoip_db (Optional[str]):
+            Name of the GeoIP database to use (e.g., "MaxMind").
+            If not specified, uses the configured default.
         humanize (Optional[Union[bool, float]]):
             Humanize the cursor movement.
             Takes either `True`, or the MAX duration in seconds of the cursor movement.
@@ -426,6 +455,12 @@ def launch_options(
             To use this, prepend "mw:" to the script: page.evaluate("mw:" + script).
         executable_path (Optional[Union[str, Path]]):
             Custom Camoufox browser executable path.
+        browser (Optional[str]):
+            Select a specific installed browser version. Can be:
+            - Repo/build like "official/beta.20"
+            - Build alone like "beta.20"
+            - Full version like "134.0.2-beta.20"
+            If not specified, uses the active version.
         firefox_user_prefs (Optional[Dict[str, Any]]):
             Firefox user preferences to set.
         proxy (Optional[Dict[str, str]]):
@@ -571,7 +606,7 @@ def launch_options(
             elif valid_ipv6(geoip):
                 set_into(config, 'webrtc:ipv6', geoip)
 
-        geolocation = get_geolocation(geoip)
+        geolocation = get_geolocation(geoip, geoip_db=geoip_db)
         config.update(geolocation.as_config())
 
     # Raise a warning when a proxy is being used without spoofing geolocation.
@@ -633,15 +668,6 @@ def launch_options(
             },
         )
 
-    # Canvas anti-fingerprinting
-    merge_into(
-        config,
-        {
-            'canvas:aaOffset': randint(-50, 50),  # nosec
-            'canvas:aaCapOffset': True,
-        },
-    )
-
     # Cache previous pages, requests, etc (uses more memory)
     if enable_cache:
         merge_into(firefox_user_prefs, CACHE_PREFS)
@@ -662,15 +688,31 @@ def launch_options(
     # Prepare the executable path
     if executable_path:
         executable_path = str(executable_path)
+    elif browser:
+        # Select a specific installed browser version
+        from .multiversion import find_installed_version
+
+        browser_path = find_installed_version(browser)
+        if not browser_path:
+            raise ValueError(
+                f"Browser version '{browser}' not found. Run `camoufox list` to see installed versions."
+            )
+        executable_path = launch_path(browser_path)
     else:
         executable_path = launch_path()
 
-    return {
+    result = {
         "executable_path": executable_path,
         "args": args,
         "env": env_vars,
         "firefox_user_prefs": firefox_user_prefs,
-        "proxy": proxy,
         "headless": headless,
         **(launch_options if launch_options is not None else {}),
     }
+    # Only include proxy if it's not None (Playwright 1.55+ validates this)
+    # https://github.com/coryking/camoufox/commit/1336e8e509e8c12a896a09d9ee51f131f739f106
+    # Thanks @coryking
+    if proxy is not None:
+        result["proxy"] = proxy
+
+    return result

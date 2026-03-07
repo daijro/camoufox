@@ -37,6 +37,8 @@ venv/
 __pycache__/
 *.pyc
 *.mmdb
+pythonlib-dev/
+run-pw-dev.py
 
 # Closed source patches
 private
@@ -68,3 +70,4 @@ closedsrc
 /fonts/
 /gmp-clearkey/
 /windows-build/
+settings/
