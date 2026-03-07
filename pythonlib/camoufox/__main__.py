@@ -73,6 +73,8 @@ def _find_installed(specifier: str) -> Optional[InstalledVersion]:
     spec = specifier.lower()
     installed = list_installed()
 
+    parts = spec.split("/")
+
     for v in installed:
         if any(
             [
@@ -83,14 +85,20 @@ def _find_installed(specifier: str) -> Optional[InstalledVersion]:
             ]
         ):
             return v
+        # Match repo/version without channel for example official/134.0.2-beta.20
+        if len(parts) == 2:
+            repo, ver = parts
+            if v.repo_name == repo and v.version.full_string.lower() == ver:
+                return v
 
-    parts = spec.split("/")
+    # Match repo/channel for example official/stable gets latest installed for that channel
     if len(parts) == 2:
         repo, ctype = parts
-        is_pre = ctype == "prerelease"
-        for v in installed:
-            if v.repo_name == repo and v.is_prerelease == is_pre:
-                return v
+        if ctype in ("stable", "prerelease"):
+            is_pre = ctype == "prerelease"
+            for v in installed:
+                if v.repo_name == repo and v.is_prerelease == is_pre:
+                    return v
 
     return None
 
@@ -251,14 +259,21 @@ def fetch(version):
     config = load_config()
 
     if version:
-        if "/" not in version:
+        parts = version.split("/")
+        if len(parts) == 3:
+            # official/stable/135.0.1-beta.24
+            repo_name = parts[0]
+            ver_str = parts[2].lstrip("v")
+        elif len(parts) == 2:
+            # official/135.0.1-beta.24
+            repo_name = parts[0]
+            ver_str = parts[1].lstrip("v")
+        else:
             rprint(
-                "Format: <repo>/<version>-<build> (e.g., official/135.0-beta.25)",
+                "Format: <repo>/<version> or <repo>/<channel>/<version>",
                 fg="red",
             )
             return
-        repo_name, ver_str = version.split("/", 1)
-        ver_str = ver_str.lstrip("v")
     elif config.get("pinned"):
         channel = config.get("channel", "")
         repo_name = channel.split("/")[0] if "/" in channel else channel
