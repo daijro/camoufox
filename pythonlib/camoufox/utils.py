@@ -583,9 +583,9 @@ def launch_options(
         update_fonts(config, target_os)
 
     # Set random seeds for fingerprint noise (per launch)
-    set_into(config, 'fonts:spacing_seed', randint(0, 1_073_741_823))  # nosec
-    set_into(config, 'audio:seed', randint(0, 1_073_741_823))  # nosec
-    set_into(config, 'canvas:seed', randint(0, 1_073_741_823))  # nosec
+    set_into(config, 'fonts:spacing_seed', randint(1, 4_294_967_295))  # nosec
+    set_into(config, 'audio:seed', randint(1, 4_294_967_295))  # nosec
+    set_into(config, 'canvas:seed', randint(1, 4_294_967_295))  # nosec
 
     # Set geolocation
     if geoip:

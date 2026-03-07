@@ -101,6 +101,17 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
         config['navigator.languages'] = nav['languages']
     if nav.get('hardwareConcurrency'):
         config['navigator.hardwareConcurrency'] = nav['hardwareConcurrency']
+    if nav.get('oscpu'):
+        config['navigator.oscpu'] = nav['oscpu']
+    elif nav.get('platform'):
+        # Derive oscpu from platform when not explicitly in the preset
+        plat = nav['platform']
+        if plat == 'MacIntel':
+            config['navigator.oscpu'] = 'Intel Mac OS X 10.15'
+        elif plat == 'Win32':
+            config['navigator.oscpu'] = 'Windows NT 10.0; Win64; x64'
+        elif 'Linux' in plat or 'linux' in plat:
+            config['navigator.oscpu'] = 'Linux x86_64'
     if 'maxTouchPoints' in nav:
         config['navigator.maxTouchPoints'] = nav['maxTouchPoints']
 
@@ -123,17 +134,179 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
     if webgl.get('unmaskedRenderer'):
         config['webGl:renderer'] = webgl['unmaskedRenderer']
 
-    # Generate unique random seeds per launch
-    config['fonts:spacing_seed'] = randint(0, 1_073_741_823)  # nosec
-    config['audio:seed'] = randint(0, 1_073_741_823)  # nosec
-    config['canvas:seed'] = randint(0, 1_073_741_823)  # nosec
+    # Generate unique random seeds per launch (1 to 2^32-1, excluding 0 which is a no-op in C++)
+    config['fonts:spacing_seed'] = randint(1, 4_294_967_295)  # nosec
+    config['audio:seed'] = randint(1, 4_294_967_295)  # nosec
+    config['canvas:seed'] = randint(1, 4_294_967_295)  # nosec
 
+    if preset.get('timezone'):
+        config['timezone'] = preset['timezone']
     if preset.get('fonts'):
         config['fonts'] = preset['fonts']
     if preset.get('speechVoices'):
         config['voices'] = preset['speechVoices']
 
     return config
+
+
+def _build_init_script(values: Dict[str, Any]) -> str:
+    """
+    Builds the JavaScript init script that calls per-context window.setXxx() functions.
+    These functions self-destruct after first call, so they must run via addInitScript.
+    """
+    import json as _json
+
+    lines = ['(function(v) {', '  var w = window;']
+
+    setters = [
+        ('fontSpacingSeed', 'setFontSpacingSeed', '{val}'),
+        ('audioFingerprintSeed', 'setAudioFingerprintSeed', '{val}'),
+        ('canvasSeed', 'setCanvasSeed', '{val}'),
+        ('navigatorPlatform', 'setNavigatorPlatform', '{val}'),
+        ('navigatorOscpu', 'setNavigatorOscpu', '{val}'),
+        ('navigatorUserAgent', 'setNavigatorUserAgent', '{val}'),
+        ('hardwareConcurrency', 'setNavigatorHardwareConcurrency', '{val}'),
+        ('webglVendor', 'setWebGLVendor', '{val}'),
+        ('webglRenderer', 'setWebGLRenderer', '{val}'),
+    ]
+
+    for key, fn_name, _template in setters:
+        val = values.get(key)
+        if val is not None:
+            js_val = _json.dumps(val)
+            lines.append(
+                f'  if (typeof w.{fn_name} === "function") w.{fn_name}({js_val});'
+            )
+
+    # Screen dimensions (requires width + height together)
+    sw = values.get('screenWidth')
+    sh = values.get('screenHeight')
+    if sw and sh:
+        lines.append(
+            f'  if (typeof w.setScreenDimensions === "function") w.setScreenDimensions({sw}, {sh});'
+        )
+        scd = values.get('screenColorDepth')
+        if scd:
+            lines.append(
+                f'  if (typeof w.setScreenColorDepth === "function") w.setScreenColorDepth({scd});'
+            )
+
+    # Timezone (always call to trigger self-destruct)
+    tz = values.get('timezone')
+    if tz:
+        lines.append(
+            f'  if (typeof w.setTimezone === "function") w.setTimezone({_json.dumps(tz)});'
+        )
+    else:
+        lines.append(
+            '  if (typeof w.setTimezone === "function") w.setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);'
+        )
+
+    # WebRTC IP
+    ip = values.get('webrtcIP')
+    if ip:
+        lines.append(
+            f'  if (typeof w.setWebRTCIPv4 === "function") w.setWebRTCIPv4({_json.dumps(ip)});'
+        )
+    else:
+        lines.append(
+            '  if (typeof w.setWebRTCIPv4 === "function") w.setWebRTCIPv4("");'
+        )
+
+    # Font list (comma-separated)
+    font_list = values.get('fontList')
+    if font_list and len(font_list) > 0:
+        joined = ','.join(font_list)
+        lines.append(
+            f'  if (typeof w.setFontList === "function") w.setFontList({_json.dumps(joined)});'
+        )
+
+    # Speech voices (comma-separated)
+    voices = values.get('speechVoices')
+    if voices and len(voices) > 0:
+        joined = ','.join(voices)
+        lines.append(
+            f'  if (typeof w.setSpeechVoices === "function") w.setSpeechVoices({_json.dumps(joined)});'
+        )
+
+    lines.append('})();')
+    return '\n'.join(lines)
+
+
+def generate_context_fingerprint(
+    preset: Optional[Dict] = None,
+    os: Optional[str] = None,
+    ff_version: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Generate fingerprint values for a single per-context identity.
+    Returns a dict with init_script (JS string) and context_options (Playwright options).
+
+    If no preset is provided, picks a random one from bundled presets.
+    Falls back to BrowserForge if no presets available.
+    """
+    if preset is None:
+        preset = get_random_preset(os=os)
+
+    if preset is None:
+        # No presets available - cannot generate per-context fingerprint without one
+        raise ValueError(
+            'No fingerprint presets available. '
+            'Ensure fingerprint-presets.json exists in the camoufox package.'
+        )
+
+    config = from_preset(preset, ff_version)
+
+    nav = preset.get('navigator', {})
+    screen = preset.get('screen', {})
+    webgl = preset.get('webgl', {})
+
+    # Build the values dict for the init script
+    init_values: Dict[str, Any] = {
+        'fontSpacingSeed': config.get('fonts:spacing_seed'),
+        'audioFingerprintSeed': config.get('audio:seed'),
+        'canvasSeed': config.get('canvas:seed'),
+        'navigatorPlatform': nav.get('platform'),
+        'navigatorOscpu': nav.get('oscpu'),
+        'navigatorUserAgent': config.get('navigator.userAgent'),
+        'hardwareConcurrency': nav.get('hardwareConcurrency'),
+        'webglVendor': webgl.get('unmaskedVendor'),
+        'webglRenderer': webgl.get('unmaskedRenderer'),
+        'screenWidth': screen.get('width'),
+        'screenHeight': screen.get('height'),
+        'screenColorDepth': screen.get('colorDepth'),
+        'timezone': preset.get('timezone'),
+        'fontList': preset.get('fonts'),
+        'speechVoices': preset.get('speechVoices'),
+    }
+
+    init_script = _build_init_script(init_values)
+
+    # Playwright context options that must be set at context creation
+    context_options: Dict[str, Any] = {}
+    ua = config.get('navigator.userAgent')
+    if ua:
+        context_options['user_agent'] = ua
+    if screen.get('width') and screen.get('height'):
+        context_options['viewport'] = {
+            'width': screen['width'],
+            'height': screen['height'],
+        }
+    if screen.get('devicePixelRatio'):
+        context_options['device_scale_factor'] = screen['devicePixelRatio']
+    lang = nav.get('language')
+    if lang:
+        context_options['locale'] = lang
+    tz = preset.get('timezone')
+    if tz:
+        context_options['timezone_id'] = tz
+
+    return {
+        'init_script': init_script,
+        'context_options': context_options,
+        'config': config,
+        'preset': preset,
+    }
 
 
 @dataclass

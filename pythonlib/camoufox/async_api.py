@@ -1,6 +1,6 @@
 import asyncio
 from functools import partial
-from typing import Any, Dict, Optional, Union, overload
+from typing import Any, Dict, List, Optional, Union, overload
 
 from playwright.async_api import (
     Browser,
@@ -12,6 +12,7 @@ from typing_extensions import Literal
 
 from camoufox.virtdisplay import VirtualDisplay
 
+from .fingerprints import generate_context_fingerprint
 from .utils import async_attach_vd, launch_options
 
 
@@ -98,3 +99,47 @@ async def AsyncNewBrowser(
     # Browser
     browser = await playwright.firefox.launch(**from_options)
     return await async_attach_vd(browser, virtual_display)
+
+
+async def AsyncNewContext(
+    browser: Browser,
+    *,
+    preset: Optional[Dict[str, Any]] = None,
+    os: Optional[str] = None,
+    ff_version: Optional[str] = None,
+    proxy: Optional[Dict[str, str]] = None,
+    geolocation: Optional[Dict[str, float]] = None,
+    **context_kwargs: Any,
+) -> BrowserContext:
+    """
+    Creates a new browser context with a unique fingerprint identity.
+
+    Each context gets its own real fingerprint preset (navigator, screen, WebGL, fonts, etc.)
+    with unique seeds for audio, canvas, and font spacing noise. All values are applied
+    via addInitScript so they self-destruct before page scripts can detect them.
+
+    Parameters:
+        browser: A Browser instance from AsyncNewBrowser or AsyncCamoufox.
+        preset: A specific fingerprint preset dict to use. If None, picks randomly.
+        os: Target OS for preset selection ("windows", "macos", "linux").
+        ff_version: Firefox version string for UA patching.
+        proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).
+        geolocation: Per-context geolocation ({"latitude": float, "longitude": float}).
+        **context_kwargs: Additional Playwright new_context() options.
+    """
+    fp = await asyncio.get_event_loop().run_in_executor(
+        None,
+        lambda: generate_context_fingerprint(preset=preset, os=os, ff_version=ff_version),
+    )
+
+    # Merge generated context options with user overrides (user wins)
+    opts: Dict[str, Any] = {**fp['context_options'], **context_kwargs}
+    if proxy:
+        opts['proxy'] = proxy
+    if geolocation:
+        opts['geolocation'] = geolocation
+        opts.setdefault('permissions', ['geolocation'])
+
+    context = await browser.new_context(**opts)
+    await context.add_init_script(fp['init_script'])
+    return context
