@@ -16,10 +16,11 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 ---
 
 > [!NOTE]
-> All of the latest documentation is avaliable at [camoufox.com](https://camoufox.com).
+> **All of the latest documentation is avaliable at [camoufox.com](https://camoufox.com).**
 
 > [!NOTE]
-> Development is active at [github.com/CloverLabsAI/camoufox](https://github.com/CloverLabsAI/camoufox). This repo is being used for checkpoint releases.
+> Browser development is active at [github.com/CloverLabsAI/camoufox](https://github.com/CloverLabsAI/camoufox). ([See activity](https://github.com/CloverLabsAI/camoufox/activity))<br>
+> This repo is being used for Python library updates and mirroring checkpoint browser releases.
 
 <hr width=50>
 
@@ -109,7 +110,7 @@ See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on tes
   <tr>
     <td width="30%" align="center" valign="middle">
       <a href="https://birdproxies.com/t/camoufox" target="_blank">
-        <img width="380" alt="birdproxies" src="https://github.com/user-attachments/assets/ea4e41e5-843e-43aa-ba55-77a6bf4c256f"/>
+        <img width="380" alt="birdproxies" src="https://github.com/user-attachments/assets/e146836d-eb92-4b05-8bd9-120fd95dca10"/>
       </a>
     </td>
     <td valign="middle">
