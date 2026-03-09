@@ -53,12 +53,12 @@ index d0aebdf965..01472ec205 100644
 
  nsresult nsHttpHandler::SetAcceptEncodings(const char* aAcceptEncodings,
                                             bool isSecure, bool isDictionary) {
-+  if (auto value = MaskConfig::GetString("headers.Accept-Encoding")) {
-+    mHttpsAcceptEncodings.Assign(nsCString(value.value().c_str()));
-+    return NS_OK;
-+  }
    if (isDictionary) {
     mDictionaryAcceptEncodings = aAcceptEncodings;
   } else if (isSecure) {
++    if (auto value = MaskConfig::GetString("headers.Accept-Encoding")) {
++      mHttpsAcceptEncodings.Assign(nsCString(value.value().c_str()));
++      return NS_OK;
++    }
      mHttpsAcceptEncodings = aAcceptEncodings;
    } else {

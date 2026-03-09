@@ -553,6 +553,14 @@ def launch_options(
         from_browserforge(fingerprint, ff_version_str),
     )
 
+    # Ensure zstd is in Accept-Encoding (Firefox 126+ supports it natively,
+    # but older BrowserForge fingerprints may omit it)
+    ae_key = 'headers.Accept-Encoding'
+    if ae_key in config:
+        ae = config[ae_key]
+        if 'zstd' not in ae:
+            config[ae_key] = ae + ', zstd'
+
     target_os = get_target_os(config)
 
     # Set a random window.history.length
