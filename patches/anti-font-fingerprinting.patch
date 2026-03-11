@@ -179,7 +179,7 @@ new file mode 100644
 index 0000000000..f38394d39d
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,102 @@
 +#include "RoverfoxStorageManager.h"
 +#include "mozilla/Preferences.h"
 +#include "nsXULAppAPI.h"
@@ -199,7 +199,7 @@ index 0000000000..f38394d39d
 +RoverfoxStorageManager::SetPrefValue(const nsCString& prefName,
 +                                      const nsCString& value) {
 +  if (XRE_IsParentProcess()) {
-+    Preferences::SetCString(prefName, value);
++    Preferences::SetCString(prefName.get(), value);
 +  } else {
 +    ContentChild* cc = ContentChild::GetSingleton();
 +    if (cc) {
@@ -220,7 +220,7 @@ index 0000000000..f38394d39d
 +RoverfoxStorageManager::GetUint(const nsAString& key, uint32_t& outValue) {
 +  nsCString prefName = MakePrefName(key);
 +  nsAutoCString strValue;
-+  nsresult rv = Preferences::GetCString(prefName, strValue);
++  nsresult rv = Preferences::GetCString(prefName.get(), strValue);
 +  if (NS_SUCCEEDED(rv) && !strValue.IsEmpty()) {
 +    nsresult parseRv;
 +    int64_t parsed = strValue.ToInteger64(&parseRv);
@@ -243,7 +243,7 @@ index 0000000000..f38394d39d
 +RoverfoxStorageManager::GetBool(const nsAString& key, bool& outValue) {
 +  nsCString prefName = MakePrefName(key);
 +  nsAutoCString strValue;
-+  nsresult rv = Preferences::GetCString(prefName, strValue);
++  nsresult rv = Preferences::GetCString(prefName.get(), strValue);
 +  if (NS_SUCCEEDED(rv) && !strValue.IsEmpty()) {
 +    outValue = strValue.EqualsLiteral("1");
 +    return true;
@@ -264,7 +264,7 @@ index 0000000000..f38394d39d
 +RoverfoxStorageManager::GetString(const nsAString& key, nsAString& outValue) {
 +  nsCString prefName = MakePrefName(key);
 +  nsAutoCString utf8Value;
-+  nsresult rv = Preferences::GetCString(prefName, utf8Value);
++  nsresult rv = Preferences::GetCString(prefName.get(), utf8Value);
 +  if (NS_SUCCEEDED(rv) && !utf8Value.IsEmpty()) {
 +    CopyUTF8toUTF16(utf8Value, outValue);
 +    return true;
@@ -276,7 +276,7 @@ index 0000000000..f38394d39d
 +RoverfoxStorageManager::Remove(const nsAString& key) {
 +  nsCString prefName = MakePrefName(key);
 +  if (XRE_IsParentProcess()) {
-+    Preferences::ClearUser(prefName);
++    Preferences::ClearUser(prefName.get());
 +  }
 +}
 +
@@ -287,7 +287,7 @@ new file mode 100644
 index 0000000000..d5700aea62
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.h
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,30 @@
 +#ifndef mozilla_dom_RoverfoxStorageManager_h
 +#define mozilla_dom_RoverfoxStorageManager_h
 +

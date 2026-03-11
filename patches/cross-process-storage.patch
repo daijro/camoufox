@@ -9,10 +9,10 @@ index 1ff3195235..795cb05bc3 100644
 +mozilla::ipc::IPCResult ContentParent::RecvRoverfoxStoragePut(
 +    const nsCString& aPrefName, const nsCString& aValue) {
 +  // Only allow roverfox-namespaced prefs for security
-+  if (!StringBeginsWith(aPrefName, roverfox.s._ns)) {
++  if (!StringBeginsWith(aPrefName, "roverfox.s."_ns)) {
 +    return IPC_OK();
 +  }
-+  Preferences::SetCString(aPrefName, aValue);
++  Preferences::SetCString(aPrefName.get(), aValue);
 +  return IPC_OK();
 +}
 +
