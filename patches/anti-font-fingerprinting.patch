@@ -179,7 +179,7 @@ new file mode 100644
 index 0000000000..f38394d39d
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -0,0 +1,150 @@
+@@ -0,0 +1,183 @@
 +#include "RoverfoxStorageManager.h"
 +#include "mozilla/Preferences.h"
 +#include "nsXULAppAPI.h"
@@ -249,6 +249,17 @@ index 0000000000..f38394d39d
 +  if (strValue.IsEmpty()) {
 +    Preferences::GetCString(prefName.get(), strValue);
 +  }
++  // Sync IPC read from parent (cross-process fallback for workers)
++  if (strValue.IsEmpty() && !XRE_IsParentProcess()) {
++    ContentChild* cc = ContentChild::GetSingleton();
++    if (cc) {
++      cc->SendRoverfoxStorageGet(prefName, &strValue);
++      if (!strValue.IsEmpty()) {
++        MutexAutoLock lock(GetLocalCacheMutex());
++        GetLocalCache().InsertOrUpdate(prefName, nsCString(strValue));
++      }
++    }
++  }
 +  if (!strValue.IsEmpty()) {
 +    nsresult parseRv;
 +    int64_t parsed = strValue.ToInteger64(&parseRv);
@@ -280,6 +291,17 @@ index 0000000000..f38394d39d
 +  if (strValue.IsEmpty()) {
 +    Preferences::GetCString(prefName.get(), strValue);
 +  }
++  // Sync IPC read from parent (cross-process fallback for workers)
++  if (strValue.IsEmpty() && !XRE_IsParentProcess()) {
++    ContentChild* cc = ContentChild::GetSingleton();
++    if (cc) {
++      cc->SendRoverfoxStorageGet(prefName, &strValue);
++      if (!strValue.IsEmpty()) {
++        MutexAutoLock lock(GetLocalCacheMutex());
++        GetLocalCache().InsertOrUpdate(prefName, nsCString(strValue));
++      }
++    }
++  }
 +  if (!strValue.IsEmpty()) {
 +    outValue = strValue.EqualsLiteral("1");
 +    return true;
@@ -308,6 +330,17 @@ index 0000000000..f38394d39d
 +  }
 +  if (utf8Value.IsEmpty()) {
 +    Preferences::GetCString(prefName.get(), utf8Value);
++  }
++  // Sync IPC read from parent (cross-process fallback for workers)
++  if (utf8Value.IsEmpty() && !XRE_IsParentProcess()) {
++    ContentChild* cc = ContentChild::GetSingleton();
++    if (cc) {
++      cc->SendRoverfoxStorageGet(prefName, &utf8Value);
++      if (!utf8Value.IsEmpty()) {
++        MutexAutoLock lock(GetLocalCacheMutex());
++        GetLocalCache().InsertOrUpdate(prefName, nsCString(utf8Value));
++      }
++    }
 +  }
 +  if (!utf8Value.IsEmpty()) {
 +    CopyUTF8toUTF16(utf8Value, outValue);
