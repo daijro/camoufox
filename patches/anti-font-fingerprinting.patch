@@ -179,11 +179,12 @@ new file mode 100644
 index 0000000000..f38394d39d
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -0,0 +1,183 @@
+@@ -0,0 +1,184 @@
 +#include "RoverfoxStorageManager.h"
 +#include "mozilla/Preferences.h"
 +#include "nsXULAppAPI.h"
 +#include "mozilla/dom/ContentChild.h"
++#include "nsThreadUtils.h"
 +
 +namespace mozilla {
 +namespace dom {
@@ -250,7 +251,7 @@ index 0000000000..f38394d39d
 +    Preferences::GetCString(prefName.get(), strValue);
 +  }
 +  // Sync IPC read from parent (cross-process fallback for workers)
-+  if (strValue.IsEmpty() && !XRE_IsParentProcess()) {
++  if (strValue.IsEmpty() && !XRE_IsParentProcess() && NS_IsMainThread()) {
 +    ContentChild* cc = ContentChild::GetSingleton();
 +    if (cc) {
 +      cc->SendRoverfoxStorageGet(prefName, &strValue);
@@ -292,7 +293,7 @@ index 0000000000..f38394d39d
 +    Preferences::GetCString(prefName.get(), strValue);
 +  }
 +  // Sync IPC read from parent (cross-process fallback for workers)
-+  if (strValue.IsEmpty() && !XRE_IsParentProcess()) {
++  if (strValue.IsEmpty() && !XRE_IsParentProcess() && NS_IsMainThread()) {
 +    ContentChild* cc = ContentChild::GetSingleton();
 +    if (cc) {
 +      cc->SendRoverfoxStorageGet(prefName, &strValue);
@@ -332,7 +333,7 @@ index 0000000000..f38394d39d
 +    Preferences::GetCString(prefName.get(), utf8Value);
 +  }
 +  // Sync IPC read from parent (cross-process fallback for workers)
-+  if (utf8Value.IsEmpty() && !XRE_IsParentProcess()) {
++  if (utf8Value.IsEmpty() && !XRE_IsParentProcess() && NS_IsMainThread()) {
 +    ContentChild* cc = ContentChild::GetSingleton();
 +    if (cc) {
 +      cc->SendRoverfoxStorageGet(prefName, &utf8Value);
