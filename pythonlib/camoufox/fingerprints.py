@@ -1,8 +1,9 @@
 import json
+import os
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from random import choice, randint, randrange
+from random import choice, randint, randrange, random, sample, shuffle
 from typing import Any, Dict, List, Optional, Tuple
 
 from browserforge.fingerprints import (
@@ -21,6 +22,99 @@ FP_GENERATOR = FingerprintGenerator(browser='firefox', os=('linux', 'macos', 'wi
 # Bundled real fingerprint presets
 PRESETS_FILE = Path(__file__).parent / 'fingerprint-presets.json'
 _PRESETS_CACHE: Optional[Dict] = None
+
+# CreepJS OS marker fonts used for OS detection
+_MACOS_MARKER_FONTS = [
+    'Helvetica Neue', 'PingFang HK', 'PingFang SC', 'PingFang TC',
+]
+_LINUX_MARKER_FONTS = [
+    'Arimo', 'Cousine', 'Tinos', 'Twemoji Mozilla',
+]
+_WINDOWS_MARKER_FONTS = [
+    'Segoe UI', 'Tahoma', 'Cambria Math', 'Nirmala UI',
+]
+
+
+def _ensure_marker_fonts(fonts: List[str], markers: List[str]) -> None:
+    """Add any missing marker fonts to the font list (in-place)."""
+    existing = set(fonts)
+    for m in markers:
+        if m not in existing:
+            fonts.append(m)
+
+
+# OS font lists loaded from fonts.json
+_OS_FONTS_CACHE: Optional[Dict[str, List[str]]] = None
+
+def _load_os_fonts() -> Dict[str, List[str]]:
+    """Load the full OS font lists from fonts.json."""
+    global _OS_FONTS_CACHE
+    if _OS_FONTS_CACHE is not None:
+        return _OS_FONTS_CACHE
+    fonts_path = os.path.join(os.path.dirname(__file__), 'fonts.json')
+    with open(fonts_path, 'rb') as f:
+        import orjson
+        _OS_FONTS_CACHE = orjson.loads(f.read())
+    return _OS_FONTS_CACHE
+
+
+# Essential fonts per OS that must always be included in subsets
+_ESSENTIAL_FONTS_MACOS = [
+    'Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'Verdana',
+    'Georgia', 'Trebuchet MS', 'Tahoma', 'Helvetica Neue', 'Lucida Grande',
+    'Menlo', 'Monaco', 'Geneva', 'PingFang HK', 'PingFang SC', 'PingFang TC',
+]
+_ESSENTIAL_FONTS_WINDOWS = [
+    'Arial', 'Times New Roman', 'Courier New', 'Verdana', 'Georgia',
+    'Trebuchet MS', 'Tahoma', 'Segoe UI', 'Calibri', 'Cambria Math',
+    'Nirmala UI', 'Consolas',
+]
+_ESSENTIAL_FONTS_LINUX = [
+    'Arimo', 'Cousine', 'Tinos', 'Twemoji Mozilla',
+    'Noto Sans Devanagari', 'Noto Sans JP', 'Noto Sans KR',
+    'Noto Sans SC', 'Noto Sans TC',
+]
+
+
+def _generate_random_font_subset(target_os: str) -> List[str]:
+    """
+    Generate a random subset of fonts for the given OS.
+    Picks a random percentage between 30-78% of non-essential fonts,
+    always includes essential + marker fonts.
+    """
+    os_fonts_data = _load_os_fonts()
+    os_key = {'macos': 'mac', 'windows': 'win', 'linux': 'lin'}.get(target_os, 'mac')
+    full_list = os_fonts_data.get(os_key, os_fonts_data.get('mac', []))
+
+    if target_os == 'windows':
+        essential = set(_ESSENTIAL_FONTS_WINDOWS)
+        markers = _WINDOWS_MARKER_FONTS
+    elif target_os == 'linux':
+        essential = set(_ESSENTIAL_FONTS_LINUX)
+        markers = _LINUX_MARKER_FONTS
+    else:
+        essential = set(_ESSENTIAL_FONTS_MACOS)
+        markers = _MACOS_MARKER_FONTS
+
+    # Split into essential and non-essential
+    result = [f for f in full_list if f in essential]
+    non_essential = [f for f in full_list if f not in essential]
+
+    # Random percentage between 30-78%
+    pct = 30 + int(random() * 49)
+    count = round((pct / 100) * len(non_essential))
+
+    # Randomly select non-essential fonts
+    if count < len(non_essential):
+        selected = sample(non_essential, count)
+    else:
+        selected = non_essential
+    result.extend(selected)
+
+    # Ensure marker fonts are present
+    _ensure_marker_fonts(result, markers)
+
+    return result
 
 
 def load_presets() -> Optional[Dict]:
@@ -95,10 +189,6 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
         config['navigator.userAgent'] = ua
     if nav.get('platform'):
         config['navigator.platform'] = nav['platform']
-    if nav.get('language'):
-        config['navigator.language'] = nav['language']
-    if nav.get('languages'):
-        config['navigator.languages'] = nav['languages']
     if nav.get('hardwareConcurrency'):
         config['navigator.hardwareConcurrency'] = nav['hardwareConcurrency']
     if nav.get('oscpu'):
@@ -141,8 +231,29 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
 
     if preset.get('timezone'):
         config['timezone'] = preset['timezone']
-    if preset.get('fonts'):
-        config['fonts'] = preset['fonts']
+
+    # Generate a unique random font subset from the OS font list.
+    plat = nav.get('platform', '')
+    if plat == 'MacIntel':
+        target_os = 'macos'
+    elif plat == 'Win32':
+        target_os = 'windows'
+    elif 'Linux' in plat or 'linux' in plat:
+        target_os = 'linux'
+    else:
+        target_os = 'macos'
+    try:
+        config['fonts'] = _generate_random_font_subset(target_os)
+    except Exception:
+        # Fallback to preset fonts if font generation fails
+        if preset.get('fonts'):
+            fonts = list(preset['fonts'])
+            _ensure_marker_fonts(fonts, {
+                'macos': _MACOS_MARKER_FONTS,
+                'windows': _WINDOWS_MARKER_FONTS,
+                'linux': _LINUX_MARKER_FONTS,
+            }.get(target_os, _MACOS_MARKER_FONTS))
+            config['fonts'] = fonts
     if preset.get('speechVoices'):
         config['voices'] = preset['speechVoices']
 
@@ -267,7 +378,7 @@ def generate_context_fingerprint(
         'audioFingerprintSeed': config.get('audio:seed'),
         'canvasSeed': config.get('canvas:seed'),
         'navigatorPlatform': nav.get('platform'),
-        'navigatorOscpu': nav.get('oscpu'),
+        'navigatorOscpu': config.get('navigator.oscpu'),
         'navigatorUserAgent': config.get('navigator.userAgent'),
         'hardwareConcurrency': nav.get('hardwareConcurrency'),
         'webglVendor': webgl.get('unmaskedVendor'),
@@ -276,8 +387,8 @@ def generate_context_fingerprint(
         'screenHeight': screen.get('height'),
         'screenColorDepth': screen.get('colorDepth'),
         'timezone': preset.get('timezone'),
-        'fontList': preset.get('fonts'),
-        'speechVoices': preset.get('speechVoices'),
+        'fontList': config.get('fonts', preset.get('fonts')),
+        'speechVoices': config.get('voices', preset.get('speechVoices')),
     }
 
     init_script = _build_init_script(init_values)
@@ -288,15 +399,13 @@ def generate_context_fingerprint(
     if ua:
         context_options['user_agent'] = ua
     if screen.get('width') and screen.get('height'):
+        # Viewport must be smaller than screen to count for the title bar etc.
         context_options['viewport'] = {
             'width': screen['width'],
-            'height': screen['height'],
+            'height': max(screen['height'] - 28, 600),
         }
     if screen.get('devicePixelRatio'):
         context_options['device_scale_factor'] = screen['devicePixelRatio']
-    lang = nav.get('language')
-    if lang:
-        context_options['locale'] = lang
     tz = preset.get('timezone')
     if tz:
         context_options['timezone_id'] = tz
