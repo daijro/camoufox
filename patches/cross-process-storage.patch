@@ -1,0 +1,49 @@
+diff --git a/dom/ipc/ContentParent.cpp b/dom/ipc/ContentParent.cpp
+index 1ff3195235..795cb05bc3 100644
+--- a/dom/ipc/ContentParent.cpp
++++ b/dom/ipc/ContentParent.cpp
+@@ -1231,6 +1231,16 @@ mozilla::ipc::IPCResult ContentParent::RecvCreateGMPService() {
+   return IPC_OK();
+ }
+ 
++mozilla::ipc::IPCResult ContentParent::RecvRoverfoxStoragePut(
++    const nsCString& aPrefName, const nsCString& aValue) {
++  // Only allow roverfox-namespaced prefs for security
++  if (!StringBeginsWith(aPrefName, roverfox.s._ns)) {
++    return IPC_OK();
++  }
++  Preferences::SetCString(aPrefName, aValue);
++  return IPC_OK();
++}
++
+ IPCResult ContentParent::RecvAttributionEvent(
+     const nsACString& aHost, PrivateAttributionImpressionType aType,
+     uint32_t aIndex, const nsAString& aAd, const nsACString& aTargetHost) {
+diff --git a/dom/ipc/ContentParent.h b/dom/ipc/ContentParent.h
+index 4a478a5a4d..161a1f993e 100644
+--- a/dom/ipc/ContentParent.h
++++ b/dom/ipc/ContentParent.h
+@@ -362,6 +362,9 @@ class ContentParent final : public PContentParent,
+       Endpoint<PClipboardContentAnalysisParent>&& aParentEndpoint);
+   mozilla::ipc::IPCResult RecvCreateGMPService();
+ 
++  mozilla::ipc::IPCResult RecvRoverfoxStoragePut(
++      const nsCString& aPrefName, const nsCString& aValue);
++
+   NS_DECL_CYCLE_COLLECTION_CLASS_AMBIGUOUS(ContentParent, nsIObserver)
+ 
+   NS_DECL_CYCLE_COLLECTING_ISUPPORTS
+diff --git a/dom/ipc/PContent.ipdl b/dom/ipc/PContent.ipdl
+index 39b01c305d..882bd54b8f 100644
+--- a/dom/ipc/PContent.ipdl
++++ b/dom/ipc/PContent.ipdl
+@@ -1113,6 +1113,9 @@ parent:
+ 
+     async CreateGMPService();
+ 
++    // Roverfox: set a namespaced pref from content process
++    async RoverfoxStoragePut(nsCString prefName, nsCString value);
++
+     async CreateClipboardContentAnalysis(Endpoint<PClipboardContentAnalysisParent> aParentEndpoint);
+ 
+     async InitStreamFilter(uint64_t channelId, nsString addonId)
