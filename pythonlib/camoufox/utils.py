@@ -21,7 +21,7 @@ from .exceptions import (
     NonFirefoxFingerprint,
     UnknownProperty,
 )
-from .fingerprints import from_browserforge, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset
+from .fingerprints import from_browserforge, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locales import handle_locales
@@ -378,6 +378,7 @@ def launch_options(
     screen: Optional[Screen] = None,
     window: Optional[Tuple[int, int]] = None,
     fingerprint: Optional[Fingerprint] = None,
+    fingerprint_preset: Optional[Union[bool, Dict[str, Any]]] = None,
     ff_version: Optional[int] = None,
     headless: Optional[bool] = None,
     main_world_eval: Optional[bool] = None,
@@ -443,6 +444,10 @@ def launch_options(
             Use a custom BrowserForge fingerprint. Note: Not all values will be implemented.
             If not provided, a random fingerprint will be generated based on the provided
             `os` & `screen` constraints.
+        fingerprint_preset (Optional[Union[bool, Dict[str, Any]]]):
+            Opt into using real fingerprint presets instead of BrowserForge.
+            Pass `True` to use a random bundled preset, or pass a preset dict directly.
+            By default (None), BrowserForge is used for infinite unique fingerprints.
         ff_version (Optional[int]):
             Firefox version to use. Defaults to the current Camoufox version.
             To prevent leaks, only use this for special cases.
@@ -537,23 +542,27 @@ def launch_options(
 
     # Generate a fingerprint
     _used_preset = False
-    if fingerprint is None:
-        # Try real fingerprint presets first
-        preset = get_random_preset(os=os)
+    if fingerprint is not None:
+        # User passed a custom BrowserForge fingerprint
+        if not i_know_what_im_doing:
+            check_custom_fingerprint(fingerprint)
+    elif fingerprint_preset is not None:
+        # User opted into real fingerprint presets
+        if isinstance(fingerprint_preset, dict):
+            preset = fingerprint_preset
+        else:
+            preset = get_random_preset(os=os)
         if preset:
             merge_into(config, from_preset(preset, ff_version_str))
             _used_preset = True
-        else:
-            # Fall back to BrowserForge synthetic generation
-            fingerprint = generate_fingerprint(
-                screen=screen or get_screen_cons(headless or 'DISPLAY' in env),
-                window=window,
-                os=os,
-            )
-    else:
-        # Or use the one passed by the user
-        if not i_know_what_im_doing:
-            check_custom_fingerprint(fingerprint)
+
+    if not _used_preset and fingerprint is None:
+        # Default: BrowserForge synthetic generation (infinite unique fingerprints)
+        fingerprint = generate_fingerprint(
+            screen=screen or get_screen_cons(headless or 'DISPLAY' in env),
+            window=window,
+            os=os,
+        )
 
     if not _used_preset and fingerprint is not None:
         # Inject the BrowserForge fingerprint into the config
@@ -584,6 +593,14 @@ def launch_options(
             config['fonts'] = _generate_random_font_subset(os_name)
         except Exception:
             update_fonts(config, target_os)
+
+    # Generate a unique random voice subset
+    if 'voices' not in config:
+        os_name_v = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}.get(target_os, 'macos')
+        try:
+            config['voices'] = _generate_random_voice_subset(os_name_v)
+        except Exception:
+            pass
 
     # Set random seeds for fingerprint noise (per launch)
     set_into(config, 'fonts:spacing_seed', randint(1, 4_294_967_295))  # nosec

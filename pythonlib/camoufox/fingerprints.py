@@ -13,6 +13,7 @@ from browserforge.fingerprints import (
 )
 
 from camoufox.pkgman import load_yaml
+from camoufox.webgl import sample_webgl
 
 # Load the browserforge.yaml file
 BROWSERFORGE_DATA = load_yaml('browserforge.yml')
@@ -113,6 +114,72 @@ def _generate_random_font_subset(target_os: str) -> List[str]:
 
     # Ensure marker fonts are present
     _ensure_marker_fonts(result, markers)
+
+    return result
+
+
+# OS voice lists loaded from voices.json
+_OS_VOICES_CACHE: Optional[Dict[str, List[str]]] = None
+
+
+def _load_os_voices() -> Dict[str, List[str]]:
+    """Load OS voice lists from voices.json, extracting voice names."""
+    global _OS_VOICES_CACHE
+    if _OS_VOICES_CACHE is not None:
+        return _OS_VOICES_CACHE
+    voices_path = os.path.join(os.path.dirname(__file__), 'voices.json')
+    with open(voices_path, 'rb') as f:
+        import orjson
+        raw = orjson.loads(f.read())
+    # Extract voice names from "Name:locale:type" format
+    _OS_VOICES_CACHE = {}
+    for os_key, entries in raw.items():
+        _OS_VOICES_CACHE[os_key] = [e.split(':')[0] for e in entries]
+    return _OS_VOICES_CACHE
+
+
+# Essential speech voices per OS that must always be included in subsets
+_ESSENTIAL_VOICES_MACOS = [
+    'Samantha', 'Alex', 'Fred', 'Victoria', 'Karen', 'Daniel',
+]
+_ESSENTIAL_VOICES_WINDOWS = [
+    'Microsoft David - English (United States)',
+    'Microsoft Zira - English (United States)',
+    'Microsoft Mark - English (United States)',
+]
+
+
+def _generate_random_voice_subset(target_os: str) -> List[str]:
+    """
+    Generate a random subset of speech voices for the given OS.
+    macOS: random 40-80% of non-essential + essential always included.
+    Windows: all voices (too few to subset meaningfully).
+    Linux: empty list (no native speech voices).
+    """
+    os_voices_data = _load_os_voices()
+    os_key = {'macos': 'mac', 'windows': 'win', 'linux': 'lin'}.get(target_os, 'mac')
+    full_list = os_voices_data.get(os_key, [])
+
+    if not full_list:
+        return []
+
+    # Windows has too few voices to subset — return all
+    if target_os == 'windows':
+        return list(full_list)
+
+    # macOS: random 40-80% subset
+    essential = set(_ESSENTIAL_VOICES_MACOS)
+    result = [v for v in full_list if v in essential]
+    non_essential = [v for v in full_list if v not in essential]
+
+    pct = 40 + int(random() * 41)  # 40-80%
+    count = round((pct / 100) * len(non_essential))
+
+    if count < len(non_essential):
+        selected = sample(non_essential, count)
+    else:
+        selected = non_essential
+    result.extend(selected)
 
     return result
 
@@ -254,8 +321,12 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
                 'linux': _LINUX_MARKER_FONTS,
             }.get(target_os, _MACOS_MARKER_FONTS))
             config['fonts'] = fonts
-    if preset.get('speechVoices'):
-        config['voices'] = preset['speechVoices']
+    # Generate a unique random voice subset from the OS voice list
+    try:
+        config['voices'] = _generate_random_voice_subset(target_os)
+    except Exception:
+        if preset.get('speechVoices'):
+            config['voices'] = preset['speechVoices']
 
     return config
 
@@ -353,26 +424,94 @@ def generate_context_fingerprint(
     Generate fingerprint values for a single per-context identity.
     Returns a dict with init_script (JS string) and context_options (Playwright options).
 
-    If no preset is provided, picks a random one from bundled presets.
-    Falls back to BrowserForge if no presets available.
+    By default, uses BrowserForge for infinite unique synthetic fingerprints.
+    Pass a preset dict to use a real fingerprint preset instead.
     """
-    if preset is None:
-        preset = get_random_preset(os=os)
+    if preset is not None:
+        # Use real fingerprint preset
+        config = from_preset(preset, ff_version)
+        nav = preset.get('navigator', {})
+        screen = preset.get('screen', {})
+        webgl = preset.get('webgl', {})
+    else:
+        # Fall back to BrowserForge synthetic generation
+        fp = generate_fingerprint(os=os)
+        config = from_browserforge(fp, ff_version)
 
-    if preset is None:
-        # No presets available - cannot generate per-context fingerprint without one
-        raise ValueError(
-            'No fingerprint presets available. '
-            'Ensure fingerprint-presets.json exists in the camoufox package.'
-        )
+        # Add seeds (BrowserForge doesn't generate these)
+        config.setdefault('fonts:spacing_seed', randint(1, 4_294_967_295))  # nosec
+        config.setdefault('audio:seed', randint(1, 4_294_967_295))  # nosec
+        config.setdefault('canvas:seed', randint(1, 4_294_967_295))  # nosec
 
-    config = from_preset(preset, ff_version)
+        # Determine target OS from platform for font/voice generation
+        plat = config.get('navigator.platform', '')
+        os_name = 'macos'
+        if plat == 'Win32':
+            os_name = 'windows'
+        elif 'Linux' in plat or 'linux' in plat:
+            os_name = 'linux'
 
-    nav = preset.get('navigator', {})
-    screen = preset.get('screen', {})
-    webgl = preset.get('webgl', {})
+        # Add fonts (BrowserForge doesn't generate these)
+        if 'fonts' not in config:
+            try:
+                config['fonts'] = _generate_random_font_subset(os_name)
+            except Exception:
+                pass
 
-    # Build the values dict for the init script
+        # Add voices (BrowserForge doesn't generate these)
+        if 'voices' not in config:
+            try:
+                config['voices'] = _generate_random_voice_subset(os_name)
+            except Exception:
+                pass
+
+        # Derive oscpu if BrowserForge didn't provide it
+        if 'navigator.oscpu' not in config:
+            plat = config.get('navigator.platform', '')
+            if plat == 'MacIntel':
+                config['navigator.oscpu'] = 'Intel Mac OS X 10.15'
+            elif plat == 'Win32':
+                config['navigator.oscpu'] = 'Windows NT 10.0; Win64; x64'
+            elif 'Linux' in plat or 'linux' in plat:
+                config['navigator.oscpu'] = 'Linux x86_64'
+
+        # Sample WebGL vendor/renderer from database (BrowserForge doesn't generate these)
+        if not config.get('webGl:vendor') or not config.get('webGl:renderer'):
+            _os_map = {'macos': 'mac', 'linux': 'lin', 'windows': 'win'}
+            _target_os = _os_map.get(os or '', None)
+            if not _target_os:
+                plat = config.get('navigator.platform', '')
+                if plat == 'Win32':
+                    _target_os = 'win'
+                elif 'Linux' in plat or 'linux' in plat:
+                    _target_os = 'lin'
+                else:
+                    _target_os = 'mac'
+            try:
+                webgl_fp = sample_webgl(_target_os)
+                webgl_fp.pop('webGl2Enabled', None)
+                config.update(webgl_fp)
+            except Exception:
+                pass
+
+        # Build source dicts from BrowserForge config for init_values
+        nav = {
+            'platform': config.get('navigator.platform'),
+            'hardwareConcurrency': config.get('navigator.hardwareConcurrency'),
+        }
+        screen = {
+            'width': config.get('screen.width'),
+            'height': config.get('screen.height'),
+            'colorDepth': config.get('screen.colorDepth'),
+            'devicePixelRatio': None,
+        }
+        webgl = {
+            'unmaskedVendor': config.get('webGl:vendor'),
+            'unmaskedRenderer': config.get('webGl:renderer'),
+        }
+        preset = {'navigator': nav, 'screen': screen, 'webgl': webgl}
+
+    # Build the values dict for the init script (works for both paths)
     init_values: Dict[str, Any] = {
         'fontSpacingSeed': config.get('fonts:spacing_seed'),
         'audioFingerprintSeed': config.get('audio:seed'),
@@ -380,15 +519,15 @@ def generate_context_fingerprint(
         'navigatorPlatform': nav.get('platform'),
         'navigatorOscpu': config.get('navigator.oscpu'),
         'navigatorUserAgent': config.get('navigator.userAgent'),
-        'hardwareConcurrency': nav.get('hardwareConcurrency'),
+        'hardwareConcurrency': nav.get('hardwareConcurrency') or config.get('navigator.hardwareConcurrency'),
         'webglVendor': webgl.get('unmaskedVendor'),
         'webglRenderer': webgl.get('unmaskedRenderer'),
         'screenWidth': screen.get('width'),
         'screenHeight': screen.get('height'),
         'screenColorDepth': screen.get('colorDepth'),
-        'timezone': preset.get('timezone'),
-        'fontList': config.get('fonts', preset.get('fonts')),
-        'speechVoices': config.get('voices', preset.get('speechVoices')),
+        'timezone': preset.get('timezone') if isinstance(preset.get('timezone'), str) else config.get('timezone'),
+        'fontList': config.get('fonts'),
+        'speechVoices': config.get('voices'),
     }
 
     init_script = _build_init_script(init_values)
@@ -398,15 +537,19 @@ def generate_context_fingerprint(
     ua = config.get('navigator.userAgent')
     if ua:
         context_options['user_agent'] = ua
-    if screen.get('width') and screen.get('height'):
-        # Viewport must be smaller than screen to count for the title bar etc.
+    sw = screen.get('width')
+    sh = screen.get('height')
+    if sw and sh:
         context_options['viewport'] = {
-            'width': screen['width'],
-            'height': max(screen['height'] - 28, 600),
+            'width': sw,
+            'height': max(sh - 28, 600),
         }
-    if screen.get('devicePixelRatio'):
-        context_options['device_scale_factor'] = screen['devicePixelRatio']
-    tz = preset.get('timezone')
+    dpr = screen.get('devicePixelRatio')
+    if dpr:
+        context_options['device_scale_factor'] = dpr
+    tz = config.get('timezone')
+    if not tz and isinstance(preset, dict):
+        tz = preset.get('timezone')
     if tz:
         context_options['timezone_id'] = tz
 
