@@ -73,31 +73,29 @@ diff --git a/dom/geolocation/moz.build b/dom/geolocation/moz.build
 index 2d6b6b5fab..0c7ed74c6d 100644
 --- a/dom/geolocation/moz.build
 +++ b/dom/geolocation/moz.build
-@@ -85,4 +85,7 @@
+@@ -84,4 +84,7 @@ elif CONFIG["MOZ_WIDGET_TOOLKIT"] == "gtk":
  BROWSER_CHROME_MANIFESTS += ["test/browser/browser.toml"]
  MOCHITEST_CHROME_MANIFESTS += ["test/chrome/chrome.toml"]
  MOCHITEST_MANIFESTS += ["test/mochitest/mochitest.toml"]
  XPCSHELL_TESTS_MANIFESTS += ["test/unit/xpcshell.toml"]
 +
-+# DOM Mask
++# Camoufox: include path for MaskConfig.hpp
 +LOCAL_INCLUDES += ["/camoucfg"]
-
 diff --git a/dom/system/NetworkGeolocationProvider.sys.mjs b/dom/system/NetworkGeolocationProvider.sys.mjs
 index 7edc62b4a6..19b77aa6b6 100644
 --- a/dom/system/NetworkGeolocationProvider.sys.mjs
 +++ b/dom/system/NetworkGeolocationProvider.sys.mjs
-@@ -342,17 +342,55 @@ NetworkGeolocationProvider.prototype = {
+@@ -442,17 +442,53 @@ NetworkGeolocationProvider.prototype = {
      let url = Services.urlFormatter.formatURLPref("geo.provider.network.url");
      LOG("Sending request");
  
-+    // Collect the latitude, longitude, and accuracy from the camouflage prefs.
-+    // If the values are not set, use the default value of -180.
++    // Use CAMOU_CONFIG geolocation if configured
 +    let DEFAULT_DEG = -180;
 +
 +    let latitude = ChromeUtils.camouGetDouble("geolocation:latitude", DEFAULT_DEG);
 +    let longitude = ChromeUtils.camouGetDouble("geolocation:longitude", DEFAULT_DEG);
 +    let accuracy = ChromeUtils.camouGetDouble("geolocation:accuracy", 0);
-+    
++
 +    let countDecimalPlaces = (num) => {
 +      if (Math.floor(num) === num) return 0;
 +      return num.toString().split(".")[1].length || 0;
@@ -116,27 +114,26 @@ index 7edc62b4a6..19b77aa6b6 100644
 -      );
 +      let newLocation;
 +      if (latitude != DEFAULT_DEG && longitude != DEFAULT_DEG) {
-+        // Use the latitude and longitude from the camouflage prefs.
++        // Use the latitude and longitude from CAMOU_CONFIG
 +        ChromeUtils.camouDebug(
 +          `Use Camoufox geo: ${latitude}:${longitude} accuracy:${accuracy}`
 +        );
-+        // If accuracy is not set, calculate it manually using the decimal precision
++        // If accuracy is not set, calculate it using decimal precision
 +        if (!accuracy) {
 +          let latPrecision = countDecimalPlaces(latitude);
 +          let lonPrecision = countDecimalPlaces(longitude);
 +          let precision = Math.min(latPrecision, lonPrecision);
-+          
++
 +          // Estimate accuracy in meters
 +          accuracy = (111320 * Math.cos(latitude * Math.PI / 180)) / Math.pow(10, precision);
 +        }
-+        // Create a new NetworkGeoPositionObject with the calculated accuracy
 +        newLocation = new NetworkGeoPositionObject(
 +          latitude,
 +          longitude,
 +          accuracy
 +        );
 +      } else {
-+        // Continue with the original geolocation request.
++        // No CAMOU_CONFIG override, use real geolocation
 +        result = await this.makeRequest(url, wifiData);
 +
 +        LOG(
@@ -151,3 +148,4 @@ index 7edc62b4a6..19b77aa6b6 100644
  
        if (this.listener) {
          this.listener.update(newLocation);
+
