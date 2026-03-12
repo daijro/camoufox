@@ -3,11 +3,12 @@ new file mode 100644
 index 0000000000..abcdef1234
 --- /dev/null
 +++ b/dom/base/CanvasFingerprintManager.cpp
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,79 @@
 +/* Camoufox: Per-context canvas fingerprint manager */
 +#include "CanvasFingerprintManager.h"
 +
 +#include <algorithm>
++#include "MaskConfig.hpp"
 +#include "mozilla/dom/BrowsingContext.h"
 +#include "nsGlobalWindowInner.h"
 +#include "xpcpublic.h"
@@ -31,8 +32,14 @@ index 0000000000..abcdef1234
 +  nsAutoString key;
 +  key.AppendPrintf("canvasSeed_%u", aId);
 +  uint32_t seed = 0;
-+  RoverfoxStorageManager::GetUint(key, seed);
-+  return seed;
++  if (RoverfoxStorageManager::GetUint(key, seed) && seed != 0) {
++    return seed;
++  }
++  // Fallback to CAMOU_CONFIG for Workers in separate processes
++  if (auto val = MaskConfig::GetUint32("canvas:seed")) {
++    return val.value();
++  }
++  return 0;
 +}
 +
 +void CanvasFingerprintManager::ApplyCanvasNoise(uint8_t* data, uint32_t length,
@@ -145,23 +152,28 @@ diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index xxxxxxxxxx..yyyyyyyyyy 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -23,5 +23,6 @@
+@@ -20,6 +20,7 @@
+ #include "AutoplayPolicy.h"
+ #include "Crypto.h"
  #include "MainThreadUtils.h"
 +#include "CanvasFingerprintManager.h"
  #include "Navigator.h"
  #include "PaintWorkletImpl.h"
  #include "SessionStorageCache.h"
- #include "Units.h"
-@@ -7477,6 +7478,21 @@
+@@ -7477,6 +7478,28 @@ void nsGlobalWindowInner::ForgetSharedWorker(SharedWorker* aSharedWorker) {
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
 
++
 +void nsGlobalWindowInner::SetCanvasSeed(uint32_t seed, ErrorResult& aRv) {
 +  uint32_t userContextId = 0;
 +  if (BrowsingContext* bc = GetBrowsingContext()) {
 +    userContextId = bc->OriginAttributesRef().mUserContextId;
 +  }
 +  CanvasFingerprintManager::SetSeed(userContextId, seed);
++  if (userContextId != 0) {
++    CanvasFingerprintManager::SetSeed(0, seed);
++  }
 +  CanvasFingerprintManager::DisableFunction(userContextId);
 +  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
@@ -181,10 +193,12 @@ diff --git a/dom/canvas/CanvasRenderingContext2D.cpp b/dom/canvas/CanvasRenderin
 index xxxxxxxxxx..yyyyyyyyyy 100644
 --- a/dom/canvas/CanvasRenderingContext2D.cpp
 +++ b/dom/canvas/CanvasRenderingContext2D.cpp
-@@ -9,5 +9,7 @@
+@@ -9,5 +9,9 @@
  #include "CanvasImageCache.h"
 +#include "CanvasFingerprintManager.h"
 +#include "nsPIDOMWindow.h"
++#include "mozilla/dom/WorkerPrivate.h"
++#include "mozilla/dom/WorkerScope.h"
  #include "CanvasUtils.h"
  #include "GeckoBindings.h"
  #include "ImageEncoder.h"
@@ -197,7 +211,7 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
  #include "mozilla/dom/CanvasGradient.h"
  #include "mozilla/dom/CanvasPath.h"
  #include "mozilla/dom/CanvasPattern.h"
-@@ -2287,5 +2289,32 @@
+@@ -2287,5 +2289,34 @@
          SurfaceFormat::A8R8G8B8_UINT32);
    }
 
@@ -217,6 +231,8 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +          if (BrowsingContext* bc = win->GetBrowsingContext()) {
 +            userContextId = bc->OriginAttributesRef().mUserContextId;
 +          }
++        } else if (WorkerPrivate* wp = GetCurrentThreadWorkerPrivate()) {
++          userContextId = wp->GetOriginAttributes().mUserContextId;
 +        }
 +      }
 +    }
@@ -230,7 +246,7 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +
    return ret;
  }
-@@ -6615,5 +6644,35 @@
+@@ -6615,5 +6644,37 @@
    } while (false);
 
 +  // Per-context canvas fingerprint noise
@@ -249,6 +265,8 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +          if (BrowsingContext* bc = win->GetBrowsingContext()) {
 +            userContextId = bc->OriginAttributesRef().mUserContextId;
 +          }
++        } else if (WorkerPrivate* wp = GetCurrentThreadWorkerPrivate()) {
++          userContextId = wp->GetOriginAttributes().mUserContextId;
 +        }
 +      }
 +    }
@@ -266,6 +284,20 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
    readback->Unmap();
    *aRetval = darray;
    return NS_OK;
+diff --git a/dom/canvas/moz.build b/dom/canvas/moz.build
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/dom/canvas/moz.build
++++ b/dom/canvas/moz.build
+@@ -188,6 +188,9 @@ SOURCES += [
+ # Suppress warnings from third-party code.
+ SOURCES["MurmurHash3.cpp"].flags += ["-Wno-implicit-fallthrough"]
+
++# WorkerPrivate.h for OffscreenCanvas worker context support
++LOCAL_INCLUDES += ["/dom/workers"]
++
+ LOCAL_INCLUDES += [
+     "/js/xpconnect/wrappers",
+ ]
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
 index xxxxxxxxxx..yyyyyyyyyy 100644
 --- a/dom/webidl/Window.webidl

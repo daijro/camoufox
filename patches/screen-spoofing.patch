@@ -196,7 +196,7 @@ index 748ae6cf83..c3d4e5f6a7 100644
  #include "nsIThread.h"
  #include "nsITimedChannel.h"
  #include "nsIURI.h"
-@@ -7420,7 +7421,49 @@ nsGlobalWindowInner::GetAudioWorklet(ErrorResult& aRv) {
+@@ -7420,7 +7421,53 @@ nsGlobalWindowInner::GetAudioWorklet(ErrorResult& aRv) {
    return mAudioWorklet;
  }
 
@@ -306,7 +306,7 @@ index 7f7728a6cc..a1b2c3d4e5 100644
  #include "nsGlobalWindowInner.h"
 @@ -67,6 +68,26 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
  }
-
+ 
  CSSIntRect nsScreen::GetRect() {
 +  // Check for per-context screen dimensions first
 +  if (nsPIDOMWindowOuter* outer = GetOuter()) {
@@ -331,6 +331,31 @@ index 7f7728a6cc..a1b2c3d4e5 100644
    // Return window inner rect to prevent fingerprinting.
    if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
      return GetTopWindowInnerRectForRFP();
+@@ -95,6 +116,24 @@
+ }
+ 
+ CSSIntRect nsScreen::GetAvailRect() {
++  // Check for per-context screen avail dimensions first
++  if (nsPIDOMWindowOuter* outer = GetOuter()) {
++    if (nsPIDOMWindowInner* inner = outer->GetCurrentInnerWindow()) {
++      nsGlobalWindowInner* win = nsGlobalWindowInner::Cast(inner);
++      if (win) {
++        uint32_t userContextId = mozilla::dom::ScreenDimensionManager::GetUserContextIdFromWindow(win);
++        int32_t w = 0, h = 0;
++        if (mozilla::dom::ScreenDimensionManager::GetDimensions(userContextId, &w, &h)) {
++          int32_t availTop = 25;
++          if (auto top = MaskConfig::GetInt32("screen.availTop"); top.has_value()) {
++            availTop = top.value();
++          }
++          return {0, availTop, w, h - availTop};
++        }
++      }
++    }
++  }
++
+   auto rect = MaskConfig::GetRect("screen.availLeft", "screen.availTop",
+                                   "screen.availWidth", "screen.availHeight");
+   if (rect.has_value()) {
 
 diff --git a/gfx/src/moz.build b/gfx/src/moz.build
 index a2b3e60fe5..faa0c113bc 100644

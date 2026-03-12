@@ -3,9 +3,10 @@ new file mode 100644
 index 0000000000..fe74a1f432
 --- /dev/null
 +++ b/dom/base/FontSpacingSeedManager.cpp
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,91 @@
 +#include "FontSpacingSeedManager.h"
 +#include "nsPrintfCString.h"
++#include "MaskConfig.hpp"
 +#include "nsGlobalWindowInner.h"
 +#include "xpcpublic.h"
 +#include "mozilla/dom/BrowsingContext.h"
@@ -45,8 +46,12 @@ index 0000000000..fe74a1f432
 +FontSpacingSeedManager::GetSeed(uint32_t userContextId) {
 +  nsString key = KeyForUserContext(userContextId);
 +  uint32_t seed = 0;
-+  if (RoverfoxStorageManager::GetUint(key, seed)) {
++  if (RoverfoxStorageManager::GetUint(key, seed) && seed != 0) {
 +    return seed;
++  }
++  // Fallback to CAMOU_CONFIG for Workers in separate processes
++  if (auto val = MaskConfig::GetUint32("fonts:spacing_seed")) {
++    return val.value();
 +  }
 +  return 0;
 +}
@@ -174,183 +179,233 @@ new file mode 100644
 index 0000000000..f38394d39d
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,184 @@
 +#include "RoverfoxStorageManager.h"
++#include "mozilla/Preferences.h"
++#include "nsXULAppAPI.h"
++#include "mozilla/dom/ContentChild.h"
++#include "nsThreadUtils.h"
 +
 +namespace mozilla {
 +namespace dom {
 +
-+ThreadSafeKV RoverfoxStorageManager::sUintStorage;
-+ThreadSafeStringKV RoverfoxStorageManager::sStringStorage;
++/* static */ nsTHashMap<nsCStringHashKey, nsCString>&
++RoverfoxStorageManager::GetLocalCache() {
++  static nsTHashMap<nsCStringHashKey, nsCString> sCache;
++  return sCache;
++}
++
++/* static */ mozilla::Mutex&
++RoverfoxStorageManager::GetLocalCacheMutex() {
++  static mozilla::Mutex sMutex("RoverfoxStorageCache");
++  return sMutex;
++}
++
++/* static */ nsCString
++RoverfoxStorageManager::MakePrefName(const nsAString& key) {
++  nsAutoCString prefName("roverfox.s.");
++  AppendUTF16toUTF8(key, prefName);
++  return nsCString(prefName);
++}
 +
 +/* static */ void
-+RoverfoxStorageManager::PutUint(const nsAString& key, uint32_t value)
-+{
-+  sUintStorage.Put(key, value);
++RoverfoxStorageManager::SetPrefValue(const nsCString& prefName,
++                                      const nsCString& value) {
++  // Always store locally for immediate reads in this process
++  {
++    MutexAutoLock lock(GetLocalCacheMutex());
++    GetLocalCache().InsertOrUpdate(prefName, nsCString(value));
++  }
++  // Sync to parent for cross-process availability
++  if (XRE_IsParentProcess()) {
++    Preferences::SetCString(prefName.get(), value);
++  } else {
++    ContentChild* cc = ContentChild::GetSingleton();
++    if (cc) {
++      cc->SendRoverfoxStoragePut(prefName, value);
++    }
++  }
++}
++
++/* static */ void
++RoverfoxStorageManager::PutUint(const nsAString& key, uint32_t value) {
++  nsCString prefName = MakePrefName(key);
++  nsAutoCString strValue;
++  strValue.AppendInt(static_cast<int64_t>(value));
++  SetPrefValue(prefName, strValue);
 +}
 +
 +/* static */ bool
-+RoverfoxStorageManager::GetUint(const nsAString& key, uint32_t& outValue)
-+{
-+  return sUintStorage.Get(key, outValue);
++RoverfoxStorageManager::GetUint(const nsAString& key, uint32_t& outValue) {
++  nsCString prefName = MakePrefName(key);
++  nsAutoCString strValue;
++  // Check local cache first (immediate reads for values set in this process)
++  {
++    MutexAutoLock lock(GetLocalCacheMutex());
++    if (auto entry = GetLocalCache().Lookup(prefName)) {
++      strValue = entry.Data();
++    }
++  }
++  // Fall back to Preferences (values synced from other processes)
++  if (strValue.IsEmpty()) {
++    Preferences::GetCString(prefName.get(), strValue);
++  }
++  // Sync IPC read from parent (cross-process fallback for workers)
++  if (strValue.IsEmpty() && !XRE_IsParentProcess() && NS_IsMainThread()) {
++    ContentChild* cc = ContentChild::GetSingleton();
++    if (cc) {
++      cc->SendRoverfoxStorageGet(prefName, &strValue);
++      if (!strValue.IsEmpty()) {
++        MutexAutoLock lock(GetLocalCacheMutex());
++        GetLocalCache().InsertOrUpdate(prefName, nsCString(strValue));
++      }
++    }
++  }
++  if (!strValue.IsEmpty()) {
++    nsresult parseRv;
++    int64_t parsed = strValue.ToInteger64(&parseRv);
++    if (NS_SUCCEEDED(parseRv) && parsed >= 0) {
++      outValue = static_cast<uint32_t>(parsed);
++      return true;
++    }
++  }
++  return false;
 +}
 +
 +/* static */ void
-+RoverfoxStorageManager::PutBool(const nsAString& key, bool value)
-+{
-+  sUintStorage.Put(key, value ? 1 : 0);
++RoverfoxStorageManager::PutBool(const nsAString& key, bool value) {
++  nsCString prefName = MakePrefName(key);
++  nsAutoCString strValue(value ? "1" : "0");
++  SetPrefValue(prefName, strValue);
 +}
 +
 +/* static */ bool
-+RoverfoxStorageManager::GetBool(const nsAString& key, bool& outValue)
-+{
-+  uint32_t intValue;
-+  if (sUintStorage.Get(key, intValue)) {
-+    outValue = (intValue != 0);
++RoverfoxStorageManager::GetBool(const nsAString& key, bool& outValue) {
++  nsCString prefName = MakePrefName(key);
++  nsAutoCString strValue;
++  {
++    MutexAutoLock lock(GetLocalCacheMutex());
++    if (auto entry = GetLocalCache().Lookup(prefName)) {
++      strValue = entry.Data();
++    }
++  }
++  if (strValue.IsEmpty()) {
++    Preferences::GetCString(prefName.get(), strValue);
++  }
++  // Sync IPC read from parent (cross-process fallback for workers)
++  if (strValue.IsEmpty() && !XRE_IsParentProcess() && NS_IsMainThread()) {
++    ContentChild* cc = ContentChild::GetSingleton();
++    if (cc) {
++      cc->SendRoverfoxStorageGet(prefName, &strValue);
++      if (!strValue.IsEmpty()) {
++        MutexAutoLock lock(GetLocalCacheMutex());
++        GetLocalCache().InsertOrUpdate(prefName, nsCString(strValue));
++      }
++    }
++  }
++  if (!strValue.IsEmpty()) {
++    outValue = strValue.EqualsLiteral("1");
 +    return true;
 +  }
 +  return false;
 +}
 +
 +/* static */ void
-+RoverfoxStorageManager::PutString(const nsAString& key, const nsAString& value)
-+{
-+  sStringStorage.Put(key, value);
++RoverfoxStorageManager::PutString(const nsAString& key,
++                                   const nsAString& value) {
++  nsCString prefName = MakePrefName(key);
++  nsAutoCString utf8Value;
++  CopyUTF16toUTF8(value, utf8Value);
++  SetPrefValue(prefName, utf8Value);
 +}
 +
 +/* static */ bool
-+RoverfoxStorageManager::GetString(const nsAString& key, nsAString& outValue)
-+{
-+  return sStringStorage.Get(key, outValue);
++RoverfoxStorageManager::GetString(const nsAString& key, nsAString& outValue) {
++  nsCString prefName = MakePrefName(key);
++  nsAutoCString utf8Value;
++  {
++    MutexAutoLock lock(GetLocalCacheMutex());
++    if (auto entry = GetLocalCache().Lookup(prefName)) {
++      utf8Value = entry.Data();
++    }
++  }
++  if (utf8Value.IsEmpty()) {
++    Preferences::GetCString(prefName.get(), utf8Value);
++  }
++  // Sync IPC read from parent (cross-process fallback for workers)
++  if (utf8Value.IsEmpty() && !XRE_IsParentProcess() && NS_IsMainThread()) {
++    ContentChild* cc = ContentChild::GetSingleton();
++    if (cc) {
++      cc->SendRoverfoxStorageGet(prefName, &utf8Value);
++      if (!utf8Value.IsEmpty()) {
++        MutexAutoLock lock(GetLocalCacheMutex());
++        GetLocalCache().InsertOrUpdate(prefName, nsCString(utf8Value));
++      }
++    }
++  }
++  if (!utf8Value.IsEmpty()) {
++    CopyUTF8toUTF16(utf8Value, outValue);
++    return true;
++  }
++  return false;
 +}
 +
 +/* static */ void
-+RoverfoxStorageManager::Remove(const nsAString& key)
-+{
-+  sUintStorage.Remove(key);
-+  sStringStorage.Remove(key);
++RoverfoxStorageManager::Remove(const nsAString& key) {
++  nsCString prefName = MakePrefName(key);
++  {
++    MutexAutoLock lock(GetLocalCacheMutex());
++    GetLocalCache().Remove(prefName);
++  }
++  if (XRE_IsParentProcess()) {
++    Preferences::ClearUser(prefName.get());
++  }
 +}
 +
-+} // namespace dom
-+} // namespace mozilla
++}  // namespace dom
++}  // namespace mozilla
 diff --git a/dom/base/RoverfoxStorageManager.h b/dom/base/RoverfoxStorageManager.h
 new file mode 100644
 index 0000000000..d5700aea62
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.h
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,36 @@
 +#ifndef mozilla_dom_RoverfoxStorageManager_h
 +#define mozilla_dom_RoverfoxStorageManager_h
 +
-+#include "mozilla/Mutex.h"
-+#include "nsBaseHashtable.h"
 +#include "nsString.h"
++#include "nsTHashMap.h"
 +#include "nsHashKeys.h"
++#include "mozilla/Mutex.h"
 +
 +namespace mozilla {
 +namespace dom {
 +
-+/**
-+ * Thread-safe hashtable for storing key-value pairs.
-+ * Based on nsClassHashtable with mutex protection for thread safety.
-+ */
-+class ThreadSafeKV {
-+public:
-+  ThreadSafeKV()
-+    : mMutex("ThreadSafeKV::mMutex") {}
-+
-+  void Put(const nsAString& key, uint32_t value) {
-+    mozilla::MutexAutoLock lock(mMutex);
-+    mTable.InsertOrUpdate(key, value);
-+  }
-+
-+  bool Get(const nsAString& key, uint32_t& outValue) {
-+    mozilla::MutexAutoLock lock(mMutex);
-+    return mTable.Get(key, &outValue);
-+  }
-+
-+  void Remove(const nsAString& key) {
-+    mozilla::MutexAutoLock lock(mMutex);
-+    mTable.Remove(key);
-+  }
-+
-+private:
-+  mozilla::Mutex mMutex;
-+  nsTHashMap<nsString, uint32_t> mTable;
-+};
-+
-+/**
-+ * Thread-safe hashtable for storing string key-value pairs.
-+ */
-+class ThreadSafeStringKV {
-+public:
-+  ThreadSafeStringKV()
-+    : mMutex("ThreadSafeStringKV::mMutex") {}
-+
-+  void Put(const nsAString& key, const nsAString& value) {
-+    mozilla::MutexAutoLock lock(mMutex);
-+    mTable.InsertOrUpdate(key, nsString(value));
-+  }
-+
-+  bool Get(const nsAString& key, nsAString& outValue) {
-+    mozilla::MutexAutoLock lock(mMutex);
-+    nsString value;
-+    if (mTable.Get(key, &value)) {
-+      outValue = value;
-+      return true;
-+    }
-+    return false;
-+  }
-+
-+  void Remove(const nsAString& key) {
-+    mozilla::MutexAutoLock lock(mMutex);
-+    mTable.Remove(key);
-+  }
-+
-+private:
-+  mozilla::Mutex mMutex;
-+  nsTHashMap<nsString, nsString> mTable;
-+};
-+
-+/**
-+ * Thread-safe key-value storage manager for whole-browser session scope.
-+ * Uses in-memory ThreadSafeKV storage with no SQLite dependencies.
-+ */
++// Cross-process key-value storage using Firefox Preferences + local cache.
++// Write-through: values stored locally (immediate reads) and sent to parent
++// process via IPDL (cross-process sync via Preferences API).
++// Keys prefixed with "roverfox.s." to avoid conflicts.
 +class RoverfoxStorageManager {
-+public:
-+  // Store a uint32_t value under a string key.
++ public:
 +  static void PutUint(const nsAString& key, uint32_t value);
-+
-+  // Retrieve a uint32_t value. Returns true if present.
 +  static bool GetUint(const nsAString& key, uint32_t& outValue);
-+
-+  // Store a boolean value.
 +  static void PutBool(const nsAString& key, bool value);
-+
-+  // Retrieve a boolean value. Returns true if present.
 +  static bool GetBool(const nsAString& key, bool& outValue);
-+
-+  // Store a UTF-16 string value.
 +  static void PutString(const nsAString& key, const nsAString& value);
-+
-+  // Retrieve a UTF-16 string value. Returns true if present.
 +  static bool GetString(const nsAString& key, nsAString& outValue);
-+
-+  // Remove a key for all supported types (best-effort), no-op if absent.
 +  static void Remove(const nsAString& key);
 +
-+private:
-+  // Thread-safe storage for uint32_t values
-+  static ThreadSafeKV sUintStorage;
-+  
-+  // Thread-safe storage for string values
-+  static ThreadSafeStringKV sStringStorage;
++ private:
++  static nsCString MakePrefName(const nsAString& key);
++  static void SetPrefValue(const nsCString& prefName, const nsCString& value);
++  static nsTHashMap<nsCStringHashKey, nsCString>& GetLocalCache();
++  static mozilla::Mutex& GetLocalCacheMutex();
 +};
 +
-+} // namespace dom
-+} // namespace mozilla
++}  // namespace dom
++}  // namespace mozilla
 +
-+#endif // mozilla_dom_RoverfoxStorageManager_h
++#endif  // mozilla_dom_RoverfoxStorageManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
 index cd9090cda3..609d3b71be 100644
 --- a/dom/base/moz.build
@@ -405,7 +460,7 @@ index 330a707789..fb3ba4d3fb 100644
  #include "nsIDOMXULControlElement.h"
  #include "nsIDeviceSensors.h"
  #include "nsIDocShell.h"
-@@ -7463,6 +7467,23 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
+@@ -7463,6 +7467,25 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
    return mIntlUtils;
  }
  
@@ -453,21 +508,22 @@ index 989dba05ca..14f8be6dcd 100644
  #include "mozilla/dom/CanvasRenderingContext2DBinding.h"
  #include "mozilla/dom/DOMMatrix.h"
  #include "mozilla/dom/Document.h"
-+#include "mozilla/OriginAttributes.h"
++#include "mozilla/dom/BrowsingContext.h"
  #include "mozilla/dom/FontFaceSet.h"
  #include "mozilla/dom/FontFaceSetImpl.h"
  #include "mozilla/dom/GeneratePlaceholderCanvasData.h"
-@@ -4719,10 +4720,20 @@ struct MOZ_STACK_CLASS CanvasBidiProcessor final
+@@ -4719,10 +4720,21 @@ struct MOZ_STACK_CLASS CanvasBidiProcessor final
      } else {
        flags &= ~gfx::ShapedTextFlags::TEXT_IS_RTL;
      }
-+    // Extract user context ID from Canvas element's document
++    // Extract user context ID via BrowsingContext (canonical source)
 +    uint32_t userContextId = 0;
 +    if (mCtx && mCtx->mCanvasElement) {
 +      if (Document* doc = mCtx->mCanvasElement->GetOwnerDocument()) {
-+        if (nsIPrincipal* principal = doc->NodePrincipal()) {
-+          const OriginAttributes& attrs = principal->OriginAttributesRef();
-+          userContextId = attrs.mUserContextId;
++        if (nsPIDOMWindowInner* win = doc->GetInnerWindow()) {
++          if (BrowsingContext* bc = win->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
 +        }
 +      }
 +    }
@@ -533,12 +589,13 @@ diff --git a/gfx/src/nsFontMetrics.cpp b/gfx/src/nsFontMetrics.cpp
 index ef081ebe40..a921c49f43 100644
 --- a/gfx/src/nsFontMetrics.cpp
 +++ b/gfx/src/nsFontMetrics.cpp
-@@ -23,9 +23,12 @@
+@@ -23,9 +23,13 @@
  #include "nsStyleConsts.h"       // for StyleHyphens::None
  #include "mozilla/Assertions.h"  // for MOZ_ASSERT
  #include "mozilla/UniquePtr.h"   // for UniquePtr
 +#include "mozilla/dom/Document.h"  // for Document
-+#include "mozilla/OriginAttributes.h"  // for OriginAttributes
++#include "mozilla/dom/BrowsingContext.h"  // for BrowsingContext
++#include "nsPIDOMWindow.h"  // for nsPIDOMWindowInner
  
  class gfxUserFontSet;
  using namespace mozilla;
@@ -546,17 +603,18 @@ index ef081ebe40..a921c49f43 100644
  
  namespace {
  
-@@ -35,17 +38,37 @@ class AutoTextRun {
+@@ -35,17 +39,39 @@ class AutoTextRun {
  
    AutoTextRun(const nsFontMetrics* aMetrics, DrawTarget* aDrawTarget,
                const char* aString, uint32_t aLength) {
-+    // Extract user context ID from PresContext document if available
++    // Extract user context ID via BrowsingContext (canonical source)
 +    uint32_t userContextId = 0;
 +    if (aMetrics->mPresContext) {
 +      if (Document* doc = aMetrics->mPresContext->Document()) {
-+        if (nsIPrincipal* principal = doc->NodePrincipal()) {
-+          const OriginAttributes& attrs = principal->OriginAttributesRef();
-+          userContextId = attrs.mUserContextId;
++        if (nsPIDOMWindowInner* win = doc->GetInnerWindow()) {
++          if (BrowsingContext* bc = win->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
 +        }
 +      }
 +    }
@@ -569,13 +627,14 @@ index ef081ebe40..a921c49f43 100644
  
    AutoTextRun(const nsFontMetrics* aMetrics, DrawTarget* aDrawTarget,
                const char16_t* aString, uint32_t aLength) {
-+    // Extract user context ID from PresContext document if available
++    // Extract user context ID via BrowsingContext (canonical source)
 +    uint32_t userContextId = 0;
 +    if (aMetrics->mPresContext) {
 +      if (Document* doc = aMetrics->mPresContext->Document()) {
-+        if (nsIPrincipal* principal = doc->NodePrincipal()) {
-+          const OriginAttributes& attrs = principal->OriginAttributesRef();
-+          userContextId = attrs.mUserContextId;
++        if (nsPIDOMWindowInner* win = doc->GetInnerWindow()) {
++          if (BrowsingContext* bc = win->GetBrowsingContext()) {
++            userContextId = bc->OriginAttributesRef().mUserContextId;
++          }
 +        }
 +      }
 +    }
@@ -638,7 +697,8 @@ index 6f02e3a566..ca3b60d550 100644
 -    Func aCallback) {
 +    uint32_t aUserContextId, Func aCallback) {
    WordCacheKey key(aText, aLength, aHash, aRunScript, aLanguage,
-                    aAppUnitsPerDevUnit, aFlags, aRounding);
+-                   aAppUnitsPerDevUnit, aFlags, aRounding);
++                   aAppUnitsPerDevUnit, aFlags, aRounding, aUserContextId);
    {
 @@ -3317,6 +3319,8 @@ bool gfxFont::ProcessShapedWordInternal(
      NS_WARNING("failed to create gfxShapedWord - expect missing text");
@@ -649,16 +709,26 @@ index 6f02e3a566..ca3b60d550 100644
    DebugOnly<bool> ok =
        ShapeText(aDrawTarget, aText, 0, aLength, aRunScript, aLanguage,
                  aVertical, aRounding, newShapedWord.get());
-@@ -3420,7 +3424,7 @@ bool gfxFont::ProcessSingleSpaceShapedWord(
+@@ -3383,7 +3387,8 @@ bool gfxFont::WordCacheKey::HashPolicy::match(const Key& aKey,
+   if (aKey.mLength != aLookup.mLength || aKey.mFlags != aLookup.mFlags ||
+       aKey.mRounding != aLookup.mRounding ||
+       aKey.mAppUnitsPerDevUnit != aLookup.mAppUnitsPerDevUnit ||
+-      aKey.mScript != aLookup.mScript || aKey.mLanguage != aLookup.mLanguage) {
++      aKey.mScript != aLookup.mScript || aKey.mLanguage != aLookup.mLanguage ||
++      aKey.mUserContextId != aLookup.mUserContextId) {
+     return false;
+   }
+
+@@ -3420,7 +3425,7 @@ bool gfxFont::ProcessSingleSpaceShapedWord(
    return ProcessShapedWordInternal(
        aDrawTarget, &space, 1, gfxShapedWord::HashMix(0, ' '), Script::LATIN,
        /* aLanguage = */ nullptr, aVertical, aAppUnitsPerDevUnit, aFlags,
 -      aRounding, nullptr, aCallback);
 +      aRounding, nullptr, 0 /* pbid */, aCallback);
  }
- 
+
  bool gfxFont::ShapeText(DrawTarget* aDrawTarget, const uint8_t* aText,
-@@ -3778,6 +3782,7 @@ bool gfxFont::SplitAndInitTextRun(
+@@ -3778,6 +3784,7 @@ bool gfxFont::SplitAndInitTextRun(
        bool processed = ProcessShapedWordInternal(
            aDrawTarget, aString + wordStart, length, hash, aRunScript, aLanguage,
            vertical, appUnitsPerDevUnit, wordFlags, rounding, tp,
@@ -729,9 +799,54 @@ index 4601fc3f17..78c2f1116c 100644
 +                                  gfxTextPerfMetrics* aTextPerf,
 +                                  uint32_t aUserContextId,
 +                                  Func aCallback);
- 
+
    // whether a given feature is included in feature settings from both the
    // font and the style. aFeatureOn set if resolved feature value is non-zero
+@@ -2127,11 +2141,12 @@ class gfxFont {
+     PLDHashNumber mHashKey;
+     bool mTextIs8Bit;
++    uint32_t mUserContextId;
+     RoundingFlags mRounding;
+
+     WordCacheKey(const uint8_t* aText, uint32_t aLength, uint32_t aStringHash,
+                  Script aScriptCode, nsAtom* aLanguage,
+                  int32_t aAppUnitsPerDevUnit, ShapedTextFlags aFlags,
+-                 RoundingFlags aRounding)
++                 RoundingFlags aRounding, uint32_t aUserContextId = 0)
+         : mLength(aLength),
+           mFlags(aFlags),
+           mScript(aScriptCode),
+@@ -2139,8 +2154,9 @@ class gfxFont {
+           mAppUnitsPerDevUnit(aAppUnitsPerDevUnit),
+           mHashKey(aStringHash + static_cast<int32_t>(aScriptCode) +
+                    aAppUnitsPerDevUnit * 0x100 + uint16_t(aFlags) * 0x10000 +
+-                   int(aRounding) + (aLanguage ? aLanguage->hash() : 0)),
++                   int(aRounding) + (aLanguage ? aLanguage->hash() : 0) + aUserContextId * 0x1000000),
+           mTextIs8Bit(true),
++          mUserContextId(aUserContextId),
+           mRounding(aRounding) {
+       NS_ASSERTION(aFlags & ShapedTextFlags::TEXT_IS_8BIT,
+                    "8-bit flag should have been set");
+@@ -2150,7 +2166,7 @@ class gfxFont {
+     WordCacheKey(const char16_t* aText, uint32_t aLength, uint32_t aStringHash,
+                  Script aScriptCode, nsAtom* aLanguage,
+                  int32_t aAppUnitsPerDevUnit, ShapedTextFlags aFlags,
+-                 RoundingFlags aRounding)
++                 RoundingFlags aRounding, uint32_t aUserContextId = 0)
+         : mLength(aLength),
+           mFlags(aFlags),
+           mScript(aScriptCode),
+@@ -2158,8 +2174,9 @@ class gfxFont {
+           mAppUnitsPerDevUnit(aAppUnitsPerDevUnit),
+           mHashKey(aStringHash + static_cast<int32_t>(aScriptCode) +
+                    aAppUnitsPerDevUnit * 0x100 + uint16_t(aFlags) * 0x10000 +
+-                   int(aRounding)),
++                   int(aRounding) + aUserContextId * 0x1000000),
+           mTextIs8Bit(false),
++          mUserContextId(aUserContextId),
+           mRounding(aRounding) {
+       // We can NOT assert that TEXT_IS_8BIT is false in aFlags here,
+       // because this might be an 8bit-only word from a 16-bit textrun,
 diff --git a/gfx/thebes/gfxHarfBuzzShaper.cpp b/gfx/thebes/gfxHarfBuzzShaper.cpp
 index 1a5bdaba99..46226fc88d 100644
 --- a/gfx/thebes/gfxHarfBuzzShaper.cpp
@@ -806,12 +921,13 @@ index de9a9661a1..f878bdb36c 100644
  #include "mozilla/Sprintf.h"
  #include "mozilla/StaticPresData.h"
  #include "mozilla/UniquePtr.h"
-@@ -34,6 +35,7 @@
+@@ -34,6 +35,8 @@
  #include "nsUnicodeProperties.h"
  #include "SharedFontList-impl.h"
  #include "TextDrawTarget.h"
-+#include "mozilla/BasePrincipal.h"
- 
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsPIDOMWindow.h"
+
  #ifdef XP_WIN
  #  include "gfxWindowsPlatform.h"
 @@ -145,25 +147,26 @@ void* gfxTextRun::AllocateStorageForTextRun(size_t aSize, uint32_t aLength) {
@@ -854,19 +970,18 @@ index de9a9661a1..f878bdb36c 100644
  
    EmphasisMarkDrawParams params(aContext, aPaletteCache);
    params.mark = aMark;
-@@ -1870,6 +1874,19 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+@@ -1870,6 +1874,18 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
        mFontVariantEmoji(aVariantEmoji) {
    // We don't use SetUserFontSet() here, as we want to unconditionally call
    // EnsureFontList() rather than only do UpdateUserFonts() if it changed.
 +
-+  // Initialize cached user context ID from the font visibility provider if available.
++  // Initialize cached user context ID via BrowsingContext (canonical source).
 +  mUserContextId = 0;
 +  if (mFontVisibilityProvider) {
 +    if (auto* doc = mFontVisibilityProvider->GetDocument()) {
-+      if (auto* principal = doc->NodePrincipal()) {
-+        auto* bp = mozilla::BasePrincipal::Cast(principal);
-+        if (bp) {
-+          mUserContextId = bp->OriginAttributesRef().mUserContextId;
++      if (auto* win = doc->GetInnerWindow()) {
++        if (auto* bc = win->GetBrowsingContext()) {
++          mUserContextId = bc->OriginAttributesRef().mUserContextId;
 +        }
 +      }
 +    }
@@ -1035,17 +1150,16 @@ diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
 index 89ed5fec3e..32920e9b71 100644
 --- a/layout/base/nsLayoutUtils.cpp
 +++ b/layout/base/nsLayoutUtils.cpp
-@@ -144,7 +144,9 @@
+@@ -144,7 +144,8 @@
  #include "nsIFrameInlines.h"
  #include "nsIImageLoadingContent.h"
  #include "nsIInterfaceRequestorUtils.h"
-+#include "nsILoadContext.h"
++#include "mozilla/dom/BrowsingContext.h"
  #include "nsIWidget.h"
-+#include "mozilla/OriginAttributes.h"
  #include "nsListControlFrame.h"
  #include "nsMenuPopupFrame.h"
  #include "nsPIDOMWindow.h"
-@@ -1210,6 +1212,33 @@ nsIFrame* nsLayoutUtils::GetLastSibling(nsIFrame* aFrame) {
+@@ -1210,6 +1211,31 @@ nsIFrame* nsLayoutUtils::GetLastSibling(nsIFrame* aFrame) {
    return aFrame;
  }
  
@@ -1055,25 +1169,23 @@ index 89ed5fec3e..32920e9b71 100644
 +    if (!aFrame || !aFrame->GetContent()) {
 +        return 0;
 +    }
-+    
++
 +    mozilla::dom::Document* doc = aFrame->GetContent()->GetComposedDoc();
 +    if (!doc) {
 +        return 0;
 +    }
-+    
-+    nsIDocShell* docShell = doc->GetDocShell();
-+    if (!docShell) {
++
++    nsPIDOMWindowInner* win = doc->GetInnerWindow();
++    if (!win) {
 +        return 0;
 +    }
-+    
-+    nsCOMPtr<nsILoadContext> loadContext = do_QueryInterface(docShell);
-+    if (!loadContext) {
++
++    mozilla::dom::BrowsingContext* bc = win->GetBrowsingContext();
++    if (!bc) {
 +        return 0;
 +    }
-+    
-+    mozilla::OriginAttributes attrs;
-+    loadContext->GetOriginAttributes(attrs);
-+    return attrs.mUserContextId;
++
++    return bc->OriginAttributesRef().mUserContextId;
 +}
 +
  // static
@@ -1114,25 +1226,27 @@ diff --git a/layout/generic/MathMLTextRunFactory.cpp b/layout/generic/MathMLText
 index 13c9cc5c11..b940be8790 100644
 --- a/layout/generic/MathMLTextRunFactory.cpp
 +++ b/layout/generic/MathMLTextRunFactory.cpp
-@@ -11,6 +11,7 @@
+@@ -11,6 +11,8 @@
  #include "mozilla/ComputedStyleInlines.h"
  #include "mozilla/StaticPrefs_mathml.h"
  #include "mozilla/intl/UnicodeScriptCodes.h"
-+#include "mozilla/OriginAttributes.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsPIDOMWindow.h"
  #include "nsDeviceContext.h"
  #include "nsFontMetrics.h"
  #include "nsStyleConsts.h"
-@@ -637,6 +638,17 @@ void MathMLTextRunFactory::RebuildTextRun(
+@@ -637,6 +639,18 @@ void MathMLTextRunFactory::RebuildTextRun(
      newFontGroup = fontGroup;
    }
  
-+  // Extract user context ID from PresContext document if available
++  // Extract user context ID via BrowsingContext (canonical source)
 +  uint32_t userContextId = 0;
 +  if (length && styles[0]->mPresContext) {
 +    if (mozilla::dom::Document* doc = styles[0]->mPresContext->Document()) {
-+      if (nsIPrincipal* principal = doc->NodePrincipal()) {
-+        const mozilla::OriginAttributes& attrs = principal->OriginAttributesRef();
-+        userContextId = attrs.mUserContextId;
++      if (nsPIDOMWindowInner* win = doc->GetInnerWindow()) {
++        if (mozilla::dom::BrowsingContext* bc = win->GetBrowsingContext()) {
++          userContextId = bc->OriginAttributesRef().mUserContextId;
++        }
 +      }
 +    }
 +  }
@@ -1140,7 +1254,7 @@ index 13c9cc5c11..b940be8790 100644
    if (mInnerTransformingTextRunFactory) {
      transformedChild = mInnerTransformingTextRunFactory->MakeTextRun(
          convertedString.BeginReading(), convertedString.Length(), &innerParams,
-@@ -646,7 +658,7 @@ void MathMLTextRunFactory::RebuildTextRun(
+@@ -646,7 +660,7 @@ void MathMLTextRunFactory::RebuildTextRun(
    } else {
      cachedChild = newFontGroup->MakeTextRun(
          convertedString.BeginReading(), convertedString.Length(), &innerParams,
@@ -1244,8 +1358,8 @@ index 58f9670e7f..577fd833ce 100644
  #include "mozilla/StaticPrefs_mathml.h"
  #include "mozilla/UniquePtr.h"
  #include "mozilla/dom/Document.h"
-+#include "mozilla/OriginAttributes.h"
-+#include "mozilla/BasePrincipal.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsPIDOMWindow.h"
  #include "mozilla/gfx/2D.h"
  #include "mozilla/intl/UnicodeScriptCodes.h"
  #include "nsCOMPtr.h"
@@ -1267,16 +1381,15 @@ index 58f9670e7f..577fd833ce 100644
      const gfxTextRun::CompressedGlyph& data = textRun->GetCharacterGlyphs()[0];
      if (data.IsSimpleGlyph()) {
        mGlyphID = data.GetSimpleGlyph();
-@@ -1396,10 +1398,20 @@ nsresult nsMathMLChar::StretchInternal(
+@@ -1396,10 +1398,19 @@ nsresult nsMathMLChar::StretchInternal(
      flags |= gfx::ShapedTextFlags::TEXT_IS_RTL;
    }
  
 +  uint32_t userContextId = 0;
 +  if (mozilla::dom::Document* doc = presContext->Document()) {
-+    if (nsIPrincipal* principal = doc->NodePrincipal()) {
-+      auto* bp = mozilla::BasePrincipal::Cast(principal);
-+      if (bp) {
-+        userContextId = bp->OriginAttributesRef().mUserContextId;
++    if (nsPIDOMWindowInner* win = doc->GetInnerWindow()) {
++      if (mozilla::dom::BrowsingContext* bc = win->GetBrowsingContext()) {
++        userContextId = bc->OriginAttributesRef().mUserContextId;
 +      }
 +    }
 +  }
