@@ -1,0 +1,92 @@
+diff --git a/dom/ipc/ContentParent.cpp b/dom/ipc/ContentParent.cpp
+index 1ff3195235..795cb05bc3 100644
+--- a/dom/ipc/ContentParent.cpp
++++ b/dom/ipc/ContentParent.cpp
+@@ -1231,6 +1231,26 @@ mozilla::ipc::IPCResult ContentParent::RecvCreateGMPService() {
+   return IPC_OK();
+ }
+ 
++mozilla::ipc::IPCResult ContentParent::RecvRoverfoxStoragePut(
++    const nsCString& aPrefName, const nsCString& aValue) {
++  // Only allow roverfox-namespaced prefs for security
++  if (!StringBeginsWith(aPrefName, "roverfox.s."_ns)) {
++    return IPC_OK();
++  }
++  Preferences::SetCString(aPrefName.get(), aValue);
++  return IPC_OK();
++}
++
++mozilla::ipc::IPCResult ContentParent::RecvRoverfoxStorageGet(
++    const nsCString& aPrefName, nsCString* aOutValue) {
++  if (!StringBeginsWith(aPrefName, "roverfox.s."_ns)) {
++    *aOutValue = ""_ns;
++    return IPC_OK();
++  }
++  Preferences::GetCString(aPrefName.get(), *aOutValue);
++  return IPC_OK();
++}
++
+ IPCResult ContentParent::RecvAttributionEvent(
+     const nsACString& aHost, PrivateAttributionImpressionType aType,
+     uint32_t aIndex, const nsAString& aAd, const nsACString& aTargetHost) {
+diff --git a/dom/ipc/ContentParent.h b/dom/ipc/ContentParent.h
+index 4a478a5a4d..161a1f993e 100644
+--- a/dom/ipc/ContentParent.h
++++ b/dom/ipc/ContentParent.h
+@@ -362,6 +362,11 @@ class ContentParent final : public PContentParent,
+       Endpoint<PClipboardContentAnalysisParent>&& aParentEndpoint);
+   mozilla::ipc::IPCResult RecvCreateGMPService();
+ 
++  mozilla::ipc::IPCResult RecvRoverfoxStoragePut(
++      const nsCString& aPrefName, const nsCString& aValue);
++  mozilla::ipc::IPCResult RecvRoverfoxStorageGet(
++      const nsCString& aPrefName, nsCString* aOutValue);
++
+   NS_DECL_CYCLE_COLLECTION_CLASS_AMBIGUOUS(ContentParent, nsIObserver)
+ 
+   NS_DECL_CYCLE_COLLECTING_ISUPPORTS
+diff --git a/dom/ipc/PContent.ipdl b/dom/ipc/PContent.ipdl
+index 39b01c305d..882bd54b8f 100644
+--- a/dom/ipc/PContent.ipdl
++++ b/dom/ipc/PContent.ipdl
+@@ -1113,6 +1113,13 @@ parent:
+ 
+     async CreateGMPService();
+ 
++    // Roverfox: set a namespaced pref from content process (sync to ensure
++    // value is in parent before any worker process starts)
++    sync RoverfoxStoragePut(nsCString prefName, nsCString value);
++
++    // Roverfox: read a namespaced pref from parent (cross-process sync)
++    sync RoverfoxStorageGet(nsCString prefName) returns (nsCString value);
++
+     async CreateClipboardContentAnalysis(Endpoint<PClipboardContentAnalysisParent> aParentEndpoint);
+ 
+     async InitStreamFilter(uint64_t channelId, nsString addonId)
+diff --git a/ipc/ipdl/sync-messages.ini b/ipc/ipdl/sync-messages.ini
+index abcdef1234..1234abcdef 100644
+--- a/ipc/ipdl/sync-messages.ini
++++ b/ipc/ipdl/sync-messages.ini
+@@ -369,5 +369,11 @@ description = This must be synchronous until quota file streams become non-blocki
+ [PIPCClientCerts::Sign]
+ description = Performs a signature on given data with a key corresponding to the given identifier. This is called from PKCS#11, so there is no way to make this asynchronous.
+ # -
++[PContent::RoverfoxStoragePut]
++description = Writes a roverfox-namespaced preference to the parent process. Synchronous to ensure the value is available in Firefox Preferences before any worker content process starts.
++# -
++[PContent::RoverfoxStorageGet]
++description = Reads a roverfox-namespaced preference from the parent process for cross-process fingerprint storage synchronization. Only used during initial fingerprint reads in worker processes.
++# -
+ [PRemoteQuotaObject::MaybeUpdateSize]
+ description = This must be synchronous until quota file streams become non-blocking. The synchronous message is never used on the main thread or the PBackground thread or a DOM worker threed.
+diff --git a/modules/libpref/Preferences.cpp b/modules/libpref/Preferences.cpp
+index aaaaaa0000..bbbbbb0000 100644
+--- a/modules/libpref/Preferences.cpp
++++ b/modules/libpref/Preferences.cpp
+@@ -6364,6 +6364,8 @@ static const PrefListEntry sDynamicPrefOverrideList[]{
+     PREF_LIST_ENTRY("toolkit.mozprotocol.url"),
+     PREF_LIST_ENTRY("toolkit.telemetry.log.level"),
+     PREF_LIST_ENTRY("ui."),
++    // Roverfox: allow cross-process sync of per-context fingerprint storage
++    PREF_LIST_ENTRY("roverfox.s."),
+ };

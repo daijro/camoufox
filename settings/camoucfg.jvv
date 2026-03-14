@@ -77,7 +77,9 @@
 
     "fonts": "array[str]",
     "fonts:spacing_seed": "int[>=0]",
-    
+    "audio:seed": "int[>=0]",
+    "canvas:seed": "int[>=0]",
+
     "AudioContext:sampleRate": "int[>=0]",
     "AudioContext:outputLatency": "double[>=0]",
     "AudioContext:maxChannelCount": "int[>=0]",

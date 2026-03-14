@@ -168,7 +168,7 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
  #include "Units.h"
  #include "VRManagerChild.h"
  #include "WindowDestroyedEvent.h"
-@@ -7477,6 +7478,22 @@
+@@ -7477,6 +7478,25 @@
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
 

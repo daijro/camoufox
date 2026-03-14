@@ -157,7 +157,7 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
  #include "Crypto.h"
 +#include "SpeechVoicesManager.h"
  #include "MainThreadUtils.h"
-@@ -7477,6 +7478,22 @@
+@@ -7477,6 +7478,25 @@
    mSharedWorkers.RemoveElement(aSharedWorker);
  }
 

@@ -56,6 +56,8 @@
   { "property": "battery:level", "type": "double" },
   { "property": "fonts", "type": "array" },
   { "property": "fonts:spacing_seed", "type": "uint" },
+  { "property": "audio:seed", "type": "uint" },
+  { "property": "canvas:seed", "type": "uint" },
   { "property": "geolocation:latitude", "type": "double" },
   { "property": "geolocation:longitude", "type": "double" },
   { "property": "geolocation:accuracy", "type": "double" },
