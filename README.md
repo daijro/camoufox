@@ -198,6 +198,36 @@ async with AsyncCamoufox() as browser:
 
 [[Installation & usage](https://camoufox.com/python/)]
 
+### Making Full use of Hardware Spoofing
+
+For stable releases, you should always use the main [`camoufox`](https://pypi.org/project/camoufox/) pip package. However, if you want to make use of per-context fingerprints and hardware spoofing, use the [`cloverlabs-camoufox`](https://pypi.org/project/cloverlabs-camoufox/) package. This package is updated with each releases, whereas the official package is released on delay.
+
+Make sure you are using a virtual env to avoid conflicts between the two packages.
+
+**Installation**
+
+```bash
+pip install cloverlabs-camoufox
+```
+
+**Fetch the latest prerelease browser** (recommended for newest patches)
+
+```bash
+python -m camoufox sync
+python -m camoufox set official/prerelease
+python -m camoufox fetch
+```
+
+**Usage** — the API is identical to the upstream package:
+
+```python
+from camoufox.sync_api import Camoufox
+
+with Camoufox() as browser:
+    page = browser.new_page()
+    page.goto("https://example.com")
+```
+
 ---
 
 ## Capabilities

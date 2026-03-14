@@ -1,0 +1,2 @@
+pytest>=8.0
+pytest-asyncio>=0.24
