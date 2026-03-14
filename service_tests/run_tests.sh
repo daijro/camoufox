@@ -38,8 +38,8 @@ fi
 PYTHON=".venv/bin/python"
 PIP=".venv/bin/pip"
 
-echo "==> Installing cloverlabs-camoufox..."
-$PIP install -q --upgrade cloverlabs-camoufox
+echo "==> Installing camoufox from local source..."
+$PIP install -q -e ../pythonlib
 
 echo "==> Setting browser version: $VERSION"
 $PYTHON -m camoufox set "$VERSION"
