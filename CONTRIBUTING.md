@@ -14,7 +14,7 @@ See README.md
 
 ## Pull Request Rules
 
-1. Each pull requested must be associated with a Github issue
+1. Each pull request must be associated with a Github issue
 2. Follow the pull request template
 3. Keep commits focused — one logical change per commit.
 4. Open a PR with a clear description of what you changed and why.

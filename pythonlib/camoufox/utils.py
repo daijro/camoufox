@@ -112,7 +112,7 @@ def validate_config(config_map: Dict[str, str], path: Optional[Path] = None) -> 
     for key, value in config_map.items():
         expected_type = property_types.get(key)
         if not expected_type:
-            print(f'Skipping unknown patch ${key} : ${value}')
+            print(f'Skipping unknown patch {key} : {value}')
             continue  # Property not supported by this browser version; skip silently
 
         if not validate_type(value, expected_type):
