@@ -1,6 +1,8 @@
 import asyncio
+import socket
 from functools import partial
 from typing import Any, Dict, List, Optional, Union, overload
+from urllib.parse import urlparse
 
 from playwright.async_api import (
     Browser,
@@ -101,12 +103,27 @@ async def AsyncNewBrowser(
     return await async_attach_vd(browser, virtual_display)
 
 
+async def _resolve_proxy_ip(proxy: Dict[str, str]) -> Optional[str]:
+    """Resolves the proxy server hostname to an IPv4 address."""
+    host = urlparse(proxy.get("server", "")).hostname
+    if not host:
+        return None
+    try:
+        infos = await asyncio.get_event_loop().getaddrinfo(host, None, family=socket.AF_INET)
+        if infos:
+            return infos[0][4][0]
+    except Exception:
+        pass
+    return None
+
+
 async def AsyncNewContext(
     browser: Browser,
     *,
     preset: Optional[Dict[str, Any]] = None,
     os: Optional[str] = None,
     ff_version: Optional[str] = None,
+    webrtc_ip: Optional[str] = None,
     proxy: Optional[Dict[str, str]] = None,
     geolocation: Optional[Dict[str, float]] = None,
     **context_kwargs: Any,
@@ -123,13 +140,18 @@ async def AsyncNewContext(
         preset: A specific fingerprint preset dict to use. If None, picks randomly.
         os: Target OS for preset selection ("windows", "macos", "linux").
         ff_version: Firefox version string for UA patching.
+        webrtc_ip: IPv4 address to spoof for WebRTC ICE candidates.
         proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).
         geolocation: Per-context geolocation ({"latitude": float, "longitude": float}).
         **context_kwargs: Additional Playwright new_context() options.
     """
+    # Auto-derive WebRTC IP from proxy server when not explicitly provided
+    if proxy and not webrtc_ip:
+        webrtc_ip = await _resolve_proxy_ip(proxy)
+
     fp = await asyncio.get_event_loop().run_in_executor(
         None,
-        lambda: generate_context_fingerprint(preset=preset, os=os, ff_version=ff_version),
+        lambda: generate_context_fingerprint(preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip),
     )
 
     # Merge generated context options with user overrides (user wins)

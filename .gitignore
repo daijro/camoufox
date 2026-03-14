@@ -72,3 +72,4 @@ closedsrc
 /windows-build/
 
 node_modules/
+proxies.txt

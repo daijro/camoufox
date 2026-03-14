@@ -9,6 +9,7 @@ BUILD_TESTER_DIR="$SCRIPT_DIR/../build-tester"
 VERSION="official/stable"
 HEADFUL=""
 PROFILE_COUNT=6
+PROXIES="$SCRIPT_DIR/proxies.txt"
 EXTRA_ARGS=""
 
 # Parse args
@@ -20,6 +21,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --profile-count)
             PROFILE_COUNT="$2"
+            shift 2
+            ;;
+        --proxies)
+            PROXIES="$2"
             shift 2
             ;;
         --headful)
@@ -36,7 +41,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Unknown argument: $1"
-            echo "Usage: $0 [--browser-version <specifier>] [--profile-count N] [--headful] [--no-cert] [--save-cert PATH]"
+            echo "Usage: $0 [--browser-version <specifier>] [--profile-count N] [--proxies PATH] [--headful] [--no-cert] [--save-cert PATH]"
             echo "  e.g. $0 --browser-version official/prerelease/146.0.1-beta.50 --headful"
             exit 1
             ;;
@@ -74,5 +79,6 @@ echo "==> Running service tests..."
 $PYTHON run_tests.py \
     --browser-version "$VERSION" \
     --profile-count "$PROFILE_COUNT" \
+    --proxies "$PROXIES" \
     $HEADFUL \
     $EXTRA_ARGS
