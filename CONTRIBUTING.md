@@ -22,17 +22,53 @@ See README.md
 
 ## Testing Requirements
 
-Two test suites must pass before a PR can be merged:
+**Both test suites are required for every PR.** They test different layers of the stack and catch different classes of bugs — passing one does not substitute for the other.
 
 ### build-tester
 
-Tests the Camoufox binary in isolation. This verifies that the browser binary itself is functioning correctly — fingerprint properties, header behavior, and other browser-level changes. Run this when you've made changes to the browser source.
+Tests the **raw binary** in isolation, bypassing the Python package entirely. Fingerprints are injected manually via `generate_context_fingerprint` + `addInitScript` (per-context mode) and via the `CAMOU_CONFIG` environment variable (global mode). It also validates that injected values actually appear in the page via match result checks.
+
+**Run this when you change:** browser patches, Firefox source modifications, WebGL/canvas/audio spoofing, WebRTC IP handling, or anything in the C++/JS browser layer.
+
+```bash
+cd build-tester
+npm install          # first time only
+pip install -r requirements.txt
+python scripts/run_tests.py /path/to/camoufox-binary
+```
+
+See [`build-tester/README.md`](build-tester/README.md) for full details.
+
+---
 
 ### service_tests
 
-Tests the full stack: both the pip package and the binary together. This validates that the Python library correctly launches, configures, and communicates with the browser binary end-to-end. Run this when you've made changes to either the Python package (`pythonlib/`) or anything that affects how the pip package interacts with the binary.
+Tests the **full stack** — the binary and the Python package together — using only the public `AsyncNewContext` API. Fingerprints are generated entirely by camoufox/browserforge with no manual injection. Real proxies are required; the WebRTC IP and timezone are auto-derived from each proxy's exit IP. This is a black-box trust test: if it fails, the fix belongs in the Python package, not in the test.
 
-When in doubt, run both.
+**Run this when you change:** `pythonlib/` (fingerprint generation, `AsyncNewContext`, `NewContext`), proxy handling, or any behaviour that affects how the Python package interacts with the binary.
+
+```bash
+cd service_tests
+# Add proxies (one per line, format: user:pass@domain:port)
+cp proxies.txt.example proxies.txt   # or create manually
+./run_tests.sh
+```
+
+See [`service_tests/README.md`](service_tests/README.md) for full details.
+
+---
+
+### Key differences
+
+| | build-tester | service_tests |
+|---|---|---|
+| Entry point | Raw binary path | `pip install camoufox` |
+| Fingerprint injection | Manual | Via `AsyncNewContext` API |
+| Global mode (`CAMOU_CONFIG`) | ✓ | ✗ |
+| Match result validation | ✓ | ✗ |
+| Proxy required | ✗ | ✓ |
+| Profiles | 8 (6 per-context + 2 global) | 6 (per-context) |
+| Fix target on failure | Browser source | Python package |
 
 ## Reporting Issues
 
