@@ -4,8 +4,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+BUILD_TESTER_DIR="$SCRIPT_DIR/../build-tester"
+
 VERSION="official/stable"
 HEADFUL=""
+PROFILE_COUNT=6
+EXTRA_ARGS=""
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -14,20 +18,39 @@ while [[ $# -gt 0 ]]; do
             VERSION="$2"
             shift 2
             ;;
+        --profile-count)
+            PROFILE_COUNT="$2"
+            shift 2
+            ;;
         --headful)
             HEADFUL="--headful"
             shift
             ;;
+        --no-cert)
+            EXTRA_ARGS="$EXTRA_ARGS --no-cert"
+            shift
+            ;;
+        --save-cert)
+            EXTRA_ARGS="$EXTRA_ARGS --save-cert $2"
+            shift 2
+            ;;
         *)
             echo "Unknown argument: $1"
-            echo "Usage: $0 [--browser-version <specifier>] [--headful]"
-            echo "  e.g. $0 --browser-version official/prerelease/146.0.1-beta.25 --headful"
+            echo "Usage: $0 [--browser-version <specifier>] [--profile-count N] [--headful] [--no-cert] [--save-cert PATH]"
+            echo "  e.g. $0 --browser-version official/prerelease/146.0.1-beta.50 --headful"
             exit 1
             ;;
     esac
 done
 
 echo "==> Browser version: $VERSION"
+echo "==> Profile count:   $PROFILE_COUNT"
+
+# Install npm deps in build-tester (for esbuild — needed to build TypeScript bundle)
+if [ ! -d "$BUILD_TESTER_DIR/node_modules" ]; then
+    echo "==> Installing build-tester npm dependencies..."
+    (cd "$BUILD_TESTER_DIR" && npm install --silent)
+fi
 
 # Create venv if needed
 if [ ! -d ".venv" ]; then
@@ -47,8 +70,9 @@ $PYTHON -m camoufox set "$VERSION"
 echo "==> Fetching browser..."
 $PYTHON -m camoufox fetch
 
-echo "==> Installing test dependencies..."
-$PIP install -q -r requirements.txt
-
-echo "==> Running tests..."
-.venv/bin/pytest test_fingerprints.py -v -s --browser-version "$VERSION" $HEADFUL
+echo "==> Running service tests..."
+$PYTHON run_tests.py \
+    --browser-version "$VERSION" \
+    --profile-count "$PROFILE_COUNT" \
+    $HEADFUL \
+    $EXTRA_ARGS

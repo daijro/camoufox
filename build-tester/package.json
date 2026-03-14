@@ -1,0 +1,9 @@
+{
+  "name": "camoufox-build-tester",
+  "version": "0.1.0",
+  "private": true,
+  "devDependencies": {
+    "esbuild": "^0.24",
+    "typescript": "^5"
+  }
+}
