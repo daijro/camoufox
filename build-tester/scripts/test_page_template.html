@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Camoufox Check</title>
+</head>
+<body>
+<script src="/checks-bundle.js"></script>
+<script>
+(async function () {
+  try {
+    var results = await CamoufoxChecks.runAllChecks();
+    window.__testResults__ = results;
+    window.__testComplete__ = true;
+  } catch (e) {
+    window.__testError__ = String(e);
+    window.__testComplete__ = true;
+  }
+})();
+</script>
+</body>
+</html>

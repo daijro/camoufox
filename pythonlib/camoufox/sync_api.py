@@ -1,4 +1,7 @@
+import json as _json
+import urllib.request
 from typing import Any, Dict, List, Optional, Union, overload
+from urllib.parse import urlparse
 
 from playwright.sync_api import (
     Browser,
@@ -101,12 +104,36 @@ def NewBrowser(
     return sync_attach_vd(browser, virtual_display)
 
 
+def _proxy_url_with_creds(proxy: Dict[str, str]) -> str:
+    """Builds a proxy URL string with embedded credentials."""
+    parsed = urlparse(proxy.get("server", ""))
+    user = proxy.get("username", "")
+    pwd = proxy.get("password", "")
+    if user and pwd:
+        return f"{parsed.scheme}://{user}:{pwd}@{parsed.netloc}"
+    return proxy.get("server", "")
+
+
+def _resolve_proxy_geo(proxy: Dict[str, str]) -> Dict[str, Optional[str]]:
+    """Queries ip-api.com through the proxy for the exit IP and timezone."""
+    proxy_url = _proxy_url_with_creds(proxy)
+    handler = urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+    opener = urllib.request.build_opener(handler)
+    try:
+        with opener.open("http://ip-api.com/json?fields=query,timezone", timeout=10) as resp:
+            data = _json.loads(resp.read())
+            return {"ip": data.get("query") or None, "timezone": data.get("timezone") or None}
+    except Exception:
+        return {"ip": None, "timezone": None}
+
+
 def NewContext(
     browser: Browser,
     *,
     preset: Optional[Dict[str, Any]] = None,
     os: Optional[str] = None,
     ff_version: Optional[str] = None,
+    webrtc_ip: Optional[str] = None,
     proxy: Optional[Dict[str, str]] = None,
     geolocation: Optional[Dict[str, float]] = None,
     **context_kwargs: Any,
@@ -123,11 +150,20 @@ def NewContext(
         preset: A specific fingerprint preset dict to use. If None, picks randomly.
         os: Target OS for preset selection ("windows", "macos", "linux").
         ff_version: Firefox version string for UA patching.
+        webrtc_ip: IPv4 address to spoof for WebRTC ICE candidates.
         proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).
         geolocation: Per-context geolocation ({"latitude": float, "longitude": float}).
         **context_kwargs: Additional Playwright new_context() options.
     """
-    fp = generate_context_fingerprint(preset=preset, os=os, ff_version=ff_version)
+    # Auto-derive WebRTC IP and timezone from proxy's exit IP when not explicitly provided
+    if proxy and (not webrtc_ip or "timezone_id" not in context_kwargs):
+        geo = _resolve_proxy_geo(proxy)
+        if not webrtc_ip:
+            webrtc_ip = geo["ip"]
+        if "timezone_id" not in context_kwargs and geo["timezone"]:
+            context_kwargs["timezone_id"] = geo["timezone"]
+
+    fp = generate_context_fingerprint(preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip)
 
     # Merge generated context options with user overrides (user wins)
     opts: Dict[str, Any] = {**fp['context_options'], **context_kwargs}
