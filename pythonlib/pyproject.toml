@@ -3,15 +3,14 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "cloverlabs-camoufox"
-version = "0.5.3"
+name = "camoufox"
+version = "0.5.0"
 description = "Wrapper around Playwright to help launch Camoufox"
-authors = ["CloverLabs <hello@cloverlabs.ai>"]
+authors = ["daijro <daijro.dev@gmail.com>"]
 license = "MIT"
-repository = "https://github.com/CloverLabsAI/camoufox"
+repository = "https://github.com/daijro/camoufox"
 homepage = "https://camoufox.com/python"
 readme = "README.md"
-packages = [{include = "camoufox"}]
 keywords = [
     "client",
     "fingerprint",
