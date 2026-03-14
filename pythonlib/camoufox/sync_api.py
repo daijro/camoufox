@@ -1,4 +1,6 @@
+import json as _json
 import socket
+import urllib.request
 from typing import Any, Dict, List, Optional, Union, overload
 from urllib.parse import urlparse
 
@@ -103,6 +105,16 @@ def NewBrowser(
     return sync_attach_vd(browser, virtual_display)
 
 
+def _proxy_url_with_creds(proxy: Dict[str, str]) -> str:
+    """Builds a proxy URL string with embedded credentials."""
+    parsed = urlparse(proxy.get("server", ""))
+    user = proxy.get("username", "")
+    pwd = proxy.get("password", "")
+    if user and pwd:
+        return f"{parsed.scheme}://{user}:{pwd}@{parsed.netloc}"
+    return proxy.get("server", "")
+
+
 def _resolve_proxy_ip(proxy: Dict[str, str]) -> Optional[str]:
     """Resolves the proxy server hostname to an IPv4 address."""
     host = urlparse(proxy.get("server", "")).hostname
@@ -115,6 +127,19 @@ def _resolve_proxy_ip(proxy: Dict[str, str]) -> Optional[str]:
     except Exception:
         pass
     return None
+
+
+def _resolve_proxy_timezone(proxy: Dict[str, str]) -> Optional[str]:
+    """Detects the timezone of the proxy's exit IP by querying ip-api.com through the proxy."""
+    proxy_url = _proxy_url_with_creds(proxy)
+    handler = urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+    opener = urllib.request.build_opener(handler)
+    try:
+        with opener.open("http://ip-api.com/json?fields=timezone", timeout=10) as resp:
+            data = _json.loads(resp.read())
+            return data.get("timezone") or None
+    except Exception:
+        return None
 
 
 def NewContext(
@@ -145,9 +170,14 @@ def NewContext(
         geolocation: Per-context geolocation ({"latitude": float, "longitude": float}).
         **context_kwargs: Additional Playwright new_context() options.
     """
-    # Auto-derive WebRTC IP from proxy server when not explicitly provided
-    if proxy and not webrtc_ip:
-        webrtc_ip = _resolve_proxy_ip(proxy)
+    # Auto-derive WebRTC IP and timezone from proxy when not explicitly provided
+    if proxy:
+        if not webrtc_ip:
+            webrtc_ip = _resolve_proxy_ip(proxy)
+        if "timezone_id" not in context_kwargs:
+            tz = _resolve_proxy_timezone(proxy)
+            if tz:
+                context_kwargs["timezone_id"] = tz
 
     fp = generate_context_fingerprint(preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip)
 
