@@ -2,8 +2,9 @@ diff --git a/dom/media/webspeech/synth/moz.build b/dom/media/webspeech/synth/moz
 index 2cf19982b2..dcdcdb5cbf 100644
 --- a/dom/media/webspeech/synth/moz.build
 +++ b/dom/media/webspeech/synth/moz.build
-@@ -61,3 +61,6 @@ FINAL_LIBRARY = "xul"
+@@ -62,5 +62,8 @@ FINAL_LIBRARY = "xul"
  LOCAL_INCLUDES += [
+     "/dom/base",
      "ipc",
  ]
 +
