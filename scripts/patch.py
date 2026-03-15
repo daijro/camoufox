@@ -109,11 +109,13 @@ class Patcher:
         Apply a patch and check for reject files.
         Returns list of reject files if any, empty list otherwise.
         """
-        import subprocess
-        import os
+        import time
 
         print(f"\n*** -> patch -p1 -i {patch_file}")
         sys.stdout.flush()
+
+        # Record time before applying so we only detect .rej files from this patch
+        start_time = time.time()
 
         # Apply patch interactively - don't capture stdout/stderr at all
         # This allows prompts to show immediately and user can respond
@@ -128,18 +130,20 @@ class Patcher:
             text=True
         )
 
-        # After patch completes, search for any .rej files created
+        # After patch completes, search for any .rej files created during this patch
         rejects = []
         for root, dirs, files in os.walk('.'):
             for file in files:
                 if file.endswith('.rej'):
-                    # Check if this is a newly created reject file
                     reject_path = os.path.join(root, file)
-                    # Only include if it was just created (within last minute)
                     if os.path.exists(reject_path):
-                        import time
-                        if time.time() - os.path.getmtime(reject_path) < 60:
+                        # Only include if created after this patch started
+                        if os.path.getmtime(reject_path) >= start_time:
                             rejects.append(reject_path)
+
+        # Clean up .rej files so they don't interfere with subsequent patches
+        for rej in rejects:
+            os.remove(rej)
 
         return rejects
 
