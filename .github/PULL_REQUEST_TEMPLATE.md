@@ -19,7 +19,7 @@ Closes #
 
 ## Fingerprint Report
 
-Please submit a report from https://camoufox-tester.vercel.app/ and paste the results below.
+Please submit a report from both the service tester and build tester.
 
 <details>
 <summary>Fingerprint report</summary>
