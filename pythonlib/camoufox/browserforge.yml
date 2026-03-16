@@ -54,10 +54,10 @@ screen:
 #  renderer: webgl:renderer
 #  vendor: webgl:vendor
 
-headers:
+#headers:
   # headers.User-Agent is redundant with navigator.userAgent
   # headers.Accept-Language is redundant with locale:*
-  Accept-Encoding: headers.Accept-Encoding
+  # Accept-Encoding: headers.Accept-Encoding is set via network.http.accept-encoding.secure firefox preference
 
 battery:
   charging: battery:charging
