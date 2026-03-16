@@ -71,3 +71,6 @@ closedsrc
 /gmp-clearkey/
 /windows-build/
 
+node_modules/
+proxies.txt
+checks-bundle.js

@@ -72,4 +72,3 @@ index 3ee8c0aa76..c0f1df8cf6 100644
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
-\ No newline at end of file

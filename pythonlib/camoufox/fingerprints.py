@@ -419,6 +419,7 @@ def generate_context_fingerprint(
     preset: Optional[Dict] = None,
     os: Optional[str] = None,
     ff_version: Optional[str] = None,
+    webrtc_ip: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Generate fingerprint values for a single per-context identity.
@@ -528,6 +529,7 @@ def generate_context_fingerprint(
         'timezone': preset.get('timezone') if isinstance(preset.get('timezone'), str) else config.get('timezone'),
         'fontList': config.get('fonts'),
         'speechVoices': config.get('voices'),
+        'webrtcIP': webrtc_ip or '',
     }
 
     init_script = _build_init_script(init_values)

@@ -19,7 +19,6 @@ from .exceptions import (
     InvalidOS,
     InvalidPropertyType,
     NonFirefoxFingerprint,
-    UnknownProperty,
 )
 from .fingerprints import from_browserforge, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset
 from .geolocation import geoip_allowed, get_geolocation
@@ -113,7 +112,8 @@ def validate_config(config_map: Dict[str, str], path: Optional[Path] = None) -> 
     for key, value in config_map.items():
         expected_type = property_types.get(key)
         if not expected_type:
-            raise UnknownProperty(f"Unknown property {key} in config")
+            print(f'Skipping unknown patch {key} : {value}')
+            continue  # Property not supported by this browser version; skip silently
 
         if not validate_type(value, expected_type):
             raise InvalidPropertyType(

@@ -20,17 +20,11 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 
 > [!NOTE]
 > Browser development is active at [github.com/CloverLabsAI/camoufox](https://github.com/CloverLabsAI/camoufox). ([See activity](https://github.com/CloverLabsAI/camoufox/activity))<br>
-> This repo hosts Python library updates and mirrors upstream browser releases.
+
+> [!NOTE] 
+> To make use of the alpha Camoufox releases, use the [`cloverlabs-camoufox`](https://pypi.org/project/cloverlabs-camoufox/) pip package. 
 
 <hr width=50>
-
-## Firefox Version Upgrade Notice
-
-The current main branch is built for Firefox v146. It is an experimental change and may contain several bugs. If you are building from source and require a stable production version, use branch `releases/135`.
-
-FF146 only works for MacOS. Linux support is coming in the next week and windows support by the end of January.
-
-See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on testing FF146.
 
 ---
 
@@ -52,7 +46,7 @@ See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on tes
   <tr>
     <td width="30%" align="center" valign="middle">
       <a href="https://cloverlabs.ai/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
-        <img src="https://i.imgur.com/I3oe7xG.jpeg" alt="cloverlabs.ai" width="200">
+        <img src="https://i.imgur.com/I3oe7xG.jpeg" alt="cloverlabs.ai" width="300">
       </a>
     </td>
     <td valign="middle">
@@ -197,6 +191,36 @@ async with AsyncCamoufox() as browser:
 ```
 
 [[Installation & usage](https://camoufox.com/python/)]
+
+### Making Full use of Hardware Spoofing
+
+For stable releases, you should always use the main [`camoufox`](https://pypi.org/project/camoufox/) pip package. However, if you want to make use of per-context fingerprints and hardware spoofing, use the [`cloverlabs-camoufox`](https://pypi.org/project/cloverlabs-camoufox/) package. This package is updated with each releases, whereas the official package is released on delay.
+
+Make sure you are using a virtual env to avoid conflicts between the two packages.
+
+**Installation**
+
+```bash
+pip install cloverlabs-camoufox
+```
+
+**Fetch the latest prerelease browser** (recommended for newest patches)
+
+```bash
+python -m camoufox sync
+python -m camoufox set official/prerelease
+python -m camoufox fetch
+```
+
+**Usage** — the API is identical to the upstream package:
+
+```python
+from camoufox.sync_api import Camoufox
+
+with Camoufox() as browser:
+    page = browser.new_page()
+    page.goto("https://example.com")
+```
 
 ---
 
