@@ -20,17 +20,11 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 
 > [!NOTE]
 > Browser development is active at [github.com/CloverLabsAI/camoufox](https://github.com/CloverLabsAI/camoufox). ([See activity](https://github.com/CloverLabsAI/camoufox/activity))<br>
-> This repo hosts Python library updates and mirrors upstream browser releases.
+
+> [!NOTE] 
+> To make use of the alpha Camoufox releases, use the [`cloverlabs-camoufox`](https://pypi.org/project/cloverlabs-camoufox/) pip package. 
 
 <hr width=50>
-
-## Firefox Version Upgrade Notice
-
-The current main branch is built for Firefox v146. It is an experimental change and may contain several bugs. If you are building from source and require a stable production version, use branch `releases/135`.
-
-FF146 only works for MacOS. Linux support is coming in the next week and windows support by the end of January.
-
-See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on testing FF146.
 
 ---
 
@@ -52,7 +46,7 @@ See the [Beta Testing Guide](docs/beta-testing-ff146.md) for instructions on tes
   <tr>
     <td width="30%" align="center" valign="middle">
       <a href="https://cloverlabs.ai/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
-        <img src="https://i.imgur.com/I3oe7xG.jpeg" alt="cloverlabs.ai" width="200">
+        <img src="https://i.imgur.com/I3oe7xG.jpeg" alt="cloverlabs.ai" width="300">
       </a>
     </td>
     <td valign="middle">
