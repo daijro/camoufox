@@ -1,7 +1,7 @@
 diff --git a/dom/media/webspeech/synth/moz.build b/dom/media/webspeech/synth/moz.build
 --- a/dom/media/webspeech/synth/moz.build
 +++ b/dom/media/webspeech/synth/moz.build
-@@ -63,2 +63,5 @@
+@@ -63,4 +63,7 @@
      "ipc",
  ]
 +

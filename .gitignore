@@ -70,10 +70,7 @@ closedsrc
 /fonts/
 /gmp-clearkey/
 /windows-build/
-_bisect_extract/
-node_modules/
 
+node_modules/
 proxies.txt
 checks-bundle.js
-.env
-    
