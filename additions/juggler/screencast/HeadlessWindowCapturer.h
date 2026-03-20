@@ -4,6 +4,14 @@
 
 #pragma once
 
+// pid_t is not defined in MSVC/MinGW cross-compilation targets
+#if defined(XP_WIN) || defined(_WIN32) || defined(__MINGW32__)
+#ifndef _PID_T_DEFINED
+#define _PID_T_DEFINED
+typedef int pid_t;
+#endif
+#endif
+
 #include <memory>
 #include <set>
 #include "api/video/video_frame.h"
