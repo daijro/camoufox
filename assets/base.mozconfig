@@ -24,6 +24,10 @@ ac_add_options --with-unsigned-addon-scopes=app,system
 
 ac_add_options --enable-bootstrap
 
+# Use ccache for faster incremental rebuilds (install: brew install ccache)
+# Safe no-op if ccache is not installed — build proceeds without caching.
+ac_add_options --with-ccache=ccache
+
 export MOZ_REQUIRE_SIGNING=
 
 mk_add_options MOZ_CRASHREPORTER=0
