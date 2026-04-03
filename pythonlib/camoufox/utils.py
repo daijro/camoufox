@@ -627,7 +627,12 @@ def launch_options(
                 set_into(config, 'webrtc:ipv6', geoip)
 
         geolocation = get_geolocation(geoip, geoip_db=geoip_db)
-        config.update(geolocation.as_config())
+        geo_config = geolocation.as_config()
+        for key, value in geo_config.items():
+            if key in ('timezone', 'locale:language', 'locale:region', 'locale:script'):
+                config.setdefault(key, value)
+            else:
+                config[key] = value
 
     # Raise a warning when a proxy is being used without spoofing geolocation.
     # This is a very bad idea; the warning cannot be ignored with i_know_what_im_doing.
