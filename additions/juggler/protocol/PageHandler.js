@@ -545,7 +545,7 @@ export class PageHandler {
         // viewport coordinates, then move the mouse off from the Web Content.
         // This way we can eliminate all the hover effects.
         // NOTE: since this won't go inside the renderer, there's no need to wait for ACK.
-        win.windowUtils.sendMouseEvent(
+        win.windowUtils.jugglerSendMouseEvent(
           'mousemove',
           0 /* x */,
           0 /* y */,
