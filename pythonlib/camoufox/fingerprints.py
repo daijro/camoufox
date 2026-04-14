@@ -373,15 +373,16 @@ def _build_init_script(values: Dict[str, Any]) -> str:
                 f'  if (typeof w.setScreenColorDepth === "function") w.setScreenColorDepth({scd});'
             )
 
-    # Timezone (always call to trigger self-destruct)
+    # Timezone — only call setTimezone() when we have an explicit value.
+    # Without this, the C++ MaskConfig fallback (from CAMOU_CONFIG set by geoip
+    # in launch_options) handles timezone for both main thread and workers via
+    # SetNewDocument() and TimezoneManager::GetTimezone().
+    # The old fallback read system TZ and poisoned RoverfoxStorageManager,
+    # preventing MaskConfig from ever being consulted.
     tz = values.get('timezone')
     if tz:
         lines.append(
             f'  if (typeof w.setTimezone === "function") w.setTimezone({_json.dumps(tz)});'
-        )
-    else:
-        lines.append(
-            '  if (typeof w.setTimezone === "function") w.setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);'
         )
 
     # WebRTC IP
