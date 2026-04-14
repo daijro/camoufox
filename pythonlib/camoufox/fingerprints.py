@@ -420,6 +420,8 @@ def generate_context_fingerprint(
     os: Optional[str] = None,
     ff_version: Optional[str] = None,
     webrtc_ip: Optional[str] = None,
+    timezone: Optional[str] = None,
+    locale: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Generate fingerprint values for a single per-context identity.
@@ -427,6 +429,14 @@ def generate_context_fingerprint(
 
     By default, uses BrowserForge for infinite unique synthetic fingerprints.
     Pass a preset dict to use a real fingerprint preset instead.
+
+    Parameters:
+        timezone: IANA timezone string (e.g. 'Europe/London'). When provided,
+            injected into config before init_script generation. Takes priority
+            over any timezone from the preset.
+        locale: BCP-47 locale string (e.g. 'en-GB'). When provided, parsed via
+            normalize_locale() and injected into config. Also sets
+            context_options['locale'] for Playwright.
     """
     if preset is not None:
         # Use real fingerprint preset
@@ -512,6 +522,18 @@ def generate_context_fingerprint(
         }
         preset = {'navigator': nav, 'screen': screen, 'webgl': webgl}
 
+    # Inject explicit timezone/locale into config (takes priority over preset)
+    if timezone:
+        config['timezone'] = timezone
+    if locale:
+        from .locales import normalize_locale
+        parsed = normalize_locale(locale)
+        config['locale:language'] = parsed.language
+        config['locale:region'] = parsed.region
+        config['navigator.language'] = parsed.as_string
+        if parsed.script:
+            config['locale:script'] = parsed.script
+
     # Build the values dict for the init script (works for both paths)
     init_values: Dict[str, Any] = {
         'fontSpacingSeed': config.get('fonts:spacing_seed'),
@@ -554,6 +576,9 @@ def generate_context_fingerprint(
         tz = preset.get('timezone')
     if tz:
         context_options['timezone_id'] = tz
+    nav_lang = config.get('navigator.language')
+    if nav_lang:
+        context_options['locale'] = nav_lang
 
     return {
         'init_script': init_script,
