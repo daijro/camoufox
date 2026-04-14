@@ -10,7 +10,19 @@ Thanks for your interest in contributing! Here's how to get started.
 - **Documentation** — Fixes and improvements to docs are always welcome.
 
 ## Development Setup
-See README.md
+
+See README.md for general setup. For iterative development with frequent rebuilds, install [ccache](https://ccache.dev/) to cache compiled objects:
+
+```bash
+# macOS
+brew install ccache
+
+# Linux
+sudo apt install ccache   # Debian/Ubuntu
+sudo dnf install ccache   # Fedora
+```
+
+ccache is already enabled in the build config. A cold build takes the usual ~40 minutes, but subsequent rebuilds drop to ~5 minutes for small changes.
 
 ## Pull Request Rules
 
