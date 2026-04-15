@@ -333,17 +333,16 @@ index f0854f7ca6..6a1438dbac 100644
      "NodeInfo.h",
      "NodeInfoInlines.h",
      "NodeIterator.h",
-@@ -553,6 +554,10 @@ SOURCES += [
+@@ -553,5 +554,9 @@ SOURCES += [
      "nsPluginArray.cpp",
  ]
- 
+
 +# NavigatorManager compiled separately to avoid unified build scope issues
 +# (includes RoverfoxStorageManager.h which can affect compilation units)
 +SOURCES += ["NavigatorManager.cpp"]
 +
- # CanvasFingerprintManager compiled separately to avoid unified build scope issues
- # (includes RoverfoxStorageManager.h which can affect compilation units)
- SOURCES += ["CanvasFingerprintManager.cpp"]
+ # FontListManager compiled separately (includes RoverfoxStorageManager.h)
+ SOURCES += ["FontListManager.cpp"]
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index cdd544a14d..230ded31c0 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
@@ -453,10 +452,10 @@ diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
 index 87f1e92cec..4991123b64 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -700,6 +700,14 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
- 
+@@ -700,5 +700,13 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+
    void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
- 
+
 +  // Per-context navigator property spoofing
 +  void SetNavigatorPlatform(const nsAString& platform,
 +                            mozilla::ErrorResult& aRv);
@@ -465,9 +464,9 @@ index 87f1e92cec..4991123b64 100644
 +                                       mozilla::ErrorResult& aRv);
 +  void SetNavigatorUserAgent(const nsAString& ua, mozilla::ErrorResult& aRv);
 +
-   // Per-context canvas fingerprint seed
-   void SetCanvasSeed(uint32_t seed, mozilla::ErrorResult& aRv);
- 
+  public:
+   void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
+
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
 index 6a0570cdf7..cf69daa15d 100644
 --- a/dom/webidl/Window.webidl
