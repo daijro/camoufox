@@ -41,6 +41,39 @@ CACHE_PREFS = {
 }
 
 
+def _generate_fontconfig(fontconfig_path: str) -> str:
+    """
+    Generates a runtime fontconfig that resolves bundled font paths absolutely.
+    The bundled fonts.conf uses prefix="cwd" relative paths which break when
+    Playwright's working directory differs from the browser install directory.
+    Writes a patched copy to ~/.cache/camoufox/fontconfig/ (deterministic,
+    only regenerated when content changes).
+    """
+    import hashlib
+
+    fonts_dir = get_path("fonts")
+    fonts_conf_src = os.path.join(fontconfig_path, "fonts.conf")
+
+    with open(fonts_conf_src, 'r') as f:
+        conf_content = f.read()
+
+    conf_content = conf_content.replace(
+        '<dir prefix="cwd">fonts</dir>',
+        f'<dir>{fonts_dir}</dir>',
+    )
+
+    cache_dir = os.path.join(os.path.expanduser('~'), '.cache', 'camoufox', 'fontconfig')
+    os.makedirs(cache_dir, exist_ok=True)
+
+    content_hash = hashlib.sha256(conf_content.encode()).hexdigest()[:12]
+    runtime_conf = os.path.join(cache_dir, f'fonts-{content_hash}.conf')
+    if not os.path.exists(runtime_conf):
+        with open(runtime_conf, 'w') as f:
+            f.write(conf_content)
+
+    return runtime_conf
+
+
 def get_env_vars(
     config_map: Dict[str, str], user_agent_os: str
 ) -> Dict[str, Union[str, float, bool]]:
@@ -85,6 +118,8 @@ def get_env_vars(
             raise FileNotFoundError(
                 f"fonts.conf not found in {fontconfig_path}!  Something ain't right with your camoufox bundle."
             )
+
+        env_vars['FONTCONFIG_FILE'] = _generate_fontconfig(fontconfig_path)
 
     return env_vars
 
