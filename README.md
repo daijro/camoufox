@@ -19,12 +19,10 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 > **All of the latest documentation is avaliable at [camoufox.com](https://camoufox.com).**
 
 > [!NOTE]
-> Browser development is active at [github.com/CloverLabsAI/camoufox](https://github.com/CloverLabsAI/camoufox). ([See activity](https://github.com/CloverLabsAI/camoufox/activity))<br>
+> Browser development is active at [github.com/CloverLabsAI/camoufox](https://github.com/CloverLabsAI/camoufox) and [github.com/VulpineOS/VulpineOS](https://github.com/VulpineOS/VulpineOS).<br>This repo is being used to merge checkpoint releases.
 
 > [!NOTE] 
 > To make use of the alpha Camoufox releases, use the [`cloverlabs-camoufox`](https://pypi.org/project/cloverlabs-camoufox/) pip package. 
-
-<hr width=50>
 
 ---
 
@@ -34,7 +32,7 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
 <summary>View</summary>
 <table>
   <tr>
-    <td width="30%" align="center" valign="middle">
+    <td width="25%" align="center" valign="middle">
       <a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
         <img src="https://raw.githubusercontent.com/daijro/camoufox/main/assets/scrapfly.png" alt="Scrapfly.io" width="200">
       </a>
@@ -44,7 +42,7 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
     </td>
   </tr>
   <tr>
-    <td width="30%" align="center" valign="middle">
+    <td width="25%" align="center" valign="middle">
       <a href="https://cloverlabs.ai/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
         <img src="https://i.imgur.com/I3oe7xG.jpeg" alt="cloverlabs.ai" width="300">
       </a>
@@ -54,7 +52,7 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
     </td>
   </tr>
   <tr>
-    <td width="30%" align="center" valign="middle" height="100">
+    <td width="25%" align="center" valign="middle" height="100">
       <a href="https://serpapi.com/use-cases/web-search-api?utm_source=camoufox" target="_blank">
         <img width="350" alt="color horizontal" src="https://github.com/user-attachments/assets/cdf90178-869e-4f85-8288-3fe32da319d9"/>
       </a>
@@ -64,45 +62,44 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
     </td>
   </tr>
   <tr>
-    <td width="30%" align="center" valign="middle">
+    <td width="25%" align="center" valign="middle">
       <a href="https://www.thordata.com/?ls=github&lk=camoufox" target="_blank">
         <img alt="thordata" src="https://github.com/user-attachments/assets/fa79fe26-633b-44a4-a2a8-bce570f180ca" width="350"/>
       </a>
     </td>
     <td valign="middle">
       <a href="https://www.thordata.com/?ls=github&lk=camoufox">Thordata</a> - Your First Plan is on Us! 💰 Get 100% of your first residential proxy purchase back as wallet balance, up to $900.<br><br>
-      <b>⚡ Why Thordata?</b><br><br>
-      🌍 190+ real residential & ISP IP locations<br>
-      🔐 Fully encrypted, ultra-secure connections<br>
-      🚀 Optimized for web scraping, ad verification & automation workflows<br><br>
+      <b>⚡ Why Thordata?</b><br>
+      • 🌍 190+ real residential & ISP IP locations<br>
+      • 🔐 Fully encrypted, ultra-secure connections<br>
+      • 🚀 Optimized for web scraping, ad verification & automation workflows<br>
       🔥 Don't wait - this is your <b>best time to start</b> with <a href="https://www.thordata.com/?ls=github&lk=camoufox">Thordata</a> and experience the safest, fastest proxy network.
     </td>
   </tr>
   <tr>
-    <td width="30%" align="center" valign="middle">
+    <td width="25%" align="center" valign="middle">
       <a href="https://proxyempire.io/?ref=camoufox&utm_source=camoufox" target="_blank">
         <img width="380" alt="proxyempire" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f"/>
       </a>
     </td>
     <td valign="middle">
-      <b>🚀 Camoufox × ProxyEmpire</b><br><br>
+      <b>🚀 Camoufox × ProxyEmpire</b><br>
       Running Camoufox? Your proxy layer decides whether you scale — or get blocked.<br><br>
       <a href="https://proxyempire.io/?ref=camoufox&utm_source=camoufox">ProxyEmpire</a> delivers:<br>
-      🌍 30M+ Residential IPs (170+ countries)<br>
-      📱 4G/5G Mobile Proxies<br>
-      🔄 Rotating & Sticky Sessions<br>
-      ⚡ Unlimited Concurrent Sessions<br>
-      🎯 Precise geo-targeting<br>
-      HTTP, HTTPS & SOCKS5 Support<br><br>
+      • 🌍 30M+ Residential IPs (170+ countries)<br>
+      • 📱 4G/5G Mobile Proxies<br>
+      • 🔄 Rotating & Sticky Sessions<br>
+      • ⚡ Unlimited Concurrent Sessions<br>
+      • 🎯 Precise geo-targeting<br>
+      • HTTP, HTTPS & SOCKS5 Support<br>
       Built for scraping, automation, and high-stealth workflows.<br><br>
-      <b>🔥 Exclusive Offer</b><br>
-      Use code <b>Camoufox30</b><br>
+      <b>🔥 Exclusive Offer</b> - Use code <b>Camoufox30</b><br>
       Get <b>30% recurring discount</b> (not just first month).<br>
       Upgrade your proxies. Reduce bans. Scale properly
     </td>
   </tr>
   <tr>
-    <td width="30%" align="center" valign="middle">
+    <td width="25%" align="center" valign="middle">
       <a href="https://birdproxies.com/t/camoufox" target="_blank">
         <img width="380" alt="birdproxies" src="https://github.com/user-attachments/assets/e146836d-eb92-4b05-8bd9-120fd95dca10"/>
       </a>
@@ -111,6 +108,16 @@ Camoufox is an open source anti-detect browser for robust fingerprint injection 
       Hey, we built BirdProxies because proxies shouldn't be complicated or overpriced. Fast residential and ISP proxies in 195+ locations, fair pricing, and real support.<br>
       Try our FlappyBird game on the landing page for free data!<br>
       <a href="https://birdproxies.com/t/camoufox">Try Now</a> | <a href="https://discord.com/invite/birdproxies">Discord</a>
+    </td>
+  </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://proxy-seller.com/?partner=1W5MMSYEXKKTUK" target="_blank">
+        <img width="380" alt="birdproxies" src="https://github.com/user-attachments/assets/d2771913-e2c1-453f-a258-4789139a841c"/>
+      </a>
+    </td>
+    <td valign="middle">
+      <a href="https://proxy-seller.com/?partner=1W5MMSYEXKKTUK">Proxy-Seller</a> - 220+ GEOs, $0.70 per GB, 24/7 Support. Residential/ISP Proxy IPs (IPv4/IPv6).<br>Use code CAMOUFOX for 15% off.
     </td>
   </tr>
 </table>
