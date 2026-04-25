@@ -1478,7 +1478,7 @@ index 31b29ac946..f8c6335c0a 100644
  #include "mozilla/dom/MouseEvent.h"
  #include "mozilla/dom/NumericInputTypes.h"
  #include "mozilla/dom/ProgressEvent.h"
-@@ -799,6 +800,13 @@ nsresult HTMLInputElement::InitColorPicker() {
+@@ -848,6 +848,13 @@ nsresult HTMLInputElement::InitFilePicker(FilePickerType aType) {
      return NS_ERROR_FAILURE;
    }
  
