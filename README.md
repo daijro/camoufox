@@ -94,8 +94,7 @@ Camoufox is an open source browser built for AI agents. It is lightweight, mimic
       • HTTP, HTTPS & SOCKS5 Support<br>
       Built for scraping, automation, and high-stealth workflows.<br><br>
       <b>🔥 Exclusive Offer</b> - Use code <b>Camoufox30</b><br>
-      Get <b>30% recurring discount</b> (not just first month).<br>
-      Upgrade your proxies. Reduce bans. Scale properly
+      Get <b>30% recurring discount</b> (not just first month). Upgrade your proxies. Reduce bans. Scale properly
     </td>
   </tr>
   <tr>
@@ -120,6 +119,26 @@ Camoufox is an open source browser built for AI agents. It is lightweight, mimic
       <a href="https://proxy-seller.com/?partner=1W5MMSYEXKKTUK">Proxy-Seller</a> - 220+ GEOs, $0.70 per GB, 24/7 Support. Residential/ISP Proxy IPs (IPv4/IPv6).<br>Use code CAMOUFOX for 15% off.
     </td>
   </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://www.rapidproxy.io/?ref=daijro" target="_blank">
+        <img width="380" alt="rapidproxy" src="https://github.com/user-attachments/assets/140337e0-50d5-452d-8a31-86c6b1761e47"/>
+      </a>
+    </td>
+    <td valign="middle">
+      <a href="https://www.rapidproxy.io/?ref=daijro">RapidProxy</a> - Power Your Data with Premium Proxies<br>
+      🎁 Try proxies for free  + Use code <strong>RAPID10</strong> for <strong>10% OFF</strong>
+      <br><br>
+      <strong>Why Choose RapidProxy?</strong><br>
+      • 🌍 90M+ IPs in 200+ countries & regions<br>
+      • ♾️ No expiration on traffic — use anytime, no pressure<br>
+      • 🔥 Unlimited concurrency for maximum performance<br>
+      • 💰 Starting from just $0.65/GB — built for scale<br>
+      • 📍 City-level targeting for precise geo access<br>
+      • 🔄 Flexible session control tailored to your needs<br>
+      Don’t miss out — start your free trial today and experience fast, stable, and scalable proxy performance with <a href="https://www.rapidproxy.io/?ref=daijro">RapidProxy</a>.
+    </td>
+  </tr>
 </table>
 </details>
 
@@ -131,31 +150,31 @@ Camoufox is a Firefox fork engineered for AI agents. It is headless, undetectabl
 
 ## Highlights
 
-- **Built for AI agents** 🤖
-  - Minimal, debloated Firefox — fast to launch, cheap to run
-  - Drop-in Playwright compatibility via Python interface
-  - Token-efficient: clean DOM output, no CSS animations, or tracking noise
-  - Invisible to anti-bot systems so you can run your agent cluster locally or in the cloud without being flagged
+* **Built for AI agents** 🤖
+  * Minimal, debloated Firefox - fast to launch, cheap to run
+  * Drop-in Playwright compatibility via Python interface
+  * Token-efficient: clean DOM output, no CSS animations, or tracking noise
+  * Invisible to anti-bot systems so you can run your agent cluster locally or in the cloud without being flagged
 
 - **Undetectable by design** 🎭
   - Page automation hidden from JavaScript inspection. See the [stealth page](https://camoufox.com/stealth) for more details.
 
 * **Fingerprint injection & rotation (without JS injection!)**
-  - All navigator properties (device, OS, hardware, browser, etc.) ✅
-  - Screen size, resolution, window, & viewport properties ✅
-  - Geolocation, timezone, locale, & Intl spoofing ✅
-  - WebRTC IP spoofing at the protocol level ✅
-  - Voices, speech playback rate, etc. ✅
-  - And much, much more!
+  * All navigator properties (device, OS, hardware, browser, etc.) ✅
+  * Screen size, resolution, window, & viewport properties ✅
+  * Geolocation, timezone, locale, & Intl spoofing ✅
+  * WebRTC IP spoofing at the protocol level ✅
+  * Voices, speech playback rate, etc. ✅
+  * And much, much more!
 
 - **Anti Graphical fingerprinting**
   - WebGL parameters, supported extensions, context attributes, & shader precision formats ✅
   - Font spoofing & anti-fingerprinting ✅
 
 * **Optimized for automation**
-  - Human-like mouse movement 🖱️
-  - Blocks & circumvents ads 🛡️
-  - No CSS animations 💨
+  * Human-like mouse movement 🖱️
+  * Blocks & circumvents ads 🛡️
+  * No CSS animations 💨
 
 - Debloated & optimized for memory efficiency ⚡
 - [PyPi package](https://pypi.org/project/camoufox/) for updates & auto fingerprint injection 📦
