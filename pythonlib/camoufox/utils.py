@@ -547,6 +547,11 @@ def launch_options(
     # Handle virtual display
     if virtual_display:
         env['DISPLAY'] = virtual_display
+        # Virtual display uses Xvfb (X11). If the host session forces Wayland via env vars,
+        # GTK/Firefox may try Wayland and ignore DISPLAY, breaking Xvfb usage.
+        env['GDK_BACKEND'] = 'x11'
+        env.pop('WAYLAND_DISPLAY', None)
+        env["MOZ_ENABLE_WAYLAND"] = "0"
 
     # Warn the user for manual config settings
     if not i_know_what_im_doing:
