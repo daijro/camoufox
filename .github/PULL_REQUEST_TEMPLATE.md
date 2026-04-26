@@ -33,5 +33,5 @@ Please submit a report from both the service tester and build tester.
 - [ ] I have linked a related issue above
 - [ ] My changes are focused on a single logical change
 - [ ] I have added testing instructions which include the desired result
-- [ ] I have included a fingerprint report from https://camoufox-tester.vercel.app/
-- [ ] Service tests pass (`bash service_tests/run_tests.sh`)
+- [ ] Service tests pass (for python library changes) -`./service_tests/run_tests.sh` (attach screenshot)
+- [ ] Build test passes (for patch changes) - `./build-tester/run_tests.sh` A score of at least 1000 must be achieved (attach screenshot)
