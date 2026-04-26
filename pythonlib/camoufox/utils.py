@@ -417,6 +417,7 @@ def launch_options(
     ff_version: Optional[int] = None,
     headless: Optional[bool] = None,
     main_world_eval: Optional[bool] = None,
+    allow_addon_new_tab: Optional[bool] = None,
     executable_path: Optional[Union[str, Path]] = None,
     browser: Optional[str] = None,
     firefox_user_prefs: Optional[Dict[str, Any]] = None,
@@ -493,6 +494,8 @@ def launch_options(
         main_world_eval (Optional[bool]):
             Whether to enable running scripts in the main world.
             To use this, prepend "mw:" to the script: page.evaluate("mw:" + script).
+        allow_addon_new_tab (Optional[bool]):
+            Whether to allow addon open new tabs. Defaults to False.
         executable_path (Optional[Union[str, Path]]):
             Custom Camoufox browser executable path.
         browser (Optional[str]):
@@ -691,6 +694,10 @@ def launch_options(
     # Enable the main world context creation
     if main_world_eval:
         set_into(config, 'allowMainWorld', True)
+
+    # Allow addon open new tabs
+    if allow_addon_new_tab:
+        set_into(config, 'allowAddonNewtab', True)
 
     # Set Firefox user preferences
     if block_images:
