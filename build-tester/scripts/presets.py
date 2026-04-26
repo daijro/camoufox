@@ -55,7 +55,8 @@ def generate_presets() -> dict:
     except ImportError:
         print(
             "ERROR: camoufox Python package not installed.\n"
-            "  Run: pip install camoufox  (or: bash scripts/setup.sh)",
+            "  Use the wrapper: ./run_tests.sh <binary_path>\n"
+            "  Or install manually: pip install -e ../pythonlib",
             file=sys.stderr,
         )
         sys.exit(1)

@@ -30,7 +30,7 @@ ccache is already enabled in the build config. A cold build takes the usual ~40 
 2. Follow the pull request template
 3. Keep commits focused — one logical change per commit.
 4. Open a PR with a clear description of what you changed and why.
-5. All pull requests must pass both the **build-tester** and **service_tests** test suites before merging.
+5. All pull requests must pass both the **build-tester** and **service-tester** test suites before merging.
 
 ## Testing Requirements
 
@@ -53,26 +53,26 @@ See [`build-tester/README.md`](build-tester/README.md) for full details.
 
 ---
 
-### service_tests
+### service-tester
 
 Tests the **full stack** — the binary and the Python package together — using only the public `AsyncNewContext` API. Fingerprints are generated entirely by camoufox/browserforge with no manual injection. Real proxies are required; the WebRTC IP and timezone are auto-derived from each proxy's exit IP. This is a black-box trust test: if it fails, the fix belongs in the Python package, not in the test.
 
 **Run this when you change:** `pythonlib/` (fingerprint generation, `AsyncNewContext`, `NewContext`), proxy handling, or any behaviour that affects how the Python package interacts with the binary.
 
 ```bash
-cd service_tests
+cd service-tester
 # Add proxies (one per line, format: user:pass@domain:port)
 cp proxies.txt.example proxies.txt   # or create manually
 ./run_tests.sh
 ```
 
-See [`service_tests/README.md`](service_tests/README.md) for full details.
+See [`service-tester/README.md`](service-tester/README.md) for full details.
 
 ---
 
 ### Key differences
 
-| | build-tester | service_tests |
+| | build-tester | service-tester |
 |---|---|---|
 | Entry point | Raw binary path | `pip install camoufox` |
 | Fingerprint injection | Manual | Via `AsyncNewContext` API |

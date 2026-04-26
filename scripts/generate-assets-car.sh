@@ -29,13 +29,26 @@ if [[ "$(uname)" != "Darwin" ]]; then
     exit 0
 fi
 
-# Check for actool
-if ! command -v actool &>/dev/null && ! xcrun --find actool &>/dev/null; then
-    echo "Error: actool not found. Please install Xcode Command Line Tools."
+# Check for actool. actool ships with full Xcode, NOT Command Line Tools alone.
+# If only the CLT is active, fall back to an existing Assets.car instead of erroring.
+if ! xcrun --find actool &>/dev/null 2>&1; then
+    echo "Warning: actool not available (full Xcode is required to generate Assets.car)."
+    if [[ -f "$OUTPUT_FILE" ]]; then
+        echo "Using existing Assets.car at $OUTPUT_FILE."
+        exit 0
+    fi
+    OFFICIAL_ASSETS=("$SCRIPT_DIR"/../camoufox-*/browser/branding/official/Assets.car)
+    if [[ -f "${OFFICIAL_ASSETS[0]}" ]]; then
+        cp "${OFFICIAL_ASSETS[0]}" "$OUTPUT_FILE"
+        echo "Copied Assets.car from official branding."
+        exit 0
+    fi
+    echo "Error: actool not found and no fallback Assets.car available."
+    echo "Install full Xcode from the App Store, or place an Assets.car at $OUTPUT_FILE."
     exit 1
 fi
 
-ACTOOL=$(xcrun --find actool 2>/dev/null || echo "actool")
+ACTOOL=$(xcrun --find actool)
 
 echo "Generating Assets.car from camoufox branding icons..."
 
