@@ -48,6 +48,7 @@ async def run_tests(
     secret: str,
     save_cert: Optional[str],
     no_cert: bool,
+    executable_path: Optional[str] = None,
 ) -> int:
     # 1. Ensure checks bundle is built
     ensure_bundle()
@@ -64,9 +65,17 @@ async def run_tests(
     ]
     entries = all_specs[:max(1, min(profile_count, len(all_specs)))]
 
-    # Assign proxies round-robin across entries
+    # Assign proxies round-robin across entries.
+    # Bypass localhost so the in-browser test page can fetch the local checks bundle.
     for i, entry in enumerate(entries):
-        entry["proxy"] = proxies[i % len(proxies)]
+        proxy = dict(proxies[i % len(proxies)])
+        existing_bypass = proxy.get("bypass", "")
+        bypass_entries = [b.strip() for b in existing_bypass.split(",") if b.strip()]
+        for host in ("127.0.0.1", "localhost"):
+            if host not in bypass_entries:
+                bypass_entries.append(host)
+        proxy["bypass"] = ",".join(bypass_entries)
+        entry["proxy"] = proxy
 
     # Resolve proxy geo info concurrently (for certificate debug section)
     print("Resolving proxy locations...")
@@ -105,6 +114,9 @@ async def run_tests(
     launch_kwargs = {"headless": not headful}
     if ff_version:
         launch_kwargs["ff_version"] = ff_version
+    if executable_path:
+        launch_kwargs["executable_path"] = executable_path
+        print(f"Using executable: {executable_path}")
 
     try:
         async with AsyncCamoufox(**launch_kwargs) as browser:
@@ -138,7 +150,7 @@ async def run_tests(
 
                 # Wait for all tests to complete
                 print(f"  Waiting for all tests to complete...")
-                await asyncio.gather(
+                wait_outcomes = await asyncio.gather(
                     *[p.wait_for_function("!!window.__testComplete__", timeout=120_000)
                       for p in pages],
                     return_exceptions=True,
@@ -146,16 +158,27 @@ async def run_tests(
 
                 # Collect results
                 print(f"  Collecting results from {len(open_contexts)} contexts...")
-                for ctx_data in open_contexts:
+                for ctx_data, wait_outcome in zip(open_contexts, wait_outcomes):
                     page = ctx_data["page"]
                     profile = ctx_data["profile"]
                     try:
+                        if isinstance(wait_outcome, Exception):
+                            raise RuntimeError(
+                                f"test page never set __testComplete__ within 120s "
+                                f"(likely the checks bundle failed to load — check proxy/network): "
+                                f"{wait_outcome}"
+                            )
                         test_error = await page.evaluate("window.__testError__")
                         if test_error:
                             pr = {"profile": profile, "results": None, "grade": "F",
                                   "passCount": 0, "totalChecks": 0, "error": test_error}
                         else:
                             results = await page.evaluate("window.__testResults__")
+                            if results is None:
+                                raise RuntimeError(
+                                    "test page completed but __testResults__ is empty — "
+                                    "checks bundle did not produce results"
+                                )
                             adjust_cross_os_font_checks(profile["os"], results)
                             pass_count, total_checks = count_all_checks(results)
                             grade = compute_grade(pass_count, total_checks)
@@ -233,6 +256,8 @@ def main():
                         help="Save certificate to this file path")
     parser.add_argument("--no-cert", action="store_true",
                         help="Skip certificate generation")
+    parser.add_argument("--executable-path", default=None,
+                        help="Path to a local Camoufox binary (skips registry lookup)")
     args = parser.parse_args()
 
     sys.exit(asyncio.run(run_tests(
@@ -243,6 +268,7 @@ def main():
         secret=args.secret,
         save_cert=args.save_cert,
         no_cert=args.no_cert,
+        executable_path=args.executable_path,
     )))
 
 
