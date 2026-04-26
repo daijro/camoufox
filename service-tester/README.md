@@ -50,7 +50,7 @@ If you prefer to run steps individually:
 
 ```bash
 # Install build-tester deps (once)
-cd ../build-tester && npm install && cd ../service_tests
+cd ../build-tester && npm install && cd ../service-tester
 
 # Create and activate virtualenv
 python3 -m venv .venv

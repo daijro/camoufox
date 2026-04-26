@@ -67,6 +67,7 @@ PYTHON=".venv/bin/python"
 PIP=".venv/bin/pip"
 
 echo "==> Installing camoufox from local source..."
+$PIP uninstall -y cloverlabs-camoufox >/dev/null 2>&1 || true
 $PIP install -q -e ../pythonlib
 
 echo "==> Setting browser version: $VERSION"
