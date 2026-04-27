@@ -1527,7 +1527,26 @@ diff --git a/dom/ipc/BrowserChild.cpp b/dom/ipc/BrowserChild.cpp
 index 80158ce3a0..4e7fc3c95d 100644
 --- a/dom/ipc/BrowserChild.cpp
 +++ b/dom/ipc/BrowserChild.cpp
-@@ -1813,6 +1813,21 @@ void BrowserChild::HandleRealMouseButtonEvent(const WidgetMouseEvent& aEvent,
+@@ -1594,7 +1594,17 @@ mozilla::ipc::IPCResult BrowserChild::RecvNormalPriorityRealMouseMoveEvent(
+ mozilla::ipc::IPCResult BrowserChild::RecvRealMouseMoveEvent(
+     const WidgetMouseEvent& aEvent, const ScrollableLayerGuid& aGuid,
+     const uint64_t& aInputBlockId) {
+-  if (mCoalesceMouseMoveEvents && mCoalescedMouseEventFlusher) {
++  // Playwright/juggler: synthesized mouse events (mJugglerEventId != 0) await a
++  // per-event "juggler-mouse-event-hit-renderer" observer notification that is
++  // only fired from HandleRealMouseButtonEvent. Coalescing defers dispatch to
++  // the next nsRefreshDriver tick, which under heavy parallel load (many
++  // browsers, software rendering) can be many seconds late — long enough to
++  // pin activateAndRun's serialization chain. Skip the coalescing branch for
++  // juggler-originated events so they dispatch immediately and ack in
++  // milliseconds; real (non-juggler) events still benefit from the coalescing
++  // optimization.
++  if (mCoalesceMouseMoveEvents && mCoalescedMouseEventFlusher &&
++      !aEvent.mJugglerEventId) {
+     CoalescedMouseData* data =
+         mCoalescedMouseData.GetOrInsertNew(aEvent.pointerId);
+     MOZ_ASSERT(data);
+@@ -1813,6 +1823,21 @@ void BrowserChild::HandleRealMouseButtonEvent(const WidgetMouseEvent& aEvent,
    if (postLayerization) {
      postLayerization->Register();
    }
