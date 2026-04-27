@@ -150,6 +150,7 @@ export class PageAgent {
         dispatchTouchEvent: this._dispatchTouchEvent.bind(this),
         dispatchTapEvent: this._dispatchTapEvent.bind(this),
         getContentQuads: this._getContentQuads.bind(this),
+        getEventListenersForNode: this._getEventListenersForNode.bind(this),
         getFullAXTree: this._getFullAXTree.bind(this),
         insertText: this._insertText.bind(this),
         scrollIntoViewIfNeeded: this._scrollIntoViewIfNeeded.bind(this),
@@ -424,6 +425,28 @@ export class PageAgent {
       contentFrameId: contentFrame ? contentFrame.id() : undefined,
       ownerFrameId: ownerFrame ? ownerFrame.id() : undefined,
     };
+  }
+
+  _getEventListenersForNode({objectId, frameId}) {
+    const frame = this._frameTree.frame(frameId);
+    if (!frame)
+      throw new Error('Failed to find frame with id = ' + frameId);
+    const unsafeObject = frame.unsafeObject(objectId);
+    if (!unsafeObject)
+      throw new Error('Failed to find node with id = ' + objectId);
+    const els = Cc['@mozilla.org/eventlistenerservice;1']
+        .getService(Ci.nsIEventListenerService);
+    const infos = els.getListenerInfoFor(unsafeObject);
+    const listeners = [];
+    for (const info of infos) {
+      listeners.push({
+        type: info.type,
+        capturing: info.capturing,
+        allowsUntrusted: info.allowsUntrusted,
+        inSystemEventGroup: info.inSystemEventGroup,
+      });
+    }
+    return { listeners };
   }
 
   async _scrollIntoViewIfNeeded({objectId, frameId, rect}) {
