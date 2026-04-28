@@ -539,7 +539,11 @@ def launch_options(
     if i_know_what_im_doing is None:
         i_know_what_im_doing = False
     if env is None:
-        env = cast(Dict[str, Union[str, float, bool]], environ)
+        # Copy os.environ rather than aliasing it. Concurrent calls (each
+        # with its own virtual_display) would otherwise race on the shared
+        # os.environ['DISPLAY'] mutation below and leak each other's DISPLAY
+        # into the wrong Firefox child.
+        env = cast(Dict[str, Union[str, float, bool]], dict(environ))
     if isinstance(executable_path, str):
         # Convert executable path to a Path object
         executable_path = Path(abspath(executable_path))
