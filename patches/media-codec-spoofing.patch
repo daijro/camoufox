@@ -1,0 +1,74 @@
+diff --git a/dom/media/mp4/MP4Decoder.cpp b/dom/media/mp4/MP4Decoder.cpp
+index abcdef0001..abcdef0002 100644
+--- a/dom/media/mp4/MP4Decoder.cpp
++++ b/dom/media/mp4/MP4Decoder.cpp
+@@ -7,6 +7,7 @@
+ #include "MP4Decoder.h"
+
+ #include "H264.h"
++#include "MaskConfig.hpp"
+ #include "VPXDecoder.h"
+ #ifdef MOZ_AV1
+ #  include "AOMDecoder.h"
+@@ -133,6 +134,14 @@ bool MP4Decoder::IsSupportedType(const MediaContainerType& aType,
+     return false;
+   }
+
++  // Camoufox: When media:spoof_codecs is enabled, always report MP4 as
++  // supported. This prevents canPlayType()/isTypeSupported() from leaking
++  // which system codec libraries (FFmpeg, VideoToolbox, GStreamer) are
++  // installed. Actual playback may fail if no decoder is present.
++  if (MaskConfig::GetBool("media:spoof_codecs").value_or(false)) {
++    return true;
++  }
++
+   if (!tracks.IsEmpty()) {
+     // Look for exact match as we know used codecs.
+     RefPtr<PDMFactory> platform = new PDMFactory();
+diff --git a/dom/media/mp4/moz.build b/dom/media/mp4/moz.build
+index abcdef0003..abcdef0004 100644
+--- a/dom/media/mp4/moz.build
++++ b/dom/media/mp4/moz.build
+@@ -32,3 +32,6 @@ CXXFLAGS += [
+
+ # Add libFuzzer configuration directives
+ include("/tools/fuzzing/libfuzzer-config.mozbuild")
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+diff --git a/dom/media/webm/MatroskaDecoder.cpp b/dom/media/webm/MatroskaDecoder.cpp
+index abcdef0005..abcdef0006 100644
+--- a/dom/media/webm/MatroskaDecoder.cpp
++++ b/dom/media/webm/MatroskaDecoder.cpp
+@@ -12,6 +12,7 @@
+ #include "MediaContainerType.h"
+ #include "PDMFactory.h"
+ #include "PlatformDecoderModule.h"
++#include "MaskConfig.hpp"
+ #include "VideoUtils.h"
+ #include "mozilla/StaticPrefs_media.h"
+ #include "nsMimeTypes.h"
+@@ -130,6 +131,12 @@ bool MatroskaDecoder::IsSupportedType(const MediaContainerType& aContainerType,
+
+   if (!tracks.IsEmpty()) {
+     // Look for exact match as we know the codecs used.
++
++    // Camoufox: bypass system decoder check when media:spoof_codecs is enabled.
++    if (MaskConfig::GetBool("media:spoof_codecs").value_or(false)) {
++      return true;
++    }
++
+     RefPtr<PDMFactory> platform = new PDMFactory();
+     for (const auto& track : tracks) {
+       if (!track ||
+diff --git a/dom/media/webm/moz.build b/dom/media/webm/moz.build
+index abcdef0007..abcdef0008 100644
+--- a/dom/media/webm/moz.build
++++ b/dom/media/webm/moz.build
+@@ -29,3 +29,6 @@ FINAL_LIBRARY = "xul"
+
+ # Add libFuzzer configuration directives
+ include("/tools/fuzzing/libfuzzer-config.mozbuild")
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
