@@ -107,6 +107,23 @@ pageTypes.InitScript = {
   worldName: t.Optional(t.String),
 };
 
+// One row of `Page.getEventListenersForNode`'s response. The
+// field names mirror Firefox's `nsIEventListenerInfo` interface
+// (dom/events/nsIEventListenerService.idl) verbatim so the
+// mapping from the underlying XPCOM service is unambiguous —
+// what Firefox DevTools's "Event Listeners" panel shows is what
+// this method emits. `inSystemEventGroup` distinguishes
+// browser/extension-registered listeners from page-author
+// handlers, letting clients filter to "author intent" if they
+// want. Note: Firefox doesn't expose the DOM-level `passive`
+// flag through this interface, so it isn't included.
+pageTypes.EventListenerInfo = {
+  type: t.String,
+  capturing: t.Boolean,
+  allowsUntrusted: t.Boolean,
+  inSystemEventGroup: t.Boolean,
+};
+
 const runtimeTypes = {};
 runtimeTypes.RemoteObject = {
   type: t.Optional(t.Enum(['object', 'function', 'undefined', 'string', 'number', 'boolean', 'symbol', 'bigint'])),
@@ -831,6 +848,25 @@ const Page = {
       returns: {
         contentFrameId: t.Optional(t.String),
         ownerFrameId: t.Optional(t.String),
+      },
+    },
+    // Enumerate every event listener attached to the DOM node
+    // identified by `(frameId, objectId)`. Wraps Firefox's
+    // `nsIEventListenerService.getListenerInfoFor(node)`, the
+    // same XPCOM service that powers DevTools's "Event Listeners"
+    // panel. Useful for automation clients that need to discover
+    // non-ARIA interactive elements (e.g. `<div onclick>` /
+    // `<span data-action>`) that pure accessibility-tree walks
+    // don't expose. Listeners are returned in their native
+    // registration order; the `system` flag distinguishes
+    // browser/extension listeners from page-author handlers.
+    'getEventListenersForNode': {
+      params: {
+        frameId: t.String,
+        objectId: t.String,
+      },
+      returns: {
+        listeners: t.Array(pageTypes.EventListenerInfo),
       },
     },
     'scrollIntoViewIfNeeded': {
