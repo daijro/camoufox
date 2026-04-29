@@ -537,7 +537,8 @@ export class PageHandler {
       this._pageTarget.ensureContextMenuClosed();
       // If someone asks us to dispatch mouse event outside of viewport, then we normally would drop it.
       const boundingBox = this._pageTarget._linkedBrowser.getBoundingClientRect();
-      if (x < 0 || y < 0 || x > boundingBox.width || y > boundingBox.height) {
+      // Treat exact-edge coordinates as out-of-viewport: a mousemove at x==width or y==height fires as an exit event instead of eMouseMove, so the hit-renderer signal never arrives and every later input event hangs behind it forever.
+      if (x < 0 || y < 0 || x >= boundingBox.width || y >= boundingBox.height) {
         if (type !== 'mousemove')
           return;
 
