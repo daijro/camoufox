@@ -423,6 +423,7 @@ def generate_context_fingerprint(
     webrtc_ip: Optional[str] = None,
     timezone: Optional[str] = None,
     locale: Optional[str] = None,
+    config_overrides: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Generate fingerprint values for a single per-context identity.
@@ -438,6 +439,9 @@ def generate_context_fingerprint(
         locale: BCP-47 locale string (e.g. 'en-GB'). When provided, parsed via
             normalize_locale() and injected into config. Also sets
             context_options['locale'] for Playwright.
+        config_overrides: Dict of CAMOU_CONFIG keys to override after config
+            is built but before init_script is rendered. Useful for disabling
+            perturbation (e.g. {'fonts:spacing_seed': 0}).
     """
     if preset is not None:
         # Use real fingerprint preset
@@ -534,6 +538,10 @@ def generate_context_fingerprint(
         config['navigator.language'] = parsed.as_string
         if parsed.script:
             config['locale:script'] = parsed.script
+
+    # Apply caller overrides before rendering init_script
+    if config_overrides:
+        config.update(config_overrides)
 
     # Build the values dict for the init script (works for both paths)
     init_values: Dict[str, Any] = {
