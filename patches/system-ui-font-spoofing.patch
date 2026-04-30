@@ -1,0 +1,23 @@
+diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
+index xxxxxxxxxx..yyyyyyyyyy 100644
+--- a/gfx/thebes/gfxPlatformFontList.cpp
++++ b/gfx/thebes/gfxPlatformFontList.cpp
+@@ -2132,6 +2132,16 @@
+ static void GetSystemUIFontFamilies(
+     FontVisibilityProvider* aFontVisibilityProvider,
+     [[maybe_unused]] nsAtom* aLangGroup, nsTArray<nsCString>& aFamilies) {
++  // Camoufox: spoof system-ui to match the spoofed OS
++  if (auto platform = MaskConfig::GetString("navigator.platform"); platform) {
++    if (*platform == "MacIntel") {
++      *aFamilies.AppendElement() = "Helvetica"_ns;
++      return;
++    }
++    if (*platform == "Win32") {
++      *aFamilies.AppendElement() = "Segoe UI"_ns;
++      return;
++    }
++  }
++
+   // TODO: On macOS, use CTCreateUIFontForLanguage or such thing (though the
+   // code below ends up using [NSFont systemFontOfSize: 0.0].
+   nsFont systemFont;
