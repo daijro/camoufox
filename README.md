@@ -244,6 +244,25 @@ with Camoufox(fingerprint_seed="account-123") as browser:
     page.goto("https://example.com")
 ```
 
+To persist cookies, local storage, and browser profile state, use a persistent
+context with a stable `user_data_dir` alongside the same `fingerprint_seed`:
+
+```python
+from pathlib import Path
+
+from camoufox.sync_api import Camoufox
+
+profile_dir = Path("profiles/account-123")
+
+with Camoufox(
+    persistent_context=True,
+    user_data_dir=profile_dir,
+    fingerprint_seed="account-123",
+) as context:
+    page = context.new_page()
+    page.goto("https://example.com")
+```
+
 ### Making Full use of Hardware Spoofing
 
 For stable releases, you should always use the main [`camoufox`](https://pypi.org/project/camoufox/) pip package. However, if you want to make use of per-context fingerprints and hardware spoofing, use the [`cloverlabs-camoufox`](https://pypi.org/project/cloverlabs-camoufox/) package. This package is updated with each releases, whereas the official package is released on delay.

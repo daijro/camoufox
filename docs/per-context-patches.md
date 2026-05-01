@@ -640,6 +640,24 @@ with Camoufox(fingerprint_seed="account-123") as browser:
 The seed only controls generated fingerprint values. It does not persist
 cookies, local storage, cache, or Playwright browser profile state.
 
+Persistent browser state should be handled separately with Playwright's
+persistent context support. Reuse the same `fingerprint_seed` and the same
+`user_data_dir` when cookies/storage should remain tied to the same generated
+identity:
+
+```python
+from pathlib import Path
+
+from camoufox.sync_api import Camoufox
+
+with Camoufox(
+    persistent_context=True,
+    user_data_dir=Path("profiles/account-123"),
+    fingerprint_seed="account-123",
+) as context:
+    ...
+```
+
 ### What Each Path Sets
 
 | Property | Source | Notes |
