@@ -648,7 +648,7 @@ def launch_options(
 
     target_os = get_target_os(config)
 
-    # Set a random window.history.length
+    # Set a per-launch window.history.length, deterministic when seeded.
     history_length = (
         deterministic_rng(fingerprint_seed, 'history').randrange(1, 6)
         if fingerprint_seed is not None
@@ -667,7 +667,7 @@ def launch_options(
         else:
             raise ValueError('No custom fonts were passed, but `custom_fonts_only` is enabled.')
     elif 'fonts' not in config or not config.get('fonts'):
-        # Generate a unique random font subset from the OS font list
+        # Generate a per-launch font subset from the OS font list.
         os_name = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}.get(target_os, 'macos')
         try:
             font_rng = (
@@ -679,7 +679,7 @@ def launch_options(
         except Exception:
             update_fonts(config, target_os)
 
-    # Generate a unique random voice subset
+    # Generate a per-launch voice subset.
     if 'voices' not in config:
         os_name_v = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}.get(target_os, 'macos')
         try:
@@ -692,7 +692,7 @@ def launch_options(
         except Exception:
             pass
 
-    # Set random seeds for fingerprint noise (per launch)
+    # Set per-launch seeds for fingerprint noise.
     set_into(
         config,
         'fonts:spacing_seed',
