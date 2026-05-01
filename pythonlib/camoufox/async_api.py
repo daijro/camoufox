@@ -15,6 +15,7 @@ from typing_extensions import Literal
 
 from camoufox.virtdisplay import VirtualDisplay
 
+from .fingerprint_seed import FingerprintSeed
 from .fingerprints import generate_context_fingerprint
 from .utils import async_attach_vd, launch_options
 
@@ -138,6 +139,7 @@ async def AsyncNewContext(
     os: Optional[str] = None,
     ff_version: Optional[str] = None,
     webrtc_ip: Optional[str] = None,
+    fingerprint_seed: Optional[FingerprintSeed] = None,
     proxy: Optional[Dict[str, str]] = None,
     geolocation: Optional[Dict[str, float]] = None,
     **context_kwargs: Any,
@@ -155,6 +157,7 @@ async def AsyncNewContext(
         os: Target OS for preset selection ("windows", "macos", "linux").
         ff_version: Firefox version string for UA patching.
         webrtc_ip: IPv4 address to spoof for WebRTC ICE candidates.
+        fingerprint_seed: Stable seed for Camoufox-generated fingerprint values.
         proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).
         geolocation: Per-context geolocation ({"latitude": float, "longitude": float}).
         **context_kwargs: Additional Playwright new_context() options.
@@ -169,7 +172,13 @@ async def AsyncNewContext(
 
     fp = await asyncio.get_event_loop().run_in_executor(
         None,
-        lambda: generate_context_fingerprint(preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip),
+        lambda: generate_context_fingerprint(
+            preset=preset,
+            os=os,
+            ff_version=ff_version,
+            webrtc_ip=webrtc_ip,
+            fingerprint_seed=fingerprint_seed,
+        ),
     )
 
     # Merge generated context options with user overrides (user wins)
