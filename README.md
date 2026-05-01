@@ -224,6 +224,26 @@ async with AsyncCamoufox() as browser:
 
 [[Installation & usage](https://camoufox.com/python/)]
 
+### Persistent Fingerprint Seeds
+
+Pass `fingerprint_seed` when you want the same generated identity to be reused
+across launches or contexts. The seed controls Camoufox-generated fingerprint
+values such as BrowserForge sampling, font and voice subsets, WebGL sampling,
+and audio/canvas/font noise seeds. It does not persist cookies, storage, or
+browser profile state.
+
+```python
+from camoufox.sync_api import Camoufox, NewContext
+
+with Camoufox(fingerprint_seed="account-123") as browser:
+    page = browser.new_page()
+    page.goto("https://example.com")
+
+    context = NewContext(browser, fingerprint_seed="account-123:context-2")
+    page = context.new_page()
+    page.goto("https://example.com")
+```
+
 ### Making Full use of Hardware Spoofing
 
 For stable releases, you should always use the main [`camoufox`](https://pypi.org/project/camoufox/) pip package. However, if you want to make use of per-context fingerprints and hardware spoofing, use the [`cloverlabs-camoufox`](https://pypi.org/project/cloverlabs-camoufox/) package. This package is updated with each releases, whereas the official package is released on delay.
@@ -322,6 +342,7 @@ Below is a list of patches and features implemented in Camoufox.
 
 - Automatically generates & injects unique device characteristics into Camoufox based on their real-world distribution
 - WebGL fingerprint injection & rotation
+- Optional persistent fingerprint seeds for stable generated identities
 - Uses the correct system fonts and subpixel antialiasing & hinting based on your target OS
 - Avoid proxy detection by calculating your target geolocation, timezone, & locale from your proxy's target region
 - Calculate and spoof the browser's language based on the distribution of language speakers in the proxy's target region

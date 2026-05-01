@@ -614,7 +614,7 @@ bundle/
 
 ## Python Library Changes
 
-The Camoufox Python package (`pythonlib/`) generates fingerprints for both `NewBrowser` (global CAMOU_CONFIG) and `NewContext` (per-context init script). **BrowserForge is the default for both paths.** Real fingerprint presets are available as an opt-in alternative.
+The Camoufox Python package (`pythonlib/`) generates fingerprints for both `NewBrowser` (global CAMOU_CONFIG) and `NewContext` (per-context init script). **BrowserForge is the default for both paths.** Real fingerprint presets are available as an opt-in alternative. Both paths can also take `fingerprint_seed` to reuse the same Camoufox-generated identity values across runs.
 
 ### Fingerprint Source Priority
 
@@ -623,19 +623,36 @@ The Camoufox Python package (`pythonlib/`) generates fingerprints for both `NewB
 | **NewBrowser** (`launch_options()` in `utils.py`) | BrowserForge synthetic | Pass `fingerprint_preset=True` or a preset dict |
 | **NewContext** (`generate_context_fingerprint()` in `fingerprints.py`) | BrowserForge synthetic | Pass `preset=dict` explicitly |
 
+### Persistent Fingerprint Seeds
+
+`fingerprint_seed` accepts `str`, `int`, or `bytes`. It derives independent
+sub-seeds for each random fingerprint domain so one stable seed can reproduce
+the same identity while keeping BrowserForge, WebGL, font, voice, audio, canvas,
+and screen-offset sampling separate.
+
+```python
+from camoufox.sync_api import Camoufox, NewContext
+
+with Camoufox(fingerprint_seed="account-123") as browser:
+    context = NewContext(browser, fingerprint_seed="account-123:context-2")
+```
+
+The seed only controls generated fingerprint values. It does not persist
+cookies, local storage, cache, or Playwright browser profile state.
+
 ### What Each Path Sets
 
 | Property | Source | Notes |
 |----------|--------|-------|
 | UA, platform, HWC, oscpu | BrowserForge or preset | UA version patched to match Camoufox Firefox version |
 | Screen dims, colorDepth | BrowserForge or preset | Viewport adjusted by -28px for browser chrome |
-| WebGL vendor/renderer | `sample_webgl()` from `webgl_data.db` | OS-weighted probability sampling. BrowserForge does NOT generate WebGL (commented out in `browserforge.yml`). Both paths call `sample_webgl()` when WebGL values are missing. |
-| Font list | `_generate_random_font_subset()` | Random 30-78% of OS fonts. Essential + marker fonts always included. NOT from presets — generated fresh per call. |
-| Font spacing seed | `randint(1, 2^32-1)` | Excludes 0 (0 = no-op in C++) |
-| Audio seed | `randint(1, 2^32-1)` | Excludes 0 |
-| Canvas seed | `randint(1, 2^32-1)` | Excludes 0 |
+| WebGL vendor/renderer | Preset values or `sample_webgl()` from `webgl_data.db` | BrowserForge does NOT generate WebGL (commented out in `browserforge.yml`). Synthetic paths use OS-weighted probability sampling, deterministic when `fingerprint_seed` is supplied. Preset paths use preset WebGL values when present. |
+| Font list | `_generate_random_font_subset()` | Random 30-78% of OS fonts, or deterministic when `fingerprint_seed` is supplied. Essential + marker fonts always included. Normally generated fresh per call unless seeded; preset fonts are only used as a fallback if OS font generation fails. |
+| Font spacing seed | Random uint32, or derived from `fingerprint_seed` | Excludes 0 (0 = no-op in C++) |
+| Audio seed | Random uint32, or derived from `fingerprint_seed` | Excludes 0 |
+| Canvas seed | Random uint32, or derived from `fingerprint_seed` | Excludes 0 |
 | Timezone | From preset, or Intl.DateTimeFormat fallback in init script | NewBrowser: from preset or geolocation detection. NewContext: preset or browser default. |
-| Speech voices | `_generate_random_voice_subset()` | Random 40-80% of OS voices. Essential voices always included. macOS: 6 essentials + random subset of ~184. Windows: all voices (too few to subset). Linux: empty (no native voices). NOT from presets — generated fresh per call. |
+| Speech voices | `_generate_random_voice_subset()` | Random 40-80% of OS voices, or deterministic when `fingerprint_seed` is supplied. Essential voices always included. macOS: 6 essentials + random subset of ~184. Windows: all voices (too few to subset). Linux: empty (no native voices). Normally generated fresh per call unless seeded; preset voices are only used as a fallback if OS voice generation fails. |
 | WebRTC IP | Not set by default | User sets via `window.setWebRTCIPv4()`. NewContext init script defaults to empty string `""` |
 | Geolocation | User parameter or geoip detection | Via Playwright `context.setGeolocation()` |
 
@@ -643,20 +660,22 @@ The Camoufox Python package (`pythonlib/`) generates fingerprints for both `NewB
 
 **`fingerprints.py`** — Per-context fingerprint generation:
 - `generate_context_fingerprint()` — main API. Returns `{init_script, context_options, config, preset}`
+- `fingerprint_seed.py` — derives independent deterministic sub-seeds for BrowserForge, WebGL, fonts, voices, and noise seeds
 - `from_preset()` — converts real preset to CAMOU_CONFIG format
 - `from_browserforge()` — converts BrowserForge Fingerprint to CAMOU_CONFIG using `browserforge.yml` mappings
 - `_build_init_script()` — generates JavaScript IIFE calling 15 `window.setXxx()` functions with `typeof` guards (`setWebRTCIPv6` is not included — IPv6 is optional and rarely set)
-- `_generate_random_font_subset()` — unique random font subset per call (Fisher-Yates, essential + marker fonts always included)
-- `_generate_random_voice_subset()` — unique random voice subset per call (essential voices always included, OS-aware)
+- `_generate_random_font_subset()` — random by default, deterministic when passed a seeded RNG (essential + marker fonts always included)
+- `_generate_random_voice_subset()` — random by default, deterministic when passed a seeded RNG (essential voices always included, OS-aware)
 
 **`utils.py`** — Global browser launch configuration:
 - `launch_options()` — builds CAMOU_CONFIG env var, Playwright args, and Firefox prefs
+- `fingerprint_seed` — optional stable seed for launch-level BrowserForge, preset, font, voice, WebGL, history, and noise generation
 - Font subset generated via same `_generate_random_font_subset()` function
 - Voice subset generated via same `_generate_random_voice_subset()` function
 - WebGL sampled via same `sample_webgl()` function
 - Config validated against `properties.json` before serialization
 
-**`fingerprint-presets.json`** — Bundled real fingerprints organized by OS (macOS, Windows, Linux). Each preset includes navigator properties, screen dimensions, WebGL params, speech voices, and timezone. Font and voice data not used from presets — generated fresh per launch.
+**`fingerprint-presets.json`** — Bundled real fingerprints organized by OS (macOS, Windows, Linux). Each preset includes navigator properties, screen dimensions, WebGL params, speech voices, and timezone. Fonts and voices are normally generated from OS lists, deterministic when seeded, and preset values are fallback-only if OS generation fails.
 
 **`fonts.json`** — Complete OS-specific font lists for random font subset generation.
 
