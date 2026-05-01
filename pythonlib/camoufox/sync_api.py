@@ -143,14 +143,15 @@ def NewContext(
     """
     Creates a new browser context with a unique fingerprint identity.
 
-    Each context gets its own real fingerprint preset
-    with unique seeds for audio, canvas, and font spacing noise. All values are applied
+    By default, each context gets a BrowserForge synthetic fingerprint with
+    unique audio, canvas, font spacing, font, voice, and WebGL values. Pass a
+    preset dict to use a real bundled fingerprint instead. Values are applied
     via addInitScript so they self-destruct before page scripts can detect them.
 
     Parameters:
         browser: A Browser instance from NewBrowser or Camoufox.
-        preset: A specific fingerprint preset dict to use. If None, picks randomly.
-        os: Target OS for preset selection ("windows", "macos", "linux").
+        preset: A specific fingerprint preset dict to use. If None, BrowserForge is used.
+        os: Target OS for synthetic fingerprint generation ("windows", "macos", "linux").
         ff_version: Firefox version string for UA patching.
         webrtc_ip: IPv4 address to spoof for WebRTC ICE candidates.
         fingerprint_seed: Stable seed for Camoufox-generated fingerprint values.
