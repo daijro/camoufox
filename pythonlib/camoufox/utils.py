@@ -4,7 +4,7 @@ from os import environ
 from os.path import abspath
 from pathlib import Path
 from pprint import pprint
-from random import randint, randrange
+from random import randrange
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -20,7 +20,17 @@ from .exceptions import (
     InvalidPropertyType,
     NonFirefoxFingerprint,
 )
-from .fingerprints import from_browserforge, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset
+from .fingerprint_seed import FingerprintSeed, derive_uint32_seed, deterministic_rng
+from .fingerprints import (
+    _generate_random_font_subset,
+    _generate_random_voice_subset,
+    _synthetic_os_for_seed,
+    _uint32_noise_seed,
+    from_browserforge,
+    from_preset,
+    generate_fingerprint,
+    get_random_preset,
+)
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locales import handle_locales
@@ -271,6 +281,21 @@ def check_valid_os(os: ListOrString) -> None:
         raise InvalidOS(f"Camoufox does not support the OS: '{os}'")
 
 
+def _seeded_os(
+    os: Optional[ListOrString],
+    fingerprint_seed: Optional[FingerprintSeed],
+) -> Optional[ListOrString]:
+    if fingerprint_seed is None:
+        return os
+    if os is None:
+        return _synthetic_os_for_seed(fingerprint_seed)
+    if isinstance(os, str):
+        return os
+    if not os:
+        return os
+    return deterministic_rng(fingerprint_seed, 'os').choice(tuple(os))
+
+
 def _clean_locals(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Gets the launch options from the locals of the function.
@@ -414,6 +439,7 @@ def launch_options(
     window: Optional[Tuple[int, int]] = None,
     fingerprint: Optional[Fingerprint] = None,
     fingerprint_preset: Optional[Union[bool, Dict[str, Any]]] = None,
+    fingerprint_seed: Optional[FingerprintSeed] = None,
     ff_version: Optional[int] = None,
     headless: Optional[bool] = None,
     main_world_eval: Optional[bool] = None,
@@ -483,6 +509,8 @@ def launch_options(
             Opt into using real fingerprint presets instead of BrowserForge.
             Pass `True` to use a random bundled preset, or pass a preset dict directly.
             By default (None), BrowserForge is used for infinite unique fingerprints.
+        fingerprint_seed (Optional[FingerprintSeed]):
+            Stable seed for Camoufox-generated fingerprint values.
         ff_version (Optional[int]):
             Firefox version to use. Defaults to the current Camoufox version.
             To prevent leaks, only use this for special cases.
@@ -564,6 +592,7 @@ def launch_options(
     # webgl_config requires OS to be set
     elif webgl_config:
         raise ValueError('OS must be set when using webgl_config')
+    fingerprint_os = _seeded_os(os, fingerprint_seed)
 
     # Add the default addons
     add_default_addons(addons, exclude_addons)
@@ -591,9 +620,14 @@ def launch_options(
         if isinstance(fingerprint_preset, dict):
             preset = fingerprint_preset
         else:
-            preset = get_random_preset(os=os)
+            preset_rng = (
+                deterministic_rng(fingerprint_seed, 'preset')
+                if fingerprint_seed is not None
+                else None
+            )
+            preset = get_random_preset(os=os, rng=preset_rng)
         if preset:
-            merge_into(config, from_preset(preset, ff_version_str))
+            merge_into(config, from_preset(preset, ff_version_str, fingerprint_seed))
             _used_preset = True
 
     if not _used_preset and fingerprint is None:
@@ -601,20 +635,26 @@ def launch_options(
         fingerprint = generate_fingerprint(
             screen=screen or get_screen_cons(headless or 'DISPLAY' in env),
             window=window,
-            os=os,
+            os=fingerprint_os,
+            fingerprint_seed=fingerprint_seed,
         )
 
     if not _used_preset and fingerprint is not None:
         # Inject the BrowserForge fingerprint into the config
         merge_into(
             config,
-            from_browserforge(fingerprint, ff_version_str),
+            from_browserforge(fingerprint, ff_version_str, fingerprint_seed),
         )
 
     target_os = get_target_os(config)
 
     # Set a random window.history.length
-    set_into(config, 'window.history.length', randrange(1, 6))  # nosec
+    history_length = (
+        deterministic_rng(fingerprint_seed, 'history').randrange(1, 6)
+        if fingerprint_seed is not None
+        else randrange(1, 6)  # nosec
+    )
+    set_into(config, 'window.history.length', history_length)
 
     # Update fonts list
     if fonts:
@@ -630,7 +670,12 @@ def launch_options(
         # Generate a unique random font subset from the OS font list
         os_name = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}.get(target_os, 'macos')
         try:
-            config['fonts'] = _generate_random_font_subset(os_name)
+            font_rng = (
+                deterministic_rng(fingerprint_seed, 'fonts')
+                if fingerprint_seed is not None
+                else None
+            )
+            config['fonts'] = _generate_random_font_subset(os_name, font_rng)
         except Exception:
             update_fonts(config, target_os)
 
@@ -638,14 +683,23 @@ def launch_options(
     if 'voices' not in config:
         os_name_v = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}.get(target_os, 'macos')
         try:
-            config['voices'] = _generate_random_voice_subset(os_name_v)
+            voice_rng = (
+                deterministic_rng(fingerprint_seed, 'voices')
+                if fingerprint_seed is not None
+                else None
+            )
+            config['voices'] = _generate_random_voice_subset(os_name_v, voice_rng)
         except Exception:
             pass
 
     # Set random seeds for fingerprint noise (per launch)
-    set_into(config, 'fonts:spacing_seed', randint(1, 4_294_967_295))  # nosec
-    set_into(config, 'audio:seed', randint(1, 4_294_967_295))  # nosec
-    set_into(config, 'canvas:seed', randint(1, 4_294_967_295))  # nosec
+    set_into(
+        config,
+        'fonts:spacing_seed',
+        _uint32_noise_seed(fingerprint_seed, 'fonts:spacing_seed'),
+    )
+    set_into(config, 'audio:seed', _uint32_noise_seed(fingerprint_seed, 'audio:seed'))
+    set_into(config, 'canvas:seed', _uint32_noise_seed(fingerprint_seed, 'canvas:seed'))
 
     # Set geolocation
     if geoip:
@@ -719,7 +773,12 @@ def launch_options(
             # Preset already set vendor/renderer — sample matching WebGL params
             webgl_fp = sample_webgl(target_os, config['webGl:vendor'], config['webGl:renderer'])
         else:
-            webgl_fp = sample_webgl(target_os)
+            webgl_seed = (
+                derive_uint32_seed(fingerprint_seed, 'webgl')
+                if fingerprint_seed is not None
+                else None
+            )
+            webgl_fp = sample_webgl(target_os, random_seed=webgl_seed)
         enable_webgl2 = webgl_fp.pop('webGl2Enabled')
 
         # Merge the WebGL fingerprint into the config

@@ -1,11 +1,14 @@
 import json
 import os
 import re
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from random import Random, choice, randint, randrange, random, sample, shuffle
-from typing import Any, Dict, List, Optional, Tuple
+from random import Random, choice, randint, randrange, random, sample
+from threading import Lock
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+import browserforge.bayesian_network as browserforge_bayesian_network
 from browserforge.fingerprints import (
     Fingerprint,
     FingerprintGenerator,
@@ -40,6 +43,7 @@ _WINDOWS_MARKER_FONTS = [
     'Segoe UI', 'Tahoma', 'Cambria Math', 'Nirmala UI',
 ]
 _SYNTHETIC_OS_CHOICES = ('linux', 'macos', 'windows')
+_BROWSERFORGE_RNG_LOCK = Lock()
 
 
 def _uint32_noise_seed(
@@ -53,6 +57,22 @@ def _uint32_noise_seed(
 
 def _synthetic_os_for_seed(fingerprint_seed: FingerprintSeed) -> str:
     return deterministic_rng(fingerprint_seed, 'os').choice(_SYNTHETIC_OS_CHOICES)
+
+
+@contextmanager
+def _browserforge_rng(fingerprint_seed: Optional[FingerprintSeed]) -> Iterator[None]:
+    with _BROWSERFORGE_RNG_LOCK:
+        if fingerprint_seed is None:
+            yield
+            return
+
+        rng = deterministic_rng(fingerprint_seed, 'browserforge')
+        previous_random = browserforge_bayesian_network.random
+        browserforge_bayesian_network.random = rng
+        try:
+            yield
+        finally:
+            browserforge_bayesian_network.random = previous_random
 
 
 def _ensure_marker_fonts(fonts: List[str], markers: List[str]) -> None:
@@ -240,6 +260,7 @@ _OS_TO_PRESET_KEY = {
 
 def get_random_preset(
     os: Optional[str] = None,
+    rng: Optional[Random] = None,
 ) -> Optional[Dict]:
     """
     Get a random preset for the given OS.
@@ -268,7 +289,8 @@ def get_random_preset(
     if not candidates:
         return None
 
-    return choice(candidates)  # nosec
+    random_choice = rng.choice if rng is not None else choice
+    return random_choice(candidates)  # nosec
 
 
 def from_preset(
@@ -500,8 +522,8 @@ def generate_context_fingerprint(
         synthetic_os = os
         if synthetic_os is None and fingerprint_seed is not None:
             synthetic_os = _synthetic_os_for_seed(fingerprint_seed)
-        fp = generate_fingerprint(os=synthetic_os)
-        config = from_browserforge(fp, ff_version)
+        fp = generate_fingerprint(os=synthetic_os, fingerprint_seed=fingerprint_seed)
+        config = from_browserforge(fp, ff_version, fingerprint_seed)
 
         # Add seeds (BrowserForge doesn't generate these)
         config.setdefault(
@@ -705,7 +727,11 @@ def _cast_to_properties(
         camoufox_data[type_key] = data
 
 
-def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: ScreenFingerprint) -> None:
+def handle_screenXY(
+    camoufox_data: Dict[str, Any],
+    fp_screen: ScreenFingerprint,
+    rng: Optional[Random] = None,
+) -> None:
     """
     Helper method to set window.screenY based on Browserforge's screenX value.
     """
@@ -729,12 +755,18 @@ def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: ScreenFingerprint)
     if screenY == 0:
         camoufox_data['window.screenY'] = 0
     elif screenY > 0:
-        camoufox_data['window.screenY'] = randrange(0, screenY)  # nosec
+        random_range = rng.randrange if rng is not None else randrange
+        camoufox_data['window.screenY'] = random_range(0, screenY)  # nosec
     else:
-        camoufox_data['window.screenY'] = randrange(screenY, 0)  # nosec
+        random_range = rng.randrange if rng is not None else randrange
+        camoufox_data['window.screenY'] = random_range(screenY, 0)  # nosec
 
 
-def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None) -> Dict[str, Any]:
+def from_browserforge(
+    fingerprint: Fingerprint,
+    ff_version: Optional[str] = None,
+    fingerprint_seed: Optional[FingerprintSeed] = None,
+) -> Dict[str, Any]:
     """
     Converts a Browserforge fingerprint to a Camoufox config.
     """
@@ -745,7 +777,12 @@ def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None
         bf_dict=asdict(fingerprint),
         ff_version=ff_version,
     )
-    handle_screenXY(camoufox_data, fingerprint.screen)
+    screen_rng = (
+        deterministic_rng(fingerprint_seed, 'screen')
+        if fingerprint_seed is not None
+        else None
+    )
+    handle_screenXY(camoufox_data, fingerprint.screen, screen_rng)
 
     return camoufox_data
 
@@ -773,15 +810,20 @@ def handle_window_size(fp: Fingerprint, outer_width: int, outer_height: int) -> 
     sc.outerHeight = outer_height
 
 
-def generate_fingerprint(window: Optional[Tuple[int, int]] = None, **config) -> Fingerprint:
+def generate_fingerprint(
+    window: Optional[Tuple[int, int]] = None,
+    fingerprint_seed: Optional[FingerprintSeed] = None,
+    **config,
+) -> Fingerprint:
     """
     Generates a Firefox fingerprint with Browserforge.
     """
-    if window:  # User-specified outer window size
-        fingerprint = FP_GENERATOR.generate(**config)
-        handle_window_size(fingerprint, *window)
-        return fingerprint
-    return FP_GENERATOR.generate(**config)
+    with _browserforge_rng(fingerprint_seed):
+        if window:  # User-specified outer window size
+            fingerprint = FP_GENERATOR.generate(**config)
+            handle_window_size(fingerprint, *window)
+            return fingerprint
+        return FP_GENERATOR.generate(**config)
 
 
 if __name__ == "__main__":
