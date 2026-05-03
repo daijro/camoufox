@@ -1,9 +1,39 @@
+diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/StaticPrefList.yaml
+--- a/modules/libpref/init/StaticPrefList.yaml
++++ b/modules/libpref/init/StaticPrefList.yaml
+@@ -5487,6 +5487,13 @@
+ #endif
+   mirror: always
+
++# Hide navigator.webdriver attribute when false (Camoufox: anti-fingerprinting,
++# referenced via [Pref] in dom/webidl/Navigator.webidl).
++- name: dom.webdriver.enabled
++  type: bool
++  value: false
++  mirror: always
++
+ # Is support for the Web Audio API enabled?
+ - name: dom.webaudio.enabled
+   type: bool
+
+diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
+--- a/dom/webidl/Navigator.webidl
++++ b/dom/webidl/Navigator.webidl
+@@ -310,7 +310,7 @@
+
+ // https://w3c.github.io/webdriver/webdriver-spec.html#interface
+ interface mixin NavigatorAutomationInformation {
+-  [Constant, Cached]
++  [Constant, Cached, Pref="dom.webdriver.enabled"]
+   readonly attribute boolean webdriver;
+ };
+
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
 index 9880047350..318d2edba8 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
 @@ -2316,28 +2316,7 @@ dom::PrivateAttribution* Navigator::PrivateAttribution() {
- 
+
  /* static */
  bool Navigator::Webdriver() {
 -#ifdef ENABLE_WEBDRIVER
