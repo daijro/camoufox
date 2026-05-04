@@ -147,10 +147,10 @@ async def AsyncNewContext(
     """
     Creates a new browser context with a unique fingerprint identity.
 
-    By default, each context gets a BrowserForge synthetic fingerprint with
-    unique audio, canvas, font spacing, font, voice, and WebGL values. Pass a
-    preset dict to use a real bundled fingerprint instead. Values are applied
-    via addInitScript so they self-destruct before page scripts can detect them.
+    By default, each context gets a BrowserForge synthetic fingerprint. Supported
+    per-context values are applied via addInitScript so they self-destruct before
+    page scripts can detect them. Pass a preset dict to use a real bundled
+    fingerprint instead.
 
     Parameters:
         browser: A Browser instance from AsyncNewBrowser or AsyncCamoufox.

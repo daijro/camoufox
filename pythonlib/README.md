@@ -39,8 +39,10 @@ with Camoufox(fingerprint_seed="account-123") as browser:
 ```
 
 The seed controls generated identity values such as BrowserForge sampling,
-font and voice subsets, WebGL sampling, and audio/canvas/font noise seeds. It
-does not persist cookies, storage, cache, or profile state.
+font and voice subsets, WebGL sampling, and audio/canvas/font config seeds.
+Launch-level seeds cover the full generated `CAMOU_CONFIG`; context-level seeds
+apply the supported per-context surfaces for new browser contexts. It does not
+persist cookies, storage, cache, or profile state.
 
 To keep browser state tied to the same generated identity, reuse the same
 `fingerprint_seed` and the same `user_data_dir` with a persistent context:

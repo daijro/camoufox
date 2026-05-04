@@ -139,7 +139,12 @@ def _load_properties(path: Optional[Path] = None) -> Dict[str, str]:
     Loads the properties.json file.
     """
     if path:
-        prop_file = str(path.parent / "properties.json")
+        prop_file = path.parent / "properties.json"
+        if not prop_file.exists() and path.parent.name == "MacOS":
+            app_prop_file = path.parent.parent / "Resources" / "properties.json"
+            if app_prop_file.exists():
+                prop_file = app_prop_file
+        prop_file = str(prop_file)
     else:
         prop_file = get_path("properties.json")
     with open(prop_file, "rb") as f:

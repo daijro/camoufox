@@ -412,7 +412,6 @@ def _build_init_script(values: Dict[str, Any]) -> str:
     setters = [
         ('fontSpacingSeed', 'setFontSpacingSeed', '{val}'),
         ('audioFingerprintSeed', 'setAudioFingerprintSeed', '{val}'),
-        ('canvasSeed', 'setCanvasSeed', '{val}'),
         ('navigatorPlatform', 'setNavigatorPlatform', '{val}'),
         ('navigatorOscpu', 'setNavigatorOscpu', '{val}'),
         ('navigatorUserAgent', 'setNavigatorUserAgent', '{val}'),
@@ -508,8 +507,8 @@ def generate_context_fingerprint(
         locale: BCP-47 locale string (e.g. 'en-GB'). When provided, parsed via
             normalize_locale() and injected into config. Also sets
             context_options['locale'] for Playwright.
-        fingerprint_seed: Stable seed for Camoufox-generated noise seeds and
-            font/voice/WebGL subsets.
+        fingerprint_seed: Stable seed for Camoufox-generated config values and
+            supported per-context surfaces.
     """
     if preset is not None:
         # Use real fingerprint preset
@@ -638,7 +637,6 @@ def generate_context_fingerprint(
     init_values: Dict[str, Any] = {
         'fontSpacingSeed': config.get('fonts:spacing_seed'),
         'audioFingerprintSeed': config.get('audio:seed'),
-        'canvasSeed': config.get('canvas:seed'),
         'navigatorPlatform': nav.get('platform'),
         'navigatorOscpu': config.get('navigator.oscpu'),
         'navigatorUserAgent': config.get('navigator.userAgent'),

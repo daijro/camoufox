@@ -627,8 +627,9 @@ The Camoufox Python package (`pythonlib/`) generates fingerprints for both `NewB
 
 `fingerprint_seed` accepts `str`, `int`, or `bytes`. It derives independent
 sub-seeds for each random fingerprint domain so one stable seed can reproduce
-the same identity while keeping BrowserForge, WebGL, font, voice, audio, canvas,
-and screen-offset sampling separate.
+the same generated launch identity while keeping BrowserForge, WebGL, font,
+voice, audio, canvas, and screen-offset sampling separate. Context-level seeds
+apply the supported per-context surfaces for new browser contexts.
 
 ```python
 from camoufox.sync_api import Camoufox, NewContext
@@ -681,7 +682,7 @@ with Camoufox(
 - `fingerprint_seed.py` — derives independent deterministic sub-seeds for BrowserForge, WebGL, fonts, voices, and noise seeds
 - `from_preset()` — converts real preset to CAMOU_CONFIG format
 - `from_browserforge()` — converts BrowserForge Fingerprint to CAMOU_CONFIG using `browserforge.yml` mappings
-- `_build_init_script()` — generates JavaScript IIFE calling 15 `window.setXxx()` functions with `typeof` guards (`setWebRTCIPv6` is not included — IPv6 is optional and rarely set)
+- `_build_init_script()` — generates JavaScript IIFE calling supported `window.setXxx()` functions with `typeof` guards (`setWebRTCIPv6` is not included — IPv6 is optional and rarely set)
 - `_generate_random_font_subset()` — random by default, deterministic when passed a seeded RNG (essential + marker fonts always included)
 - `_generate_random_voice_subset()` — random by default, deterministic when passed a seeded RNG (essential voices always included, OS-aware)
 
@@ -699,7 +700,7 @@ with Camoufox(
 
 **`voices.json`** — Complete OS-specific speech voice lists for random voice subset generation. macOS: 190 voices, Windows: 53 voices, Linux: empty. Format: `"Name:locale:type"` — names extracted at load time.
 
-**`properties.json`** — Includes `audio:seed` and `canvas:seed` as `CAMOU_CONFIG` properties (uint type). These enable the MaskConfig fallback in the audio and canvas patches when using global config without per-context JavaScript.
+**`properties.json`** — Includes `audio:seed` and `canvas:seed` as `CAMOU_CONFIG` properties (uint type). These values are generated deterministically when `fingerprint_seed` is supplied; context-level JavaScript only calls setters that the current browser exposes.
 
 **`camoufox.cfg`** — Sets `fission.autostart=true` and `dom.ipc.processPrelaunch.enabled=false`. No `dom.ipc.processCount` override needed with cross-process storage.
 

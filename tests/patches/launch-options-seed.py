@@ -9,7 +9,9 @@ Or with pytest:
 """
 
 import json
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+from tempfile import TemporaryDirectory
 
 from camoufox import utils
 from camoufox.fingerprints import from_browserforge, generate_fingerprint
@@ -119,12 +121,28 @@ def test_seeded_browserforge_is_stable_with_concurrent_unseeded_calls():
     assert all(result == expected for result in seeded_results)
 
 
+def test_load_properties_supports_macos_app_bundle_layout():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        exe = root / "Camoufox.app" / "Contents" / "MacOS" / "camoufox"
+        resources = root / "Camoufox.app" / "Contents" / "Resources"
+        exe.parent.mkdir(parents=True)
+        resources.mkdir(parents=True)
+        exe.write_text("")
+        (resources / "properties.json").write_text(
+            json.dumps([{"property": "navigator.userAgent", "type": "str"}])
+        )
+
+        assert utils._load_properties(exe) == {"navigator.userAgent": "str"}
+
+
 def main():
     test_same_seed_reuses_synthetic_launch_config()
     test_same_seed_reuses_preset_launch_config()
     test_different_seed_changes_noise_seeds()
     test_unseeded_launch_still_sets_nonzero_noise_seeds()
     test_seeded_browserforge_is_stable_with_concurrent_unseeded_calls()
+    test_load_properties_supports_macos_app_bundle_layout()
     print("launch options seed checks passed")
 
 

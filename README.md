@@ -229,8 +229,10 @@ async with AsyncCamoufox() as browser:
 Pass `fingerprint_seed` when you want the same generated identity to be reused
 across launches or contexts. The seed controls Camoufox-generated fingerprint
 values such as BrowserForge sampling, font and voice subsets, WebGL sampling,
-and audio/canvas/font noise seeds. It does not persist cookies, storage, or
-browser profile state.
+and audio/canvas/font config seeds. Launch-level seeds cover the full generated
+`CAMOU_CONFIG`; context-level seeds apply the supported per-context surfaces for
+new browser contexts. It does not persist cookies, storage, or browser profile
+state.
 
 ```python
 from camoufox.sync_api import Camoufox, NewContext

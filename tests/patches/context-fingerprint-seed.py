@@ -104,12 +104,18 @@ def test_unseeded_context_still_sets_nonzero_noise_seeds():
     )
 
 
+def test_context_init_script_does_not_call_unsupported_canvas_setter():
+    result = generate_context_fingerprint(preset=PRESET, fingerprint_seed="profile-a")
+    assert "setCanvasSeed" not in result["init_script"]
+
+
 def main():
     test_same_seed_reuses_camoufox_values()
     test_same_seed_reuses_synthetic_camoufox_values()
     test_same_seed_reuses_default_synthetic_camoufox_values()
     test_different_seed_changes_noise_seeds()
     test_unseeded_context_still_sets_nonzero_noise_seeds()
+    test_context_init_script_does_not_call_unsupported_canvas_setter()
     print("context fingerprint seed checks passed")
 
 
