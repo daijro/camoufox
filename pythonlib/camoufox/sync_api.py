@@ -14,6 +14,7 @@ from typing_extensions import Literal
 from camoufox.virtdisplay import VirtualDisplay
 
 from .exceptions import InvalidProxy
+from .fingerprint_seed import FingerprintSeed
 from .fingerprints import generate_context_fingerprint
 from .utils import launch_options, sync_attach_vd
 
@@ -134,6 +135,7 @@ def NewContext(
     os: Optional[str] = None,
     ff_version: Optional[str] = None,
     webrtc_ip: Optional[str] = None,
+    fingerprint_seed: Optional[FingerprintSeed] = None,
     proxy: Optional[Dict[str, str]] = None,
     geolocation: Optional[Dict[str, float]] = None,
     **context_kwargs: Any,
@@ -141,16 +143,18 @@ def NewContext(
     """
     Creates a new browser context with a unique fingerprint identity.
 
-    Each context gets its own real fingerprint preset
-    with unique seeds for audio, canvas, and font spacing noise. All values are applied
-    via addInitScript so they self-destruct before page scripts can detect them.
+    By default, each context gets a BrowserForge synthetic fingerprint. Supported
+    per-context values are applied via addInitScript so they self-destruct before
+    page scripts can detect them. Pass a preset dict to use a real bundled
+    fingerprint instead.
 
     Parameters:
         browser: A Browser instance from NewBrowser or Camoufox.
-        preset: A specific fingerprint preset dict to use. If None, picks randomly.
-        os: Target OS for preset selection ("windows", "macos", "linux").
+        preset: A specific fingerprint preset dict to use. If None, BrowserForge is used.
+        os: Target OS for synthetic fingerprint generation ("windows", "macos", "linux").
         ff_version: Firefox version string for UA patching.
         webrtc_ip: IPv4 address to spoof for WebRTC ICE candidates.
+        fingerprint_seed: Stable seed for Camoufox-generated fingerprint values.
         proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).
         geolocation: Per-context geolocation ({"latitude": float, "longitude": float}).
         **context_kwargs: Additional Playwright new_context() options.
@@ -163,7 +167,13 @@ def NewContext(
         if "timezone_id" not in context_kwargs and geo["timezone"]:
             context_kwargs["timezone_id"] = geo["timezone"]
 
-    fp = generate_context_fingerprint(preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip)
+    fp = generate_context_fingerprint(
+        preset=preset,
+        os=os,
+        ff_version=ff_version,
+        webrtc_ip=webrtc_ip,
+        fingerprint_seed=fingerprint_seed,
+    )
 
     # Merge generated context options with user overrides (user wins)
     opts: Dict[str, Any] = {**fp['context_options'], **context_kwargs}

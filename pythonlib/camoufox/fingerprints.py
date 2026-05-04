@@ -1,17 +1,25 @@
 import json
 import os
 import re
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from random import choice, randint, randrange, random, sample, shuffle
-from typing import Any, Dict, List, Optional, Tuple
+from random import Random, choice, randint, randrange, random, sample
+from threading import Lock
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+import browserforge.bayesian_network as browserforge_bayesian_network
 from browserforge.fingerprints import (
     Fingerprint,
     FingerprintGenerator,
     ScreenFingerprint,
 )
 
+from camoufox.fingerprint_seed import (
+    FingerprintSeed,
+    derive_uint32_seed,
+    deterministic_rng,
+)
 from camoufox.pkgman import load_yaml
 from camoufox.webgl import sample_webgl
 
@@ -34,6 +42,37 @@ _LINUX_MARKER_FONTS = [
 _WINDOWS_MARKER_FONTS = [
     'Segoe UI', 'Tahoma', 'Cambria Math', 'Nirmala UI',
 ]
+_SYNTHETIC_OS_CHOICES = ('linux', 'macos', 'windows')
+_BROWSERFORGE_RNG_LOCK = Lock()
+
+
+def _uint32_noise_seed(
+    fingerprint_seed: Optional[FingerprintSeed],
+    namespace: str,
+) -> int:
+    if fingerprint_seed is None:
+        return randint(1, 4_294_967_295)  # nosec
+    return derive_uint32_seed(fingerprint_seed, namespace)
+
+
+def _synthetic_os_for_seed(fingerprint_seed: FingerprintSeed) -> str:
+    return deterministic_rng(fingerprint_seed, 'os').choice(_SYNTHETIC_OS_CHOICES)
+
+
+@contextmanager
+def _browserforge_rng(fingerprint_seed: Optional[FingerprintSeed]) -> Iterator[None]:
+    with _BROWSERFORGE_RNG_LOCK:
+        if fingerprint_seed is None:
+            yield
+            return
+
+        rng = deterministic_rng(fingerprint_seed, 'browserforge')
+        previous_random = browserforge_bayesian_network.random
+        browserforge_bayesian_network.random = rng
+        try:
+            yield
+        finally:
+            browserforge_bayesian_network.random = previous_random
 
 
 def _ensure_marker_fonts(fonts: List[str], markers: List[str]) -> None:
@@ -77,7 +116,10 @@ _ESSENTIAL_FONTS_LINUX = [
 ]
 
 
-def _generate_random_font_subset(target_os: str) -> List[str]:
+def _generate_random_font_subset(
+    target_os: str,
+    rng: Optional[Random] = None,
+) -> List[str]:
     """
     Generate a random subset of fonts for the given OS.
     Picks a random percentage between 30-78% of non-essential fonts,
@@ -102,12 +144,15 @@ def _generate_random_font_subset(target_os: str) -> List[str]:
     non_essential = [f for f in full_list if f not in essential]
 
     # Random percentage between 30-78%
-    pct = 30 + int(random() * 49)
+    random_float = rng.random if rng is not None else random
+    random_sample = rng.sample if rng is not None else sample
+
+    pct = 30 + int(random_float() * 49)
     count = round((pct / 100) * len(non_essential))
 
     # Randomly select non-essential fonts
     if count < len(non_essential):
-        selected = sample(non_essential, count)
+        selected = random_sample(non_essential, count)
     else:
         selected = non_essential
     result.extend(selected)
@@ -149,7 +194,10 @@ _ESSENTIAL_VOICES_WINDOWS = [
 ]
 
 
-def _generate_random_voice_subset(target_os: str) -> List[str]:
+def _generate_random_voice_subset(
+    target_os: str,
+    rng: Optional[Random] = None,
+) -> List[str]:
     """
     Generate a random subset of speech voices for the given OS.
     macOS: random 40-80% of non-essential + essential always included.
@@ -172,11 +220,14 @@ def _generate_random_voice_subset(target_os: str) -> List[str]:
     result = [v for v in full_list if v in essential]
     non_essential = [v for v in full_list if v not in essential]
 
-    pct = 40 + int(random() * 41)  # 40-80%
+    random_float = rng.random if rng is not None else random
+    random_sample = rng.sample if rng is not None else sample
+
+    pct = 40 + int(random_float() * 41)  # 40-80%
     count = round((pct / 100) * len(non_essential))
 
     if count < len(non_essential):
-        selected = sample(non_essential, count)
+        selected = random_sample(non_essential, count)
     else:
         selected = non_essential
     result.extend(selected)
@@ -209,6 +260,7 @@ _OS_TO_PRESET_KEY = {
 
 def get_random_preset(
     os: Optional[str] = None,
+    rng: Optional[Random] = None,
 ) -> Optional[Dict]:
     """
     Get a random preset for the given OS.
@@ -237,12 +289,20 @@ def get_random_preset(
     if not candidates:
         return None
 
-    return choice(candidates)  # nosec
+    random_choice = rng.choice if rng is not None else choice
+    return random_choice(candidates)  # nosec
 
 
-def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any]:
+def from_preset(
+    preset: Dict,
+    ff_version: Optional[str] = None,
+    fingerprint_seed: Optional[FingerprintSeed] = None,
+) -> Dict[str, Any]:
     """
     Convert a real fingerprint preset to CAMOU_CONFIG format.
+
+    When fingerprint_seed is supplied, Camoufox-owned noise seeds and
+    font/voice subsets are deterministic for that preset.
     """
     config: Dict[str, Any] = {}
 
@@ -291,15 +351,14 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
     if webgl.get('unmaskedRenderer'):
         config['webGl:renderer'] = webgl['unmaskedRenderer']
 
-    # Generate unique random seeds per launch (1 to 2^32-1, excluding 0 which is a no-op in C++)
-    config['fonts:spacing_seed'] = randint(1, 4_294_967_295)  # nosec
-    config['audio:seed'] = randint(1, 4_294_967_295)  # nosec
-    config['canvas:seed'] = randint(1, 4_294_967_295)  # nosec
+    config['fonts:spacing_seed'] = _uint32_noise_seed(fingerprint_seed, 'fonts:spacing_seed')
+    config['audio:seed'] = _uint32_noise_seed(fingerprint_seed, 'audio:seed')
+    config['canvas:seed'] = _uint32_noise_seed(fingerprint_seed, 'canvas:seed')
 
     if preset.get('timezone'):
         config['timezone'] = preset['timezone']
 
-    # Generate a unique random font subset from the OS font list.
+    # Generate a context-local font subset from the OS font list.
     plat = nav.get('platform', '')
     if plat == 'MacIntel':
         target_os = 'macos'
@@ -309,8 +368,18 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
         target_os = 'linux'
     else:
         target_os = 'macos'
+    font_rng = (
+        deterministic_rng(fingerprint_seed, 'fonts')
+        if fingerprint_seed is not None
+        else None
+    )
+    voice_rng = (
+        deterministic_rng(fingerprint_seed, 'voices')
+        if fingerprint_seed is not None
+        else None
+    )
     try:
-        config['fonts'] = _generate_random_font_subset(target_os)
+        config['fonts'] = _generate_random_font_subset(target_os, font_rng)
     except Exception:
         # Fallback to preset fonts if font generation fails
         if preset.get('fonts'):
@@ -321,9 +390,9 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
                 'linux': _LINUX_MARKER_FONTS,
             }.get(target_os, _MACOS_MARKER_FONTS))
             config['fonts'] = fonts
-    # Generate a unique random voice subset from the OS voice list
+    # Generate a context-local voice subset from the OS voice list
     try:
-        config['voices'] = _generate_random_voice_subset(target_os)
+        config['voices'] = _generate_random_voice_subset(target_os, voice_rng)
     except Exception:
         if preset.get('speechVoices'):
             config['voices'] = preset['speechVoices']
@@ -343,7 +412,6 @@ def _build_init_script(values: Dict[str, Any]) -> str:
     setters = [
         ('fontSpacingSeed', 'setFontSpacingSeed', '{val}'),
         ('audioFingerprintSeed', 'setAudioFingerprintSeed', '{val}'),
-        ('canvasSeed', 'setCanvasSeed', '{val}'),
         ('navigatorPlatform', 'setNavigatorPlatform', '{val}'),
         ('navigatorOscpu', 'setNavigatorOscpu', '{val}'),
         ('navigatorUserAgent', 'setNavigatorUserAgent', '{val}'),
@@ -423,6 +491,7 @@ def generate_context_fingerprint(
     webrtc_ip: Optional[str] = None,
     timezone: Optional[str] = None,
     locale: Optional[str] = None,
+    fingerprint_seed: Optional[FingerprintSeed] = None,
 ) -> Dict[str, Any]:
     """
     Generate fingerprint values for a single per-context identity.
@@ -438,22 +507,36 @@ def generate_context_fingerprint(
         locale: BCP-47 locale string (e.g. 'en-GB'). When provided, parsed via
             normalize_locale() and injected into config. Also sets
             context_options['locale'] for Playwright.
+        fingerprint_seed: Stable seed for Camoufox-generated config values and
+            supported per-context surfaces.
     """
     if preset is not None:
         # Use real fingerprint preset
-        config = from_preset(preset, ff_version)
+        config = from_preset(preset, ff_version, fingerprint_seed)
         nav = preset.get('navigator', {})
         screen = preset.get('screen', {})
         webgl = preset.get('webgl', {})
     else:
         # Fall back to BrowserForge synthetic generation
-        fp = generate_fingerprint(os=os)
-        config = from_browserforge(fp, ff_version)
+        synthetic_os = os
+        if synthetic_os is None and fingerprint_seed is not None:
+            synthetic_os = _synthetic_os_for_seed(fingerprint_seed)
+        fp = generate_fingerprint(os=synthetic_os, fingerprint_seed=fingerprint_seed)
+        config = from_browserforge(fp, ff_version, fingerprint_seed)
 
         # Add seeds (BrowserForge doesn't generate these)
-        config.setdefault('fonts:spacing_seed', randint(1, 4_294_967_295))  # nosec
-        config.setdefault('audio:seed', randint(1, 4_294_967_295))  # nosec
-        config.setdefault('canvas:seed', randint(1, 4_294_967_295))  # nosec
+        config.setdefault(
+            'fonts:spacing_seed',
+            _uint32_noise_seed(fingerprint_seed, 'fonts:spacing_seed'),
+        )
+        config.setdefault(
+            'audio:seed',
+            _uint32_noise_seed(fingerprint_seed, 'audio:seed'),
+        )
+        config.setdefault(
+            'canvas:seed',
+            _uint32_noise_seed(fingerprint_seed, 'canvas:seed'),
+        )
 
         # Determine target OS from platform for font/voice generation
         plat = config.get('navigator.platform', '')
@@ -466,14 +549,24 @@ def generate_context_fingerprint(
         # Add fonts (BrowserForge doesn't generate these)
         if 'fonts' not in config:
             try:
-                config['fonts'] = _generate_random_font_subset(os_name)
+                font_rng = (
+                    deterministic_rng(fingerprint_seed, 'fonts')
+                    if fingerprint_seed is not None
+                    else None
+                )
+                config['fonts'] = _generate_random_font_subset(os_name, font_rng)
             except Exception:
                 pass
 
         # Add voices (BrowserForge doesn't generate these)
         if 'voices' not in config:
             try:
-                config['voices'] = _generate_random_voice_subset(os_name)
+                voice_rng = (
+                    deterministic_rng(fingerprint_seed, 'voices')
+                    if fingerprint_seed is not None
+                    else None
+                )
+                config['voices'] = _generate_random_voice_subset(os_name, voice_rng)
             except Exception:
                 pass
 
@@ -490,7 +583,7 @@ def generate_context_fingerprint(
         # Sample WebGL vendor/renderer from database (BrowserForge doesn't generate these)
         if not config.get('webGl:vendor') or not config.get('webGl:renderer'):
             _os_map = {'macos': 'mac', 'linux': 'lin', 'windows': 'win'}
-            _target_os = _os_map.get(os or '', None)
+            _target_os = _os_map.get(synthetic_os or '', None)
             if not _target_os:
                 plat = config.get('navigator.platform', '')
                 if plat == 'Win32':
@@ -500,7 +593,12 @@ def generate_context_fingerprint(
                 else:
                     _target_os = 'mac'
             try:
-                webgl_fp = sample_webgl(_target_os)
+                webgl_seed = (
+                    derive_uint32_seed(fingerprint_seed, 'webgl')
+                    if fingerprint_seed is not None
+                    else None
+                )
+                webgl_fp = sample_webgl(_target_os, random_seed=webgl_seed)
                 webgl_fp.pop('webGl2Enabled', None)
                 config.update(webgl_fp)
             except Exception:
@@ -539,7 +637,6 @@ def generate_context_fingerprint(
     init_values: Dict[str, Any] = {
         'fontSpacingSeed': config.get('fonts:spacing_seed'),
         'audioFingerprintSeed': config.get('audio:seed'),
-        'canvasSeed': config.get('canvas:seed'),
         'navigatorPlatform': nav.get('platform'),
         'navigatorOscpu': config.get('navigator.oscpu'),
         'navigatorUserAgent': config.get('navigator.userAgent'),
@@ -628,7 +725,11 @@ def _cast_to_properties(
         camoufox_data[type_key] = data
 
 
-def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: ScreenFingerprint) -> None:
+def handle_screenXY(
+    camoufox_data: Dict[str, Any],
+    fp_screen: ScreenFingerprint,
+    rng: Optional[Random] = None,
+) -> None:
     """
     Helper method to set window.screenY based on Browserforge's screenX value.
     """
@@ -652,12 +753,18 @@ def handle_screenXY(camoufox_data: Dict[str, Any], fp_screen: ScreenFingerprint)
     if screenY == 0:
         camoufox_data['window.screenY'] = 0
     elif screenY > 0:
-        camoufox_data['window.screenY'] = randrange(0, screenY)  # nosec
+        random_range = rng.randrange if rng is not None else randrange
+        camoufox_data['window.screenY'] = random_range(0, screenY)  # nosec
     else:
-        camoufox_data['window.screenY'] = randrange(screenY, 0)  # nosec
+        random_range = rng.randrange if rng is not None else randrange
+        camoufox_data['window.screenY'] = random_range(screenY, 0)  # nosec
 
 
-def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None) -> Dict[str, Any]:
+def from_browserforge(
+    fingerprint: Fingerprint,
+    ff_version: Optional[str] = None,
+    fingerprint_seed: Optional[FingerprintSeed] = None,
+) -> Dict[str, Any]:
     """
     Converts a Browserforge fingerprint to a Camoufox config.
     """
@@ -668,7 +775,12 @@ def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None
         bf_dict=asdict(fingerprint),
         ff_version=ff_version,
     )
-    handle_screenXY(camoufox_data, fingerprint.screen)
+    screen_rng = (
+        deterministic_rng(fingerprint_seed, 'screen')
+        if fingerprint_seed is not None
+        else None
+    )
+    handle_screenXY(camoufox_data, fingerprint.screen, screen_rng)
 
     return camoufox_data
 
@@ -696,15 +808,20 @@ def handle_window_size(fp: Fingerprint, outer_width: int, outer_height: int) -> 
     sc.outerHeight = outer_height
 
 
-def generate_fingerprint(window: Optional[Tuple[int, int]] = None, **config) -> Fingerprint:
+def generate_fingerprint(
+    window: Optional[Tuple[int, int]] = None,
+    fingerprint_seed: Optional[FingerprintSeed] = None,
+    **config,
+) -> Fingerprint:
     """
     Generates a Firefox fingerprint with Browserforge.
     """
-    if window:  # User-specified outer window size
-        fingerprint = FP_GENERATOR.generate(**config)
-        handle_window_size(fingerprint, *window)
-        return fingerprint
-    return FP_GENERATOR.generate(**config)
+    with _browserforge_rng(fingerprint_seed):
+        if window:  # User-specified outer window size
+            fingerprint = FP_GENERATOR.generate(**config)
+            handle_window_size(fingerprint, *window)
+            return fingerprint
+        return FP_GENERATOR.generate(**config)
 
 
 if __name__ == "__main__":
