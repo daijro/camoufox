@@ -154,6 +154,51 @@ def test_context_webgl_overrides_launch_config_webgl():
     }
 
 
+def test_context_webgl_overrides_launch_parameter_webgl():
+    executable_path = _required_executable()
+    parent_vendor = "Vulpine Parent Parameter Vendor"
+    parent_renderer = "Vulpine Parent Parameter Renderer"
+    context_vendor = "Vulpine Context Parameter Vendor"
+    context_renderer = "Vulpine Context Parameter Renderer"
+
+    env = {
+        **os.environ,
+        **get_env_vars(
+            {
+                "webGl:vendor": parent_vendor,
+                "webGl:renderer": parent_renderer,
+                "webGl:parameters": {
+                    "37445": parent_vendor,
+                    "37446": parent_renderer,
+                },
+            },
+            "mac",
+        ),
+    }
+    with sync_playwright() as playwright:
+        browser = playwright.firefox.launch(
+            executable_path=executable_path,
+            headless=True,
+            env=env,
+            firefox_user_prefs={
+                "webgl.force-enabled": True,
+            },
+        )
+        try:
+            context_result = _read_context(
+                browser,
+                context_vendor,
+                context_renderer,
+            )
+        finally:
+            browser.close()
+
+    assert context_result["webgl"] == {
+        "vendor": context_vendor,
+        "renderer": context_renderer,
+    }
+
+
 def _preset(vendor, renderer, platform="Win32", cores=8):
     return {
         "navigator": {
@@ -225,6 +270,7 @@ def test_new_context_applies_preset_webgl_vendor_renderer():
 def main():
     test_context_webgl_vendor_renderer_are_isolated_and_reusable()
     test_context_webgl_overrides_launch_config_webgl()
+    test_context_webgl_overrides_launch_parameter_webgl()
     test_new_context_applies_preset_webgl_vendor_renderer()
     print("live per-context WebGL checks passed")
 
