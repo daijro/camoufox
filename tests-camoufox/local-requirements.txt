@@ -1,0 +1,18 @@
+# The single pin that drives everything: which version of the Playwright
+# Python suite gets pulled and what protocol surface we test against.
+#
+# To bump:
+#   1. Change the version below.
+#   2. rm -rf venv .upstream-cache
+#   3. bash setup-venv.sh
+#   4. ./run-tests.sh --executable-path /path/to/camoufox
+#
+# Keep this version in sync with what `pythonlib/` and `camoufox-js/` depend
+# on at runtime, otherwise the tests exercise a different protocol surface
+# than what your code does.
+playwright==1.59.0
+
+# Test infrastructure deps. These are pulled in addition to whatever
+# microsoft/playwright-python's own local-requirements.txt requires —
+# setup-venv.sh installs both files.
+flaky==3.8.1

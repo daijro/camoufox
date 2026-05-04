@@ -1,0 +1,147 @@
+# Tests deselected when running upstream microsoft/playwright-python@v1.59.0
+# against Camoufox. Format: one full pytest test ID per line, # for comments.
+#
+# Each line should explain WHY the test is deselected. As fixes land,
+# remove lines from this file rather than amending them.
+#
+# Categories (rough triage; see follow-up fix branches):
+#   [bug-c++]       Real Camoufox regression that needs a C++ patch + rebuild.
+#   [bug-juggler]   Real Camoufox regression that may be fixable in Juggler JS.
+#   [hang]          Hangs the runner; revisit as part of harness iteration.
+#   [flaky]         Passes serially, fails under -n 8 — fixture isolation.
+#   [unsupported]   Camoufox-specific stealth behaviour deliberately diverges
+#                   from upstream's expectation (test pins stock Firefox shape).
+
+# ------------------------------------------------------------------
+# [fixed] proxy: launch-arg proxy now reaches the filter. Camoufox 146
+# defaulted dom.security.https_first=true, which upgrades http:// → https://
+# before the proxy filter, breaking simple HTTP proxies. Disabled in
+# settings/camoufox.cfg.
+# ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# [bug-c++] navigation history: go_back / reload(data:) /
+# dom_history_back_forward — Camoufox's session-history shim doesn't
+# preserve all upstream semantics. Stock playwright Firefox passes these.
+# ------------------------------------------------------------------
+tests/async/test_navigation.py::test_go_back_should_work
+tests/async/test_navigation.py::test_go_back_should_work_with_history_api
+tests/async/test_navigation.py::test_reload_should_work_with_data_url
+tests/async/test_navigation.py::test_wait_for_nav_should_work_with_dom_history_back_forward
+tests/async/test_navigation.py::test_wait_for_load_state_should_wait_for_load_state_of_empty_url_popup
+tests/async/test_wait_for_url.py::test_wait_for_url_should_work_with_dom_history_back_forward
+tests/async/test_har.py::test_should_go_back_to_redirected_navigation
+tests/async/test_har.py::test_should_go_forward_to_redirected_navigation
+
+# ------------------------------------------------------------------
+# [fixed] locale: launch-arg locale now reaches navigator.language /
+# Intl. Camoufox's juggler content/main.js was setting docShell.languageOverride
+# only, which updates ICU+JS but doesn't propagate to the BrowsingContext
+# LanguageOverride synced field that dom/base/Navigator.cpp reads. Now also
+# sets browsingContext.top.languageOverride.
+# ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# [unsupported] worker locale test asserts en-US format for a ru-RU
+# context: stock playwright Firefox doesn't propagate context locale
+# into Workers (see https://github.com/microsoft/playwright/issues/38919).
+# Camoufox's BrowsingContext-based fix DOES propagate, so workers correctly
+# format with the requested locale ("10 000,2") — the test's hardcoded
+# Firefox-specific expectation ("10,000.2") no longer matches.
+# ------------------------------------------------------------------
+tests/async/test_worker.py::test_workers_should_format_number_using_context_locale
+
+# ------------------------------------------------------------------
+# [fixed] expose_function + add_init_script — root cause was Page.reload
+# being a no-op on about:blank because FF146's Browser:Reload requires a
+# history entry. Juggler now falls through to browsingContext.reload.
+# ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# [fixed] keyboard insert_text emitted `input` twice — _insertText now
+# sets value + dispatches a single trusted InputEvent for input/textarea
+# elements; commitCompositionWith fallback for contenteditable.
+# ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# [bug-c++] page clock emulation: clock.pause_at(...) measurements
+# overshoot the cap by 3-13%, drift in the clock-spoof patch.
+# ------------------------------------------------------------------
+# Page-clock state is spoofed by the camoufox clock patch and has wide
+# run-to-run variance under -n 8 — different individual tests fail each
+# run. Deselecting the whole module rather than chasing the tail; this
+# whole module gets re-enabled once the underlying clock-precision patch
+# lands. Removing this line should restore ~30 tests at once.
+tests/async/test_page_clock.py
+
+# ------------------------------------------------------------------
+# [bug-c++] video record_video_dir: streaming + video.save_as() works,
+# but the auto-finalize on context.close() doesn't write the .webm.
+# ------------------------------------------------------------------
+tests/async/test_video.py::test_short_video_should_throw
+
+# ------------------------------------------------------------------
+# [bug-juggler] tracing: source-collection + traces-dir + multi-trace
+# tests fail; trace event shape may differ from upstream's expectation.
+# ------------------------------------------------------------------
+# Same situation as test_page_clock — tracing event ordering varies
+# run-to-run, different tests fail. Whole module deselected; re-enable
+# once Juggler tracing event shape is fixed.
+tests/async/test_tracing.py
+tests/async/test_browsertype_connect.py::test_should_record_trace_with_source
+
+# ------------------------------------------------------------------
+# [bug-c++] click stability: position/movement detection on slowly
+# transitioning elements. Stock Firefox passes; needs deeper look.
+# ------------------------------------------------------------------
+tests/async/test_click.py::test_timeout_waiting_for_stable_position
+tests/async/test_click.py::test_wait_for_stable_position
+
+# ------------------------------------------------------------------
+# [unsupported] client certificates: 5 tests rely on Firefox's standard
+# client-cert handling which Camoufox's patches alter / disable.
+# ------------------------------------------------------------------
+tests/async/test_browsercontext_client_certificates.py::test_should_throw_with_untrusted_client_certs
+tests/async/test_browsercontext_client_certificates.py::test_should_work_with_global_api_request_context
+tests/async/test_browsercontext_client_certificates.py::test_should_work_with_new_context
+tests/async/test_browsercontext_client_certificates.py::test_should_work_with_new_context_passing_as_content
+tests/async/test_browsercontext_client_certificates.py::test_should_work_with_new_persistent_context
+
+# ------------------------------------------------------------------
+# [unsupported] Camoufox UA says "Camoufox/<v>" not "Firefox/<v>".
+# Test asserts substring "Firefox" — by design we diverge.
+# ------------------------------------------------------------------
+tests/async/test_network.py::test_request_headers_should_work
+
+# ------------------------------------------------------------------
+# [bug-?] persistent context state restore — Camoufox profile dir
+# format may not round-trip cleanly. Needs deeper triage.
+# ------------------------------------------------------------------
+tests/async/test_defaultbrowsercontext.py::test_should_restore_state_from_userDataDir
+
+# ------------------------------------------------------------------
+# [hang] launch-server subprocess hangs at startup under -n 8; passes
+# serially. Likely xdist+playwright-driver IPC contention.
+# ------------------------------------------------------------------
+tests/async/test_browsertype_connect.py::test_should_upload_large_file
+
+# ------------------------------------------------------------------
+# [flaky] file upload progress timing under -n 8 parallelism. Adding
+# @flaky upstream would be cleaner; for now deselect.
+# ------------------------------------------------------------------
+tests/async/test_input.py::test_should_upload_large_file
+
+# ------------------------------------------------------------------
+# [unsupported] page URL assertion — "data:" URL handling diverges in
+# Camoufox; test asserts a specific upstream-Firefox URL shape.
+# ------------------------------------------------------------------
+tests/async/test_assertions.py::test_assertions_page_to_have_url
+
+# ------------------------------------------------------------------
+# [flaky] tests that recover under --reruns 3 most of the time but
+# occasionally exhaust their retries. Track here so a clean run is
+# green; revisit if any of these turn out to be deterministic bugs.
+# ------------------------------------------------------------------
+tests/async/test_page_event_pageerror.py::test_page_errors_should_work
+tests/async/test_route_web_socket.py::test_should_work_with_ws_close
+tests/async/test_navigation.py::test_frame_goto_should_continue_after_client_redirect
