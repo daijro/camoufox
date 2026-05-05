@@ -381,14 +381,21 @@ index 11578f425f..6c77acd7f3 100644
    }
 
    return ret;
-@@ -2114,6 +2172,57 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2114,6 +2172,64 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
    const auto& state = State();
 
    // -
 +  std::optional<
 +      std::variant<int64_t, bool, double, std::string, std::nullptr_t>>
 +      data;
-+  data = MaskConfig::GLParam(pname, mIsWebGL2);
++  switch (pname) {
++    case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
++    case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
++      break;
++    default:
++      data = MaskConfig::GLParam(pname, mIsWebGL2);
++      break;
++  }
 +
 +  if (data.has_value()) {
 +    const auto& value = data.value();
