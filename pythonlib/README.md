@@ -21,6 +21,48 @@ In addition, it will also calculate your target geolocation, timezone, and local
 
 ---
 
+## Persistent Fingerprint Seeds
+
+Pass `fingerprint_seed` when you want Camoufox to reproduce the same generated
+fingerprint values across launches or contexts:
+
+```python
+from camoufox.sync_api import Camoufox, NewContext
+
+with Camoufox(fingerprint_seed="account-123") as browser:
+    page = browser.new_page()
+    page.goto("https://example.com")
+
+    context = NewContext(browser, fingerprint_seed="account-123:context-2")
+    page = context.new_page()
+    page.goto("https://example.com")
+```
+
+The seed controls generated identity values such as BrowserForge sampling,
+font and voice subsets, WebGL sampling, and audio/canvas/font config seeds.
+Launch-level seeds cover the full generated `CAMOU_CONFIG`; context-level seeds
+apply the supported per-context surfaces for new browser contexts. It does not
+persist cookies, storage, cache, or profile state.
+
+To keep browser state tied to the same generated identity, reuse the same
+`fingerprint_seed` and the same `user_data_dir` with a persistent context:
+
+```python
+from pathlib import Path
+
+from camoufox.sync_api import Camoufox
+
+with Camoufox(
+    persistent_context=True,
+    user_data_dir=Path("profiles/account-123"),
+    fingerprint_seed="account-123",
+) as context:
+    page = context.new_page()
+    page.goto("https://example.com")
+```
+
+---
+
 ## Installation
 
 First, install the `camoufox` package:

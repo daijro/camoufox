@@ -12,7 +12,10 @@ DB_PATH = Path(__file__).parent / 'webgl_data.db'
 
 
 def sample_webgl(
-    os: str, vendor: Optional[str] = None, renderer: Optional[str] = None
+    os: str,
+    vendor: Optional[str] = None,
+    renderer: Optional[str] = None,
+    random_seed: Optional[int] = None,
 ) -> Dict[str, str]:
     """
     Sample a random WebGL vendor/renderer combination and its data based on OS probabilities.
@@ -22,6 +25,7 @@ def sample_webgl(
         os: Operating system ('win', 'mac', or 'lin')
         vendor: Optional specific vendor to use
         renderer: Optional specific renderer to use (requires vendor to be set)
+        random_seed: Optional seed for deterministic probability sampling
 
     Returns:
         Dict containing WebGL data including vendor, renderer and additional parameters
@@ -65,7 +69,8 @@ def sample_webgl(
 
     # Get all vendor/renderer pairs and their probabilities for this OS
     cursor.execute(
-        f'SELECT vendor, renderer, data, {os} FROM webgl_fingerprints WHERE {os} > 0'  # nosec
+        f'SELECT vendor, renderer, data, {os} FROM webgl_fingerprints '  # nosec
+        f'WHERE {os} > 0 ORDER BY vendor, renderer'
     )
     results = cursor.fetchall()
     conn.close()
@@ -81,7 +86,8 @@ def sample_webgl(
     probs_array = probs_array / probs_array.sum()
 
     # Sample based on probabilities
-    idx = np.random.choice(len(probs_array), p=probs_array)
+    rng = np.random.default_rng(random_seed) if random_seed is not None else np.random
+    idx = rng.choice(len(probs_array), p=probs_array)
 
     # Parse the JSON data string
     return orjson.loads(data_strs[idx])
