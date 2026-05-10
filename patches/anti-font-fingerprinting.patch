@@ -915,11 +915,12 @@ index ea420d13cd..9bd7061f2d 100644
  #include "mozilla/Sprintf.h"
  #include "mozilla/StaticPresData.h"
  #include "mozilla/UniquePtr.h"
-@@ -32,6 +33,8 @@
+@@ -32,6 +33,9 @@
  #include "nsUnicodeProperties.h"
  #include "SharedFontList-impl.h"
  #include "TextDrawTarget.h"
 +#include "mozilla/dom/BrowsingContext.h"
++#include "mozilla/dom/Document.h"
 +#include "nsPIDOMWindow.h"
  
  #ifdef XP_WIN

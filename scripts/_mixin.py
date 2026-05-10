@@ -58,7 +58,7 @@ def get_moz_target(target, arch):
     if target == "linux":
         return "aarch64-unknown-linux-gnu" if arch == "arm64" else f"{arch}-pc-linux-gnu"
     if target == "windows":
-        return f"{arch}-pc-mingw32"
+        return f"{arch}-pc-windows-msvc"
     if target == "macos":
         return "aarch64-apple-darwin" if arch == "arm64" else f"{arch}-apple-darwin"
     raise ValueError(f"Unsupported target: {target}")

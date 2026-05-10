@@ -6,6 +6,9 @@
 
 #include <memory>
 #include <set>
+#ifdef XP_WIN
+typedef int pid_t;  // libwebrtc headers reference pid_t which is POSIX-only
+#endif
 #include "api/video/video_frame.h"
 #include "api/video/video_sink_interface.h"
 #include "modules/video_capture/video_capture.h"
