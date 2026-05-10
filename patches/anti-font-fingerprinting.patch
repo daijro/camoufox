@@ -1007,7 +1007,7 @@ index ea420d13cd..9bd7061f2d 100644
    if (aLength == 0) {
      return MakeEmptyTextRun(aParams, aFlags, aFlags2);
    }
-@@ -2519,8 +2536,16 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
+@@ -2519,8 +2536,13 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
      return MakeBlankTextRun(aString, aLength, aParams, aFlags, aFlags2);
    }
  
@@ -1015,9 +1015,6 @@ index ea420d13cd..9bd7061f2d 100644
 +  if (aUserContextId == 0) {
 +    aUserContextId = mUserContextId;
 +  }
-+
-+  // Log the user context id used for this text run creation
-+  printf("MakeTextRun: userContextId=%u\n", aUserContextId);
 +
    RefPtr<gfxTextRun> textRun =
 -      gfxTextRun::Create(aParams, aLength, this, aFlags, aFlags2);

@@ -180,6 +180,7 @@ export class TargetRegistry {
     const domWindowTabListeners = new Map();
 
     const onOpenWindow = async (appWindow) => {
+
       let domWindow;
       if (appWindow instanceof Ci.nsIAppWindow) {
         domWindow = appWindow.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
@@ -202,19 +203,6 @@ export class TargetRegistry {
         await helper.awaitEvent(domWindow, 'DOMContentLoaded');
       }
 
-      // Firefox 150+: chrome window may report readyState=complete before
-      // gBrowser is populated. Wait for it if missing.
-      if (!domWindow.gBrowser) {
-        await new Promise((resolve, reject) => {
-          const start = Date.now();
-          const tick = () => {
-            if (domWindow.gBrowser) return resolve();
-            if (Date.now() - start > 15000) return reject(new Error('gBrowser never populated'));
-            domWindow.setTimeout(tick, 50);
-          };
-          tick();
-        });
-      }
       if (!domWindow.gBrowser)
         return;
       const tabContainer = domWindow.gBrowser.tabContainer;
@@ -332,6 +320,7 @@ export class TargetRegistry {
   }
 
   async _newPageInternal({browserContextId}) {
+    console.error(`[TR-DEBUG] _newPageInternal start ctx=${browserContextId}`);
     const browserContext = this.browserContextForId(browserContextId);
     const features = "chrome,dialog=no,all";
     // See _callWithURIToLoad in browser.js for the structure of window.arguments
@@ -365,15 +354,23 @@ export class TargetRegistry {
     args.appendElement(undefined); // 7
     args.appendElement(Services.scriptSecurityManager.getSystemPrincipal()); // 8
 
+    console.error(`[TR-DEBUG] opening window with url=${AppConstants.BROWSER_CHROME_URL}`);
     const window = Services.ww.openWindow(null, AppConstants.BROWSER_CHROME_URL, '_blank', features, args);
+    console.error(`[TR-DEBUG] openWindow returned, awaiting ready`);
     await waitForWindowReady(window);
+    console.error(`[TR-DEBUG] window ready, browsers=${window.gBrowser ? window.gBrowser.browsers.length : 'no gBrowser'}`);
     if (window.gBrowser.browsers.length !== 1)
       throw new Error(`Unexpected number of tabs in the new window: ${window.gBrowser.browsers.length}`);
     const browser = window.gBrowser.browsers[0];
     let target = this._browserToTarget.get(browser);
+    console.error(`[TR-DEBUG] initial target lookup: ${target ? 'found' : 'not found'}`);
+    let attempts = 0;
     while (!target) {
+      attempts++;
+      console.error(`[TR-DEBUG] awaiting TargetCreated event (attempt ${attempts})`);
       await helper.awaitEvent(this, TargetRegistry.Events.TargetCreated);
       target = this._browserToTarget.get(browser);
+      console.error(`[TR-DEBUG] after TargetCreated: ${target ? 'matched' : 'not matched'}`);
     }
     browser.focus();
     if (browserContext.crossProcessCookie.settings.timezoneId) {
