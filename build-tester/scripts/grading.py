@@ -8,15 +8,15 @@ import sys
 # ─── Grading ──────────────────────────────────────────────────────────────────
 
 def compute_grade(pass_count: int, total_checks: int) -> str:
-    fail_count = total_checks - pass_count
-    if fail_count == 0:
+    if total_checks == 0:
+        return "F"
+    pct = pass_count / total_checks
+    if pct >= 0.95:
         return "A"
-    if fail_count <= 2:
+    if pct >= 0.85:
         return "B"
-    if fail_count <= 5:
+    if pct >= 0.75:
         return "C"
-    if fail_count <= 10:
-        return "D"
     return "F"
 
 
