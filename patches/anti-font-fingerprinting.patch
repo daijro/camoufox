@@ -1415,3 +1415,14 @@ index 9655c9134d..c21c271060 100644
    using FontVisibilityProvider::ReportBlockedFontFamily;
  };
  
+diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
+--- a/gfx/thebes/gfxPlatformFontList.cpp
++++ b/gfx/thebes/gfxPlatformFontList.cpp
+@@ -448,6 +448,7 @@
+     return mozilla::Nothing();
+   }
+   void UserFontSetUpdated(gfxUserFontEntry*) override {}
++  mozilla::dom::Document* GetDocument() const override { return nullptr; }
+   using FontVisibilityProvider::ReportBlockedFontFamily;
+ 
+  private:

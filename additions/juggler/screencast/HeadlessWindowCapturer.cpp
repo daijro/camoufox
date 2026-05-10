@@ -40,6 +40,11 @@ void HeadlessWindowCapturer::RegisterCaptureDataCallback(rtc::VideoSinkInterface
 void HeadlessWindowCapturer::RegisterCaptureDataCallback(webrtc::RawVideoSinkInterface* dataCallback) {
 }
 
+void HeadlessWindowCapturer::DeRegisterCaptureDataCallback() {
+  rtc::CritScope lock2(&_callBackCs);
+  _dataCallBacks.clear();
+}
+
 void HeadlessWindowCapturer::DeRegisterCaptureDataCallback(rtc::VideoSinkInterface<webrtc::VideoFrame>* dataCallback) {
   rtc::CritScope lock2(&_callBackCs);
   auto it = _dataCallBacks.find(dataCallback);

@@ -12,6 +12,9 @@
 #include "rtc_base/deprecated/recursive_critical_section.h"
 #include "video_engine/desktop_capture_impl.h"
 
+// Compatibility namespace alias: libwebrtc converted rtc:: to webrtc:: in Fx150
+namespace rtc = webrtc;
+
 class nsIWidget;
 
 namespace mozilla {
@@ -26,6 +29,7 @@ class HeadlessWindowCapturer : public webrtc::VideoCaptureModuleEx {
 
   void RegisterCaptureDataCallback(
       rtc::VideoSinkInterface<webrtc::VideoFrame>* dataCallback) override;
+  void DeRegisterCaptureDataCallback() override;
   void DeRegisterCaptureDataCallback(
       rtc::VideoSinkInterface<webrtc::VideoFrame>* dataCallback) override;
   int32_t StopCaptureIfAllClientsClose() override;

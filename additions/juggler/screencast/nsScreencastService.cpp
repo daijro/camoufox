@@ -17,9 +17,11 @@
 #include "nsIRandomGenerator.h"
 #include "nsISupportsPrimitives.h"
 #include "nsThreadManager.h"
-#include "nsView.h"
-#include "nsViewManager.h"
 #include "modules/desktop_capture/desktop_capturer.h"
+
+// Compatibility namespace alias: libwebrtc converted rtc:: to webrtc:: in Fx150
+namespace rtc = webrtc;
+
 #include "modules/desktop_capture/desktop_capture_options.h"
 #include "modules/desktop_capture/desktop_frame.h"
 #include "modules/video_capture/video_capture.h"
@@ -324,13 +326,9 @@ nsresult nsScreencastService::StartVideoRecording(nsIScreencastServiceClient* aC
   PresShell* presShell = aDocShell->GetPresShell();
   if (!presShell)
     return NS_ERROR_UNEXPECTED;
-  nsViewManager* viewManager = presShell->GetViewManager();
-  if (!viewManager)
+  nsIWidget* widget = presShell->GetRootWidget();
+  if (!widget)
     return NS_ERROR_UNEXPECTED;
-  nsView* view = viewManager->GetRootView();
-  if (!view)
-    return NS_ERROR_UNEXPECTED;
-  nsIWidget* widget = view->GetWidget();
 
   rtc::scoped_refptr<webrtc::VideoCaptureModuleEx> capturer = nullptr;
   for (auto& it : mIdToSession) {

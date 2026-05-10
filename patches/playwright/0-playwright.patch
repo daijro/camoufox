@@ -1076,7 +1076,7 @@ index c73fbaf596..4b03ebacd3 100644
 +  mouseEventData.mButton = aButton;
 +  mouseEventData.mButtons.Construct(aButtons);
 +  mouseEventData.mClickCount.Construct(aClickCount);
-+  mouseEventData.mPressure = aPressure;
++  mouseEventData.mPressure.Construct(aPressure);
 +  mouseEventData.mInputSource = aInputSourceArg;
 +  mouseEventData.mModifiers = aModifiers;
 +  mouseEventData.mJugglerEventId = *aJugglerEventId;
@@ -1592,7 +1592,7 @@ index f71812b8e0..6286e45533 100644
      return false;
    }
 diff --git a/dom/media/systemservices/video_engine/desktop_capture_impl.cc b/dom/media/systemservices/video_engine/desktop_capture_impl.cc
-index 9e1086527c..8443a2875f 100644
+index 9e1086527c..4357efe79a 100644
 --- a/dom/media/systemservices/video_engine/desktop_capture_impl.cc
 +++ b/dom/media/systemservices/video_engine/desktop_capture_impl.cc
 @@ -52,9 +52,10 @@ namespace webrtc {
@@ -1638,10 +1638,18 @@ index 9e1086527c..8443a2875f 100644
        mControlThread(mozilla::GetCurrentSerialEventTarget()),
        mNextFrameMinimumTime(Timestamp::Zero()),
        mCallback("DesktopCaptureImpl::mCallback"),
-@@ -290,6 +295,19 @@ void DesktopCaptureImpl::DeRegisterCaptureDataCallback() {
+@@ -290,6 +295,35 @@ void DesktopCaptureImpl::DeRegisterCaptureDataCallback() {
    *callback = nullptr;
  }
  
++void DesktopCaptureImpl::DeRegisterCaptureDataCallback(
++    webrtc::VideoSinkInterface<VideoFrame>* aCallback) {
++  auto callback = mCallback.Lock();
++  if (*callback == aCallback) {
++    *callback = nullptr;
++  }
++}
++
 +void DesktopCaptureImpl::RegisterRawFrameCallback(RawFrameCallback* rawFrameCallback) {
 +  webrtc::CritScope lock(&mApiCs);
 +  _rawFrameCallbacks.insert(rawFrameCallback);
@@ -1655,10 +1663,18 @@ index 9e1086527c..8443a2875f 100644
 +  }
 +}
 +
++int32_t DesktopCaptureImpl::StopCaptureIfAllClientsClose() {
++  auto callback = mCallback.Lock();
++  if (*callback == nullptr) {
++    return StopCapture();
++  }
++  return 0;
++}
++
  int32_t DesktopCaptureImpl::SetCaptureRotation(VideoRotation aRotation) {
    MOZ_ASSERT_UNREACHABLE("Unused");
    return -1;
-@@ -311,7 +329,7 @@ int32_t DesktopCaptureImpl::StartCapture(
+@@ -311,7 +345,7 @@ int32_t DesktopCaptureImpl::StartCapture(
      mRequestedCapability = mozilla::Some(aCapability);
      MOZ_ALWAYS_SUCCEEDS(mCaptureThread->Dispatch(
          NS_NewRunnableFunction("DesktopCaptureImpl::UpdateOnThread",
@@ -1667,7 +1683,7 @@ index 9e1086527c..8443a2875f 100644
                                   UpdateOnThread(maxFps);
                                 })));
      return 0;
-@@ -335,7 +353,7 @@ int32_t DesktopCaptureImpl::StartCapture(
+@@ -335,7 +369,7 @@ int32_t DesktopCaptureImpl::StartCapture(
      return -1;
    }
    std::unique_ptr capturer = CreateDesktopCapturerAndThread(
@@ -1676,7 +1692,7 @@ index 9e1086527c..8443a2875f 100644
  
    MOZ_ASSERT(!capturer == !mCaptureThread);
    if (!capturer) {
-@@ -347,7 +365,7 @@ int32_t DesktopCaptureImpl::StartCapture(
+@@ -347,7 +381,7 @@ int32_t DesktopCaptureImpl::StartCapture(
  
    MOZ_ALWAYS_SUCCEEDS(mCaptureThread->Dispatch(NS_NewRunnableFunction(
        "DesktopCaptureImpl::InitOnThread",
@@ -1685,7 +1701,7 @@ index 9e1086527c..8443a2875f 100644
         maxFps]() mutable { InitOnThread(std::move(capturer), maxFps); })));
  
    return 0;
-@@ -445,6 +463,15 @@ void DesktopCaptureImpl::OnCaptureResult(DesktopCapturer::Result aResult,
+@@ -445,6 +479,15 @@ void DesktopCaptureImpl::OnCaptureResult(DesktopCapturer::Result aResult,
    frameInfo.height = aFrame->size().height();
    frameInfo.videoType = VideoType::kARGB;
  
@@ -1702,7 +1718,7 @@ index 9e1086527c..8443a2875f 100644
        frameInfo.width * frameInfo.height * DesktopFrame::kBytesPerPixel;
  
 diff --git a/dom/media/systemservices/video_engine/desktop_capture_impl.h b/dom/media/systemservices/video_engine/desktop_capture_impl.h
-index 7f3e2e0360..62ecdd89e2 100644
+index 7f3e2e0360..44df1ff0a9 100644
 --- a/dom/media/systemservices/video_engine/desktop_capture_impl.h
 +++ b/dom/media/systemservices/video_engine/desktop_capture_impl.h
 @@ -26,6 +26,7 @@
@@ -1713,7 +1729,7 @@ index 7f3e2e0360..62ecdd89e2 100644
  #include "mozilla/DataMutex.h"
  #include "mozilla/Maybe.h"
  #include "mozilla/TimeStamp.h"
-@@ -43,6 +44,13 @@ namespace webrtc {
+@@ -43,18 +44,53 @@ namespace webrtc {
  
  class VideoCaptureEncodeInterface;
  
@@ -1724,22 +1740,61 @@ index 7f3e2e0360..62ecdd89e2 100644
 +  virtual void OnRawFrame(uint8_t* videoFrame, size_t videoFrameLength, const VideoCaptureCapability& frameInfo) = 0;
 +};
 +
++class VideoCaptureModuleEx : public VideoCaptureModule {
++ public:
++  virtual ~VideoCaptureModuleEx() {}
++
++  virtual void RegisterRawFrameCallback(RawFrameCallback* rawFrameCallback) = 0;
++  virtual void DeRegisterRawFrameCallback(RawFrameCallback* rawFrameCallback) = 0;
++  virtual void DeRegisterCaptureDataCallback(
++      VideoSinkInterface<VideoFrame>* aCallback) = 0;
++  using VideoCaptureModule::DeRegisterCaptureDataCallback;
++  virtual int32_t StopCaptureIfAllClientsClose() = 0;
++  int32_t StartCaptureCounted(const VideoCaptureCapability& aCapability) {
++    ++capture_counter_;
++    return capture_counter_ == 1 ? StartCapture(aCapability) : 0;
++  }
++
++  int32_t StopCaptureCounted() {
++    --capture_counter_;
++    return capture_counter_ == 0 ? StopCapture() : 0;
++  }
++
++ private:
++  int32_t capture_counter_ = 0;
++};
++
  // Reuses the video engine pipeline for screen sharing.
  // As with video, DesktopCaptureImpl is a proxy for screen sharing
  // and follows the video pipeline design
-@@ -54,7 +62,10 @@ class DesktopCaptureImpl : public mozilla::DesktopCaptureInterface,
+ class DesktopCaptureImpl : public mozilla::DesktopCaptureInterface,
+                            public DesktopCapturer::Callback,
+-                           public VideoCaptureModule {
++                           public VideoCaptureModuleEx {
+  public:
+   /* Create a screen capture modules object
     */
    static DesktopCaptureImpl* Create(
        int32_t aCaptureId, const char* aUniqueId,
 -      const mozilla::camera::CaptureDeviceType aType);
 +      const mozilla::camera::CaptureDeviceType aType, bool aCaptureCursor = true);
 +
-+  void RegisterRawFrameCallback(RawFrameCallback* rawFrameCallback);
-+  void DeRegisterRawFrameCallback(RawFrameCallback* rawFrameCallback);
++  void RegisterRawFrameCallback(RawFrameCallback* rawFrameCallback) override;
++  void DeRegisterRawFrameCallback(RawFrameCallback* rawFrameCallback) override;
++  int32_t StopCaptureIfAllClientsClose() override;
  
    [[nodiscard]] static std::shared_ptr<VideoCaptureModule::DeviceInfo>
    CreateDeviceInfo(const mozilla::camera::CaptureDeviceType aType);
-@@ -87,7 +98,8 @@ class DesktopCaptureImpl : public mozilla::DesktopCaptureInterface,
+@@ -65,6 +101,8 @@ class DesktopCaptureImpl : public mozilla::DesktopCaptureInterface,
+   void RegisterCaptureDataCallback(
+       RawVideoSinkInterface* dataCallback) override {}
+   void DeRegisterCaptureDataCallback() override;
++  void DeRegisterCaptureDataCallback(
++      webrtc::VideoSinkInterface<VideoFrame>* aCallback) override;
+ 
+   int32_t SetCaptureRotation(VideoRotation aRotation) override;
+   bool SetApplyRotation(bool aEnable) override;
+@@ -87,7 +125,8 @@ class DesktopCaptureImpl : public mozilla::DesktopCaptureInterface,
  
   protected:
    DesktopCaptureImpl(const int32_t aCaptureId, const char* aUniqueId,
@@ -1749,7 +1804,7 @@ index 7f3e2e0360..62ecdd89e2 100644
    virtual ~DesktopCaptureImpl();
  
   private:
-@@ -96,6 +108,9 @@ class DesktopCaptureImpl : public mozilla::DesktopCaptureInterface,
+@@ -96,6 +135,9 @@ class DesktopCaptureImpl : public mozilla::DesktopCaptureInterface,
    void InitOnThread(std::unique_ptr<DesktopCapturer> aCapturer, int aFramerate);
    void UpdateOnThread(int aFramerate);
    void ShutdownOnThread();
@@ -1759,7 +1814,7 @@ index 7f3e2e0360..62ecdd89e2 100644
    // DesktopCapturer::Callback interface.
    void OnCaptureResult(DesktopCapturer::Result aResult,
                         std::unique_ptr<DesktopFrame> aFrame) override;
-@@ -103,6 +118,8 @@ class DesktopCaptureImpl : public mozilla::DesktopCaptureInterface,
+@@ -103,6 +145,8 @@ class DesktopCaptureImpl : public mozilla::DesktopCaptureInterface,
    // Notifies all mCallbacks of OnFrame(). mCaptureThread only.
    void NotifyOnFrame(const VideoFrame& aFrame);
  
@@ -2337,56 +2392,6 @@ index 8ab093044d..3ed5fc6e2d 100644
    return nullptr;
  }
  
-diff --git a/juggler/screencast/HeadlessWindowCapturer.h b/juggler/screencast/HeadlessWindowCapturer.h
-index cb1bcbbfd7..6b39dfbea0 100644
---- a/juggler/screencast/HeadlessWindowCapturer.h
-+++ b/juggler/screencast/HeadlessWindowCapturer.h
-@@ -6,12 +6,17 @@
- 
- #include <memory>
- #include <set>
-+#include "api/scoped_refptr.h"
- #include "api/video/video_frame.h"
- #include "api/video/video_sink_interface.h"
- #include "modules/video_capture/video_capture.h"
- #include "rtc_base/deprecated/recursive_critical_section.h"
-+#include "rtc_base/ref_counted_object.h"
- #include "video_engine/desktop_capture_impl.h"
- 
-+// Compatibility namespace aliases for WebRTC types
-+namespace rtc = webrtc;
-+
- class nsIWidget;
- 
- namespace mozilla {
-diff --git a/juggler/screencast/ScreencastEncoder.cpp b/juggler/screencast/ScreencastEncoder.cpp
-index 701361add0..08e4fb9667 100644
---- a/juggler/screencast/ScreencastEncoder.cpp
-+++ b/juggler/screencast/ScreencastEncoder.cpp
-@@ -41,6 +41,10 @@
- #include "WebMFileWriter.h"
- #include "api/video/video_frame.h"
- 
-+
-+// Compatibility namespace aliases for WebRTC types
-+namespace rtc = webrtc;
-+
- namespace mozilla {
- 
- namespace {
-diff --git a/juggler/screencast/nsScreencastService.cpp b/juggler/screencast/nsScreencastService.cpp
-index fa9d1a965c..539752e359 100644
---- a/juggler/screencast/nsScreencastService.cpp
-+++ b/juggler/screencast/nsScreencastService.cpp
-@@ -26,6 +26,8 @@
- #include "mozilla/widget/PlatformWidgetTypes.h"
- #include "video_engine/desktop_capture_impl.h"
- #include "VideoEngine.h"
-+#include "gfxPlatform.h"
-+
- 
- extern "C" {
- #include "jpeglib.h"
 diff --git a/layout/base/GeometryUtils.cpp b/layout/base/GeometryUtils.cpp
 index 1f5759ad1a..c7d2924c27 100644
 --- a/layout/base/GeometryUtils.cpp
@@ -2798,7 +2803,7 @@ index 5041de0a9e..05951a5945 100644
 +    return true;
 +
 +  RefPtr<mozilla::dom::BrowsingContext> wbc;
-+  mLoadInfo->GetWorkerAssociatedBrowsingContext(getter_AddRefs(wbc));
++  mLoadInfo->GetAssociatedBrowsingContext(getter_AddRefs(wbc));
 +  if (wbc && wbc->Top()->GetForceOffline())
 +    return true;
 +

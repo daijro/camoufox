@@ -16,6 +16,9 @@ namespace webrtc {
 class VideoFrame;
 }
 
+// Compatibility namespace alias: libwebrtc converted rtc:: to webrtc:: in Fx150
+namespace rtc = webrtc;
+
 namespace mozilla {
 
 class ScreencastEncoder {
