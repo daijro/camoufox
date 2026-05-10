@@ -1,6 +1,6 @@
 diff --git a/dom/base/FontSpacingSeedManager.cpp b/dom/base/FontSpacingSeedManager.cpp
 new file mode 100644
-index 0000000000..fe74a1f432
+index 0000000000..e07de3e753
 --- /dev/null
 +++ b/dom/base/FontSpacingSeedManager.cpp
 @@ -0,0 +1,91 @@
@@ -176,7 +176,7 @@ index 0000000000..63d43f3b86
 \ No newline at end of file
 diff --git a/dom/base/RoverfoxStorageManager.cpp b/dom/base/RoverfoxStorageManager.cpp
 new file mode 100644
-index 0000000000..f38394d39d
+index 0000000000..1f8b3a08f6
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
 @@ -0,0 +1,184 @@
@@ -366,7 +366,7 @@ index 0000000000..f38394d39d
 +}  // namespace mozilla
 diff --git a/dom/base/RoverfoxStorageManager.h b/dom/base/RoverfoxStorageManager.h
 new file mode 100644
-index 0000000000..d5700aea62
+index 0000000000..4a2dac8e8f
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.h
 @@ -0,0 +1,36 @@
@@ -407,23 +407,25 @@ index 0000000000..d5700aea62
 +
 +#endif  // mozilla_dom_RoverfoxStorageManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index cd9090cda3..609d3b71be 100644
+index 49c8ac12fa..66b3509602 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -191,6 +191,7 @@ EXPORTS.mozilla.dom += [
-     "EventSourceEventService.h",
+@@ -190,6 +190,7 @@ EXPORTS.mozilla.dom += [
      "External.h",
+     "FastFrontRemovableArray.h",
      "FilteredNodeIterator.h",
 +    "FontSpacingSeedManager.h",
      "FormData.h",
      "FragmentDirective.h",
      "FragmentOrElement.h",
-@@ -253,4 +254,5 @@ EXPORTS.mozilla.dom += [
+@@ -255,6 +256,7 @@ EXPORTS.mozilla.dom += [
+     "RequestCallbackManager.h",
      "ResizeObserver.h",
      "ResponsiveImageSelector.h",
 +    "RoverfoxStorageManager.h",
      "SameProcessMessageQueue.h",
      "ScreenLuminance.h",
+     "ScreenOrientation.h",
 @@ -369,6 +371,7 @@ UNIFIED_SOURCES += [
      "EventSource.cpp",
      "EventSourceEventService.cpp",
@@ -432,17 +434,19 @@ index cd9090cda3..609d3b71be 100644
      "FormData.cpp",
      "FragmentDirective.cpp",
      "FragmentOrElement.cpp",
-@@ -457,4 +461,5 @@ UNIFIED_SOURCES += [
+@@ -459,6 +462,7 @@ UNIFIED_SOURCES += [
+     "RemoteOuterWindowProxy.cpp",
      "ResizeObserver.cpp",
      "ResponsiveImageSelector.cpp",
 +    "RoverfoxStorageManager.cpp",
      "SameProcessMessageQueue.cpp",
      "ScreenLuminance.cpp",
+     "ScreenOrientation.cpp",
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 330a707789..fb3ba4d3fb 100644
+index 0545014921..5432f702ed 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -60,6 +60,7 @@
+@@ -57,6 +57,7 @@
  #include "mozilla/EventDispatcher.h"
  #include "mozilla/EventListenerManager.h"
  #include "mozilla/EventQueue.h"
@@ -450,7 +454,7 @@ index 330a707789..fb3ba4d3fb 100644
  #include "mozilla/ExtensionPolicyService.h"
  #include "mozilla/FloatingPoint.h"
  #include "mozilla/FlushType.h"
-@@ -243,6 +244,9 @@
+@@ -242,6 +243,9 @@
  #include "nsICookieService.h"
  #include "nsID.h"
  #include "nsIDOMStorageManager.h"
@@ -460,7 +464,7 @@ index 330a707789..fb3ba4d3fb 100644
  #include "nsIDOMXULControlElement.h"
  #include "nsIDeviceSensors.h"
  #include "nsIDocShell.h"
-@@ -7463,6 +7467,25 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
+@@ -7707,6 +7711,25 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
    return mIntlUtils;
  }
  
@@ -487,10 +491,10 @@ index 330a707789..fb3ba4d3fb 100644
    MOZ_ASSERT(aSharedWorker);
    MOZ_ASSERT(!mSharedWorkers.Contains(aSharedWorker));
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index 648bcda859..46cb7d6f4a 100644
+index 43b3ef9521..b26388188c 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -681,6 +681,9 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -678,6 +678,9 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
  
    mozilla::dom::IntlUtils* GetIntlUtils(mozilla::ErrorResult& aRv);
  
@@ -501,7 +505,7 @@ index 648bcda859..46cb7d6f4a 100644
  
    void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
 diff --git a/dom/canvas/CanvasRenderingContext2D.cpp b/dom/canvas/CanvasRenderingContext2D.cpp
-index 989dba05ca..14f8be6dcd 100644
+index d010d51b43..c1d3f13898 100644
 --- a/dom/canvas/CanvasRenderingContext2D.cpp
 +++ b/dom/canvas/CanvasRenderingContext2D.cpp
 @@ -57,6 +57,7 @@
@@ -512,7 +516,7 @@ index 989dba05ca..14f8be6dcd 100644
  #include "mozilla/dom/FontFaceSet.h"
  #include "mozilla/dom/FontFaceSetImpl.h"
  #include "mozilla/dom/GeneratePlaceholderCanvasData.h"
-@@ -4719,10 +4720,21 @@ struct MOZ_STACK_CLASS CanvasBidiProcessor final
+@@ -4784,10 +4785,21 @@ struct MOZ_STACK_CLASS CanvasBidiProcessor final
      } else {
        flags &= ~gfx::ShapedTextFlags::TEXT_IS_RTL;
      }
@@ -536,10 +540,10 @@ index 989dba05ca..14f8be6dcd 100644
    }
  
 diff --git a/dom/canvas/OffscreenCanvas.cpp b/dom/canvas/OffscreenCanvas.cpp
-index e32eeaeeab..fed027072c 100644
+index a802950043..fa8b4e4490 100644
 --- a/dom/canvas/OffscreenCanvas.cpp
 +++ b/dom/canvas/OffscreenCanvas.cpp
-@@ -635,6 +635,15 @@ void OffscreenCanvas::ReportBlockedFontFamily(const nsCString& aMsg) const {
+@@ -651,6 +651,15 @@ void OffscreenCanvas::ReportBlockedFontFamily(const nsCString& aMsg) const {
    }
  }
  
@@ -556,10 +560,10 @@ index e32eeaeeab..fed027072c 100644
    if (NS_IsMainThread()) {
      nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(GetOwnerGlobal());
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index 7c509eb87e..7a076768d0 100644
+index ae2d14e105..838aef642d 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -892,6 +892,12 @@ partial interface Window {
+@@ -930,6 +930,12 @@ partial interface Window {
    readonly attribute VisualViewport visualViewport;
  };
  
@@ -573,10 +577,10 @@ index 7c509eb87e..7a076768d0 100644
  // finding on a page.
  partial interface Window {
 diff --git a/dom/workers/WorkerPrivate.h b/dom/workers/WorkerPrivate.h
-index c5d17c1c0a..216bdace64 100644
+index c34db27680..6fdccc0279 100644
 --- a/dom/workers/WorkerPrivate.h
 +++ b/dom/workers/WorkerPrivate.h
-@@ -1103,8 +1103,6 @@ class WorkerPrivate final
+@@ -1102,8 +1102,6 @@ class WorkerPrivate final
  
    void WorkerScriptLoaded();
  
@@ -586,10 +590,10 @@ index c5d17c1c0a..216bdace64 100644
  
    void UpdateContextOptions(const JS::ContextOptions& aContextOptions);
 diff --git a/gfx/src/nsFontMetrics.cpp b/gfx/src/nsFontMetrics.cpp
-index ef081ebe40..a921c49f43 100644
+index a52e3a56d8..3025f57da5 100644
 --- a/gfx/src/nsFontMetrics.cpp
 +++ b/gfx/src/nsFontMetrics.cpp
-@@ -23,9 +23,13 @@
+@@ -22,9 +22,13 @@
  #include "nsStyleConsts.h"       // for StyleHyphens::None
  #include "mozilla/Assertions.h"  // for MOZ_ASSERT
  #include "mozilla/UniquePtr.h"   // for UniquePtr
@@ -603,7 +607,7 @@ index ef081ebe40..a921c49f43 100644
  
  namespace {
  
-@@ -35,17 +39,39 @@ class AutoTextRun {
+@@ -34,17 +38,39 @@ class AutoTextRun {
  
    AutoTextRun(const nsFontMetrics* aMetrics, DrawTarget* aDrawTarget,
                const char* aString, uint32_t aLength) {
@@ -646,10 +650,10 @@ index ef081ebe40..a921c49f43 100644
  
    gfxTextRun* get() const { return mTextRun.get(); }
 diff --git a/gfx/src/nsFontMetrics.h b/gfx/src/nsFontMetrics.h
-index cc8aec7cc7..e4e51f5000 100644
+index df44559b26..d829aa8ff2 100644
 --- a/gfx/src/nsFontMetrics.h
 +++ b/gfx/src/nsFontMetrics.h
-@@ -257,6 +257,10 @@ class nsFontMetrics final {
+@@ -299,6 +299,10 @@ class nsFontMetrics final {
    bool AllowForceGDIClassic() const { return mAllowForceGDIClassic; }
  #endif
  
@@ -660,7 +664,7 @@ index cc8aec7cc7..e4e51f5000 100644
   private:
    // Private destructor, to discourage deletion outside of Release():
    ~nsFontMetrics();
-@@ -264,9 +268,6 @@ class nsFontMetrics final {
+@@ -306,9 +310,6 @@ class nsFontMetrics final {
    const nsFont mFont;
    RefPtr<gfxFontGroup> mFontGroup;
    RefPtr<nsAtom> const mLanguage;
@@ -671,10 +675,10 @@ index cc8aec7cc7..e4e51f5000 100644
  
    // The font orientation (horizontal or vertical) for which these metrics
 diff --git a/gfx/thebes/gfxFont.cpp b/gfx/thebes/gfxFont.cpp
-index 6f02e3a566..ca3b60d550 100644
+index a0020a6a65..1f27407e7a 100644
 --- a/gfx/thebes/gfxFont.cpp
 +++ b/gfx/thebes/gfxFont.cpp
-@@ -20,6 +20,7 @@
+@@ -18,6 +18,7 @@
  
  #include "gfxGlyphExtents.h"
  #include "gfxPlatform.h"
@@ -682,15 +686,7 @@ index 6f02e3a566..ca3b60d550 100644
  #include "gfxTextRun.h"
  #include "nsGkAtoms.h"
  
-@@ -47,6 +48,7 @@
- #include "gfxSVGGlyphs.h"
- #include "gfx2DGlue.h"
- #include "TextDrawTarget.h"
-+#include "mozilla/dom/FontSpacingSeedManager.h"
- 
- #include "ThebesRLBox.h"
- 
-@@ -3284,7 +3286,7 @@ bool gfxFont::ProcessShapedWordInternal(
+@@ -3284,9 +3285,9 @@ bool gfxFont::ProcessShapedWordInternal(
      Script aRunScript, nsAtom* aLanguage, bool aVertical,
      int32_t aAppUnitsPerDevUnit, gfx::ShapedTextFlags aFlags,
      RoundingFlags aRounding, gfxTextPerfMetrics* aTextPerf GFX_MAYBE_UNUSED,
@@ -700,7 +696,9 @@ index 6f02e3a566..ca3b60d550 100644
 -                   aAppUnitsPerDevUnit, aFlags, aRounding);
 +                   aAppUnitsPerDevUnit, aFlags, aRounding, aUserContextId);
    {
-@@ -3317,6 +3319,8 @@ bool gfxFont::ProcessShapedWordInternal(
+     // If we have a word cache, attempt to look up the word in it.
+     AutoReadLock lock(mLock);
+@@ -3317,6 +3318,8 @@ bool gfxFont::ProcessShapedWordInternal(
      NS_WARNING("failed to create gfxShapedWord - expect missing text");
      return false;
    }
@@ -709,7 +707,7 @@ index 6f02e3a566..ca3b60d550 100644
    DebugOnly<bool> ok =
        ShapeText(aDrawTarget, aText, 0, aLength, aRunScript, aLanguage,
                  aVertical, aRounding, newShapedWord.get());
-@@ -3383,7 +3387,8 @@ bool gfxFont::WordCacheKey::HashPolicy::match(const Key& aKey,
+@@ -3383,7 +3386,8 @@ bool gfxFont::WordCacheKey::HashPolicy::match(const Key& aKey,
    if (aKey.mLength != aLookup.mLength || aKey.mFlags != aLookup.mFlags ||
        aKey.mRounding != aLookup.mRounding ||
        aKey.mAppUnitsPerDevUnit != aLookup.mAppUnitsPerDevUnit ||
@@ -718,17 +716,17 @@ index 6f02e3a566..ca3b60d550 100644
 +      aKey.mUserContextId != aLookup.mUserContextId) {
      return false;
    }
-
-@@ -3420,7 +3425,7 @@ bool gfxFont::ProcessSingleSpaceShapedWord(
+ 
+@@ -3420,7 +3424,7 @@ bool gfxFont::ProcessSingleSpaceShapedWord(
    return ProcessShapedWordInternal(
        aDrawTarget, &space, 1, gfxShapedWord::HashMix(0, ' '), Script::LATIN,
        /* aLanguage = */ nullptr, aVertical, aAppUnitsPerDevUnit, aFlags,
 -      aRounding, nullptr, aCallback);
 +      aRounding, nullptr, 0 /* pbid */, aCallback);
  }
-
+ 
  bool gfxFont::ShapeText(DrawTarget* aDrawTarget, const uint8_t* aText,
-@@ -3778,6 +3784,7 @@ bool gfxFont::SplitAndInitTextRun(
+@@ -3778,6 +3782,7 @@ bool gfxFont::SplitAndInitTextRun(
        bool processed = ProcessShapedWordInternal(
            aDrawTarget, aString + wordStart, length, hash, aRunScript, aLanguage,
            vertical, appUnitsPerDevUnit, wordFlags, rounding, tp,
@@ -745,7 +743,7 @@ index 6f02e3a566..ca3b60d550 100644
                aTextRun->CopyGlyphDataFrom(aShapedWord, aRunStart + i);
                if (boundary == ' ') {
 diff --git a/gfx/thebes/gfxFont.h b/gfx/thebes/gfxFont.h
-index 4601fc3f17..78c2f1116c 100644
+index 0ae6de8b22..27b0eb3c44 100644
 --- a/gfx/thebes/gfxFont.h
 +++ b/gfx/thebes/gfxFont.h
 @@ -737,6 +737,10 @@ class gfxShapedText {
@@ -781,7 +779,7 @@ index 4601fc3f17..78c2f1116c 100644
    // The mCharGlyphsStorage array is actually a variable-size member;
    // when the ShapedWord is created, its size will be increased as necessary
    // to allow the proper number of glyphs to be stored.
-@@ -2091,12 +2103,14 @@ class gfxFont {
+@@ -2142,12 +2154,14 @@ class gfxFont {
    // for use in setting up a gfxTextRun.
    template <typename T, typename Func>
    bool ProcessShapedWordInternal(DrawTarget* aDrawTarget, const T* aText,
@@ -799,15 +797,16 @@ index 4601fc3f17..78c2f1116c 100644
 +                                  gfxTextPerfMetrics* aTextPerf,
 +                                  uint32_t aUserContextId,
 +                                  Func aCallback);
-
+ 
    // whether a given feature is included in feature settings from both the
    // font and the style. aFeatureOn set if resolved feature value is non-zero
-@@ -2127,11 +2141,12 @@ class gfxFont {
+@@ -2177,12 +2191,13 @@ class gfxFont {
+     int32_t mAppUnitsPerDevUnit;
      PLDHashNumber mHashKey;
      bool mTextIs8Bit;
 +    uint32_t mUserContextId;
      RoundingFlags mRounding;
-
+ 
      WordCacheKey(const uint8_t* aText, uint32_t aLength, uint32_t aStringHash,
                   Script aScriptCode, nsAtom* aLanguage,
                   int32_t aAppUnitsPerDevUnit, ShapedTextFlags aFlags,
@@ -816,7 +815,7 @@ index 4601fc3f17..78c2f1116c 100644
          : mLength(aLength),
            mFlags(aFlags),
            mScript(aScriptCode),
-@@ -2139,8 +2154,9 @@ class gfxFont {
+@@ -2190,8 +2205,9 @@ class gfxFont {
            mAppUnitsPerDevUnit(aAppUnitsPerDevUnit),
            mHashKey(aStringHash + static_cast<int32_t>(aScriptCode) +
                     aAppUnitsPerDevUnit * 0x100 + uint16_t(aFlags) * 0x10000 +
@@ -827,7 +826,7 @@ index 4601fc3f17..78c2f1116c 100644
            mRounding(aRounding) {
        NS_ASSERTION(aFlags & ShapedTextFlags::TEXT_IS_8BIT,
                     "8-bit flag should have been set");
-@@ -2150,7 +2166,7 @@ class gfxFont {
+@@ -2201,7 +2217,7 @@ class gfxFont {
      WordCacheKey(const char16_t* aText, uint32_t aLength, uint32_t aStringHash,
                   Script aScriptCode, nsAtom* aLanguage,
                   int32_t aAppUnitsPerDevUnit, ShapedTextFlags aFlags,
@@ -836,7 +835,7 @@ index 4601fc3f17..78c2f1116c 100644
          : mLength(aLength),
            mFlags(aFlags),
            mScript(aScriptCode),
-@@ -2158,8 +2174,9 @@ class gfxFont {
+@@ -2209,8 +2225,9 @@ class gfxFont {
            mAppUnitsPerDevUnit(aAppUnitsPerDevUnit),
            mHashKey(aStringHash + static_cast<int32_t>(aScriptCode) +
                     aAppUnitsPerDevUnit * 0x100 + uint16_t(aFlags) * 0x10000 +
@@ -848,10 +847,10 @@ index 4601fc3f17..78c2f1116c 100644
        // We can NOT assert that TEXT_IS_8BIT is false in aFlags here,
        // because this might be an 8bit-only word from a 16-bit textrun,
 diff --git a/gfx/thebes/gfxHarfBuzzShaper.cpp b/gfx/thebes/gfxHarfBuzzShaper.cpp
-index 1a5bdaba99..46226fc88d 100644
+index 8bd7f6f38c..5282efb7e5 100644
 --- a/gfx/thebes/gfxHarfBuzzShaper.cpp
 +++ b/gfx/thebes/gfxHarfBuzzShaper.cpp
-@@ -17,6 +17,10 @@
+@@ -16,6 +16,10 @@
  
  #include "harfbuzz/hb.h"
  #include "harfbuzz/hb-ot.h"
@@ -862,7 +861,7 @@ index 1a5bdaba99..46226fc88d 100644
  
  #include <algorithm>
  
-@@ -1567,6 +1571,36 @@ bool gfxHarfBuzzShaper::ShapeText(DrawTarget* aDrawTarget,
+@@ -1466,6 +1470,36 @@ bool gfxHarfBuzzShaper::ShapeText(DrawTarget* aDrawTarget,
  
    hb_shape(mHBFont, mBuffer, features.Elements(), features.Length());
  
@@ -899,16 +898,16 @@ index 1a5bdaba99..46226fc88d 100644
    if (isRightToLeft) {
      hb_buffer_reverse(mBuffer);
    }
-@@ -1872,3 +1905,4 @@ nsresult gfxHarfBuzzShaper::SetGlyphsFromRun(gfxShapedText* aShapedText,
+@@ -1771,3 +1805,4 @@ nsresult gfxHarfBuzzShaper::SetGlyphsFromRun(gfxShapedText* aShapedText,
  
    return NS_OK;
  }
 +
 diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
-index de9a9661a1..f878bdb36c 100644
+index ea420d13cd..9bd7061f2d 100644
 --- a/gfx/thebes/gfxTextRun.cpp
 +++ b/gfx/thebes/gfxTextRun.cpp
-@@ -25,6 +25,7 @@
+@@ -23,6 +23,7 @@
  #include "mozilla/Likely.h"
  #include "mozilla/MruCache.h"
  #include "mozilla/ServoStyleSet.h"
@@ -916,16 +915,16 @@ index de9a9661a1..f878bdb36c 100644
  #include "mozilla/Sprintf.h"
  #include "mozilla/StaticPresData.h"
  #include "mozilla/UniquePtr.h"
-@@ -34,6 +35,8 @@
+@@ -32,6 +33,8 @@
  #include "nsUnicodeProperties.h"
  #include "SharedFontList-impl.h"
  #include "TextDrawTarget.h"
 +#include "mozilla/dom/BrowsingContext.h"
 +#include "nsPIDOMWindow.h"
-
+ 
  #ifdef XP_WIN
  #  include "gfxWindowsPlatform.h"
-@@ -145,25 +147,26 @@ void* gfxTextRun::AllocateStorageForTextRun(size_t aSize, uint32_t aLength) {
+@@ -143,25 +146,26 @@ void* gfxTextRun::AllocateStorageForTextRun(size_t aSize, uint32_t aLength) {
  already_AddRefed<gfxTextRun> gfxTextRun::Create(
      const gfxTextRunFactory::Parameters* aParams, uint32_t aLength,
      gfxFontGroup* aFontGroup, gfx::ShapedTextFlags aFlags,
@@ -955,7 +954,7 @@ index de9a9661a1..f878bdb36c 100644
        mReleasedFontGroup(false),
        mReleasedFontGroupSkippedDrawing(false),
        mShapingState(eShapingState_Normal) {
-@@ -728,7 +731,8 @@ void gfxTextRun::DrawEmphasisMarks(
+@@ -726,7 +730,8 @@ void gfxTextRun::DrawEmphasisMarks(
      gfxContext* aContext, gfxTextRun* aMark, gfxFloat aMarkAdvance,
      gfx::Point aPt, Range aRange, const PropertyProvider* aProvider,
      mozilla::gfx::PaletteCache& aPaletteCache) const {
@@ -965,7 +964,7 @@ index de9a9661a1..f878bdb36c 100644
  
    EmphasisMarkDrawParams params(aContext, aPaletteCache);
    params.mark = aMark;
-@@ -1870,6 +1874,18 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+@@ -1868,6 +1873,18 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
        mFontVariantEmoji(aVariantEmoji) {
    // We don't use SetUserFontSet() here, as we want to unconditionally call
    // EnsureFontList() rather than only do UpdateUserFonts() if it changed.
@@ -984,7 +983,7 @@ index de9a9661a1..f878bdb36c 100644
  }
  
  gfxFontGroup::~gfxFontGroup() {
-@@ -2485,12 +2502,12 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeHyphenTextRun(
+@@ -2474,12 +2491,12 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeHyphenTextRun(
    RefPtr<gfxFont> font = GetFirstValidFont(uint32_t(hyphen));
    if (font->HasCharacter(hyphen)) {
      return MakeTextRun(&hyphen, 1, aDrawTarget, aAppUnitsPerDevUnit, aFlags,
@@ -999,7 +998,7 @@ index de9a9661a1..f878bdb36c 100644
  }
  
  gfxFloat gfxFontGroup::GetHyphenWidth(
-@@ -2511,7 +2528,7 @@ template <typename T>
+@@ -2500,7 +2517,7 @@ template <typename T>
  already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
      const T* aString, uint32_t aLength, const Parameters* aParams,
      gfx::ShapedTextFlags aFlags, nsTextFrameUtils::Flags aFlags2,
@@ -1008,7 +1007,7 @@ index de9a9661a1..f878bdb36c 100644
    if (aLength == 0) {
      return MakeEmptyTextRun(aParams, aFlags, aFlags2);
    }
-@@ -2530,8 +2547,16 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
+@@ -2519,8 +2536,16 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
      return MakeBlankTextRun(aString, aLength, aParams, aFlags, aFlags2);
    }
  
@@ -1026,7 +1025,7 @@ index de9a9661a1..f878bdb36c 100644
    if (!textRun) {
      return nullptr;
    }
-@@ -2547,11 +2572,11 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
+@@ -2536,11 +2561,11 @@ already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
  template already_AddRefed<gfxTextRun> gfxFontGroup::MakeTextRun(
      const uint8_t* aString, uint32_t aLength, const Parameters* aParams,
      gfx::ShapedTextFlags aFlags, nsTextFrameUtils::Flags aFlags2,
@@ -1038,9 +1037,9 @@ index de9a9661a1..f878bdb36c 100644
 -    gfxMissingFontRecorder* aMFR);
 +    gfxMissingFontRecorder* aMFR, uint32_t aUserContextId);
  
- // Helper to get a hashtable that maps tags to Script codes, created on first
- // use.
-@@ -2609,8 +2634,9 @@ static Script ResolveScriptForLang(const nsAtom* aLanguage, Script aDefault) {
+ // ComputeRanges instantiation (used by
+ // gfxPlatformFontList::ListFontsUsedForString).
+@@ -2604,8 +2629,9 @@ static Script ResolveScriptForLang(const nsAtom* aLanguage, Script aDefault) {
    static LangScriptCache sCache;
    static RWLock sLock("LangScriptCache lock");
  
@@ -1052,7 +1051,7 @@ index de9a9661a1..f878bdb36c 100644
  
    {
      // Try to use a cached value without taking an exclusive lock.
-@@ -3045,7 +3071,7 @@ gfxTextRun* gfxFontGroup::GetEllipsisTextRun(
+@@ -3040,7 +3066,7 @@ gfxTextRun* gfxFontGroup::GetEllipsisTextRun(
                         nullptr, 0,       aAppUnitsPerDevPixel};
    mCachedEllipsisTextRun =
        MakeTextRun(ellipsis.BeginReading(), ellipsis.Length(), &params, aFlags,
@@ -1061,7 +1060,7 @@ index de9a9661a1..f878bdb36c 100644
    if (!mCachedEllipsisTextRun) {
      return nullptr;
    }
-@@ -3460,7 +3486,7 @@ already_AddRefed<gfxFont> gfxFontGroup::FindFontForChar(
+@@ -3455,7 +3481,7 @@ already_AddRefed<gfxFont> gfxFontGroup::FindFontForChar(
          font = FindFallbackFaceForChar(ff, aCh, aNextCh, presentation);
          if (font) {
            if (CheckCandidate(font,
@@ -1071,10 +1070,10 @@ index de9a9661a1..f878bdb36c 100644
            }
          }
 diff --git a/gfx/thebes/gfxTextRun.h b/gfx/thebes/gfxTextRun.h
-index 06ccaa6082..556ab66718 100644
+index 9e007251ef..e746af411d 100644
 --- a/gfx/thebes/gfxTextRun.h
 +++ b/gfx/thebes/gfxTextRun.h
-@@ -487,13 +487,14 @@ class gfxTextRun : public gfxShapedText {
+@@ -485,13 +485,14 @@ class gfxTextRun : public gfxShapedText {
    void ClearFlagBits(nsTextFrameUtils::Flags aFlags) { mFlags2 &= ~aFlags; }
    const gfxSkipChars& GetSkipChars() const { return mSkipChars; }
    gfxFontGroup* GetFontGroup() const { return mFontGroup; }
@@ -1090,7 +1089,7 @@ index 06ccaa6082..556ab66718 100644
  
    // The text is divided into GlyphRuns as necessary. (In the vast majority
    // of cases, a gfxTextRun contains just a single GlyphRun.)
-@@ -802,7 +803,7 @@ class gfxTextRun : public gfxShapedText {
+@@ -801,7 +802,7 @@ class gfxTextRun : public gfxShapedText {
     */
    gfxTextRun(const gfxTextRunFactory::Parameters* aParams, uint32_t aLength,
               gfxFontGroup* aFontGroup, mozilla::gfx::ShapedTextFlags aFlags,
@@ -1099,7 +1098,7 @@ index 06ccaa6082..556ab66718 100644
  
    // Whether we need to fetch actual glyph extents from the fonts.
    bool NeedsGlyphExtents() const;
-@@ -894,6 +895,8 @@ class gfxTextRun : public gfxShapedText {
+@@ -893,6 +894,8 @@ class gfxTextRun : public gfxShapedText {
    nsTextFrameUtils::Flags
        mFlags2;  // additional flags (see also gfxShapedText::mFlags)
  
@@ -1142,10 +1141,10 @@ index 06ccaa6082..556ab66718 100644
     * Textrun creation short-cuts for special cases where we don't need to
     * call a font shaper to generate glyphs.
 diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
-index 89ed5fec3e..32920e9b71 100644
+index 41334360e9..e2abf1f5d3 100644
 --- a/layout/base/nsLayoutUtils.cpp
 +++ b/layout/base/nsLayoutUtils.cpp
-@@ -144,7 +144,8 @@
+@@ -143,6 +143,7 @@
  #include "nsIFrameInlines.h"
  #include "nsIImageLoadingContent.h"
  #include "nsIInterfaceRequestorUtils.h"
@@ -1153,9 +1152,8 @@ index 89ed5fec3e..32920e9b71 100644
  #include "nsIWidget.h"
  #include "nsListControlFrame.h"
  #include "nsMenuPopupFrame.h"
- #include "nsPIDOMWindow.h"
-@@ -1210,6 +1211,31 @@ nsIFrame* nsLayoutUtils::GetLastSibling(nsIFrame* aFrame) {
-   return aFrame;
+@@ -1188,6 +1189,31 @@ int32_t nsLayoutUtils::DoCompareTreePosition(const nsIFrame* aFrame1,
+                                nonCommonAncestor ? aCommonAncestor : nullptr);
  }
  
 +/* static */ uint32_t
@@ -1184,13 +1182,13 @@ index 89ed5fec3e..32920e9b71 100644
 +}
 +
  // static
- nsView* nsLayoutUtils::FindSiblingViewFor(nsView* aParentView,
-                                           nsIFrame* aFrame) {
+ int32_t nsLayoutUtils::DoCompareTreePosition(
+     const nsIFrame* aFrame1, const nsIFrame* aFrame2,
 diff --git a/layout/base/nsLayoutUtils.h b/layout/base/nsLayoutUtils.h
-index 6c7d485e38..da404c0e5c 100644
+index aac8f3cbb2..9079714449 100644
 --- a/layout/base/nsLayoutUtils.h
 +++ b/layout/base/nsLayoutUtils.h
-@@ -423,6 +423,11 @@ class nsLayoutUtils {
+@@ -433,6 +433,11 @@ class nsLayoutUtils {
     */
    static nsIFrame* GetLastSibling(nsIFrame* aFrame);
  
@@ -1203,10 +1201,10 @@ index 6c7d485e38..da404c0e5c 100644
     * FindSiblingViewFor locates the child of aParentView that aFrame's
     * view should be inserted 'above' (i.e., before in sibling view
 diff --git a/layout/base/nsPresContext.cpp b/layout/base/nsPresContext.cpp
-index 9bb509ed5f..a5e21d2f57 100644
+index 989e01eefa..fb158fbe99 100644
 --- a/layout/base/nsPresContext.cpp
 +++ b/layout/base/nsPresContext.cpp
-@@ -425,6 +425,10 @@ bool nsPresContext::IsChrome() const {
+@@ -426,6 +426,10 @@ bool nsPresContext::IsChrome() const {
    return Document()->IsInChromeDocShell();
  }
  
@@ -1218,10 +1216,10 @@ index 9bb509ed5f..a5e21d2f57 100644
    if (!GetPresShell()) {
      // No presshell means nothing to do here.  We'll do this when we
 diff --git a/layout/generic/MathMLTextRunFactory.cpp b/layout/generic/MathMLTextRunFactory.cpp
-index 13c9cc5c11..b940be8790 100644
+index 22adbaf9bc..e685fd4feb 100644
 --- a/layout/generic/MathMLTextRunFactory.cpp
 +++ b/layout/generic/MathMLTextRunFactory.cpp
-@@ -11,6 +11,8 @@
+@@ -9,6 +9,8 @@
  #include "mozilla/ComputedStyleInlines.h"
  #include "mozilla/StaticPrefs_mathml.h"
  #include "mozilla/intl/UnicodeScriptCodes.h"
@@ -1230,7 +1228,7 @@ index 13c9cc5c11..b940be8790 100644
  #include "nsDeviceContext.h"
  #include "nsFontMetrics.h"
  #include "nsStyleConsts.h"
-@@ -637,6 +639,18 @@ void MathMLTextRunFactory::RebuildTextRun(
+@@ -635,6 +637,18 @@ void MathMLTextRunFactory::RebuildTextRun(
      newFontGroup = fontGroup;
    }
  
@@ -1249,7 +1247,7 @@ index 13c9cc5c11..b940be8790 100644
    if (mInnerTransformingTextRunFactory) {
      transformedChild = mInnerTransformingTextRunFactory->MakeTextRun(
          convertedString.BeginReading(), convertedString.Length(), &innerParams,
-@@ -646,7 +660,7 @@ void MathMLTextRunFactory::RebuildTextRun(
+@@ -644,7 +658,7 @@ void MathMLTextRunFactory::RebuildTextRun(
    } else {
      cachedChild = newFontGroup->MakeTextRun(
          convertedString.BeginReading(), convertedString.Length(), &innerParams,
@@ -1259,10 +1257,10 @@ index 13c9cc5c11..b940be8790 100644
    }
    if (!child) {
 diff --git a/layout/generic/nsTextFrame.cpp b/layout/generic/nsTextFrame.cpp
-index c84d5cde15..7b0e7f4bdf 100644
+index 67019d714a..0b61323cd7 100644
 --- a/layout/generic/nsTextFrame.cpp
 +++ b/layout/generic/nsTextFrame.cpp
-@@ -2338,10 +2338,11 @@ static already_AddRefed<gfxTextRun> GetHyphenTextRun(nsTextFrame* aTextFrame,
+@@ -2348,10 +2348,11 @@ static already_AddRefed<gfxTextRun> GetHyphenTextRun(nsTextFrame* aTextFrame,
      return fontGroup->MakeHyphenTextRun(dt, flags, appPerDev);
    }
    auto* missingFonts = aTextFrame->PresContext()->MissingFontRecorder();
@@ -1275,7 +1273,7 @@ index c84d5cde15..7b0e7f4bdf 100644
  }
  
  already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
-@@ -2691,6 +2692,9 @@ already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
+@@ -2701,6 +2702,9 @@ already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
                   "We didn't cover all the characters in the text run!");
    }
  
@@ -1285,7 +1283,7 @@ index c84d5cde15..7b0e7f4bdf 100644
    RefPtr<gfxTextRun> textRun;
    gfxTextRunFactory::Parameters params = {
        mDrawTarget,
-@@ -2708,7 +2712,7 @@ already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
+@@ -2718,7 +2722,7 @@ already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
            std::move(styles), true);
      } else {
        textRun = fontGroup->MakeTextRun(text, transformedLength, &params, flags,
@@ -1294,7 +1292,7 @@ index c84d5cde15..7b0e7f4bdf 100644
      }
    } else {
      const uint8_t* text = static_cast<const uint8_t*>(textPtr);
-@@ -2719,7 +2723,7 @@ already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
+@@ -2729,7 +2733,7 @@ already_AddRefed<gfxTextRun> BuildTextRunsScanner::BuildTextRunForFrames(
            std::move(styles), true);
      } else {
        textRun = fontGroup->MakeTextRun(text, transformedLength, &params, flags,
@@ -1303,7 +1301,7 @@ index c84d5cde15..7b0e7f4bdf 100644
      }
    }
    if (!textRun) {
-@@ -5561,6 +5565,7 @@ static already_AddRefed<gfxTextRun> GenerateTextRunForEmphasisMarks(
+@@ -5590,6 +5594,7 @@ static already_AddRefed<gfxTextRun> GenerateTextRunForEmphasisMarks(
  
    RefPtr<DrawTarget> dt = CreateReferenceDrawTarget(aFrame);
    auto appUnitsPerDevUnit = aFrame->PresContext()->AppUnitsPerDevPixel();
@@ -1311,7 +1309,7 @@ index c84d5cde15..7b0e7f4bdf 100644
    gfx::ShapedTextFlags flags =
        nsLayoutUtils::GetTextRunOrientFlagsForStyle(aComputedStyle);
    if (flags == gfx::ShapedTextFlags::TEXT_ORIENT_VERTICAL_MIXED) {
-@@ -5569,7 +5574,8 @@ static already_AddRefed<gfxTextRun> GenerateTextRunForEmphasisMarks(
+@@ -5598,7 +5603,8 @@ static already_AddRefed<gfxTextRun> GenerateTextRunForEmphasisMarks(
    }
    return aFontGroup->MakeTextRun<char16_t>(string.get(), string.Length(), dt,
                                             appUnitsPerDevUnit, flags,
@@ -1322,10 +1320,10 @@ index c84d5cde15..7b0e7f4bdf 100644
  
  static nsRubyFrame* FindFurthestInlineRubyAncestor(nsTextFrame* aFrame) {
 diff --git a/layout/generic/nsTextRunTransformations.cpp b/layout/generic/nsTextRunTransformations.cpp
-index 93419af8bb..b524540ec6 100644
+index f950a3ab02..ccc1d61034 100644
 --- a/layout/generic/nsTextRunTransformations.cpp
 +++ b/layout/generic/nsTextRunTransformations.cpp
-@@ -918,6 +918,10 @@ void nsCaseTransformTextRunFactory::RebuildTextRun(
+@@ -909,6 +909,10 @@ void nsCaseTransformTextRunFactory::RebuildTextRun(
    RefPtr<gfxTextRun> cachedChild;
    gfxTextRun* child;
  
@@ -1336,7 +1334,7 @@ index 93419af8bb..b524540ec6 100644
    if (mInnerTransformingTextRunFactory) {
      transformedChild = mInnerTransformingTextRunFactory->MakeTextRun(
          convertedString.BeginReading(), convertedString.Length(), &innerParams,
-@@ -927,7 +931,7 @@ void nsCaseTransformTextRunFactory::RebuildTextRun(
+@@ -918,7 +922,7 @@ void nsCaseTransformTextRunFactory::RebuildTextRun(
    } else {
      cachedChild = fontGroup->MakeTextRun(
          convertedString.BeginReading(), convertedString.Length(), &innerParams,
@@ -1346,7 +1344,7 @@ index 93419af8bb..b524540ec6 100644
    }
    if (!child) {
 diff --git a/layout/mathml/nsMathMLChar.cpp b/layout/mathml/nsMathMLChar.cpp
-index 58f9670e7f..577fd833ce 100644
+index 58daeb0d22..17cba3f503 100644
 --- a/layout/mathml/nsMathMLChar.cpp
 +++ b/layout/mathml/nsMathMLChar.cpp
 @@ -20,6 +20,8 @@
@@ -1357,17 +1355,17 @@ index 58f9670e7f..577fd833ce 100644
 +#include "nsPIDOMWindow.h"
  #include "mozilla/gfx/2D.h"
  #include "mozilla/intl/UnicodeScriptCodes.h"
- #include "nsCOMPtr.h"
-@@ -360,7 +362,7 @@ already_AddRefed<gfxTextRun> nsPropertiesTable::MakeTextRun(
-                "nsPropertiesTable can only access glyphs by code point");
-   return aFontGroup->MakeTextRun(aGlyph.code, aGlyph.Length(), aDrawTarget,
-                                  aAppUnitsPerDevPixel, mFlags,
+ #include "nsCSSRendering.h"
+@@ -272,7 +274,7 @@ already_AddRefed<gfxTextRun> nsUnicodeTable::MakeTextRun(
+                "nsUnicodeTable can only access glyphs by code point");
+   return aFontGroup->MakeTextRun(&aGlyph.code, 1, aDrawTarget,
+                                  aAppUnitsPerDevPixel, gfx::ShapedTextFlags(),
 -                                 nsTextFrameUtils::Flags(), nullptr);
 +                                 nsTextFrameUtils::Flags(), nullptr, 0); // TODO: Extract private browsing ID
  }
  
  // An instance of nsOpenTypeTable is associated with one gfxFontEntry that
-@@ -431,7 +433,7 @@ void nsOpenTypeTable::UpdateCache(DrawTarget* aDrawTarget,
+@@ -344,7 +346,7 @@ void nsOpenTypeTable::UpdateCache(DrawTarget* aDrawTarget,
    if (mCharCache != aChar) {
      RefPtr<gfxTextRun> textRun =
          aFontGroup->MakeTextRun(&aChar, 1, aDrawTarget, aAppUnitsPerDevPixel,
@@ -1376,7 +1374,7 @@ index 58f9670e7f..577fd833ce 100644
      const gfxTextRun::CompressedGlyph& data = textRun->GetCharacterGlyphs()[0];
      if (data.IsSimpleGlyph()) {
        mGlyphID = data.GetSimpleGlyph();
-@@ -1396,10 +1398,19 @@ nsresult nsMathMLChar::StretchInternal(
+@@ -1220,10 +1222,19 @@ nsresult nsMathMLChar::StretchInternal(
      flags |= gfx::ShapedTextFlags::TEXT_IS_RTL;
    }
  
@@ -1396,9 +1394,9 @@ index 58f9670e7f..577fd833ce 100644
 +      presContext->MissingFontRecorder(), userContextId);
    aDesiredStretchSize = MeasureTextRun(aDrawTarget, mGlyphs[0].get());
  
-   bool maxWidth = (NS_STRETCH_MAXWIDTH & aStretchHint) != 0;
+   bool maxWidth = aStretchFlags.contains(MathMLStretchFlag::MaxWidth);
 diff --git a/toolkit/components/resistfingerprinting/FontVisibilityProvider.h b/toolkit/components/resistfingerprinting/FontVisibilityProvider.h
-index 51a754b76e..ea41fde83b 100644
+index 9655c9134d..c21c271060 100644
 --- a/toolkit/components/resistfingerprinting/FontVisibilityProvider.h
 +++ b/toolkit/components/resistfingerprinting/FontVisibilityProvider.h
 @@ -43,6 +43,7 @@ class FontVisibilityProvider {

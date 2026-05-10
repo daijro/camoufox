@@ -1,6 +1,6 @@
 diff --git a/dom/base/ScreenDimensionManager.cpp b/dom/base/ScreenDimensionManager.cpp
 new file mode 100644
-index 0000000000..1a2b3c4d5e
+index 0000000000..f5d2c23df5
 --- /dev/null
 +++ b/dom/base/ScreenDimensionManager.cpp
 @@ -0,0 +1,104 @@
@@ -108,10 +108,9 @@ index 0000000000..1a2b3c4d5e
 +
 +}  // namespace dom
 +}  // namespace mozilla
-
 diff --git a/dom/base/ScreenDimensionManager.h b/dom/base/ScreenDimensionManager.h
 new file mode 100644
-index 0000000000..2b3c4d5e6f
+index 0000000000..329f709a60
 --- /dev/null
 +++ b/dom/base/ScreenDimensionManager.h
 @@ -0,0 +1,47 @@
@@ -162,33 +161,31 @@ index 0000000000..2b3c4d5e6f
 +}  // namespace mozilla
 +
 +#endif  // mozilla_dom_ScreenDimensionManager_h
-
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index cd9090cda3..b2c3d4e5f6 100644
+index 39952f9af8..c471c97936 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -256,6 +256,7 @@ EXPORTS.mozilla.dom += [
-     "ResizeObserver.h",
+@@ -260,6 +260,7 @@ EXPORTS.mozilla.dom += [
      "ResponsiveImageSelector.h",
+     "RoverfoxStorageManager.h",
      "SameProcessMessageQueue.h",
 +    "ScreenDimensionManager.h",
      "ScreenLuminance.h",
      "ScreenOrientation.h",
      "Selection.h",
-@@ -460,6 +461,7 @@ UNIFIED_SOURCES += [
-     "ResizeObserver.cpp",
+@@ -471,6 +472,7 @@ UNIFIED_SOURCES += [
      "ResponsiveImageSelector.cpp",
+     "RoverfoxStorageManager.cpp",
      "SameProcessMessageQueue.cpp",
 +    "ScreenDimensionManager.cpp",
      "ScreenLuminance.cpp",
      "ScreenOrientation.cpp",
      "ScriptableContentIterator.cpp",
-
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 748ae6cf83..c3d4e5f6a7 100644
+index a72b2b478a..babefb850c 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -277,6 +277,7 @@
+@@ -286,6 +286,7 @@
  #include "nsISizeOfEventTarget.h"
  #include "nsISlowScriptDebug.h"
  #include "nsISupportsUtils.h"
@@ -196,10 +193,10 @@ index 748ae6cf83..c3d4e5f6a7 100644
  #include "nsIThread.h"
  #include "nsITimedChannel.h"
  #include "nsIURI.h"
-@@ -7420,7 +7421,53 @@ nsGlobalWindowInner::GetAudioWorklet(ErrorResult& aRv) {
-   return mAudioWorklet;
+@@ -7706,6 +7707,52 @@ nsISerialEventTarget* nsGlobalWindowInner::SerialEventTarget() const {
+   return GetMainThreadSerialEventTarget();
  }
-
+ 
 +void nsGlobalWindowInner::SetScreenDimensions(int32_t aWidth, int32_t aHeight,
 +                                              ErrorResult& aRv) {
 +  uint32_t userContextId = ScreenDimensionManager::GetUserContextIdFromWindow(this);
@@ -249,62 +246,35 @@ index 748ae6cf83..c3d4e5f6a7 100644
  Worklet* nsGlobalWindowInner::GetPaintWorklet(ErrorResult& aRv) {
    if (!mPaintWorklet) {
      nsIPrincipal* principal = GetPrincipal();
-
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index 3183172d29..d4e5f6a7b8 100644
+index 9f1ce33fdc..42584898fa 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -750,6 +750,10 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
-
-   Worklet* GetPaintWorklet(mozilla::ErrorResult& aRv);
-
+@@ -677,6 +677,10 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+   // Audio fingerprint seed for per-context audio fingerprinting
+   void SetAudioFingerprintSeed(uint32_t seed, mozilla::ErrorResult& aRv);
+ 
 +  // Screen dimension methods for per-context screen spoofing
 +  void SetScreenDimensions(int32_t aWidth, int32_t aHeight, mozilla::ErrorResult& aRv);
 +  void SetScreenColorDepth(int32_t aColorDepth, mozilla::ErrorResult& aRv);
 +
-   void GetRegionalPrefsLocales(nsTArray<nsString>& aLocales);
-
    void GetWebExposedLocales(nsTArray<nsString>& aLocales);
-
-diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index a6f0d96a36..b1c2d3e4f5 100644
---- a/dom/webidl/Window.webidl
-+++ b/dom/webidl/Window.webidl
-@@ -886,6 +886,18 @@ partial interface Window {
-   [Throws, Func="IsChromeOrUAWidget"]
-   readonly attribute IntlUtils intlUtils;
- };
-
-+// Screen dimension for per-context screen spoofing
-+partial interface Window {
-+  [Throws, Func="mozilla::dom::ScreenDimensionManager::IsFunctionEnabledForWebIDL"]
-+  undefined setScreenDimensions(long width, long height);
-+};
-+
-+// Screen color depth for per-context screen spoofing
-+partial interface Window {
-+  [Throws, Func="mozilla::dom::ScreenDimensionManager::IsFunctionEnabledForWebIDL"]
-+  undefined setScreenColorDepth(long colorDepth);
-+};
-+
- partial interface Window {
-   [SameObject, Replaceable]
-   readonly attribute VisualViewport visualViewport;
- };
-
+ 
+   mozilla::dom::IntlUtils* GetIntlUtils(mozilla::ErrorResult& aRv);
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index 7f7728a6cc..a1b2c3d4e5 100644
+index 8ebb3e575a..f157ff7da8 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
-@@ -14,6 +14,7 @@
+@@ -12,6 +12,8 @@
  #include "mozilla/dom/DocumentInlines.h"
  #include "mozilla/widget/ScreenManager.h"
  #include "nsCOMPtr.h"
 +#include "ScreenDimensionManager.h"
- #include "nsContentUtils.h"
++#include "nsContentUtils.h"
  #include "nsDeviceContext.h"
  #include "nsGlobalWindowInner.h"
-@@ -67,6 +68,26 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
+ #include "nsGlobalWindowOuter.h"
+@@ -73,6 +75,26 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
  }
  
  CSSIntRect nsScreen::GetRect() {
@@ -331,7 +301,7 @@ index 7f7728a6cc..a1b2c3d4e5 100644
    // Return window inner rect to prevent fingerprinting.
    if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
      return GetTopWindowInnerRectForRFP();
-@@ -95,6 +116,24 @@
+@@ -105,6 +127,24 @@ CSSIntRect nsScreen::GetRect() {
  }
  
  CSSIntRect nsScreen::GetAvailRect() {
@@ -356,34 +326,55 @@ index 7f7728a6cc..a1b2c3d4e5 100644
    auto rect = MaskConfig::GetRect("screen.availLeft", "screen.availTop",
                                    "screen.availWidth", "screen.availHeight");
    if (rect.has_value()) {
-
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index 1aa2baa931..4f5479fc2e 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -929,6 +929,18 @@ partial interface Window {
+   readonly attribute IntlUtils intlUtils;
+ };
+ 
++// Screen dimension for per-context screen spoofing
++partial interface Window {
++  [Throws, Func="mozilla::dom::ScreenDimensionManager::IsFunctionEnabledForWebIDL"]
++  undefined setScreenDimensions(long width, long height);
++};
++
++// Screen color depth for per-context screen spoofing
++partial interface Window {
++  [Throws, Func="mozilla::dom::ScreenDimensionManager::IsFunctionEnabledForWebIDL"]
++  undefined setScreenColorDepth(long colorDepth);
++};
++
+ partial interface Window {
+   [SameObject, Replaceable]
+   readonly attribute VisualViewport visualViewport;
 diff --git a/gfx/src/moz.build b/gfx/src/moz.build
-index a2b3e60fe5..faa0c113bc 100644
+index d1e1cdf387..54fbb8ad08 100644
 --- a/gfx/src/moz.build
 +++ b/gfx/src/moz.build
-@@ -95,3 +95,6 @@ FINAL_LIBRARY = "xul"
+@@ -93,3 +93,6 @@ FINAL_LIBRARY = "xul"
  if CONFIG["MOZ_WIDGET_TOOLKIT"] == "gtk":
      CXXFLAGS += CONFIG["MOZ_GTK3_CFLAGS"]
      CXXFLAGS += CONFIG["MOZ_PANGO_CFLAGS"]
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
-
 diff --git a/gfx/src/nsDeviceContext.cpp b/gfx/src/nsDeviceContext.cpp
-index 7a4fa8d48f..408b754d92 100644
+index 06b86c6c75..9641c8457c 100644
 --- a/gfx/src/nsDeviceContext.cpp
 +++ b/gfx/src/nsDeviceContext.cpp
-@@ -5,6 +5,7 @@
+@@ -3,6 +3,7 @@
   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-
+ 
  #include "nsDeviceContext.h"
 +#include "MaskConfig.hpp"
  #include <algorithm>  // for max
  #include "gfxContext.h"
  #include "gfxPoint.h"    // for gfxSize
-@@ -177,6 +178,13 @@ bool nsDeviceContext::GetScreenIsHDR() {
+@@ -193,6 +194,13 @@ bool nsDeviceContext::GetScreenIsHDR() {
  }
-
+ 
  nsSize nsDeviceContext::GetDeviceSurfaceDimensions() {
 +  // Check for height and width overrides from MaskConfig
 +  if (auto height = MaskConfig::GetInt32("screen.height"),
@@ -394,30 +385,24 @@ index 7a4fa8d48f..408b754d92 100644
 +  }
    return GetRect().Size();
  }
-
+ 
 diff --git a/layout/style/nsMediaFeatures.cpp b/layout/style/nsMediaFeatures.cpp
-index f83e2c21ca..5362dd77d4 100644
+index 07564ab15b..ae6b70f3b6 100644
 --- a/layout/style/nsMediaFeatures.cpp
 +++ b/layout/style/nsMediaFeatures.cpp
-@@ -26,4 +26,6 @@
+@@ -22,6 +22,8 @@
+ #include "nsDeviceContext.h"
+ #include "nsGkAtoms.h"
  #include "nsGlobalWindowOuter.h"
 +#include "nsGlobalWindowInner.h"
 +#include "mozilla/dom/ScreenDimensionManager.h"
  #include "nsIBaseWindow.h"
  #include "nsIDocShell.h"
  #include "nsIPrintSettings.h"
-@@ -66,14 +68,18 @@ static nsSize GetDeviceSize(const Document& aDocument) {
+@@ -62,6 +64,18 @@ static nsSize GetDeviceSize(const Document& aDocument) {
      return GetSize(aDocument);
    }
-
--  // Media queries in documents in an RDM pane should use the simulated
--  // device size.
--  Maybe<CSSIntSize> deviceSize =
--      nsGlobalWindowOuter::GetRDMDeviceSize(aDocument);
--  if (deviceSize.isSome()) {
--    return CSSPixel::ToAppUnits(deviceSize.value());
--  }
--
+ 
 +  // Camoufox: per-context screen dimensions for CSS device-width/height queries
 +  if (nsPIDOMWindowInner* inner = aDocument.GetInnerWindow()) {
 +    nsGlobalWindowInner* win = nsGlobalWindowInner::Cast(inner);
@@ -430,6 +415,6 @@ index f83e2c21ca..5362dd77d4 100644
 +    }
 +  }
 +
-   nsPresContext* pc = aDocument.GetPresContext();
-   // NOTE(emilio): We should probably figure out how to return an appropriate
-   // device size here, though in a multi-screen world that makes no sense
+   // Media queries in documents in an RDM pane should use the simulated
+   // device size.
+   Maybe<CSSIntSize> deviceSize =

@@ -1,20 +1,10 @@
-diff --git a/intl/components/moz.build b/intl/components/moz.build
-index xxxxxxxxxx..yyyyyyyyyy 100644
---- a/intl/components/moz.build
-+++ b/intl/components/moz.build
-@@ -1,3 +1,5 @@
-+LOCAL_INCLUDES += ["/camoucfg"]
-+
- # -*- Mode: python; indent-tabs-mode: nil; tab-width: 40 -*-
- # vim: set filetype=python:
- # This Source Code Form is subject to the terms of the Mozilla Public
 diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
-index 2456c5b4c6..826404b1b7 100644
+index b64d2f52ed..543bb50593 100644
 --- a/browser/base/content/browser-init.js
 +++ b/browser/base/content/browser-init.js
-@@ -109,6 +109,22 @@ var gBrowserInit = {
+@@ -183,6 +183,22 @@ var gBrowserInit = {
      window.TabBarVisibility.update();
-     TabsInTitlebar.init();
+     CustomTitlebar.init();
  
 +    // If a list of languages were passed, use them.
 +    let camouLocale = ChromeUtils.camouGetString("locale:all")
@@ -35,11 +25,21 @@ index 2456c5b4c6..826404b1b7 100644
      new LightweightThemeConsumer(document);
  
      if (
+diff --git a/intl/components/moz.build b/intl/components/moz.build
+index eb6673cb34..e7456492ee 100644
+--- a/intl/components/moz.build
++++ b/intl/components/moz.build
+@@ -1,3 +1,5 @@
++LOCAL_INCLUDES += ["/camoucfg"]
++
+ # This Source Code Form is subject to the terms of the Mozilla Public
+ # License, v. 2.0. If a copy of the MPL was not distributed with this
+ # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 diff --git a/intl/components/src/Locale.cpp b/intl/components/src/Locale.cpp
-index 9a043518cf..a8d3733212 100644
+index 718d8814d8..068d042bc7 100644
 --- a/intl/components/src/Locale.cpp
 +++ b/intl/components/src/Locale.cpp
-@@ -24,11 +24,56 @@
+@@ -20,11 +20,56 @@
  
  #include "unicode/uloc.h"
  #include "unicode/utypes.h"
@@ -97,12 +97,12 @@ index 9a043518cf..a8d3733212 100644
  bool IsStructurallyValidLanguageTag(Span<const CharT> aLanguage) {
    // unicode_language_subtag = alpha{2,3} | alpha{5,8};
 diff --git a/intl/components/src/Locale.h b/intl/components/src/Locale.h
-index 1f4e06f543..448486a479 100644
+index afc065bc80..77269cea1a 100644
 --- a/intl/components/src/Locale.h
 +++ b/intl/components/src/Locale.h
-@@ -190,8 +190,11 @@ using UniqueChars = UniquePtr<char[]>;
-  */
- class MOZ_STACK_CLASS Locale final {
+@@ -209,8 +209,11 @@ class MOZ_STACK_CLASS Locale final {
+ 
+  private:
    LanguageSubtag mLanguage = {};
 +  mutable LanguageSubtag mCamouLanguage = {};
    ScriptSubtag mScript = {};
@@ -110,9 +110,9 @@ index 1f4e06f543..448486a479 100644
    RegionSubtag mRegion = {};
 +  mutable RegionSubtag mCamouRegion = {};
  
-   using VariantsVector = Vector<UniqueChars, 2>;
-   using ExtensionsVector = Vector<UniqueChars, 2>;
-@@ -314,9 +317,28 @@ class MOZ_STACK_CLASS Locale final {
+   VariantsVector mVariants;
+   ExtensionsVector mExtensions;
+@@ -339,9 +342,28 @@ class MOZ_STACK_CLASS Locale final {
      }
    };
  
@@ -144,7 +144,7 @@ index 1f4e06f543..448486a479 100644
    auto Variants() const { return SubtagEnumeration(mVariants); }
    auto Extensions() const { return SubtagEnumeration(mExtensions); }
    Maybe<Span<const char>> PrivateUse() const {
-@@ -483,7 +505,15 @@ class MOZ_STACK_CLASS Locale final {
+@@ -519,7 +541,15 @@ class MOZ_STACK_CLASS Locale final {
     *
     * Also see <https://unicode-org.github.io/icu/userguide/locale>.
     */
@@ -162,10 +162,10 @@ index 1f4e06f543..448486a479 100644
    /**
     * Returns an iterator over all supported locales.
 diff --git a/intl/locale/OSPreferences.cpp b/intl/locale/OSPreferences.cpp
-index b87924b61a..2eaa960c04 100644
+index b922e3890e..a856788d48 100644
 --- a/intl/locale/OSPreferences.cpp
 +++ b/intl/locale/OSPreferences.cpp
-@@ -406,6 +406,10 @@ bool OSPreferences::GetDateTimeConnectorPattern(const nsACString& aLocale,
+@@ -410,6 +410,10 @@ bool OSPreferences::GetDateTimeConnectorPattern(const nsACString& aLocale,
   */
  NS_IMETHODIMP
  OSPreferences::GetSystemLocales(nsTArray<nsCString>& aRetVal) {
@@ -176,7 +176,7 @@ index b87924b61a..2eaa960c04 100644
    if (!mSystemLocales.IsEmpty()) {
      aRetVal = mSystemLocales.Clone();
      return NS_OK;
-@@ -425,7 +429,10 @@ OSPreferences::GetSystemLocales(nsTArray<nsCString>& aRetVal) {
+@@ -429,7 +433,10 @@ OSPreferences::GetSystemLocales(nsTArray<nsCString>& aRetVal) {
  
  NS_IMETHODIMP
  OSPreferences::GetSystemLocale(nsACString& aRetVal) {
@@ -188,7 +188,7 @@ index b87924b61a..2eaa960c04 100644
      aRetVal = mSystemLocales[0];
    } else {
      AutoTArray<nsCString, 10> locales;
-@@ -439,6 +446,10 @@ OSPreferences::GetSystemLocale(nsACString& aRetVal) {
+@@ -443,6 +450,10 @@ OSPreferences::GetSystemLocale(nsACString& aRetVal) {
  
  NS_IMETHODIMP
  OSPreferences::GetRegionalPrefsLocales(nsTArray<nsCString>& aRetVal) {

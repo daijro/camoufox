@@ -1,8 +1,8 @@
 diff --git a/dom/geolocation/Geolocation.cpp b/dom/geolocation/Geolocation.cpp
-index 274cdebc2e..b0183ecc6a 100644
+index 5cc4ca84dc..e657a7fb64 100644
 --- a/dom/geolocation/Geolocation.cpp
 +++ b/dom/geolocation/Geolocation.cpp
-@@ -34,6 +34,7 @@
+@@ -35,6 +35,7 @@
  #include "nsServiceManagerUtils.h"
  #include "nsThreadUtils.h"
  #include "nsXULAppAPI.h"
@@ -10,9 +10,9 @@ index 274cdebc2e..b0183ecc6a 100644
  
  class nsIPrincipal;
  
-@@ -1267,6 +1268,12 @@ void Geolocation::NotifyAllowedRequest(nsGeolocationRequest* aRequest) {
- 
- bool Geolocation::RegisterRequestWithPrompt(nsGeolocationRequest* request) {
+@@ -1478,6 +1479,12 @@ void Geolocation::NotifyAllowedRequest(nsGeolocationRequest* aRequest) {
+ /* static */ bool Geolocation::RegisterRequestWithPrompt(
+     nsGeolocationRequest* request) {
    nsIEventTarget* target = GetMainThreadSerialEventTarget();
 +  if (MaskConfig::GetDouble("geolocation:latitude") &&
 +      MaskConfig::GetDouble("geolocation:longitude")) {
@@ -24,18 +24,18 @@ index 274cdebc2e..b0183ecc6a 100644
    if (pr == ContentPermissionRequestBase::PromptResult::Granted) {
      request->RequestDelayedTask(target,
 diff --git a/dom/geolocation/GeolocationPosition.cpp b/dom/geolocation/GeolocationPosition.cpp
-index 19ca685251..a286a4a784 100644
+index ea9f539aa0..6f0f0b3961 100644
 --- a/dom/geolocation/GeolocationPosition.cpp
 +++ b/dom/geolocation/GeolocationPosition.cpp
-@@ -9,6 +9,7 @@
- 
+@@ -7,6 +7,7 @@
  #include "mozilla/FloatingPoint.h"
+ #include "mozilla/dom/GeolocationCoordinates.h"
  #include "mozilla/dom/GeolocationPositionBinding.h"
 +#include "MaskConfig.hpp"
  
  using mozilla::EqualOrBothNaN;
  
-@@ -62,13 +63,19 @@ NS_IMPL_RELEASE(nsGeoPositionCoords)
+@@ -60,13 +61,19 @@ NS_IMPL_RELEASE(nsGeoPositionCoords)
  
  NS_IMETHODIMP
  nsGeoPositionCoords::GetLatitude(double* aLatitude) {
@@ -57,7 +57,7 @@ index 19ca685251..a286a4a784 100644
    return NS_OK;
  }
  
-@@ -80,7 +87,10 @@ nsGeoPositionCoords::GetAltitude(double* aAltitude) {
+@@ -78,7 +85,10 @@ nsGeoPositionCoords::GetAltitude(double* aAltitude) {
  
  NS_IMETHODIMP
  nsGeoPositionCoords::GetAccuracy(double* aAccuracy) {
@@ -70,11 +70,10 @@ index 19ca685251..a286a4a784 100644
  }
  
 diff --git a/dom/geolocation/moz.build b/dom/geolocation/moz.build
-index 2d6b6b5fab..0c7ed74c6d 100644
+index 25d0eaf307..c60d95e90f 100644
 --- a/dom/geolocation/moz.build
 +++ b/dom/geolocation/moz.build
-@@ -84,4 +84,7 @@ elif CONFIG["MOZ_WIDGET_TOOLKIT"] == "gtk":
- BROWSER_CHROME_MANIFESTS += ["test/browser/browser.toml"]
+@@ -84,3 +84,6 @@ BROWSER_CHROME_MANIFESTS += ["test/browser/browser.toml"]
  MOCHITEST_CHROME_MANIFESTS += ["test/chrome/chrome.toml"]
  MOCHITEST_MANIFESTS += ["test/mochitest/mochitest.toml"]
  XPCSHELL_TESTS_MANIFESTS += ["test/unit/xpcshell.toml"]
@@ -82,12 +81,12 @@ index 2d6b6b5fab..0c7ed74c6d 100644
 +# Camoufox: include path for MaskConfig.hpp
 +LOCAL_INCLUDES += ["/camoucfg"]
 diff --git a/dom/system/NetworkGeolocationProvider.sys.mjs b/dom/system/NetworkGeolocationProvider.sys.mjs
-index 7edc62b4a6..19b77aa6b6 100644
+index f89cf1b1a7..c2fc42998f 100644
 --- a/dom/system/NetworkGeolocationProvider.sys.mjs
 +++ b/dom/system/NetworkGeolocationProvider.sys.mjs
-@@ -442,17 +442,53 @@ NetworkGeolocationProvider.prototype = {
-     let url = Services.urlFormatter.formatURLPref("geo.provider.network.url");
-     LOG("Sending request");
+@@ -357,17 +357,52 @@ NetworkGeolocationProvider.prototype = {
+       Glean.geolocation.geolocationService.network_ip.add();
+     }
  
 +    // Use CAMOU_CONFIG geolocation if configured
 +    let DEFAULT_DEG = -180;
@@ -103,8 +102,8 @@ index 7edc62b4a6..19b77aa6b6 100644
 +
      let result;
      try {
--      result = await this.makeRequest(url, wifiData);
--      LOG(
+-      result = await this.fetchLocation(url, wifiData);
+-      lazy.log.info(
 -        `geo provider reported: ${result.location.lng}:${result.location.lat}`
 -      );
 -      let newLocation = new NetworkGeoPositionObject(
@@ -134,9 +133,8 @@ index 7edc62b4a6..19b77aa6b6 100644
 +        );
 +      } else {
 +        // No CAMOU_CONFIG override, use real geolocation
-+        result = await this.makeRequest(url, wifiData);
-+
-+        LOG(
++        result = await this.fetchLocation(url, wifiData);
++        lazy.log.info(
 +          `geo provider reported: ${result.location.lng}:${result.location.lat}`
 +        );
 +        newLocation = new NetworkGeoPositionObject(
@@ -148,4 +146,3 @@ index 7edc62b4a6..19b77aa6b6 100644
  
        if (this.listener) {
          this.listener.update(newLocation);
-

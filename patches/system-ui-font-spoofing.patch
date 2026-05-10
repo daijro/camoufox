@@ -1,8 +1,8 @@
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
-index xxxxxxxxxx..yyyyyyyyyy 100644
+index d82edfc767..2e05cedcb3 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
 +++ b/gfx/thebes/gfxPlatformFontList.cpp
-@@ -2132,6 +2132,16 @@
+@@ -2246,6 +2246,18 @@ void gfxPlatformFontList::MaybeRemoveCmap(gfxCharacterMap* aCharMap,
  static void GetSystemUIFontFamilies(
      FontVisibilityProvider* aFontVisibilityProvider,
      [[maybe_unused]] nsAtom* aLangGroup, nsTArray<nsCString>& aFamilies) {

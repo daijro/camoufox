@@ -1,8 +1,8 @@
 diff --git a/browser/components/preferences/main.js b/browser/components/preferences/main.js
-index 46283d3..9e14d59 100644
+index 8f8da3c4ca..83e9ccce59 100644
 --- a/browser/components/preferences/main.js
 +++ b/browser/components/preferences/main.js
-@@ -1000,65 +1000,6 @@ const DefaultBrowserHelper = {
+@@ -1660,65 +1660,6 @@ const DefaultBrowserHelper = {
    },
  };
  
@@ -22,7 +22,7 @@ index 46283d3..9e14d59 100644
 -   * browser is already the default browser.
 -   */
 -  visible: () => DefaultBrowserHelper.canCheck,
--  disabled: (deps, setting) =>
+-  disabled: (_, setting) =>
 -    !DefaultBrowserHelper.canCheck ||
 -    setting.locked ||
 -    DefaultBrowserHelper.isBrowserDefault,
@@ -65,10 +65,10 @@ index 46283d3..9e14d59 100644
 -  },
 -});
 -
- // Performance settings
+ // Firefox support settings
  Preferences.addSetting({
-   id: "contentProcessCount",
-@@ -1141,31 +1082,6 @@ let SETTINGS_CONFIG = {
+   id: "supportLinksGroup",
+@@ -2688,10 +2629,6 @@ function createStartupConfig(hidden = false) {
          control: "moz-message-bar",
          l10nId: "startup-windows-launch-on-login-profile-disabled",
        },
@@ -76,27 +76,26 @@ index 46283d3..9e14d59 100644
 -        id: "alwaysCheckDefault",
 -        l10nId: "always-check-default",
 -      },
--      {
--        id: "isDefaultPane",
--        l10nId: "is-default-browser",
--        control: "moz-promo",
--      },
--      {
--        id: "isNotDefaultPane",
--        l10nId: "is-not-default-browser",
--        control: "moz-promo",
--        options: [
--          {
--            control: "moz-button",
--            l10nId: "set-as-my-default-browser",
--            id: "setDefaultButton",
--            controlAttrs: {
--              slot: "actions",
--              type: "primary",
--            },
--          },
--        ],
--      },
+     ],
+   };
+ }
+@@ -2753,7 +2690,6 @@ SettingGroupManager.registerGroups({
+       },
      ],
    },
-   zoom: {
+-  defaultBrowser: createDefaultBrowserConfig(),
+   startup: createStartupConfig(
+     Services.prefs.getBoolPref("browser.settings-redesign.enabled", false)
+   ),
+@@ -4639,11 +4575,6 @@ SettingGroupManager.registerGroups({
+       },
+     ],
+   },
+-  defaultBrowserSync: createDefaultBrowserConfig({
+-    includeIsDefaultPane: false,
+-    inProgress: true,
+-    hiddenFromSearch: true,
+-  }),
+   sync: {
+     inProgress: true,
+     l10nId: "sync-group-label",

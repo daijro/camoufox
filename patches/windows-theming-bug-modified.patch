@@ -1,17 +1,8 @@
 diff --git a/browser/app/Makefile.in b/browser/app/Makefile.in
-index d11c35ff9d..0aa4b9058b 100644
+index a615f68a6f..f950c876fa 100644
 --- a/browser/app/Makefile.in
 +++ b/browser/app/Makefile.in
-@@ -23,7 +23,7 @@ ifeq ($(OS_ARCH),WINNT)
- # (this dependency should really be just for firefox.exe, not other targets)
- # Note the manifest file exists in the tree, so we use the explicit filename
- # here.
--EXTRA_DEPS += $(srcdir)/firefox.exe.manifest
-+EXTRA_DEPS += $(srcdir)/camoufox.exe.manifest
- endif
- 
- PROGRAMS_DEST = $(DIST)/bin
-@@ -92,7 +92,7 @@ tools repackage:: $(DIST)/bin/$(MOZ_APP_NAME) $(objdir)/macbuild/Contents/MacOS-
+@@ -84,7 +84,7 @@ tools repackage:: $(DIST)/bin/$(MOZ_APP_NAME) $(objdir)/macbuild/Contents/MacOS-
  	rsync -aL $(DIST)/bin/$(MOZ_APP_NAME) '$(dist_dest)/Contents/MacOS'
  	cp -RL $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/firefox.icns '$(dist_dest)/Contents/Resources/firefox.icns'
  	cp -RL $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/document.icns '$(dist_dest)/Contents/Resources/document.icns'
