@@ -59,6 +59,8 @@ def count_all_checks(results: dict) -> tuple:
 
 
 def adjust_cross_os_font_checks(os_type: str, results: dict) -> None:
+    if not results:
+        return
     host_os = "macos" if sys.platform == "darwin" else ("windows" if sys.platform == "win32" else "linux")
     if os_type == host_os:
         return
