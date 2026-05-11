@@ -48,6 +48,7 @@ async def run_tests(
     secret: str,
     save_cert: Optional[str],
     no_cert: bool,
+    executable_path: Optional[str] = None,
 ) -> int:
     # 1. Ensure checks bundle is built
     ensure_bundle()
@@ -103,7 +104,10 @@ async def run_tests(
     print("Launching browser...")
 
     launch_kwargs = {"headless": not headful}
-    if ff_version:
+    if executable_path:
+        launch_kwargs["executable_path"] = executable_path
+        print(f"Using local binary: {executable_path}")
+    elif ff_version:
         launch_kwargs["ff_version"] = ff_version
 
     try:
@@ -233,6 +237,8 @@ def main():
                         help="Save certificate to this file path")
     parser.add_argument("--no-cert", action="store_true",
                         help="Skip certificate generation")
+    parser.add_argument("--executable-path", default=None,
+                        help="Use a specific Camoufox binary (skips fetched-version selection)")
     args = parser.parse_args()
 
     sys.exit(asyncio.run(run_tests(
@@ -243,6 +249,7 @@ def main():
         secret=args.secret,
         save_cert=args.save_cert,
         no_cert=args.no_cert,
+        executable_path=args.executable_path,
     )))
 
 

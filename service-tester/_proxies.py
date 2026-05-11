@@ -28,7 +28,12 @@ def load_proxies(path: Path) -> list:
         except ValueError:
             print(f"ERROR: proxies.txt line {lineno}: expected user:pass@domain:port, got: {line!r}", file=sys.stderr)
             sys.exit(1)
-        proxies.append({"server": f"http://{domain}:{port}", "username": user, "password": password})
+        proxies.append({
+            "server": f"http://{domain}:{port}",
+            "username": user,
+            "password": password,
+            "bypass": "127.0.0.1,localhost",
+        })
 
     if not proxies:
         print("ERROR: proxies.txt contains no valid proxy entries.", file=sys.stderr)

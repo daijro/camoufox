@@ -19,9 +19,12 @@ End-to-end antibot-detection tests that verify a pip-installed camoufox release 
 `run_tests.sh` will:
 1. Install npm deps in `../build-tester/` (for `esbuild`, first run only)
 2. Create a `.venv` virtualenv (first run only)
-3. Install `camoufox` from the local `../pythonlib` source
-4. Download the camoufox browser binary
-5. Run the full test suite
+3. Build a wheel from `../pythonlib` and install it (tests the actual packaged artifact)
+4. **Phase 1** — run the suite against the locally compiled binary (auto-detected from `../camoufox-*/obj-*/dist/bin/camoufox-bin`), if present
+5. **Phase 2** — download the official binary (`--browser-version`, default `official/stable`) and run the suite against it
+6. Exit `0` only if both phases pass
+
+Use `--binary local` or `--binary fetched` to run only one phase.
 
 ## Proxies
 
@@ -56,8 +59,10 @@ cd ../build-tester && npm install && cd ../service-tester
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install camoufox from local source
-pip install -e ../pythonlib
+# Build wheel from local source and install it
+pip install build
+(cd ../pythonlib && rm -rf dist && python -m build --wheel -o dist)
+pip install --force-reinstall ../pythonlib/dist/*.whl
 
 # Download the browser binary
 python -m camoufox fetch
@@ -80,6 +85,10 @@ python run_tests.py [options]
   --no-cert               Skip certificate generation
   --save-cert PATH        Save certificate text to a file
   --secret KEY            HMAC signing key for the certificate
+  --binary MODE           Which binary to test: local | fetched | both (default: both)
+                          (run_tests.sh only — orchestrates the two phases)
+  --executable-path PATH  Run against a specific binary path
+                          (run_tests.py only — used internally by phase 1)
 ```
 
 ## What It Tests
