@@ -591,7 +591,7 @@ def launch_options(
         if isinstance(fingerprint_preset, dict):
             preset = fingerprint_preset
         else:
-            preset = get_random_preset(os=os)
+            preset = get_random_preset(os=os, ff_version=ff_version_str)
         if preset:
             merge_into(config, from_preset(preset, ff_version_str))
             _used_preset = True

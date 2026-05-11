@@ -292,6 +292,17 @@ with Camoufox() as browser:
     page.goto("https://example.com")
 ```
 
+#### Real fingerprint presets (recommended for v149+ binaries)
+
+By default, fingerprint values are synthesized by BrowserForge. For better evasion against complex consistency checks, opt into the bundled presets — real fingerprints scraped from in-the-wild Firefox traffic:
+
+```python
+with Camoufox(fingerprint_preset=True, os="macos") as browser:
+    ...
+```
+
+The library auto-routes by binary version: Firefox ≥ 149 loads `fingerprint-presets-v150.json` (312 presets covering v149–v152, 67 macOS / 180 Windows / 65 Linux); older binaries fall back to the original bundle. UA strings are rewritten to match the active binary, so opting in is safe across versions. Pass a preset dict instead of `True` to pin a specific fingerprint.
+
 ---
 
 ## Capabilities

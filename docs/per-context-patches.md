@@ -623,6 +623,31 @@ The Camoufox Python package (`pythonlib/`) generates fingerprints for both `NewB
 | **NewBrowser** (`launch_options()` in `utils.py`) | BrowserForge synthetic | Pass `fingerprint_preset=True` or a preset dict |
 | **NewContext** (`generate_context_fingerprint()` in `fingerprints.py`) | BrowserForge synthetic | Pass `preset=dict` explicitly |
 
+**Recommended for v149+ binaries:** opt into bundled real fingerprints via
+`fingerprint_preset=True`. The library auto-selects the v150 preset bundle
+(`fingerprint-presets-v150.json`, 312 real fingerprints scraped from v149–v152
+browsers) for any binary at Firefox ≥ 149, and falls back to the original
+bundle (`fingerprint-presets.json`, 123 presets) for older binaries. UA strings
+are rewritten to match the active binary's Firefox version, so opting in costs
+nothing for compatibility.
+
+```python
+from camoufox.async_api import AsyncCamoufox
+
+# Use a randomly-sampled real preset matching the binary's Firefox version
+async with AsyncCamoufox(fingerprint_preset=True, os='macos') as browser:
+    page = await browser.new_page()
+    ...
+
+# Or pin a specific preset dict
+async with AsyncCamoufox(fingerprint_preset=my_preset_dict) as browser:
+    ...
+```
+
+Routing logic lives in `fingerprints.py:_select_presets_file()`. The
+`PRESETS_V150_MIN_FF` constant (default `149`) controls the cutoff. Both
+bundles are shipped in the wheel.
+
 ### What Each Path Sets
 
 | Property | Source | Notes |
@@ -656,7 +681,9 @@ The Camoufox Python package (`pythonlib/`) generates fingerprints for both `NewB
 - WebGL sampled via same `sample_webgl()` function
 - Config validated against `properties.json` before serialization
 
-**`fingerprint-presets.json`** — Bundled real fingerprints organized by OS (macOS, Windows, Linux). Each preset includes navigator properties, screen dimensions, WebGL params, speech voices, and timezone. Font and voice data not used from presets — generated fresh per launch.
+**`fingerprint-presets.json`** — Original bundled real fingerprints organized by OS (macOS 30, Windows 75, Linux 18). Each preset includes navigator properties, screen dimensions, WebGL params, and speech voices. Used for Firefox < 149 binaries. Font and voice data not used from presets — generated fresh per launch.
+
+**`fingerprint-presets-v150.json`** — Newer bundle covering Firefox v149–v152 (macOS 67, Windows 180, Linux 65; 312 total). Same schema as the original. Auto-selected by `load_presets()` when the active binary reports Firefox ≥ 149.
 
 **`fonts.json`** — Complete OS-specific font lists for random font subset generation.
 
