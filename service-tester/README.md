@@ -20,11 +20,17 @@ End-to-end antibot-detection tests that verify a pip-installed camoufox release 
 1. Install npm deps in `../build-tester/` (for `esbuild`, first run only)
 2. Create a `.venv` virtualenv (first run only)
 3. Build a wheel from `../pythonlib` and install it (tests the actual packaged artifact)
-4. **Phase 1** — run the suite against the locally compiled binary (auto-detected from `../camoufox-*/obj-*/dist/bin/camoufox-bin`), if present
+4. **Phase 1** — run the suite against the locally compiled binary, auto-detected from:
+   - macOS: `../camoufox-*/obj-*-apple-darwin/dist/Camoufox.app/Contents/MacOS/camoufox`
+   - Linux: `../camoufox-*/obj-*-linux-*/dist/bin/camoufox-bin`
+
+   Skipped (with a notice) if no local build is found. On macOS, the script also copies `properties.json` from `Camoufox.app/Contents/Resources/` into `MacOS/` so pythonlib can locate it next to the binary.
 5. **Phase 2** — download the official binary (`--browser-version`, default `official/stable`) and run the suite against it
 6. Exit `0` only if both phases pass
 
 Use `--binary local` or `--binary fetched` to run only one phase.
+
+> **Heads-up on Phase 2:** if the latest `official/stable` is much older than the local pythonlib (e.g. v135 binary vs pythonlib targeting v149+), the binary may not understand newer fingerprint patches and the test page can fail to produce results. Pin a newer binary with `--browser-version` to avoid this.
 
 ## Proxies
 
@@ -46,6 +52,7 @@ alice:secret123@proxy1.example.com:10001
 - Blank lines and lines starting with `#` are ignored
 - Proxies are assigned round-robin across the 6 test profiles
 - Fewer proxies than profiles is fine — they cycle
+- `127.0.0.1` and `localhost` are bypassed automatically so the local test-page server stays reachable
 
 ## Manual Setup
 
