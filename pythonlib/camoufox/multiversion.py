@@ -23,6 +23,42 @@ CONFIG_FILE: Path = INSTALL_DIR / "config.json"
 REPO_CACHE_FILE: Path = INSTALL_DIR / "repo_cache.json"
 COMPAT_FLAG: Path = INSTALL_DIR / ".0.5_FLAG"
 
+# Manifest content mirrors Firefox source:
+# https://searchfox.org/firefox-main/source/mozglue/build/mozglue.dll.manifest
+_MOZGLUE_MANIFEST = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    '<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">\n'
+    '<assemblyIdentity\n'
+    '    version="1.0.0.0"\n'
+    '    name="mozglue"\n'
+    '    type="win32"\n'
+    '/>\n'
+    '<file name="mozglue.dll"/>\n'
+    '</assembly>\n'
+)
+
+
+def _ensure_mozglue_manifest(install_path: Path) -> None:
+    """
+    Write mozglue.manifest alongside camoufox.exe on Windows.
+
+    camoufox.exe embeds a manifest declaring mozglue as a Win32 SxS
+    (side-by-side) assembly dependency.  The Firefox installer registers
+    mozglue in the global WinSxS store; the portable zip does not.  On a
+    clean Windows system (no prior Firefox or Visual Studio install) this
+    causes camoufox.exe to fail at launch with:
+        "side-by-side configuration is incorrect"
+
+    Placing a flat mozglue.manifest next to the exe satisfies the Windows
+    private-assembly lookup without requiring any system-level registration.
+    Only the flat-file form must be used — a mozglue\\ subdirectory takes
+    precedence in the SxS search order but requires the DLL inside it too,
+    which would break normal DLL loading.
+    """
+    manifest_path = install_path / 'mozglue.manifest'
+    if not manifest_path.exists():
+        manifest_path.write_text(_MOZGLUE_MANIFEST, encoding='utf-8')
+
 
 def load_config() -> Dict:
     """
@@ -328,6 +364,11 @@ def install_versioned(fetcher, replace: bool = False) -> bool:
             fetcher.download_file(temp_file, fetcher.url)
             rprint(f'Extracting Camoufox: {install_path}')
             unzip(temp_file, str(install_path))
+
+            # Windows: generate the missing SxS manifest so camoufox.exe
+            # can launch on clean systems without a prior Firefox install.
+            if OS_NAME == 'win':
+                _ensure_mozglue_manifest(install_path)
 
             if fetcher._selected_version:
                 metadata = fetcher._selected_version.to_metadata()
