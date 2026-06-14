@@ -450,7 +450,24 @@ export class PageHandler {
 
   async ['Page.reload']() {
     await this._pageTarget.activateAndRun(() => {
-      const doc = this._pageTarget._tab.linkedBrowser.ownerDocument;
+      const browser = this._pageTarget._tab.linkedBrowser;
+      // Camoufox: Firefox 146's Browser:Reload command is a no-op on about:blank
+      // (no history entry to reload). Fall back to a forced reloadWithFlags via
+      // browsingContext so the load event still fires and init scripts run.
+      try {
+        const uri = browser.currentURI?.spec;
+        if (uri === 'about:blank' || !uri) {
+          const bc = browser.browsingContext;
+          if (bc && typeof bc.reload === 'function') {
+            const Ci = Components.interfaces;
+            bc.reload(Ci.nsIWebNavigation.LOAD_FLAGS_NONE);
+            return;
+          }
+        }
+      } catch (e) {
+        dump(`juggler: reload-fallback failed: ${e}\n`);
+      }
+      const doc = browser.ownerDocument;
       doc.getElementById('Browser:Reload').doCommand();
     });
   }
