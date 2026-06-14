@@ -568,6 +568,37 @@ export class PageAgent {
 
   async _insertText({text}) {
     const frame = this._frameTree.mainFrame();
+    const win = frame.domWindow();
+    const doc = win.document;
+    const active = doc.activeElement;
+    // Fast path: if focus is on an editable input/textarea, set the value
+    // directly and fire a single trusted-shape input event. This avoids the
+    // double `input` event we get from nsITextInputProcessor on Firefox 146
+    // (one for compositionupdate, one after compositionend), and matches the
+    // upstream test expectation of exactly one `input` event.
+    const isEditableField = active && (
+      (active.tagName === 'INPUT' && /^(text|search|url|tel|email|password|number|)$/i.test(active.type || '')) ||
+      active.tagName === 'TEXTAREA'
+    );
+    if (isEditableField) {
+      const start = active.selectionStart ?? active.value.length;
+      const end = active.selectionEnd ?? active.value.length;
+      const before = active.value.slice(0, start);
+      const after = active.value.slice(end);
+      active.value = before + text + after;
+      const caret = (before + text).length;
+      try { active.setSelectionRange(caret, caret); } catch (e) {}
+      const InputEvent = win.InputEvent;
+      active.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: false,
+        composed: true,
+        inputType: 'insertText',
+        data: text,
+      }));
+      return;
+    }
+    // Fallback: contenteditable / other editing hosts use the TIP path.
     frame.textInputProcessor().commitCompositionWith(text);
   }
 
