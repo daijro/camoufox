@@ -121,12 +121,17 @@ def _generate_random_font_subset(target_os: str) -> List[str]:
     return result
 
 
-# OS voice lists loaded from voices.json
-_OS_VOICES_CACHE: Optional[Dict[str, List[str]]] = None
+# OS voice lists loaded from voices.json, parsed into "Name:lang:type" tuples.
+_OS_VOICES_CACHE: Optional[Dict[str, List[Tuple[str, str, str]]]] = None
 
 
-def _load_os_voices() -> Dict[str, List[str]]:
-    """Load OS voice lists from voices.json, extracting voice names."""
+def _load_os_voices() -> Dict[str, List[Tuple[str, str, str]]]:
+    """Load OS voice lists from voices.json as (name, lang, type) tuples.
+
+    Each entry is "Name:lang:type" (type is "local" or "remote"). Voice names
+    may contain parens/commas but not colons, so a last-two-colons split is
+    safe.
+    """
     global _OS_VOICES_CACHE
     if _OS_VOICES_CACHE is not None:
         return _OS_VOICES_CACHE
@@ -134,10 +139,23 @@ def _load_os_voices() -> Dict[str, List[str]]:
     with open(voices_path, 'rb') as f:
         import orjson
         raw = orjson.loads(f.read())
-    # Extract voice names from "Name:locale:type" format
     _OS_VOICES_CACHE = {}
     for os_key, entries in raw.items():
-        _OS_VOICES_CACHE[os_key] = [e.split(':')[0] for e in entries]
+        parsed: List[Tuple[str, str, str]] = []
+        for entry in entries:
+            last = entry.rfind(':')
+            if last < 0:
+                continue
+            vtype = entry[last + 1:]
+            before = entry[:last]
+            langsep = before.rfind(':')
+            if langsep < 0:
+                continue
+            lang = before[langsep + 1:]
+            name = before[:langsep]
+            if name and lang:
+                parsed.append((name, lang, vtype))
+        _OS_VOICES_CACHE[os_key] = parsed
     return _OS_VOICES_CACHE
 
 
@@ -151,13 +169,56 @@ _ESSENTIAL_VOICES_WINDOWS = [
     'Microsoft Mark - English (United States)',
 ]
 
+# Real Firefox speechSynthesis URI prefixes per backend.
+#   macOS NSSpeechSynthesizer -> "urn:moz-tts:osx:<dotted-slug>"
+#   Windows SAPI              -> "urn:moz-tts:sapi:<dotted-slug>"
+#   Linux speech-dispatcher   -> "urn:moz-tts:speechd:<escaped-name>?<lang>"
+_VOICE_URI_PREFIX = {
+    'mac': 'urn:moz-tts:osx:',
+    'win': 'urn:moz-tts:sapi:',
+    'lin': 'urn:moz-tts:speechd:',
+}
 
-def _generate_random_voice_subset(target_os: str) -> List[str]:
-    """
-    Generate a random subset of speech voices for the given OS.
-    macOS: random 40-80% of non-essential + essential always included.
-    Windows: all voices (too few to subset meaningfully).
-    Linux: empty list (no native speech voices).
+
+def _voice_uri_slug(name: str) -> str:
+    """Stable dotted slug for mac/win URIs (shape-plausible, not catalog-exact)."""
+    return re.sub(r'^\.|\.$', '', re.sub(r'[^a-z0-9]+', '.', name.lower()))
+
+
+def _voice_uri(os_key: str, name: str, lang: str) -> str:
+    """Build a voiceUri matching what real Firefox emits for the OS backend."""
+    if os_key == 'lin':
+        # Firefox's SpeechDispatcherService.cpp builds:
+        #   "urn:moz-tts:speechd:" + NS_EscapeURL(name, OnlyNonASCII|Spaces) + "?" + lang
+        # i.e. spaces -> %20 and non-ASCII bytes -> %XX, ASCII punctuation intact.
+        escaped = []
+        for ch in name:
+            if ch == ' ':
+                escaped.append('%20')
+            elif ord(ch) <= 0x7F:
+                escaped.append(ch)
+            else:
+                escaped.append(''.join(f'%{b:02X}' for b in ch.encode('utf-8')))
+        return f"{_VOICE_URI_PREFIX['lin']}{''.join(escaped)}?{lang}"
+    return f"{_VOICE_URI_PREFIX.get(os_key, '')}{_voice_uri_slug(name)}"
+
+
+def _generate_random_voice_subset(
+    target_os: str, locale: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Generate the speech voice list for the given OS as MaskConfig objects.
+
+    Returns a list of {lang, name, voiceUri, isDefault, isLocalService} dicts,
+    the shape MaskConfig::MVoices() requires (it silently drops any entry
+    missing a field, so raw name strings would register nothing).
+
+    Without this override, Firefox registers the HOST machine's
+    speech-dispatcher / SAPI / NSSpeech voices, leaking the OS the wrapper
+    actually runs on. We therefore emit a list for EVERY target OS:
+      macOS:   essential voices + a random 40-80% of the rest.
+      Windows: full SAPI set (subsetting a fixed list reads as suspicious).
+      Linux:   full espeak-ng base-language set (~131 voices) as enumerated
+               by speech-dispatcher — the fixed list a Linux Firefox exposes.
     """
     os_voices_data = _load_os_voices()
     os_key = {'macos': 'mac', 'windows': 'win', 'linux': 'lin'}.get(target_os, 'mac')
@@ -166,24 +227,92 @@ def _generate_random_voice_subset(target_os: str) -> List[str]:
     if not full_list:
         return []
 
-    # Windows has too few voices to subset — return all
-    if target_os == 'windows':
-        return list(full_list)
-
-    # macOS: random 40-80% subset
-    essential = set(_ESSENTIAL_VOICES_MACOS)
-    result = [v for v in full_list if v in essential]
-    non_essential = [v for v in full_list if v not in essential]
-
-    pct = 40 + int(random() * 41)  # 40-80%
-    count = round((pct / 100) * len(non_essential))
-
-    if count < len(non_essential):
-        selected = sample(non_essential, count)
+    if os_key in ('win', 'lin'):
+        # Fixed lists across installs (SAPI / espeak-ng) — ship the whole set.
+        selected = list(full_list)
     else:
-        selected = non_essential
-    result.extend(selected)
+        # macOS: essential voices + random 40-80% of the rest.
+        essential = set(_ESSENTIAL_VOICES_MACOS)
+        result = [v for v in full_list if v[0] in essential]
+        non_essential = [v for v in full_list if v[0] not in essential]
+        pct = 40 + int(random() * 41)  # 40-80%
+        count = round((pct / 100) * len(non_essential))
+        if count < len(non_essential):
+            result.extend(sample(non_essential, count))
+        else:
+            result.extend(non_essential)
+        selected = result
 
+    voices: List[Dict[str, Any]] = [
+        {
+            'name': name,
+            'lang': lang,
+            'voiceUri': _voice_uri(os_key, name, lang),
+            'isDefault': False,
+            'isLocalService': vtype == 'local',
+        }
+        for (name, lang, vtype) in selected
+    ]
+
+    # Mark a default voice matching the spoofed locale prefix so it lines up
+    # with Intl.DateTimeFormat().resolvedOptions().locale (CreepJS flags a
+    # voiceLangMismatch otherwise).
+    if voices:
+        prefix = locale.split('-')[0].lower() if locale else 'en'
+        idx = next(
+            (i for i, v in enumerate(voices) if locale and v['lang'].lower() == locale.lower()),
+            -1,
+        )
+        if idx < 0:
+            idx = next(
+                (i for i, v in enumerate(voices) if v['lang'].split('-')[0].lower() == prefix),
+                -1,
+            )
+        if idx < 0:
+            idx = 0
+        voices[idx]['isDefault'] = True
+
+    return voices
+
+
+def _normalize_preset_voices(
+    voices: Any, target_os: str
+) -> List[Dict[str, Any]]:
+    """Coerce a preset's `speechVoices` into MaskConfig voice objects.
+
+    Presets historically store voices as "Name:lang:type" strings, which the
+    C++ MaskConfig::MVoices() silently drops (it needs full objects). Convert
+    them; pass through entries that are already objects.
+    """
+    os_key = {'macos': 'mac', 'windows': 'win', 'linux': 'lin'}.get(target_os, 'mac')
+    result: List[Dict[str, Any]] = []
+    for entry in voices:
+        if isinstance(entry, dict):
+            result.append(entry)
+            continue
+        last = entry.rfind(':')
+        if last < 0:
+            continue
+        vtype = entry[last + 1:]
+        before = entry[:last]
+        langsep = before.rfind(':')
+        if langsep < 0:
+            continue
+        lang = before[langsep + 1:]
+        name = before[:langsep]
+        if not name or not lang:
+            continue
+        result.append(
+            {
+                'name': name,
+                'lang': lang,
+                'voiceUri': _voice_uri(os_key, name, lang),
+                'isDefault': False,
+                'isLocalService': vtype == 'local',
+            }
+        )
+    if result and not any(v['isDefault'] for v in result):
+        result[0]['isDefault'] = True
     return result
 
 
@@ -346,7 +475,9 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
         config['voices'] = _generate_random_voice_subset(target_os)
     except Exception:
         if preset.get('speechVoices'):
-            config['voices'] = preset['speechVoices']
+            config['voices'] = _normalize_preset_voices(
+                preset['speechVoices'], target_os
+            )
 
     return config
 
@@ -424,10 +555,13 @@ def _build_init_script(values: Dict[str, Any]) -> str:
             f'  if (typeof w.setFontList === "function") w.setFontList({_json.dumps(joined)});'
         )
 
-    # Speech voices (comma-separated)
+    # Speech voices (comma-separated names). config['voices'] holds MaskConfig
+    # voice objects; extract the display name from each (tolerating a legacy
+    # list of plain name strings).
     voices = values.get('speechVoices')
     if voices and len(voices) > 0:
-        joined = ','.join(voices)
+        names = [v['name'] if isinstance(v, dict) else v for v in voices]
+        joined = ','.join(names)
         lines.append(
             f'  if (typeof w.setSpeechVoices === "function") w.setSpeechVoices({_json.dumps(joined)});'
         )

@@ -295,10 +295,17 @@ MVoices() {
   std::vector<std::tuple<std::string, std::string, std::string, bool, bool>>
       voices;
   for (const auto& voice : data["voices"]) {
-    // Check if voice has all required fields
-    if (!voice.contains("lang") || !voice.contains("name") ||
-        !voice.contains("voiceUri") || !voice.contains("isDefault") ||
-        !voice.contains("isLocalService")) {
+    // Each voice must be a full object with all five fields. A bare string
+    // (e.g. "Name:lang:type") or an object missing a field registers NOTHING
+    // and would silently leave the host's native voices exposed, so warn
+    // loudly instead of dropping it quietly.
+    if (!voice.is_object() || !voice.contains("lang") ||
+        !voice.contains("name") || !voice.contains("voiceUri") ||
+        !voice.contains("isDefault") || !voice.contains("isLocalService")) {
+      printf_stderr(
+          "ERROR: 'voices' entry is not a complete object "
+          "{lang,name,voiceUri,isDefault,isLocalService}; skipping: %s\n",
+          voice.dump().c_str());
       continue;
     }
 
