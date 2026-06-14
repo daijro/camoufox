@@ -1,0 +1,292 @@
+Camoufox: spoof CSS2 system-font keyword resolution to match navigator.platform.
+
+Sibling to font-system-ui.patch. That patch covers the `system-ui` generic
+via gfxPlatformFontList::GetSystemUIFontFamilies(). It does NOT cover the
+older CSS2 system-font shorthand keywords:
+
+    font: caption | icon | menu | message-box | small-caption | status-bar
+
+CreepJS's headless detector (headless/getSystemFonts.ts) probes all six
+keywords:
+
+    SYSTEM_FONTS = ['caption','icon','menu','message-box','small-caption','status-bar']
+    for (const f of SYSTEM_FONTS) {
+      el.setAttribute('style', `font: ${f} !important`);
+      set.add(getComputedStyle(el).fontFamily);
+    }
+    // Linux: set = {"Sans"} or {"sans-serif"}, regardless of navigator.platform
+    // GeckoFonts["Sans"] === GeckoFonts["sans-serif"] === "Linux"
+    //   -> emits "Sans:Linux" / "sans-serif:Linux"
+
+Firefox routes CSS system-font resolution through TWO different paths
+depending on whether RFP's FontVisibilityRestrictGenerics target is on:
+
+  1. RFP off (or target off): nsLookAndFeel::PerThemeData::GetFont()
+     returns the GTK system font (e.g. "Cantarell").
+  2. RFP on (Camoufox default):   nsLayoutUtils::GetSpoofedSystemFontForRFP()
+     returns "sans-serif" (Linux build) or "-apple-system" (Mac build) etc.
+
+Camoufox runs RFP on by default, so CreepJS sees path 2 — which on the
+Linux build hardcodes "sans-serif" and entirely bypasses the
+LookAndFeel::GetFont call site.
+
+This patch hooks BOTH paths to honor navigator.platform:
+
+  - "-apple-system"  when navigator.platform starts with "Mac"
+                     (matches CreepJS GeckoFonts entry "-apple-system" -> "Mac")
+  - "Segoe UI"       when navigator.platform starts with "Win"
+                     (matches CreepJS GeckoFonts entry "Segoe UI" -> "Windows")
+  - (falls through)  otherwise (Linux / iPhone / unspoofed)
+
+For path 1 we patch widget/gtk/nsLookAndFeel.cpp's PerThemeData::GetFont.
+For path 2 we patch layout/base/nsLayoutUtils.cpp's
+GetSpoofedSystemFontForRFP (file-static) helper. Both files need
+LOCAL_INCLUDES += ["/camoucfg"] in their respective moz.build to expose
+MaskConfig.hpp.
+
+Both hooks classify navigator.platform once via a function-static and
+keep the result for the lifetime of the process. CreepJS calls the CSS
+resolver six times in tight succession (one per CSS2 keyword) and uses
+probe duration as a probabilistic headless signal, so we don't want to
+re-parse CAMOU_CONFIG on every call. The config is set at process start
+and never changes, so a single classification per process is safe.
+
+Bug: daijro/camoufox#598 (sibling of font-system-ui.patch)
+
+--- a/widget/gtk/moz.build
++++ b/widget/gtk/moz.build
+@@ -155,6 +155,7 @@
+ FINAL_LIBRARY = "xul"
+
+ LOCAL_INCLUDES += [
++    "/camoucfg",
+     "/layout/base",
+     "/layout/forms",
+     "/layout/generic",
+--- a/widget/gtk/nsLookAndFeel.cpp
++++ b/widget/gtk/nsLookAndFeel.cpp
+@@ -34,6 +34,7 @@
+ #include "mozilla/glean/WidgetGtkMetrics.h"
+ #include "mozilla/ScopeExit.h"
+ #include "mozilla/WidgetUtilsGtk.h"
++#include "MaskConfig.hpp"
+ #include "ScreenHelperGTK.h"
+ #include "ScrollbarDrawing.h"
+
+@@ -1302,6 +1303,48 @@
+ bool nsLookAndFeel::PerThemeData::GetFont(FontID aID, nsString& aFontName,
+                                           gfxFontStyle& aFontStyle,
+                                           float aTextScaleFactor) const {
++  // Camoufox: spoof the CSS2 system-font keyword family resolution
++  // (caption / icon / menu / message-box / small-caption / status-bar)
++  // based on navigator.platform so we don't leak the host's GTK system
++  // font through getComputedStyle().fontFamily. Sibling to
++  // font-system-ui.patch which handles the `system-ui` generic.
++  //
++  // The platform classification is cached in a function-static. CreepJS's
++  // headless detector calls getComputedStyle().fontFamily after setting
++  // `font: caption !important` six times in tight succession, and uses
++  // probe duration as a probabilistic headless signal. navigator.platform
++  // is set from CAMOU_CONFIG at process start and never changes, so a
++  // single lookup per process is safe and removes the per-call overhead.
++  enum class SpoofedOS { Other, Mac, Win };
++  static const SpoofedOS sSpoofedOS = []() {
++    auto platform = MaskConfig::GetString("navigator.platform");
++    if (!platform) return SpoofedOS::Other;
++    const std::string& p = platform.value();
++    auto starts_with = [&](const char* prefix) {
++      size_t n = std::strlen(prefix);
++      return p.size() >= n &&
++             std::equal(prefix, prefix + n, p.begin(),
++                        [](char a, char b) {
++                          return std::tolower(static_cast<unsigned char>(a)) ==
++                                 std::tolower(static_cast<unsigned char>(b));
++                        });
++    };
++    if (starts_with("mac")) return SpoofedOS::Mac;
++    if (starts_with("win")) return SpoofedOS::Win;
++    return SpoofedOS::Other;
++  }();
++  if (sSpoofedOS == SpoofedOS::Mac) {
++    aFontName.AssignLiteral(u"-apple-system");
++    aFontStyle = mDefaultFontStyle;
++    return true;
++  }
++  if (sSpoofedOS == SpoofedOS::Win) {
++    aFontName.AssignLiteral(u"Segoe UI");
++    aFontStyle = mDefaultFontStyle;
++    return true;
++  }
++  // Linux / iPhone / unknown: fall through to upstream behavior.
++
+   switch (aID) {
+     case FontID::Menu:             // css2
+     case FontID::MozPullDownMenu:  // css3
+--- a/layout/base/moz.build
++++ b/layout/base/moz.build
+@@ -146,6 +146,7 @@
+     "../tables",
+     "../xul",
+     "../xul/tree/",
++    "/camoucfg",
+     "/docshell/base",
+     "/dom/base",
+     "/dom/html",
+--- a/layout/base/nsLayoutUtils.cpp
++++ b/layout/base/nsLayoutUtils.cpp
+@@ -6,6 +6,7 @@
+
+ #include "nsLayoutUtils.h"
+
++#include "MaskConfig.hpp"
+ #include <algorithm>
+ #include <limits>
+
+@@ -9623,6 +9654,54 @@
+
+ static void GetSpoofedSystemFontForRFP(LookAndFeel::FontID aFontID,
+                                        gfxFontStyle& aStyle, nsAString& aName) {
++  // Camoufox: when navigator.platform is spoofed, return the family-name
++  // string the spoofed OS would. Firefox's CSS resolver routes the CSS2
++  // system-font keywords (caption / icon / menu / message-box /
++  // small-caption / status-bar) through this function whenever RFP's
++  // FontVisibilityRestrictGenerics target is on (default for Camoufox),
++  // bypassing nsLookAndFeel::PerThemeData::GetFont entirely. CreepJS's
++  // headless detector reads `getComputedStyle().fontFamily` after setting
++  // `font: caption !important` and emits "<family>:Linux" / "<family>:Mac"
++  // / "<family>:Windows" attributions. Without this hook the Linux build
++  // emits `sans-serif` (which fontconfig resolves to "Sans") for every
++  // spoofed OS, leaking Linux. Sibling to the nsLookAndFeel::GetFont hook
++  // in widget/gtk/nsLookAndFeel.cpp.
++  //
++  // The platform classification is cached in a function-static because
++  // CreepJS calls this six times in tight succession (one per CSS2
++  // keyword) and uses probe duration as a probabilistic headless signal.
++  // navigator.platform is set from CAMOU_CONFIG at process start and
++  // never changes, so a single lookup per process is safe.
++  enum class SpoofedOS { Other, Mac, Win };
++  static const SpoofedOS sSpoofedOS = []() {
++    auto platform = MaskConfig::GetString("navigator.platform");
++    if (!platform) return SpoofedOS::Other;
++    const std::string& p = platform.value();
++    auto starts_with = [&](const char* prefix) {
++      size_t n = std::strlen(prefix);
++      return p.size() >= n &&
++             std::equal(prefix, prefix + n, p.begin(),
++                        [](char a, char b) {
++                          return std::tolower(static_cast<unsigned char>(a)) ==
++                                 std::tolower(static_cast<unsigned char>(b));
++                        });
++    };
++    if (starts_with("mac")) return SpoofedOS::Mac;
++    if (starts_with("win")) return SpoofedOS::Win;
++    return SpoofedOS::Other;
++  }();
++  if (sSpoofedOS == SpoofedOS::Mac) {
++    aName = u"-apple-system"_ns;
++    aStyle.size = 13;
++    return;
++  }
++  if (sSpoofedOS == SpoofedOS::Win) {
++    aName = u"Segoe UI"_ns;
++    aStyle.size = 12;
++    return;
++  }
++  // Linux / iPhone / unknown: fall through to upstream behavior.
++
+ #if defined(XP_MACOSX) || defined(MOZ_WIDGET_UIKIT)
+   aName = u"-apple-system"_ns;
+   // Values taken from a macOS 10.15 system.
+@@ -9729,7 +9729,17 @@ void nsLayoutUtils::ComputeSystemFont(nsFont* aSystemFont,
+                                       const Document* aDocument) {
+   gfxFontStyle fontStyle;
+   nsAutoString systemFontName;
+-  if (aDocument->ShouldResistFingerprinting(
++  // Camoufox: take the spoof path whenever navigator.platform is spoofed, not
++  // only when the FontVisibilityRestrictGenerics RFP target is active. That
++  // target is NOT in Firefox's default-enabled set (RFPTargetsDefault.inc) and
++  // Camoufox never turns it on, so the original guard left the spoof dead: the
++  // real GTK system font ("sans-serif" on Linux) leaked through
++  // getComputedStyle().fontFamily for the CSS2 system-font keywords, exposing
++  // the host OS (CreepJS "platform hints: sans-serif:Linux"). When no platform
++  // is spoofed, GetSpoofedSystemFontForRFP falls through to the native value,
++  // so this is a no-op for unspoofed contexts.
++  if (MaskConfig::GetString("navigator.platform").has_value() ||
++      aDocument->ShouldResistFingerprinting(
+           RFPTarget::FontVisibilityRestrictGenerics)) {
+     GetSpoofedSystemFontForRFP(aFontID, fontStyle, systemFontName);
+   } else if (!LookAndFeel::GetFont(aFontID, systemFontName, fontStyle)) {
+diff --git a/gfx/thebes/gfxMacPlatformFontList.mm b/gfx/thebes/gfxMacPlatformFontList.mm
+--- a/gfx/thebes/gfxMacPlatformFontList.mm
++++ b/gfx/thebes/gfxMacPlatformFontList.mm
+@@ -17,6 +17,7 @@
+ #include "SharedFontList-impl.h"
+ 
+ #include "harfbuzz/hb.h"
++#include "MaskConfig.hpp"
+ 
+ #include "AppleUtils.h"
+ #include "MainThreadUtils.h"
+@@ -394,7 +395,48 @@ void gfxMacPlatformFontList::LookupSystemFont(LookAndFeel::FontID aSystemFontID,
+   }
+   NS_ASSERTION(font, "system font not set");
+ 
+-  aSystemFontName.AssignASCII("-apple-system");
++  // Camoufox: spoof the CSS2 system-font keyword family resolution
++  // (caption / icon / menu / message-box / small-caption / status-bar)
++  // based on navigator.platform. This is the cocoa sibling of the GTK
++  // hook in widget/gtk/nsLookAndFeel.cpp::PerThemeData::GetFont.
++  //
++  // Without this hook the Mac build always emits "-apple-system" here,
++  // which CreepJS's GeckoFonts map attributes to "Mac" — leaking the
++  // host OS through `getComputedStyle().fontFamily` even when
++  // navigator.platform is spoofed to Win32.
++  //
++  // The Camoufox-runs-RFP-by-default premise that the nsLayoutUtils.cpp
++  // hunk relied on is no longer true: privacy.resistFingerprinting is
++  // off and FontVisibilityRestrictGenerics is not in the default RFP
++  // target set, so ComputeSystemFont takes the LookAndFeel::GetFont
++  // branch on every call. On Mac that lands here.
++  //
++  // The platform classification is cached in a function-static for the
++  // same reason as the sibling hooks: CreepJS uses probe duration as a
++  // probabilistic headless signal.
++  enum class SpoofedOS { Other, Mac, Win };
++  static const SpoofedOS sSpoofedOS = []() {
++    auto platform = MaskConfig::GetString("navigator.platform");
++    if (!platform) return SpoofedOS::Other;
++    const std::string& p = platform.value();
++    auto starts_with = [&](const char* prefix) {
++      size_t n = std::strlen(prefix);
++      return p.size() >= n &&
++             std::equal(prefix, prefix + n, p.begin(),
++                        [](char a, char b) {
++                          return std::tolower(static_cast<unsigned char>(a)) ==
++                                 std::tolower(static_cast<unsigned char>(b));
++                        });
++    };
++    if (starts_with("mac")) return SpoofedOS::Mac;
++    if (starts_with("win")) return SpoofedOS::Win;
++    return SpoofedOS::Other;
++  }();
++  if (sSpoofedOS == SpoofedOS::Win) {
++    aSystemFontName.AssignASCII("Segoe UI");
++  } else {
++    aSystemFontName.AssignASCII("-apple-system");
++  }
+ 
+   NSFontSymbolicTraits traits = font.fontDescriptor.symbolicTraits;
+   aFontStyle.style = (traits & NSFontItalicTrait) ? FontSlantStyle::ITALIC
+
+--- a/gfx/thebes/moz.build
++++ b/gfx/thebes/moz.build
+@@ -302,3 +302,9 @@
+
+ # DOM Mask
+ LOCAL_INCLUDES += ["/camoucfg"]
++
++# Objective-C++ compilation in this directory keeps exceptions enabled for
++# ObjC @try/@catch even when C++ has -fno-exceptions, which makes
++# nlohmann/json (transitively included via MaskConfig.hpp) emit `throw`
++# expressions that don't compile. Force the JSON_THROW=std::abort path.
++DEFINES["JSON_NOEXCEPTION"] = True
