@@ -20,7 +20,7 @@ from .exceptions import (
     InvalidPropertyType,
     NonFirefoxFingerprint,
 )
-from .fingerprints import from_browserforge, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset
+from .fingerprints import from_browserforge, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_screen_no_taskbar, clamp_window_dimensions, set_media_devices_defaults
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locales import handle_locales
@@ -561,6 +561,13 @@ def launch_options(
     if not i_know_what_im_doing:
         warn_manual_config(config)
 
+    # Snapshot which domains the USER set before fingerprint generation fills in
+    # the rest. The post-generation BrowserForge-correction fixes below must
+    # only touch generated values, never override what the user passed.
+    _user_set_navigator = is_domain_set(config, 'navigator.')
+    _user_set_screen_window = is_domain_set(config, 'screen.', 'window.')
+    _user_set_media_devices = is_domain_set(config, 'mediaDevices:')
+
     # Assert the target OS is valid
     if os:
         check_valid_os(os)
@@ -617,6 +624,14 @@ def launch_options(
 
     target_os = get_target_os(config)
 
+    # Correct BrowserForge fingerprint inconsistencies that leak as headless /
+    # impossible-geometry tells, unless the user is driving these themselves.
+    if not _user_set_navigator:
+        fix_navigator_arch(config, target_os)
+    if not _user_set_screen_window:
+        fix_screen_no_taskbar(config, target_os)
+        clamp_window_dimensions(config)
+
     # Set a random window.history.length
     set_into(config, 'window.history.length', randrange(1, 6))  # nosec
 
@@ -645,6 +660,11 @@ def launch_options(
             config['voices'] = _generate_random_voice_subset(os_name_v)
         except Exception:
             pass
+
+    # Default mediaDevices to one mic + one camera so headless contexts don't
+    # expose an empty enumerateDevices() list (a headless tell).
+    if not _user_set_media_devices:
+        set_media_devices_defaults(config)
 
     # Set random seeds for fingerprint noise (per launch)
     set_into(config, 'fonts:spacing_seed', randint(1, 4_294_967_295))  # nosec

@@ -316,6 +316,114 @@ def _normalize_preset_voices(
     return result
 
 
+def fix_navigator_arch(config: Dict[str, Any], target_os: str) -> None:
+    """Force navigator.platform AND navigator.oscpu to match the UA's arch.
+
+    ~8% of Linux Firefox fingerprints in the BrowserForge pool report
+    "Linux armv81" for platform/oscpu while the UA says "Linux x86_64". That
+    arch mismatch is itself a CreepJS lie signal (CreepJS cross-checks oscpu,
+    platform, and the UA arch). Mac/Windows pools are consistent and need no
+    correction.
+    """
+    if target_os != 'lin':
+        return
+    ua = config.get('navigator.userAgent')
+    if not ua:
+        return
+    target = ''
+    if 'Linux x86_64' in ua:
+        target = 'Linux x86_64'
+    elif 'Linux i686' in ua:
+        target = 'Linux i686'
+    if not target:
+        return
+    if config.get('navigator.platform') != target:
+        config['navigator.platform'] = target
+    if config.get('navigator.oscpu') != target:
+        config['navigator.oscpu'] = target
+
+
+def fix_screen_no_taskbar(config: Dict[str, Any], target_os: str) -> None:
+    """Ensure screen.availHeight < screen.height so CreepJS's noTaskbar flag
+    (screen.height == availHeight and screen.width == availWidth) doesn't flip.
+
+    Every desktop OS keeps some chrome visible (Mac menu bar ~25px, Win taskbar
+    ~40px, Linux panel ~27px); the BrowserForge pool occasionally ships
+    fingerprints with identical screen/avail values which leak as a headless
+    tell. Also clamp window.outerHeight (and innerHeight) to the new avail so
+    the window isn't taller than the available area.
+    """
+    sw = config.get('screen.width')
+    sh = config.get('screen.height')
+    aw = config.get('screen.availWidth')
+    ah = config.get('screen.availHeight')
+    if not (sw and sh and aw == sw and ah == sh):
+        return
+    taskbar = 40 if target_os == 'win' else 25 if target_os == 'mac' else 27
+    new_avail = sh - taskbar
+    config['screen.availHeight'] = new_avail
+    oh = config.get('window.outerHeight')
+    if oh and oh > new_avail:
+        ih = config.get('window.innerHeight')
+        chrome = oh - ih if ih else 0
+        config['window.outerHeight'] = new_avail
+        if ih:
+            config['window.innerHeight'] = new_avail - chrome
+
+
+def clamp_window_dimensions(config: Dict[str, Any]) -> None:
+    """Enforce inner <= outer <= avail <= screen on BOTH axes.
+
+    The browser faithfully reports whatever we inject, so a BrowserForge
+    fingerprint that ships e.g. outerWidth > screen.width or innerWidth >
+    outerWidth leaks as an impossible geometry. Shrink each level down to its
+    container, preserving the chrome delta between outer and inner where
+    possible. Complements fix_screen_no_taskbar (which only clamps height).
+    """
+    for axis in ('Width', 'Height'):
+        screen = config.get(f'screen.{axis.lower()}')
+        avail = config.get(f'screen.avail{axis}')
+        outer = config.get(f'window.outer{axis}')
+        inner = config.get(f'window.inner{axis}')
+
+        # avail must not exceed screen
+        if screen and avail and avail > screen:
+            config[f'screen.avail{axis}'] = screen
+        avail_clamped = config.get(f'screen.avail{axis}', screen)
+
+        # outer must not exceed avail (or screen if avail is unknown)
+        outer_cap = avail_clamped if avail_clamped is not None else screen
+        if outer and outer_cap and outer > outer_cap:
+            chrome = max(0, outer - inner) if inner else 0
+            config[f'window.outer{axis}'] = outer_cap
+            if inner:
+                config[f'window.inner{axis}'] = max(1, outer_cap - chrome)
+
+        # inner must not exceed outer
+        outer_clamped = config.get(f'window.outer{axis}', outer)
+        inner_now = config.get(f'window.inner{axis}')
+        if inner_now and outer_clamped and inner_now > outer_clamped:
+            config[f'window.inner{axis}'] = outer_clamped
+
+
+def set_media_devices_defaults(config: Dict[str, Any]) -> None:
+    """Spoof navigator.mediaDevices.enumerateDevices() so headless contexts
+    expose a plausible device list.
+
+    A real desktop browser without explicit mic permission reports one
+    audioinput + one videoinput; an empty list is a headless tell. The patched
+    MediaDevices::FilterExposedDevices reads mediaDevices:{enabled,micros,
+    webcams,speakers}. Default to one of each input kind unless the caller
+    already set any mediaDevices: key.
+    """
+    if any(k.startswith('mediaDevices:') for k in config):
+        return
+    config['mediaDevices:enabled'] = True
+    config['mediaDevices:micros'] = 1
+    config['mediaDevices:webcams'] = 1
+    config['mediaDevices:speakers'] = 0
+
+
 def _select_presets_file(ff_version: Optional[Any] = None) -> Path:
     """Pick the bundled-presets file appropriate for a given Firefox version.
 
