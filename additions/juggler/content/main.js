@@ -48,6 +48,15 @@ export function initialize(browsingContext, docShell) {
     },
 
     locale: (locale) => {
+      // Camoufox: also propagate to BrowsingContext so the LanguageOverride
+      // synced field reaches Navigator.language consumers
+      // (dom/base/Navigator.cpp reads bc->Top()->GetLanguageOverride()).
+      // docShell.languageOverride alone only updates ICU + JS default locale.
+      try {
+        if (browsingContext && browsingContext.top) {
+          browsingContext.top.languageOverride = locale || "";
+        }
+      } catch (e) { /* fall through */ }
       docShell.languageOverride = locale;
     },
 
