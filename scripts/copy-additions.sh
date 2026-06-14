@@ -23,10 +23,18 @@ run() {
     fi
 }
 
-# Copy the search-config.json file
+# Copy the search-config.json file.
+# FF150 removed the bundled RemoteSettings dumps tree (services/settings/dumps/
+# no longer ships in the source tarball — search config is fetched at runtime),
+# so the destination dir must be created first. Shipping the empty stub keeps
+# Camoufox's "no bundled search engines" intent and is harmless if unread.
+run 'mkdir -p services/settings/dumps/main'
 run 'cp -v ../assets/search-config.json services/settings/dumps/main/search-config.json'
 
 # vs_pack.py issue... should be temporary
+# FF150 no longer ships build/vs/ in the source tree, so create it first
+# (this helper is only consumed by the Windows MSVC packaging path).
+run 'mkdir -p build/vs'
 run 'cp -v ../patches/librewolf/pack_vs.py build/vs/'
 
 # Apply most recent `settings` repository files
