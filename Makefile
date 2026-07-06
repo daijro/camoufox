@@ -111,8 +111,14 @@ checkpoint:
 	cd $(cf_source_dir) && git commit -m "Checkpoint" -uno
 
 clean:
-	cd $(cf_source_dir) && git clean -fdx && ./mach clobber
-	make revert
+	@if [ -e "$(cf_source_dir)/.git" ]; then \
+		cd "$(cf_source_dir)" && ./mach clobber && git clean -fdx; \
+		$(MAKE) revert; \
+	else \
+		echo "No git repo found in $(cf_source_dir); re-extracting Firefox source..."; \
+		rm -rf "$(cf_source_dir)"; \
+		$(MAKE) setup-minimal; \
+	fi
 
 distclean:
 	rm -rf $(cf_source_dir) $(ff_source_tarball)
