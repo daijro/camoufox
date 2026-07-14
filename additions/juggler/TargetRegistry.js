@@ -441,7 +441,8 @@ export class PageTarget {
   }
 
   async activateAndRun(callback = () => {}, { muteNotificationsPopup = false } = {}) {
-    const ownerWindow = this._tab.linkedBrowser.ownerGlobal;
+    const linkedBrowser = this._tab.linkedBrowser;
+    const ownerWindow = linkedBrowser.ownerGlobal || linkedBrowser.ownerDocument.defaultView;
     const tabBrowser = ownerWindow.gBrowser;
     // Serialize all tab-switching commands per tabbed browser
     // to disallow concurrent tab switching.
