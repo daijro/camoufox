@@ -588,8 +588,13 @@ export class PageTarget {
 
   updateCacheDisabled(browsingContext = this._linkedBrowser.browsingContext) {
     const enableFlags = Ci.nsIRequest.LOAD_NORMAL;
-    const disableFlags = Ci.nsIRequest.LOAD_BYPASS_CACHE |
-                  Ci.nsIRequest.INHIBIT_CACHING;
+    // Camoufox: upstream also sets LOAD_BYPASS_CACHE here, which makes necko put
+    // "Pragma: no-cache" and "Cache-Control: no-cache" on every request. Firefox only
+    // does that for a forced reload, and Playwright turns this on for every page.route()
+    // call, so it marks all our traffic as automated. INHIBIT_CACHING alone stops
+    // responses from ever being stored, which starves the cache just as effectively
+    // without announcing it to the server.
+    const disableFlags = Ci.nsIRequest.INHIBIT_CACHING;
 
     browsingContext.defaultLoadFlags = (this._browserContext.disableCache || this.disableCache) ? disableFlags : enableFlags;
   }
