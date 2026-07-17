@@ -21,7 +21,7 @@ from .exceptions import (
     InvalidPropertyType,
     NonFirefoxFingerprint,
 )
-from .fingerprints import from_browserforge, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_screen_no_taskbar, clamp_window_dimensions, set_media_devices_defaults
+from .fingerprints import from_browserforge, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_screen_no_taskbar, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, set_media_devices_defaults
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locales import handle_locales
@@ -679,10 +679,14 @@ def launch_options(
             merge_into(config, from_preset(preset, ff_version_str))
             _used_preset = True
 
+    # Bound the geometry to the real display. BrowserForge only honours this when
+    # its pool has a match, so it is re-applied after generation as well.
+    screen_cons = screen or get_screen_cons(headless or 'DISPLAY' in env)
+
     if not _used_preset and fingerprint is None:
         # Default: BrowserForge synthetic generation (infinite unique fingerprints)
         fingerprint = generate_fingerprint(
-            screen=screen or get_screen_cons(headless or 'DISPLAY' in env),
+            screen=screen_cons,
             window=window,
             os=os,
         )
@@ -701,8 +705,15 @@ def launch_options(
     if not _user_set_navigator:
         fix_navigator_arch(config, target_os)
     if not _user_set_screen_window:
+        # Headful only: this bound exists so the real window fits the monitor.
+        # headless has no window to overflow, and headless='virtual' runs a 1x1
+        # Xvfb (see virtdisplay.py) that would otherwise shrink the whole
+        # fingerprint to 1x1.
+        if headless is False and screen_cons:
+            clamp_screen_to_display(config, screen_cons.max_width, screen_cons.max_height)
         fix_screen_no_taskbar(config, target_os)
         clamp_window_dimensions(config)
+        clamp_window_position(config)
 
     # Set a random window.history.length
     set_into(config, 'window.history.length', randrange(1, 6))  # nosec
