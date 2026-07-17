@@ -239,10 +239,13 @@ class NetworkRequest {
     this._overriddenHeadersForRedirect = headers;
     this._expectingResumedRequest = undefined;
 
-    if (headers)
+    const extraHTTPHeaders = this._pageNetwork ? this._pageNetwork.combinedExtraHTTPHeaders() : [];
+    if (headers) {
       overrideRequestHeaders(this.httpChannel, headers);
-    else if (this._pageNetwork)
-      appendExtraHTTPHeaders(this.httpChannel, this._pageNetwork.combinedExtraHTTPHeaders());
+    } else {
+      appendExtraHTTPHeaders(this.httpChannel, extraHTTPHeaders);
+      restoreInterceptedHeaderOrder(this.httpChannel, extraHTTPHeaders);
+    }
     if (method)
       this.httpChannel.requestMethod = method;
     if (postData !== undefined)
@@ -808,6 +811,63 @@ function clearRequestHeaders(httpChannel) {
 function overrideRequestHeaders(httpChannel, headers) {
   clearRequestHeaders(httpChannel);
   appendExtraHTTPHeaders(httpChannel, headers);
+}
+
+// Headers necko adds in HttpBaseChannel::Init, before anything else touches the channel.
+const DEFAULT_REQUEST_HEADERS = ['host', 'user-agent', 'accept', 'accept-language', 'accept-encoding'];
+// Headers necko adds in nsHttpChannel::OnBeforeConnect, which runs after the cookie header is set
+// and after http-on-modify-request, where we add the extra headers.
+const ON_BEFORE_CONNECT_HEADERS = ['upgrade-insecure-requests', 'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-user'];
+
+// Resuming an intercepted request makes necko tear down the channel and build a fresh one
+// (InterceptedHttpChannel::ResetInterception). The header copy that follows deliberately drops
+// "connection" and "cookie" - the replacement channel is expected to regenerate them - so both
+// end up appended after every header that was copied over, rather than in the slot they occupy
+// on a channel that was never intercepted:
+//
+//   never intercepted: ... accept-encoding, connection, referer, cookie, sec-fetch-*
+//   after a resume:    ... accept-encoding, referer, sec-fetch-*, connection, cookie
+//
+// Request header order is part of a browser's fingerprint, so the second layout tells a server the
+// request came from an automated browser. Put the two headers back in the order necko fills them
+// in: the defaults, "connection", whatever the channel was set up with, "cookie", and finally
+// everything added from http-on-modify-request onwards. Order on the wire follows
+// nsHttpHeaderArray, and setting a header that is already present updates it in place, so moving
+// one means deleting it and adding it back.
+function restoreInterceptedHeaderOrder(httpChannel, extraHTTPHeaders) {
+  const headers = requestHeaders(httpChannel);
+  const nameOf = header => header.name.toLowerCase();
+
+  const displaced = [];
+  for (const name of ['connection', 'cookie']) {
+    const index = headers.findIndex(header => nameOf(header) === name);
+    if (index !== -1)
+      displaced.push(headers.splice(index, 1)[0]);
+  }
+  if (!displaced.length)
+    return;
+
+  const lateHeaders = new Set([
+    ...ON_BEFORE_CONNECT_HEADERS,
+    ...extraHTTPHeaders.map(header => header.name.toLowerCase()),
+  ]);
+  const firstIndex = predicate => {
+    const index = headers.findIndex(predicate);
+    return index === -1 ? headers.length : index;
+  };
+
+  for (const header of displaced) {
+    const boundary = nameOf(header) === 'connection' ?
+        firstIndex(h => !DEFAULT_REQUEST_HEADERS.includes(nameOf(h))) :
+        firstIndex(h => lateHeaders.has(nameOf(h)));
+    headers.splice(boundary, 0, header);
+  }
+
+  // The host header cannot be removed, and it sorts first either way.
+  const movable = headers.filter(header => nameOf(header) !== 'host');
+  for (const header of movable)
+    httpChannel.setRequestHeader(header.name, '', false /* merge */);
+  appendExtraHTTPHeaders(httpChannel, movable);
 }
 
 const redirectStatus = [301, 302, 303, 307, 308];
