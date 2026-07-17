@@ -406,6 +406,52 @@ def clamp_window_dimensions(config: Dict[str, Any]) -> None:
             config[f'window.inner{axis}'] = outer_clamped
 
 
+def clamp_screen_to_display(
+    config: Dict[str, Any],
+    max_width: Optional[int],
+    max_height: Optional[int],
+) -> None:
+    """Shrink screen.width/height down to the bounds of the real display.
+
+    BrowserForge takes a Screen constraint but drops it silently whenever it
+    filters the fingerprint pool too far: FingerprintGenerator.partial_csp
+    swallows the resulting failure and deletes the constraint unless strict=True.
+    So the bound from get_screen_cons() is best-effort only, and a 1366x768
+    laptop routinely gets a 2560x1440 fingerprint. browser-init.patch resizes the
+    real chrome window to window.outerWidth/outerHeight, so an unbounded value
+    renders past the edge of the monitor (daijro/camoufox#499).
+
+    Keeps the taskbar delta (screen - avail) intact so fix_screen_no_taskbar's
+    invariant survives. Callers must run clamp_window_dimensions afterwards to
+    cascade the new bounds down to avail/outer/inner.
+    """
+    for axis, cap in (('width', max_width), ('height', max_height)):
+        screen = config.get(f'screen.{axis}')
+        if not (screen and cap) or screen <= cap:
+            continue
+        avail_key = 'screen.availWidth' if axis == 'width' else 'screen.availHeight'
+        avail = config.get(avail_key)
+        config[f'screen.{axis}'] = cap
+        if avail:
+            config[avail_key] = max(1, cap - max(0, screen - avail))
+
+
+def clamp_window_position(config: Dict[str, Any]) -> None:
+    """Keep the window box inside the screen: 0 <= screenX/Y <= screen - outer.
+
+    BrowserForge's screenX/screenY are consistent with the screen it generated
+    them against, so clamp_screen_to_display invalidates them. A window
+    positioned partly off its own reported screen is an impossible geometry.
+    """
+    for axis, pos_key in (('Width', 'window.screenX'), ('Height', 'window.screenY')):
+        screen = config.get(f'screen.{axis.lower()}')
+        outer = config.get(f'window.outer{axis}')
+        pos = config.get(pos_key)
+        if pos is None or not (screen and outer):
+            continue
+        config[pos_key] = max(0, min(pos, screen - outer))
+
+
 def set_media_devices_defaults(config: Dict[str, Any]) -> None:
     """Spoof navigator.mediaDevices.enumerateDevices() so headless contexts
     expose a plausible device list.
