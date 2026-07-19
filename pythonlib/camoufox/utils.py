@@ -775,8 +775,10 @@ def launch_options(
     # Pass the humanize option
     if humanize:
         set_into(config, 'humanize', True)
-        if isinstance(humanize, (int, float)):
-            set_into(config, 'humanize:maxTime', humanize)
+        # bool is a subclass of int, but MaskConfig expects maxTime to be a
+        # JSON number with a floating-point representation.
+        if isinstance(humanize, (int, float)) and not isinstance(humanize, bool):
+            set_into(config, 'humanize:maxTime', float(humanize))
 
     # Enable the main world context creation
     if main_world_eval:
