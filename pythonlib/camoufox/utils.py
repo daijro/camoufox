@@ -6,7 +6,7 @@ from os.path import abspath
 from pathlib import Path
 from pprint import pprint
 from random import randint, randrange
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import orjson
@@ -601,8 +601,10 @@ def launch_options(
         custom_fonts_only = False
     if i_know_what_im_doing is None:
         i_know_what_im_doing = False
-    if env is None:
-        env = cast(Dict[str, Union[str, float, bool]], environ)
+    # Keep per-launch overrides isolated from the process environment and from
+    # mappings supplied by callers. In particular, DISPLAY must not outlive the
+    # virtual display that owns it.
+    env = dict(environ) if env is None else dict(env)
     if isinstance(executable_path, str):
         # Convert executable path to a Path object
         executable_path = Path(abspath(executable_path))
