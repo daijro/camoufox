@@ -556,7 +556,33 @@ class Frame {
       this._runtime.destroyExecutionContext(context);
     this._worldNameToContext.clear();
 
-    this._worldNameToContext.set('', this._runtime.createExecutionContext(this.domWindow(), this.domWindow(), {
+    const domWindow = this.domWindow();
+    let contextGlobal = domWindow;
+    if (ChromeUtils.camouGetBool('forceScopeAccess', false)) {
+      // Use a page-scoped expanded principal for the explicitly opted-in
+      // automation context. This keeps network and DOM authority bounded to the
+      // page while allowing chrome-gated DOM bindings without a system principal.
+      contextGlobal = Cu.Sandbox([domWindow], {
+        sandboxPrototype: domWindow,
+        wantComponents: false,
+        wantExportHelpers: false,
+        wantXrays: true,
+        freshCompartment: true,
+      });
+
+      const accessorName = '__camoufoxGetClosedShadowRoot';
+      Cu.exportFunction(function() {
+        return this.shadowRootUnl;
+      }, contextGlobal, {defineAs: accessorName});
+      Cu.evalInSandbox(`
+        Object.defineProperty(Element.prototype, 'shadowRootUnl', {
+          configurable: true,
+          get: globalThis.${accessorName},
+        });
+        delete globalThis.${accessorName};
+      `, contextGlobal);
+    }
+    this._worldNameToContext.set('', this._runtime.createExecutionContext(domWindow, contextGlobal, {
       frameId: this._frameId,
       name: '',
     }));
