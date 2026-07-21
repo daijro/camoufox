@@ -55,17 +55,29 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target):
         else:
             target_dir = temp_dir
 
-        # Add includes
+        # Add includes.
+        #
+        # A missing entry is fatal rather than skipped: the Windows package pulls
+        # the MSVC CRT in through a shell glob, and when that glob does not
+        # expand (different toolchain version on the build host) the literal
+        # pattern used to be silently ignored -- shipping a browser that cannot
+        # start on any machine without the redistributable installed.
+        missing = [include for include in includes or [] if not os.path.exists(include)]
+        if missing:
+            raise FileNotFoundError(
+                "Missing --includes entries (unexpanded glob or wrong path):\n  "
+                + "\n  ".join(missing)
+            )
+
         for include in includes or []:
-            if os.path.exists(include):
-                if os.path.isdir(include):
-                    shutil.copytree(
-                        include,
-                        os.path.join(target_dir, os.path.basename(include)),
-                        dirs_exist_ok=True,
-                    )
-                else:
-                    shutil.copy2(include, target_dir)
+            if os.path.isdir(include):
+                shutil.copytree(
+                    include,
+                    os.path.join(target_dir, os.path.basename(include)),
+                    dirs_exist_ok=True,
+                )
+            else:
+                shutil.copy2(include, target_dir)
 
         # Add the font folders under fonts/
         fonts_dir = os.path.join(target_dir, 'fonts')
