@@ -11,11 +11,11 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 import numpy as np
 import orjson
 from browserforge.fingerprints import Fingerprint, Screen
-from screeninfo import get_monitors
 from typing_extensions import TypeAlias
 from ua_parser import user_agent_parser
 
 from .addons import DefaultAddons, add_default_addons, confirm_paths
+from .display import largest_display
 from .exceptions import (
     InvalidOS,
     InvalidPropertyType,
@@ -221,19 +221,16 @@ def determine_ua_os(user_agent: str) -> Literal['mac', 'win', 'lin']:
 def get_screen_cons(headless: Optional[bool] = None) -> Optional[Screen]:
     """
     Determines a sane viewport size for Camoufox if being ran in headful mode.
+
+    Bounds are CSS pixels, the unit Firefox lays its windows out in -- see
+    camoufox.display for why that differs from the monitor's physical size.
     """
     if headless is False:
         return None  # Skip if headless
-    try:
-        monitors = get_monitors()
-    except Exception:
-        return None  # Skip if there's an error getting the monitors
-    if not monitors:
-        return None  # Skip if there are no monitors
-
-    # Use the dimensions from the monitor with greatest screen real estate
-    monitor = max(monitors, key=lambda m: m.width * m.height)
-    return Screen(max_width=monitor.width, max_height=monitor.height)
+    display = largest_display()
+    if display is None:
+        return None  # Skip if the display can't be probed
+    return Screen(max_width=display.width, max_height=display.height)
 
 
 def update_fonts(config: Dict[str, Any], target_os: str) -> None:
