@@ -13,6 +13,7 @@ from unittest import mock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import orjson  # noqa: E402
+import pytest  # noqa: E402
 from browserforge.fingerprints import Screen  # noqa: E402
 
 from camoufox import utils  # noqa: E402
@@ -68,3 +69,45 @@ class TestVirtualDisplayIsNotAScreen:
         for key, value in config.items():
             if key.startswith("screen.") or key.startswith("window.outer"):
                 assert value >= 0, f"{key} is negative: {value}"
+
+
+# A 1920x1080 panel at 150% Windows scaling, in CSS pixels
+SCALED_DISPLAY = Screen(max_width=1280, max_height=720)
+
+# Config key -> the display bound it must respect
+BOUNDED_BY = {
+    "screen.width": "max_width",
+    "screen.height": "max_height",
+    "window.outerWidth": "max_width",
+    "window.outerHeight": "max_height",
+}
+
+
+class TestHeadfulFitsOnDisplay:
+    """BrowserForge drops a screen constraint it cannot satisfy, so assert the
+    outcome rather than trusting the constraint to have been honoured."""
+
+    @pytest.mark.parametrize("attempt", range(15))
+    def test_generated_geometry_never_exceeds_the_display(self, attempt):
+        with host(SCALED_DISPLAY):
+            config = launch(headless=False)
+
+        for key, bound in BOUNDED_BY.items():
+            limit = getattr(SCALED_DISPLAY, bound)
+            assert config[key] <= limit, f"{key}={config[key]} exceeds {limit}"
+
+    def test_geometry_stays_internally_consistent(self):
+        with host(SCALED_DISPLAY):
+            config = launch(headless=False)
+
+        assert config["screen.availWidth"] <= config["screen.width"]
+        assert config["screen.availHeight"] < config["screen.height"]  # taskbar
+        assert config["window.outerWidth"] <= config["screen.availWidth"]
+        assert config["window.outerHeight"] <= config["screen.availHeight"]
+
+    def test_unprobeable_display_is_not_clamped(self):
+        """A host we cannot measure must not silently shrink the fingerprint."""
+        with host(None), mock.patch.object(utils, "clamp_screen_to_display") as clamp:
+            launch(headless=False)
+
+        clamp.assert_not_called()

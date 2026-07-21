@@ -15,7 +15,7 @@ from typing_extensions import TypeAlias
 from ua_parser import user_agent_parser
 
 from .addons import DefaultAddons, add_default_addons, confirm_paths
-from .display import largest_display
+from .display import has_display, largest_display
 from .exceptions import (
     InvalidOS,
     InvalidPropertyType,
@@ -665,7 +665,7 @@ def launch_options(
 
     # Bound the geometry to the real display. BrowserForge only honours this when
     # its pool has a match, so it is re-applied after generation as well.
-    screen_cons = screen or get_screen_cons(headless or 'DISPLAY' in env)
+    screen_cons = screen or get_screen_cons(headless or has_display(env))
 
     if not _used_preset and fingerprint is None:
         # Default: BrowserForge synthetic generation (infinite unique fingerprints)
