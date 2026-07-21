@@ -692,11 +692,11 @@ def launch_options(
     if not _user_set_navigator:
         fix_navigator_arch(config, target_os)
     if not _user_set_screen_window:
-        # Headful only: this bound exists so the real window fits the monitor.
-        # headless has no window to overflow, and headless='virtual' runs a 1x1
-        # Xvfb (see virtdisplay.py) that would otherwise shrink the whole
-        # fingerprint to 1x1.
-        if headless is False and screen_cons:
+        # Headful on a real monitor only: this bound exists so the window fits
+        # the screen it is drawn on. headless has no window to overflow, and
+        # headless='virtual' reaches here as headless=False (see async_api) with
+        # a 1x1 Xvfb (virtdisplay.py) that is not a real screen.
+        if headless is False and not virtual_display and screen_cons:
             clamp_screen_to_display(config, screen_cons.max_width, screen_cons.max_height)
         fix_screen_no_taskbar(config, target_os)
         clamp_window_dimensions(config)
