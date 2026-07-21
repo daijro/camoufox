@@ -90,3 +90,24 @@ class TestLargestDisplay:
 
         monkeypatch.setattr(display, "get_monitors", boom)
         assert display.largest_display() is None
+
+
+class TestHasDisplay:
+    @pytest.mark.parametrize("os_name", ["win", "mac"])
+    def test_always_present_off_linux(self, monkeypatch, os_name):
+        """Regression: keying off DISPLAY alone skipped Windows/macOS entirely."""
+        monkeypatch.setattr(display, "OS_NAME", os_name)
+        assert display.has_display({}) is True
+
+    @pytest.mark.parametrize(
+        ("env", "expected"),
+        [
+            ({}, False),
+            ({"DISPLAY": ":0"}, True),
+            ({"WAYLAND_DISPLAY": "wayland-0"}, True),
+            ({"DISPLAY": ""}, False),
+        ],
+    )
+    def test_linux_requires_a_session(self, monkeypatch, env, expected):
+        monkeypatch.setattr(display, "OS_NAME", "lin")
+        assert display.has_display(env) is expected

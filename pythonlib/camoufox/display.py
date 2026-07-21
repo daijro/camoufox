@@ -12,7 +12,7 @@ macOS (`NSScreen.frame`) and X11 (xrandr) already report CSS pixels, so scaling
 only ever applies on Windows.
 """
 
-from typing import Any, NamedTuple, Optional
+from typing import Any, Mapping, NamedTuple, Optional
 
 from screeninfo import get_monitors
 
@@ -31,6 +31,19 @@ class DisplaySize(NamedTuple):
 
     width: int
     height: int
+
+
+def has_display(env: Mapping[str, Any]) -> bool:
+    """
+    Whether the host has a desktop session for Camoufox's window to open on.
+
+    DISPLAY / WAYLAND_DISPLAY only ever exist on Linux, so they cannot be the
+    sole probe: keying off DISPLAY alone skipped the screen constraints entirely
+    on Windows and macOS, where a session is always present.
+    """
+    if OS_NAME != 'lin':
+        return True
+    return bool(env.get('DISPLAY') or env.get('WAYLAND_DISPLAY'))
 
 
 def largest_display() -> Optional[DisplaySize]:
