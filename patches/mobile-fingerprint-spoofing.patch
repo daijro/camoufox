@@ -1,0 +1,17 @@
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -896,6 +896,13 @@
+ //*****************************************************************************
+
+ uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
++  // Camoufox: allow spoofing navigator.maxTouchPoints via config. A desktop
++  // build has no touch digitizer, so the real value is 0 and Firefox's RFP
++  // path only ever collapses it to 0 - there is no way to report a phone's
++  // value without this override.
++  if (auto value = MaskConfig::GetUint32("navigator.maxTouchPoints")) {
++    return value.value();
++  }
+   nsIDocShell* docshell = GetDocShell();
+   BrowsingContext* bc = docshell ? docshell->GetBrowsingContext() : nullptr;
+
