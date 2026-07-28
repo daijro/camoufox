@@ -876,7 +876,16 @@ export class PageTarget {
       QueryInterface: ChromeUtils.generateQI([Ci.nsIScreencastServiceClient]),
       screencastFrame(data, deviceWidth, deviceHeight) {
         if (self._screencastRecordingInfo)
-          self.emit(PageTarget.Events.ScreencastFrame, { data, deviceWidth, deviceHeight });
+          self.emit(PageTarget.Events.ScreencastFrame, {
+            data,
+            deviceWidth,
+            deviceHeight,
+            // nsIScreencastServiceClient does not hand us the capture time, so
+            // stamp it on arrival. The frame was just encoded on the capture
+            // thread, so this is within a frame interval of the real swap time
+            // -- close enough for the recorder's frame pacing.
+            timestamp: Date.now() / 1000,
+          });
       },
       screencastStopped() {
       },
@@ -888,9 +897,15 @@ export class PageTarget {
   }
 
   screencastFrameAck({ screencastId }) {
-    if (!this._screencastRecordingInfo || this._screencastRecordingInfo.screencastId !== screencastId)
+    if (!this._screencastRecordingInfo)
       return;
-    screencastService.screencastFrameAck(screencastId);
+    // A client that omits the id is acking whatever is currently recording --
+    // there can only be one screencast per page target. Only reject an id that
+    // is present and refers to some other (stale) session.
+    const activeId = this._screencastRecordingInfo.screencastId;
+    if (screencastId !== undefined && screencastId !== activeId)
+      return;
+    screencastService.screencastFrameAck(activeId);
   }
 
   stopScreencast() {
