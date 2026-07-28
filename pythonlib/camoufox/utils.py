@@ -26,6 +26,7 @@ from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locales import handle_locales
 from .pkgman import (
+    INSTALL_DIR,
     OS_NAME,
     ensure_browser_profile_dir,
     get_path,
@@ -53,8 +54,10 @@ def _generate_fontconfig(fontconfig_path: str) -> str:
     Generates a runtime fontconfig that resolves bundled font paths absolutely.
     The bundled fonts.conf uses prefix="cwd" relative paths which break when
     Playwright's working directory differs from the browser install directory.
-    Writes a patched copy to ~/.cache/camoufox/fontconfig/ (deterministic,
-    only regenerated when content changes).
+    Writes a patched copy to the user cache dir (deterministic, only
+    regenerated when content changes). This must not live inside the versioned
+    browser bundle: the bundle is commonly baked into an image as root and run
+    as a non-root user, so it is read-only at launch time.
     """
     import hashlib
 
@@ -69,7 +72,7 @@ def _generate_fontconfig(fontconfig_path: str) -> str:
         f'<dir>{fonts_dir}</dir>',
     )
 
-    cache_dir = get_path('fontconfig')
+    cache_dir = str(INSTALL_DIR / 'fontconfig')
     os.makedirs(cache_dir, exist_ok=True)
 
     content_hash = hashlib.sha256(conf_content.encode()).hexdigest()[:12]
