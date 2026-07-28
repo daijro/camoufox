@@ -44,7 +44,22 @@ def launch_server(**kwargs) -> NoReturn:
     """
     Launch a Playwright server. Takes the same arguments as `Camoufox()`.
     Prints the websocket endpoint to the console.
+
+    Note: persistent contexts are not servable. Playwright's `launchServer`
+    routes through `BrowserType.launch()`, and its `PlaywrightServer` only
+    accepts a `preLaunchedBrowser` -- there is no way to expose a persistent
+    `BrowserContext` over a websocket endpoint. Reject those options up front
+    rather than accepting them and silently launching a throwaway profile.
     """
+    for unsupported in ('persistent_context', 'user_data_dir'):
+        if kwargs.get(unsupported):
+            raise ValueError(
+                f"launch_server() does not support {unsupported!r}: Playwright cannot "
+                "serve a persistent context over a websocket endpoint. Use "
+                f"Camoufox(persistent_context=True, ...) in-process instead."
+            )
+        kwargs.pop(unsupported, None)
+
     config = launch_options(**kwargs)
     nodejs = get_nodejs()
 
