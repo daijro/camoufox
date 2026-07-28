@@ -54,7 +54,11 @@ def get_trace_actions(events: List[Any]) -> List[str]:
         ),
         key=lambda e: e["startTime"],
     )
-    return [e["apiName"] for e in action_events]
+    # Traces no longer record the Python-level `apiName` ("Page.goto"); action
+    # events now carry the protocol-level class and method ("Frame.goto"). The
+    # old key is simply absent, so reading it raised KeyError and took down
+    # every assertion that inspects a trace.
+    return [f'{e["class"]}.{e["method"]}' for e in action_events]
 
 
 TARGET_CLOSED_ERROR_MESSAGE = "Target page, context or browser has been closed"

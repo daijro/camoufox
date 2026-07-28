@@ -110,17 +110,17 @@ async def test_should_collect_trace_with_resources_but_no_js(
     (_, events) = parse_trace(trace_file_path)
     assert events[0]["type"] == "context-options"
     assert get_trace_actions(events) == [
-        "Page.goto",
-        "Page.set_content",
-        "Page.click",
-        "Mouse.move",
-        "Mouse.dblclick",
-        "Keyboard.insert_text",
-        "Page.wait_for_timeout",
-        "Page.route",
-        "Page.goto",
-        "Route.continue_",
-        "Page.goto",
+        "Frame.goto",
+        "Frame.setContent",
+        "Frame.click",
+        "Page.mouseMove",
+        "Page.mouseClick",
+        "Page.keyboardInsertText",
+        "Frame.waitForTimeout",
+        "Page.setNetworkInterceptionPatterns",
+        "Frame.goto",
+        "Route.continue",
+        "Frame.goto",
         "Page.close",
     ]
 
@@ -165,14 +165,14 @@ async def test_should_collect_two_traces(
     (_, events) = parse_trace(tracing1_path)
     assert events[0]["type"] == "context-options"
     assert get_trace_actions(events) == [
-        "Page.goto",
-        "Page.set_content",
-        "Page.click",
+        "Frame.goto",
+        "Frame.setContent",
+        "Frame.click",
     ]
 
     (_, events) = parse_trace(tracing2_path)
     assert events[0]["type"] == "context-options"
-    assert get_trace_actions(events) == ["Page.dblclick", "Page.close"]
+    assert get_trace_actions(events) == ["Frame.dblclick", "Page.close"]
 
 
 async def test_should_not_throw_when_stopping_without_start_but_not_exporting(
@@ -200,13 +200,13 @@ async def test_should_work_with_playwright_context_managers(
     (_, events) = parse_trace(trace_file_path)
     assert events[0]["type"] == "context-options"
     assert get_trace_actions(events) == [
-        "Page.goto",
-        "Page.set_content",
-        "Page.expect_console_message",
-        "Page.evaluate",
-        "Page.click",
-        "Page.expect_popup",
-        "Page.evaluate",
+        "Frame.goto",
+        "Frame.setContent",
+        "Page.waitForEventInfo",
+        "Frame.evaluateExpression",
+        "Frame.click",
+        "Page.waitForEventInfo",
+        "Frame.evaluateExpression",
     ]
 
 
@@ -224,9 +224,9 @@ async def test_should_display_wait_for_load_state_even_if_did_not_wait_for_it(
 
     (_, events) = parse_trace(trace_file_path)
     assert get_trace_actions(events) == [
-        "Page.goto",
-        "Page.wait_for_load_state",
-        "Page.wait_for_load_state",
+        "Frame.goto",
+        "Page.waitForEventInfo",
+        "Page.waitForEventInfo",
     ]
 
 
@@ -264,7 +264,7 @@ async def test_should_respect_traces_dir_and_name(
         )
 
     (resources, events) = parse_trace(tmpdir / "trace1.zip")
-    assert get_trace_actions(events) == ["Page.goto"]
+    assert get_trace_actions(events) == ["Frame.goto"]
     assert resource_names(resources) == [
         "resources/XXX.css",
         "resources/XXX.html",
@@ -274,7 +274,7 @@ async def test_should_respect_traces_dir_and_name(
     ]
 
     (resources, events) = parse_trace(tmpdir / "trace2.zip")
-    assert get_trace_actions(events) == ["Page.goto"]
+    assert get_trace_actions(events) == ["Frame.goto"]
     assert resource_names(resources) == [
         "resources/XXX.css",
         "resources/XXX.html",

@@ -452,7 +452,8 @@ async def test_to_have_values_fails_when_multiple_not_specified(page: Page, serv
     )
     locator = page.locator("select")
     await locator.select_option(["B"])
-    with pytest.raises(Error) as excinfo:
+    # Assertion failures surface as AssertionError now, not playwright.Error.
+    with pytest.raises(AssertionError) as excinfo:
         await expect(locator).to_have_values(["R", "G"], timeout=500)
     assert "Error: Not a select element with a multiple attribute" in str(excinfo.value)
 
@@ -464,7 +465,7 @@ async def test_to_have_values_fails_when_not_a_select_element(page: Page, server
     """
     )
     locator = page.locator("input")
-    with pytest.raises(Error) as excinfo:
+    with pytest.raises(AssertionError) as excinfo:
         await expect(locator).to_have_values(["R", "G"], timeout=500)
     assert "Error: Not a select element with a multiple attribute" in str(excinfo.value)
 
@@ -502,9 +503,15 @@ async def test_assertions_locator_to_be_disabled_enabled(page: Page, server: Ser
 
 async def test_assertions_locator_to_be_editable(page: Page, server: Server) -> None:
     await page.goto(server.EMPTY_PAGE)
-    await page.set_content("<input></input><button disabled>Text</button>")
-    await expect(page.locator("button")).not_to_be_editable()
-    await expect(page.locator("input")).to_be_editable()
+    # A <button> is no longer merely "not editable": editability is only
+    # defined for <input>/<textarea>/<select>/[contenteditable] or a role
+    # allowing [aria-readonly], and anything else now raises. Use a readonly
+    # input for the negative case.
+    await page.set_content(
+        "<input></input><input readonly></input><button disabled>Text</button>"
+    )
+    await expect(page.locator("input[readonly]")).not_to_be_editable()
+    await expect(page.locator("input:not([readonly])")).to_be_editable()
     with pytest.raises(AssertionError):
         await expect(page.locator("button")).to_be_editable(timeout=100)
 
@@ -766,7 +773,7 @@ async def test_should_be_attached_over_navigation(page: Page, server: Server) ->
 async def test_should_be_able_to_set_custom_timeout(page: Page) -> None:
     with pytest.raises(AssertionError) as exc_info:
         await expect(page.locator("#a1")).to_be_visible(timeout=111)
-    assert "LocatorAssertions.to_be_visible with timeout 111ms" in str(exc_info.value)
+    assert 'Expect "to_be_visible" with timeout 111ms' in str(exc_info.value)
 
 
 async def test_should_be_able_to_set_custom_global_timeout(page: Page) -> None:
@@ -774,7 +781,7 @@ async def test_should_be_able_to_set_custom_global_timeout(page: Page) -> None:
         expect.set_options(timeout=111)
         with pytest.raises(AssertionError) as exc_info:
             await expect(page.locator("#a1")).to_be_visible()
-        assert "LocatorAssertions.to_be_visible with timeout 111ms" in str(exc_info.value)
+        assert 'Expect "to_be_visible" with timeout 111ms' in str(exc_info.value)
     finally:
         expect.set_options(timeout=None)
 

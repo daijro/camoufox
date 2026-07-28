@@ -250,6 +250,21 @@ def assert_to_be_golden(browser_name: str) -> Callable[[bytes, str], None]:
     return compare
 
 
+def _to_camel_case_keys(options: Dict) -> Dict:
+    """snake_case launch options -> the camelCase the Node driver expects.
+
+    Unset options are dropped rather than serialised as null: the driver
+    validates types strictly, so a `channel: None` from an unused --browser-channel
+    aborts the server with "channel: expected string, got object".
+    """
+
+    def camel(key: str) -> str:
+        head, *rest = key.split("_")
+        return head + "".join(part.title() for part in rest)
+
+    return {camel(key): value for key, value in options.items() if value is not None}
+
+
 class RemoteServer:
     def __init__(self, browser_name: str, launch_server_options: Dict, tmpfile: Path) -> None:
         driver_dir = Path(inspect.getfile(playwright)).parent / "driver"
@@ -258,7 +273,14 @@ class RemoteServer:
         else:
             node_executable = driver_dir / "node"
         cli_js = driver_dir / "package" / "cli.js"
-        tmpfile.write_text(json.dumps(launch_server_options))
+        # `launch-server --config` is read by the Node driver as JS launch
+        # options, so the keys have to be camelCase. Handing it the Python
+        # fixture's snake_case `executable_path` silently dropped it: the server
+        # fell back to Playwright's bundled Firefox, failed with "Executable
+        # doesn't exist at .../firefox-1522/firefox", printed no endpoint, and
+        # every connect test then died on an empty ws_endpoint with the
+        # misleading "Port should be >= 0 and < 65536. Received type string ('')".
+        tmpfile.write_text(json.dumps(_to_camel_case_keys(launch_server_options)))
         self.process = subprocess.Popen(
             [
                 str(node_executable),

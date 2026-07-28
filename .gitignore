@@ -35,6 +35,7 @@ wget-log
 
 # Python interface
 venv/
+venv[0-9]*/
 __pycache__/
 *.pyc
 *.mmdb

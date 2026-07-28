@@ -71,6 +71,23 @@ class ExpectResponse(Generic[T]):
         return self._value
 
 
+def _write_error_body(request: "TestServerRequest", message: bytes) -> None:
+    """Give error responses a Content-Type and a body.
+
+    Gecko never fires `load` for an error response carrying neither -- the
+    document renders through the plaintext viewer and then sits at readyState
+    "interactive" forever. page.goto() waits for `load` by default, so it hangs
+    until the test times out. Reproduced identically on stock Firefox, so this
+    is Gecko behaviour rather than anything Camoufox does; it surfaced here only
+    because this server was answering 404/401 with a bare status line, which no
+    real server does.
+    """
+    body = b"<html><body>" + message + b"</body></html>"
+    request.setHeader(b"Content-Type", b"text/html; charset=utf-8")
+    request.setHeader(b"Content-Length", str(len(body)))
+    request.write(body)
+
+
 class TestServerRequest(http.Request):
     __test__ = False
     channel: "TestServerHTTPChannel"
@@ -106,6 +123,7 @@ class TestServerRequest(http.Request):
             if not creds_correct:
                 self.setHeader(b"www-authenticate", 'Basic realm="Secure Area"')
                 self.setResponseCode(HTTPStatus.UNAUTHORIZED)
+                _write_error_body(self, b"401 Unauthorized")
                 self.finish()
                 return
         if server.csp.get(path):
@@ -130,6 +148,7 @@ class TestServerRequest(http.Request):
             self.setResponseCode(HTTPStatus.OK)
         except (FileNotFoundError, IsADirectoryError, PermissionError):
             self.setResponseCode(HTTPStatus.NOT_FOUND)
+            _write_error_body(self, b"404 Not Found")
         self.finish()
 
 
