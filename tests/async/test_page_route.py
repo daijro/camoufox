@@ -20,7 +20,16 @@ from typing import Callable, List, Optional
 
 import pytest
 
-from playwright._impl._glob import glob_to_regex
+try:
+    from playwright._impl._glob import glob_to_regex
+except ImportError:
+    # Playwright >=1.55 renamed this private helper and made it return the
+    # pattern string rather than a compiled regex. Without the shim the import
+    # error takes the whole module down, silently dropping all 43 route tests.
+    from playwright._impl._glob import glob_to_regex_pattern
+
+    def glob_to_regex(glob: str) -> "re.Pattern":
+        return re.compile(glob_to_regex_pattern(glob))
 from playwright.async_api import (
     Browser,
     BrowserContext,

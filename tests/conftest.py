@@ -68,9 +68,17 @@ Playwright fixtures.
 
 @pytest.fixture(scope="session")
 def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    loop = asyncio.get_event_loop()
-    yield loop
-    loop.close()
+    # Not asyncio.get_event_loop(): with no running loop that is deprecated on
+    # 3.12 and raises RuntimeError on 3.14, which takes down every async test in
+    # the suite at fixture setup ("There is no current event loop in thread
+    # 'MainThread'") -- 1151 errors that look like browser failures but are not.
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        yield loop
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
 
 
 @pytest.fixture(scope="session")
