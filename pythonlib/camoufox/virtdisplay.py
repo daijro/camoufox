@@ -32,19 +32,19 @@ SCREEN_ENV_VAR = "CAMOUFOX_VIRTUAL_DISPLAY_SIZE"
 # The Composite extension, disabled by default (Xvfb's `-extension COMPOSITE`).
 #
 # This was briefly enabled by default on the theory that #93 (no video under
-# headless="virtual") was caused by disabling it. Measurement says otherwise:
+# headless="virtual") was caused by disabling it. It was not: #93 was a juggler
+# bug, fixed by capturing the screencast from the compositor instead of from
+# libwebrtc's X11 window capturer. Both states were measured before that fix:
 #
 #   composite off, record_video_dir  -> a valid .webm of 24 pure-white frames
 #   composite ON,  record_video_dir  -> browser dies with SIGSEGV, no video
 #   composite ON,  no recording      -> fine
 #
-# So compositing does not fix #93, and turning it on converts a blank recording
-# into a crash whenever someone records under a virtual display. Reproduced on
-# both this build and the shipped 152.0.4-beta.28, so the segfault is in the
-# screencast capture path, not something this branch introduced.
-#
-# Left as an opt-in for hosts with real GL where it may behave differently:
-# set CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE=1 to enable it.
+# The segfault was inside the X11 capturer, which the browser no longer uses, so
+# enabling Composite is no longer dangerous -- but it is also no longer good for
+# anything, since recording never touches X11 window capture now. Leave it off
+# (Camoufox's long-standing default) and keep the escape hatch:
+# CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE=1 enables it.
 COMPOSITE_ENV_VAR = "CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE"
 
 
