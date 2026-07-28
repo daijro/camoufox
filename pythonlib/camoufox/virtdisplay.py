@@ -16,31 +16,78 @@ from camoufox.pkgman import OS_NAME
 # Safe timeout for Xvfb writing display num, prevents infinite hang.
 DISPLAYFD_READ_TIMEOUT_S = 10.0
 
+# Xvfb screen geometry for headless="virtual".
+#
+# This used to be hardcoded to 1x1x24. A 1x1 root window is not a plausible
+# desktop: it breaks anything that measures the screen, and it is why
+# clamp_screen_to_display() has to special-case virtual displays (otherwise a
+# generated fingerprint gets clamped to 1x1). Default to an ordinary desktop
+# size instead. The framebuffer cost is trivial -- 1920*1080*4 bytes is ~8MB.
+#
+# Override with CAMOUFOX_VIRTUAL_DISPLAY_SIZE="<width>x<height>x<depth>", e.g.
+# "2560x1440x24". Depth may be omitted.
+DEFAULT_SCREEN = "1920x1080x24"
+SCREEN_ENV_VAR = "CAMOUFOX_VIRTUAL_DISPLAY_SIZE"
+
+# The Composite extension. Offscreen rendering -- which is what Playwright's
+# video recording relies on -- needs it, so disabling it silently broke
+# record_video_dir under headless="virtual" (#93). A real X server has it, so
+# enabling it is also the more faithful default.
+#
+# Set CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE=0 to go back to disabling it.
+COMPOSITE_ENV_VAR = "CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE"
+
+
+def _resolve_screen() -> str:
+    """Screen geometry for Xvfb's -screen argument."""
+    value = os.environ.get(SCREEN_ENV_VAR, "").strip()
+    if not value:
+        return DEFAULT_SCREEN
+    parts = value.lower().split("x")
+    if len(parts) not in (2, 3) or not all(p.isdigit() and int(p) > 0 for p in parts):
+        raise VirtualDisplayNotSupported(
+            f"{SCREEN_ENV_VAR} must look like '1920x1080' or '1920x1080x24', got {value!r}"
+        )
+    if len(parts) == 2:
+        parts.append("24")
+    return "x".join(parts)
+
 
 class VirtualDisplay:
     """A minimal virtual display implementation for Linux."""
 
-    xvfb_args = (
-        # fmt: off
-        "-screen", "0", "1x1x24",
-        "-ac",
-        "-nolisten", "tcp",
-        "-extension", "RENDER",
-        "+extension", "GLX",
-        "-extension", "COMPOSITE",
-        "-extension", "XVideo",
-        "-extension", "XVideo-MotionCompensation",
-        "-extension", "XINERAMA",
-        "-fp", "built-ins",
-        "-nocursor",
-        "-br",
-        # fmt: on
-    )
-
-    def __init__(self, debug: bool = False) -> None:
+    def __init__(
+        self,
+        debug: bool = False,
+        screen: Optional[str] = None,
+        composite: Optional[bool] = None,
+    ) -> None:
         self.debug = debug
+        self.screen = screen or _resolve_screen()
+        if composite is None:
+            composite = os.environ.get(COMPOSITE_ENV_VAR, "1").strip() not in ("0", "false", "")
+        self.composite = composite
         self.proc: Optional[subprocess.Popen] = None
         self._display: Optional[int] = None
+
+    @property
+    def xvfb_args(self) -> tuple:
+        return (
+            # fmt: off
+            "-screen", "0", self.screen,
+            "-ac",
+            "-nolisten", "tcp",
+            "-extension", "RENDER",
+            "+extension", "GLX",
+            "+extension" if self.composite else "-extension", "COMPOSITE",
+            "-extension", "XVideo",
+            "-extension", "XVideo-MotionCompensation",
+            "-extension", "XINERAMA",
+            "-fp", "built-ins",
+            "-nocursor",
+            "-br",
+            # fmt: on
+        )
 
     @property
     def xvfb_path(self) -> str:
