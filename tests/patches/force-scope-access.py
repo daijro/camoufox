@@ -23,6 +23,17 @@ Run against a specific build:
     CAMOUFOX_EXECUTABLE_PATH=/path/to/camoufox-bin python tests/patches/force-scope-access.py
 (without the env var it uses the camoufox-managed browser download.)
 
+Point this at a PACKAGED build (`make package-linux`), not at
+camoufox-*/obj-*/dist/bin/camoufox-bin. Like the other scripts in this
+directory it launches through AsyncCamoufox, and that path sets FONTCONFIG_FILE
+from the installed bundle and expects the packaged fonts/ tree. An unpackaged
+`make build` tree has neither, so font init fails ("[GFX1]: no fonts"), pending
+idle-startup work becomes a quit-application shutdown blocker, and Playwright
+force-kills the browser after its graceful-close timeout -- surfacing as a
+confusing TargetClosedError on a later new_page(). Measured 5/5 failures
+unpackaged vs 0/5 packaged for the same commit. (`make tests` is unaffected: its
+conftest launches via plain Playwright, not AsyncCamoufox.)
+
 What PASS means:
     * with forceScopeAccess=True, page.evaluate() can read a closed shadow root
       through `element.shadowRootUnl` and query inside it;
