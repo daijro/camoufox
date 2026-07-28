@@ -29,12 +29,22 @@ DISPLAYFD_READ_TIMEOUT_S = 10.0
 DEFAULT_SCREEN = "1920x1080x24"
 SCREEN_ENV_VAR = "CAMOUFOX_VIRTUAL_DISPLAY_SIZE"
 
-# The Composite extension. Offscreen rendering -- which is what Playwright's
-# video recording relies on -- needs it, so disabling it silently broke
-# record_video_dir under headless="virtual" (#93). A real X server has it, so
-# enabling it is also the more faithful default.
+# The Composite extension, disabled by default (Xvfb's `-extension COMPOSITE`).
 #
-# Set CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE=0 to go back to disabling it.
+# This was briefly enabled by default on the theory that #93 (no video under
+# headless="virtual") was caused by disabling it. Measurement says otherwise:
+#
+#   composite off, record_video_dir  -> a valid .webm of 24 pure-white frames
+#   composite ON,  record_video_dir  -> browser dies with SIGSEGV, no video
+#   composite ON,  no recording      -> fine
+#
+# So compositing does not fix #93, and turning it on converts a blank recording
+# into a crash whenever someone records under a virtual display. Reproduced on
+# both this build and the shipped 152.0.4-beta.28, so the segfault is in the
+# screencast capture path, not something this branch introduced.
+#
+# Left as an opt-in for hosts with real GL where it may behave differently:
+# set CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE=1 to enable it.
 COMPOSITE_ENV_VAR = "CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE"
 
 
@@ -65,7 +75,7 @@ class VirtualDisplay:
         self.debug = debug
         self.screen = screen or _resolve_screen()
         if composite is None:
-            composite = os.environ.get(COMPOSITE_ENV_VAR, "1").strip() not in ("0", "false", "")
+            composite = os.environ.get(COMPOSITE_ENV_VAR, "0").strip() in ("1", "true")
         self.composite = composite
         self.proc: Optional[subprocess.Popen] = None
         self._display: Optional[int] = None
