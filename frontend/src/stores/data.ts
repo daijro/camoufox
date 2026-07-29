@@ -285,10 +285,10 @@ function applyProfile(s: DataState, p: Profile): Profile[] {
 }
 
 export const useDataStore = create<DataState>((set, get) => ({
-  profiles: INITIAL_PROFILES,
-  proxies: INITIAL_PROXIES,
-  groups: INITIAL_GROUPS,
-  tags: INITIAL_TAGS,
+  profiles: isRemoteMode() ? [] : INITIAL_PROFILES,
+  proxies: isRemoteMode() ? [] : INITIAL_PROXIES,
+  groups: isRemoteMode() ? [] : INITIAL_GROUPS,
+  tags: isRemoteMode() ? [] : INITIAL_TAGS,
   settings: {
     apiPort: 50325,
     apiToken: 'cf_dev_token_mock_8f3a',
