@@ -413,6 +413,10 @@ class Frame {
       parentFrame._children.add(this);
     }
 
+    // Camoufox: see _createIsolatedContext(). Held per frame because the master
+    // sandbox is cached, and reset on every global object change.
+    this._masterSandbox = null;
+
     this._lastCommittedNavigationId = null;
     this._pendingNavigationId = null;
 
@@ -506,18 +510,53 @@ class Frame {
     };
   }
 
-  _createIsolatedContext(name) {
-    const principal = [this.domWindow()]; // extended principal
-    const sandbox = Cu.Sandbox(principal, {
-      sandboxPrototype: this.domWindow(),
-      wantComponents: false,
-      wantExportHelpers: false,
-      wantXrays: true,
-    });
+  // Camoufox: a "god mode" sandbox in its own compartment, running with the
+  // system principal so that chrome-gated WebIDL (Element.shadowRootUnl, added
+  // by patches/shadow-root-bypass.patch behind Func="Document::IsCallerChromeOrAddon")
+  // is reachable from evaluated code. Only used when `forceScopeAccess` is set;
+  // evaluated code then runs privileged, which is the point and the risk.
+  //
+  // Cached per document, not per frame: _onGlobalObjectCleared() drops it so a
+  // new document gets a new compartment.
+  _getMasterSandbox() {
+    if (!this._masterSandbox) {
+      this._masterSandbox = Cu.Sandbox(
+        Services.scriptSecurityManager.getSystemPrincipal(),
+        {
+          sandboxPrototype: this.domWindow(),
+          wantComponents: false,
+          wantExportHelpers: false,
+          wantXrays: true,
+          freshCompartment: true,
+        }
+      );
+    }
+    return this._masterSandbox;
+  }
+
+  _createIsolatedContext(name, useMaster = false) {
+    let sandbox;
+    if (useMaster && ChromeUtils.camouGetBool('forceScopeAccess', false)) {
+      sandbox = this._getMasterSandbox();
+    } else {
+      const principal = [this.domWindow()]; // extended principal
+      sandbox = Cu.Sandbox(principal, {
+        sandboxPrototype: this.domWindow(),
+        wantComponents: false,
+        wantExportHelpers: false,
+        wantXrays: true,
+      });
+    }
     const world = this._runtime.createExecutionContext(this.domWindow(), sandbox, {
       frameId: this.id(),
       name,
     });
+    // Camoufox: give the default world a main-world twin for the `mw:` escape
+    // hatch (Runtime.js). Only the default world gets one -- that is where
+    // page.evaluate() lands; Playwright's own utility world has no business
+    // reaching into the page.
+    if (!name && ChromeUtils.camouGetBool('allowMainWorld', false))
+      world.enableMainWorld(this.domWindow());
     this._worldNameToContext.set(name, world);
     return world;
   }
@@ -556,13 +595,24 @@ class Frame {
       this._runtime.destroyExecutionContext(context);
     this._worldNameToContext.clear();
 
-    const domWindow = this.domWindow();
-    this._worldNameToContext.set('', this._runtime.createExecutionContext(domWindow, domWindow, {
-      frameId: this._frameId,
-      name: '',
-    }));
-    if (ChromeUtils.camouGetBool('forceScopeAccess', false))
-      installClosedShadowAccessor(domWindow);
+    // Camoufox: scope the default execution context to a sandbox so that
+    // page.evaluate() -- which Playwright routes to the world named '' -- runs
+    // in its own compartment instead of the page's. Nothing the automation
+    // evaluates is then reachable by page script, and page-installed traps
+    // (poisoned prototypes, hooked Function.prototype.toString, window getters)
+    // do not see it. Upstream Playwright puts this context on the page window
+    // itself; that is the leak this fork exists to avoid.
+    //
+    // The cost, and the reason Runtime.js keeps a `mw:` escape hatch: with Xray
+    // vision the page's own JS state is invisible from here, so
+    // page.evaluate('window.pageVar') reads undefined.
+    //
+    // Drop the master sandbox with the document it was created for. It is the
+    // only world that would otherwise outlive a navigation, and a persistent
+    // global means state written by evaluate() on one page is still there on
+    // the next -- every other world starts empty per document.
+    this._masterSandbox = null;
+    this._createIsolatedContext('', true);
     for (const [name, world] of this._frameTree._isolatedWorlds) {
       if (name)
         this._createIsolatedContext(name);
@@ -693,54 +743,5 @@ function channelId(channel) {
   return helper.generateId();
 }
 
-// Camoufox: make Element.shadowRootUnl reachable from page.evaluate() when the
-// `forceScopeAccess` config key is set.
-//
-// patches/shadow-root-bypass.patch adds `shadowRootUnl` to Element.webidl gated
-// on Func="Document::IsCallerChromeOrAddon". page.evaluate() runs as the page
-// principal, so that gate never passed and the property read as `undefined` --
-// the flag was declared in settings/properties.json and settings/camoucfg.jvv
-// but nothing ever consulted it (#628).
-//
-// The gate tests the *caller*, not the world the property lives in. So export a
-// getter whose body stays in this module's system-principal scope and install it
-// on the page's own Element.prototype. The main world is left exactly as it was:
-// page.evaluate() still runs against the real page window and still sees page
-// globals, expandos, and handles.
-//
-// Two caveats, both inherent to keeping evaluation in the main world:
-//   * The property is defined on the page's prototype, so the page can see it
-//     too while the flag is on. Anything that probes for it can therefore
-//     fingerprint the flag -- which is why this stays opt-in and off by default.
-//   * A page that defines its own `shadowRootUnl` on an element shadows the
-//     prototype accessor and can return whatever it likes. A page can only do
-//     that if it already knows the property exists, i.e. already detected us.
-//
-// The alternative (PR #685) hides the accessor in a Cu.Sandbox, which defeats
-// both caveats but relocates the default execution context: with Xray vision on
-// a sandboxPrototype window, page expandos become invisible, so
-// page.evaluate('window.pageSecret') starts returning null for anyone who turns
-// the flag on. Silently breaking evaluate is the worse trade.
-// Credit to @Cloudymap1e (#685) for the Cu.exportFunction technique.
-function installClosedShadowAccessor(domWindow) {
-  try {
-    const getter = Cu.exportFunction(function() {
-      // `this` arrives Xray-wrapped, so this read is attributed to the
-      // system-principal caller and Document::IsCallerChromeOrAddon passes.
-      return this.shadowRootUnl;
-    }, domWindow);
-    // Waive Xrays so the definition lands in the page's compartment rather than
-    // in the chrome-only Xray expando holder, where page script could not
-    // reach it.
-    const pageGlobal = Cu.waiveXrays(domWindow);
-    Object.defineProperty(pageGlobal.Element.prototype, 'shadowRootUnl', {
-      configurable: true,
-      enumerable: false,
-      get: getter,
-    });
-  } catch (e) {
-    dump(`juggler: failed to install shadowRootUnl accessor: ${e}\n`);
-  }
-}
 
 

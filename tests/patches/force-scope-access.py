@@ -1,46 +1,40 @@
 """
-Verify `forceScopeAccess` reaches closed shadow roots without relocating the
-main world (daijro/camoufox#628).
+Verify `forceScopeAccess` reaches closed shadow roots (daijro/camoufox#628).
 
 patches/shadow-root-bypass.patch adds `Element.shadowRootUnl` to the WebIDL,
-gated on Func="Document::IsCallerChromeOrAddon". page.evaluate() runs as the
-page principal, so that gate never passed and the property read as `undefined`.
-Meanwhile `forceScopeAccess` was declared in settings/properties.json and
-settings/camoucfg.jvv but nothing in additions/juggler/ ever consulted it, so
-the flag was accepted, validated, and silently ignored.
+gated on Func="Document::IsCallerChromeOrAddon". That gate tests the *caller*,
+so whether page.evaluate() can read the property depends entirely on the
+principal of the world it runs in.
 
-FrameTree.js now installs a getter whose body stays in the juggler module's
-system-principal scope, so the WebIDL gate is satisfied by the *caller* while
-the default execution context remains the real page window.
+With `forceScopeAccess` set, FrameTree.js builds the default execution context
+as a system-principal Cu.Sandbox in its own compartment -- the "master sandbox"
+-- instead of the page-principal sandbox used otherwise. The gate then passes.
+The flag had been declared in settings/properties.json and settings/camoucfg.jvv
+with nothing consulting it, so it was accepted, validated, and ignored (#628).
 
-That last part is the point of this test. The obvious alternative -- evaluating
-in a Cu.Sandbox over the page window -- also unlocks the binding, but Xray
-vision then hides page expandos, so `page.evaluate('window.pageSecret')`
-silently starts returning None for anyone who enables the flag. These cases pin
-both halves: the binding works AND main-world semantics are untouched.
+Note what this costs, and why the flag is opt-in and off by default: evaluated
+scripts run with chrome privileges while it is on. That is the point of the
+flag, but it means anything you evaluate can reach far past the page.
+
+What it does *not* cost: page-visible surface. The accessor lives in the
+sandbox, never on the page's own Element.prototype, so a detection script cannot
+find `shadowRootUnl` and cannot tell the flag is set.
 
 Run against a specific build:
     CAMOUFOX_EXECUTABLE_PATH=/path/to/camoufox-bin python tests/patches/force-scope-access.py
 (without the env var it uses the camoufox-managed browser download.)
-
-Point this at a PACKAGED build (`make package-linux`), not at
-camoufox-*/obj-*/dist/bin/camoufox-bin. Like the other scripts in this
-directory it launches through AsyncCamoufox, and that path sets FONTCONFIG_FILE
-from the installed bundle and expects the packaged fonts/ tree. An unpackaged
-`make build` tree has neither, so font init fails ("[GFX1]: no fonts"), pending
-idle-startup work becomes a quit-application shutdown blocker, and Playwright
-force-kills the browser after its graceful-close timeout -- surfacing as a
-confusing TargetClosedError on a later new_page(). Measured 5/5 failures
-unpackaged vs 0/5 packaged for the same commit. (`make tests` is unaffected: its
-conftest launches via plain Playwright, not AsyncCamoufox.)
+Against an unpackaged objdir build, run `make stage-fonts` first: these launch
+through AsyncCamoufox, which sets FONTCONFIG_FILE, and a build with no bundled
+fonts fails startup in a way that surfaces as a confusing TargetClosedError.
 
 What PASS means:
     * with forceScopeAccess=True, page.evaluate() can read a closed shadow root
-      through `element.shadowRootUnl` and query inside it;
-    * with the flag off (the default), `shadowRootUnl` is undefined -- the
-      accessor is not installed and the default build gains no new surface;
-    * in BOTH modes page.evaluate() still sees page globals and page expandos,
-      element handles still resolve, and ChromeUtils is not exposed to the page.
+      through `element.shadowRootUnl` and query inside it, and runs privileged;
+    * with the flag off (the default), `shadowRootUnl` is undefined and
+      evaluation has no privileges;
+    * in BOTH modes the page sees no trace of the property, evaluation stays
+      isolated from page JS state, element handles still resolve, and the world
+      does not carry state across a navigation.
 """
 
 import asyncio
@@ -59,10 +53,14 @@ PAGE = """
   const host = document.querySelector('#host');
   const root = host.attachShadow({mode: 'closed'});
   root.innerHTML = '<span id="secret">inside</span>';
-  // Page-owned state that main-world evaluation must keep seeing.
+  // Page-owned state; isolated evaluation must not see it.
   window.pageSecret = 41;
   document.querySelector('#target').pageMarker = 'page-owned';
-  document.documentElement.dataset.chromeUtilsType = typeof ChromeUtils;
+  // What the page itself can detect.
+  const data = document.documentElement.dataset;
+  data.chromeUtilsType = typeof ChromeUtils;
+  data.shadowUnlOnElement = typeof host.shadowRootUnl;
+  data.shadowUnlOnPrototype = ('shadowRootUnl' in Element.prototype) ? 'present' : 'absent';
 </script>
 """
 
@@ -82,7 +80,7 @@ def _check(results: Dict[str, Any], label: str, got: Any, expected: Any) -> None
     results[label] = ok
     verdict = "PASS" if ok else "FAIL"
     suffix = "" if ok else f" (expected {expected!r})"
-    print(f"  {verdict} {label:38} -> {got!r}{suffix}")
+    print(f"  {verdict} {label:40} -> {got!r}{suffix}")
 
 
 async def _run(force_scope_access: bool) -> bool:
@@ -93,22 +91,23 @@ async def _run(force_scope_access: bool) -> bool:
         await page.set_content(PAGE)
 
         # --- the feature itself ---
-        shadow_type = await page.evaluate(
-            "typeof document.querySelector('#host').shadowRootUnl"
-        )
         _check(
             results,
             "typeof element.shadowRootUnl",
-            shadow_type,
+            await page.evaluate("typeof document.querySelector('#host').shadowRootUnl"),
             "object" if force_scope_access else "undefined",
         )
 
         if force_scope_access:
-            text = await page.evaluate(
-                "document.querySelector('#host').shadowRootUnl"
-                ".querySelector('#secret').textContent"
+            _check(
+                results,
+                "closed shadow root is queryable",
+                await page.evaluate(
+                    "document.querySelector('#host').shadowRootUnl"
+                    ".querySelector('#secret').textContent"
+                ),
+                "inside",
             )
-            _check(results, "closed shadow root is queryable", text, "inside")
             # The plain, spec-compliant accessor must still refuse.
             _check(
                 results,
@@ -117,18 +116,33 @@ async def _run(force_scope_access: bool) -> bool:
                 None,
             )
 
-        # --- main-world semantics must be identical in both modes ---
-        _check(results, "page global visible to evaluate", await page.evaluate("window.pageSecret"), 41)
+        # --- the privilege that comes with it ---
         _check(
             results,
-            "page expando visible to evaluate",
-            await page.evaluate("document.querySelector('#target').pageMarker"),
-            "page-owned",
+            "evaluation is privileged",
+            await page.evaluate("typeof ChromeUtils"),
+            "object" if force_scope_access else "undefined",
         )
 
-        handle = await page.evaluate_handle("() => ({value: 42})")
-        _check(results, "evaluate_handle round-trips", await handle.json_value(), {"value": 42})
-        await handle.dispose()
+        # --- the page must learn nothing, either way ---
+        _check(results, "page cannot see ChromeUtils", await page.get_attribute("html", "data-chrome-utils-type"), "undefined")
+        _check(results, "page cannot see shadowRootUnl", await page.get_attribute("html", "data-shadow-unl-on-element"), "undefined")
+        _check(
+            results,
+            "page prototype is untouched",
+            await page.get_attribute("html", "data-shadow-unl-on-prototype"),
+            "absent",
+        )
+
+        # --- isolation is unchanged by the flag ---
+        _check(results, "page global hidden from evaluate", await page.evaluate("window.pageSecret"), None)
+        _check(
+            results,
+            "page expando hidden from evaluate",
+            await page.evaluate("document.querySelector('#target').pageMarker"),
+            None,
+        )
+        _check(results, "DOM still reachable", await page.evaluate("document.querySelector('#target').textContent"), "content")
 
         element = await page.query_selector("#target")
         _check(
@@ -137,18 +151,19 @@ async def _run(force_scope_access: bool) -> bool:
             await element.get_attribute("id") if element else None,
             "target",
         )
+        handle = await page.evaluate_handle("() => ({value: 42})")
+        _check(results, "evaluate_handle round-trips", await handle.json_value(), {"value": 42})
+        await handle.dispose()
 
-        # --- the page must not gain chrome privileges either way ---
+        # --- the world must not outlive its document ---
+        # The master sandbox is the only world that is cached, so it is the only
+        # one that could carry evaluate() state from one page to the next.
+        await page.evaluate("globalThis.leakedAcrossNavigation = 'yes'")
+        await page.goto("about:blank")
         _check(
             results,
-            "page cannot see ChromeUtils",
-            await page.get_attribute("html", "data-chrome-utils-type"),
-            "undefined",
-        )
-        _check(
-            results,
-            "evaluate cannot see ChromeUtils",
-            await page.evaluate("typeof ChromeUtils"),
+            "world is fresh after navigation",
+            await page.evaluate("typeof globalThis.leakedAcrossNavigation"),
             "undefined",
         )
 
@@ -163,10 +178,9 @@ async def main() -> int:
 
     print()
     if passed:
-        print("PASS: forceScopeAccess unlocks closed shadow roots and main-world "
-              "evaluation is unchanged")
+        print("PASS: forceScopeAccess unlocks closed shadow roots without leaking to the page")
     else:
-        print("FAIL: forceScopeAccess is ignored, or it altered main-world evaluation")
+        print("FAIL: forceScopeAccess is ignored, or it changed what the page can see")
     print()
     return 0 if passed else 1
 
