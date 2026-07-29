@@ -387,9 +387,11 @@ export class PageAgent {
       nsFiles = await Promise.all(files.map(filePath => File.createFromFileName(filePath)));
     }
     unsafeObject.mozSetFileArray(nsFiles);
+    // The file picker's own shape (DispatchEvents(), HTMLInputElement.cpp).
+    // Upstream marks both cancelable and composed, which reads as synthetic.
     const events = [
-      new (frame.domWindow().Event)('input', { bubbles: true, cancelable: true, composed: true }),
-      new (frame.domWindow().Event)('change', { bubbles: true, cancelable: true, composed: true }),
+      new (frame.domWindow().Event)('input', { bubbles: true, composed: true }),
+      new (frame.domWindow().Event)('change', { bubbles: true }),
     ];
     for (const event of events)
       unsafeObject.dispatchEvent(event);
