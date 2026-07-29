@@ -547,6 +547,25 @@ class Frame {
         wantXrays: true,
       });
     }
+    // Camoufox: make `window` inside the world mean the world's own global.
+    //
+    // Without this, `window` resolves through sandboxPrototype to the page's
+    // window, so `window.x = 1` and `globalThis.x = 1` land in different places
+    // and only the latter is readable back. Playwright calls its bindings as
+    // `globalThis[name]` and survives, but anything using `window[name]` --
+    // expose_function() as it is documented, and any page script the automation
+    // evaluates -- silently reads undefined (#628 follow-up).
+    //
+    // Nothing is lost: the sandbox still inherits every real window property
+    // through its prototype, so window.document, window.location and friends
+    // resolve exactly as before. It is also the more faithful shape, since
+    // `window === globalThis` holds in a real page and did not hold here.
+    Object.defineProperty(sandbox, 'window', {
+      value: sandbox,
+      configurable: true,
+      writable: true,
+      enumerable: false,
+    });
     const world = this._runtime.createExecutionContext(this.domWindow(), sandbox, {
       frameId: this.id(),
       name,
