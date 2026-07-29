@@ -99,6 +99,8 @@ export type Profile = {
   hasFingerprintConfig?: boolean
   fingerprintConfigJson?: string | null
   restoreSession?: boolean
+  cpuPercent?: number | null
+  memoryMb?: number | null
 }
 
 export type CreateProfileInput = {

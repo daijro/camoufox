@@ -1,4 +1,4 @@
-# Camoufox Console API 契约（v0.5）
+# Camoufox Console API 契约（v0.6）
 
 Base URL：`VITE_API_BASE`（例如 `http://127.0.0.1:50325`）
 
@@ -9,18 +9,23 @@ Base URL：`VITE_API_BASE`（例如 `http://127.0.0.1:50325`）
 | Method | Path | 说明 |
 |--------|------|------|
 | GET | `/api/v1/health` | 健康检查；`realLaunch` 反映 `CAMOUFOX_REAL_LAUNCH` |
-| GET | `/api/v1/settings` | 系统设置 |
+| GET | `/api/v1/settings` | 系统设置（含 `maxConcurrency`，默认 8） |
+| PATCH | `/api/v1/settings` | 更新设置（`maxConcurrency` 1–64 等） |
 | GET | `/api/v1/profiles` | 环境列表（`?include_deleted=true`） |
 | GET | `/api/v1/profiles/{id}` | 详情（含 `hasFingerprintConfig` / `restoreSession`） |
 | POST | `/api/v1/profiles` | 创建（`restoreSession` 默认 true） |
 | PATCH | `/api/v1/profiles/{id}` | 更新（可改 `restoreSession`） |
-| POST | `/api/v1/profiles/{id}/start` | 启动；首次锁定指纹；条件注入 Cookie；加载 Console Home |
+| POST | `/api/v1/profiles/{id}/start` | 启动；首次锁定指纹；达 `maxConcurrency` 时 **409**「已达并发上限」 |
 | POST | `/api/v1/profiles/{id}/stop` | 停止 |
+| POST | `/api/v1/profiles/{id}/focus` | 有头运行中：按 PID 置前窗口（Windows）；无头/无 PID **400** |
+| POST | `/api/v1/profiles/{id}/clear-cache` | 须 idle；删 `cache2`/`startupCache` 等，保留 Cookie/指纹；更新 `diskMb`；运行中 **409** |
+| POST | `/api/v1/profiles/{id}/reset-profile` | 须 idle；重建 Profile 目录；保留 DB 行/指纹锁定/代理/平台账号；`cookiesJson=[]`；运行中 **409** |
 | POST | `/api/v1/profiles/{id}/resample-fingerprint` | 重新采样并锁定指纹（须先停止；**409** if running） |
 | POST | `/api/v1/profiles/{id}/trash` | 软删除 |
 | POST | `/api/v1/profiles/{id}/restore` | 从回收站恢复 |
 | DELETE | `/api/v1/profiles/{id}` | 彻底删除（含 `rmtree` Profile 目录） |
-| GET | `/api/v1/runtime` | 运行中实例 |
+| GET | `/api/v1/runtime` | 运行中实例；附 `cpuPercent` / `memoryMb`（按 pid，无则 null） |
+| GET | `/api/v1/runtime/stats` | `{ cpuPercent, memoryUsedMb, memoryTotalMb, running, maxConcurrency }` |
 | GET/POST | `/api/v1/proxies` | 代理列表 / 新建 |
 | POST | `/api/v1/proxies/import` | 批量文本导入 |
 | POST | `/api/v1/proxies/{id}/check` | 经代理探测公网出口 IP |
@@ -32,7 +37,7 @@ Base URL：`VITE_API_BASE`（例如 `http://127.0.0.1:50325`）
 | DELETE | `/api/v1/tags/{id}` | 删除标签 |
 | GET | `/api/v1/fingerprint-templates` | 指纹模板列表 |
 | POST | `/api/v1/fingerprint-templates` | 新建自定义模板 |
-| PATCH | `/api/v1/fingerprint-templates/{id}` | 更新 |
+| PATCH | `/api/v1/fingerprint-templates/{id}` | 更新；可提交完整 `configJson` 字符串；**system** 不可改关键字段（**400**） |
 | POST | `/api/v1/fingerprint-templates/{id}/sample` | 采样固化 `config_json` |
 | POST | `/api/v1/fingerprint-templates/{id}/default` | 设为全局默认 |
 | POST | `/api/v1/fingerprint-templates/{id}/copy` | 复制为 custom |
@@ -46,6 +51,21 @@ Base URL：`VITE_API_BASE`（例如 `http://127.0.0.1:50325`）
 | POST | `/api/v1/profiles/{id}/platform-accounts/{aid}/activate` | 设为当前服务 |
 | DELETE | `/api/v1/profiles/{id}/platform-accounts/{aid}` | 删除 |
 | GET | `/api/v1/home/{id}?token=` | Console Home 聚合数据 |
+
+## 环境运维（v0.6）
+
+| 能力 | 行为 |
+|------|------|
+| 聚焦窗口 | `POST .../focus`；Windows `EnumWindows` + `SetForegroundWindow` |
+| 清缓存 | 删除缓存目录，保留 cookies / places / 扩展 / `fingerprint_config_json` |
+| 重置目录 | `rmtree` 后重建；DB 元数据与指纹锁定保留 |
+
+## 实例监控（v0.6）
+
+| 能力 | 行为 |
+|------|------|
+| 进程资源 | `psutil` 按 profile `pid`（含子进程）汇总 CPU/内存 |
+| 并发上限 | settings `max_concurrency`；启动前计数 running+starting+api |
 
 ## 环境身份持久化
 
@@ -71,4 +91,8 @@ Base URL：`VITE_API_BASE`（例如 `http://127.0.0.1:50325`）
 
 ## Profile JSON（camelCase）
 
-见 `types/console.ts`：`hasFingerprintConfig`、`restoreSession`、`fingerprintConfigJson`（有锁时可能返回）等。
+见 `types/console.ts`：`hasFingerprintConfig`、`restoreSession`、`fingerprintConfigJson`、`cpuPercent`、`memoryMb`（runtime 列表）等。
+
+## 前端路由（相关）
+
+- `/fingerprints/:id/edit` — 指纹三栏高级编辑器（自定义可保存；系统仅「复制后编辑」）

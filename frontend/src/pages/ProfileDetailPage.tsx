@@ -174,6 +174,21 @@ export function ProfileDetailPage() {
               </span>
             </div>
             <div className="flex gap-2">
+              {(profile.status === 'running' || profile.status === 'api') && !profile.headless ? (
+                <Button
+                  variant="secondary"
+                  disabled={!isRemoteMode() || !profile.pid}
+                  onClick={() => {
+                    void remote
+                      .remoteFocusProfile(profile.id)
+                      .catch((e) =>
+                        window.alert(e instanceof Error ? e.message : String(e)),
+                      )
+                  }}
+                >
+                  聚焦窗口
+                </Button>
+              ) : null}
               {profile.status === 'running' || profile.status === 'api' ? (
                 <Button variant="danger" onClick={() => void stopProfile(profile.id)}>
                   强制停止
@@ -288,9 +303,30 @@ export function ProfileDetailPage() {
               <p className="text-[11px] text-slate-400">
                 Cookie JSON 仅在 Profile 尚无 cookies.sqlite 时注入；已有站点登录态不会被覆盖。
               </p>
-              <Button variant="secondary" onClick={() => setSection('accounts')}>
-                管理平台账号
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => setSection('accounts')}>
+                  管理平台账号
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={
+                    !isRemoteMode() ||
+                    profile.status === 'running' ||
+                    profile.status === 'starting' ||
+                    profile.status === 'api'
+                  }
+                  onClick={() => {
+                    void remote
+                      .remoteClearCache(profile.id)
+                      .then((p) => useDataStore.getState().upsertProfile(p))
+                      .catch((e) =>
+                        window.alert(e instanceof Error ? e.message : String(e)),
+                      )
+                  }}
+                >
+                  清除缓存（保留 Cookie）
+                </Button>
+              </div>
             </section>
           ) : null}
 
@@ -546,20 +582,59 @@ export function ProfileDetailPage() {
           ) : null}
 
           {section === 'danger' ? (
-            <section className="rounded-xl border border-rose-200 bg-rose-50 p-6">
-              <h3 className="text-sm font-bold text-rose-800">危险操作</h3>
-              <p className="mt-2 text-xs text-rose-700">
-                将环境移入回收站（软删除）。可在回收站恢复或彻底删除。
-              </p>
-              <Button
-                variant="danger"
-                className="mt-4"
-                onClick={() => {
-                  void softDelete(profile.id).then(() => navigate('/profiles/trash'))
-                }}
-              >
-                扔进回收站
-              </Button>
+            <section className="space-y-6 rounded-xl border border-rose-200 bg-rose-50 p-6">
+              <div>
+                <h3 className="text-sm font-bold text-rose-800">危险操作</h3>
+                <p className="mt-2 text-xs text-rose-700">
+                  将环境移入回收站（软删除）。可在回收站恢复或彻底删除。
+                </p>
+                <Button
+                  variant="danger"
+                  className="mt-4"
+                  onClick={() => {
+                    void softDelete(profile.id).then(() => navigate('/profiles/trash'))
+                  }}
+                >
+                  扔进回收站
+                </Button>
+              </div>
+              <div className="border-t border-rose-200 pt-4">
+                <h4 className="text-sm font-bold text-rose-800">重置 Profile 目录</h4>
+                <p className="mt-2 text-xs text-rose-700">
+                  清空磁盘上的 Profile 目录并重建空目录。保留数据库中的指纹锁定、代理绑定与平台账号；Cookie
+                  JSON 清空。须先停止环境。
+                </p>
+                <Button
+                  variant="danger"
+                  className="mt-4"
+                  disabled={
+                    !isRemoteMode() ||
+                    profile.status === 'running' ||
+                    profile.status === 'starting' ||
+                    profile.status === 'api'
+                  }
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        '确定重置 Profile 目录？站点登录态与缓存将被清空，指纹锁定会保留。',
+                      )
+                    ) {
+                      return
+                    }
+                    void remote
+                      .remoteResetProfile(profile.id)
+                      .then((p) => {
+                        useDataStore.getState().upsertProfile(p)
+                        setCookies('[]')
+                      })
+                      .catch((e) =>
+                        window.alert(e instanceof Error ? e.message : String(e)),
+                      )
+                  }}
+                >
+                  重置 Profile 目录
+                </Button>
+              </div>
             </section>
           ) : null}
         </div>

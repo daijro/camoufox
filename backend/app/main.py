@@ -37,6 +37,14 @@ from .platform_accounts import (
     stage_console_home_addon,
     verify_home_session,
 )
+from .profile_ops import (
+    clear_profile_cache,
+    du_mb,
+    focus_window_by_pid,
+    process_stats,
+    reset_profile_dir,
+    system_stats,
+)
 
 # ---------------------------------------------------------------------------
 # Paths / config
@@ -195,10 +203,42 @@ def init_db() -> None:
             )
 
         seed_fingerprint_templates(conn)
+        ensure_default_settings(conn)
 
         n = conn.execute("SELECT COUNT(*) AS c FROM profiles").fetchone()["c"]
         if n == 0:
             seed(conn)
+
+
+def ensure_default_settings(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        ("camoufox_version", CAMOUFOX_VERSION),
+    )
+    row = conn.execute(
+        "SELECT value FROM settings WHERE key='max_concurrency'"
+    ).fetchone()
+    if not row:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?)",
+            ("max_concurrency", "8"),
+        )
+
+
+def get_max_concurrency(conn: Optional[sqlite3.Connection] = None) -> int:
+    def _read(c: sqlite3.Connection) -> int:
+        row = c.execute(
+            "SELECT value FROM settings WHERE key='max_concurrency'"
+        ).fetchone()
+        try:
+            return max(1, min(64, int(row["value"]))) if row else 8
+        except (TypeError, ValueError):
+            return 8
+
+    if conn is not None:
+        return _read(conn)
+    with db() as c:
+        return _read(c)
 
 
 def seed_fingerprint_templates(conn: sqlite3.Connection) -> None:
@@ -503,6 +543,13 @@ class TemplatePatch(BaseModel):
     alignGeo: Optional[bool] = None
     webrtc: Optional[str] = None
     usePreset: Optional[bool] = None
+    configJson: Optional[str] = None
+
+
+class SettingsPatch(BaseModel):
+    maxConcurrency: Optional[int] = None
+    defaultHeadless: Optional[bool] = None
+    theme: Optional[str] = None
 
 
 class BrowserActiveBody(BaseModel):
@@ -597,6 +644,14 @@ async def start_profile_async(profile_id: str) -> dict[str, Any]:
                 raise HTTPException(404, "Profile not found")
             if row["status"] in ("starting", "running", "api"):
                 raise HTTPException(409, f"Profile is already {row['status']}")
+            running_n = conn.execute(
+                """SELECT COUNT(*) AS c FROM profiles
+                   WHERE deleted_at IS NULL
+                     AND status IN ('running','api','starting')"""
+            ).fetchone()["c"]
+            max_c = get_max_concurrency(conn)
+            if running_n >= max_c:
+                raise HTTPException(409, f"已达并发上限（{max_c}）")
             profile = row_to_profile(row)
             conn.execute(
                 "UPDATE profiles SET status=? WHERE id=?", ("starting", profile_id)
@@ -814,6 +869,7 @@ def get_settings(authorization: Optional[str] = Header(None)):
     require_token(authorization)
     with db() as conn:
         rows = conn.execute("SELECT key, value FROM settings").fetchall()
+        max_c = get_max_concurrency(conn)
     data = {r["key"]: r["value"] for r in rows}
     return {
         "apiPort": 50325,
@@ -821,10 +877,37 @@ def get_settings(authorization: Optional[str] = Header(None)):
         "apiRunning": True,
         "camoufoxVersion": data.get("camoufox_version", CAMOUFOX_VERSION),
         "profileRoot": str(PROFILE_ROOT),
-        "theme": "light",
-        "defaultHeadless": False,
+        "theme": data.get("theme", "light"),
+        "defaultHeadless": data.get("default_headless", "0") in ("1", "true", "True"),
         "realLaunch": REAL_LAUNCH,
+        "maxConcurrency": max_c,
     }
+
+
+@app.patch("/api/v1/settings")
+def patch_settings(body: SettingsPatch, authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    data = body.model_dump(exclude_unset=True)
+    with db() as conn:
+        if "maxConcurrency" in data and data["maxConcurrency"] is not None:
+            n = int(data["maxConcurrency"])
+            if n < 1 or n > 64:
+                raise HTTPException(400, "maxConcurrency 须在 1–64")
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                ("max_concurrency", str(n)),
+            )
+        if "defaultHeadless" in data and data["defaultHeadless"] is not None:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                ("default_headless", "1" if data["defaultHeadless"] else "0"),
+            )
+        if "theme" in data and data["theme"]:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                ("theme", str(data["theme"])),
+            )
+    return get_settings(authorization)
 
 
 @app.get("/api/v1/profiles")
@@ -972,6 +1055,75 @@ async def stop_profile_route(
     return await stop_profile_async(profile_id)
 
 
+@app.post("/api/v1/profiles/{profile_id}/focus")
+def focus_profile(profile_id: str, authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    profile = get_profile(profile_id)
+    if profile.get("status") not in ("running", "api"):
+        raise HTTPException(400, "环境未在运行")
+    if profile.get("headless"):
+        raise HTTPException(400, "无头模式无法聚焦窗口")
+    pid = profile.get("pid")
+    if not pid:
+        raise HTTPException(400, "无有效 PID")
+    ok = focus_window_by_pid(int(pid))
+    if not ok:
+        raise HTTPException(400, "未找到可聚焦的窗口（仅 Windows 有头模式支持）")
+    with db() as conn:
+        append_log(conn, profile_id, f"已聚焦窗口 PID={pid}")
+    return {"ok": True, "pid": pid}
+
+
+@app.post("/api/v1/profiles/{profile_id}/clear-cache")
+def clear_cache_profile(
+    profile_id: str, authorization: Optional[str] = Header(None)
+):
+    require_token(authorization)
+    profile = get_profile(profile_id)
+    if profile.get("status") in ("running", "api", "starting"):
+        raise HTTPException(409, "请先停止环境再清除缓存")
+    path = profile.get("profilePath") or ""
+    removed = clear_profile_cache(path)
+    disk = du_mb(path)
+    with db() as conn:
+        conn.execute(
+            "UPDATE profiles SET disk_mb=? WHERE id=?", (disk, profile_id)
+        )
+        append_log(
+            conn,
+            profile_id,
+            f"已清除缓存：{', '.join(removed) if removed else '无可清理项'}；占用 {disk} MB",
+        )
+    return get_profile(profile_id)
+
+
+@app.post("/api/v1/profiles/{profile_id}/reset-profile")
+def reset_profile_route(
+    profile_id: str, authorization: Optional[str] = Header(None)
+):
+    require_token(authorization)
+    profile = get_profile(profile_id)
+    if profile.get("status") in ("running", "api", "starting"):
+        raise HTTPException(409, "请先停止环境再重置 Profile")
+    path = profile.get("profilePath") or ""
+    if not path:
+        raise HTTPException(400, "无 Profile 路径")
+    reset_profile_dir(path)
+    disk = du_mb(path)
+    with db() as conn:
+        conn.execute(
+            """UPDATE profiles SET cookies_json='[]', disk_mb=?,
+               status='idle', pid=NULL, ws_endpoint=NULL WHERE id=?""",
+            (disk, profile_id),
+        )
+        append_log(
+            conn,
+            profile_id,
+            "已重置 Profile 目录（保留指纹锁定 / 代理 / 平台账号）",
+        )
+    return get_profile(profile_id)
+
+
 @app.post("/api/v1/profiles/{profile_id}/resample-fingerprint")
 def resample_fingerprint(
     profile_id: str, authorization: Optional[str] = Header(None)
@@ -1062,7 +1214,34 @@ def list_runtime(authorization: Optional[str] = Header(None)):
         rows = conn.execute(
             "SELECT * FROM profiles WHERE deleted_at IS NULL AND status IN ('running','api','starting')"
         ).fetchall()
-    return [row_to_profile(r) for r in rows]
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        item = row_to_profile(r)
+        stats = process_stats(item.get("pid"))
+        item["cpuPercent"] = stats["cpuPercent"]
+        item["memoryMb"] = stats["memoryMb"]
+        out.append(item)
+    return out
+
+
+@app.get("/api/v1/runtime/stats")
+def runtime_stats(authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    with db() as conn:
+        running = conn.execute(
+            """SELECT COUNT(*) AS c FROM profiles
+               WHERE deleted_at IS NULL
+                 AND status IN ('running','api','starting')"""
+        ).fetchone()["c"]
+        max_c = get_max_concurrency(conn)
+    sys_s = system_stats()
+    return {
+        "cpuPercent": sys_s["cpuPercent"],
+        "memoryUsedMb": sys_s["memoryUsedMb"],
+        "memoryTotalMb": sys_s["memoryTotalMb"],
+        "running": running,
+        "maxConcurrency": max_c,
+    }
 
 
 @app.get("/api/v1/proxies")
@@ -1443,6 +1622,16 @@ def patch_template(
             elif k == "usePreset":
                 fields.append("use_preset=?")
                 vals.append(1 if v else 0)
+            elif k == "configJson":
+                if v is not None:
+                    try:
+                        parsed = json.loads(v) if isinstance(v, str) else v
+                    except json.JSONDecodeError as e:
+                        raise HTTPException(400, f"configJson 非法: {e}") from e
+                    if not isinstance(parsed, dict):
+                        raise HTTPException(400, "configJson 须为 JSON 对象")
+                    fields.append("config_json=?")
+                    vals.append(dumps_config(parsed))
             elif k in mapping:
                 fields.append(f"{mapping[k]}=?")
                 vals.append(v)

@@ -1,25 +1,68 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TopBar } from '@/components/layout/TopBar'
 import { Button } from '@/components/ui/Form'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { SummaryCard } from '@/components/ui/SummaryCard'
 import { isRemoteMode } from '@/lib/api'
+import * as remote from '@/services/remote'
 import { useDataStore } from '@/stores/data'
 
 export function RuntimePage() {
   const profiles = useDataStore((s) => s.profiles)
+  const settings = useDataStore((s) => s.settings)
   const stopProfile = useDataStore((s) => s.stopProfile)
   const stopMany = useDataStore((s) => s.stopMany)
   const refreshRuntime = useDataStore((s) => s.refreshRuntime)
-  const [limit, setLimit] = useState(8)
+  const updateSettings = useDataStore((s) => s.updateSettings)
+
+  const [limit, setLimit] = useState(settings.maxConcurrency ?? 8)
+  const [stats, setStats] = useState<{
+    cpuPercent: number | null
+    memoryUsedMb: number | null
+    memoryTotalMb: number | null
+    running: number
+    maxConcurrency: number
+  } | null>(null)
+  const [runtimeExtras, setRuntimeExtras] = useState<
+    Record<string, { cpuPercent?: number | null; memoryMb?: number | null }>
+  >({})
+  const [limitMsg, setLimitMsg] = useState('')
+
+  const pullStats = useCallback(async () => {
+    if (!isRemoteMode()) return
+    try {
+      const [s, rt] = await Promise.all([
+        remote.remoteRuntimeStats(),
+        remote.remoteListRuntime(),
+      ])
+      setStats(s)
+      setLimit(s.maxConcurrency)
+      const map: Record<string, { cpuPercent?: number | null; memoryMb?: number | null }> =
+        {}
+      for (const p of rt) {
+        map[p.id] = { cpuPercent: p.cpuPercent, memoryMb: p.memoryMb }
+      }
+      setRuntimeExtras(map)
+    } catch {
+      /* keep */
+    }
+  }, [])
 
   useEffect(() => {
     if (!isRemoteMode()) return
     void refreshRuntime()
-    const t = window.setInterval(() => void refreshRuntime(), 8000)
+    void pullStats()
+    const t = window.setInterval(() => {
+      void refreshRuntime()
+      void pullStats()
+    }, 8000)
     return () => window.clearInterval(t)
-  }, [refreshRuntime])
+  }, [refreshRuntime, pullStats])
+
+  useEffect(() => {
+    if (settings.maxConcurrency != null) setLimit(settings.maxConcurrency)
+  }, [settings.maxConcurrency])
 
   const running = useMemo(
     () =>
@@ -31,6 +74,40 @@ export function RuntimePage() {
     [profiles],
   )
 
+  const memLabel = useMemo(() => {
+    if (!stats?.memoryUsedMb || !stats.memoryTotalMb) return '—'
+    const used = (stats.memoryUsedMb / 1024).toFixed(1)
+    const total = (stats.memoryTotalMb / 1024).toFixed(1)
+    return `${used} / ${total} GB`
+  }, [stats])
+
+  const commitLimit = async (n: number) => {
+    setLimit(n)
+    setLimitMsg('')
+    if (!isRemoteMode()) {
+      updateSettings({ maxConcurrency: n })
+      return
+    }
+    try {
+      const s = await remote.remotePatchSettings({ maxConcurrency: n })
+      updateSettings({ maxConcurrency: s.maxConcurrency ?? n })
+      setStats((prev) =>
+        prev
+          ? { ...prev, maxConcurrency: s.maxConcurrency ?? n }
+          : {
+              cpuPercent: null,
+              memoryUsedMb: null,
+              memoryTotalMb: null,
+              running: running.length,
+              maxConcurrency: s.maxConcurrency ?? n,
+            },
+      )
+      setLimitMsg(`并发上限已设为 ${s.maxConcurrency ?? n}`)
+    } catch (e) {
+      setLimitMsg(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   return (
     <>
       <TopBar
@@ -40,10 +117,19 @@ export function RuntimePage() {
       />
       <main className="flex-1 space-y-6 overflow-y-auto p-8">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <SummaryCard label="运行实例" value={`${running.length}`} accent />
-          <SummaryCard label="并发上限" value={`${limit}`} />
-          <SummaryCard label="CPU（示意）" value="23%" />
-          <SummaryCard label="内存（示意）" value="4.2 GB" />
+          <SummaryCard
+            label="运行实例"
+            value={`${stats?.running ?? running.length}`}
+            accent
+          />
+          <SummaryCard label="并发上限" value={`${stats?.maxConcurrency ?? limit}`} />
+          <SummaryCard
+            label="CPU"
+            value={
+              stats?.cpuPercent != null ? `${stats.cpuPercent.toFixed(0)}%` : '—'
+            }
+          />
+          <SummaryCard label="内存" value={memLabel} />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -54,17 +140,26 @@ export function RuntimePage() {
               min={1}
               max={20}
               value={limit}
-              onChange={(e) => setLimit(Number(e.target.value))}
+              onChange={(e) => void commitLimit(Number(e.target.value))}
               className="w-40"
             />
             <span className="font-mono">{limit}</span>
           </label>
           <div className="flex items-center gap-3">
+            {limitMsg ? (
+              <span className="text-xs text-slate-500">{limitMsg}</span>
+            ) : null}
             <span className="flex items-center gap-1.5 text-xs text-teal-600">
               <span className="h-2 w-2 animate-pulse rounded-full bg-teal-500" />
-              {isRemoteMode() ? '每 8s 同步 /api/v1/runtime' : '本地 store'}
+              {isRemoteMode() ? '每 8s 同步 runtime + stats' : '本地 store'}
             </span>
-            <Button variant="secondary" onClick={() => void refreshRuntime()}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void refreshRuntime()
+                void pullStats()
+              }}
+            >
               立即刷新
             </Button>
             <Button
@@ -87,42 +182,52 @@ export function RuntimePage() {
               启动。
             </p>
           ) : (
-            running.map((p) => (
-              <article
-                key={p.id}
-                className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-800">{p.name}</h3>
-                    <p className="mt-1 font-mono text-[10px] text-slate-400">
-                      PID {p.pid ?? '—'}
-                    </p>
+            running.map((p) => {
+              const extra = runtimeExtras[p.id]
+              const mem = extra?.memoryMb ?? p.memoryMb
+              const cpu = extra?.cpuPercent ?? p.cpuPercent
+              return (
+                <article
+                  key={p.id}
+                  className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">{p.name}</h3>
+                      <p className="mt-1 font-mono text-[10px] text-slate-400">
+                        PID {p.pid ?? '—'}
+                      </p>
+                    </div>
+                    <StatusBadge status={p.status} />
                   </div>
-                  <StatusBadge status={p.status} />
-                </div>
-                <dl className="mt-4 space-y-1.5 text-[11px] text-slate-500">
-                  <div>
-                    模式：{p.headless ? '无头' : '有头'}
-                    {p.status === 'api' ? ' · API' : ''}
+                  <dl className="mt-4 space-y-1.5 text-[11px] text-slate-500">
+                    <div>
+                      模式：{p.headless ? '无头' : '有头'}
+                      {p.status === 'api' ? ' · API' : ''}
+                    </div>
+                    <div>启动：{p.lastStartedAt ?? '—'}</div>
+                    <div>
+                      资源：
+                      {mem != null ? `${mem.toFixed(0)} MB` : '—'}
+                      {cpu != null ? ` · CPU ${cpu.toFixed(0)}%` : ''}
+                    </div>
+                    <div className="truncate font-mono">WS：{p.wsEndpoint ?? '—'}</div>
+                    <div>代理：{p.proxyLabel ?? '直连'}</div>
+                  </dl>
+                  <div className="mt-4 flex gap-2">
+                    <Link
+                      to={`/profiles/${p.id}`}
+                      className="inline-flex rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                    >
+                      详情
+                    </Link>
+                    <Button variant="danger" onClick={() => void stopProfile(p.id)}>
+                      强杀
+                    </Button>
                   </div>
-                  <div>启动：{p.lastStartedAt ?? '—'}</div>
-                  <div className="truncate font-mono">WS：{p.wsEndpoint ?? '—'}</div>
-                  <div>代理：{p.proxyLabel ?? '直连'}</div>
-                </dl>
-                <div className="mt-4 flex gap-2">
-                  <Link
-                    to={`/profiles/${p.id}`}
-                    className="inline-flex rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700"
-                  >
-                    详情
-                  </Link>
-                  <Button variant="danger" onClick={() => void stopProfile(p.id)}>
-                    强杀
-                  </Button>
-                </div>
-              </article>
-            ))
+                </article>
+              )
+            })
           )}
         </div>
       </main>

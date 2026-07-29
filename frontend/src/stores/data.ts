@@ -262,6 +262,7 @@ type Settings = {
   profileRoot: string
   theme: 'light' | 'dark' | 'system'
   defaultHeadless: boolean
+  maxConcurrency?: number
 }
 
 type DataState = {
@@ -344,6 +345,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     profileRoot: 'D:/camoufox-profiles',
     theme: 'light',
     defaultHeadless: false,
+    maxConcurrency: 8,
   },
   hydrated: !isRemoteMode(),
   hydrateError: null,
@@ -364,6 +366,7 @@ export const useDataStore = create<DataState>((set, get) => ({
         profileRoot: snap.settings.profileRoot,
         theme: snap.settings.theme,
         defaultHeadless: snap.settings.defaultHeadless,
+        maxConcurrency: snap.settings.maxConcurrency ?? 8,
       },
       hydrated: true,
       hydrateError: null,

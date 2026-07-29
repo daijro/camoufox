@@ -42,8 +42,20 @@ export async function remoteSettings(): Promise<{
   theme: 'light' | 'dark' | 'system'
   defaultHeadless: boolean
   realLaunch?: boolean
+  maxConcurrency?: number
 }> {
   return apiFetch('/api/v1/settings', opts())
+}
+
+export async function remotePatchSettings(patch: {
+  maxConcurrency?: number
+  defaultHeadless?: boolean
+  theme?: string
+}): Promise<Awaited<ReturnType<typeof remoteSettings>>> {
+  return apiFetch('/api/v1/settings', opts({
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  }))
 }
 
 export async function remoteListProfiles(includeDeleted = false): Promise<Profile[]> {
@@ -80,6 +92,18 @@ export async function remoteResampleFingerprint(id: string): Promise<Profile> {
   return apiFetch(`/api/v1/profiles/${id}/resample-fingerprint`, opts({ method: 'POST' }))
 }
 
+export async function remoteFocusProfile(id: string): Promise<{ ok: boolean; pid: number }> {
+  return apiFetch(`/api/v1/profiles/${id}/focus`, opts({ method: 'POST' }))
+}
+
+export async function remoteClearCache(id: string): Promise<Profile> {
+  return apiFetch(`/api/v1/profiles/${id}/clear-cache`, opts({ method: 'POST' }))
+}
+
+export async function remoteResetProfile(id: string): Promise<Profile> {
+  return apiFetch(`/api/v1/profiles/${id}/reset-profile`, opts({ method: 'POST' }))
+}
+
 export async function remoteTrashProfile(id: string): Promise<Profile> {
   return apiFetch(`/api/v1/profiles/${id}/trash`, opts({ method: 'POST' }))
 }
@@ -92,8 +116,20 @@ export async function remoteDeleteProfile(id: string): Promise<void> {
   await apiFetch(`/api/v1/profiles/${id}`, opts({ method: 'DELETE' }))
 }
 
-export async function remoteListRuntime(): Promise<Profile[]> {
+export async function remoteListRuntime(): Promise<
+  (Profile & { cpuPercent?: number | null; memoryMb?: number | null })[]
+> {
   return apiFetch('/api/v1/runtime', opts())
+}
+
+export async function remoteRuntimeStats(): Promise<{
+  cpuPercent: number | null
+  memoryUsedMb: number | null
+  memoryTotalMb: number | null
+  running: number
+  maxConcurrency: number
+}> {
+  return apiFetch('/api/v1/runtime/stats', opts())
 }
 
 export async function remoteListProxies(): Promise<Proxy[]> {
@@ -178,6 +214,23 @@ export async function remoteCreateTemplate(body: {
 
 export async function remoteSampleTemplate(id: string): Promise<FingerprintTemplate> {
   return apiFetch(`/api/v1/fingerprint-templates/${id}/sample`, opts({ method: 'POST' }))
+}
+
+export async function remotePatchTemplate(
+  id: string,
+  patch: {
+    name?: string
+    os?: string
+    alignGeo?: boolean
+    webrtc?: string
+    usePreset?: boolean
+    configJson?: string
+  },
+): Promise<FingerprintTemplate> {
+  return apiFetch(`/api/v1/fingerprint-templates/${id}`, opts({
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  }))
 }
 
 export async function remoteSetDefaultTemplate(id: string): Promise<FingerprintTemplate> {

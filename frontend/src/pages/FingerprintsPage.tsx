@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { TopBar } from '@/components/layout/TopBar'
 import { Button, Field, Input, Select } from '@/components/ui/Form'
 import { SummaryCard } from '@/components/ui/SummaryCard'
@@ -7,6 +8,7 @@ import { useDataStore } from '@/stores/data'
 import type { OsChoice } from '@/types/console'
 
 export function FingerprintsPage() {
+  const navigate = useNavigate()
   const templates = useDataStore((s) => s.templates)
   const createTemplate = useDataStore((s) => s.createTemplate)
   const sampleTemplate = useDataStore((s) => s.sampleTemplate)
@@ -132,6 +134,29 @@ export function FingerprintsPage() {
                 OS：{t.os} · WebRTC：{t.webrtc} · Geo：{t.alignGeo ? '跟随代理' : '关'}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
+                {t.kind === 'custom' ? (
+                  <Link
+                    to={`/fingerprints/${t.id}/edit`}
+                    className="inline-flex rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                  >
+                    编辑
+                  </Link>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    disabled={busy === t.id}
+                    onClick={() =>
+                      void run(t.id, async () => {
+                        await copyTemplate(t.id)
+                        const list = useDataStore.getState().templates
+                        const last = list[list.length - 1]
+                        if (last) navigate(`/fingerprints/${last.id}/edit`)
+                      })
+                    }
+                  >
+                    复制后编辑
+                  </Button>
+                )}
                 <Button
                   variant="secondary"
                   disabled={busy === t.id || (t.kind === 'system' && t.id === 'tpl_auto')}
