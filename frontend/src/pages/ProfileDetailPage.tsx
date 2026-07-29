@@ -28,6 +28,8 @@ export function ProfileDetailPage() {
   const startProfile = useDataStore((s) => s.startProfile)
   const stopProfile = useDataStore((s) => s.stopProfile)
   const softDelete = useDataStore((s) => s.softDelete)
+  const hydrated = useDataStore((s) => s.hydrated)
+  const hydrating = useDataStore((s) => s.hydrating)
 
   const initialSection = (searchParams.get('tab') as (typeof SECTIONS)[number]['id']) || 'basic'
   const [section, setSection] = useState<(typeof SECTIONS)[number]['id']>(
@@ -74,6 +76,17 @@ export function ProfileDetailPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, profile?.id])
+
+  if ((!hydrated || hydrating) && !profile) {
+    return (
+      <>
+        <TopBar title="环境详情" />
+        <main className="flex-1 p-8">
+          <p className="text-sm text-slate-500">正在加载环境数据…</p>
+        </main>
+      </>
+    )
+  }
 
   if (!profile || profile.deletedAt) {
     return (
