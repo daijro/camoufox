@@ -53,6 +53,7 @@ def fingerprint_kwargs(strategy: str) -> dict[str, Any]:
 
 
 def extract_pid(context: Any) -> Optional[int]:
+    """Best-effort PID from Playwright Browser handle (often missing for persistent)."""
     try:
         browser_obj = getattr(context, "browser", None)
         if browser_obj is None:
@@ -68,6 +69,63 @@ def extract_pid(context: Any) -> Optional[int]:
     except Exception:
         return None
     return None
+
+
+def list_browser_pids() -> set[int]:
+    """PIDs of camoufox/firefox processes (Windows tasklist + POSIX fallback)."""
+    names = ("camoufox.exe", "camoufox", "firefox.exe", "firefox")
+    found: set[int] = set()
+    if sys.platform == "win32":
+        import subprocess
+
+        for name in ("camoufox.exe", "firefox.exe"):
+            try:
+                out = subprocess.check_output(
+                    ["tasklist", "/FI", f"IMAGENAME eq {name}", "/FO", "CSV", "/NH"],
+                    text=True,
+                    errors="ignore",
+                    timeout=5,
+                )
+            except Exception:
+                continue
+            for line in out.splitlines():
+                line = line.strip()
+                if not line or line.upper().startswith("INFO:"):
+                    continue
+                # "camoufox.exe","1234","Console","1","12,345 K"
+                parts = [p.strip().strip('"') for p in line.split(",")]
+                if len(parts) >= 2:
+                    try:
+                        found.add(int(parts[1]))
+                    except ValueError:
+                        pass
+        return found
+
+    try:
+        import subprocess
+
+        out = subprocess.check_output(["ps", "-A", "-o", "pid=,comm="], text=True, errors="ignore")
+        for line in out.splitlines():
+            parts = line.split(None, 1)
+            if len(parts) != 2:
+                continue
+            comm = parts[1].strip().lower()
+            if any(n in comm for n in names):
+                try:
+                    found.add(int(parts[0]))
+                except ValueError:
+                    pass
+    except Exception:
+        pass
+    return found
+
+
+def pid_from_diff(before: set[int]) -> Optional[int]:
+    """Pick a newly appeared browser PID after launch (prefer largest PID as newest)."""
+    new = list_browser_pids() - before
+    if not new:
+        return None
+    return max(new)
 
 
 async def real_launch(
@@ -93,19 +151,39 @@ async def real_launch(
         # Logged by caller via return flag
         pass
 
-    opts = launch_options(
-        os=os_map.get(profile.get("os") or "windows", "windows"),
-        headless=bool(profile.get("headless")),
-        geoip=bool(profile.get("alignGeoWithProxy")) and proxy is not None,
-        proxy=proxy,
-        humanize=True,
-        **fp_kw,
-    )
-    opts["user_data_dir"] = user_data
+    want_geoip = bool(profile.get("alignGeoWithProxy")) and proxy is not None
+    geoip_fallback = False
 
+    def _opts(use_geoip: bool) -> dict[str, Any]:
+        o = launch_options(
+            os=os_map.get(profile.get("os") or "windows", "windows"),
+            headless=bool(profile.get("headless")),
+            geoip=use_geoip,
+            proxy=proxy,
+            humanize=True,
+            **fp_kw,
+        )
+        o["user_data_dir"] = user_data
+        return o
+
+    before_pids = list_browser_pids()
     pw = await async_playwright().start()
     try:
-        context = await AsyncNewBrowser(pw, persistent_context=True, from_options=opts)
+        try:
+            context = await AsyncNewBrowser(
+                pw, persistent_context=True, from_options=_opts(want_geoip)
+            )
+        except Exception as e:
+            # Proxy geoip probe (ipecho etc.) often times out; still launch without geo.
+            msg = str(e).lower()
+            if want_geoip and ("ip address" in msg or "geoip" in msg or "ipecho" in msg):
+                geoip_fallback = True
+                context = await AsyncNewBrowser(
+                    pw, persistent_context=True, from_options=_opts(False)
+                )
+            else:
+                await pw.stop()
+                raise
     except Exception:
         await pw.stop()
         raise
@@ -127,13 +205,14 @@ async def real_launch(
             # Non-fatal: browser is up even if navigation fails
             pass
 
-    pid = extract_pid(context)
+    pid = extract_pid(context) or pid_from_diff(before_pids)
     return {
         "pid": pid,
         "wsEndpoint": None,
         "playwright": pw,
         "browser": context,
         "templateFallback": (profile.get("fingerprintStrategy") or "").lower() == "template",
+        "geoipFallback": geoip_fallback,
     }
 
 

@@ -78,3 +78,4 @@ node_modules/
 proxies.txt
 checks-bundle.js
 .env
+.gstack/

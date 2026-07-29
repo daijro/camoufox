@@ -479,6 +479,8 @@ async def start_profile_async(profile_id: str) -> dict[str, Any]:
             msg = "浏览器启动成功" + (" (Camoufox)" if REAL_LAUNCH else " (mock)")
             if result.get("templateFallback"):
                 msg += "；指纹模板策略暂以 preset 采样代替"
+            if result.get("geoipFallback"):
+                msg += "；代理 GeoIP 探测失败，已降级为不自动对齐时区"
             append_log(conn, profile_id, msg)
         return get_profile(profile_id)
     finally:
