@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>环境管理中心</title>
+    <base href="http://localhost:5173/" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei"; }
+      img { max-width: 100%; height: auto; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div class="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col h-screen overflow-hidden">
+  <!-- 整体容器 -->
+  <div class="flex flex-1 overflow-hidden h-full">
+    
+    <!-- 侧边导航栏 -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 z-30 flex-shrink-0">
+      <div>
+        <!-- 头部 Logo -->
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
+          <div class="bg-teal-500 text-slate-950 p-2 rounded-lg font-bold text-lg flex items-center justify-center w-9 h-9">
+            CF
+          </div>
+          <div>
+            <h1 class="font-bold text-white text-sm tracking-wide leading-none">Camoufox 控制台</h1>
+            <span class="text-xs text-teal-400 mt-1 inline-block">指纹安全浏览器</span>
+          </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="mt-6 px-4 space-y-1" data-proto-role="menu">
+          <a href="#" data-proto-action-id="5a5df0fb-8ba6-455b-bf42-026c449dbba1" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-teal-600 text-white transition-all">
+            <svg class="w-5 h-5 text-teal-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            环境管理
+          </a>
+          <a href="#" data-proto-action-id="49b5dfd4-54c3-4d6d-9be2-4df703c14c51" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            实例监控
+            <span class="ml-auto bg-teal-500/20 text-teal-300 text-xs px-2 py-0.5 rounded-full font-semibold">3 运行</span>
+          </a>
+          <a href="#" data-proto-action-id="b07e8685-61be-4b07-bf30-a19777c0b0ee" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+            代理中心
+          </a>
+          <a href="#" data-proto-action-id="36fd044e-128a-4c28-97bf-4375b42d7658" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 009 11.5c0-.62-.078-1.22-.227-1.791M15.147 18.25a14.27 14.27 0 002.244-2.077M4.772 5.79A13.93 13.93 0 0018.18 15.75A9 9 0 104.772 5.79z"></path></svg>
+            指纹策略
+          </a>
+          <a href="#" data-proto-action-id="adbc7356-9a25-4c07-b08e-ee518d6e90e7" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            本地接口 (Local API)
+          </a>
+          <a href="#" data-proto-action-id="eb94c34a-939a-4c28-bb84-5a2a2cde6439" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            系统设置
+          </a>
+          <div class="h-px bg-slate-800 my-4"></div>
+          <a href="#" data-proto-action-id="56306637-2d1f-44e2-a080-60b64c125192" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            回收站
+          </a>
+        </nav>
+      </div>
+
+      <!-- 底部状态指示器 -->
+      <div class="p-4 border-t border-slate-800 text-xs">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-slate-500">接口服务 (API)</span>
+          <span class="flex items-center gap-1.5 text-teal-400 font-medium">
+            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+            运行中 :50325
+          </span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-500">Camoufox 版本</span>
+          <span class="text-slate-400 font-mono">Camoufox 152.0.4-beta.28</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧内容区域 -->
+    <div class="flex-1 flex flex-col overflow-y-auto min-w-0 bg-slate-50">
+      <!-- 顶栏 -->
+      <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20 flex-shrink-0">
+        <!-- 搜索与面包屑 -->
+        <div class="flex items-center gap-8">
+          <div class="flex items-center gap-2 text-sm text-slate-500">
+            <span>环境管理</span>
+            <span>/</span>
+            <span class="text-slate-800 font-semibold">环境列表</span>
+          </div>
+
+          <!-- 全局搜索 -->
+          <div class="relative w-80">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </span>
+            <input type="text" placeholder="搜索环境名、代理 IP、标签或备注..." class="w-full pl-9 pr-4 py-1.5 text-sm bg-slate-100 border border-transparent rounded-lg focus:outline-none focus:bg-white focus:border-teal-500 transition-all placeholder:text-slate-400" />
+          </div>
+        </div>
+
+        <!-- 运行摘要与快捷启动 -->
+        <div class="flex items-center gap-6">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400">快捷启动:</span>
+            <button data-proto-action-id="f2fa9a69-650a-42c2-84e1-eb5fb79e0004" class="bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-700 text-xs px-2.5 py-1.5 rounded border border-slate-200 transition-all font-medium">亚马逊_店铺A</button>
+            <button data-proto-action-id="eb3e3514-a957-41ec-8968-3e4b77e382d6" class="bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-700 text-xs px-2.5 py-1.5 rounded border border-slate-200 transition-all font-medium">脸书投放_03</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- 主体内容 -->
+      <main class="p-6 space-y-6 flex-1 min-w-0">
+        
+        <!-- 全局统计卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="text-xs text-slate-400 font-medium">总环境数量</span>
+              <h3 class="text-2xl font-bold text-slate-800 mt-1">128 个</h3>
+              <p class="text-xs text-slate-500 mt-1">数据健康度 100%</p>
+            </div>
+            <div class="p-3 bg-slate-100 rounded-lg text-slate-600">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2z"></path></svg>
+            </div>
+          </div>
+
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="text-xs text-slate-400 font-medium">运行中环境</span>
+              <h3 class="text-2xl font-bold text-teal-600 mt-1">3 个</h3>
+              <p class="text-xs text-teal-500 mt-1">包含 1 个无头 API 实例</p>
+            </div>
+            <div class="p-3 bg-teal-50 text-teal-600 rounded-lg">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+          </div>
+
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="text-xs text-slate-400 font-medium">异常代理警报</span>
+              <h3 class="text-2xl font-bold text-rose-600 mt-1">2 个</h3>
+              <p class="text-xs text-rose-500 mt-1">检测到 1 处 IP 物理漂移</p>
+            </div>
+            <div class="p-3 bg-rose-50 text-rose-600 rounded-lg">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+          </div>
+
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="text-xs text-slate-400 font-medium">本地存储占用</span>
+              <h3 class="text-2xl font-bold text-slate-800 mt-1">4.2 GB</h3>
+              <p class="text-xs text-slate-500 mt-1">Profile 目录 · 磁盘可用 24.5 GB</p>
+            </div>
+            <div class="p-3 bg-slate-100 rounded-lg text-slate-600">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- 过滤器与批量操作栏 -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <select class="bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-2 focus:outline-none focus:border-teal-500">
+              <option>全部分组</option>
+              <option>欧美投放</option>
+              <option>东南亚养号</option>
+            </select>
+            <select class="bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-2 focus:outline-none focus:border-teal-500">
+              <option>所有标签</option>
+              <option>主力账号</option>
+              <option>测试实例</option>
+            </select>
+            <select class="bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-2 focus:outline-none focus:border-teal-500">
+              <option>所有运行状态</option>
+              <option>运行中</option>
+              <option>API 控制中</option>
+              <option>未启动</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <button data-proto-action-id="a0d6cbef-b8cb-402a-9ca8-3a95bb24c6ad" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-3 py-2 rounded-lg font-medium border border-slate-200 transition-all flex items-center gap-1.5">
+              批量启动
+            </button>
+            <button data-proto-action-id="56360c7f-94de-4043-ae66-7bde94de2fb8" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-3 py-2 rounded-lg font-medium border border-slate-200 transition-all flex items-center gap-1.5">
+              批量停止
+            </button>
+            <button data-proto-action-id="b21f3a22-385d-450e-8fb8-22d7159c381c" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-3 py-2 rounded-lg font-medium border border-slate-200 transition-all flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+              批量导入
+            </button>
+            <button data-proto-action-id="a4ee9cb3-cb90-48e0-bb12-4fb0033c9429" class="bg-teal-600 hover:bg-teal-700 text-white text-xs px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              新建环境
+            </button>
+          </div>
+        </div>
+
+        <!-- 环境列表高功能表格 -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase tracking-wider">
+                  <th class="p-4 w-12 text-center">
+                    <input type="checkbox" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                  </th>
+                  <th class="p-4 w-16 text-center">序号</th>
+                  <th class="p-4 min-w-[180px]">环境名称</th>
+                  <th class="p-4 w-28">平台/用途</th>
+                  <th class="p-4 min-w-[220px]">绑定代理</th>
+                  <th class="p-4 w-36">指纹简写</th>
+                  <th class="p-4 w-36">运行状态</th>
+                  <th class="p-4 w-40">最后启动时间</th>
+                  <th class="p-4 w-32">标签分组</th>
+                  <th class="p-4 w-72 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-xs">
+                
+                <!-- 行 1: 运行中 -->
+                <tr class="hover:bg-slate-50 transition-colors">
+                  <td class="p-4 text-center">
+                    <input type="checkbox" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" checked />
+                  </td>
+                  <td class="p-4 text-center text-slate-400 font-mono">01</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-1.5 group">
+                      <span class="font-semibold text-slate-800">亚马逊_店铺A</span>
+                      <button data-proto-action-id="ce5cc84e-fbbf-4375-9279-51a44c776092" title="修改名称" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-teal-600 transition-opacity">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                      </button>
+                    </div>
+                    <span class="text-[10px] text-slate-400 block mt-0.5">ID: prof_82943558</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="flex items-center gap-1 text-slate-600">
+                      <span class="font-bold text-amber-600">Amazon</span>
+                    </span>
+                  </td>
+                  <td class="p-4">
+                    <div class="relative group/proxy">
+                      <span class="font-mono text-slate-600">socks5://192.168.1.***:1080</span>
+                      <div class="absolute left-0 mt-1 hidden group-hover/proxy:block bg-slate-900 text-white text-[10px] p-2 rounded shadow-lg z-30 w-52 leading-relaxed">
+                        <p class="font-semibold text-teal-400">当前代理正常</p>
+                        <p>物理出口 IP: 104.244.75.12</p>
+                        <p>归属地: 美国 加利福尼亚</p>
+                        <a href="#" data-proto-action-id="9ee94498-8422-48f8-b570-9fbeffeb9753" class="mt-1.5 block text-teal-300 underline font-medium hover:text-white">快捷更换代理</a>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="p-4">
+                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono">Win · FF 152 · 1920×1080</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-teal-50 text-teal-700 font-medium">
+                      <span class="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse"></span>
+                      运行中
+                    </span>
+                  </td>
+                  <td class="p-4 text-slate-500 font-mono">2026-07-29 14:32</td>
+                  <td class="p-4">
+                    <div class="flex flex-wrap gap-1">
+                      <span class="px-1.5 py-0.5 bg-teal-50 text-teal-600 border border-teal-100 rounded text-[10px]">主力账号</span>
+                    </div>
+                  </td>
+                  <td class="p-4 text-right space-x-1.5">
+                    <button data-proto-action-id="7618ad01-eb4b-4bcf-a548-43d92f58e1c3" class="bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded font-medium border border-rose-100 transition-all">停止</button>
+                    <button data-proto-action-id="0ef29f04-0985-48fa-89ea-c4391e4e5ee6" title="窗口聚焦与开启调试" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded font-medium border border-slate-200 transition-all">聚焦 / DevTools</button>
+                    <button data-proto-action-id="be97b2be-2b9a-4122-8051-512c01990471" title="Cookie管理" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1 rounded border border-slate-200 inline-flex items-center justify-center align-middle">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    </button>
+                    <button data-proto-action-id="c644d6eb-95d8-4fbe-8877-626dfd1be0b7" class="text-slate-400 hover:text-slate-600 px-1">详情</button>
+                  </td>
+                </tr>
+
+                <!-- 行 2: 启动中 -->
+                <tr class="hover:bg-slate-50 transition-colors">
+                  <td class="p-4 text-center">
+                    <input type="checkbox" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                  </td>
+                  <td class="p-4 text-center text-slate-400 font-mono">02</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-1.5 group">
+                      <span class="font-semibold text-slate-800">脸书投放_03</span>
+                      <button data-proto-action-id="0efb81f1-3316-43cb-b0b2-db448cf30a13" title="修改名称" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-teal-600 transition-opacity">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                      </button>
+                    </div>
+                    <span class="text-[10px] text-slate-400 block mt-0.5">ID: prof_82943559</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="flex items-center gap-1 text-slate-600">
+                      <span class="font-bold text-blue-600">Facebook</span>
+                    </span>
+                  </td>
+                  <td class="p-4">
+                    <span class="font-mono text-slate-600 font-medium">http://103.45.22.***:8080</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono">Mac · FF 152 · 1440×900</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-amber-50 text-amber-700 font-medium animate-pulse">
+                      <svg class="animate-spin h-3.5 w-3.5 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      启动中
+                    </span>
+                  </td>
+                  <td class="p-4 text-slate-500 font-mono">2026-07-29 14:35</td>
+                  <td class="p-4">
+                    <div class="flex flex-wrap gap-1">
+                      <span class="px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px]">测试实例</span>
+                    </div>
+                  </td>
+                  <td class="p-4 text-right space-x-1.5">
+                    <button data-proto-action-id="56360c7f-94de-4043-ae66-7bde94de2fcf" disabled class="bg-slate-100 text-slate-400 px-2 py-1 rounded font-medium border border-slate-200 cursor-not-allowed">启动中</button>
+                    <button data-proto-action-id="0ef29f04-0985-48fa-89ea-c4391e4e5ecd" disabled class="bg-slate-100 text-slate-400 px-2 py-1 rounded font-medium border border-slate-200 cursor-not-allowed">聚焦</button>
+                    <button data-proto-action-id="be97b2be-2b9a-4122-8051-512c019904cf" class="text-slate-400 hover:text-slate-600 px-1">详情</button>
+                  </td>
+                </tr>
+
+                <!-- 行 3: 启动失败（代理超时） -->
+                <tr class="hover:bg-slate-50 transition-colors bg-amber-50/20">
+                  <td class="p-4 text-center">
+                    <input type="checkbox" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                  </td>
+                  <td class="p-4 text-center text-slate-400 font-mono">03</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-1.5 group">
+                      <span class="font-semibold text-slate-800">测试环境_直连</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 block mt-0.5">ID: prof_82943560</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="text-slate-500">常规浏览</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="text-slate-400 italic">直连 (不绑定代理)</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono">Linux · FF 152 · 1920×1080</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-rose-50 text-rose-700 font-medium">
+                      <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                      启动失败
+                    </span>
+                    <span class="text-[10px] text-rose-500 block mt-0.5">代理连接超时</span>
+                  </td>
+                  <td class="p-4 text-slate-500 font-mono">2026-07-28 16:20</td>
+                  <td class="p-4">
+                    <span class="px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px]">测试</span>
+                  </td>
+                  <td class="p-4 text-right space-x-1.5">
+                    <button data-proto-action-id="ab6dfd09-847e-40cd-a044-ee7dfdbcf192" class="bg-teal-600 hover:bg-teal-700 text-white px-2 py-1 rounded font-medium transition-all">重试</button>
+                    <button data-proto-action-id="bcfb565a-0d12-4c28-98e3-f1df48ed92b4" class="text-slate-400 hover:text-slate-600 px-1">详情</button>
+                  </td>
+                </tr>
+
+                <!-- 行 4: IP 出口突变异常 -->
+                <tr class="hover:bg-slate-50 transition-colors bg-rose-50/30">
+                  <td class="p-4 text-center">
+                    <input type="checkbox" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                  </td>
+                  <td class="p-4 text-center text-slate-400 font-mono">04</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-1.5 group">
+                      <span class="font-semibold text-slate-800">美国特卖_店铺02</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 block mt-0.5">ID: prof_82943561</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="flex items-center gap-1 text-slate-600">
+                      <span class="font-bold text-amber-600">eBay</span>
+                    </span>
+                  </td>
+                  <td class="p-4">
+                    <div class="border border-rose-200 bg-rose-50/80 px-2.5 py-1.5 rounded-lg inline-block relative group/proxywarn">
+                      <span class="font-mono text-rose-700 font-medium">socks5://185.120.33.***:9090</span>
+                      <div class="absolute left-0 mt-2 hidden group-hover/proxywarn:block bg-slate-900 text-white text-[10px] p-3 rounded-lg shadow-xl z-30 w-64 leading-relaxed">
+                        <p class="font-semibold text-rose-400 flex items-center gap-1">
+                          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                          检测到 IP 物理漂移警告！
+                        </p>
+                        <p class="mt-1">预期的出口地: 美国 洛杉矶</p>
+                        <p class="text-rose-300">实际的出口地: 英国 伦敦</p>
+                        <div class="mt-2 border-t border-slate-700 pt-2 flex justify-between items-center">
+                          <span class="text-slate-400">可能会造成店铺账号风控</span>
+                          <a href="#" data-proto-action-id="a2007e05-9619-4700-bf7f-b88eb34c38d3" class="text-teal-300 font-semibold hover:underline">快捷更换代理</a>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="p-4">
+                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono">Win · FF 152 · 1920×1080</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-rose-50 text-rose-700 font-medium">
+                      <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                      运行异常
+                    </span>
+                  </td>
+                  <td class="p-4 text-slate-500 font-mono">2026-07-28 09:12</td>
+                  <td class="p-4">
+                    <div class="flex flex-wrap gap-1">
+                      <span class="px-1.5 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded text-[10px]">主力账号</span>
+                    </div>
+                  </td>
+                  <td class="p-4 text-right space-x-1.5">
+                    <button data-proto-action-id="b148c26f-4fb1-4326-9d33-40f4e1564703" class="bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 rounded font-medium transition-all">重试</button>
+                    <button data-proto-action-id="44f2d7a2-f8c6-43c2-a9b0-91147a4bf05b" class="text-slate-400 hover:text-slate-600 px-1">详情</button>
+                  </td>
+                </tr>
+
+                <!-- 行 5: API 控制中 -->
+                <tr class="hover:bg-slate-50 transition-colors">
+                  <td class="p-4 text-center">
+                    <input type="checkbox" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                  </td>
+                  <td class="p-4 text-center text-slate-400 font-mono">05</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-1.5 group">
+                      <span class="font-semibold text-slate-800">爬虫自动化_01</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 block mt-0.5">ID: prof_82943562</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="text-slate-500 font-medium">数据采集</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="font-mono text-slate-600">socks5://45.56.99.***:1080</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono">Linux · FF 152 · 1920×1080</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-50 text-indigo-700 font-medium">
+                      <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                      API 控制中
+                    </span>
+                  </td>
+                  <td class="p-4 text-slate-500 font-mono">2026-07-29 14:00</td>
+                  <td class="p-4">
+                    <span class="text-slate-400">- -</span>
+                  </td>
+                  <td class="p-4 text-right space-x-1.5">
+                    <button data-proto-action-id="ad2386e8-eb6e-44ab-b565-d0df73ee6ff0" class="bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded font-medium border border-rose-100 transition-all">强制断开</button>
+                    <button data-proto-action-id="1ff745d1-137b-402a-9cb8-b0a79058b730" class="text-slate-400 hover:text-slate-600 px-1">详情</button>
+                  </td>
+                </tr>
+
+                <!-- 行 6: 未启动 -->
+                <tr class="hover:bg-slate-50 transition-colors">
+                  <td class="p-4 text-center">
+                    <input type="checkbox" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                  </td>
+                  <td class="p-4 text-center text-slate-400 font-mono">06</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-1.5 group">
+                      <span class="font-semibold text-slate-800">欧美店铺_待开发</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 block mt-0.5">ID: prof_82943563</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="flex items-center gap-1 text-slate-600">
+                      <span class="font-bold text-amber-700">eBay</span>
+                    </span>
+                  </td>
+                  <td class="p-4">
+                    <span class="font-mono text-slate-600">socks5://72.44.11.***:1080</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono">Win · FF 152 · 1920×1080</span>
+                  </td>
+                  <td class="p-4">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-slate-500 font-medium">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                      未启动
+                    </span>
+                  </td>
+                  <td class="p-4 text-slate-400 font-mono">2026-07-25 18:22</td>
+                  <td class="p-4">
+                    <span class="px-1.5 py-0.5 bg-teal-50 text-teal-600 border border-teal-100 rounded text-[10px]">主力账号</span>
+                  </td>
+                  <td class="p-4 text-right space-x-1.5">
+                    <button data-proto-action-id="56306637-2d1f-44e2-a080-60b64c125195" class="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1 rounded font-medium transition-all">启动</button>
+                    <button data-proto-action-id="be97b2be-2b9a-4122-8051-512c019904ce" title="Cookie管理" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1 rounded border border-slate-200 inline-flex items-center justify-center align-middle">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    </button>
+                    <button data-proto-action-id="c644d6eb-95d8-4fbe-8877-626dfd1be0ba" class="text-slate-400 hover:text-slate-600 px-1">详情</button>
+                  </td>
+                </tr>
+
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- 分页器 -->
+          <div class="bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-between text-xs text-slate-500">
+            <div>
+              显示第 <span class="font-semibold text-slate-700">1</span> 到 <span class="font-semibold text-slate-700">6</span> 条记录，共 <span class="font-semibold text-slate-700">128</span> 条记录
+            </div>
+            <div class="flex items-center gap-2">
+              <button data-proto-action-id="870fd9f1-a1e6-4251-87de-dfd9e3328e3b" class="px-3 py-1.5 bg-white border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50">上一页</button>
+              <button data-proto-action-id="28cf085b-e4cf-4ca4-a4f6-7b2de34be848" class="px-3 py-1.5 bg-teal-600 text-white rounded-md font-semibold">1</button>
+              <button data-proto-action-id="0ef29f04-0985-48fa-89ea-c4391e4e5ee2" class="px-3 py-1.5 bg-white border border-slate-200 rounded-md text-slate-600 hover:bg-slate-50">2</button>
+              <button data-proto-action-id="be97b2be-2b9a-4122-8051-512c019904ee" class="px-3 py-1.5 bg-white border border-slate-200 rounded-md text-slate-600 hover:bg-slate-50">3</button>
+              <button data-proto-action-id="c644d6eb-95d8-4fbe-8877-626dfd1be0ee" class="px-3 py-1.5 bg-white border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50">下一页</button>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+    <!-- 右侧快捷属性抽屉 -->
+    <aside class="w-80 border-l border-slate-200 bg-white flex-shrink-0 flex flex-col overflow-y-auto">
+      <div class="p-6 border-b border-slate-200">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold text-slate-800">环境详情 & 快捷管理</h2>
+          <span class="px-2 py-0.5 bg-teal-50 text-teal-700 rounded text-[10px] font-semibold">已选中 1</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-2 font-medium">环境名：亚马逊_店铺A</p>
+      </div>
+
+      <!-- 快捷管理选项 -->
+      <div class="p-6 space-y-6 flex-1">
+        
+        <!-- Profile 缓存大小 -->
+        <div class="space-y-2">
+          <label class="text-xs font-semibold text-slate-500 block">Profile 本地存储空间</label>
+          <div class="bg-slate-50 p-3 rounded-lg border border-slate-150 flex items-center justify-between">
+            <div>
+              <p class="text-xs text-slate-400">文件夹大小</p>
+              <p class="text-sm font-bold text-slate-800 font-mono mt-0.5">1.24 GB</p>
+            </div>
+            <button data-proto-action-id="d2be73cf-6b22-49df-8b2b-632b7d42cf38" class="text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 text-xs px-2.5 py-1.5 rounded-lg border border-rose-100 font-medium transition-all">
+              一键清理缓存
+            </button>
+          </div>
+          <span class="text-[10px] text-slate-400 leading-normal block">清理缓存将保留所有已登录的 Cookie 数据，仅清理多余的静态文件和历史缓存。</span>
+        </div>
+
+        <div class="h-px bg-slate-200"></div>
+
+        <!-- 详细代理 GeoIP 数据 -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-slate-500 block">出口代理 GeoIP 实测数据</label>
+            <button data-proto-action-id="e2fd6e4a-9774-4b55-a228-b0a79058b73f" class="text-teal-600 hover:text-teal-700 text-xs font-medium flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18.2"></path></svg>
+              一键重测
+            </button>
+          </div>
+          
+          <div class="space-y-2 text-xs">
+            <div class="flex justify-between py-1 border-b border-slate-100">
+              <span class="text-slate-400">出口 IP 地址</span>
+              <span class="font-mono text-slate-700 font-medium">104.244.75.12</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-slate-100">
+              <span class="text-slate-400">出口国家/地区</span>
+              <span class="text-slate-700 font-medium">美国 (United States)</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-slate-100">
+              <span class="text-slate-400">时区 (Timezone)</span>
+              <span class="text-slate-700 font-medium">America/Los_Angeles</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-slate-100">
+              <span class="text-slate-400">通信延迟 (Latency)</span>
+              <span class="text-teal-600 font-mono font-bold">45 ms (极速)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="h-px bg-slate-200"></div>
+
+        <!-- 指纹 JSON 结构树状只读视图 -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-slate-500 block">指纹策略摘要 (camoucfg)</label>
+            <a href="#" data-proto-action-id="ad2386e8-eb6e-44ab-b565-d0df73ee6ff5" class="text-teal-600 hover:text-teal-700 text-xs font-medium">在策略模板中编辑</a>
+          </div>
+
+          <div class="bg-slate-900 rounded-lg p-3 text-[11px] font-mono text-teal-400 overflow-x-auto leading-relaxed max-h-48 scrollbar-thin">
+            <pre>{
+  "strategy": "auto_random",
+  "navigator.userAgent": "Mozilla/5.0 (...; rv:152.0) Gecko/20100101 Firefox/152.0",
+  "navigator.platform": "Win32",
+  "screen.width": 1920,
+  "screen.height": 1080,
+  "timezone": "America/Los_Angeles",
+  "webrtc:ipv4": "104.244.75.12",
+  "canvas:seed": "(launch-time random)"
+}</pre>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 底部保存 -->
+      <div class="p-6 border-t border-slate-200 bg-slate-50">
+        <button data-proto-action-id="0ef29f04-0985-48fa-89ea-c4391e4e5ee8" class="w-full bg-teal-600 hover:bg-teal-700 text-white text-xs py-2 rounded-lg font-semibold transition-all">
+          保存并关闭抽屉
+        </button>
+      </div>
+    </aside>
+
+  </div>
+</div>
+  </body>
+</html>

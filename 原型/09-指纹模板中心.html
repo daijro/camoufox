@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>指纹策略模板</title>
+    <base href="http://localhost:5173/" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei"; }
+      img { max-width: 100%; height: auto; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div class="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col h-screen overflow-hidden">
+  <!-- 整体容器 -->
+  <div class="flex flex-1 overflow-hidden h-full">
+    
+    <!-- 侧边导航栏 (Sidebar) -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 z-30 flex-shrink-0">
+      <!-- 头部 Logo -->
+      <div>
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
+          <div class="bg-teal-500 text-slate-950 p-2 rounded-lg font-bold text-lg flex items-center justify-center w-9 h-9">
+            CF
+          </div>
+          <div>
+            <h1 class="font-bold text-white text-sm tracking-wide leading-none">Camoufox 控制台</h1>
+            <span class="text-xs text-teal-400 mt-1 inline-block">指纹浏览器系统</span>
+          </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="mt-6 px-4 space-y-1">
+          <a href="#" data-proto-role="menu" data-proto-action-id="fb7a718c-c4d6-4e55-87bd-ea3a45c381e1" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            环境管理
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="fb7a718c-c4d6-4e55-87bd-ea3a45c381e2" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            实例监控
+            <span class="ml-auto bg-teal-500/20 text-teal-300 text-xs px-2 py-0.5 rounded-full font-semibold">3 运行</span>
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="fb7a718c-c4d6-4e55-87bd-ea3a45c381e3" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+            代理中心
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="fb7a718c-c4d6-4e55-87bd-ea3a45c381e4" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-teal-600 text-white transition-all">
+            <svg class="w-5 h-5 text-teal-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 009 11.5c0-.62-.078-1.22-.227-1.791M15.147 18.25a14.27 14.27 0 002.244-2.077M4.772 5.79A13.93 13.93 0 0018.18 15.75A9 9 0 104.772 5.79z"></path></svg>
+            指纹策略
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="fb7a718c-c4d6-4e55-87bd-ea3a45c381e5" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+            插件中心
+            <span class="ml-auto text-xs text-slate-500">第二阶段</span>
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="fb7a718c-c4d6-4e55-87bd-ea3a45c381e6" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+            任务中心
+          </a>
+          <div class="h-px bg-slate-800 my-4"></div>
+          <a href="#" data-proto-role="menu" data-proto-action-id="fb7a718c-c4d6-4e55-87bd-ea3a45c381e7" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            浏览器版本
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="fb7a718c-c4d6-4e55-87bd-ea3a45c381e8" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            本地接口 (Local API)
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="fb7a718c-c4d6-4e55-87bd-ea3a45c381e9" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            系统设置
+          </a>
+        </nav>
+      </div>
+
+      <!-- 底部状态指示器 -->
+      <div class="p-4 border-t border-slate-800 text-xs">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-slate-500">接口服务 (API)</span>
+          <span class="flex items-center gap-1.5 text-teal-400">
+            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+            运行中 :50325
+          </span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-500">Camoufox 版本</span>
+          <span class="text-slate-400 font-mono">Camoufox 152.0.4-beta.28</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧内容区域（含顶栏与主体） -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      
+      <!-- 顶栏 (Header) -->
+      <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 z-20">
+        <!-- 搜索与面包屑 -->
+        <div class="flex items-center gap-8">
+          <div class="flex items-center gap-2 text-sm text-slate-500">
+            <span class="hover:text-slate-800 cursor-pointer">环境管理中心</span>
+            <span>/</span>
+            <span class="text-sm font-semibold text-slate-800">指纹策略模板</span>
+          </div>
+
+          <!-- 全局搜索 -->
+          <div class="relative w-80">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </span>
+            <input type="text" placeholder="搜索策略模板名称、描述或关键字..." class="w-full pl-9 pr-4 py-1.5 text-sm bg-slate-100 border border-transparent rounded-lg focus:outline-none focus:bg-white focus:border-teal-500 transition-all placeholder:text-slate-400" />
+          </div>
+        </div>
+
+        <!-- 顶部操作区 -->
+        <div class="flex items-center gap-4">
+          <div class="text-xs text-slate-400 mr-2">
+            当前共有 <span class="font-semibold text-slate-700">8</span> 个策略模板 (含系统预设)
+          </div>
+          <button data-proto-action-id="bf2f9c73-455b-4394-a131-0df082260ef1" class="bg-teal-600 hover:bg-teal-700 text-white text-xs px-4 py-2 rounded-lg font-medium flex items-center gap-1.5 shadow-sm transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            新建策略模板
+          </button>
+        </div>
+      </header>
+
+      <!-- 双区域主视图容器 -->
+      <main class="flex-1 flex overflow-hidden bg-slate-50">
+        
+        <!-- 左侧区域：模板卡片列表 -->
+        <section class="w-80 border-r border-slate-200 flex flex-col flex-shrink-0 bg-slate-50">
+          <div class="p-4 border-b border-slate-200 bg-white flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">模板列表</span>
+            <span class="text-xs text-teal-600 bg-teal-50 px-2 py-0.5 rounded font-medium">全局应用</span>
+          </div>
+          
+          <div class="flex-1 overflow-y-auto p-4 space-y-3">
+            
+            <!-- 卡片 0 (系统预设 - BrowserForge 默认) -->
+            <div class="bg-slate-100 p-4 rounded-xl border-2 border-teal-600 shadow-sm relative">
+              <div class="absolute top-3 right-3 flex items-center gap-1.5">
+                <span class="bg-teal-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">默认</span>
+                <span class="bg-slate-300 text-slate-600 text-[10px] px-1.5 py-0.5 rounded font-medium">系统预设</span>
+              </div>
+              <div class="pr-16">
+                <h4 class="text-sm font-semibold text-slate-700">BrowserForge 自动随机</h4>
+                <p class="text-xs text-slate-400 mt-1 line-clamp-2">每次启动自动生成唯一 Firefox 指纹，Camoufox 默认策略。</p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                <div>引用: <span class="font-semibold text-slate-700">86 个环境</span></div>
+                <div class="flex items-center gap-2">
+                  <button class="text-teal-600 hover:text-teal-700 font-medium">查看</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 卡片 1 (当前选中编辑状态) -->
+            <div class="bg-white p-4 rounded-xl border-2 border-teal-600 shadow-sm transition-all relative cursor-pointer">
+              <div class="absolute top-3 right-3 flex items-center gap-1.5">
+                <span class="bg-teal-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">默认</span>
+              </div>
+              <div class="pr-10">
+                <h4 class="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+                  跨境电商常规运营模板
+                </h4>
+                <p class="text-xs text-slate-400 mt-1 line-clamp-2">专为亚马逊、eBay等商铺设计，基于 Windows 平台的高兼容对抗配置。</p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <div>
+                  引用: <span class="font-semibold text-slate-700">42 个环境</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2321" class="text-teal-600 hover:text-teal-700 font-medium">编辑</button>
+                  <span class="text-slate-300">|</span>
+                  <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2322" class="text-slate-600 hover:text-slate-700">复制</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 卡片 2 -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 hover:border-slate-300 shadow-sm transition-all relative cursor-pointer">
+              <div class="absolute top-3 right-3">
+                <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2323" class="w-8 h-4 rounded-full bg-slate-200 p-0.5 transition-colors focus:outline-none" aria-label="设为默认">
+                  <span class="block w-3 h-3 rounded-full bg-white shadow transform translate-x-0 transition-transform"></span>
+                </button>
+              </div>
+              <div class="pr-10">
+                <h4 class="text-sm font-semibold text-slate-800">
+                  社媒多账号防关联模板
+                </h4>
+                <p class="text-xs text-slate-400 mt-1 line-clamp-2">适用于 Facebook、Twitter 批量养号投放，重在语言与代理时区自动对齐。</p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <div>
+                  引用: <span class="font-semibold text-slate-700">18 个环境</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2324" class="text-teal-600 hover:text-teal-700 font-medium">编辑</button>
+                  <span class="text-slate-300">|</span>
+                  <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2325" class="text-slate-600 hover:text-slate-700">复制</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 卡片 3 (系统预设) -->
+            <div class="bg-slate-100 p-4 rounded-xl border border-slate-200 relative">
+              <div class="absolute top-3 right-3">
+                <span class="bg-slate-300 text-slate-600 text-[10px] px-1.5 py-0.5 rounded font-medium">系统内置</span>
+              </div>
+              <div class="pr-16">
+                <h4 class="text-sm font-semibold text-slate-700">
+                  纯净指纹 (无干扰模式)
+                </h4>
+                <p class="text-xs text-slate-400 mt-1 line-clamp-2">所有高级噪点功能关闭，使用最普遍的真实物理机数据进行伪装。</p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                <div>
+                  引用: <span class="font-semibold text-slate-700">5 个环境</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2326" class="text-teal-600 hover:text-teal-700 font-medium">查看</button>
+                  <span class="text-slate-300">|</span>
+                  <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2327" class="text-slate-600 hover:text-slate-700">复制</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 卡片 4 -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 hover:border-slate-300 shadow-sm transition-all relative cursor-pointer">
+              <div class="absolute top-3 right-3">
+                <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2328" class="w-8 h-4 rounded-full bg-slate-200 p-0.5 transition-colors focus:outline-none" aria-label="设为默认">
+                  <span class="block w-3 h-3 rounded-full bg-white shadow transform translate-x-0 transition-transform"></span>
+                </button>
+              </div>
+              <div class="pr-10">
+                <h4 class="text-sm font-semibold text-slate-800">
+                  macOS Firefox 仿真环境
+                </h4>
+                <p class="text-xs text-slate-400 mt-1 line-clamp-2">完全模拟苹果端 Firefox 浏览器的硬件和画布渲染链路。</p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <div>
+                  引用: <span class="font-semibold text-slate-700">12 个环境</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2329" class="text-teal-600 hover:text-teal-700 font-medium">编辑</button>
+                  <span class="text-slate-300">|</span>
+                  <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2330" class="text-slate-600 hover:text-slate-700">复制</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- 右侧区域：高级指纹编辑器 (三栏结构) -->
+        <section class="flex-1 flex overflow-hidden">
+          
+          <!-- 编辑器左栏：分类导航 + 表单项 -->
+          <div class="flex-1 flex flex-col overflow-hidden bg-white">
+            <!-- 当前编辑模板顶栏 -->
+            <div class="h-14 border-b border-slate-200 px-6 flex items-center justify-between bg-slate-50/50 flex-shrink-0">
+              <div class="flex items-center gap-3">
+                <span class="text-xs font-semibold text-slate-400">正在编辑:</span>
+                <span class="text-sm font-bold text-slate-800">跨境电商常规运营模板</span>
+                <span class="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">未保存的修改</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2331" class="text-xs text-slate-600 hover:text-slate-800 bg-white border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-lg flex items-center gap-1 font-medium transition-all">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.228 9H18.01"></path></svg>
+                  重置修改
+                </button>
+                <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2332" class="text-xs text-teal-700 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg flex items-center gap-1 font-medium transition-all">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                  随机生成
+                </button>
+                <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2333" class="text-xs bg-teal-600 hover:bg-teal-700 text-white px-4 py-1.5 rounded-lg font-medium transition-all shadow-sm">
+                  保存模板
+                </button>
+              </div>
+            </div>
+
+            <!-- 分类导航与表单核心区 -->
+            <div class="flex-1 flex overflow-hidden">
+              
+              <!-- 左侧小分类 Tab 导航 -->
+              <div class="w-40 border-r border-slate-200 bg-slate-50/70 p-2 space-y-1 flex-shrink-0">
+                <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2334" class="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold bg-white text-teal-600 shadow-sm border border-slate-100 flex items-center gap-2">
+                  <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+                  基础特征
+                </button>
+                <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2335" class="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-all flex items-center gap-2">
+                  <span class="w-1.5 h-1.5 rounded-full bg-transparent"></span>
+                  屏幕与窗口
+                </button>
+                <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2336" class="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-all flex items-center gap-2">
+                  <span class="w-1.5 h-1.5 rounded-full bg-transparent"></span>
+                  地理与WebRTC
+                </button>
+                <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2337" class="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-all flex items-center gap-2">
+                  <span class="w-1.5 h-1.5 rounded-full bg-transparent"></span>
+                  高级反指纹技术
+                </button>
+              </div>
+
+              <!-- 表单填写容器 -->
+              <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                
+                <!-- 分组 1: 基础特征 -->
+                <div class="space-y-4">
+                  <div class="border-b border-slate-100 pb-2">
+                    <h3 class="text-sm font-bold text-slate-800">1. 基础特征配置</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">指定操作系统平台。User-Agent 与 Firefox 版本由 Camoufox 启动时自动生成。</p>
+                  </div>
+                  
+                  <div class="grid grid-cols-1 gap-4">
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-600 mb-1.5">操作系统平台</label>
+                      <div class="flex gap-2">
+                        <label class="flex-1 border border-teal-500 bg-teal-50/50 rounded-lg p-2 flex items-center gap-2 cursor-pointer transition-all">
+                          <input type="radio" name="os_platform" value="windows" checked class="text-teal-600 focus:ring-teal-500 h-3.5 w-3.5">
+                          <span class="text-xs font-medium text-slate-700">Windows</span>
+                        </label>
+                        <label class="flex-1 border border-slate-200 hover:border-slate-300 rounded-lg p-2 flex items-center gap-2 cursor-pointer transition-all">
+                          <input type="radio" name="os_platform" value="mac" class="text-teal-600 focus:ring-teal-500 h-3.5 w-3.5">
+                          <span class="text-xs font-medium text-slate-700">macOS</span>
+                        </label>
+                        <label class="flex-1 border border-slate-200 hover:border-slate-300 rounded-lg p-2 flex items-center gap-2 cursor-pointer transition-all">
+                          <input type="radio" name="os_platform" value="linux" class="text-teal-600 focus:ring-teal-500 h-3.5 w-3.5">
+                          <span class="text-xs font-medium text-slate-700">Linux</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">User-Agent</label>
+                    <input type="text" value="启动时自动生成，无需配置" readonly class="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono bg-slate-100 text-slate-500 cursor-not-allowed" />
+                    <p class="text-[10px] text-slate-400 mt-1">由 BrowserForge 根据 OS 与已安装 Camoufox 版本自动推导。</p>
+                  </div>
+                </div>
+
+                <!-- 分组 2: 屏幕与窗口 -->
+                <div class="space-y-4">
+                  <div class="border-b border-slate-100 pb-2">
+                    <h3 class="text-sm font-bold text-slate-800">2. 屏幕与窗口渲染</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">控制屏幕分辨率、设备像素比 (DPR) 以及视口偏移防检测策略。</p>
+                  </div>
+
+                  <div class="grid grid-cols-3 gap-4">
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-600 mb-1.5">设备像素比 (DPR)</label>
+                      <select class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 bg-white">
+                        <option value="1" selected>1.0 (标准屏幕)</option>
+                        <option value="1.5">1.5 (高清缩放屏)</option>
+                        <option value="2">2.0 (视网膜屏 Retina)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-600 mb-1.5">分辨率范围 (默认随机)</label>
+                      <select class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 bg-white">
+                        <option value="random" selected>按常用分辨率分布随机</option>
+                        <option value="1920x1080">固定 1920 x 1080</option>
+                        <option value="1440x900">固定 1440 x 900</option>
+                        <option value="1366x768">固定 1366 x 768</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-600 mb-1.5">内外视口映射设定</label>
+                      <div class="flex items-center mt-2">
+                        <input type="checkbox" id="inner_outer_sync" checked class="text-teal-600 focus:ring-teal-500 h-4 w-4 rounded border-slate-300">
+                        <label for="inner_outer_sync" class="ml-2 text-xs text-slate-600 cursor-pointer">自动防篡改视口匹配</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 分组 3: 地理与WebRTC -->
+                <div class="space-y-4">
+                  <div class="border-b border-slate-100 pb-2">
+                    <h3 class="text-sm font-bold text-slate-800">3. 地理定位与 WebRTC</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">配置代理 IP 联动设置，防范因时区和网卡真实 IP 泄露关联风险。</p>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center justify-between">
+                      <div>
+                        <label class="block text-xs font-bold text-slate-700">时区跟随代理IP</label>
+                        <span class="text-[10px] text-slate-400">基于代理出口 GeoIP 动态校准浏览器系统时区</span>
+                      </div>
+                      <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2338" class="w-9 h-5 rounded-full bg-teal-600 p-0.5 transition-colors focus:outline-none" aria-label="时区跟随开关">
+                        <span class="block w-4 h-4 rounded-full bg-white shadow transform translate-x-4 transition-transform"></span>
+                      </button>
+                    </div>
+
+                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center justify-between">
+                      <div>
+                        <label class="block text-xs font-bold text-slate-700">语言 Locale 自动推导</label>
+                        <span class="text-[10px] text-slate-400">优先采用代理服务器属地常用语言注入 Headers</span>
+                      </div>
+                      <button data-proto-action-id="a87a83d4-cf3d-4952-b88a-b9c1d06e2339" class="w-9 h-5 rounded-full bg-teal-600 p-0.5 transition-colors focus:outline-none" aria-label="语言自动推导开关">
+                        <span class="block w-4 h-4 rounded-full bg-white shadow transform translate-x-4 transition-transform"></span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">WebRTC 伪装策略</label>
+                    <div class="grid grid-cols-2 gap-2">
+                      <label class="border border-teal-500 bg-teal-50/50 rounded-lg p-2.5 flex flex-col gap-1 cursor-pointer">
+                        <input type="radio" name="webrtc_mode" value="mask" checked class="text-teal-600 focus:ring-teal-500 h-3.5 w-3.5">
+                        <span class="text-xs font-semibold text-slate-700 mt-1">跟随代理 IP 伪装 (推荐)</span>
+                        <span class="text-[10px] text-slate-400">对应 geoip=True，写入 webrtc:ipv4</span>
+                      </label>
+                      <label class="border border-slate-200 hover:border-slate-300 rounded-lg p-2.5 flex flex-col gap-1 cursor-pointer">
+                        <input type="radio" name="webrtc_mode" value="disabled" class="text-teal-600 focus:ring-teal-500 h-3.5 w-3.5">
+                        <span class="text-xs font-semibold text-slate-700 mt-1">禁用 WebRTC</span>
+                        <span class="text-[10px] text-slate-400">对应 block_webrtc=True</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 分组 4: 高级反指纹技术 -->
+                <div class="space-y-4">
+                  <div class="border-b border-slate-100 pb-2">
+                    <h3 class="text-sm font-bold text-slate-800">4. 指纹噪声 Seed 策略</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Canvas、Audio、字体 spacing 的 seed 在 Camoufox 启动时注入 C++ 层。</p>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <label class="border border-teal-500 bg-teal-50/50 rounded-lg p-3 flex flex-col gap-1 cursor-pointer">
+                      <input type="radio" name="seed_mode" value="random" checked class="text-teal-600 focus:ring-teal-500 h-3.5 w-3.5">
+                      <span class="text-xs font-semibold text-slate-700 mt-1">每次启动随机（推荐）</span>
+                      <span class="text-[10px] text-slate-400">canvas:seed / audio:seed 每次 launch 重新生成</span>
+                    </label>
+                    <label class="border border-slate-200 hover:border-slate-300 rounded-lg p-3 flex flex-col gap-1 cursor-pointer">
+                      <input type="radio" name="seed_mode" value="fixed" class="text-teal-600 focus:ring-teal-500 h-3.5 w-3.5">
+                      <span class="text-xs font-semibold text-slate-700 mt-1">固定 seed（存模板）</span>
+                      <span class="text-[10px] text-slate-400">同一环境每次启动复用相同噪声</span>
+                    </label>
+                  </div>
+
+                  <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs font-mono text-slate-600 space-y-1">
+                    <div>canvas:seed — <span class="text-slate-400">启动时随机</span></div>
+                    <div>audio:seed — <span class="text-slate-400">启动时随机</span></div>
+                    <div>fonts:spacing_seed — <span class="text-slate-400">启动时随机</span></div>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">字体子集策略</label>
+                    <select class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 bg-white">
+                      <option value="random" selected>随机 OS 字体子集（推荐，30-78%）</option>
+                      <option value="full">完整 OS 字体列表（不推荐）</option>
+                      <option value="custom">自定义字体列表（高级）</option>
+                    </select>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- 编辑器右栏：JSON 配置树状实时预览 -->
+          <div class="w-72 border-l border-slate-200 flex flex-col bg-slate-900 text-teal-400 flex-shrink-0 overflow-hidden font-mono text-xs">
+            <div class="h-14 border-b border-slate-800 px-4 flex items-center justify-between bg-slate-950 flex-shrink-0 text-slate-400 font-sans">
+              <span class="text-xs font-bold tracking-wider flex items-center gap-1.5">
+                <svg class="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                实时指纹结构 (camoucfg)
+              </span>
+              <span class="text-[10px] text-teal-500/80 bg-teal-950/50 px-2 py-0.5 rounded border border-teal-900">同步中</span>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4 space-y-2 select-all leading-relaxed">
+              <div>{</div>
+              <!-- 基础配置 -->
+              <div class="pl-4 text-slate-400">"platform": <span class="text-teal-300">"windows"</span>,</div>
+              <div class="pl-4 text-slate-400">"firefox_version": <span class="text-amber-300 font-bold bg-amber-950/40 px-1 rounded">152</span>,</div>
+              <div class="pl-4 text-slate-400">"user_agent": <span class="text-teal-300">"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0)..."</span>,</div>
+              
+              <!-- 屏幕与视口 -->
+              <div class="pl-4 text-slate-500">// 屏幕与窗口设定</div>
+              <div class="pl-4 text-slate-400">"screen": {</div>
+                <div class="pl-8 text-slate-400">"dpr": <span class="text-teal-300">1</span>,</div>
+                <div class="pl-8 text-slate-400">"width": <span class="text-teal-300">1920</span>,</div>
+                <div class="pl-8 text-slate-400">"height": <span class="text-teal-300">1080</span>,</div>
+                <div class="pl-8 text-slate-400">"viewport_sync": <span class="text-teal-300">true</span></div>
+              <div class="pl-4 text-slate-400">},</div>
+
+              <!-- 地理与WebRTC -->
+              <div class="pl-4 text-slate-500">// 网络与物理定位</div>
+              <div class="pl-4 text-slate-400">"geoip_override": {</div>
+                <div class="pl-8 text-slate-400">"timezone_auto": <span class="text-amber-300 font-bold bg-amber-950/40 px-1 rounded">true</span>,</div>
+                <div class="pl-8 text-slate-400">"locale_auto": <span class="text-teal-300">true</span></div>
+              <div class="pl-4 text-slate-400">},</div>
+              <div class="pl-4 text-slate-400">"webrtc": {</div>
+                <div class="pl-8 text-slate-400">"mode": <span class="text-teal-300">"proxy_mask"</span>,</div>
+                <div class="pl-8 text-slate-400">"spoof_ipv4": <span class="text-teal-300">"auto"</span></div>
+              <div class="pl-4 text-slate-400">},</div>
+
+              <!-- 噪点设置 -->
+              <div class="pl-4 text-slate-500">// 高级防指纹噪声 Seed</div>
+              <div class="pl-4 text-slate-400">"canvas_noise": {</div>
+                <div class="pl-8 text-slate-400">"enabled": <span class="text-teal-300">true</span>,</div>
+                <div class="pl-8 text-slate-400">"seed_ratio": <span class="text-amber-300 font-bold bg-amber-950/40 px-1 rounded">0.0015</span></div>
+              <div class="pl-4 text-slate-400">},</div>
+              <div class="pl-4 text-slate-400">"webgl_noise": {</div>
+                <div class="pl-8 text-slate-400">"enabled": <span class="text-teal-300">true</span>,</div>
+                <div class="pl-8 text-slate-400">"seed_ratio": <span class="text-teal-300">0.0025</span></div>
+              <div class="pl-4 text-slate-400">},</div>
+              <div class="pl-4 text-slate-400">"audio_noise": {</div>
+                <div class="pl-8 text-slate-400">"enabled": <span class="text-teal-300">true</span>,</div>
+                <div class="pl-8 text-slate-400">"seed_ratio": <span class="text-teal-300">0.0005</span></div>
+              <div class="pl-4 text-slate-400">},</div>
+
+              <!-- 字体策略 -->
+              <div class="pl-4 text-slate-400">"fonts": {</div>
+                <div class="pl-8 text-slate-400">"subset_strategy": <span class="text-teal-300">"core_safe"</span></div>
+              <div class="pl-4 text-slate-400">}</div>
+
+              <div>}</div>
+            </div>
+
+            <div class="p-4 border-t border-slate-800 bg-slate-950 text-slate-500 flex items-center justify-between font-sans">
+              <span>配置校验状态:</span>
+              <span class="text-teal-500 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-teal-400"></span>
+                参数无冲突
+              </span>
+            </div>
+          </div>
+
+        </section>
+
+      </main>
+
+    </div>
+  </div>
+</div>
+  </body>
+</html>

@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>新建环境向导</title>
+    <base href="http://localhost:5173/" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei"; }
+      img { max-width: 100%; height: auto; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div class="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
+  <!-- 整体容器 -->
+  <div class="flex flex-1 overflow-hidden h-screen">
+    
+    <!-- 侧边导航栏 (Sidebar) -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 z-30">
+      <!-- 头部 Logo -->
+      <div>
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
+          <div class="bg-teal-500 text-slate-950 p-2 rounded-lg font-bold text-lg flex items-center justify-center w-9 h-9">
+            CF
+          </div>
+          <div>
+            <h1 class="font-bold text-white text-sm tracking-wide leading-none">Camoufox 控制台</h1>
+            <span class="text-xs text-teal-400 mt-1 inline-block">指纹浏览器系统</span>
+          </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="mt-6 px-4 space-y-1">
+          <a href="#" data-proto-role="menu" data-proto-action-id="4a9f993d-d1ef-4f11-9a7f-d3b1e779a1f1" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-teal-600 text-white transition-all">
+            <svg class="w-5 h-5 text-teal-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            环境管理
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="4a9f993d-d1ef-4f11-9a7f-d3b1e779a1f2" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            实例监控
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="4a9f993d-d1ef-4f11-9a7f-d3b1e779a1f3" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+            代理中心
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="4a9f993d-d1ef-4f11-9a7f-d3b1e779a1f4" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 009 11.5c0-.62-.078-1.22-.227-1.791M15.147 18.25a14.27 14.27 0 002.244-2.077M4.772 5.79A13.93 13.93 0 0018.18 15.75A9 9 0 104.772 5.79z"></path></svg>
+            指纹策略
+          </a>
+          <div class="h-px bg-slate-800 my-4"></div>
+          <a href="#" data-proto-role="menu" data-proto-action-id="4a9f993d-d1ef-4f11-9a7f-d3b1e779a1f5" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            浏览器版本
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="4a9f993d-d1ef-4f11-9a7f-d3b1e779a1f6" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            本地接口 (Local API)
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="4a9f993d-d1ef-4f11-9a7f-d3b1e779a1f7" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            系统设置
+          </a>
+        </nav>
+      </div>
+
+      <!-- 底部状态指示 -->
+      <div class="p-4 border-t border-slate-800 text-xs">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-slate-500">接口服务 (API)</span>
+          <span class="flex items-center gap-1.5 text-teal-400">
+            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+            运行中 :50325
+          </span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-500">Camoufox 版本</span>
+          <span class="text-slate-400 font-mono">Camoufox 152.0.4-beta.28</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧内容区域 -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      
+      <!-- 顶栏 (Header) -->
+      <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
+        <!-- 面包屑与页面标题 -->
+        <div class="flex items-center gap-4 text-sm">
+          <a href="#" class="text-slate-500 hover:text-teal-600 transition-colors">环境管理</a>
+          <span class="text-slate-300">/</span>
+          <span class="text-slate-800 font-semibold">新建防关联环境</span>
+        </div>
+
+        <!-- 快速说明 -->
+        <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg">
+          正在为 SQLite 数据库初始化全新 Profile 独立指纹环境
+        </div>
+      </header>
+
+      <!-- 主体区域：采用两栏布局 -->
+      <div class="p-8 flex gap-8 items-start flex-1">
+        
+        <!-- 左侧：向导配置主表单 -->
+        <div class="flex-1 space-y-6">
+          
+          <!-- 分类导航 Tab 卡片 -->
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="border-b border-slate-200 bg-slate-50/50 px-6 py-4 flex items-center justify-between">
+              <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                <span class="w-1.5 h-4 bg-teal-600 rounded"></span>
+                配置环境基本与核心参数
+              </h2>
+              <span class="text-xs text-slate-400">所有配置仅本地存储，加密保存</span>
+            </div>
+
+            <div class="p-6 space-y-8">
+              <!-- 1. 基础信息 -->
+              <div>
+                <div class="flex items-center gap-2 mb-4 border-l-2 border-teal-500 pl-2">
+                  <span class="text-xs font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded">01</span>
+                  <h3 class="font-semibold text-slate-800 text-sm">基础配置信息</h3>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                  <div class="col-span-2">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">环境名称 <span class="text-rose-500">*</span></label>
+                    <input type="text" placeholder="例如：北美店铺投放主账号_01" class="w-full text-sm px-3.5 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all" value="跨境店铺_03_Mac仿真" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">用途分类/平台</label>
+                    <select class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 transition-all bg-white">
+                      <option>Facebook 广告投放</option>
+                      <option>Amazon 卖家中心</option>
+                      <option>TikTok 运营</option>
+                      <option>Google Ads 账户</option>
+                      <option>自定义通用网页</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">归属分组</label>
+                    <div class="flex gap-2">
+                      <select class="flex-1 text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 transition-all bg-white">
+                        <option>默认分组</option>
+                        <option>北美海外部</option>
+                        <option>欧洲自营店</option>
+                      </select>
+                      <button data-proto-action-id="a7b6c5d4-3210-4fde-bcda-1234567890ab" class="px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors text-xs flex items-center justify-center gap-1 font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        新建
+                      </button>
+                    </div>
+                  </div>
+                  <div class="col-span-2">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">个性化标签</label>
+                    <div class="flex flex-wrap items-center gap-2 border border-slate-200 rounded-lg p-2 bg-white">
+                      <span class="inline-flex items-center gap-1 bg-teal-50 text-teal-700 text-xs px-2.5 py-1 rounded-md font-medium border border-teal-200">
+                        北美区
+                        <button class="hover:text-teal-900 font-bold">&times;</button>
+                      </span>
+                      <span class="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-medium border border-slate-200">
+                        高权重
+                        <button class="hover:text-slate-900 font-bold">&times;</button>
+                      </span>
+                      <input type="text" placeholder="输入并回车以新增标签..." class="flex-1 min-w-[120px] text-xs focus:outline-none bg-transparent" />
+                    </div>
+                  </div>
+                  <div class="col-span-2">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">备注说明</label>
+                    <textarea placeholder="选填，用于记录该环境的特殊用途或注意事项，防止多账号混淆..." class="w-full text-sm px-3.5 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 transition-all h-20 resize-none"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. 网络代理配置 -->
+              <div class="border-t border-slate-100 pt-6">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2 border-l-2 border-teal-500 pl-2">
+                    <span class="text-xs font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded">02</span>
+                    <h3 class="font-semibold text-slate-800 text-sm">代理网络设置 (Proxy Routing)</h3>
+                  </div>
+                  <span class="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200 flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                    建议绑定独立纯净代理以实现防关联防追踪
+                  </span>
+                </div>
+
+                <!-- 代理选项单选组 -->
+                <div class="grid grid-cols-3 gap-4 mb-4">
+                  <label class="relative flex flex-col p-4 border border-slate-200 rounded-xl cursor-pointer hover:border-teal-500 transition-all bg-white select-none">
+                    <input type="radio" name="proxy_type" class="absolute top-4 right-4 text-teal-600 focus:ring-teal-500" />
+                    <span class="text-xs font-bold text-slate-700">直连模式 (不绑定代理)</span>
+                    <span class="text-[11px] text-slate-400 mt-1">使用您本机的当前网络环境，无法隐藏真实出口 IP。</span>
+                  </label>
+                  
+                  <label class="relative flex flex-col p-4 border border-slate-200 rounded-xl cursor-pointer hover:border-teal-500 transition-all bg-white select-none">
+                    <input type="radio" name="proxy_type" class="absolute top-4 right-4 text-teal-600 focus:ring-teal-500" />
+                    <span class="text-xs font-bold text-slate-700">从代理列表库中绑定</span>
+                    <span class="text-[11px] text-slate-400 mt-1">选择已导入代理中心的现有代理，避免重复录入。</span>
+                  </label>
+
+                  <label class="relative flex flex-col p-4 border-teal-500 ring-1 ring-teal-500 rounded-xl cursor-pointer transition-all bg-teal-50/20 select-none">
+                    <input type="radio" name="proxy_type" class="absolute top-4 right-4 text-teal-600 focus:ring-teal-500" checked />
+                    <span class="text-xs font-bold text-teal-800">即时新建并绑定代理</span>
+                    <span class="text-[11px] text-teal-600/80 mt-1">为此环境单独填写新代理线路，并保存至代理中心。</span>
+                  </label>
+                </div>
+
+                <!-- 新建代理录入表单 -->
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-4">
+                  <div class="grid grid-cols-4 gap-3">
+                    <div>
+                      <label class="block text-[11px] font-semibold text-slate-500 mb-1">协议类型</label>
+                      <select class="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-teal-500 bg-white">
+                        <option>SOCKS5</option>
+                        <option>HTTP</option>
+                        <option>HTTPS</option>
+                      </select>
+                    </div>
+                    <div class="col-span-2">
+                      <label class="block text-[11px] font-semibold text-slate-500 mb-1">代理主机 IP 或域名</label>
+                      <input type="text" placeholder="192.168.1.100" class="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-teal-500" value="185.220.101.4" />
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-semibold text-slate-500 mb-1">端口</label>
+                      <input type="text" placeholder="1080" class="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-teal-500" value="9050" />
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-[11px] font-semibold text-slate-500 mb-1">代理用户名 (可选)</label>
+                      <input type="text" placeholder="无认证则不填" class="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-teal-500" />
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-semibold text-slate-500 mb-1">代理密码 (可选)</label>
+                      <input type="password" placeholder="无认证则不填" class="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-teal-500" />
+                    </div>
+                  </div>
+
+                  <!-- 代理检测交互区 -->
+                  <div class="flex items-center justify-between border-t border-slate-200/60 pt-3">
+                    <button type="button" data-proto-action-id="a0f78921-2ef3-4632-bd88-82e147bfae81" class="bg-white hover:bg-slate-100 text-slate-700 text-xs px-3.5 py-2 rounded-lg border border-slate-200 transition-all font-semibold flex items-center gap-1.5">
+                      <svg class="w-4 h-4 text-slate-500 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18"></path></svg>
+                      测试代理连通性
+                    </button>
+
+                    <!-- 测试通过状态显示 -->
+                    <div class="flex items-center gap-4 text-xs">
+                      <span class="text-teal-600 font-medium flex items-center gap-1 bg-teal-50 px-2 py-1 rounded border border-teal-200">
+                        <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+                        连接成功
+                      </span>
+                      <div class="text-slate-500 flex gap-3">
+                        <span>出口 IP: <strong class="font-mono text-slate-700">185.220.101.4</strong></span>
+                        <span>地区: <strong class="text-slate-700">美国 (US) - 俄勒冈州</strong></span>
+                        <span>时区: <strong class="text-slate-700">America/Los_Angeles (UTC-8)</strong></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3. 指纹策略 -->
+              <div class="border-t border-slate-100 pt-6">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2 border-l-2 border-teal-500 pl-2">
+                    <span class="text-xs font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded">03</span>
+                    <h3 class="font-semibold text-slate-800 text-sm">指纹策略 (Camoufox 自动生成)</h3>
+                  </div>
+                </div>
+
+                <!-- 三策略 radio 卡片 -->
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                  <label class="relative flex flex-col p-4 border-teal-500 ring-1 ring-teal-500 rounded-xl cursor-pointer transition-all bg-teal-50/20 select-none">
+                    <input type="radio" name="fp_strategy" class="absolute top-4 right-4 text-teal-600 focus:ring-teal-500" checked />
+                    <span class="text-xs font-bold text-teal-800">自动随机生成（推荐）</span>
+                    <span class="text-[11px] text-teal-600/80 mt-1">每次启动由 BrowserForge 生成唯一 Firefox 指纹。</span>
+                  </label>
+                  <label class="relative flex flex-col p-4 border-slate-200 hover:border-teal-300 rounded-xl cursor-pointer transition-all bg-white select-none">
+                    <input type="radio" name="fp_strategy" class="absolute top-4 right-4 text-teal-600 focus:ring-teal-500" />
+                    <span class="text-xs font-bold text-slate-700">从真实设备预设采样</span>
+                    <span class="text-[11px] text-slate-400 mt-1">使用 fingerprint-presets 库中的真实指纹。</span>
+                  </label>
+                  <label class="relative flex flex-col p-4 border-slate-200 hover:border-teal-300 rounded-xl cursor-pointer transition-all bg-white select-none">
+                    <input type="radio" name="fp_strategy" class="absolute top-4 right-4 text-teal-600 focus:ring-teal-500" />
+                    <span class="text-xs font-bold text-slate-700">使用已保存模板</span>
+                    <span class="text-[11px] text-slate-400 mt-1">固定策略模板（含 seed），下次启动复用。</span>
+                  </label>
+                </div>
+
+                <!-- 默认可见：OS + Geo 对齐 -->
+                <div class="space-y-4">
+                  <div class="grid grid-cols-2 gap-4 p-4 border border-slate-200 rounded-xl bg-white">
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-600 mb-1.5">操作系统 (OS)</label>
+                      <select class="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-teal-500 bg-white">
+                        <option>Windows (10/11)</option>
+                        <option selected>macOS (Apple Silicon/Intel)</option>
+                        <option>Linux</option>
+                      </select>
+                    </div>
+                    <div class="flex items-end">
+                      <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                        <input type="checkbox" checked class="text-teal-600 focus:ring-teal-500 h-4 w-4 rounded border-slate-300" />
+                        <span>启动时根据代理自动对齐时区、语言、WebRTC</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- 高级参数（原型演示默认展开；正式产品可折叠） -->
+                  <div class="flex items-center justify-between bg-slate-50 px-4 py-3 rounded-lg border border-slate-200">
+                    <div>
+                      <span class="text-xs font-semibold text-slate-700">高级指纹参数（可选）</span>
+                      <p class="text-[10px] text-slate-400 mt-0.5">演示中默认展开；产品中可折叠。日常使用可忽略，由 Camoufox 自动处理。</p>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-600 mb-1.5">屏幕分辨率</label>
+                      <select class="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-teal-500 bg-white">
+                        <option selected>按常用分布随机</option>
+                        <option>1920 &times; 1080 (固定)</option>
+                        <option>1440 &times; 900 (固定)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-600 mb-1.5">WebRTC 策略</label>
+                      <select class="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-teal-500 bg-white">
+                        <option selected>跟随代理 IP 伪装（推荐）</option>
+                        <option>禁用 WebRTC</option>
+                      </select>
+                    </div>
+                    <div class="col-span-2">
+                      <a href="#" class="text-xs text-teal-600 hover:text-teal-700 font-medium">在指纹策略模板中心编辑高级参数 →</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4. 凭证导入 -->
+              <div class="border-t border-slate-100 pt-6">
+                <div class="flex items-center justify-between mb-4 border-l-2 border-teal-500 pl-2">
+                  <span class="text-xs font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded">04</span>
+                  <div class="flex items-center gap-2">
+                    <h3 class="font-semibold text-slate-800 text-sm">账户凭据与历史 Cookie 导入</h3>
+                    <span class="text-xs text-slate-400 font-normal">（自动解析 JSON 数组）</span>
+                  </div>
+                </div>
+                <div>
+                  <textarea placeholder='请在此粘贴您的 Cookie 数据，支持标准的 JSON 数组格式，例如：
+[
+  { "name": "session_id", "value": "xyz123...", "domain": ".amazon.com" }
+]' class="w-full text-xs font-mono px-3.5 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 transition-all h-32 resize-y bg-slate-50/50 focus:bg-white"></textarea>
+                  <p class="text-[11px] text-slate-400 mt-1.5">注：安全隔离的 SQLite 数据库将在本地环境中加密储存此 Cookie 信息，启动环境时会自动注入目标浏览器实例，无需手动再次登录账号。</p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧：指纹与地理伪装预览卡片 (固定悬浮) -->
+        <div class="w-80 sticky top-6 space-y-6">
+          
+          <!-- 核心预览卡片 -->
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="bg-slate-900 text-white p-4">
+              <h3 class="font-bold text-xs tracking-wider uppercase text-teal-400 flex items-center justify-between">
+                <span>指纹策略摘要</span>
+                <span class="flex items-center gap-1 text-[10px] text-slate-400 font-normal lowercase">
+                  <span class="w-1.5 h-1.5 bg-teal-400 rounded-full animate-ping"></span>
+                  实时预览
+                </span>
+              </h3>
+              <p class="text-xs text-slate-300 mt-1">Camoufox 启动时将自动生成完整指纹</p>
+            </div>
+
+            <div class="p-4 space-y-4">
+              <!-- 策略摘要 -->
+              <div class="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200/80">
+                <span class="text-xs text-slate-500 font-medium">当前策略</span>
+                <span class="text-xs font-bold text-teal-600">自动随机生成</span>
+              </div>
+
+              <!-- 具体项列表 -->
+              <div class="space-y-3 text-xs border-b border-slate-100 pb-4">
+                <div class="flex justify-between">
+                  <span class="text-slate-400">预设操作系统</span>
+                  <span class="font-medium text-slate-700">macOS</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">代理出口 IP</span>
+                  <span class="font-mono font-medium text-slate-700">185.220.101.4</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">代理所属时区</span>
+                  <span class="font-medium text-slate-700">America/Los_Angeles</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Geo 自动对齐</span>
+                  <span class="font-medium text-teal-600 flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    已启用
+                  </span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">User-Agent</span>
+                  <span class="font-medium text-slate-500">启动时自动生成</span>
+                </div>
+              </div>
+
+              <!-- 成功提示 -->
+              <div class="bg-teal-50 border border-teal-200 rounded-lg p-3 space-y-1">
+                <div class="flex items-start gap-1.5 text-teal-800">
+                  <svg class="w-4 h-4 text-teal-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  <span class="text-xs font-bold leading-none">指纹将由 Camoufox 自动生成</span>
+                </div>
+                <p class="text-[10px] text-teal-700 leading-normal">
+                  无需手动配置 UA、Canvas 或 WebGL。BrowserForge 将在启动时生成统计学上合理的 Firefox 指纹，并与代理 Geo 信息保持一致。
+                </p>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- 保存动作面板 -->
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-2">
+            <button type="button" data-proto-action-id="a0f78921-2ef3-4632-bd88-82e147bfae84" class="w-full bg-teal-600 hover:bg-teal-700 text-white text-xs py-2.5 rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 shadow-sm shadow-teal-600/10">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+              保存并立即启动环境
+            </button>
+            <button type="button" data-proto-action-id="a0f78921-2ef3-4632-bd88-82e147bfae85" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-2 rounded-lg transition-all font-semibold text-center border border-slate-200/80">
+              仅保存至环境列表
+            </button>
+            <a href="#" class="block text-center text-[10px] text-slate-400 hover:text-slate-600 transition-colors py-1">
+              放弃配置并返回环境管理中心
+            </a>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+  </body>
+</html>

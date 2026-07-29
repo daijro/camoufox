@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>批量导入中心</title>
+    <base href="http://localhost:5173/" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei"; }
+      img { max-width: 100%; height: auto; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div class="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
+  <!-- 整体容器 -->
+  <div class="flex flex-1 overflow-hidden h-screen">
+    
+    <!-- 侧边导航栏 (Sidebar) -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 z-30">
+      <!-- 头部 Logo -->
+      <div>
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
+          <div class="bg-teal-500 text-slate-950 p-2 rounded-lg font-bold text-lg flex items-center justify-center w-9 h-9">
+            CF
+          </div>
+          <div>
+            <h1 class="font-bold text-white text-sm tracking-wide leading-none">Camoufox 控制台</h1>
+            <span class="text-xs text-teal-400 mt-1 inline-block">指纹浏览器系统</span>
+          </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="mt-6 px-4 space-y-1">
+          <a href="#" data-proto-role="menu" data-proto-action-id="ad4c62c9-6bde-4b68-8094-1a9860b001a1" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-teal-600 text-white transition-all">
+            <svg class="w-5 h-5 text-teal-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            环境管理
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="7ba57917-76ad-4560-afcf-b2f5697ea35e" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            实例监控
+            <span class="ml-auto bg-teal-500/20 text-teal-300 text-xs px-2 py-0.5 rounded-full font-semibold">3 运行</span>
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="b07b1d9c-df1e-450a-aa84-d13c7c25227d" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+            代理中心
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="2fb68cf5-7389-49c0-9d0b-fc51480f29c4" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 009 11.5c0-.62-.078-1.22-.227-1.791M15.147 18.25a14.27 14.27 0 002.244-2.077M4.772 5.79A13.93 13.93 0 0018.18 15.75A9 9 0 104.772 5.79z"></path></svg>
+            指纹策略
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="5632a67a-1ee8-4ea7-8b01-f2f64f434c4d" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+            插件中心
+            <span class="ml-auto text-xs text-slate-500">第二阶段</span>
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="62464731-fa99-4c92-bd6c-4860b764c6c0" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+            任务中心
+          </a>
+          <div class="h-px bg-slate-800 my-4"></div>
+          <a href="#" data-proto-role="menu" data-proto-action-id="adfa1b25-b9d9-48f5-93df-81ec663673c6" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            浏览器版本
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="8145dbde-4d7a-42c2-be00-e29ea209c13d" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            本地接口 (Local API)
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="02c01991-8848-4cb3-afc1-840cc6a528cc" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            系统设置
+          </a>
+        </nav>
+      </div>
+
+      <!-- 底部状态指示器 -->
+      <div class="p-4 border-t border-slate-800 text-xs">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-slate-500">接口服务 (API)</span>
+          <span class="flex items-center gap-1.5 text-teal-400">
+            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+            运行中 :50325
+          </span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-500">Camoufox 版本</span>
+          <span class="text-slate-400 font-mono">Camoufox 152.0.4-beta.28</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧内容区域 -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      <!-- 顶栏 -->
+      <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
+        <!-- 面包屑 -->
+        <div class="flex items-center gap-3 text-sm text-slate-500">
+          <a href="#" data-proto-action-id="fb0c8a8c-7f41-477d-81fe-dcebfb26117f" class="hover:text-teal-600 transition-colors">环境管理</a>
+          <span>/</span>
+          <span class="text-slate-800 font-semibold">批量导入中心</span>
+        </div>
+
+        <!-- 返回按钮 -->
+        <a href="#" data-proto-action-id="ec4c8b32-8418-498c-bc5d-6c1704e0e561" class="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-all font-medium bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+          返回环境列表
+        </a>
+      </header>
+
+      <!-- 主体内容 -->
+      <main class="p-8 space-y-6 flex-1 max-w-7xl mx-auto w-full">
+        <!-- 步骤指示器 -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between max-w-3xl mx-auto">
+            <!-- 步骤 1 -->
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-sm">
+                1
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-slate-800">文件上传</p>
+                <p class="text-xs text-slate-400">下载模板并上传数据文件</p>
+              </div>
+            </div>
+            
+            <div class="flex-1 h-px bg-slate-200 mx-4"></div>
+
+            <!-- 步骤 2 -->
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-sm">
+                2
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-slate-800">字段映射与规则</p>
+                <p class="text-xs text-slate-400">配置解析规则与字段对齐</p>
+              </div>
+            </div>
+
+            <div class="flex-1 h-px bg-slate-200 mx-4"></div>
+
+            <!-- 步骤 3 -->
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-teal-50/80 border-2 border-teal-600 text-teal-600 flex items-center justify-center font-bold text-sm">
+                3
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-teal-700">解析预览与校验</p>
+                <p class="text-xs text-slate-500">异常数据排查与批量入库</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 导入配置区：并排两栏 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- 左栏：第一步 - 文件上传与策略 -->
+          <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span class="w-1.5 h-4 bg-teal-600 rounded-sm"></span>
+                  第一步：文件上传
+                </h3>
+                <div class="flex gap-2">
+                  <button data-proto-action-id="ba89d71c-f232-4752-9b24-b150c7760e7e" class="text-xs text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    下载 CSV 模板
+                  </button>
+                  <span class="text-slate-300">|</span>
+                  <button data-proto-action-id="c77d5b88-1bfd-426b-8d69-cb18ca21074a" class="text-xs text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    下载 Excel 模板
+                  </button>
+                </div>
+              </div>
+
+              <!-- 拖拽上传区 -->
+              <div class="border-2 border-dashed border-slate-200 hover:border-teal-500 rounded-xl p-8 text-center bg-slate-50/50 hover:bg-teal-50/10 transition-all cursor-pointer relative group">
+                <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" data-proto-action-id="2ad1fb10-911e-450e-b8d4-ce3f2a1b9e07" />
+                <div class="space-y-3">
+                  <div class="mx-auto w-12 h-12 bg-white rounded-lg shadow-sm border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-teal-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                  </div>
+                  <div>
+                    <p class="text-sm font-semibold text-slate-750">点击或将文件拖拽到这里上传</p>
+                    <p class="text-xs text-slate-400 mt-1">支持 CSV, XLSX 格式，大小不超过 50MB</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 已上传文件状态展示 -->
+              <div class="mt-4 bg-teal-50/50 border border-teal-100 rounded-lg p-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="p-2 bg-teal-100 text-teal-700 rounded">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium text-slate-800">store_import_template_v2.xlsx</p>
+                    <p class="text-xs text-slate-500">145.8 KB · 解析成功 (共 100 行数据)</p>
+                  </div>
+                </div>
+                <button data-proto-action-id="eb2bf1f2-c361-460d-a3df-2035b809ea4f" class="text-slate-400 hover:text-rose-500 p-1">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- 规则配置（指纹与代理匹配策略） -->
+            <div class="pt-6 border-t border-slate-100 space-y-4">
+              <h4 class="text-sm font-bold text-slate-700">全局规则配置</h4>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">指纹分配策略</label>
+                  <select data-proto-action-id="8c919a3b-be24-42b7-a3d8-5f257a0774a3" class="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-teal-500">
+                    <option value="random">全部随机生成 (推荐)</option>
+                    <option value="template">使用默认模板</option>
+                    <option value="excel" disabled class="text-slate-400">使用表格内自定义参数（Phase 2）</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">代理匹配策略</label>
+                  <select data-proto-action-id="c7b134aa-fbf6-42d4-9d56-a19139bc694d" class="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-teal-500">
+                    <option value="auto">自动匹配代理库 (按 IP:Port)</option>
+                    <option value="create">直接使用表内代理信息 (无则创建)</option>
+                    <option value="none">暂不绑定代理</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右栏：第二步 - 字段映射与对齐 -->
+          <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div>
+              <h3 class="text-base font-bold text-slate-800 flex items-center gap-2 mb-4">
+                <span class="w-1.5 h-4 bg-teal-600 rounded-sm"></span>
+                第二步：字段映射关系
+              </h3>
+              <p class="text-xs text-slate-400 mb-4">请将表格文件中的列（表头字段）与系统的环境属性建立映射关系，以便正确导入数据。</p>
+
+              <!-- 映射表格 -->
+              <div class="border border-slate-200 rounded-lg overflow-hidden">
+                <table class="w-full text-left border-collapse">
+                  <thead>
+                    <tr class="bg-slate-50 text-slate-400 text-xs font-semibold border-b border-slate-200">
+                      <th class="p-3">系统预设字段</th>
+                      <th class="p-3">映射状态</th>
+                      <th class="p-3">表格文件对应表头列</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100 text-sm">
+                    <tr>
+                      <td class="p-3 font-medium text-slate-700 flex items-center gap-1.5">
+                        环境名称 <span class="text-rose-500">*</span>
+                      </td>
+                      <td class="p-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-teal-50 text-teal-700">自动对齐</span>
+                      </td>
+                      <td class="p-3">
+                        <select data-proto-action-id="ef467a99-b1d6-4447-9208-6f6a7d5ea853" class="w-full text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-teal-500">
+                          <option value="店铺名称">店铺名称</option>
+                          <option value="环境名称">环境名称</option>
+                          <option value="序号">序号</option>
+                        </select>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="p-3 font-medium text-slate-700 flex items-center gap-1.5">
+                        绑定代理
+                      </td>
+                      <td class="p-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-teal-50 text-teal-700">自动对齐</span>
+                      </td>
+                      <td class="p-3">
+                        <select data-proto-action-id="ad4c62c9-6bde-4b68-8094-1a9860b001a2" class="w-full text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-teal-500">
+                          <option value="代理地址">代理地址</option>
+                          <option value="Proxy">Proxy</option>
+                          <option value="无">-- 暂无映射 --</option>
+                        </select>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="p-3 font-medium text-slate-700 flex items-center gap-1.5">
+                        Cookie 数据
+                      </td>
+                      <td class="p-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-teal-50 text-teal-700">自动对齐</span>
+                      </td>
+                      <td class="p-3">
+                        <select data-proto-action-id="7ba57917-76ad-4560-afcf-b2f5697ea35f" class="w-full text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-teal-500">
+                          <option value="Cookie数据">Cookie数据</option>
+                          <option value="Cookies">Cookies</option>
+                          <option value="无">-- 暂无映射 --</option>
+                        </select>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="p-3 font-medium text-slate-700 flex items-center gap-1.5">
+                        多标签分组
+                      </td>
+                      <td class="p-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-teal-50 text-teal-700">自动对齐</span>
+                      </td>
+                      <td class="p-3">
+                        <select data-proto-action-id="b07b1d9c-df1e-450a-aa84-d13c7c25227e" class="w-full text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-teal-500">
+                          <option value="店铺标签">店铺标签</option>
+                          <option value="所属分组">所属分组</option>
+                          <option value="无">-- 暂无映射 --</option>
+                        </select>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="p-3 font-medium text-slate-700 flex items-center gap-1.5">
+                        备注信息
+                      </td>
+                      <td class="p-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-600">手动选择</span>
+                      </td>
+                      <td class="p-3">
+                        <select data-proto-action-id="2fb68cf5-7389-49c0-9d0b-fc51480f29c5" class="w-full text-xs bg-white border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-teal-500">
+                          <option value="无">-- 暂无映射 --</option>
+                          <option value="备注说明" selected>备注说明</option>
+                          <option value="创建时间">创建时间</option>
+                        </select>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 检测提示 -->
+            <div class="mt-4 bg-slate-55 border border-slate-200 rounded-lg p-3 flex items-start gap-2.5">
+              <svg class="w-4 h-4 text-slate-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <p class="text-xs text-slate-550 leading-relaxed">系统会根据表头字段进行智能化推荐对齐，若未正确匹配，您可以点开下拉菜单手动绑定。带有星号标识 <span class="text-rose-500">*</span> 的为必填字段。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 下半部：第三步 - 数据解析预览与校验报告 -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div class="flex items-center gap-3">
+              <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                <span class="w-1.5 h-4 bg-teal-600 rounded-sm"></span>
+                第三步：数据解析预览与校验报告
+              </h3>
+              <span class="text-xs text-slate-400">系统已预解析前 50 行并执行了格式校验</span>
+            </div>
+            
+            <!-- 状态统计过滤 -->
+            <div class="flex items-center gap-2">
+              <button data-proto-action-id="35f4b005-4da0-4963-b8f9-54378f5f654b" class="px-2.5 py-1 text-xs font-semibold rounded bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
+                全部 (100)
+              </button>
+              <button data-proto-action-id="ebfa4b3b-6323-41bb-ad68-f9166f202685" class="px-2.5 py-1 text-xs font-semibold rounded bg-teal-50 text-teal-700 hover:bg-teal-100 transition-colors">
+                正常数据 (98)
+              </button>
+              <button data-proto-action-id="8c057639-ee9b-4560-bfbe-d45adcbdf5d2" class="px-2.5 py-1 text-xs font-semibold rounded bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors">
+                异常报错 (2)
+              </button>
+            </div>
+          </div>
+
+          <!-- 解析表格 -->
+          <div class="border border-slate-200 rounded-lg overflow-x-auto">
+            <table class="w-full text-left border-collapse min-w-[900px]">
+              <thead>
+                <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200">
+                  <th class="p-3 w-16 text-center">序号</th>
+                  <th class="p-3 w-28">校验结果</th>
+                  <th class="p-3">环境名称</th>
+                  <th class="p-3">关联代理 (IP:Port)</th>
+                  <th class="p-3">Cookie 状态</th>
+                  <th class="p-3">店铺标签</th>
+                  <th class="p-3">异常说明</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-xs">
+                <!-- 正常行 -->
+                <tr class="hover:bg-slate-50/50">
+                  <td class="p-3 text-center text-slate-400 font-mono">01</td>
+                  <td class="p-3">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700">校验通过</span>
+                  </td>
+                  <td class="p-3 font-medium text-slate-700">跨境店铺_US_01</td>
+                  <td class="p-3 text-slate-650 font-mono">128.14.22.10:8080:user:pass</td>
+                  <td class="p-3 text-slate-400">
+                    <span class="text-teal-600 font-semibold">包含 (JSON 格式)</span>
+                  </td>
+                  <td class="p-3">
+                    <span class="inline-block px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 text-[10px]">亚马逊美东</span>
+                  </td>
+                  <td class="p-3 text-slate-400">--</td>
+                </tr>
+
+                <!-- 异常行 (代理格式错误) -->
+                <tr class="bg-rose-50/30 hover:bg-rose-50/50 border border-rose-200">
+                  <td class="p-3 text-center text-rose-800 font-mono">02</td>
+                  <td class="p-3">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">格式错误</span>
+                  </td>
+                  <td class="p-3 font-medium text-slate-700">跨境店铺_US_02</td>
+                  <td class="p-3 text-rose-700 font-mono bg-rose-50 px-1 py-0.5 rounded border border-rose-200 inline-block mt-1">socks5://invalid_ip</td>
+                  <td class="p-3 text-slate-400">
+                    <span class="text-teal-600 font-semibold">包含 (JSON 格式)</span>
+                  </td>
+                  <td class="p-3">
+                    <span class="inline-block px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 text-[10px]">测试环境</span>
+                  </td>
+                  <td class="p-3 text-rose-700 font-medium">代理地址格式不正确，缺少端口配置</td>
+                </tr>
+
+                <!-- 正常行 -->
+                <tr class="hover:bg-slate-50/50">
+                  <td class="p-3 text-center text-slate-400 font-mono">03</td>
+                  <td class="p-3">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700">校验通过</span>
+                  </td>
+                  <td class="p-3 font-medium text-slate-700">跨境店铺_US_03</td>
+                  <td class="p-3 text-slate-650 font-mono">192.168.1.1:1080</td>
+                  <td class="p-3 text-slate-400">暂无 Cookie</td>
+                  <td class="p-3">
+                    <span class="inline-block px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 text-[10px]">独立站</span>
+                  </td>
+                  <td class="p-3 text-slate-400">--</td>
+                </tr>
+
+                <!-- 异常行 (Cookie 非法) -->
+                <tr class="bg-rose-50/30 hover:bg-rose-50/50 border border-rose-200">
+                  <td class="p-3 text-center text-rose-800 font-mono">04</td>
+                  <td class="p-3">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">格式错误</span>
+                  </td>
+                  <td class="p-3 font-medium text-slate-700">跨境店铺_US_04</td>
+                  <td class="p-3 text-slate-650 font-mono">128.14.22.12:8080:user:pass</td>
+                  <td class="p-3 text-rose-700 font-mono bg-rose-50 px-1 py-0.5 rounded border border-rose-200 inline-block mt-1">[invalid cookie text]</td>
+                  <td class="p-3">
+                    <span class="inline-block px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 text-[10px]">亚马逊美东</span>
+                  </td>
+                  <td class="p-3 text-rose-700 font-medium">Cookie 必须是标准 JSON 字符串或 Base64 密文</td>
+                </tr>
+
+                <!-- 正常行 -->
+                <tr class="hover:bg-slate-50/50">
+                  <td class="p-3 text-center text-slate-400 font-mono">05</td>
+                  <td class="p-3">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700">校验通过</span>
+                  </td>
+                  <td class="p-3 font-medium text-slate-700">跨境店铺_US_05</td>
+                  <td class="p-3 text-slate-650 font-mono">128.14.22.15:8080:user:pass</td>
+                  <td class="p-3 text-slate-400">
+                    <span class="text-teal-600 font-semibold">包含 (JSON 格式)</span>
+                  </td>
+                  <td class="p-3">
+                    <span class="inline-block px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 text-[10px]">eBay店</span>
+                  </td>
+                  <td class="p-3 text-slate-400">--</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 分页器 / 表格控制 -->
+          <div class="flex items-center justify-between text-xs text-slate-500 pt-2">
+            <div>
+              <span>显示 1 到 5 行，共 100 行记录</span>
+            </div>
+            <div class="flex gap-2">
+              <button data-proto-action-id="2fb68cf5-7389-49c0-9d0b-fc51480f29c6" class="px-3 py-1.5 border border-slate-200 rounded hover:bg-slate-55 transition-colors font-medium">上一页</button>
+              <button data-proto-action-id="5632a67a-1ee8-4ea7-8b01-f2f64f434c4e" class="px-3 py-1.5 border border-slate-200 rounded hover:bg-slate-55 transition-colors font-medium">下一页</button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 底部固定控制条与进度 -->
+      <footer class="bg-white border-t border-slate-200 px-8 py-4 sticky bottom-0 z-20 flex items-center justify-between shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
+        <!-- 进度与统计 -->
+        <div class="flex items-center gap-6 flex-1 max-w-xl">
+          <div class="flex-1">
+            <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+              <span>正在校验文件格式并读取中...</span>
+              <span class="font-mono text-teal-600">75%</span>
+            </div>
+            <!-- 进度条背景 -->
+            <div class="w-full bg-slate-100 rounded-full h-2">
+              <!-- 进度填充 -->
+              <div class="bg-teal-600 h-2 rounded-full transition-all duration-300" style="width: 75%"></div>
+            </div>
+          </div>
+
+          <div class="flex gap-4 border-l border-slate-200 pl-6 text-xs whitespace-nowrap">
+            <div>
+              <span class="text-slate-400">已成功读取</span>
+              <p class="font-bold text-teal-600 text-sm">98 <span class="text-xs font-normal text-slate-500">行</span></p>
+            </div>
+            <div>
+              <span class="text-slate-400">排查异常数</span>
+              <p class="font-bold text-rose-600 text-sm">2 <span class="text-xs font-normal text-slate-500">行</span></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 动作操作组 -->
+        <div class="flex items-center gap-3">
+          <button data-proto-action-id="c5b1b4d0-c3d9-482a-adff-d63503db8342" class="px-5 py-2 text-sm font-semibold text-slate-650 hover:text-slate-900 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors">
+            重新上传文件
+          </button>
+          <button data-proto-action-id="eb2bf1f2-c361-460d-a3df-2035b809ea4e" class="px-6 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors shadow-sm flex items-center gap-2">
+            确认导入并入库 (98个成功环境)
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+          </button>
+        </div>
+      </footer>
+    </div>
+  </div>
+</div>
+```
+  </body>
+</html>

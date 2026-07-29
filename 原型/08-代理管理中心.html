@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>代理管理中心</title>
+    <base href="http://localhost:5173/" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei"; }
+      img { max-width: 100%; height: auto; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div class="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-800 font-sans">
+  
+  <!-- 侧边导航栏 -->
+  <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 z-30 flex-shrink-0">
+    <div>
+      <!-- 头部 Logo -->
+      <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
+        <div class="bg-teal-500 text-slate-950 p-2 rounded-lg font-bold text-lg flex items-center justify-center w-9 h-9">
+          CF
+        </div>
+        <div>
+          <h1 class="font-bold text-white text-sm tracking-wide leading-none">Camoufox 控制台</h1>
+          <span class="text-xs text-teal-400 mt-1 inline-block">指纹浏览器系统</span>
+        </div>
+      </div>
+
+      <!-- 导航菜单 -->
+      <nav class="mt-6 px-4 space-y-1">
+        <a href="#" data-proto-action-id="a87a2a0f-eb15-4ba8-bb4e-7b7ba1e05001" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+          环境管理
+        </a>
+        <a href="#" data-proto-action-id="a87a2a0f-eb15-4ba8-bb4e-7b7ba1e05002" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+          实例监控
+          <span class="ml-auto bg-teal-500/20 text-teal-300 text-xs px-2 py-0.5 rounded-full font-semibold">3 运行</span>
+        </a>
+        <a href="#" data-proto-action-id="a87a2a0f-eb15-4ba8-bb4e-7b7ba1e05003" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-teal-600 text-white transition-all">
+          <svg class="w-5 h-5 text-teal-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+          代理中心
+        </a>
+        <a href="#" data-proto-action-id="a87a2a0f-eb15-4ba8-bb4e-7b7ba1e05004" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 009 11.5c0-.62-.078-1.22-.227-1.791M15.147 18.25a14.27 14.27 0 002.244-2.077M4.772 5.79A13.93 13.93 0 0018.18 15.75A9 9 0 104.772 5.79z"></path></svg>
+          指纹策略
+        </a>
+        <div class="h-px bg-slate-800 my-4"></div>
+        <a href="#" data-proto-action-id="a87a2a0f-eb15-4ba8-bb4e-7b7ba1e05005" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          浏览器版本
+        </a>
+        <a href="#" data-proto-action-id="a87a2a0f-eb15-4ba8-bb4e-7b7ba1e05006" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          本地接口 (Local API)
+        </a>
+        <a href="#" data-proto-action-id="a87a2a0f-eb15-4ba8-bb4e-7b7ba1e05007" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          系统设置
+        </a>
+      </nav>
+    </div>
+
+    <!-- 底部状态指示器 -->
+    <div class="p-4 border-t border-slate-800 text-xs">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-slate-500">接口服务 (API)</span>
+        <span class="flex items-center gap-1.5 text-teal-400">
+          <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+          运行中 :50325
+        </span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-slate-500">Camoufox 版本</span>
+        <span class="text-slate-400 font-mono">Camoufox 152.0.4-beta.28</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 右侧内容主区域 -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    
+    <!-- 顶栏 -->
+    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 z-20">
+      <!-- 搜索与面包屑 -->
+      <div class="flex items-center gap-8">
+        <div class="flex items-center gap-2 text-sm text-slate-500">
+          <span>环境管理中心</span>
+          <span>/</span>
+          <span class="text-slate-800 font-semibold">代理管理中心</span>
+        </div>
+
+        <!-- 搜索 -->
+        <div class="relative w-80">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          </span>
+          <input type="text" placeholder="搜索代理别名、出口IP或地址..." class="w-full pl-9 pr-4 py-1.5 text-sm bg-slate-100 border border-transparent rounded-lg focus:outline-none focus:bg-white focus:border-teal-500 transition-all placeholder:text-slate-400" />
+        </div>
+      </div>
+
+      <!-- 快捷状态摘要 -->
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-4 text-xs border-r border-slate-200 pr-6">
+          <div class="text-right">
+            <span class="text-slate-400">可用代理数</span>
+            <p class="font-bold text-slate-800 text-sm">62 <span class="text-xs font-normal text-slate-500">/ 64 个</span></p>
+          </div>
+          <div class="text-right">
+            <span class="text-slate-400">平均连通延迟</span>
+            <p class="font-bold text-teal-600 text-sm">82 ms</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400">快速检测状态:</span>
+          <span class="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium border border-emerald-200 flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 62 正常
+          </span>
+          <span class="bg-rose-50 text-rose-700 text-xs px-2.5 py-1 rounded-full font-medium border border-rose-200 flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> 2 异常
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主体区域：包含表格和右侧信息抽屉 -->
+    <div class="flex-1 flex overflow-hidden">
+      
+      <!-- 左侧：工具栏与代理列表表格 -->
+      <main class="flex-1 flex flex-col p-6 overflow-y-auto space-y-6">
+        
+        <!-- 操作控制栏 -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between flex-shrink-0">
+          <div class="flex items-center gap-3">
+            <button onclick="document.getElementById('modal-create-proxy').classList.remove('hidden')" data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0a1" class="bg-teal-600 hover:bg-teal-700 text-white text-sm px-4 py-2 rounded-lg font-medium shadow-sm flex items-center gap-2 transition-all">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              新建代理
+            </button>
+            
+            <button onclick="document.getElementById('modal-batch-import').classList.remove('hidden')" data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0a2" class="bg-teal-50 hover:bg-teal-100 text-teal-700 text-sm px-4 py-2 rounded-lg font-medium border border-teal-200 flex items-center gap-2 transition-all">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+              批量导入
+            </button>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0a3" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm px-4 py-2 rounded-lg font-medium border border-slate-200 flex items-center gap-2 transition-all">
+              <svg class="w-4 h-4 text-slate-500 animate-spin-hover" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3-3m0 0l3 3m-3-3v12"></path></svg>
+              批量连通性测试
+            </button>
+
+            <button data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0a4" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-sm px-4 py-2 rounded-lg font-medium border border-rose-200 flex items-center gap-2 transition-all">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              批量删除失效代理
+            </button>
+          </div>
+        </div>
+
+        <!-- 过滤筛选栏 -->
+        <div class="flex items-center gap-4 bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex-shrink-0 text-sm">
+          <div class="flex items-center gap-2">
+            <span class="text-slate-500">协议类型:</span>
+            <select class="border border-slate-200 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-teal-500">
+              <option>全部</option>
+              <option>SOCKS5</option>
+              <option>HTTP</option>
+              <option>HTTPS</option>
+            </select>
+          </div>
+          <div class="w-px h-5 bg-slate-200"></div>
+          <div class="flex items-center gap-2">
+            <span class="text-slate-500">延迟状态:</span>
+            <select class="border border-slate-200 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-teal-500">
+              <option>全部</option>
+              <option>极速 (< 100ms)</option>
+              <option>中等 (100ms - 300ms)</option>
+              <option>高延迟 (> 300ms)</option>
+              <option>超时/异常</option>
+            </select>
+          </div>
+          <div class="w-px h-5 bg-slate-200"></div>
+          <div class="flex items-center gap-2">
+            <span class="text-slate-500">归属国家:</span>
+            <select class="border border-slate-200 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-teal-500">
+              <option>全部国家</option>
+              <option>美国 (US)</option>
+              <option>日本 (JP)</option>
+              <option>中国香港 (HK)</option>
+              <option>新加坡 (SG)</option>
+            </select>
+          </div>
+          <button class="ml-auto text-xs text-teal-600 hover:text-teal-700 font-medium">重置筛选</button>
+        </div>
+
+        <!-- 代理数据表格 -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex-1 overflow-hidden flex flex-col">
+          <div class="overflow-y-auto flex-1">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider sticky top-0 z-10">
+                  <th class="p-4 w-12 text-center">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500" />
+                  </th>
+                  <th class="p-4 w-40">代理别名</th>
+                  <th class="p-4 w-28">协议类型</th>
+                  <th class="p-4">连接地址 (脱敏)</th>
+                  <th class="p-4 w-36">出口 IP</th>
+                  <th class="p-4 w-44">国家地区 (GeoIP)</th>
+                  <th class="p-4 w-32">响应延迟</th>
+                  <th class="p-4 w-32 text-center">关联环境数</th>
+                  <th class="p-4 w-44">最新检测时间</th>
+                  <th class="p-4 w-24 text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-sm">
+                <!-- 行 1: 正常/低延迟/美国 -->
+                <tr onclick="selectProxyRow('proxy-01')" class="hover:bg-slate-50/80 transition-colors cursor-pointer bg-teal-50/20 border-l-2 border-teal-500">
+                  <td class="p-4 text-center" onclick="event.stopPropagation()">
+                    <input type="checkbox" checked class="rounded text-teal-600 focus:ring-teal-500" />
+                  </td>
+                  <td class="p-4 font-medium text-slate-800">
+                    <div class="flex items-center gap-1.5 group/edit">
+                      <span class="border-b border-dashed border-slate-400 group-hover/edit:border-teal-500">洛杉矶静态_01</span>
+                      <svg class="w-3.5 h-3.5 text-slate-400 group-hover/edit:text-teal-600 opacity-0 group-hover/edit:opacity-100 transition-all cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </div>
+                  </td>
+                  <td class="p-4"><span class="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-xs font-semibold">SOCKS5</span></td>
+                  <td class="p-4 font-mono text-slate-600 text-xs">192.154.20.85:1080:usr_la:••••••</td>
+                  <td class="p-4 font-mono text-slate-700 text-xs">192.154.20.85</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-2">
+                      <span class="text-lg">🇺🇸</span>
+                      <span class="text-slate-700">美国 (加利福尼亚)</span>
+                    </div>
+                  </td>
+                  <td class="p-4">
+                    <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2 py-0.5 rounded-full font-medium flex items-center justify-center w-20">
+                      45 ms
+                    </span>
+                  </td>
+                  <td class="p-4 text-center font-semibold text-teal-600">3</td>
+                  <td class="p-4 text-slate-400 text-xs font-mono">2026-07-29 14:32:05</td>
+                  <td class="p-4 text-center" onclick="event.stopPropagation()">
+                    <button class="text-teal-600 hover:text-teal-700 font-medium text-xs">重测</button>
+                  </td>
+                </tr>
+
+                <!-- 行 2: 正常/中延迟/日本 -->
+                <tr onclick="selectProxyRow('proxy-02')" class="hover:bg-slate-50/80 transition-colors cursor-pointer">
+                  <td class="p-4 text-center" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500" />
+                  </td>
+                  <td class="p-4 font-medium text-slate-800">
+                    <div class="flex items-center gap-1.5 group/edit">
+                      <span class="border-b border-dashed border-slate-400 group-hover/edit:border-teal-500">东京原生住宅_3</span>
+                      <svg class="w-3.5 h-3.5 text-slate-400 group-hover/edit:text-teal-600 opacity-0 group-hover/edit:opacity-100 transition-all cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </div>
+                  </td>
+                  <td class="p-4"><span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-semibold">HTTP</span></td>
+                  <td class="p-4 font-mono text-slate-600 text-xs">210.140.10.123:8080:usr_tokyo:••••••</td>
+                  <td class="p-4 font-mono text-slate-700 text-xs">210.140.10.123</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-2">
+                      <span class="text-lg">🇯🇵</span>
+                      <span class="text-slate-700">日本 (东京都)</span>
+                    </div>
+                  </td>
+                  <td class="p-4">
+                    <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2 py-0.5 rounded-full font-medium flex items-center justify-center w-20">
+                      92 ms
+                    </span>
+                  </td>
+                  <td class="p-4 text-center font-semibold text-slate-700">1</td>
+                  <td class="p-4 text-slate-400 text-xs font-mono">2026-07-29 14:31:44</td>
+                  <td class="p-4 text-center" onclick="event.stopPropagation()">
+                    <button class="text-teal-600 hover:text-teal-700 font-medium text-xs">重测</button>
+                  </td>
+                </tr>
+
+                <!-- 行 3: 延迟较高/黄色/香港 -->
+                <tr onclick="selectProxyRow('proxy-03')" class="hover:bg-slate-50/80 transition-colors cursor-pointer">
+                  <td class="p-4 text-center" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500" />
+                  </td>
+                  <td class="p-4 font-medium text-slate-800">
+                    <div class="flex items-center gap-1.5 group/edit">
+                      <span class="border-b border-dashed border-slate-400 group-hover/edit:border-teal-500">香港阿里云_B</span>
+                      <svg class="w-3.5 h-3.5 text-slate-400 group-hover/edit:text-teal-600 opacity-0 group-hover/edit:opacity-100 transition-all cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </div>
+                  </td>
+                  <td class="p-4"><span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-semibold">HTTPS</span></td>
+                  <td class="p-4 font-mono text-slate-600 text-xs">47.56.12.98:443:usr_hk_ali:••••••</td>
+                  <td class="p-4 font-mono text-slate-700 text-xs">47.56.12.98</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-2">
+                      <span class="text-lg">🇭🇰</span>
+                      <span class="text-slate-700">中国香港</span>
+                    </div>
+                  </td>
+                  <td class="p-4">
+                    <span class="bg-amber-50 text-amber-700 border border-amber-200 text-xs px-2 py-0.5 rounded-full font-medium flex items-center justify-center w-20">
+                      240 ms
+                    </span>
+                  </td>
+                  <td class="p-4 text-center font-semibold text-slate-700">5</td>
+                  <td class="p-4 text-slate-400 text-xs font-mono">2026-07-29 14:30:12</td>
+                  <td class="p-4 text-center" onclick="event.stopPropagation()">
+                    <button class="text-teal-600 hover:text-teal-700 font-medium text-xs">重测</button>
+                  </td>
+                </tr>
+
+                <!-- 行 4: 异常超时/红色/未知 -->
+                <tr onclick="selectProxyRow('proxy-04')" class="hover:bg-slate-50/80 transition-colors cursor-pointer">
+                  <td class="p-4 text-center" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500" />
+                  </td>
+                  <td class="p-4 font-medium text-slate-800">
+                    <div class="flex items-center gap-1.5 group/edit">
+                      <span class="border-b border-dashed border-slate-400 group-hover/edit:border-teal-500">备用动态_04</span>
+                      <svg class="w-3.5 h-3.5 text-slate-400 group-hover/edit:text-teal-600 opacity-0 group-hover/edit:opacity-100 transition-all cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </div>
+                  </td>
+                  <td class="p-4"><span class="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-xs font-semibold">SOCKS5</span></td>
+                  <td class="p-4 font-mono text-slate-600 text-xs">185.220.101.5:9050:usr_backup:••••••</td>
+                  <td class="p-4 font-mono text-slate-400 text-xs">—</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-2 text-slate-400">
+                      <span class="text-lg">❓</span>
+                      <span>未知归属</span>
+                    </div>
+                  </td>
+                  <td class="p-4">
+                    <span class="bg-rose-50 text-rose-700 border border-rose-200 text-xs px-2 py-0.5 rounded-full font-medium flex items-center justify-center w-20">
+                      连接超时
+                    </span>
+                  </td>
+                  <td class="p-4 text-center font-semibold text-slate-400">0</td>
+                  <td class="p-4 text-slate-400 text-xs font-mono">2026-07-29 14:28:55</td>
+                  <td class="p-4 text-center" onclick="event.stopPropagation()">
+                    <button class="text-teal-600 hover:text-teal-700 font-medium text-xs">重测</button>
+                  </td>
+                </tr>
+
+                <!-- 行 5: 正常/低延迟/新加坡 -->
+                <tr onclick="selectProxyRow('proxy-05')" class="hover:bg-slate-50/80 transition-colors cursor-pointer">
+                  <td class="p-4 text-center" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500" />
+                  </td>
+                  <td class="p-4 font-medium text-slate-800">
+                    <div class="flex items-center gap-1.5 group/edit">
+                      <span class="border-b border-dashed border-slate-400 group-hover/edit:border-teal-500">新加坡搬瓦工</span>
+                      <svg class="w-3.5 h-3.5 text-slate-400 group-hover/edit:text-teal-600 opacity-0 group-hover/edit:opacity-100 transition-all cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </div>
+                  </td>
+                  <td class="p-4"><span class="bg-teal-50 text-teal-700 px-2 py-0.5 rounded text-xs font-semibold">SOCKS5</span></td>
+                  <td class="p-4 font-mono text-slate-600 text-xs">164.52.25.106:1080:usr_sg_bwg:••••••</td>
+                  <td class="p-4 font-mono text-slate-700 text-xs">164.52.25.106</td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-2">
+                      <span class="text-lg">🇸🇬</span>
+                      <span class="text-slate-700">新加坡</span>
+                    </div>
+                  </td>
+                  <td class="p-4">
+                    <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2 py-0.5 rounded-full font-medium flex items-center justify-center w-20">
+                      78 ms
+                    </span>
+                  </td>
+                  <td class="p-4 text-center font-semibold text-slate-700">2</td>
+                  <td class="p-4 text-slate-400 text-xs font-mono">2026-07-29 14:25:31</td>
+                  <td class="p-4 text-center" onclick="event.stopPropagation()">
+                    <button class="text-teal-600 hover:text-teal-700 font-medium text-xs">重测</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 分页栏 -->
+          <div class="h-14 border-t border-slate-200 px-6 flex items-center justify-between text-xs text-slate-500 bg-slate-50 flex-shrink-0">
+            <span>显示第 1 至 5 项，共 64 项代理</span>
+            <div class="flex items-center gap-1.5">
+              <button class="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium transition-all">上一页</button>
+              <button class="px-3 py-1 rounded bg-teal-600 text-white font-medium">1</button>
+              <button class="px-3 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all">2</button>
+              <button class="px-3 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all">3</button>
+              <span>...</span>
+              <button class="px-3 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all">13</button>
+              <button class="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium transition-all">下一页</button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 右侧：详情展示与反向分配绑定面板 -->
+      <aside id="proxy-detail-drawer" class="w-80 border-l border-slate-200 bg-white flex flex-col flex-shrink-0 z-10 transition-all">
+        <!-- 抽屉头部 -->
+        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 class="font-bold text-slate-800 text-sm">代理详情与绑定关系</h2>
+            <p class="text-xs text-slate-400 mt-0.5">查看已关联的环境及分配设置</p>
+          </div>
+          <span class="bg-teal-50 text-teal-700 text-xs px-2 py-0.5 rounded font-semibold">已选中</span>
+        </div>
+
+        <!-- 详细信息区 -->
+        <div class="flex-1 overflow-y-auto p-5 space-y-6">
+          
+          <!-- 代理核心参数概览 -->
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-400">当前别名:</span>
+              <span class="text-sm font-semibold text-slate-800">洛杉矶静态_01</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-400">协议类型:</span>
+              <span class="bg-teal-100 text-teal-800 px-2 py-0.5 rounded text-xs font-semibold">SOCKS5</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-400">出口 IP:</span>
+              <span class="text-xs font-mono font-bold text-slate-700">192.154.20.85</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-400">国家城市:</span>
+              <span class="text-xs font-medium text-slate-700 flex items-center gap-1">🇺🇸 美国加州洛杉矶</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-400">最新连通延迟:</span>
+              <span class="text-xs font-semibold text-emerald-600">45 ms</span>
+            </div>
+          </div>
+
+          <!-- 已关联环境列表 -->
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">当前关联环境 (3)</h3>
+              <span class="text-slate-400 text-xs">影响启动警告</span>
+            </div>
+            
+            <div class="space-y-2">
+              <!-- 环境项 1 -->
+              <div class="bg-white p-3 rounded-lg border border-slate-200 hover:border-teal-500 transition-all flex items-center justify-between text-xs">
+                <div>
+                  <p class="font-semibold text-slate-800">亚马逊店铺_美国_01</p>
+                  <p class="text-slate-400 mt-0.5">最近运行: 2小时前</p>
+                </div>
+                <button data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0a5" class="text-rose-500 hover:text-rose-600 hover:underline">解绑</button>
+              </div>
+
+              <!-- 环境项 2 -->
+              <div class="bg-white p-3 rounded-lg border border-slate-200 hover:border-teal-500 transition-all flex items-center justify-between text-xs">
+                <div>
+                  <p class="font-semibold text-slate-800">脸书主页广告投手_02</p>
+                  <p class="text-slate-400 mt-0.5">最近运行: 1天前</p>
+                </div>
+                <button data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0a6" class="text-rose-500 hover:text-rose-600 hover:underline">解绑</button>
+              </div>
+
+              <!-- 环境项 3 -->
+              <div class="bg-white p-3 rounded-lg border border-slate-200 hover:border-teal-500 transition-all flex items-center justify-between text-xs">
+                <div>
+                  <p class="font-semibold text-slate-800">Ebay销售备用环境</p>
+                  <p class="text-slate-400 mt-0.5">状态: 未曾运行</p>
+                </div>
+                <button data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0a7" class="text-rose-500 hover:text-rose-600 hover:underline">解绑</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 一键反向分配绑定流 -->
+          <div class="border-t border-slate-100 pt-5">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">分配此代理至其他环境</h3>
+            
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">选择目标环境:</label>
+                <select class="w-full border border-slate-200 rounded-lg p-2 text-xs text-slate-700 bg-white focus:outline-none focus:border-teal-500">
+                  <option value="">-- 请选择未绑定代理的环境 --</option>
+                  <option value="profile-1">跨境独立站_Shopify_03 (未绑定)</option>
+                  <option value="profile-2">TikTok养号环境_JP_05 (未绑定)</option>
+                  <option value="profile-3">FB备用主账号_投放A (当前绑定: 备用动态_04)</option>
+                </select>
+              </div>
+
+              <div class="flex gap-2">
+                <button data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0a8" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white text-xs py-2 rounded-lg font-medium shadow-sm transition-all text-center">
+                  确认绑定此代理
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-400 leading-normal">说明: 重新绑定代理后，关联的环境将在下次启动时，强制要求对当前 IP 与环境指纹的地理位置（如时区、经纬度）实施自动对其策略。</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 底部管理按钮 -->
+        <div class="p-4 border-t border-slate-100 bg-slate-50 flex gap-2 flex-shrink-0">
+          <button data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0a9" class="flex-1 bg-white hover:bg-slate-100 text-slate-700 text-xs py-2 rounded border border-slate-200 font-medium transition-all text-center">
+            编辑别名与配置
+          </button>
+          <button data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0b1" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs px-3 py-2 rounded border border-rose-200 font-medium transition-all">
+            删除
+          </button>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- 模态弹窗: 新建代理 -->
+  <div id="modal-create-proxy" class="hidden fixed inset-0 z-50 overflow-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden transition-all flex flex-col">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="font-bold text-slate-800 text-base">添加单个代理网络资产</h3>
+        <button onclick="document.getElementById('modal-create-proxy').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <form class="p-6 space-y-4 text-sm">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">代理别名 (非必填)</label>
+          <input type="text" placeholder="例如：静态纽约_01" class="w-full border border-slate-200 rounded-lg p-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-teal-500" />
+        </div>
+
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">协议类型 *</label>
+            <select class="w-full border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-none focus:border-teal-500 bg-white">
+              <option value="socks5">SOCKS5</option>
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+            </select>
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">代理服务器地址 (Host) *</label>
+            <input type="text" placeholder="例如: 127.0.0.1 或 proxy.com" class="w-full border border-slate-200 rounded-lg p-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-teal-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">端口 (Port) *</label>
+            <input type="number" placeholder="1080" class="w-full border border-slate-200 rounded-lg p-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-teal-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">代理用户名</label>
+            <input type="text" placeholder="选填" class="w-full border border-slate-200 rounded-lg p-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-teal-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">代理密码</label>
+            <input type="password" placeholder="选填" class="w-full border border-slate-200 rounded-lg p-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-teal-500" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">备注说明</label>
+          <textarea rows="2" placeholder="输入相关记录说明，方便团队资产盘点..." class="w-full border border-slate-200 rounded-lg p-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-teal-500"></textarea>
+        </div>
+
+        <!-- 连通性测试即时反馈 -->
+        <div class="bg-slate-50 border border-slate-200 p-4 rounded-lg flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2 text-slate-500">
+            <span class="w-2 h-2 rounded-full bg-slate-300"></span>
+            <span>待测试连接状态</span>
+          </div>
+          <button type="button" data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0b2" class="text-teal-600 hover:text-teal-700 font-semibold">开始检测</button>
+        </div>
+      </form>
+
+      <div class="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-3">
+        <button onclick="document.getElementById('modal-create-proxy').classList.add('hidden')" class="bg-white hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium transition-all">
+          取消
+        </button>
+        <button data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0b3" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-all">
+          保存代理
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模态弹窗: 批量导入 -->
+  <div id="modal-batch-import" class="hidden fixed inset-0 z-50 overflow-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl overflow-hidden transition-all flex flex-col">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="font-bold text-slate-800 text-base">批量导入代理网络资产</h3>
+        <button onclick="document.getElementById('modal-batch-import').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-6 text-sm overflow-y-auto max-h-[70vh]">
+        <!-- 导入方式切换 -->
+        <div class="flex border-b border-slate-200">
+          <button class="border-b-2 border-teal-500 text-teal-600 font-bold py-2 px-4 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            文本粘贴导入
+          </button>
+          <button class="text-slate-500 hover:text-slate-800 py-2 px-4 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+            上传 CSV 文件
+          </button>
+        </div>
+
+        <!-- 文本域输入框 -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-500">
+            <span>请在下方每行粘贴一条代理，系统将自动识别格式</span>
+            <span class="text-teal-600">支持格式: ip:port:user:pass 或 ip:port</span>
+          </div>
+          <textarea rows="8" placeholder="例如：
+192.168.1.1:1080:admin:pass123
+192.168.1.2:8080
+104.238.190.82:3128:socks_user:secure_pwd" class="w-full border border-slate-200 rounded-lg p-3 font-mono text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-teal-500"></textarea>
+        </div>
+
+        <!-- 全局分配设置 -->
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">导入默认协议类型</label>
+            <select class="w-full border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none focus:border-teal-500 bg-white">
+              <option value="socks5">SOCKS5</option>
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+            </select>
+            <p class="text-[10px] text-slate-400 mt-1">若文本中未显式声明协议，默认按此协议解析</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">导入后行为</label>
+            <div class="mt-2 space-y-1 text-xs text-slate-700">
+              <label class="flex items-center gap-2">
+                <input type="checkbox" checked class="rounded text-teal-600 focus:ring-teal-500" />
+                <span>自动执行连通性延时测试</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" checked class="rounded text-teal-600 focus:ring-teal-500" />
+                <span>自动识别解析国家归属 (GeoIP)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 模板下载引导（仅CSV上传模式有用，备用提示） -->
+        <div class="text-xs text-slate-400 flex items-center justify-between">
+          <span>大批量代理网络资产建议通过 CSV 文件模板导入。</span>
+          <a href="#" class="text-teal-600 hover:text-teal-700 font-semibold hover:underline">下载批量导入模板.csv</a>
+        </div>
+      </div>
+
+      <div class="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-3 flex-shrink-0">
+        <button onclick="document.getElementById('modal-batch-import').classList.add('hidden')" class="bg-white hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium transition-all">
+          取消
+        </button>
+        <button data-proto-action-id="d2fa955f-864a-4e20-b441-26df4e3ff0b4" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-all">
+          解析并批量保存
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 轻量交互控制 (原生 JS 以避免外部依赖和保障受控逻辑) -->
+  
+</div>
+  </body>
+</html>

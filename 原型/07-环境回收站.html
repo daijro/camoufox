@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>环境回收站</title>
+    <base href="http://localhost:5173/" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei"; }
+      img { max-width: 100%; height: auto; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div class="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
+  <!-- 整体容器 -->
+  <div class="flex flex-1 overflow-hidden h-screen">
+    
+    <!-- 侧边导航栏 (Sidebar) -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 z-30">
+      <!-- 头部 Logo -->
+      <div>
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
+          <div class="bg-teal-500 text-slate-950 p-2 rounded-lg font-bold text-lg flex items-center justify-center w-9 h-9">
+            CF
+          </div>
+          <div>
+            <h1 class="font-bold text-white text-sm tracking-wide leading-none">Camoufox 控制台</h1>
+            <span class="text-xs text-teal-400 mt-1 inline-block">指纹浏览器系统</span>
+          </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="mt-6 px-4 space-y-1">
+          <a href="#" data-proto-role="menu" data-proto-action-id="a0bd99fa-bbce-45c1-8408-0118671158a7" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            环境管理
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="c0a202a0-47b2-4d2c-87d2-6d274bf79efc" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            实例监控
+            <span class="ml-auto bg-teal-500/20 text-teal-300 text-xs px-2 py-0.5 rounded-full font-semibold">3 运行</span>
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="563ba88e-67fe-43fb-9805-4f7f6ffb5e28" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+            代理中心
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="7b2be29e-c852-4752-9de8-18e3fa5c05c0" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 009 11.5c0-.62-.078-1.22-.227-1.791M15.147 18.25a14.27 14.27 0 002.244-2.077M4.772 5.79A13.93 13.93 0 0018.18 15.75A9 9 0 104.772 5.79z"></path></svg>
+            指纹策略
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="cfa20211-1c39-4458-9411-cf1b4df279b9" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+            插件中心
+            <span class="ml-auto text-xs text-slate-500">第二阶段</span>
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="5534cf5e-5bb8-4e89-a78b-bf997327f273" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+            任务中心
+          </a>
+          <div class="h-px bg-slate-800 my-4"></div>
+          <a href="#" data-proto-role="menu" data-proto-action-id="81ab09aa-9eb9-408a-b850-d4cfd8042456" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            浏览器版本
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="bb3efc02-eb82-45e0-b99b-449e4d0b13cf" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            本地接口 (Local API)
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="9be032ff-4d5c-4433-a3d2-44675549ad0e" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            系统设置
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="20dbd92e-336c-4876-b9a3-5cde78a0b12c" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-teal-600 text-white transition-all">
+            <svg class="w-5 h-5 text-teal-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            环境回收站
+          </a>
+        </nav>
+      </div>
+
+      <!-- 底部状态指示器 -->
+      <div class="p-4 border-t border-slate-800 text-xs">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-slate-500">接口服务 (API)</span>
+          <span class="flex items-center gap-1.5 text-teal-400">
+            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+            运行中 :50325
+          </span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-500">Camoufox 版本</span>
+          <span class="text-slate-400 font-mono">Camoufox 152.0.4-beta.28</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧内容区域 -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      
+      <!-- 顶栏 (Header) -->
+      <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
+        <!-- 搜索与面包屑 -->
+        <div class="flex items-center gap-8">
+          <div class="flex items-center gap-2 text-sm text-slate-500">
+            <span>环境管理</span>
+            <span>/</span>
+            <span class="text-slate-800 font-semibold">环境回收站</span>
+          </div>
+
+          <!-- 搜索框 -->
+          <div class="relative w-80">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </span>
+            <input type="text" placeholder="搜索已删除环境名、备注..." class="w-full pl-9 pr-4 py-1.5 text-sm bg-slate-100 border border-transparent rounded-lg focus:outline-none focus:bg-white focus:border-teal-500 transition-all placeholder:text-slate-400" />
+          </div>
+        </div>
+
+        <!-- 状态摘要 -->
+        <div class="flex items-center gap-6">
+          <div class="flex items-center gap-4 text-xs">
+            <div class="text-right">
+              <span class="text-slate-400">待清理环境</span>
+              <p class="font-bold text-slate-800 text-sm">6 <span class="text-xs font-normal text-slate-500">个</span></p>
+            </div>
+            <div class="text-right border-l border-slate-200 pl-4">
+              <span class="text-slate-400 font-medium">可释放磁盘空间</span>
+              <p class="font-bold text-teal-600 text-sm">2.4 GB</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- 主体内容 -->
+      <main class="p-8 space-y-6 flex-1">
+        
+        <!-- 安全提示 Banner -->
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 text-amber-800">
+          <svg class="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+          <div class="text-xs leading-relaxed">
+            <span class="font-bold block text-sm mb-1 text-amber-900">数据安全保护期说明</span>
+            环境被删除后将在此暂存，防止误删导致绑定的商户账号、Cookie 等机密数据丢失。您可在保护期内一键恢复。
+            <br/>彻底物理删除将调用系统接口永久销毁本地计算机上的浏览器配置文件（Profile）目录，该操作无法找回，请谨慎操作。
+          </div>
+        </div>
+
+        <!-- 统计指标卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="text-xs text-slate-400 font-medium">逻辑删除总数</span>
+              <h3 class="text-2xl font-bold text-slate-800 mt-1">6</h3>
+              <p class="text-xs text-slate-500 mt-1">已占用空间 2.4 GB</p>
+            </div>
+            <div class="p-3 bg-slate-100 rounded-lg text-slate-600">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </div>
+          </div>
+
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="text-xs text-slate-400 font-medium">今日新增待办</span>
+              <h3 class="text-2xl font-bold text-amber-600 mt-1">2</h3>
+              <p class="text-xs text-amber-500 mt-1">自环境中心移入</p>
+            </div>
+            <div class="p-3 bg-amber-50 text-amber-600 rounded-lg">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+          </div>
+
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="text-xs text-slate-400 font-medium">最快到期环境</span>
+              <h3 class="text-2xl font-bold text-rose-600 mt-1">1</h3>
+              <p class="text-xs text-rose-500 mt-1">剩余时间 18 小时</p>
+            </div>
+            <div class="p-3 bg-rose-50 text-rose-600 rounded-lg">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+          </div>
+
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="text-xs text-slate-400 font-medium">已安全找回</span>
+              <h3 class="text-2xl font-bold text-teal-600 mt-1">14</h3>
+              <p class="text-xs text-teal-500 mt-1 font-medium">恢复率达 70.0%</p>
+            </div>
+            <div class="p-3 bg-teal-50 text-teal-600 rounded-lg">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表与控制栏 -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div class="p-6 border-b border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-slate-50/50">
+            <div class="flex items-center gap-3">
+              <span class="text-sm font-semibold text-slate-800">已废弃环境列表</span>
+              <span class="bg-slate-200 text-slate-600 text-xs px-2.5 py-0.5 rounded-full font-medium">共 6 项</span>
+            </div>
+            
+            <div class="flex items-center gap-3">
+              <!-- 批量恢复 -->
+              <button data-proto-action-id="37a7cd02-4d2d-45db-9c88-b22340b0db3f" class="bg-white hover:bg-slate-50 text-slate-700 text-sm px-4 py-2 rounded-lg border border-slate-200 transition-all font-medium flex items-center gap-2">
+                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89H18"></path></svg>
+                批量恢复
+              </button>
+
+              <!-- 一键清空回收站 -->
+              <a href="#danger-modal" data-proto-action-id="efb31d04-358b-4b13-a4f6-8c4d262d169d" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-sm px-4 py-2 rounded-lg border border-rose-200 transition-all font-semibold flex items-center gap-2">
+                <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                一键清空回收站
+              </a>
+            </div>
+          </div>
+
+          <!-- 表格结构 -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50/70 border-b border-slate-200 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                  <th class="py-4 px-6 w-12">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500 border-slate-300 w-4 h-4" />
+                  </th>
+                  <th class="py-4 px-6 text-slate-700">环境名称 / 备注</th>
+                  <th class="py-4 px-6 text-slate-700">原属分组</th>
+                  <th class="py-4 px-6 text-slate-700">删除时间</th>
+                  <th class="py-4 px-6 text-slate-700">存储路径与大小</th>
+                  <th class="py-4 px-6 text-slate-700">自动销毁倒计时</th>
+                  <th class="py-4 px-6 text-right text-slate-700">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-sm">
+                <!-- 行1 -->
+                <tr class="hover:bg-slate-50/50 transition-colors">
+                  <td class="py-4 px-6">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500 border-slate-300 w-4 h-4" />
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="flex items-center gap-3">
+                      <div class="bg-slate-100 p-2 rounded-lg text-slate-500 font-mono text-xs">
+                        FB-01
+                      </div>
+                      <div>
+                        <span class="font-semibold text-slate-800 block">脸书广告投放_01</span>
+                        <span class="text-xs text-slate-400 block mt-0.5">主投放账号 - 绑代理 US-09</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
+                      北美地区组
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-slate-500 font-mono text-xs">
+                    2026-07-29 14:32:10
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="text-slate-700 font-mono text-xs truncate max-w-xs" title="C:\Users\Admin\.camoufox\profiles\fb_01">
+                      ...\profiles\fb_01
+                    </div>
+                    <span class="text-xs text-slate-400 mt-0.5 block font-medium">420.5 MB</span>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                      <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                      18小时后
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-2">
+                      <button data-proto-action-id="f0a3597c-9b88-4c12-8e7c-a0e28f0814f8" class="text-teal-600 hover:text-teal-800 text-xs font-semibold bg-teal-50 hover:bg-teal-100/70 px-3 py-1.5 rounded-md transition-all">
+                        恢复
+                      </button>
+                      <a href="#danger-modal" data-proto-action-id="cd7bb6c2-06b2-4d2a-8ce8-7ee8ec5f3cf8" class="text-rose-600 hover:text-rose-800 text-xs font-semibold bg-rose-50 hover:bg-rose-100/70 px-3 py-1.5 rounded-md transition-all">
+                        彻底删除
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- 行2 -->
+                <tr class="hover:bg-slate-50/50 transition-colors">
+                  <td class="py-4 px-6">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500 border-slate-300 w-4 h-4" />
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="flex items-center gap-3">
+                      <div class="bg-slate-100 p-2 rounded-lg text-slate-500 font-mono text-xs">
+                        AMZ
+                      </div>
+                      <div>
+                        <span class="font-semibold text-slate-800 block">亚马逊买家秀测评_主账号</span>
+                        <span class="text-xs text-slate-400 block mt-0.5">欧洲买家 Profile - 带大量 Cookie</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
+                      跨境电商组
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-slate-500 font-mono text-xs">
+                    2026-07-29 12:11:45
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="text-slate-700 font-mono text-xs truncate max-w-xs" title="C:\Users\Admin\.camoufox\profiles\amz_buyer">
+                      ...\profiles\amz_buyer
+                    </div>
+                    <span class="text-xs text-slate-400 mt-0.5 block font-medium">812.9 MB</span>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                      14天后
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-2">
+                      <button data-proto-action-id="f0a3597c-9b88-4c12-8e7c-a0e28f0814f8" class="text-teal-600 hover:text-teal-800 text-xs font-semibold bg-teal-50 hover:bg-teal-100/70 px-3 py-1.5 rounded-md transition-all">
+                        恢复
+                      </button>
+                      <a href="#danger-modal" data-proto-action-id="cd7bb6c2-06b2-4d2a-8ce8-7ee8ec5f3cf8" class="text-rose-600 hover:text-rose-800 text-xs font-semibold bg-rose-50 hover:bg-rose-100/70 px-3 py-1.5 rounded-md transition-all">
+                        彻底删除
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- 行3 -->
+                <tr class="hover:bg-slate-50/50 transition-colors">
+                  <td class="py-4 px-6">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500 border-slate-300 w-4 h-4" />
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="flex items-center gap-3">
+                      <div class="bg-slate-100 p-2 rounded-lg text-slate-500 font-mono text-xs">
+                        TK
+                      </div>
+                      <div>
+                        <span class="font-semibold text-slate-800 block">TikTok 养号备用_05</span>
+                        <span class="text-xs text-slate-400 block mt-0.5">英国节点备份环境</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
+                      海外社交组
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-slate-500 font-mono text-xs">
+                    2026-07-28 09:05:00
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="text-slate-700 font-mono text-xs truncate max-w-xs" title="C:\Users\Admin\.camoufox\profiles\tk_05">
+                      ...\profiles\tk_05
+                    </div>
+                    <span class="text-xs text-slate-400 mt-0.5 block font-medium">350.2 MB</span>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                      21天后
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-2">
+                      <button data-proto-action-id="f0a3597c-9b88-4c12-8e7c-a0e28f0814f8" class="text-teal-600 hover:text-teal-800 text-xs font-semibold bg-teal-50 hover:bg-teal-100/70 px-3 py-1.5 rounded-md transition-all">
+                        恢复
+                      </button>
+                      <a href="#danger-modal" data-proto-action-id="cd7bb6c2-06b2-4d2a-8ce8-7ee8ec5f3cf8" class="text-rose-600 hover:text-rose-800 text-xs font-semibold bg-rose-50 hover:bg-rose-100/70 px-3 py-1.5 rounded-md transition-all">
+                        彻底删除
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- 行4 -->
+                <tr class="hover:bg-slate-50/50 transition-colors">
+                  <td class="py-4 px-6">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500 border-slate-300 w-4 h-4" />
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="flex items-center gap-3">
+                      <div class="bg-slate-100 p-2 rounded-lg text-slate-500 font-mono text-xs">
+                        GGL
+                      </div>
+                      <div>
+                        <span class="font-semibold text-slate-800 block">谷歌云服务_02</span>
+                        <span class="text-xs text-slate-400 block mt-0.5">测试账号</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
+                      默认分组
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-slate-500 font-mono text-xs">
+                    2026-07-27 18:22:11
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="text-slate-700 font-mono text-xs truncate max-w-xs" title="C:\Users\Admin\.camoufox\profiles\ggl_02">
+                      ...\profiles\ggl_02
+                    </div>
+                    <span class="text-xs text-slate-400 mt-0.5 block font-medium">120.1 MB</span>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                      22天后
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-2">
+                      <button data-proto-action-id="f0a3597c-9b88-4c12-8e7c-a0e28f0814f8" class="text-teal-600 hover:text-teal-800 text-xs font-semibold bg-teal-50 hover:bg-teal-100/70 px-3 py-1.5 rounded-md transition-all">
+                        恢复
+                      </button>
+                      <a href="#danger-modal" data-proto-action-id="cd7bb6c2-06b2-4d2a-8ce8-7ee8ec5f3cf8" class="text-rose-600 hover:text-rose-800 text-xs font-semibold bg-rose-50 hover:bg-rose-100/70 px-3 py-1.5 rounded-md transition-all">
+                        彻底删除
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- 行5 -->
+                <tr class="hover:bg-slate-50/50 transition-colors">
+                  <td class="py-4 px-6">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500 border-slate-300 w-4 h-4" />
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="flex items-center gap-3">
+                      <div class="bg-slate-100 p-2 rounded-lg text-slate-500 font-mono text-xs">
+                        DEV
+                      </div>
+                      <div>
+                        <span class="font-semibold text-slate-800 block">本地 API 调试_Temp</span>
+                        <span class="text-xs text-slate-400 block mt-0.5">测试接口自动化产生的残留环境</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
+                      默认分组
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-slate-500 font-mono text-xs">
+                    2026-07-27 15:40:19
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="text-slate-700 font-mono text-xs truncate max-w-xs" title="C:\Users\Admin\.camoufox\profiles\api_debug_temp">
+                      ...\profiles\api_debug_temp
+                    </div>
+                    <span class="text-xs text-slate-400 mt-0.5 block font-medium">580.4 MB</span>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                      22天后
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-2">
+                      <button data-proto-action-id="f0a3597c-9b88-4c12-8e7c-a0e28f0814f8" class="text-teal-600 hover:text-teal-800 text-xs font-semibold bg-teal-50 hover:bg-teal-100/70 px-3 py-1.5 rounded-md transition-all">
+                        恢复
+                      </button>
+                      <a href="#danger-modal" data-proto-action-id="cd7bb6c2-06b2-4d2a-8ce8-7ee8ec5f3cf8" class="text-rose-600 hover:text-rose-800 text-xs font-semibold bg-rose-50 hover:bg-rose-100/70 px-3 py-1.5 rounded-md transition-all">
+                        彻底删除
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- 行6 -->
+                <tr class="hover:bg-slate-50/50 transition-colors">
+                  <td class="py-4 px-6">
+                    <input type="checkbox" class="rounded text-teal-600 focus:ring-teal-500 border-slate-300 w-4 h-4" />
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="flex items-center gap-3">
+                      <div class="bg-slate-100 p-2 rounded-lg text-slate-500 font-mono text-xs">
+                        FB-02
+                      </div>
+                      <div>
+                        <span class="font-semibold text-slate-800 block">脸书广告投放_02</span>
+                        <span class="text-xs text-slate-400 block mt-0.5">测试账号</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
+                      北美地区组
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-slate-500 font-mono text-xs">
+                    2026-07-26 11:20:00
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="text-slate-700 font-mono text-xs truncate max-w-xs" title="C:\Users\Admin\.camoufox\profiles\fb_02">
+                      ...\profiles\fb_02
+                    </div>
+                    <span class="text-xs text-slate-400 mt-0.5 block font-medium">180.3 MB</span>
+                  </td>
+                  <td class="py-4 px-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                      25天后
+                    </span>
+                  </td>
+                  <td class="py-4 px-6 text-right whitespace-nowrap">
+                    <div class="inline-flex items-center gap-2">
+                      <button data-proto-action-id="f0a3597c-9b88-4c12-8e7c-a0e28f0814f8" class="text-teal-600 hover:text-teal-800 text-xs font-semibold bg-teal-50 hover:bg-teal-100/70 px-3 py-1.5 rounded-md transition-all">
+                        恢复
+                      </button>
+                      <a href="#danger-modal" data-proto-action-id="cd7bb6c2-06b2-4d2a-8ce8-7ee8ec5f3cf8" class="text-rose-600 hover:text-rose-800 text-xs font-semibold bg-rose-50 hover:bg-rose-100/70 px-3 py-1.5 rounded-md transition-all">
+                        彻底删除
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 分页器 -->
+          <div class="p-6 border-t border-slate-200 flex items-center justify-between bg-slate-50/50">
+            <span class="text-xs text-slate-500">显示第 1 至 6 项，共 6 项记录</span>
+            <div class="flex items-center gap-2">
+              <button disabled class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-400 bg-slate-100 cursor-not-allowed">上一页</button>
+              <button class="px-3.5 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-semibold">1</button>
+              <button disabled class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-400 bg-slate-100 cursor-not-allowed">下一页</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- CSS 触发式危险警告弹框 -->
+  <div id="danger-modal" class="hidden target:flex fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm justify-center items-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-rose-100 overflow-hidden transform transition-all">
+      <!-- 弹窗页眉 -->
+      <div class="p-6 bg-rose-50 border-b border-rose-100 flex items-start gap-4">
+        <div class="p-3 bg-rose-100 text-rose-700 rounded-xl">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-rose-900">彻底销毁环境数据确认</h3>
+          <p class="text-xs text-rose-700 mt-1 leading-relaxed">此操作直接涉及本地文件系统的物理擦除，属于高危不可逆操作！</p>
+        </div>
+      </div>
+
+      <!-- 弹窗表单内容 -->
+      <div class="p-6 space-y-4">
+        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 leading-relaxed">
+          <span class="font-semibold block text-slate-800 mb-1">物理数据警告:</span>
+          永久删除将对关联的本地环境目录 <code class="bg-slate-200 px-1 rounded font-mono">user_data_dir</code> 执行彻底清空。如果该环境内已登录未备份的商户账号或保存有重要的历史凭证，删除后将彻底无法找回。
+        </div>
+
+        <div class="space-y-3 pt-2">
+          <span class="text-xs font-semibold text-slate-700 block">请仔细核对并手动选择销毁执行方式（必选）：</span>
+          
+          <!-- 防呆选项 1 -->
+          <label class="flex items-start gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all cursor-pointer">
+            <input type="checkbox" name="destroy_policy" class="mt-1 rounded text-rose-600 focus:ring-rose-500 border-slate-300 w-4.5 h-4.5" />
+            <div>
+              <span class="text-xs font-bold text-slate-800 block">仅从控制台列表擦除，保留本地配置文件目录（Profile）</span>
+              <span class="text-[11px] text-slate-500 block mt-0.5">仅在软件控制面板中删除本项环境记录，保留您硬盘上的浏览器数据以备后续排查。</span>
+            </div>
+          </label>
+
+          <!-- 防呆选项 2 -->
+          <label class="flex items-start gap-3 p-3 rounded-lg border border-rose-200 bg-rose-50/20 hover:bg-rose-50/40 transition-all cursor-pointer">
+            <input type="checkbox" name="destroy_policy" class="mt-1 rounded text-rose-600 focus:ring-rose-500 border-rose-300 w-4.5 h-4.5" />
+            <div>
+              <span class="text-xs font-bold text-rose-950 block flex items-center gap-1.5">
+                彻底物理删除配置及本地所有指纹数据（物理不可逆）
+              </span>
+              <span class="text-[11px] text-rose-700 block mt-0.5">永久删除配置、Cookie、缓存及本地指纹环境文件夹。无法恢复！</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- 弹窗页脚 -->
+      <div class="p-6 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
+        <a href="#" data-proto-action-id="d866a1e3-c287-47cc-9e6b-0a7eb5179bf1" class="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-all">
+          取消
+        </a>
+        <button data-proto-action-id="70cf6992-cc23-455b-bf99-5ef3e210168b" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-rose-600/20 transition-all">
+          确认执行销毁
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+```
+  </body>
+</html>

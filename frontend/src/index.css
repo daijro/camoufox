@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+
+:root {
+  --color-bg: #f8fafc;
+  --color-sidebar: #0f172a;
+  --color-accent: #0d9488;
+  --color-accent-hover: #0f766e;
+  --color-muted: #64748b;
+  --color-border: #e2e8f0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Arial,
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
+  background: var(--color-bg);
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+}

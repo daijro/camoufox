@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>分组标签管理器</title>
+    <base href="http://localhost:5173/" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei"; }
+      img { max-width: 100%; height: auto; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div class="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
+  <!-- 整体容器 -->
+  <div class="flex flex-1 overflow-hidden h-screen">
+    
+    <!-- 侧边导航栏 (Sidebar) -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 z-30">
+      <!-- 头部 Logo -->
+      <div>
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
+          <div class="bg-teal-500 text-slate-950 p-2 rounded-lg font-bold text-lg flex items-center justify-center w-9 h-9">
+            CF
+          </div>
+          <div>
+            <h1 class="font-bold text-white text-sm tracking-wide leading-none">Camoufox 控制台</h1>
+            <span class="text-xs text-teal-400 mt-1 inline-block">指纹浏览器系统</span>
+          </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="mt-6 px-4 space-y-1">
+          <a href="#" data-proto-role="menu" data-proto-action-id="a0fb9a65-8b36-4d00-b6f1-678a1bc1b471" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            环境管理
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="cc5118fa-388a-4467-8cfb-d98c253ff7a7" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            实例监控
+            <span class="ml-auto bg-teal-500/20 text-teal-300 text-xs px-2 py-0.5 rounded-full font-semibold">3 运行</span>
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="56488d57-1ff0-48b4-b9b5-4b537a4c49d8" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+            代理中心
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="90226388-c70a-48d1-817a-c39dd85f5480" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 009 11.5c0-.62-.078-1.22-.227-1.791M15.147 18.25a14.27 14.27 0 002.244-2.077M4.772 5.79A13.93 13.93 0 0018.18 15.75A9 9 0 104.772 5.79z"></path></svg>
+            指纹策略
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="2cc71f49-5f2f-488f-9a3d-4c360be15b80" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+            插件中心
+            <span class="ml-auto text-xs text-slate-500">第二阶段</span>
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="bb3ef15f-c2db-424a-b5e1-45ee447ccfe2" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+            任务中心
+          </a>
+          <div class="h-px bg-slate-800 my-4"></div>
+          <a href="#" data-proto-role="menu" data-proto-action-id="d5bbfa06-03c6-43b6-ad2f-cc019ee68579" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            浏览器版本
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="4ab60b93-9c86-455f-89f4-b2023db9ec4e" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            本地接口 (Local API)
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="2fffa146-fe49-43c2-bfeb-db048e910243" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            系统设置
+          </a>
+        </nav>
+      </div>
+
+      <!-- 底部状态指示器 -->
+      <div class="p-4 border-t border-slate-800 text-xs">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-slate-500">接口服务 (API)</span>
+          <span class="flex items-center gap-1.5 text-teal-400">
+            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+            运行中 :50325
+          </span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-500">Camoufox 版本</span>
+          <span class="text-slate-400 font-mono">Camoufox 152.0.4-beta.28</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧内容区域 -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      
+      <!-- 顶栏 (Header) -->
+      <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
+        <!-- 面包屑 -->
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2 text-sm text-slate-500">
+            <a href="#" data-proto-action-id="eb2bf1f6-a36c-4860-91bf-5b23d90184b2" class="hover:text-teal-600 transition-colors">环境管理中心</a>
+            <span>/</span>
+            <span class="text-slate-800 font-semibold">分组标签管理器</span>
+          </div>
+        </div>
+
+        <!-- 返回按钮与信息概要 -->
+        <div class="flex items-center gap-6">
+          <div class="flex items-center gap-4 text-xs border-r border-slate-200 pr-6">
+            <div class="text-right">
+              <span class="text-slate-400">总分组数</span>
+              <p class="font-bold text-slate-800 text-sm">12 个</p>
+            </div>
+            <div class="text-right">
+              <span class="text-slate-400">标签分类</span>
+              <p class="font-bold text-slate-800 text-sm">28 个</p>
+            </div>
+          </div>
+          <button data-proto-action-id="f8832a83-a7d0-40cc-87b6-c958611cf0ff" class="bg-white hover:bg-slate-50 text-slate-700 text-sm px-4 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            返回环境管理
+          </button>
+        </div>
+      </header>
+
+      <!-- 主体内容 -->
+      <main class="p-8 space-y-6 flex-1 bg-slate-50">
+        
+        <!-- 说明横幅 -->
+        <div class="bg-teal-50 border border-teal-100 rounded-xl p-4 flex items-start gap-3">
+          <div class="text-teal-600 mt-0.5">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-teal-900">使用说明</h4>
+            <p class="text-xs text-teal-700 mt-0.5 leading-relaxed">
+              此处的修改将立即全局同步至“环境管理中心”的左侧导航和筛选下拉菜单。删除分组或标签不会物理删除环境本身，原环境将自动转为“未分类”。
+            </p>
+          </div>
+        </div>
+
+        <!-- 双栏管理面板 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          <!-- 左栏：分组架构管理树 (col-span-5) -->
+          <section class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+            <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 class="font-bold text-slate-800 text-sm">分组架构管理树</h3>
+                <p class="text-xs text-slate-400 mt-0.5">支持一级/二级层级，支持拖拽排序与归属</p>
+              </div>
+              <button data-proto-action-id="55fe0972-e61e-4509-b4ab-0209dfa5dbb4" class="bg-teal-600 hover:bg-teal-700 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                新增一级分组
+              </button>
+            </div>
+
+            <!-- 分组树形容器 -->
+            <div class="p-5 space-y-3 max-h-[600px] overflow-y-auto">
+              
+              <!-- 一级分组节点 (展开状态) -->
+              <div class="border border-slate-100 rounded-lg p-2 bg-slate-50/30">
+                <div class="flex items-center justify-between p-2 rounded hover:bg-slate-100/70 transition-all cursor-pointer group">
+                  <div class="flex items-center gap-2">
+                    <!-- 拖拽手柄 -->
+                    <span class="cursor-move text-slate-300 hover:text-slate-500">
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm6-12a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2z"></path></svg>
+                    </span>
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    <span class="text-sm font-semibold text-slate-700">亚太业务部</span>
+                    <span class="text-xs font-mono text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full font-medium">42 个环境</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button data-proto-action-id="13e17cf6-042f-48d8-912c-c46672322302" class="p-1 text-slate-400 hover:text-teal-600 hover:bg-white rounded transition-all" title="添加子分组">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </button>
+                    <button data-proto-action-id="9f77f516-f3cc-49d7-873b-e018698ee52c" class="p-1 text-slate-400 hover:text-teal-600 hover:bg-white rounded transition-all" title="重命名">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </button>
+                    <button data-proto-action-id="ea317c2a-9ca8-4dfb-9db0-36e65bb6d0c2" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-white rounded transition-all" title="删除">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 二级子节点容器 -->
+                <div class="pl-8 mt-1 space-y-1.5 border-l border-slate-200 ml-4">
+                  <!-- 二级节点 1 -->
+                  <div class="flex items-center justify-between p-1.5 rounded hover:bg-slate-100 transition-all cursor-pointer group">
+                    <div class="flex items-center gap-2">
+                      <span class="cursor-move text-slate-300 hover:text-slate-500">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm6-12a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2z"></path></svg>
+                      </span>
+                      <span class="text-sm text-slate-600">日本站项目组</span>
+                      <span class="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">18</span>
+                    </div>
+                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button data-proto-action-id="ec492e85-d8f8-45e0-8a7e-976ff2a7e781" class="p-1 text-slate-400 hover:text-teal-600 hover:bg-white rounded transition-all" title="重命名">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                      </button>
+                      <button data-proto-action-id="264627ef-02cf-4b72-ac32-e0dfc346db6f" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-white rounded transition-all" title="删除">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- 二级节点 2 -->
+                  <div class="flex items-center justify-between p-1.5 rounded hover:bg-slate-100 transition-all cursor-pointer group">
+                    <div class="flex items-center gap-2">
+                      <span class="cursor-move text-slate-300 hover:text-slate-500">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm6-12a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2z"></path></svg>
+                      </span>
+                      <span class="text-sm text-slate-600">韩国特区小组</span>
+                      <span class="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">24</span>
+                    </div>
+                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button data-proto-action-id="56788e0c-9742-491c-9fa4-70678d910a30" class="p-1 text-slate-400 hover:text-teal-600 hover:bg-white rounded transition-all" title="重命名">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                      </button>
+                      <button data-proto-action-id="36bb102f-b4ec-4286-9ec1-381c8502f679" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-white rounded transition-all" title="删除">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 一级分组节点 (展开状态) -->
+              <div class="border border-slate-100 rounded-lg p-2 bg-slate-50/30">
+                <div class="flex items-center justify-between p-2 rounded hover:bg-slate-100/70 transition-all cursor-pointer group">
+                  <div class="flex items-center gap-2">
+                    <span class="cursor-move text-slate-300 hover:text-slate-500">
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm6-12a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2z"></path></svg>
+                    </span>
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    <span class="text-sm font-semibold text-slate-700">欧美广告投放</span>
+                    <span class="text-xs font-mono text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full font-medium">85 个环境</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button data-proto-action-id="563d7de0-1798-4b71-88f5-4fbca5439c2d" class="p-1 text-slate-400 hover:text-teal-600 hover:bg-white rounded transition-all" title="添加子分组">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </button>
+                    <button data-proto-action-id="e4f62bfd-3843-4e42-99bd-fa95ee919df5" class="p-1 text-slate-400 hover:text-teal-600 hover:bg-white rounded transition-all" title="重命名">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </button>
+                    <button data-proto-action-id="1255ee98-be4a-4e20-be5a-19597e7ee6fb" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-white rounded transition-all" title="删除">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 二级子节点容器 -->
+                <div class="pl-8 mt-1 space-y-1.5 border-l border-slate-200 ml-4">
+                  <!-- 二级节点 1 -->
+                  <div class="flex items-center justify-between p-1.5 rounded hover:bg-slate-100 transition-all cursor-pointer group">
+                    <div class="flex items-center gap-2">
+                      <span class="cursor-move text-slate-300 hover:text-slate-500">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm6-12a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2z"></path></svg>
+                      </span>
+                      <span class="text-sm text-slate-600">北美 Facebook 矩阵</span>
+                      <span class="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">50</span>
+                    </div>
+                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button data-proto-action-id="ab6c4e09-9fb5-4428-bc84-3860ab7e6005" class="p-1 text-slate-400 hover:text-teal-600 hover:bg-white rounded transition-all" title="重命名">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                      </button>
+                      <button data-proto-action-id="6246479a-2415-4c07-b8a9-0d32f50fe5ca" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-white rounded transition-all" title="删除">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- 二级节点 2 -->
+                  <div class="flex items-center justify-between p-1.5 rounded hover:bg-slate-100 transition-all cursor-pointer group">
+                    <div class="flex items-center gap-2">
+                      <span class="cursor-move text-slate-300 hover:text-slate-500">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm6-12a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2z"></path></svg>
+                      </span>
+                      <span class="text-sm text-slate-600">欧洲 Google Ads</span>
+                      <span class="text-xs font-mono text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">35</span>
+                    </div>
+                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button data-proto-action-id="ebdeec25-2efc-4613-8968-07ee4b7a13c3" class="p-1 text-slate-400 hover:text-teal-600 hover:bg-white rounded transition-all" title="重命名">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                      </button>
+                      <button data-proto-action-id="8c949c8c-1e64-4fe1-ba5b-21d7b1b36952" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-white rounded transition-all" title="删除">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 一级空分支 (折叠状态) -->
+              <div class="border border-slate-100 rounded-lg p-2 bg-slate-50/30">
+                <div class="flex items-center justify-between p-2 rounded hover:bg-slate-100/70 transition-all cursor-pointer group">
+                  <div class="flex items-center gap-2">
+                    <span class="cursor-move text-slate-300 hover:text-slate-500">
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm6-12a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2zm0 6a2 2 0 11-2 2 2 2 0 012-2z"></path></svg>
+                    </span>
+                    <svg class="w-4 h-4 text-slate-400 rotate-270" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    <span class="text-sm font-semibold text-slate-700">备用待孵化组</span>
+                    <span class="text-xs font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">0 个环境</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button data-proto-action-id="bd55b0a3-fbd9-4a0b-99f5-48b4e75d4a13" class="p-1 text-slate-400 hover:text-teal-600 hover:bg-white rounded transition-all" title="添加子分组">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </button>
+                    <button data-proto-action-id="a0fb9c4a-67a6-4b47-ab1b-cfc126d400be" class="p-1 text-slate-400 hover:text-teal-600 hover:bg-white rounded transition-all" title="重命名">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </button>
+                    <button data-proto-action-id="567b2d58-963d-4c31-89b5-c0e81c0099ad" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-white rounded transition-all" title="删除">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- 拖拽操作指导 -->
+            <div class="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex items-center gap-2">
+              <svg class="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0V12m-3-2.5a1.5 1.5 0 013-3m0 3v2m0-5a1.5 1.5 0 013-3m0 3v2m0-6a1.5 1.5 0 013-3m0 3V17a4 4 0 11-8 0v-4.5"></path></svg>
+              <span>可直接按住 <strong class="text-slate-700">手柄图标</strong> 跨级拖动调整排序与上下级属系。</span>
+            </div>
+          </section>
+          
+          <!-- 右栏：标签色彩中心 (col-span-7) -->
+          <section class="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+            <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+              <div>
+                <h3 class="font-bold text-slate-800 text-sm">标签色彩中心</h3>
+                <p class="text-xs text-slate-400 mt-0.5">管理全部自定义视觉标签，快速归类资产</p>
+              </div>
+              <div class="flex items-center gap-3">
+                <button data-proto-action-id="eb4a50d2-9d8a-40a2-9ab2-8beeb5c556b6" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                  清理 0 引用标签
+                </button>
+              </div>
+            </div>
+
+            <!-- 新增标签快捷工具栏 -->
+            <div class="p-5 border-b border-slate-100 bg-slate-50/30 flex flex-wrap items-center gap-3">
+              <div class="flex-1 min-w-[200px]">
+                <input type="text" placeholder="输入新标签名，例如：FB主页" class="w-full px-3 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 transition-all placeholder:text-slate-400" />
+              </div>
+              
+              <!-- 快捷颜色选取 -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-500">颜色:</span>
+                <div class="flex items-center gap-1.5">
+                  <button data-proto-action-id="c6488d57-1ff0-48b4-b9b5-4b537a4c49aa" class="w-6 h-6 rounded-full bg-teal-500 ring-2 ring-offset-2 ring-teal-500 focus:outline-none"></button>
+                  <button data-proto-action-id="c6488d57-1ff0-48b4-b9b5-4b537a4c49ab" class="w-6 h-6 rounded-full bg-sky-500 hover:ring-2 hover:ring-offset-2 hover:ring-sky-500 focus:outline-none"></button>
+                  <button data-proto-action-id="c6488d57-1ff0-48b4-b9b5-4b537a4c49ac" class="w-6 h-6 rounded-full bg-violet-500 hover:ring-2 hover:ring-offset-2 hover:ring-violet-500 focus:outline-none"></button>
+                  <button data-proto-action-id="c6488d57-1ff0-48b4-b9b5-4b537a4c49ad" class="w-6 h-6 rounded-full bg-amber-500 hover:ring-2 hover:ring-offset-2 hover:ring-amber-500 focus:outline-none"></button>
+                  <button data-proto-action-id="c6488d57-1ff0-48b4-b9b5-4b537a4c49ae" class="w-6 h-6 rounded-full bg-emerald-500 hover:ring-2 hover:ring-offset-2 hover:ring-emerald-500 focus:outline-none"></button>
+                  
+                  <!-- 自定义颜色取色器 -->
+                  <div class="relative flex items-center">
+                    <input type="color" value="#0d9488" class="absolute inset-0 w-6 h-6 opacity-0 cursor-pointer" />
+                    <button class="w-6 h-6 rounded-full border border-slate-300 flex items-center justify-center bg-white text-slate-500 hover:bg-slate-50">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button data-proto-action-id="c8fd2b84-17c3-4d43-85bb-bf75c7429188" class="bg-teal-600 hover:bg-teal-700 text-white text-sm px-4 py-1.5 rounded-lg flex items-center gap-1 transition-all">
+                添加标签
+              </button>
+            </div>
+
+            <!-- 标签列表表格 -->
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-200 bg-slate-50/50 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                    <th class="p-4">标签名称</th>
+                    <th class="p-4">色值代码</th>
+                    <th class="p-4">环境引用计数</th>
+                    <th class="p-4 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-sm">
+                  
+                  <!-- 标签行 1 -->
+                  <tr class="hover:bg-slate-50/80 transition-colors">
+                    <td class="p-4">
+                      <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-teal-500"></span>
+                        <span class="bg-teal-50 text-teal-700 font-medium px-2 py-0.5 rounded text-xs border border-teal-200">主广告账号</span>
+                      </div>
+                    </td>
+                    <td class="p-4">
+                      <div class="flex items-center gap-2 font-mono text-xs text-slate-500">
+                        <span class="w-4 h-4 rounded border border-slate-200 bg-teal-500 inline-block"></span>
+                        #0d9488
+                        <button data-proto-action-id="df348e8c-8f92-4977-8c31-01f23bb1d971" class="text-slate-400 hover:text-teal-600" title="修改颜色">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                      </div>
+                    </td>
+                    <td class="p-4 font-mono text-slate-600 font-semibold">142</td>
+                    <td class="p-4 text-right">
+                      <div class="inline-flex items-center gap-2">
+                        <button data-proto-action-id="eb3e9db2-132d-45db-9c3f-42ee90cdfb2e" class="text-xs text-slate-500 hover:text-teal-600 px-2 py-1 rounded hover:bg-slate-100 transition-all">重命名</button>
+                        <button data-proto-action-id="be318de2-8c9a-4c28-9844-93ffca0a52df" class="text-xs text-slate-400 hover:text-rose-600 px-2 py-1 rounded hover:bg-slate-100 transition-all">删除</button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 标签行 2 -->
+                  <tr class="hover:bg-slate-50/80 transition-colors">
+                    <td class="p-4">
+                      <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-violet-500"></span>
+                        <span class="bg-violet-50 text-violet-700 font-medium px-2 py-0.5 rounded text-xs border border-violet-200">日本原生IP</span>
+                      </div>
+                    </td>
+                    <td class="p-4">
+                      <div class="flex items-center gap-2 font-mono text-xs text-slate-500">
+                        <span class="w-4 h-4 rounded border border-slate-200 bg-violet-500 inline-block"></span>
+                        #8b5cf6
+                        <button data-proto-action-id="df348e8c-8f92-4977-8c31-01f23bb1d972" class="text-slate-400 hover:text-teal-600" title="修改颜色">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                      </div>
+                    </td>
+                    <td class="p-4 font-mono text-slate-600 font-semibold">68</td>
+                    <td class="p-4 text-right">
+                      <div class="inline-flex items-center gap-2">
+                        <button data-proto-action-id="eb3e9db2-132d-45db-9c3f-42ee90cdfb2f" class="text-xs text-slate-500 hover:text-teal-600 px-2 py-1 rounded hover:bg-slate-100 transition-all">重命名</button>
+                        <button data-proto-action-id="be318de2-8c9a-4c28-9844-93ffca0a52e0" class="text-xs text-slate-400 hover:text-rose-600 px-2 py-1 rounded hover:bg-slate-100 transition-all">删除</button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 标签行 3 (0引用，高亮警告删除) -->
+                  <tr class="hover:bg-slate-50/80 transition-colors bg-rose-50/10">
+                    <td class="p-4">
+                      <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                        <span class="bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded text-xs border border-slate-200">废弃老站</span>
+                      </div>
+                    </td>
+                    <td class="p-4">
+                      <div class="flex items-center gap-2 font-mono text-xs text-slate-500">
+                        <span class="w-4 h-4 rounded border border-slate-200 bg-slate-400 inline-block"></span>
+                        #94a3b8
+                        <button data-proto-action-id="df348e8c-8f92-4977-8c31-01f23bb1d973" class="text-slate-400 hover:text-teal-600" title="修改颜色">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                      </div>
+                    </td>
+                    <td class="p-4">
+                      <span class="inline-flex items-center gap-1 text-rose-600 font-semibold font-mono text-xs">
+                        0
+                        <span class="bg-rose-100 text-rose-800 text-[10px] px-1.5 py-0.2 rounded font-normal">无引用</span>
+                      </span>
+                    </td>
+                    <td class="p-4 text-right">
+                      <div class="inline-flex items-center gap-2">
+                        <button data-proto-action-id="eb3e9db2-132d-45db-9c3f-42ee90cdfb30" class="text-xs text-slate-500 hover:text-teal-600 px-2 py-1 rounded hover:bg-slate-100 transition-all">重命名</button>
+                        <button data-proto-action-id="be318de2-8c9a-4c28-9844-93ffca0a52e1" class="text-xs font-semibold text-rose-600 hover:text-rose-700 px-2 py-1 rounded hover:bg-rose-100/50 transition-all">立即清理</button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 标签行 4 -->
+                  <tr class="hover:bg-slate-50/80 transition-colors">
+                    <td class="p-4">
+                      <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                        <span class="bg-amber-50 text-amber-700 font-medium px-2 py-0.5 rounded text-xs border border-amber-200">固定指纹策略</span>
+                      </div>
+                    </td>
+                    <td class="p-4">
+                      <div class="flex items-center gap-2 font-mono text-xs text-slate-500">
+                        <span class="w-4 h-4 rounded border border-slate-200 bg-amber-500 inline-block"></span>
+                        #f59e0b
+                        <button data-proto-action-id="df348e8c-8f92-4977-8c31-01f23bb1d974" class="text-slate-400 hover:text-teal-600" title="修改颜色">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                      </div>
+                    </td>
+                    <td class="p-4 font-mono text-slate-600 font-semibold">12</td>
+                    <td class="p-4 text-right">
+                      <div class="inline-flex items-center gap-2">
+                        <button data-proto-action-id="eb3e9db2-132d-45db-9c3f-42ee90cdfb31" class="text-xs text-slate-500 hover:text-teal-600 px-2 py-1 rounded hover:bg-slate-100 transition-all">重命名</button>
+                        <button data-proto-action-id="be318de2-8c9a-4c28-9844-93ffca0a52e2" class="text-xs text-slate-400 hover:text-rose-600 px-2 py-1 rounded hover:bg-slate-100 transition-all">删除</button>
+                      </div>
+                    </td>
+                  </tr>
+
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 分页/总计 -->
+            <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+              <span>显示 1-4 / 共 28 个标签</span>
+              <div class="flex items-center gap-2">
+                <button class="px-2 py-1 border border-slate-200 rounded hover:bg-white transition-all disabled:opacity-50" disabled>上一页</button>
+                <button class="px-2 py-1 border border-slate-200 rounded hover:bg-white transition-all">下一页</button>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- 分组删除防呆确认框 (模拟弹窗状态) -->
+  <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-white rounded-xl border border-slate-200 shadow-xl max-w-md w-full overflow-hidden">
+      <div class="p-6">
+        <div class="flex items-center gap-3 text-amber-600 mb-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+          <h3 class="font-bold text-slate-800 text-lg">确认要删除该分组吗？</h3>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          删除分组 <strong class="text-slate-800">亚太业务部</strong> 后，系统将作如下处理：
+        </p>
+        <ul class="list-disc pl-5 text-xs text-slate-500 mt-2 space-y-1">
+          <li>该分组下的 <strong>42</strong> 个浏览器环境不会被物理删除。</li>
+          <li>所有相关环境将被移至系统内置的“未分组”目录下。</li>
+          <li>其包含的二级子分组也会一并被移至未分组目录中。</li>
+        </ul>
+      </div>
+      <div class="bg-slate-50 p-4 border-t border-slate-100 flex items-center justify-end gap-3">
+        <button data-proto-action-id="2fe51ff1-4560-4cd7-bf53-739c2794eb09" class="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-sm px-4 py-2 rounded-lg transition-all">取消</button>
+        <button data-proto-action-id="8ae6e4e5-9c88-4398-a664-df0a256df2bb" class="bg-rose-600 hover:bg-rose-700 text-white text-sm px-4 py-2 rounded-lg transition-all shadow-sm">仅删除分组（保留环境数据）</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+```
+  </body>
+</html>

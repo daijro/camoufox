@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>本地 API 管理中心</title>
+    <base href="http://localhost:5173/" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei"; }
+      img { max-width: 100%; height: auto; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div class="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
+  <!-- 整体容器 -->
+  <div class="flex flex-1 overflow-hidden h-screen">
+    
+    <!-- 侧边导航栏 (Sidebar) -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 z-30">
+      <div>
+        <!-- 头部 Logo -->
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
+          <div class="bg-teal-500 text-slate-950 p-2 rounded-lg font-bold text-lg flex items-center justify-center w-9 h-9">
+            CF
+          </div>
+          <div>
+            <h1 class="font-bold text-white text-sm tracking-wide leading-none">Camoufox 控制台</h1>
+            <span class="text-xs text-teal-400 mt-1 inline-block">指纹浏览器系统</span>
+          </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="mt-6 px-4 space-y-1">
+          <a href="#" data-proto-role="menu" data-proto-action-id="fb0c4b2b-092f-4886-90f7-b0891c3d1912" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            环境管理
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="5bc3bb9d-9d41-4fa3-b676-e82245b0a32d" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            实例监控
+            <span class="ml-auto bg-teal-500/20 text-teal-300 text-xs px-2 py-0.5 rounded-full font-semibold">3 运行</span>
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="3ff201ee-b6ee-4613-bc7c-38fb501f0163" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+            代理中心
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="34173d1f-8461-4df2-a393-3ea76b0cf91a" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 009 11.5c0-.62-.078-1.22-.227-1.791M15.147 18.25a14.27 14.27 0 002.244-2.077M4.772 5.79A13.93 13.93 0 0018.18 15.75A9 9 0 104.772 5.79z"></path></svg>
+            指纹策略
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="908b9fdf-4fe3-4ff5-ae52-78d1fb57de81" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+            插件中心
+            <span class="ml-auto text-xs text-slate-500">规划中</span>
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="44f4adab-a86d-4950-84ad-e77a28e833f4" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+            任务中心
+          </a>
+          <div class="h-px bg-slate-800 my-4"></div>
+          <a href="#" data-proto-role="menu" data-proto-action-id="0ad2f128-e4fc-4b55-a0cd-e50e932b130e" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            浏览器版本
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="2946c1c2-6ff8-4ee0-994c-e87f31dfd4e6" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-teal-600 text-white transition-all">
+            <svg class="w-5 h-5 text-teal-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            本地接口 (Local API)
+          </a>
+          <a href="#" data-proto-role="menu" data-proto-action-id="34177484-9dfc-4e89-9a78-b118b85bbd19" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            系统设置
+          </a>
+        </nav>
+      </div>
+
+      <!-- 底部状态指示器 -->
+      <div class="p-4 border-t border-slate-800 text-xs">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-slate-500">接口服务 (API)</span>
+          <span class="flex items-center gap-1.5 text-teal-400">
+            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+            运行中 :50325
+          </span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-500">Camoufox 版本</span>
+          <span class="text-slate-400 font-mono">Camoufox 152.0.4-beta.28</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧内容区域 -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      
+      <!-- 顶栏 (Header) -->
+      <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
+        <!-- 面包屑 -->
+        <div class="flex items-center gap-8">
+          <div class="flex items-center gap-2 text-sm text-slate-500">
+            <span>环境管理</span>
+            <span>/</span>
+            <span class="text-slate-800 font-semibold">本地接口 (Local API)</span>
+          </div>
+        </div>
+
+        <!-- 状态摘要与版本信息 -->
+        <div class="flex items-center gap-6">
+          <div class="flex items-center gap-4 text-xs">
+            <div class="text-right">
+              <span class="text-slate-400">当前接口状态</span>
+              <p class="font-bold text-teal-600 text-sm">提供本地服务中</p>
+            </div>
+            <div class="h-8 w-px bg-slate-200"></div>
+            <div class="text-right">
+              <span class="text-slate-400">网关协议版本</span>
+              <p class="font-bold text-slate-800 text-sm">v1.2.0 (REST/WS)</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- 主体内容 (Main Content) -->
+      <main class="p-8 space-y-6 flex-1 bg-slate-50">
+        
+        <!-- 主布局：左控制与日志，右文档 -->
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          
+          <!-- 左侧：API 控制面板与日志查看器 (col-span-5) -->
+          <div class="xl:col-span-5 space-y-6">
+            
+            <!-- API 控制面板 -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+              <div class="flex items-center justify-between mb-6">
+                <div>
+                  <h3 class="text-base font-bold text-slate-800">API 服务控制台</h3>
+                  <p class="text-xs text-slate-400 mt-1">管理本地 FastAPI 代理服务的启停与网关参数</p>
+                </div>
+                <!-- 状态指示器 -->
+                <div class="flex items-center gap-2 px-3 py-1 bg-teal-50 rounded-full border border-teal-100">
+                  <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+                  </span>
+                  <span class="text-xs font-semibold text-teal-700">服务运行中</span>
+                </div>
+              </div>
+
+              <!-- 启停开关与基础配置表单 -->
+              <div class="space-y-4">
+                <div class="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-100">
+                  <div>
+                    <span class="text-sm font-semibold text-slate-700">服务启停开关</span>
+                    <p class="text-xs text-slate-400 mt-0.5">关闭后外部程序将无法通过端口控制浏览器</p>
+                  </div>
+                  <!-- Switch 按钮 -->
+                  <button type="button" data-proto-action-id="70f72365-1d42-4f76-88e3-5adff200236a" class="bg-teal-600 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2" role="switch" aria-checked="true">
+                    <span class="translate-x-5 pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                  </button>
+                </div>
+
+                <!-- 监听地址 -->
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">监听地址 (IP 地址)</label>
+                  <input type="text" value="127.0.0.1" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-teal-500 transition-all font-mono" />
+                </div>
+
+                <!-- 端口配置 -->
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">服务端口</label>
+                  <input type="number" value="50325" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-teal-500 transition-all font-mono" />
+                  <p class="text-[11px] text-slate-400 mt-1">若端口被占用，请更改后保存并重启服务。</p>
+                </div>
+
+                <!-- API 鉴权令牌 (Token) -->
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">API 鉴权令牌 (Token)</label>
+                  <div class="flex gap-2">
+                    <div class="relative flex-1">
+                      <input type="password" value="cf_live_8f3a9e2c7b5d1a0e4f" disabled class="w-full pl-3 pr-10 py-2 text-sm bg-slate-100 text-slate-500 border border-slate-200 rounded-lg font-mono" />
+                      <button type="button" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600">
+                        <!-- Eye icon -->
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                      </button>
+                    </div>
+                    <button type="button" data-proto-action-id="2dbf88c8-b2a6-419b-a01f-0a0689b14c33" class="px-3 py-2 text-sm font-medium border border-slate-200 hover:border-slate-300 rounded-lg hover:bg-slate-50 text-slate-700 flex items-center gap-1 transition-all">
+                      <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                      复制
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 动作按钮 -->
+                <div class="flex gap-3 pt-2">
+                  <button type="button" data-proto-action-id="ca3ab476-eb86-4fbf-b620-316279f04ee8" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2 px-4 rounded-lg shadow-sm transition-all text-center">
+                    保存并重启服务
+                  </button>
+                  <button type="button" data-proto-action-id="76249bf5-c053-481d-9a6a-d4a8ecfcff91" class="border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold py-2 px-3 rounded-lg transition-all">
+                    重置 Token
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- API 请求日志查看器 -->
+            <div class="bg-slate-950 rounded-xl border border-slate-800 shadow-lg overflow-hidden flex flex-col h-[380px]">
+              <!-- 日志头部 -->
+              <div class="bg-slate-900 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                  <span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+                  <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                  <span class="text-xs font-semibold text-slate-400 font-mono ml-2">本地接口实时流水 (最近 100 条)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-teal-900/50 text-teal-300 border border-teal-800">
+                    监听中
+                  </span>
+                </div>
+              </div>
+              
+              <!-- 日志内容区域 -->
+              <div class="flex-1 p-4 overflow-y-auto font-mono text-xs space-y-2.5 text-slate-300">
+                <div class="flex items-start gap-3">
+                  <span class="text-slate-500">14:02:11</span>
+                  <span class="text-emerald-400 font-bold">GET</span>
+                  <span class="text-slate-200 flex-1">/api/v1/profiles</span>
+                  <span class="text-emerald-400 bg-emerald-950/50 px-1 rounded border border-emerald-900">200 OK</span>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-slate-500">14:02:15</span>
+                  <span class="text-teal-400 font-bold">POST</span>
+                  <span class="text-slate-200 flex-1">/api/v1/profiles/env-983a/start</span>
+                  <span class="text-emerald-400 bg-emerald-950/50 px-1 rounded border border-emerald-900">200 OK</span>
+                </div>
+                <div class="flex items-start gap-3 pl-8 border-l border-slate-800 py-1 text-slate-400">
+                  <span>[系统进程] 已唤醒环境 env-983a 并完成指纹注入，PID: 18290</span>
+                </div>
+                <div class="flex items-start gap-3 pl-8 border-l border-slate-800 py-1 text-slate-400">
+                  <span>[WebSocket] 建立连接 - 客户端 Playwright Juggler</span>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-slate-500">14:03:01</span>
+                  <span class="text-emerald-400 font-bold">GET</span>
+                  <span class="text-slate-200 flex-1">/api/v1/profiles/env-983a/status</span>
+                  <span class="text-emerald-400 bg-emerald-950/50 px-1 rounded border border-emerald-900">200 OK</span>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-slate-500">14:04:12</span>
+                  <span class="text-rose-400 font-bold">POST</span>
+                  <span class="text-slate-200 flex-1">/api/v1/profiles/env-9999/start</span>
+                  <span class="text-rose-400 bg-rose-950/50 px-1 rounded border border-rose-900">404 NOT_FOUND</span>
+                </div>
+                <div class="flex items-start gap-3 pl-8 border-l border-slate-800 py-1 text-rose-300">
+                  <span>[异常告警] 未找到对应 ID 的环境配置文件</span>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="text-slate-500">14:05:00</span>
+                  <span class="text-teal-400 font-bold">POST</span>
+                  <span class="text-slate-200 flex-1">/api/v1/profiles/env-983a/stop</span>
+                  <span class="text-emerald-400 bg-emerald-950/50 px-1 rounded border border-emerald-900">200 OK</span>
+                </div>
+                <div class="flex items-start gap-3 pl-8 border-l border-slate-800 py-1 text-slate-400">
+                  <span>[系统进程] 结束环境进程 PID: 18290，释放指纹端口</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 右侧：内嵌交互式 API 开发者文档 (col-span-7) -->
+          <div class="xl:col-span-7 space-y-6">
+            
+            <!-- 文档主卡片 -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col min-h-[750px]">
+              <div class="border-b border-slate-200 pb-4 mb-6">
+                <h3 class="text-base font-bold text-slate-800">开发者集成文档</h3>
+                <p class="text-xs text-slate-400 mt-1">集成 API 到 Playwright（官方支持）。Selenium / CDP 不在 Camoufox 支持范围内。</p>
+              </div>
+
+              <!-- 文档标签页切换 -->
+              <div class="flex border-b border-slate-200 mb-6 gap-6">
+                <button type="button" data-proto-action-id="1de83852-c0e7-4903-b09f-689e4bbad88a" class="border-b-2 border-teal-600 pb-3 text-sm font-semibold text-teal-600">
+                  REST 接口列表说明
+                </button>
+                <button type="button" data-proto-action-id="1de83852-c0e7-4903-b09f-689e4bbad88b" class="border-b-2 border-transparent pb-3 text-sm font-medium text-slate-400 hover:text-slate-600">
+                  Python (Playwright) 接入示例
+                </button>
+                <button type="button" data-proto-action-id="1de83852-c0e7-4903-b09f-689e4bbad88c" class="border-b-2 border-transparent pb-3 text-sm font-medium text-slate-400 hover:text-slate-600">
+                  Node.js 接入示例
+                </button>
+              </div>
+
+              <!-- 接口列表内容 -->
+              <div class="space-y-6 flex-1">
+                
+                <!-- 接口 1 -->
+                <div class="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <div class="flex items-center gap-3 mb-2 flex-wrap">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800">GET</span>
+                    <span class="font-mono text-sm font-semibold text-slate-700">/api/v1/profiles</span>
+                    <span class="text-xs text-slate-400 ml-auto">获取本地保存的所有环境列表</span>
+                  </div>
+                  <!-- 参数说明表格 -->
+                  <div class="mt-3 text-xs">
+                    <div class="bg-white rounded border border-slate-200 overflow-hidden">
+                      <table class="min-w-full divide-y divide-slate-200">
+                        <thead class="bg-slate-50 font-semibold text-slate-600 text-left">
+                          <tr>
+                            <th class="px-3 py-2">参数字段</th>
+                            <th class="px-3 py-2">类型</th>
+                            <th class="px-3 py-2">是否必填</th>
+                            <th class="px-3 py-2">说明</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-slate-700">
+                          <tr>
+                            <td class="px-3 py-2 font-mono text-slate-900">group_id</td>
+                            <td class="px-3 py-2">String</td>
+                            <td class="px-3 py-2 text-slate-400">否</td>
+                            <td class="px-3 py-2">按分组 ID 筛选环境</td>
+                          </tr>
+                          <tr>
+                            <td class="px-3 py-2 font-mono text-slate-900">status</td>
+                            <td class="px-3 py-2">String</td>
+                            <td class="px-3 py-2 text-slate-400">否</td>
+                            <td class="px-3 py-2">按运行状态筛选 (idle/running/error)</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 接口 2 -->
+                <div class="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <div class="flex items-center gap-3 mb-2 flex-wrap">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-800">POST</span>
+                    <span class="font-mono text-sm font-semibold text-slate-700">/api/v1/profiles/{id}/start</span>
+                    <span class="text-xs text-slate-400 ml-auto">启动指定的指纹浏览器实例并返回 WebSocket 地址</span>
+                  </div>
+                  
+                  <!-- 参数说明表格 -->
+                  <div class="mt-3 text-xs">
+                    <div class="bg-white rounded border border-slate-200 overflow-hidden">
+                      <table class="min-w-full divide-y divide-slate-200">
+                        <thead class="bg-slate-50 font-semibold text-slate-600 text-left">
+                          <tr>
+                            <th class="px-3 py-2">参数字段</th>
+                            <th class="px-3 py-2">类型</th>
+                            <th class="px-3 py-2">是否必填</th>
+                            <th class="px-3 py-2">说明</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-slate-700">
+                          <tr>
+                            <td class="px-3 py-2 font-mono text-slate-900">headless</td>
+                            <td class="px-3 py-2">Boolean</td>
+                            <td class="px-3 py-2 text-slate-400">否 (默认 false)</td>
+                            <td class="px-3 py-2">是否采用无头模式启动浏览器</td>
+                          </tr>
+                          <tr>
+                            <td class="px-3 py-2 font-mono text-slate-900">disable_proxy</td>
+                            <td class="px-3 py-2">Boolean</td>
+                            <td class="px-3 py-2 text-slate-400">否 (默认 false)</td>
+                            <td class="px-3 py-2">临时禁用该环境绑定的代理网络</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <!-- 返回体样例 -->
+                    <div class="mt-3">
+                      <span class="text-[11px] font-semibold text-slate-500 block mb-1">响应 JSON 结构定义 (JSON Schema)</span>
+                      <pre class="bg-slate-900 text-slate-300 p-3 rounded font-mono text-[11px] overflow-x-auto">
+{
+  "code": 200,
+  "msg": "启动成功",
+  "data": {
+    "profile_id": "env-983a",
+    "ws_endpoint": "ws://127.0.0.1:50325/juggler/env-983a",
+    "http_port": 58310,
+    "pid": 18290
+  }
+}</pre>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 代码块展示区 -->
+                <div class="border-t border-slate-200 pt-6">
+                  <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span class="w-1.5 h-3 bg-teal-600 rounded-sm"></span>
+                      Python (Playwright Juggler 自动化连接示例)
+                    </span>
+                    <button type="button" data-proto-action-id="925ecf23-382a-4f51-b847-e2c7a72d73bb" class="text-xs text-teal-600 hover:text-teal-700 font-semibold flex items-center gap-1">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                      复制集成代码
+                    </button>
+                  </div>
+                  
+                  <pre class="bg-slate-900 text-slate-300 p-4 rounded-lg font-mono text-xs overflow-x-auto leading-relaxed">
+<span class="text-amber-400">import</span> requests
+<span class="text-amber-400">from</span> playwright.sync_api <span class="text-amber-400">import</span> sync_playwright
+
+<span class="text-slate-500"># 1. 触发本地接口服务启动指定浏览器实例</span>
+api_url = <span class="text-emerald-400">"http://127.0.0.1:50325/api/v1/profiles/env-983a/start"</span>
+headers = {<span class="text-emerald-400">"Authorization"</span>: <span class="text-emerald-400">"Bearer cf_live_8f3a..."</span>}
+response = requests.post(api_url, headers=headers).json()
+
+ws_endpoint = response[<span class="text-emerald-400">"data"</span>][<span class="text-emerald-400">"ws_endpoint"</span>]
+
+<span class="text-slate-500"># 2. 通过 WebSockets 连接到运行中的 Firefox 进程</span>
+<span class="text-amber-400">with</span> sync_playwright() <span class="text-amber-400">as</span> p:
+    browser = p.firefox.connect(ws_endpoint)
+    context = browser.contexts[0] <span class="text-slate-500"># 获取自动防指纹关联上下文</span>
+    page = context.new_page()
+    
+    <span class="text-slate-500"># 3. 正常执行自动化业务逻辑</span>
+    page.goto(<span class="text-emerald-400">"https://bot.sannysoft.com"</span>)
+    page.screenshot(path=<span class="text-emerald-400">"fingerprint_test.png"</span>)
+    
+    browser.close()</pre>
+                </div>
+
+              </div>
+              
+              <!-- 文档底部支持 -->
+              <div class="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
+                <span>如有对接问题，请参考 <a href="#" class="text-teal-600 hover:underline">本地命令行（CLI）集成手册</a></span>
+                <span>更新于 2026-07-29</span>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </main>
+    </div>
+
+  </div>
+</div>
+  </body>
+</html>

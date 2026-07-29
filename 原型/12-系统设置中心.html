@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>系统设置中心</title>
+    <base href="http://localhost:5173/" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei"; }
+      img { max-width: 100%; height: auto; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div class="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
+  <!-- 整体容器 -->
+  <div class="flex flex-1 overflow-hidden h-screen">
+    
+    <!-- 侧边导航栏 (Sidebar) -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 z-30">
+      <!-- 头部 Logo -->
+      <div>
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
+          <div class="bg-teal-500 text-slate-950 p-2 rounded-lg font-bold text-lg flex items-center justify-center w-9 h-9">
+            CF
+          </div>
+          <div>
+            <h1 class="font-bold text-white text-sm tracking-wide leading-none">Camoufox 控制台</h1>
+            <span class="text-xs text-teal-400 mt-1 inline-block">指纹浏览器系统</span>
+          </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="mt-6 px-4 space-y-1">
+          <a href="#" data-proto-action-id="f0a3597c-9b16-4c4f-9e7b-c3fb1e6a9ee8" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            环境管理
+          </a>
+          <a href="#" data-proto-action-id="2300b957-8fb2-4467-bc18-49033320c24e" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            实例监控
+            <span class="ml-auto bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full font-semibold">3 运行</span>
+          </a>
+          <a href="#" data-proto-action-id="72cd7142-ff0f-4886-af34-453006456079" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+            代理中心
+          </a>
+          <a href="#" data-proto-action-id="976098ee-5ab1-42e7-9d7a-115f5539dcd6" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 009 11.5c0-.62-.078-1.22-.227-1.791M15.147 18.25a14.27 14.27 0 002.244-2.077M4.772 5.79A13.93 13.93 0 0018.18 15.75A9 9 0 104.772 5.79z"></path></svg>
+            指纹策略
+          </a>
+          <a href="#" data-proto-action-id="d4062a4d-f954-44df-be9e-f41e57c61858" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+            插件中心
+          </a>
+          <a href="#" data-proto-action-id="576594d2-d383-4901-b3b4-406fb5a4358a" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+            任务中心
+          </a>
+          <div class="h-px bg-slate-800 my-4"></div>
+          <a href="#" data-proto-action-id="4e9b925b-0cfd-4a1e-abcf-75a7b6cf9c0c" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            浏览器版本
+          </a>
+          <a href="#" data-proto-action-id="3c162cf5-5381-4ebc-8ce8-7a54a938c4c7" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            本地接口 (Local API)
+          </a>
+          <a href="#" data-proto-action-id="c644d57c-f83b-4ca0-880c-03d32845e2d1" data-proto-role="menu" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-teal-600 text-white transition-all">
+            <svg class="w-5 h-5 text-teal-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            系统设置
+          </a>
+        </nav>
+      </div>
+
+      <!-- 底部状态指示器 -->
+      <div class="p-4 border-t border-slate-800 text-xs">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-slate-500">接口服务 (API)</span>
+          <span class="flex items-center gap-1.5 text-teal-400">
+            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+            运行中 :50325
+          </span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-500">Camoufox 版本</span>
+          <span class="text-slate-400 font-mono">Camoufox 152.0.4-beta.28</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧内容区域（含顶栏与主体） -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      
+      <!-- 顶栏 (Header) -->
+      <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
+        <!-- 搜索与面包屑 -->
+        <div class="flex items-center gap-8">
+          <div class="flex items-center gap-2 text-sm text-slate-500">
+            <span class="hover:text-slate-800 cursor-pointer">环境管理中心</span>
+            <span>/</span>
+            <span class="text-slate-800 font-semibold">系统设置中心</span>
+          </div>
+        </div>
+
+        <!-- 状态摘要与快捷工具 -->
+        <div class="flex items-center gap-6">
+          <div class="flex items-center gap-4 text-xs border-r border-slate-200 pr-6">
+            <div class="text-right">
+              <span class="text-slate-400">本地磁盘健康</span>
+              <p class="font-bold text-slate-800 text-sm">良好 <span class="text-xs font-normal text-slate-500">(C盘剩余24.5GB)</span></p>
+            </div>
+            <div class="text-right">
+              <span class="text-slate-400">浏览器缓存体积</span>
+              <p class="font-bold text-teal-600 text-sm">1.82 GB</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400">Active 版本:</span>
+            <span class="bg-teal-50 text-teal-700 text-xs px-2.5 py-1 rounded border border-teal-200 font-medium">Camoufox 152.0.4-beta.28 (Active)</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- 主体内容 (Main Content) -->
+      <main class="p-8 space-y-6 flex-1">
+        
+        <!-- 页面标题区 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-bold text-slate-900">系统设置中心</h2>
+            <p class="text-xs text-slate-500 mt-1">配置全局启动模式、管理 Profile 存储卷及 Camoufox 浏览器版本（全局 Active）。</p>
+          </div>
+        </div>
+
+        <!-- 选项卡切换 (Tabs) -->
+        <div class="border-b border-slate-200">
+          <nav class="flex space-x-8" aria-label="Tabs">
+            <button class="border-teal-500 text-teal-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+              常规配置
+            </button>
+            <button class="border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2z"></path></svg>
+              存储与空间
+            </button>
+            <button class="border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+              Camoufox 版本管理
+            </button>
+          </nav>
+        </div>
+
+        <!-- 页面区块划分 -->
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          
+          <!-- 左&中列：常规配置与存储空间 -->
+          <div class="xl:col-span-2 space-y-6">
+            
+            <!-- 卡片 1：常规配置 -->
+            <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+              <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
+                <div class="flex items-center gap-2.5">
+                  <div class="p-2 bg-teal-50 text-teal-600 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-slate-800 text-sm">常规配置</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">控制台客户端级别全局参数调整</p>
+                  </div>
+                </div>
+                <button data-proto-action-id="d702d0cf-f273-4ca2-8db8-b57f201df4f8" class="bg-teal-600 hover:bg-teal-700 text-white text-xs px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-1.5">
+                  保存设置
+                </button>
+              </div>
+
+              <!-- 配置表单 -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 语言选择 -->
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">客户端语言</label>
+                  <select data-proto-action-id="91f9b3be-bfd5-451e-b8cc-a3bf92a5b6eb" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:bg-white transition-all text-slate-800">
+                    <option value="zh-CN">简体中文 (Chinese Simplified)</option>
+                    <option value="en-US">英文 (English)</option>
+                  </select>
+                  <p class="text-xs text-slate-400 mt-1.5">影响控制台所有菜单、向导和日志输出的语言类型。</p>
+                </div>
+
+                <!-- 主题切换 -->
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">系统主题</label>
+                  <div class="flex gap-2 p-1 bg-slate-100 rounded-lg w-fit">
+                    <button data-proto-action-id="de304919-4a94-4d89-98ee-a63e26f86c2e" class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md bg-white text-slate-800 shadow-sm transition-all">
+                      <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m2.828-9.9a5 5 0 117.072 0l-.001.001z"></path></svg>
+                      亮色模式
+                    </button>
+                    <button data-proto-action-id="f8c2e64b-b0b3-461d-84e1-7e3e26cf8d2b" class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                      暗色模式
+                    </button>
+                  </div>
+                  <p class="text-xs text-slate-400 mt-1.5">适配桌面客户端的整体视觉格调与色彩系统。</p>
+                </div>
+
+                <!-- 默认启动模式 -->
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">默认环境启动模式</label>
+                  <div class="flex gap-2 p-1 bg-slate-100 rounded-lg w-fit">
+                    <button data-proto-action-id="6ea2b8c5-9c90-4c7b-a010-8b1b86d93b3f" class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all">
+                      无头模式 (Headless)
+                    </button>
+                    <button class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md bg-white text-slate-800 shadow-sm transition-all">
+                      有头可见模式
+                    </button>
+                  </div>
+                  <p class="text-xs text-slate-400 mt-1.5">新建浏览器环境时，启动方式的默认全局初始值。</p>
+                </div>
+
+                <!-- 关闭窗口行为 -->
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">关闭主窗口时的行为</label>
+                  <select data-proto-action-id="b74d493a-8671-477d-8153-2d2c16e7887d" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:bg-white transition-all text-slate-800">
+                    <option value="tray">最小化到系统托盘 (后台运行)</option>
+                    <option value="exit">直接退出控制台程序 (杀掉所有浏览器)</option>
+                  </select>
+                  <p class="text-xs text-slate-400 mt-1.5">为防止关闭窗口时，后台未完成的任务被中断。</p>
+                </div>
+
+                <!-- 开机自启开关 -->
+                <div class="md:col-span-2 p-4 bg-slate-50 rounded-lg flex items-center justify-between border border-slate-200">
+                  <div class="flex flex-col">
+                    <span class="text-sm font-semibold text-slate-800">开机自动启动程序</span>
+                    <span class="text-xs text-slate-400 mt-0.5">当计算机开机进入桌面系统时自动加载运行并开启 API 接口后台</span>
+                  </div>
+                  <!-- Switch Component -->
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" data-proto-action-id="f3214b7e-97c7-4971-872f-48d94e27f05b" value="" class="sr-only peer" checked>
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <!-- 卡片 2：存储与空间 -->
+            <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+              <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
+                <div class="flex items-center gap-2.5">
+                  <div class="p-2 bg-teal-50 text-teal-600 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-slate-800 text-sm">存储与空间</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Profile 本地数据存储与数据盘目录迁移</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 根目录输入框及迁移说明 -->
+              <div class="space-y-6">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Profile 本地根目录 (全局存储路径)</label>
+                  <div class="flex gap-2">
+                    <input type="text" value="D:\Camoufox\Profiles" disabled class="flex-1 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-500 font-mono" />
+                    <button data-proto-action-id="71cd4e17-f58c-41c3-bc19-5d2f66be4a0b" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-1.5">
+                      更改路径
+                    </button>
+                    <button data-proto-action-id="80720485-64d8-4f2b-8ff9-cc4d51bbfad6" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1.5">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5L10 6z"></path></svg>
+                      打开目录
+                    </button>
+                  </div>
+                  <p class="text-xs text-rose-500 mt-2 flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    警告：修改路径将全局影响新建环境的数据目录。若已存在活动环境，请谨慎迁移，确保手动将旧数据剪切到新路径。
+                  </p>
+                </div>
+
+                <!-- 空间可视化区域 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 p-5 bg-slate-50 border border-slate-200 rounded-xl">
+                  
+                  <!-- 左侧环形图 -->
+                  <div class="flex flex-col items-center justify-center border-r border-slate-200 pr-6">
+                    <div class="relative w-28 h-28">
+                      <!-- SVG 环形进度条 -->
+                      <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                        <!-- 底圈 -->
+                        <path class="text-slate-200" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <!-- 磁盘使用占比 75% -->
+                        <path class="text-teal-600" stroke-dasharray="75, 100" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                      </svg>
+                      <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span class="text-xl font-bold text-slate-800 leading-none">75%</span>
+                        <span class="text-[9px] text-slate-400 mt-1 uppercase">D盘已用</span>
+                      </div>
+                    </div>
+                    <span class="text-xs text-slate-500 mt-3 font-medium">总空间 100 GB</span>
+                  </div>
+
+                  <!-- 右侧占比说明与垃圾清理 -->
+                  <div class="md:col-span-2 flex flex-col justify-between">
+                    <div class="space-y-3">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider">空间使用详情</span>
+                        <span class="text-xs text-slate-500 font-medium">可清理</span>
+                      </div>
+                      
+                      <!-- 进度图例 1 -->
+                      <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs font-semibold text-slate-700">
+                          <span class="flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-sm bg-teal-600 inline-block"></span>
+                            环境数据目录 (Profiles)
+                          </span>
+                          <span>4.2 GB</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-1.5">
+                          <div class="bg-teal-600 h-1.5 rounded-full" style="width: 42%"></div>
+                        </div>
+                      </div>
+
+                      <!-- 进度图例 2 -->
+                      <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs font-semibold text-slate-700">
+                          <span class="flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block"></span>
+                            临时残留及缓存垃圾
+                          </span>
+                          <span>2.85 GB</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-1.5">
+                          <div class="bg-amber-500 h-1.5 rounded-full" style="width: 28%"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 清理按钮与操作区 -->
+                    <div class="flex items-center justify-between pt-4 border-t border-slate-200 mt-4">
+                      <span class="text-xs text-slate-400">定期清理临时缓存可有效加快浏览器启动速度</span>
+                      <button data-proto-action-id="9081bc18-2e06-44ce-af96-a94f6f874288" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs px-4 py-2 rounded-lg border border-rose-200 font-medium transition-all">
+                        立即清理缓存垃圾
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- 右列：Camoufox 版本管理 & GeoIP -->
+          <div class="xl:col-span-1 space-y-6">
+            
+            <!-- 卡片 3：Camoufox 版本管理 -->
+            <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col h-full justify-between">
+              <div>
+                <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+                  <div class="flex items-center gap-2.5">
+                    <div class="p-2 bg-teal-50 text-teal-600 rounded-lg">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    </div>
+                    <div>
+                      <h3 class="font-semibold text-slate-800 text-sm">Camoufox 版本管理</h3>
+                      <p class="text-xs text-slate-400 mt-0.5">同步、安装与管理 Camoufox 构建版本</p>
+                    </div>
+                  </div>
+                  <button data-proto-action-id="6bc496a7-0e6d-4950-84c4-7ffc0c4516d0" class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all" title="刷新远程列表">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 4.79M9 9h9v9"></path></svg>
+                  </button>
+                </div>
+
+                <!-- 内核通道状态及列表 -->
+                <div class="space-y-4">
+                  
+                  <!-- 已装版本 1 - 当前 Active -->
+                  <div class="p-3 bg-teal-50/50 border border-teal-200 rounded-lg relative overflow-hidden">
+                    <div class="absolute right-0 top-0 bg-teal-600 text-white text-[10px] px-2 py-0.5 rounded-bl">
+                      Active
+                    </div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <span class="text-xs font-bold text-slate-800 font-mono">152.0.4-beta.28</span>
+                      <span class="text-[10px] bg-teal-100 text-teal-800 font-semibold px-2 py-0.5 rounded">daijro / stable</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-slate-500 mt-2">
+                      <span>存储体积: 521 MB</span>
+                      <span class="text-slate-400 text-[10px]">当前运行版本，不可卸载</span>
+                    </div>
+                  </div>
+
+                  <!-- 已装版本 2 -->
+                  <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <div class="flex items-center justify-between mb-1.5">
+                      <span class="text-xs font-bold text-slate-800 font-mono">150.0.2-beta.25</span>
+                      <span class="text-[10px] bg-slate-200 text-slate-700 font-semibold px-2 py-0.5 rounded">daijro / stable</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-slate-500 mt-2">
+                      <span>存储体积: 504 MB</span>
+                      <div class="flex gap-2">
+                        <button data-proto-action-id="5a3962cd-e78a-446b-b46f-c1f03d52467d" class="text-teal-600 hover:text-teal-700 font-medium">设为 Active</button>
+                        <span class="text-slate-300">|</span>
+                        <button class="text-rose-600 hover:text-rose-700 font-medium">卸载</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 下载中版本 -->
+                  <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <div class="flex items-center justify-between mb-1.5">
+                      <span class="text-xs font-bold text-slate-800 font-mono">152.0.4-beta.29</span>
+                      <span class="text-[10px] bg-orange-100 text-orange-800 font-semibold px-2 py-0.5 rounded">daijro / prerelease</span>
+                    </div>
+                    <div class="space-y-1.5 mt-2">
+                      <div class="w-full bg-slate-200 rounded-full h-1.5">
+                        <div class="bg-teal-600 h-1.5 rounded-full" style="width: 65%"></div>
+                      </div>
+                      <div class="flex items-center justify-between text-[10px] text-slate-400">
+                        <span>正在下载 (65%)</span>
+                        <span>1.2 MB/s</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 远程可下载 -->
+                  <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <div class="flex items-center justify-between mb-1.5">
+                      <span class="text-xs font-bold text-slate-800 font-mono">151.0.1-beta.20</span>
+                      <span class="text-[10px] bg-blue-100 text-blue-800 font-semibold px-2 py-0.5 rounded">远程可用</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-slate-500 mt-2">
+                      <span class="text-slate-400">未安装</span>
+                      <button data-proto-action-id="10b65f3f-42ee-45df-a044-f952f4c94b76" class="text-teal-600 hover:text-teal-700 font-semibold flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        安装
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- 底部 GeoIP 数据库管理 -->
+              <div class="mt-6 pt-4 border-t border-slate-200">
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="p-1 bg-amber-50 text-amber-600 rounded">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                  </span>
+                  <span class="text-xs font-semibold text-slate-700">地理IP数据库 (GeoIP)</span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-slate-500">
+                  <div>
+                    <p class="font-mono">版本: MaxMind 2026.07.24</p>
+                    <p class="text-[10px] text-slate-400 mt-0.5">上次校验: 2小时前 状态已对齐</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button data-proto-action-id="b13b7352-cc28-4034-9ca9-25fbc74187fa" class="text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1 border border-teal-200 hover:bg-teal-50 px-2 py-1 rounded transition-all">
+                      从远程源同步
+                    </button>
+                    <button class="text-slate-600 hover:text-slate-800 font-medium flex items-center gap-1 border border-slate-200 hover:bg-slate-50 px-2 py-1 rounded transition-all">
+                      打开 GeoIP 目录
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+          </div>
+
+        </div>
+
+      </main>
+    </div>
+
+  </div>
+</div>
+  </body>
+</html>
