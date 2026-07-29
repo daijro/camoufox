@@ -1,5 +1,7 @@
 import { isRemoteMode } from '@/lib/api'
+import { useDataStore } from '@/stores/data'
 import { useUiStore } from '@/stores/ui'
+import { countRunning } from '@/types/console'
 
 type TopBarProps = {
   title?: string
@@ -9,13 +11,18 @@ type TopBarProps = {
 
 export function TopBar({
   title = '环境管理中心',
-  runningCount = 0,
-  totalCount = 0,
+  runningCount,
+  totalCount,
 }: TopBarProps) {
   const searchQuery = useUiStore((s) => s.searchQuery)
   const setSearchQuery = useUiStore((s) => s.setSearchQuery)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
+  const profiles = useDataStore((s) => s.profiles)
   const remote = isRemoteMode()
+
+  const active = profiles.filter((p) => !p.deletedAt)
+  const resolvedRunning = runningCount ?? countRunning(active)
+  const resolvedTotal = totalCount ?? active.length
 
   return (
     <header className="z-20 flex h-16 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-8">
@@ -42,9 +49,9 @@ export function TopBar({
       <div className="flex items-center gap-4 text-xs text-slate-500">
         <span>
           运行中{' '}
-          <strong className="font-semibold text-teal-600">{runningCount}</strong>
+          <strong className="font-semibold text-teal-600">{resolvedRunning}</strong>
           {' / '}
-          总计 <strong className="font-semibold text-slate-700">{totalCount}</strong>
+          总计 <strong className="font-semibold text-slate-700">{resolvedTotal}</strong>
         </span>
         <span
           className={
