@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import sqlite3
 import threading
 import time
@@ -13,11 +14,13 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from .fp_templates import dumps_config, row_to_template, sample_fingerprint_config
 from .launch import check_proxy_exit, close_handle, mock_launch, real_launch
 
 # ---------------------------------------------------------------------------
@@ -122,7 +125,20 @@ def init_db() -> None:
               ws_endpoint TEXT,
               profile_path TEXT,
               disk_mb REAL,
-              logs_json TEXT
+              logs_json TEXT,
+              template_id TEXT
+            );
+            CREATE TABLE IF NOT EXISTS fingerprint_templates (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              kind TEXT NOT NULL,
+              os TEXT NOT NULL,
+              align_geo INTEGER NOT NULL DEFAULT 1,
+              webrtc TEXT NOT NULL DEFAULT 'follow',
+              use_preset INTEGER NOT NULL DEFAULT 0,
+              config_json TEXT,
+              is_default INTEGER NOT NULL DEFAULT 0,
+              created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS settings (
               key TEXT PRIMARY KEY,
@@ -130,10 +146,54 @@ def init_db() -> None:
             );
             """
         )
-        # Seed if empty
+        # Migrations for older DBs
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(profiles)").fetchall()}
+        if "template_id" not in cols:
+            conn.execute("ALTER TABLE profiles ADD COLUMN template_id TEXT")
+
+        seed_fingerprint_templates(conn)
+
         n = conn.execute("SELECT COUNT(*) AS c FROM profiles").fetchone()["c"]
         if n == 0:
             seed(conn)
+
+
+def seed_fingerprint_templates(conn: sqlite3.Connection) -> None:
+    n = conn.execute("SELECT COUNT(*) AS c FROM fingerprint_templates").fetchone()["c"]
+    if n > 0:
+        return
+    stamp = now_stamp()
+    conn.executemany(
+        """INSERT INTO fingerprint_templates
+        (id,name,kind,os,align_geo,webrtc,use_preset,config_json,is_default,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        [
+            (
+                "tpl_auto",
+                "自动随机（默认）",
+                "system",
+                "any",
+                1,
+                "follow",
+                0,
+                None,
+                1,
+                stamp,
+            ),
+            (
+                "tpl_preset",
+                "真实设备预设采样",
+                "system",
+                "any",
+                1,
+                "follow",
+                1,
+                None,
+                0,
+                stamp,
+            ),
+        ],
+    )
 
 
 def seed(conn: sqlite3.Connection) -> None:
@@ -195,8 +255,8 @@ def seed(conn: sqlite3.Connection) -> None:
         """INSERT INTO profiles
         (id,name,platform,note,group_id,tags_json,proxy_id,proxy_label,fingerprint,
          fingerprint_strategy,os,align_geo,cookies_json,start_url,headless,status,
-         last_started_at,deleted_at,pid,ws_endpoint,profile_path,disk_mb,logs_json)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+         last_started_at,deleted_at,pid,ws_endpoint,profile_path,disk_mb,logs_json,template_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             pid,
             "示例环境_US",
@@ -224,6 +284,7 @@ def seed(conn: sqlite3.Connection) -> None:
                 [{"at": now_stamp(), "level": "info", "message": "种子环境已创建"}],
                 ensure_ascii=False,
             ),
+            None,
         ),
     )
     conn.execute(
@@ -257,6 +318,7 @@ def row_to_profile(r: sqlite3.Row) -> dict[str, Any]:
         "profilePath": r["profile_path"],
         "diskMb": r["disk_mb"] or 0,
         "logs": json.loads(r["logs_json"] or "[]"),
+        "templateId": r["template_id"] if "template_id" in r.keys() else None,
     }
 
 
@@ -305,6 +367,7 @@ class ProfileCreate(BaseModel):
     startUrl: str = ""
     fingerprint: Optional[str] = None
     headless: bool = False
+    templateId: Optional[str] = None
 
 
 class ProfilePatch(BaseModel):
@@ -320,6 +383,10 @@ class ProfilePatch(BaseModel):
     headless: Optional[bool] = None
     status: Optional[str] = None
     diskMb: Optional[float] = None
+    fingerprintStrategy: Optional[str] = None
+    templateId: Optional[str] = None
+    os: Optional[str] = None
+    alignGeoWithProxy: Optional[bool] = None
 
 
 class ProxyCreate(BaseModel):
@@ -331,6 +398,10 @@ class ProxyCreate(BaseModel):
     password: Optional[str] = None
 
 
+class ProxyImportBody(BaseModel):
+    text: str
+
+
 class GroupCreate(BaseModel):
     name: str
     parentId: Optional[str] = None
@@ -339,6 +410,26 @@ class GroupCreate(BaseModel):
 class TagCreate(BaseModel):
     name: str
     color: str = "#0d9488"
+
+
+class TemplateCreate(BaseModel):
+    name: str
+    os: str = "windows"
+    alignGeo: bool = True
+    webrtc: str = "follow"
+    usePreset: bool = False
+
+
+class TemplatePatch(BaseModel):
+    name: Optional[str] = None
+    os: Optional[str] = None
+    alignGeo: Optional[bool] = None
+    webrtc: Optional[str] = None
+    usePreset: Optional[bool] = None
+
+
+class BrowserActiveBody(BaseModel):
+    version: str
 
 
 # ---------------------------------------------------------------------------
@@ -442,9 +533,26 @@ async def start_profile_async(profile_id: str) -> dict[str, Any]:
                     "SELECT * FROM proxies WHERE id=?", (profile["proxyId"],)
                 ).fetchone()
 
+        template_row = None
+        tid = profile.get("templateId")
+        if tid or (profile.get("fingerprintStrategy") or "").lower() == "template":
+            with db() as conn:
+                if tid:
+                    t = conn.execute(
+                        "SELECT * FROM fingerprint_templates WHERE id=?", (tid,)
+                    ).fetchone()
+                else:
+                    t = conn.execute(
+                        "SELECT * FROM fingerprint_templates WHERE is_default=1 LIMIT 1"
+                    ).fetchone()
+                if t:
+                    template_row = row_to_template(t)
+
         try:
             if REAL_LAUNCH:
-                result = await real_launch(profile, proxy_row=proxy_row)
+                result = await real_launch(
+                    profile, proxy_row=proxy_row, template_row=template_row
+                )
             else:
                 result = await mock_launch(profile)
         except HTTPException:
@@ -578,18 +686,26 @@ def get_profile_route(profile_id: str, authorization: Optional[str] = Header(Non
 @app.post("/api/v1/profiles")
 def create_profile(body: ProfileCreate, authorization: Optional[str] = Header(None)):
     require_token(authorization)
+    if body.fingerprintStrategy == "template" and not body.templateId:
+        raise HTTPException(400, "fingerprintStrategy=template 时需要 templateId")
     pid = uid("prof")
     path = str(PROFILE_ROOT / pid)
     Path(path).mkdir(parents=True, exist_ok=True)
     os_label = {"windows": "Win", "macos": "Mac", "linux": "Linux"}.get(body.os, "Win")
     fp = body.fingerprint or f"{os_label} · FF 152 · 1920×1080"
     with db() as conn:
+        if body.templateId:
+            t = conn.execute(
+                "SELECT id FROM fingerprint_templates WHERE id=?", (body.templateId,)
+            ).fetchone()
+            if not t:
+                raise HTTPException(400, "templateId 不存在")
         conn.execute(
             """INSERT INTO profiles
             (id,name,platform,note,group_id,tags_json,proxy_id,proxy_label,fingerprint,
              fingerprint_strategy,os,align_geo,cookies_json,start_url,headless,status,
-             last_started_at,deleted_at,pid,ws_endpoint,profile_path,disk_mb,logs_json)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+             last_started_at,deleted_at,pid,ws_endpoint,profile_path,disk_mb,logs_json,template_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 pid,
                 body.name,
@@ -617,6 +733,7 @@ def create_profile(body: ProfileCreate, authorization: Optional[str] = Header(No
                     [{"at": now_stamp(), "level": "info", "message": "环境已创建"}],
                     ensure_ascii=False,
                 ),
+                body.templateId,
             ),
         )
     return get_profile(pid)
@@ -638,6 +755,9 @@ def patch_profile(
         "startUrl": "start_url",
         "status": "status",
         "diskMb": "disk_mb",
+        "fingerprintStrategy": "fingerprint_strategy",
+        "templateId": "template_id",
+        "os": "os",
     }
     data = body.model_dump(exclude_unset=True)
     if not data:
@@ -650,6 +770,9 @@ def patch_profile(
             vals.append(json.dumps(v, ensure_ascii=False))
         elif k == "headless":
             fields.append("headless=?")
+            vals.append(1 if v else 0)
+        elif k == "alignGeoWithProxy":
+            fields.append("align_geo=?")
             vals.append(1 if v else 0)
         elif k in mapping:
             fields.append(f"{mapping[k]}=?")
@@ -706,7 +829,15 @@ def restore_profile(profile_id: str, authorization: Optional[str] = Header(None)
 def delete_profile(profile_id: str, authorization: Optional[str] = Header(None)):
     require_token(authorization)
     with db() as conn:
+        row = conn.execute(
+            "SELECT profile_path FROM profiles WHERE id=?", (profile_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Profile not found")
+        path = row["profile_path"]
         conn.execute("DELETE FROM profiles WHERE id=?", (profile_id,))
+    if path:
+        shutil.rmtree(path, ignore_errors=True)
     return {"ok": True}
 
 
@@ -797,11 +928,15 @@ def check_proxy(proxy_id: str, authorization: Optional[str] = Header(None)):
 def delete_proxy(proxy_id: str, authorization: Optional[str] = Header(None)):
     require_token(authorization)
     with db() as conn:
-        conn.execute("DELETE FROM proxies WHERE id=?", (proxy_id,))
-        conn.execute(
-            "UPDATE profiles SET proxy_id=NULL, proxy_label=NULL WHERE proxy_id=?",
+        n = conn.execute(
+            "SELECT COUNT(*) AS c FROM profiles WHERE proxy_id=? AND deleted_at IS NULL",
             (proxy_id,),
-        )
+        ).fetchone()["c"]
+        if n > 0:
+            raise HTTPException(
+                409, f"代理仍被 {n} 个环境引用，请先解绑后再删除"
+            )
+        conn.execute("DELETE FROM proxies WHERE id=?", (proxy_id,))
     return {"ok": True}
 
 
@@ -901,14 +1036,388 @@ def delete_tag(tag_id: str, authorization: Optional[str] = Header(None)):
 @app.get("/api/v1/browser/versions")
 def browser_versions(authorization: Optional[str] = Header(None)):
     require_token(authorization)
+    installed: list[dict[str, Any]] = []
     active = CAMOUFOX_VERSION
+    note = "全局 Active；切换调用 multiversion.set_active"
+    try:
+        from .launch import _ensure_camoufox_path
+
+        _ensure_camoufox_path()
+        from camoufox import multiversion as mv
+
+        for iv in mv.list_installed():
+            installed.append(
+                {
+                    "version": iv.version.full_string
+                    if hasattr(iv.version, "full_string")
+                    else str(iv.version),
+                    "path": iv.relative_path,
+                    "repo": getattr(iv, "repo_name", None),
+                }
+            )
+        cfg = mv.load_config()
+        active_rel = cfg.get("active_version")
+        if active_rel:
+            for item in installed:
+                if item["path"] == active_rel:
+                    active = item["version"]
+                    break
+            else:
+                active = str(active_rel)
+        elif installed:
+            active = installed[0]["version"]
+    except Exception as e:
+        note = f"无法扫描本机安装（{e}）；返回 settings 中的版本"
+        with db() as conn:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key='camoufox_version'"
+            ).fetchone()
+        if row:
+            active = row["value"]
+        if not installed:
+            installed = [{"version": active, "path": None, "repo": None}]
+
+    with db() as conn:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key='camoufox_version'"
+        ).fetchone()
+        if row and not installed:
+            active = row["value"]
+
     return {
         "active": active,
-        "installed": [active],
+        "installed": installed,
         "remote": [
             {"version": "152.0.4-beta.28", "channel": "beta"},
             {"version": "150.0.2-beta.25", "channel": "beta"},
             {"version": "135.0.1-beta.23", "channel": "beta"},
         ],
-        "note": "全局 Active；真实切换可对接 camoufox multiversion / gui",
+        "note": note,
     }
+
+
+@app.post("/api/v1/browser/active")
+def browser_set_active(body: BrowserActiveBody, authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    from .launch import _ensure_camoufox_path
+
+    _ensure_camoufox_path()
+    try:
+        from camoufox import multiversion as mv
+
+        path = mv.find_installed_version(body.version)
+        if path is None:
+            # try match by full_string in list
+            for iv in mv.list_installed():
+                full = (
+                    iv.version.full_string
+                    if hasattr(iv.version, "full_string")
+                    else str(iv.version)
+                )
+                if full == body.version or iv.relative_path == body.version:
+                    path = iv.path
+                    rel = iv.relative_path
+                    break
+            else:
+                raise HTTPException(404, f"未安装版本: {body.version}")
+        else:
+            installed = mv.list_installed()
+            rel = next(
+                (iv.relative_path for iv in installed if iv.path == path),
+                None,
+            )
+            if not rel:
+                raise HTTPException(404, f"未安装版本: {body.version}")
+        mv.set_active(rel)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"set_active 失败: {e}") from e
+
+    with db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            ("camoufox_version", body.version),
+        )
+    return browser_versions(authorization)
+
+
+@app.post("/api/v1/browser/refresh")
+def browser_refresh(authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    return browser_versions(authorization)
+
+
+# ---------------------------------------------------------------------------
+# Fingerprint templates
+# ---------------------------------------------------------------------------
+
+
+def get_template(template_id: str) -> dict[str, Any]:
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM fingerprint_templates WHERE id=?", (template_id,)
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "Template not found")
+    return row_to_template(row)
+
+
+@app.get("/api/v1/fingerprint-templates")
+def list_templates(authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM fingerprint_templates ORDER BY kind DESC, name"
+        ).fetchall()
+    return [row_to_template(r) for r in rows]
+
+
+@app.post("/api/v1/fingerprint-templates")
+def create_template(body: TemplateCreate, authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    tid = uid("tpl")
+    with db() as conn:
+        conn.execute(
+            """INSERT INTO fingerprint_templates
+            (id,name,kind,os,align_geo,webrtc,use_preset,config_json,is_default,created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (
+                tid,
+                body.name.strip(),
+                "custom",
+                body.os,
+                1 if body.alignGeo else 0,
+                body.webrtc if body.webrtc in ("follow", "disable") else "follow",
+                1 if body.usePreset else 0,
+                None,
+                0,
+                now_stamp(),
+            ),
+        )
+    return get_template(tid)
+
+
+@app.patch("/api/v1/fingerprint-templates/{template_id}")
+def patch_template(
+    template_id: str, body: TemplatePatch, authorization: Optional[str] = Header(None)
+):
+    require_token(authorization)
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM fingerprint_templates WHERE id=?", (template_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Template not found")
+        if row["kind"] == "system":
+            # system: only name display change blocked; allow nothing critical
+            data = body.model_dump(exclude_unset=True)
+            if set(data.keys()) - {"name"}:
+                raise HTTPException(400, "系统预设仅可改名称展示，或请复制后编辑")
+        data = body.model_dump(exclude_unset=True)
+        fields = []
+        vals: list[Any] = []
+        mapping = {
+            "name": "name",
+            "os": "os",
+            "webrtc": "webrtc",
+        }
+        for k, v in data.items():
+            if k == "alignGeo":
+                fields.append("align_geo=?")
+                vals.append(1 if v else 0)
+            elif k == "usePreset":
+                fields.append("use_preset=?")
+                vals.append(1 if v else 0)
+            elif k in mapping:
+                fields.append(f"{mapping[k]}=?")
+                vals.append(v)
+        if fields:
+            vals.append(template_id)
+            conn.execute(
+                f"UPDATE fingerprint_templates SET {', '.join(fields)} WHERE id=?",
+                vals,
+            )
+    return get_template(template_id)
+
+
+@app.post("/api/v1/fingerprint-templates/{template_id}/sample")
+def sample_template(template_id: str, authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM fingerprint_templates WHERE id=?", (template_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Template not found")
+        if row["kind"] == "system" and row["id"] == "tpl_auto":
+            raise HTTPException(400, "自动随机无需采样固化")
+        os_name = row["os"] if row["os"] != "any" else "windows"
+        use_preset = bool(row["use_preset"]) or row["id"] == "tpl_preset"
+    try:
+        cfg = sample_fingerprint_config(os_name=os_name, use_preset=use_preset)
+        raw = dumps_config(cfg)
+    except Exception as e:
+        raise HTTPException(500, f"采样失败: {e}") from e
+    with db() as conn:
+        conn.execute(
+            "UPDATE fingerprint_templates SET config_json=? WHERE id=?",
+            (raw, template_id),
+        )
+    return get_template(template_id)
+
+
+@app.post("/api/v1/fingerprint-templates/{template_id}/default")
+def set_default_template(template_id: str, authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    with db() as conn:
+        row = conn.execute(
+            "SELECT id FROM fingerprint_templates WHERE id=?", (template_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Template not found")
+        conn.execute("UPDATE fingerprint_templates SET is_default=0")
+        conn.execute(
+            "UPDATE fingerprint_templates SET is_default=1 WHERE id=?",
+            (template_id,),
+        )
+    return get_template(template_id)
+
+
+@app.post("/api/v1/fingerprint-templates/{template_id}/copy")
+def copy_template(template_id: str, authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM fingerprint_templates WHERE id=?", (template_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Template not found")
+        nid = uid("tpl")
+        conn.execute(
+            """INSERT INTO fingerprint_templates
+            (id,name,kind,os,align_geo,webrtc,use_preset,config_json,is_default,created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (
+                nid,
+                f"{row['name']} 副本",
+                "custom",
+                row["os"] if row["os"] != "any" else "windows",
+                row["align_geo"],
+                row["webrtc"],
+                row["use_preset"],
+                row["config_json"],
+                0,
+                now_stamp(),
+            ),
+        )
+    return get_template(nid)
+
+
+@app.delete("/api/v1/fingerprint-templates/{template_id}")
+def delete_template(template_id: str, authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM fingerprint_templates WHERE id=?", (template_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Template not found")
+        if row["kind"] == "system":
+            raise HTTPException(400, "系统预设不可删除")
+        n = conn.execute(
+            "SELECT COUNT(*) AS c FROM profiles WHERE template_id=?",
+            (template_id,),
+        ).fetchone()["c"]
+        if n > 0:
+            raise HTTPException(409, f"模板仍被 {n} 个环境引用")
+        was_default = bool(row["is_default"])
+        conn.execute(
+            "DELETE FROM fingerprint_templates WHERE id=?", (template_id,)
+        )
+        if was_default:
+            conn.execute(
+                "UPDATE fingerprint_templates SET is_default=1 WHERE id='tpl_auto'"
+            )
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Proxy batch import
+# ---------------------------------------------------------------------------
+
+
+def parse_proxy_line(line: str) -> Optional[dict[str, Any]]:
+    line = line.strip()
+    if not line or line.startswith("#"):
+        return None
+    protocol = "socks5"
+    username = None
+    password = None
+    host = None
+    port = None
+    if "://" in line:
+        u = urlparse(line)
+        protocol = (u.scheme or "socks5").lower()
+        host = u.hostname
+        port = u.port
+        username = u.username
+        password = u.password
+    else:
+        parts = line.split(":")
+        if len(parts) == 2:
+            host, port_s = parts
+            port = int(port_s)
+        elif len(parts) == 4:
+            host, port_s, username, password = parts
+            port = int(port_s)
+        elif len(parts) >= 5 and parts[0].lower() in ("socks5", "http", "https"):
+            protocol = parts[0].lower()
+            host, port_s = parts[1], parts[2]
+            port = int(port_s)
+            if len(parts) >= 5:
+                username, password = parts[3], parts[4]
+        else:
+            return None
+    if not host or not port:
+        return None
+    return {
+        "protocol": protocol if protocol in ("socks5", "http", "https") else "socks5",
+        "host": host,
+        "port": int(port),
+        "username": username,
+        "password": password,
+        "alias": f"{host}:{port}",
+    }
+
+
+@app.post("/api/v1/proxies/import")
+def import_proxies(body: ProxyImportBody, authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    created = []
+    errors = []
+    for i, line in enumerate(body.text.splitlines(), start=1):
+        parsed = parse_proxy_line(line)
+        if parsed is None:
+            if line.strip() and not line.strip().startswith("#"):
+                errors.append({"line": i, "error": "无法解析", "raw": line.strip()})
+            continue
+        pid = uid("px")
+        with db() as conn:
+            conn.execute(
+                """INSERT INTO proxies
+                (id,alias,protocol,host,port,username,password,status)
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (
+                    pid,
+                    parsed["alias"],
+                    parsed["protocol"],
+                    parsed["host"],
+                    parsed["port"],
+                    parsed["username"],
+                    parsed["password"],
+                    "unknown",
+                ),
+            )
+        created.append(get_proxy(pid))
+    return {"created": created, "errors": errors, "ok": len(created)}

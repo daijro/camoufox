@@ -18,10 +18,14 @@ export function ProfileNewPage() {
   const groups = useDataStore((s) => s.groups)
   const proxies = useDataStore((s) => s.proxies)
   const tags = useDataStore((s) => s.tags)
+  const templates = useDataStore((s) => s.templates)
   const createProfile = useDataStore((s) => s.createProfile)
   const startProfile = useDataStore((s) => s.startProfile)
   const addGroup = useDataStore((s) => s.addGroup)
   const addProxy = useDataStore((s) => s.addProxy)
+
+  const defaultTpl = templates.find((t) => t.isDefault)
+  const customTemplates = templates.filter((t) => t.kind === 'custom' || t.hasConfig)
 
   const [name, setName] = useState('')
   const [platform, setPlatform] = useState('')
@@ -39,7 +43,20 @@ export function ProfileNewPage() {
     password: '',
     alias: '',
   })
-  const [strategy, setStrategy] = useState<FingerprintStrategy>('auto')
+  const [strategy, setStrategy] = useState<FingerprintStrategy>(
+    defaultTpl && defaultTpl.id !== 'tpl_auto'
+      ? defaultTpl.usePreset
+        ? 'preset'
+        : defaultTpl.kind === 'custom' || defaultTpl.hasConfig
+          ? 'template'
+          : 'auto'
+      : 'auto',
+  )
+  const [templateId, setTemplateId] = useState(
+    defaultTpl && (defaultTpl.kind === 'custom' || defaultTpl.hasConfig)
+      ? defaultTpl.id
+      : '',
+  )
   const [os, setOs] = useState<OsChoice>('windows')
   const [alignGeo, setAlignGeo] = useState(true)
   const [cookiesJson, setCookiesJson] = useState('[]')
@@ -106,6 +123,10 @@ export function ProfileNewPage() {
       }
 
       setError('')
+      if (strategy === 'template' && !templateId) {
+        setError('请选择已保存模板')
+        return
+      }
       const profile = await createProfile({
         name: name.trim(),
         platform: platform.trim(),
@@ -120,6 +141,7 @@ export function ProfileNewPage() {
         cookiesJson,
         startUrl,
         fingerprint: fingerprintSummary(os),
+        templateId: strategy === 'template' ? templateId : null,
       })
       if (andStart) await startProfile(profile.id)
       navigate('/profiles')
@@ -283,7 +305,7 @@ export function ProfileNewPage() {
                   [
                     ['auto', '自动随机', 'BrowserForge 默认'],
                     ['preset', '真实预设', 'fingerprint_preset'],
-                    ['template', '已保存模板', '固定 seed'],
+                    ['template', '已保存模板', '固定 config'],
                   ] as const
                 ).map(([key, title, desc]) => (
                   <button
@@ -302,7 +324,30 @@ export function ProfileNewPage() {
                   </button>
                 ))}
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              {strategy === 'template' ? (
+                <Field label="选择模板" hint="需先在指纹策略页创建并采样固化">
+                  <Select
+                    value={templateId}
+                    onChange={(e) => setTemplateId(e.target.value)}
+                  >
+                    <option value="">请选择…</option>
+                    {customTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                        {t.hasConfig ? '' : '（未固化）'}
+                      </option>
+                    ))}
+                    {templates
+                      .filter((t) => t.kind === 'system' && t.id === 'tpl_preset')
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                  </Select>
+                </Field>
+              ) : null}
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field label="操作系统">
                   <Select value={os} onChange={(e) => setOs(e.target.value as OsChoice)}>
                     <option value="windows">Windows</option>

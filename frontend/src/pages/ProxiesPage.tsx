@@ -15,6 +15,9 @@ export function ProxiesPage() {
 
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const [q, setQ] = useState('')
+  const [bulk, setBulk] = useState('')
+  const [bulkMsg, setBulkMsg] = useState('')
+  const importProxiesText = useDataStore((s) => s.importProxiesText)
   const [form, setForm] = useState({
     alias: '',
     protocol: 'socks5' as ProxyProtocol,
@@ -125,6 +128,37 @@ export function ProxiesPage() {
           </div>
         </section>
 
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="mb-2 text-sm font-bold">批量粘贴导入</h3>
+          <p className="mb-3 text-[11px] text-slate-500">
+            每行：host:port 或 host:port:user:pass 或 socks5://user:pass@host:port
+          </p>
+          <textarea
+            className="min-h-[88px] w-full rounded-lg border border-slate-200 p-3 font-mono text-xs"
+            value={bulk}
+            onChange={(e) => setBulk(e.target.value)}
+          />
+          <div className="mt-3 flex items-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={() =>
+                void (async () => {
+                  try {
+                    const res = await importProxiesText(bulk)
+                    setBulkMsg(`导入 ${res.ok} 条` + (res.errors.length ? `，失败 ${res.errors.length}` : ''))
+                    if (res.ok) setBulk('')
+                  } catch (e) {
+                    setBulkMsg(e instanceof Error ? e.message : String(e))
+                  }
+                })()
+              }
+            >
+              导入
+            </Button>
+            {bulkMsg ? <span className="text-xs text-slate-500">{bulkMsg}</span> : null}
+          </div>
+        </section>
+
         <div className="flex items-center justify-between gap-3">
           <input
             value={q}
@@ -179,7 +213,18 @@ export function ProxiesPage() {
                     <Button variant="ghost" onClick={() => setDrawerId(p.id)}>
                       详情
                     </Button>
-                    <Button variant="danger" onClick={() => void removeProxy(p.id)}>
+                    <Button
+                      variant="danger"
+                      onClick={() =>
+                        void (async () => {
+                          try {
+                            await removeProxy(p.id)
+                          } catch (e) {
+                            window.alert(e instanceof Error ? e.message : String(e))
+                          }
+                        })()
+                      }
+                    >
                       删除
                     </Button>
                   </td>

@@ -6,6 +6,7 @@ import {
   fingerprintSummary,
   nowStamp,
   type CreateProfileInput,
+  type FingerprintTemplate,
   type Group,
   type Profile,
   type ProfileStatus,
@@ -224,6 +225,35 @@ const INITIAL_PROFILES: Profile[] = [
   },
 ]
 
+const INITIAL_TEMPLATES: FingerprintTemplate[] = [
+  {
+    id: 'tpl_auto',
+    name: '自动随机（默认）',
+    kind: 'system',
+    os: 'any',
+    alignGeo: true,
+    webrtc: 'follow',
+    usePreset: false,
+    configJson: null,
+    hasConfig: false,
+    isDefault: true,
+    createdAt: nowStamp(),
+  },
+  {
+    id: 'tpl_preset',
+    name: '真实设备预设采样',
+    kind: 'system',
+    os: 'any',
+    alignGeo: true,
+    webrtc: 'follow',
+    usePreset: true,
+    configJson: null,
+    hasConfig: false,
+    isDefault: false,
+    createdAt: nowStamp(),
+  },
+]
+
 type Settings = {
   apiPort: number
   apiToken: string
@@ -239,6 +269,7 @@ type DataState = {
   proxies: Proxy[]
   groups: Group[]
   tags: Tag[]
+  templates: FingerprintTemplate[]
   settings: Settings
   hydrated: boolean
   hydrateError: string | null
@@ -263,7 +294,9 @@ type DataState = {
   restore: (id: string) => Promise<void>
   purge: (id: string) => Promise<void>
   purgeAll: () => Promise<void>
-  importProfiles: (rows: CreateProfileInput[]) => Promise<number>
+  importProfiles: (
+    rows: CreateProfileInput[],
+  ) => Promise<{ ok: number; fail: number; errors: string[] }>
   addGroup: (name: string, parentId?: string | null) => Promise<Group>
   renameGroup: (id: string, name: string) => Promise<void>
   removeGroup: (id: string) => Promise<void>
@@ -275,6 +308,19 @@ type DataState = {
   updateProxy: (id: string, patch: Partial<Proxy>) => void
   removeProxy: (id: string) => Promise<void>
   checkProxy: (id: string) => Promise<void>
+  importProxiesText: (text: string) => Promise<{ ok: number; errors: string[] }>
+  createTemplate: (input: {
+    name: string
+    os?: string
+    alignGeo?: boolean
+    webrtc?: string
+    usePreset?: boolean
+  }) => Promise<FingerprintTemplate>
+  sampleTemplate: (id: string) => Promise<void>
+  setDefaultTemplate: (id: string) => Promise<void>
+  copyTemplate: (id: string) => Promise<void>
+  removeTemplate: (id: string) => Promise<void>
+  refreshTemplates: () => Promise<void>
   updateSettings: (patch: Partial<Settings>) => void
 }
 
@@ -289,6 +335,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   proxies: isRemoteMode() ? [] : INITIAL_PROXIES,
   groups: isRemoteMode() ? [] : INITIAL_GROUPS,
   tags: isRemoteMode() ? [] : INITIAL_TAGS,
+  templates: isRemoteMode() ? [] : INITIAL_TEMPLATES,
   settings: {
     apiPort: 50325,
     apiToken: 'cf_dev_token_mock_8f3a',
@@ -308,6 +355,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       proxies: snap.proxies,
       groups: snap.groups,
       tags: snap.tags,
+      templates: snap.templates ?? [],
       settings: {
         apiPort: snap.settings.apiPort,
         apiToken: snap.settings.apiToken,
@@ -400,6 +448,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       profilePath: `${get().settings.profileRoot}/${id}`,
       diskMb: 12,
       logs: [{ at: nowStamp(), level: 'info', message: '环境已创建' }],
+      templateId: input.templateId ?? null,
     }
     set((s) => ({ profiles: [profile, ...s.profiles] }))
     return profile
@@ -536,10 +585,17 @@ export const useDataStore = create<DataState>((set, get) => ({
   },
 
   importProfiles: async (rows) => {
+    let ok = 0
+    const errors: string[] = []
     for (const r of rows) {
-      await get().createProfile(r)
+      try {
+        await get().createProfile(r)
+        ok += 1
+      } catch (e) {
+        errors.push(`${r.name}: ${e instanceof Error ? e.message : String(e)}`)
+      }
     }
-    return rows.length
+    return { ok, fail: errors.length, errors }
   },
 
   addGroup: async (name, parentId = null) => {
@@ -658,6 +714,128 @@ export const useDataStore = create<DataState>((set, get) => ({
       country: ok ? 'US' : undefined,
       lastCheckedAt: nowStamp(),
     })
+  },
+
+  importProxiesText: async (text) => {
+    if (isRemoteMode()) {
+      const res = await remote.remoteImportProxies(text)
+      set((s) => ({ proxies: [...res.created, ...s.proxies] }))
+      return {
+        ok: res.ok,
+        errors: res.errors.map((e) => `L${e.line}: ${e.error} (${e.raw})`),
+      }
+    }
+    const lines = text.split(/\r?\n/)
+    let ok = 0
+    const errors: string[] = []
+    for (const line of lines) {
+      const t = line.trim()
+      if (!t || t.startsWith('#')) continue
+      const parts = t.split(':')
+      if (parts.length < 2) {
+        errors.push(`无法解析: ${t}`)
+        continue
+      }
+      await get().addProxy({
+        alias: `${parts[0]}:${parts[1]}`,
+        protocol: 'socks5',
+        host: parts[0],
+        port: Number(parts[1]),
+        username: parts[2],
+        password: parts[3],
+        status: 'unknown',
+      })
+      ok += 1
+    }
+    return { ok, errors }
+  },
+
+  createTemplate: async (input) => {
+    if (isRemoteMode()) {
+      const t = await remote.remoteCreateTemplate(input)
+      set((s) => ({ templates: [...s.templates, t] }))
+      return t
+    }
+    const t: FingerprintTemplate = {
+      id: uid('tpl'),
+      name: input.name,
+      kind: 'custom',
+      os: input.os ?? 'windows',
+      alignGeo: input.alignGeo ?? true,
+      webrtc: input.webrtc ?? 'follow',
+      usePreset: input.usePreset ?? false,
+      configJson: null,
+      hasConfig: false,
+      isDefault: false,
+      createdAt: nowStamp(),
+    }
+    set((s) => ({ templates: [...s.templates, t] }))
+    return t
+  },
+
+  sampleTemplate: async (id) => {
+    if (isRemoteMode()) {
+      const t = await remote.remoteSampleTemplate(id)
+      set((s) => ({
+        templates: s.templates.map((x) => (x.id === id ? t : x)),
+      }))
+      return
+    }
+    set((s) => ({
+      templates: s.templates.map((x) =>
+        x.id === id
+          ? { ...x, hasConfig: true, configJson: '{"mock":true}' }
+          : x,
+      ),
+    }))
+  },
+
+  setDefaultTemplate: async (id) => {
+    if (isRemoteMode()) {
+      const t = await remote.remoteSetDefaultTemplate(id)
+      set((s) => ({
+        templates: s.templates.map((x) => ({
+          ...x,
+          isDefault: x.id === t.id,
+        })),
+      }))
+      return
+    }
+    set((s) => ({
+      templates: s.templates.map((x) => ({ ...x, isDefault: x.id === id })),
+    }))
+  },
+
+  copyTemplate: async (id) => {
+    if (isRemoteMode()) {
+      const t = await remote.remoteCopyTemplate(id)
+      set((s) => ({ templates: [...s.templates, t] }))
+      return
+    }
+    const src = get().templates.find((x) => x.id === id)
+    if (!src) return
+    const t: FingerprintTemplate = {
+      ...src,
+      id: uid('tpl'),
+      name: `${src.name} 副本`,
+      kind: 'custom',
+      isDefault: false,
+      createdAt: nowStamp(),
+    }
+    set((s) => ({ templates: [...s.templates, t] }))
+  },
+
+  removeTemplate: async (id) => {
+    if (isRemoteMode()) {
+      await remote.remoteDeleteTemplate(id)
+    }
+    set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }))
+  },
+
+  refreshTemplates: async () => {
+    if (!isRemoteMode()) return
+    const templates = await remote.remoteListTemplates()
+    set({ templates })
   },
 
   updateSettings: (patch) =>

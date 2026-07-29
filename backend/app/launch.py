@@ -42,14 +42,36 @@ def build_proxy_dict(px_row: Any) -> Optional[dict[str, str]]:
     return proxy
 
 
-def fingerprint_kwargs(strategy: str) -> dict[str, Any]:
+def fingerprint_kwargs(
+    strategy: str,
+    template_row: Optional[dict[str, Any]] = None,
+) -> tuple[dict[str, Any], bool]:
+    """Build launch_options kwargs from strategy + optional template.
+
+    Returns (kwargs, template_fallback) where template_fallback means we had to
+    stand in with preset because no baked config was available.
+    """
     s = (strategy or "auto").lower()
     if s == "preset":
-        return {"fingerprint_preset": True}
+        return {"fingerprint_preset": True}, False
     if s == "template":
-        # Fixed-template seed not yet persisted; use preset sampling as stand-in.
-        return {"fingerprint_preset": True}
-    return {}
+        if template_row:
+            raw = template_row.get("configJson") or template_row.get("config_json")
+            if isinstance(raw, str) and raw.strip():
+                try:
+                    cfg = json.loads(raw)
+                    if isinstance(cfg, dict) and cfg:
+                        kw: dict[str, Any] = {"config": cfg}
+                        if (template_row.get("webrtc") or "follow") == "disable":
+                            kw["block_webrtc"] = True
+                        return kw, False
+                except json.JSONDecodeError:
+                    pass
+            if template_row.get("usePreset") or template_row.get("use_preset"):
+                return {"fingerprint_preset": True}, False
+            return {}, False
+        return {"fingerprint_preset": True}, True
+    return {}, False
 
 
 def extract_pid(context: Any) -> Optional[int]:
@@ -132,6 +154,7 @@ async def real_launch(
     profile: dict[str, Any],
     *,
     proxy_row: Any = None,
+    template_row: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Launch Camoufox persistent context; returns pid/ws and keeps handles for caller."""
     from playwright.async_api import async_playwright
@@ -146,17 +169,29 @@ async def real_launch(
 
     proxy = build_proxy_dict(proxy_row)
     os_map = {"windows": "windows", "macos": "macos", "linux": "linux"}
-    fp_kw = fingerprint_kwargs(profile.get("fingerprintStrategy") or "auto")
-    if (profile.get("fingerprintStrategy") or "").lower() == "template":
-        # Logged by caller via return flag
-        pass
+    launch_os = profile.get("os") or "windows"
+    if template_row:
+        tos = (template_row.get("os") or "").lower()
+        if tos in os_map:
+            launch_os = tos
+        # Template align_geo overrides profile when strategy is template
+        if "alignGeo" in template_row or "align_geo" in template_row:
+            align = template_row.get("alignGeo")
+            if align is None:
+                align = bool(template_row.get("align_geo"))
+            profile = {**profile, "alignGeoWithProxy": bool(align)}
+
+    fp_kw, template_fallback = fingerprint_kwargs(
+        profile.get("fingerprintStrategy") or "auto",
+        template_row,
+    )
 
     want_geoip = bool(profile.get("alignGeoWithProxy")) and proxy is not None
     geoip_fallback = False
 
     def _opts(use_geoip: bool) -> dict[str, Any]:
         o = launch_options(
-            os=os_map.get(profile.get("os") or "windows", "windows"),
+            os=os_map.get(launch_os, "windows"),
             headless=bool(profile.get("headless")),
             geoip=use_geoip,
             proxy=proxy,
@@ -211,7 +246,7 @@ async def real_launch(
         "wsEndpoint": None,
         "playwright": pw,
         "browser": context,
-        "templateFallback": (profile.get("fingerprintStrategy") or "").lower() == "template",
+        "templateFallback": template_fallback,
         "geoipFallback": geoip_fallback,
     }
 

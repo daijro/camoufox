@@ -1,5 +1,6 @@
 import type {
   CreateProfileInput,
+  FingerprintTemplate,
   Group,
   Profile,
   Proxy,
@@ -154,21 +155,87 @@ export async function remoteDeleteTag(id: string): Promise<void> {
   await apiFetch(`/api/v1/tags/${id}`, opts({ method: 'DELETE' }))
 }
 
+export async function remoteListTemplates(): Promise<FingerprintTemplate[]> {
+  return apiFetch('/api/v1/fingerprint-templates', opts())
+}
+
+export async function remoteCreateTemplate(body: {
+  name: string
+  os?: string
+  alignGeo?: boolean
+  webrtc?: string
+  usePreset?: boolean
+}): Promise<FingerprintTemplate> {
+  return apiFetch('/api/v1/fingerprint-templates', opts({
+    method: 'POST',
+    body: JSON.stringify(body),
+  }))
+}
+
+export async function remoteSampleTemplate(id: string): Promise<FingerprintTemplate> {
+  return apiFetch(`/api/v1/fingerprint-templates/${id}/sample`, opts({ method: 'POST' }))
+}
+
+export async function remoteSetDefaultTemplate(id: string): Promise<FingerprintTemplate> {
+  return apiFetch(`/api/v1/fingerprint-templates/${id}/default`, opts({ method: 'POST' }))
+}
+
+export async function remoteCopyTemplate(id: string): Promise<FingerprintTemplate> {
+  return apiFetch(`/api/v1/fingerprint-templates/${id}/copy`, opts({ method: 'POST' }))
+}
+
+export async function remoteDeleteTemplate(id: string): Promise<void> {
+  await apiFetch(`/api/v1/fingerprint-templates/${id}`, opts({ method: 'DELETE' }))
+}
+
+export async function remoteBrowserVersions(): Promise<{
+  active: string
+  installed: { version: string; path?: string | null; repo?: string | null }[]
+  remote: { version: string; channel: string }[]
+  note?: string
+}> {
+  return apiFetch('/api/v1/browser/versions', opts())
+}
+
+export async function remoteBrowserSetActive(version: string) {
+  return apiFetch('/api/v1/browser/active', opts({
+    method: 'POST',
+    body: JSON.stringify({ version }),
+  }))
+}
+
+export async function remoteBrowserRefresh() {
+  return apiFetch('/api/v1/browser/refresh', opts({ method: 'POST' }))
+}
+
+export async function remoteImportProxies(text: string): Promise<{
+  created: Proxy[]
+  errors: { line: number; error: string; raw: string }[]
+  ok: number
+}> {
+  return apiFetch('/api/v1/proxies/import', opts({
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  }))
+}
+
 export type HydrateSnapshot = {
   profiles: Profile[]
   proxies: Proxy[]
   groups: Group[]
   tags: Tag[]
+  templates: FingerprintTemplate[]
   settings: Awaited<ReturnType<typeof remoteSettings>>
 }
 
 export async function fetchHydrateSnapshot(): Promise<HydrateSnapshot> {
-  const [profiles, proxies, groups, tags, settings] = await Promise.all([
+  const [profiles, proxies, groups, tags, templates, settings] = await Promise.all([
     remoteListProfiles(true),
     remoteListProxies(),
     remoteListGroups(),
     remoteListTags(),
+    remoteListTemplates(),
     remoteSettings(),
   ])
-  return { profiles, proxies, groups, tags, settings }
+  return { profiles, proxies, groups, tags, templates, settings }
 }

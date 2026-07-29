@@ -31,6 +31,20 @@ export type Proxy = {
   status: 'ok' | 'fail' | 'unknown'
 }
 
+export type FingerprintTemplate = {
+  id: string
+  name: string
+  kind: 'system' | 'custom'
+  os: string
+  alignGeo: boolean
+  webrtc: 'follow' | 'disable' | string
+  usePreset: boolean
+  configJson: string | null
+  hasConfig: boolean
+  isDefault: boolean
+  createdAt: string
+}
+
 export type Profile = {
   id: string
   name: string
@@ -56,6 +70,7 @@ export type Profile = {
   profilePath: string
   diskMb: number
   logs: { at: string; level: string; message: string }[]
+  templateId?: string | null
 }
 
 export type CreateProfileInput = {
@@ -72,6 +87,7 @@ export type CreateProfileInput = {
   cookiesJson: string
   startUrl: string
   fingerprint?: string
+  templateId?: string | null
 }
 
 export function countRunning(profiles: Profile[]): number {
