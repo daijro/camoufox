@@ -1,0 +1,42 @@
+{
+  "manifest_version": 2,
+  "name": "Camoufox Console Home",
+  "version": "0.2.1",
+  "description": "启动首页：IP、指纹、平台账号、TOTP；Gemini 自动登录；不抢会话恢复",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "console-home@camoufox.local",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": [
+    "tabs",
+    "storage",
+    "clipboardWrite",
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "*://*.google.com/*",
+    "*://accounts.google.com/*",
+    "*://gemini.google.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://accounts.google.com/*",
+        "*://gemini.google.com/*"
+      ],
+      "js": ["sites/google-login.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "chrome_url_overrides": {
+    "newtab": "home.html"
+  },
+  "browser_action": {
+    "default_title": "Console Home",
+    "default_popup": "home.html"
+  }
+}

@@ -42,15 +42,88 @@ def build_proxy_dict(px_row: Any) -> Optional[dict[str, str]]:
     return proxy
 
 
+# Console launches use light chrome. Binary camoufox.cfg defaults to dark via
+# extensions.activeThemeID + ui.systemUsesDarkTheme=1 (the latter alone keeps
+# chrome/about:blank dark even when compact-light is selected).
+LIGHT_THEME_PREFS: dict[str, Any] = {
+    "extensions.activeThemeID": "firefox-compact-light@mozilla.org",
+    "ui.systemUsesDarkTheme": 0,
+    "userChrome.theme.fully_dark": False,
+    # 0=follow browser, 1=light, 2=dark
+    "layout.css.prefers-color-scheme.content-override": 1,
+}
+
+SESSION_RESTORE_PREFS: dict[str, Any] = {
+    "browser.startup.page": 3,  # resume previous session
+    "browser.sessionstore.resume_from_crash": True,
+    "browser.sessionstore.resume_session_once": False,
+    "browser.sessionstore.max_tabs_undo": 10,
+    "browser.sessionstore.max_windows_undo": 2,
+    "browser.sessionstore.restore_on_demand": False,
+    "browser.sessionstore.restore_tabs_lazily": False,
+    "browser.sessionstore.resuming_after_os_restart": True,
+}
+
+SESSION_NO_RESTORE_PREFS: dict[str, Any] = {
+    "browser.startup.page": 1,  # home
+    "browser.sessionstore.resume_from_crash": False,
+    "browser.sessionstore.max_tabs_undo": 0,
+    "browser.sessionstore.max_windows_undo": 0,
+}
+
+
+def _pref_js_value(v: Any) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return str(int(v) if isinstance(v, float) and v == int(v) else v)
+    # string
+    escaped = str(v).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def ensure_profile_prefs(
+    user_data_dir: str | Path,
+    *,
+    restore_session: bool = True,
+) -> dict[str, Any]:
+    """Write user.js (light theme + session policy) and return prefs for Playwright."""
+    path = Path(user_data_dir)
+    path.mkdir(parents=True, exist_ok=True)
+    prefs = dict(LIGHT_THEME_PREFS)
+    if restore_session:
+        prefs.update(SESSION_RESTORE_PREFS)
+    else:
+        prefs.update(SESSION_NO_RESTORE_PREFS)
+    lines = [
+        "// Camoufox console: chrome theme + session restore policy",
+    ]
+    for k, v in prefs.items():
+        lines.append(f'user_pref("{k}", {_pref_js_value(v)});')
+    lines.append("")
+    (path / "user.js").write_text("\n".join(lines), encoding="utf-8")
+    return prefs
+
+
+def ensure_light_theme_profile(user_data_dir: str | Path) -> None:
+    """Backward-compatible alias."""
+    ensure_profile_prefs(user_data_dir, restore_session=True)
+
+
+def profile_has_cookie_db(user_data_dir: str | Path) -> bool:
+    """True if Firefox cookies.sqlite already exists with meaningful size."""
+    db = Path(user_data_dir) / "cookies.sqlite"
+    try:
+        return db.is_file() and db.stat().st_size > 4096
+    except OSError:
+        return False
+
+
 def fingerprint_kwargs(
     strategy: str,
     template_row: Optional[dict[str, Any]] = None,
 ) -> tuple[dict[str, Any], bool]:
-    """Build launch_options kwargs from strategy + optional template.
-
-    Returns (kwargs, template_fallback) where template_fallback means we had to
-    stand in with preset because no baked config was available.
-    """
+    """Legacy helper — prefer resolve_locked_fingerprint via fp_templates."""
     s = (strategy or "auto").lower()
     if s == "preset":
         return {"fingerprint_preset": True}, False
@@ -155,6 +228,8 @@ async def real_launch(
     *,
     proxy_row: Any = None,
     template_row: Optional[dict[str, Any]] = None,
+    console_home_addon: Optional[str | Path] = None,
+    open_console_home: bool = False,
 ) -> dict[str, Any]:
     """Launch Camoufox persistent context; returns pid/ws and keeps handles for caller."""
     from playwright.async_api import async_playwright
@@ -163,9 +238,21 @@ async def real_launch(
     from camoufox.async_api import AsyncNewBrowser
     from camoufox.utils import launch_options
 
-    cookies = parse_cookies(profile.get("cookiesJson") or "[]")
+    from .fp_templates import resolve_locked_fingerprint
+
     user_data = profile["profilePath"]
     Path(user_data).mkdir(parents=True, exist_ok=True)
+    restore_session = profile.get("restoreSession", True)
+    if restore_session is None:
+        restore_session = True
+    firefox_prefs = ensure_profile_prefs(
+        user_data, restore_session=bool(restore_session)
+    )
+
+    should_inject_cookies = not profile_has_cookie_db(user_data)
+    cookies: list[dict[str, Any]] = []
+    if should_inject_cookies:
+        cookies = parse_cookies(profile.get("cookiesJson") or "[]")
 
     proxy = build_proxy_dict(proxy_row)
     os_map = {"windows": "windows", "macos": "macos", "linux": "linux"}
@@ -174,30 +261,35 @@ async def real_launch(
         tos = (template_row.get("os") or "").lower()
         if tos in os_map:
             launch_os = tos
-        # Template align_geo overrides profile when strategy is template
         if "alignGeo" in template_row or "align_geo" in template_row:
             align = template_row.get("alignGeo")
             if align is None:
                 align = bool(template_row.get("align_geo"))
             profile = {**profile, "alignGeoWithProxy": bool(align)}
 
-    fp_kw, template_fallback = fingerprint_kwargs(
-        profile.get("fingerprintStrategy") or "auto",
-        template_row,
+    fp_kw, config_to_persist, used_lock, template_fallback = resolve_locked_fingerprint(
+        profile, template_row
     )
 
     want_geoip = bool(profile.get("alignGeoWithProxy")) and proxy is not None
     geoip_fallback = False
+    addon_paths: list[str] = []
+    if console_home_addon:
+        addon_paths.append(str(console_home_addon))
 
     def _opts(use_geoip: bool) -> dict[str, Any]:
-        o = launch_options(
-            os=os_map.get(launch_os, "windows"),
-            headless=bool(profile.get("headless")),
-            geoip=use_geoip,
-            proxy=proxy,
-            humanize=True,
+        kw: dict[str, Any] = {
+            "os": os_map.get(launch_os, "windows"),
+            "headless": bool(profile.get("headless")),
+            "geoip": use_geoip,
+            "proxy": proxy,
+            "humanize": True,
+            "firefox_user_prefs": dict(firefox_prefs),
             **fp_kw,
-        )
+        }
+        if addon_paths:
+            kw["addons"] = list(addon_paths)
+        o = launch_options(**kw)
         o["user_data_dir"] = user_data
         return o
 
@@ -209,7 +301,6 @@ async def real_launch(
                 pw, persistent_context=True, from_options=_opts(want_geoip)
             )
         except Exception as e:
-            # Proxy geoip probe (ipecho etc.) often times out; still launch without geo.
             msg = str(e).lower()
             if want_geoip and ("ip address" in msg or "geoip" in msg or "ipecho" in msg):
                 geoip_fallback = True
@@ -223,21 +314,24 @@ async def real_launch(
         await pw.stop()
         raise
 
+    cookies_injected = False
     if cookies:
         try:
             await context.add_cookies(cookies)
+            cookies_injected = True
         except Exception as e:
             await context.close()
             await pw.stop()
             raise ValueError(f"注入 Cookie 失败: {e}") from e
 
+    # With session restore, do not force-navigate; only goto startUrl when restore off
+    # and Console Home is not managing first paint.
     start_url = (profile.get("startUrl") or "").strip()
-    if start_url:
+    if start_url and not restore_session and not open_console_home:
         page = await context.new_page()
         try:
             await page.goto(start_url, wait_until="domcontentloaded", timeout=60_000)
         except Exception:
-            # Non-fatal: browser is up even if navigation fails
             pass
 
     pid = extract_pid(context) or pid_from_diff(before_pids)
@@ -248,11 +342,21 @@ async def real_launch(
         "browser": context,
         "templateFallback": template_fallback,
         "geoipFallback": geoip_fallback,
+        "consoleHome": bool(console_home_addon),
+        "configToPersist": config_to_persist,
+        "usedFingerprintLock": used_lock,
+        "cookiesInjected": cookies_injected,
+        "cookiesSkipped": not should_inject_cookies,
     }
 
 
 async def mock_launch(profile: dict[str, Any]) -> dict[str, Any]:
     await asyncio.sleep(0.4)
+    from .fp_templates import resolve_locked_fingerprint
+
+    _kw, config_to_persist, used_lock, template_fallback = resolve_locked_fingerprint(
+        profile, None
+    )
     pid = 10000 + (abs(hash(profile["id"])) % 50000)
     ws = (
         f"ws://127.0.0.1:{9222 + (abs(hash(profile['id'])) % 20)}"
@@ -264,6 +368,11 @@ async def mock_launch(profile: dict[str, Any]) -> dict[str, Any]:
         "playwright": None,
         "browser": None,
         "mock": True,
+        "configToPersist": config_to_persist,
+        "usedFingerprintLock": used_lock,
+        "templateFallback": template_fallback,
+        "cookiesInjected": False,
+        "cookiesSkipped": True,
     }
 
 

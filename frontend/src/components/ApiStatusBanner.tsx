@@ -38,12 +38,14 @@ export function ApiStatusBanner() {
   )
 }
 
-/** Boot hydrate when VITE_API_BASE is set */
+/** Boot hydrate when VITE_API_BASE is set; poll runtime so closed browsers update UI. */
 export function useApiHydrate() {
   const hydrateFromApi = useDataStore((s) => s.hydrateFromApi)
+  const refreshRuntime = useDataStore((s) => s.refreshRuntime)
   useEffect(() => {
-    if (isRemoteMode()) {
-      void hydrateFromApi()
-    }
-  }, [hydrateFromApi])
+    if (!isRemoteMode()) return
+    void hydrateFromApi()
+    const t = window.setInterval(() => void refreshRuntime(), 5000)
+    return () => window.clearInterval(t)
+  }, [hydrateFromApi, refreshRuntime])
 }

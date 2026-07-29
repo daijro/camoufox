@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-http://localhost:5173 → `/profiles`
+http://localhost:10020 → `/profiles`
 
 ```bash
 npm run build

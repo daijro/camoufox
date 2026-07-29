@@ -1,4 +1,4 @@
-# Camoufox Console API 契约（v0.3）
+# Camoufox Console API 契约（v0.5）
 
 Base URL：`VITE_API_BASE`（例如 `http://127.0.0.1:50325`）
 
@@ -11,13 +11,14 @@ Base URL：`VITE_API_BASE`（例如 `http://127.0.0.1:50325`）
 | GET | `/api/v1/health` | 健康检查；`realLaunch` 反映 `CAMOUFOX_REAL_LAUNCH` |
 | GET | `/api/v1/settings` | 系统设置 |
 | GET | `/api/v1/profiles` | 环境列表（`?include_deleted=true`） |
-| GET | `/api/v1/profiles/{id}` | 详情 |
-| POST | `/api/v1/profiles` | 创建（`templateId` 可选；strategy=template 时必填） |
-| PATCH | `/api/v1/profiles/{id}` | 更新 |
-| POST | `/api/v1/profiles/{id}/start` | 启动 |
+| GET | `/api/v1/profiles/{id}` | 详情（含 `hasFingerprintConfig` / `restoreSession`） |
+| POST | `/api/v1/profiles` | 创建（`restoreSession` 默认 true） |
+| PATCH | `/api/v1/profiles/{id}` | 更新（可改 `restoreSession`） |
+| POST | `/api/v1/profiles/{id}/start` | 启动；首次锁定指纹；条件注入 Cookie；加载 Console Home |
 | POST | `/api/v1/profiles/{id}/stop` | 停止 |
+| POST | `/api/v1/profiles/{id}/resample-fingerprint` | 重新采样并锁定指纹（须先停止；**409** if running） |
 | POST | `/api/v1/profiles/{id}/trash` | 软删除 |
-| POST | `/api/v1/profiles/{id}/restore` | 恢复 |
+| POST | `/api/v1/profiles/{id}/restore` | 从回收站恢复 |
 | DELETE | `/api/v1/profiles/{id}` | 彻底删除（含 `rmtree` Profile 目录） |
 | GET | `/api/v1/runtime` | 运行中实例 |
 | GET/POST | `/api/v1/proxies` | 代理列表 / 新建 |
@@ -39,26 +40,35 @@ Base URL：`VITE_API_BASE`（例如 `http://127.0.0.1:50325`）
 | GET | `/api/v1/browser/versions` | 本机已安装 + Active + 远程目录 |
 | POST | `/api/v1/browser/active` | `{ "version": "..." }` 设 Active |
 | POST | `/api/v1/browser/refresh` | 重扫已安装列表 |
+| GET | `/api/v1/platform-presets` | 预置平台 URL 列表 |
+| GET/POST | `/api/v1/profiles/{id}/platform-accounts` | 平台账号列表 / 新建 |
+| PATCH | `/api/v1/profiles/{id}/platform-accounts/{aid}` | 更新 |
+| POST | `/api/v1/profiles/{id}/platform-accounts/{aid}/activate` | 设为当前服务 |
+| DELETE | `/api/v1/profiles/{id}/platform-accounts/{aid}` | 删除 |
+| GET | `/api/v1/home/{id}?token=` | Console Home 聚合数据 |
 
-## 启停语义
+## 环境身份持久化
 
-| 情况 | 状态码 / 行为 |
-|------|----------------|
-| 正常启动 | 200，`status=running`，写入 `pid` / 日志 |
-| Cookie JSON 非法 | **400**，`status=error` |
-| 正在 starting / 已在运行 | **409** Conflict |
-| Camoufox 启动失败 | **500**，`status=error` |
-| `CAMOUFOX_REAL_LAUNCH=0` | mock：约 0.4s 后假 PID/WS |
-| `CAMOUFOX_REAL_LAUNCH=1` | `AsyncNewBrowser(persistent_context=True)` + `user_data_dir` |
+| 能力 | 行为 |
+|------|------|
+| 指纹锁定 | `fingerprint_config_json`；首次启动采样写入；之后只注入锁定 config |
+| 重新采样 | `POST .../resample-fingerprint` 覆盖锁定配置 |
+| 会话恢复 | `restoreSession`（默认 true）→ prefs `browser.startup.page=3` 等；写入 profile `user.js` |
+| Cookie | 仅当 `cookies.sqlite` 不存在或过小才 `add_cookies(cookiesJson)` |
+| Console Home | 临时扩展；**不**每次强制新开首页（避免抢走恢复的标签）；新标签 / 工具栏仍可打开 |
 
 ### 真实启动映射
 
-- 指纹：`auto` 默认生成；`preset` → `fingerprint_preset=True`；`template` → 优先注入模板 `config_json`，否则 `use_preset` / 按 OS 生成
-- 代理 + `alignGeoWithProxy` → Playwright `proxy` + `geoip=True`（探测失败可降级）
-- `cookiesJson` → `context.add_cookies(...)`
-- `startUrl` → `new_page().goto(...)`（失败不阻断启动）
-- `headless` → 传入 launch options
+- 指纹：锁定 config 优先；否则按 strategy 生成并回写 DB
+- 代理 + `alignGeoWithProxy` → `proxy` + `geoip`（可降级）
+- Cookie：条件注入（见上）
+- `startUrl`：仅在 `restoreSession=false` 且无强制首页时 `goto`
+- `headless` → launch options
+
+### 平台账号 / Gemini
+
+- 凭据加密；Gemini 可「打开并自动登录」（尽力填表）
 
 ## Profile JSON（camelCase）
 
-见仓库前端 `types/console.ts` 的 `Profile` 字段（含 `templateId`）；后端响应使用相同 camelCase。
+见 `types/console.ts`：`hasFingerprintConfig`、`restoreSession`、`fingerprintConfigJson`（有锁时可能返回）等。

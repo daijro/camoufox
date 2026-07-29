@@ -76,6 +76,10 @@ export async function remoteStopProfile(id: string): Promise<Profile> {
   return apiFetch(`/api/v1/profiles/${id}/stop`, opts({ method: 'POST' }))
 }
 
+export async function remoteResampleFingerprint(id: string): Promise<Profile> {
+  return apiFetch(`/api/v1/profiles/${id}/resample-fingerprint`, opts({ method: 'POST' }))
+}
+
 export async function remoteTrashProfile(id: string): Promise<Profile> {
   return apiFetch(`/api/v1/profiles/${id}/trash`, opts({ method: 'POST' }))
 }
@@ -217,6 +221,66 @@ export async function remoteImportProxies(text: string): Promise<{
     method: 'POST',
     body: JSON.stringify({ text }),
   }))
+}
+
+export async function remoteListPlatformPresets(): Promise<
+  import('@/types/console').PlatformPreset[]
+> {
+  return apiFetch('/api/v1/platform-presets', opts())
+}
+
+export async function remoteListPlatformAccounts(
+  profileId: string,
+): Promise<import('@/types/console').PlatformAccount[]> {
+  return apiFetch(`/api/v1/profiles/${profileId}/platform-accounts`, opts())
+}
+
+export async function remoteCreatePlatformAccount(
+  profileId: string,
+  body: {
+    platformUrl: string
+    platformLabel?: string
+    username?: string
+    password?: string
+    totpSecret?: string
+    isActive?: boolean
+  },
+): Promise<import('@/types/console').PlatformAccount> {
+  return apiFetch(`/api/v1/profiles/${profileId}/platform-accounts`, opts({
+    method: 'POST',
+    body: JSON.stringify(body),
+  }))
+}
+
+export async function remotePatchPlatformAccount(
+  profileId: string,
+  accountId: string,
+  body: Record<string, unknown>,
+): Promise<import('@/types/console').PlatformAccount> {
+  return apiFetch(
+    `/api/v1/profiles/${profileId}/platform-accounts/${accountId}`,
+    opts({ method: 'PATCH', body: JSON.stringify(body) }),
+  )
+}
+
+export async function remoteActivatePlatformAccount(
+  profileId: string,
+  accountId: string,
+): Promise<import('@/types/console').PlatformAccount[]> {
+  return apiFetch(
+    `/api/v1/profiles/${profileId}/platform-accounts/${accountId}/activate`,
+    opts({ method: 'POST' }),
+  )
+}
+
+export async function remoteDeletePlatformAccount(
+  profileId: string,
+  accountId: string,
+): Promise<void> {
+  await apiFetch(
+    `/api/v1/profiles/${profileId}/platform-accounts/${accountId}`,
+    opts({ method: 'DELETE' }),
+  )
 }
 
 export type HydrateSnapshot = {

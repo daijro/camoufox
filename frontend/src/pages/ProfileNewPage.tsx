@@ -61,6 +61,7 @@ export function ProfileNewPage() {
   const [alignGeo, setAlignGeo] = useState(true)
   const [cookiesJson, setCookiesJson] = useState('[]')
   const [startUrl, setStartUrl] = useState('')
+  const [restoreSession, setRestoreSession] = useState(true)
   const [error, setError] = useState('')
 
   const strategyLabel = useMemo(() => {
@@ -142,9 +143,12 @@ export function ProfileNewPage() {
         startUrl,
         fingerprint: fingerprintSummary(os),
         templateId: strategy === 'template' ? templateId : null,
+        restoreSession,
       })
-      if (andStart) await startProfile(profile.id)
+      // Navigate immediately; start runs in background so the list shows starting
+      // instead of freezing the wizard for ~20s on real launch.
       navigate('/profiles')
+      if (andStart) void startProfile(profile.id)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -374,13 +378,21 @@ export function ProfileNewPage() {
                 <Field label="Cookie JSON 数组" hint="粘贴 Playwright/浏览器导出的 cookies 数组">
                   <Textarea value={cookiesJson} onChange={(e) => setCookiesJson(e.target.value)} />
                 </Field>
-                <Field label="启动 URL（可选）">
+                <Field label="启动 URL（可选，关闭会话恢复时使用）">
                   <Input
                     value={startUrl}
                     onChange={(e) => setStartUrl(e.target.value)}
                     placeholder="https://…"
                   />
                 </Field>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={restoreSession}
+                    onChange={(e) => setRestoreSession(e.target.checked)}
+                  />
+                  恢复上次会话（标签页）；首次启动将锁定设备指纹
+                </label>
               </div>
             </section>
 
@@ -418,7 +430,7 @@ export function ProfileNewPage() {
               </div>
             </dl>
             <p className="mt-4 text-[10px] leading-relaxed text-slate-400">
-              启动时由 Camoufox / BrowserForge 自动生成完整指纹，无需手填 UA / Canvas。
+              首次启动会采样并锁定完整指纹（UA / WebGL 等），之后启停保持不变；可在详情页重新采样。
             </p>
           </aside>
         </div>

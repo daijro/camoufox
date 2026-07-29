@@ -45,6 +45,30 @@ export type FingerprintTemplate = {
   createdAt: string
 }
 
+export type PlatformAccount = {
+  id: string
+  profileId: string
+  platformUrl: string
+  platformLabel: string
+  username: string
+  hasPassword: boolean
+  hasTotp: boolean
+  isActive: boolean
+  autoLogin?: boolean
+  autoLoginEligible?: boolean
+  createdAt: string
+  updatedAt: string
+  password?: string | null
+  totpSecret?: string | null
+  totpCode?: string | null
+  totpRemaining?: number
+}
+
+export type PlatformPreset = {
+  label: string
+  url: string
+}
+
 export type Profile = {
   id: string
   name: string
@@ -71,6 +95,10 @@ export type Profile = {
   diskMb: number
   logs: { at: string; level: string; message: string }[]
   templateId?: string | null
+  lastExitIp?: string | null
+  hasFingerprintConfig?: boolean
+  fingerprintConfigJson?: string | null
+  restoreSession?: boolean
 }
 
 export type CreateProfileInput = {
@@ -88,6 +116,7 @@ export type CreateProfileInput = {
   startUrl: string
   fingerprint?: string
   templateId?: string | null
+  restoreSession?: boolean
 }
 
 export function countRunning(profiles: Profile[]): number {

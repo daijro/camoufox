@@ -20,8 +20,23 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .fp_templates import dumps_config, row_to_template, sample_fingerprint_config
+from .fp_templates import (
+    dumps_config,
+    fingerprint_summary_from_config,
+    resolve_locked_fingerprint,
+    row_to_template,
+    sample_fingerprint_config,
+)
 from .launch import check_proxy_exit, close_handle, mock_launch, real_launch
+from .platform_accounts import (
+    PLATFORM_PRESETS,
+    clear_home_session,
+    encrypt_secret,
+    issue_home_session,
+    row_to_account,
+    stage_console_home_addon,
+    verify_home_session,
+)
 
 # ---------------------------------------------------------------------------
 # Paths / config
@@ -144,12 +159,40 @@ def init_db() -> None:
               key TEXT PRIMARY KEY,
               value TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS platform_accounts (
+              id TEXT PRIMARY KEY,
+              profile_id TEXT NOT NULL,
+              platform_url TEXT NOT NULL,
+              platform_label TEXT,
+              username TEXT,
+              password_enc TEXT,
+              totp_secret_enc TEXT,
+              is_active INTEGER NOT NULL DEFAULT 0,
+              auto_login INTEGER NOT NULL DEFAULT 1,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
             """
         )
         # Migrations for older DBs
         cols = {r[1] for r in conn.execute("PRAGMA table_info(profiles)").fetchall()}
         if "template_id" not in cols:
             conn.execute("ALTER TABLE profiles ADD COLUMN template_id TEXT")
+        if "last_exit_ip" not in cols:
+            conn.execute("ALTER TABLE profiles ADD COLUMN last_exit_ip TEXT")
+        if "fingerprint_config_json" not in cols:
+            conn.execute("ALTER TABLE profiles ADD COLUMN fingerprint_config_json TEXT")
+        if "restore_session" not in cols:
+            conn.execute(
+                "ALTER TABLE profiles ADD COLUMN restore_session INTEGER NOT NULL DEFAULT 1"
+            )
+        pa_cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(platform_accounts)").fetchall()
+        }
+        if "auto_login" not in pa_cols:
+            conn.execute(
+                "ALTER TABLE platform_accounts ADD COLUMN auto_login INTEGER NOT NULL DEFAULT 1"
+            )
 
         seed_fingerprint_templates(conn)
 
@@ -294,6 +337,14 @@ def seed(conn: sqlite3.Connection) -> None:
 
 
 def row_to_profile(r: sqlite3.Row) -> dict[str, Any]:
+    keys = set(r.keys())
+    fp_cfg = None
+    if "fingerprint_config_json" in keys:
+        fp_cfg = r["fingerprint_config_json"]
+    has_fp = bool(fp_cfg and str(fp_cfg).strip() not in ("", "{}", "null"))
+    restore = True
+    if "restore_session" in keys and r["restore_session"] is not None:
+        restore = bool(r["restore_session"])
     return {
         "id": r["id"],
         "name": r["name"],
@@ -318,7 +369,11 @@ def row_to_profile(r: sqlite3.Row) -> dict[str, Any]:
         "profilePath": r["profile_path"],
         "diskMb": r["disk_mb"] or 0,
         "logs": json.loads(r["logs_json"] or "[]"),
-        "templateId": r["template_id"] if "template_id" in r.keys() else None,
+        "templateId": r["template_id"] if "template_id" in keys else None,
+        "lastExitIp": r["last_exit_ip"] if "last_exit_ip" in keys else None,
+        "hasFingerprintConfig": has_fp,
+        "fingerprintConfigJson": fp_cfg if has_fp else None,
+        "restoreSession": restore,
     }
 
 
@@ -368,6 +423,7 @@ class ProfileCreate(BaseModel):
     fingerprint: Optional[str] = None
     headless: bool = False
     templateId: Optional[str] = None
+    restoreSession: bool = True
 
 
 class ProfilePatch(BaseModel):
@@ -387,6 +443,7 @@ class ProfilePatch(BaseModel):
     templateId: Optional[str] = None
     os: Optional[str] = None
     alignGeoWithProxy: Optional[bool] = None
+    restoreSession: Optional[bool] = None
 
 
 class ProxyCreate(BaseModel):
@@ -400,6 +457,26 @@ class ProxyCreate(BaseModel):
 
 class ProxyImportBody(BaseModel):
     text: str
+
+
+class PlatformAccountCreate(BaseModel):
+    platformUrl: str
+    platformLabel: str = ""
+    username: str = ""
+    password: str = ""
+    totpSecret: str = ""
+    isActive: bool = False
+    autoLogin: bool = True
+
+
+class PlatformAccountPatch(BaseModel):
+    platformUrl: Optional[str] = None
+    platformLabel: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    totpSecret: Optional[str] = None
+    isActive: Optional[bool] = None
+    autoLogin: Optional[bool] = None
 
 
 class GroupCreate(BaseModel):
@@ -550,8 +627,22 @@ async def start_profile_async(profile_id: str) -> dict[str, Any]:
 
         try:
             if REAL_LAUNCH:
+                api_base = os.environ.get(
+                    "CAMOUFOX_API_BASE", "http://127.0.0.1:50325"
+                )
+                session_token = issue_home_session(profile_id)
+                addon_path = stage_console_home_addon(
+                    profile["profilePath"],
+                    profile_id=profile_id,
+                    api_base=api_base,
+                    session_token=session_token,
+                )
                 result = await real_launch(
-                    profile, proxy_row=proxy_row, template_row=template_row
+                    profile,
+                    proxy_row=proxy_row,
+                    template_row=template_row,
+                    console_home_addon=addon_path,
+                    open_console_home=bool(addon_path),
                 )
             else:
                 result = await mock_launch(profile)
@@ -568,10 +659,37 @@ async def start_profile_async(profile_id: str) -> dict[str, Any]:
                 append_log(conn, profile_id, f"启动失败: {e}", level="error")
             raise HTTPException(500, f"Launch failed: {e}") from e
 
+        browser_ctx = result.get("browser")
+        pw_handle = result.get("playwright")
+
+        def _on_context_close() -> None:
+            """Called by Playwright when the browser window/context is closed externally."""
+            with _runtime_lock:
+                _runtime.pop(profile_id, None)
+            clear_home_session(profile_id)
+            update_status(profile_id, "idle", pid=None, ws=None)
+            with db() as conn:
+                append_log(conn, profile_id, "浏览器已关闭（自动感知）")
+            # Async close of playwright handle in background
+            async def _async_close() -> None:
+                await close_handle({"playwright": pw_handle, "browser": None})
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(_async_close())
+            except Exception:
+                pass
+
+        if browser_ctx is not None and not result.get("mock"):
+            try:
+                browser_ctx.on("close", lambda: _on_context_close())
+            except Exception:
+                pass
+
         with _runtime_lock:
             _runtime[profile_id] = {
-                "playwright": result.get("playwright"),
-                "browser": result.get("browser"),
+                "playwright": pw_handle,
+                "browser": browser_ctx,
                 "mock": bool(result.get("mock")),
                 "started_at": time.time(),
             }
@@ -584,11 +702,31 @@ async def start_profile_async(profile_id: str) -> dict[str, Any]:
             started=True,
         )
         with db() as conn:
+            cfg = result.get("configToPersist")
+            if isinstance(cfg, dict) and cfg:
+                summary = fingerprint_summary_from_config(
+                    cfg, profile.get("os") or "windows"
+                )
+                conn.execute(
+                    """UPDATE profiles SET fingerprint_config_json=?, fingerprint=?
+                       WHERE id=?""",
+                    (dumps_config(cfg), summary, profile_id),
+                )
+                append_log(conn, profile_id, f"首次锁定指纹：{summary}")
+            elif result.get("usedFingerprintLock"):
+                append_log(conn, profile_id, "使用已锁定指纹")
+
             msg = "浏览器启动成功" + (" (Camoufox)" if REAL_LAUNCH else " (mock)")
             if result.get("templateFallback"):
-                msg += "；指纹模板策略暂以 preset 采样代替"
+                msg += "；指纹模板策略暂以采样代替"
             if result.get("geoipFallback"):
                 msg += "；代理 GeoIP 探测失败，已降级为不自动对齐时区"
+            if result.get("consoleHome"):
+                msg += "；已加载 Console Home 扩展"
+            if result.get("cookiesSkipped"):
+                msg += "；跳过 Cookie JSON 注入（盘上已有 cookies）"
+            elif result.get("cookiesInjected"):
+                msg += "；已注入 Cookie JSON"
             append_log(conn, profile_id, msg)
         return get_profile(profile_id)
     finally:
@@ -601,6 +739,7 @@ async def stop_profile_async(profile_id: str) -> dict[str, Any]:
         handle = _runtime.pop(profile_id, None)
         _starting.discard(profile_id)
     await close_handle(handle)
+    clear_home_session(profile_id)
     update_status(profile_id, "idle", pid=None, ws=None)
     with db() as conn:
         append_log(conn, profile_id, "已停止")
@@ -622,6 +761,31 @@ def get_profile(profile_id: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+async def _watchdog_loop() -> None:
+    """Every 10 s: check if running profiles' PIDs are still alive; mark idle if gone."""
+    from .launch import list_browser_pids
+    while True:
+        await asyncio.sleep(10)
+        try:
+            with db() as conn:
+                rows = conn.execute(
+                    "SELECT id, pid FROM profiles WHERE status IN ('running','api') AND deleted_at IS NULL"
+                ).fetchall()
+            if not rows:
+                continue
+            alive_pids = list_browser_pids()
+            for row in rows:
+                pid_val = row["pid"]
+                if pid_val and int(pid_val) not in alive_pids:
+                    with _runtime_lock:
+                        _runtime.pop(row["id"], None)
+                    update_status(row["id"], "idle", pid=None, ws=None)
+                    with db() as conn:
+                        append_log(conn, row["id"], "浏览器进程已退出（watchdog 感知）")
+        except Exception:
+            pass
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
@@ -631,6 +795,8 @@ def on_startup() -> None:
             """UPDATE profiles SET status='idle', pid=NULL, ws_endpoint=NULL
                WHERE status IN ('starting','running','api') AND deleted_at IS NULL"""
         )
+    # Start background watchdog
+    asyncio.get_event_loop().create_task(_watchdog_loop())
 
 
 @app.get("/api/v1/health")
@@ -704,8 +870,9 @@ def create_profile(body: ProfileCreate, authorization: Optional[str] = Header(No
             """INSERT INTO profiles
             (id,name,platform,note,group_id,tags_json,proxy_id,proxy_label,fingerprint,
              fingerprint_strategy,os,align_geo,cookies_json,start_url,headless,status,
-             last_started_at,deleted_at,pid,ws_endpoint,profile_path,disk_mb,logs_json,template_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+             last_started_at,deleted_at,pid,ws_endpoint,profile_path,disk_mb,logs_json,
+             template_id,restore_session)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 pid,
                 body.name,
@@ -734,6 +901,7 @@ def create_profile(body: ProfileCreate, authorization: Optional[str] = Header(No
                     ensure_ascii=False,
                 ),
                 body.templateId,
+                1 if body.restoreSession else 0,
             ),
         )
     return get_profile(pid)
@@ -774,6 +942,9 @@ def patch_profile(
         elif k == "alignGeoWithProxy":
             fields.append("align_geo=?")
             vals.append(1 if v else 0)
+        elif k == "restoreSession":
+            fields.append("restore_session=?")
+            vals.append(1 if v else 0)
         elif k in mapping:
             fields.append(f"{mapping[k]}=?")
             vals.append(v)
@@ -799,6 +970,49 @@ async def stop_profile_route(
 ):
     require_token(authorization)
     return await stop_profile_async(profile_id)
+
+
+@app.post("/api/v1/profiles/{profile_id}/resample-fingerprint")
+def resample_fingerprint(
+    profile_id: str, authorization: Optional[str] = Header(None)
+):
+    """Regenerate and lock a new fingerprint config for this profile."""
+    require_token(authorization)
+    with _runtime_lock:
+        if profile_id in _runtime or profile_id in _starting:
+            raise HTTPException(409, "请先停止环境再重新采样指纹")
+    profile = get_profile(profile_id)
+    template_row = None
+    tid = profile.get("templateId")
+    if tid or (profile.get("fingerprintStrategy") or "").lower() == "template":
+        with db() as conn:
+            if tid:
+                t = conn.execute(
+                    "SELECT * FROM fingerprint_templates WHERE id=?", (tid,)
+                ).fetchone()
+            else:
+                t = conn.execute(
+                    "SELECT * FROM fingerprint_templates WHERE is_default=1 LIMIT 1"
+                ).fetchone()
+            if t:
+                template_row = row_to_template(t)
+    unlocked = {**profile, "fingerprintConfigJson": None, "hasFingerprintConfig": False}
+    _kw, cfg, _used, fallback = resolve_locked_fingerprint(unlocked, template_row)
+    if not cfg:
+        raise HTTPException(500, "指纹采样失败")
+    summary = fingerprint_summary_from_config(cfg, profile.get("os") or "windows")
+    with db() as conn:
+        conn.execute(
+            """UPDATE profiles SET fingerprint_config_json=?, fingerprint=? WHERE id=?""",
+            (dumps_config(cfg), summary, profile_id),
+        )
+        append_log(
+            conn,
+            profile_id,
+            f"重新采样并锁定指纹：{summary}"
+            + ("（模板回退采样）" if fallback else ""),
+        )
+    return get_profile(profile_id)
 
 
 @app.post("/api/v1/profiles/{profile_id}/trash")
@@ -1340,6 +1554,314 @@ def delete_template(template_id: str, authorization: Optional[str] = Header(None
                 "UPDATE fingerprint_templates SET is_default=1 WHERE id='tpl_auto'"
             )
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Platform accounts + console home
+# ---------------------------------------------------------------------------
+
+
+def _get_account_row(conn: sqlite3.Connection, profile_id: str, account_id: str):
+    row = conn.execute(
+        "SELECT * FROM platform_accounts WHERE id=? AND profile_id=?",
+        (account_id, profile_id),
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "Platform account not found")
+    return row
+
+
+def _activate_account(conn: sqlite3.Connection, profile_id: str, account_id: str) -> None:
+    conn.execute(
+        "UPDATE platform_accounts SET is_active=0 WHERE profile_id=?",
+        (profile_id,),
+    )
+    conn.execute(
+        "UPDATE platform_accounts SET is_active=1, updated_at=? WHERE id=? AND profile_id=?",
+        (now_stamp(), account_id, profile_id),
+    )
+
+
+@app.get("/api/v1/platform-presets")
+def list_platform_presets(authorization: Optional[str] = Header(None)):
+    require_token(authorization)
+    return PLATFORM_PRESETS
+
+
+@app.get("/api/v1/profiles/{profile_id}/platform-accounts")
+def list_platform_accounts(
+    profile_id: str, authorization: Optional[str] = Header(None)
+):
+    require_token(authorization)
+    get_profile(profile_id)
+    with db() as conn:
+        rows = conn.execute(
+            """SELECT * FROM platform_accounts WHERE profile_id=?
+               ORDER BY is_active DESC, updated_at DESC""",
+            (profile_id,),
+        ).fetchall()
+    return [row_to_account(r) for r in rows]
+
+
+@app.post("/api/v1/profiles/{profile_id}/platform-accounts")
+def create_platform_account(
+    profile_id: str,
+    body: PlatformAccountCreate,
+    authorization: Optional[str] = Header(None),
+):
+    require_token(authorization)
+    get_profile(profile_id)
+    url = (body.platformUrl or "").strip()
+    if not url:
+        raise HTTPException(400, "platformUrl required")
+    aid = uid("pa")
+    stamp = now_stamp()
+    with db() as conn:
+        n = conn.execute(
+            "SELECT COUNT(*) AS c FROM platform_accounts WHERE profile_id=?",
+            (profile_id,),
+        ).fetchone()["c"]
+        make_active = body.isActive or n == 0
+        if make_active:
+            conn.execute(
+                "UPDATE platform_accounts SET is_active=0 WHERE profile_id=?",
+                (profile_id,),
+            )
+        conn.execute(
+            """INSERT INTO platform_accounts
+            (id,profile_id,platform_url,platform_label,username,password_enc,
+             totp_secret_enc,is_active,auto_login,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                aid,
+                profile_id,
+                url,
+                body.platformLabel or "",
+                body.username or "",
+                encrypt_secret(body.password),
+                encrypt_secret(body.totpSecret),
+                1 if make_active else 0,
+                1 if body.autoLogin else 0,
+                stamp,
+                stamp,
+            ),
+        )
+        if body.platformLabel:
+            conn.execute(
+                "UPDATE profiles SET platform=? WHERE id=? AND (platform IS NULL OR platform='')",
+                (body.platformLabel, profile_id),
+            )
+        row = _get_account_row(conn, profile_id, aid)
+    return row_to_account(row)
+
+
+@app.patch("/api/v1/profiles/{profile_id}/platform-accounts/{account_id}")
+def patch_platform_account(
+    profile_id: str,
+    account_id: str,
+    body: PlatformAccountPatch,
+    authorization: Optional[str] = Header(None),
+):
+    require_token(authorization)
+    data = body.model_dump(exclude_unset=True)
+    with db() as conn:
+        _get_account_row(conn, profile_id, account_id)
+        fields: list[str] = []
+        vals: list[Any] = []
+        mapping = {
+            "platformUrl": "platform_url",
+            "platformLabel": "platform_label",
+            "username": "username",
+        }
+        for k, col in mapping.items():
+            if k in data:
+                fields.append(f"{col}=?")
+                vals.append(data[k])
+        if "password" in data:
+            fields.append("password_enc=?")
+            vals.append(encrypt_secret(data["password"] or ""))
+        if "totpSecret" in data:
+            fields.append("totp_secret_enc=?")
+            vals.append(encrypt_secret(data["totpSecret"] or ""))
+        if "autoLogin" in data:
+            fields.append("auto_login=?")
+            vals.append(1 if data["autoLogin"] else 0)
+        if data.get("isActive"):
+            _activate_account(conn, profile_id, account_id)
+        fields.append("updated_at=?")
+        vals.append(now_stamp())
+        vals.extend([account_id, profile_id])
+        if fields:
+            conn.execute(
+                f"UPDATE platform_accounts SET {', '.join(fields)} WHERE id=? AND profile_id=?",
+                vals,
+            )
+        row = _get_account_row(conn, profile_id, account_id)
+    return row_to_account(row)
+
+
+@app.post("/api/v1/profiles/{profile_id}/platform-accounts/{account_id}/activate")
+def activate_platform_account(
+    profile_id: str,
+    account_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    require_token(authorization)
+    with db() as conn:
+        _get_account_row(conn, profile_id, account_id)
+        _activate_account(conn, profile_id, account_id)
+        rows = conn.execute(
+            """SELECT * FROM platform_accounts WHERE profile_id=?
+               ORDER BY is_active DESC, updated_at DESC""",
+            (profile_id,),
+        ).fetchall()
+    return [row_to_account(r) for r in rows]
+
+
+@app.delete("/api/v1/profiles/{profile_id}/platform-accounts/{account_id}")
+def delete_platform_account(
+    profile_id: str,
+    account_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    require_token(authorization)
+    with db() as conn:
+        row = _get_account_row(conn, profile_id, account_id)
+        was_active = bool(row["is_active"])
+        conn.execute(
+            "DELETE FROM platform_accounts WHERE id=? AND profile_id=?",
+            (account_id, profile_id),
+        )
+        if was_active:
+            nxt = conn.execute(
+                """SELECT id FROM platform_accounts WHERE profile_id=?
+                   ORDER BY updated_at DESC LIMIT 1""",
+                (profile_id,),
+            ).fetchone()
+            if nxt:
+                _activate_account(conn, profile_id, nxt["id"])
+    return {"ok": True}
+
+
+@app.get("/api/v1/home/{profile_id}")
+def console_home(
+    profile_id: str,
+    token: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+):
+    """Aggregated start-page payload for the Console Home extension."""
+    # Prefer session token from extension bootstrap; Bearer still allowed.
+    if token:
+        if not verify_home_session(profile_id, token):
+            raise HTTPException(401, "Invalid or expired home session")
+    else:
+        require_token(authorization)
+
+    profile = get_profile(profile_id)
+    group_name = "—"
+    with db() as conn:
+        if profile.get("groupId"):
+            g = conn.execute(
+                "SELECT name FROM groups WHERE id=?", (profile["groupId"],)
+            ).fetchone()
+            if g:
+                group_name = g["name"]
+        acc_row = conn.execute(
+            """SELECT * FROM platform_accounts
+               WHERE profile_id=? AND is_active=1 LIMIT 1""",
+            (profile_id,),
+        ).fetchone()
+        if not acc_row:
+            acc_row = conn.execute(
+                """SELECT * FROM platform_accounts WHERE profile_id=?
+                   ORDER BY updated_at DESC LIMIT 1""",
+                (profile_id,),
+            ).fetchone()
+
+        proxy_row = None
+        if profile.get("proxyId"):
+            proxy_row = conn.execute(
+                "SELECT * FROM proxies WHERE id=?", (profile["proxyId"],)
+            ).fetchone()
+
+    account = row_to_account(acc_row, reveal=True) if acc_row else None
+
+    exit_ip = None
+    country = None
+    latency = None
+    if proxy_row:
+        probe = check_proxy_exit(
+            proxy_row["protocol"],
+            proxy_row["host"],
+            proxy_row["port"],
+            proxy_row["username"],
+            proxy_row["password"],
+        )
+        if probe.get("status") == "ok":
+            exit_ip = probe.get("exitIp")
+            country = probe.get("country")
+            latency = probe.get("latencyMs")
+    if not exit_ip:
+        try:
+            import urllib.request
+
+            with urllib.request.urlopen("https://api.ipify.org", timeout=8) as resp:
+                exit_ip = resp.read().decode().strip()
+        except Exception:
+            exit_ip = None
+
+    last_ip = profile.get("lastExitIp")
+    ip_changed = bool(last_ip and exit_ip and last_ip != exit_ip)
+    if exit_ip:
+        with db() as conn:
+            conn.execute(
+                "UPDATE profiles SET last_exit_ip=? WHERE id=?",
+                (exit_ip, profile_id),
+            )
+
+    ua = None
+    # Best-effort UA from template config if present
+    tid = profile.get("templateId")
+    if tid:
+        with db() as conn:
+            t = conn.execute(
+                "SELECT config_json FROM fingerprint_templates WHERE id=?", (tid,)
+            ).fetchone()
+            if t and t["config_json"]:
+                try:
+                    cfg = json.loads(t["config_json"])
+                    ua = cfg.get("navigator.userAgent")
+                except json.JSONDecodeError:
+                    pass
+
+    return {
+        "profileId": profile_id,
+        "profileName": profile.get("name"),
+        "exitIp": exit_ip,
+        "country": country,
+        "region": None,
+        "city": None,
+        "latencyMs": latency,
+        "ipChanged": ip_changed,
+        "ipWarnMessage": (
+            "您的 IP 地址已发生变化，请注意，访问账号的操作可能存在风险。"
+            if ip_changed
+            else None
+        ),
+        "lastExitIp": last_ip,
+        "account": account,
+        "window": {
+            "note": profile.get("note") or "",
+            "group": group_name,
+            "tags": profile.get("tags") or [],
+        },
+        "fingerprint": {
+            "os": profile.get("os"),
+            "summary": profile.get("fingerprint"),
+            "strategy": profile.get("fingerprintStrategy"),
+            "userAgent": ua,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------

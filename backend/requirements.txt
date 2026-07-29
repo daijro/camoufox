@@ -3,6 +3,8 @@ fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 pydantic>=2.0
 requests>=2.31.0
+cryptography>=42.0.0
+pyotp>=2.9.0
 # Optional for real launch (CAMOUFOX_REAL_LAUNCH=1):
 # camoufox
 # playwright

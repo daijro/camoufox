@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Camoufox 启动首页</title>
+  <link rel="stylesheet" href="home.css" />
+</head>
+<body>
+  <header class="top">
+    <span id="profileBadge" class="badge">—</span>
+    <span id="clock" class="clock"></span>
+  </header>
+
+  <div id="ipWarn" class="warn hidden"></div>
+
+  <main class="grid">
+    <section class="card ip-card">
+      <div class="card-head">
+        <h2>出口 IP</h2>
+        <button type="button" id="btnRefreshIp" class="btn ghost">刷新</button>
+      </div>
+      <div id="geoLine" class="muted">检测中…</div>
+      <div id="ipLine" class="ip">—</div>
+    </section>
+
+    <section class="card account-card">
+      <h2>平台账号</h2>
+      <div id="noAccount" class="muted hidden">未设置当前服务。请在控制台「平台账号」中添加并设为当前。</div>
+      <div id="accountBlock">
+        <a id="platformUrl" class="link" href="#" target="_blank" rel="noreferrer">—</a>
+        <div class="row">
+          <span id="username" class="mono">—</span>
+          <button type="button" class="btn" data-copy="username">复制账号</button>
+        </div>
+        <div class="row">
+          <span id="passwordMask" class="mono">••••••••</span>
+          <button type="button" class="btn" data-copy="password">复制密码</button>
+        </div>
+        <div class="totp-box">
+          <div id="totpCode" class="totp">——————</div>
+          <div class="totp-meta">
+            <span id="totpRemain">—</span>
+            <button type="button" class="btn" data-copy="totp">复制验证码</button>
+          </div>
+        </div>
+        <button type="button" id="btnOpenPlatform" class="btn primary">打开平台</button>
+        <button type="button" id="btnAutoLogin" class="btn primary hidden">打开并自动登录</button>
+        <label id="autoLoginNextWrap" class="auto-next hidden">
+          <input type="checkbox" id="chkAutoLoginNext" />
+          下次启动自动执行登录
+        </label>
+        <div id="autoLoginStatus" class="muted status-line"></div>
+      </div>
+    </section>
+
+    <section class="card fp-card">
+      <h2>窗口 / 指纹</h2>
+      <dl id="fpList" class="dl"></dl>
+    </section>
+  </main>
+
+  <footer class="foot">Camoufox Console Home · Local API</footer>
+
+  <script src="bootstrap.js"></script>
+  <script src="home.js"></script>
+</body>
+</html>

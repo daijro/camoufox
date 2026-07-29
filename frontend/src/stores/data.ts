@@ -449,6 +449,8 @@ export const useDataStore = create<DataState>((set, get) => ({
       diskMb: 12,
       logs: [{ at: nowStamp(), level: 'info', message: '环境已创建' }],
       templateId: input.templateId ?? null,
+      hasFingerprintConfig: false,
+      restoreSession: input.restoreSession !== false,
     }
     set((s) => ({ profiles: [profile, ...s.profiles] }))
     return profile

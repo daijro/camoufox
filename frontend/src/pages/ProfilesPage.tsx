@@ -285,6 +285,12 @@ export function ProfilesPage() {
                       >
                         详情
                       </Link>
+                      <Link
+                        to={`/profiles/${p.id}?tab=accounts`}
+                        className="inline-flex rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-700"
+                      >
+                        选择服务
+                      </Link>
                       <Button variant="ghost" onClick={() => setDrawerId(p.id)}>
                         快捷
                       </Button>
