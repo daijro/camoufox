@@ -1,0 +1,268 @@
+diff --git a/js/src/builtin/Promise.cpp b/js/src/builtin/Promise.cpp
+index 273bb542d0..9dc4c2b573 100644
+--- a/js/src/builtin/Promise.cpp
++++ b/js/src/builtin/Promise.cpp
+@@ -6357,7 +6357,7 @@ static MOZ_ALWAYS_INLINE bool IsPromiseThenOrCatchRetValImplicitlyUsed(
+   }
+ 
+   // If devtools is opened, the current realm will become debuggee.
+-  if (cx->realm()->isDebuggee()) {
++  if (cx->realm()->isDebuggeeVisibleToContent()) {
+     return true;
+   }
+ 
+diff --git a/js/src/debugger/DebugAPI.h b/js/src/debugger/DebugAPI.h
+index bfe4060775..a76bff1684 100644
+--- a/js/src/debugger/DebugAPI.h
++++ b/js/src/debugger/DebugAPI.h
+@@ -311,6 +311,10 @@ class DebugAPI {
+   // Whether any Debugger is observing native function call.
+   static bool debuggerObservesNativeCall(GlobalObject* global);
+ 
++  // Whether a global has debuggers and every one of them has set
++  // invisibleToContent. False if the global has no debuggers at all.
++  static bool allDebuggersInvisibleToContent(GlobalObject* global);
++
+   /*
+    * Return true if the given global is being observed by at least one
+    * Debugger that is tracking allocations.
+diff --git a/js/src/debugger/Debugger.cpp b/js/src/debugger/Debugger.cpp
+index 858be3c571..0250d6d72c 100644
+--- a/js/src/debugger/Debugger.cpp
++++ b/js/src/debugger/Debugger.cpp
+@@ -542,6 +542,7 @@ Debugger::Debugger(JSContext* cx, NativeObject* dbg)
+       uncaughtExceptionHook(nullptr),
+       allowUnobservedAsmJS(false),
+       allowUnobservedWasm(false),
++      invisibleToContent(false),
+       exclusiveDebuggerOnEval(false),
+       inspectNativeCallArguments(false),
+       collectCoverageInfo(false),
+@@ -806,6 +807,20 @@ bool DebugAPI::debuggerObservesNativeCall(GlobalObject* global) {
+       global, [=](Debugger* dbg) { return dbg->observesNativeCalls(); });
+ }
+ 
++/* static */
++bool DebugAPI::allDebuggersInvisibleToContent(GlobalObject* global) {
++  JS::AutoSuppressGCAnalysis nogc;
++
++  bool any = false;
++  for (Realm::DebuggerVectorEntry& entry : global->getDebuggers(nogc)) {
++    any = true;
++    if (!entry.dbg.unbarrieredGet()->isInvisibleToContent()) {
++      return false;
++    }
++  }
++  return any;
++}
++
+ /* static */
+ bool DebugAPI::hasExceptionUnwindHook(GlobalObject* global) {
+   return Debugger::hasLiveHook(global, Debugger::OnExceptionUnwind);
+@@ -3529,14 +3544,14 @@ Debugger::IsObserving Debugger::observesAllExecution() const {
+ }
+ 
+ Debugger::IsObserving Debugger::observesAsmJS() const {
+-  if (!allowUnobservedAsmJS) {
++  if (!allowUnobservedAsmJS && !invisibleToContent) {
+     return Observing;
+   }
+   return NotObserving;
+ }
+ 
+ Debugger::IsObserving Debugger::observesWasm() const {
+-  if (!allowUnobservedWasm) {
++  if (!allowUnobservedWasm && !invisibleToContent) {
+     return Observing;
+   }
+   return NotObserving;
+@@ -4256,6 +4271,8 @@ struct MOZ_STACK_CLASS Debugger::CallData {
+   bool setAllowUnobservedAsmJS();
+   bool getAllowUnobservedWasm();
+   bool setAllowUnobservedWasm();
++  bool getInvisibleToContent();
++  bool setInvisibleToContent();
+   bool getExclusiveDebuggerOnEval();
+   bool setExclusiveDebuggerOnEval();
+   bool getInspectNativeCallArguments();
+@@ -4564,6 +4581,29 @@ bool Debugger::CallData::setAllowUnobservedWasm() {
+   return true;
+ }
+ 
++bool Debugger::CallData::getInvisibleToContent() {
++  args.rval().setBoolean(dbg->invisibleToContent);
++  return true;
++}
++
++bool Debugger::CallData::setInvisibleToContent() {
++  if (!args.requireAtLeast(cx, "Debugger.set invisibleToContent", 1)) {
++    return false;
++  }
++  dbg->invisibleToContent = ToBoolean(args[0]);
++
++  for (auto iter = dbg->debuggees.iter(); !iter.done(); iter.next()) {
++    GlobalObject* global = iter.get();
++    Realm* realm = global->realm();
++    realm->updateAllDebuggersInvisibleToContent();
++    realm->updateDebuggerObservesAsmJS();
++    realm->updateDebuggerObservesWasm();
++  }
++
++  args.rval().setUndefined();
++  return true;
++}
++
+ bool Debugger::CallData::getExclusiveDebuggerOnEval() {
+   args.rval().setBoolean(dbg->exclusiveDebuggerOnEval);
+   return true;
+@@ -5074,6 +5114,7 @@ bool Debugger::addDebuggeeGlobal(JSContext* cx, Handle<GlobalObject*> global) {
+   // (5)
+   AutoRestoreRealmDebugMode debugModeGuard(debuggeeRealm);
+   debuggeeRealm->setIsDebuggee();
++  debuggeeRealm->updateAllDebuggersInvisibleToContent();
+   debuggeeRealm->updateDebuggerObservesAsmJS();
+   debuggeeRealm->updateDebuggerObservesWasm();
+   debuggeeRealm->updateDebuggerObservesCoverage();
+@@ -5196,6 +5237,7 @@ void Debugger::removeDebuggeeGlobal(JS::GCContext* gcx, GlobalObject* global,
+     global->realm()->unsetIsDebuggee();
+   } else {
+     global->realm()->updateDebuggerObservesAllExecution();
++    global->realm()->updateAllDebuggersInvisibleToContent();
+     global->realm()->updateDebuggerObservesAsmJS();
+     global->realm()->updateDebuggerObservesWasm();
+     global->realm()->updateDebuggerObservesCoverage();
+@@ -6879,6 +6921,8 @@ const JSPropertySpec Debugger::properties[] = {
+                   setAllowUnobservedAsmJS),
+     JS_DEBUG_PSGS("allowUnobservedWasm", getAllowUnobservedWasm,
+                   setAllowUnobservedWasm),
++    JS_DEBUG_PSGS("invisibleToContent", getInvisibleToContent,
++                  setInvisibleToContent),
+     JS_DEBUG_PSGS("collectCoverageInfo", getCollectCoverageInfo,
+                   setCollectCoverageInfo),
+     JS_DEBUG_PSGS("exclusiveDebuggerOnEval", getExclusiveDebuggerOnEval,
+diff --git a/js/src/debugger/Debugger.h b/js/src/debugger/Debugger.h
+index 517dc5cc25..6156c921c6 100644
+--- a/js/src/debugger/Debugger.h
++++ b/js/src/debugger/Debugger.h
+@@ -642,6 +642,13 @@ class Debugger : private mozilla::LinkedListElement<Debugger> {
+   bool allowUnobservedAsmJS;
+   bool allowUnobservedWasm;
+ 
++  // When true, this Debugger's debuggees do not take on the debuggee side
++  // effects that content can observe: extra stack capture for throws, async
++  // stack capture, the Promise return-value optimization being disabled, and
++  // asm.js/wasm being deoptimized. Lets an embedder attach a Debugger without
++  // the debuggee realm becoming distinguishable from one that has no debugger.
++  bool invisibleToContent;
++
+   // When this flag is true, this debugger should be the only one to have its
+   // hooks called when it evaluates via Frame.evalWithBindings,
+   // Object.executeInGlobalWithBindings or Object.call.
+@@ -1025,6 +1032,8 @@ class Debugger : private mozilla::LinkedListElement<Debugger> {
+ 
+   bool isExclusiveDebuggerOnEval() const;
+ 
++  bool isInvisibleToContent() const { return invisibleToContent; }
++
+  private:
+   [[nodiscard]] static bool ensureExecutionObservabilityOfFrame(
+       JSContext* cx, AbstractFramePtr frame);
+diff --git a/js/src/jsapi.cpp b/js/src/jsapi.cpp
+index 6df2fc69cd..b93285b7f8 100644
+--- a/js/src/jsapi.cpp
++++ b/js/src/jsapi.cpp
+@@ -5034,7 +5034,7 @@ JS_PUBLIC_API bool JS::IsAsyncStackCaptureEnabledForRealm(JSContext* cx) {
+   }
+ 
+   if (!cx->options().asyncStackCaptureDebuggeeOnly() ||
+-      cx->realm()->isDebuggee()) {
++      cx->realm()->isDebuggeeVisibleToContent()) {
+     return true;
+   }
+ 
+diff --git a/js/src/vm/Realm.cpp b/js/src/vm/Realm.cpp
+index e9959dc153..b16bcd07f5 100644
+--- a/js/src/vm/Realm.cpp
++++ b/js/src/vm/Realm.cpp
+@@ -439,6 +439,24 @@ void Realm::setNewObjectMetadata(JSContext* cx, HandleObject obj) {
+   }
+ }
+ 
++void Realm::updateAllDebuggersInvisibleToContent() {
++  MOZ_ASSERT(isDebuggee());
++
++  GlobalObject* global =
++      zone()->runtimeFromMainThread()->gc.isForegroundSweeping()
++          ? unsafeUnbarrieredMaybeGlobal()
++          : maybeGlobal();
++
++  // Execution tracing makes the realm a debuggee on its own, so it can't be
++  // hidden by the Debuggers that happen to be attached.
++  if (global && !isTracingExecution_ &&
++      DebugAPI::allDebuggersInvisibleToContent(global)) {
++    debugModeBits_ |= AllDebuggersInvisibleToContent;
++  } else {
++    debugModeBits_ &= ~AllDebuggersInvisibleToContent;
++  }
++}
++
+ void Realm::updateDebuggerObservesFlag(unsigned flag) {
+   MOZ_ASSERT(isDebuggee());
+   MOZ_ASSERT(flag == DebuggerObservesAllExecution ||
+@@ -653,7 +664,7 @@ bool Realm::shouldCaptureStackForThrow() {
+   // To match other browsers, we always capture a stack trace if the realm is a
+   // debuggee (this includes the devtools console being open) or if unlimited
+   // stack traces have been enabled for this realm (used in automation).
+-  if (isDebuggee() || isUnlimitedStacksCapturingEnabled) {
++  if (isDebuggeeVisibleToContent() || isUnlimitedStacksCapturingEnabled) {
+     return true;
+   }
+ 
+diff --git a/js/src/vm/Realm.h b/js/src/vm/Realm.h
+index c60b7da46f..7bbfc58948 100644
+--- a/js/src/vm/Realm.h
++++ b/js/src/vm/Realm.h
+@@ -407,6 +407,9 @@ class JS::Realm : public JS::shadow::Realm {
+     DebuggerObservesCoverage = 1 << 3,
+     DebuggerObservesWasm = 1 << 4,
+     DebuggerObservesNativeCall = 1 << 5,
++    // Set only when the realm has debuggers and *every* one of them has
++    // invisibleToContent set. See isDebuggeeVisibleToContent.
++    AllDebuggersInvisibleToContent = 1 << 6,
+   };
+   uint32_t debugModeBits_ = 0;
+   friend class js::AutoRestoreRealmDebugMode;
+@@ -720,6 +723,16 @@ class JS::Realm : public JS::shadow::Realm {
+   // object.
+   bool isDebuggee() const { return !!(debugModeBits_ & IsDebuggee); }
+ 
++  // True if this realm is a debuggee whose debuggee-ness is allowed to have
++  // side effects that content can observe (extra stack capture, async stack
++  // capture, ...). False when every attached Debugger has opted out via
++  // invisibleToContent, which lets an embedder attach a Debugger without
++  // making the realm look like it has DevTools open.
++  bool isDebuggeeVisibleToContent() const {
++    return isDebuggee() && !(debugModeBits_ & AllDebuggersInvisibleToContent);
++  }
++  void updateAllDebuggersInvisibleToContent();
++
+   void setIsDebuggee();
+   void unsetIsDebuggee();
+ 
+@@ -731,6 +744,7 @@ class JS::Realm : public JS::shadow::Realm {
+     isTracingExecution_ = true;
+     setIsDebuggee();
+     updateDebuggerObservesAllExecution();
++    updateAllDebuggersInvisibleToContent();
+   }
+ 
+   void disableExecutionTracing() {
+@@ -744,6 +758,8 @@ class JS::Realm : public JS::shadow::Realm {
+     updateDebuggerObservesAllExecution();
+     if (!hasDebuggers()) {
+       unsetIsDebuggee();
++    } else {
++      updateAllDebuggersInvisibleToContent();
+     }
+   }
+ 

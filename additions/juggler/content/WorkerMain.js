@@ -22,6 +22,7 @@ const runtime = new Runtime(true /* isWorker */);
   // Create execution context in the runtime only when the script
   // source was actually evaluated in it.
   const dbg = new Debugger(global);
+  dbg.invisibleToContent = true;
   if (dbg.findScripts({global}).length) {
     runtime.createExecutionContext(null /* domWindow */, global, {});
   } else {

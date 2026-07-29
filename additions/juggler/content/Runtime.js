@@ -56,6 +56,11 @@ const disallowedMessageCategories = new Set([
 class Runtime {
   constructor(isWorker = false) {
     this._debugger = new Debugger();
+    // Keep the debuggee realm indistinguishable from one with no debugger
+    // attached: without this, having Juggler attached is equivalent to having
+    // DevTools open as far as content-visible behaviour is concerned (async
+    // stack capture, throw-site stack capture, deoptimized asm.js/wasm).
+    this._debugger.invisibleToContent = true;
     this._pendingPromises = new Map();
     this._executionContexts = new Map();
     this._windowToExecutionContext = new Map();
