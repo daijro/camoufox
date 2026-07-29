@@ -16,6 +16,9 @@ emitted mousemove events catches it.
 Run against a specific build:
     CAMOUFOX_EXECUTABLE_PATH=/path/to/camoufox-bin python tests/patches/humanize-mouse-trajectory.py
 (without the env var it uses the camoufox-managed browser download.)
+Against an unpackaged objdir build, run `make stage-fonts` first: these launch
+through AsyncCamoufox, which sets FONTCONFIG_FILE, and a build with no bundled
+fonts fails startup in a way that surfaces as a confusing TargetClosedError.
 
 What PASS means:
     * humanize=True expands one long mouse.move into many intermediate

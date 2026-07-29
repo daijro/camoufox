@@ -249,6 +249,12 @@ tests:
 		--executable-path ../$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
 		$(if $(filter true,$(headful)),--headful,)
 
+# Lets tests/patches/*.py run against an unpackaged build. Not needed by `run`
+# or `tests`, which launch without the Python wrapper and so fall back to the
+# system fontconfig.
+stage-fonts:
+	bash scripts/stage-fonts.sh $(version) $(release)
+
 unbusy:
 	rm -rf $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
 		$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox \
