@@ -512,6 +512,8 @@ Camoufox patches Juggler to give it its own isolated "copy" of the page to work 
 
 Additionally, Juggler sends its inputs directly through the Firefox's original user input handlers, meaning they are handled the exact same way as if you were using the browser normally. Camoufox also patches Firefox's headless mode to appear the same as if it were running in a normal window. But as a fallback, the Python library can run Camoufox in a [virtual display](https://camoufox.com/python/virtual-display/) if headless mode ever leaks.
 
+*(Another project patching Firefox at the source level, with a different driver-side focus - killing automation-layer tells like an attached debugger rather than isolating Juggler's page copy: [invisible_playwright](https://github.com/feder-cr/invisible_playwright).)*
+
 ---
 
 <h1 align="center">Build System</h1>
