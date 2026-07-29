@@ -75,7 +75,8 @@ export function RuntimePage() {
   )
 
   const memLabel = useMemo(() => {
-    if (!stats?.memoryUsedMb || !stats.memoryTotalMb) return '—'
+    if (stats == null) return '…'
+    if (stats.memoryUsedMb == null || stats.memoryTotalMb == null) return '—'
     const used = (stats.memoryUsedMb / 1024).toFixed(1)
     const total = (stats.memoryTotalMb / 1024).toFixed(1)
     return `${used} / ${total} GB`
@@ -126,7 +127,11 @@ export function RuntimePage() {
           <SummaryCard
             label="CPU"
             value={
-              stats?.cpuPercent != null ? `${stats.cpuPercent.toFixed(0)}%` : '—'
+              stats == null
+                ? '…'
+                : stats.cpuPercent != null
+                  ? `${stats.cpuPercent.toFixed(0)}%`
+                  : '—'
             }
           />
           <SummaryCard label="内存" value={memLabel} />

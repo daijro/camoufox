@@ -35,6 +35,7 @@ export function ProfileDetailPage() {
   )
   const [cookies, setCookies] = useState(profile?.cookiesJson ?? '[]')
   const [cookieMsg, setCookieMsg] = useState('')
+  const [opsMsg, setOpsMsg] = useState('')
   const [proxyPick, setProxyPick] = useState(profile?.proxyId ?? '')
 
   const [accounts, setAccounts] = useState<PlatformAccount[]>([])
@@ -303,7 +304,7 @@ export function ProfileDetailPage() {
               <p className="text-[11px] text-slate-400">
                 Cookie JSON 仅在 Profile 尚无 cookies.sqlite 时注入；已有站点登录态不会被覆盖。
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="secondary" onClick={() => setSection('accounts')}>
                   管理平台账号
                 </Button>
@@ -316,16 +317,23 @@ export function ProfileDetailPage() {
                     profile.status === 'api'
                   }
                   onClick={() => {
+                    setOpsMsg('')
                     void remote
                       .remoteClearCache(profile.id)
-                      .then((p) => useDataStore.getState().upsertProfile(p))
+                      .then((p) => {
+                        useDataStore.getState().upsertProfile(p)
+                        setOpsMsg(`已清除缓存，当前占用 ${p.diskMb} MB`)
+                      })
                       .catch((e) =>
-                        window.alert(e instanceof Error ? e.message : String(e)),
+                        setOpsMsg(e instanceof Error ? e.message : String(e)),
                       )
                   }}
                 >
                   清除缓存（保留 Cookie）
                 </Button>
+                {opsMsg ? (
+                  <span className="text-xs text-teal-700">{opsMsg}</span>
+                ) : null}
               </div>
             </section>
           ) : null}
