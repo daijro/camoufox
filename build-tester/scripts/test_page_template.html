@@ -5,18 +5,8 @@
   <title>Camoufox Check</title>
 </head>
 <body>
-<script src="/checks-bundle.js"></script>
-<script>
-(async function () {
-  try {
-    var results = await CamoufoxChecks.runAllChecks();
-    window.__testResults__ = results;
-    window.__testComplete__ = true;
-  } catch (e) {
-    window.__testError__ = String(e);
-    window.__testComplete__ = true;
-  }
-})();
-</script>
+<!-- Deliberately inert. The checks run as an init script (see bundle.py) so that
+     their results land in the world the runner reads from, and so the page under
+     test cannot see them. -->
 </body>
 </html>

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from bundle import ensure_bundle
+from bundle import checks_init_script
 from certificate import (
     build_certificate_text,
     generate_certificate,
@@ -44,6 +44,7 @@ async def run_per_context_phase(
     per_context_entries: list,
     test_page_url: str,
     profile_results: list,
+    checks_script: str,
 ) -> None:
     # Phase 1: Create all contexts simultaneously
     open_contexts = []
@@ -68,6 +69,7 @@ async def run_per_context_phase(
 
             context = await browser.new_context(**ctx_opts)
             await context.add_init_script(preset["initScript"])
+            await context.add_init_script(checks_script)
             page = await context.new_page()
             open_contexts.append({"context": context, "page": page, "profile": profile})
         except Exception as e:
@@ -180,8 +182,8 @@ async def run_tests(
 ) -> int:
     project_dir = Path(__file__).parent.parent
 
-    # 1. Ensure bundle exists
-    ensure_bundle(project_dir)
+    # 1. Ensure bundle exists, and build the init script that runs it
+    checks_script = checks_init_script(project_dir)
 
     # 2. Generate fingerprint presets
     print("\nGenerating fingerprint presets via Camoufox Python API...")
@@ -268,7 +270,7 @@ async def run_tests(
                 return 1
 
             try:
-                await run_per_context_phase(browser, per_context_entries, test_page_url, profile_results)
+                await run_per_context_phase(browser, per_context_entries, test_page_url, profile_results, checks_script)
             finally:
                 await browser.close()
 
@@ -305,6 +307,7 @@ async def run_tests(
                 await context.add_init_script(
                     f"try {{ if (typeof window.setWebRTCIPv4 === 'function') window.setWebRTCIPv4({json.dumps(WEBRTC_TEST_IP)}); }} catch(e) {{}}"
                 )
+                await context.add_init_script(checks_script)
 
                 page = await context.new_page()
                 await page.goto(test_page_url, wait_until="domcontentloaded", timeout=30000)
