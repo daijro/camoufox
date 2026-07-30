@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from bundle import checks_init_script
+from bundle import ensure_bundle
 from certificate import (
     build_certificate_text,
     generate_certificate,
@@ -39,12 +39,51 @@ from wsl import get_windows_host_ip, is_elf_binary
 
 # ─── Per-Context Phase ────────────────────────────────────────────────────────
 
+# The page hands its results over through a DOM node rather than a JS global,
+# because page.evaluate() runs in juggler's isolated world and cannot see globals
+# the page wrote. See the comment in test_page_template.html for why the checks
+# have to stay in the page. Xray vision does not hide real nodes, so reading the
+# node's text from the isolated world returns exactly what the page wrote.
+_RESULTS_NODE = "__camoufoxResults__"
+_READ_RESULTS = (
+    "() => { const n = document.getElementById(%r); return n ? n.textContent : null; }" % _RESULTS_NODE
+)
+
+
+def _revive(value):
+    """Undo the tagging the page applied to values JSON cannot carry."""
+    if isinstance(value, list):
+        return [_revive(item) for item in value]
+    if isinstance(value, dict):
+        if "__undefined__" in value:
+            return None
+        nonfinite = value.get("__nonfinite__")
+        if nonfinite is not None:
+            return float(nonfinite)
+        return {key: _revive(item) for key, item in value.items()}
+    return value
+
+
+async def collect_results(page, timeout: int = 120000):
+    """Wait for the page's checks to finish, then read them back.
+
+    Returns (results, error): exactly one is None.
+    """
+    await page.wait_for_selector(f"#{_RESULTS_NODE}", state="attached", timeout=timeout)
+    raw = await page.evaluate(_READ_RESULTS)
+    if not raw:
+        return None, "results node was empty"
+    payload = _revive(json.loads(raw))
+    if payload.get("error"):
+        return None, payload["error"]
+    return payload.get("results"), None
+
+
 async def run_per_context_phase(
     browser,
     per_context_entries: list,
     test_page_url: str,
     profile_results: list,
-    checks_script: str,
 ) -> None:
     # Phase 1: Create all contexts simultaneously
     open_contexts = []
@@ -69,7 +108,6 @@ async def run_per_context_phase(
 
             context = await browser.new_context(**ctx_opts)
             await context.add_init_script(preset["initScript"])
-            await context.add_init_script(checks_script)
             page = await context.new_page()
             open_contexts.append({"context": context, "page": page, "profile": profile})
         except Exception as e:
@@ -90,7 +128,10 @@ async def run_per_context_phase(
     # Phase 3: Wait for all tests to complete
     print(f"  Waiting for all per-context tests to complete...")
     await asyncio.gather(
-        *[ctx["page"].wait_for_function("!!window.__testComplete__", timeout=120000) for ctx in open_contexts],
+        *[
+            ctx["page"].wait_for_selector(f"#{_RESULTS_NODE}", state="attached", timeout=120000)
+            for ctx in open_contexts
+        ],
         return_exceptions=True,
     )
 
@@ -100,11 +141,10 @@ async def run_per_context_phase(
         page = ctx_data["page"]
         profile = ctx_data["profile"]
         try:
-            test_error = await page.evaluate("window.__testError__")
+            results, test_error = await collect_results(page)
             if test_error:
                 pr = {"profile": profile, "results": None, "matchResults": [], "grade": "F", "passCount": 0, "totalChecks": 0, "error": test_error}
             else:
-                results = await page.evaluate("window.__testResults__")
                 adjust_cross_os_font_checks(profile, results)
                 match_results = compute_match_results(profile, results)
                 pass_count, total_checks = count_all_checks(profile, results, match_results)
@@ -182,8 +222,8 @@ async def run_tests(
 ) -> int:
     project_dir = Path(__file__).parent.parent
 
-    # 1. Ensure bundle exists, and build the init script that runs it
-    checks_script = checks_init_script(project_dir)
+    # 1. Ensure bundle exists (the test page loads it with a <script src>)
+    ensure_bundle(project_dir)
 
     # 2. Generate fingerprint presets
     print("\nGenerating fingerprint presets via Camoufox Python API...")
@@ -270,7 +310,7 @@ async def run_tests(
                 return 1
 
             try:
-                await run_per_context_phase(browser, per_context_entries, test_page_url, profile_results, checks_script)
+                await run_per_context_phase(browser, per_context_entries, test_page_url, profile_results)
             finally:
                 await browser.close()
 
@@ -307,18 +347,15 @@ async def run_tests(
                 await context.add_init_script(
                     f"try {{ if (typeof window.setWebRTCIPv4 === 'function') window.setWebRTCIPv4({json.dumps(WEBRTC_TEST_IP)}); }} catch(e) {{}}"
                 )
-                await context.add_init_script(checks_script)
 
                 page = await context.new_page()
                 await page.goto(test_page_url, wait_until="domcontentloaded", timeout=30000)
                 print(f"  Waiting for tests to complete...")
-                await page.wait_for_function("!!window.__testComplete__", timeout=120000)
+                results, test_error = await collect_results(page)
 
-                test_error = await page.evaluate("window.__testError__")
                 if test_error:
                     pr = {"profile": profile, "results": None, "matchResults": [], "grade": "F", "passCount": 0, "totalChecks": 0, "error": test_error}
                 else:
-                    results = await page.evaluate("window.__testResults__")
                     adjust_cross_os_font_checks(profile, results)
                     results["selfDestruct"] = None  # Not applicable for global profiles
                     match_results = compute_match_results(profile, results)

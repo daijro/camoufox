@@ -22,6 +22,7 @@ scripts/test*
 .idea
 /tests/*.disabled
 k8s/
+camoufox-*.*.*/
 
 # Old data
 _old/

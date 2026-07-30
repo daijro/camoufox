@@ -547,25 +547,42 @@ class Frame {
         wantXrays: true,
       });
     }
-    // Camoufox: make `window` inside the world mean the world's own global.
+    // Camoufox: make the world's self-references mean the world's own global.
     //
-    // Without this, `window` resolves through sandboxPrototype to the page's
-    // window, so `window.x = 1` and `globalThis.x = 1` land in different places
-    // and only the latter is readable back. Playwright calls its bindings as
+    // Without this they resolve through sandboxPrototype to the page's window,
+    // so `window.x = 1` and `globalThis.x = 1` land in different places and only
+    // the latter is readable back. Playwright calls its bindings as
     // `globalThis[name]` and survives, but anything using `window[name]` --
     // expose_function() as it is documented, and any page script the automation
     // evaluates -- silently reads undefined (#628 follow-up).
     //
+    // `self` has to move with `window`, not be left behind: `window === self`
+    // holds in every real global, and fixing only `window` swaps one asymmetry
+    // for another. It is the alias UMD and webpack bundles reach for, so an
+    // add_init_script() payload that is a bundle writes to one and reads the
+    // other. `frames` is the same identity (`window.frames === window`
+    // everywhere); indexed child access still works, since a numeric key misses
+    // on the sandbox and resolves on the page window through the prototype.
+    //
+    // `top` and `parent` are only aliases in a top-level frame. In a subframe
+    // they name genuinely different windows, and the page's own values are the
+    // right answer, so leave them alone there.
+    //
     // Nothing is lost: the sandbox still inherits every real window property
     // through its prototype, so window.document, window.location and friends
-    // resolve exactly as before. It is also the more faithful shape, since
-    // `window === globalThis` holds in a real page and did not hold here.
-    Object.defineProperty(sandbox, 'window', {
-      value: sandbox,
-      configurable: true,
-      writable: true,
-      enumerable: false,
-    });
+    // resolve exactly as before.
+    const domWindow = this.domWindow();
+    const selfNames = ['window', 'self', 'frames'];
+    if (domWindow === domWindow.top)
+      selfNames.push('top', 'parent');
+    for (const selfName of selfNames) {
+      Object.defineProperty(sandbox, selfName, {
+        value: sandbox,
+        configurable: true,
+        writable: true,
+        enumerable: false,
+      });
+    }
     const world = this._runtime.createExecutionContext(this.domWindow(), sandbox, {
       frameId: this.id(),
       name,

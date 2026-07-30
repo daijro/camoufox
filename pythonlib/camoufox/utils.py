@@ -5,7 +5,7 @@ from os import environ
 from os.path import abspath
 from pathlib import Path
 from pprint import pprint
-from random import randint, randrange
+from random import randint
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
@@ -715,8 +715,18 @@ def launch_options(
         clamp_window_dimensions(config)
         clamp_window_position(config)
 
-    # Set a random window.history.length
-    set_into(config, 'window.history.length', randrange(1, 6))  # nosec
+    # Deliberately NOT setting window.history.length. It used to be pinned to a
+    # random 1-5 because browser.sessionhistory.max_entries=0 left the real
+    # session history empty, so the honest value was 0 -- an impossible number,
+    # since the HTML spec guarantees a browsing context always keeps its current
+    # entry. settings/camoufox.cfg now runs Firefox's stock max_entries, so the
+    # real value starts at 1 and grows with each navigation.
+    #
+    # Pinning it on top of that is strictly worse than leaving it alone: the
+    # value would no longer move across navigations, and a fresh tab would claim
+    # a depth of, say, 4 while history.back() -- which reads the real session
+    # history -- does nothing. Any page can check that pair. The property stays
+    # in properties.json for callers who want to override it by hand.
 
     # Update fonts list
     if fonts:
