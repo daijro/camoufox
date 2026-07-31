@@ -18,15 +18,17 @@ DISPLAYFD_READ_TIMEOUT_S = 10.0
 
 # Xvfb screen geometry for headless="virtual".
 #
-# This used to be hardcoded to 1x1x24. A 1x1 root window is not a plausible
-# desktop: it breaks anything that measures the screen, and it is why
-# clamp_screen_to_display() has to special-case virtual displays (otherwise a
-# generated fingerprint gets clamped to 1x1). Default to an ordinary desktop
-# size instead. The framebuffer cost is trivial -- 1920*1080*4 bytes is ~8MB.
+# 1x1x24 is Camoufox's long-standing default and stays the default. The root
+# window size is not observable as a fingerprint: screen.* comes from the
+# generated fingerprint, applied per context in the browser, and
+# clamp_screen_to_display() is skipped entirely for virtual displays (see the
+# `not virtual_display` guard in utils.py), so a 1x1 root never clamps a
+# generated screen down to 1x1.
 #
 # Override with CAMOUFOX_VIRTUAL_DISPLAY_SIZE="<width>x<height>x<depth>", e.g.
-# "2560x1440x24". Depth may be omitted.
-DEFAULT_SCREEN = "1920x1080x24"
+# "1920x1080x24", for the cases that do want a real framebuffer to draw into.
+# Depth may be omitted.
+DEFAULT_SCREEN = "1x1x24"
 SCREEN_ENV_VAR = "CAMOUFOX_VIRTUAL_DISPLAY_SIZE"
 
 # The Composite extension, disabled by default (Xvfb's `-extension COMPOSITE`).
