@@ -88,8 +88,16 @@ function isMainWorldRequest(functionDeclaration, args) {
 // Array...), so a hostile page can observe or poison main-world evaluation.
 // That is inherent to running there and is exactly why the default world is
 // isolated and this path is opt-in.
-const MAIN_WORLD_EVALUATE = `
-(isFunction, returnByValue, expression, argCount, ...argsAndHandles) => {
+//
+// It is written as a real function and stringified at the bottom rather than
+// authored as a template literal, so SpiderMonkey parses it when Runtime.js
+// loads. A syntax error is then a startup failure instead of a first-`mw:`-call
+// failure -- which matters here more than usual, because Playwright rewrites
+// callFunction protocol errors into "Execution context was destroyed", so a bad
+// wrapper surfaces as a phantom navigation rather than as a syntax error (#631).
+// Nothing in the body may close over Runtime.js scope: only the source text
+// crosses into the page, and the page's global is where every name resolves.
+function mainWorldEvaluate(isFunction, returnByValue, expression, argCount, ...argsAndHandles) {
   const typedArrays = {
     i8: Int8Array, ui8: Uint8Array, ui8c: Uint8ClampedArray,
     i16: Int16Array, ui16: Uint16Array,
@@ -193,7 +201,7 @@ const MAIN_WORLD_EVALUATE = `
       return {bi: value.toString()};
     if (value instanceof Error || tagged(value, 'Error')) {
       const header = value.name + ': ' + value.message;
-      const stack = value.stack && value.stack.startsWith(header) ? value.stack : header + '\\n' + value.stack;
+      const stack = value.stack && value.stack.startsWith(header) ? value.stack : header + '\n' + value.stack;
       return {e: {n: value.name, m: value.message, s: stack}};
     }
     if (value instanceof Date || tagged(value, 'Date'))
@@ -273,7 +281,20 @@ const MAIN_WORLD_EVALUATE = `
   if (result && typeof result.then === 'function')
     return result.then(jsonValue);
   return jsonValue(result);
-}`;
+}
+
+// evaluateFunction() compiles this with `executeInGlobal('(' + text + ')')`, so
+// what gets evaluated is a function *expression*, and its binding never reaches
+// the page global either way.
+//
+// The name is dropped on the way out regardless. A named function expression
+// puts its name on every stack frame it appears in, and a page that throws
+// inside page.evaluate() can read those frames back off error.stack -- so
+// keeping it would hand a detector the literal string "mainWorldEvaluate".
+// Anonymous is what the page saw before this was a real function, so keep it
+// that way. Verified: with the name stripped, output is identical to the
+// previous template-literal wrapper, stack frames included.
+const MAIN_WORLD_EVALUATE = mainWorldEvaluate.toString().replace(/^function mainWorldEvaluate/, 'function');
 
 class Runtime {
   constructor(isWorker = false) {
