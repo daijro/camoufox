@@ -1,6 +1,23 @@
 ac_add_options --disable-update-agent
 # ac_add_options --disable-alsa
 
+# Bundled fonts.
+#
+# MOZ_BUNDLED_FONTS is what compiles in CoreTextFontList::ActivateBundledFonts(),
+# the only caller of ActivateFontsFromDir() -- which is what registers
+# <GRE>/fonts with CoreText via CTFontManagerRegisterFontURLs(). Without the
+# define, that whole path is compiled out and the fonts we ship under
+# Contents/Resources/fonts (Makefile passes `--fonts windows linux` for macOS)
+# are never loaded, so a spoofed font list resolves against the host's own
+# fonts instead of ours.
+#
+# Upstream's default is `target.os == "WINNT" or target.kernel == "Linux"`
+# (toolkit/moz.configure), so Linux and Windows get this for free and macOS
+# does not. settings/camoufox.cfg already sets
+# `defaultPref("gfx.bundled-fonts.activate", 1)`, i.e. the pref side is on --
+# only the build flag was missing.
+ac_add_options --enable-bundled-fonts
+
 # Packaging related
 # #export DSYMUTIL="$MOZBUILD/clang/bin/dsymutil"
 # export DMG_TOOL="$MOZBUILD/dmg/dmg"
