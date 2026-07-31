@@ -11,7 +11,7 @@
  #include "mozilla/MemoryReporting.h"
  #include "mozilla/Preferences.h"
  #include "mozilla/PresShell.h"
-@@ -1701,6 +1705,57 @@
+@@ -1701,8 +1705,109 @@
                                         aCallerType, aRv);
  }
  
@@ -68,11 +68,16 @@
 +
  bool nsINode::DispatchEvent(Event& aEvent, CallerType aCallerType,
                              ErrorResult& aRv) {
-   // Playwright drives <select> and <input type=file> by mutating the control
-@@ -1713,6 +1768,46 @@
-   // nsContentUtils::DispatchInputEvent, which does both itself. System callers
-   // count because Juggler's parent-built events (_setFileInputFiles) are still
-   // untrusted until DispatchDOMEvent promotes them, further down.
++  // Playwright drives <select> and <input type=file> by mutating the control
++  // and dispatching the "input"/"change" pair from script, so two things a
++  // real interaction always does are missing: the control is never marked
++  // user-interacted, and no user gesture is registered on the document. A
++  // dropdown <select> also loses the mouse events the parent process sends to
++  // the chosen <option>. Add them back here, for the dispatches that reach
++  // this function directly rather than through
++  // nsContentUtils::DispatchInputEvent, which does both itself. System callers
++  // count because Juggler's parent-built events (_setFileInputFiles) are still
++  // untrusted until DispatchDOMEvent promotes them, further down.
 +  const bool fromAutomation =
 +      (aEvent.IsTrusted() || aCallerType == CallerType::System) &&
 +      HasScriptedCaller();
@@ -116,7 +121,7 @@
    // XXX sXBL/XBL2 issue -- do we really want the owner here?  What
    // if that's the XBL document?  Would we want its presshell?  Or what?
    nsCOMPtr<Document> document = OwnerDoc();
-@@ -1725,6 +1820,12 @@
+@@ -1715,6 +1820,12 @@
    // Obtain a presentation shell
    RefPtr<nsPresContext> context = document->GetPresContext();
  
@@ -129,10 +134,11 @@
    nsEventStatus status = nsEventStatus_eIgnore;
    nsresult rv = EventDispatcher::DispatchDOMEvent(this, nullptr, &aEvent,
                                                    context, &status);
-@@ -1733,6 +1834,11 @@
+@@ -1722,6 +1833,12 @@
+   if (NS_FAILED(rv)) {
      aRv.Throw(rv);
    }
- 
++
 +  if (optionToClick) {
 +    // Last, and outside the user-input state, exactly as SelectChild orders it.
 +    handlingUserInput.reset();
@@ -141,8 +147,6 @@
    return retval;
  }
  
-diff --git a/dom/events/Event.cpp b/dom/events/Event.cpp
-index 7ff4014b8d..b36139e649 100644
 --- a/dom/events/Event.cpp
 +++ b/dom/events/Event.cpp
 @@ -8,7 +8,9 @@
