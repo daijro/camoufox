@@ -48,7 +48,7 @@ closedsrc
 
 .venv
 *.pem
-.DS_store
+.DS_Store
 
 # Build outputs
 *.so
