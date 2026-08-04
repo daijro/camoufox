@@ -1,20 +1,38 @@
+Camoufox: spoof the `system-ui` CSS generic to match the spoofed OS.
+
+Sibling to font-system-fonts-css2.patch, which covers the older CSS2
+system-font shorthand keywords (caption / icon / menu / message-box /
+small-caption / status-bar) via nsLayoutUtils::ComputeSystemFont().
+
+Chrome documents are excluded. The browser's own UI is not reachable by the
+page, and resolving its `system-ui` to a family from another OS ("Helvetica"
+or "Segoe UI" on a host that has neither) leaves the toolbar and menus falling
+back to the default serif font.
+
+Bug: daijro/camoufox#695 (chrome exemption), daijro/camoufox#599 (spoof)
+
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
-index d82edfc767..2e05cedcb3 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
 +++ b/gfx/thebes/gfxPlatformFontList.cpp
-@@ -2246,6 +2246,18 @@ void gfxPlatformFontList::MaybeRemoveCmap(gfxCharacterMap* aCharMap,
+@@ -2245,6 +2245,24 @@
  static void GetSystemUIFontFamilies(
      FontVisibilityProvider* aFontVisibilityProvider,
      [[maybe_unused]] nsAtom* aLangGroup, nsTArray<nsCString>& aFamilies) {
-+  // Camoufox: spoof system-ui to match the spoofed OS
-+  if (auto platform = MaskConfig::GetString("navigator.platform"); platform) {
-+    if (*platform == "MacIntel") {
-+      *aFamilies.AppendElement() = "Helvetica"_ns;
-+      return;
-+    }
-+    if (*platform == "Win32") {
-+      *aFamilies.AppendElement() = "Segoe UI"_ns;
-+      return;
++  // Camoufox: spoof system-ui to match the spoofed OS. Chrome documents are
++  // excluded: they are not reachable by the page, and pointing the browser's
++  // own UI at a family from another OS leaves it falling back to the default
++  // serif font (daijro/camoufox#695). A null provider means there is no
++  // document behind the lookup, where spoofing is the safe default.
++  if (!(aFontVisibilityProvider && aFontVisibilityProvider->IsChrome())) {
++    if (auto platform = MaskConfig::GetString("navigator.platform"); platform) {
++      if (*platform == "MacIntel") {
++        *aFamilies.AppendElement() = "Helvetica"_ns;
++        return;
++      }
++      if (*platform == "Win32") {
++        *aFamilies.AppendElement() = "Segoe UI"_ns;
++        return;
++      }
 +    }
 +  }
 +

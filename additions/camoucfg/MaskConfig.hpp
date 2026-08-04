@@ -7,6 +7,7 @@ Written by daijro.
 #include "json.hpp"
 #include <memory>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <optional>
 #include <codecvt>
@@ -114,6 +115,31 @@ inline std::vector<std::string> GetStringListLower(const std::string& key) {
                    [](unsigned char c) { return std::tolower(c); });
   }
   return result;
+}
+
+/**
+ * The spoofed font family allowlist ("fonts"), lowercased and cached for the
+ * lifetime of the process. CAMOU_CONFIG is read once at startup and never
+ * changes, and the gfx font lookup paths consult this on every family
+ * resolution, so re-parsing the JSON per call is not an option.
+ * An empty list means no font spoofing is configured.
+ */
+inline const std::vector<std::string>& FontAllowlist() {
+  static const std::vector<std::string> fonts = GetStringListLower("fonts");
+  return fonts;
+}
+
+inline bool HasFontAllowlist() { return !FontAllowlist().empty(); }
+
+/**
+ * Whether a font family may be used. `family` must already be lowercased
+ * (gfxPlatformFontList::GenerateFontListKey output is). Always true when no
+ * allowlist is configured.
+ */
+inline bool IsFontAllowed(std::string_view family) {
+  const auto& fonts = FontAllowlist();
+  if (fonts.empty()) return true;
+  return std::find(fonts.begin(), fonts.end(), family) != fonts.end();
 }
 
 template <typename T>

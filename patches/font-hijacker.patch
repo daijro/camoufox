@@ -1,5 +1,42 @@
+Camoufox: restrict font family resolution to the spoofed "fonts" allowlist.
+
+The allowlist is applied when a family is looked up, NOT by handing the list to
+Firefox's `font.system.whitelist` pref (which is what this patch used to do).
+That pref drives gfxPlatformFontList::ApplyWhitelist(), which physically
+removes every non-listed family from the process-wide font list -- and, when
+the shared font list is enabled (the default on all three platforms), from the
+read-only list the parent process builds and shares with every content
+process.
+
+The parent process is also the process that paints the browser chrome, so
+pruning the list there strips the UI of the fonts it needs. On Windows that
+leaves the titlebar buttons drawing tofu boxes instead of their Segoe Fluent
+Icons / Segoe MDL2 Assets glyphs (U+E921 / U+E922 / U+E8BB) and the toolbar
+falling back to serif: the icon fonts are not in any of the generated masks,
+and "Segoe UI" only survives when the spoofed OS is Windows. Linux hosts were
+insulated by the bundled FONTCONFIG_FILE, which is why this only shows up on
+Windows and macOS builds.
+
+Filtering at lookup time instead keys off FontVisibilityProvider::IsChrome(),
+so chrome documents (browser UI, devtools, about: pages) keep the host's real
+font list while web content still only ever resolves families from the mask.
+The three content-reachable paths are covered:
+
+  - FindAndAddFamiliesLocked  -- font-family / CSS generic resolution, which is
+                                 what document.fonts.check() and text-metric
+                                 probing go through.
+  - GlobalFontFallback        -- per-character system fallback; also keeps the
+                                 cmap path forced, as the whitelist did, so the
+                                 platform fallback APIs can't pick a family
+                                 behind our back.
+  - gfxUserFontSet local()    -- upstream already refuses local() sources while
+                                 a whitelist is active; keep that behaviour for
+                                 content under the mask, so a page can't probe
+                                 for hidden families via src: local().
+
+Bug: daijro/camoufox#695
+
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
-index 6bdcd2a57c..41d46bf26c 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
 +++ b/gfx/thebes/gfxPlatformFontList.cpp
 @@ -13,6 +13,7 @@
@@ -10,28 +47,131 @@ index 6bdcd2a57c..41d46bf26c 100644
  
  #include "FontVisibilityProvider.h"
  
-@@ -313,6 +314,16 @@ gfxPlatformFontList::gfxPlatformFontList(bool aNeedFullnamePostscriptNames)
+@@ -890,6 +891,29 @@
+   ToLowerCase(aKeyName);
+ }
  
-   mFontPrefs = MakeUnique<FontPrefs>();
- 
-+  // Hijack the kFontSystemWhitelistPref pref
-+  if (std::vector<std::string> fontValues = MaskConfig::GetStringList("fonts");
-+      !fontValues.empty()) {
-+    std::string fontValuesJoined =
-+        std::accumulate(fontValues.begin(), fontValues.end(), std::string(),
-+                        [](const std::string& acc, const std::string& s) {
-+                          return acc.empty() ? s : acc + "," + s;
-+                        });
-+    Preferences::SetCString(kFontSystemWhitelistPref, fontValuesJoined.data());
++/* static */
++bool gfxPlatformFontList::MaskedFontListAppliesTo(
++    FontVisibilityProvider* aFontVisibilityProvider) {
++  if (!MaskConfig::HasFontAllowlist()) {
++    return false;
 +  }
-   gfxFontUtils::GetPrefsFontList(kFontSystemWhitelistPref, mEnabledFontsList);
-   mFontFamilyWhitelistActive = !mEnabledFontsList.IsEmpty();
++  // Chrome documents are not inspectable by the page and they need the host's
++  // real UI fonts -- on Windows the titlebar buttons are Segoe Fluent Icons
++  // glyphs and the toolbar is Segoe UI -- so they are exempt. A null provider
++  // is an internal lookup with no document behind it, which upstream likewise
++  // treats as fully privileged.
++  return aFontVisibilityProvider && !aFontVisibilityProvider->IsChrome();
++}
++
++/* static */
++bool gfxPlatformFontList::MaskedFontListBlocks(
++    FontVisibilityProvider* aFontVisibilityProvider,
++    const nsACString& aLowercaseFamily) {
++  return MaskedFontListAppliesTo(aFontVisibilityProvider) &&
++         !MaskConfig::IsFontAllowed(std::string_view(
++             aLowercaseFamily.BeginReading(), aLowercaseFamily.Length()));
++}
++
+ // Used if a stylo thread wants to trigger InitOtherFamilyNames in the main
+ // process: we can't do IPC from the stylo thread so we post this to the main
+ // thread instead.
+@@ -1418,7 +1442,11 @@
+     uint32_t aNextCh, Script aRunScript, FontPresentation aPresentation,
+     const gfxFontStyle* aMatchStyle, uint32_t& aCmapCount,
+     FontFamily& aMatchedFamily) {
+-  bool useCmaps = IsFontFamilyWhitelistActive() ||
++  // Camoufox: under the spoofed font list, force the cmap path for the same
++  // reason a whitelist does -- the platform fallback APIs choose a family for
++  // us, which would bypass the filtering in the loops below.
++  const bool maskedFontList = MaskedFontListAppliesTo(aFontVisibilityProvider);
++  bool useCmaps = IsFontFamilyWhitelistActive() || maskedFontList ||
+                   gfxPlatform::GetPlatform()->UseCmapsDuringSystemFallback();
+   FontVisibility level = aFontVisibilityProvider
+                              ? aFontVisibilityProvider->GetFontVisibility()
+@@ -1468,6 +1496,11 @@
+         if (!IsVisibleToCSS(family, level)) {
+           continue;
+         }
++        if (maskedFontList &&
++            MaskedFontListBlocks(aFontVisibilityProvider,
++                                 family.Key().AsString(SharedFontList()))) {
++          continue;
++        }
+         if (!family.IsFullyInitialized() &&
+             StaticPrefs::gfx_font_rendering_fallback_async() &&
+             !XRE_IsParentProcess()) {
+@@ -1494,6 +1527,13 @@
+       if (!IsVisibleToCSS(*family, level)) {
+         continue;
+       }
++      if (maskedFontList) {
++        nsAutoCString familyKey;
++        GenerateFontListKey(family->Name(), familyKey);
++        if (MaskedFontListBlocks(aFontVisibilityProvider, familyKey)) {
++          continue;
++        }
++      }
+       // evaluate all fonts in this family for a match
+       family->FindFontForChar(&data);
+       if (data.mMatchDistance == 0.0) {
+@@ -1754,6 +1794,11 @@
+       aFontVisibilityProvider ? aFontVisibilityProvider->GetFontVisibility()
+                               : FontVisibility::User;
  
++  // Camoufox: content only ever resolves families from the spoofed font list.
++  if (MaskedFontListBlocks(aFontVisibilityProvider, key)) {
++    return false;
++  }
++
+   // If this font lookup is the result of resolving a CSS generic (not a direct
+   // font-family request by the page), and RFP settings allow generics to be
+   // unrestricted, bump the effective visibility level applied here so as to
+diff --git a/gfx/thebes/gfxPlatformFontList.h b/gfx/thebes/gfxPlatformFontList.h
+--- a/gfx/thebes/gfxPlatformFontList.h
++++ b/gfx/thebes/gfxPlatformFontList.h
+@@ -652,6 +652,19 @@
+     return mFontFamilyWhitelistActive;
+   };
+ 
++  // Camoufox: the spoofed "fonts" allowlist is applied when a family is looked
++  // up rather than by pruning the process-wide (and cross-process shared) font
++  // list, so that the browser's own chrome UI keeps the host's real UI fonts.
++  // See daijro/camoufox#695.
++  //
++  // MaskedFontListAppliesTo: is aFontVisibilityProvider subject to the mask?
++  // MaskedFontListBlocks: ...and is aLowercaseFamily absent from it?
++  static bool MaskedFontListAppliesTo(
++      FontVisibilityProvider* aFontVisibilityProvider);
++  static bool MaskedFontListBlocks(
++      FontVisibilityProvider* aFontVisibilityProvider,
++      const nsACString& aLowercaseFamily);
++
+   static void FontWhitelistPrefChanged(const char* aPref, void* aClosure);
+ 
+   bool AddWithLegacyFamilyName(const nsACString& aLegacyName,
+diff --git a/gfx/thebes/gfxUserFontSet.cpp b/gfx/thebes/gfxUserFontSet.cpp
+--- a/gfx/thebes/gfxUserFontSet.cpp
++++ b/gfx/thebes/gfxUserFontSet.cpp
+@@ -461,8 +461,12 @@
+       gfxPlatformFontList* pfl = gfxPlatformFontList::PlatformFontList();
+       pfl->AddUserFontSet(fontSet);
+       // Don't look up local fonts if the font whitelist is being used.
++      // Camoufox: nor for content under the spoofed font list -- src: local()
++      // would otherwise let a page probe for families the mask hides.
+       gfxFontEntry* fe = nullptr;
+-      if (!pfl->IsFontFamilyWhitelistActive()) {
++      if (!pfl->IsFontFamilyWhitelistActive() &&
++          !gfxPlatformFontList::MaskedFontListAppliesTo(
++              fontSet->GetFontVisibilityProvider())) {
+         fe = gfxPlatform::GetPlatform()->LookupLocalFont(
+             fontSet->GetFontVisibilityProvider(), currSrc.mLocalName, Weight(),
+             Stretch(), SlantStyle());
 diff --git a/gfx/thebes/moz.build b/gfx/thebes/moz.build
-index 2bb893d84f..0088f6cab7 100644
 --- a/gfx/thebes/moz.build
 +++ b/gfx/thebes/moz.build
-@@ -299,3 +299,6 @@ DEFINES["GRAPHITE2_STATIC"] = True
+@@ -299,3 +299,6 @@
  COMPILE_FLAGS["WARNINGS_CXXFLAGS"] += ["-Werror=switch"]
  
  include("/tools/fuzzing/libfuzzer-config.mozbuild")
@@ -39,10 +179,9 @@ index 2bb893d84f..0088f6cab7 100644
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
 diff --git a/layout/style/FontFace.cpp b/layout/style/FontFace.cpp
-index 56e579eb33..5a679f75ba 100644
 --- a/layout/style/FontFace.cpp
 +++ b/layout/style/FontFace.cpp
-@@ -239,7 +239,16 @@ void FontFace::SetSizeAdjust(const nsACString& aValue, ErrorResult& aRv) {
+@@ -239,7 +239,16 @@
    mImpl->SetSizeAdjust(aValue, aRv);
  }
  
@@ -60,7 +199,7 @@ index 56e579eb33..5a679f75ba 100644
  
  Promise* FontFace::Load(ErrorResult& aRv) {
    EnsurePromise();
-@@ -249,7 +258,17 @@ Promise* FontFace::Load(ErrorResult& aRv) {
+@@ -249,7 +258,17 @@
      return nullptr;
    }
  
@@ -80,10 +219,9 @@ index 56e579eb33..5a679f75ba 100644
    return mLoaded;
  }
 diff --git a/layout/style/FontFaceImpl.cpp b/layout/style/FontFaceImpl.cpp
-index f13782ae6d..abb8d83fb3 100644
 --- a/layout/style/FontFaceImpl.cpp
 +++ b/layout/style/FontFaceImpl.cpp
-@@ -354,21 +354,15 @@ void FontFaceImpl::DoLoad() {
+@@ -354,21 +354,15 @@
  void FontFaceImpl::SetStatus(FontFaceLoadStatus aStatus) {
    gfxFontUtils::AssertSafeThreadOrServoFontMetricsLocked();
  
@@ -112,7 +250,6 @@ index f13782ae6d..abb8d83fb3 100644
      mFontFaceSet->OnFontFaceStatusChanged(this);
    }
 diff --git a/layout/style/FontFaceImpl.h b/layout/style/FontFaceImpl.h
-index c94388212e..2826682e7b 100644
 --- a/layout/style/FontFaceImpl.h
 +++ b/layout/style/FontFaceImpl.h
 @@ -8,6 +8,7 @@
@@ -123,32 +260,25 @@ index c94388212e..2826682e7b 100644
  #include "nsTHashSet.h"
  
  class gfxFontFaceBufferSource;
-@@ -27,6 +28,20 @@ class UTF8StringOrArrayBufferOrArrayBufferView;
+@@ -27,6 +28,14 @@
  
  namespace mozilla::dom {
  
 +// Helper function to check if a font is in the allowed list
 +inline bool IsFontAllowed(const nsACString& aFontName) {
-+  if (std::vector<std::string> maskValues =
-+          MaskConfig::GetStringListLower("fonts");
-+      !maskValues.empty()) {
-+    std::string fontName(aFontName.BeginReading(), aFontName.EndReading());
-+    std::transform(fontName.begin(), fontName.end(), fontName.begin(),
-+                   ::tolower);
-+    return std::find(maskValues.begin(), maskValues.end(), fontName) !=
-+           maskValues.end();
-+  }
-+  return true;
++  std::string fontName(aFontName.BeginReading(), aFontName.Length());
++  std::transform(fontName.begin(), fontName.end(), fontName.begin(),
++                 [](unsigned char c) { return std::tolower(c); });
++  return MaskConfig::IsFontAllowed(fontName);
 +}
 +
  class FontFaceImpl final {
    NS_INLINE_DECL_THREADSAFE_REFCOUNTING(FontFaceImpl)
  
 diff --git a/layout/style/moz.build b/layout/style/moz.build
-index b3886e491f..9236483cec 100644
 --- a/layout/style/moz.build
 +++ b/layout/style/moz.build
-@@ -370,3 +370,6 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
+@@ -370,3 +370,6 @@
          "ServoStyleConsts.h",
          inputs=["/servo/ports/geckolib", "/servo/components/style"],
      )
