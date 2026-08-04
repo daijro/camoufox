@@ -16,7 +16,9 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from camoufox.fingerprints import (  # noqa: E402
+    clamp_screen_to_display,
     clamp_window_dimensions,
+    clamp_window_position,
     fix_navigator_arch,
     fix_screen_no_taskbar,
     set_media_devices_defaults,
@@ -126,6 +128,99 @@ class TestClampWindowDimensions:
         clamp_window_dimensions(c)
         assert c["window.outerWidth"] == 1280
         assert c["window.innerWidth"] == 1264
+
+
+class TestClampScreenToDisplay:
+    def test_shrinks_screen_to_display(self):
+        # BrowserForge routinely ships a 2560x1440 fingerprint to a 1366x768
+        # laptop; browser-init then resizes the real window past the monitor.
+        c = {
+            "screen.width": 2560,
+            "screen.height": 1440,
+            "screen.availWidth": 2560,
+            "screen.availHeight": 1400,
+        }
+        clamp_screen_to_display(c, 1366, 768)
+        assert c["screen.width"] == 1366
+        assert c["screen.height"] == 768
+        # taskbar delta (1440-1400=40) preserved, so fix_screen_no_taskbar's
+        # avail < height invariant still holds
+        assert c["screen.availWidth"] == 1366
+        assert c["screen.availHeight"] == 768 - 40
+
+    def test_noop_when_already_within_display(self):
+        c = {"screen.width": 1280, "screen.height": 720, "screen.availHeight": 700}
+        clamp_screen_to_display(c, 1366, 768)
+        assert c["screen.width"] == 1280
+        assert c["screen.height"] == 720
+        assert c["screen.availHeight"] == 700
+
+    def test_ignores_unset_bounds(self):
+        c = {"screen.width": 2560, "screen.height": 1440}
+        clamp_screen_to_display(c, None, None)
+        assert c["screen.width"] == 2560
+        assert c["screen.height"] == 1440
+
+    def test_avail_never_drops_below_one(self):
+        # taskbar delta larger than the display must not produce a <= 0 avail
+        c = {"screen.height": 2000, "screen.availHeight": 100}
+        clamp_screen_to_display(c, None, 768)
+        assert c["screen.availHeight"] >= 1
+
+    def test_clamped_result_survives_cascade(self):
+        c = {
+            "screen.width": 2560,
+            "screen.height": 1440,
+            "screen.availWidth": 2560,
+            "screen.availHeight": 1400,
+            "window.outerWidth": 1920,
+            "window.outerHeight": 1055,
+            "window.innerWidth": 1920,
+            "window.innerHeight": 1000,
+        }
+        clamp_screen_to_display(c, 1366, 768)
+        clamp_window_dimensions(c)
+        assert c["window.outerWidth"] <= c["screen.availWidth"] <= c["screen.width"] == 1366
+        assert c["window.outerHeight"] <= c["screen.availHeight"] <= c["screen.height"] == 768
+        assert c["window.innerWidth"] <= c["window.outerWidth"]
+        assert c["window.innerHeight"] <= c["window.outerHeight"]
+
+
+class TestClampWindowPosition:
+    def test_pulls_window_back_inside_screen(self):
+        c = {
+            "screen.width": 1366,
+            "screen.height": 768,
+            "window.outerWidth": 1366,
+            "window.outerHeight": 728,
+            "window.screenX": 250,
+            "window.screenY": 281,
+        }
+        clamp_window_position(c)
+        assert c["window.screenX"] == 0
+        assert c["window.screenY"] == 40
+
+    def test_noop_when_window_already_inside(self):
+        c = {
+            "screen.width": 1920,
+            "screen.height": 1080,
+            "window.outerWidth": 1280,
+            "window.outerHeight": 720,
+            "window.screenX": 100,
+            "window.screenY": 50,
+        }
+        clamp_window_position(c)
+        assert c["window.screenX"] == 100
+        assert c["window.screenY"] == 50
+
+    def test_never_negative(self):
+        c = {
+            "screen.width": 800,
+            "window.outerWidth": 1000,  # wider than screen
+            "window.screenX": 50,
+        }
+        clamp_window_position(c)
+        assert c["window.screenX"] == 0
 
 
 class TestSetMediaDevicesDefaults:
