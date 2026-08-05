@@ -25,6 +25,11 @@ import argparse
 import asyncio
 import sys
 from datetime import datetime, timezone
+
+# Ensure Unicode box-drawing characters render correctly on Windows consoles.
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 from pathlib import Path
 from typing import Optional
 
