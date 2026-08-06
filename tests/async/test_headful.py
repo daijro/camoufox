@@ -135,6 +135,13 @@ async def test_should_not_block_third_party_cookies(
     await browser.close()
 
 
+# page.evaluate() runs in an isolated world whose sandbox holds an expanded
+# principal, not the page's own (see additions/juggler/content/FrameTree.js).
+# Firefox refuses cross-window property access from such a principal, so the
+# popup's `resizeTo` is unreachable: "Permission denied to access property
+# resizeTo on cross-origin object". Reaching another window from evaluate()
+# requires being the page, which is exactly what Camoufox does not do.
+@pytest.mark.skip(reason="Not supported by Camoufox")
 async def test_should_not_override_viewport_size_when_passed_null(
     browser_type: BrowserType, launch_arguments: Dict, server: Server
 ) -> None:

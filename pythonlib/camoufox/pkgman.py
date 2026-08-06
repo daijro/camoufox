@@ -32,6 +32,7 @@ from .__version__ import CONSTRAINTS
 from .exceptions import (
     CamoufoxNotInstalled,
     MissingRelease,
+    ProfileDirectoryError,
     UnsupportedArchitecture,
     UnsupportedOS,
     UnsupportedVersion,
@@ -76,6 +77,41 @@ LAUNCH_FILE = {
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 console = Console()
+
+
+def ensure_browser_profile_dir(
+    env: Optional[Dict[str, Union[str, float, bool]]] = None,
+) -> Optional[Path]:
+    """Ensure Firefox's Linux application directory exists before startup.
+
+    Firefox probes ``~/.camoufox`` even when Playwright supplies a temporary
+    profile. On a read-only HOME, a missing directory makes startup stall; an
+    existing directory may itself remain read-only.
+    """
+    if OS_NAME != 'lin':
+        return None
+
+    environment = os.environ if env is None else env
+    configured_home = environment.get('HOME')
+    home = Path(str(configured_home)).expanduser() if configured_home else Path.home()
+    profile_dir = home / '.camoufox'
+    if profile_dir.is_dir():
+        return profile_dir
+
+    try:
+        profile_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError as error:
+        raise ProfileDirectoryError(
+            f"Camoufox requires '{profile_dir}' to exist before launch, but it "
+            "could not be created. For a read-only runtime, create this directory "
+            "before making HOME read-only."
+        ) from error
+
+    if not profile_dir.is_dir():
+        raise ProfileDirectoryError(
+            f"Camoufox requires '{profile_dir}' to be a directory before launch."
+        )
+    return profile_dir
 
 
 def rprint(msg: str, fg: Optional[str] = None, nl: bool = True) -> None:
@@ -595,6 +631,7 @@ class CamoufoxFetcher(GitHubDownloader):
         from .multiversion import install_versioned
 
         install_versioned(self, replace=replace)
+        ensure_browser_profile_dir()
 
     @property
     def url(self) -> str:

@@ -77,7 +77,7 @@ async def test_should_support_global_user_agent_option(
 async def test_should_support_global_timeout_option(playwright: Playwright, server: Server) -> None:
     request = await playwright.request.new_context(timeout=100)
     server.set_route("/empty.html", lambda req: None)
-    with pytest.raises(Error, match="Request timed out after 100ms"):
+    with pytest.raises(Error, match="Timeout 100ms exceeded"):
         await request.get(server.EMPTY_PAGE)
 
 

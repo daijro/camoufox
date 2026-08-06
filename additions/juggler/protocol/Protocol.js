@@ -773,6 +773,13 @@ const Page = {
       data: t.String,
       deviceWidth: t.Number,
       deviceHeight: t.Number,
+      // Seconds. Playwright's Firefox delegate does `event.timestamp * 1e3` with
+      // no fallback (unlike its WebKit path, which defaults to Date.now()), and
+      // feeds the result to VideoRecorder.writeFrame() as the frame's wall time.
+      // Omitting this made every frame NaN-timestamped, so the recorder wrote
+      // nothing to ffmpeg's stdin and ffmpeg died with "Error opening output
+      // file" -- record_video_dir produced no file at all.
+      timestamp: t.Number,
     },
   },
 
@@ -994,7 +1001,14 @@ const Page = {
     },
     'screencastFrameAck': {
       params: {
-        screencastId: t.String,
+        // Optional: Playwright's Firefox delegate acks with no parameters at
+        // all (`sendMayFail("Page.screencastFrameAck")`). Requiring the id made
+        // the dispatcher reject every ack, and because it is sent via
+        // sendMayFail the client never noticed. nsScreencastService allows
+        // kMaxFramesInFlight = 1, so an unacked frame stalls the capture
+        // permanently: exactly one frame is emitted and record_video_dir
+        // produces an empty or missing .webm.
+        screencastId: t.Optional(t.String),
       },
     },
     'stopScreencast': {

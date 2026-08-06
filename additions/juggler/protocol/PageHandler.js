@@ -634,6 +634,21 @@ export class PageHandler {
           return;
         }
 
+        // Skip a zero-displacement mousemove. When the destination rounds to the
+        // pixel the pointer is already on, the widget generates no eMouseMove, so
+        // the juggler-mouse-event-hit-renderer notification never fires and the
+        // sendEvents() call below awaits an ack that will never arrive. Because
+        // input dispatch is serialized on activateAndRun()'s process-global chain,
+        // that one stuck await wedges EVERY later input event for the life of the
+        // page. Reproduces on a stock build as the first action:
+        //     await page.mouse.move(0, 0);   // cursor starts at 0,0 -> no-op -> hang
+        // A no-op move has nothing to dispatch anyway, so return once the tracked
+        // position is (re)recorded.
+        if (Math.round(x) === Math.round(this._lastTrackedPos.x) &&
+            Math.round(y) === Math.round(this._lastTrackedPos.y)) {
+          this._lastTrackedPos = { x, y };
+          return;
+        }
         const watcher = new EventWatcher(this._pageEventSink, ['dragstart', 'juggler-drag-finalized'], this._pendingEventWatchers);
         await sendEvents(['mousemove']);
         // Camoufox: remember where the cursor landed so the next humanized

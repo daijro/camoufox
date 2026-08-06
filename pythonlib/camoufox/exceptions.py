@@ -194,3 +194,9 @@ class CamoufoxNotInstalled(FileNotFoundError):
     """
 
     ...
+
+
+class ProfileDirectoryError(RuntimeError):
+    """Raised when Camoufox's required runtime directory cannot be prepared."""
+
+    ...

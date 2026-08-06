@@ -22,6 +22,7 @@ scripts/test*
 .idea
 /tests/*.disabled
 k8s/
+camoufox-*.*.*/
 
 # Old data
 _old/
@@ -35,6 +36,7 @@ wget-log
 
 # Python interface
 venv/
+venv[0-9]*/
 __pycache__/
 *.pyc
 *.mmdb

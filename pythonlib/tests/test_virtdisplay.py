@@ -68,7 +68,9 @@ def test_single_launch_returns_valid_display_and_kill_terminates_xvfb(tracked):
 
     vd.kill()
     _wait_for_exit(vd)
-    assert vd.proc.poll() is not None  # exited
+    # kill() reaps the child and clears the handle, so `proc is None` is the
+    # post-condition; a surviving handle must at least report an exit code.
+    assert vd.proc is None or vd.proc.poll() is not None  # exited
 
 
 def test_get_is_idempotent_within_one_virtual_display(tracked):
@@ -107,7 +109,7 @@ def test_concurrent_reservations_all_get_unique_displays(tracked):
     for vd in vds:
         _wait_for_exit(vd)
     for vd in vds:
-        assert vd.proc.poll() is not None
+        assert vd.proc is None or vd.proc.poll() is not None
 
 
 def test_released_display_numbers_can_be_reused_on_the_next_launch(tracked):

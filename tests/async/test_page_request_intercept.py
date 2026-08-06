@@ -32,7 +32,7 @@ async def test_should_support_timeout_option_in_route_fetch(server: Server, page
     async def handle(route: Route) -> None:
         with pytest.raises(Error) as error:
             await route.fetch(timeout=1000)
-        assert "Request timed out after 1000ms" in error.value.message
+        assert "Timeout 1000ms exceeded" in error.value.message
 
     await page.route("**/*", lambda route: handle(route))
     with pytest.raises(Error) as error:

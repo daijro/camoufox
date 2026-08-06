@@ -7,6 +7,9 @@ const {Preferences} = ChromeUtils.importESModule("resource://gre/modules/Prefere
 const {ContextualIdentityService} = ChromeUtils.importESModule("resource://gre/modules/ContextualIdentityService.sys.mjs");
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
 const {AppConstants} = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
+// This module's scope has no timer globals (unlike the content-side juggler
+// scripts), so the screencast tick has to import them explicitly.
+const {setTimeout, clearTimeout} = ChromeUtils.importESModule("resource://gre/modules/Timer.sys.mjs");
 
 const Cr = Components.results;
 
@@ -14,6 +17,12 @@ const helper = new Helper();
 
 const IDENTITY_NAME = 'JUGGLER ';
 const HUNDRED_YEARS = 60 * 60 * 24 * 365 * 100;
+
+// Capture rate for the compositor-backed screencast. Playwright muxes at 25fps
+// and repeats frames to fill gaps, so this is an upper bound on capture cost
+// rather than the video's frame rate; the ack-driven backpressure in
+// _startSnapshotScreencast lowers it further whenever encoding cannot keep up.
+const SNAPSHOT_SCREENCAST_FPS = 25;
 
 const ALL_PERMISSIONS = [
   'geo',
@@ -588,8 +597,13 @@ export class PageTarget {
 
   updateCacheDisabled(browsingContext = this._linkedBrowser.browsingContext) {
     const enableFlags = Ci.nsIRequest.LOAD_NORMAL;
-    const disableFlags = Ci.nsIRequest.LOAD_BYPASS_CACHE |
-                  Ci.nsIRequest.INHIBIT_CACHING;
+    // Camoufox: upstream also sets LOAD_BYPASS_CACHE here, which makes necko put
+    // "Pragma: no-cache" and "Cache-Control: no-cache" on every request. Firefox only
+    // does that for a forced reload, and Playwright turns this on for every page.route()
+    // call, so it marks all our traffic as automated. INHIBIT_CACHING alone stops
+    // responses from ever being stored, which starves the cache just as effectively
+    // without announcing it to the server.
+    const disableFlags = Ci.nsIRequest.INHIBIT_CACHING;
 
     browsingContext.defaultLoadFlags = (this._browserContext.disableCache || this.disableCache) ? disableFlags : enableFlags;
   }
@@ -860,6 +874,27 @@ export class PageTarget {
     if (width < 10 || width > 10000 || height < 10 || height > 10000)
       throw new Error("Invalid size");
 
+    // nsScreencastService only has a working capture source when the browser is
+    // headless (HeadlessWindowCapturer). Outside headless it falls through to
+    // libwebrtc's X11 window capturer, which does not work here in either
+    // configuration:
+    //
+    //   * without the XComposite extension, startVideoRecording() succeeds and
+    //     then never delivers a single frame -- the recording silently comes
+    //     out as Playwright's blank filler;
+    //   * with XComposite enabled, the browser segfaults during capture;
+    //   * on Wayland it cannot start at all, because
+    //     nsWindow::GetNativeData(NS_NATIVE_WINDOW_WEBRTC_DEVICE_ID) is
+    //     documented as unhandled there and returns null, so the service throws
+    //     NS_ERROR_FAILURE ("Failed to get native window id").
+    //
+    // Capture from the compositor instead. drawSnapshot() is what
+    // Page.screenshot already uses, it renders the page content directly, and
+    // it is independent of the windowing system -- so headful, Xvfb and Wayland
+    // all record identically.
+    if (!Services.appinfo.headless)
+      return this._startSnapshotScreencast({ width, height, quality });
+
     // Firefox 152 renamed `ownerGlobal` to `documentGlobal` on nodes.
     const docShell = (this._gBrowser.documentGlobal || this._gBrowser.ownerGlobal).docShell;
     // Exclude address bar and navigation control from the video.
@@ -871,7 +906,16 @@ export class PageTarget {
       QueryInterface: ChromeUtils.generateQI([Ci.nsIScreencastServiceClient]),
       screencastFrame(data, deviceWidth, deviceHeight) {
         if (self._screencastRecordingInfo)
-          self.emit(PageTarget.Events.ScreencastFrame, { data, deviceWidth, deviceHeight });
+          self.emit(PageTarget.Events.ScreencastFrame, {
+            data,
+            deviceWidth,
+            deviceHeight,
+            // nsIScreencastServiceClient does not hand us the capture time, so
+            // stamp it on arrival. The frame was just encoded on the capture
+            // thread, so this is within a frame interval of the real swap time
+            // -- close enough for the recorder's frame pacing.
+            timestamp: Date.now() / 1000,
+          });
       },
       screencastStopped() {
       },
@@ -882,18 +926,118 @@ export class PageTarget {
     return { screencastId };
   }
 
+  // Compositor-backed screencast, used whenever the native capturer has no
+  // usable source (see startScreencast). Frames come from the same
+  // drawSnapshot() call Page.screenshot uses, so this works headful, under Xvfb
+  // and on Wayland alike.
+  _startSnapshotScreencast({ width, height, quality }) {
+    const screencastId = Services.uuid.generateUUID().toString().replace(/[{}-]/g, '');
+    const jpegQuality = Math.min(Math.max(quality ?? 90, 0), 100) / 100;
+    const state = {
+      stopped: false,
+      // Mirrors nsScreencastService's kMaxFramesInFlight = 1: hold the next
+      // capture until the client acks the previous frame, so a slow consumer
+      // throttles the capture instead of queueing unbounded JPEGs.
+      inFlight: false,
+    };
+    this._screencastRecordingInfo = { screencastId, snapshotState: state };
+
+    const captureFrame = async () => {
+      const browsingContext = this.linkedBrowser()?.browsingContext;
+      const windowGlobal = browsingContext?.currentWindowGlobal;
+      if (!windowGlobal)
+        return;
+
+      const viewport = this._viewportSize || this._browserContext.defaultViewportSize;
+      const rect = viewport
+        ? new DOMRect(0, 0, viewport.width, viewport.height)
+        : this.linkedBrowser().getBoundingClientRect();
+      if (!rect.width || !rect.height)
+        return;
+
+      // Fit inside the requested frame without distorting; ffmpeg pads the rest.
+      const scale = Math.min(width / rect.width, height / rect.height);
+      const frameWidth = Math.max(1, Math.round(rect.width * scale));
+      const frameHeight = Math.max(1, Math.round(rect.height * scale));
+
+      // drawSnapshot rejects with NS_ERROR_LOSS_OF_SIGNIFICANT_DATA while a
+      // navigation is in flight. Drop that frame rather than ending the video.
+      let snapshot;
+      try {
+        snapshot = await windowGlobal.drawSnapshot(
+          new DOMRect(0, 0, rect.width, rect.height), scale, 'rgb(255,255,255)');
+      } catch (e) {
+        return;
+      }
+      if (state.stopped) {
+        snapshot.close();
+        return;
+      }
+
+      const doc = this._window.document;
+      const canvas = doc.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');
+      canvas.width = frameWidth;
+      canvas.height = frameHeight;
+      canvas.getContext('2d').drawImage(snapshot, 0, 0);
+      snapshot.close();
+
+      const dataURL = canvas.toDataURL('image/jpeg', jpegQuality);
+      state.inFlight = true;
+      this.emit(PageTarget.Events.ScreencastFrame, {
+        data: dataURL.substring(dataURL.indexOf(',') + 1),
+        deviceWidth: frameWidth,
+        deviceHeight: frameHeight,
+        timestamp: Date.now() / 1000,
+      });
+    };
+
+    const intervalMs = 1000 / SNAPSHOT_SCREENCAST_FPS;
+    const tick = async () => {
+      if (state.stopped)
+        return;
+      if (!state.inFlight) {
+        try {
+          await captureFrame();
+        } catch (e) {
+          dump(`juggler: snapshot screencast frame failed: ${e}\n`);
+        }
+      }
+      if (!state.stopped)
+        state.timer = setTimeout(tick, intervalMs);
+    };
+    state.timer = setTimeout(tick, 0);
+
+    return { screencastId };
+  }
+
   screencastFrameAck({ screencastId }) {
-    if (!this._screencastRecordingInfo || this._screencastRecordingInfo.screencastId !== screencastId)
+    const info = this._screencastRecordingInfo;
+    if (!info)
       return;
-    screencastService.screencastFrameAck(screencastId);
+    // A client that omits the id is acking whatever is currently recording --
+    // there can only be one screencast per page target. Only reject an id that
+    // is present and refers to some other (stale) session.
+    if (screencastId !== undefined && screencastId !== info.screencastId)
+      return;
+    if (info.snapshotState) {
+      info.snapshotState.inFlight = false;
+      return;
+    }
+    screencastService.screencastFrameAck(info.screencastId);
   }
 
   stopScreencast() {
-    if (!this._screencastRecordingInfo)
+    const info = this._screencastRecordingInfo;
+    if (!info)
       throw new Error('No screencast in progress');
-    const { screencastId } = this._screencastRecordingInfo;
     this._screencastRecordingInfo = undefined;
-    screencastService.stopVideoRecording(screencastId);
+    if (info.snapshotState) {
+      info.snapshotState.stopped = true;
+      if (info.snapshotState.timer)
+        clearTimeout(info.snapshotState.timer);
+      return;
+    }
+    screencastService.stopVideoRecording(info.screencastId);
   }
 
   ensureContextMenuClosed() {

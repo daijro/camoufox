@@ -7,15 +7,46 @@
 <body>
 <script src="/checks-bundle.js"></script>
 <script>
-(async function () {
-  try {
-    var results = await CamoufoxChecks.runAllChecks();
-    window.__testResults__ = results;
-    window.__testComplete__ = true;
-  } catch (e) {
-    window.__testError__ = String(e);
-    window.__testComplete__ = true;
+// The checks MUST run here, as ordinary page script, and never as an init script.
+// An init script runs in juggler's isolated world, which is the one realm no
+// detection vendor can reach: its global carries ~72 properties against the page
+// window's ~880, page-installed traps (a poisoned Array.prototype, a hooked
+// Function.prototype.toString) are invisible through Xray, and anything the page
+// itself wrote is simply absent. Grading that realm certifies an object nobody
+// measures. Cloudflare, DataDome and friends execute exactly where this runs.
+//
+// So the runner cannot read results out of a JS global -- it calls
+// page.evaluate(), which lands in the isolated world. Hand them over through the
+// DOM instead: Xray hides JS expandos, but not real nodes, so a text node written
+// here reads back verbatim from the isolated world.
+(function () {
+  // JSON is all that crosses a text node, and it flattens the three values
+  // Playwright's serializer would have kept. Tag them on the way out and rebuild
+  // them in Python (decode_results in runner.py).
+  function replacer(key, value) {
+    if (typeof value === 'number' && !isFinite(value))
+      return { __nonfinite__: String(value) };
+    if (value === undefined)
+      return { __undefined__: true };
+    return value;
   }
+
+  function handOff(payload) {
+    var node = document.createElement('script');
+    node.type = 'application/json';
+    node.id = '__camoufoxResults__';
+    try {
+      node.textContent = JSON.stringify(payload, replacer);
+    } catch (e) {
+      node.textContent = JSON.stringify({ error: 'result serialization failed: ' + String(e) });
+    }
+    document.documentElement.appendChild(node);
+  }
+
+  Promise.resolve()
+    .then(function () { return CamoufoxChecks.runAllChecks(); })
+    .then(function (results) { handOff({ results: results }); })
+    .catch(function (e) { handOff({ error: String(e) }); });
 })();
 </script>
 </body>

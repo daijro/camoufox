@@ -1,2 +1,5 @@
 cloverlabs-camoufox
-playwright
+# 1.61 sends viewport.isMobile in Browser.setDefaultViewport, which this
+# juggler's protocol schema rejects -- every context creation fails. Matches the
+# cap in pythonlib/pyproject.toml.
+playwright<1.61

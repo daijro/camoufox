@@ -299,6 +299,7 @@
     "showcursor": "bool",
 
     "allowMainWorld": "bool",
+    "allowAddonNewtab": "bool",
     "forceScopeAccess": "bool",
 
     "disableTheming": "bool",

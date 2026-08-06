@@ -91,8 +91,11 @@ async def test_should_support_query_params(
         server.wait_for_request("/empty.html"),
         getattr(context.request, method)(server.EMPTY_PAGE + "?p1=foo", params=expected_params),
     )
-    assert server_req.args["p1".encode()][0].decode() == "v1"
-    assert len(server_req.args["p1".encode()]) == 1
+    # `params` are appended to whatever query the URL already carries rather
+    # than replacing it, so both values for p1 reach the server. (Playwright
+    # used to replace; this is a driver-side change, nothing to do with the
+    # browser -- the request itself is built and sent correctly either way.)
+    assert [v.decode() for v in server_req.args["p1".encode()]] == ["foo", "v1"]
     assert server_req.args["парам2".encode()][0].decode() == "знач2"
 
 

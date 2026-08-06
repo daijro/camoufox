@@ -1,0 +1,334 @@
+--- a/dom/base/nsINode.cpp
++++ b/dom/base/nsINode.cpp
+@@ -27,6 +27,10 @@
+ #include "mozilla/HTMLEditor.h"
+ #include "mozilla/Likely.h"
+ #include "mozilla/Maybe.h"
++#include "mozilla/dom/HTMLSelectElement.h"
++#include "mozilla/dom/MouseEvent.h"
++#include "mozilla/dom/PointerEvent.h"
++#include "mozilla/dom/UserActivation.h"
+ #include "mozilla/MemoryReporting.h"
+ #include "mozilla/Preferences.h"
+ #include "mozilla/PresShell.h"
+@@ -1701,8 +1705,109 @@
+                                        aCallerType, aRv);
+ }
+ 
++// A mouse-driven <select> commit dispatches these on the chosen <option>, from
++// the parent process, around the input/change pair -- see the closedWithClickOn
++// branch of SelectChild.sys.mjs. Playwright mutates the DOM instead, so without
++// this the option-targeted events a real user produces are simply missing.
++// "click" is a PointerEvent there, the others MouseEvents; all bubble, are
++// cancelable and composed.
++static void DispatchSelectOptionMouseEvent(nsINode* aOption,
++                                           const nsAString& aType,
++                                           bool aAsPointerEvent) {
++  nsCOMPtr<nsPIDOMWindowInner> win = aOption->OwnerDoc()->GetInnerWindow();
++  RefPtr<Event> event;
++  if (aAsPointerEvent) {
++    PointerEventInit init;
++    init.mBubbles = true;
++    init.mCancelable = true;
++    init.mComposed = true;
++    init.mView = win ? nsGlobalWindowInner::Cast(win) : nullptr;
++    event = PointerEvent::Constructor(aOption, aType, init);
++  } else {
++    MouseEventInit init;
++    init.mBubbles = true;
++    init.mCancelable = true;
++    init.mComposed = true;
++    init.mView = win ? nsGlobalWindowInner::Cast(win) : nullptr;
++    event = MouseEvent::Constructor(aOption, aType, init);
++  }
++  event->SetTrusted(true);
++  aOption->DispatchEvent(*event, CallerType::System, IgnoreErrors());
++}
++
++// Whether script is what is dispatching, as opposed to Gecko's own event
++// handling. The native <select> commit path reaches this function too -- a
++// keyboard selection ends in nsContentUtils::DispatchTrustedEvent("change") --
++// and it already emits everything a user produces, so it must be left alone.
++// A keyboard commit also produces no option-targeted mouse events at all.
++static bool HasScriptedCaller() {
++  JSContext* cx = nsContentUtils::GetCurrentJSContext();
++  return cx && JS::GetScriptedCallerGlobal(cx);
++}
++
++// The <option> a commit would have been made on, or nullptr when this is not a
++// dropdown-style <select>.
++static nsINode* ComboboxSelectedOption(nsINode* aNode) {
++  auto* select = HTMLSelectElement::FromNode(aNode);
++  if (!select || !select->IsCombobox()) {
++    return nullptr;
++  }
++  const int32_t index = select->SelectedIndex();
++  return index < 0 ? nullptr : select->Item(index);
++}
++
+ bool nsINode::DispatchEvent(Event& aEvent, CallerType aCallerType,
+                             ErrorResult& aRv) {
++  // Playwright drives <select> and <input type=file> by mutating the control
++  // and dispatching the "input"/"change" pair from script, so two things a
++  // real interaction always does are missing: the control is never marked
++  // user-interacted, and no user gesture is registered on the document. A
++  // dropdown <select> also loses the mouse events the parent process sends to
++  // the chosen <option>. Add them back here, for the dispatches that reach
++  // this function directly rather than through
++  // nsContentUtils::DispatchInputEvent, which does both itself. System callers
++  // count because Juggler's parent-built events (_setFileInputFiles) are still
++  // untrusted until DispatchDOMEvent promotes them, further down.
++  const bool fromAutomation =
++      (aEvent.IsTrusted() || aCallerType == CallerType::System) &&
++      HasScriptedCaller();
++  // Narrower: dispatched by the automation world's own script. Gecko's native
++  // commit path uses nsContentUtils::DispatchTrustedEvent, which is a system
++  // caller, so this excludes it -- it already emits what a user produces.
++  const bool byAutomationScript = aEvent.IsTrusted() &&
++                                  aCallerType != CallerType::System &&
++                                  HasScriptedCaller();
++  nsAtom* const eventType = aEvent.WidgetEventPtr()->mSpecifiedEventType;
++  Maybe<AutoHandlingUserInputStatePusher> handlingUserInput;
++
++  if (fromAutomation && eventType == nsGkAtoms::oninput) {
++    if (RefPtr control = nsGenericHTMLFormControlElement::FromNode(this)) {
++      control->SetUserInteracted(true);
++      // Ahead of the "input" this precedes, so the page sees the widget path's
++      // focus/input/change ordering. A no-op for fill and the file picker.
++      if (OwnerDoc()->GetActiveElement() != control) {
++        FocusOptions options;
++        IgnoredErrorResult ignored;
++        control->Focus(options, CallerType::NonSystem, ignored);
++      }
++      if (nsCOMPtr<nsINode> option =
++              byAutomationScript ? ComboboxSelectedOption(control) : nullptr) {
++        DispatchSelectOptionMouseEvent(option, u"mousedown"_ns, false);
++        DispatchSelectOptionMouseEvent(option, u"mouseup"_ns, false);
++      }
++    }
++  }
++
++  // SelectChild wraps the pair in setHandlingUserInput(changed), so for a real
++  // user a change handler runs as user-initiated -- window.open() and friends
++  // are allowed there. Match that for the same two events.
++  if (byAutomationScript &&
++      (eventType == nsGkAtoms::oninput || eventType == nsGkAtoms::onchange) &&
++      ComboboxSelectedOption(this)) {
++    OwnerDoc()->NotifyUserGestureActivation();
++    handlingUserInput.emplace(true, aEvent.WidgetEventPtr());
++  }
++
+   // XXX sXBL/XBL2 issue -- do we really want the owner here?  What
+   // if that's the XBL document?  Would we want its presshell?  Or what?
+   nsCOMPtr<Document> document = OwnerDoc();
+@@ -1715,6 +1820,12 @@
+   // Obtain a presentation shell
+   RefPtr<nsPresContext> context = document->GetPresContext();
+ 
++  // Captured before dispatch: a change handler may move the selection.
++  nsCOMPtr<nsINode> optionToClick;
++  if (byAutomationScript && eventType == nsGkAtoms::onchange) {
++    optionToClick = ComboboxSelectedOption(this);
++  }
++
+   nsEventStatus status = nsEventStatus_eIgnore;
+   nsresult rv = EventDispatcher::DispatchDOMEvent(this, nullptr, &aEvent,
+                                                   context, &status);
+@@ -1722,6 +1833,12 @@
+   if (NS_FAILED(rv)) {
+     aRv.Throw(rv);
+   }
++
++  if (optionToClick) {
++    // Last, and outside the user-input state, exactly as SelectChild orders it.
++    handlingUserInput.reset();
++    DispatchSelectOptionMouseEvent(optionToClick, u"click"_ns, true);
++  }
+   return retval;
+ }
+ 
+--- a/dom/events/Event.cpp
++++ b/dom/events/Event.cpp
+@@ -8,7 +8,9 @@
+ #include "base/basictypes.h"
+ #include "ipc/IPCMessageUtils.h"
+ #include "ipc/IPCMessageUtilsSpecializations.h"
++#include "jsapi.h"
+ #include "mozilla/BasePrincipal.h"
++#include "mozilla/ExpandedPrincipal.h"
+ #include "mozilla/ContentEvents.h"
+ #include "mozilla/DOMEventTargetHelper.h"
+ #include "mozilla/EventDispatcher.h"
+@@ -402,6 +404,37 @@ bool Event::ShouldIgnoreChromeEventTargetListener() const {
+   return bc->IsContent();
+ }
+ 
++// True in Juggler's automation worlds, which are per-frame sandboxes holding an
++// ExpandedPrincipal over the document's own principal (_createIsolatedContext()
++// in additions/juggler/content/FrameTree.js). Playwright synthesises there the
++// events a native widget would have sent -- "input"/"change" for <select>, for
++// <input type=date|color|range>, for file pickers -- and Event.isTrusted would
++// otherwise separate every one of them from a real user's.
++//
++// Requiring the allowlist to be exactly the target document excludes
++// WebExtension content scripts, which are expanded principals too but also list
++// the extension. The caller is the scripted one, not the current realm: the
++// sandbox reaches Event through an Xray, so by here the wrapper has entered the
++// page's realm and a realm check would see the page principal.
++static bool IsAutomationWorldCaller(Document* aTargetDoc) {
++  JSContext* cx = nsContentUtils::GetCurrentJSContext();
++  if (!cx || !aTargetDoc) {
++    return false;
++  }
++  JSObject* callerGlobal = JS::GetScriptedCallerGlobal(cx);
++  if (!callerGlobal) {
++    return false;
++  }
++  nsIPrincipal* caller = nsContentUtils::ObjectPrincipal(callerGlobal);
++  if (!caller || !BasePrincipal::Cast(caller)->Is<ExpandedPrincipal>()) {
++    return false;
++  }
++  const nsTArray<nsCOMPtr<nsIPrincipal>>& allowList =
++      BasePrincipal::Cast(caller)->As<ExpandedPrincipal>()->AllowList();
++  return allowList.Length() == 1 &&
++         allowList[0]->Equals(aTargetDoc->NodePrincipal());
++}
++
+ bool Event::Init(mozilla::dom::EventTarget* aGlobal) {
+   if (!mIsMainThreadEvent) {
+     return IsCurrentThreadRunningChromeWorker();
+@@ -410,7 +443,7 @@ bool Event::Init(mozilla::dom::EventTarget* aGlobal) {
+   if (aGlobal) {
+     if (nsPIDOMWindowInner* w = aGlobal->GetAsInnerWindow()) {
+       if (Document* d = w->GetExtantDoc()) {
+-        trusted = nsContentUtils::IsChromeDoc(d);
++        trusted = nsContentUtils::IsChromeDoc(d) || IsAutomationWorldCaller(d);
+         if (nsPresContext* presContext = d->GetPresContext()) {
+           InitPresContextData(presContext);
+         }
+diff --git a/dom/events/MouseEvent.cpp b/dom/events/MouseEvent.cpp
+index 5d9b838e77..f310ed7cb1 100644
+--- a/dom/events/MouseEvent.cpp
++++ b/dom/events/MouseEvent.cpp
+@@ -147,6 +147,13 @@ already_AddRefed<MouseEvent> MouseEvent::Constructor(
+     const GlobalObject& aGlobal, const nsAString& aType,
+     const MouseEventInit& aParam) {
+   nsCOMPtr<EventTarget> t = do_QueryInterface(aGlobal.GetAsSupports());
++  return Constructor(t, aType, aParam);
++}
++
++already_AddRefed<MouseEvent> MouseEvent::Constructor(
++    EventTarget* aOwner, const nsAString& aType,
++    const MouseEventInit& aParam) {
++  EventTarget* t = aOwner;
+   RefPtr<MouseEvent> e = new MouseEvent(t, nullptr, nullptr);
+   bool trusted = e->Init(t);
+   e->InitMouseEventInternal(
+diff --git a/dom/events/MouseEvent.h b/dom/events/MouseEvent.h
+index 67c117c6c5..7a99aabb48 100644
+--- a/dom/events/MouseEvent.h
++++ b/dom/events/MouseEvent.h
+@@ -124,6 +124,10 @@ class MouseEvent : public UIEvent {
+   static already_AddRefed<MouseEvent> Constructor(const GlobalObject& aGlobal,
+                                                   const nsAString& aType,
+                                                   const MouseEventInit& aParam);
++  // Same, for native callers with no JS context. Mirrors PointerEvent.
++  static already_AddRefed<MouseEvent> Constructor(EventTarget* aOwner,
++                                                  const nsAString& aType,
++                                                  const MouseEventInit& aParam);
+   int32_t MovementX() { return GetMovementPoint().x; }
+   int32_t MovementY() { return GetMovementPoint().y; }
+   float MozPressure(CallerType) const;
+diff --git a/dom/events/PointerEventHandler.cpp b/dom/events/PointerEventHandler.cpp
+index 01a6e2638c..681a9e1bac 100644
+--- a/dom/events/PointerEventHandler.cpp
++++ b/dom/events/PointerEventHandler.cpp
+@@ -15,6 +15,7 @@
+ #include "mozilla/dom/BrowserParent.h"
+ #include "mozilla/dom/Document.h"
+ #include "mozilla/dom/DocumentInlines.h"
++#include "mozilla/dom/HTMLSelectElement.h"
+ #include "mozilla/dom/MouseEventBinding.h"
+ #include "nsIContentInlines.h"
+ #include "nsIFrame.h"
+@@ -48,6 +49,7 @@ Maybe<int32_t> PointerEventHandler::sSpoofedPointerId;
+ StaticAutoPtr<PointerInfo> PointerEventHandler::sLastMouseInfo;
+ StaticRefPtr<nsIWeakReference> PointerEventHandler::sLastMousePresShell;
+ Maybe<uint32_t> PointerEventHandler::sLastPointerId;
++bool PointerEventHandler::sDropDownOpenedByLastMouseDown = false;
+ 
+ // Keeps a map between pointerId and element that currently capturing pointer
+ // with such pointerId. If pointerId is absent in this map then nobody is
+@@ -1257,6 +1259,24 @@ void PointerEventHandler::DispatchPointerFromMouseOrTouch(
+       return;
+     }
+ 
++    // Releasing the button after a press that opened a <select> dropdown
++    // produces no "pointerup": the panel lives in the parent process and takes
++    // the release. Measured against a real click -- a plain element gets
++    // pointerup, a select whose panel opened does not. Juggler injects its
++    // release straight into content, so without this an automated click is one
++    // event richer than any click a user can make.
++    //
++    // Keyed off the press rather than the panel's current state: by the time
++    // the release is converted the popup has already been rolled up at the
++    // widget level, so OpenInParentProcess() reads false here.
++    if (mouseEvent->mMessage == eMouseDown) {
++      sDropDownOpenedByLastMouseDown = false;
++    } else if (mouseEvent->mMessage == eMouseUp &&
++               sDropDownOpenedByLastMouseDown) {
++      sDropDownOpenedByLastMouseDown = false;
++      return;
++    }
++
+     // Normal synthesized mouse move events are marked as "not convert to
+     // pointer" by PresShell::ProcessSynthMouseOrPointerMoveEvent().  However:
+     // 1. if the event is synthesized via nsIDOMWindowUtils, it's not marked as
+diff --git a/dom/events/PointerEventHandler.h b/dom/events/PointerEventHandler.h
+index 14b942f7dd..29c2629d96 100644
+--- a/dom/events/PointerEventHandler.h
++++ b/dom/events/PointerEventHandler.h
+@@ -662,6 +662,17 @@ class PointerEventHandler final {
+   // Stores the last pointerId which has not left from all documents managed in
+   // this process.
+   static Maybe<uint32_t> sLastPointerId;
++
++  // Set by HTMLSelectElement::HandleMouseDown when a press opens a dropdown.
++  // See the eMouseUp handling in DispatchPointerFromMouseOrTouch.
++  static bool sDropDownOpenedByLastMouseDown;
++
++ public:
++  static void NotifyDropDownOpenedByMouseDown() {
++    sDropDownOpenedByLastMouseDown = true;
++  }
++
++ private:
+ };
+ 
+ }  // namespace mozilla
+diff --git a/dom/html/HTMLSelectElement.cpp b/dom/html/HTMLSelectElement.cpp
+index b969ecca19..bcd5979e15 100644
+--- a/dom/html/HTMLSelectElement.cpp
++++ b/dom/html/HTMLSelectElement.cpp
+@@ -19,6 +19,7 @@
+ #include "mozilla/dom/Document.h"
+ #include "mozilla/dom/Element.h"
+ #include "mozilla/dom/FormData.h"
++#include "mozilla/dom/PointerEventHandler.h"
+ #include "mozilla/dom/HTMLOptGroupElement.h"
+ #include "mozilla/dom/HTMLOptionElement.h"
+ #include "mozilla/dom/HTMLSelectElementBinding.h"
+@@ -1779,7 +1780,12 @@ nsresult HTMLSelectElement::HandleMouseDown(EventChainPostVisitor& aVisitor) {
+     }
+     const bool isSourceTouchEvent =
+         inputSource == MouseEvent_Binding::MOZ_SOURCE_TOUCH;
+-    FireDropDownEvent(!OpenInParentProcess(), isSourceTouchEvent);
++    const bool opening = !OpenInParentProcess();
++    FireDropDownEvent(opening, isSourceTouchEvent);
++    if (opening) {
++      // The panel takes the button release, so no "pointerup" follows.
++      PointerEventHandler::NotifyDropDownOpenedByMouseDown();
++    }
+     return NS_OK;
+   }
+ 

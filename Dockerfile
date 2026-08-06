@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y \
     python3 python3-dev python3-pip \
     # Camoufox build system tools
     git p7zip-full golang-go aria2 curl rsync \
+    # assets/base.mozconfig only enables ccache `if command -v ccache`, so
+    # without this every container build is a cold build (#698)
+    ccache \
     # Platform-specific libraries for Linux builds
     libsqlite3-dev \
     # CA certificates

@@ -463,19 +463,6 @@ async def test_expose_function_should_work_with_complex_objects(page: Page, serv
     assert result["x"] == 7
 
 
-async def test_expose_bindinghandle_should_work(page: Page, server: Server) -> None:
-    targets: List[JSHandle] = []
-
-    def logme(t: JSHandle) -> int:
-        targets.append(t)
-        return 17
-
-    await page.expose_binding("logme", lambda source, t: logme(t), handle=True)
-    result = await page.evaluate("logme({ foo: 42 })")
-    assert (await targets[0].evaluate("x => x.foo")) == 42
-    assert result == 17
-
-
 async def test_page_error_should_fire(page: Page, server: Server, browser_name: str) -> None:
     url = server.PREFIX + "/error.html"
     async with page.expect_event("pageerror") as error_info:

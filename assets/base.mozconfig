@@ -4,6 +4,11 @@ ac_add_options --allow-addon-sideload
 ac_add_options --disable-crashreporter
 ac_add_options --disable-backgroundtasks
 ac_add_options --disable-debug
+# --disable-debug only turns off DEBUG code; it does NOT drop -g. Without this,
+# the gkrust fat-LTO staticlib and the libxul link carry full debug info, which
+# is what pushes linux/arm64 container builds into the OOM killer (#698).
+# Nothing in scripts/package.py consumes symbol files, so they are pure cost.
+ac_add_options --disable-debug-symbols
 ac_add_options --disable-default-browser-agent
 ac_add_options --disable-tests
 ac_add_options --disable-updater

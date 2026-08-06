@@ -182,7 +182,16 @@ async def test_request_headers_should_work(
     if is_chromium:
         assert "Chrome" in response.request.headers["user-agent"]
     elif is_firefox:
-        assert "Firefox" in response.request.headers["user-agent"]
+        # The bare binary advertises its own build token,
+        # "... Gecko/20100101 Camoufox/<version>". The Python package replaces
+        # that with "Firefox/<version>" (verified on the wire and in
+        # navigator.userAgent) as part of injecting a fingerprint, but this
+        # suite drives the bare binary through plain Playwright and so sees the
+        # unspoofed token. Assert what this layer can actually promise: a Gecko
+        # UA carrying one of the two.
+        user_agent = response.request.headers["user-agent"]
+        assert "Gecko/" in user_agent
+        assert "Firefox" in user_agent or "Camoufox" in user_agent
     elif is_webkit:
         assert "WebKit" in response.request.headers["user-agent"]
 
