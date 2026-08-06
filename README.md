@@ -124,18 +124,6 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://birdproxies.com/t/camoufox" target="_blank">
-        <img width="380" alt="birdproxies" src="https://github.com/user-attachments/assets/e146836d-eb92-4b05-8bd9-120fd95dca10"/>
-      </a>
-    </td>
-    <td valign="middle">
-      Hey, we built BirdProxies because proxies shouldn't be complicated or overpriced. Fast residential and ISP proxies in 195+ locations, fair pricing, and real support.<br>
-      Try our FlappyBird game on the landing page for free data!<br>
-      <a href="https://birdproxies.com/t/camoufox">Try Now</a> | <a href="https://discord.com/invite/birdproxies">Discord</a>
-    </td>
-  </tr>
-  <tr>
-    <td width="25%" align="center" valign="middle">
       <a href="https://www.rapidproxy.io/?ref=daijro" target="_blank">
         <img width="380" alt="rapidproxy" src="https://github.com/user-attachments/assets/140337e0-50d5-452d-8a31-86c6b1761e47"/>
       </a>
