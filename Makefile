@@ -177,7 +177,7 @@ package-windows:
 			settings/chrome.css \
 			settings/camoucfg.jvv \
 			settings/properties.json \
-			~/.mozbuild/vs/VC/Redist/MSVC/14.38.33135/$(vcredist_arch)/Microsoft.VC143.CRT/*.dll \
+			~/.mozbuild/vs/VC/Redist/MSVC/*/$(vcredist_arch)/Microsoft.VC*.CRT/*.dll \
 		--version $(version) \
 		--release $(release) \
 		--arch $(arch) \
