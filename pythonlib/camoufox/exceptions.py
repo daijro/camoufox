@@ -14,6 +14,14 @@ class MissingRelease(Exception):
     ...
 
 
+class CorruptedDownload(Exception):
+    """
+    Raised when a downloaded asset does not match its expected sha256 digest.
+    """
+
+    ...
+
+
 class UnsupportedArchitecture(Exception):
     """
     Raised when the architecture is not supported.
