@@ -25,7 +25,13 @@ from .fingerprints import from_browserforge, from_preset, generate_fingerprint, 
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
 from .locales import handle_locales
-from .pkgman import OS_NAME, get_path, installed_verstr, launch_path
+from .pkgman import (
+    OS_NAME,
+    ensure_browser_profile_dir,
+    get_path,
+    installed_verstr,
+    launch_path,
+)
 from .virtdisplay import VirtualDisplay
 from ._warnings import LeakWarning
 from .webgl import sample_webgl
@@ -584,6 +590,8 @@ def launch_options(
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
+    ensure_browser_profile_dir(env)
+
     # Build the config
     if config is None:
         config = {}
