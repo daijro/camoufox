@@ -16,8 +16,11 @@ Run with:
 
 import base64
 import os
+import queue
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import orjson
@@ -36,6 +39,27 @@ MODULE_ERRORS = ("Cannot find module", "MODULE_NOT_FOUND")
 
 def _driver_package() -> Path:
     return Path(get_nodejs()).parent / "package"
+
+
+def _read_until(process, expected: str, timeout: float = 5) -> str:
+    lines = queue.Queue()
+
+    def read_stdout():
+        for line in process.stdout:
+            lines.put(line)
+
+    threading.Thread(target=read_stdout, daemon=True).start()
+    output = []
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            line = lines.get(timeout=deadline - time.monotonic())
+        except queue.Empty:
+            break
+        output.append(line)
+        if expected in line:
+            return "".join(output)
+    raise AssertionError(f"Did not receive {expected!r}; stdout was {''.join(output)!r}")
 
 
 def test_driver_entrypoint_exposes_launch_server():
@@ -81,6 +105,155 @@ def test_launch_script_resolves_driver_against_installed_playwright():
         assert error not in combined, f"driver failed to resolve:\n{combined}"
     assert "Launching server..." in combined, combined
     assert "executable doesn't exist" in combined, combined
+
+
+def test_launch_script_closes_server_gracefully(tmp_path):
+    driver = tmp_path / "driver"
+    driver.mkdir()
+    close_marker = tmp_path / "closed"
+    (driver / "index.js").write_text(
+        "const fs = require('fs');\n"
+        "module.exports = { firefox: { launchServer: async () => ({\n"
+        "  wsEndpoint: () => 'ws://test-server',\n"
+        "  close: async () => fs.writeFileSync(process.env.CLOSE_MARKER, 'closed')\n"
+        "}) } };\n"
+    )
+    env = os.environ.copy()
+    env["CLOSE_MARKER"] = str(close_marker)
+    process = subprocess.Popen(
+        [get_nodejs(), str(server.LAUNCH_SCRIPT), str(driver)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
+    assert process.stdin is not None
+    try:
+        config = base64.b64encode(orjson.dumps({})).decode()
+        midpoint = len(config) // 2
+        process.stdin.write(config[:midpoint])
+        process.stdin.flush()
+        process.stdin.write(config[midpoint:] + "\nignored-after-first-frame\n")
+        process.stdin.flush()
+
+        output = _read_until(process, "ws://test-server")
+        assert "Launching server..." in output
+        assert process.poll() is None
+        assert not close_marker.exists()
+
+        process.stdin.close()
+        assert process.wait(timeout=5) == 0
+        assert close_marker.read_text() == "closed"
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        if not process.stdin.closed:
+            process.stdin.close()
+
+
+@pytest.mark.parametrize(
+    ("destroy_argument", "expected_returncode"),
+    [("", 0), ("new Error('control stream failed')", 1)],
+)
+def test_launch_script_closes_server_on_stdin_close_or_error(
+    tmp_path, destroy_argument, expected_returncode
+):
+    driver = tmp_path / "driver"
+    driver.mkdir()
+    close_marker = tmp_path / "closed"
+    (driver / "index.js").write_text(
+        "const fs = require('fs');\n"
+        "module.exports = { firefox: { launchServer: async () => {\n"
+        f"  setTimeout(() => process.stdin.destroy({destroy_argument}), 25);\n"
+        "  return {\n"
+        "    wsEndpoint: () => 'ws://test-server',\n"
+        "    close: async () => fs.writeFileSync(process.env.CLOSE_MARKER, 'closed')\n"
+        "  };\n"
+        "} } };\n"
+    )
+    env = os.environ.copy()
+    env["CLOSE_MARKER"] = str(close_marker)
+    process = subprocess.Popen(
+        [get_nodejs(), str(server.LAUNCH_SCRIPT), str(driver)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
+    assert process.stdin is not None
+    try:
+        config = base64.b64encode(orjson.dumps({})).decode()
+        process.stdin.write(config + "\n")
+        process.stdin.flush()
+        _read_until(process, "ws://test-server")
+
+        assert process.wait(timeout=5) == expected_returncode
+        assert close_marker.read_text() == "closed"
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        if not process.stdin.closed:
+            process.stdin.close()
+
+
+@pytest.mark.parametrize("interrupt_at", ["write", "flush"])
+def test_launch_server_reaps_child_when_sending_config_is_interrupted(
+    monkeypatch, interrupt_at
+):
+    class InterruptingStdin:
+        def __init__(self):
+            self.closed = False
+
+        def write(self, data):
+            if interrupt_at == "write":
+                raise KeyboardInterrupt
+            return len(data)
+
+        def flush(self):
+            if interrupt_at == "flush":
+                raise KeyboardInterrupt
+
+        def close(self):
+            self.closed = True
+
+    class FakeProcess:
+        def __init__(self):
+            self.stdin = InterruptingStdin()
+            self.returncode = None
+            self.wait_timeouts = []
+            self.terminated = False
+            self.killed = False
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            self.wait_timeouts.append(timeout)
+            self.returncode = 0
+            return 0
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+    process = FakeProcess()
+    monkeypatch.setattr(server, "get_nodejs", lambda: "/node")
+    monkeypatch.setattr(server, "launch_options", lambda **kwargs: {})
+    monkeypatch.setattr(server.subprocess, "Popen", lambda *args, **kwargs: process)
+
+    with pytest.raises(KeyboardInterrupt):
+        server.launch_server()
+
+    assert process.stdin.closed
+    assert process.wait_timeouts == [15]
+    assert not process.terminated
+    assert not process.killed
 
 
 def test_launch_server_surfaces_child_exit_instead_of_pipe_error(monkeypatch, tmp_path):

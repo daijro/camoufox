@@ -63,12 +63,55 @@ def launch_server(**kwargs) -> NoReturn:
         stdin=subprocess.PIPE,
         text=True,
     )
-    # Write data to stdin, close the stream, and wait forever.
-    # communicate() tolerates the pipe closing early if the server exits before reading
-    # its config, keeping that error visible instead of masking it with an OSError.
-    process.communicate(input=base64.b64encode(data).decode())
+    # Send one newline-delimited configuration frame, then keep the pipe open.
+    # The Node process treats EOF as a shutdown request and can close Playwright
+    # cleanly before exiting, which removes its temporary browser profile.
+    assert process.stdin is not None
+    stdin = process.stdin
+    encoded_config = base64.b64encode(data).decode() + '\n'
 
-    # Add an explicit return statement to satisfy the NoReturn type hint
+    def close_stdin() -> None:
+        if stdin.closed:
+            return
+        try:
+            stdin.close()
+        except OSError:
+            pass
+
+    def shutdown_process() -> None:
+        """Ask Node to close BrowserServer, then reap it with bounded fallbacks."""
+        close_stdin()
+        if process.poll() is not None:
+            process.wait()
+            return
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+
+    try:
+        stdin.write(encoded_config)
+        stdin.flush()
+        process.wait()
+    except OSError as error:
+        # If Node failed before reading the frame, preserve its exit status
+        # instead of masking the original failure with a pipe exception.
+        shutdown_process()
+        raise RuntimeError(
+            f"Server process terminated unexpectedly with exit code {process.returncode}"
+        ) from error
+    except BaseException:
+        shutdown_process()
+        raise
+    finally:
+        close_stdin()
+
+    # Add an explicit exception to satisfy the NoReturn type hint.
     raise RuntimeError(
         f"Server process terminated unexpectedly with exit code {process.returncode}"
     )
