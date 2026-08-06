@@ -32,7 +32,7 @@ from ..multiversion import (
     save_repo_cache,
     set_active,
 )
-from ..pkgman import RepoConfig, unzip, webdl
+from ..pkgman import RepoConfig, unzip, verify_sha256, webdl
 
 # Workers
 
@@ -74,8 +74,12 @@ class DownloadWorker(Worker):
 
             with tempfile.NamedTemporaryFile() as f:
                 webdl(self.version.url, buffer=f, bar=False, progress_callback=self._progress)
-                self.status.emit("Extracting...")
+                self.status.emit("Verifying...")
                 self.progress.emit(-1)
+                verify_sha256(
+                    f, self.version.sha256, desc=f"Camoufox v{self.version.version.full_string}"
+                )
+                self.status.emit("Extracting...")
                 unzip(f, str(path), bar=False)
 
             (path / 'version.json').write_bytes(orjson.dumps(self.version.to_metadata()))

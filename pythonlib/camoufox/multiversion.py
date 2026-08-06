@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 import orjson
 import rich_click as click
 
-from .pkgman import INSTALL_DIR, OS_NAME, Version, rprint, unzip
+from .pkgman import INSTALL_DIR, OS_NAME, Version, rprint, unzip, verify_sha256
 
 BROWSERS_DIR: Path = INSTALL_DIR / "browsers"
 CONFIG_FILE: Path = INSTALL_DIR / "config.json"
@@ -420,6 +420,14 @@ def install_versioned(fetcher, replace: bool = False) -> bool:
 
         with tempfile.NamedTemporaryFile() as temp_file:
             fetcher.download_file(temp_file, fetcher.url)
+
+            expected_sha = (
+                fetcher._selected_version.sha256
+                if fetcher._selected_version
+                else getattr(fetcher, "installed_sha256", None)
+            )
+            verify_sha256(temp_file, expected_sha, desc=f"Camoufox v{fetcher.verstr}")
+
             rprint(f'Extracting Camoufox: {install_path}')
             unzip(temp_file, str(install_path))
 
