@@ -1,4 +1,5 @@
 import os
+import shutil
 from enum import Enum
 from multiprocessing import Lock
 from typing import List, Optional
@@ -74,14 +75,16 @@ def maybe_download_addons(
         # Get the addon path
         addon_path = get_addon_path(addon.name)
 
-        # Check if the addon is already extracted
-        if os.path.exists(addon_path):
+        # Check if the addon is already extracted. A bare directory is not
+        # enough: a failed download leaves an empty dir behind, so require the
+        # manifest that confirm_paths() looks for.
+        if os.path.exists(os.path.join(addon_path, 'manifest.json')):
             # Add the existing addon path to addons_list
             if addons_list is not None:
                 addons_list.append(addon_path)
             continue
 
-        # Addon doesn't exist, create directory and download
+        # Addon isn't extracted, create directory and download
         try:
             os.makedirs(addon_path, exist_ok=True)
             download_and_extract(addon.value, addon_path, addon.name)
@@ -89,4 +92,6 @@ def maybe_download_addons(
             if addons_list is not None:
                 addons_list.append(addon_path)
         except Exception as e:
+            # Drop the partial directory so the next run re-downloads.
+            shutil.rmtree(addon_path, ignore_errors=True)
             print(f"Failed to download and extract {addon.name}: {e}")
