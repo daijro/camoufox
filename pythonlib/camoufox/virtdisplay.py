@@ -22,7 +22,7 @@ class VirtualDisplay:
 
     xvfb_args = (
         # fmt: off
-        "-screen", "0", "1x1x24",
+        "-screen", "0", "1920x1080x24",
         "-ac",
         "-nolisten", "tcp",
         "-extension", "RENDER",
