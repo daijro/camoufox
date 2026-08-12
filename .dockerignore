@@ -1,0 +1,7 @@
+.git
+dist
+node_modules
+build-tester/node_modules
+service-tester/node_modules
+*.zip
+camoufox-*
