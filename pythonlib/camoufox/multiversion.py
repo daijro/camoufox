@@ -2,6 +2,7 @@
 Manager for handling multiple Camoufox versions side by side
 """
 
+import hashlib
 import os
 import shlex
 import shutil
@@ -420,6 +421,17 @@ def install_versioned(fetcher, replace: bool = False) -> bool:
 
         with tempfile.NamedTemporaryFile() as temp_file:
             fetcher.download_file(temp_file, fetcher.url)
+
+            expected_sha256 = getattr(fetcher, "installed_sha256", None)
+            if expected_sha256:
+                temp_file.seek(0)
+                actual_sha256 = hashlib.sha256(temp_file.read()).hexdigest()
+                if actual_sha256 != expected_sha256:
+                    shutil.rmtree(install_path, ignore_errors=True)
+                    raise Exception(
+                        f"SHA256 mismatch: expected {expected_sha256}, got {actual_sha256}"
+                    )
+
             rprint(f'Extracting Camoufox: {install_path}')
             unzip(temp_file, str(install_path))
 
