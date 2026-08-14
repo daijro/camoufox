@@ -470,6 +470,110 @@ def set_media_devices_defaults(config: Dict[str, Any]) -> None:
     config['mediaDevices:speakers'] = 0
 
 
+# ── WebGL ↔ screen resolution consistency ──────────────────────────────────
+
+# GPU classes and their typical minimum screen resolutions. A GPU reporting
+# a high-end discrete renderer (e.g., NVIDIA GTX 980) paired with a tiny
+# screen (e.g., 1024x600) is a fingerprint consistency tell — no real device
+# ships that combination. Integrated GPUs (Intel HD, AMD Radeon R9) appear
+# in laptops with 1366x768+; discrete GPUs in desktops with 1920x1080+.
+#
+# The thresholds are conservative — we only flag clear mismatches, not
+# borderline cases, to avoid over-constraining the fingerprint space.
+
+_GPU_MIN_RESOLUTIONS = {
+    # High-end discrete GPUs — almost always paired with 1920x1080+
+    'NVIDIA GeForce GTX': (1920, 1080),
+    'NVIDIA GeForce RTX': (1920, 1080),
+    'NVIDIA Quadro': (1920, 1080),
+    'Radeon R9': (1920, 1080),
+    'Radeon RX': (1920, 1080),
+    # ANGLE (Direct3D11) on Windows — typically 1920x1080+ (desktop)
+    'ANGLE (NVIDIA': (1920, 1080),
+    'ANGLE (AMD': (1920, 1080),
+    # Apple M-series — Retina displays, always 2560x1600+ (13") or 3024x1964+ (14")
+    'Apple M': (2560, 1600),
+    # Mid-range / integrated — 1366x768 is the laptop floor
+    'Intel(R) HD Graphics': (1366, 768),
+    'Intel(R) Iris': (1366, 768),
+    'ANGLE (Intel': (1366, 768),
+    'AMD Radeon HD': (1366, 768),
+}
+
+
+def fix_webgl_screen_consistency(config: Dict[str, Any]) -> None:
+    """Ensure the WebGL renderer is plausible for the claimed screen resolution.
+
+    BrowserForge generates screen dimensions independently of the WebGL
+    vendor/renderer (sampled from ``webgl_data.db``). This can produce
+    combinations that never exist on real hardware — e.g., a high-end
+    discrete GPU with a 1024x600 screen. Fingerprint consistency detectors
+    (Pixelscan, Fingerprint.com) flag these as masking.
+
+    If the screen resolution is below the GPU's typical minimum, we bump
+    the screen up to the minimum so the pair is plausible. We only adjust
+    upward (never shrink) to avoid breaking window/viewport geometry that
+    downstream code may depend on.
+    """
+    renderer = config.get('webGl:renderer', '')
+    if not renderer:
+        return
+
+    sw = config.get('screen.width')
+    sh = config.get('screen.height')
+    if not (sw and sh):
+        return
+
+    # Find the matching GPU class
+    min_w, min_h = None, None
+    for gpu_prefix, (gpu_min_w, gpu_min_h) in _GPU_MIN_RESOLUTIONS.items():
+        if gpu_prefix in renderer:
+            min_w, min_h = gpu_min_w, gpu_min_h
+            break
+
+    if min_w is None:
+        return  # Unknown GPU — don't constrain
+
+    # If the screen is already large enough, nothing to do
+    if sw >= min_w and sh >= min_h:
+        return
+
+    # Bump screen up to the GPU's minimum. Preserve the taskbar gap
+    # (availHeight < height) that fix_screen_no_taskbar established.
+    new_w = max(sw, min_w)
+    new_h = max(sh, min_h)
+    config['screen.width'] = new_w
+    config['screen.height'] = new_h
+
+    # Scale avail to match the new screen height, preserving the gap
+    old_gap = (config.get('screen.height', 0) -
+               config.get('screen.availHeight', 0))
+    if old_gap and old_gap > 0:
+        config['screen.availHeight'] = new_h - old_gap
+    else:
+        # No existing gap — apply a default taskbar height
+        config['screen.availHeight'] = new_h - 40
+    config['screen.availWidth'] = new_w
+
+    # Scale window dimensions proportionally if they exist
+    oh = config.get('window.outerHeight')
+    if oh:
+        config['window.outerHeight'] = min(oh, config['screen.availHeight'])
+    ow = config.get('window.outerWidth')
+    if ow:
+        config['window.outerWidth'] = min(ow, new_w)
+    ih = config.get('window.innerHeight')
+    if ih and oh:
+        chrome = oh - ih
+        new_oh = config['window.outerHeight']
+        config['window.innerHeight'] = max(1, new_oh - chrome)
+    iw = config.get('window.innerWidth')
+    if iw and ow:
+        chrome_w = ow - iw
+        new_ow = config['window.outerWidth']
+        config['window.innerWidth'] = max(1, new_ow - chrome_w)
+
+
 def _select_presets_file(ff_version: Optional[Any] = None) -> Path:
     """Pick the bundled-presets file appropriate for a given Firefox version.
 
