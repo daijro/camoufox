@@ -435,6 +435,7 @@ class Frame {
       wsid: webSocketSerialID + '',
       opcode: frame.opCode,
       data: frame.opCode !== 1 ? btoa(frame.payload) : frame.payload,
+      timestamp: frame.timeStamp / 1_000_000,
     });
     this._webSocketListener = {
       QueryInterface: ChromeUtils.generateQI([Ci.nsIWebSocketEventListener, ]),
@@ -505,6 +506,7 @@ class Frame {
           wsid: webSocketSerialID + '',
           opcode: frame.opCode,
           data: frame.opCode !== 1 ? btoa(frame.payload) : frame.payload,
+          timestamp: frame.timeStamp / 1_000_000,
         });
       },
     };

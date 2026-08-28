@@ -329,7 +329,7 @@ export class PageHandler {
     return await this._contentPage.send('adoptNode', options);
   }
 
-  async ['Page.screenshot']({ mimeType, clip, omitDeviceScaleFactor, quality = 80}) {
+  async ['Page.screenshot']({ mimeType, clip, omitDeviceScaleFactor, quality }) {
     const rect = new DOMRect(clip.x, clip.y, clip.width, clip.height);
 
     const browsingContext = this._pageTarget.linkedBrowser().browsingContext;
@@ -374,7 +374,8 @@ export class PageHandler {
     ctx.drawImage(snapshot, 0, 0);
     snapshot.close();
 
-    if (mimeType === 'image/jpeg') {
+    if (mimeType === 'image/jpeg' || mimeType === 'image/webp') {
+      quality ??= mimeType === 'image/webp' ? 100 : 80;
       if (quality < 0 || quality > 100)
         throw new Error('Quality must be an integer value between 0 and 100; received ' + quality);
       quality /= 100;

@@ -77,6 +77,8 @@ pageTypes.Size = {
 pageTypes.Viewport = {
   viewportSize: pageTypes.Size,
   deviceScaleFactor: t.Optional(t.Number),
+  screenSize: t.Optional(pageTypes.Size),
+  isMobile: t.Optional(t.Boolean),
 };
 
 pageTypes.DOMQuad = {
@@ -762,12 +764,14 @@ const Page = {
       wsid: t.String,
       opcode: t.Number,
       data: t.String,
+      timestamp: t.Number,
     },
     'webSocketFrameReceived': {
       frameId: t.String,
       wsid: t.String,
       opcode: t.Number,
       data: t.String,
+      timestamp: t.Number,
     },
     'screencastFrame': {
       data: t.String,
@@ -806,6 +810,9 @@ const Page = {
     'setViewportSize': {
       params: {
         viewportSize: t.Nullable(pageTypes.Size),
+        deviceScaleFactor: t.Optional(t.Number),
+        screenSize: t.Optional(pageTypes.Size),
+        isMobile: t.Optional(t.Boolean),
       },
     },
     'setZoom': {
@@ -895,7 +902,7 @@ const Page = {
     },
     'screenshot': {
       params: {
-        mimeType: t.Enum(['image/png', 'image/jpeg']),
+        mimeType: t.Enum(['image/png', 'image/jpeg', 'image/webp']),
         clip: pageTypes.Clip,
         quality: t.Optional(t.Number),
         omitDeviceScaleFactor: t.Optional(t.Boolean),
