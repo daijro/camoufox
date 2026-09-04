@@ -738,6 +738,33 @@ def get_random_preset(
     return choice(candidates)  # nosec
 
 
+# Tokens that name the machine rather than the platform: Firefox leaves every one
+# of them out of appVersion.
+_APP_VERSION_DROPPED = ('Win64', 'x64', 'Mobile', 'Tablet')
+
+
+def _app_version_from_user_agent(user_agent: str) -> Optional[str]:
+    """The appVersion Firefox reports for a browser sending this user agent.
+
+    "5.0 (<OS tokens>)": the parenthesised part of the UA without the
+    architecture, the Gecko revision, or the Windows build number.
+    """
+    block = re.match(r'Mozilla/5\.0 \(([^)]*)\)', user_agent or '')
+    if not block:
+        return None
+    kept = []
+    for token in (part.strip() for part in block.group(1).split(';')):
+        if (
+            token.startswith('rv:')
+            or token in _APP_VERSION_DROPPED
+            or token.startswith('Linux ')
+            or token.startswith('Intel Mac OS X')
+        ):
+            continue
+        kept.append('Windows' if token.startswith('Windows') else token)
+    return f"5.0 ({'; '.join(kept)})" if kept else None
+
+
 def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any]:
     """
     Convert a real fingerprint preset to CAMOU_CONFIG format.
@@ -767,6 +794,24 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
             config['navigator.oscpu'] = 'Windows NT 10.0; Win64; x64'
         elif 'Linux' in plat or 'linux' in plat:
             config['navigator.oscpu'] = 'Linux x86_64'
+    if nav.get('appVersion'):
+        config['navigator.appVersion'] = nav['appVersion']
+    elif config.get('navigator.userAgent'):
+        # Left unset, appVersion falls through to the *host's* value and then
+        # contradicts the userAgent and platform set above: a Linux preset on a
+        # macOS host reported "5.0 (Macintosh)" beside platform "Linux x86_64",
+        # which any page can read in two properties.
+        #
+        # Firefox builds it from the same OS tokens as the userAgent, minus the
+        # architecture and rv, with Windows collapsed to its family name. Deriving
+        # it from the UA rather than from the platform keeps the distro token that
+        # 20 of the bundled Linux presets carry ("X11; Ubuntu"), which a platform
+        # lookup would flatten to "X11" — a mismatch of the same kind, if a
+        # smaller one. Checked against 800 browserforge fingerprints: exact every
+        # time.
+        derived = _app_version_from_user_agent(config['navigator.userAgent'])
+        if derived:
+            config['navigator.appVersion'] = derived
     if 'maxTouchPoints' in nav:
         config['navigator.maxTouchPoints'] = nav['maxTouchPoints']
 
