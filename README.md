@@ -276,6 +276,15 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
       Get free trial traffic after signup + use code <strong>Camoufox</strong> for <strong>10% OFF</strong>.<br>
       <a href="https://www.thordata.com/?ls=dcx&lk=dcx" target="_blank">Start your free trial with Thordata</a>
   </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://www.webshare.io/" target="_blank">
+        <img width="380" alt="Webshare" src="https://github.com/user-attachments/assets/b2af0630-bfa9-4f59-a074-d2162a2c8913"/>
+      </a>
+    </td>
+    <td valign="middle">
+      <strong><a href="https://www.webshare.io/">Webshare</a></strong> gives you instant access to a proxy pool of 80M+ ethically-sourced IPs across 195+ countries, with rotating residential, static ISP, and datacenter options plus a full API. It includes a 100+ Gbps backbone, country/city/state/ZIP/ASN-level targeting, and requires no credit card to start. <strong>Discount Code</strong>: <strong>CAMOUFOX20</strong> for 20% off your first purchase.
+  </tr>
 </table>
 </details>
 
