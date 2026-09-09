@@ -964,6 +964,56 @@ def _build_init_script(values: Dict[str, Any]) -> str:
     return '\n'.join(lines)
 
 
+def _default_build_id(ff_version: Optional[str]) -> Optional[str]:
+    """
+    Derive a plausible Firefox buildID (YYYYMMDDHHMMSS) for a given major
+    version.
+
+    Real Firefox buildIDs are the timestamp of the compiler run that produced
+    the release. Distributed Camoufox binaries carry their own (often stale)
+    engine buildID, and unless a user explicitly sets `navigator.buildID`,
+    Firefox's XULAppInfo reports it verbatim — letting a modern UA claim a
+    years-old build, which detectors cross-check.
+
+    Approximates each major version's release date (Firefox 94 shipped Nov
+    2021; releases follow ~every 4 weeks) with deterministic jitter so the
+    same version always yields the same ID.
+    """
+    if not ff_version:
+        return None
+    try:
+        major = int(str(ff_version).split('.', 1)[0])
+    except ValueError:
+        return None
+    # Anchor: Firefox 94 released 2021-11-02 (12:00:00 UTC).
+    months_since = max(major - 94, 0)
+    base_epoch = 1_635_854_400
+    jitter_days = (major * 7919) % 90
+    epoch = base_epoch + months_since * 30 * 86400 + jitter_days * 86400
+    days, secs_of_day = divmod(epoch, 86400)
+    # Civil-from-days (Howard Hinnant) — no external date dependency.
+    z = days + 719_468
+    era = z // 146_097
+    doe = z - era * 146_097
+    yoe = (doe - doe // 1460 + doe // 36524 - doe // 146_096) // 365
+    year = yoe + era * 400
+    doy = doe - (365 * yoe + yoe // 4 - yoe // 100)
+    mp = (5 * doy + 2) // 153
+    day = doy - (153 * mp + 2) // 5 + 1
+    month = mp + 3 if mp < 10 else mp - 9
+    if month <= 2:
+        year += 1
+    hh, rem = divmod(secs_of_day, 3600)
+    mm, ss = divmod(rem, 60)
+    return f"{year:04d}{month:02d}{day:02d}{hh:02d}{mm:02d}{ss:02d}"
+
+
+def _ff_major_from_ua(ua: str) -> Optional[str]:
+    """Extract the major Firefox version from a UA string like '...Firefox/152.0'."""
+    m = re.search(r"Firefox/(\d+)", ua or "")
+    return m.group(1) if m else None
+
+
 def generate_context_fingerprint(
     preset: Optional[Dict] = None,
     os: Optional[str] = None,
@@ -1093,6 +1143,21 @@ def generate_context_fingerprint(
         config['navigator.language'] = parsed.as_string
         if parsed.script:
             config['locale:script'] = parsed.script
+
+    # Default navigator.buildID to a period-correct value for the claimed UA
+    # version. Without this, XULAppInfo reports the (stale) engine buildID,
+    # letting a modern Firefox UA claim a years-old build — trivially
+    # cross-checkable by detectors. Users who set navigator.buildID
+    # explicitly are unaffected.
+    if 'navigator.buildID' not in config:
+        ff_major = (
+            str(ff_version).split('.', 1)[0]
+            if ff_version
+            else _ff_major_from_ua(config.get('navigator.userAgent', ''))
+        )
+        derived = _default_build_id(ff_major)
+        if derived:
+            config['navigator.buildID'] = derived
 
     # Apply caller overrides before rendering init_script
     if config_overrides:
