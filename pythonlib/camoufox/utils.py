@@ -1013,6 +1013,40 @@ def launch_options(
         print('[DEBUG] Config:')
         pprint(config)
 
+    # navigator.doNotTrack and navigator.globalPrivacyControl reach the browser
+    # as Firefox prefs, not as CAMOU_CONFIG reads.
+    #
+    # Each has a header half -- DNT and Sec-GPC -- and one pref drives both
+    # halves, so the pref is the only thing that moves them together. Spoofing
+    # the JS getter alone would leave the header contradicting it, which is a
+    # sharper tell than the value being wrong.
+    #
+    # GPC has a second split. WorkerNavigator::GlobalPrivacyControl reads
+    # MaskConfig; the main-thread Navigator::GlobalPrivacyControl does not. With
+    # the config set and the pref left alone, a page and a worker it spawns
+    # report different values -- something no genuine Firefox does, and a page
+    # can read both. Driving the pref from the same config value keeps the two
+    # threads and the header in agreement.
+    #
+    # merge_into only fills keys that are absent, so an explicit
+    # firefox_user_prefs from the caller still wins.
+    gpc = config.get('navigator.globalPrivacyControl')
+    if gpc is not None:
+        merge_into(
+            firefox_user_prefs,
+            {
+                'privacy.globalprivacycontrol.enabled': bool(gpc),
+                'privacy.globalprivacycontrol.functionality.enabled': bool(gpc),
+            },
+        )
+
+    dnt = config.get('navigator.doNotTrack')
+    if dnt is not None:
+        merge_into(
+            firefox_user_prefs,
+            {'privacy.donottrackheader.enabled': str(dnt) == '1'},
+        )
+
     # Validate the config
     warn_if_executable_predates_playwright(executable_path)
     validate_config(config, path=executable_path)
