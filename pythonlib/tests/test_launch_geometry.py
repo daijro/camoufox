@@ -26,10 +26,25 @@ XVFB_STUB = Screen(max_width=1, max_height=1)
 
 @contextmanager
 def host(screen_cons):
-    """Run launch_options() against a stubbed host, without touching the disk."""
+    """Run launch_options() against a stubbed host, without touching the disk.
+
+    has_display() is stubbed alongside get_screen_cons() because launch_options
+    guards the one with the other:
+
+        screen_cons = screen or (get_screen_cons(headless) if has_display(env) else None)
+
+    Stubbing only get_screen_cons left the result depending on the *ambient*
+    display: with DISPLAY set the stub was consulted and the clamp ran, and
+    without it screen_cons came back None and the clamp was skipped, so all
+    fifteen TestHeadfulFitsOnDisplay draws failed. That passed on every
+    developer machine and failed the first time the suite ran on a headless CI
+    runner.
+    """
     with mock.patch.object(utils, "get_screen_cons", lambda headless: screen_cons), (
-        mock.patch.object(utils, "installed_verstr", lambda: "150.0.2")
-    ), mock.patch.object(utils, "launch_path", lambda **kwargs: "/nonexistent/camoufox"):
+        mock.patch.object(utils, "has_display", lambda env: True)
+    ), mock.patch.object(utils, "installed_verstr", lambda: "150.0.2"), (
+        mock.patch.object(utils, "launch_path", lambda **kwargs: "/nonexistent/camoufox")
+    ):
         yield
 
 

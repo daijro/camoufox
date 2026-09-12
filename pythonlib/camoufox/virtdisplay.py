@@ -172,7 +172,23 @@ class VirtualDisplay:
         return f":{self._display}"
 
     def kill(self) -> None:
-        if self.proc and self.proc.poll() is None:
+        """Stop Xvfb if it is running, and remove its lock and socket either way.
+
+        The cleanup deliberately does NOT depend on whether we did the killing.
+        It used to: the whole body sat behind `self.proc.poll() is None`, so a
+        display whose Xvfb had already died -- crashed, OOM-killed, or reaped
+        with the browser's process group -- was never cleaned up at all.
+
+        That is backwards. A SIGKILLed Xvfb never gets to remove its own socket,
+        so the crash path is precisely the one where /tmp/.X11-unix/X<n> is left
+        behind. Those accumulate, and because -displayfd scans upward for a free
+        number, every stranded socket pushes the next display higher until a
+        long-running host stops being able to allocate one.
+        """
+        if not self.proc:
+            return
+
+        if self.proc.poll() is None:
             if self.debug:
                 print("Terminating virtual display:", self._display)
             try:
@@ -180,15 +196,22 @@ class VirtualDisplay:
                 self.proc.wait(timeout=5)
             except Exception:
                 pass
+        elif self.debug:
+            print("Virtual display already exited:", self._display)
+
+        for path in (
+            f"/tmp/.X{self._display}-lock",
+            f"/tmp/.X11-unix/X{self._display}",
+        ):
             try:
-                os.remove(f"/tmp/.X{self._display}-lock")
-            except FileNotFoundError:
+                os.remove(path)
+            except OSError:
+                # Missing is the normal case; anything else (a permission error
+                # from a number another user has since claimed) must not take
+                # down a teardown path.
                 pass
-            try:
-                os.remove(f"/tmp/.X11-unix/X{self._display}")
-            except FileNotFoundError:
-                pass
-            self.proc = None
+
+        self.proc = None
 
     @staticmethod
     def _assert_linux() -> None:

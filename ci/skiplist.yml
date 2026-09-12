@@ -1,0 +1,100 @@
+# Upstream Playwright tests Camoufox cannot pass by design.
+#
+# This is not a list of things that are broken. It is a list of places where
+# Camoufox deliberately breaks upstream's automation contract, because that
+# contract is exactly what an anti-bot system looks for. Every entry names the
+# behaviour and why it is intentional.
+#
+# The bar for adding an entry:
+#
+#   A test fails because Camoufox does something differently ON PURPOSE, and a
+#   fix would mean giving up the thing the fork exists to do.
+#
+# "It was failing when I got here" is not a reason -- that is a regression
+# wearing a disguise. `ci/summarize.py` rejects an entry with an empty reason,
+# so this file cannot quietly turn into a list of unexplained failures.
+#
+# Entries are matched against pytest node ids. `module` skips a whole file;
+# `test` skips one node id; `pattern` is a substring match, used sparingly.
+#
+# The suite runs with main-world execution enabled (see ci/pw_camoufox_plugin.py),
+# which is why the list is as short as it is -- roughly 37 tests that would
+# otherwise fail on "X is not defined" pass without needing an entry here.
+
+schema: 1
+
+skip:
+  # --- synthesized input -----------------------------------------------------
+  #
+  # Camoufox routes every synthesized mouse and wheel event through the
+  # humanization chokepoint in additions/juggler/input/MouseDispatch.js: real
+  # trajectories, real timings, trusted events. Upstream's input tests assert
+  # the instantaneous, teleporting behaviour of stock Playwright -- click lands
+  # in exactly one frame, focus moves with no intervening motion -- so they
+  # measure precisely the tell Camoufox exists to remove.
+  #
+  # See docs/input-dispatch.md. These same modules are disabled in the vendored
+  # suite (tests/async/*.disabled), which already runs main-world, so their
+  # failure is not an isolation artefact.
+
+  - module: tests/async/test_click.py
+    reason: >-
+      Synthesized clicks go through Camoufox's humanized trajectory and trusted-event
+      path, not stock Playwright's instantaneous dispatch. These assert the
+      instantaneous behaviour, which is the automation tell the fork removes.
+
+  - module: tests/async/test_check.py
+    reason: >-
+      Checkbox and radio interaction is driven by the same humanized click path as
+      test_click.py.
+
+  - module: tests/async/test_fill.py
+    reason: >-
+      Fill drives the humanized keyboard path; upstream asserts stock Playwright's
+      direct value assignment.
+
+  - module: tests/async/test_focus.py
+    reason: >-
+      Focus moves through the humanized input path, so intermediate focus/blur
+      ordering differs from stock Playwright.
+
+  - module: tests/async/test_dispatch_event.py
+    reason: >-
+      dispatch_event() injects an untrusted synthetic event. Camoufox only emits
+      trusted events, because isTrusted:false is a first-order automation signal.
+
+  - module: tests/async/test_element_handle.py
+    reason: >-
+      Element-handle interaction is the synthesized input path again, plus
+      bounding-box arithmetic against spoofed browser chrome whose fractional
+      height varies with the spoofed OS (docs/input-dispatch.md).
+
+  # --- identity spoofing -----------------------------------------------------
+
+  - module: tests/async/test_popup.py
+    reason: >-
+      Asserts that a popup inherits a context's overridden User-Agent. Camoufox
+      resolves the User-Agent from its fingerprint config, so an arbitrary
+      override does not and must not stick -- a UA that disagrees with the rest
+      of the fingerprint is the single easiest thing to detect.
+
+  # --- launch model ----------------------------------------------------------
+
+  - module: tests/async/test_launcher.py
+    reason: >-
+      Launches its own browsers with deliberately invalid executable paths and
+      asserts stock Playwright's launch diagnostics. Camoufox is launched through
+      its own wrapper with a fixed binary, so these assert a code path that does
+      not exist here.
+
+  - module: tests/async/test_browsercontext_client_certificates.py
+    reason: >-
+      Client-certificate support is not built into the Camoufox binary.
+
+  # --- other engines ---------------------------------------------------------
+
+  - pattern: "[chromium]"
+    reason: Camoufox is a Firefox fork; Chromium-parameterised tests do not apply.
+
+  - pattern: "[webkit]"
+    reason: Camoufox is a Firefox fork; WebKit-parameterised tests do not apply.

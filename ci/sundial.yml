@@ -1,0 +1,62 @@
+# Scope and thresholds for the stealth check.
+#
+# Lives here rather than in harness/policy.yml because the stealth check is a
+# repo-wide test that runs on every pull request; the harness is just one of its
+# callers. harness/policy.yml keeps the things only the auto-update pipeline
+# cares about -- baselines, regression waivers, which gates are mandatory.
+#
+# Nothing in this file is secret. What is secret is the report sundial returns,
+# and that never leaves ci/run_sundial.py::redact() intact.
+
+schema: 1
+
+# Whether CI may run the stealth check at all.
+#
+# OFF, and deliberately so. The deployment at the url below **predates score
+# mode** (verified 2026-09-11 by authenticating and grepping the served bundle:
+# sundial master carries `f136985`, the live build does not). An older sundial
+# ignores `?score=1` and posts the whole report -- every vector's id, name,
+# brief, source and measured value -- to whatever collector asked for it. On a
+# public GitHub Actions runner that is the one shape this repository must never
+# receive, and `redact()` discarding it afterwards is not the same guarantee as
+# never having been sent it.
+#
+# While this is false the job is not scheduled, so the credential never reaches
+# a runner environment and there is nothing to redact. `ci/run_sundial.py`
+# refuses to run too, in case someone invokes it by hand.
+#
+# Turn it back on only after ALL of:
+#   1. sundial master (score mode + the score-only `ci` role) is deployed
+#      -- `make pages-deploy`, then re-run the deploy check
+#   2. `make pages-ci` has set CI_USER / CI_PASS, and it is redeployed
+#   3. SUNDIAL_USERNAME (= CI_USER) and SUNDIAL_AUTOMATION_KEY (= CI_PASS)
+#      are set on every repo whose CI runs this
+enabled: false
+
+url: https://sundial.daijro.dev
+
+# Only gate on categories Camoufox actually claims to implement. A vector
+# outside this list is still measured and counted, but cannot fail a build --
+# failing one would mean gating on a promise nobody made.
+gated_categories:
+  - Identity
+  - Security
+  - JS Engine
+  - Display
+  - Locale
+  - Network
+
+# Measured and counted, never gated. Cross-OS rendering parity lives here:
+# Camoufox does not claim byte-identical emulation of another platform's
+# rasterizer, its audio stack, or its CPU timing signature.
+ungated_categories:
+  - Graphics
+  - Audio
+  - CPU
+
+# A run scoring below this fails, even with no regression against the baseline.
+min_pass_rate: 0.90
+
+# Grade boundaries, for the single letter that goes public.
+# (Defined in ci/run_sundial.py::grade; listed here for reference.)
+#   A+ >= 0.99   A >= 0.97   B >= 0.94   C >= 0.90   D >= 0.80   else F

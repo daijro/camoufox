@@ -14,7 +14,7 @@ Tests a raw Camoufox binary (Firefox) directly against the same antibot-detectio
 npm install
 
 # Install Python deps
-pip install -r requirements.txt
+pip install -r requirements.txt   # installs -e ../pythonlib, this tree's package
 ```
 
 ## Usage

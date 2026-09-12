@@ -1,4 +1,10 @@
-playwright
+# Must track the ceiling in pythonlib/pyproject.toml. Unpinned, this installs
+# whatever is newest, and every Playwright minor is free to change Juggler --
+# 1.61 added params the protocol schema had to learn. The day a version ships
+# past the cap, this suite installs a client the browser cannot speak to and the
+# failure reads as "the browser broke".
+# ci/tests asserts the two stay in step.
+playwright<1.63
 auditwheel==6.1.0
 autobahn==23.1.2
 black==24.8.0

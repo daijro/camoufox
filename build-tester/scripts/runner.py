@@ -219,6 +219,7 @@ async def run_tests(
     secret: str,
     save_cert: Optional[str],
     no_cert: bool,
+    json_out: Optional[str] = None,
 ) -> int:
     project_dir = Path(__file__).parent.parent
 
@@ -392,6 +393,13 @@ async def run_tests(
         "timestamp": timestamp,
         "binaryPath": binary_path,
     }
+
+    # The auto-update harness grades this run per check rather than by reading
+    # the printed table, so offer the same structure it prints from.
+    if json_out:
+        Path(json_out).parent.mkdir(parents=True, exist_ok=True)
+        Path(json_out).write_text(json.dumps(full_result, indent=2, default=str), encoding="utf-8")
+        print(f"Machine-readable results written to: {json_out}")
 
     print(f"\n{'═' * 62}")
     gc = grade_color(overall_grade)

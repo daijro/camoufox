@@ -1,0 +1,79 @@
+name: Prepare browser
+description: >-
+  Check out the repo, install Python and the runtime libraries Firefox needs,
+  and unpack the built Camoufox from the build job's artifact. Every job that
+  drives a browser starts with this, so there is one place to fix when the
+  runtime dependency list drifts.
+
+inputs:
+  python-version:
+    required: false
+    default: "3.12"
+
+outputs:
+  binary:
+    description: Absolute path to camoufox-bin
+    value: ${{ steps.unpack.outputs.binary }}
+
+runs:
+  using: composite
+  steps:
+    # No checkout here on purpose. A local composite action (`uses: ./...`) can
+    # only be resolved once the repository is already in the workspace, so every
+    # caller must run actions/checkout itself before reaching this.
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - shell: bash
+      run: pip install -r ci/requirements.txt
+
+    - name: Install browser runtime libraries
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        # What a Firefox binary needs to actually start on a bare runner. Xvfb
+        # because every browser job runs headless-with-a-display rather than
+        # headless-mode: see ci/tribal/rules.yml on why.
+        sudo apt-get install -y --no-install-recommends \
+          xvfb libgtk-3-0 libasound2t64 libdbus-glib-1-2 libx11-xcb1 \
+          libxcb-shm0 libxcomposite1 libxcursor1 libxdamage1 libxfixes3 \
+          libxi6 libxrandr2 libxtst6 libpci3 zstd
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: camoufox-dist
+        path: ${{ github.workspace }}
+
+    - name: Unpack
+      id: unpack
+      shell: bash
+      run: |
+        mkdir -p .ci-browser
+        zstd -d -c camoufox-dist.tar.zst | tar -C .ci-browser -xf -
+        binary="$(realpath .ci-browser/bin/camoufox-bin)"
+        test -x "$binary" || { echo "::error::camoufox-bin missing from the artifact"; exit 1; }
+        # The Python API resolves properties.json next to the binary, and
+        # camoufox.cfg is where every spoofing pref lives. Without either, the
+        # browser either refuses to launch or launches as plain Firefox.
+        for required in properties.json camoufox.cfg; do
+          test -f ".ci-browser/bin/$required" || {
+            echo "::error::$required missing beside the binary -- the build job should have staged it"
+            exit 1; }
+        done
+
+        # The whole class, not just the two files above. mach builds dist/bin out
+        # of symlinks, some of them absolute into the source tree; archived
+        # without --dereference they resolve on the build runner and dangle
+        # everywhere else. A dangling link is invisible until something opens it,
+        # so check for them directly.
+        dangling="$(find .ci-browser -xtype l | head -20)"
+        if [ -n "$dangling" ]; then
+          echo "::error::the artifact contains dangling symlinks -- it was packed without tar --dereference"
+          echo "$dangling"
+          exit 1
+        fi
+        echo "binary=$binary" >> "$GITHUB_OUTPUT"
+        # Consumed by every runner via ci/_pytest.py::built_binary().
+        echo "CAMOUFOX_BINARY=$binary" >> "$GITHUB_ENV"
+        "$binary" --version || true
