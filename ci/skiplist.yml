@@ -95,8 +95,9 @@ skip:
   #
   # These two are not places Camoufox is worse than Firefox. They are places the
   # upstream test bakes in something specific to the *stock* browser, which the
-  # fork deliberately does not reproduce. Both were confirmed against the built
-  # binary rather than reasoned about: see the failure text quoted in each.
+  # fork deliberately does not reproduce. Both were reproduced against the built
+  # binary and read in upstream's source before being listed here -- neither is
+  # on this list because it was failing and looked plausible.
 
   - test: tests/async/test_worker.py::test_workers_should_format_number_using_context_locale
     reason: >-

@@ -125,8 +125,8 @@ def _assert_publishable(metrics: Dict[str, Any]) -> Dict[str, Any]:
 # non-browser User-Agent -- Python's urllib default and anything else that does
 # not look like a browser gets a 403 before the request reaches sundial at all.
 # So present as one. This has to be on *every* request, not just the first: a
-# client that authenticates with browser headers and then fetches with its own
-# logs in successfully and gets a confusing 403 on the next hop.
+# client that authenticates with browser headers and then fetches with urllib's
+# defaults logs in successfully and gets a confusing 403 on the very next hop.
 _BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0"
