@@ -22,7 +22,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set
 
 import pytest
 
@@ -124,19 +124,42 @@ def take_snapshot(psutil_mod) -> Snapshot:
     )
 
 
-def settle(psutil_mod, timeout: float = 20.0) -> None:
-    """Wait for children to exit and descriptors to close.
+def settle(psutil_mod, timeout: float = 20.0, pids: Optional[Iterable[int]] = None) -> None:
+    """Wait for the processes we started to exit, and descriptors to close.
 
     Teardown is not instantaneous: the driver has to notice the browser is gone,
     the OS has to reap it, and sockets sit in TIME_WAIT. Polling for quiescence
     rather than sleeping a fixed amount keeps the tests fast when things work
     and honest when they do not.
+
+    `pids` matters. Waiting only on `children()` waits on the wrong set: a
+    process whose parent has already exited is reparented to init and is no
+    longer our child, so the loop sees nothing left and returns immediately --
+    while the survivor check, which tracks sampled PIDs precisely so that
+    reparenting cannot hide a leak, still counts it. The wait then covers less
+    than the assertion does, and anything that outlives its parent by a few
+    hundred milliseconds fails as a leak. Gecko's `glxtest` GPU probe does
+    exactly that.
+
+    So wait on the sampled set as well, and a genuine leak still fails: these
+    processes get the same bounded grace period, not an exemption.
     """
     gc.collect()
     proc = psutil_mod.Process()
+    tracked = list(pids or [])
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        alive = [c for c in proc.children(recursive=True)]
+        alive = list(proc.children(recursive=True))
+        seen = {c.pid for c in alive}
+        for pid in tracked:
+            if pid in seen:
+                continue
+            try:
+                candidate = psutil_mod.Process(pid)
+                if candidate.is_running() and candidate.status() != psutil_mod.STATUS_ZOMBIE:
+                    alive.append(candidate)
+            except (psutil_mod.NoSuchProcess, psutil_mod.AccessDenied):
+                continue
         if not alive:
             break
         gone, _ = psutil_mod.wait_procs(alive, timeout=0.5)
@@ -201,6 +224,10 @@ class DescendantSampler:
         if self._thread:
             self._thread.join(timeout=2)
 
+    def seen_pids(self) -> List[int]:
+        """Every PID sampled during the test, reparented ones included."""
+        return list(self._seen)
+
     def survivors(self) -> List[str]:
         """PIDs we started that are still alive, reparenting included."""
         out = []
@@ -231,7 +258,8 @@ def leak_check(psutil_mod):
         sampler: "DescendantSampler"
 
         def assert_clean(self, *, allow_fds: int = 8) -> None:
-            settle(psutil_mod)
+            # Wait on exactly the set survivors() judges, reparenting included.
+            settle(psutil_mod, pids=self.sampler.seen_pids())
             self.sampler.stop()
             after = take_snapshot(psutil_mod)
 

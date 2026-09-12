@@ -58,7 +58,24 @@ def get_trace_actions(events: List[Any]) -> List[str]:
     # events now carry the protocol-level class and method ("Frame.goto"). The
     # old key is simply absent, so reading it raised KeyError and took down
     # every assertion that inspects a trace.
-    return [f'{e["class"]}.{e["method"]}' for e in action_events]
+    #
+    # Protocol method names are Playwright's internals and it renames them: this
+    # suite is pinned to a range (`playwright<1.63`), not to one version, so a
+    # test that spells one out fails on the versions that spell it the other
+    # way. Normalise here, once, rather than in each assertion -- the tests care
+    # about which actions ran and in what order, not what Playwright calls them
+    # this month.
+    return [_canonical_action(f'{e["class"]}.{e["method"]}') for e in action_events]
+
+
+# Renamed in Playwright after this suite was forked. Same action either way.
+_ACTION_ALIASES = {
+    "Page.__waitInfo__": "Page.waitForEventInfo",
+}
+
+
+def _canonical_action(action: str) -> str:
+    return _ACTION_ALIASES.get(action, action)
 
 
 TARGET_CLOSED_ERROR_MESSAGE = "Target page, context or browser has been closed"
