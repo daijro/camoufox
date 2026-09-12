@@ -102,7 +102,8 @@ def test_only_whitelisted_keys_are_published():
     assert set(out) <= _PUBLISHABLE, f"published beyond the whitelist: {set(out) - _PUBLISHABLE}"
     assert set(out) == {
         "grade", "checks_total", "checks_passed", "pass_rate",
-        "out_of_scope_failed", "cross_os_total", "cross_os_passed",
+        "out_of_scope_failed", "unknown_category_checks",
+        "cross_os_total", "cross_os_passed",
         "score_mode", "os", "sundial_version", "schema_version",
     }
 
@@ -1112,3 +1113,72 @@ def test_zero_attempts_still_runs_the_step_once(monkeypatch):
     code, fake = _run_step(monkeypatch, [(0, "ok")], attempts=0)
     assert len(fake.calls) == 1
     assert code == 0
+
+
+# ---------------------------------------------------------------------------
+# a category nobody has ruled on is a blind spot, not an "out of scope"
+# ---------------------------------------------------------------------------
+
+
+def _score_payload(*buckets) -> dict:
+    """A minimal sundial score payload: (category, class, scored, passed)."""
+    return {
+        "schemaVersion": 1,
+        "mode": "score",
+        "sundialVersion": "0.5.0",
+        "buckets": {
+            f"{cat}|{cls}": {"scored": n, "passed": p, "failed": n - p}
+            for cat, cls, n, p in buckets
+        },
+    }
+
+
+def test_sundial_yml_names_every_section_sundial_has():
+    """ci/sundial.yml must partition sundial's taxonomy, not sample it.
+
+    sundial's SECTIONS are the `category` every scored entry carries. If the two
+    lists here do not cover all of them, whatever is missing is silently
+    unscored -- the gate would report a pass rate over a slice of the suite and
+    read exactly like a clean run.
+    """
+    import yaml
+
+    cfg = yaml.safe_load((CI_ROOT / "sundial.yml").read_text(encoding="utf-8"))
+    named = {c.lower() for c in cfg["gated_categories"]} | {
+        c.lower() for c in cfg["ungated_categories"]
+    }
+    # sundial 0.5.0, src/lib/engine.js SECTIONS[].label.
+    sundial_sections = {
+        "identity", "security", "js engine", "graphics",
+        "display", "locale", "audio", "cpu", "network",
+    }
+    assert sundial_sections <= named, (
+        f"not scored by either list: {sorted(sundial_sections - named)}"
+    )
+    assert not (named - sundial_sections), (
+        f"named here but not a sundial section: {sorted(named - sundial_sections)}"
+    )
+
+
+def test_a_category_in_neither_list_is_counted_as_unknown():
+    out = redact(
+        _score_payload(
+            ("Identity", "core", 10, 10),
+            ("Graphics", "core", 5, 3),      # deliberately ungated
+            ("Battery", "core", 4, 1),       # a section nobody has ruled on
+        ),
+        GATED, UNGATED, os_name="linux",
+    )
+    assert out["checks_total"] == 10
+    assert out["unknown_category_checks"] == 4
+    # Still only a count -- the category name never reaches the metrics.
+    assert "Battery" not in json.dumps(out)
+
+
+def test_a_known_ungated_category_is_not_unknown():
+    out = redact(
+        _score_payload(("Identity", "core", 10, 10), ("Graphics", "core", 5, 3)),
+        GATED, UNGATED, os_name="linux",
+    )
+    assert out["unknown_category_checks"] == 0
+    assert out["out_of_scope_failed"] == 2

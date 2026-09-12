@@ -92,6 +92,7 @@ _PUBLISHABLE = frozenset({
     "checks_passed",
     "pass_rate",
     "out_of_scope_failed",  # a single count, no attribution
+    "unknown_category_checks",  # ditto -- how many, never which
     "cross_os_total",     # host-OS detectors: measured, never gated
     "cross_os_passed",
     "score_mode",         # did sundial answer in score mode? a protocol fact
@@ -342,16 +343,24 @@ def grade(pass_rate: float) -> str:
     return "F"
 
 
-def _from_buckets(payload: dict, gated: List[str]) -> Dict[str, int]:
+def _from_buckets(payload: dict, gated: List[str], ungated: List[str]) -> Dict[str, int]:
     """Fold sundial's score payload into the three numbers we publish.
 
     Buckets arrive keyed "<Category>|<class>". Category decides scope -- whether
     Camoufox claims that area at all -- and class decides whether a failure is
     the browser's fault or the machine's.
+
+    A category in neither list is counted separately. sundial's taxonomy is nine
+    top-level sections and ci/sundial.yml names all nine, so a tenth means
+    sundial grew one and nobody decided whether Camoufox claims it. Folding that
+    into "out of scope" would answer the question by default, in the direction
+    that never fails a build -- a stealth blind spot that looks like a pass.
     """
     gated_set = {c.lower() for c in gated}
+    known = gated_set | {c.lower() for c in ungated}
     scored = passed = 0
     out_of_scope_failed = 0
+    unknown_scored = 0
     cross_total = cross_passed = 0
 
     for key, bucket in (payload.get("buckets") or {}).items():
@@ -373,11 +382,14 @@ def _from_buckets(payload: dict, gated: List[str]) -> Dict[str, int]:
             passed += n_passed
         else:
             out_of_scope_failed += n_scored - n_passed
+            if category.lower() not in known:
+                unknown_scored += n_scored
 
     return {
         "scored": scored,
         "passed": passed,
         "out_of_scope_failed": out_of_scope_failed,
+        "unknown_category_checks": unknown_scored,
         "cross_os_total": cross_total,
         "cross_os_passed": cross_passed,
     }
@@ -427,11 +439,12 @@ def redact(
             "under an account that is allowed one."
         )
     if score_mode:
-        counts = _from_buckets(payload, gated)
+        counts = _from_buckets(payload, gated, ungated)
     else:
         # Legacy path: fold a full report down to the same numbers.
         gated_set = {c.lower() for c in gated}
-        scored = passed = out_of_scope_failed = 0
+        known = gated_set | {c.lower() for c in ungated}
+        scored = passed = out_of_scope_failed = unknown_scored = 0
         for _key, category, status in _iter_entries(payload):
             outcome = _STATUS_MAP.get(status, evidence.SKIP)
             if outcome not in (evidence.PASS, evidence.FAIL, evidence.ERROR):
@@ -439,11 +452,15 @@ def redact(
             if category.lower() in gated_set:
                 scored += 1
                 passed += outcome == evidence.PASS
-            elif outcome != evidence.PASS:
-                out_of_scope_failed += 1
+            else:
+                if outcome != evidence.PASS:
+                    out_of_scope_failed += 1
+                if category.lower() not in known:
+                    unknown_scored += 1
         counts = {
             "scored": scored, "passed": passed,
             "out_of_scope_failed": out_of_scope_failed,
+            "unknown_category_checks": unknown_scored,
             "cross_os_total": 0, "cross_os_passed": 0,
         }
 
@@ -455,6 +472,7 @@ def redact(
         "checks_passed": counts["passed"],
         "pass_rate": rate,
         "out_of_scope_failed": counts["out_of_scope_failed"],
+        "unknown_category_checks": counts["unknown_category_checks"],
         "cross_os_total": counts["cross_os_total"],
         "cross_os_passed": counts["cross_os_passed"],
         "os": os_name,
@@ -703,6 +721,19 @@ def gate(argv: Optional[List[str]] = None) -> int:
         result.note("no gated vectors were scored -- treating as a failure, not a pass")
         violations.append(
             "no gated vectors were scored; the scan produced a report with nothing in scope"
+        )
+        status = evidence.FAIL
+    elif metrics.get("unknown_category_checks"):
+        n = metrics["unknown_category_checks"]
+        result.note(
+            f"{n} scored check(s) are in a category ci/sundial.yml does not name, so "
+            "nobody has decided whether Camoufox claims them"
+        )
+        violations.append(
+            f"{n} scored check(s) fell outside both category lists in ci/sundial.yml. "
+            "sundial has grown a section; add it to gated_categories or "
+            "ungated_categories. Failing rather than ignoring it, because ignoring it "
+            "is a stealth blind spot that reads as a pass."
         )
         status = evidence.FAIL
     elif metrics["pass_rate"] < floor:
