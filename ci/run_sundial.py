@@ -217,6 +217,24 @@ def login(base_url: str, username: str, password: str, *, timeout: int = 30) -> 
     raise RuntimeError("sundial login succeeded but returned no session cookie")
 
 
+def scrub(text: str, secret: str) -> str:
+    """Remove a secret from text that is about to be published.
+
+    Whatever goes into result.note() reaches the results artifact and the pull
+    request comment, and an exception raised deep inside urllib can carry the
+    URL that produced it -- which, for the token route, is the credential. So
+    nothing built from an exception is published until it has been through here.
+    Both the raw secret and its percent-encoded form, because the URL holds the
+    latter.
+    """
+    if not secret:
+        return text
+    for form in (secret, urllib.parse.quote(secret, safe="")):
+        if form:
+            text = text.replace(form, "<redacted>")
+    return text
+
+
 def authenticate(base_url: str, username: str, secret: str, *, timeout: int = 30) -> str:
     """Get a session cookie, whichever shape the stored credential is.
 
@@ -231,15 +249,19 @@ def authenticate(base_url: str, username: str, secret: str, *, timeout: int = 30
     try:
         return login_with_key(base_url, secret, timeout=timeout)
     except Exception as exc:  # noqa: BLE001 -- reported below if the form fails too
-        errors.append(f"automation key: {exc}")
-        log(f"automation-key login did not take ({exc}); trying the form", level="WARN")
+        detail = scrub(str(exc), secret)
+        errors.append(f"automation key: {detail}")
+        log(f"automation-key login did not take ({detail}); trying the form", level="WARN")
     try:
         return login(base_url, username, secret, timeout=timeout)
     except Exception as exc:  # noqa: BLE001
-        errors.append(f"form login as {username!r}: {exc}")
+        errors.append(f"form login as {username!r}: {scrub(str(exc), secret)}")
     raise RuntimeError(
-        "could not authenticate to sundial. Both routes were tried:\n  "
-        + "\n  ".join(errors)
+        scrub(
+            "could not authenticate to sundial. Both routes were tried:\n  "
+            + "\n  ".join(errors),
+            secret,
+        )
         + "\nSUNDIAL_AUTOMATION_KEY must be either an automation key from "
         "`make pages-automation-keys` or the password for the account named by "
         "SUNDIAL_USERNAME (default 'guest')."
@@ -673,7 +695,10 @@ def gate(argv: Optional[List[str]] = None) -> int:
             )
         )
     except Exception as exc:  # noqa: BLE001 -- any failure here is a gate failure
-        result.note(f"{type(exc).__name__}: {exc}")
+        # Scrubbed: this note goes to the results artifact and the pull request
+        # comment, and an exception from deep inside urllib can carry the URL
+        # that raised it -- which for the token route contains the credential.
+        result.note(scrub(f"{type(exc).__name__}: {exc}", password))
         result.finish(evidence.ERROR).save(args.evidence_dir)
         return 1
 

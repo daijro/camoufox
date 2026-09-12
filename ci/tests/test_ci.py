@@ -20,6 +20,8 @@ import os
 import pathlib
 import re
 import tempfile
+import urllib.error
+import urllib.parse
 
 import pytest
 
@@ -1209,3 +1211,60 @@ def test_a_step_that_wedges_without_printing_is_killed():
     assert code == 124, "a timed-out step must not report success"
     assert "TIMEOUT" in out
     assert elapsed < 15, f"the timeout did not fire promptly ({elapsed:.1f}s)"
+
+
+# ---------------------------------------------------------------------------
+# the credential must not ride out on an error message
+# ---------------------------------------------------------------------------
+
+
+def test_scrub_removes_the_secret_in_both_encodings():
+    """An exception from urllib can carry the URL that raised it.
+
+    For the token route that URL *is* the credential, percent-encoded. Whatever
+    reaches result.note() is published to the results artifact and the pull
+    request comment, so it goes through scrub() first.
+    """
+    from ci.run_sundial import scrub
+
+    secret = "yPsM+key/with=specials"
+    quoted = urllib.parse.quote(secret, safe="")
+    text = f"HTTPError at https://sundial.daijro.dev/automated?key={quoted} and raw {secret}"
+    out = scrub(text, secret)
+    assert secret not in out
+    assert quoted not in out
+    assert out.count("<redacted>") == 2
+
+
+def test_scrub_is_a_no_op_without_a_secret():
+    from ci.run_sundial import scrub
+
+    assert scrub("nothing to hide", "") == "nothing to hide"
+
+
+def test_a_failed_login_never_publishes_the_credential():
+    """End to end: a bad credential fails the gate without leaking itself."""
+    import ci.run_sundial as rs
+
+    secret = "super-secret-automation-key"
+
+    def boom(base_url, key, **kwargs):
+        raise urllib.error.HTTPError(
+            f"{base_url}/automated?key={urllib.parse.quote(secret, safe='')}",
+            401, "Unauthorized", {}, None,
+        )
+
+    monkey = {"login_with_key": rs.login_with_key, "login": rs.login}
+    rs.login_with_key = boom
+    rs.login = lambda *a, **k: (_ for _ in ()).throw(RuntimeError(f"rejected {secret}"))
+    try:
+        with pytest.raises(RuntimeError) as exc_info:
+            rs.authenticate("https://sundial.invalid", "guest", secret)
+    finally:
+        rs.login_with_key, rs.login = monkey["login_with_key"], monkey["login"]
+
+    message = str(exc_info.value)
+    assert secret not in message, "the credential reached the published error text"
+    assert "<redacted>" in message
+    # Still says enough to act on.
+    assert "automation key" in message and "form login" in message
