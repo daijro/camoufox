@@ -189,11 +189,14 @@ summary says so.
 Asking for `?score=1` is a promise the caller makes, and a promise is not a
 mechanism. Today two things back it:
 
-- **`guest` cannot load the private vectors.** sundial's middleware answers
-  `isPrivateVectorAsset` paths with an empty stub for that role specifically, so
-  the definitions this repository must never hold are not sent to the session in
-  the first place. (`admin` and `private` do get them — which is why CI uses the
-  least privileged account rather than whichever one was to hand.)
+- **`guest` cannot load the private vectors, and that is checked.** sundial's
+  middleware answers `isPrivateVectorAsset` paths with an empty stub for that
+  role specifically. `admin` and `private` do get them — and `/automated?key=`
+  resolves to `private` when handed the private key, which is indistinguishable
+  from the guest one by looking at it. So "we set the right key" stays an
+  assumption until something checks: the gate reads sundial's own `/__auth/me`
+  and **refuses to open the browser at all** unless the session is a role the
+  vectors are withheld from. Not knowing the role counts as not safe.
 - **A non-score payload fails the run.** `redact(require_score_mode=True)`
   refuses to process a full report rather than folding it down, so a deployment
   that ignored `score=1` is a red build, not a quiet leak.

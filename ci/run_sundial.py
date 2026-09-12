@@ -58,8 +58,9 @@ COOKIE_NAME = "sundial_session"
 #
 #   server-side  `guest` is answered with an empty stub for vectors-private.js
 #                (_middleware.js gates that path on the role). `admin` and
-#                `private` are not, which is why CI uses the least privileged
-#                account rather than whichever one was to hand.
+#                `private` are not -- so the gate verifies the session's role
+#                against /__auth/me and refuses to scan under either of them,
+#                rather than trusting that the right key was configured.
 #   client-side  this gate only ever requests `/?auto=1&score=1`, and redact()
 #                refuses to process anything that is not a score payload, so a
 #                deployment that ignored `score=1` fails the run instead of
@@ -95,6 +96,7 @@ _PUBLISHABLE = frozenset({
     "pass_rate",
     "out_of_scope_failed",  # a single count, no attribution
     "unknown_category_checks",  # ditto -- how many, never which
+    "sundial_role",  # which role CI authenticated as; names an account, not a vector
     "cross_os_total",     # host-OS detectors: measured, never gated
     "cross_os_passed",
     "score_mode",         # did sundial answer in score mode? a protocol fact
@@ -123,16 +125,19 @@ def _assert_publishable(metrics: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-# Cloudflare sits in front of sundial and refuses *document* requests carrying a
-# non-browser User-Agent: `/automated?key=<bogus>` answers 401 with a browser UA
-# and 403 with urllib's default, before the request reaches sundial at all.
+# Cloudflare sits in front of sundial and refuses document requests carrying a
+# non-browser User-Agent, before they reach sundial at all. Measured against the
+# live host: `/automated?key=<bogus>` answers **401** with a browser User-Agent
+# and **403** with urllib's default.
 #
-# It is not blanket -- `POST /__auth/login` worked for months with
-# `User-Agent: camoufox-harness` -- so this is not fixing a live outage. It
-# matters because the token route below *is* a document request, and because a
-# client that authenticates with browser headers and then fetches with urllib's
-# defaults logs in successfully and gets a confusing 403 on the very next hop.
-# Cheaper to look like a browser everywhere than to remember which hop is which.
+# That matters here because the token route below is exactly such a request, and
+# it is the route this repository's credential actually uses. Sent with the old
+# `User-Agent: camoufox-harness` it would have been refused by the edge, and the
+# 403 would have read like a permissions problem rather than a bot filter.
+#
+# On every request, not just the first: a client that authenticates with browser
+# headers and then fetches with urllib's defaults logs in successfully and gets
+# a confusing 403 on the very next hop.
 _BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0"
@@ -239,6 +244,59 @@ def scrub(text: str, secret: str) -> str:
         if form:
             text = text.replace(form, "<redacted>")
     return text
+
+
+# Roles sundial will not serve the private-vector bundle to. Everything rests on
+# the session being one of these: `redact()` controls what this repository
+# *publishes*, but only the role controls what the browser is *given*, and a
+# public runner holding the vectors at all is the thing being prevented.
+#
+# `guest` is what an AUTOMATION_GUEST_KEY resolves to. `ci` is sundial's
+# score-only role, for when it lands. `private` and `admin` both load the
+# vectors and must never be what CI ends up as -- which is a live possibility,
+# not a hypothetical: /automated?key= resolves to `private` when handed the
+# private key, and the two keys are indistinguishable by looking at them.
+ROLES_WITHOUT_VECTORS = frozenset({"guest", "ci"})
+
+
+def session_role(base_url: str, cookie: str, *, timeout: int = 30) -> Optional[str]:
+    """The role this session actually has, per sundial's own /__auth/me.
+
+    Returns None if the endpoint is absent or unreadable -- an older deployment
+    may not have it, and the caller decides what to do about that.
+    """
+    req = urllib.request.Request(
+        base_url.rstrip("/") + "/__auth/me",
+        headers={**_BROWSER_HEADERS, "Accept": "application/json", "Cookie": f"{COOKIE_NAME}={cookie}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            if resp.status != 200:
+                return None
+            return (json.loads(resp.read().decode("utf-8")) or {}).get("role")
+    except Exception:  # noqa: BLE001 -- absence is not an error here
+        return None
+
+
+def assert_role_cannot_read_vectors(base_url: str, cookie: str, *, timeout: int = 30) -> str:
+    """Refuse to scan under a role that would be handed the private vectors."""
+    role = session_role(base_url, cookie, timeout=timeout)
+    if role is None:
+        raise RuntimeError(
+            "sundial did not say what role this session has (/__auth/me returned nothing "
+            "usable), so it cannot be confirmed that the browser will be refused the "
+            "private vectors. Refusing to scan: the alternative is loading them onto a "
+            "public runner on the assumption that the credential was the right one."
+        )
+    if role not in ROLES_WITHOUT_VECTORS:
+        raise RuntimeError(
+            f"this credential authenticates as the {role!r} role, which sundial serves the "
+            f"private vectors to. CI must use one of {sorted(ROLES_WITHOUT_VECTORS)} -- set "
+            "SUNDIAL_AUTOMATION_KEY to the guest automation key (`make pages-automation-keys`), "
+            "not the private one. Refusing to scan."
+        )
+    log(f"sundial session role is {role!r}; the private vectors are not served to it")
+    return role
 
 
 def authenticate(base_url: str, username: str, secret: str, *, timeout: int = 30) -> str:
@@ -690,6 +748,10 @@ def gate(argv: Optional[List[str]] = None) -> int:
     try:
         binary = args.binary or require_binary()
         cookie = authenticate(base_url, username, password)
+        # Before the browser opens sundial at all: confirm the session really is
+        # a role that cannot be handed the vectors, rather than trusting that
+        # whoever set the secret picked the right key.
+        result.metrics["sundial_role"] = assert_role_cannot_read_vectors(base_url, cookie)
         report = asyncio.run(
             scan(
                 binary=binary,

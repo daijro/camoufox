@@ -1268,3 +1268,52 @@ def test_a_failed_login_never_publishes_the_credential():
     assert "<redacted>" in message
     # Still says enough to act on.
     assert "automation key" in message and "form login" in message
+
+
+# ---------------------------------------------------------------------------
+# CI must not scan under a role that is handed the vectors
+# ---------------------------------------------------------------------------
+
+
+def _with_role(monkeypatch, role):
+    import ci.run_sundial as rs
+
+    monkeypatch.setattr(rs, "session_role", lambda *a, **k: role)
+    return rs
+
+
+@pytest.mark.parametrize("role", ["guest", "ci"])
+def test_a_role_without_the_vectors_is_accepted(monkeypatch, role):
+    rs = _with_role(monkeypatch, role)
+    assert rs.assert_role_cannot_read_vectors("https://sundial.invalid", "cookie") == role
+
+
+@pytest.mark.parametrize("role", ["private", "admin"])
+def test_a_role_that_can_read_the_vectors_is_refused(monkeypatch, role):
+    """`/automated?key=` resolves to `private` when handed the private key.
+
+    The two keys look identical, so "we set the guest one" is an assumption
+    until something checks. Loading the vectors onto a public runner is the
+    exact outcome this gate exists to prevent, so the check has to come before
+    the browser opens sundial -- not after, and not in redaction, which only
+    governs what gets published.
+    """
+    rs = _with_role(monkeypatch, role)
+    with pytest.raises(RuntimeError, match=f"{role}.*role"):
+        rs.assert_role_cannot_read_vectors("https://sundial.invalid", "cookie")
+
+
+def test_an_unreadable_role_fails_closed(monkeypatch):
+    """Not knowing the role is not the same as the role being safe."""
+    rs = _with_role(monkeypatch, None)
+    with pytest.raises(RuntimeError, match="did not say what role"):
+        rs.assert_role_cannot_read_vectors("https://sundial.invalid", "cookie")
+
+
+def test_the_role_is_publishable_but_the_whitelist_still_bites():
+    from ci.run_sundial import _PUBLISHABLE, _assert_publishable
+
+    assert "sundial_role" in _PUBLISHABLE
+    _assert_publishable({"sundial_role": "guest"})
+    with pytest.raises(RuntimeError):
+        _assert_publishable({"sundial_role": "guest", "vector_name": "pv-secret"})

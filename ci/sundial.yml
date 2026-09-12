@@ -27,7 +27,9 @@ schema: 1
 #
 # What holds the line now, in the order a vector would have to get past:
 #   1. the run logs in as `guest`, which sundial's middleware refuses the
-#      private-vector bundle to
+#      private-vector bundle to -- and the gate confirms that from sundial's own
+#      /__auth/me before the browser opens, rather than assuming whoever set the
+#      secret picked the guest key rather than the private one
 #   2. the only URL this gate ever requests is `/?auto=1&score=1`, so sundial
 #      posts counts rather than a report
 #   3. `redact(require_score_mode=True)` fails the run outright if a full report
