@@ -31,13 +31,13 @@
 <table>
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://go.nodemaven.com/daijrogh" target="_blank">
-        <img width="380" alt="nodemaven" src="https://github.com/user-attachments/assets/25015cb5-f1b4-4b49-9e9b-b74dc25037dc"/>
+      <a href="https://go.nodemaven.com/camoufoxghsept" target="_blank">
+        <img width="380" alt="nodemaven" src="https://github.com/user-attachments/assets/1e4af9b7-3ebc-4251-96f9-2925c75efb04"/>
       </a>
     </td>
     <td valign="middle">
-      <a href="https://go.nodemaven.com/daijrogh">NodeMaven</a>: The most efficient proxy provider for Web Scrapping and Automation with the Highest Quality IP on the market.<br>
-      <strong>Why <a href="https://go.nodemaven.com/daijrogh">NodeMaven</a>?</strong><br>
+      <a href="https://go.nodemaven.com/camoufoxghsept">NodeMaven</a>: The most efficient proxy provider for Web Scrapping and Automation with the Highest Quality IP on the market.<br>
+      <strong>Why <a href="https://go.nodemaven.com/camoufoxghsept">NodeMaven</a>?</strong><br>
       • 99.9% uptime<br>
       • ZIP Targeting<br>
       • IP filtering: all proxies have fraud score <97%<br>
@@ -285,6 +285,15 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
     <td valign="middle">
       <strong><a href="https://www.webshare.io/">Webshare</a></strong> gives you instant access to a proxy pool of 80M+ ethically-sourced IPs across 195+ countries, with rotating residential, static ISP, and datacenter options plus a full API. It includes a 100+ Gbps backbone, country/city/state/ZIP/ASN-level targeting, and requires no credit card to start.<br>
       🏷️ Get <strong>20% OFF your first purchase</strong> with promo code <strong><code>CAMOUFOX20</code></strong>
+  </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://roamproxy.com" target="_blank">
+        <img width="380" alt="Roamproxy" src="https://roamproxy.com/assets/camoufox-banner.png"/>
+      </a>
+    </td>
+    <td valign="middle">
+      <strong><a href="https://roamproxy.com">Roam</a></strong> — Residential & static residential proxies, pay-as-you-go per GB. Use code CAMOUFOX15 for 15% extra credit on your first top-up.
   </tr>
 </table>
 </details>
