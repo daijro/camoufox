@@ -1105,3 +1105,10 @@ def test_the_workflow_prepares_through_the_retrying_entry_point():
         assert target not in commands, (
             f"{target} is invoked directly; it would not be retried"
         )
+
+
+def test_zero_attempts_still_runs_the_step_once(monkeypatch):
+    """`--attempts 0` must not report success by never running anything."""
+    code, fake = _run_step(monkeypatch, [(0, "ok")], attempts=0)
+    assert len(fake.calls) == 1
+    assert code == 0

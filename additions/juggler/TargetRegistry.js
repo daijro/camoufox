@@ -1016,7 +1016,7 @@ export class PageTarget {
         // The viewport this frame depicts -- NOT the JPEG's own dimensions.
         // Playwright's Firefox delegate maps deviceWidth/deviceHeight straight
         // onto the client-visible viewportWidth/viewportHeight, and every other
-        // backend fills them from the page's viewport: the native path below
+        // backend fills them from the page's viewport: the native path above
         // sends pageWidth/pageHeight (clamped to the viewport, never scaled by
         // the requested frame size), and the Chromium delegate forwards CDP's
         // metadata.deviceWidth. Sending frameWidth/frameHeight here made the

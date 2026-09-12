@@ -83,7 +83,10 @@ def _summarise(output: str, limit: int = 3) -> List[str]:
 
 
 def run_step(target: str, *, retry: bool, attempts: int, backoff: int, timeout: int) -> int:
-    tries = attempts if retry else 1
+    # At least one attempt, always. `--attempts 0` reaching the loop bound would
+    # skip the step entirely and return success, which is the one answer this
+    # function must never invent.
+    tries = max(1, attempts) if retry else 1
     for attempt in range(1, tries + 1):
         # Captured rather than teed: classifying the failure means reading it,
         # and _util.run() only captures when it is not streaming. The output is
@@ -107,7 +110,7 @@ def run_step(target: str, *, retry: bool, attempts: int, backoff: int, timeout: 
         log(f"make {target} hit a transient network failure "
             f"(attempt {attempt}/{tries}); retrying in {delay}s", level="WARN")
         time.sleep(delay)
-    return 0  # unreachable; the loop either returns or exhausts `tries`
+    raise AssertionError("run_step fell out of its loop without a verdict")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
