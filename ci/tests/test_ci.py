@@ -680,17 +680,17 @@ def test_the_vendored_suite_honours_pythonlibs_playwright_ceiling():
 
 
 # ---------------------------------------------------------------------------
-# the score-only `ci` role
+# score mode is a requirement, not a preference
 # ---------------------------------------------------------------------------
 
 
 def test_a_full_report_is_refused_by_default():
-    """The gate runs as a role sundial refuses to serve a report to.
+    """The gate only ever asks for `?auto=1&score=1`.
 
-    So a full report arriving here means the run is pointed at the wrong
-    account, or at a deployment that predates the role. Folding it down anyway
-    would mean the vectors passed through this process and nobody noticed --
-    the failure has to be loud.
+    So a full report arriving here means the deployment did not honour it. That
+    is the one case where the vectors really are in this process, and folding
+    them down anyway would mean they passed through and nobody noticed -- the
+    failure has to be loud.
     """
     with pytest.raises(RuntimeError, match="full report, not a score"):
         redact(FULL_REPORT, GATED, UNGATED, os_name="linux")
