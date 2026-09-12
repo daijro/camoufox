@@ -12,26 +12,34 @@ schema: 1
 
 # Whether CI may run the stealth check at all.
 #
-# OFF, and deliberately so. The deployment at the url below **predates score
-# mode** (verified 2026-09-11 by authenticating and grepping the served bundle:
-# sundial master carries `f136985`, the live build does not). An older sundial
-# ignores `?score=1` and posts the whole report -- every vector's id, name,
-# brief, source and measured value -- to whatever collector asked for it. On a
-# public GitHub Actions runner that is the one shape this repository must never
-# receive, and `redact()` discarding it afterwards is not the same guarantee as
-# never having been sent it.
+# ON as of 2026-09-12. sundial 0.5.0 is deployed and serving score mode --
+# verified by the version on the served page and by the successful "Deploy to
+# Cloudflare Pages" run for `d024d51 Bump Sundial to 0.5.0`. master now deploys
+# itself on push, so merged does mean deployed.
 #
-# While this is false the job is not scheduled, so the credential never reaches
-# a runner environment and there is nothing to redact. `ci/run_sundial.py`
-# refuses to run too, in case someone invokes it by hand.
+# While this was false the job was not scheduled, the credential never reached a
+# runner, and `ci/run_sundial.py` refused to run by hand. It stayed false for as
+# long as the live build predated score mode, because an older sundial ignores
+# `?score=1` and posts the whole report -- every vector's id, name, brief, source
+# and measured value -- to whatever collector asked for it, and `redact()`
+# discarding it afterwards is not the same guarantee as never having been sent
+# it.
 #
-# Turn it back on only after ALL of:
-#   1. sundial master (score mode + the score-only `ci` role) is deployed
-#      -- `make pages-deploy`, then re-run the deploy check
-#   2. `make pages-ci` has set CI_USER / CI_PASS, and it is redeployed
-#   3. SUNDIAL_USERNAME (= CI_USER) and SUNDIAL_AUTOMATION_KEY (= CI_PASS)
-#      are set on every repo whose CI runs this
-enabled: false
+# What holds the line now, in the order a vector would have to get past:
+#   1. the run logs in as `guest`, which sundial's middleware refuses the
+#      private-vector bundle to
+#   2. the only URL this gate ever requests is `/?auto=1&score=1`, so sundial
+#      posts counts rather than a report
+#   3. `redact(require_score_mode=True)` fails the run outright if a full report
+#      arrives anyway, rather than folding it down and continuing
+#   4. only whitelisted keys reach the summary, asserted by an AST walk over
+#      every consumer in ci/tests/test_ci.py
+#
+# Set SUNDIAL_USERNAME=ci once sundial's score-only `ci` role is merged and
+# deployed; that makes step 2 server-enforced rather than a promise this repo
+# keeps. Until then the job needs SUNDIAL_AUTOMATION_KEY set on every repo whose
+# CI runs it; without it the job skips, which is the normal case for a fork PR.
+enabled: true
 
 url: https://sundial.daijro.dev
 

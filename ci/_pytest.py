@@ -51,16 +51,42 @@ _NORM = re.compile(r"\s+")
 
 
 def junit_test_id(classname: str, name: str) -> str:
-    """A stable identity for one test.
+    """A stable identity for one test, in pytest node-id form.
 
     junit's `classname` is the dotted module path, which differs between the
     vendored suite (`async.test_page`) and a fetched upstream checkout
     (`tests.async.test_page`). Trimming to the last two segments makes the two
     comparable, which is the whole point of running both.
+
+    For a test inside a class, pytest appends the class to that dotted path
+    (`async.test_page_clock.TestWhileRunning`), and the trailing segment is then
+    a class, not a module. Splitting on the last `test_*` segment tells the two
+    apart, so a class-based test comes back as
+
+        async/test_page_clock.py::TestWhileRunning::test_should_pause
+
+    -- a node id pytest will actually accept. Treating the class as a module
+    instead produced `test_page_clock/TestWhileRunning.py::test_should_pause`,
+    which names a directory that does not exist, so the id could not be fed back
+    to pytest and no skiplist entry could ever match it.
     """
     parts = [p for p in classname.split(".") if p and p != "tests"]
-    module = "/".join(parts[-2:]) if len(parts) >= 2 else (parts[-1] if parts else "")
-    return _NORM.sub(" ", f"{module}.py::{name}").strip()
+    # The last segment that looks like a test module is the file; anything after
+    # it is class nesting. Test files are `test_*.py` by pytest convention, and
+    # classes are `Test*` -- so this does not have to guess from case alone.
+    module_end = len(parts)
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i].startswith("test_"):
+            module_end = i + 1
+            break
+    module_parts, class_parts = parts[:module_end], parts[module_end:]
+    module = (
+        "/".join(module_parts[-2:])
+        if len(module_parts) >= 2
+        else (module_parts[-1] if module_parts else "")
+    )
+    suffix = "".join(f"::{c}" for c in class_parts)
+    return _NORM.sub(" ", f"{module}.py{suffix}::{name}").strip()
 
 
 def parse_junit(path: Path) -> Dict[str, str]:

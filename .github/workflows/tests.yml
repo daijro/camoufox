@@ -158,8 +158,10 @@ jobs:
         # Two conditions, and the config one is checked FIRST and without the
         # secret in scope. While ci/sundial.yml says `enabled: false` the job is
         # not scheduled at all, so SUNDIAL_AUTOMATION_KEY never enters a runner
-        # environment and no request is made -- which is the point: the live
-        # sundial predates score mode and would post the whole report back.
+        # environment and no request is made. That ordering is what made the
+        # kill switch real while the live sundial still predated score mode and
+        # would have posted the whole report back; it stays that way round so
+        # the switch keeps working the next time it is needed.
         #
         # Secrets are absent for pull requests from forks, so the credential
         # check is resolved here once rather than from a job-level `if`, which
@@ -173,8 +175,9 @@ jobs:
             exit 0
           fi
           # Only the password gates the job. The username names an account, not
-          # a secret, and ci/run_sundial.py defaults it to sundial's `ci` role --
-          # which the server will not serve anything but a score to.
+          # a secret, so ci/run_sundial.py defaults it (to `guest`, the least
+          # privileged role the deployment has -- sundial refuses it the
+          # private-vector bundle) instead of demanding a second secret.
           if [ -n "$KEY" ]; then
             echo "has_sundial=true" >> "$GITHUB_OUTPUT"
           else
@@ -366,14 +369,17 @@ jobs:
         run: |
           ccache -M 8G && ccache -z
           echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
+          # ci.run_prepare runs setup-minimal -> dir -> mozbootstrap, retrying
+          # only the two that download things and only when the failure reads as
+          # transient. `mach bootstrap` pulls toolchains from Taskcluster, and a
+          # connection reset there used to fail the pull request outright.
+          #
           # setup-minimal, not `make dir` alone: `dir` falls through to `make
           # setup`, which git-inits the source tree and commits -- and a bare
           # runner has no git identity, so that dies with "empty ident name".
           # The local dev repo is only needed by the patch-repair loop, which
           # sets an identity of its own.
-          make setup-minimal
-          make dir
-          make mozbootstrap
+          python3 -m ci.run_prepare
 
       - name: Build
         env:

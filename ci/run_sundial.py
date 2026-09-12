@@ -48,11 +48,27 @@ from ._util import CI_DIR, RESULTS_DIR, WORK_DIR, log, opaque_id, run
 
 CONFIG_PATH = CI_DIR / "sundial.yml"
 COOKIE_NAME = "sundial_session"
-# sundial's score-only role. It is refused anything but `/?auto=1&score=1`
-# server-side, so this credential cannot retrieve a vector even if the secret
-# leaks out of a public repository -- which is the point of using it here rather
-# than `guest`, who can still read the whole report.
-DEFAULT_USERNAME = "ci"
+# The account CI logs in as. `guest` is the least-privileged role the deployment
+# actually has (sundial 0.5.0): its middleware refuses `guest` the private-vector
+# bundle outright, so the definitions this repository must never see are not
+# served to this session at all.
+#
+# Two guarantees keep a vector out of a public log, and it is worth being precise
+# about which is which, because only one of them is enforced by the server:
+#
+#   server-side  `guest` cannot load vectors-private.js (_middleware.js checks
+#                the role against isPrivateVectorAsset).
+#   client-side  this gate only ever requests `/?auto=1&score=1`, and redact()
+#                refuses to process anything that is not a score payload, so a
+#                deployment that ignored `score=1` fails the run instead of
+#                folding a report down and carrying on.
+#
+# The stricter option is sundial's score-only `ci` role, which is refused
+# anything but `/?auto=1&score=1` server-side and so cannot retrieve a report
+# even if this credential leaks. That role is not in sundial's master branch and
+# is therefore not deployed; when it lands, set SUNDIAL_USERNAME=ci and the
+# server-side half of the guarantee gets stronger with no change here.
+DEFAULT_USERNAME = "guest"
 DEFAULT_URL = "https://sundial.daijro.dev"
 
 # Report fields that may describe a private vector. Dropped without exception.
@@ -318,18 +334,18 @@ def redact(
     """
     score_mode = payload.get("mode") == "score"
     if not score_mode and require_score_mode:
-        # The `ci` account is refused anything but `/?auto=1&score=1`, so a full
-        # report cannot legitimately arrive here. If one does, the run is
-        # pointed at the wrong account or at a deployment that predates the
-        # role -- either way the vectors are now in this process, and the honest
-        # thing is to fail loudly rather than quietly fold them down and carry
-        # on as though the guarantee held.
+        # This gate asks for `/?auto=1&score=1` and nothing else, so a full
+        # report cannot legitimately arrive here. If one does, the deployment
+        # ignored `score=1` -- it predates score mode, or the request did not
+        # reach the code that honours it. Either way the vectors are now in this
+        # process, and the honest thing is to fail loudly rather than quietly
+        # fold them down and carry on as though the guarantee had held.
         raise RuntimeError(
-            "sundial answered with a full report, not a score. This gate runs as the "
-            "score-only `ci` role, which the server refuses to serve a report to, so this "
-            "means SUNDIAL_USERNAME does not name that role or the deployment predates it. "
-            "Refusing to process the payload. Pass --allow-full-report for a deliberate "
-            "local run under an account that is allowed one."
+            "sundial answered with a full report, not a score. This gate only ever "
+            "requests `?auto=1&score=1`, so the deployment did not honour it: check that "
+            "sundial is at 0.5.0 or later (score mode landed in f136985). Refusing to "
+            "process the payload. Pass --allow-full-report for a deliberate local run "
+            "under an account that is allowed one."
         )
     if score_mode:
         counts = _from_buckets(payload, gated)
@@ -531,9 +547,8 @@ def gate(argv: Optional[List[str]] = None) -> int:
         )
         return 0
 
-    # The username is not a secret -- it names an account, and sundial's
-    # score-only `ci` role is what CI should be using. Only the password needs
-    # protecting, so this defaults rather than demanding a second secret.
+    # The username is not a secret -- it names an account. Only the password
+    # needs protecting, so this defaults rather than demanding a second secret.
     username = (os.environ.get("SUNDIAL_USERNAME") or DEFAULT_USERNAME).strip()
     password = os.environ.get("SUNDIAL_AUTOMATION_KEY", "").strip()
     if not username or not password:

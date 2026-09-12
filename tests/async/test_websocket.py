@@ -169,11 +169,15 @@ async def test_should_reject_wait_for_event_on_close_and_error(page: Page, serve
     assert exc_info.value.message == "Socket closed"
 
 
-async def test_should_emit_error_event(page: Page, server: Server, browser_name: str) -> None:
+async def test_should_emit_error_event(page: Page, server: Server) -> None:
     future: "asyncio.Future[str]" = asyncio.Future()
 
     def _on_ws_socket_error(err: str) -> None:
-        future.set_result(err)
+        # A refused handshake can raise socketerror more than once; a second
+        # set_result() on a settled future is an InvalidStateError, which
+        # surfaced as a suite ERROR rather than a failure.
+        if not future.done():
+            future.set_result(err)
 
     def _on_websocket(websocket: WebSocket) -> None:
         websocket.on("socketerror", _on_ws_socket_error)
@@ -187,7 +191,9 @@ async def test_should_emit_error_event(page: Page, server: Server, browser_name:
         server.PORT,
     )
     err = await future
-    if browser_name == "firefox":
-        assert err == "CLOSE_ABNORMAL"
-    else:
-        assert ": 404" in err
+    # Firefox used to collapse a refused handshake to the generic close code.
+    # It now reports the HTTP status that refused the upgrade, the same as the
+    # other engines, so the Firefox-specific expectation is gone -- this is
+    # playwright-python v1.61's own form of the assertion, and the upstream
+    # suite passes it against this build.
+    assert ": 404" in err

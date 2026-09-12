@@ -82,6 +82,14 @@ def load_skiplist(path: Optional[Path] = None) -> List[Dict[str, str]]:
 
 def skip_reason(nodeid: str, entries: List[Dict[str, str]]) -> Optional[str]:
     """The reason this node id is skipped, or None to run it."""
+    # Every test in this suite is parameterised by browser, so the node ids that
+    # actually arrive here end in `[firefox]`. Compare against the id with its
+    # parameters stripped as well as the whole thing, so a `test:` entry written
+    # the way a human reads a node id out of a failure report does what its
+    # author meant. Requiring the exact `...[firefox]` spelling instead made
+    # every `test:` entry a silent no-op -- the entry looked applied, the test
+    # went on running and failing, and nothing reported the mismatch.
+    base = nodeid.partition("[")[0]
     # pytest node ids are posix-style even on Windows.
     for entry in entries:
         if "module" in entry:
@@ -89,7 +97,8 @@ def skip_reason(nodeid: str, entries: List[Dict[str, str]]) -> Optional[str]:
             if nodeid.startswith(module + "::") or nodeid == module:
                 return str(entry["reason"])
         elif "test" in entry:
-            if nodeid == str(entry["test"]):
+            target = str(entry["test"]).lstrip("./")
+            if nodeid == target or base == target:
                 return str(entry["reason"])
         elif "pattern" in entry:
             if str(entry["pattern"]) in nodeid:

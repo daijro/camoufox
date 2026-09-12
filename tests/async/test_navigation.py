@@ -758,7 +758,7 @@ async def test_wait_for_load_state_should_work_with_pages_that_have_loaded_befor
 
 
 async def test_wait_for_load_state_should_wait_for_load_state_of_empty_url_popup(
-    page: Page, is_firefox: bool
+    page: Page,
 ) -> None:
     ready_state = []
     async with page.expect_popup() as popup_info:
@@ -773,7 +773,13 @@ async def test_wait_for_load_state_should_wait_for_load_state_of_empty_url_popup
 
     popup = await popup_info.value
     await popup.wait_for_load_state()
-    assert ready_state == ["uninitialized"] if is_firefox else ["complete"]
+    # Firefox used to report an `window.open('')` popup as "uninitialized" at
+    # this point and now reports "complete" like the other engines, so the
+    # browser-specific expectation is gone. (The old line also mis-parsed: the
+    # conditional bound to the whole assert, so the non-Firefox arm asserted a
+    # truthy list rather than comparing anything.) This is playwright-python
+    # v1.61's form, which the upstream suite passes against this build.
+    assert ready_state == ["complete"]
     assert await popup.evaluate("() => document.readyState") == ready_state[0]
 
 

@@ -63,6 +63,42 @@ _MAY_COLLIDE = ("uniqueFonts", "uniqueScreens", "uniqueVoices", "uniqueWebGL")
 _MUST_MATCH = ("uniquePlatforms",)
 
 
+# A renderer string that names a software rasteriser. The page-side
+# headlessDetection/noSwiftShader check flags these, because a browser reporting
+# one is usually a headless browser on a machine with no GPU.
+_SOFTWARE_RENDERERS = ("swiftshader", "llvmpipe", "software")
+
+
+def _is_software_renderer(value: Optional[str]) -> bool:
+    low = (value or "").lower()
+    return any(token in low for token in _SOFTWARE_RENDERERS)
+
+
+def check_passed(meta: dict, section: str, category: str, check: str, payload: dict) -> bool:
+    """Did this check pass, judged against what the profile actually asked for?
+
+    Almost always just `payload["passed"]`. The exception is
+    extended/headlessDetection/noSwiftShader, which reads the WebGL renderer and
+    fails on a software rasteriser -- a sound headless signal in general, and the
+    wrong question to ask here. Camoufox's own fingerprint pool contains real
+    Linux machines whose renderer IS llvmpipe (`fingerprint-presets-v150.json`
+    ships "llvmpipe, or similar"), so when such a profile is drawn, reporting
+    llvmpipe is the spoof working exactly as instructed -- and reporting anything
+    else would be the bug. Grading it as a failure made this gate fail at random,
+    depending on which presets that run's `generate_context_fingerprint()` drew.
+
+    So the check fails only when the browser reports a software renderer the
+    profile did not ask for, which is the case that would really mean the WebGL
+    spoof had fallen through to the host.
+    """
+    passed = bool(payload.get("passed"))
+    if passed:
+        return True
+    if (section, category, check) == ("extended", "headlessDetection", "noSwiftShader"):
+        return _is_software_renderer(meta.get("webglRenderer"))
+    return False
+
+
 def flatten(full: dict) -> Dict[str, str]:
     """The whole result tree -> {check_id: pass|fail}."""
     tests: Dict[str, str] = {}
@@ -88,7 +124,8 @@ def flatten(full: dict) -> Dict[str, str]:
                     if not isinstance(payload, dict) or not isinstance(payload.get("passed"), bool):
                         continue
                     tid = f"{slot}/{section}/{category}/{check}"
-                    tests[tid] = evidence.PASS if payload["passed"] else evidence.FAIL
+                    ok = check_passed(meta, section, category, check, payload)
+                    tests[tid] = evidence.PASS if ok else evidence.FAIL
 
         webrtc = results.get("webrtc") or {}
         if webrtc:
@@ -107,13 +144,18 @@ def category_failures(full: dict, required: List[str]) -> Dict[str, int]:
     wanted = {c.lower() for c in required}
     out: Dict[str, int] = {}
     for profile in full.get("profiles") or []:
+        meta = profile.get("profile") or {}
         results = profile.get("results") or {}
         for section in ("core", "extended", "workers", "selfDestruct"):
             for category, checks in (results.get(section) or {}).items():
                 if category.lower() not in wanted or not isinstance(checks, dict):
                     continue
-                for payload in checks.values():
-                    if isinstance(payload, dict) and payload.get("passed") is False:
+                for check, payload in checks.items():
+                    if not isinstance(payload, dict) or payload.get("passed") is not False:
+                        continue
+                    # Same judgement flatten() makes, so the required-category
+                    # gate and the per-check evidence cannot disagree.
+                    if not check_passed(meta, section, category, check, payload):
                         out[category] = out.get(category, 0) + 1
     return out
 

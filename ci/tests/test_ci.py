@@ -174,11 +174,48 @@ def test_iter_entries_finds_public_and_private():
     [
         ("tests.async.test_page", "test_foo", "async/test_page.py::test_foo"),
         ("async.test_page", "test_foo", "async/test_page.py::test_foo"),
+        # A test inside a class: the trailing segment is the class, not a
+        # module, so it has to stay on the far side of the `.py`.
+        (
+            "async.test_page_clock.TestWhileRunning",
+            "test_should_pause",
+            "async/test_page_clock.py::TestWhileRunning::test_should_pause",
+        ),
+        (
+            "tests.async.test_page_clock.TestWhileRunning",
+            "test_should_pause",
+            "async/test_page_clock.py::TestWhileRunning::test_should_pause",
+        ),
+        # Nested classes keep their order.
+        (
+            "async.test_x.TestOuter.TestInner",
+            "test_y",
+            "async/test_x.py::TestOuter::TestInner::test_y",
+        ),
+        # Nothing that looks like a test module: fall back to the old shape
+        # rather than inventing one.
+        ("some.module", "test_z", "some/module.py::test_z"),
     ],
 )
 def test_junit_ids_match_across_vendored_and_upstream_layouts(classname, name, expected):
     """The two suites report different dotted paths for the same test file."""
     assert junit_test_id(classname, name) == expected
+
+
+def test_a_class_based_id_is_a_node_id_pytest_would_accept():
+    """The id is fed back to pytest and matched against ci/skiplist.yml.
+
+    Both uses need a real node id: `path/to/file.py::Class::test`. The bug this
+    guards against turned the class into a directory
+    (`test_page_clock/TestWhileRunning.py::test_should_pause`), which named no
+    file on disk, so `--last-failed` could not re-run it and no skiplist entry
+    could match it.
+    """
+    tid = junit_test_id("async.test_page_clock.TestWhileRunning", "test_should_pause")
+    path, _, rest = tid.partition("::")
+    assert path.endswith(".py")
+    assert "TestWhileRunning" not in path, "the class must not become part of the path"
+    assert rest == "TestWhileRunning::test_should_pause"
 
 
 @pytest.mark.parametrize(
@@ -235,10 +272,33 @@ SKIPS = [
         ("tests/async/test_page.py::test_two", None),
         ("tests/async/test_x.py::test_y[chromium]", "not a Chromium fork"),
         ("tests/async/test_x.py::test_y[firefox]", None),
+        # Every test in the suite is parameterised by browser, so this is the
+        # only spelling a `test:` entry ever actually meets.
+        ("tests/async/test_page.py::test_one[firefox]", "specific"),
+        ("tests/async/test_page.py::test_two[firefox]", None),
+        # Stripping the parameters must not widen the match to a longer name.
+        ("tests/async/test_page.py::test_one_more[firefox]", None),
     ],
 )
 def test_skip_matching(nodeid, expected):
     assert skip_reason(nodeid, SKIPS) == expected
+
+
+def test_every_shipped_test_entry_matches_a_parameterised_node_id():
+    """A `test:` entry that only matches the unparameterised id is a no-op.
+
+    The suite runs `--browser firefox`, so pytest's ids all end in `[firefox]`.
+    An entry compared for exact equality against that never fires: the test goes
+    on running and failing while the skiplist reads as though it were handled.
+    This asserts the shipped entries match the id shape they will really see.
+    """
+    entries = load_skiplist()
+    targets = [str(e["test"]) for e in entries if "test" in e]
+    assert targets, "no `test:` entries -- drop this test if that is intentional"
+    for target in targets:
+        assert skip_reason(f"{target}[firefox]", entries), (
+            f"{target} does not match its own parameterised node id"
+        )
 
 
 def test_the_shipped_skiplist_is_valid():
@@ -860,3 +920,182 @@ def test_required_suites_are_names_a_runner_actually_writes():
         f"required but no runner writes a result by that name: {sorted(unknown)}. "
         "summarize.py will report it missing on every run."
     )
+
+
+# ---------------------------------------------------------------------------
+# build-tester: a spoofed software renderer is not a headless tell
+# ---------------------------------------------------------------------------
+
+
+def _bt_profile(webgl_renderer: str, *, noswift_passed: bool) -> dict:
+    return {
+        "profiles": [
+            {
+                "profile": {
+                    "os": "linux",
+                    "mode": "per-context",
+                    "index": 0,
+                    "webglRenderer": webgl_renderer,
+                },
+                "results": {
+                    "extended": {
+                        "headlessDetection": {
+                            "noSwiftShader": {
+                                "passed": noswift_passed,
+                                "detail": "SOFTWARE RENDERER: llvmpipe (headless indicator)",
+                            },
+                            "noWebdriver": {"passed": True, "detail": "false"},
+                        }
+                    }
+                },
+            }
+        ]
+    }
+
+
+def test_a_profile_that_asked_for_llvmpipe_is_not_graded_headless():
+    """camoufox's own preset pool ships "llvmpipe, or similar".
+
+    When `generate_context_fingerprint()` draws that preset, the browser is meant
+    to report llvmpipe -- doing so is the WebGL spoof working. Grading it as a
+    headless indicator made this gate fail at random, on the runs where that
+    preset happened to be drawn.
+    """
+    from ci.run_build_tester import category_failures, flatten
+
+    full = _bt_profile("llvmpipe, or similar", noswift_passed=False)
+    tid = "linux-per-context-0/extended/headlessDetection/noSwiftShader"
+    assert flatten(full)[tid] == "pass"
+    assert category_failures(full, ["headlessDetection"]) == {}
+
+
+def test_an_unasked_for_software_renderer_still_fails():
+    """The case the check exists for: the spoof fell through to the host GPU."""
+    from ci.run_build_tester import category_failures, flatten
+
+    full = _bt_profile("AMD Radeon R9 200 Series", noswift_passed=False)
+    tid = "linux-per-context-0/extended/headlessDetection/noSwiftShader"
+    assert flatten(full)[tid] == "fail"
+    assert category_failures(full, ["headlessDetection"]) == {"headlessDetection": 1}
+
+
+def test_the_exemption_is_confined_to_that_one_check():
+    """A different headlessDetection check must not inherit the exemption."""
+    from ci.run_build_tester import flatten
+
+    full = _bt_profile("llvmpipe, or similar", noswift_passed=False)
+    checks = full["profiles"][0]["results"]["extended"]["headlessDetection"]
+    checks["noWebdriver"] = {"passed": False, "detail": "navigator.webdriver = true"}
+    tests = flatten(full)
+    assert tests["linux-per-context-0/extended/headlessDetection/noWebdriver"] == "fail"
+
+
+# ---------------------------------------------------------------------------
+# preparing the source tree: retry the network, never the real failures
+# ---------------------------------------------------------------------------
+
+
+# The exact text that failed run 34673115086, trimmed to the lines that matter.
+_TASKCLUSTER_RESET = """\
+  File "/home/runner/work/camoufox/camoufox/camoufox-152.0.4-beta.31/python/mach/mach/main.py", line 416, in _run
+    return Registrar._run_command_handler(
+requests.exceptions.ConnectionError: ('Connection aborted.', \
+ConnectionResetError(104, 'Connection reset by peer'))
+make: *** [Makefile:95: mozbootstrap] Error 1
+"""
+
+_REAL_BUILD_FAILURE = """\
+patching file browser/base/content/browser.js
+Hunk #1 FAILED at 812.
+1 out of 1 hunk FAILED -- saving rejects to browser/base/content/browser.js.rej
+make: *** [Makefile:88: dir] Error 1
+"""
+
+
+def test_a_taskcluster_connection_reset_is_transient():
+    from ci.run_prepare import is_transient
+
+    assert is_transient(_TASKCLUSTER_RESET)
+
+
+def test_a_failed_patch_hunk_is_not_transient():
+    """The retry must not paper over the failure mode this pipeline exists to catch."""
+    from ci.run_prepare import is_transient
+
+    assert not is_transient(_REAL_BUILD_FAILURE)
+
+
+class _FakeRun:
+    """Stands in for ci._util.run, replaying a scripted list of outcomes."""
+
+    def __init__(self, outcomes):
+        self.outcomes = list(outcomes)
+        self.calls = []
+
+    def __call__(self, cmd, **kwargs):
+        from ci._util import Result
+
+        self.calls.append(cmd)
+        code, output = self.outcomes.pop(0)
+        return Result(code, output, "")
+
+
+def _run_step(monkeypatch, outcomes, *, target="mozbootstrap", retry=True, attempts=3):
+    import ci.run_prepare as rp
+
+    fake = _FakeRun(outcomes)
+    monkeypatch.setattr(rp, "run", fake)
+    monkeypatch.setattr(rp.time, "sleep", lambda _s: None)
+    code = rp.run_step(target, retry=retry, attempts=attempts, backoff=0, timeout=60)
+    return code, fake
+
+
+def test_a_transient_failure_is_retried_and_can_succeed(monkeypatch):
+    code, fake = _run_step(monkeypatch, [(2, _TASKCLUSTER_RESET), (0, "ok")])
+    assert code == 0
+    assert len(fake.calls) == 2
+
+
+def test_a_real_failure_is_not_retried(monkeypatch):
+    """Retrying a broken tree only spends a runner to reach the same answer."""
+    code, fake = _run_step(monkeypatch, [(2, _REAL_BUILD_FAILURE)])
+    assert code == 2
+    assert len(fake.calls) == 1
+
+
+def test_retries_are_bounded(monkeypatch):
+    code, fake = _run_step(
+        monkeypatch, [(2, _TASKCLUSTER_RESET)] * 3, attempts=3
+    )
+    assert code == 2
+    assert len(fake.calls) == 3
+
+
+def test_applying_patches_is_never_retried(monkeypatch):
+    """`make dir` touches no network once the tarball is there, so a failure is real."""
+    import ci.run_prepare as rp
+
+    assert dict(rp._STEPS)["dir"] is False
+    code, fake = _run_step(
+        monkeypatch, [(2, _TASKCLUSTER_RESET)], target="dir", retry=False
+    )
+    assert code == 2
+    assert len(fake.calls) == 1
+
+
+def test_the_workflow_prepares_through_the_retrying_entry_point():
+    """A step that shells straight to `make mozbootstrap` gets no retry."""
+    from ci._util import REPO_ROOT
+
+    workflow = (REPO_ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+    assert "python3 -m ci.run_prepare" in workflow
+    prepare = workflow.split("Prepare the source tree", 1)[1].split("- name:", 1)[0]
+    # Comments in that step quote the make targets while explaining them, so
+    # judge the commands only.
+    commands = "\n".join(
+        line for line in prepare.splitlines() if not line.strip().startswith("#")
+    )
+    for target in ("make setup-minimal", "make dir", "make mozbootstrap"):
+        assert target not in commands, (
+            f"{target} is invoked directly; it would not be retried"
+        )

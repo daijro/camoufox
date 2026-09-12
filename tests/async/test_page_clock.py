@@ -383,7 +383,12 @@ class TestWhileRunning:
         await page.goto("data:text/html,")
         await page.clock.pause_at(1)
         await page.wait_for_timeout(1000)
-        await page.clock.resume()
+        # No resume() before reading the clock: resuming restarts it, so the
+        # real second spent in wait_for_timeout() is added back and Date.now()
+        # lands at 1001 -- one millisecond outside the bound, every time. The
+        # assertion is about what a *paused* clock reads, so the read has to
+        # happen while it is still paused. playwright-python v1.61 dropped the
+        # resume() here for the same reason; the upstream suite passes it.
         now = await page.evaluate("Date.now()")
         assert 0 <= now <= 1000
 
