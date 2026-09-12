@@ -120,6 +120,62 @@ def _assert_publishable(metrics: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+# Cloudflare sits in front of sundial and refuses a document request carrying a
+# non-browser User-Agent -- Python's urllib default and anything else that does
+# not look like a browser gets a 403 before the request reaches sundial at all.
+# So present as one. This has to be on *every* request, not just the first: a
+# client that authenticates with browser headers and then fetches with its own
+# logs in successfully and gets a confusing 403 on the next hop.
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Both auth routes answer 303 + Set-Cookie; following it hides the cookie."""
+
+    def redirect_request(self, *_args, **_kwargs):  # noqa: D102
+        return None
+
+
+def _session_cookie(headers) -> Optional[str]:  # noqa: ANN001
+    for raw in headers.get_all("Set-Cookie") or []:
+        if raw.startswith(COOKIE_NAME + "="):
+            value = raw.split(";", 1)[0][len(COOKIE_NAME) + 1 :]
+            if value:
+                return value
+    return None
+
+
+def login_with_key(base_url: str, key: str, *, timeout: int = 30) -> str:
+    """Token login: `GET /automated?key=` mints the session cookie.
+
+    This is the route the credential in CI is actually for -- sundial's
+    `make pages-automation-keys` mints report-URL keys, and a key presented here
+    resolves to the `guest` role. Tried before the form because it needs no
+    username, so there is no second secret to keep in step with whatever
+    `GUEST_USER` was set to.
+    """
+    url = base_url.rstrip("/") + "/automated?key=" + urllib.parse.quote(key, safe="")
+    req = urllib.request.Request(url, headers=_BROWSER_HEADERS)
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        resp = opener.open(req, timeout=timeout)
+        status, headers = resp.status, resp.headers
+    except urllib.error.HTTPError as exc:
+        status, headers = exc.code, exc.headers
+    cookie = _session_cookie(headers)
+    if cookie:
+        log("sundial auth OK (automation key)")
+        return cookie
+    raise RuntimeError(f"the automation key route returned {status} and no session cookie")
+
+
 def login(base_url: str, username: str, password: str, *, timeout: int = 30) -> str:
     """Form-login and return the session cookie value.
 
@@ -132,14 +188,10 @@ def login(base_url: str, username: str, password: str, *, timeout: int = 30) -> 
         data=body,
         method="POST",
         headers={
+            **_BROWSER_HEADERS,
             "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "camoufox-harness",
         },
     )
-
-    class _NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, *_args, **_kwargs):  # noqa: D102
-            return None
 
     opener = urllib.request.build_opener(_NoRedirect)
     try:
@@ -157,13 +209,40 @@ def login(base_url: str, username: str, password: str, *, timeout: int = 30) -> 
         if status != 303:
             raise RuntimeError(f"sundial login returned {status}") from None
 
-    for raw in headers.get_all("Set-Cookie") or []:
-        if raw.startswith(COOKIE_NAME + "="):
-            value = raw.split(";", 1)[0][len(COOKIE_NAME) + 1 :]
-            if value:
-                log("sundial login OK")
-                return value
+    cookie = _session_cookie(headers)
+    if cookie:
+        log("sundial login OK (form)")
+        return cookie
     raise RuntimeError("sundial login succeeded but returned no session cookie")
+
+
+def authenticate(base_url: str, username: str, secret: str, *, timeout: int = 30) -> str:
+    """Get a session cookie, whichever shape the stored credential is.
+
+    SUNDIAL_AUTOMATION_KEY has been both things over this repository's life: an
+    automation key for `/automated?key=`, and a password for the login form. The
+    two are indistinguishable by looking at them, and which one a given
+    repository holds is not something this code can know -- so try the key route
+    first (it needs no username) and fall back to the form. The only cost when
+    the secret is a password is one extra request that 401s.
+    """
+    errors = []
+    try:
+        return login_with_key(base_url, secret, timeout=timeout)
+    except Exception as exc:  # noqa: BLE001 -- reported below if the form fails too
+        errors.append(f"automation key: {exc}")
+        log(f"automation-key login did not take ({exc}); trying the form", level="WARN")
+    try:
+        return login(base_url, username, secret, timeout=timeout)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"form login as {username!r}: {exc}")
+    raise RuntimeError(
+        "could not authenticate to sundial. Both routes were tried:\n  "
+        + "\n  ".join(errors)
+        + "\nSUNDIAL_AUTOMATION_KEY must be either an automation key from "
+        "`make pages-automation-keys` or the password for the account named by "
+        "SUNDIAL_USERNAME (default 'guest')."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -564,7 +643,7 @@ def gate(argv: Optional[List[str]] = None) -> int:
 
     try:
         binary = args.binary or require_binary()
-        cookie = login(base_url, username, password)
+        cookie = authenticate(base_url, username, password)
         report = asyncio.run(
             scan(
                 binary=binary,

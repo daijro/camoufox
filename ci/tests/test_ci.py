@@ -801,9 +801,10 @@ def test_sundial_yml_declares_enabled_explicitly():
 def test_a_disabled_gate_makes_no_request():
     """Disabled means no credential is read and no connection is opened.
 
-    Asserted by making both fatal: login() and scan() raise if reached, and the
-    credential is put in the environment so that a gate which ignored the flag
-    would sail past the missing-credential check and hit them.
+    Asserted by making every route out fatal: authenticate(), both of the login
+    functions it can reach, and scan() all raise if called, and the credential is
+    put in the environment so that a gate which ignored the flag would sail past
+    the missing-credential check and hit them.
     """
     import ci.run_sundial as rs
 
@@ -813,8 +814,11 @@ def test_a_disabled_gate_makes_no_request():
         calls.append(args)
         raise AssertionError("a disabled stealth gate contacted sundial")
 
-    monkey = {"login": rs.login, "scan": rs.scan, "_config": rs._config}
-    rs.login, rs.scan = explode, explode
+    names = ("authenticate", "login", "login_with_key", "scan")
+    monkey = {name: getattr(rs, name) for name in names}
+    monkey["_config"] = rs._config
+    for name in names:
+        setattr(rs, name, explode)
     rs._config = lambda: {"enabled": False, "url": "https://sundial.invalid"}
     old_key = os.environ.get("SUNDIAL_AUTOMATION_KEY")
     os.environ["SUNDIAL_AUTOMATION_KEY"] = "would-be-used-if-the-flag-were-ignored"
@@ -824,7 +828,9 @@ def test_a_disabled_gate_makes_no_request():
             produced = pathlib.Path(tmp) / "sundial.json"
             written = json.loads(produced.read_text()) if produced.exists() else None
     finally:
-        rs.login, rs.scan, rs._config = monkey["login"], monkey["scan"], monkey["_config"]
+        for name in names:
+            setattr(rs, name, monkey[name])
+        rs._config = monkey["_config"]
         if old_key is None:
             os.environ.pop("SUNDIAL_AUTOMATION_KEY", None)
         else:
