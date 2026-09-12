@@ -189,10 +189,11 @@ summary says so.
 Asking for `?score=1` is a promise the caller makes, and a promise is not a
 mechanism. Today two things back it:
 
-- **`guest` cannot load the private vectors.** sundial's middleware checks the
-  role against `isPrivateVectorAsset` and serves that bundle to nobody else, so
-  the definitions this repository must never hold are not sent to the session
-  in the first place.
+- **`guest` cannot load the private vectors.** sundial's middleware answers
+  `isPrivateVectorAsset` paths with an empty stub for that role specifically, so
+  the definitions this repository must never hold are not sent to the session in
+  the first place. (`admin` and `private` do get them — which is why CI uses the
+  least privileged account rather than whichever one was to hand.)
 - **A non-score payload fails the run.** `redact(require_score_mode=True)`
   refuses to process a full report rather than folding it down, so a deployment
   that ignored `score=1` is a red build, not a quiet leak.

@@ -56,8 +56,10 @@ COOKIE_NAME = "sundial_session"
 # Two guarantees keep a vector out of a public log, and it is worth being precise
 # about which is which, because only one of them is enforced by the server:
 #
-#   server-side  `guest` cannot load vectors-private.js (_middleware.js checks
-#                the role against isPrivateVectorAsset).
+#   server-side  `guest` is answered with an empty stub for vectors-private.js
+#                (_middleware.js gates that path on the role). `admin` and
+#                `private` are not, which is why CI uses the least privileged
+#                account rather than whichever one was to hand.
 #   client-side  this gate only ever requests `/?auto=1&score=1`, and redact()
 #                refuses to process anything that is not a score payload, so a
 #                deployment that ignored `score=1` fails the run instead of
