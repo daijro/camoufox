@@ -757,10 +757,11 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -e pythonlib
       - name: Run
-        # The only step in this workflow that sees the sundial credential, and
-        # the credential is for a role sundial refuses to hand a report to. What
-        # comes back is already a score, and ci/run_sundial.py refuses anything
-        # else outright, so the artifact below is publishable.
+        # The only step in this workflow that sees the sundial credential. It
+        # asks for `?auto=1&score=1`, so what comes back is already counts
+        # rather than a report; sundial refuses this role the private-vector
+        # bundle either way, and ci/run_sundial.py refuses to process anything
+        # that is not a score. The artifact below is a grade and counts.
         env:
           SUNDIAL_USERNAME: ${{ secrets.SUNDIAL_USERNAME }}
           SUNDIAL_AUTOMATION_KEY: ${{ secrets.SUNDIAL_AUTOMATION_KEY }}
