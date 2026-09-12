@@ -1317,3 +1317,46 @@ def test_the_role_is_publishable_but_the_whitelist_still_bites():
     _assert_publishable({"sundial_role": "guest"})
     with pytest.raises(RuntimeError):
         _assert_publishable({"sundial_role": "guest", "vector_name": "pv-secret"})
+
+
+def test_the_evidence_records_which_role_the_run_used(monkeypatch, tmp_path):
+    """`sundial_role` has to survive into the saved result, not just be checked.
+
+    redact()'s output replaces result.metrics wholesale, so a role recorded
+    before the scan was silently dropped on the way out -- the check still ran
+    and still failed closed, but the artifact did not say which role it had
+    confirmed, leaving "the vectors were never served to this session"
+    unverifiable after the fact.
+    """
+    import ci.run_sundial as rs
+
+    score = {
+        "schemaVersion": 1,
+        "mode": "score",
+        "sundialVersion": "v0.5.0",
+        "buckets": {"Identity|core": {"scored": 10, "passed": 10, "failed": 0}},
+    }
+
+    monkeypatch.setattr(rs, "_config", lambda: {
+        "enabled": True,
+        "url": "https://sundial.invalid",
+        "gated_categories": ["Identity"],
+        "ungated_categories": ["Graphics"],
+        "min_pass_rate": 0.9,
+    })
+    monkeypatch.setattr(rs, "authenticate", lambda *a, **k: "cookie")
+    monkeypatch.setattr(rs, "assert_role_cannot_read_vectors", lambda *a, **k: "guest")
+    async def _scan(**_kwargs):
+        return score
+
+    monkeypatch.setattr(rs, "scan", _scan)
+    monkeypatch.setattr(rs, "seal", lambda *a, **k: None)
+    monkeypatch.setenv("SUNDIAL_AUTOMATION_KEY", "a-key")
+
+    code = rs.gate(["--binary", str(tmp_path / "fake-bin"), "--evidence-dir", str(tmp_path)])
+    saved = json.loads((tmp_path / "sundial.json").read_text())
+
+    assert code == 0, saved.get("notes")
+    assert saved["metrics"]["sundial_role"] == "guest"
+    # And it is still only ever counts beside it.
+    assert "vector" not in json.dumps(saved).lower()

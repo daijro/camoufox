@@ -750,8 +750,9 @@ def gate(argv: Optional[List[str]] = None) -> int:
         cookie = authenticate(base_url, username, password)
         # Before the browser opens sundial at all: confirm the session really is
         # a role that cannot be handed the vectors, rather than trusting that
-        # whoever set the secret picked the right key.
-        result.metrics["sundial_role"] = assert_role_cannot_read_vectors(base_url, cookie)
+        # whoever set the secret picked the right key. Held in a local because
+        # redact()'s output replaces result.metrics wholesale further down.
+        sundial_role = assert_role_cannot_read_vectors(base_url, cookie)
         report = asyncio.run(
             scan(
                 binary=binary,
@@ -790,6 +791,11 @@ def gate(argv: Optional[List[str]] = None) -> int:
     # Deliberately no per-test map. See redact(): a set of opaque ids is still
     # per-vector data, and verify.py judges this gate on the score instead.
     result.metrics = metrics
+    # Re-added after the wholesale assignment above: which role the run
+    # authenticated as is part of the evidence, not a detail of it. An artifact
+    # that does not say makes "the vectors were never served to this session"
+    # unverifiable after the fact, which is most of the point of recording it.
+    result.metrics["sundial_role"] = sundial_role
     if sealed:
         result.artifacts.append(sealed.name)
 

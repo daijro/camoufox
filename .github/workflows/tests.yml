@@ -759,9 +759,10 @@ jobs:
       - name: Run
         # The only step in this workflow that sees the sundial credential. It
         # asks for `?auto=1&score=1`, so what comes back is already counts
-        # rather than a report; sundial refuses this role the private-vector
-        # bundle either way, and ci/run_sundial.py refuses to process anything
-        # that is not a score. The artifact below is a grade and counts.
+        # rather than a report; ci/run_sundial.py checks the session's role
+        # against sundial's own /__auth/me and refuses to open the browser at
+        # all unless the vectors are withheld from it, and refuses to process
+        # anything that is not a score. The artifact below is a grade and counts.
         env:
           SUNDIAL_USERNAME: ${{ secrets.SUNDIAL_USERNAME }}
           SUNDIAL_AUTOMATION_KEY: ${{ secrets.SUNDIAL_AUTOMATION_KEY }}
