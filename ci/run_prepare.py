@@ -28,11 +28,13 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
+import threading
 import time
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-from ._util import REPO_ROOT, log, run
+from ._util import REPO_ROOT, log
 
 # Substrings that mark a failure as "the network went away", not "this tree is
 # broken". Matched against combined stdout/stderr, case-insensitively.
@@ -82,28 +84,62 @@ def _summarise(output: str, limit: int = 3) -> List[str]:
     return hits[-limit:]
 
 
+def _run_capturing(cmd: List[str], *, timeout: int) -> Tuple[int, str]:
+    """Run a command, echoing each line as it arrives and keeping a copy.
+
+    _util.run() can stream or capture, not both -- and this needs both. Deciding
+    whether a failure is transient means reading the output, and a `make dir`
+    that prints nothing for five minutes while aria2c pulls a 500MB tarball
+    looks exactly like a hung job.
+    """
+    log("$ " + " ".join(cmd) + f"  (cwd={REPO_ROOT})")
+    proc = subprocess.Popen(
+        cmd, cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, bufsize=1,
+    )
+    lines: List[str] = []
+
+    # The reader runs on its own thread so the timeout is real. Draining the
+    # pipe on this thread would block in readline until EOF, and only *then*
+    # reach proc.wait(timeout=...) -- so a step that wedged without printing
+    # anything (exactly what a stalled download does) would hang forever and
+    # the timeout would never fire.
+    def drain() -> None:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            print(line, end="", flush=True)
+            lines.append(line)
+
+    reader = threading.Thread(target=drain, daemon=True)
+    reader.start()
+    try:
+        code = proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        lines.append(f"\nTIMEOUT after {timeout}s\n")
+        code = 124
+    # Give the reader a moment to flush what the process already wrote; it is a
+    # daemon thread, so a wedged pipe cannot hold the process open.
+    reader.join(timeout=10)
+    return code, "".join(lines)
+
+
 def run_step(target: str, *, retry: bool, attempts: int, backoff: int, timeout: int) -> int:
     # At least one attempt, always. `--attempts 0` reaching the loop bound would
     # skip the step entirely and return success, which is the one answer this
     # function must never invent.
     tries = max(1, attempts) if retry else 1
     for attempt in range(1, tries + 1):
-        # Captured rather than teed: classifying the failure means reading it,
-        # and _util.run() only captures when it is not streaming. The output is
-        # echoed below either way, so the job log still holds the whole thing --
-        # it just arrives per step instead of line by line.
-        proc = run(["make", target], cwd=REPO_ROOT, timeout=timeout, capture=True)
-        output = proc.combined()
-        if output:
-            print(output, flush=True)
-        if proc.code == 0:
+        code, output = _run_capturing(["make", target], timeout=timeout)
+        if code == 0:
             return 0
         if attempt == tries:
-            return proc.code
+            return code
         if not is_transient(output):
             log(f"make {target} failed and the failure does not look transient; not retrying",
                 level="ERROR")
-            return proc.code
+            return code
         for line in _summarise(output):
             log(f"  {line}", level="WARN")
         delay = backoff * attempt

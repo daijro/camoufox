@@ -1033,25 +1033,22 @@ def test_a_failed_patch_hunk_is_not_transient():
 
 
 class _FakeRun:
-    """Stands in for ci._util.run, replaying a scripted list of outcomes."""
+    """Stands in for run_prepare._run_capturing, replaying scripted outcomes."""
 
     def __init__(self, outcomes):
         self.outcomes = list(outcomes)
         self.calls = []
 
     def __call__(self, cmd, **kwargs):
-        from ci._util import Result
-
         self.calls.append(cmd)
-        code, output = self.outcomes.pop(0)
-        return Result(code, output, "")
+        return self.outcomes.pop(0)
 
 
 def _run_step(monkeypatch, outcomes, *, target="mozbootstrap", retry=True, attempts=3):
     import ci.run_prepare as rp
 
     fake = _FakeRun(outcomes)
-    monkeypatch.setattr(rp, "run", fake)
+    monkeypatch.setattr(rp, "_run_capturing", fake)
     monkeypatch.setattr(rp.time, "sleep", lambda _s: None)
     code = rp.run_step(target, retry=retry, attempts=attempts, backoff=0, timeout=60)
     return code, fake
@@ -1182,3 +1179,33 @@ def test_a_known_ungated_category_is_not_unknown():
     )
     assert out["unknown_category_checks"] == 0
     assert out["out_of_scope_failed"] == 2
+
+
+def test_run_capturing_keeps_stdout_and_stderr():
+    """The classifier reads this output, so losing stderr loses the diagnosis."""
+    from ci.run_prepare import _run_capturing
+
+    code, out = _run_capturing(
+        ["bash", "-c", "echo on-stdout; echo on-stderr >&2; exit 3"], timeout=30
+    )
+    assert code == 3
+    assert "on-stdout" in out and "on-stderr" in out
+
+
+def test_a_step_that_wedges_without_printing_is_killed():
+    """The timeout has to cover a silent hang, which is what a stalled download is.
+
+    Draining the pipe on the calling thread would block in readline until EOF
+    and only then reach proc.wait(timeout=...) -- so a process producing no
+    output would never be timed out at all.
+    """
+    import time
+
+    from ci.run_prepare import _run_capturing
+
+    started = time.monotonic()
+    code, out = _run_capturing(["bash", "-c", "sleep 60"], timeout=2)
+    elapsed = time.monotonic() - started
+    assert code == 124, "a timed-out step must not report success"
+    assert "TIMEOUT" in out
+    assert elapsed < 15, f"the timeout did not fire promptly ({elapsed:.1f}s)"
