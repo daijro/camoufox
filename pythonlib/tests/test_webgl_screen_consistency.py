@@ -321,3 +321,38 @@ def test_preset_screens_are_never_lifted():
             preset["screen"]["width"],
             preset["screen"]["height"],
         )
+
+
+@pytest.mark.parametrize("ff_version", ["148", "152"])
+@pytest.mark.parametrize(
+    "target_os,webgl_os",
+    [("windows", "win"), ("macos", "mac"), ("linux", "lin")],
+)
+def test_random_preset_pool_only_contains_supported_webgl_pairs(
+    monkeypatch, ff_version, target_os, webgl_os
+):
+    """Every preset eligible for random selection must survive launch_options.
+
+    The bundled preset files contain vendor/renderer pairs absent from
+    webgl_data.db. Selection therefore failed only when random.choice happened
+    to pick one of those entries, making browser startup intermittently crash.
+    """
+    from camoufox.fingerprints import get_random_preset
+    from camoufox.webgl import sample_webgl
+
+    candidates = []
+
+    def capture(pool):
+        candidates.extend(pool)
+        return pool[0]
+
+    monkeypatch.setattr(fingerprints, "choice", capture)
+    get_random_preset(os=target_os, ff_version=ff_version)
+
+    assert candidates
+    for preset in candidates:
+        webgl = preset.get("webgl", {})
+        vendor = webgl.get("unmaskedVendor")
+        renderer = webgl.get("unmaskedRenderer")
+        if vendor and renderer:
+            sample_webgl(webgl_os, vendor, renderer)
