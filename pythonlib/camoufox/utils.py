@@ -754,9 +754,9 @@ def launch_options(
     env = dict(environ) if env is None else dict(env)
     if executable_path is None:
         # Point every launch at a specific build without threading the path
-        # through each call site. tests/conftest.py already used this variable;
-        # honouring it in the library is what lets tests/patches/*.py run against
-        # a local build, since those construct AsyncCamoufox directly.
+        # through each call site. The CI runners set it, and honouring it in the
+        # library is what lets tests/patches/*.py run against a local build,
+        # since those construct AsyncCamoufox directly.
         # Absent the variable nothing changes.
         _env_executable = environ.get('CAMOUFOX_EXECUTABLE_PATH', '').strip()
         if _env_executable:

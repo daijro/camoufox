@@ -1,25 +1,18 @@
 #!/usr/bin/env python3
-"""Run a Playwright suite against a Camoufox build.
+"""Run the Playwright suite against a Camoufox build.
 
-Two suites, because they answer different questions:
+One suite: playwright-python's own tests, fetched fresh at the tag
+`ci/versions.py` resolved for this browser, run unmodified with main-world
+execution and `ci/skiplist.yml` applied, plus the Camoufox-specific modules
+`ci/suite.py` overlays from `tests/camoufox/`.
 
-  --suite upstream   playwright-python's own tests, fetched fresh at the tag
-                     ci/versions.py resolved for this browser, run unmodified
-                     with main-world execution and ci/skiplist.yml applied.
-                     This is the conformance check: does Camoufox still honour
-                     the automation contract its users hold it to, including
-                     tests written after the vendored fork stopped tracking
-                     upstream. Shardable.
-
-  --suite vendored   the maintained suite in tests/. A fork of a ~v1.55-era
-                     upstream suite carrying ~1800 semantic lines of Camoufox
-                     adaptations. Being frozen is the point: every test has a
-                     known prior outcome, so it is the regression check.
+This is the conformance check -- does Camoufox still honour the automation
+contract its users hold it to -- and, through the overlay, the regression check
+for the behaviours that are ours alone. Shardable.
 
 Run:
-    python3 -m ci.run_playwright --suite upstream --binary path/to/camoufox-bin
-    python3 -m ci.run_playwright --suite upstream --shard 3/6
-    python3 -m ci.run_playwright --suite vendored --binary path/to/camoufox-bin
+    python3 -m ci.run_playwright --binary path/to/camoufox-bin
+    python3 -m ci.run_playwright --binary path/to/camoufox-bin --shard 3/6
 """
 
 from __future__ import annotations
@@ -31,38 +24,26 @@ from typing import List, Optional
 
 from . import results
 from ._pytest import parse_junit, require_binary, run_pytest
-from ._util import REPO_ROOT, RESULTS_DIR, WORK_DIR, log, run
+from ._util import REPO_ROOT, RESULTS_DIR, WORK_DIR, log
+from .suite import prepare
 from .versions import resolve
-
-TESTS_DIR = REPO_ROOT / "tests"
-
-
-def vendored_python() -> Path:
-    """tests/setup-venv.sh owns this environment; make sure it exists."""
-    python = TESTS_DIR / "venv" / "bin" / "python"
-    if not python.exists():
-        log("tests/venv missing -- running tests/setup-venv.sh")
-        run(["bash", "./setup-venv.sh"], cwd=TESTS_DIR, check=True, timeout=1800,
-            tee=True, capture=False)
-    return python
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=["upstream", "vendored"], required=True)
     parser.add_argument("--binary", type=Path)
     parser.add_argument("--browser-version", help="passed through to ci.versions")
     parser.add_argument("--playwright-tag", help="pin the suite instead of resolving one")
-    parser.add_argument("--shard", help="e.g. 3/6 (upstream suite only)")
+    parser.add_argument("--shard", help="e.g. 3/6")
     parser.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
-    parser.add_argument("--name", help="result file name; defaults to the suite name")
+    parser.add_argument("--name", help="result file name; defaults to playwright[-shard]")
     parser.add_argument("--timeout", type=int, default=10800)
     parser.add_argument("--retries", type=int, default=1, help="rerun failures this many times")
     parser.add_argument("--headful", action="store_true")
     args = parser.parse_args(argv)
 
     suffix = f"-{args.shard.replace('/', 'of')}" if args.shard else ""
-    name = args.name or f"playwright_{args.suite}{suffix}"
+    name = args.name or f"playwright{suffix}"
     result = results.GateResult(gate=name)
 
     try:
@@ -73,41 +54,35 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
     env = {"CAMOUFOX_EXECUTABLE_PATH": str(binary.resolve())}
-    junit = WORK_DIR / f"junit-{args.suite}{suffix}.xml"
+    junit = WORK_DIR / f"junit{suffix}.xml"
 
-    if args.suite == "upstream":
-        from .suite import prepare
+    versions = resolve(
+        browser_version=args.browser_version, playwright_tag=args.playwright_tag
+    )
+    tag = versions["playwright_tag"]
+    result.metrics.update(
+        playwright_tag=tag,
+        playwright_firefox=versions["playwright_firefox"],
+        browser_version=versions["browser_version"],
+    )
 
-        versions = resolve(
-            browser_version=args.browser_version, playwright_tag=args.playwright_tag
-        )
-        tag = versions["playwright_tag"]
-        result.metrics.update(
-            playwright_tag=tag,
-            playwright_firefox=versions["playwright_firefox"],
-            browser_version=versions["browser_version"],
-            suite="upstream",
-        )
-        manifest = prepare(tag)
-        cwd = Path(manifest["checkout"])
-        python = Path(manifest["python"])
-        target = "tests/async/"
-        pytest_args = ["-p", "pw_camoufox_plugin", "--browser", "firefox", target]
-        # The plugin reads the skiplist from the repository, not the fetched
-        # checkout, so a local edit takes effect without re-preparing.
-        env["CI_SKIPLIST"] = str(REPO_ROOT / "ci" / "skiplist.yml")
-        if args.shard:
-            env["CI_SHARD"] = args.shard
-            result.metrics["shard"] = args.shard
-    else:
-        cwd = TESTS_DIR
-        python = vendored_python()
-        target = "async/"
-        pytest_args = ([] if args.headful else ["--headless"]) + [target]
-        result.metrics["suite"] = "vendored"
-        if args.shard:
-            log("--shard is ignored for the vendored suite; it is small enough to run whole",
-                level="WARN")
+    manifest = prepare(tag)
+    cwd = Path(manifest["checkout"])
+    python = Path(manifest["python"])
+    result.metrics["camoufox_tests"] = len(manifest.get("camoufox_tests", []))
+
+    target = "tests/async/"
+    pytest_args = ["-p", "pw_camoufox_plugin", "--browser", "firefox"]
+    if args.headful:
+        pytest_args.append("--headed")
+    pytest_args.append(target)
+
+    # The plugin reads the skiplist from the repository, not the fetched
+    # checkout, so a local edit takes effect without re-preparing.
+    env["CI_SKIPLIST"] = str(REPO_ROOT / "ci" / "skiplist.yml")
+    if args.shard:
+        env["CI_SHARD"] = args.shard
+        result.metrics["shard"] = args.shard
 
     proc = run_pytest(
         cwd=cwd, python=python, args=pytest_args, junit=junit, env=env, timeout=args.timeout
@@ -133,7 +108,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if not failing:
             break
         log(f"retry {attempt + 1}: {len(failing)} failing test(s)")
-        retry_junit = WORK_DIR / f"junit-{args.suite}{suffix}-retry{attempt + 1}.xml"
+        retry_junit = WORK_DIR / f"junit{suffix}-retry{attempt + 1}.xml"
         run_pytest(
             cwd=cwd, python=python, args=retry_args,
             junit=retry_junit, env=env, timeout=args.timeout,

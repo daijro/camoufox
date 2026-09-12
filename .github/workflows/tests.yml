@@ -8,10 +8,12 @@ name: Tests
 #
 # The browser version comes from upstream.sh unless a caller passes one in,
 # which is what lets one pipeline test both a pull request and a version bump.
-# ci/versions.py
-# then picks the newest released Playwright suite that is not ahead of that
-# browser, and ci/run_playwright.py runs it with main-world execution and
-# ci/skiplist.yml applied.
+# ci/versions.py then picks the newest released Playwright suite that is not
+# ahead of that browser -- Playwright trails Firefox and skips generations, so
+# the suite's own Firefox pin is usually a release or two behind the browser
+# under test, and that is expected rather than a mismatch. ci/run_playwright.py
+# fetches it fresh, applies ci/skiplist.yml, overlays tests/camoufox/ and runs
+# it with main-world execution.
 #
 # The stealth check reports a letter grade and a count. Its per-vector detail
 # never leaves ci/run_sundial.py, because this repository is public.
@@ -24,7 +26,7 @@ name: Tests
 #   2  browser     BUILD if patches/additions changed,
 #                  otherwise FETCH the released binary        ~70 min / ~1 min
 #   3a smoke       patch guards, build-tester                 ~15 min
-#   3b full        Playwright x2 suites, leaks, stealth       ~40 min
+#   3b full        Playwright (6 shards), leaks, stealth      ~40 min
 #   4  gate        the single required status check
 #
 # A driver-only pull request never builds: there is nothing new to compile, so it
@@ -109,6 +111,7 @@ jobs:
       browser_release: ${{ steps.versions.outputs.browser_release }}
       playwright_tag: ${{ steps.versions.outputs.playwright_tag }}
       playwright_firefox: ${{ steps.versions.outputs.playwright_firefox }}
+      version_note: ${{ steps.versions.outputs.note }}
       browser_changed: ${{ steps.scope.outputs.browser_changed }}
       has_sundial: ${{ steps.sundial.outputs.has_sundial }}
       shard_matrix: ${{ steps.shards.outputs.matrix }}
@@ -497,8 +500,8 @@ jobs:
           retention-days: 3
 
   # ---------------------------------------------------------------------------
-  playwright-upstream:
-    name: Playwright upstream ${{ matrix.shard }}
+  playwright:
+    name: Playwright ${{ matrix.shard }}
     # Tier 3b. Gated on 3a: a browser that fails its patch guards is broken, and
     # six shards would take forty minutes to reach the same conclusion.
     needs: [resolve, build, fetch-browser, patch-guards, build-tester]
@@ -523,7 +526,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           xvfb-run -a python3 -m ci.run_playwright \
-            --suite upstream \
             --shard "${{ matrix.shard }}" \
             --binary "$CAMOUFOX_BINARY" \
             --browser-version "${{ needs.resolve.outputs.browser_version }}" \
@@ -531,7 +533,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: results-playwright-upstream-${{ strategy.job-index }}
+          name: results-playwright-${{ strategy.job-index }}
           # One path, and no glob. The summary merges every results-* artifact
           # into one directory and load_all() globs a single level, so these
           # must arrive at the artifact's top level. A second path would move
@@ -542,44 +544,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: diagnostics-playwright-upstream-${{ strategy.job-index }}
-          path: |
-            .ci-work/junit-*.xml
-          include-hidden-files: true
-          if-no-files-found: ignore
-
-  # ---------------------------------------------------------------------------
-  playwright-vendored:
-    name: Playwright regression suite
-    needs: [resolve, build, fetch-browser, patch-guards, build-tester]
-    if: always() && needs.patch-guards.result == 'success' && needs.build-tester.result == 'success'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 180
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: ./.github/actions/prepare-browser
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - run: xvfb-run -a python3 -m ci.run_playwright --suite vendored --binary "$CAMOUFOX_BINARY"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: results-playwright-vendored
-          # One path, and no glob. The summary merges every results-* artifact
-          # into one directory and load_all() globs a single level, so these
-          # must arrive at the artifact's top level. A second path would move
-          # upload-artifact's common root and nest them under results/.
-          path: .ci-work/results/
-          include-hidden-files: true
-          if-no-files-found: warn
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: diagnostics-playwright-vendored
+          name: diagnostics-playwright-${{ strategy.job-index }}
           path: |
             .ci-work/junit-*.xml
           include-hidden-files: true
@@ -778,8 +743,8 @@ jobs:
   # ---------------------------------------------------------------------------
   summary:
     name: Summary
-    needs: [resolve, static, pythonlib, build, fetch-browser, playwright-upstream,
-            playwright-vendored, patch-guards, build-tester, native, sundial]
+    needs: [resolve, static, pythonlib, build, fetch-browser, playwright,
+            patch-guards, build-tester, native, sundial]
     if: always() && needs.resolve.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
@@ -813,7 +778,7 @@ jobs:
           # not succeed, so nothing is lost by leaving it out.
           required="pythonlib native_rules"
           if [ "${{ needs.resolve.outputs.browser_changed }}" != "skip" ]; then
-            required="$required build patch_guards build_tester playwright_vendored playwright_upstream native_browser"
+            required="$required build patch_guards build_tester playwright native_browser"
           fi
           if [ "${{ needs.resolve.outputs.has_sundial }}" = "true" ]; then
             required="$required sundial"
@@ -826,7 +791,8 @@ jobs:
             --browser-version "${{ needs.resolve.outputs.browser_version }}" \
             --browser-release "${{ needs.resolve.outputs.browser_release }}" \
             --playwright-tag "${{ needs.resolve.outputs.playwright_tag }}" \
-            --playwright-firefox "${{ needs.resolve.outputs.playwright_firefox }}"
+            --playwright-firefox "${{ needs.resolve.outputs.playwright_firefox }}" \
+            --version-note "${{ needs.resolve.outputs.version_note }}"
           code=$?
           echo "verdict=$([ $code -eq 0 ] && echo pass || echo fail)" >> "$GITHUB_OUTPUT"
           exit $code
@@ -874,8 +840,8 @@ jobs:
     # that is not `success`, including `skipped`, fails the gate: a suite that
     # did not run has not passed, and silently skipping one is the cheapest way
     # to a green tick.
-    needs: [resolve, static, pythonlib, build, fetch-browser, playwright-upstream,
-            playwright-vendored, patch-guards, build-tester, native, sundial, summary]
+    needs: [resolve, static, pythonlib, build, fetch-browser, playwright,
+            patch-guards, build-tester, native, sundial, summary]
     if: always()
     runs-on: ubuntu-24.04
     permissions:

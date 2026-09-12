@@ -48,12 +48,18 @@ _SKIPLIST_ENV = "CI_SKIPLIST"
 # ---------------------------------------------------------------------------
 
 
+def skiplist_path(path: Optional[Path] = None) -> Path:
+    """Where the skiplist is read from: $CI_SKIPLIST, else next to this file."""
+    if path is not None:
+        return path
+    # Path("") is Path("."), which exists and is a directory -- so an unset
+    # CI_SKIPLIST must be treated as unset, not as a path.
+    override = os.environ.get(_SKIPLIST_ENV, "").strip()
+    return Path(override) if override else Path(__file__).resolve().parent / "skiplist.yml"
+
+
 def load_skiplist(path: Optional[Path] = None) -> List[Dict[str, str]]:
-    if path is None:
-        # Path("") is Path("."), which exists and is a directory -- so an unset
-        # CI_SKIPLIST must be treated as unset, not as a path.
-        override = os.environ.get(_SKIPLIST_ENV, "").strip()
-        path = Path(override) if override else Path(__file__).resolve().parent / "skiplist.yml"
+    path = skiplist_path(path)
     if not path.is_file():
         print(f"camoufox: skiplist not found at {path}; running with no skips")
         return []
@@ -187,6 +193,12 @@ def pytest_configure(config) -> None:  # noqa: ANN001
         )
     _install_executable_path(os.path.abspath(executable))
     config._camoufox_skiplist = load_skiplist()
+    # Report the file we actually read, not where this plugin happens to sit.
+    # ci/suite.py copies the plugin into the fetched checkout, so those two are
+    # different directories and the header used to name a path with no file at
+    # the end of it -- which is worse than saying nothing when a skip is being
+    # chased down.
+    config._camoufox_skiplist_path = skiplist_path()
     config._camoufox_shard = parse_shard(os.environ.get(_SHARD_ENV))
     config._camoufox_skipped: Dict[str, str] = {}
 
@@ -221,7 +233,7 @@ def pytest_report_header(config) -> List[str]:  # noqa: ANN001
         "camoufox: main-world execution enabled for this suite "
         "(isolation is covered by tests/patches/isolated-evaluate.py)",
         f"camoufox: {len(getattr(config, '_camoufox_skiplist', []))} skiplist entries "
-        f"from {Path(__file__).parent / 'skiplist.yml'}",
+        f"from {getattr(config, '_camoufox_skiplist_path', '(not loaded)')}",
     ]
     if shard:
         lines.append(f"camoufox: shard {shard[0]} of {shard[1]}")

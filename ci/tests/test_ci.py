@@ -7,8 +7,9 @@ report honestly. These cover the parts where "honestly" is load-bearing:
     output is a grade rather than a breakdown of what is weak;
   * a skip must carry a reason, or it is indistinguishable from hiding a test;
   * sharding must be stable, so a flake does not appear to move between runners;
-  * version resolution must never pick a suite newer than the browser;
-  * test identities must match across the vendored and upstream suite layouts.
+  * version resolution must never pick a suite newer than the browser, nor one
+    above the Playwright ceiling pythonlib pins;
+  * test identities must survive being run from a different working directory.
 
 Run:  python3 -m pytest ci/tests -q
 """
@@ -200,8 +201,8 @@ def test_iter_entries_finds_public_and_private():
         ("some.module", "test_z", "some/module.py::test_z"),
     ],
 )
-def test_junit_ids_match_across_vendored_and_upstream_layouts(classname, name, expected):
-    """The two suites report different dotted paths for the same test file."""
+def test_junit_ids_are_stable_across_rootdirs(classname, name, expected):
+    """How many leading segments junit reports depends on where pytest ran."""
     assert junit_test_id(classname, name) == expected
 
 
@@ -318,6 +319,31 @@ def test_an_unreasoned_skip_is_rejected(tmp_path):
     path.write_text("schema: 1\nskip:\n  - module: tests/async/test_x.py\n")
     problems = validate_skiplist(path)
     assert problems and "no reason" in problems[0]
+
+
+def test_a_replaced_by_that_names_nothing_is_rejected(tmp_path):
+    """Two entries skip an upstream test because a Camoufox test took the job on.
+
+    That claim is only true while the named file exists. Rename or delete it and
+    the skip silently becomes "nothing checks this any more" -- which is exactly
+    the state the skiplist's stated-reason rule exists to prevent, arrived at
+    from the other direction.
+    """
+    path = tmp_path / "skiplist.yml"
+    path.write_text(
+        "schema: 1\n"
+        "skip:\n"
+        "  - test: tests/async/test_x.py::test_y\n"
+        "    replaced-by: tests/camoufox/test_nope.py\n"
+        "    reason: superseded\n"
+    )
+    problems = validate_skiplist(path)
+    assert problems and "does not exist" in problems[0]
+
+
+def test_every_replaced_by_in_the_shipped_skiplist_resolves():
+    """The shipped file, not a fixture -- this is the one that has to hold."""
+    assert not validate_skiplist()
 
 
 def test_load_skiplist_refuses_an_unreasoned_entry(tmp_path, monkeypatch):
@@ -647,37 +673,46 @@ def test_zero_distinct_is_absence_not_collision():
     assert not out["leaks"] and not out["noise"]
 
 
-def test_the_vendored_suite_honours_pythonlibs_playwright_ceiling():
-    """Two files decide which Playwright the regression suite runs against.
+def test_version_resolution_honours_pythonlibs_playwright_ceiling():
+    """The resolver must not pick a client pythonlib refuses to install.
 
-    pythonlib/pyproject.toml caps it deliberately -- every Playwright minor is
-    free to change Juggler, and 1.61 added params the protocol schema had to
-    learn. tests/local-requirements.txt installs the client the suite actually
-    uses. Unpinned there, the cap means nothing: the suite quietly installs a
-    client the browser cannot speak to, and it reads as a browser failure.
+    `camoufox.server` imports `playwright._impl._driver`, a private API, so
+    pythonlib pins a ceiling. Without this filter a Firefox bump silently moves
+    the suite above that ceiling, and whatever Juggler changed in between is
+    reported as a browser failure in a suite nobody shipping the package could
+    reproduce.
+
+    Pinned inputs, so this tests the rule and not today's release list.
     """
-    import re
+    from ci import versions
 
-    from ci._util import REPO_ROOT
+    available = [("v1.64.0", "158.0"), ("v1.63.0", "156.0"), ("v1.62.0", "153.0")]
+    real_pins, real_ceiling = versions.pins, versions.client_ceiling
+    try:
+        versions.pins = lambda limit=10: list(available)
+        versions.client_ceiling = lambda: (1, 63, 0)
+        resolved = versions.resolve(browser_version="158.0.1")
+    finally:
+        versions.pins, versions.client_ceiling = real_pins, real_ceiling
 
-    pyproject = (REPO_ROOT / "pythonlib" / "pyproject.toml").read_text(encoding="utf-8")
-    cap = re.search(r'^playwright\s*=\s*"([^"]+)"', pyproject, re.M)
-    assert cap, "pythonlib/pyproject.toml no longer pins playwright"
-
-    reqs = (REPO_ROOT / "tests" / "local-requirements.txt").read_text(encoding="utf-8")
-    line = next(
-        (l.strip() for l in reqs.splitlines()
-         if l.strip().lower().startswith("playwright") and not l.strip().startswith("#")),
-        None,
+    assert resolved["playwright_tag"] == "v1.62.0", (
+        "resolved to a Playwright at or above pythonlib's ceiling; the suite would "
+        "install a client the shipped package forbids"
     )
-    assert line, "tests/local-requirements.txt no longer lists playwright"
-    assert line != "playwright", (
-        "tests/local-requirements.txt installs an unpinned playwright, so "
-        f"pythonlib's {cap.group(1)!r} ceiling does not apply to the suite that "
-        "actually exercises the browser."
-    )
-    assert cap.group(1).replace(" ", "") in line.replace(" ", ""), (
-        f"the suite pins {line!r} but pythonlib caps at {cap.group(1)!r}; they have drifted"
+
+
+def test_pythonlib_still_pins_a_playwright_ceiling():
+    """The filter above is only as real as the pin it reads.
+
+    If the ceiling is dropped from pyproject.toml, `client_ceiling()` returns
+    None and the filter quietly stops applying -- so assert the pin exists here
+    rather than discovering it from a protocol failure later.
+    """
+    from ci.versions import client_ceiling
+
+    assert client_ceiling() is not None, (
+        "pythonlib/pyproject.toml no longer pins a playwright ceiling, so "
+        "ci.versions has nothing to clamp the suite to"
     )
 
 
@@ -922,7 +957,7 @@ def test_required_suites_are_names_a_runner_actually_writes():
     producible = {
         "build", "build_tester", "patch_guards", "pythonlib", "sundial",
         "native", "native_rules", "native_browser", "native_growth",
-        "playwright_upstream", "playwright_vendored",
+        "playwright",
     }
     unknown = required - producible
     assert not unknown, (
@@ -1360,3 +1395,85 @@ def test_the_evidence_records_which_role_the_run_used(monkeypatch, tmp_path):
     assert saved["metrics"]["sundial_role"] == "guest"
     # And it is still only ever counts beside it.
     assert "vector" not in json.dumps(saved).lower()
+
+
+# ---------------------------------------------------------------------------
+# the overlay: our tests must not silently replace upstream's
+# ---------------------------------------------------------------------------
+
+
+def _fake_checkout(tmp_path, upstream_modules=("test_page.py",)):
+    async_dir = tmp_path / "checkout" / "tests" / "async"
+    async_dir.mkdir(parents=True)
+    for name in upstream_modules:
+        (async_dir / name).write_text("# upstream\n", encoding="utf-8")
+    return tmp_path / "checkout"
+
+
+def test_the_overlay_refuses_to_shadow_an_upstream_module(tmp_path, monkeypatch):
+    """Copying over an upstream file would drop every test in it, silently.
+
+    The suite would simply be smaller, with nothing in the log to say a module
+    had been replaced -- so this has to be refused rather than resolved.
+    """
+    from ci import suite
+
+    checkout = _fake_checkout(tmp_path, upstream_modules=("test_page.py",))
+    ours = tmp_path / "camoufox"
+    ours.mkdir()
+    (ours / "test_page.py").write_text("# ours\n", encoding="utf-8")
+    monkeypatch.setattr(suite, "CAMOUFOX_TESTS", ours)
+
+    with pytest.raises(SystemExit):
+        suite.overlay(checkout)
+
+    assert (checkout / "tests" / "async" / "test_page.py").read_text() == "# upstream\n"
+
+
+def test_the_overlay_is_idempotent_and_clears_stale_files(tmp_path, monkeypatch):
+    """A reused checkout must not trip the collision check on our own files.
+
+    `fetch()` reuses a checkout when one is already there, so the second run
+    finds the first run's copies already in place. It must overwrite those --
+    and drop a module we have since renamed, which would otherwise linger and
+    keep passing against code that no longer claims it.
+    """
+    from ci import suite
+
+    checkout = _fake_checkout(tmp_path)
+    ours = tmp_path / "camoufox"
+    ours.mkdir()
+    (ours / "test_ours.py").write_text("# v1\n", encoding="utf-8")
+    monkeypatch.setattr(suite, "CAMOUFOX_TESTS", ours)
+
+    assert suite.overlay(checkout) == ["test_ours.py"]
+
+    # Second run: same file, edited, plus one renamed away.
+    (ours / "test_ours.py").write_text("# v2\n", encoding="utf-8")
+    assert suite.overlay(checkout) == ["test_ours.py"]
+    assert (checkout / "tests" / "async" / "test_ours.py").read_text() == "# v2\n"
+
+    (ours / "test_ours.py").rename(ours / "test_renamed.py")
+    assert suite.overlay(checkout) == ["test_renamed.py"]
+    assert not (checkout / "tests" / "async" / "test_ours.py").exists()
+    assert (checkout / "tests" / "async" / "test_renamed.py").exists()
+    # Upstream's own module is untouched throughout.
+    assert (checkout / "tests" / "async" / "test_page.py").read_text() == "# upstream\n"
+
+
+def test_every_camoufox_test_module_is_named_unlike_upstreams():
+    """Names are the only thing standing between an overlay and a shadowed module.
+
+    Checked here as well as at overlay time so a badly named file fails in the
+    static job in seconds, rather than forty minutes in when the browser is up.
+    """
+    from ci.suite import CAMOUFOX_TESTS
+
+    ours = sorted(p.name for p in CAMOUFOX_TESTS.glob("test_*.py"))
+    assert ours, "tests/camoufox/ has no test modules; the overlay guards nothing"
+    # Upstream names every module after the API it covers; ours are named after
+    # the Camoufox behaviour, so a collision means someone copied a file in.
+    generic = {"test_page.py", "test_network.py", "test_worker.py", "test_browsercontext.py"}
+    assert not (set(ours) & generic), (
+        f"{sorted(set(ours) & generic)} shares a name with an upstream module"
+    )

@@ -4,7 +4,7 @@
 Runs last in CI. Three jobs:
 
   * **Merge shards.** The upstream suite is split across parallel runners, so
-    `playwright_upstream-3of6` and its siblings are folded back into one record
+    `playwright-3of6` and its siblings are folded back into one record
     before anything is judged.
   * **Decide.** A required suite that produced no result file is a failure, not
     a skip -- otherwise deleting a job would be the cheapest way to a green
@@ -17,7 +17,7 @@ because a skiplist that can grow silently is a way to make any test disappear.
 
 Run:
     python3 -m ci.summarize --results-dir .ci-work/results
-    python3 -m ci.summarize --require build playwright_upstream --markdown out.md
+    python3 -m ci.summarize --require build playwright --markdown out.md
 """
 
 from __future__ import annotations
@@ -30,16 +30,15 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from . import results
-from ._util import RESULTS_DIR, SKIPLIST_PATH, log, summary, write_json
+from ._util import REPO_ROOT, RESULTS_DIR, SKIPLIST_PATH, log, summary, write_json
 
-# "playwright_upstream-3of6" -> "playwright_upstream"
+# "playwright-3of6" -> "playwright"
 _SHARD_SUFFIX = re.compile(r"-\d+of\d+$")
 
 # Presented in this order; anything unexpected is appended.
 _ORDER = [
     "native_rules", "pythonlib", "patches_apply", "build", "patch_guards",
-    "native_browser", "build_tester", "playwright_vendored", "playwright_upstream",
-    "sundial",
+    "native_browser", "build_tester", "playwright", "sundial",
 ]
 
 
@@ -95,7 +94,14 @@ def merge_shards(records: Dict[str, dict]) -> Dict[str, dict]:
 
 
 def validate_skiplist(path: Optional[Path] = None) -> List[str]:
-    """Every skip needs a reason. Returns the problems found."""
+    """Every skip needs a reason, and every `replaced-by` has to point at a real
+    file. Returns the problems found.
+
+    The second check is what keeps the "upstream expectations that encode a
+    stock-Firefox quirk" section honest. Those entries claim a Camoufox-owned
+    test took over guarding the behaviour; if that file is renamed or deleted the
+    claim silently becomes false and the behaviour stops being tested by anything.
+    """
     path = path or SKIPLIST_PATH
     if not path.exists():
         return []
@@ -115,7 +121,20 @@ def validate_skiplist(path: Optional[Path] = None) -> List[str]:
                 f"skiplist entry {target!r} has no reason. A skip without a stated reason "
                 "is indistinguishable from hiding a failure."
             )
+        replacement = str(entry.get("replaced-by", "")).strip()
+        if replacement and not (REPO_ROOT / replacement).is_file():
+            problems.append(
+                f"skiplist entry {target!r} says it is replaced by {replacement!r}, "
+                "which does not exist. Either restore that test or stop claiming "
+                "the behaviour is still covered."
+            )
     return problems
+
+
+def _firefox_generation(browser_version: str) -> str:
+    """`152.0.4` -> `152`. A missing or malformed version is not worth failing on."""
+    head = browser_version.split(".")[0].strip()
+    return head if head.isdigit() else "?"
 
 
 def render(merged: Dict[str, dict], required: List[str], problems: List[str], meta: Dict[str, str]) -> str:
@@ -124,9 +143,15 @@ def render(merged: Dict[str, dict], required: List[str], problems: List[str], me
         "## " + ("✅ Tests passed" if ok else "❌ Tests failed"),
         "",
         f"Camoufox `{meta.get('browser_version', '?')}` "
-        f"(`{meta.get('browser_release') or 'no release tag'}`) against Playwright "
-        f"`{meta.get('playwright_tag', '?')}`, which targets Firefox "
-        f"`{meta.get('playwright_firefox', '?')}`.",
+        f"(`{meta.get('browser_release') or 'no release tag'}`), built on Firefox "
+        f"`{_firefox_generation(meta.get('browser_version', ''))}`, tested against Playwright "
+        f"`{meta.get('playwright_tag', '?')}` — "
+        # Say WHY that tag, because the Firefox it pins is rarely the Firefox
+        # being tested and the bare pair reads like a mismatch. Playwright
+        # releases trail Firefox and skip generations (it went 151 -> 153,
+        # never pinning 152), so an exact match is the exception.
+        + (meta.get("version_note") or f"which targets Firefox `{meta.get('playwright_firefox', '?')}`")
+        + ".",
         "",
         "| Suite | Result | Detail |",
         "| --- | --- | --- |",
@@ -169,11 +194,12 @@ def render(merged: Dict[str, dict], required: List[str], problems: List[str], me
 
     lines += [
         "",
-        "<sub>The upstream Playwright suite runs with main-world execution enabled, and "
-        "tests Camoufox cannot pass by design are deselected via "
-        "[`ci/skiplist.yml`](ci/skiplist.yml) — each with a stated reason. The stealth "
-        "check reports a grade only; its per-vector detail is deliberately never "
-        "published.</sub>",
+        "<sub>The Playwright suite is upstream playwright-python at the tag above, "
+        "fetched fresh, run with main-world execution, with "
+        "[`tests/camoufox/`](tests/camoufox) overlaid. Tests Camoufox cannot pass by "
+        "design are deselected via [`ci/skiplist.yml`](ci/skiplist.yml) — each with a "
+        "stated reason. The stealth check reports a grade only; its per-vector detail "
+        "is deliberately never published.</sub>",
     ]
     return "\n".join(lines)
 
@@ -188,6 +214,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--browser-release", default="")
     parser.add_argument("--playwright-tag", default="")
     parser.add_argument("--playwright-firefox", default="")
+    parser.add_argument("--version-note", default="", help="how ci.versions chose the suite")
     parser.add_argument("--allow-failure", nargs="*", default=[],
                         help="suites whose failure is reported but not fatal")
     args = parser.parse_args(argv)
@@ -219,6 +246,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "browser_release": args.browser_release,
         "playwright_tag": args.playwright_tag,
         "playwright_firefox": args.playwright_firefox,
+        "version_note": args.version_note,
     }
     markdown = render(merged, args.require, problems, meta)
     print()

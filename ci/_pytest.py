@@ -2,9 +2,10 @@
 
 Locating the built binary, running pytest against a chosen interpreter, and
 reading back the JUnit XML it writes. `junit_test_id` is the one that matters
-beyond this file: it produces the identity a test is known by, and the vendored
-and upstream suites lay their files out differently, so two runs of the same
-test must still agree on what it is called.
+beyond this file: it produces the identity a test is known by, and that identity
+has to survive a suite being re-fetched at a different tag, or run from a
+different working directory, or sharded -- otherwise a run cannot be compared
+with the one before it.
 """
 
 from __future__ import annotations
@@ -46,17 +47,18 @@ def require_binary(version: Optional[str] = None, release: Optional[str] = None)
 # ---------------------------------------------------------------------------
 
 # pytest junit escapes some characters; normalise so ids are stable across
-# pytest versions and across the vendored/upstream copies of a suite.
+# pytest versions and across checkouts rooted at different paths.
 _NORM = re.compile(r"\s+")
 
 
 def junit_test_id(classname: str, name: str) -> str:
     """A stable identity for one test, in pytest node-id form.
 
-    junit's `classname` is the dotted module path, which differs between the
-    vendored suite (`async.test_page`) and a fetched upstream checkout
-    (`tests.async.test_page`). Trimming to the last two segments makes the two
-    comparable, which is the whole point of running both.
+    junit's `classname` is the dotted module path, and how many leading segments
+    it carries depends on where pytest was invoked from -- `tests.async.test_page`
+    from the checkout root, `async.test_page` from inside `tests/`. Trimming to
+    the last two segments makes a run comparable with any other run of the same
+    test, however it was launched.
 
     For a test inside a class, pytest appends the class to that dotted path
     (`async.test_page_clock.TestWhileRunning`), and the trailing segment is then

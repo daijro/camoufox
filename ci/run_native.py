@@ -99,8 +99,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             *files,
             "--rounds", str(args.rounds),
             "--browsers", str(args.browsers),
-            # native-tests sits outside tests/, whose conftest belongs to the
-            # vendored Playwright fork and pulls in that suite's dependencies.
+            # This suite is run from several places against several binaries;
+            # a .pytest_cache left in the tree would make --last-failed and
+            # friends carry state between them.
             "-p", "no:cacheprovider",
         ],
         junit=junit,

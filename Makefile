@@ -243,10 +243,12 @@ workspace:
 	make first-checkpoint || true
 	make patch $(_ARGS)
 
+# The Playwright suite: upstream playwright-python at the tag ci/versions.py
+# resolves for this browser, fetched fresh, plus tests/camoufox/. The first run
+# builds a virtualenv under .ci-work/ and is slow; later runs reuse it.
 tests:
-	cd ./tests && \
-	bash run-tests.sh \
-		--executable-path ../$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
+	python3 -m ci.run_playwright \
+		--binary ./$(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \
 		$(if $(filter true,$(headful)),--headful,)
 
 # Lets tests/patches/*.py run against an unpackaged build. Not needed by `run`

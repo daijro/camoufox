@@ -26,13 +26,24 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from typing import Dict, List, Optional, Tuple
 
-from ._util import http_json, log, major, parse_version, read_upstream_sh, set_output
+from ._util import (
+    REPO_ROOT,
+    http_json,
+    log,
+    major,
+    parse_version,
+    read_upstream_sh,
+    set_output,
+)
 
 BROWSERS_JSON = "https://raw.githubusercontent.com/microsoft/playwright/{ref}/packages/playwright-core/browsers.json"
 TAGS_API = "https://api.github.com/repos/microsoft/playwright-python/tags?per_page=100"
+PYPROJECT = "pythonlib/pyproject.toml"
+_CEILING = re.compile(r'^playwright\s*=\s*"<\s*([0-9][0-9.]*)"', re.M)
 
 # Consulted only when the network is unavailable or GitHub is rate-limiting an
 # unauthenticated runner. Deliberately short: it is a floor, not a source of
@@ -95,6 +106,28 @@ def pins(limit: int = 10) -> List[Tuple[str, str]]:
     return list(FALLBACK_PINS)
 
 
+def client_ceiling() -> Optional[Tuple[int, int, int]]:
+    """The Playwright version pythonlib refuses to go to, or None if unpinned.
+
+    `camoufox.server` imports `playwright._impl._driver`, a private API with no
+    compatibility guarantee, and every Playwright minor is free to change
+    Juggler. pythonlib pins a ceiling for that reason, and a suite run above it
+    would be testing the browser against a client its own package will not
+    install -- a green run that proves nothing a user can reproduce.
+    """
+    try:
+        text = (REPO_ROOT / PYPROJECT).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    found = _CEILING.search(text)
+    if not found:
+        return None
+    try:
+        return parse_version(found.group(1))
+    except ValueError:
+        return None
+
+
 def resolve(
     *,
     browser_version: Optional[str] = None,
@@ -112,14 +145,40 @@ def resolve(
     if playwright_tag:
         pinned = dict(available).get(playwright_tag) or firefox_pinned_by(playwright_tag) or ""
         chosen = (playwright_tag, pinned)
-        note = f"suite pinned explicitly to {playwright_tag}"
+        note = f"pinned explicitly to {playwright_tag}, which targets Firefox {pinned or '?'}"
     else:
         ours = major(browser_version)
         # Newest suite that is not ahead of the browser we are testing.
         eligible = [(t, f) for t, f in available if major(f) <= ours]
+
+        # ... and not above the client ceiling pythonlib pins. Dropping this
+        # filter does not fail loudly: the suite installs a client the shipped
+        # package forbids, and whatever Juggler changed in between reads as a
+        # browser bug.
+        ceiling = client_ceiling()
+        if ceiling and eligible:
+            allowed = [(t, f) for t, f in eligible if parse_version(t.lstrip("v")) < ceiling]
+            if allowed and allowed != eligible:
+                dropped = sorted({t for t, _ in eligible} - {t for t, _ in allowed})
+                log(
+                    f"ignoring {', '.join(dropped)}: at or above pythonlib's "
+                    f"playwright ceiling ({PYPROJECT})"
+                )
+                eligible = allowed
+            elif not allowed:
+                log(
+                    f"every suite not ahead of Firefox {ours} is at or above pythonlib's "
+                    f"playwright ceiling; testing above it. Bump the ceiling in {PYPROJECT} "
+                    "or expect protocol noise.",
+                    level="WARN",
+                )
+
         if eligible:
             chosen = max(eligible, key=lambda tf: parse_version(tf[1]))
-            note = f"newest suite not ahead of Firefox {ours}"
+            note = (
+                f"the newest released suite not ahead of Firefox {ours} "
+                f"(it targets Firefox {chosen[1]})"
+            )
         else:
             # Every known suite is newer than this browser -- an old branch, or
             # a Firefox so new nothing targets it yet. Take the oldest available
@@ -131,6 +190,7 @@ def resolve(
             )
             log(note, level="WARN")
 
+    ours_display = major(browser_version)
     resolved = {
         "browser_version": browser_version,
         "browser_release": release,
@@ -139,8 +199,8 @@ def resolve(
         "note": note,
     }
     log(
-        f"testing Camoufox {browser_version} ({release or 'no release tag'}) "
-        f"against Playwright {chosen[0]}, which targets Firefox {chosen[1]} -- {note}"
+        f"testing Camoufox {browser_version} ({release or 'no release tag'}), built on "
+        f"Firefox {ours_display}, against Playwright {chosen[0]} -- {note}"
     )
     return resolved
 

@@ -8,8 +8,7 @@ pass", not two.
 ```
 resolve ──┬─ static ────────── tribal rules, skiplist, self-tests   (seconds)
           ├─ pythonlib ─────── the package's own tests               (a minute)
-          └─ build ──┬─ playwright upstream × 6 shards               (conformance)
-                     ├─ playwright vendored                          (regression)
+          └─ build ──┬─ playwright × 6 shards        (conformance + our own)
                      ├─ native ───────────── leaks, contexts         (ours)
                      ├─ patch guards ─────── one per spoofing patch
                      ├─ build-tester ─────── 8 fingerprint profiles
@@ -26,43 +25,67 @@ resolve ──┬─ static ────────── tribal rules, skiplis
   moving to a new Firefox passes the version it is moving to, which is what lets
   one pipeline test both a pull request and an upgrade.
 - **suite** — the newest *released* playwright-python tag whose pinned Firefox is
-  not ahead of that browser.
+  not ahead of that browser, and which is below the Playwright ceiling
+  `pythonlib/pyproject.toml` pins.
 
 Newest-not-ahead, rather than an exact match, because Playwright trails Firefox
-by weeks: requiring a match would leave most of a release cycle with no suite,
-and taking a newer one would test against an automation contract that assumes
-engine work the build does not have.
+and skips generations: it pinned Firefox 151 and then 153, never 152, so a
+browser built on 152 has no exact suite and never will. Requiring a match would
+leave most of a release cycle with no suite at all, and taking a newer one would
+test against an automation contract that assumes engine work the build does not
+have. **So the suite's Firefox pin being a release or two behind the browser is
+the normal case, not a misconfiguration** — the summary line says which rule
+picked the tag.
+
+The ceiling matters for the same reason it exists in `pythonlib`: `camoufox.server`
+imports `playwright._impl._driver`, a private API, and every Playwright minor is
+free to change Juggler. Testing above the ceiling would exercise a client the
+shipped package will not install.
 
 ```bash
 python3 -m ci.versions --json                          # what would run
 python3 -m ci.versions --browser-version 153.0.4 --json
 ```
 
-## The two Playwright suites
+## The Playwright suite
 
-`tests/` is a maintained fork of a ~v1.55-era upstream suite carrying roughly
-1800 semantic lines of Camoufox adaptations. Being frozen is the point: every
-test in it has a known prior outcome, so it is the **regression** check.
+One suite, fetched fresh per run: upstream playwright-python at the resolved tag.
+It runs unmodified — `ci/pw_camoufox_plugin.py` adapts the environment around it
+rather than editing it, hooking `BrowserType` at the `_impl` layer so upstream
+can refactor its fixtures freely — and `ci/suite.py` overlays `tests/camoufox/`
+into it.
 
-The upstream suite is fetched fresh per run at the resolved tag and is the
-**conformance** check — it knows about tests written after the fork stopped
-tracking upstream. It runs unmodified; `ci/pw_camoufox_plugin.py` adapts the
-environment around it rather than editing it, by hooking `BrowserType` at the
-`_impl` layer so upstream can refactor its fixtures freely.
+`tests/camoufox/` is small on purpose: behaviour upstream has no test for (that
+`page.route()` must not change what a request looks like on the wire), or asserts
+the opposite of on purpose (that a worker should *not* inherit the context
+locale, which stock Firefox gets wrong and Camoufox does not). It is not a fork
+of anything, so it cannot go stale; it runs against upstream's own conftest and
+server at whatever tag was resolved.
 
-Regenerating `tests/` from upstream would discard those 1800 lines. The pipeline
-never does.
+`tests/` used to hold a fork of a ~v1.55-era upstream suite. It was deleted after
+measuring it against the same binary:
+
+- **73 of the 74 tests it skipped as "Not supported by Camoufox" pass** in
+  upstream's copy. Those skips predated main-world execution and were never
+  revisited, so the fork was asserting the browser was worse than it is.
+- Of its passing tests, eight had no upstream counterpart. Six of those were
+  Camoufox-specific and now live in `tests/camoufox/` as three modules; the
+  other two were tests upstream had since renamed.
+
+A re-fetched suite cannot drift, and a deliberate difference from upstream now
+has to be written down in `ci/skiplist.yml` with a reason, where it is visible,
+instead of being encoded as a silent edit to a vendored file.
 
 ## Main-world execution, and the skip list
 
-The upstream suite runs with world isolation **off**. It asserts upstream
+The suite runs with world isolation **off**. It asserts upstream
 semantics — tests read globals their own page scripts defined and pass handles
 into `evaluate()` — and about 37 of them fail on "X is not defined" otherwise.
 Camoufox's actual isolated-world behaviour is covered by
 `tests/patches/isolated-evaluate.py`, which must keep passing *without* that
 flag. That file is what to check if isolation regresses, not this suite.
 
-With main world on, 1392 of 1592 upstream tests run. The other 200 are
+With main world on, 1382 of the 1584 collected tests run. The other 202 are
 deselected by [`ci/skiplist.yml`](skiplist.yml), which requires a stated reason
 per entry — `ci/summarize.py` fails the run on an unreasoned one, because a skip
 list that can grow silently is a way to make any failing test disappear. The
@@ -72,7 +95,7 @@ overridable), or another engine's tests.
 
 ## Camoufox's own suite
 
-`native-tests/` covers what neither Playwright suite can ask about:
+`native-tests/` covers what the Playwright suite cannot ask about:
 
 - **Leaks.** Launch browsers, kill them, prove nothing survived — file
   descriptors, sockets, child processes, X11 lock files. The real assertion is
@@ -298,8 +321,8 @@ into a slow red build.
 ## Running a piece by hand
 
 ```bash
-python3 -m ci.run_playwright --suite upstream --binary path/to/camoufox-bin
-python3 -m ci.run_playwright --suite upstream --shard 3/6
+python3 -m ci.run_playwright --binary path/to/camoufox-bin
+python3 -m ci.run_playwright --binary path/to/camoufox-bin --shard 3/6
 python3 -m ci.run_native     --subset rules            # no browser needed
 python3 -m ci.run_native     --subset browser --binary path/to/camoufox-bin
 python3 -m ci.run_sundial    --binary path/to/camoufox-bin

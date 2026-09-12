@@ -33,9 +33,10 @@ skip:
   # in exactly one frame, focus moves with no intervening motion -- so they
   # measure precisely the tell Camoufox exists to remove.
   #
-  # See docs/input-dispatch.md. These same modules are disabled in the vendored
-  # suite (tests/async/*.disabled), which already runs main-world, so their
-  # failure is not an isolation artefact.
+  # See docs/input-dispatch.md. The suite runs with main-world execution, so
+  # these failures are the humanized input path itself and not an isolation
+  # artefact -- tests/patches/humanize-mouse-trajectory.py and
+  # tests/patches/input-ack-backstop.py assert the behaviour that replaces them.
 
   - module: tests/async/test_click.py
     reason: >-
@@ -100,6 +101,7 @@ skip:
   # on this list because it was failing and looked plausible.
 
   - test: tests/async/test_worker.py::test_workers_should_format_number_using_context_locale
+    replaced-by: tests/camoufox/test_worker_locale.py
     reason: >-
       Asserts that a worker does NOT inherit the context locale. Upstream marks
       this with a link to playwright#38919 and expects "10,000.2" -- en-US --
@@ -111,15 +113,15 @@ skip:
       disagreement -- a free signal for anything that bothers to look in both.
 
   - test: tests/async/test_network.py::test_request_headers_should_work
+    replaced-by: tests/camoufox/test_user_agent_token.py
     reason: >-
       Asserts "Firefox" appears in the User-Agent. The bare binary advertises its
       own build token ("... Gecko/20100101 Camoufox/<version>"); the Python
       package replaces it with "Firefox/<version>" on the wire and in
       navigator.userAgent as part of injecting a fingerprint, and this suite
-      drives the bare binary through plain Playwright. The vendored suite asserts
+      drives the bare binary through plain Playwright. The replacement asserts
       what this layer can actually promise -- a Gecko UA carrying one of the two
-      tokens -- in tests/async/test_network.py; that copy is the one that guards
-      this behaviour.
+      tokens, and the same one in the header as in the DOM.
 
   # --- other engines ---------------------------------------------------------
 
