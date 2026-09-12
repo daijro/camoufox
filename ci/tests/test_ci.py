@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 import tempfile
 
 import pytest
@@ -774,3 +775,88 @@ def test_a_disabled_gate_makes_no_request():
     # No result file, matching CI, where the job is never scheduled. A skip
     # record here would fail a summary that CI would have passed.
     assert written is None, "a disabled gate must not write a result file"
+
+
+# ---------------------------------------------------------------------------
+# the workflow's plumbing -- result files have to survive the round trip
+# ---------------------------------------------------------------------------
+
+WORKFLOW = CI_ROOT.parent / ".github" / "workflows" / "tests.yml"
+
+
+def _upload_blocks():
+    """(name, path-lines, block-text) for every upload-artifact step."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    blocks = []
+    for match in re.finditer(r"- uses: actions/upload-artifact@v4\n", text):
+        block = text[match.start() : match.start() + 900]
+        # Stop at the next step at the same indentation.
+        end = re.search(r"\n( *)- (uses|name):", block[40:])
+        if end:
+            block = block[: 40 + end.start()]
+        name = re.search(r"name: (\S.*)", block)
+        paths = re.findall(r"^\s+(\.ci-work\S*|summary\.\w+)\s*$", block, re.M)
+        inline = re.search(r"path: (\.ci-work\S*)", block)
+        if inline:
+            paths.append(inline.group(1))
+        blocks.append((name.group(1) if name else "?", paths, block))
+    return blocks
+
+
+def test_results_artifacts_keep_their_json_at_the_top_level():
+    """A `results-*` artifact must hold its JSON at the artifact root.
+
+    The summary downloads every one of them with `merge-multiple: true` into a
+    single directory, and results.load_all() globs exactly one level. Give
+    upload-artifact a second path and its common root moves up, so the files
+    arrive nested under `results/` and are silently invisible -- the summary
+    then reports a suite that passed as "produced no result file". That is what
+    happened to build_tester.
+    """
+    offenders = [
+        (name, paths)
+        for name, paths, _ in _upload_blocks()
+        if name.startswith("results-") and paths != [".ci-work/results/"]
+    ]
+    assert not offenders, (
+        "a results-* artifact must upload exactly `.ci-work/results/` and nothing "
+        f"else; put diagnostics in their own artifact: {offenders}"
+    )
+
+
+def test_every_ci_work_upload_includes_hidden_files():
+    """`.ci-work` is a dotfile, and upload-artifact v4 drops those by default.
+
+    Without this the upload silently finds nothing -- which is how a failing
+    suite came back as "missing" rather than as the failure it was.
+    """
+    offenders = [
+        name
+        for name, paths, block in _upload_blocks()
+        if any(p.startswith(".ci-work") for p in paths)
+        and "include-hidden-files: true" not in block
+    ]
+    assert not offenders, f"these upload .ci-work without include-hidden-files: {offenders}"
+
+
+def test_required_suites_are_names_a_runner_actually_writes():
+    """Requiring a name nothing produces fails every run, forever.
+
+    `static` is a job, not a suite; requiring it meant summarize reported
+    "produced no result file" on runs where everything passed.
+    """
+    text = WORKFLOW.read_text(encoding="utf-8")
+    required: set[str] = set()
+    for line in re.findall(r'required="([^"]*)"', text):
+        required.update(part for part in line.split() if not part.startswith("$"))
+
+    producible = {
+        "build", "build_tester", "patch_guards", "pythonlib", "sundial",
+        "native", "native_rules", "native_browser", "native_growth",
+        "playwright_upstream", "playwright_vendored",
+    }
+    unknown = required - producible
+    assert not unknown, (
+        f"required but no runner writes a result by that name: {sorted(unknown)}. "
+        "summarize.py will report it missing on every run."
+    )

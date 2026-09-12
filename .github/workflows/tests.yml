@@ -242,6 +242,7 @@ jobs:
         with:
           name: results-static
           path: .ci-work/results/
+          include-hidden-files: true
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
@@ -273,6 +274,7 @@ jobs:
         with:
           name: results-pythonlib
           path: .ci-work/results/
+          include-hidden-files: true
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
@@ -432,6 +434,7 @@ jobs:
         with:
           name: results-build
           path: .ci-work/results/
+          include-hidden-files: true
           if-no-files-found: warn
 
 
@@ -523,10 +526,21 @@ jobs:
         if: always()
         with:
           name: results-playwright-upstream-${{ strategy.job-index }}
-          path: |
-            .ci-work/results/
-            .ci-work/junit-*.xml
+          # One path, and no glob. The summary merges every results-* artifact
+          # into one directory and load_all() globs a single level, so these
+          # must arrive at the artifact's top level. A second path would move
+          # upload-artifact's common root and nest them under results/.
+          path: .ci-work/results/
+          include-hidden-files: true
           if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostics-playwright-upstream-${{ strategy.job-index }}
+          path: |
+            .ci-work/junit-*.xml
+          include-hidden-files: true
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   playwright-vendored:
@@ -549,10 +563,21 @@ jobs:
         if: always()
         with:
           name: results-playwright-vendored
-          path: |
-            .ci-work/results/
-            .ci-work/junit-*.xml
+          # One path, and no glob. The summary merges every results-* artifact
+          # into one directory and load_all() globs a single level, so these
+          # must arrive at the artifact's top level. A second path would move
+          # upload-artifact's common root and nest them under results/.
+          path: .ci-work/results/
+          include-hidden-files: true
           if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostics-playwright-vendored
+          path: |
+            .ci-work/junit-*.xml
+          include-hidden-files: true
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   patch-guards:
@@ -581,6 +606,7 @@ jobs:
         with:
           name: results-patch-guards
           path: .ci-work/results/
+          include-hidden-files: true
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
@@ -608,13 +634,21 @@ jobs:
         if: always()
         with:
           name: results-build-tester
-          # The graded tree as well as the verdict. When the gate flags a
-          # cross-profile collision, the hashes that collided are the first
-          # thing anyone will want, and re-running to get them costs an hour.
-          path: |
-            .ci-work/results/
-            .ci-work/build-tester-result.json
+          # One path, and no glob. The summary merges every results-* artifact
+          # into one directory and load_all() globs a single level, so these
+          # must arrive at the artifact's top level. A second path would move
+          # upload-artifact's common root and nest them under results/.
+          path: .ci-work/results/
+          include-hidden-files: true
           if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostics-build-tester
+          path: |
+            .ci-work/build-tester-result.json
+          include-hidden-files: true
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   native:
@@ -647,10 +681,21 @@ jobs:
         if: always()
         with:
           name: results-native
-          path: |
-            .ci-work/results/
-            .ci-work/junit-*.xml
+          # One path, and no glob. The summary merges every results-* artifact
+          # into one directory and load_all() globs a single level, so these
+          # must arrive at the artifact's top level. A second path would move
+          # upload-artifact's common root and nest them under results/.
+          path: .ci-work/results/
+          include-hidden-files: true
           if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostics-native
+          path: |
+            .ci-work/junit-*.xml
+          include-hidden-files: true
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   growth:
@@ -685,6 +730,7 @@ jobs:
         with:
           name: results-growth
           path: .ci-work/results/
+          include-hidden-files: true
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
@@ -718,6 +764,7 @@ jobs:
         with:
           name: results-sundial
           path: .ci-work/results/
+          include-hidden-files: true
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
@@ -752,7 +799,11 @@ jobs:
         id: summarize
         run: |
           set +e
-          required="static pythonlib native_rules"
+          # Suite names, not job names. `static` is a job; the suites it runs are
+          # the pipeline self-tests, which write no result, and native_rules,
+          # which is named here. The gate separately fails if the job itself did
+          # not succeed, so nothing is lost by leaving it out.
+          required="pythonlib native_rules"
           if [ "${{ needs.resolve.outputs.browser_changed }}" != "skip" ]; then
             required="$required build patch_guards build_tester playwright_vendored playwright_upstream native_browser"
           fi
@@ -780,6 +831,7 @@ jobs:
             summary.md
             summary.json
             .ci-work/results/
+          include-hidden-files: true
 
       - name: Comment on the pull request
         if: always() && github.event_name == 'pull_request'
