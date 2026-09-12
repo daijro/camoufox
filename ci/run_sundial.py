@@ -123,12 +123,16 @@ def _assert_publishable(metrics: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-# Cloudflare sits in front of sundial and refuses a document request carrying a
-# non-browser User-Agent -- Python's urllib default and anything else that does
-# not look like a browser gets a 403 before the request reaches sundial at all.
-# So present as one. This has to be on *every* request, not just the first: a
+# Cloudflare sits in front of sundial and refuses *document* requests carrying a
+# non-browser User-Agent: `/automated?key=<bogus>` answers 401 with a browser UA
+# and 403 with urllib's default, before the request reaches sundial at all.
+#
+# It is not blanket -- `POST /__auth/login` worked for months with
+# `User-Agent: camoufox-harness` -- so this is not fixing a live outage. It
+# matters because the token route below *is* a document request, and because a
 # client that authenticates with browser headers and then fetches with urllib's
 # defaults logs in successfully and gets a confusing 403 on the very next hop.
+# Cheaper to look like a browser everywhere than to remember which hop is which.
 _BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0"
