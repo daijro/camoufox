@@ -92,14 +92,16 @@ overridable), or another engine's tests.
 
 ## Sundial
 
-> **Currently off.** `ci/sundial.yml` says `enabled: false`, so the job is not
-> scheduled, the credential never enters a runner, and nothing is requested.
-> The live deployment predates score mode (checked 2026-09-11 against the served
-> bundle), and an older sundial ignores `?score=1` and posts the entire report
-> — every vector's id, name, brief, source and value — to whatever collector
-> asked. Receiving that on a public runner and discarding it afterwards is not
-> the guarantee this section describes; not receiving it is. The comment in
-> `ci/sundial.yml` lists what has to be true before flipping it back.
+> **On since 2026-09-12.** sundial 0.5.0 is deployed and serving score mode, and
+> sundial's master branch now deploys itself on push, so merged does mean
+> deployed. It was off for as long as the live build predated score mode: an
+> older sundial ignores `?score=1` and posts the entire report — every vector's
+> id, name, brief, source and value — to whatever collector asked. Receiving
+> that on a public runner and discarding it afterwards is not the guarantee this
+> section describes; not receiving it is. `enabled: false` in `ci/sundial.yml`
+> is still the kill switch, and the resolve job checks it *before* the
+> credential comes into scope, so flipping it back stops the request rather than
+> just the reporting.
 
 The stealth check reports **a letter grade and a count**. Nothing else leaves
 `ci/run_sundial.py::redact()` — not a vector name, description, measured value,
@@ -144,18 +146,27 @@ it is, and the gate says so in its notes rather than leaving you to notice.
 So the dependency runs one way, and setting the GitHub secrets is the *last*
 step, not the first:
 
-1. merge sundial's score mode **and the `ci` role**, then deploy
-   (`make pages-deploy`)
-2. mint the CI credential (`make pages-ci`, then redeploy)
-3. `gh secret set SUNDIAL_AUTOMATION_KEY -R <repo>` and
-   `gh secret set SUNDIAL_USERNAME -R <repo>` (the `CI_USER` from step 2)
-4. flip `enabled: true` in `ci/sundial.yml`
+1. deploy sundial's score mode — done; it ships in 0.5.0, and master now
+   deploys on push
+2. `gh secret set SUNDIAL_AUTOMATION_KEY -R <repo>` for every repository whose
+   CI runs this. Without it the job skips, which is the normal case for a fork
+   pull request
+3. flip `enabled: true` in `ci/sundial.yml` — done
 
-Order matters here in a way it did not before. The gate now authenticates as
-`ci`, a role that only exists once step 1 is deployed, so running it against an
-older deployment fails to log in rather than degrading — which is the right
-failure, because the alternative is authenticating as an account that *can* be
-handed a full report.
+Two things keep a vector out of a public log, and it is worth separating them,
+because only one is enforced by the server:
+
+| | guarantee |
+|---|---|
+| server-side | The run logs in as `guest`, and sundial's middleware refuses `guest` the private-vector bundle outright — those definitions are never served to the session. |
+| client-side | This gate only ever requests `/?auto=1&score=1`, and `redact(require_score_mode=True)` **fails the run** if a full report arrives anyway, rather than folding it down and carrying on. |
+
+The stricter option is sundial's score-only `ci` role, which is refused anything
+but `/?auto=1&score=1` server-side and so cannot be handed a report even if the
+credential leaks. That role is not in sundial's master branch and is therefore
+not deployed; when it lands, mint the credential (`make pages-ci`, then
+redeploy) and set `SUNDIAL_USERNAME=ci`. Nothing in this repository changes —
+the client-side half already behaves as though the server were enforcing it.
 
 There are deliberately **no per-vector rows**, not even opaque ones. An HMAC
 names nothing, but a map of them publishes how many distinct checks fail and
@@ -168,28 +179,39 @@ to compare releases, by a maximum allowed drop in its policy file. To get the pe
 set `SUNDIAL_REPORT_AGE_RECIPIENT` to an `age` public key — the full report is
 then kept encrypted to you and nobody else can open it.
 
-Needs **`SUNDIAL_AUTOMATION_KEY`** (the password) and **`SUNDIAL_USERNAME`**
-(the account, which is not a secret — it defaults to `ci`). Absent the password
-— a pull request from a fork — the job is skipped and the summary says so.
+Needs **`SUNDIAL_AUTOMATION_KEY`** (the password). **`SUNDIAL_USERNAME`** is
+optional and names the account, which is not a secret — it defaults to `guest`.
+Absent the password — a pull request from a fork — the job is skipped and the
+summary says so.
 
-### Why the account, not the request, decides
+### What actually stops a vector reaching the log
 
-Asking for `?score=1` is a promise the caller makes. `ci` is a role sundial
-will not serve anything else to: it refuses a bare `/`, `auto=1` without
-`score=1`, `?mode=raw`, `?download=true`, `?key=`, the `/automated` and
-`/locale` export routes, and any parameter not on its allow-list — each with a
-403. On the pages it does serve, the full report is never written to a global at
-all, so there is nothing for `page.evaluate`, devtools or a screenshot to read.
+Asking for `?score=1` is a promise the caller makes, and a promise is not a
+mechanism. Today two things back it:
 
-The difference matters because the old arrangement failed silently: drop
-`score=1` by accident and the whole report lands in the collector, and the only
-thing standing between it and a public artifact is `redact()` being called.
-Under the role, the mistake is a 403 at the first request.
+- **`guest` cannot load the private vectors.** sundial's middleware checks the
+  role against `isPrivateVectorAsset` and serves that bundle to nobody else, so
+  the definitions this repository must never hold are not sent to the session
+  in the first place.
+- **A non-score payload fails the run.** `redact(require_score_mode=True)`
+  refuses to process a full report rather than folding it down, so a deployment
+  that ignored `score=1` is a red build, not a quiet leak.
 
-`ci/run_sundial.py` holds up its end: a payload that is not the score is
-**refused**, not folded down, because under this role one cannot legitimately
-arrive. `--allow-full-report` exists for a deliberate local run under an
-account that is allowed one.
+What is still missing is a server that refuses the *request*. sundial's
+score-only `ci` role does exactly that — a bare `/`, `auto=1` without `score=1`,
+`?mode=raw`, `?download=true`, `?key=`, the `/automated` and `/locale` export
+routes, and any parameter not on its allow-list each get a 403, and on the pages
+it does serve the report is never written to a global, so there is nothing for
+`page.evaluate`, devtools or a screenshot to read. That role is not merged into
+sundial's master and so is not deployed. When it is, set `SUNDIAL_USERNAME=ci`;
+nothing here changes, because this side already behaves as though the server
+were enforcing it.
+
+The distinction is worth keeping straight: under `guest`, dropping `score=1` by
+accident would put the whole report in the collector and leave `redact()` as the
+only thing between it and a public artifact. Under `ci`, the same mistake is a
+403 at the first request. `--allow-full-report` exists for a deliberate local
+run under an account that is allowed one.
 
 ## Blocking a merge
 
@@ -255,6 +277,15 @@ in a pull request starts warm even though its own key is new.
 A prebuilt image in `ghcr.io` with the object cache baked in would be warmer
 still and would not need the eviction guard. It also needs registry credentials
 and a rebuild pipeline of its own; this is the version that works with no setup.
+
+**Preparing the tree retries the network, and nothing else.** `mach bootstrap`
+pulls toolchains from Taskcluster, and a connection reset there used to fail the
+whole pull request. `ci.run_prepare` runs `setup-minimal` → `dir` →
+`mozbootstrap`, retrying the two that download things and only when the failure
+text reads as transient. A failed patch hunk or a compile error still fails on
+the first attempt — retrying a broken tree only spends a runner to reach the
+same answer, and a retry loop that swallows a real breakage turns a red build
+into a slow red build.
 
 > One consequence of `cancel-in-progress`: pushing to a branch cancels its
 > running build. That is right while iterating, but a 70-minute build will not
