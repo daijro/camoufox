@@ -481,6 +481,59 @@ def _from_buckets(payload: dict, gated: List[str], ungated: List[str]) -> Dict[s
     }
 
 
+def explain_buckets(payload: dict, gated: List[str], ungated: List[str]) -> List[str]:
+    """Per-category pass/fail lines from a score payload, for a local run.
+
+    This is as far as score mode can take you. sundial's score answer carries
+    buckets keyed "<Category>|<class>" holding two integers each -- there are no
+    check names in it, and no opaque ids either, so "which five failed" is a
+    question the payload cannot answer at any level of effort. What it can say
+    is which category they are in, which is usually enough to know where to look.
+
+    For the names you need a full report, which means a role sundial will serve
+    one to and `--allow-full-report`. This never returns anything that goes into
+    a result file; `_PUBLISHABLE` still governs what is published.
+    """
+    gated_set = {c.lower() for c in gated}
+    known = gated_set | {c.lower() for c in ungated}
+
+    rows: List[tuple] = []
+    for key, bucket in sorted((payload.get("buckets") or {}).items()):
+        category, _, cls = str(key).partition("|")
+        scored = int(bucket.get("scored", 0))
+        passed = int(bucket.get("passed", 0))
+        if not scored:
+            continue
+        if cls == "crossOs":
+            scope = "cross-OS (never gated)"
+        elif category.lower() in gated_set:
+            scope = "gated"
+        elif category.lower() in known:
+            scope = "out of scope"
+        else:
+            scope = "UNKNOWN CATEGORY -- decide whether Camoufox claims it"
+        rows.append((scored - passed, category, cls or "-", passed, scored, scope))
+
+    if not rows:
+        return ["no buckets in the payload -- was this a score-mode answer?"]
+
+    lines = ["", "per-category breakdown (local only, never published):"]
+    width = max(len(r[1]) for r in rows)
+    for failed, category, cls, passed, scored, scope in sorted(rows, reverse=True):
+        mark = "FAIL" if failed else "  ok"
+        lines.append(
+            f"  {mark}  {category:<{width}}  {cls:<10} {passed:>4}/{scored:<4} "
+            + (f"{failed} failing  [{scope}]" if failed else f"[{scope}]")
+        )
+    lines.append("")
+    lines.append(
+        "Score mode carries no check names, so this is the finest detail available "
+        "to the credential CI uses. For the individual checks, re-run under a role "
+        "sundial serves full reports to and pass --allow-full-report."
+    )
+    return lines
+
+
 def redact(
     payload: dict,
     gated: List[str],
@@ -699,6 +752,14 @@ def gate(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--timeout", type=float, default=300.0)
     parser.add_argument("--evidence-dir", type=Path, default=RESULTS_DIR)
     parser.add_argument(
+        "--explain",
+        action="store_true",
+        help=(
+            "print a per-category pass/fail breakdown to the terminal. Local only -- "
+            "refused under GITHUB_ACTIONS, where stdout is a public log."
+        ),
+    )
+    parser.add_argument(
         "--allow-full-report",
         action="store_true",
         help=(
@@ -707,6 +768,16 @@ def gate(argv: Optional[List[str]] = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
+
+    if args.explain and os.environ.get("GITHUB_ACTIONS"):
+        # Category-level counts are not vectors, but they are a map of where
+        # this browser is weak, and a public workflow log is exactly the place
+        # that should not carry one. Refused here rather than filtered later,
+        # so the flag cannot be turned on in CI by accident.
+        raise SystemExit(
+            "--explain writes a weakness breakdown to stdout and this is a public "
+            "log. Run it locally instead."
+        )
 
     cfg = _config()
     base_url = os.environ.get("SUNDIAL_URL") or cfg.get("url") or DEFAULT_URL
@@ -772,6 +843,15 @@ def gate(argv: Optional[List[str]] = None) -> int:
         return 1
 
     sealed = seal(report, WORK_DIR / "sundial-full-report.age")
+    if args.explain:
+        # Printed, never recorded: `result` is what reaches the artifact and
+        # the pull-request comment, and none of this goes near it.
+        for line in explain_buckets(
+            report,
+            cfg.get("gated_categories") or [],
+            cfg.get("ungated_categories") or [],
+        ):
+            print(line)
     # The plaintext report is dropped here and never referenced again.
     try:
         metrics = redact(

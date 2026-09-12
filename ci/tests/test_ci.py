@@ -1477,3 +1477,104 @@ def test_every_camoufox_test_module_is_named_unlike_upstreams():
     assert not (set(ours) & generic), (
         f"{sorted(set(ours) & generic)} shares a name with an upstream module"
     )
+
+
+# ---------------------------------------------------------------------------
+# --explain: a local diagnostic that must stay local
+# ---------------------------------------------------------------------------
+
+
+def _explain_payload():
+    return {
+        "schemaVersion": 1,
+        "mode": "score",
+        "sundialVersion": "v0.5.0",
+        "buckets": {
+            "Identity|core": {"scored": 10, "passed": 8},
+            "Graphics|core": {"scored": 4, "passed": 3},
+            "Identity|crossOs": {"scored": 5, "passed": 4},
+        },
+    }
+
+
+def _stub_sundial(monkeypatch, rs, payload):
+    monkeypatch.setattr(rs, "_config", lambda: {
+        "enabled": True,
+        "url": "https://sundial.invalid",
+        "gated_categories": ["Identity"],
+        "ungated_categories": ["Graphics"],
+        "min_pass_rate": 0.5,
+    })
+    monkeypatch.setattr(rs, "authenticate", lambda *a, **k: "cookie")
+    monkeypatch.setattr(rs, "assert_role_cannot_read_vectors", lambda *a, **k: "guest")
+
+    async def _scan(**_kwargs):
+        return payload
+
+    monkeypatch.setattr(rs, "scan", _scan)
+    monkeypatch.setattr(rs, "seal", lambda *a, **k: None)
+    monkeypatch.setenv("SUNDIAL_AUTOMATION_KEY", "a-key")
+
+
+def test_explain_is_refused_in_ci(monkeypatch, tmp_path):
+    """A per-category weakness map must not be written to a public workflow log.
+
+    The counts are not vectors, but they do say where this browser is weak, and
+    the repository is public. Refused before anything is sent, so the flag cannot
+    be switched on in CI and discovered afterwards.
+    """
+    import ci.run_sundial as rs
+
+    _stub_sundial(monkeypatch, rs, _explain_payload())
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+    with pytest.raises(SystemExit, match="public"):
+        rs.gate(["--explain", "--binary", str(tmp_path / "bin"), "--evidence-dir", str(tmp_path)])
+
+    assert not (tmp_path / "sundial.json").exists(), "refused before anything ran"
+
+
+def test_explain_prints_but_never_records(monkeypatch, tmp_path, capsys):
+    """The breakdown goes to the terminal; the artifact keeps only the whitelist.
+
+    This is the boundary the whole module is built around, so assert it on the
+    one path that deliberately produces more detail than it publishes.
+    """
+    import ci.run_sundial as rs
+
+    _stub_sundial(monkeypatch, rs, _explain_payload())
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    code = rs.gate(["--explain", "--binary", str(tmp_path / "bin"), "--evidence-dir", str(tmp_path)])
+    printed = capsys.readouterr().out
+    saved = json.loads((tmp_path / "sundial.json").read_text())
+
+    assert code == 0, saved.get("notes")
+    assert "per-category breakdown" in printed and "Identity" in printed
+    # Nothing about categories reached the artifact.
+    assert "Identity" not in json.dumps(saved)
+    assert "breakdown" not in json.dumps(saved)
+    assert set(saved["metrics"]) <= set(rs._PUBLISHABLE)
+
+
+def test_explain_says_the_names_are_not_available(monkeypatch):
+    """The output must not imply it is showing individual checks.
+
+    Score mode carries no check names at all, so a reader who takes this for the
+    full answer would conclude the failing checks are unknowable rather than
+    that they need a different credential.
+    """
+    from ci.run_sundial import explain_buckets
+
+    lines = "\n".join(explain_buckets(_explain_payload(), ["Identity"], ["Graphics"]))
+    assert "--allow-full-report" in lines
+    assert "no check names" in lines
+
+
+def test_explain_flags_a_category_nobody_has_classified():
+    """Same rule as the gate: a new sundial section must not default to ignored."""
+    from ci.run_sundial import explain_buckets
+
+    payload = {"mode": "score", "buckets": {"Quantum|core": {"scored": 3, "passed": 1}}}
+    lines = "\n".join(explain_buckets(payload, ["Identity"], ["Graphics"]))
+    assert "UNKNOWN CATEGORY" in lines

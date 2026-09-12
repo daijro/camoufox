@@ -131,10 +131,13 @@ The stealth check reports **a letter grade and a count**. Nothing else leaves
 source, and not a per-category breakdown either: a table reading "Graphics 3/17"
 is the most useful single fact an adversary could take from a public CI log.
 
-Identities in the results file are HMACs, which is enough to notice "the check
-that passed last release is failing now" and not enough to learn what it was.
-Scope and thresholds live in [`ci/sundial.yml`](sundial.yml); only categories
-Camoufox actually claims are gated.
+There are **no per-check rows in the results file at all** — not even opaque
+ones. An HMAC does not name a vector, but a map of them still publishes how many
+distinct checks fail and lets a reader follow one across releases, which is
+per-vector data wearing a hash. The instruction was a score, so it is a score:
+regression detection is per-score, via `min_pass_rate` and a maximum allowed
+drop. Scope and thresholds live in [`ci/sundial.yml`](sundial.yml); only
+categories Camoufox actually claims are gated.
 
 Everything that leaves `redact()` is checked against a **whitelist** at runtime,
 not a blacklist — a blacklist only stops the leaks somebody already thought of.
@@ -156,6 +159,31 @@ through more than it did", which is a different conversation.
 
 The run asks sundial for `?auto=1&score=1`, so it receives counts and the
 vectors never cross the wire at all.
+
+### Finding out which checks failed
+
+Worth being precise about, because the answer is "you can't, from CI", and that
+is deliberate rather than an oversight. Score mode's payload is buckets keyed
+`"<Category>|<class>"` holding two integers each. **It carries no check names and
+no ids**, so a failing check's identity is not something the CI process discards
+— it is something sundial never sends. Nothing in the artifact, the log, or the
+sealed report can recover it.
+
+Two steps down from there, both local only:
+
+```bash
+# which CATEGORY the failures are in -- works with the credential CI already has
+python3 -m ci.run_sundial --explain --binary /path/to/camoufox-bin
+
+# which CHECKS -- needs a role sundial serves full reports to
+python3 -m ci.run_sundial --explain --allow-full-report --binary /path/to/camoufox-bin
+```
+
+`--explain` prints to the terminal and never writes to a result file, and is
+**refused outright under `GITHUB_ACTIONS`**: a category-level table is not a
+vector, but "Graphics 3/17" is still the most useful single fact an adversary
+could take from a public log, which is exactly why `redact()` does not publish
+one.
 
 ### Order of operations
 
