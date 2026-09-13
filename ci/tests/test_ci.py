@@ -957,7 +957,7 @@ def test_required_suites_are_names_a_runner_actually_writes():
     producible = {
         "build", "build_tester", "patch_guards", "pythonlib", "sundial",
         "native", "native_rules", "native_browser", "native_growth",
-        "playwright",
+        "playwright", "skiplist_audit",
     }
     unknown = required - producible
     assert not unknown, (
@@ -1578,3 +1578,47 @@ def test_explain_flags_a_category_nobody_has_classified():
     payload = {"mode": "score", "buckets": {"Quantum|core": {"scored": 3, "passed": 1}}}
     lines = "\n".join(explain_buckets(payload, ["Identity"], ["Graphics"]))
     assert "UNKNOWN CATEGORY" in lines
+
+
+# ---------------------------------------------------------------------------
+# the skiplist audit: a reason is an assertion, and assertions get checked
+# ---------------------------------------------------------------------------
+
+
+def test_the_audit_can_name_a_target_for_every_entry_it_claims_to_check():
+    """`pattern` entries name no file, so they cannot be audited by selection.
+
+    They must be reported as unaudited rather than counted as checked -- an
+    entry that looks verified and is not is the exact bug this gate exists for.
+    """
+    from ci.run_skiplist_audit import targets
+
+    selectable, unresolved = targets([
+        {"module": "tests/async/test_x.py", "reason": "r"},
+        {"test": "tests/async/test_y.py::test_z", "reason": "r"},
+        {"pattern": "[chromium]", "reason": "r"},
+    ])
+    assert selectable == ["tests/async/test_x.py", "tests/async/test_y.py::test_z"]
+    assert unresolved == ["[chromium]"]
+
+
+def test_every_shipped_skiplist_entry_is_auditable():
+    """Nothing currently in the file escapes the audit.
+
+    If a pattern entry is ever added this fails, which is the prompt to decide
+    how it gets verified rather than letting it ride unchecked.
+    """
+    import sys
+
+    from ci._util import REPO_ROOT
+    from ci.run_skiplist_audit import targets
+
+    sys.path.insert(0, str(REPO_ROOT / "ci"))
+    from pw_camoufox_plugin import load_skiplist
+
+    selectable, unresolved = targets(load_skiplist(REPO_ROOT / "ci" / "skiplist.yml"))
+    assert selectable, "the skiplist audit would check nothing"
+    assert not unresolved, (
+        f"these skiplist entries cannot be audited: {unresolved}. Either express them "
+        "as a module/test, or decide how their truth gets checked."
+    )

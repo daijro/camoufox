@@ -9,6 +9,7 @@ pass", not two.
 resolve ──┬─ static ────────── tribal rules, skiplist, self-tests   (seconds)
           ├─ pythonlib ─────── the package's own tests               (a minute)
           └─ build ──┬─ playwright × 6 shards        (conformance + our own)
+                     ├─ skiplist audit ───── every skip must still fail
                      ├─ native ───────────── leaks, contexts         (ours)
                      ├─ patch guards ─────── one per spoofing patch
                      ├─ build-tester ─────── 8 fingerprint profiles
@@ -85,13 +86,30 @@ Camoufox's actual isolated-world behaviour is covered by
 `tests/patches/isolated-evaluate.py`, which must keep passing *without* that
 flag. That file is what to check if isolation regresses, not this suite.
 
-With main world on, 1382 of the 1584 collected tests run. The other 202 are
+With main world on, 1575 of the 1584 collected tests run. The other 9 are
 deselected by [`ci/skiplist.yml`](skiplist.yml), which requires a stated reason
-per entry — `ci/summarize.py` fails the run on an unreasoned one, because a skip
-list that can grow silently is a way to make any failing test disappear. The
-current entries are all one of: synthesized input (Camoufox humanizes it),
-User-Agent override (resolved from the fingerprint, deliberately not
-overridable), or another engine's tests.
+per entry — `ci/summarize.py` fails the run on an unreasoned one.
+
+**A reason is not evidence, so the reasons are checked.** The first version of
+this file inherited all nine `tests/async/*.disabled` modules from the vendored
+suite and gave each a plausible justification without running any of them: of
+the 202 tests it skipped, **193 passed**, and seven of the nine modules failed
+nothing at all. A written reason made them look verified, which is worse than
+leaving them bare.
+
+`ci/run_skiplist_audit.py` now runs every entry with the skiplist disabled and
+**fails the build if a skipped test passes**. It is cheap precisely because a
+correct skiplist is short — nine tests, a few seconds — and it is what keeps the
+list from drifting back into a place failing tests go to disappear.
+
+```bash
+python3 -m ci.run_skiplist_audit --binary /path/to/camoufox-bin
+```
+
+What remains after the audit: two `test_click.py` tests where Playwright's
+stable-position wait races the humanized travel time, the five client-certificate
+tests (not built into the binary), and the two upstream expectations that encode
+a stock-Firefox quirk and are replaced by `tests/camoufox/`.
 
 ## Camoufox's own suite
 

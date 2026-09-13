@@ -38,7 +38,7 @@ _SHARD_SUFFIX = re.compile(r"-\d+of\d+$")
 # Presented in this order; anything unexpected is appended.
 _ORDER = [
     "native_rules", "pythonlib", "patches_apply", "build", "patch_guards",
-    "native_browser", "build_tester", "playwright", "sundial",
+    "skiplist_audit", "native_browser", "build_tester", "playwright", "sundial",
 ]
 
 

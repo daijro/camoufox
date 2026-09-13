@@ -25,7 +25,7 @@ name: Tests
 #   1  unit        pythonlib                                  ~1 min
 #   2  browser     BUILD if patches/additions changed,
 #                  otherwise FETCH the released binary        ~70 min / ~1 min
-#   3a smoke       patch guards, build-tester                 ~15 min
+#   3a smoke       patch guards, skiplist audit, build-tester ~15 min
 #   3b full        Playwright (6 shards), leaks, stealth      ~40 min
 #   4  gate        the single required status check
 #
@@ -572,6 +572,18 @@ jobs:
       # Fonts and properties.json are staged into the artifact by the build job;
       # `make stage-fonts` here would find no source tree and do nothing.
       - run: xvfb-run -a python3 -m ci.run_patch_guards --binary "$CAMOUFOX_BINARY"
+      - name: Every skiplist entry is still failing
+        # Seconds, because a correct skiplist is short. This is what stops
+        # ci/skiplist.yml turning into a list of tests that would now pass --
+        # which is what it was: 193 of the 202 tests it skipped passed.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          xvfb-run -a python3 -m ci.run_skiplist_audit \
+            --binary "$CAMOUFOX_BINARY" \
+            --browser-version "${{ needs.resolve.outputs.browser_version }}" \
+            --playwright-tag "${{ needs.resolve.outputs.playwright_tag }}"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -778,7 +790,7 @@ jobs:
           # not succeed, so nothing is lost by leaving it out.
           required="pythonlib native_rules"
           if [ "${{ needs.resolve.outputs.browser_changed }}" != "skip" ]; then
-            required="$required build patch_guards build_tester playwright native_browser"
+            required="$required build patch_guards skiplist_audit build_tester playwright native_browser"
           fi
           if [ "${{ needs.resolve.outputs.has_sundial }}" = "true" ]; then
             required="$required sundial"
