@@ -69,6 +69,22 @@
      <strong><a href="https://node-proxy.com">Get started at node-proxy.com →</a></strong>
     </td>
   </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://layer3intel.com/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
+        <img width="380" alt="layer3" src="https://github.com/user-attachments/assets/891ca706-f3a6-4583-81c9-a5e4f6fef80d"/>
+      </a>
+    </td>
+    <td valign="middle">
+      <strong><a href="https://layer3intel.com/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox">Layer3 Intel</a> | See your proxies the way anti-bots see them</strong><br>
+      Camoufox hides your browser. Your proxy IP is the part it can't hide. Layer3 Intel is the residential proxy detection engine used to catch proxy traffic — check whether the IPs your provider sells you are clean, or already known and flagged.<br>
+      • 🔍 Live threat score for any IP<br>
+      • 🗂️ Proxy pool membership - identify IP resellers<br>
+      • 📡 70M+ residential, mobile & ISP proxy IPs tracked across 200+ providers<br>
+      • ⚡ <40ms API responses — vet IPs inline before your scraper uses them<br>
+      Check your IPs: <a href="https://layer3intel.com/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox">https://layer3intel.com</a>
+    </td>
+  </tr>
 </table>
 
 ## Tools & Services
