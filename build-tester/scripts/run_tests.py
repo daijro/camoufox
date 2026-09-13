@@ -13,6 +13,7 @@ Options:
   --secret KEY          HMAC signing key for certificate
   --save-cert PATH      Save certificate text to this file
   --no-cert             Skip certificate generation
+  --json PATH           Write full machine-readable results to this path
 """
 
 import argparse
@@ -45,6 +46,10 @@ def main():
         "--no-cert", action="store_true",
         help="Skip certificate generation",
     )
+    parser.add_argument(
+        "--json", metavar="PATH", dest="json_out",
+        help="Write the full machine-readable result tree to this path",
+    )
     args = parser.parse_args()
 
     profile_count = max(1, min(8, args.profile_count))
@@ -75,6 +80,7 @@ def main():
             secret=args.secret,
             save_cert=args.save_cert,
             no_cert=args.no_cert,
+            json_out=args.json_out,
         )
     )
     sys.exit(exit_code)

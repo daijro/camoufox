@@ -1,0 +1,8 @@
+# The CI pipeline itself. Individual suites install their own dependencies:
+# ci/suite.py builds a venv from the fetched Playwright checkout's own pins,
+# and build-tester/requirements.txt covers the binary tests.
+PyYAML>=6.0
+pytest>=8.0
+pytest-timeout>=2.3
+pytest-asyncio>=0.21
+psutil>=5.9

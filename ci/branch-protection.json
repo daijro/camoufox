@@ -1,0 +1,13 @@
+{
+  "required_status_checks": {
+    "strict": false,
+    "contexts": ["All tests passed"]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_linear_history": false,
+  "required_conversation_resolution": true
+}

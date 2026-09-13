@@ -1,0 +1,72 @@
+# Scope and thresholds for the stealth check.
+#
+# Lives here rather than in harness/policy.yml because the stealth check is a
+# repo-wide test that runs on every pull request; the harness is just one of its
+# callers. harness/policy.yml keeps the things only the auto-update pipeline
+# cares about -- baselines, regression waivers, which gates are mandatory.
+#
+# Nothing in this file is secret. What is secret is the report sundial returns,
+# and that never leaves ci/run_sundial.py::redact() intact.
+
+schema: 1
+
+# Whether CI may run the stealth check at all.
+#
+# ON as of 2026-09-12. sundial 0.5.0 is deployed and serving score mode --
+# verified by the version on the served page and by the successful "Deploy to
+# Cloudflare Pages" run for `d024d51 Bump Sundial to 0.5.0`. master now deploys
+# itself on push, so merged does mean deployed.
+#
+# While this was false the job was not scheduled, the credential never reached a
+# runner, and `ci/run_sundial.py` refused to run by hand. It stayed false for as
+# long as the live build predated score mode, because an older sundial ignores
+# `?score=1` and posts the whole report -- every vector's id, name, brief, source
+# and measured value -- to whatever collector asked for it, and `redact()`
+# discarding it afterwards is not the same guarantee as never having been sent
+# it.
+#
+# What holds the line now, in the order a vector would have to get past:
+#   1. the run logs in as `guest`, which sundial's middleware refuses the
+#      private-vector bundle to -- and the gate confirms that from sundial's own
+#      /__auth/me before the browser opens, rather than assuming whoever set the
+#      secret picked the guest key rather than the private one
+#   2. the only URL this gate ever requests is `/?auto=1&score=1`, so sundial
+#      posts counts rather than a report
+#   3. `redact(require_score_mode=True)` fails the run outright if a full report
+#      arrives anyway, rather than folding it down and continuing
+#   4. only whitelisted keys reach the summary, asserted by an AST walk over
+#      every consumer in ci/tests/test_ci.py
+#
+# Set SUNDIAL_USERNAME=ci once sundial's score-only `ci` role is merged and
+# deployed; that makes step 2 server-enforced rather than a promise this repo
+# keeps. Until then the job needs SUNDIAL_AUTOMATION_KEY set on every repo whose
+# CI runs it; without it the job skips, which is the normal case for a fork PR.
+enabled: true
+
+url: https://sundial.daijro.dev
+
+# Only gate on categories Camoufox actually claims to implement. A vector
+# outside this list is still measured and counted, but cannot fail a build --
+# failing one would mean gating on a promise nobody made.
+gated_categories:
+  - Identity
+  - Security
+  - JS Engine
+  - Display
+  - Locale
+  - Network
+
+# Measured and counted, never gated. Cross-OS rendering parity lives here:
+# Camoufox does not claim byte-identical emulation of another platform's
+# rasterizer, its audio stack, or its CPU timing signature.
+ungated_categories:
+  - Graphics
+  - Audio
+  - CPU
+
+# A run scoring below this fails, even with no regression against the baseline.
+min_pass_rate: 0.90
+
+# Grade boundaries, for the single letter that goes public.
+# (Defined in ci/run_sundial.py::grade; listed here for reference.)
+#   A+ >= 0.99   A >= 0.97   B >= 0.94   C >= 0.90   D >= 0.80   else F

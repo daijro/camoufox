@@ -1,0 +1,902 @@
+name: Tests
+
+# The repository's test pipeline. Runs on every pull request, on pushes to main,
+# on demand, and -- via workflow_call -- from any workflow that needs to test a
+# specific browser version,
+# so a contributor's pull request and an automated Firefox bump are judged by
+# exactly the same checks.
+#
+# The browser version comes from upstream.sh unless a caller passes one in,
+# which is what lets one pipeline test both a pull request and a version bump.
+# ci/versions.py then picks the newest released Playwright suite that is not
+# ahead of that browser -- Playwright trails Firefox and skips generations, so
+# the suite's own Firefox pin is usually a release or two behind the browser
+# under test, and that is expected rather than a mismatch. ci/run_playwright.py
+# fetches it fresh, applies ci/skiplist.yml, overlays tests/camoufox/ and runs
+# it with main-world execution.
+#
+# The stealth check reports a letter grade and a count. Its per-vector detail
+# never leaves ci/run_sundial.py, because this repository is public.
+#
+# Ordering: cheapest first, and every tier gates the next, so a pull request that
+# fails a two-second lint never reaches a seventy-minute build.
+#
+#   0  static      lint, self-tests, settled decisions        seconds
+#   1  unit        pythonlib                                  ~1 min
+#   2  browser     BUILD if patches/additions changed,
+#                  otherwise FETCH the released binary        ~70 min / ~1 min
+#   3a smoke       patch guards, skiplist audit, build-tester ~15 min
+#   3b full        Playwright (6 shards), leaks, stealth      ~40 min
+#   4  gate        the single required status check
+#
+# A driver-only pull request never builds: there is nothing new to compile, so it
+# is tested against the published browser its users actually run. Tier 3b waits
+# on 3a so a browser that fails its guards does not also burn six Playwright
+# shards proving the same thing.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Keeps the ccache alive. GitHub evicts a cache after 7 days unused, and a
+    # cold Firefox build is over an hour; twice a week keeps pull-request builds
+    # restoring a warm one from main.
+    - cron: "0 5 * * 1,4"
+  workflow_dispatch:
+    inputs:
+      browser_version:
+        description: "Firefox version to test (default: whatever upstream.sh pins)"
+        required: false
+        type: string
+      playwright_tag:
+        description: "Pin the Playwright suite (default: resolved from the browser)"
+        required: false
+        type: string
+      shards:
+        description: "How many runners to split the upstream suite across"
+        required: false
+        default: "6"
+        type: string
+  workflow_call:
+    inputs:
+      browser_version:
+        required: false
+        type: string
+      playwright_tag:
+        required: false
+        type: string
+      shards:
+        required: false
+        default: "6"
+        type: string
+      ref:
+        description: "Commit to test; defaults to the calling workflow's ref"
+        required: false
+        type: string
+    secrets:
+      SUNDIAL_USERNAME:
+        required: false
+      SUNDIAL_AUTOMATION_KEY:
+        required: false
+    outputs:
+      verdict:
+        description: "pass or fail"
+        value: ${{ jobs.summary.outputs.verdict }}
+      browser_version:
+        value: ${{ jobs.resolve.outputs.browser_version }}
+      playwright_tag:
+        value: ${{ jobs.resolve.outputs.playwright_tag }}
+
+permissions: {}
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  CI_WORK_DIR: ${{ github.workspace }}/.ci-work
+  CI_RESULTS_DIR: ${{ github.workspace }}/.ci-work/results
+
+jobs:
+  # ---------------------------------------------------------------------------
+  resolve:
+    name: Resolve versions
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      browser_version: ${{ steps.versions.outputs.browser_version }}
+      browser_release: ${{ steps.versions.outputs.browser_release }}
+      playwright_tag: ${{ steps.versions.outputs.playwright_tag }}
+      playwright_firefox: ${{ steps.versions.outputs.playwright_firefox }}
+      version_note: ${{ steps.versions.outputs.note }}
+      browser_changed: ${{ steps.scope.outputs.browser_changed }}
+      has_sundial: ${{ steps.sundial.outputs.has_sundial }}
+      shard_matrix: ${{ steps.shards.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r ci/requirements.txt
+
+      - id: versions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 -m ci.versions \
+            ${{ inputs.browser_version && format('--browser-version {0}', inputs.browser_version) || '' }} \
+            ${{ inputs.playwright_tag && format('--playwright-tag {0}', inputs.playwright_tag) || '' }}
+
+      - name: Does this change the browser?
+        id: scope
+        # Only a change that can alter the binary justifies compiling one. A
+        # pull request that touches pythonlib/ or ci/ is a driver change: it
+        # still gets the full browser suite, but against the published build its
+        # users are running, which takes a minute instead of seventy.
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "browser_changed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Not a pull request -- building, which also refreshes the shared ccache."
+            exit 0
+          fi
+          base="${{ github.event.pull_request.base.sha }}"
+          changed=$(git diff --name-only "$base"...HEAD || echo "")
+          echo "changed files:"; echo "$changed" | sed 's/^/  /'
+          if echo "$changed" | grep -qE '^(patches/|additions/|settings/|assets/|upstream\.sh|Makefile|scripts/)'; then
+            echo "browser_changed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Browser sources changed -- rebuilding from source."
+          else
+            echo "browser_changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No browser sources changed -- testing against the published release."
+          fi
+
+      - name: May the stealth check run?
+        id: sundial
+        # Two conditions, and the config one is checked FIRST and without the
+        # secret in scope. While ci/sundial.yml says `enabled: false` the job is
+        # not scheduled at all, so SUNDIAL_AUTOMATION_KEY never enters a runner
+        # environment and no request is made. That ordering is what made the
+        # kill switch real while the live sundial still predated score mode and
+        # would have posted the whole report back; it stays that way round so
+        # the switch keeps working the next time it is needed.
+        #
+        # Secrets are absent for pull requests from forks, so the credential
+        # check is resolved here once rather than from a job-level `if`, which
+        # the secrets context is not available in.
+        env:
+          KEY: ${{ secrets.SUNDIAL_AUTOMATION_KEY }}
+        run: |
+          if [ "$(python3 -m ci.run_sundial status)" != "true" ]; then
+            echo "has_sundial=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Stealth check not run: disabled in ci/sundial.yml. See the comment there."
+            exit 0
+          fi
+          # Only the password gates the job. The username names an account, not
+          # a secret, so ci/run_sundial.py defaults it (to `guest`, the least
+          # privileged role the deployment has -- sundial refuses it the
+          # private-vector bundle) instead of demanding a second secret.
+          if [ -n "$KEY" ]; then
+            echo "has_sundial=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_sundial=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Stealth check skipped: no sundial credential on this run (normal for a fork PR)."
+          fi
+
+      - name: Build the shard matrix
+        id: shards
+        run: |
+          python3 -c "
+          import json, os
+          n = max(1, int('${{ inputs.shards || '6' }}'))
+          print('matrix=' + json.dumps([f'{i}/{n}' for i in range(1, n + 1)]))
+          " >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  static:
+    name: Static checks
+    needs: resolve
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # -e pythonlib because the settled-decisions tests import camoufox.* to
+      # assert against it. It is a pure-Python install; no browser involved.
+      - run: pip install -r ci/requirements.txt pytest -e pythonlib
+
+      - name: Synthesized input goes through one chokepoint
+        run: python3 scripts/check-input-dispatch.py
+
+      - name: CI pipeline self-tests
+        # These assert that the pipeline reports honestly: skips carry reasons,
+        # shards partition exactly, and nothing identifying a sundial vector
+        # survives redaction.
+        run: python3 -m pytest ci/tests -q
+
+      - name: Settled decisions are still in force
+        # No browser needed: these read the source. They fail a pull request in
+        # seconds rather than after a 40-minute build, which matters because the
+        # thing they catch is usually a well-meaning change that looks obviously
+        # correct until you read the closed PR that rejected it.
+        run: python3 -m ci.run_native --subset rules
+
+      - name: Skiplist is valid
+        run: |
+          python3 -c "
+          from ci.summarize import validate_skiplist
+          from ci.pw_camoufox_plugin import load_skiplist
+          problems = validate_skiplist()
+          if problems:
+              raise SystemExit('\n'.join(problems))
+          print(f'skiplist OK: {len(load_skiplist())} entries, every one with a reason')
+          "
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-static
+          path: .ci-work/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  pythonlib:
+    name: pythonlib
+    # Tier 1. Waits on the static checks so an obvious mistake costs seconds.
+    needs: [resolve, static]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r ci/requirements.txt pytest -e pythonlib
+      - name: Run
+        # pythonlib resolves the published release through the GitHub API
+        # (pkgman.py honours GITHUB_TOKEN). Unauthenticated, a runner shares the
+        # 60-requests-an-hour anonymous quota for its whole IP range and the job
+        # fails on `403 rate limit exceeded` having tested nothing.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -m ci.run_pythonlib
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-pythonlib
+          path: .ci-work/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build (linux x86_64)
+    # Tier 2. Nothing gets compiled until the cheap tiers are green -- this is
+    # over an hour cold, and a lint failure should never cost that.
+    needs: [resolve, static, pythonlib]
+    if: needs.resolve.outputs.browser_changed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    permissions:
+      contents: read
+    env:
+      # scripts/patch.py writes the mozconfig from BUILD_TARGET and defaults to
+      # macos,arm64 when it is unset -- sensible for a developer on a Mac,
+      # wrong here. Without this, configure goes looking for the macOS SDK and
+      # dies with "No such file or directory: MacOSX26.5.sdk/SDKSettings.plist"
+      # three minutes in, which reads like a missing dependency rather than a
+      # cross-compile nobody asked for. multibuild.py sets this itself; `make
+      # dir` + `make build` do not.
+      BUILD_TARGET: linux,x86_64
+    steps:
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@8831c82abf29b34eb2caac48d5f999ecfc0d8eef # v4.1
+        with:
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+          remove-docker-images: "true"
+          remove-cached-tools: "true"
+          remove-swapfile: "true"
+
+      - name: Remove unwanted tools
+        run: |
+          sudo apt-get remove -y '^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' 'php.*' \
+            '^mongodb-.*' '^mysql-.*' > /dev/null 2>&1 || true
+          sudo apt-get remove -y azure-cli google-chrome-stable firefox mono-devel \
+            libgl1-mesa-dri --fix-missing > /dev/null 2>&1 || true
+          sudo apt-get autoremove -y > /dev/null 2>&1 || true
+          sudo apt-get clean > /dev/null 2>&1 || true
+          df -h /
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install build dependencies
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18
+          sudo apt-get install -y lld-18 clang-18
+          sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-18 100
+          sudo apt-get update
+          # The mozconfig sets --with-ccache; configure fails hard without it
+          # rather than degrading.
+          sudo apt-get install -y msitools p7zip-full aria2 ccache libsqlite3-dev
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          # Keyed on the browser version and the patch set, so a pull request
+          # that does not touch patches/ starts from a fully warm cache.
+          key: ccache-${{ needs.resolve.outputs.browser_version }}-${{ hashFiles('patches/**', 'additions/**', 'assets/*.mozconfig') }}
+          restore-keys: |
+            ccache-${{ needs.resolve.outputs.browser_version }}-
+            ccache-
+
+      - name: Create swap
+        run: |
+          # The link step is OOM-killed on a standard runner without this, and
+          # reports as a bare SIGTERM that looks nothing like out-of-memory.
+          sudo fallocate -l 24G /swapfile && sudo chmod 600 /swapfile
+          sudo mkswap /swapfile && sudo swapon /swapfile
+          free -h
+
+      - run: pip install -r ci/requirements.txt
+
+      - name: Prepare the source tree
+        env:
+          CAMOUFOX_PASSWD: ${{ secrets.CAMOUFOX_PASSWD }}
+        run: |
+          ccache -M 8G && ccache -z
+          echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
+          # ci.run_prepare runs setup-minimal -> dir -> mozbootstrap, retrying
+          # only the two that download things and only when the failure reads as
+          # transient. `mach bootstrap` pulls toolchains from Taskcluster, and a
+          # connection reset there used to fail the pull request outright.
+          #
+          # setup-minimal, not `make dir` alone: `dir` falls through to `make
+          # setup`, which git-inits the source tree and commits -- and a bare
+          # runner has no git identity, so that dies with "empty ident name".
+          # The local dev repo is only needed by the patch-repair loop, which
+          # sets an identity of its own.
+          python3 -m ci.run_prepare
+
+      - name: Build
+        env:
+          CARGO_BUILD_JOBS: "1"
+        run: python3 -m ci.run_build
+
+      - run: ccache -s
+
+      - name: Package the binary for the test jobs
+        run: |
+          set -euo pipefail
+          src="camoufox-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}/obj-x86_64-pc-linux-gnu/dist/bin"
+          test -x "$src/camoufox-bin" || { echo "::error::no camoufox-bin at $src"; exit 1; }
+
+          # `mach build` produces an *unpackaged* tree. Two things scripts/package.py
+          # would add are load-bearing for the test jobs and are missing here:
+          #
+          #   fonts/ + fontconfig/  -- without them every glyph in page content
+          #                            renders as tofu, silently, because the
+          #                            browser chrome still has system fonts.
+          #   properties.json       -- the Python API resolves it next to the
+          #                            binary, so AsyncCamoufox dies with
+          #                            FileNotFoundError without it. That breaks
+          #                            patch-guards, the leak suite and sundial.
+          make stage-fonts
+          for f in properties.json chrome.css camoucfg.jvv; do
+            [ -f "$src/$f" ] || cp -v "settings/$f" "$src/$f"
+          done
+
+          # Fail here, once, rather than in five browser jobs with five
+          # different confusing errors.
+          for required in camoufox-bin properties.json camoufox.cfg fonts/linux fontconfig/linux; do
+            [ -e "$src/$required" ] || { echo "::error::artifact is missing $required"; exit 1; }
+          done
+
+          # -h (--dereference) is load-bearing, not tidiness. mach builds dist/bin
+          # out of symlinks -- 17 of them here, and properties.json and
+          # camoufox.cfg are ABSOLUTE links into the source tree. Archiving the
+          # links means they resolve on this runner, where the tree exists, and
+          # dangle on every runner that only downloads the artifact. The browser
+          # then starts with no config at all, which is where every spoofing pref
+          # lives, and the failure surfaces as "properties.json missing" three
+          # jobs later.
+          #
+          # It also defeats the check above: `[ -e ]` follows a symlink, so the
+          # file looked present right up until it was unpacked somewhere else.
+          tar -C "$(dirname "$src")" -chf - bin | zstd -3 -T0 -o camoufox-dist.tar.zst
+          ls -lh camoufox-dist.tar.zst
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: camoufox-dist
+          path: camoufox-dist.tar.zst
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-build
+          path: .ci-work/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+
+  # ---------------------------------------------------------------------------
+  fetch-browser:
+    name: Fetch the released browser
+    # The other half of tier 2. A driver-only change has nothing new to compile,
+    # so it is tested against the build its users are actually running. Uploads
+    # the same artifact name as `build`, so every downstream job is identical
+    # whichever way the browser arrived.
+    needs: [resolve, static, pythonlib]
+    if: needs.resolve.outputs.browser_changed == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r ci/requirements.txt -e pythonlib
+
+      - name: Download
+        # Same GitHub API path as the pythonlib job above, and the same anonymous
+        # rate limit if the token is missing.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m camoufox fetch
+          install_dir="$(python -m camoufox path)"
+          echo "install dir: $install_dir"
+          test -x "$install_dir/camoufox-bin" || {
+            echo "::error::no camoufox-bin under $install_dir after fetch"; exit 1; }
+          # The published build is packaged, so properties.json and the font
+          # bundles are already beside the binary -- the two things the Python
+          # API resolves there. Assert rather than assume.
+          for required in properties.json fonts; do
+            [ -e "$install_dir/$required" ] || {
+              echo "::error::the published build has no $required beside the binary"; exit 1; }
+          done
+          mkdir -p pack/bin
+          cp -a "$install_dir/." pack/bin/
+          tar -C pack -cf - bin | zstd -3 -T0 -o camoufox-dist.tar.zst
+          ls -lh camoufox-dist.tar.zst
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: camoufox-dist
+          path: camoufox-dist.tar.zst
+          retention-days: 3
+
+  # ---------------------------------------------------------------------------
+  playwright:
+    name: Playwright ${{ matrix.shard }}
+    # Tier 3b. Gated on 3a: a browser that fails its patch guards is broken, and
+    # six shards would take forty minutes to reach the same conclusion.
+    needs: [resolve, build, fetch-browser, patch-guards, build-tester]
+    if: always() && needs.patch-guards.result == 'success' && needs.build-tester.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(needs.resolve.outputs.shard_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/prepare-browser
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          xvfb-run -a python3 -m ci.run_playwright \
+            --shard "${{ matrix.shard }}" \
+            --binary "$CAMOUFOX_BINARY" \
+            --browser-version "${{ needs.resolve.outputs.browser_version }}" \
+            --playwright-tag "${{ needs.resolve.outputs.playwright_tag }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-playwright-${{ strategy.job-index }}
+          # One path, and no glob. The summary merges every results-* artifact
+          # into one directory and load_all() globs a single level, so these
+          # must arrive at the artifact's top level. A second path would move
+          # upload-artifact's common root and nest them under results/.
+          path: .ci-work/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostics-playwright-${{ strategy.job-index }}
+          path: |
+            .ci-work/junit-*.xml
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  patch-guards:
+    # Tier 3a: the cheap checks on a fresh browser. If these fail the browser is
+    # broken in an obvious way and tier 3b would only say so more slowly.
+    if: always() && (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
+    name: Patch guards
+    needs: [resolve, build, fetch-browser]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/prepare-browser
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e pythonlib
+      # Fonts and properties.json are staged into the artifact by the build job;
+      # `make stage-fonts` here would find no source tree and do nothing.
+      - run: xvfb-run -a python3 -m ci.run_patch_guards --binary "$CAMOUFOX_BINARY"
+      - name: Every skiplist entry is still failing
+        # Seconds, because a correct skiplist is short. This is what stops
+        # ci/skiplist.yml turning into a list of tests that would now pass --
+        # which is what it was: 193 of the 202 tests it skipped passed.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          xvfb-run -a python3 -m ci.run_skiplist_audit \
+            --binary "$CAMOUFOX_BINARY" \
+            --browser-version "${{ needs.resolve.outputs.browser_version }}" \
+            --playwright-tag "${{ needs.resolve.outputs.playwright_tag }}"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-patch-guards
+          path: .ci-work/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  build-tester:
+    # Tier 3a: the cheap checks on a fresh browser. If these fail the browser is
+    # broken in an obvious way and tier 3b would only say so more slowly.
+    if: always() && (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
+    name: build-tester
+    needs: [resolve, build, fetch-browser]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/prepare-browser
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: |
+          cd build-tester && npm install && pip install -r requirements.txt
+      - run: xvfb-run -a python3 -m ci.run_build_tester --binary "$CAMOUFOX_BINARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-build-tester
+          # One path, and no glob. The summary merges every results-* artifact
+          # into one directory and load_all() globs a single level, so these
+          # must arrive at the artifact's top level. A second path would move
+          # upload-artifact's common root and nest them under results/.
+          path: .ci-work/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostics-build-tester
+          path: |
+            .ci-work/build-tester-result.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  native:
+    name: Leaks and context semantics
+    needs: [resolve, build, fetch-browser, patch-guards, build-tester]
+    if: always() && needs.patch-guards.result == 'success' && needs.build-tester.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/prepare-browser
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e pythonlib
+      - name: Run
+        # Launches browsers, kills them, and proves nothing survived -- the
+        # failure a long-running scraper hits after six hours and no Playwright
+        # test can see. Also checks that a context and a browser mean what the
+        # project says they mean.
+        run: |
+          xvfb-run -a python3 -m ci.run_native \
+            --subset browser \
+            --binary "$CAMOUFOX_BINARY" \
+            --rounds 4 --browsers 3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-native
+          # One path, and no glob. The summary merges every results-* artifact
+          # into one directory and load_all() globs a single level, so these
+          # must arrive at the artifact's top level. A second path would move
+          # upload-artifact's common root and nest them under results/.
+          path: .ci-work/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostics-native
+          path: |
+            .ci-work/junit-*.xml
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  growth:
+    name: Memory growth (scheduled)
+    # Deliberately NOT in the merge gate. It takes ~37 minutes, because every
+    # mechanism is churned twice -- at n and 4n -- to measure whether growth
+    # scales with the count. That is the wrong price to pay on every pull
+    # request for a detector aimed at a slow-moving class of bug, so it runs on
+    # the schedule and on demand, and a failure opens a conversation rather than
+    # blocking a merge.
+    needs: [resolve, build, fetch-browser, patch-guards, build-tester]
+    if: >-
+      always()
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      && needs.patch-guards.result == 'success'
+      && needs.build-tester.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/prepare-browser
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e pythonlib
+      - run: xvfb-run -a python3 -m ci.run_native --subset growth --binary "$CAMOUFOX_BINARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-growth
+          path: .ci-work/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  sundial:
+    name: Stealth check
+    needs: [resolve, build, fetch-browser, patch-guards, build-tester]
+    if: always() && needs.resolve.outputs.has_sundial == 'true' && needs.patch-guards.result == 'success' && needs.build-tester.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/prepare-browser
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e pythonlib
+      - name: Run
+        # The only step in this workflow that sees the sundial credential. It
+        # asks for `?auto=1&score=1`, so what comes back is already counts
+        # rather than a report; ci/run_sundial.py checks the session's role
+        # against sundial's own /__auth/me and refuses to open the browser at
+        # all unless the vectors are withheld from it, and refuses to process
+        # anything that is not a score. The artifact below is a grade and counts.
+        env:
+          SUNDIAL_USERNAME: ${{ secrets.SUNDIAL_USERNAME }}
+          SUNDIAL_AUTOMATION_KEY: ${{ secrets.SUNDIAL_AUTOMATION_KEY }}
+        run: xvfb-run -a python3 -m ci.run_sundial --binary "$CAMOUFOX_BINARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-sundial
+          path: .ci-work/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  summary:
+    name: Summary
+    needs: [resolve, static, pythonlib, build, fetch-browser, playwright,
+            patch-guards, build-tester, native, sundial]
+    if: always() && needs.resolve.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      verdict: ${{ steps.summarize.outputs.verdict }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r ci/requirements.txt
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-*
+          merge-multiple: true
+          path: .ci-work/results
+        continue-on-error: true
+
+      - name: Summarize
+        id: summarize
+        run: |
+          set +e
+          # Suite names, not job names. `static` is a job; the suites it runs are
+          # the pipeline self-tests, which write no result, and native_rules,
+          # which is named here. The gate separately fails if the job itself did
+          # not succeed, so nothing is lost by leaving it out.
+          required="pythonlib native_rules"
+          if [ "${{ needs.resolve.outputs.browser_changed }}" != "skip" ]; then
+            required="$required build patch_guards skiplist_audit build_tester playwright native_browser"
+          fi
+          if [ "${{ needs.resolve.outputs.has_sundial }}" = "true" ]; then
+            required="$required sundial"
+          fi
+          python3 -m ci.summarize \
+            --results-dir .ci-work/results \
+            --require $required \
+            --markdown summary.md \
+            --out summary.json \
+            --browser-version "${{ needs.resolve.outputs.browser_version }}" \
+            --browser-release "${{ needs.resolve.outputs.browser_release }}" \
+            --playwright-tag "${{ needs.resolve.outputs.playwright_tag }}" \
+            --playwright-firefox "${{ needs.resolve.outputs.playwright_firefox }}" \
+            --version-note "${{ needs.resolve.outputs.version_note }}"
+          code=$?
+          echo "verdict=$([ $code -eq 0 ] && echo pass || echo fail)" >> "$GITHUB_OUTPUT"
+          exit $code
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-summary
+          path: |
+            summary.md
+            summary.json
+            .ci-work/results/
+          include-hidden-files: true
+
+      - name: Comment on the pull request
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        continue-on-error: true
+        run: |
+          # One rolling comment rather than a new one per push.
+          marker="<!-- camoufox-tests -->"
+          { echo "$marker"; cat summary.md; } > body.md
+          existing=$(gh pr view "${{ github.event.pull_request.number }}" \
+            --json comments --jq "[.comments[] | select(.body | startswith(\"$marker\"))][0].id" 2>/dev/null || true)
+          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/${existing#*_}" \
+              -f body="$(cat body.md)" >/dev/null 2>&1 \
+              || gh pr comment "${{ github.event.pull_request.number }}" --body-file body.md
+          else
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file body.md
+          fi
+
+  # ---------------------------------------------------------------------------
+  gate:
+    name: All tests passed
+    # THE required status check. Branch protection points at this one job rather
+    # than at a dozen, so the required-check list does not have to be edited
+    # every time a suite is added, renamed, or sharded differently.
+    #
+    # A job that was legitimately not applicable is allowed to be skipped -- the
+    # build when the browser was fetched instead, the fetch when it was built,
+    # the stealth check on a fork pull request with no credentials or while it is
+    # disabled in ci/sundial.yml. Anything else
+    # that is not `success`, including `skipped`, fails the gate: a suite that
+    # did not run has not passed, and silently skipping one is the cheapest way
+    # to a green tick.
+    needs: [resolve, static, pythonlib, build, fetch-browser, playwright,
+            patch-guards, build-tester, native, sundial, summary]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check every tier
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          BROWSER_CHANGED: ${{ needs.resolve.outputs.browser_changed }}
+          HAS_SUNDIAL: ${{ needs.resolve.outputs.has_sundial }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+
+          results = {name: job["result"] for name, job in json.loads(os.environ["RESULTS"]).items()}
+          built = os.environ.get("BROWSER_CHANGED") == "true"
+
+          # The only jobs allowed to be skipped, and only for these reasons.
+          may_skip = {
+              "build": not built,
+              "fetch-browser": built,
+              "sundial": os.environ.get("HAS_SUNDIAL") != "true",
+          }
+
+          problems = []
+          for name, result in sorted(results.items()):
+              if result == "success":
+                  continue
+              if result == "skipped" and may_skip.get(name):
+                  print(f"  - {name}: skipped (not applicable to this run)")
+                  continue
+              problems.append(f"{name}: {result}")
+
+          width = max(len(n) for n in results)
+          print("\ntier results:")
+          for name, result in sorted(results.items()):
+              mark = "ok  " if result == "success" else "FAIL"
+              print(f"  {mark}  {name:<{width}}  {result}")
+
+          if problems:
+              print("\nnot mergeable:")
+              for problem in problems:
+                  print(f"  - {problem}")
+              sys.exit(1)
+          print("\nevery tier passed; this pull request is mergeable.")
+          PY

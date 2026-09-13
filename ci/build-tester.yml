@@ -1,0 +1,39 @@
+# Scope and thresholds for the build-tester suite.
+#
+# Here rather than in harness/policy.yml for the same reason ci/sundial.yml is:
+# this runs on every pull request, and the auto-update harness is only one of
+# its callers.
+
+schema: 1
+
+# 6 per-context profiles + 2 global (CAMOU_CONFIG) profiles.
+profile_count: 8
+
+# These must come back with zero failing checks. A failure here is a leak, not
+# a flake.
+required_categories:
+  - Automation Detection
+  - JS Engine
+  - Lie Detection
+  - Firefox APIs
+  - Cross-Signal
+  - CSS Fingerprint
+  - Canvas Noise
+  - WebGL Render
+
+# Cross-profile uniqueness is judged by what each slot actually promises, not by
+# one count across all of them (see ci/run_build_tester.py):
+#
+#   must vary    audio, canvas, timezone -- derived per context. Two contexts
+#                sharing one is the leak this suite exists to catch, so the
+#                tolerance below is 0.
+#   may collide  fonts, screens, voices, WebGL -- drawn from the preset pool.
+#                Three draws from a pool of a dozen collide regularly; that is
+#                the birthday paradox, and the pools are small on purpose
+#                because they hold real devices. Reported, never fatal.
+#   must match   platform -- every macOS context reports MacIntel. A collision
+#                is the correct answer here and variation is the bug.
+#
+# The earlier flat count failed a run that scored 1054/1054, by reading three
+# macOS contexts all reporting MacIntel as three collisions.
+allow_uniqueness_collisions: 0

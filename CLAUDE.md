@@ -60,15 +60,39 @@ Low-level equivalents: `make patch ./patches/x.patch`, `make unpatch ./patches/x
 
 ## Testing
 
-Two suites, **both required for PRs** (they cover different layers):
+`ci/` is the whole pipeline, and it runs identically locally and on a pull
+request — see [`ci/README.md`](ci/README.md). Every gate below must pass before a
+PR can merge; the workflow is `.github/workflows/tests.yml`.
 
-- **`build-tester/`** — tests the raw binary directly (bypasses the Python package); fingerprints injected via `generate_context_fingerprint` + `addInitScript` and `CAMOU_CONFIG`. Run when changing patches / C++ / JS browser layer:
+- **`build-tester/`** — the raw binary directly, bypassing the Python package:
+  eight fingerprint profiles, injected via `generate_context_fingerprint` +
+  `addInitScript` and `CAMOU_CONFIG`. **This is the anti-detect suite** — run it
+  when changing patches, C++, or the JS browser layer.
   ```bash
-  cd build-tester && npm install && pip install -r requirements.txt
-  python scripts/run_tests.py /path/to/camoufox-binary
+  python3 -m ci.run_build_tester --binary /path/to/camoufox-bin
   ```
-- **`service-tester/`** — tests the Python package / service layer.
-- **`tests/`** — Playwright tests, run via `make tests` (add `headful=true` for headful): points at `camoufox-*/obj-*/dist/bin/camoufox-bin`.
+- **`tests/patches/`** — one standalone guard per shipped spoofing behaviour
+  (isolated evaluate, trusted events, fonts, mouse trajectories, touchscreen).
+  The most direct evidence a Firefox bump did not neuter a patch that still
+  *applies* cleanly.
+  ```bash
+  python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin
+  ```
+- **Playwright** — upstream playwright-python, fetched fresh at the tag
+  `ci/versions.py` resolves for the browser, with `ci/skiplist.yml` applied and
+  `tests/camoufox/` overlaid. This is the automation-contract check, not the
+  stealth check.
+  ```bash
+  make tests                # or: python3 -m ci.run_playwright --binary ...
+  ```
+- **`native-tests/`** — leaks, context lifetime, and the repo's own conventions.
+- **`pythonlib/`**, **`service-tester/`** — the Python package and service layer.
+- **stealth grade** — `ci/run_sundial.py` reports a letter grade and a count.
+  Its per-vector detail never leaves that module, because this repo is public.
+
+The Playwright suite is **not** a fork: `tests/` holds only `patches/` and
+`camoufox/`. Do not vendor upstream tests back into it — a deliberate difference
+from upstream belongs in `ci/skiplist.yml` with a stated reason.
 
 `ccache` is enabled in the build config — install it for fast incremental rebuilds (cold ~40 min, incremental ~5 min).
 
@@ -76,4 +100,4 @@ Two suites, **both required for PRs** (they cover different layers):
 
 - The `camoufox-*/` source directory is regenerated — persist changes as patches, never as edits committed to that tree.
 - Keep the `Makefile` diff clean against `main` unless a change genuinely belongs there — dependency setup lives in `scripts/install-deps.sh`, not the Makefile.
-- Every PR must be tied to a GitHub issue and pass both test suites (see `CONTRIBUTING.md`).
+- Every PR must be tied to a GitHub issue and pass the full pipeline (see `CONTRIBUTING.md` and `ci/README.md`).

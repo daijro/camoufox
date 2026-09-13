@@ -1,0 +1,310 @@
+# Decisions this repository has already made, and the evidence for each.
+#
+# Compiled from code comments, commit messages, and the issue/PR record --
+# specifically from what was *rejected*, which is where the reasoning usually
+# lives. A rule earns a place here when someone proposed the opposite, it was
+# considered on the merits, and the answer was no. Those are the decisions that
+# get re-litigated by the next well-meaning contributor, or quietly undone by an
+# agent rebasing patches at 3am.
+#
+# `native-tests/test_tribal_rules.py` asserts every entry that is mechanically
+# checkable. An entry with `check: manual` is documentation only.
+#
+# Adding one: cite the issue, PR, or commit. "I think this is how it works" is
+# not evidence, and a rule nobody can trace gets deleted the first time it is
+# inconvenient.
+
+schema: 1
+
+rules:
+  # -------------------------------------------------------------------------
+  # Virtual display
+  # -------------------------------------------------------------------------
+
+  - id: virtual-display-default-1x1x24
+    title: The Xvfb default screen is 1x1x24 and stays that way
+    check: automated
+    evidence:
+      - "PR #714 (rejected): 'use 1920x1080 screen size for virtual display'"
+      - "PR #724 (rejected): the same change, proposed again"
+      - "issue #458: blank screenshots, the reported motivation for both"
+    rationale: >-
+      Proposed twice, rejected twice, on two grounds. First, it does not fix
+      anything: rendering was measured identical at both sizes -- innerWidth
+      1280, innerHeight 984, fullpage 1280x5367 either way, with only
+      fingerprint-rotation noise in the colour count. Second, it costs
+      throughput: past 30-40 concurrent browsers the framebuffer becomes the
+      bottleneck on a machine that handles 70-80 at 1x1. The root window is not
+      a fingerprint -- screen.* comes from the generated fingerprint, applied
+      per context in the browser.
+    expect:
+      module: camoufox.virtdisplay
+      attribute: DEFAULT_SCREEN
+      equals: "1x1x24"
+
+  - id: virtual-display-size-override-exists
+    title: The screen size is overridable, just not by default
+    check: automated
+    evidence:
+      - "PR #714 review: 'hardcoding 1920x1080 would be the wrong default'"
+    rationale: >-
+      The rejection was of the *default*, not the capability. Anyone who needs a
+      real framebuffer sets CAMOUFOX_VIRTUAL_DISPLAY_SIZE. Removing the hatch
+      would turn a settled disagreement back into an open one.
+    expect:
+      module: camoufox.virtdisplay
+      attribute: SCREEN_ENV_VAR
+      equals: CAMOUFOX_VIRTUAL_DISPLAY_SIZE
+
+  - id: composite-extension-off
+    title: The X Composite extension stays disabled by default
+    check: automated
+    evidence:
+      - "issue #93: no video under headless='virtual'"
+      - "pythonlib/camoufox/virtdisplay.py: the measurement table"
+    rationale: >-
+      Briefly enabled on the theory that disabling it caused #93. It did not --
+      #93 was a Juggler bug, fixed by capturing the screencast from the
+      compositor instead of libwebrtc's X11 window capturer. Measured at the
+      time: Composite on + record_video_dir crashed the browser with SIGSEGV
+      inside the X11 capturer. That capturer is gone, so enabling it is no
+      longer dangerous, but it is no longer useful either. Off is the
+      long-standing default and there is now no reason to move.
+    expect:
+      module: camoufox.virtdisplay
+      attribute: COMPOSITE_ENV_VAR
+      equals: CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE
+
+  - id: displayfd-not-lockfile-scan
+    title: Displays are claimed atomically with Xvfb -displayfd
+    check: automated
+    evidence:
+      - "issue #597 / commit 8f9ff07"
+    rationale: >-
+      The old userspace lock-file scan plus random-jitter retry raced: many
+      camoufox processes starting at once all saw the same free display numbers
+      before any of them bound. -displayfd lets Xvfb scan up from :0 and bind
+      the first free socket itself -- kernel-mediated, no userspace race -- then
+      writes the number back down an inherited pipe.
+    expect:
+      module: camoufox.virtdisplay
+      xvfb_args_contain: "-displayfd"
+
+  - id: displayfd-read-timeout
+    title: The displayfd read is bounded
+    check: automated
+    evidence:
+      - "commit 8f9ff07: 'so a hung Xvfb fails fast instead of blocking forever'"
+    rationale: >-
+      A hung Xvfb with no timeout blocks the launch forever, at 0% CPU, with no
+      diagnostic. Ten seconds is the agreed bound.
+    expect:
+      module: camoufox.virtdisplay
+      attribute: DISPLAYFD_READ_TIMEOUT_S
+      is_positive_number: true
+
+  - id: xvfb-cleanup-runs-even-if-it-already-died
+    title: The display's lock and socket are removed whether or not we killed it
+    check: automated
+    evidence:
+      - "found by native-tests/test_crash_recovery.py::test_xvfb_sigkill_under_a_virtual_display"
+      - "isolated: Xvfb alive -> socket removed; Xvfb already dead -> socket leaked"
+    rationale: >-
+      kill() used to gate its entire body on `self.proc.poll() is None`, so a
+      display whose Xvfb had already died -- crashed, OOM-killed, reaped with
+      the browser's process group -- was never cleaned up. That is backwards: a
+      SIGKILLed Xvfb never removes its own socket, so the crash path is the only
+      one where /tmp/.X11-unix/X<n> survives, and it was the one path kill()
+      skipped. Stranded sockets accumulate, and -displayfd scans upward for a
+      free number, so each one pushes the next display higher until a
+      long-running host stops being able to allocate one at all.
+
+  - id: xvfb-sigkill-and-socket-cleanup
+    title: Xvfb is SIGKILLed, reaped, and its X11 lock and socket removed
+    check: automated
+    evidence:
+      - "PR #652 / commit 71fe028"
+      - "PR #618 / commit ce5edf6: wait() the child or it becomes a zombie"
+    rationale: >-
+      The old terminate-wait-kill ladder left zombie Xvfb processes, and the
+      stale /tmp/.X{n}-lock and /tmp/.X11-unix/X{n} files it left behind blocked
+      later display allocation. Both halves matter: SIGKILL then wait() so
+      nothing is reaped later, then unlink both files.
+
+  # -------------------------------------------------------------------------
+  # Dependencies
+  # -------------------------------------------------------------------------
+
+  - id: no-third-party-camoufox-distribution
+    title: Nothing here depends on someone else's camoufox package
+    check: automated
+    evidence:
+      - "PR #521 (2026-03-15) added `cloverlabs-camoufox` to build-tester/requirements.txt"
+      - "the commit's author is the PyPI author of that package"
+      - "build-tester/scripts/presets.py already prints the correct answer in its ImportError handler"
+    rationale: >-
+      build-tester generates its fingerprints with camoufox.fingerprints, so
+      whichever distribution provides `camoufox` decides what is actually being
+      tested. Pointing that at a third-party redistribution means the binary is
+      graded against someone else's fingerprint generation, a divergence between
+      the two reads as a browser bug, and every CI run pulls an outside package
+      into a job holding repository credentials. The only `camoufox` this
+      repository may install is pythonlib/ from this tree.
+    expect:
+      no_dependency_matching: "camoufox"
+      except_paths: ["pythonlib/pyproject.toml"]
+      allowed_forms: ["-e ../pythonlib", "-e ./pythonlib", "-e pythonlib"]
+
+  # -------------------------------------------------------------------------
+  # Measurement
+  # -------------------------------------------------------------------------
+
+  - id: canvas-noise-entropy-is-lower-than-audio
+    title: Two contexts share a canvas fingerprint far more often than they should
+    check: manual   # an open finding, not a settled decision
+    evidence:
+      - "24 profiles across 3 runs on v152.0.4-beta.30, once the canvas was actually hashed"
+      - "audio 24 distinct / 24 samples; canvas 16 / 24, values recurring across independent runs"
+      - "macOS 7 distinct of 12, Linux 9 of 12; one value seen three times"
+      - "matches the rate at which CI flagged cross-profile canvas collisions"
+    rationale: >-
+      Audio and canvas are both noised per context, by the same machinery, and
+      were measured in the same runs with the same hash. Audio came back
+      completely unique; canvas did not, and its values repeat across runs that
+      share nothing. So two contexts in one browser are linkable by canvas
+      roughly a third of the time, which is the property per-context spoofing
+      exists to prevent.
+      This was invisible until the fingerprint stopped being a 100-character
+      prefix of a data URL, which compared equal for almost anything. It is
+      recorded as an open question rather than a decision: it may be that canvas
+      output is deliberately tied to the device preset rather than to
+      canvas:seed, in which case the seed is not doing what its name suggests.
+      Not gated, because failing one run in three helps nobody, and not dropped,
+      because it is real.
+
+  - id: canvas-fingerprint-is-hashed-not-truncated
+    title: The canvas check hashes pixels, not a prefix of the data URL
+    check: automated
+    evidence:
+      - "build-tester/src/lib/checks/collectors.ts returned canvas.toDataURL().substring(0, 100)"
+      - "CI reported two contexts sharing a canvas fingerprint; 8 local runs across two rendering paths never did"
+    rationale: >-
+      A hundred characters of a data URL is not the image. "data:image/png;base64,"
+      takes 22 of them, leaving about 58 bytes of PNG: the signature, the IHDR
+      giving width and height, the IDAT header, and roughly fifteen bytes of
+      deflate stream. Cross-profile uniqueness was therefore decided by whether
+      the noise happened to land in the top-left of the first scanline, and two
+      contexts whose canvas differed everywhere else read as identical. Worse,
+      the stability check compared the same prefix between two collections, so
+      it passed on PNG headers and could not have noticed non-deterministic
+      noise. getImageData is the surface Camoufox noises and the one a
+      fingerprinter reads; hash that.
+
+  # -------------------------------------------------------------------------
+  # Teardown
+  # -------------------------------------------------------------------------
+
+  - id: launch-failure-tears-down-playwright
+    title: A failed launch must not leak the Playwright session
+    check: automated
+    evidence:
+      - "issue #82 / PR #655 / commit 0d54401"
+    rationale: >-
+      The Playwright session is started before the browser. If the launch then
+      raises -- bad proxy, missing binary, invalid options -- the driver process
+      and its connection stay alive with nothing holding them. Every launch path
+      wraps the launch and calls the base __aexit__ on failure.
+
+  - id: close-failure-still-tears-down
+    title: browser.close() raising must not skip teardown
+    check: automated
+    evidence:
+      - "issue #82 / PR #655 / commit 0d54401"
+      - "commit fd1bb2f: the same rule for the virtual display"
+    rationale: >-
+      A browser that has already crashed makes close() raise, and the original
+      code let that exception skip the driver teardown -- so the failure mode
+      that leaks is exactly the one that happens under load. The close goes in a
+      try, the teardown in the finally. The virtual display is cleaned up the
+      same way.
+
+  # -------------------------------------------------------------------------
+  # Contexts and windows
+  # -------------------------------------------------------------------------
+
+  - id: no-viewport-when-window-is-spoofed
+    title: Spoofed window dimensions imply no_viewport
+    check: automated
+    evidence:
+      - "issue #666 / PR #673: page-recycle hang under spoofed window dims"
+    rationale: >-
+      Playwright's default viewport deadlocks Juggler when the window has been
+      spoofed to a different size. Both launch paths default to no_viewport when
+      spoofs_window_dimensions() is true, unless the caller said otherwise.
+    expect:
+      module: camoufox.utils
+      has_callables: [spoofs_window_dimensions, attach_no_viewport_default]
+
+  - id: virtual-display-skips-screen-clamp
+    title: A virtual display never clamps the generated screen
+    check: automated
+    evidence:
+      - "pythonlib/camoufox/utils.py: the `not virtual_display` guards"
+    rationale: >-
+      This is what makes the 1x1 default safe. If clamping applied, a 1x1 root
+      window would clamp every generated screen down to 1x1 and the fingerprint
+      would be absurd. The guard and the 1x1 default stand or fall together --
+      remove the guard and the display size stops being a free choice.
+
+  - id: evaluate-is-isolated-by-default
+    title: page.evaluate runs in an isolated world; "mw:" is the opt-in hatch
+    check: automated
+    evidence:
+      - "PR #745 / issue #738: let init scripts reach the page world with 'mw:'"
+      - "commit c3d5721: evaluate in an isolated world, with an opt-in main-world hatch"
+    rationale: >-
+      Injected automation JavaScript running in the page's world is visible to
+      the page, which is the thing this fork exists to prevent. Isolation is the
+      default and the "mw:" prefix is the deliberate, per-call way out. Upstream
+      Playwright's suite is run with isolation off because it asserts upstream
+      semantics -- that flag must never become the default here.
+
+  # -------------------------------------------------------------------------
+  # Juggler frame lifecycle
+  # -------------------------------------------------------------------------
+
+  - id: per-frame-state-released-on-dispose
+    title: Anything reset when the document changes is also released when the frame dies
+    check: automated
+    evidence:
+      - "additions/juggler/content/FrameTree.js: _masterSandbox was cleared in _onGlobalObjectCleared() but not in Frame.dispose()"
+      - "upstream Playwright's FrameTree.js has no _masterSandbox, and dispose() was inherited from it verbatim"
+    rationale: >-
+      Frame.dispose() came from upstream, which has no Camoufox-specific
+      per-frame fields. So when one is added, only the navigation path tends to
+      learn about it, and a frame that is *destroyed* rather than navigated
+      keeps it -- which is the common case on any page that creates and removes
+      iframes. _masterSandbox made that concrete: built over the page window
+      with a system principal, it holds the window's global and with it the
+      whole document, so a retained one keeps a dead document alive. The
+      invariant is simply that the two teardown paths agree: a field worth
+      resetting when the document changes is worth releasing when the frame goes
+      away, and a sandbox needs nuking rather than just dropping.
+
+  # -------------------------------------------------------------------------
+  # Input
+  # -------------------------------------------------------------------------
+
+  - id: input-through-one-chokepoint
+    title: Every synthesized input event goes through MouseDispatch.js
+    check: manual   # enforced by scripts/check-input-dispatch.py in CI
+    evidence:
+      - "docs/input-dispatch.md: four deadlocks between 2026-04 and 2026-09"
+      - "issues #225, #677, #751, #752"
+    rationale: >-
+      Four separate deadlocks, each fixed by adding one more coordinate guard at
+      one more call site, which does not converge -- the trigger set is not
+      enumerable, because whether a coordinate reaches the renderer depends on a
+      rounding accident in the fractional height of spoofed browser chrome. One
+      unbounded await for an ack that never arrives wedges input for every tab
+      in the process, permanently, at 0% CPU.

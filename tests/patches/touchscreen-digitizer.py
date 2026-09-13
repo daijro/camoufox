@@ -44,7 +44,7 @@ SPOOFED_TOUCH_POINTS = 5
 
 # ---------------------------------------------------------------------------
 # The recorded reference: a Dell XPS 15 9510 (Windows 10, touchscreen) running
-# Firefox 152.0, captured with tests/assets/touch-reference.html.
+# Firefox 152.0, captured with tests/patches/assets/touch-reference.html.
 #
 #   UA        Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0)
 #             Gecko/20100101 Firefox/152.0

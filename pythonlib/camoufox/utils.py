@@ -572,6 +572,32 @@ def sync_attach_vd(
     return browser
 
 
+
+def resolve_verstr(executable_path: Optional[Path] = None) -> str:
+    """The version of the build about to be launched.
+
+    installed_verstr() answers "which release did `camoufox fetch` put in the
+    cache", which is the wrong question when the caller named a binary: it
+    raises CamoufoxNotInstalled on a machine that has a perfectly good build and
+    simply never downloaded one. That is what every tests/patches guard hit in
+    CI -- 14 of 16 died before launching anything.
+
+    Firefox writes application.ini beside the executable, so when a path is
+    given the answer is right there. Falls back to the installed release when it
+    is not, which is the ordinary `pip install camoufox` case.
+    """
+    if executable_path:
+        ini = Path(executable_path).parent / 'application.ini'
+        try:
+            for line in ini.read_text(encoding='utf-8', errors='replace').splitlines():
+                if line.startswith('Version='):
+                    version = line.split('=', 1)[1].strip()
+                    if version:
+                        return version
+        except OSError:
+            pass
+    return installed_verstr()
+
 def launch_options(
     *,
     config: Optional[Dict[str, Any]] = None,
@@ -726,6 +752,15 @@ def launch_options(
     # mappings supplied by callers. In particular, DISPLAY must not outlive the
     # virtual display that owns it.
     env = dict(environ) if env is None else dict(env)
+    if executable_path is None:
+        # Point every launch at a specific build without threading the path
+        # through each call site. The CI runners set it, and honouring it in the
+        # library is what lets tests/patches/*.py run against a local build,
+        # since those construct AsyncCamoufox directly.
+        # Absent the variable nothing changes.
+        _env_executable = environ.get('CAMOUFOX_EXECUTABLE_PATH', '').strip()
+        if _env_executable:
+            executable_path = _env_executable
     if isinstance(executable_path, str):
         # Convert executable path to a Path object
         executable_path = Path(abspath(executable_path))
@@ -771,7 +806,7 @@ def launch_options(
         ff_version_str = str(ff_version)
         LeakWarning.warn('ff_version', i_know_what_im_doing)
     else:
-        ff_version_str = installed_verstr().split('.', 1)[0]
+        ff_version_str = resolve_verstr(executable_path).split('.', 1)[0]
 
     # Generate a fingerprint
     _used_preset = False

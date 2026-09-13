@@ -1,4 +1,20 @@
-cloverlabs-camoufox
+# This repository's own Python package, not a third-party redistribution.
+#
+# build-tester generates its fingerprints with camoufox.fingerprints
+# (scripts/presets.py, scripts/generate-presets.py). Which `camoufox` provides
+# that decides what is actually under test, so it has to be pythonlib/ from this
+# tree -- otherwise the binary is graded against someone else's fingerprint
+# generation and a divergence between the two reads as a browser bug.
+#
+# This line was `cloverlabs-camoufox` between #521 (2026-03-15) and now: a
+# third-party fork on PyPI, published by the same author as the commit that
+# added it. scripts/presets.py already told you the right answer in its own
+# ImportError handler -- "pip install -e ../pythonlib".
+#
+# Relative to build-tester/, which is where both entry points run from:
+# run_tests.sh cd's here, and so does the CI job.
+-e ../pythonlib
+
 # 1.61 sent viewport.isMobile in Browser.setDefaultViewport, which this
 # juggler's protocol schema rejected; the schema now accepts it, so the cap
 # moves up rather than away. Matches the cap in pythonlib/pyproject.toml.

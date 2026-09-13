@@ -1013,8 +1013,20 @@ export class PageTarget {
       state.inFlight = true;
       this.emit(PageTarget.Events.ScreencastFrame, {
         data: dataURL.substring(dataURL.indexOf(',') + 1),
-        deviceWidth: frameWidth,
-        deviceHeight: frameHeight,
+        // The viewport this frame depicts -- NOT the JPEG's own dimensions.
+        // Playwright's Firefox delegate maps deviceWidth/deviceHeight straight
+        // onto the client-visible viewportWidth/viewportHeight, and every other
+        // backend fills them from the page's viewport: the native path above
+        // sends pageWidth/pageHeight (clamped to the viewport, never scaled by
+        // the requested frame size), and the Chromium delegate forwards CDP's
+        // metadata.deviceWidth. Sending frameWidth/frameHeight here made the
+        // pair track `size=` instead, so a client asking for a 500x400 frame of
+        // a 1000x400 page was told the viewport was 500x200 -- and asking for a
+        // frame larger than the page reported a viewport larger than the page.
+        // The scaled dimensions are still carried by the JPEG itself, which is
+        // where a consumer that wants the image size reads them from.
+        deviceWidth: Math.round(rect.width),
+        deviceHeight: Math.round(rect.height),
         timestamp: Date.now() / 1000,
       });
     };
