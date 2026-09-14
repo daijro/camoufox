@@ -144,7 +144,7 @@ export class MouseDispatch {
       this._args.modifiers,
       false /* aIgnoreRootScrollFrame */,
       0.0 /* pressure */,
-      0 /* inputSource */,
+      this._win.MouseEvent.MOZ_SOURCE_MOUSE /* inputSource */,
       true /* isDOMEventSynthesized */,
       false /* isWidgetEventSynthesized */,
       this._args.buttons,

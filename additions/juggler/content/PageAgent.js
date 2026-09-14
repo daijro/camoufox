@@ -565,7 +565,7 @@ export class PageAgent {
         modifiers,
         false /*aIgnoreRootScrollFrame*/,
         0.0 /*pressure*/,
-        0 /*inputSource*/,
+        win.MouseEvent.MOZ_SOURCE_MOUSE /*inputSource*/,
         true /*isDOMEventSynthesized*/,
         false /*isWidgetEventSynthesized*/,
         0 /*buttons*/,
