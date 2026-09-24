@@ -765,6 +765,43 @@ def _app_version_from_user_agent(user_agent: str) -> Optional[str]:
     return f"5.0 ({'; '.join(kept)})" if kept else None
 
 
+# navigator.buildID: Firefox reports YYYYMMDDHHMMSS. When a config spoofs the
+# UA version but not the buildID, the engine falls back to the host build's
+# own XULAppInfo value — a 2026 UA claiming a 2018 build, which any detector
+# can cross-check. Derive a plausible one from the spoofed major version
+# instead: Firefox 94 shipped 2021-11-02, and each major has followed at
+# ~4-week intervals since (Mozilla's cadence post-2021). Deterministic per
+# version, so the same identity always yields the same buildID.
+_FIREFOX_RELEASE_ANCHOR = (2021, 11, 2)  # Firefox 94 release date
+_FIREFOX_WEEKS_PER_MAJOR = 4
+
+
+def _default_build_id(ff_major: Optional[int]) -> Optional[str]:
+    """A plausible navigator.buildID for a spoofed Firefox major version.
+
+    Deterministic: base release date + 4 weeks per major beyond the anchor,
+    + a fixed hour offset derived from the major so successive versions don't
+    all stamp midnight UTC.
+    """
+    if not ff_major or ff_major < 94:
+        return None
+    try:
+        import calendar
+        from datetime import datetime, timedelta
+
+        base = datetime(*_FIREFOX_RELEASE_ANCHOR)
+        offset = timedelta(weeks=_FIREFOX_WEEKS_PER_MAJOR * (ff_major - 94))
+        stamp = base + offset + timedelta(hours=(ff_major % 24))
+        return stamp.strftime('%Y%m%d%H%M%S')
+    except Exception:
+        return None
+
+
+def _ff_major_from_user_agent(user_agent: Optional[str]) -> Optional[int]:
+    m = re.search(r'Firefox/(\d+)', user_agent or '')
+    return int(m.group(1)) if m else None
+
+
 def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any]:
     """
     Convert a real fingerprint preset to CAMOU_CONFIG format.
@@ -779,6 +816,19 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None) -> Dict[str, Any
             ua = re.sub(r'Firefox/\d+\.0', f'Firefox/{ff_version}.0', ua)
             ua = re.sub(r'rv:\d+\.0', f'rv:{ff_version}.0', ua)
         config['navigator.userAgent'] = ua
+        # Honour an explicit buildID from the preset before deriving one.
+        if nav.get('buildID'):
+            config['navigator.buildID'] = nav['buildID']
+        # A spoofed UA version with the host's own buildID (Firefox reports
+        # YYYYMMDDHHMMSS from XULAppInfo, left at the host build's value when
+        # the property is unset) reads as a 2018 build inside a modern UA to
+        # any detector that cross-checks the two. Derive a plausible one;
+        # if the UA has no version to derive from, leave it to the user's
+        # own setting or the host.
+        if 'navigator.buildID' not in config:
+            derived = _default_build_id(_ff_major_from_user_agent(ua))
+            if derived:
+                config['navigator.buildID'] = derived
     if nav.get('platform'):
         config['navigator.platform'] = nav['platform']
     if nav.get('hardwareConcurrency'):
@@ -1232,6 +1282,15 @@ def from_browserforge(fingerprint: Fingerprint, ff_version: Optional[str] = None
         ff_version=ff_version,
     )
     handle_screenXY(camoufox_data, fingerprint.screen)
+
+    # Same rationale as from_preset: a spoofed UA without a buildID leaves
+    # XULAppInfo's host value in place, which contradicts the UA version.
+    if 'navigator.userAgent' in camoufox_data and 'navigator.buildID' not in camoufox_data:
+        derived = _default_build_id(
+            _ff_major_from_user_agent(camoufox_data['navigator.userAgent'])
+        )
+        if derived:
+            camoufox_data['navigator.buildID'] = derived
 
     return camoufox_data
 
