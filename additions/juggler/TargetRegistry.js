@@ -502,6 +502,17 @@ export class PageTarget {
     browserContext.pages.add(this);
     this._registry._browserToTarget.set(this._linkedBrowser, this);
     const browserId = this._linkedBrowser.browsingContext.browserId;
+    // Popup process-swap guard: a cross-origin navigation in a popup can
+    // fire TabOpen again, constructing a second PageTarget for the same
+    // browserId. The old target is silently replaced by the set below,
+    // but never disposed — the client keeps its session alive and every
+    // evaluate against it hangs (`juggler: timeout waiting for
+    // Runtime.evaluate`). Dispose the previous target first so it emits
+    // TargetDestroyed, the dispatcher destroys the stale session, and the
+    // client gets `Browser.detachedFromTarget` for the page it is about to lose.
+    const previous = this._registry._browserIdToTarget.get(browserId);
+    if (previous && previous !== this && !previous._disposed)
+      previous.dispose();
     this._registry._browserIdToTarget.set(browserId, this);
     // Firefox 152+: the content-process actor may already exist (window.open
     // popups create the actor before TabOpen). Bind it now so the page channel
