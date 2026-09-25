@@ -11,6 +11,7 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from camoufox.pkgman import load_yaml
 from camoufox.webgl import sample_webgl
+from camoufox.webgl.sample import get_possible_pairs
 
 # Load the fpgen mapping file
 FPGEN_DATA = load_yaml('fpgen.yml')
@@ -73,6 +74,7 @@ PRESETS_V150_FILE = Path(__file__).parent / 'fingerprint-presets-v150.json'
 # Firefox major version at which the v150 preset bundle becomes preferred.
 PRESETS_V150_MIN_FF = 149
 _PRESETS_CACHE: Dict[Path, Dict] = {}
+_SUPPORTED_WEBGL_PAIRS: Optional[Dict[str, FrozenSet[Tuple[str, str]]]] = None
 
 # CreepJS OS marker fonts used for OS detection. Twin of MARKER_FONTS in
 # scripts/gen-fonts-json.py. Every name must be in fonts.json for its OS
@@ -1570,10 +1572,26 @@ def get_random_preset(
     else:
         os_keys = all_os_keys
 
-    # Collect all matching presets
+    global _SUPPORTED_WEBGL_PAIRS
+    if _SUPPORTED_WEBGL_PAIRS is None:
+        _SUPPORTED_WEBGL_PAIRS = {
+            target_os: frozenset(pairs)
+            for target_os, pairs in get_possible_pairs().items()
+        }
+
+    # Collect presets whose WebGL data can be resolved for the target OS.
+    # Some bundled presets contain pairs absent from webgl_data.db; selecting
+    # one would otherwise make launch_options() fail nondeterministically.
     candidates: List[Dict] = []
     for key in os_keys:
-        candidates.extend(presets.get('presets', {}).get(key, []))
+        target_os = {'windows': 'win', 'macos': 'mac', 'linux': 'lin'}.get(key, key)
+        supported_pairs = _SUPPORTED_WEBGL_PAIRS.get(target_os, frozenset())
+        for preset in presets.get('presets', {}).get(key, []):
+            webgl = preset.get('webgl', {})
+            vendor = webgl.get('unmaskedVendor')
+            renderer = webgl.get('unmaskedRenderer')
+            if not vendor or not renderer or (vendor, renderer) in supported_pairs:
+                candidates.append(preset)
 
     if not candidates:
         return None
