@@ -276,15 +276,14 @@ leaving them bare.
 
 `ci/run_skiplist_audit.py` now runs every entry with the skiplist disabled and
 **fails the build if a skipped test passes**. It is cheap precisely because a
-correct skiplist is short — fourteen tests, a few seconds — and it is what keeps the
+correct skiplist is short — twelve tests, a few seconds — and it is what keeps the
 list from drifting back into a place failing tests go to disappear.
 
 ```bash
 python3 -m ci.run_skiplist_audit --binary /path/to/camoufox-bin
 ```
 
-What remains, 14 tests: two `test_click.py` tests where Playwright's
-stable-position wait races the humanized travel time; two `test_keyboard.py`
+What remains, 12 tests: two `test_keyboard.py`
 tests that assert a shifted character arrives without Shift, which Camoufox
 presses as a real keyboard would; six client-certificate tests (async and sync)
 that need the **browser** to present a certificate during the TLS handshake —

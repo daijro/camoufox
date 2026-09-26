@@ -6,6 +6,11 @@ an `error` event for it unless `voices:fakeCompletion` was set, and even then it
 fired `start` and `end` in the same instant. A real voice never errors on a plain
 utterance, and its `end` arrives after the text has been spoken. Both were tells.
 
+The host's own speech backend must not matter either. On a Linux host where
+speech-dispatcher cannot start, Firefox broadcasts a voices error, and every
+page used to error its queued utterances. A spoofed Windows identity's voices
+do not depend on the host's daemon, so the guard runs with it unreachable.
+
 What PASS means:
     * the page sees spoofed voices at all (so the check is not vacuous);
     * speaking 25 characters on one fires `start`, then `end`, and no `error`;
@@ -16,6 +21,7 @@ What PASS means:
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -52,7 +58,10 @@ PROBE = """async (text) => {
 async def main() -> int:
     from camoufox.async_api import AsyncCamoufox
 
-    async with AsyncCamoufox(headless=True, os="windows",
+    # An unreachable speech-dispatcher socket: the host backend fails to start,
+    # as it does on a machine without the daemon.
+    env = {**os.environ, "SPEECHD_ADDRESS": "unix_socket:/nonexistent/speechd.sock"}
+    async with AsyncCamoufox(headless=True, os="windows", env=env,
                              executable_path=str(resolve_binary())) as browser:
         page = await browser.new_page()
         await page.goto("about:blank")

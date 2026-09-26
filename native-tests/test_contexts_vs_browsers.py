@@ -32,6 +32,7 @@ at random, so pinning a number would make the suite a liability.
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
@@ -219,20 +220,144 @@ async def test_closing_one_context_does_not_disturb_another(binary):
     )
 
 
+# The whole fingerprint a site computes, run by the page itself: Playwright's
+# evaluate runs in Camoufox's isolated world, which may not read audio sample
+# data, so the page writes its result into the DOM for the test to read.
+FONT_CANDIDATES = [
+    "Arial", "Arial Black", "Calibri", "Cambria", "Candara", "Consolas", "Constantia",
+    "Corbel", "Courier New", "Ebrima", "Franklin Gothic Medium", "Gabriola", "Gadugi",
+    "Georgia", "Impact", "Ink Free", "Javanese Text", "Leelawadee UI", "Lucida Console",
+    "Lucida Sans Unicode", "Malgun Gothic", "Marlett", "Microsoft Himalaya",
+    "Microsoft JhengHei", "Microsoft New Tai Lue", "Microsoft PhagsPa", "Microsoft Sans Serif",
+    "Microsoft Tai Le", "Microsoft YaHei", "Microsoft Yi Baiti", "MingLiU-ExtB",
+    "Mongolian Baiti", "MS Gothic", "MV Boli", "Myanmar Text", "Nirmala UI",
+    "Palatino Linotype", "Segoe Print", "Segoe Script", "Segoe UI", "Segoe UI Emoji",
+    "SimSun", "Sitka Small", "Sylfaen", "Symbol", "Tahoma", "Times New Roman",
+    "Trebuchet MS", "Verdana", "Webdings", "Wingdings", "Yu Gothic", "Aptos", "Bahnschrift",
+    "HoloLens MDL2 Assets", "Cascadia Code", "Cascadia Mono", "Segoe Fluent Icons",
+    "American Typewriter", "Andale Mono", "Apple Chancery", "Apple Color Emoji",
+    "Apple SD Gothic Neo", "Avenir", "Avenir Next", "Baskerville", "Big Caslon",
+    "Chalkboard", "Chalkboard SE", "Charter", "Cochin", "Copperplate", "Didot",
+    "Futura", "Geneva", "Gill Sans", "Helvetica", "Helvetica Neue", "Herculanum",
+    "Hoefler Text", "Lucida Grande", "Marker Felt", "Menlo", "Monaco", "Noteworthy",
+    "Optima", "Papyrus", "PingFang SC", "Rockwell", "SF Pro", "Skia", "Snell Roundhand",
+    "Zapfino", "Arial Hebrew", "Hiragino Sans", "Kohinoor Devanagari", "Thonburi",
+    "DejaVu Sans", "DejaVu Serif", "DejaVu Sans Mono", "Liberation Sans",
+    "Liberation Serif", "Liberation Mono", "Noto Sans", "Noto Serif", "Noto Color Emoji",
+    "Noto Sans CJK SC", "Ubuntu", "Ubuntu Mono", "Cantarell", "FreeSans", "FreeSerif",
+    "Nimbus Sans", "Nimbus Roman", "C059", "P052", "URW Bookman", "Droid Sans Fallback",
+]
+
+FINGERPRINT_PAGE = """<!doctype html><html><body><script>
+(async () => {
+ try {
+  const within = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]);
+  const fp = {};
+  const n = navigator;
+  Object.assign(fp, {
+    userAgent: n.userAgent, platform: n.platform, oscpu: n.oscpu,
+    hardwareConcurrency: n.hardwareConcurrency, languages: n.languages.join(","),
+    maxTouchPoints: n.maxTouchPoints,
+    screen: [screen.width, screen.height, screen.availWidth, screen.availHeight,
+             screen.colorDepth].join("x"),
+    outer: [outerWidth, outerHeight].join("x"),
+    devicePixelRatio: devicePixelRatio,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
+  const gl = document.createElement("canvas").getContext("webgl");
+  if (gl) {
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    fp.webglVendor = dbg && gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL);
+    fp.webglRenderer = dbg && gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+    fp.webglLimits = [gl.MAX_TEXTURE_SIZE, gl.MAX_VERTEX_UNIFORM_VECTORS,
+                      gl.MAX_FRAGMENT_UNIFORM_VECTORS, gl.MAX_VARYING_VECTORS,
+                      gl.MAX_RENDERBUFFER_SIZE].map(p => gl.getParameter(p)).join(",");
+    fp.webglExtensions = (gl.getSupportedExtensions() || []).join(",");
+  }
+  // Width against each generic fallback, as fingerprinting scripts detect
+  // installed fonts. document.fonts.check() only knows web fonts and answers
+  // true for any system font name, so it cannot tell.
+  const measure = document.createElement("canvas").getContext("2d");
+  const text = "mmmmmmmmmmlliWW@#&0123456789";
+  const width = family => { measure.font = `72px ${family}`; return measure.measureText(text).width; };
+  const bases = ["monospace", "sans-serif", "serif"];
+  const baseWidths = bases.map(width);
+  fp.fonts = FONTS.filter(f => bases.some((base, i) => width(`"${f}", ${base}`) !== baseWidths[i])).join(",");
+  let voices = speechSynthesis.getVoices();
+  if (!voices.length) {
+    await within(new Promise(r => speechSynthesis.addEventListener("voiceschanged", r, {once: true})), 3000);
+    voices = speechSynthesis.getVoices();
+  }
+  fp.voices = voices.map(v => v.name).join(",");
+  const devices = await within(n.mediaDevices.enumerateDevices(), 3000);
+  fp.mediaDevices = devices ? ["audioinput", "videoinput", "audiooutput"]
+      .map(k => devices.filter(d => d.kind === k).length).join(",") : "timeout";
+  const ctx = new OfflineAudioContext(1, 5000, 44100);
+  const osc = ctx.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.value = 10000;
+  const comp = ctx.createDynamicsCompressor();
+  osc.connect(comp);
+  comp.connect(ctx.destination);
+  osc.start(0);
+  const data = (await ctx.startRendering()).getChannelData(0);
+  let sum = 0;
+  for (let i = 4500; i < 5000; i++) sum += Math.abs(data[i]);
+  fp.audio = sum;
+  document.documentElement.dataset.fingerprint = JSON.stringify(fp);
+ } catch (e) {
+  document.documentElement.dataset.fingerprint = JSON.stringify({error: String(e)});
+ }
+})();
+</script></body></html>"""
+
+
+async def full_fingerprint(page) -> dict:
+    """Everything a fingerprinting script reads, computed in the page.
+
+    Served from an https URL Playwright fulfils locally: mediaDevices and other
+    APIs exist only in a secure context, which about:blank content is not.
+    """
+    html = FINGERPRINT_PAGE.replace("FONTS", json.dumps(FONT_CANDIDATES))
+    await page.route("https://fingerprint.camoufox.test/",
+                     lambda route: route.fulfill(content_type="text/html", body=html))
+    await page.goto("https://fingerprint.camoufox.test/")
+    for _ in range(60):
+        result = await page.evaluate("document.documentElement.dataset.fingerprint || null")
+        if result:
+            fingerprint = json.loads(result)
+            assert "error" not in fingerprint, fingerprint["error"]
+            return fingerprint
+        await asyncio.sleep(0.5)
+    raise AssertionError("the fingerprint page produced no result in 30s")
+
+
 async def test_two_browsers_get_different_fingerprints(binary):
+    """Two launches must not present the same device.
+
+    Measured on the whole fingerprint a site computes. The coarse values alone
+    can legitimately match -- two real Macs share a UA, a 2560x1440 screen and
+    8 cores, and CI pins timezone and language -- so a check on those alone
+    failed whenever two draws landed on a common machine. Fonts, voices, the
+    GPU and the per-identity audio seed together cannot.
+    """
     from camoufox.async_api import AsyncCamoufox
 
     async def one() -> dict:
         async with AsyncCamoufox(executable_path=str(binary), headless=True,
                                  i_know_what_im_doing=True) as browser:
             context, page = await open_page(browser)
-            values = await probe(page)
+            fingerprint = await full_fingerprint(page)
             await context.close()
-            return values
+            return fingerprint
 
     a, b = await asyncio.gather(one(), one())
-    differing = [k for k in PROBES if a.get(k) != b.get(k)]
+    assert "audio" in a and "audio" in b, (a, b)
+    differing = sorted(k for k in a if a.get(k) != b.get(k))
     assert differing, f"two separate browser launches produced an identical fingerprint: {a}"
+    # The audio noise is seeded per identity, so it must differ on its own:
+    # equal hashes would mean the seed stopped reaching the browser.
+    assert a["audio"] != b["audio"], f"both launches rendered audio hash {a['audio']}"
 
 
 async def test_a_context_survives_its_sibling_browser(binary):

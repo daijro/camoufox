@@ -10,7 +10,7 @@ index ca6ffacb21..fb661fd69e 100644
 +# DOM Mask
 +LOCAL_INCLUDES += ['/camoucfg']
 diff --git a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp b/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
-index 3648239545..48e195a684 100644
+index 3648239545..759e61837b 100644
 --- a/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
 +++ b/dom/media/webspeech/synth/nsSynthVoiceRegistry.cpp
 @@ -23,7 +23,9 @@
@@ -66,7 +66,24 @@ index 3648239545..48e195a684 100644
    return AddVoiceImpl(aService, aUri, aName, aLang, aLocalService,
                        aQueuesUtterances);
  }
-@@ -775,6 +806,30 @@ void nsSynthVoiceRegistry::SpeakImpl(VoiceData* aVoice, nsSpeechTask* aTask,
+@@ -373,6 +404,16 @@ nsSynthVoiceRegistry::NotifyVoicesChanged() {
+ 
+ NS_IMETHODIMP
+ nsSynthVoiceRegistry::NotifyVoicesError(const nsAString& aError) {
++  // While Camoufox manages the voice list, a host speech backend failing to
++  // start (no speech-dispatcher on a Linux host) says nothing about the
++  // spoofed voices. Forwarding it would make every page error its queued
++  // utterances, which a Windows or macOS identity never does.
++  if (MaskConfig::MVoices()) {
++    LOG(LogLevel::Debug, ("nsSynthVoiceRegistry::NotifyVoicesError ignored: "
++                          "the voice list is spoofed"));
++    return NS_OK;
++  }
++
+   if (XRE_IsParentProcess()) {
+     nsTArray<SpeechSynthesisParent*> ssplist;
+     GetAllSpeechSynthActors(ssplist);
+@@ -775,6 +816,30 @@ void nsSynthVoiceRegistry::SpeakImpl(VoiceData* aVoice, nsSpeechTask* aTask,
         NS_ConvertUTF16toUTF8(aText).get(),
         NS_ConvertUTF16toUTF8(aVoice->mUri).get(), aRate, aPitch));
  

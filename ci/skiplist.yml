@@ -42,27 +42,14 @@ skip:
   #
   # That breaks far less than this section used to claim. test_click.py,
   # test_check.py, test_fill.py, test_focus.py, test_dispatch_event.py and
-  # test_element_handle.py were skipped wholesale -- 160 tests -- and 158 of
-  # them pass. Only the two below actually fail, and they fail for one specific
-  # reason rather than for "humanized input" in general.
+  # test_element_handle.py were skipped wholesale -- 160 tests -- and all of
+  # them pass. The last two, test_click.py's stable-position tests, were blamed
+  # on humanized travel time; they failed because every animation finished at
+  # once, so the element Playwright waited on never moved. With animations on
+  # stock timing (instantAnimations is now opt-in) they pass too.
   #
   # See docs/input-dispatch.md. tests/patches/humanize-mouse-trajectory.py and
   # tests/patches/input-ack-backstop.py assert the behaviour that replaces them.
-
-  - test: tests/async/test_click.py::test_wait_for_stable_position
-    reason: >-
-      Upstream animates a button over 500ms and asserts click() waits for it to
-      stop moving, landing at offset 300. Camoufox clicks at 100 -- mid-flight.
-      Playwright's stable-position wait polls the bounding box and then dispatches
-      instantly; the humanized path spends real time travelling to the target, so
-      the element has moved on by the time the press lands. Narrow and real: the
-      other 68 tests in this module pass.
-
-  - test: tests/async/test_click.py::test_timeout_waiting_for_stable_position
-    reason: >-
-      The same stable-position wait, asserted from the other side -- upstream
-      expects a timeout error when the element never settles, and Camoufox does
-      not raise one.
 
   - test: tests/async/test_keyboard.py::test_should_send_proper_codes_while_typing
     reason: >-
