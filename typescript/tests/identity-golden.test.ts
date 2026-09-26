@@ -28,6 +28,7 @@ import {
 } from "../src/pycompat.js";
 import { PyRandom, pyRandom } from "../src/pyrandom.js";
 import * as webgl from "../src/webgl.js";
+import { prerequisite } from "./prereq.js";
 
 const FIXTURES = path.join(
 	path.dirname(fileURLToPath(import.meta.url)),
@@ -184,7 +185,18 @@ describe("python compatibility primitives", () => {
 			expect(formatPyFloatRepr(num(x))).toBe(rep);
 		}
 	});
-	it("sum() over ints and floats", () => {
+	it("sum() over ints and floats", (ctx) => {
+		// pySum() is sum() as 3.14 computes it; 3.12/3.13 round a mixed
+		// int/float sum that loses precision differently in the last bit.
+		const [major, minor] = fx.python;
+		if (
+			!prerequisite(
+				"python-3.14",
+				major * 100 + minor >= 314,
+				`the goldens were recorded on Python ${major}.${minor}`,
+			)
+		)
+			ctx.skip();
 		for (const s of fx.sums) {
 			const items = s.items.map((it: any) =>
 				"i" in it
@@ -197,6 +209,8 @@ describe("python compatibility primitives", () => {
 			if ("i" in s.result) expect(got).toBe(s.result.i);
 			else expect(got).toBe(num(s.result.f));
 		}
+	});
+	it("sum() over floats", () => {
 		for (const s of fx.floatSums)
 			expect(pySumFloats(s.values.map(num))).toBe(num(s.sum));
 	});

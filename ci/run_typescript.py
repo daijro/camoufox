@@ -64,11 +64,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--evidence-dir", type=Path, default=EVIDENCE_DIR)
     parser.add_argument("--browser", type=Path, help="camoufox-bin for the end-to-end suite")
     parser.add_argument("--python", type=Path, default=Path(sys.executable),
-                        help="interpreter with pythonlib installed, for the e2e comparison")
-    parser.add_argument("--regenerate-golden", action="store_true",
-                        help="rewrite tests/fixtures/ from --python's pythonlib before the suite "
-                             "runs, so the golden tests compare against live pythonlib rather "
-                             "than a committed snapshot of it (CI does this; it edits the checkout)")
+                        help="interpreter with pythonlib installed: the golden fixtures are "
+                             "recorded from it, and the e2e suite compares against it")
     parser.add_argument("--timeout", type=int, default=1800)
     args = parser.parse_args(argv)
 
@@ -80,6 +77,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
     env = dict(os.environ)
+    # tests/golden-setup.ts records the golden fixtures from this interpreter.
+    env["CAMOUFOX_PYTHON"] = str(args.python.absolute())
     if args.browser:
         env.update(
             CAMOUFOX_E2E="1",
@@ -97,7 +96,16 @@ def main(argv: Optional[List[str]] = None) -> int:
          "--", "typescript/src", "typescript/tests", "typescript/scripts"],
         cwd=REPO_ROOT,
     )
-    stray = [p for p in ignored.stdout.split() if "__pycache__" not in p]
+    # The goldens tests/golden-setup.ts records are ignored on purpose, by
+    # typescript/tests/fixtures/.gitignore; anything another rule hides is stray.
+    candidates = [p for p in ignored.stdout.split() if "__pycache__" not in p]
+    rules = run(["git", "check-ignore", "--verbose", "--no-index", *candidates], cwd=REPO_ROOT) \
+        if candidates else None
+    generated = {
+        line.split("\t", 1)[1] for line in (rules.stdout.splitlines() if rules else [])
+        if line.startswith("typescript/tests/fixtures/.gitignore:")
+    }
+    stray = [p for p in candidates if p not in generated]
     for path in stray:
         result.note(f"git-ignored test input: {path}")
     result.record("no test input is git-ignored", evidence.FAIL if stray else evidence.PASS)
@@ -125,25 +133,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         pack = build.ok and run(["node", "scripts/check-pack.mjs"], cwd=TYPESCRIPT, env=env,
                                 timeout=900, tee=True, capture=False).ok
         result.record("npm package (scripts/check-pack.mjs)", evidence.PASS if pack else evidence.FAIL)
-
-    # The committed fixtures are a snapshot of pythonlib's output. A pythonlib
-    # change that typescript/ does not mirror leaves that snapshot untouched, so
-    # the golden tests keep passing against it; regenerating from the pythonlib
-    # in this checkout is what makes such a change fail here.
-    if args.regenerate_golden and not args.browser:
-        regenerated = True
-        # fpgen's stats.json is thousands of random draws, compared statistically;
-        # it changes with the pinned model, not with pythonlib, and would cost
-        # CI minutes to redraw. The deterministic fpgen fixtures are rewritten.
-        for script, *only in (["launch_golden.py"], ["identity_golden.py"],
-                              ["fpgen_golden.py", "structure", "values", "conditions", "api"]):
-            proc = run([str(args.python), str(TYPESCRIPT / "scripts" / "golden" / script), *only],
-                       cwd=REPO_ROOT, env=env, timeout=900, tee=True, capture=False)
-            if not proc.ok:
-                result.note(f"{script} exited {proc.code}")
-                regenerated = False
-        result.record("golden fixtures regenerated from pythonlib",
-                      evidence.PASS if regenerated else evidence.FAIL)
 
     junit = WORK_DIR / f"junit-{gate}.xml"
     junit.parent.mkdir(parents=True, exist_ok=True)

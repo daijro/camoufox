@@ -13,6 +13,7 @@ export default defineConfig({
 	root: PACKAGE_ROOT,
 	test: {
 		include: ["tests/**/*.test.ts"],
+		globalSetup: ["tests/golden-setup.ts"],
 		testTimeout: 30_000,
 		hookTimeout: 30_000,
 	},

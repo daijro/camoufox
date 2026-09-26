@@ -1,0 +1,6 @@
+# Recorded from pythonlib by tests/golden-setup.ts on every test run.
+/fpgen/*
+!/fpgen/stats.json
+/identity/
+/launch/scenario-*.json
+/launch/host.json

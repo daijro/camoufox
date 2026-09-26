@@ -34,14 +34,14 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import AdmZip from "adm-zip";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { PYTHON as GOLDEN_PYTHON } from "./golden-setup.js";
 import { prerequisite } from "./prereq.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..", "..");
 const EXECUTABLE = process.env.CAMOUFOX_EXECUTABLE ?? "";
 const ENABLED = process.env.CAMOUFOX_E2E === "1" && Boolean(EXECUTABLE);
-const PYTHON =
-	process.env.CAMOUFOX_E2E_PYTHON ?? path.join(REPO, ".venv", "bin", "python");
+const PYTHON = process.env.CAMOUFOX_E2E_PYTHON ?? GOLDEN_PYTHON;
 const PROBE = fs.readFileSync(
 	path.join(HERE, "fixtures", "e2e", "probe.js"),
 	"utf-8",

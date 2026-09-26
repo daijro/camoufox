@@ -128,33 +128,34 @@ PySide6 desktop app that only the Python package provides.
 
 ## Development
 
+The tests need a Python with pythonlib next to them, at the repo root (or
+point `CAMOUFOX_PYTHON` at one):
+
 ```bash
+python3.14 -m venv .venv                                           # repo root
+.venv/bin/pip install -r ci/requirements.txt -e pythonlib
+.venv/bin/python scripts/pin-fpgen-model.py
+cd typescript
 pnpm install
-pnpm build       # tsc -> dist/, then copy src/data-files
-pnpm test        # vitest
+pnpm build       # tsc -> dist/, then copy pythonlib's data files into dist/data-files
+pnpm test        # records the golden fixtures from pythonlib, then vitest
 pnpm check       # biome lint + format
 pnpm typecheck   # tsc --noEmit
 ```
 
-`src/data-files/` holds copies of the Python package's data, kept
-byte-identical by `scripts/sync-identity-data.py`; a test fails if any copy
-drifts.
+The data files (presets, fonts, voices, territoryInfo.xml, ...) are read from
+`pythonlib/camoufox/`, the only copy in the repo; `DATA_FILES` in
+`src/paths.ts` lists them, and the build copies them into the package.
 
 ### Parity with pythonlib
 
-The golden tests are what keep the two launchers twins. Scripts under
-`scripts/golden/` run the Python code over hundreds of fixed inputs and record
-its output in `tests/fixtures/`; the TS tests must reproduce it exactly —
-`launch_options()` byte for byte, including the `CAMOU_CONFIG` blob. After a
-pythonlib change, mirror it here and regenerate:
-
-```bash
-python3 -m venv .venv && .venv/bin/pip install -e pythonlib   # repo root
-.venv/bin/python scripts/pin-fpgen-model.py
-.venv/bin/python typescript/scripts/golden/identity_golden.py
-.venv/bin/python typescript/scripts/golden/launch_golden.py
-.venv/bin/python typescript/scripts/golden/fpgen_golden.py
-```
+The golden tests are what keep the two launchers twins. Before the suite runs,
+`tests/golden-setup.ts` runs the scripts under `scripts/golden/`, which put the
+Python code through hundreds of fixed inputs and record its output in
+`tests/fixtures/` (git-ignored); the TS tests must reproduce it exactly --
+`launch_options()` byte for byte, including the `CAMOU_CONFIG` blob. A
+pythonlib change that is not mirrored here fails `pnpm test`. Use Python 3.14:
+`pySum()` follows its `sum()`, and on 3.12/3.13 that one test skips.
 
 The end-to-end suite launches a real browser through both launchers and compares
 what a page sees:

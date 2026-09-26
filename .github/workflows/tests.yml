@@ -360,8 +360,8 @@ jobs:
           # the last bit).
           python-version: "3.14"
       - run: |
-          # A venv at the repo root, where the tests that check TS against live
-          # pythonlib look for it. Without it they skip, and a skip is not a pass.
+          # A venv at the repo root: tests/golden-setup.ts records the golden
+          # fixtures from its pythonlib before the suite runs.
           python3 -m venv .venv
           .venv/bin/pip install -r ci/requirements.txt -e pythonlib
           # fpgen downloads its model on first import with TLS verification
@@ -391,7 +391,7 @@ jobs:
       - name: Run
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: .venv/bin/python -m ci.run_typescript --regenerate-golden
+        run: .venv/bin/python -m ci.run_typescript
       - uses: actions/upload-artifact@v4
         if: always()
         with:

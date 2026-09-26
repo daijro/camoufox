@@ -631,7 +631,6 @@ python3 -m ci.run_prepare                                # make setup-minimal, d
 python3 -m ci.run_build
 python3 -m ci.run_pythonlib                              # no browser needed
 python3 -m ci.run_typescript                             # no browser needed
-python3 -m ci.run_typescript     --regenerate-golden    # as CI: fixtures from live pythonlib (3.14; edits the checkout)
 python3 -m ci.run_typescript     --browser path/to/camoufox-bin
 python3 -m ci.run_patch_guards   --binary path/to/camoufox-bin
 python3 -m ci.run_build_tester   --binary path/to/camoufox-bin

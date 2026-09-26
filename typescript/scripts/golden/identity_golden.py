@@ -191,7 +191,8 @@ def record_pycompat():
     reprs = [[s, repr(s)] for s in ('', 'abc', "it's", 'say "hi"', 'both \' and "', 'tab\there', 'nl\n',
                                      'back\\slash', '\x00\x7f', 'é😀', '​', ' ', 'Apple M1, or similar')]
     write('pycompat.json', {'floats': float_cases, 'sums': sums, 'floatSums': float_sums, 'crc32': crc,
-                            'salts': salts, 'seeds': seeds, 'reprs': reprs})
+                            'salts': salts, 'seeds': seeds, 'reprs': reprs,
+                            'python': list(sys.version_info[:2])})
 
 
 def record_fpgen_salts():
