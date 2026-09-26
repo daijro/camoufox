@@ -14,24 +14,18 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { LIBRARY_VERSION } from "./__version__.js";
 import { CamoufoxNotInstalled } from "./exceptions.js";
+import { LOCAL_DATA } from "./paths.js";
 import { installedVerStr } from "./pkgman.js";
-
-const currentDir =
-	import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url));
 
 let warningsData: Record<string, string> | undefined;
 
 /** warnings.yml, loaded once. */
 export function loadWarnings(): Record<string, string> {
 	warningsData ??= parseYaml(
-		fs.readFileSync(
-			path.join(currentDir, "data-files", "warnings.yml"),
-			"utf-8",
-		),
+		fs.readFileSync(path.join(LOCAL_DATA, "warnings.yml"), "utf-8"),
 	) as Record<string, string>;
 	return warningsData;
 }

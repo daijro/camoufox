@@ -10,7 +10,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LOCAL_DATA } from "../src/paths.js";
+import { DATA_FILES, LOCAL_DATA } from "../src/paths.js";
 import { prerequisite } from "./prereq.js";
 
 const REPORT =
@@ -43,7 +43,9 @@ const corrupt = (file: string) => (dir: string) =>
 /** fingerprints.ts and warnings.ts reading a data directory `broken` has altered. */
 async function withData(broken: (dir: string) => void) {
 	const data = path.join(tmp, "data-files");
-	fs.cpSync(LOCAL_DATA, data, { recursive: true });
+	fs.mkdirSync(data, { recursive: true });
+	for (const name of DATA_FILES)
+		fs.copyFileSync(path.join(LOCAL_DATA, name), path.join(data, name));
 	broken(data);
 	vi.doMock("../src/paths.js", async (importOriginal) => ({
 		...(await importOriginal<typeof import("../src/paths.js")>()),

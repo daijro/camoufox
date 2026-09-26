@@ -8,6 +8,7 @@
  * cleanly. Everything is re-exported from pkgman.ts, which stays the public
  * entry point for them.
  */
+import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,8 +66,35 @@ export function userCacheDir(appName: string): string {
 
 export const INSTALL_DIR: string = userCacheDir("camoufox");
 
-/** Directory holding the bundled data-files (presets, fonts, territoryInfo...). */
-export const LOCAL_DATA: string = path.join(currentDir, "data-files");
+/**
+ * The data files both launchers read. They live in pythonlib/camoufox/, the one
+ * copy in the repo; `pnpm build` copies them into dist/data-files/ for the npm
+ * tarball, so one seed draws one identity in either launcher.
+ */
+export const DATA_FILES: readonly string[] = [
+	"essential-fonts.json",
+	"fingerprint-presets.json",
+	"fingerprint-presets-v150.json",
+	"font-bases.json",
+	"font-groups.json",
+	"fonts.json",
+	"media-devices.json",
+	"repos.yml",
+	"territoryInfo.xml",
+	"voice-manifests.json",
+	"voice-uris.json",
+	"warnings.yml",
+];
+
+/**
+ * Where DATA_FILES are read from: dist/data-files/ in a built package, else
+ * pythonlib's copies when running from src/ in the repo.
+ */
+export const LOCAL_DATA: string = fs.existsSync(
+	path.join(currentDir, "data-files"),
+)
+	? path.join(currentDir, "data-files")
+	: path.resolve(currentDir, "..", "..", "pythonlib", "camoufox");
 
 export const OS_ARCH_MATRIX: Record<string, string[]> = {
 	win: ["x86_64", "i686"],

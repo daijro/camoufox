@@ -6,6 +6,7 @@ import { FileNotFoundError } from "../src/exceptions.js";
 import {
 	AvailableVersion,
 	formatAssetDate,
+	LOCAL_DATA,
 	loadYaml,
 	OS_ARCH_MATRIX,
 	OS_NAME,
@@ -157,10 +158,7 @@ describe("repos.yml", () => {
 			path.join(import.meta.dirname, "../../pythonlib/camoufox/repos.yml"),
 			"utf-8",
 		);
-		const ours = fs.readFileSync(
-			path.join(import.meta.dirname, "../src/data-files/repos.yml"),
-			"utf-8",
-		);
+		const ours = fs.readFileSync(path.join(LOCAL_DATA, "repos.yml"), "utf-8");
 		expect(ours).toBe(shipped);
 		expect(loadYaml("repos.yml").default.browser).toBe("Official");
 	});

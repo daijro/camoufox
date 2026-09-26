@@ -5,9 +5,9 @@
  *
  *   1. its version equals pythonlib's (the two launchers ship in lockstep, and
  *      a user comparing `camoufox version` across them should see one number);
- *   2. it carries every data file src/ reads at runtime -- `copy-files` is a
- *      hand-kept list, and a file missing from it only shows up on a user's
- *      machine, as an ENOENT from inside dist/;
+ *   2. it carries every file src/ reads at runtime -- the DATA_FILES it takes
+ *      from pythonlib and any non-TS file under src/ -- since a file missing
+ *      only shows up on a user's machine, as an ENOENT from inside dist/;
  *   3. installed into an empty project, it imports and exposes its entry
  *      points, and its CLI starts.
  *
@@ -54,6 +54,10 @@ for (const file of walk(src)) {
 	} else if (!inTarball.has(`dist/${rel}`)) {
 		problems.push(`missing dist/${rel} (a non-TS file under src/ that copy-files does not ship)`);
 	}
+}
+const { DATA_FILES } = await import(join(root, "dist", "paths.js"));
+for (const name of DATA_FILES) {
+	if (!inTarball.has(`dist/data-files/${name}`)) problems.push(`missing dist/data-files/${name}`);
 }
 console.log(`${packed.filename}: ${packed.entryCount} files, ${(packed.size / 1e6).toFixed(1)} MB packed`);
 

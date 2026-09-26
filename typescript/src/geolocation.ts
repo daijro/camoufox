@@ -13,7 +13,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { NotInstalledGeoIPExtra, UnknownIPLocation } from "./exceptions.js";
 import { validateIP } from "./ip.js";
 import { Geolocation, SELECTOR } from "./locales.js";
-import { INSTALL_DIR, LOCAL_DATA, rprint } from "./paths.js";
+import { INSTALL_DIR, LOCAL_DATA } from "./paths.js";
 
 export const GEOIP_DIR: string = path.join(INSTALL_DIR, "geoip");
 export const MMDB_DIR: string = path.join(GEOIP_DIR, "mmdb");
