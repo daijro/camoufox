@@ -132,8 +132,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     # in this checkout is what makes such a change fail here.
     if args.regenerate_golden and not args.browser:
         regenerated = True
-        for script in ("launch_golden.py", "identity_golden.py", "fpgen_golden.py"):
-            proc = run([str(args.python), str(TYPESCRIPT / "scripts" / "golden" / script)],
+        # fpgen's stats.json is thousands of random draws, compared statistically;
+        # it changes with the pinned model, not with pythonlib, and would cost
+        # CI minutes to redraw. The deterministic fpgen fixtures are rewritten.
+        for script, *only in (["launch_golden.py"], ["identity_golden.py"],
+                              ["fpgen_golden.py", "structure", "values", "conditions", "api"]):
+            proc = run([str(args.python), str(TYPESCRIPT / "scripts" / "golden" / script), *only],
                        cwd=REPO_ROOT, env=env, timeout=900, tee=True, capture=False)
             if not proc.ok:
                 result.note(f"{script} exited {proc.code}")
