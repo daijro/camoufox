@@ -38,6 +38,20 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install pythonlib
+        # tests/golden-setup.ts records the golden fixtures from it, and the
+        # build copies its data files into the package.
+        working-directory: .
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r ci/requirements.txt -e pythonlib
+          .venv/bin/python scripts/pin-fpgen-model.py
+
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
