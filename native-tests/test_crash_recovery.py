@@ -637,6 +637,12 @@ async def test_the_parent_stays_flat_across_content_crashes(binary, psutil_mod, 
     manager, browser = await open_browser(binary)
     parents = wait_for_process(psutil_mod, BROWSER)
     parent = parents[0]
+    # The baseline follows one clean context. The parent's first context costs
+    # it 150-200 MB with no crash at all, and a baseline taken before that
+    # counted the warm-up as crash growth: 330-370 MB of the 400 MB allowance
+    # locally, and over it on a CI runner.
+    context, _ = await a_page(browser)
+    await close_bounded(context, 30, "the warm-up context")
     baseline = parent.memory_info().rss
 
     for _ in range(3):
