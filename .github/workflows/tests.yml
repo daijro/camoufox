@@ -354,7 +354,11 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          # Not PYTHON_VERSION: the golden fixtures are regenerated from this
+          # interpreter, and pycompat.ts's pySum() reproduces sum() as 3.14
+          # computes it (3.12/3.13 round mixed int/float sums differently in
+          # the last bit).
+          python-version: "3.14"
       - run: |
           # A venv at the repo root, where the tests that check TS against live
           # pythonlib look for it. Without it they skip, and a skip is not a pass.
@@ -387,7 +391,7 @@ jobs:
       - name: Run
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: .venv/bin/python -m ci.run_typescript
+        run: .venv/bin/python -m ci.run_typescript --regenerate-golden
       - uses: actions/upload-artifact@v4
         if: always()
         with:

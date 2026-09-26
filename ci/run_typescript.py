@@ -65,6 +65,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--browser", type=Path, help="camoufox-bin for the end-to-end suite")
     parser.add_argument("--python", type=Path, default=Path(sys.executable),
                         help="interpreter with pythonlib installed, for the e2e comparison")
+    parser.add_argument("--regenerate-golden", action="store_true",
+                        help="rewrite tests/fixtures/ from --python's pythonlib before the suite "
+                             "runs, so the golden tests compare against live pythonlib rather "
+                             "than a committed snapshot of it (CI does this; it edits the checkout)")
     parser.add_argument("--timeout", type=int, default=1800)
     args = parser.parse_args(argv)
 
@@ -121,6 +125,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         pack = build.ok and run(["node", "scripts/check-pack.mjs"], cwd=TYPESCRIPT, env=env,
                                 timeout=900, tee=True, capture=False).ok
         result.record("npm package (scripts/check-pack.mjs)", evidence.PASS if pack else evidence.FAIL)
+
+    # The committed fixtures are a snapshot of pythonlib's output. A pythonlib
+    # change that typescript/ does not mirror leaves that snapshot untouched, so
+    # the golden tests keep passing against it; regenerating from the pythonlib
+    # in this checkout is what makes such a change fail here.
+    if args.regenerate_golden and not args.browser:
+        regenerated = True
+        for script in ("launch_golden.py", "identity_golden.py", "fpgen_golden.py"):
+            proc = run([str(args.python), str(TYPESCRIPT / "scripts" / "golden" / script)],
+                       cwd=REPO_ROOT, env=env, timeout=900, tee=True, capture=False)
+            if not proc.ok:
+                result.note(f"{script} exited {proc.code}")
+                regenerated = False
+        result.record("golden fixtures regenerated from pythonlib",
+                      evidence.PASS if regenerated else evidence.FAIL)
 
     junit = WORK_DIR / f"junit-{gate}.xml"
     junit.parent.mkdir(parents=True, exist_ok=True)
