@@ -151,6 +151,9 @@ def static_check(binary: Path, manifest: dict, failures: list) -> None:
             print(f"  ok  {key.split('|', 2)[2]:32} {len(built):>5} files")
 
 
+PROBE_MARK = "PROBE-RESULT "
+
+
 def run_probe(binary: Path) -> dict:
     """The probe itself, run in a child process (see live_check)."""
     from camoufox.sync_api import Camoufox
@@ -181,7 +184,14 @@ def live_check(binary: Path, failures: list) -> None:
     if proc.returncode != 0:
         failures.append(f"live probe failed: {proc.stderr.strip().splitlines()[-1:] or proc.stdout}")
         return
-    results = json.loads(proc.stdout)
+    # The launcher may print to stdout first -- on a fresh machine the first
+    # launch downloads the default addons and reports progress -- so read the
+    # marked result line, not the whole stream.
+    marked = [line for line in proc.stdout.splitlines() if line.startswith(PROBE_MARK)]
+    if not marked:
+        failures.append(f"live probe printed no result line: {proc.stdout.strip()[-300:]!r}")
+        return
+    results = json.loads(marked[-1][len(PROBE_MARK):])
 
     for url, must_load in LIVE_PROBES:
         got = results.get(url)
@@ -227,6 +237,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--probe":
-        print(json.dumps(run_probe(Path(sys.argv[2]))))
+        print(PROBE_MARK + json.dumps(run_probe(Path(sys.argv[2]))))
         sys.exit(0)
     sys.exit(main())
