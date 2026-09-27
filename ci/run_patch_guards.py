@@ -44,8 +44,10 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "startup-prefs",
         "system-ui-font-spoofing",
         "touchscreen-digitizer",
+        "worker-config-reads",
     ),
     "automation": (
+        "addons-install-once",
         "force-scope-access",
         "humanize-edge-deadlock",
         "humanize-mouse-trajectory",
@@ -66,6 +68,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "popup-blocker-parity",
         "search-service-init",
         "stock-parity-probes",
+        "viewport-no-rdm",
         "windows-exe-manifest",
     ),
 }
