@@ -3,6 +3,7 @@
   "policies": {
     "AppUpdateURL": "https://localhost",
     "DisableAppUpdate": true,
+    "DefaultSerialGuardSetting": 3,
     "OverrideFirstRunPage": "",
     "OverridePostUpdatePage": "",
     "DisableSystemAddonUpdate": true,
