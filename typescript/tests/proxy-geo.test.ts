@@ -27,6 +27,7 @@ vi.mock("impit", () => ({
 
 const { NewContext } = await import("../src/sync_api.js");
 const { InvalidIP } = await import("../src/exceptions.js");
+const { getRandomPreset } = await import("../src/fingerprints.js");
 
 const EXIT = {
 	status: "success",
@@ -116,5 +117,25 @@ describe("NewContext identity", () => {
 		)?.[1];
 		expect(userAgent).toContain("Firefox/160.0");
 		expect(userAgent).toContain("rv:160.0");
+	});
+
+	it("hands Playwright the identity under its own option names", async () => {
+		// Re-casing these turned userAgent into `useragent`, which Playwright
+		// drops: the HTTP User-Agent then disagreed with navigator.userAgent.
+		const { browser, calls } = fakeBrowser();
+		const preset = getRandomPreset("windows");
+		expect(preset?.screen?.devicePixelRatio).toBeGreaterThan(0);
+		await NewContext(browser, { preset, timezoneId: "Asia/Tokyo" } as any);
+		const userAgent = /setNavigatorUserAgent\("([^"]+)"\)/.exec(
+			calls.script ?? "",
+		)?.[1];
+		expect(calls.options.userAgent).toBe(userAgent);
+		expect(calls.options.deviceScaleFactor).toBeGreaterThan(0);
+		expect(calls.options.viewport.width).toBeGreaterThan(0);
+		expect(calls.options.timezoneId).toBe("Asia/Tokyo");
+		for (const key of Object.keys(calls.options))
+			expect(key, "a key Playwright does not know").not.toMatch(
+				/^(useragent|devicescalefactor|timezoneid)$/,
+			);
 	});
 });

@@ -16,6 +16,7 @@ import {
 } from "playwright-core";
 import * as cpuAffinity from "./cpu_affinity.js";
 import { generateContextFingerprint } from "./fingerprints.js";
+import { ensureModel } from "./fpgen/index.js";
 import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "./ip.js";
 import {
 	applyNoViewport,
@@ -248,6 +249,11 @@ export async function NewContext(
 		...contextOptions
 	}: NewContextOptions = {},
 ): Promise<BrowserContext> {
+	// Python's fpgen loads its model on import; here it is fetched on first use.
+	// launchOptions() awaits it, but a browser from connect() or a custom
+	// executable never went through launchOptions().
+	await ensureModel();
+
 	// The drawn UA carries fpgen's Firefox version, which must not disagree with
 	// the browser the page is actually talking to.
 	const ffVersion = ff_version || browser.version().split(".", 1)[0];
@@ -268,15 +274,14 @@ export async function NewContext(
 		webrtc_ip: webrtcIp,
 	});
 
-	// Merge generated context options with user overrides (user wins). The
-	// generated ones are Python-Playwright names; the JS API is camelCase.
-	const generated: Record<string, any> = {};
-	for (const [key, value] of Object.entries(
-		(fp as any).contextOptions ?? (fp as any).context_options ?? {},
-	)) {
-		generated[camelCase(key)] = value;
-	}
-	const opts: Record<string, any> = { ...generated, ...contextOptions };
+	// Merge the generated context options with user overrides (user wins). They
+	// are already Playwright's JS names (userAgent, deviceScaleFactor,
+	// timezoneId); re-casing them turned userAgent into `useragent`, which
+	// Playwright ignores, so the HTTP User-Agent contradicted navigator's.
+	const opts: Record<string, any> = {
+		...fp.context_options,
+		...contextOptions,
+	};
 	if (proxy) opts.proxy = proxy;
 	if (geolocation) {
 		opts.geolocation = geolocation;
