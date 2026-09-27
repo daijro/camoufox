@@ -153,6 +153,20 @@ function kwargsFor(identity: string): Record<string, any> {
 	};
 }
 
+/**
+ * Give a headful page focus and wait until it has it. One bringToFront() on a
+ * bare Xvfb, with no window manager, sometimes left the window unfocused, and
+ * Firefox holds enumerateDevices() until the document has focus.
+ */
+async function focusPage(page: any): Promise<void> {
+	for (let i = 0; i < 50; i++) {
+		await page.bringToFront();
+		if (await page.evaluate("document.hasFocus()")) return;
+		await new Promise((r) => setTimeout(r, 200));
+	}
+	throw new Error("the headful page never got focus on Xvfb");
+}
+
 async function probePage(page: any): Promise<any> {
 	await page.goto(url);
 	// Python's evaluate() calls a function-source string; JS's evaluates it as
@@ -564,8 +578,12 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 						// focus (LEAKS row 57). Headless fakes focus; a headful window
 						// on a bare Xvfb only sometimes gets it, so the probe hung on
 						// some runs. A user's window has focus: give it one.
-						await step("virtual: bringToFront", page.bringToFront());
-						probe = await step("virtual: probe the page", probePage(page));
+						await step("virtual: goto", page.goto(url));
+						await step("virtual: focus", focusPage(page));
+						probe = await step(
+							"virtual: probe the page",
+							page.evaluate(`(${PROBE})()`),
+						);
 					} finally {
 						await step("virtual: close", (browser as any).close());
 					}

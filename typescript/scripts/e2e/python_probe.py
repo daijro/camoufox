@@ -63,11 +63,18 @@ def run(req):
             kwargs = {k: v for k, v in kwargs.items() if k != 'headless'}
         with Camoufox(**kwargs, **extra) as browser:
             page = browser.new_page()
+            page.goto(req['url'])
             if req['mode'] == 'virtual':
                 # As the TS side does: Firefox defers enumerateDevices() until
-                # the document has focus, which headful on bare Xvfb lacks.
-                page.bring_to_front()
-            page.goto(req['url'])
+                # the document has focus, which a headful window on a bare Xvfb
+                # only sometimes gets. Wait for it, as a user's window has it.
+                for _ in range(50):
+                    page.bring_to_front()
+                    if page.evaluate('document.hasFocus()'):
+                        break
+                    page.wait_for_timeout(200)
+                else:
+                    raise RuntimeError('the headful page never got focus on Xvfb')
             probe = page.evaluate(PROBE)
     return {'probe': probe, 'config': config}
 
