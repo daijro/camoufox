@@ -199,3 +199,25 @@ def test_is_mobile_warns_that_camoufox_is_desktop_only():
 
     with pytest.warns(LeakWarning, match="built for desktops"):
         launch(is_mobile=True, i_know_what_im_doing=False)
+
+
+def test_a_context_with_a_linux_ua_is_linux_throughout(monkeypatch):
+    """fpgen's Linux pool now and then pairs the Linux UA with platform Win32 and
+    a Windows oscpu (~1.6% of NewContext Linux identities). launch_options()
+    fixed that and generate_context_fingerprint() did not -- and it reads the OS
+    for fonts and voices from the platform, so those came out Windows too."""
+    real = fp.generate_fingerprint
+
+    def mismatched(**kwargs):
+        drawn = real(**kwargs)
+        drawn["navigator"]["platform"] = "Win32"
+        drawn["navigator"]["oscpu"] = "Windows NT 10.0; Win64; x64"
+        return drawn
+
+    monkeypatch.setattr(fp, "generate_fingerprint", mismatched)
+    config = fp.generate_context_fingerprint(os="linux")["config"]
+
+    assert "Linux x86_64" in config["navigator.userAgent"]
+    assert config["navigator.platform"] == "Linux x86_64"
+    assert config["navigator.oscpu"] == "Linux x86_64"
+    assert "Segoe UI" not in config["fonts"]

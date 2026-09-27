@@ -6,7 +6,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { InvalidIP } from "../src/exceptions.js";
 import {
 	appVersionFromUserAgent,
@@ -35,6 +35,7 @@ import {
 	setMediaDevicesDefaults,
 	WINDOWS_11_MARKER_FONTS,
 } from "../src/fingerprints.js";
+import { Generator } from "../src/fpgen/index.js";
 import { LOCAL_DATA } from "../src/pkgman.js";
 import { MODEL } from "./fpgen-setup.js";
 
@@ -886,5 +887,29 @@ describe.skipIf(!MODEL.ok)("fpgen generation (needs the model)", () => {
 		});
 		expect(fromP.context_options.timezoneId).toBe("Europe/Paris");
 		expect(fromP.config["navigator.platform"]).toBe("MacIntel");
+	});
+
+	it("a context with a Linux UA is Linux throughout", () => {
+		// fpgen's Linux pool now and then pairs the Linux UA with platform Win32
+		// and a Windows oscpu. launchOptions() fixed that and this path did not,
+		// and it reads the OS for fonts and voices from the platform.
+		const real = Generator.prototype.generate;
+		const spy = vi
+			.spyOn(Generator.prototype, "generate")
+			.mockImplementation(function (this: Generator, ...args: any[]) {
+				const drawn = (real as any).apply(this, args);
+				drawn.navigator.platform = "Win32";
+				drawn.navigator.oscpu = "Windows NT 10.0; Win64; x64";
+				return drawn;
+			});
+		try {
+			const { config } = generateContextFingerprint({ os: "linux" });
+			expect(config["navigator.userAgent"]).toContain("Linux x86_64");
+			expect(config["navigator.platform"]).toBe("Linux x86_64");
+			expect(config["navigator.oscpu"]).toBe("Linux x86_64");
+			expect(config.fonts).not.toContain("Segoe UI");
+		} finally {
+			spy.mockRestore();
+		}
 	});
 });
