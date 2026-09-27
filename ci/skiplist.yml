@@ -174,3 +174,43 @@ skip:
       patches/popup-blocker-parity.patch). page.click() still works -- it
       synthesizes a real click, which grants a real activation -- and so does
       page.evaluate(() => window.open(...)).
+
+  # --- scrollbars in an emulated viewport --------------------------------------
+  #
+  # Upstream's headless Firefox hides content scrollbars with an agent style
+  # sheet, which a page can read back, so Camoufox leaves them to the platform
+  # look-and-feel (additions/juggler/components/Juggler.js). These tests were
+  # still passing only because Juggler put every viewport context into
+  # Responsive Design Mode, whose overlay scrollbars take no width. It no longer
+  # does unless isMobile is set, as in Playwright's own Juggler since
+  # microsoft/playwright#41859 (additions/juggler/TargetRegistry.js, guard
+  # tests/patches/viewport-no-rdm.py). The suite launches the bare binary
+  # headless on Linux, which draws classic 12 px scrollbars, so a 500 px wide
+  # grid.html page lays out 488 px of content, as stock Firefox does.
+
+  - test: tests/async/test_element_handle.py::test_bounding_box
+    reason: >-
+      grid.html in a 500x500 viewport: beside a 12 px classic scrollbar nine
+      50 px boxes fit per row, not ten, so box 13 is at x=150 rather than the
+      x=100 upstream measures with no scrollbar width.
+
+  - test: tests/sync/test_element_handle.py::test_bounding_box
+    reason: >-
+      The sync twin of tests/async/test_element_handle.py::test_bounding_box:
+      box 13 is at x=150 beside a classic scrollbar, not 100.
+
+  - test: tests/async/test_locators.py::test_locators_should_return_bounding_box
+    reason: >-
+      The same grid.html measurement through a locator: x=150 beside a 12 px
+      classic scrollbar, not the 100 upstream measures with none.
+
+  - test: tests/sync/test_locators.py::test_locators_should_return_bounding_box
+    reason: >-
+      The sync twin of the locator bounding-box test: x=150 beside a classic
+      scrollbar, not 100.
+
+  - test: tests/async/test_screenshot.py::test_should_screenshot_with_mask
+    reason: >-
+      Compares a 500x500 grid.html screenshot with a golden image that has no
+      scrollbar. Here the page draws the classic scrollbar stock Firefox draws,
+      and that strip differs (5339 pixels).
