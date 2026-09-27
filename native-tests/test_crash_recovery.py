@@ -26,6 +26,7 @@ of testing what actually happens rather than what a mock says happens.
 from __future__ import annotations
 
 import asyncio
+import enum
 import os
 import time
 from pathlib import Path
@@ -627,45 +628,85 @@ async def test_repeated_content_crashes_do_not_accumulate(binary, psutil_mod, le
     leak_check.assert_clean()
 
 
-async def test_the_parent_stays_flat_across_content_crashes(binary, psutil_mod, leak_check):
+class Cycle(enum.Enum):
+    CONTROL = "control"
+    CRASH = "crash"
+
+
+# The parent's first context costs it 150-200 MB with no crash at all, and the
+# second still 10-40 MB. A baseline taken before them counts that as growth.
+WARMUP_CYCLES = 2
+# Per phase. Long enough for a per-crash leak to outgrow the +-50 MB a phase
+# wanders by on its own.
+PHASE_CYCLES = 8
+# How much more the crash phase may grow the parent than the control phase.
+# Measured locally, 18 and 20 runs: -105..+26 MB with crashed tabs closed,
+# +132..+591 MB when every crashed page kept its window open.
+CRASH_EXCESS_LIMIT_MB = 100
+
+
+async def _context_cycle(psutil_mod, browser, cycle: Cycle):
+    """One context's life: open a page, maybe lose its content process, close."""
+    if cycle is Cycle.CRASH:
+        context, _ = await _content_crash(psutil_mod, browser)
+    else:
+        context, _ = await a_page(browser)
+    await asyncio.sleep(1.5)
+    try:
+        await bounded(close_bounded(context, 30, "context.close()"), 40, "close")
+    except BaseException:
+        pass
+
+
+async def test_the_parent_stays_flat_across_content_crashes(binary, psutil_mod, leak_check, capsys):
     """#762 measured the parent at 479 MB, flat, while a child reached 15 GB.
 
     That containment is the property worth pinning. If a dying content process
     dragged the parent up with it, one bad page would take out every other tab
     in the browser rather than just its own.
+
+    The parent grows on context cycles whether or not anything crashes, so the
+    crash phase is measured against a control phase of the same cycles without
+    the kill. A raw bound on the crash phase alone hid a real leak: every
+    crashed page kept its browser window open, 15-60 MB each.
     """
     manager, browser = await open_browser(binary)
-    parents = wait_for_process(psutil_mod, BROWSER)
-    parent = parents[0]
-    # The baseline follows one clean context. The parent's first context costs
-    # it 150-200 MB with no crash at all, and a baseline taken before that
-    # counted the warm-up as crash growth: 330-370 MB of the 400 MB allowance
-    # locally, and over it on a CI runner.
-    context, _ = await a_page(browser)
-    await close_bounded(context, 30, "the warm-up context")
-    baseline = parent.memory_info().rss
+    parent = wait_for_process(psutil_mod, BROWSER)[0]
 
-    for _ in range(3):
-        context, _ = await _content_crash(psutil_mod, browser)
-        await asyncio.sleep(1.5)
+    def rss():
         try:
-            await bounded(close_bounded(context, 30, "context.close()"), 40, "close")
-        except BaseException:
-            pass
+            return parent.memory_info().rss
+        except psutil_mod.NoSuchProcess:
+            raise AssertionError(
+                "the parent process died along with its content processes. #762's whole "
+                "point is that the parent is unaffected."
+            ) from None
 
-    try:
-        after = parent.memory_info().rss
-    except psutil_mod.NoSuchProcess:
-        raise AssertionError(
-            "the parent process died along with its content processes. #762's whole "
-            "point is that the parent is unaffected."
-        ) from None
+    async def phase(cycle: Cycle, count: int) -> float:
+        before = rss()
+        for _ in range(count):
+            await _context_cycle(psutil_mod, browser, cycle)
+        return (rss() - before) / (1024 * 1024)
 
-    growth_mb = (after - baseline) / (1024 * 1024)
-    assert growth_mb < 400, (
-        f"the browser parent grew {growth_mb:.0f} MB across three content-process "
-        f"crashes ({baseline / 1e6:.0f} MB -> {after / 1e6:.0f} MB). A crashing child "
-        "should not drag the parent up with it."
+    await phase(Cycle.CONTROL, WARMUP_CYCLES)
+    control_mb = await phase(Cycle.CONTROL, PHASE_CYCLES)
+    crash_mb = await phase(Cycle.CRASH, PHASE_CYCLES)
+    excess_mb = crash_mb - control_mb
+
+    # On every run, not just a failing one, so CI logs carry the distribution
+    # the limit is set from.
+    with capsys.disabled():
+        print(
+            f"\n[parent-flat] parent RSS over {PHASE_CYCLES} context cycles: control "
+            f"{control_mb:+.0f} MB, with a content crash each {crash_mb:+.0f} MB, "
+            f"excess {excess_mb:+.0f} MB (limit {CRASH_EXCESS_LIMIT_MB})"
+        )
+
+    assert excess_mb < CRASH_EXCESS_LIMIT_MB, (
+        f"the browser parent grew {crash_mb:.0f} MB across {PHASE_CYCLES} content-process "
+        f"crashes against {control_mb:.0f} MB for the same cycles without one: "
+        f"{excess_mb:.0f} MB the crashes alone left behind. A crashing child should "
+        "not drag the parent up with it."
     )
 
     await teardown(manager, "teardown after measuring parent growth")

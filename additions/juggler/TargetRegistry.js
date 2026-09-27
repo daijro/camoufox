@@ -146,9 +146,15 @@ export class TargetRegistry {
     return TargetRegistry._instance || null;
   }
 
-  constructor() {
+  constructor({ lastWindowQuits = true } = {}) {
     helper.decorateAsEventEmitter(this);
     TargetRegistry._instance = this;
+
+    // False when Juggler holds the last-window-closing survival area (-silent,
+    // every non-persistent launch); a persistent launch quits with its last window.
+    this._lastWindowQuits = lastWindowQuits;
+    // Crashed pages whose tab is the browser's last; see _closeCrashedTab.
+    this._retainedCrashedTargets = new Set();
 
     this._browserContextIdToBrowserContext = new Map();
     this._userContextIdToBrowserContext = new Map();
@@ -189,6 +195,14 @@ export class TargetRegistry {
           return;
         target.emit(PageTarget.Events.Crashed);
         target.dispose();
+        // dispose() detaches the page from every client and drops it from its
+        // context, so nothing could close this tab afterwards: context.close()
+        // only closes the pages it still tracks, and the default context closes
+        // none. Each crashed page kept its window alive until the browser
+        // exited -- 15-60 MB of parent RSS apiece, growing without bound across
+        // repeated crashes (#762's scraper). Deferred so the tab is not torn
+        // down inside Gecko's own crash notification.
+        setTimeout(() => this._closeCrashedTab(target), 0);
       }
     }, 'oop-frameloader-crashed');
 
@@ -215,6 +229,11 @@ export class TargetRegistry {
         target.updateViewportSize();
       if (browserContext.videoRecordingOptions)
         target._startVideoRecording(browserContext.videoRecordingOptions);
+
+      // Another tab exists now, so a crashed page kept as the last one can go.
+      for (const crashed of this._retainedCrashedTargets)
+        setTimeout(() => this._closeCrashedTab(crashed), 0);
+      this._retainedCrashedTargets.clear();
     };
 
     const onTabCloseListener = event => {
@@ -367,6 +386,16 @@ export class TargetRegistry {
 
   browserContextForUserContextId(userContextId) {
     return this._userContextIdToBrowserContext.get(userContextId);
+  }
+
+  _closeCrashedTab(target) {
+    if (this._lastWindowQuits && target.isLastTab()) {
+      // Closing it would quit a persistent-context browser under the client.
+      // Keep it until another tab opens; onTabOpenListener comes back for it.
+      this._retainedCrashedTargets.add(target);
+      return;
+    }
+    target.closeCrashedTab();
   }
 
   async newPage({browserContextId}) {
@@ -811,6 +840,23 @@ export class PageTarget {
     this._gBrowser.removeTab(this._tab, {
       skipPermitUnload: !runBeforeUnload,
     });
+  }
+
+  closeCrashedTab() {
+    // Its window or context may have closed it first.
+    if (!this._tab.isConnected || this._tab.closing)
+      return;
+    this.close();
+  }
+
+  isLastTab() {
+    if (this._gBrowser.tabs.length > 1)
+      return false;
+    for (const win of Services.wm.getEnumerator('navigator:browser')) {
+      if (win !== this._window && !win.closed)
+        return false;
+    }
+    return true;
   }
 
   channel() {
