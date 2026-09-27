@@ -92,7 +92,7 @@ export class Juggler {
       case "final-ui-startup":
         Services.obs.removeObserver(this, topic);
 
-        const targetRegistry = new TargetRegistry();
+        const targetRegistry = new TargetRegistry({ lastWindowQuits: !this._silent });
         new NetworkObserver(targetRegistry);
 
         const loadStyleSheet = () => {
