@@ -336,6 +336,12 @@ def main():
                   f'(intersection of {len(bases)} base(s) + aliases)')
             essential[os_key] = sorted(common)
         path = os.path.join(REPO, 'pythonlib', 'camoufox', 'essential-fonts.json')
+        # Both launchers read every OS's list at import, so a file missing one
+        # breaks `import camoufox`. Keep the old file rather than write that.
+        missing = [k for k in OSDIRS if k not in essential]
+        if missing:
+            sys.exit(f'not writing {path}: no OS bases for {", ".join(missing)} '
+                     f'in the manifest')
         with open(path, 'w', encoding='utf-8') as f:
             f.write('{\n' + ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}'
                                         for k, v in essential.items()) + '\n}\n')
