@@ -1,8 +1,8 @@
 diff --git a/browser/app/moz.build b/browser/app/moz.build
-index 28a9650680..9251ac4547 100644
+index db09aba7e9..57a4ecd214 100644
 --- a/browser/app/moz.build
 +++ b/browser/app/moz.build
-@@ -186,6 +186,9 @@ for icon in ("firefox", "document", "newwindow", "newtab", "pbmode", "document_p
+@@ -290,6 +290,9 @@ for icon in (
          icon,
      )
  
@@ -13,10 +13,10 @@ index 28a9650680..9251ac4547 100644
      WINCONSOLE = True
  else:
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index e25ac44451..13839534ad 100644
+index e8f35ff5c4..88cea77d60 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -647,3 +647,6 @@ GeneratedFile(
+@@ -664,3 +664,6 @@ GeneratedFile(
          "/servo/components/style/properties/counted_unknown_properties.py",
      ],
  )
@@ -25,7 +25,7 @@ index e25ac44451..13839534ad 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 4bc6688f9a..693779ca08 100644
+index fb3a1f640d..bc65e5256b 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -3,6 +3,7 @@
@@ -36,25 +36,25 @@ index 4bc6688f9a..693779ca08 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -3704,6 +3705,8 @@ void nsGlobalWindowInner::SetName(const nsAString& aName,
- }
+@@ -3718,6 +3719,8 @@ void nsGlobalWindowInner::SetName(const nsAString& aName,
  
- double nsGlobalWindowInner::GetInnerWidth(ErrorResult& aError) {
+ double nsGlobalWindowInner::GetInnerWidth(CallerType aCallerType,
+                                           ErrorResult& aError) {
 +  if (auto value = MaskConfig::GetDouble("window.innerWidth"))
 +    return value.value();
-   FORWARD_TO_OUTER_OR_THROW(GetInnerWidthOuter, (aError), aError, 0);
+   FORWARD_TO_OUTER_OR_THROW(GetInnerWidthOuter, (aCallerType, aError), aError,
+                             0);
  }
+@@ -3731,6 +3734,8 @@ nsresult nsGlobalWindowInner::GetInnerWidth(CallerType aCallerType,
  
-@@ -3715,6 +3718,8 @@ nsresult nsGlobalWindowInner::GetInnerWidth(double* aWidth) {
- }
- 
- double nsGlobalWindowInner::GetInnerHeight(ErrorResult& aError) {
+ double nsGlobalWindowInner::GetInnerHeight(CallerType aCallerType,
+                                            ErrorResult& aError) {
 +  if (auto value = MaskConfig::GetDouble("window.innerHeight"))
 +    return value.value();
-   // We ignore aCallerType; we only have that argument because some other things
-   // called by GetReplaceableWindowCoord need it.  If this ever changes, fix
-   //   nsresult nsGlobalWindowInner::GetInnerHeight(double* aInnerWidth)
-@@ -3731,6 +3736,12 @@ nsresult nsGlobalWindowInner::GetInnerHeight(double* aHeight) {
+   FORWARD_TO_OUTER_OR_THROW(GetInnerHeightOuter, (aCallerType, aError), aError,
+                             0);
+ }
+@@ -3744,6 +3749,12 @@ nsresult nsGlobalWindowInner::GetInnerHeight(CallerType aCallerType,
  
  int32_t nsGlobalWindowInner::GetOuterWidth(CallerType aCallerType,
                                             ErrorResult& aError) {
@@ -67,7 +67,7 @@ index 4bc6688f9a..693779ca08 100644
    FORWARD_TO_OUTER_OR_THROW(GetOuterWidthOuter, (aCallerType, aError), aError,
                              0);
  }
-@@ -3751,11 +3762,13 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
+@@ -3764,11 +3775,13 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
  
  int32_t nsGlobalWindowInner::GetScreenX(CallerType aCallerType,
                                          ErrorResult& aError) {
@@ -81,7 +81,7 @@ index 4bc6688f9a..693779ca08 100644
    FORWARD_TO_OUTER_OR_THROW(GetScreenYOuter, (aCallerType, aError), aError, 0);
  }
  
-@@ -3789,6 +3802,8 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
+@@ -3802,6 +3815,8 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
  double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
                                                  ErrorResult& aError) {
    ENSURE_ACTIVE_DOCUMENT(aError, 0.0);
@@ -91,7 +91,7 @@ index 4bc6688f9a..693779ca08 100644
    RefPtr<nsPresContext> presContext = GetPresContextForRatio(mDoc);
    if (NS_WARN_IF(!presContext)) {
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index de9a6a4d11..78849001c5 100644
+index 3b48a7f1e2..4b989dd48a 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
 @@ -4,6 +4,8 @@
@@ -103,7 +103,7 @@ index de9a6a4d11..78849001c5 100644
  #include "mozilla/GeckoBindings.h"
  #include "mozilla/dom/BrowsingContextBinding.h"
  #include "mozilla/dom/Document.h"
-@@ -44,6 +46,10 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
+@@ -45,6 +47,10 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
                                     mScreenOrientation)
  
  int32_t nsScreen::PixelDepth() {
@@ -114,7 +114,7 @@ index de9a6a4d11..78849001c5 100644
    // Return 24 to prevent fingerprinting.
    if (ShouldResistFingerprinting(RFPTarget::ScreenPixelDepth)) {
      return 24;
-@@ -99,6 +105,12 @@ CSSIntRect nsScreen::GetRect() {
+@@ -100,6 +106,12 @@ CSSIntRect nsScreen::GetRect() {
  }
  
  CSSIntRect nsScreen::GetAvailRect() {
@@ -128,7 +128,7 @@ index de9a6a4d11..78849001c5 100644
    if (ShouldResistFingerprinting(RFPTarget::ScreenAvailRect)) {
      return GetTopWindowInnerRectForRFP();
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
-index e9ebd3e01b..c6f64371f2 100644
+index 519668019e..078d0d975a 100644
 --- a/dom/workers/WorkerNavigator.cpp
 +++ b/dom/workers/WorkerNavigator.cpp
 @@ -3,6 +3,7 @@
@@ -139,7 +139,7 @@ index e9ebd3e01b..c6f64371f2 100644
  
  #include "ErrorList.h"
  #include "MainThreadUtils.h"
-@@ -106,6 +107,9 @@ JSObject* WorkerNavigator::WrapObject(JSContext* aCx,
+@@ -111,6 +112,9 @@ JSObject* WorkerNavigator::WrapObject(JSContext* aCx,
  }
  
  bool WorkerNavigator::GlobalPrivacyControl() const {
@@ -149,7 +149,7 @@ index e9ebd3e01b..c6f64371f2 100644
    bool gpcStatus = StaticPrefs::privacy_globalprivacycontrol_enabled();
    if (!gpcStatus) {
      JSObject* jso = GetWrapper();
-@@ -128,6 +132,8 @@ void WorkerNavigator::SetLanguages(const nsTArray<nsString>& aLanguages) {
+@@ -134,6 +138,8 @@ void WorkerNavigator::SetLanguages(const nsTArray<nsString>& aLanguages) {
  void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
                                      CallerType aCallerType,
                                      ErrorResult& aRv) const {
@@ -158,7 +158,7 @@ index e9ebd3e01b..c6f64371f2 100644
    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
    MOZ_ASSERT(workerPrivate);
  
-@@ -150,6 +156,8 @@ void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
+@@ -156,6 +162,8 @@ void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
  
  void WorkerNavigator::GetPlatform(nsString& aPlatform, CallerType aCallerType,
                                    ErrorResult& aRv) const {
@@ -167,7 +167,7 @@ index e9ebd3e01b..c6f64371f2 100644
    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
    MOZ_ASSERT(workerPrivate);
  
-@@ -210,6 +218,8 @@ class GetUserAgentRunnable final : public WorkerMainThreadRunnable {
+@@ -216,6 +224,8 @@ class GetUserAgentRunnable final : public WorkerMainThreadRunnable {
  
  void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
                                     ErrorResult& aRv) const {
@@ -176,7 +176,7 @@ index e9ebd3e01b..c6f64371f2 100644
    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
    MOZ_ASSERT(workerPrivate);
  
-@@ -221,6 +231,8 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
+@@ -227,6 +237,8 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
  }
  
  uint64_t WorkerNavigator::HardwareConcurrency() const {
