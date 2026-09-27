@@ -1,8 +1,8 @@
 diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
-index 0aa4baea8e..3c964b7ad5 100644
+index 0aa4baea8e..343691b2f8 100644
 --- a/browser/base/content/browser-init.js
 +++ b/browser/base/content/browser-init.js
-@@ -44,6 +44,16 @@ var gSerialDeviceObserver = {
+@@ -44,6 +44,17 @@ var gSerialDeviceObserver = {
    },
  };
  
@@ -15,11 +15,12 @@ index 0aa4baea8e..3c964b7ad5 100644
 +  { global: "contextual" }
 +);
 +
++const ADDONS_INSTALLED_PREF = "camoufox.addons.installed";
 +
  let _resolveDelayedStartup;
  var delayedStartupPromise = new Promise(resolve => {
    _resolveDelayedStartup = resolve;
-@@ -157,7 +167,7 @@ var gBrowserInit = {
+@@ -157,7 +168,7 @@ var gBrowserInit = {
      updateBookmarkToolbarVisibility();
  
      // Set a sane starting width/height for all resolutions on new profiles.
@@ -28,7 +29,7 @@ index 0aa4baea8e..3c964b7ad5 100644
        // When the fingerprinting resistance is enabled, making sure that we don't
        // have a maximum window to interfere with generating rounded window dimensions.
        document.documentElement.setAttribute("sizemode", "normal");
-@@ -385,6 +395,22 @@ var gBrowserInit = {
+@@ -385,6 +396,22 @@ var gBrowserInit = {
      // Update UI if browser is under remote control.
      gRemoteControl.updateVisualCue();
  
@@ -51,7 +52,7 @@ index 0aa4baea8e..3c964b7ad5 100644
      // If we are given a tab to swap in, take care of it before first paint to
      // avoid an about:blank flash.
      let tabToAdopt = this.getTabToAdopt();
-@@ -448,6 +474,33 @@ var gBrowserInit = {
+@@ -448,6 +475,33 @@ var gBrowserInit = {
        }
      }
  
@@ -85,7 +86,7 @@ index 0aa4baea8e..3c964b7ad5 100644
      // Wait until chrome is painted before executing code not critical to making the window visible
      this._boundDelayedStartup = this._delayedStartup.bind(this);
      window.addEventListener("MozAfterPaint", this._boundDelayedStartup);
-@@ -475,9 +528,177 @@ var gBrowserInit = {
+@@ -475,9 +529,181 @@ var gBrowserInit = {
        }
      }
  
@@ -156,9 +157,13 @@ index 0aa4baea8e..3c964b7ad5 100644
 +      window.resizeBy(width - innerWidth, height + toolbarTop - innerHeight);
 +    }
 +
-+    // Install addons if specified
++    // Install addons once per launch: this runs for every window, Juggler opens
++    // one per page, and reinstalling a temporary addon restarts it. A default
++    // pref is never written to prefs.js.
 +    let addonPaths = ChromeUtils.camouGetStringList("addons");
-+    if (addonPaths?.length) {
++    let defaults = Services.prefs.getDefaultBranch("");
++    if (addonPaths?.length && !defaults.getBoolPref(ADDONS_INSTALLED_PREF, false)) {
++      defaults.setBoolPref(ADDONS_INSTALLED_PREF, true);
 +      Promise.all(addonPaths.map(path => this.installTemporaryAddon(path)))
 +        .then(addons => ChromeUtils.camouDebug("Installed " + addons.length + " addon(s)"))
 +        .catch(e => ChromeUtils.camouDebug("Failed to install addons: " + e));
