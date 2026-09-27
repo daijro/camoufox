@@ -1,0 +1,20 @@
+# 24h quarantine on anything freshly published, as supply-chain cover.
+minimumReleaseAge: 1440
+# captchakraken is exempt because it is OURS -- JWriter20/CaptchaKraken, the
+# same hands that publish this package. The window exists to put distance
+# between a compromised third-party release and our lockfile; it buys nothing
+# against a repo we control, and it does cost something: the camoufox bridge and
+# the solver ship in step, so a same-day captchakraken release is the normal
+# case here, not a red flag. Scoped to this one name, never widened.
+minimumReleaseAgeExclude:
+  - captchakraken
+
+onlyBuiltDependencies:
+  - esbuild
+  - playwright-core
+
+nodeLinker: hoisted
+linkWorkspacePackages: true
+preferWorkspacePackages: true
+publicHoistPattern:
+    - "*"

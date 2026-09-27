@@ -41,4 +41,4 @@ These questions will help me diagnose the issue:
 
 ### Version:
 
-Run `python -m camoufox version` in your terminal and paste the output here.
+Run `python -m camoufox version` (or `npx camoufox version` for the npm package) and paste the output here.

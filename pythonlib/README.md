@@ -238,7 +238,7 @@ Display the Python package version, active browser version, channel, and update 
 ```bash
 > camoufox version
 Python Packages
-  Camoufox                    v0.5.6
+  Camoufox                    v0.5.7
   fpgen                       v1.3.0
   Playwright                  v1.62.0
 Browser

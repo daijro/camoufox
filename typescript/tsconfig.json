@@ -1,0 +1,14 @@
+{
+	"compilerOptions": {
+		"module": "Node16",
+		"moduleResolution": "node16",
+		"preserveConstEnums": true,
+		"sourceMap": false,
+		"removeComments": false,
+		"outDir": "./dist",
+		"declaration": true,
+		"strict": true,
+		"resolveJsonModule": true
+	},
+	"include": ["src/**/*.ts"]
+}

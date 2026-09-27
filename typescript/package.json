@@ -1,0 +1,88 @@
+{
+  "name": "@camoufox/camoufox",
+  "version": "0.5.7",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "rimraf dist && tsc && pnpm copy-files",
+    "copy-files": "node scripts/copy-files.mjs",
+    "test": "vitest run --config tests/vitest.config.ts",
+    "test:watch": "vitest --config tests/vitest.config.ts",
+    "check": "biome check",
+    "typecheck": "tsc --noEmit",
+    "prepare": "pnpm build",
+    "check:dist": "node scripts/check-dist-fresh.mjs",
+    "check:pack": "node scripts/check-pack.mjs"
+  },
+  "bin": {
+    "camoufox": "dist/__main__.js"
+  },
+  "files": [
+    "dist",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "type": "module",
+  "keywords": [
+    "camoufox",
+    "firefox",
+    "playwright",
+    "fingerprint",
+    "anti-detect",
+    "scraping"
+  ],
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daijro/camoufox.git",
+    "directory": "typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/daijro/camoufox/issues"
+  },
+  "engines": {
+    "node": ">= 22.15"
+  },
+  "license": "MIT",
+  "description": "Camoufox: TypeScript launcher for the Camoufox anti-detect Firefox browser. A port of the Python wrapper.",
+  "//playwright-core": "Range mirrors pythonlib/pyproject.toml's `playwright = \"<1.63\"`: every Playwright minor is free to change Juggler, so the ceiling is bumped deliberately, with a run of `make tests`. The dev pin (1.62.0) is the version the Python venv resolves, so the goldens compare like with like.",
+  "packageManager": "pnpm@10.33.4",
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "cli-progress": "^3.12.0",
+    "commander": "^14.0.0",
+    "impit": "^0.14.1",
+    "language-tags": "^2.0.1",
+    "maxmind": "^5.0.0",
+    "pretty-bytes": "^7.1.0",
+    "ua-parser-js": "^2.0.2",
+    "xml2js": "^0.6.2",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.10",
+    "@types/adm-zip": "^0.5.7",
+    "@types/cli-progress": "^3.11.6",
+    "@types/language-tags": "^1.0.4",
+    "@types/node": "^24.0.0",
+    "@types/xml2js": "^0.4.14",
+    "playwright-core": "1.62.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.8.3",
+    "vitest": "^4.0.0"
+  },
+  "peerDependencies": {
+    "playwright-core": "<1.63"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.4",
+      "onFail": "warn"
+    }
+  },
+  "//engines": "22.15 for node:zlib zstd, which the fpgen model archive needs.",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

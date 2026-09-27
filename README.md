@@ -80,7 +80,7 @@
 
 Processing tens of billions of requests per month for thousands of customers, Byteful powers browser-based AI agents, automation systems, and data workflows. It is a member of the Internet Watch Foundation and the Ethical Web Data Collection Initiative.
 
-Get 10% off Byteful Residential Proxies with the code: CAMOUFOX10
+Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
     </td>
   </tr>
   <tr>
@@ -338,7 +338,7 @@ Camoufox is a Firefox fork engineered for web scraping and AI agents. It is head
 
 * **Built for AI agents** 🤖
   * Minimal, debloated Firefox - fast to launch, cheap to run
-  * Drop-in Playwright compatibility via Python interface
+  * Drop-in Playwright compatibility from Python and JavaScript/TypeScript
   * Invisible to anti-bot systems so you can run your agent cluster locally or in the cloud without being flagged
 
 - **Undetectable by design** 🎭
@@ -362,7 +362,7 @@ Camoufox is a Firefox fork engineered for web scraping and AI agents. It is head
   * Optional instant animations (`instantAnimations`), so Playwright never waits on one 💨
 
 - Debloated & optimized for memory efficiency ⚡
-- [PyPI package](https://pypi.org/project/camoufox/) for updates & auto fingerprint injection 📦
+- [PyPI](https://pypi.org/project/camoufox/) and npm packages for updates & auto fingerprint injection 📦
 - Stays up to date with the latest Firefox version 🕓
 
 ---
@@ -371,7 +371,7 @@ Camoufox is a Firefox fork engineered for web scraping and AI agents. It is head
 
 In Camoufox, data is intercepted at the C++ implementation level, making the changes undetectable through JavaScript inspection.
 
-To spoof individual fingerprint properties, pass a JSON containing properties to spoof to the [Python interface](pythonlib/):
+To spoof individual fingerprint properties, pass a JSON containing properties to spoof to the [Python](pythonlib/) or [TypeScript](typescript/) interface:
 
 ```py
 >>> with Camoufox(config={"property": "value"}) as browser:
@@ -383,11 +383,11 @@ Config data not set by the user is populated from [fpgen](https://github.com/scr
 
 ---
 
-## Python Usage
+## Usage
 
 Camoufox is compatible with your existing Playwright code. You only have to change your browser initialization.
 
-**Sync API**
+**Python, sync API**
 
 ```python
 from camoufox.sync_api import Camoufox
@@ -397,7 +397,7 @@ with Camoufox() as browser:
     page.goto("https://example.com")
 ```
 
-**Async API**
+**Python, async API**
 
 ```python
 from camoufox.async_api import AsyncCamoufox
@@ -407,7 +407,18 @@ async with AsyncCamoufox() as browser:
     await page.goto("https://example.com")
 ```
 
-[[Installation & usage](https://camoufox.com/python/)]
+**JavaScript / TypeScript**
+
+```javascript
+import { Camoufox } from "@camoufox/camoufox";
+
+const browser = await Camoufox({ headless: true });
+const page = await browser.newPage();
+await page.goto("https://example.com");
+await browser.close();
+```
+
+[[Python installation & usage](https://camoufox.com/python/)] · [[TypeScript package](typescript/README.md)]
 
 ---
 
@@ -472,7 +483,7 @@ Below is a list of patches and features implemented in Camoufox.
 - Addons are automatically pinned to the toolbar
 - Fixes DNS leaks with uBO prefetching
 
-### Python Interface
+### Python & TypeScript Interfaces
 
 - Automatically generates & injects unique device characteristics into Camoufox based on their real-world distribution
 - WebGL fingerprint injection & rotation
@@ -568,7 +579,7 @@ Additionally, Juggler sends its inputs directly through the Firefox's original u
 <h1 align="center">Build System</h1>
 
 > [!WARNING]
-> The content below is intended for those interested in building & debugging Camoufox. For usage instructions, see [pythonlib](pythonlib/).
+> The content below is intended for those interested in building & debugging Camoufox. For usage instructions, see [pythonlib](pythonlib/) or [typescript](typescript/).
 
 ### Overview
 
@@ -793,7 +804,7 @@ flowchart TD
 ## Licensing
 
 - **The browser** (`patches/`, `additions/`, `settings/`, and the build system) is [MPL-2.0](LICENSE), the licence of the Firefox source it modifies. The vendored Cursory trajectories are LGPLv3-or-later (`additions/juggler/input/cursory/NOTICE`).
-- **The Python launcher** is MIT ([`pythonlib/LICENSE`](pythonlib/LICENSE)), as it has always been declared on PyPI.
+- **The launchers** are MIT: the Python package ([`pythonlib/LICENSE`](pythonlib/LICENSE)) and the TypeScript package ([`typescript/LICENSE`](typescript/LICENSE)). The TypeScript package also contains ports of fpgen, CPython's `random` and NumPy's random generators; their notices are in [`typescript/THIRD_PARTY_NOTICES.md`](typescript/THIRD_PARTY_NOTICES.md).
 
 ---
 

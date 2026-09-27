@@ -70,6 +70,11 @@ def load_constants():
             name = node.targets[0].id
             if 'FONTS' in name and name.startswith('_'):
                 consts[name] = ast.literal_eval(node.value)
+    # The OS bases live in essential-fonts.json, shared with the TS launcher.
+    with open(os.path.join(REPO, 'pythonlib', 'camoufox', 'essential-fonts.json'), encoding='utf-8') as f:
+        for key, fonts in json.load(f).items():
+            suffix = {'win': 'WINDOWS', 'mac': 'MACOS', 'lin': 'LINUX'}[key]
+            consts[f'_ESSENTIAL_FONTS_{suffix}'] = fonts
     return consts
 
 

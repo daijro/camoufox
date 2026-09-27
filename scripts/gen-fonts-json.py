@@ -35,9 +35,9 @@ Usage (build machine, after the bundle changed):
 The manifest lists, per OS, the base font sets of each OS version (with their
 real-world share) and the optional additions (Office, LibreOffice, developer
 and web fonts) with their install probability, per OS. --print-bases prints
-the OS base lists (intersected with the result) as Python literals for the
-_ESSENTIAL_FONTS_* constants in pythonlib/camoufox/fingerprints.py, which must
-be kept in step with this file.
+the OS base lists (intersected with the result) and writes the essential floor
+to pythonlib/camoufox/essential-fonts.json, which both launchers read and which
+must be kept in step with this file.
 """
 import argparse
 import json
@@ -321,6 +321,7 @@ def main():
         # onto every identity -- which is what made a macOS 26 identity keep
         # claiming 131 Sonoma-only families -- and it must still carry the alias
         # names fonts.conf rewrites unconditionally, which always render.
+        essential = {}
         for os_key in OSDIRS:
             bases = list(bases_out[os_key].values())
             if not bases:
@@ -333,7 +334,18 @@ def main():
             suffix = {'win': 'WINDOWS', 'mac': 'MACOS', 'lin': 'LINUX'}[os_key]
             print(f'# _ESSENTIAL_FONTS_{suffix}: {len(common)} families '
                   f'(intersection of {len(bases)} base(s) + aliases)')
-            print(json.dumps(sorted(common), ensure_ascii=False))
+            essential[os_key] = sorted(common)
+        path = os.path.join(REPO, 'pythonlib', 'camoufox', 'essential-fonts.json')
+        # Both launchers read every OS's list at import, so a file missing one
+        # breaks `import camoufox`. Keep the old file rather than write that.
+        missing = [k for k in OSDIRS if k not in essential]
+        if missing:
+            sys.exit(f'not writing {path}: no OS bases for {", ".join(missing)} '
+                     f'in the manifest')
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write('{\n' + ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}'
+                                        for k, v in essential.items()) + '\n}\n')
+        print(f'wrote {path}')
 
 
 if __name__ == '__main__':

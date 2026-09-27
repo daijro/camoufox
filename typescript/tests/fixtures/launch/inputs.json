@@ -1,0 +1,533 @@
+{
+ "fingerprints": {
+  "linux": {
+   "navigator": {
+    "appName": "Netscape",
+    "product": "Gecko",
+    "productSub": "20100101",
+    "appCodeName": "Mozilla",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0",
+    "languages": [
+     "en-US",
+     "en"
+    ],
+    "language": "en-US",
+    "deviceMemory": "undefined",
+    "hardwareConcurrency": 8,
+    "platform": "Linux x86_64",
+    "appVersion": "5.0 (X11)",
+    "doNotTrack": "1",
+    "oscpu": "Linux x86_64",
+    "maxTouchPoints": 0
+   },
+   "screen": {
+    "availWidth": 1920,
+    "availHeight": 1080,
+    "availLeft": 0,
+    "availTop": 0,
+    "width": 1920,
+    "height": 1080,
+    "colorDepth": 24,
+    "pixelDepth": 24
+   },
+   "window": {
+    "innerWidth": 1916,
+    "innerHeight": 956,
+    "outerWidth": 1920,
+    "outerHeight": 1061,
+    "devicePixelRatio": 1,
+    "screenX": 0,
+    "screenY": 0,
+    "pageYOffset": 0
+   },
+   "headers": {
+    "accept-language": [
+     "en-US,en;q=0.5"
+    ],
+    "accept-encoding": [
+     "gzip, deflate, br, zstd"
+    ],
+    "accept": [
+     "*/*"
+    ],
+    "priority": [
+     "u=4"
+    ],
+    "sec-ch-ua": null,
+    "sec-ch-ua-mobile": null,
+    "sec-ch-ua-platform": null,
+    "sec-fetch-dest": [
+     "empty"
+    ],
+    "sec-fetch-mode": [
+     "cors"
+    ],
+    "sec-fetch-site": [
+     "same-site"
+    ],
+    "sec-gpc": null,
+    "user-agent": [
+     "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"
+    ]
+   }
+  },
+  "windows": {
+   "navigator": {
+    "appName": "Netscape",
+    "product": "Gecko",
+    "productSub": "20100101",
+    "appCodeName": "Mozilla",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0",
+    "languages": [
+     "en-GB",
+     "en"
+    ],
+    "language": "en-GB",
+    "deviceMemory": "undefined",
+    "hardwareConcurrency": 2,
+    "platform": "Win32",
+    "appVersion": "5.0 (Windows)",
+    "doNotTrack": "unspecified",
+    "oscpu": "Windows NT 10.0; Win64; x64",
+    "maxTouchPoints": 0
+   },
+   "screen": {
+    "availWidth": 1920,
+    "availHeight": 1032,
+    "availLeft": 0,
+    "availTop": 0,
+    "width": 1920,
+    "height": 1080,
+    "colorDepth": 24,
+    "pixelDepth": 24
+   },
+   "window": {
+    "innerWidth": 1722,
+    "innerHeight": 884,
+    "outerWidth": 1738,
+    "outerHeight": 978,
+    "devicePixelRatio": 1,
+    "screenX": 0,
+    "screenY": 4,
+    "pageYOffset": 0
+   },
+   "headers": {
+    "accept-language": [
+     "en-GB,en;q=0.5"
+    ],
+    "accept-encoding": [
+     "gzip, deflate, br, zstd"
+    ],
+    "accept": [
+     "*/*"
+    ],
+    "priority": [
+     "u=4"
+    ],
+    "sec-ch-ua": null,
+    "sec-ch-ua-mobile": null,
+    "sec-ch-ua-platform": null,
+    "sec-fetch-dest": [
+     "empty"
+    ],
+    "sec-fetch-mode": [
+     "cors"
+    ],
+    "sec-fetch-site": [
+     "same-site"
+    ],
+    "sec-gpc": [
+     "1"
+    ],
+    "user-agent": [
+     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0"
+    ]
+   }
+  },
+  "macos": {
+   "navigator": {
+    "appName": "Netscape",
+    "product": "Gecko",
+    "productSub": "20100101",
+    "appCodeName": "Mozilla",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0",
+    "languages": [
+     "en-US",
+     "en"
+    ],
+    "language": "en-US",
+    "deviceMemory": "undefined",
+    "hardwareConcurrency": 10,
+    "platform": "MacIntel",
+    "appVersion": "5.0 (Macintosh)",
+    "doNotTrack": "1",
+    "oscpu": "Intel Mac OS X 10.15",
+    "maxTouchPoints": 0
+   },
+   "screen": {
+    "availWidth": 1512,
+    "availHeight": 882,
+    "availLeft": 0,
+    "availTop": 38,
+    "width": 1512,
+    "height": 982,
+    "colorDepth": 30,
+    "pixelDepth": 30
+   },
+   "window": {
+    "innerWidth": 1363,
+    "innerHeight": 841,
+    "outerWidth": 1512,
+    "outerHeight": 881,
+    "devicePixelRatio": 2,
+    "screenX": 0,
+    "screenY": 38,
+    "pageYOffset": 0
+   },
+   "headers": {
+    "accept-language": [
+     "en-US,en;q=0.5"
+    ],
+    "accept-encoding": [
+     "gzip, deflate, br, zstd"
+    ],
+    "accept": [
+     "*/*"
+    ],
+    "priority": [
+     "u=4"
+    ],
+    "sec-ch-ua": null,
+    "sec-ch-ua-mobile": null,
+    "sec-ch-ua-platform": null,
+    "sec-fetch-dest": [
+     "empty"
+    ],
+    "sec-fetch-mode": [
+     "cors"
+    ],
+    "sec-fetch-site": [
+     "same-site"
+    ],
+    "sec-gpc": null,
+    "user-agent": [
+     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0"
+    ]
+   }
+  }
+ },
+ "presets": {
+  "windows": {
+   "navigator": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0",
+    "platform": "Win32",
+    "hardwareConcurrency": 12,
+    "maxTouchPoints": 0
+   },
+   "screen": {
+    "width": 1920,
+    "height": 1080,
+    "colorDepth": 24,
+    "availWidth": 1920,
+    "availHeight": 1032,
+    "devicePixelRatio": 1
+   },
+   "webgl": {
+    "unmaskedVendor": "Google Inc. (Intel)",
+    "unmaskedRenderer": "ANGLE (Intel, Intel(R) HD Graphics Direct3D11 vs_5_0 ps_5_0), or similar"
+   },
+   "speechVoices": [
+    "Microsoft David - English (United States):en-US:local",
+    "Microsoft Mark - English (United States):en-US:local",
+    "Microsoft Zira - English (United States):en-US:local",
+    "Microsoft David Desktop - English (United States):en-US:local",
+    "Microsoft Zira Desktop - English (United States):en-US:local"
+   ]
+  },
+  "macos": {
+   "navigator": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0",
+    "platform": "MacIntel",
+    "hardwareConcurrency": 10,
+    "maxTouchPoints": 0
+   },
+   "screen": {
+    "width": 2240,
+    "height": 1260,
+    "colorDepth": 30,
+    "availWidth": 2240,
+    "availHeight": 1230,
+    "devicePixelRatio": 2
+   },
+   "webgl": {
+    "unmaskedVendor": "Apple",
+    "unmaskedRenderer": "Apple M1, or similar"
+   },
+   "speechVoices": [
+    "Albert:en-US:local",
+    "Alice:it-IT:local",
+    "Soumya:kn-IN:local",
+    "Alva:sv-SE:local",
+    "Aman:en-IN:local",
+    "Amélie:fr-CA:local",
+    "Amira:ms-MY:local",
+    "Anna:de-DE:local",
+    "Aru:kk-KZ:local",
+    "Bad News:en-US:local",
+    "Bahh:en-US:local",
+    "Bells:en-US:local",
+    "Boing:en-US:local",
+    "Bubbles:en-US:local",
+    "Carmit:he-IL:local",
+    "Cellos:en-US:local",
+    "Damayanti:id-ID:local",
+    "Daniel:en-GB:local",
+    "Daria:bg-BG:local",
+    "Wobble:en-US:local",
+    "Eddy (German (Germany)):de-DE:local",
+    "Eddy (English (UK)):en-GB:local",
+    "Eddy (English (US)):en-US:local",
+    "Eddy (Spanish (Spain)):es-ES:local",
+    "Eddy (Spanish (Mexico)):es-MX:local",
+    "Eddy (Finnish (Finland)):fi-FI:local",
+    "Eddy (French (Canada)):fr-CA:local",
+    "Eddy (French (France)):fr-FR:local",
+    "Eddy (Italian (Italy)):it-IT:local",
+    "Eddy (Japanese (Japan)):ja-JP:local",
+    "Eddy (Korean (South Korea)):ko-KR:local",
+    "Eddy (Portuguese (Brazil)):pt-BR:local",
+    "Eddy (Chinese (China mainland)):zh-CN:local",
+    "Eddy (Chinese (Taiwan)):zh-TW:local",
+    "Ellen:nl-BE:local",
+    "Flo (German (Germany)):de-DE:local",
+    "Flo (English (UK)):en-GB:local",
+    "Flo (English (US)):en-US:local",
+    "Flo (Spanish (Spain)):es-ES:local",
+    "Flo (Spanish (Mexico)):es-MX:local",
+    "Flo (Finnish (Finland)):fi-FI:local",
+    "Flo (French (Canada)):fr-CA:local",
+    "Flo (French (France)):fr-FR:local",
+    "Flo (Italian (Italy)):it-IT:local",
+    "Flo (Japanese (Japan)):ja-JP:local",
+    "Flo (Korean (South Korea)):ko-KR:local",
+    "Flo (Portuguese (Brazil)):pt-BR:local",
+    "Flo (Chinese (China mainland)):zh-CN:local",
+    "Flo (Chinese (Taiwan)):zh-TW:local",
+    "Fred:en-US:local",
+    "Geeta:te-IN:local",
+    "Good News:en-US:local",
+    "Grandma (German (Germany)):de-DE:local",
+    "Grandma (English (UK)):en-GB:local",
+    "Grandma (English (US)):en-US:local",
+    "Grandma (Spanish (Spain)):es-ES:local",
+    "Grandma (Spanish (Mexico)):es-MX:local",
+    "Grandma (Finnish (Finland)):fi-FI:local",
+    "Grandma (French (Canada)):fr-CA:local",
+    "Grandma (French (France)):fr-FR:local",
+    "Grandma (Italian (Italy)):it-IT:local",
+    "Grandma (Japanese (Japan)):ja-JP:local",
+    "Grandma (Korean (South Korea)):ko-KR:local",
+    "Grandma (Portuguese (Brazil)):pt-BR:local",
+    "Grandma (Chinese (China mainland)):zh-CN:local",
+    "Grandma (Chinese (Taiwan)):zh-TW:local",
+    "Grandpa (German (Germany)):de-DE:local",
+    "Grandpa (English (UK)):en-GB:local",
+    "Grandpa (English (US)):en-US:local",
+    "Grandpa (Spanish (Spain)):es-ES:local",
+    "Grandpa (Spanish (Mexico)):es-MX:local",
+    "Grandpa (Finnish (Finland)):fi-FI:local",
+    "Grandpa (French (Canada)):fr-CA:local",
+    "Grandpa (French (France)):fr-FR:local",
+    "Grandpa (Italian (Italy)):it-IT:local",
+    "Grandpa (Japanese (Japan)):ja-JP:local",
+    "Grandpa (Korean (South Korea)):ko-KR:local",
+    "Grandpa (Portuguese (Brazil)):pt-BR:local",
+    "Grandpa (Chinese (China mainland)):zh-CN:local",
+    "Grandpa (Chinese (Taiwan)):zh-TW:local",
+    "Jester:en-US:local",
+    "Ioana:ro-RO:local",
+    "Jacques:fr-FR:local",
+    "Joana:pt-PT:local",
+    "Junior:en-US:local",
+    "Kanya:th-TH:local",
+    "Karen:en-AU:local",
+    "Kathy:en-US:local",
+    "Kyoko:ja-JP:local",
+    "Lana:hr-HR:local",
+    "Laura:sk-SK:local",
+    "Lekha:hi-IN:local",
+    "Lesya:uk-UA:local",
+    "Linh:vi-VN:local",
+    "Luciana:pt-BR:local",
+    "Majed:ar-001:local",
+    "Tünde:hu-HU:local",
+    "Meijia:zh-TW:local",
+    "Melina:el-GR:local",
+    "Milena:ru-RU:local",
+    "Moira:en-IE:local",
+    "Mónica:es-ES:local",
+    "Montse:ca-ES:local",
+    "Nora:nb-NO:local",
+    "Ona:lt-LT:local",
+    "Organ:en-US:local",
+    "Paulina:es-MX:local",
+    "Piya:bn-IN:local",
+    "Superstar:en-US:local",
+    "Ralph:en-US:local",
+    "Reed (German (Germany)):de-DE:local",
+    "Reed (English (UK)):en-GB:local",
+    "Reed (English (US)):en-US:local",
+    "Reed (Spanish (Spain)):es-ES:local",
+    "Reed (Spanish (Mexico)):es-MX:local",
+    "Reed (Finnish (Finland)):fi-FI:local",
+    "Reed (French (Canada)):fr-CA:local",
+    "Reed (Italian (Italy)):it-IT:local",
+    "Reed (Japanese (Japan)):ja-JP:local",
+    "Reed (Korean (South Korea)):ko-KR:local",
+    "Reed (Portuguese (Brazil)):pt-BR:local",
+    "Reed (Chinese (China mainland)):zh-CN:local",
+    "Reed (Chinese (Taiwan)):zh-TW:local",
+    "Rishi:en-IN:local",
+    "Rocko (German (Germany)):de-DE:local",
+    "Rocko (English (UK)):en-GB:local",
+    "Rocko (English (US)):en-US:local",
+    "Rocko (Spanish (Spain)):es-ES:local",
+    "Rocko (Spanish (Mexico)):es-MX:local",
+    "Rocko (Finnish (Finland)):fi-FI:local",
+    "Rocko (French (Canada)):fr-CA:local",
+    "Rocko (French (France)):fr-FR:local",
+    "Rocko (Italian (Italy)):it-IT:local",
+    "Rocko (Japanese (Japan)):ja-JP:local",
+    "Rocko (Korean (South Korea)):ko-KR:local",
+    "Rocko (Portuguese (Brazil)):pt-BR:local",
+    "Rocko (Chinese (China mainland)):zh-CN:local",
+    "Rocko (Chinese (Taiwan)):zh-TW:local",
+    "Samantha:en-US:local",
+    "Sandy (German (Germany)):de-DE:local",
+    "Sandy (English (UK)):en-GB:local",
+    "Sandy (English (US)):en-US:local",
+    "Sandy (Spanish (Spain)):es-ES:local",
+    "Sandy (Spanish (Mexico)):es-MX:local",
+    "Sandy (Finnish (Finland)):fi-FI:local",
+    "Sandy (French (Canada)):fr-CA:local",
+    "Sandy (French (France)):fr-FR:local",
+    "Sandy (Italian (Italy)):it-IT:local",
+    "Sandy (Japanese (Japan)):ja-JP:local",
+    "Sandy (Korean (South Korea)):ko-KR:local",
+    "Sandy (Portuguese (Brazil)):pt-BR:local",
+    "Sandy (Chinese (China mainland)):zh-CN:local",
+    "Sandy (Chinese (Taiwan)):zh-TW:local",
+    "Sara:da-DK:local",
+    "Satu:fi-FI:local",
+    "Shelley (German (Germany)):de-DE:local",
+    "Shelley (English (UK)):en-GB:local",
+    "Shelley (English (US)):en-US:local",
+    "Shelley (Spanish (Spain)):es-ES:local",
+    "Shelley (Spanish (Mexico)):es-MX:local",
+    "Shelley (Finnish (Finland)):fi-FI:local",
+    "Shelley (French (Canada)):fr-CA:local",
+    "Shelley (French (France)):fr-FR:local",
+    "Shelley (Italian (Italy)):it-IT:local",
+    "Shelley (Japanese (Japan)):ja-JP:local",
+    "Shelley (Korean (South Korea)):ko-KR:local",
+    "Shelley (Portuguese (Brazil)):pt-BR:local",
+    "Shelley (Chinese (China mainland)):zh-CN:local",
+    "Shelley (Chinese (Taiwan)):zh-TW:local",
+    "Sinji:zh-HK:local",
+    "Tara:en-IN:local",
+    "Tessa:en-ZA:local",
+    "Thomas:fr-FR:local",
+    "Tina:sl-SI:local",
+    "Tingting:zh-CN:local",
+    "Trinoids:en-US:local",
+    "Vani:ta-IN:local",
+    "Whisper:en-US:local",
+    "Xander:nl-NL:local",
+    "Yelda:tr-TR:local",
+    "Yuna:ko-KR:local",
+    "Zarvox:en-US:local",
+    "Zosia:pl-PL:local",
+    "Zuzana:cs-CZ:local"
+   ]
+  },
+  "linux": {
+   "navigator": {
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0",
+    "platform": "Linux x86_64",
+    "hardwareConcurrency": 12,
+    "maxTouchPoints": 0
+   },
+   "screen": {
+    "width": 1920,
+    "height": 1200,
+    "colorDepth": 24,
+    "availWidth": 1920,
+    "availHeight": 1200,
+    "devicePixelRatio": 1
+   },
+   "webgl": {
+    "unmaskedVendor": "Intel",
+    "unmaskedRenderer": "Intel(R) HD Graphics, or similar"
+   }
+  },
+  "windows_unknown_gpu": {
+   "navigator": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0",
+    "platform": "Win32",
+    "hardwareConcurrency": 2,
+    "maxTouchPoints": 0
+   },
+   "screen": {
+    "width": 1366,
+    "height": 768,
+    "colorDepth": 24,
+    "availWidth": 1366,
+    "availHeight": 728,
+    "devicePixelRatio": 1
+   },
+   "webgl": {
+    "unmaskedVendor": "Google Inc. (AMD)",
+    "unmaskedRenderer": "ANGLE (AMD, Radeon R9 200 Series Direct3D11 vs_4_0 ps_4_0), or similar"
+   },
+   "speechVoices": [
+    "Microsoft Helena - Spanish (Spain):es-ES:local",
+    "Microsoft Laura - Spanish (Spain):es-ES:local",
+    "Microsoft Pablo - Spanish (Spain):es-ES:local",
+    "Microsoft Helena Desktop - Spanish (Spain):es-ES:local",
+    "Microsoft Zira Desktop - English (United States):en-US:local"
+   ]
+  }
+ },
+ "webgl_pairs": {
+  "win": [
+   [
+    "Google Inc. (NVIDIA)",
+    "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar"
+   ],
+   [
+    "Google Inc. (Intel)",
+    "ANGLE (Intel, Intel(R) HD Graphics Direct3D11 vs_5_0 ps_5_0), or similar"
+   ]
+  ],
+  "mac": [
+   [
+    "Apple",
+    "Apple M1, or similar"
+   ],
+   [
+    "Intel Inc.",
+    "Intel(R) HD Graphics, or similar"
+   ]
+  ],
+  "lin": [
+   [
+    "Intel",
+    "Intel(R) HD Graphics, or similar"
+   ],
+   [
+    "NVIDIA Corporation",
+    "NVIDIA GeForce GTX 980, or similar"
+   ]
+  ]
+ }
+}

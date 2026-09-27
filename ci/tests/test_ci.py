@@ -952,7 +952,7 @@ def test_required_suites_are_names_a_runner_actually_writes():
     producible = {
         "build", "build_tester", "patch_guards", "pythonlib", "sundial",
         "native", "native_rules", "native_browser", "native_growth",
-        "playwright", "skiplist_audit",
+        "playwright", "skiplist_audit", "typescript", "typescript_browser",
     }
     unknown = required - producible
     assert not unknown, (
@@ -2260,7 +2260,7 @@ def test_the_native_inputs_cover_everything_that_can_change_the_binary():
     from ci.browser_inputs import BROWSER_DIRS, BROWSER_FILES
 
     text = WORKFLOW.read_text(encoding="utf-8")
-    scope = re.search(r"grep -qE '\^\(([^)]*)\)'", text)
+    scope = re.search(r"sources='\^\(([^)]*)\)'", text)
     assert scope, "the browser_changed grep is gone or was reshaped"
     considered = {
         part.replace("\\", "").rstrip("/") for part in scope.group(1).split("|") if part
@@ -2623,3 +2623,89 @@ def test_build_tester_accepts_every_core_count_pythonlib_presents():
         f"build-tester's plausibleHWC rejects core counts pythonlib presents: {missing}. "
         "Add them to the list in build-tester/src/lib/checks/extended.ts."
     )
+
+
+# ---------------------------------------------------------------------------
+# build-or-fetch: the published release is used only when it matches the tree
+# ---------------------------------------------------------------------------
+
+
+def _scope(repo: pathlib.Path, base: str) -> tuple[str, str]:
+    """Run the workflow's own "Does this change the browser?" step in `repo`."""
+    import subprocess
+
+    text = WORKFLOW.read_text(encoding="utf-8")
+    start = text.index("        run: |\n          if [ \"${{ github.event_name }}\" != \"pull_request\" ]")
+    end = text.index("      - name: May the stealth check run?", start)
+    lines = text[start:end].splitlines()[1:]
+    block = "\n".join(line[10:] if line.startswith(" " * 10) else line.strip() for line in lines)
+    block = block.replace("${{ github.event_name }}", "pull_request")
+    block = block.replace("${{ github.event.pull_request.base.sha }}", base)
+    out = repo / "out.txt"
+    proc = subprocess.run(
+        ["bash", "-e", "-c", block], cwd=repo, capture_output=True, text=True,
+        env={**os.environ, "GITHUB_OUTPUT": str(out)},
+    )
+    assert proc.returncode == 0, proc.stderr
+    return out.read_text().strip(), proc.stdout
+
+
+def _git(repo: pathlib.Path, *args: str) -> str:
+    import subprocess
+
+    return subprocess.run(
+        ["git", "-c", "user.email=ci@test", "-c", "user.name=ci", *args],
+        cwd=repo, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+@pytest.fixture
+def release_repo(tmp_path):
+    """A repo whose v1.0-beta.1 tag is the published release, and a main after it."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    (repo / "upstream.sh").write_text("version=1.0\nrelease=beta.1\n")
+    (repo / "patches").mkdir()
+    (repo / "patches" / "a.patch").write_text("a\n")
+    (repo / "typescript").mkdir()
+    (repo / "typescript" / "x.ts").write_text("x\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "release")
+    _git(repo, "tag", "v1.0-beta.1")
+    return repo
+
+
+def test_driver_pr_on_the_released_sources_tests_the_release(release_repo):
+    base = _git(release_repo, "rev-parse", "HEAD")
+    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    _git(release_repo, "commit", "-qam", "driver change")
+    assert _scope(release_repo, base)[0] == "browser_changed=false"
+
+
+def test_driver_pr_on_unreleased_browser_sources_builds(release_repo):
+    """#785: main had merged browser patches (#779) that no release carried yet,
+    so a TS-only pull request fetched beta.31 and ran #779's patch guards on it."""
+    (release_repo / "patches" / "a.patch").write_text("merged but unreleased\n")
+    _git(release_repo, "commit", "-qam", "browser change merged to main")
+    base = _git(release_repo, "rev-parse", "HEAD")
+    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    _git(release_repo, "commit", "-qam", "driver change")
+    result, log = _scope(release_repo, base)
+    assert result == "browser_changed=true"
+    assert "patches/a.patch" in log
+
+
+def test_browser_pr_builds(release_repo):
+    base = _git(release_repo, "rev-parse", "HEAD")
+    (release_repo / "patches" / "a.patch").write_text("b\n")
+    _git(release_repo, "commit", "-qam", "browser change")
+    assert _scope(release_repo, base)[0] == "browser_changed=true"
+
+
+def test_unpublished_release_tag_builds(release_repo):
+    _git(release_repo, "tag", "-d", "v1.0-beta.1")
+    base = _git(release_repo, "rev-parse", "HEAD")
+    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    _git(release_repo, "commit", "-qam", "driver change")
+    assert _scope(release_repo, base)[0] == "browser_changed=true"

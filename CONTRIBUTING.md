@@ -38,7 +38,7 @@ The engineering rules in [`AGENTS.md`](AGENTS.md) apply to every change, whether
 
 ## Testing Requirements
 
-**CI runs everything, on every pull request.** [`.github/workflows/tests.yml`](.github/workflows/tests.yml) builds the browser from your branch when you touch browser sources (and tests against the published release when you do not), then runs the Python package tests, the patch guards, build-tester, the upstream Playwright suite, the leak suite and the stealth check. Branch protection requires exactly one check, **`All tests passed`**, which is green only when every applicable suite is.
+**CI runs everything, on every pull request.** [`.github/workflows/tests.yml`](.github/workflows/tests.yml) builds the browser from your branch when you touch browser sources (and tests against the published release when you do not), then runs the Python and TypeScript package tests, the patch guards, build-tester, the upstream Playwright suite, the leak suite and the stealth check. Branch protection requires exactly one check, **`All tests passed`**, which is green only when every applicable suite is.
 
 So there is nothing to attach to the pull request by hand. The old process — run the suites locally, screenshot the output, paste it in — was unenforceable: nothing checked that the browser in the screenshot was built from the branch under review. If you want a report in the description anyway, CI leaves one as a comment on the pull request.
 
@@ -50,6 +50,7 @@ python3 -m ci.run_build_tester   --binary /path/to/camoufox-bin
 python3 -m ci.run_playwright     --binary /path/to/camoufox-bin   # or --shard 3/6
 python3 -m ci.run_skiplist_audit --binary /path/to/camoufox-bin
 python3 -m ci.run_pythonlib                                       # pythonlib/
+python3 -m ci.run_typescript                                      # typescript/
 python3 -m pytest ci/tests -q                                     # the pipeline's own tests
 ```
 

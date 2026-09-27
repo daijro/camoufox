@@ -1,0 +1,87 @@
+name: Publish to npm
+
+# The npm twin of publish-pypi.yml: dispatched by hand, checks, builds, verifies
+# the tarball, publishes. The package version is typescript/package.json's and
+# must equal pythonlib's -- scripts/check-pack.mjs refuses to go on otherwise.
+#
+# Authentication is npm trusted publishing (OIDC): no token is stored anywhere.
+# npm accepts this workflow's identity because the package's settings on
+# npmjs.com name this repository and this file (publish-npm.yml). Renaming the
+# file, or publishing from a fork, is rejected by the registry. The first
+# version of a new package has to be published by hand, since the trusted
+# publisher is configured on a package that already exists.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run every check and `npm publish --dry-run`, upload nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # trusted publishing, and the provenance attestation
+    defaults:
+      run:
+        working-directory: typescript
+    env:
+      CAMOUFOX_FPGEN_DATA: ${{ github.workspace }}/.fpgen
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install pythonlib
+        # tests/golden-setup.ts records the golden fixtures from it, and the
+        # build copies its data files into the package.
+        working-directory: .
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r ci/requirements.txt -e pythonlib
+          .venv/bin/python scripts/pin-fpgen-model.py
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: typescript/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          # Trusted publishing needs npm >= 11.5.1, which Node 24 ships.
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: typescript/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check and lint
+        run: |
+          pnpm typecheck
+          pnpm check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build package
+        run: pnpm build
+
+      - name: Check package
+        run: node scripts/check-pack.mjs
+
+      - name: Publish to npm
+        run: npm publish --access public ${{ inputs.dry_run && '--dry-run' || '' }}
