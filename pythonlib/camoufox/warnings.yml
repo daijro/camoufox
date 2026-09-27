@@ -41,6 +41,13 @@ instant_animations: >-
     never waits on one. A page can see it: getComputedTiming() reports a duration
     of 0 where stock Firefox reports the real one.
 
+is_mobile: >-
+    Camoufox is built for desktops and only draws desktop identities, so is_mobile
+    cannot produce a believable phone and will leak: the page still sees a desktop
+    User-Agent, platform, fonts, GPU and screen. Camoufox ignores is_mobile rather
+    than put the page in Responsive Design Mode, which a page can read too.
+    Use has_touch, device_scale_factor and viewport for the parts you need.
+
 block_webgl: >-
     Disabling WebGL is not recommended. Many WAFs will check if WebGL is enabled.
 

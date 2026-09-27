@@ -388,3 +388,32 @@ class TestStockMediaDefaults:
         assert browser.kwargs["forced_colors"] == "active"
         # the ones the caller left alone still follow the host
         assert browser.kwargs["reduced_motion"] == "no-override"
+
+
+class TestDesktopOnlyWarning:
+    """Camoufox has only desktop identities and Juggler never enters Responsive
+    Design Mode, so is_mobile on new_page()/new_context() gets a LeakWarning."""
+
+    class FakeBrowser:
+        def new_page(self, **kwargs):
+            return kwargs
+
+        def new_context(self, **kwargs):
+            return kwargs
+
+    def test_is_mobile_warns(self):
+        from camoufox._warnings import LeakWarning
+
+        browser = utils.attach_desktop_only_warning(self.FakeBrowser())
+        for create in (browser.new_page, browser.new_context):
+            with pytest.warns(LeakWarning, match="built for desktops"):
+                assert create(is_mobile=True) == {"is_mobile": True}
+
+    def test_a_desktop_context_does_not(self):
+        import warnings
+
+        browser = utils.attach_desktop_only_warning(self.FakeBrowser())
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            browser.new_context(viewport={"width": 800, "height": 600}, is_mobile=False)
+            browser.new_page()

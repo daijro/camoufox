@@ -683,6 +683,27 @@ def attach_stock_media_defaults(target: Any) -> Any:
     return target
 
 
+def attach_desktop_only_warning(target: Any) -> Any:
+    """Warn when new_page()/new_context() asks for is_mobile: Camoufox only has
+    desktop identities, and Juggler ignores the option (TargetRegistry.js)."""
+    for name in ('new_page', 'new_context'):
+        original = getattr(target, name, None)
+        if original is None:
+            continue
+
+        def wrap(original: Any) -> Any:
+            @wraps(original)
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
+                if kwargs.get('is_mobile'):
+                    LeakWarning.warn('is_mobile')
+                return original(*args, **kwargs)
+
+            return wrapper
+
+        setattr(target, name, wrap(original))
+    return target
+
+
 def attach_no_viewport_default(target: Any) -> Any:
     """
     Default new_page()/new_context() to no_viewport=True.
@@ -1417,6 +1438,9 @@ def launch_options(
     if disable_coop:
         LeakWarning.warn('disable_coop', i_know_what_im_doing)
         firefox_user_prefs['browser.tabs.remote.useCrossOriginOpenerPolicy'] = False
+    # A persistent context takes its context options here.
+    if launch_options.get('is_mobile'):
+        LeakWarning.warn('is_mobile', i_know_what_im_doing)
 
     # Drop values the source supplied that this identity cannot keep, before the
     # WebGL pool below defers to them (a preset's own GPU pair wins over

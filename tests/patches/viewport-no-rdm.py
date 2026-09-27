@@ -10,14 +10,15 @@ scrollbars pinned, a desktop identity measured 12 px of scrollbar on a
 launch-level page and 0 px in any context with a viewport.
 
 Playwright's Juggler now enables RDM only for `isMobile`
-(microsoft/playwright#41859), and so does Camoufox's. The guard pins classic
-scrollbars and measures the scrollbar gutter three ways:
+(microsoft/playwright#41859). Camoufox's never does: RDM matches no real
+browser (Firefox for Android does not run it), and Camoufox only has desktop
+identities, so the launchers warn about is_mobile instead. The guard pins
+classic scrollbars and measures the scrollbar gutter three ways:
 
   - a launch-level page, the control: it must be non-zero, or the check is
     vacuous;
   - a context with a viewport, which must match the control;
-  - a context with a viewport and is_mobile=True, which must still get RDM's
-    overlay scrollbars, so the option the caller asked for is not dropped.
+  - a context with a viewport and is_mobile=True, which must match it too.
 
 RDM plus touch also swallowed the pointer events of a mouse click
 (PointerEventHandler): in a desktop context with has_touch=True, page.click()
@@ -29,6 +30,7 @@ requires the same event sequence as on the launch-level page.
 """
 
 import sys
+import warnings
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -68,6 +70,7 @@ def click_events(page) -> str:
 
 
 def main() -> int:
+    from camoufox._warnings import LeakWarning
     from camoufox.sync_api import Camoufox
 
     binary = resolve_binary()
@@ -76,7 +79,9 @@ def main() -> int:
                   i_know_what_im_doing=True) as browser:
         control = measure(browser.new_page(no_viewport=True))
         emulated = measure(browser.new_context(viewport=VIEWPORT).new_page())
-        mobile = measure(browser.new_context(viewport=VIEWPORT, is_mobile=True).new_page())
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", LeakWarning)  # is_mobile warns; that is the point
+            mobile = measure(browser.new_context(viewport=VIEWPORT, is_mobile=True).new_page())
         control_click = click_events(browser.new_page(no_viewport=True))
         touch_click = click_events(browser.new_context(viewport=VIEWPORT, has_touch=True).new_page())
 
@@ -95,10 +100,10 @@ def main() -> int:
         failures.append(
             f"scrollbar width differs with a viewport: {emulated['page']}/{emulated['box']} px "
             f"vs {control['page']}/{control['box']} px without (Responsive Design Mode)")
-    if (mobile["page"], mobile["box"]) != (0, 0):
+    if (mobile["page"], mobile["box"]) != (control["page"], control["box"]):
         failures.append(
-            f"is_mobile=True did not enable Responsive Design Mode: scrollbars measure "
-            f"{mobile['page']}/{mobile['box']} px, not RDM's 0/0 overlay")
+            f"scrollbar width differs with is_mobile=True: {mobile['page']}/{mobile['box']} px "
+            f"vs {control['page']}/{control['box']} px without (Responsive Design Mode)")
     if "pointerdown" not in control_click:
         failures.append(f"a click on the launch page fired no pointerdown ({control_click!r}): the check is vacuous")
     if touch_click != control_click:
@@ -110,7 +115,7 @@ def main() -> int:
         print(f"FAIL: {f}")
     if failures:
         return 1
-    print("PASS: a viewport keeps the platform's scrollbars; only is_mobile enables Responsive Design Mode, and a click keeps its pointer events.")
+    print("PASS: no context enters Responsive Design Mode -- a viewport keeps the platform's scrollbars, is_mobile included, and a click keeps its pointer events.")
     return 0
 
 
