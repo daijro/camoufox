@@ -1726,6 +1726,12 @@ export function generateContextFingerprint({
 	} else {
 		const fp = generateFingerprint({ os: os ?? undefined });
 		config = fromFpgen(fp, ff_version);
+		// fpgen's Linux pool now and then pairs the Linux UA with a Windows
+		// platform and oscpu. launchOptions() corrects that; this path did not,
+		// so ~1.6% of Linux contexts said Win32 -- and, since the OS below is
+		// read from the platform, drew Windows fonts and voices as well.
+		if (pyStr(get(config, "navigator.userAgent", "")).includes("Linux"))
+			fixNavigatorArch(config, "lin");
 
 		// A fresh identity: every seeded draw below gets its own salt.
 		const salt = identitySalt();
