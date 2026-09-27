@@ -29,13 +29,80 @@ describe("rules", () => {
 		expect(config["navigator.hardwareConcurrency"]).toBe(8);
 	});
 
-	it("a Mac cannot report a Braswell Atom IGP", () => {
+	it("an Intel Mac reports its Firefox bucket", () => {
+		// SanitizeRenderer's buckets for a UHD 630 and a Radeon Pro 5300M
+		// (TestSanitizeRenderer.cpp TestCiMac, TestMacAmd; Firefox 152).
+		for (const bucket of [
+			"Intel(R) HD Graphics 400, or similar",
+			"Radeon R9 200 Series, or similar",
+		]) {
+			expect(coherence.gpuFitsOs(bucket, "mac"), bucket).toBe(true);
+		}
+		expect(coherence.gpuFitsOs("llvmpipe, or similar", "mac")).toBe(false);
+	});
+
+	it("an Intel IGP Mac reports its physical or logical cores", () => {
+		const igp = "Intel(R) HD Graphics 400, or similar";
+		const at = (cores: number) =>
+			rules(
+				{ "webGl:renderer": igp, "navigator.hardwareConcurrency": cores },
+				"mac",
+			);
+		for (const cores of [2, 4, 6, 8, 12, 16]) {
+			expect(at(cores), String(cores)).toEqual([]);
+		}
+		for (const cores of [10, 14, 20, 24, 32]) {
+			expect(at(cores), String(cores)).toEqual(["intel-mac-hardware"]);
+		}
+	});
+
+	it("a discrete GPU Mac reaches the Mac Pro", () => {
+		const amd = "Radeon R9 200 Series, or similar";
+		const at = (cores: number) =>
+			rules(
+				{ "webGl:renderer": amd, "navigator.hardwareConcurrency": cores },
+				"mac",
+			);
+		for (const cores of [
+			2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 48, 56,
+		]) {
+			expect(at(cores), String(cores)).toEqual([]);
+		}
+		expect(at(22)).toEqual(["intel-mac-hardware"]);
+	});
+
+	it.each([
+		"Intel(R) HD Graphics 400, or similar",
+		"Intel(R) HD Graphics, or similar",
+		"Radeon R9 200 Series, or similar",
+		"Radeon HD 3200 Graphics, or similar",
+	])("an Intel Mac (%s) has no notched panel", (renderer) => {
+		for (const [w, h] of [
+			[1470, 956],
+			[1512, 982],
+			[1728, 1117],
+			[2056, 1329],
+			[1710, 1107],
+		]) {
+			expect(
+				rules(
+					{ "webGl:renderer": renderer, "screen.width": w, "screen.height": h },
+					"mac",
+				),
+				`${w}x${h}`,
+			).toEqual(["intel-mac-hardware"]);
+		}
+		// The same panels are what Apple Silicon MacBooks report.
 		expect(
 			rules(
-				{ "webGl:renderer": "Intel(R) HD Graphics 400, or similar" },
+				{
+					"webGl:renderer": "Apple M1, or similar",
+					"screen.width": 1470,
+					"screen.height": 956,
+				},
 				"mac",
 			),
-		).toEqual(["gpu-matches-os"]);
+		).toEqual([]);
 	});
 
 	it("a Mac cannot report an ANGLE renderer", () => {
@@ -208,6 +275,20 @@ describe("rules", () => {
 					"webGl:renderer": "Apple M1, or similar",
 				},
 			],
+			// fpgen model-2/2026's Radeon R9 200 macOS record: a 16" MacBook
+			// Pro (6 physical cores) at its default scaled resolution.
+			[
+				"mac",
+				{
+					"navigator.platform": "MacIntel",
+					"navigator.hardwareConcurrency": 6,
+					"navigator.maxTouchPoints": 0,
+					"screen.width": 1792,
+					"screen.height": 1120,
+					"screen.colorDepth": 30,
+					"webGl:renderer": "Radeon R9 200 Series, or similar",
+				},
+			],
 		];
 		for (const [os, config] of real) {
 			expect(coherence.validate(config, os), os).toEqual([]);
@@ -216,13 +297,25 @@ describe("rules", () => {
 
 	it("drops a source GPU the OS cannot report, and only that", () => {
 		const config: Record<string, any> = {
-			"webGl:vendor": "Intel",
-			"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
+			"webGl:vendor": "Google Inc. (Intel)",
+			"webGl:renderer":
+				"ANGLE (Intel, Intel(R) HD Graphics Direct3D11 vs_5_0 ps_5_0), or similar",
 			"screen.width": 1920,
 		};
 		const dropped = coherence.dropIncoherentSourceValues(config, "mac");
 		expect(dropped.map((v) => v.rule)).toEqual(["gpu-matches-os"]);
 		expect(config).toEqual({ "screen.width": 1920 });
+	});
+
+	it("drops a source GPU the final core count rules out", () => {
+		const config: Record<string, any> = {
+			"webGl:vendor": "Intel Inc.",
+			"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
+			"navigator.hardwareConcurrency": 20,
+		};
+		const dropped = coherence.dropIncoherentSourceValues(config, "mac");
+		expect(dropped.map((v) => v.rule)).toEqual(["intel-mac-hardware"]);
+		expect(config).toEqual({ "navigator.hardwareConcurrency": 20 });
 	});
 });
 

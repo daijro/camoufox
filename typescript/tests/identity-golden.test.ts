@@ -103,6 +103,15 @@ describe("constants", () => {
 		expect([...coherence.APPLE_SILICON_CORES].sort((a, b) => a - b)).toEqual(
 			c.appleSiliconCores,
 		);
+		expect([...coherence.INTEL_MAC_IGP_CORES].sort((a, b) => a - b)).toEqual(
+			c.intelMacIgpCores,
+		);
+		expect([...coherence.INTEL_MAC_DGPU_CORES].sort((a, b) => a - b)).toEqual(
+			c.intelMacDgpuCores,
+		);
+		expect([...coherence.APPLE_SILICON_PANELS].sort()).toEqual(
+			c.appleSiliconPanels,
+		);
 		// Iteration order matters: the dpr repair breaks ties by it.
 		expect(coherence.PLAUSIBLE_DPR).toEqual(c.plausibleDpr);
 		expect([...coherence.PLAUSIBLE_COLOR_DEPTH].sort()).toEqual(
@@ -376,6 +385,20 @@ describe("webgl", () => {
 			expect(exact(out), label).toBe(c.hash);
 		}
 	});
+	it(`reproduces ${fx.forMachine.length} draws narrowed by the core count`, () => {
+		for (const c of fx.forMachine) {
+			const out = webgl.sampleWebglForScreen(
+				c.os,
+				c.w,
+				c.h,
+				big(c.seed),
+				c.cores,
+			);
+			const label = `${c.os} ${c.w}x${c.h} cores ${c.cores} seed ${c.seed}`;
+			expect(out["webGl:renderer"], label).toBe(c.renderer);
+			expect(exact(out), label).toBe(c.hash);
+		}
+	});
 	it(`reproduces ${fx.forGpu.length} draws for a named GPU`, () => {
 		for (const c of fx.forGpu) {
 			let got: any;
@@ -490,9 +513,15 @@ describe("geometry fixes", () => {
 
 describe("coherence", () => {
 	const fx = load("coherence.json.gz");
-	it("gpuFitsOs / gpuScreenIsPlausible / rendererBucket", () => {
+	it("gpuFitsOs / gpuFitsMachine / gpuScreenIsPlausible / rendererBucket", () => {
 		for (const [r, osKey, fits] of fx.fits) {
 			expect(coherence.gpuFitsOs(r, osKey), `${r} ${osKey}`).toBe(fits);
+		}
+		for (const [r, osKey, cores, w, hh, fits] of fx.machine) {
+			expect(
+				coherence.gpuFitsMachine(r, osKey, cores, w, hh),
+				`${r} ${osKey} ${cores} ${w}x${hh}`,
+			).toBe(fits);
 		}
 		for (const [r, w, hh, plausible, software, bucket] of fx.gpuScreen) {
 			expect(fp.gpuScreenIsPlausible(r, w, hh), `${r} ${w}x${hh}`).toBe(

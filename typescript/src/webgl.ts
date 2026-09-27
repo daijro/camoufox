@@ -12,7 +12,7 @@
  * then webgl2), so a seeded identity presents the same device in both
  * launchers.
  */
-import { gpuFitsOs } from "./coherence.js";
+import { gpuFitsMachine, gpuFitsOs } from "./coherence.js";
 import {
 	FPGEN_OS,
 	gpuScreenIsPlausible,
@@ -233,7 +233,8 @@ export function webglForGpu(
  *
  * Only GPUs the rest of the identity can stand beside are drawn: never a
  * software rasteriser, a GPU the OS cannot report, the resistFingerprinting
- * mask, or a discrete GPU behind a netbook panel. The screen is left alone:
+ * mask, a discrete GPU behind a netbook panel, or an Intel Mac GPU beside
+ * cores or a panel no Intel Mac has. The screen is left alone:
  * it has already been reconciled with the real display and the window (#499).
  *
  * @throws ValueError when no recorded GPU fits.
@@ -243,12 +244,14 @@ export function sampleWebglForScreen(
 	width?: number | null,
 	height?: number | null,
 	seed?: PySeed,
+	cores?: number | null,
 ): WebGLData {
 	const candidates = trace("gpu", targetOs).filter(
 		(result) =>
 			!isSoftwareRenderer(result.value.renderer) &&
 			result.value.renderer !== RFP_RENDERER &&
 			gpuFitsOs(result.value.renderer, targetOs) &&
+			gpuFitsMachine(result.value.renderer, targetOs, cores, width, height) &&
 			gpuScreenIsPlausible(result.value.renderer, width, height),
 	);
 	if (!candidates.length) {

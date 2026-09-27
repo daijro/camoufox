@@ -6,12 +6,18 @@ incoherent identity is assembled rather than inherited, and cleaning the pools
 cannot prevent it. These tests run the assembled identity, from every source, past
 camoufox.coherence.
 
-Measured before the layer existed (2026-09-17): 14% of macOS identities drew
-"Radeon R9 200 Series", a desktop PC card; 7% paired Apple Silicon with
-colorDepth 24; 2% of Windows identities reported maxTouchPoints 256; and 18 of
-the 312 bundled presets carried a GPU or a screen no desktop has.
+Measured before the layer existed (2026-09-17): 7% of macOS identities paired
+Apple Silicon with colorDepth 24; 2% of Windows identities reported
+maxTouchPoints 256; and bundled presets carried screens no desktop has.
+
+"Intel(R) HD Graphics 400" and "Radeon R9 200 Series" on macOS are not in that
+list: they are the buckets Firefox reports for an Intel Mac's UHD 630 and a
+Radeon Pro 5300M (its own TestCiMac and TestMacAmd cases). What an Intel Mac
+cannot have is a notched Apple Silicon panel, or a core count no Intel Mac with
+that GPU reports.
 """
 
+import re
 import sys
 from os.path import dirname, join
 
@@ -22,8 +28,45 @@ sys.path.insert(0, join(dirname(__file__), ".."))
 from camoufox import coherence  # noqa: E402
 from camoufox import fingerprints as fp  # noqa: E402
 from camoufox.utils import get_target_os  # noqa: E402
+from camoufox.webgl import sample_webgl_for_screen  # noqa: E402
 
 from test_identity_salt import launch  # noqa: E402
+
+
+def _firefox_bucket(raw):
+    """The AMD and Intel branches of Firefox's SanitizeRenderer for a macOS
+    GL_RENDERER (dom/canvas/SanitizeRenderer.cpp, FIREFOX_152_0_4_RELEASE)."""
+    device = re.sub(r" OpenGL Engine$", "", raw)
+    if any(part in device for part in ("REMBRANDT", "RENOIR", "Vega", "VII", "Fury")):
+        return "Radeon R9 200 Series, or similar"
+    radeon = re.search(r"Radeon.*?((R[579X]|HD) )?([0-9][0-9][0-9]+)", device)
+    if radeon:
+        if radeon.group(2) == "HD":
+            model = int(radeon.group(3))
+            return ("Radeon HD 5850" if model >= 5000 else "Radeon HD 3200 Graphics") + ", or similar"
+        return "Radeon R9 200 Series, or similar"
+    intel = re.search(r"Intel.*Graphics( P?([0-9][0-9][0-9]+))?", device)
+    if intel:
+        if not intel.group(1):
+            return "Intel(R) HD Graphics, or similar"
+        model = int(intel.group(2))
+        return ("Intel(R) HD Graphics" if 1000 <= model < 5000 else "Intel(R) HD Graphics 400") + ", or similar"
+    raise ValueError(f"not an AMD or Intel renderer: {raw!r}")
+
+
+# What Intel Macs' GPUs report through Firefox. An Intel model number under
+# 1000 or of 5000 and over lands in "HD Graphics 400"; a Radeon without an "HD"
+# prefix lands in "R9 200 Series".
+MAC_RENDERERS = [
+    ("Intel(R) UHD Graphics 630", "Intel(R) HD Graphics 400, or similar"),  # Mac mini 2018, 15"/16" MacBook Pro
+    ("Intel(R) Iris(TM) Plus Graphics 655", "Intel(R) HD Graphics 400, or similar"),  # 13" MacBook Pro 2018-19
+    ("Intel HD Graphics 6000", "Intel(R) HD Graphics 400, or similar"),  # MacBook Air 2015-17
+    ("Intel(R) Iris(TM) Plus Graphics", "Intel(R) HD Graphics, or similar"),  # MacBook Air 2020
+    ("Intel HD Graphics 4000", "Intel(R) HD Graphics, or similar"),  # MacBook Air / Mac mini 2012
+    ("AMD Radeon Pro 5300M OpenGL Engine", "Radeon R9 200 Series, or similar"),  # 16" MacBook Pro
+    ("AMD Radeon Pro 560X OpenGL Engine", "Radeon R9 200 Series, or similar"),  # 15" MacBook Pro 2018
+    ("AMD Radeon Pro Vega 56 OpenGL Engine", "Radeon R9 200 Series, or similar"),  # iMac Pro
+]
 
 
 class TestRules:
@@ -35,15 +78,60 @@ class TestRules:
         assert coherence.apply(config, "mac") == []
         assert config["navigator.hardwareConcurrency"] == 8
 
-    def test_a_mac_cannot_report_a_braswell_atom_igp(self):
-        # The retired WebGL database weighted this at 7.4% of the macOS pool,
-        # and fpgen records it from macOS too.
-        config = {"webGl:renderer": "Intel(R) HD Graphics 400, or similar"}
-        assert [v.rule for v in coherence.validate(config, "mac")] == ["gpu-matches-os"]
+    def test_the_bucket_port_agrees_with_firefoxs_own_mac_cases(self):
+        # dom/canvas/gtest/TestSanitizeRenderer.cpp, FIREFOX_152_0_4_RELEASE.
+        assert _firefox_bucket("AMD Radeon Pro 5300M OpenGL Engine") == "Radeon R9 200 Series, or similar"
+        assert _firefox_bucket("Intel(R) UHD Graphics 630") == "Intel(R) HD Graphics 400, or similar"
+
+    @pytest.mark.parametrize("raw, bucket", MAC_RENDERERS)
+    def test_an_intel_mac_reports_its_firefox_bucket(self, raw, bucket):
+        assert _firefox_bucket(raw) == bucket
+        assert coherence.gpu_fits_os(bucket, "mac"), raw
 
     def test_a_mac_cannot_report_an_angle_renderer(self):
+        # Firefox 152 renders WebGL on macOS through CGL, and its sanitizer has
+        # no ANGLE-on-Metal branch (Bug 2046027 added one after 152).
         config = {"webGl:renderer": "ANGLE (Intel, Intel(R) HD Graphics Direct3D11 vs_5_0), or similar"}
         assert [v.rule for v in coherence.validate(config, "mac")] == ["gpu-matches-os"]
+
+    def test_a_mac_cannot_report_a_software_rasteriser(self):
+        assert not coherence.gpu_fits_os("llvmpipe, or similar", "mac")
+
+    def test_an_intel_igp_mac_reports_its_physical_or_logical_cores(self):
+        igp = "Intel(R) HD Graphics 400, or similar"
+        for cores in (2, 4, 6, 8, 12, 16):
+            assert coherence.validate({"webGl:renderer": igp, "navigator.hardwareConcurrency": cores}, "mac") == [], cores
+        # No Mac that runs WebGL on its Intel IGP has more than 8 cores.
+        for cores in (10, 14, 20, 24, 32):
+            config = {"webGl:renderer": igp, "navigator.hardwareConcurrency": cores}
+            assert [v.rule for v in coherence.validate(config, "mac")] == ["intel-mac-hardware"], cores
+
+    def test_a_discrete_gpu_mac_reaches_the_mac_pro(self):
+        amd = "Radeon R9 200 Series, or similar"
+        for cores in (2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 48, 56):
+            assert coherence.validate({"webGl:renderer": amd, "navigator.hardwareConcurrency": cores}, "mac") == [], cores
+        config = {"webGl:renderer": amd, "navigator.hardwareConcurrency": 22}
+        assert [v.rule for v in coherence.validate(config, "mac")] == ["intel-mac-hardware"]
+
+    @pytest.mark.parametrize("renderer", [
+        "Intel(R) HD Graphics 400, or similar",
+        "Intel(R) HD Graphics, or similar",
+        "Radeon R9 200 Series, or similar",
+        "Radeon HD 3200 Graphics, or similar",
+    ])
+    def test_an_intel_mac_has_no_notched_panel(self, renderer):
+        for width, height in ((1470, 956), (1512, 982), (1728, 1117), (2056, 1329), (1710, 1107)):
+            config = {"webGl:renderer": renderer, "screen.width": width, "screen.height": height}
+            assert [v.rule for v in coherence.validate(config, "mac")] == ["intel-mac-hardware"], (width, height)
+        # The same panels are what Apple Silicon MacBooks report.
+        assert coherence.validate({"webGl:renderer": "Apple M1, or similar", "screen.width": 1470,
+                                   "screen.height": 956}, "mac") == []
+
+    def test_a_preset_gpu_the_final_identity_contradicts_is_dropped(self):
+        config = {"webGl:vendor": "Intel Inc.", "webGl:renderer": "Intel(R) HD Graphics 400, or similar",
+                  "navigator.hardwareConcurrency": 20}
+        assert [v.rule for v in coherence.drop_incoherent_source_values(config, "mac")] == ["intel-mac-hardware"]
+        assert "webGl:renderer" not in config and "webGl:vendor" not in config
 
     def test_windows_renders_through_angle(self):
         assert coherence.gpu_fits_os("ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11), or similar", "win")
@@ -131,9 +219,51 @@ class TestRules:
             ("mac", {"navigator.platform": "MacIntel", "navigator.hardwareConcurrency": 10,
                      "navigator.maxTouchPoints": 0, "screen.width": 2560, "screen.height": 1440,
                      "screen.colorDepth": 30, "webGl:renderer": "Apple M1, or similar"}),
+            # fpgen model-2/2026's Radeon R9 200 macOS record: a 16" MacBook Pro
+            # (6 physical cores) at its default scaled resolution.
+            ("mac", {"navigator.platform": "MacIntel", "navigator.hardwareConcurrency": 6,
+                     "navigator.maxTouchPoints": 0, "screen.width": 1792, "screen.height": 1120,
+                     "screen.colorDepth": 30, "webGl:renderer": "Radeon R9 200 Series, or similar"}),
         ]
         for target_os, config in real:
             assert coherence.validate(config, target_os) == [], target_os
+
+
+INTEL_MAC_BUCKETS = {"Intel(R) HD Graphics 400, or similar", "Radeon R9 200 Series, or similar"}
+
+
+class TestIntelMacDraws:
+    """The draw offers Intel Macs, but only beside a core count and a screen an
+    Intel Mac could have."""
+
+    def test_every_intel_mac_bucket_is_drawn(self):
+        # fpgen model-2/2026 records each at 1.1% of Firefox on macOS.
+        drawn = {sample_webgl_for_screen("mac", 2560, 1440, seed=s)["webGl:renderer"] for s in range(300)}
+        assert INTEL_MAC_BUCKETS <= drawn
+
+    def test_no_intel_mac_behind_a_notched_panel(self):
+        for seed in range(300):
+            renderer = sample_webgl_for_screen("mac", 1470, 956, seed=seed, cores=8)["webGl:renderer"]
+            assert "Apple M" in renderer, (seed, renderer)
+
+    def test_no_intel_igp_beside_a_core_count_no_intel_mac_reports(self):
+        drawn = {sample_webgl_for_screen("mac", 2560, 1440, seed=s, cores=20)["webGl:renderer"] for s in range(300)}
+        assert not any("Intel" in renderer for renderer in drawn), drawn
+
+    def test_a_preset_gpu_is_checked_against_the_host_core_count(self, monkeypatch):
+        """A launch replaces the preset's core count with the host's, after the
+        preset's GPU has been read: the GPU has to fit the count that ships."""
+        preset = dict(fp.load_presets("150")["presets"]["macos"][0])
+        preset["navigator"] = {**preset["navigator"], "hardwareConcurrency": 8}
+        preset["screen"] = {**preset["screen"], "width": 1440, "height": 900, "availWidth": 1440,
+                            "availHeight": 875}
+        preset["webgl"] = {**preset["webgl"], "unmaskedVendor": "Intel Inc.",
+                           "unmaskedRenderer": "Intel(R) HD Graphics 400, or similar"}
+        monkeypatch.setattr(fp, "host_cpu_count", lambda: 20)
+        config = launch(os="macos", fingerprint_preset=preset)
+        assert config["navigator.hardwareConcurrency"] == 20
+        assert "Intel" not in config["webGl:renderer"]
+        assert coherence.validate(config, "mac") == []
 
 
 class TestEveryIdentityIsCoherent:
