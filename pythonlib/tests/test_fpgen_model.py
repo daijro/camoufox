@@ -31,6 +31,8 @@ MEMBERS = {
     "values.json.zst": b"values-json" * 1000,
     "values.dat.zst": b"values-dat" * 1000,
 }
+# What the synthetic values.dat.zst decompresses to, as far as the pin says.
+VALUES_DAT = b"decompressed-values" * 1000
 STALE = time.time() - FPGEN_MAX_AGE_S - 86400
 
 
@@ -57,6 +59,7 @@ def pinned(monkeypatch):
         "sha256": _sha256(archive),
         "files": sorted(MEMBERS),
         "file_sha256": {name: _sha256(data) for name, data in MEMBERS.items()},
+        "decompressed_sha256": {"values.dat": _sha256(VALUES_DAT)},
     }
     monkeypatch.setattr(fpgen_model, "PIN", pin)
     monkeypatch.delenv("FPGEN_MODEL_URL", raising=False)
@@ -215,6 +218,31 @@ def test_decompressed_model_fails_loudly(tmp_path, pinned):
     with pytest.raises(FpgenModelError, match="fpgen remove"):
         ensure_fpgen_model(data_dir)
     assert pinned == []
+
+
+def test_a_pinned_values_dat_is_shared_with_the_typescript_launcher(tmp_path, pinned):
+    """CAMOUFOX_FPGEN_DATA may point the TS launcher at this directory, and it
+    decompresses values.dat there. The pinned model's values.dat stays."""
+    data_dir = tmp_path / "data"
+    ensure_fpgen_model(data_dir)
+    _write(data_dir, {"values.dat": VALUES_DAT})
+
+    ensure_fpgen_model(data_dir)
+
+    assert (data_dir / "values.dat").read_bytes() == VALUES_DAT
+    assert pinned == [fpgen_model.PIN["url"]]
+
+
+def test_a_values_dat_from_another_model_is_dropped(tmp_path, pinned):
+    """fpgen reads values.dat in preference to values.dat.zst, so one left over
+    from another model would pair its values with the pinned network."""
+    data_dir = tmp_path / "data"
+    ensure_fpgen_model(data_dir)
+    _write(data_dir, {"values.dat": b"another model"})
+
+    ensure_fpgen_model(data_dir)
+
+    assert not (data_dir / "values.dat").exists()
 
 
 def test_custom_model_url_is_left_to_fpgen(tmp_path, pinned, monkeypatch):

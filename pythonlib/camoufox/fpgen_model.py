@@ -39,6 +39,9 @@ STAMP = '.pinned-model'
 # `python -m fpgen decompress` replaces the archive's files with these, which
 # fpgen then reads in preference to them.
 DECOMPRESSED_FILES = ('fingerprint-network.json', 'values.json', 'values.dat')
+# The TypeScript launcher decompresses values.dat beside the archive's files,
+# and CAMOUFOX_FPGEN_DATA may point it at this directory. The pin carries its
+# hash, so a values.dat from the pinned model is kept and any other is dropped.
 
 # 2100-01-01T00:00:00Z. fpgen refetches files whose mtime is older than this
 # window (pkgman.files_are_recent).
@@ -90,7 +93,11 @@ def ensure_fpgen_model(data_dir: Optional[Path] = None, force: bool = False) -> 
         return
     data_dir = data_dir or fpgen_data_dir()
     with _LOCK:
-        if any((data_dir / name).exists() for name in DECOMPRESSED_FILES):
+        if any(
+            (data_dir / name).exists()
+            for name in DECOMPRESSED_FILES
+            if name not in PIN['decompressed_sha256']
+        ):
             raise FpgenModelError(
                 f"fpgen's model in {data_dir} is decompressed, so it cannot be checked against "
                 f"the pinned {PIN['tag']}. Remove it with `python -m fpgen remove`; Camoufox "
@@ -99,6 +106,7 @@ def ensure_fpgen_model(data_dir: Optional[Path] = None, force: bool = False) -> 
         try:
             if force or not is_pinned(data_dir):
                 _install(data_dir)
+            _drop_foreign_decompressed(data_dir)
             _stamp(data_dir)
         except PermissionError as e:
             raise FpgenModelError(
@@ -136,6 +144,16 @@ def _install(data_dir: Path) -> None:
             os.replace(staging / name, data_dir / name)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+
+
+def _drop_foreign_decompressed(data_dir: Path) -> None:
+    """Remove a decompressed file that is not the pinned model's: fpgen would
+    read it in preference to the verified archive. Hashing values.dat (~210 MB)
+    takes ~0.2 s, once per process, and only when the file is there."""
+    for name, digest in PIN['decompressed_sha256'].items():
+        path = data_dir / name
+        if path.exists() and _hash(path) != digest:
+            path.unlink(missing_ok=True)
 
 
 def _stamp(data_dir: Path) -> None:
