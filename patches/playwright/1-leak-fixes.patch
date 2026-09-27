@@ -1,26 +1,26 @@
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index 9880047350..318d2edba8 100644
+index bf63df47f6..60293c00b6 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
-@@ -2316,28 +2316,7 @@ dom::PrivateAttribution* Navigator::PrivateAttribution() {
+@@ -2351,28 +2351,7 @@ dom::ModelContext* Navigator::ModelContext() {
  
  /* static */
  bool Navigator::Webdriver() {
 -#ifdef ENABLE_WEBDRIVER
 -  nsCOMPtr<nsIMarionette> marionette = do_GetService(NS_MARIONETTE_CONTRACTID);
 -  if (marionette) {
--    bool marionetteRunning = false;
--    marionette->GetRunning(&marionetteRunning);
--    if (marionetteRunning) {
+-    bool isBrowserAutomationRunning = false;
+-    marionette->GetIsBrowserAutomationRunning(&isBrowserAutomationRunning);
+-    if (isBrowserAutomationRunning) {
 -      return true;
 -    }
 -  }
 -
 -  nsCOMPtr<nsIRemoteAgent> agent = do_GetService(NS_REMOTEAGENT_CONTRACTID);
 -  if (agent) {
--    bool remoteAgentRunning = false;
--    agent->GetRunning(&remoteAgentRunning);
--    if (remoteAgentRunning) {
+-    bool isBrowserAutomationRunning = false;
+-    agent->GetIsBrowserAutomationRunning(&isBrowserAutomationRunning);
+-    if (isBrowserAutomationRunning) {
 -      return true;
 -    }
 -  }
@@ -33,17 +33,17 @@ index 9880047350..318d2edba8 100644
  
  AutoplayPolicy Navigator::GetAutoplayPolicy(AutoplayPolicyMediaType aType) {
 diff --git a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-index cf5ae51466..97efc14262 100644
+index 8123110513..14cd00bc43 100644
 --- a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
 +++ b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-@@ -106,9 +106,7 @@ EnterprisePoliciesManager.prototype = {
+@@ -113,9 +113,7 @@ EnterprisePoliciesManager.prototype = {
        Services.prefs.clearUserPref(PREF_POLICIES_APPLIED);
      }
  
 -    // --- Playwright begin ---
 -    let provider = new PlaywrightPoliciesProvider();
 -    // --- Playwright end ---
-+    let provider = this._chooseProvider();
++    let provider = this._buildProvider();
  
      if (provider.failed) {
        this.status = Ci.nsIEnterprisePolicies.FAILED;
