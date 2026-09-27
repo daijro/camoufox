@@ -38,13 +38,30 @@ export const MAX_PLAUSIBLE_TOUCH_POINTS = 10;
 /** The browser's own chrome height, in CSS pixels (a property of the binary). */
 export const BROWSER_CHROME_HEIGHT = 86;
 
-/** GPU strings that are not possible on macOS. */
-const NOT_A_MAC_GPU = [
-	"ANGLE",
-	"Intel(R) HD Graphics 400",
-	"Radeon R9 200 Series",
-	"llvmpipe",
-];
+/**
+ * GPU strings that are not possible on macOS: Firefox 152 has no ANGLE on a
+ * Mac. "Intel(R) HD Graphics 400" and "Radeon R9 200 Series" are the buckets
+ * an Intel Mac's UHD 630 and Radeon Pro 5300M report.
+ */
+const NOT_A_MAC_GPU = ["ANGLE", "llvmpipe"];
+
+/** navigator.hardwareConcurrency on an Intel Mac, physical or logical. */
+export const INTEL_MAC_IGP_CORES: ReadonlySet<number> = new Set([
+	2, 4, 6, 8, 12, 16,
+]);
+/** A discrete GPU adds the desktops to those, up to the 2019 Mac Pro. */
+export const INTEL_MAC_DGPU_CORES: ReadonlySet<number> = new Set([
+	2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 56,
+]);
+
+/** Screens only Apple Silicon Macs have: the notched MacBooks, the 24" iMac. */
+export const APPLE_SILICON_PANELS: ReadonlySet<string> = new Set([
+	...["1024x665", "1280x832", "1470x956", "1710x1112"], // Air 13.6"
+	...["1280x828", "1440x932", "1710x1107"], // Air 15.3"
+	...["1147x745", "1352x878", "1512x982", "1800x1169"], // Pro 14"
+	...["1312x848", "1496x967", "1728x1117", "2056x1329"], // Pro 16"
+	"2240x1260", // iMac 24"
+]);
 
 export interface Violation {
 	rule: string;
@@ -107,6 +124,67 @@ export function gpuFitsOs(
 	if (targetOs === "win") return r.startsWith("ANGLE");
 	if (targetOs === "lin") return !r.includes("ANGLE") && !r.includes("Apple M");
 	return true;
+}
+
+function isAppleSiliconPanel(width: unknown, height: unknown): boolean {
+	const w = num(width);
+	const h = num(height);
+	return (
+		typeof w === "number" &&
+		typeof h === "number" &&
+		APPLE_SILICON_PANELS.has(`${w}x${h}`)
+	);
+}
+
+/** Why no Intel Mac reports this GPU beside these cores and this screen. */
+function intelMacMisfit(
+	rendererString: unknown,
+	cores: unknown,
+	width: unknown,
+	height: unknown,
+): string | null {
+	const r = pyTruthy(rendererString) ? pyStr(rendererString) : "";
+	if (!r || r.includes("Apple M")) return null;
+	const allowed = r.includes("Intel")
+		? INTEL_MAC_IGP_CORES
+		: INTEL_MAC_DGPU_CORES;
+	if (isPyInt(cores) && !allowed.has(Number(cores))) {
+		return `${pyRepr(r)} with hardwareConcurrency ${pyStr(cores)}; no Intel Mac with that GPU reports it`;
+	}
+	if (isAppleSiliconPanel(width, height)) {
+		return `${pyRepr(r)} behind a ${pyStr(width)}x${pyStr(height)} panel, which only Apple Silicon Macs have`;
+	}
+	return null;
+}
+
+/**
+ * Whether a machine with this GPU has these cores and this screen. Only Intel
+ * Macs are modelled; serves the WebGL draw and the finished-identity check.
+ */
+export function gpuFitsMachine(
+	rendererString: string | null | undefined,
+	targetOs: string,
+	cores?: unknown,
+	width?: unknown,
+	height?: unknown,
+): boolean {
+	return (
+		targetOs !== "mac" ||
+		intelMacMisfit(rendererString, cores, width, height) === null
+	);
+}
+
+function checkIntelMacHardware(
+	config: Config,
+	targetOs: string,
+): string | null {
+	if (targetOs !== "mac") return null;
+	return intelMacMisfit(
+		renderer(config),
+		config["navigator.hardwareConcurrency"],
+		config["screen.width"],
+		config["screen.height"],
+	);
 }
 
 function checkGpuMatchesOs(config: Config, targetOs: string): string | null {
@@ -294,6 +372,7 @@ export const RULES: readonly Rule[] = [
 		repair: repairAppleSiliconCores,
 	},
 	{ name: "gpu-matches-os", check: checkGpuMatchesOs, repair: null },
+	{ name: "intel-mac-hardware", check: checkIntelMacHardware, repair: null },
 	{ name: "color-depth", check: checkColorDepth, repair: repairColorDepth },
 	{ name: "touch-points", check: checkTouchPoints, repair: repairTouchPoints },
 	{
@@ -338,24 +417,23 @@ export function repairScreenOrientation(config: Config): boolean {
 
 /**
  * Discard values a source supplied that this identity cannot keep (a preset's
- * GPU pair its OS cannot report), so the normal WebGL sampling draws a
- * coherent one instead. Only values another pool can replace are dropped.
+ * GPU pair its OS, or its final core count and screen, rule out), so the
+ * normal WebGL sampling draws a coherent one instead. Run after the core count
+ * and the screen are final. Only values another pool can replace are dropped.
  */
 export function dropIncoherentSourceValues(
 	config: Config,
 	targetOs: string,
 ): Violation[] {
-	const dropped: Violation[] = [];
 	const r = renderer(config);
-	if (r && !gpuFitsOs(r, targetOs)) {
-		delete config["webGl:renderer"];
-		delete config["webGl:vendor"];
-		dropped.push({
-			rule: "gpu-matches-os",
-			detail: `dropped ${pyRepr(r)} for a ${targetOs} identity`,
-		});
-	}
-	return dropped;
+	if (!r) return [];
+	let rule: string;
+	if (!gpuFitsOs(r, targetOs)) rule = "gpu-matches-os";
+	else if (checkIntelMacHardware(config, targetOs)) rule = "intel-mac-hardware";
+	else return [];
+	delete config["webGl:renderer"];
+	delete config["webGl:vendor"];
+	return [{ rule, detail: `dropped ${pyRepr(r)} for a ${targetOs} identity` }];
 }
 
 /** Every invariant this identity breaks. Empty means coherent. */

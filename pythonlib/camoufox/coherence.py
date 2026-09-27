@@ -4,9 +4,9 @@ Camoufox assembles an identity from several pools -- the navigator and screen
 from the fingerprint generator, the GPU from fpgen's WebGL records, fonts and
 voices from its own catalogues, media devices from `media-devices.json`. Each
 pool is sampled on its own, so a combination that no machine has ever had can be built
-out of individually plausible parts: an Apple M1 with 2 cores, a Mac reporting a
-Braswell Atom GPU, a Linux identity whose platform says armv81 while its user
-agent says x86_64.
+out of individually plausible parts: an Apple M1 with 2 cores, an Intel Mac GPU
+behind a notched Apple Silicon panel, a Linux identity whose platform says
+armv81 while its user agent says x86_64.
 
 That class of defect cannot be removed by cleaning the pools, because it is
 created when they are combined. So every identity passes through here, whatever
@@ -81,12 +81,35 @@ MAX_PLAUSIBLE_TOUCH_POINTS = 10
 # the bottom 2 rows dead, which the boundary-sweep guard caught.
 BROWSER_CHROME_HEIGHT = 86
 
-# GPU strings that are not possible on macOS. Firefox on a Mac reports Apple
-# Silicon as "Apple M1, or similar", and Intel Macs as an Intel Iris/UHD/HD
-# 4000-6000 part; ANGLE is Windows-only (Direct3D), and the other two, which
-# fpgen records from macOS, are a Braswell Atom IGP and a desktop PC card,
-# neither of which shipped in any Mac.
-_NOT_A_MAC_GPU = ('ANGLE', 'Intel(R) HD Graphics 400', 'Radeon R9 200 Series', 'llvmpipe')
+# GPU strings that are not possible on macOS. Firefox 152 renders WebGL on a Mac
+# through CGL, not ANGLE: its SanitizeRenderer has no ANGLE-on-Metal branch
+# (Bug 2046027 added one after 152).
+#
+# Every other string a Mac reports is a bucket, not a device. SanitizeRenderer
+# maps an Intel Mac's UHD 630 or Iris Plus 655 to "Intel(R) HD Graphics 400" and
+# a Radeon Pro 5300M to "Radeon R9 200 Series" (Firefox's TestCiMac and
+# TestMacAmd cases), so neither belongs here.
+_NOT_A_MAC_GPU = ('ANGLE', 'llvmpipe')
+
+# navigator.hardwareConcurrency on an Intel Mac. Firefox reports the physical
+# count where kern.tcsm_available is set (CPUs that need the MDS workaround) and
+# the logical count otherwise (RuntimeService::ClampedHardwareConcurrency), so
+# either is real. Macs running WebGL on the Intel IGP have 2-8 physical cores,
+# 4-16 logical.
+INTEL_MAC_IGP_CORES = frozenset({2, 4, 6, 8, 12, 16})
+# A discrete GPU adds the desktops, up to the 2019 Mac Pro's 28 cores (56
+# threads). An eGPU puts one behind any Intel Mac, so the IGP counts stay in.
+INTEL_MAC_DGPU_CORES = INTEL_MAC_IGP_CORES | frozenset({10, 14, 18, 20, 24, 28, 32, 36, 48, 56})
+
+# The notched MacBook panels' scaled resolutions (Air 13.6"/15.3", Pro 14"/16")
+# and the 24" iMac's default. Only Apple Silicon Macs have them.
+APPLE_SILICON_PANELS = frozenset({
+    (1024, 665), (1280, 832), (1470, 956), (1710, 1112),  # Air 13.6"
+    (1280, 828), (1440, 932), (1710, 1107),  # Air 15.3"
+    (1147, 745), (1352, 878), (1512, 982), (1800, 1169),  # Pro 14"
+    (1312, 848), (1496, 967), (1728, 1117), (2056, 1329),  # Pro 16"
+    (2240, 1260),  # iMac 24"
+})
 
 
 class Violation(NamedTuple):
@@ -146,6 +169,41 @@ def gpu_fits_os(renderer: Optional[str], target_os: str) -> bool:
     if target_os == 'lin':
         return 'ANGLE' not in renderer and 'Apple M' not in renderer
     return True
+
+
+def _intel_mac_misfit(renderer: Optional[str], cores: Any, width: Any, height: Any) -> Optional[str]:
+    """Why no Intel Mac reports this GPU beside these cores and this screen."""
+    renderer = str(renderer or '')
+    if not renderer or 'Apple M' in renderer:
+        return None
+    allowed = INTEL_MAC_IGP_CORES if 'Intel' in renderer else INTEL_MAC_DGPU_CORES
+    if isinstance(cores, int) and cores not in allowed:
+        return f'{renderer!r} with hardwareConcurrency {cores}; no Intel Mac with that GPU reports it'
+    if (width, height) in APPLE_SILICON_PANELS:
+        return f'{renderer!r} behind a {width}x{height} panel, which only Apple Silicon Macs have'
+    return None
+
+
+def gpu_fits_machine(
+    renderer: Optional[str], target_os: str, cores: Any = None, width: Any = None, height: Any = None
+) -> bool:
+    """Whether a machine with this GPU has these cores and this screen.
+
+    Only Intel Macs are modelled. Like gpu_fits_os, which it does not repeat,
+    it serves both the WebGL draw and the finished-identity check.
+    """
+    return target_os != 'mac' or _intel_mac_misfit(renderer, cores, width, height) is None
+
+
+def _check_intel_mac_hardware(config: Dict[str, Any], target_os: str) -> Optional[str]:
+    if target_os != 'mac':
+        return None
+    return _intel_mac_misfit(
+        _renderer(config),
+        config.get('navigator.hardwareConcurrency'),
+        config.get('screen.width'),
+        config.get('screen.height'),
+    )
 
 
 def _check_gpu_matches_os(config: Dict[str, Any], target_os: str) -> Optional[str]:
@@ -290,6 +348,7 @@ def _check_arch_agreement(config: Dict[str, Any], target_os: str) -> Optional[st
 RULES: List[Rule] = [
     Rule('apple-silicon-cores', _check_apple_silicon_cores, _repair_apple_silicon_cores),
     Rule('gpu-matches-os', _check_gpu_matches_os, None),
+    Rule('intel-mac-hardware', _check_intel_mac_hardware, None),
     Rule('color-depth', _check_color_depth, _repair_color_depth),
     Rule('touch-points', _check_touch_points, _repair_touch_points),
     Rule('device-pixel-ratio', _check_device_pixel_ratio, _repair_device_pixel_ratio),
@@ -327,22 +386,28 @@ def repair_screen_orientation(config: Dict[str, Any]) -> bool:
 def drop_incoherent_source_values(config: Dict[str, Any], target_os: str) -> List[Violation]:
     """Discard values a source supplied that this identity cannot keep.
 
-    Run before the pools that would otherwise defer to them. A preset carries
-    its own GPU pair, so a macOS preset naming a Braswell Atom IGP keeps it all
-    the way to the page unless the pair is dropped here -- at which point the
-    normal WebGL sampling draws a coherent one instead. 15 of the 312 bundled
-    presets need this; they are scraped rows, not real machines.
+    Run after the core count and the screen are final, and before the pools
+    that would otherwise defer to them. A preset carries its own GPU pair, so a
+    macOS preset naming an Intel IGP keeps it all the way to the page unless
+    the pair is dropped here -- including when the launch has replaced the
+    preset's core count with a 20-core host's -- at which point the normal
+    WebGL sampling draws a coherent one instead.
 
     Only values that another pool can replace are dropped. Everything else is
     left for `apply()` to repair or report.
     """
-    dropped = []
     renderer = _renderer(config)
-    if renderer and not gpu_fits_os(renderer, target_os):
-        config.pop('webGl:renderer', None)
-        config.pop('webGl:vendor', None)
-        dropped.append(Violation('gpu-matches-os', f'dropped {renderer!r} for a {target_os} identity'))
-    return dropped
+    if not renderer:
+        return []
+    if not gpu_fits_os(renderer, target_os):
+        rule = 'gpu-matches-os'
+    elif _check_intel_mac_hardware(config, target_os):
+        rule = 'intel-mac-hardware'
+    else:
+        return []
+    config.pop('webGl:renderer', None)
+    config.pop('webGl:vendor', None)
+    return [Violation(rule, f'dropped {renderer!r} for a {target_os} identity')]
 
 
 def validate(config: Dict[str, Any], target_os: str) -> List[Violation]:

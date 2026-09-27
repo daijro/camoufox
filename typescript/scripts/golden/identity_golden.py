@@ -343,6 +343,15 @@ def record_webgl():
             for_screen.append({'os': os_key, 'w': 1920, 'h': 1080, 'seed': str(seed),
                                'renderer': out['webGl:renderer'], 'hash': exact(out)})
 
+    # The core count and a notched panel narrow the macOS draw.
+    for_machine = []
+    for cores in (8, 20, 22):
+        for w, hh in ((2560, 1440), (1470, 956)):
+            for seed in range(20):
+                out = webgl.sample_webgl_for_screen('mac', w, hh, seed=seed, cores=cores)
+                for_machine.append({'os': 'mac', 'w': w, 'h': hh, 'seed': str(seed), 'cores': cores,
+                                    'renderer': out['webGl:renderer'], 'hash': exact(out)})
+
     # Every GPU fpgen records for each OS, and every bundled preset's GPU.
     for_gpu = []
     targets = {(os_key, v, r) for os_key in OS_KEYS for v, r in gpus[os_key]}
@@ -375,8 +384,8 @@ def record_webgl():
     converted = [{'os': os_key, 'webgl2': w2, 'hash': exact(webgl.to_config(recorded, w2, os_key))}
                  for os_key in OS_KEYS for w2 in (recorded2, [])]
 
-    write('webgl.json', {'gpus': gpus, 'forScreen': for_screen, 'forGpu': for_gpu, 'errors': errors,
-                         'recorded': recorded, 'recorded2': recorded2, 'converted': converted})
+    write('webgl.json', {'gpus': gpus, 'forScreen': for_screen, 'forMachine': for_machine, 'forGpu': for_gpu,
+                         'errors': errors, 'recorded': recorded, 'recorded2': recorded2, 'converted': converted})
 
 
 # ---------------------------------------------------------------------------
@@ -513,6 +522,10 @@ def record_coherence():
     renderers = fpgen_renderers() + EXTRA_RENDERERS
     rng = random.Random(9001)
     fits = [[r, os_key, coherence.gpu_fits_os(r, os_key)] for r in renderers + [None] for os_key in OS_KEYS + ('bsd',)]
+    machine = [[r, os_key, cores, w, hh, coherence.gpu_fits_machine(r, os_key, cores, w, hh)]
+               for r in renderers + [None] for os_key in OS_KEYS + ('bsd',)
+               for cores in (None, 2, 8, 10, 20, 22, 56, True, '8')
+               for w, hh in ((1470, 956), (2056, 1329), (1920, 1080), ('1470', 956), (None, None))]
     gpu = []
     for r in renderers + [None]:
         for w, hh in ((1024, 600), (800, 480), (1024, 768), (1366, 768), (1920, 1080), (None, None), (0, 600)):
@@ -537,6 +550,8 @@ def record_coherence():
         for key, value in fields.items():
             if rng.random() < 0.6:
                 c[key] = value
+        if rng.random() < 0.2:
+            c['screen.width'], c['screen.height'] = rng.choice(sorted(coherence.APPLE_SILICON_PANELS))
         target = rng.choice(OS_KEYS + ('bsd',))
         v = [list(x) for x in coherence.validate(c, target)]
         applied = copy.deepcopy(c)
@@ -550,7 +565,7 @@ def record_coherence():
         if i < 40:
             case.update(validateFull=v, appliedFull=applied)
         cases.append(case)
-    write('coherence.json', {'fits': fits, 'gpuScreen': gpu, 'cases': cases})
+    write('coherence.json', {'fits': fits, 'machine': machine, 'gpuScreen': gpu, 'cases': cases})
 
 
 # ---------------------------------------------------------------------------
@@ -678,6 +693,9 @@ def record_constants():
         'plausibleCoreCounts': list(fp.PLAUSIBLE_CORE_COUNTS),
         'modernScreenFloor': list(fp.MODERN_SCREEN_FLOOR),
         'appleSiliconCores': sorted(coherence.APPLE_SILICON_CORES),
+        'intelMacIgpCores': sorted(coherence.INTEL_MAC_IGP_CORES),
+        'intelMacDgpuCores': sorted(coherence.INTEL_MAC_DGPU_CORES),
+        'appleSiliconPanels': sorted(f'{w}x{hh}' for w, hh in coherence.APPLE_SILICON_PANELS),
         'plausibleDpr': {k: list(v) for k, v in coherence.PLAUSIBLE_DPR.items()},
         'plausibleColorDepth': sorted(coherence.PLAUSIBLE_COLOR_DEPTH),
         'maxTouchPoints': coherence.MAX_PLAUSIBLE_TOUCH_POINTS,
