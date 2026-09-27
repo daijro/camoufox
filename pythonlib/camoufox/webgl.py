@@ -16,7 +16,7 @@ from typing import Any, Dict, FrozenSet, Optional, Tuple
 
 import orjson
 
-from .coherence import gpu_fits_os
+from .coherence import gpu_fits_machine, gpu_fits_os
 from .fingerprints import _FPGEN_OS, gpu_screen_is_plausible, is_software_renderer
 
 # Extensions a release Firefox never exposes (draft extensions behind
@@ -166,13 +166,16 @@ def sample_webgl_for_screen(
     width: Optional[int] = None,
     height: Optional[int] = None,
     seed: Optional[int] = None,
+    cores: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Draw a GPU for a synthetic identity, weighted as fpgen records Firefox
     on `target_os`, and its WebGL config.
 
     Only GPUs the rest of the identity can stand beside are drawn: never a
     software rasteriser, a GPU the OS cannot report, the resistFingerprinting
-    mask, or a discrete GPU behind a netbook panel (see gpu_screen_is_plausible).
+    mask, a discrete GPU behind a netbook panel (see gpu_screen_is_plausible),
+    or an Intel Mac GPU beside cores or a panel no Intel Mac has
+    (coherence.gpu_fits_machine).
     The screen is left alone: it has already been reconciled with the real
     display and the window (#499).
 
@@ -186,6 +189,7 @@ def sample_webgl_for_screen(
         if not is_software_renderer(result.value['renderer'])
         and result.value['renderer'] != _RFP_RENDERER
         and gpu_fits_os(result.value['renderer'], target_os)
+        and gpu_fits_machine(result.value['renderer'], target_os, cores, width, height)
         and gpu_screen_is_plausible(result.value['renderer'], width, height)
     )
     if not candidates:

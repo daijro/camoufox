@@ -805,6 +805,36 @@ describe.skipIf(!modelReady)(
 			]);
 		});
 
+		it("a preset GPU is checked against the host core count (test_coherence.py)", async () => {
+			// The launch replaces the preset's cores with the host's after the
+			// preset's GPU is read: the GPU has to fit the count that ships.
+			const base = fingerprints.loadPresets("152")?.presets.macos[0];
+			const preset = {
+				...base,
+				navigator: { ...base.navigator, hardwareConcurrency: 8 },
+				screen: {
+					...base.screen,
+					width: 1440,
+					height: 900,
+					availWidth: 1440,
+					availHeight: 875,
+				},
+				webgl: {
+					...base.webgl,
+					unmaskedVendor: "Intel Inc.",
+					unmaskedRenderer: "Intel(R) HD Graphics 400, or similar",
+				},
+			};
+			deps.fixHardwareConcurrency = (config, canPin) =>
+				fingerprints.fixHardwareConcurrency(config, canPin, { cpuCount: 20 });
+			const config = await launchConfig({
+				os: "macos",
+				fingerprint_preset: preset,
+			});
+			expect(config["navigator.hardwareConcurrency"]).toBe(20);
+			expect(config["webGl:renderer"]).not.toContain("Intel");
+		});
+
 		it("a preset GPU fpgen has never seen raises", async () => {
 			const preset = {
 				...fingerprints.loadPresets("152")?.presets.windows[0],

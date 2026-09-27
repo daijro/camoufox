@@ -1685,7 +1685,8 @@ def generate_context_fingerprint(
             # display to reconcile against, so the floor is unconditional.
             raise_screen_to_modern_floor(config)
             webgl_fp = sample_webgl_for_screen(
-                _target_os, config.get('screen.width'), config.get('screen.height')
+                _target_os, config.get('screen.width'), config.get('screen.height'),
+                cores=config.get('navigator.hardwareConcurrency'),
             )
             webgl_fp.pop('webGl2Enabled')
             config.update(webgl_fp)

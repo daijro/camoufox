@@ -122,6 +122,35 @@ describe.skipIf(!MODEL.ok)("webgl (test_webgl.py)", () => {
 		expect(renderers.size).toBeGreaterThanOrEqual(2);
 	});
 
+	it("every Intel Mac bucket is drawn", () => {
+		// fpgen model-2/2026 records each at 1.1% of Firefox on macOS.
+		const drawn = new Set(
+			SEEDS.map(
+				(s) => sampleWebglForScreen("mac", 2560, 1440, s)["webGl:renderer"],
+			),
+		);
+		expect(drawn).toContain("Intel(R) HD Graphics 400, or similar");
+		expect(drawn).toContain("Radeon R9 200 Series, or similar");
+	});
+
+	it("no Intel Mac behind a notched panel", () => {
+		for (const seed of SEEDS) {
+			const renderer = sampleWebglForScreen("mac", 1470, 956, seed, 8)[
+				"webGl:renderer"
+			];
+			expect(renderer, `seed ${seed}`).toContain("Apple M");
+		}
+	});
+
+	it("no Intel IGP beside a core count no Intel Mac reports", () => {
+		for (const seed of SEEDS) {
+			const renderer = sampleWebglForScreen("mac", 2560, 1440, seed, 20)[
+				"webGl:renderer"
+			];
+			expect(renderer, `seed ${seed}`).not.toContain("Intel");
+		}
+	});
+
 	it.each(OSES)("a %s netbook screen never draws a discrete GPU", (os) => {
 		for (const seed of SEEDS) {
 			const renderer = sampleWebglForScreen(os, 1024, 600, seed)[

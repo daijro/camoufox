@@ -1803,6 +1803,8 @@ export function generateContextFingerprint({
 				targetOs,
 				config["screen.width"],
 				config["screen.height"],
+				undefined,
+				config["navigator.hardwareConcurrency"],
 			);
 			delete webglFp.webGl2Enabled;
 			Object.assign(config, webglFp);

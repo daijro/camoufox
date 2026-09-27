@@ -9,7 +9,9 @@ rules -- `scripts/clean-fingerprint-data.py --write` is what makes these pass.
 Dropped on 2026-09-17: 38 of 435 presets (26 with a GPU their OS cannot report,
 7 pairing Apple Silicon with a core count Apple never shipped, 4 with a colour
 depth their GPU contradicts, 3 with a phone viewport, 1 claiming 40 touch
-points).
+points). 24 of them, macOS presets naming "Intel(R) HD Graphics 400" or "Radeon
+R9 200 Series", are restored: those are the buckets Firefox reports for an
+Intel Mac's GPU (see camoufox.coherence).
 """
 
 import json

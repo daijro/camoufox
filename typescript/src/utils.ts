@@ -1382,9 +1382,6 @@ export async function launchOptions({
 
 	const targetOs = getTargetOs(config);
 
-	// Drop values the source supplied that this identity cannot keep, before the
-	// pools below defer to them (a preset's own GPU pair wins over sampling).
-	coherence.dropIncoherentSourceValues(config, targetOs);
 	// A preset whose screen is a phone viewport is not a real desktop device.
 	if (!userSetScreenWindow && coherence.screenIsImplausible(config)) {
 		coherence.repairScreenOrientation(config);
@@ -1683,6 +1680,11 @@ export async function launchOptions({
 			false;
 	}
 
+	// Drop values the source supplied that this identity cannot keep, before the
+	// WebGL pool below defers to them. Here, not earlier, because the check
+	// reads the core count and the screen, which the launch replaces above.
+	coherence.dropIncoherentSourceValues(config, targetOs);
+
 	if (block_webgl) {
 		firefox_user_prefs["webgl.disabled"] = true;
 		LeakWarning.warn("block_webgl", i_know_what_im_doing);
@@ -1715,6 +1717,7 @@ export async function launchOptions({
 				config["screen.width"],
 				config["screen.height"],
 				seed(),
+				config["navigator.hardwareConcurrency"],
 			);
 		}
 		const enableWebgl2 = webglFp.webGl2Enabled;

@@ -1074,9 +1074,6 @@ def launch_options(
 
     target_os = get_target_os(config)
 
-    # Drop values the source supplied that this identity cannot keep, before the
-    # pools below defer to them (a preset's own GPU pair wins over sampling).
-    coherence.drop_incoherent_source_values(config, target_os)
     # A preset whose screen is a phone viewport is not a real desktop device;
     # the floor is normally skipped for presets, on the assumption that a preset
     # IS a real machine, which 736x414 disproves.
@@ -1421,6 +1418,12 @@ def launch_options(
         LeakWarning.warn('disable_coop', i_know_what_im_doing)
         firefox_user_prefs['browser.tabs.remote.useCrossOriginOpenerPolicy'] = False
 
+    # Drop values the source supplied that this identity cannot keep, before the
+    # WebGL pool below defers to them (a preset's own GPU pair wins over
+    # sampling). Here, not earlier, because the check reads the core count and
+    # the screen, which the host core count and the display clamp replace.
+    coherence.drop_incoherent_source_values(config, target_os)
+
     if block_webgl:
         firefox_user_prefs['webgl.disabled'] = True
         LeakWarning.warn('block_webgl', i_know_what_im_doing)
@@ -1443,6 +1446,7 @@ def launch_options(
             webgl_fp = sample_webgl_for_screen(
                 target_os, config.get('screen.width'), config.get('screen.height'),
                 seed=identity_seed(config, _identity_salt),
+                cores=config.get('navigator.hardwareConcurrency'),
             )
         enable_webgl2 = webgl_fp.pop('webGl2Enabled')
 
