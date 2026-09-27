@@ -53,7 +53,9 @@ Per-context values set from Playwright (audio seed, WebRTC IP, timezone,
 screen, navigator, voices, ...) are kept in `RoverfoxStorageManager`, which
 `anti-font-fingerprinting.patch` adds under `dom/base/`. Its cross-process
 put/get IPC lives in `cross-process-storage.patch`. Any patch that uses the
-storage manager needs both.
+storage manager needs both. It is safe to call from a worker thread: there a
+read sees only the local cache, which the main thread keeps a mirror of every
+`roverfox.s.*` pref, and a put reaches the parent from the main thread.
 
 ## Playwright
 

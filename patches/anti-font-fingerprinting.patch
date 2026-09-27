@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..dcb359d25a
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -0,0 +1,236 @@
+@@ -0,0 +1,256 @@
 +#include "RoverfoxStorageManager.h"
 +#include "mozilla/Preferences.h"
 +#include "nsIPrefBranch.h"
@@ -107,7 +107,27 @@ index 0000000000..dcb359d25a
 +    GetLocalCache().InsertOrUpdate(prefName, nsCString(value));
 +    GetMissCache().Remove(prefName);
 +  }
-+  // Sync to parent for cross-process availability
++  // Sync to parent for cross-process availability. Only from the main thread:
++  // libpref is main-thread only, and a PContent send from any other thread
++  // hits MessageChannel's release assert ("not on worker thread!") and kills
++  // the content process. TimezoneManager::GetTimezone puts from a worker
++  // global's creation when the store has no zone for its context yet (a
++  // service or shared worker started in a process no page of that context
++  // has used). The local write above already answers that thread.
++  if (!NS_IsMainThread()) {
++    NS_DispatchToMainThread(NS_NewRunnableFunction(
++        "RoverfoxStorageManager::SyncToParent",
++        [prefName = nsCString(prefName), value = nsCString(value)]() {
++          SyncToParent(prefName, value);
++        }));
++    return;
++  }
++  SyncToParent(prefName, value);
++}
++
++/* static */ void RoverfoxStorageManager::SyncToParent(const nsCString& prefName,
++                                                       const nsCString& value) {
++  MOZ_ASSERT(NS_IsMainThread());
 +  if (XRE_IsParentProcess()) {
 +    Preferences::SetCString(prefName.get(), value, kKind);
 +  } else {
@@ -245,7 +265,7 @@ new file mode 100644
 index 0000000000..e6d64378e1
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.h
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,44 @@
 +#ifndef mozilla_dom_RoverfoxStorageManager_h
 +#define mozilla_dom_RoverfoxStorageManager_h
 +
@@ -278,6 +298,7 @@ index 0000000000..e6d64378e1
 + private:
 +  static nsCString MakePrefName(const nsAString& key);
 +  static void SetPrefValue(const nsCString& prefName, const nsCString& value);
++  static void SyncToParent(const nsCString& prefName, const nsCString& value);
 +  static void ReadValue(const nsCString& prefName, nsACString& outValue);
 +  static void EnsureMirror();
 +  static nsTHashSet<nsCString>& GetMissCache();
