@@ -6,8 +6,22 @@ on:
 permissions:
   contents: read
 
+# The one place a launcher release starts. The npm package is checked first --
+# as a dry run of publish-npm.yml -- so a broken one stops the release before
+# PyPI has it; PyPI's success then triggers publish-npm.yml to publish the same
+# commit to npm (see the comment there).
+
 jobs:
+  npm-preflight:
+    permissions:
+      contents: read
+      id-token: write # publish-npm.yml's job declares it; a dry run does not use it
+    uses: ./.github/workflows/publish-npm.yml
+    with:
+      dry_run: true
+
   publish:
+    needs: npm-preflight
     runs-on: ubuntu-latest
     defaults:
       run:
