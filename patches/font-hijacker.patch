@@ -1,16 +1,16 @@
 diff --git a/gfx/thebes/CoreTextFontList.cpp b/gfx/thebes/CoreTextFontList.cpp
-index 09cc159cad..d999473501 100644
+index b6696c70c4..099c8efa19 100644
 --- a/gfx/thebes/CoreTextFontList.cpp
 +++ b/gfx/thebes/CoreTextFontList.cpp
-@@ -4,6 +4,7 @@
+@@ -6,6 +6,7 @@
  
  #include "AppleUtils.h"
- #include "CoreTextFontList.h"
+ #include "MainThreadUtils.h"
 +#include "MaskConfig.hpp"
+ #include "SharedFontList-impl.h"
  #include "gfxFontConstants.h"
  #include "gfxMacFont.h"
- #include "gfxUserFontSet.h"
-@@ -1007,7 +1008,12 @@ CoreTextFontList::CoreTextFontList()
+@@ -1077,7 +1078,12 @@ CoreTextFontList::CoreTextFontList()
  #ifdef MOZ_BUNDLED_FONTS
    // We activate bundled fonts if the pref is > 0 (on) or < 0 (auto), only an
    // explicit value of 0 (off) will disable them.
@@ -24,7 +24,7 @@ index 09cc159cad..d999473501 100644
      auto timerId = glean::fontlist::bundledfonts_activate.Start();
      ActivateBundledFonts();
      glean::fontlist::bundledfonts_activate.StopAndAccumulate(
-@@ -1475,6 +1481,11 @@ gfxFontEntry* CoreTextFontList::LookupLocalFont(
+@@ -1545,6 +1551,11 @@ already_AddRefed<gfxFontEntry> CoreTextFontList::LookupLocalFont(
    // Reset our string length to match the actual C string we got, which will
    // usually be much shorter than the maximal buffer we allocated.
    key.Truncate(strlen(key.get()));
@@ -36,32 +36,34 @@ index 09cc159cad..d999473501 100644
    ToLowerCase(key);
    // If the family can't be looked up, this font is not available for use.
    FontFamily family = FindFamily(aFontVisibilityProvider, key);
-@@ -1482,8 +1493,10 @@ gfxFontEntry* CoreTextFontList::LookupLocalFont(
+@@ -1552,9 +1563,11 @@ already_AddRefed<gfxFontEntry> CoreTextFontList::LookupLocalFont(
      return nullptr;
    }
  
--  return new CTFontEntry(aFontName, fontRef, aWeightForEntry, aStretchForEntry,
--                         aStyleForEntry, false, true);
-+  auto* fe = new CTFontEntry(aFontName, fontRef, aWeightForEntry,
-+                             aStretchForEntry, aStyleForEntry, false, true);
+-  return MakeAndAddRef<CTFontEntry>(aFontName, fontRef, aWeightForEntry,
+-                                    aWidthForEntry, aStyleForEntry, false,
+-                                    true);
++  RefPtr<CTFontEntry> fe =
++      MakeRefPtr<CTFontEntry>(aFontName, fontRef, aWeightForEntry,
++                              aWidthForEntry, aStyleForEntry, false, true);
 +  fe->mFamilyName = familyName;
-+  return fe;
++  return fe.forget();
  }
  
- static void ReleaseData(void* info, const void* data, size_t size) {
+ static void ReleaseFontData(void* aInfo, const void* aData, size_t aSize) {
 diff --git a/gfx/thebes/gfxDWriteFontList.cpp b/gfx/thebes/gfxDWriteFontList.cpp
-index 9c81c07a44..b2941ca5d7 100644
+index 63169b05b7..8cb601b7d6 100644
 --- a/gfx/thebes/gfxDWriteFontList.cpp
 +++ b/gfx/thebes/gfxDWriteFontList.cpp
-@@ -7,6 +7,7 @@
- #include "mozilla/intl/OSPreferences.h"
- 
+@@ -5,6 +5,7 @@
  #include "gfxDWriteFontList.h"
+ 
+ #include "../2d/AutoHelpersWin.h"
 +#include "MaskConfig.hpp"
- #include "gfxDWriteFonts.h"
+ #include "SharedFontList-impl.h"
  #include "gfxDWriteCommon.h"
- #include "nsUnicharUtils.h"
-@@ -1629,6 +1630,8 @@ void gfxDWriteFontList::InitSharedFontListForPlatform() {
+ #include "gfxDWriteFonts.h"
+@@ -1634,6 +1635,8 @@ void gfxDWriteFontList::InitSharedFontListForPlatform() {
    // We activate bundled fonts if the pref is > 0 (on) or < 0 (auto), only an
    // explicit value of 0 (off) will disable them.
    TimeStamp start1 = TimeStamp::Now();
@@ -70,7 +72,7 @@ index 9c81c07a44..b2941ca5d7 100644
    if (StaticPrefs::gfx_bundled_fonts_activate_AtStartup() != 0) {
      mBundledFonts = CreateBundledFontsCollection(factory);
    }
-@@ -2622,22 +2625,49 @@ class BundledFontFileEnumerator : public IDWriteFontFileEnumerator {
+@@ -2627,22 +2630,49 @@ class BundledFontFileEnumerator : public IDWriteFontFileEnumerator {
    nsCOMPtr<nsIFile> mFontDir;
    nsCOMPtr<nsIDirectoryEnumerator> mEntries;
    nsCOMPtr<nsISupports> mCurrent;
@@ -127,18 +129,18 @@ index 9c81c07a44..b2941ca5d7 100644
    }
    *aHasCurrentFile = hasMore;
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
-index 6bdcd2a57c..327e485555 100644
+index 2ea46a9810..039316b8d6 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
 +++ b/gfx/thebes/gfxPlatformFontList.cpp
-@@ -13,6 +13,7 @@
- #include "gfxTextRun.h"
- #include "gfxUserFontSet.h"
- #include "SharedFontList-impl.h"
-+#include "MaskConfig.hpp"
+@@ -6,6 +6,7 @@
  
  #include "FontVisibilityProvider.h"
- 
-@@ -891,6 +892,29 @@ void gfxPlatformFontList::GenerateFontListKey(nsACString& aKeyName) {
+ #include "GeckoProfiler.h"
++#include "MaskConfig.hpp"
+ #include "SharedFontList-impl.h"
+ #include "base/eintr_wrapper.h"
+ #include "gfxScriptItemizer.h"
+@@ -900,6 +901,29 @@ void gfxPlatformFontList::GenerateFontListKey(nsACString& aKeyName) {
    ToLowerCase(aKeyName);
  }
  
@@ -168,7 +170,7 @@ index 6bdcd2a57c..327e485555 100644
  // Used if a stylo thread wants to trigger InitOtherFamilyNames in the main
  // process: we can't do IPC from the stylo thread so we post this to the main
  // thread instead.
-@@ -1419,6 +1443,17 @@ already_AddRefed<gfxFont> gfxPlatformFontList::GlobalFontFallback(
+@@ -1428,6 +1452,17 @@ already_AddRefed<gfxFont> gfxPlatformFontList::GlobalFontFallback(
      uint32_t aNextCh, Script aRunScript, FontPresentation aPresentation,
      const gfxFontStyle* aMatchStyle, uint32_t& aCmapCount,
      FontFamily& aMatchedFamily) {
@@ -186,7 +188,7 @@ index 6bdcd2a57c..327e485555 100644
    bool useCmaps = IsFontFamilyWhitelistActive() ||
                    gfxPlatform::GetPlatform()->UseCmapsDuringSystemFallback();
    FontVisibility level = aFontVisibilityProvider
-@@ -1428,7 +1463,22 @@ already_AddRefed<gfxFont> gfxPlatformFontList::GlobalFontFallback(
+@@ -1437,7 +1472,22 @@ already_AddRefed<gfxFont> gfxPlatformFontList::GlobalFontFallback(
      // Allow platform-specific fallback code to try and find a usable font
      gfxFontEntry* fe = PlatformGlobalFontFallback(
          aFontVisibilityProvider, aCh, aRunScript, aMatchStyle, aMatchedFamily);
@@ -210,7 +212,7 @@ index 6bdcd2a57c..327e485555 100644
        if (aMatchedFamily.mShared) {
          if (IsVisibleToCSS(*aMatchedFamily.mShared, level)) {
            RefPtr<gfxFont> font = fe->FindOrMakeFont(aMatchStyle);
-@@ -1469,6 +1519,11 @@ already_AddRefed<gfxFont> gfxPlatformFontList::GlobalFontFallback(
+@@ -1478,6 +1528,11 @@ already_AddRefed<gfxFont> gfxPlatformFontList::GlobalFontFallback(
          if (!IsVisibleToCSS(family, level)) {
            continue;
          }
@@ -222,7 +224,7 @@ index 6bdcd2a57c..327e485555 100644
          if (!family.IsFullyInitialized() &&
              StaticPrefs::gfx_font_rendering_fallback_async() &&
              !XRE_IsParentProcess()) {
-@@ -1495,6 +1550,13 @@ already_AddRefed<gfxFont> gfxPlatformFontList::GlobalFontFallback(
+@@ -1504,6 +1559,13 @@ already_AddRefed<gfxFont> gfxPlatformFontList::GlobalFontFallback(
        if (!IsVisibleToCSS(*family, level)) {
          continue;
        }
@@ -236,7 +238,7 @@ index 6bdcd2a57c..327e485555 100644
        // evaluate all fonts in this family for a match
        family->FindFontForChar(&data);
        if (data.mMatchDistance == 0.0) {
-@@ -1755,6 +1817,11 @@ bool gfxPlatformFontList::FindAndAddFamiliesLocked(
+@@ -1732,6 +1794,11 @@ bool gfxPlatformFontList::FindAndAddFamiliesLocked(
        aFontVisibilityProvider ? aFontVisibilityProvider->GetFontVisibility()
                                : FontVisibility::User;
  
@@ -249,10 +251,10 @@ index 6bdcd2a57c..327e485555 100644
    // font-family request by the page), and RFP settings allow generics to be
    // unrestricted, bump the effective visibility level applied here so as to
 diff --git a/gfx/thebes/gfxPlatformFontList.h b/gfx/thebes/gfxPlatformFontList.h
-index 50964eff36..7e98560f36 100644
+index 66290cd704..bdd4b52666 100644
 --- a/gfx/thebes/gfxPlatformFontList.h
 +++ b/gfx/thebes/gfxPlatformFontList.h
-@@ -652,6 +652,19 @@ class gfxPlatformFontList : public gfxFontInfoLoader {
+@@ -649,6 +649,19 @@ class gfxPlatformFontList : public gfxFontInfoLoader {
      return mFontFamilyWhitelistActive;
    };
  
@@ -273,13 +275,13 @@ index 50964eff36..7e98560f36 100644
  
    bool AddWithLegacyFamilyName(const nsACString& aLegacyName,
 diff --git a/gfx/thebes/gfxUserFontSet.cpp b/gfx/thebes/gfxUserFontSet.cpp
-index 6ae5b3c04d..724e04364e 100644
+index 084c269bde..4507ab9927 100644
 --- a/gfx/thebes/gfxUserFontSet.cpp
 +++ b/gfx/thebes/gfxUserFontSet.cpp
-@@ -466,6 +466,26 @@ void gfxUserFontEntry::DoLoadNextSrc(bool aIsContinue) {
+@@ -473,6 +473,24 @@ void gfxUserFontEntry::DoLoadNextSrc(bool aIsContinue) {
          fe = gfxPlatform::GetPlatform()->LookupLocalFont(
              fontSet->GetFontVisibilityProvider(), currSrc.mLocalName, Weight(),
-             Stretch(), SlantStyle());
+             Width(), SlantStyle());
 +        // Camoufox: a local() source that resolves to a family outside the
 +        // spoofed font list must behave exactly like a font that is not
 +        // installed -- the next src is tried and the face ends up in error
@@ -295,8 +297,6 @@ index 6ae5b3c04d..724e04364e 100644
 +          ToLowerCase(familyKey);
 +          if (gfxPlatformFontList::MaskedFontListBlocks(
 +                  fontSet->GetFontVisibilityProvider(), familyKey)) {
-+            // The lookup hands back a new, unowned entry: release it.
-+            RefPtr<gfxFontEntry> discard(fe);
 +            fe = nullptr;
 +          }
 +        }
@@ -304,10 +304,10 @@ index 6ae5b3c04d..724e04364e 100644
          // as this means we are dependent on any updates to the font list.
          mSeenLocalSource = true;
 diff --git a/gfx/thebes/moz.build b/gfx/thebes/moz.build
-index 2bb893d84f..0088f6cab7 100644
+index a9f68b0563..d3dede3ae0 100644
 --- a/gfx/thebes/moz.build
 +++ b/gfx/thebes/moz.build
-@@ -299,3 +299,6 @@ DEFINES["GRAPHITE2_STATIC"] = True
+@@ -301,3 +301,6 @@ DEFINES["GRAPHITE2_STATIC"] = True
  COMPILE_FLAGS["WARNINGS_CXXFLAGS"] += ["-Werror=switch"]
  
  include("/tools/fuzzing/libfuzzer-config.mozbuild")
@@ -315,10 +315,10 @@ index 2bb893d84f..0088f6cab7 100644
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
 diff --git a/layout/style/moz.build b/layout/style/moz.build
-index b3886e491f..9236483cec 100644
+index 4b89cbf319..57690f6e1b 100644
 --- a/layout/style/moz.build
 +++ b/layout/style/moz.build
-@@ -370,3 +370,6 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
+@@ -369,3 +369,6 @@ if CONFIG["COMPILE_ENVIRONMENT"]:
          "ServoStyleConsts.h",
          inputs=["/servo/ports/geckolib", "/servo/components/style"],
      )
