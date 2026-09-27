@@ -173,7 +173,7 @@ tests passed`**. Run the suite that covers your change while you work:
 
 | You changed | Run |
 |---|---|
-| Patches, C++, Juggler | `python3 -m ci.run_build_tester --binary <camoufox-bin>` (the anti-detect suite) and `python3 -m ci.run_patch_guards --binary <camoufox-bin>` (one guard per spoofing behaviour) |
+| Patches, C++, Juggler | `python3 -m ci.run_build_tester --binary <camoufox-bin>` (the anti-detect suite) and `python3 -m ci.run_patch_guards --binary <camoufox-bin>` (one guard per shipped behaviour, in three groups: `--group spoofing|automation|parity`) |
 | Automation behaviour | `make tests`, the upstream Playwright suite with `ci/skiplist.yml` applied |
 | `pythonlib/` | `python3 -m ci.run_pythonlib` |
 | `ci/` itself | `python3 -m pytest ci/tests -q` |

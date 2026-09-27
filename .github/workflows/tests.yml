@@ -785,9 +785,23 @@ jobs:
   patch-guards:
     # Tier 3a: the cheap checks on a fresh browser. If these fail the browser is
     # broken in an obvious way and tier 3b would only say so more slowly.
+    #
+    # Whether the patches APPLY is the build's job; these check that what they
+    # do still works. One leg per kind of guarantee (ci/run_patch_guards.py
+    # GROUPS), plus the skiplist audit, so a failure names which kind broke and
+    # the legs run side by side. One job id, so everything that waits on the
+    # guards keeps `needs: patch-guards`.
     if: always() && (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
-    name: Patch guards
+    name: ${{ matrix.title }}
     needs: [resolve, build, fetch-browser]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {leg: spoofing, title: "Patch guards: spoofing"}
+          - {leg: automation, title: "Patch guards: automation"}
+          - {leg: parity, title: "Patch guards: stock parity"}
+          - {leg: skiplist, title: "Skiplist audit"}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -808,8 +822,10 @@ jobs:
           python3 scripts/pin-fpgen-model.py
       # Fonts and properties.json are staged into the artifact by the build job;
       # `make stage-fonts` here would find no source tree and do nothing.
-      - run: xvfb-run -a python3 -m ci.run_patch_guards --binary "$CAMOUFOX_BINARY"
+      - if: matrix.leg != 'skiplist'
+        run: xvfb-run -a python3 -m ci.run_patch_guards --group "${{ matrix.leg }}" --binary "$CAMOUFOX_BINARY"
       - name: Every skiplist entry is still failing
+        if: matrix.leg == 'skiplist'
         # Seconds, because a correct skiplist is short. This is what stops
         # ci/skiplist.yml turning into a list of tests that would now pass --
         # which is what it was: 193 of the 202 tests it skipped passed.
@@ -824,7 +840,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: results-patch-guards
+          name: results-patch-guards-${{ matrix.leg }}
           path: .ci-work/results/
           include-hidden-files: true
           if-no-files-found: warn
@@ -993,21 +1009,25 @@ jobs:
 
   # ---------------------------------------------------------------------------
   growth:
-    name: Memory growth (scheduled)
-    # Deliberately NOT in the merge gate. It takes ~37 minutes, because every
-    # mechanism is churned twice -- at n and 4n -- to measure whether growth
-    # scales with the count. That is the wrong price to pay on every pull
-    # request for a detector aimed at a slow-moving class of bug, so it runs on
-    # the schedule and on demand, and a failure opens a conversation rather than
-    # blocking a merge.
+    name: Memory growth ${{ matrix.shard }}
+    # Every mechanism is churned twice -- at n and 4n -- to measure whether
+    # growth scales with the count: ~38 minutes in one process, which kept this
+    # off pull requests. One test per runner (ci.run_native --shard) brings it
+    # to the length of a Playwright shard, so it runs on every pull request and
+    # is part of the merge gate. Seven shards for the seven tests in
+    # native-tests/test_memory_growth.py; with more tests than shards a shard
+    # simply runs two.
     needs: [resolve, build, fetch-browser, patch-guards, build-tester]
     if: >-
       always()
-      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
       && needs.patch-guards.result == 'success'
       && needs.build-tester.result == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/7", "2/7", "3/7", "4/7", "5/7", "6/7", "7/7"]
     permissions:
       contents: read
     steps:
@@ -1024,11 +1044,12 @@ jobs:
           # April-2025 model. Install the pinned one first: see
           # scripts/pin-fpgen-model.py.
           python3 scripts/pin-fpgen-model.py
-      - run: xvfb-run -a python3 -m ci.run_native --subset growth --binary "$CAMOUFOX_BINARY"
+      - run: xvfb-run -a python3 -m ci.run_native --subset growth --shard "${{ matrix.shard }}" --binary "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: results-growth
+          # A shard's "3/7" cannot go in an artifact name.
+          name: results-growth-${{ strategy.job-index }}
           path: .ci-work/results/
           include-hidden-files: true
           if-no-files-found: warn
@@ -1086,7 +1107,7 @@ jobs:
   summary:
     name: Summary
     needs: [resolve, static, pythonlib, typescript, build, fetch-browser, playwright,
-            patch-guards, build-tester, native, typescript-browser, sundial]
+            patch-guards, build-tester, native, typescript-browser, growth, sundial]
     if: always() && needs.resolve.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
@@ -1126,7 +1147,7 @@ jobs:
           # summarize report "produced no result file" and fail the gate on
           # every pull request that did not touch the browser. Which is most of
           # them, and exactly the cheap path this pipeline advertises.
-          required="pythonlib typescript typescript_browser native_rules patch_guards skiplist_audit build_tester playwright native_browser"
+          required="pythonlib typescript typescript_browser native_rules patch_guards_spoofing patch_guards_automation patch_guards_parity skiplist_audit build_tester playwright native_browser native_growth"
           if [ "${{ needs.resolve.outputs.browser_changed }}" = "true" ]; then
             required="$required build"
           fi
@@ -1192,7 +1213,7 @@ jobs:
     # did not run has not passed, and silently skipping one is the cheapest way
     # to a green tick.
     needs: [resolve, static, pythonlib, typescript, build, fetch-browser, playwright,
-            patch-guards, build-tester, native, typescript-browser, sundial, summary]
+            patch-guards, build-tester, native, typescript-browser, growth, sundial, summary]
     if: always()
     runs-on: ubuntu-24.04
     permissions:

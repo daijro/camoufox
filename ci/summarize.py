@@ -53,7 +53,9 @@ _UNIONED_METRICS = frozenset({"main_world_fallbacks"})
 # Presented in this order; anything unexpected is appended.
 _ORDER = [
     "native_rules", "pythonlib", "typescript", "patches_apply", "build", "patch_guards",
-    "skiplist_audit", "native_browser", "build_tester", "playwright", "typescript_browser", "sundial",
+    "patch_guards_spoofing", "patch_guards_automation", "patch_guards_parity",
+    "skiplist_audit", "native_browser", "build_tester", "playwright", "typescript_browser",
+    "native_growth", "sundial",
 ]
 
 

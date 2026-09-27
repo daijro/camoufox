@@ -4,15 +4,24 @@ Two things live here, and neither is a copy of anyone else's suite.
 
 ### `patches/` — patch guards
 
-One standalone script per shipped spoofing behaviour: isolated evaluate, trusted
-events, font spoofing, mouse trajectories, the touchscreen digitizer, and so on.
-Each exits 0 or 1 and drives the browser through the Python package.
+One standalone script per shipped behaviour. Each exits 0 or 1 and drives the
+browser through the Python package. Whether the patches *apply* is the build's
+check; these are the most direct evidence that a Firefox bump did not quietly
+neuter a patch that still applies cleanly — the failure a compile check cannot
+catch.
 
-These are the most direct evidence that a Firefox bump did not quietly neuter a
-patch that still *applies* cleanly — the failure a compile check cannot catch.
+Each guard belongs to one of three groups (`GROUPS` in
+`ci/run_patch_guards.py`), and CI runs each group as its own job:
+
+- **spoofing**: a spoofed value still reaches the page and holds together (media devices, voices, fonts, the touchscreen digitizer, the sealed setters, …);
+- **automation**: Playwright stays invisible to the page and never deadlocks it (isolated evaluate, trusted events, humanized and edge-case mouse input, …);
+- **parity**: what a page or the OS can observe matches stock Firefox (content-accessible files, GPU probes, the popup blocker, the Windows manifest, …).
+
+A new guard must be added to a group; `ci/tests` fails until it is.
 
 ```bash
 python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin
+python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin --group automation
 python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin --only isolated-evaluate
 ```
 

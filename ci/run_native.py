@@ -24,11 +24,11 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from . import results
 from ._pytest import parse_junit, run_pytest
-from ._util import REPO_ROOT, RESULTS_DIR, WORK_DIR
+from ._util import REPO_ROOT, RESULTS_DIR, WORK_DIR, run
 
 SUITE_DIR = REPO_ROOT / "native-tests"
 
@@ -40,10 +40,29 @@ FILES = {
         "test_crash_recovery.py",
     ],
     # Slow by construction: each mechanism is churned twice, at n and 4n, to
-    # measure whether growth scales with the count. Kept out of "browser" so a
-    # pull request is not waiting on it, and run on its own schedule.
+    # measure whether growth scales with the count -- ~38 minutes in one
+    # process. Kept out of "browser" and run with --shard, one test per
+    # runner, so a pull request waits minutes for it rather than most of an hour.
     "growth": ["test_memory_growth.py"],
 }
+
+
+def parse_shard(text: str) -> Tuple[int, int]:
+    """'3/7' -> (3, 7), refusing anything that would silently run nothing."""
+    index, _, count = text.partition("/")
+    i, n = int(index), int(count)
+    if not 1 <= i <= n:
+        raise SystemExit(f"--shard {text}: want i/n with 1 <= i <= n")
+    return i, n
+
+
+def collect(files: List[str], env: Dict[str, str]) -> List[str]:
+    """The node ids pytest would run for `files`, in its order."""
+    proc = run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", *files],
+        cwd=SUITE_DIR, env=env, timeout=300,
+    )
+    return [line.strip() for line in proc.stdout.splitlines() if "::" in line]
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -56,9 +75,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--rounds", type=int, default=3, help="launch/close rounds for leak tests")
     parser.add_argument("--browsers", type=int, default=3, help="concurrent browsers to launch")
     parser.add_argument("--timeout", type=int, default=3600)
+    parser.add_argument("--shard", help="run every n-th collected test, e.g. 3/7")
     args = parser.parse_args(argv)
 
     name = "native" if args.subset == "all" else f"native_{args.subset}"
+    shard = parse_shard(args.shard) if args.shard else None
+    if shard:
+        # summarize.py folds <name>-<i>of<n> back into <name>.
+        name = f"{name}-{shard[0]}of{shard[1]}"
     result = results.GateResult(gate=name)
     result.metrics["subset"] = args.subset
 
@@ -90,6 +114,19 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 1
         env["CAMOUFOX_EXECUTABLE_PATH"] = str(binary.resolve())
         result.metrics["binary"] = str(binary)
+
+    if shard:
+        ids = collect(files, env)
+        if not ids:
+            result.note("collected no tests; the suite did not run")
+            result.finish(results.ERROR).save(args.results_dir)
+            return 1
+        files = ids[shard[0] - 1 :: shard[1]]
+        result.metrics["shard"] = f"{shard[0]}/{shard[1]}"
+        if not files:
+            result.note(f"shard {shard[0]}/{shard[1]} has no tests of the {len(ids)} collected")
+            result.finish(results.PASS).save(args.results_dir)
+            return 0
 
     junit = WORK_DIR / f"junit-{name}.xml"
     proc = run_pytest(
