@@ -20,6 +20,7 @@ import { ensureModel } from "./fpgen/index.js";
 import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "./ip.js";
 import {
 	applyNoViewport,
+	attachDesktopOnlyWarning,
 	attachNoViewportDefault,
 	attachStockMediaDefaults,
 	attachVirtualDisplay,
@@ -193,6 +194,7 @@ async function launchWith(
 		attachNoViewportDefault(browser);
 	}
 	attachStockMediaDefaults(browser);
+	attachDesktopOnlyWarning(browser);
 	return attachVirtualDisplay(browser, virtualDisplay);
 }
 

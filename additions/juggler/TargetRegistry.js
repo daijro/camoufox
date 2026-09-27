@@ -513,7 +513,6 @@ export class PageTarget {
     this._linkedBrowser = tab.linkedBrowser;
     this._browserContext = browserContext;
     this._viewportSize = undefined;
-    this._isMobile = undefined;
     this._zoom = 1;
     this._initialDPPX = this._linkedBrowser.browsingContext.overrideDPPX;
     this._url = 'about:blank';
@@ -702,10 +701,16 @@ export class PageTarget {
   }
 
   updateMobileEmulation(browsingContext = undefined) {
-    // Responsive Design Mode is devtools' mobile mode (overlay scrollbars, and
-    // RDM branches in screen, window and navigator getters), all readable by
-    // the page. As in Playwright's Juggler, only isMobile asks for it.
-    (browsingContext || this._linkedBrowser.browsingContext).inRDMPane = !!(this._isMobile ?? this._browserContext.isMobile);
+    // Responsive Design Mode is devtools' mobile mode: overlay scrollbars, a
+    // mouse click's pointer events dropped under touch emulation, and RDM
+    // branches in screen, window and navigator getters, all readable by the
+    // page. It matches no real browser -- Firefox for Android never runs it --
+    // and Camoufox has only desktop identities, so it stays off even for
+    // isMobile. Playwright's Juggler turns it on for isMobile
+    // (microsoft/playwright#41859); this is a deliberate difference, and the
+    // launchers warn when isMobile is passed. The viewport does not need RDM:
+    // the <browser> element's size sets it.
+    (browsingContext || this._linkedBrowser.browsingContext).inRDMPane = false;
   }
 
   async updateZoom(browsingContext = undefined) {
@@ -831,9 +836,8 @@ export class PageTarget {
     await this._channel.connect('').send('setInterceptFileChooserDialog', enabled).catch(e => {});
   }
 
-  async setViewportSize(viewportSize, isMobile) {
+  async setViewportSize(viewportSize) {
     this._viewportSize = viewportSize;
-    this._isMobile = isMobile;
     await this.updateViewportSize();
   }
 
@@ -1253,7 +1257,6 @@ class BrowserContext {
     this.downloadOptions = undefined;
     this.defaultViewportSize = undefined;
     this.deviceScaleFactor = undefined;
-    this.isMobile = undefined;
     this.defaultUserAgent = null;
     this.defaultPlatform = null;
     this.touchOverride = false;
@@ -1379,7 +1382,6 @@ class BrowserContext {
   async setDefaultViewport(viewport) {
     this.defaultViewportSize = viewport ? viewport.viewportSize : undefined;
     this.deviceScaleFactor = viewport ? viewport.deviceScaleFactor : undefined;
-    this.isMobile = viewport ? viewport.isMobile : undefined;
     await Promise.all(Array.from(this.pages).map(page => page.updateViewportSize()));
   }
 

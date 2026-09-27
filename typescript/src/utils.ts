@@ -991,6 +991,23 @@ export function attachStockMediaDefaults<T>(target: T): T {
 }
 
 /**
+ * Warn when newPage()/newContext() asks for isMobile: Camoufox only has desktop
+ * identities, and Juggler ignores the option (TargetRegistry.js).
+ */
+export function attachDesktopOnlyWarning<T>(target: T): T {
+	for (const name of ["newPage", "newContext"] as const) {
+		const original = (target as any)[name];
+		if (typeof original !== "function") continue;
+		(target as any)[name] = (options?: Record<string, any>, ...rest: any[]) => {
+			if (options?.isMobile || options?.is_mobile)
+				LeakWarning.warn("is_mobile");
+			return original.call(target, options, ...rest);
+		};
+	}
+	return target;
+}
+
+/**
  * Normalise a context-options object onto the JS API's `viewport: null`,
  * defaulting to it when the caller expressed no preference. Playwright-Python
  * takes `no_viewport=True`; a caller-supplied `noViewport` is accepted and
@@ -1678,6 +1695,10 @@ export async function launchOptions({
 		LeakWarning.warn("disable_coop", i_know_what_im_doing);
 		firefox_user_prefs["browser.tabs.remote.useCrossOriginOpenerPolicy"] =
 			false;
+	}
+	// A persistent context takes its context options here.
+	if (passthrough.is_mobile || passthrough.isMobile) {
+		LeakWarning.warn("is_mobile", i_know_what_im_doing);
 	}
 
 	// Drop values the source supplied that this identity cannot keep, before the

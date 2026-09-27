@@ -191,3 +191,11 @@ def test_instant_animations_warn_that_they_are_detectable():
 
     with pytest.warns(LeakWarning, match="getComputedTiming"):
         launch(config={"instantAnimations": True}, i_know_what_im_doing=False)
+
+
+def test_is_mobile_warns_that_camoufox_is_desktop_only():
+    """A persistent context takes its context options at launch."""
+    from camoufox._warnings import LeakWarning
+
+    with pytest.warns(LeakWarning, match="built for desktops"):
+        launch(is_mobile=True, i_know_what_im_doing=False)

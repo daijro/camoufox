@@ -384,6 +384,26 @@ describe("test_launch_environment: stock media defaults", () => {
 		expect(opts.forcedColors).toBe("active");
 		expect(opts.reducedMotion).toBeNull();
 	});
+
+	it("isMobile warns that Camoufox is desktop-only", async () => {
+		const browser = utils.attachDesktopOnlyWarning(new FakeBrowser());
+		for (const create of ["newPage", "newContext"] as const) {
+			const { warnings: caught } = await warnings.recordWarnings(async () =>
+				browser[create]({ isMobile: true }),
+			);
+			expect(
+				caught.some(
+					(w) =>
+						w.category === "LeakWarning" &&
+						w.message.includes("built for desktops"),
+				),
+			).toBe(true);
+		}
+		const { warnings: none } = await warnings.recordWarnings(async () =>
+			browser.newContext({ isMobile: false }),
+		);
+		expect(none).toEqual([]);
+	});
 });
 
 describe("test_viewport_default", () => {
@@ -882,6 +902,20 @@ describe.skipIf(!modelReady)(
 				},
 				"LeakWarning",
 				"getComputedTiming",
+			);
+			expect(warned).toBe(true);
+		});
+
+		it("is_mobile warns that Camoufox is desktop-only", async () => {
+			const { warned } = await launchWarning(
+				{
+					os: "windows",
+					executable_path: BUNDLE_EXE,
+					is_mobile: true,
+					i_know_what_im_doing: false,
+				},
+				"LeakWarning",
+				"built for desktops",
 			);
 			expect(warned).toBe(true);
 		});

@@ -17,6 +17,7 @@ from .ip import Proxy, proxy_exit_geo
 from .utils import (
     async_attach_vd,
     attach_no_viewport_default,
+    attach_desktop_only_warning,
     attach_stock_media_defaults,
     launch_options,
     STOCK_MEDIA_DEFAULTS,
@@ -173,6 +174,7 @@ async def _launch(
     if no_viewport_default:
         attach_no_viewport_default(browser)
     attach_stock_media_defaults(browser)
+    attach_desktop_only_warning(browser)
     return await async_attach_vd(browser, virtual_display)
 
 

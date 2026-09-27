@@ -14,6 +14,7 @@ from .fingerprints import generate_context_fingerprint
 from .ip import Proxy, proxy_exit_geo
 from .utils import (
     attach_no_viewport_default,
+    attach_desktop_only_warning,
     attach_stock_media_defaults,
     launch_options,
     STOCK_MEDIA_DEFAULTS,
@@ -148,6 +149,7 @@ def NewBrowser(
         if no_viewport_default:
             attach_no_viewport_default(browser)
         attach_stock_media_defaults(browser)
+        attach_desktop_only_warning(browser)
         return sync_attach_vd(browser, virtual_display)
     finally:
         if pid:
