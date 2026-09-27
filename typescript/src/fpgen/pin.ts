@@ -21,6 +21,12 @@ export interface ModelPin {
 	readonly files: readonly string[];
 	/** Each file's sha256, for checking an installed model without its archive. */
 	readonly file_sha256: Readonly<Record<string, string>>;
+	/**
+	 * sha256 of each file the model decompresses to. values.dat is shared with
+	 * pythonlib when CAMOUFOX_FPGEN_DATA points at its fpgen `data/`, and this
+	 * is how pythonlib tells one decompressed from the pinned model.
+	 */
+	readonly decompressed_sha256: Readonly<Record<string, string>>;
 }
 
 export const MODEL_PIN: ModelPin = {
@@ -38,5 +44,9 @@ export const MODEL_PIN: ModelPin = {
 			"3da2cf0891a4a85ef6458f0fbdf9346acfcd04e5fd279a0ea22d7919e4eaf122",
 		"values.json.zst":
 			"294decde5b6a1a52ed53d50a894130fa5c58f7cc804b78198f5c33f55b3ba66f",
+	},
+	decompressed_sha256: {
+		"values.dat":
+			"9ce7d16630e91654e73988f7d37e8c99987c09b9c779a7bb9dc7ad6355dcc2f0",
 	},
 };
