@@ -1,3 +1,5 @@
+diff --git a/dom/base/nsINode.cpp b/dom/base/nsINode.cpp
+index e887857a6f..3ca68e5271 100644
 --- a/dom/base/nsINode.cpp
 +++ b/dom/base/nsINode.cpp
 @@ -27,6 +27,10 @@
@@ -11,7 +13,7 @@
  #include "mozilla/MemoryReporting.h"
  #include "mozilla/Preferences.h"
  #include "mozilla/PresShell.h"
-@@ -1701,8 +1705,109 @@
+@@ -2059,8 +2063,109 @@ already_AddRefed<DOMPoint> nsINode::ConvertPointFromNode(
                                         aCallerType, aRv);
  }
  
@@ -121,7 +123,7 @@
    // XXX sXBL/XBL2 issue -- do we really want the owner here?  What
    // if that's the XBL document?  Would we want its presshell?  Or what?
    nsCOMPtr<Document> document = OwnerDoc();
-@@ -1715,6 +1820,12 @@
+@@ -2073,6 +2178,12 @@ bool nsINode::DispatchEvent(Event& aEvent, CallerType aCallerType,
    // Obtain a presentation shell
    RefPtr<nsPresContext> context = document->GetPresContext();
  
@@ -134,7 +136,7 @@
    nsEventStatus status = nsEventStatus_eIgnore;
    nsresult rv = EventDispatcher::DispatchDOMEvent(this, nullptr, &aEvent,
                                                    context, &status);
-@@ -1722,6 +1833,12 @@
+@@ -2080,6 +2191,12 @@ bool nsINode::DispatchEvent(Event& aEvent, CallerType aCallerType,
    if (NS_FAILED(rv)) {
      aRv.Throw(rv);
    }
@@ -147,6 +149,8 @@
    return retval;
  }
  
+diff --git a/dom/events/Event.cpp b/dom/events/Event.cpp
+index 98ebfdab77..0a1d501537 100644
 --- a/dom/events/Event.cpp
 +++ b/dom/events/Event.cpp
 @@ -8,7 +8,9 @@
@@ -159,7 +163,7 @@
  #include "mozilla/ContentEvents.h"
  #include "mozilla/DOMEventTargetHelper.h"
  #include "mozilla/EventDispatcher.h"
-@@ -402,6 +404,37 @@ bool Event::ShouldIgnoreChromeEventTargetListener() const {
+@@ -403,6 +405,37 @@ bool Event::ShouldIgnoreChromeEventTargetListener() const {
    return bc->IsContent();
  }
  
@@ -197,7 +201,7 @@
  bool Event::Init(mozilla::dom::EventTarget* aGlobal) {
    if (!mIsMainThreadEvent) {
      return IsCurrentThreadRunningChromeWorker();
-@@ -410,7 +443,7 @@ bool Event::Init(mozilla::dom::EventTarget* aGlobal) {
+@@ -411,7 +444,7 @@ bool Event::Init(mozilla::dom::EventTarget* aGlobal) {
    if (aGlobal) {
      if (nsPIDOMWindowInner* w = aGlobal->GetAsInnerWindow()) {
        if (Document* d = w->GetExtantDoc()) {
@@ -240,7 +244,7 @@ index 67c117c6c5..7a99aabb48 100644
    int32_t MovementY() { return GetMovementPoint().y; }
    float MozPressure(CallerType) const;
 diff --git a/dom/events/PointerEventHandler.cpp b/dom/events/PointerEventHandler.cpp
-index 01a6e2638c..681a9e1bac 100644
+index 1bf2e04fdb..4e7f31c852 100644
 --- a/dom/events/PointerEventHandler.cpp
 +++ b/dom/events/PointerEventHandler.cpp
 @@ -15,6 +15,7 @@
@@ -251,15 +255,15 @@ index 01a6e2638c..681a9e1bac 100644
  #include "mozilla/dom/MouseEventBinding.h"
  #include "nsIContentInlines.h"
  #include "nsIFrame.h"
-@@ -48,6 +49,7 @@ Maybe<int32_t> PointerEventHandler::sSpoofedPointerId;
- StaticAutoPtr<PointerInfo> PointerEventHandler::sLastMouseInfo;
- StaticRefPtr<nsIWeakReference> PointerEventHandler::sLastMousePresShell;
+@@ -50,6 +51,7 @@ StaticRefPtr<nsIWeakReference> PointerEventHandler::sLastMousePresShell;
+ StaticRefPtr<nsIWeakReference> PointerEventHandler::sLastMouseWidget;
+ Maybe<uint32_t> PointerEventHandler::sLastMousePointerId;
  Maybe<uint32_t> PointerEventHandler::sLastPointerId;
 +bool PointerEventHandler::sDropDownOpenedByLastMouseDown = false;
  
  // Keeps a map between pointerId and element that currently capturing pointer
  // with such pointerId. If pointerId is absent in this map then nobody is
-@@ -1257,6 +1259,24 @@ void PointerEventHandler::DispatchPointerFromMouseOrTouch(
+@@ -1316,6 +1318,24 @@ void PointerEventHandler::DispatchPointerFromMouseOrTouch(
        return;
      }
  
@@ -285,10 +289,10 @@ index 01a6e2638c..681a9e1bac 100644
      // pointer" by PresShell::ProcessSynthMouseOrPointerMoveEvent().  However:
      // 1. if the event is synthesized via nsIDOMWindowUtils, it's not marked as
 diff --git a/dom/events/PointerEventHandler.h b/dom/events/PointerEventHandler.h
-index 14b942f7dd..29c2629d96 100644
+index 266ab7ece7..f7e5fb66ec 100644
 --- a/dom/events/PointerEventHandler.h
 +++ b/dom/events/PointerEventHandler.h
-@@ -662,6 +662,17 @@ class PointerEventHandler final {
+@@ -694,6 +694,17 @@ class PointerEventHandler final {
    // Stores the last pointerId which has not left from all documents managed in
    // this process.
    static Maybe<uint32_t> sLastPointerId;
@@ -307,28 +311,65 @@ index 14b942f7dd..29c2629d96 100644
  
  }  // namespace mozilla
 diff --git a/dom/html/HTMLSelectElement.cpp b/dom/html/HTMLSelectElement.cpp
-index b969ecca19..bcd5979e15 100644
+index 3b83803e78..831d84edc4 100644
 --- a/dom/html/HTMLSelectElement.cpp
 +++ b/dom/html/HTMLSelectElement.cpp
-@@ -19,6 +19,7 @@
- #include "mozilla/dom/Document.h"
- #include "mozilla/dom/Element.h"
- #include "mozilla/dom/FormData.h"
+@@ -34,6 +34,7 @@
+ #include "mozilla/dom/HTMLSlotElementBinding.h"
+ #include "mozilla/dom/MouseEventBinding.h"
+ #include "mozilla/dom/NameSpaceConstants.h"
 +#include "mozilla/dom/PointerEventHandler.h"
- #include "mozilla/dom/HTMLOptGroupElement.h"
- #include "mozilla/dom/HTMLOptionElement.h"
- #include "mozilla/dom/HTMLSelectElementBinding.h"
-@@ -1779,7 +1780,12 @@ nsresult HTMLSelectElement::HandleMouseDown(EventChainPostVisitor& aVisitor) {
+ #include "mozilla/dom/ShadowRoot.h"
+ #include "mozilla/dom/ShadowRootBinding.h"
+ #include "mozilla/dom/UnionTypes.h"
+@@ -197,7 +198,7 @@ nsGenericHTMLElement* HTMLSelectElement::GetPickerElement() const {
+       FindShadowPseudo(PseudoStyleType::Picker));
+ }
+ 
+-void HTMLSelectElement::TogglePickerInternal(bool aIsSourceTouchEvent) {
++bool HTMLSelectElement::TogglePickerInternal(bool aIsSourceTouchEvent) {
+   if (IsBaseSelectAppearance()) {
+     if (RefPtr<nsGenericHTMLElement> picker = GetPickerElement()) {
+       IgnoredErrorResult rv;
+@@ -206,12 +207,14 @@ void HTMLSelectElement::TogglePickerInternal(bool aIsSourceTouchEvent) {
+       } else {
+         picker->ShowPopoverInternal(this, rv);
+       }
+-      return;
++      return false;
+     }
+   }
+   if (!OpenInParentProcess()) {
+     FireDropDownEvent(true, aIsSourceTouchEvent);
++    return true;
+   }
++  return false;
+ }
+ 
+ void HTMLSelectElement::GetSlotNameFor(const ShadowRoot& aShadow,
+@@ -2298,7 +2301,10 @@ nsresult HTMLSelectElement::HandleMouseDown(EventChainPostVisitor& aVisitor) {
      }
      const bool isSourceTouchEvent =
-         inputSource == MouseEvent_Binding::MOZ_SOURCE_TOUCH;
--    FireDropDownEvent(!OpenInParentProcess(), isSourceTouchEvent);
-+    const bool opening = !OpenInParentProcess();
-+    FireDropDownEvent(opening, isSourceTouchEvent);
-+    if (opening) {
+         mouseEvent->mInputSource == MouseEvent_Binding::MOZ_SOURCE_TOUCH;
+-    TogglePickerInternal(isSourceTouchEvent);
++    if (TogglePickerInternal(isSourceTouchEvent)) {
 +      // The panel takes the button release, so no "pointerup" follows.
 +      PointerEventHandler::NotifyDropDownOpenedByMouseDown();
 +    }
      return NS_OK;
    }
  
+diff --git a/dom/html/HTMLSelectElement.h b/dom/html/HTMLSelectElement.h
+index e43a1fc66b..47dac17de5 100644
+--- a/dom/html/HTMLSelectElement.h
++++ b/dom/html/HTMLSelectElement.h
+@@ -279,7 +279,8 @@ class HTMLSelectElement final : public nsGenericHTMLFormControlElementWithState,
+ 
+   bool IsBaseSelectAppearance() const;
+   nsGenericHTMLElement* GetPickerElement() const;
+-  MOZ_CAN_RUN_SCRIPT void TogglePickerInternal(
++  // Returns whether this opened the parent-process dropdown panel.
++  MOZ_CAN_RUN_SCRIPT bool TogglePickerInternal(
+       bool aIsSourceTouchEvent = false);
+ 
+   bool OpenInParentProcess() const { return mIsOpenInParentProcess; }
