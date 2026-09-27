@@ -11,6 +11,7 @@ from typing import Any, List, Optional, Tuple
 import rich_click as click
 
 from .addons import DefaultAddons, maybe_download_addons
+from .fpgen_model import ensure_fpgen_model
 from .geolocation import (
     ALLOW_GEOIP,
     GEOIP_DIR,
@@ -323,6 +324,7 @@ def fetch(version):
     if ALLOW_GEOIP:
         download_mmdb()
     maybe_download_addons(list(DefaultAddons))
+    ensure_fpgen_model()
 
 
 def _set_channel(repo_name: str, channel_type: str):

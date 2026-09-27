@@ -37,6 +37,8 @@ Next, download the Camoufox browser:
 camoufox fetch
 ```
 
+`fetch` also installs fpgen's model, pinned by sha256, into fpgen's package directory. Otherwise the first generated fingerprint installs it. Run `fetch` as that directory's owner if the browser will run as another user, e.g. while building a Docker image.
+
 To uninstall, run `camoufox remove`.
 
 ---

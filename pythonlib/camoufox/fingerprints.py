@@ -29,9 +29,9 @@ _FP_GENERATOR = None
 def _generator():
     global _FP_GENERATOR
     if _FP_GENERATOR is None:
-        from fpgen import Generator
+        from .fpgen_model import load_fpgen
 
-        _FP_GENERATOR = Generator()
+        _FP_GENERATOR = load_fpgen().Generator()
     return _FP_GENERATOR
 
 
