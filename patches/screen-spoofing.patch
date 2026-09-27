@@ -1,14 +1,15 @@
 diff --git a/dom/base/ScreenDimensionManager.cpp b/dom/base/ScreenDimensionManager.cpp
 new file mode 100644
-index 0000000000..bcfdb0a863
+index 0000000000..336fe886ee
 --- /dev/null
 +++ b/dom/base/ScreenDimensionManager.cpp
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,46 @@
 +/* Camoufox: Per-context screen dimension manager */
 +#include "ScreenDimensionManager.h"
 +
 +#include "mozilla/dom/BrowsingContext.h"
 +#include "nsGlobalWindowInner.h"
++#include "nsPIDOMWindowInlines.h"
 +#include "xpcpublic.h"
 +
 +namespace mozilla {
@@ -141,10 +142,10 @@ index 0000000000..6861cdcfbc
 +
 +#endif  // mozilla_dom_ScreenDimensionManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 8e94c6bd70..7607e2429e 100644
+index b0973412be..926cadf3dc 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -262,6 +262,7 @@ EXPORTS.mozilla.dom += [
+@@ -264,6 +264,7 @@ EXPORTS.mozilla.dom += [
      "ResponsiveImageSelector.h",
      "RoverfoxStorageManager.h",
      "SameProcessMessageQueue.h",
@@ -152,7 +153,7 @@ index 8e94c6bd70..7607e2429e 100644
      "ScreenLuminance.h",
      "ScreenOrientation.h",
      "Selection.h",
-@@ -551,6 +552,9 @@ SOURCES += [
+@@ -566,6 +567,9 @@ SOURCES += [
  # (includes RoverfoxStorageManager.h which can affect compilation units)
  SOURCES += ["NavigatorManager.cpp"]
  
@@ -163,7 +164,7 @@ index 8e94c6bd70..7607e2429e 100644
  SOURCES += ["FontListManager.cpp"]
  
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 5c3d639da9..8620f732ec 100644
+index 99da751676..469c30e02c 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -5,6 +5,7 @@
@@ -174,7 +175,7 @@ index 5c3d639da9..8620f732ec 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -7921,6 +7922,56 @@ void nsGlobalWindowInner::SetNavigatorUserAgent(const nsAString& ua,
+@@ -7925,6 +7926,56 @@ void nsGlobalWindowInner::SetNavigatorUserAgent(const nsAString& ua,
    }
  }
  
@@ -232,10 +233,10 @@ index 5c3d639da9..8620f732ec 100644
      bool aGranted) {
    // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index 54b50f7bb1..e907a2c31a 100644
+index 9616144511..ff8c14d011 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -701,6 +701,11 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -704,6 +704,11 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
                                         mozilla::ErrorResult& aRv);
    void SetNavigatorUserAgent(const nsAString& ua, mozilla::ErrorResult& aRv);
  
@@ -248,7 +249,7 @@ index 54b50f7bb1..e907a2c31a 100644
    void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
    void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index 78849001c5..d27c51aa5a 100644
+index 4b989dd48a..6dfd4ea066 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
 @@ -5,8 +5,10 @@
@@ -262,7 +263,7 @@ index 78849001c5..d27c51aa5a 100644
  #include "mozilla/dom/BrowsingContextBinding.h"
  #include "mozilla/dom/Document.h"
  #include "mozilla/dom/DocumentInlines.h"
-@@ -23,6 +25,19 @@
+@@ -24,6 +26,19 @@
  using namespace mozilla;
  using namespace mozilla::dom;
  
@@ -282,7 +283,7 @@ index 78849001c5..d27c51aa5a 100644
  nsScreen::nsScreen(nsPIDOMWindowInner* aWindow)
      : DOMEventTargetHelper(aWindow) {}
  
-@@ -46,6 +61,12 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
+@@ -47,6 +62,12 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
                                     mScreenOrientation)
  
  int32_t nsScreen::PixelDepth() {
@@ -295,7 +296,7 @@ index 78849001c5..d27c51aa5a 100644
    if (auto value = MaskConfig::GetUint32("screen.colorDepth"))
      return value.value();
    if (auto value = MaskConfig::GetUint32("screen.pixelDepth"))
-@@ -73,6 +94,17 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
+@@ -74,6 +95,17 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
  }
  
  CSSIntRect nsScreen::GetRect() {
@@ -313,7 +314,7 @@ index 78849001c5..d27c51aa5a 100644
    // Return window inner rect to prevent fingerprinting.
    if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
      return GetTopWindowInnerRectForRFP();
-@@ -105,6 +137,15 @@ CSSIntRect nsScreen::GetRect() {
+@@ -106,6 +138,15 @@ CSSIntRect nsScreen::GetRect() {
  }
  
  CSSIntRect nsScreen::GetAvailRect() {
@@ -330,10 +331,10 @@ index 78849001c5..d27c51aa5a 100644
                                    "screen.availWidth", "screen.availHeight");
    if (rect.has_value()) {
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index 1aa2baa931..cde7d1ba98 100644
+index bfb0332a1c..c4cb127e83 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -985,6 +985,18 @@ partial interface Window {
+@@ -982,6 +982,18 @@ partial interface Window {
    undefined setNavigatorUserAgent(DOMString ua);
  };
  
@@ -367,7 +368,7 @@ index 91fd96a691..03adf5d674 100644
      DEFINES["USE_NEON"] = True
      LOCAL_INCLUDES += ["/third_party/xsimd/include"]
 diff --git a/gfx/src/nsDeviceContext.cpp b/gfx/src/nsDeviceContext.cpp
-index 06b86c6c75..9641c8457c 100644
+index 0a628c93d2..cf8de1839e 100644
 --- a/gfx/src/nsDeviceContext.cpp
 +++ b/gfx/src/nsDeviceContext.cpp
 @@ -3,6 +3,7 @@
@@ -375,10 +376,10 @@ index 06b86c6c75..9641c8457c 100644
  
  #include "nsDeviceContext.h"
 +#include "MaskConfig.hpp"
+ 
  #include <algorithm>  // for max
- #include "gfxContext.h"
- #include "gfxPoint.h"    // for gfxSize
-@@ -193,6 +194,13 @@ bool nsDeviceContext::GetScreenIsHDR() {
+ 
+@@ -196,6 +197,13 @@ bool nsDeviceContext::GetScreenIsHDR() {
  }
  
  nsSize nsDeviceContext::GetDeviceSurfaceDimensions() {
