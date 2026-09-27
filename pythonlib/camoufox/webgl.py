@@ -18,6 +18,7 @@ import orjson
 
 from .coherence import gpu_fits_os
 from .fingerprints import _FPGEN_OS, gpu_screen_is_plausible, is_software_renderer
+from .fpgen_model import load_fpgen
 
 # Extensions a release Firefox never exposes (draft extensions behind
 # webgl.enable-draft-extensions, or mobile-only): fpgen's corpus carries some
@@ -60,9 +61,7 @@ def _filtered_extensions(target_os: str) -> FrozenSet[str]:
 @lru_cache(maxsize=None)
 def _lookup_index(node: str) -> Dict[str, str]:
     """fpgen's lookup index for every value of `node`, keyed by its JSON."""
-    from fpgen.utils import _lookup_possibilities
-
-    return _lookup_possibilities(node, casefold=False)
+    return load_fpgen().utils._lookup_possibilities(node, casefold=False)
 
 
 def _pin(node: str, value: Any) -> Tuple[str, str]:
@@ -79,10 +78,8 @@ def _pin(node: str, value: Any) -> Tuple[str, str]:
 @lru_cache(maxsize=None)
 def _trace(target: str, target_os: str, pinned: Tuple[Tuple[str, str], ...] = ()) -> Tuple[Any, ...]:
     """fpgen's distribution of `target` for Firefox on `target_os`, in its order."""
-    import fpgen
-
     return tuple(
-        fpgen.trace(
+        load_fpgen().trace(
             target=target,
             browser='Firefox',
             os=_FPGEN_OS[target_os],
