@@ -1,15 +1,16 @@
 diff --git a/dom/base/SpeechVoicesManager.cpp b/dom/base/SpeechVoicesManager.cpp
 new file mode 100644
-index 0000000000..abcdef1234
+index 0000000000..9d34ae6822
 --- /dev/null
 +++ b/dom/base/SpeechVoicesManager.cpp
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,78 @@
 +/* Camoufox: Per-context speech voices manager */
 +#include "SpeechVoicesManager.h"
 +
 +#include "mozilla/dom/BrowsingContext.h"
 +#include "mozilla/Mutex.h"
 +#include "nsGlobalWindowInner.h"
++#include "nsPIDOMWindowInlines.h"
 +#include "xpcpublic.h"
 +
 +namespace mozilla {
@@ -83,7 +84,7 @@ index 0000000000..abcdef1234
 +}  // namespace mozilla
 diff --git a/dom/base/SpeechVoicesManager.h b/dom/base/SpeechVoicesManager.h
 new file mode 100644
-index 0000000000..bcdef12345
+index 0000000000..def6218919
 --- /dev/null
 +++ b/dom/base/SpeechVoicesManager.h
 @@ -0,0 +1,29 @@
@@ -117,13 +118,13 @@ index 0000000000..bcdef12345
 +
 +#endif  // mozilla_dom_SpeechVoicesManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index xxxxxxxxxx..yyyyyyyyyy 100644
+index 926cadf3dc..c1b1fbf7e6 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -534,5 +534,13 @@
-     "nsPluginArray.cpp",
+@@ -577,6 +577,14 @@ EXPORTS.mozilla.dom += [
+     "FontListManager.h",
  ]
-
+ 
 +# SpeechVoicesManager compiled separately to avoid unified build scope issues
 +# (includes RoverfoxStorageManager.h which can affect compilation units)
 +SOURCES += ["SpeechVoicesManager.cpp"]
@@ -134,33 +135,23 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +
  # Are we targeting x86-32 or x86-64?  If so, we want to include SSE2 code for
  # CharacterDataBuffer.cpp
-diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index xxxxxxxxxx..yyyyyyyyyy 100644
---- a/dom/base/nsGlobalWindowInner.h
-+++ b/dom/base/nsGlobalWindowInner.h
-@@ -685,6 +685,9 @@
-
-   void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
-
-+  // Per-context speech voices
-+  void SetSpeechVoices(const nsAString& aVoices, mozilla::ErrorResult& aRv);
-+
-  public:
-   void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
-   void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
+ if CONFIG["INTEL_ARCHITECTURE"]:
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index xxxxxxxxxx..yyyyyyyyyy 100644
+index 469c30e02c..ef345fa7ea 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -22,3 +22,4 @@
+@@ -19,6 +19,7 @@
+ #include "AudioChannelService.h"
  #include "AutoplayPolicy.h"
  #include "Crypto.h"
 +#include "SpeechVoicesManager.h"
  #include "MainThreadUtils.h"
-@@ -7477,6 +7478,25 @@
-   mSharedWorkers.RemoveElement(aSharedWorker);
+ #include "Navigator.h"
+ #include "PaintWorkletImpl.h"
+@@ -7976,6 +7977,25 @@ void nsGlobalWindowInner::SetScreenColorDepth(uint32_t depth,
+   }
  }
-
+ 
 +void nsGlobalWindowInner::SetSpeechVoices(const nsAString& aVoices,
 +                                           ErrorResult& aRv) {
 +  uint32_t userContextId = 0;
@@ -183,36 +174,34 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
  RefPtr<GenericPromise> nsGlobalWindowInner::StorageAccessPermissionChanged(
      bool aGranted) {
    // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
-diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index xxxxxxxxxx..yyyyyyyyyy 100644
---- a/dom/webidl/Window.webidl
-+++ b/dom/webidl/Window.webidl
-@@ -892,6 +892,12 @@ partial interface Window {
-   readonly attribute VisualViewport visualViewport;
- };
-
-+// Per-context speech voices
-+partial interface Window {
-+  [Throws, Func="mozilla::dom::SpeechVoicesManager::IsFunctionEnabledForWebIDL"]
-+  undefined setSpeechVoices(DOMString voices);
-+};
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index ff8c14d011..d6826ed802 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -709,6 +709,9 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+                            mozilla::ErrorResult& aRv);
+   void SetScreenColorDepth(uint32_t depth, mozilla::ErrorResult& aRv);
+ 
++  // Per-context speech voices
++  void SetSpeechVoices(const nsAString& aVoices, mozilla::ErrorResult& aRv);
 +
- // Used to assign marks to appear on the scrollbar when
- // finding on a page.
- partial interface Window {
+  public:
+   void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
+   void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
 diff --git a/dom/media/webspeech/synth/SpeechSynthesis.cpp b/dom/media/webspeech/synth/SpeechSynthesis.cpp
-index xxxxxxxxxx..yyyyyyyyyy 100644
+index e6ce729415..4dc0b589da 100644
 --- a/dom/media/webspeech/synth/SpeechSynthesis.cpp
 +++ b/dom/media/webspeech/synth/SpeechSynthesis.cpp
-@@ -14,5 +14,7 @@
+@@ -12,6 +12,8 @@
+ #include "mozilla/dom/WindowGlobalChild.h"
  #include "nsContentUtils.h"
  #include "nsGlobalWindowInner.h"
 +#include "mozilla/dom/BrowsingContext.h"
 +#include "SpeechVoicesManager.h"
  #include "nsIDocShell.h"
  #include "nsISupportsPrimitives.h"
- #include "nsSpeechTask.h"
-@@ -222,6 +224,17 @@
+ #include "nsPIDOMWindowInlines.h"
+@@ -236,6 +238,17 @@ void SpeechSynthesis::OnEnd(const nsSpeechTask* aTask) {
  void SpeechSynthesis::GetVoices(
      nsTArray<RefPtr<SpeechSynthesisVoice> >& aResult) {
    aResult.Clear();
@@ -230,12 +219,10 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
    uint32_t voiceCount = 0;
    nsCOMPtr<nsPIDOMWindowInner> window = GetOwnerWindow();
    nsCOMPtr<nsIDocShell> docShell = window ? window->GetDocShell() : nullptr;
-@@ -246,8 +259,18 @@
-     if (NS_FAILED(rv)) {
-       NS_WARNING("Failed to retrieve voice from registry");
+@@ -261,6 +274,16 @@ void SpeechSynthesis::GetVoices(
        continue;
      }
-
+ 
 +    // Per-context voice filtering: skip voices not in allowed list
 +    if (mozilla::dom::SpeechVoicesManager::HasVoices(speechVoiceCtxId)) {
 +      nsAutoString voiceName;
@@ -247,14 +234,33 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
 +    }
 +
      SpeechSynthesisVoice* voice = mVoiceCache.GetWeak(uri);
-
+ 
      if (!voice) {
 diff --git a/dom/media/webspeech/synth/moz.build b/dom/media/webspeech/synth/moz.build
-index xxxxxxxxxx..yyyyyyyyyy 100644
+index e1bf345159..ca6ffacb21 100644
 --- a/dom/media/webspeech/synth/moz.build
 +++ b/dom/media/webspeech/synth/moz.build
-@@ -62,3 +62,4 @@
+@@ -59,5 +59,6 @@ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
  LOCAL_INCLUDES += [
 +    "/dom/base",
      "ipc",
  ]
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index c4cb127e83..e4db344794 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -949,6 +949,12 @@ partial interface Window {
+   undefined setFontList(DOMString fontList);
+ };
+ 
++// Per-context speech voices
++partial interface Window {
++  [Throws, Func="mozilla::dom::SpeechVoicesManager::IsFunctionEnabledForWebIDL"]
++  undefined setSpeechVoices(DOMString voices);
++};
++
+ // Used to assign marks to appear on the scrollbar when
+ // finding on a page.
+ partial interface Window {

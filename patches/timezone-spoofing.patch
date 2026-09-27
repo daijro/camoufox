@@ -1,13 +1,14 @@
 diff --git a/dom/base/TimezoneManager.cpp b/dom/base/TimezoneManager.cpp
 new file mode 100644
-index 0000000000..206a027918
+index 0000000000..a54411bf28
 --- /dev/null
 +++ b/dom/base/TimezoneManager.cpp
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,91 @@
 +#include "TimezoneManager.h"
 +#include "RoverfoxStorageManager.h"
 +#include "MaskConfig.hpp"
 +#include "nsGlobalWindowInner.h"
++#include "nsPIDOMWindowInlines.h"
 +#include "xpcpublic.h"
 +#include "mozilla/dom/BrowsingContext.h"
 +#include "mozilla/dom/Document.h"
@@ -134,10 +135,10 @@ index 0000000000..888303c315
 +
 +#endif  // mozilla_dom_TimezoneManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 56e0798c8b..eab5894010 100644
+index c1b1fbf7e6..ee5d0b9149 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -284,6 +284,7 @@ EXPORTS.mozilla.dom += [
+@@ -290,6 +290,7 @@ EXPORTS.mozilla.dom += [
      "TimeoutBudgetManager.h",
      "TimeoutHandler.h",
      "TimeoutManager.h",
@@ -145,7 +146,7 @@ index 56e0798c8b..eab5894010 100644
      "TreeIterator.h",
      "TreeOrderedArray.h",
      "TreeOrderedArrayInlines.h",
-@@ -501,6 +502,7 @@ UNIFIED_SOURCES += [
+@@ -518,6 +519,7 @@ UNIFIED_SOURCES += [
      "TimeoutExecutor.cpp",
      "TimeoutHandler.cpp",
      "TimeoutManager.cpp",
@@ -154,10 +155,10 @@ index 56e0798c8b..eab5894010 100644
      "UIDirectionManager.cpp",
      "UserActivation.cpp",
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index fb9c5c69d3..d4453fda3f 100644
+index ef345fa7ea..fe3cdaebd5 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -248,6 +248,8 @@
+@@ -247,6 +247,8 @@
  #include "nsICookieService.h"
  #include "nsID.h"
  #include "nsIDOMStorageManager.h"
@@ -166,7 +167,7 @@ index fb9c5c69d3..d4453fda3f 100644
  #include "nsDocShell.h"
  #include "mozilla/OriginAttributes.h"
  #include "nsIDOMXULControlElement.h"
-@@ -7763,6 +7765,50 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
+@@ -7765,6 +7767,50 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
    return mIntlUtils;
  }
  
@@ -218,10 +219,10 @@ index fb9c5c69d3..d4453fda3f 100644
    MOZ_ASSERT(aSharedWorker);
    MOZ_ASSERT(!mSharedWorkers.Contains(aSharedWorker));
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index 43600d66bf..1f9f283026 100644
+index d6826ed802..a9d8fb50ba 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -683,6 +683,8 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -685,6 +685,8 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
  
    mozilla::dom::IntlUtils* GetIntlUtils(mozilla::ErrorResult& aRv);
  
@@ -231,7 +232,7 @@ index 43600d66bf..1f9f283026 100644
  
    void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
 diff --git a/dom/base/nsGlobalWindowOuter.cpp b/dom/base/nsGlobalWindowOuter.cpp
-index dd0124f7e9..549e0869d0 100644
+index c0bd92f276..7f6ea88dea 100644
 --- a/dom/base/nsGlobalWindowOuter.cpp
 +++ b/dom/base/nsGlobalWindowOuter.cpp
 @@ -87,6 +87,8 @@
@@ -243,7 +244,7 @@ index dd0124f7e9..549e0869d0 100644
  #include "mozilla/Likely.h"
  #include "mozilla/Preferences.h"
  #include "mozilla/SchedulerGroup.h"
-@@ -2506,6 +2508,31 @@ nsresult nsGlobalWindowOuter::SetNewDocument(Document* aDocument,
+@@ -2515,6 +2517,31 @@ nsresult nsGlobalWindowOuter::SetNewDocument(Document* aDocument,
      MOZ_ALWAYS_SUCCEEDS(bc->SetCurrentInnerWindowId(mInnerWindow->WindowID()));
    }
  
@@ -276,7 +277,7 @@ index dd0124f7e9..549e0869d0 100644
    // its not being reused and clear our reference.
    if (doomCurrentInner) {
 diff --git a/dom/base/nsJSEnvironment.cpp b/dom/base/nsJSEnvironment.cpp
-index 21d69bdfed..fa2a7e3be3 100644
+index 2da511a657..3b4f16cd41 100644
 --- a/dom/base/nsJSEnvironment.cpp
 +++ b/dom/base/nsJSEnvironment.cpp
 @@ -3,6 +3,9 @@
@@ -289,7 +290,7 @@ index 21d69bdfed..fa2a7e3be3 100644
  
  #include "mozilla/EventDispatcher.h"
  #include "mozilla/HoldDropJSObjects.h"
-@@ -1800,6 +1803,16 @@ void nsJSContext::EnsureStatics() {
+@@ -1804,6 +1807,16 @@ void nsJSContext::EnsureStatics() {
      return;
    }
  
@@ -307,10 +308,10 @@ index 21d69bdfed..fa2a7e3be3 100644
    MOZ_ASSERT(NS_IsMainThread());
  
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index 162c95ba3d..b20d7c1f6f 100644
+index e4db344794..c2c6eb41b8 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -952,6 +952,12 @@ partial interface Window {
+@@ -955,6 +955,12 @@ partial interface Window {
    undefined setSpeechVoices(DOMString voices);
  };
  
@@ -324,7 +325,7 @@ index 162c95ba3d..b20d7c1f6f 100644
  // finding on a page.
  partial interface Window {
 diff --git a/dom/workers/WorkerPrivate.cpp b/dom/workers/WorkerPrivate.cpp
-index 6f88f1f176..9f4fe197b2 100644
+index f8563ba6eb..ad144a8d36 100644
 --- a/dom/workers/WorkerPrivate.cpp
 +++ b/dom/workers/WorkerPrivate.cpp
 @@ -21,6 +21,8 @@
@@ -336,7 +337,7 @@ index 6f88f1f176..9f4fe197b2 100644
  #include "js/Exception.h"
  #include "js/LocaleSensitive.h"
  #include "js/MemoryMetrics.h"
-@@ -6425,6 +6427,20 @@ WorkerGlobalScope* WorkerPrivate::GetOrCreateGlobalScope(JSContext* aCx) {
+@@ -6776,6 +6778,20 @@ WorkerGlobalScope* WorkerPrivate::GetOrCreateGlobalScope(JSContext* aCx) {
      data->mScope->DisconnectGlobalTeardownObservers();
    }
  
@@ -358,7 +359,7 @@ index 6f88f1f176..9f4fe197b2 100644
  
    return data->mScope;
 diff --git a/js/public/Date.h b/js/public/Date.h
-index 90d8708e2b..2a650570f6 100644
+index 55c8db661d..a9fa7a43d9 100644
 --- a/js/public/Date.h
 +++ b/js/public/Date.h
 @@ -55,6 +55,9 @@ namespace JS {
@@ -372,10 +373,10 @@ index 90d8708e2b..2a650570f6 100644
  class ClippedTime;
  inline ClippedTime TimeClip(double time);
 diff --git a/js/src/vm/DateTime.cpp b/js/src/vm/DateTime.cpp
-index f8a975acc3..05f26e45c8 100644
+index a358ad1bf5..690ebed68c 100644
 --- a/js/src/vm/DateTime.cpp
 +++ b/js/src/vm/DateTime.cpp
-@@ -36,6 +36,7 @@
+@@ -35,6 +35,7 @@
  #include "util/Text.h"
  #include "vm/MutexIDs.h"
  #include "vm/Realm.h"
@@ -383,7 +384,7 @@ index f8a975acc3..05f26e45c8 100644
  
  static bool ComputeLocalTime(time_t local, struct tm* ptm) {
    // Neither localtime_s nor localtime_r are required to act as if tzset has
-@@ -254,6 +255,20 @@ js::DateTimeInfo::DateTimeInfo() {
+@@ -253,6 +254,20 @@ js::DateTimeInfo::DateTimeInfo() {
  
  js::DateTimeInfo::~DateTimeInfo() = default;
  
@@ -404,7 +405,7 @@ index f8a975acc3..05f26e45c8 100644
  int64_t js::DateTimeInfo::toClampedSeconds(int64_t milliseconds) {
    int64_t seconds = milliseconds / msPerSecond;
    int64_t millis = milliseconds % msPerSecond;
-@@ -582,6 +597,18 @@ JS_PUBLIC_API bool JS::SetTimeZoneOverride(const char* timeZoneId) {
+@@ -581,6 +596,18 @@ JS_PUBLIC_API bool JS::SetTimeZoneOverride(const char* timeZoneId) {
    return true;
  }
  
@@ -436,7 +437,7 @@ index 41b0c5be27..eb11caadb2 100644
    // The spec implicitly assumes DST and time zone adjustment information
    // never change in the course of a function -- sometimes even across
 diff --git a/js/src/vm/Realm.cpp b/js/src/vm/Realm.cpp
-index 8d195ca7c8..62f67c0658 100644
+index 0684f1be95..b0ef2b39a5 100644
 --- a/js/src/vm/Realm.cpp
 +++ b/js/src/vm/Realm.cpp
 @@ -597,10 +597,19 @@ void Realm::setLocaleOverride(const char* locale) {
@@ -464,10 +465,10 @@ index 8d195ca7c8..62f67c0658 100644
  }
  
 diff --git a/js/src/vm/Realm.h b/js/src/vm/Realm.h
-index 7bbfc58948..ab0a588abd 100644
+index 087f93b90d..bf36a670eb 100644
 --- a/js/src/vm/Realm.h
 +++ b/js/src/vm/Realm.h
-@@ -353,6 +353,8 @@ class JS::Realm : public JS::shadow::Realm {
+@@ -360,6 +360,8 @@ class JS::Realm : public JS::shadow::Realm {
  #if JS_HAS_INTL_API
    // Date-time info for realms with non-default time zones.
    js::UniquePtr<js::DateTimeInfo> dateTimeInfo_;
