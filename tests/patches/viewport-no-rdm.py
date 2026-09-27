@@ -19,6 +19,12 @@ scrollbars and measures the scrollbar gutter three ways:
   - a context with a viewport and is_mobile=True, which must still get RDM's
     overlay scrollbars, so the option the caller asked for is not dropped.
 
+RDM plus touch also swallowed the pointer events of a mouse click
+(PointerEventHandler): in a desktop context with has_touch=True, page.click()
+fired mousedown, mouseup and click with no pointerdown or pointerup, which
+stock Firefox never does. The guard clicks a button in such a context and
+requires the same event sequence as on the launch-level page.
+
     python tests/patches/viewport-no-rdm.py
 """
 
@@ -32,6 +38,13 @@ VIEWPORT = {"width": 1000, "height": 600}
 
 PAGE = """<!doctype html><style>body{margin:0;height:3000px}
 #b{width:200px;height:100px;overflow:scroll}</style><div id=b></div>"""
+
+# The events land in an attribute: page.evaluate runs in an isolated world and
+# cannot read the page's globals.
+CLICK_PAGE = """<!doctype html><button id=t style="width:200px;height:80px">x</button><script>
+for (const k of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'])
+  t.addEventListener(k, () => t.dataset.ev = (t.dataset.ev ? t.dataset.ev + ' ' : '') + k);
+</script>"""
 
 MEASURE = """() => {
   const b = document.getElementById('b');
@@ -48,6 +61,12 @@ def measure(page) -> dict:
     return page.evaluate(MEASURE)
 
 
+def click_events(page) -> str:
+    page.set_content(CLICK_PAGE)
+    page.click("#t")
+    return page.get_attribute("#t", "data-ev") or ""
+
+
 def main() -> int:
     from camoufox.sync_api import Camoufox
 
@@ -58,10 +77,14 @@ def main() -> int:
         control = measure(browser.new_page(no_viewport=True))
         emulated = measure(browser.new_context(viewport=VIEWPORT).new_page())
         mobile = measure(browser.new_context(viewport=VIEWPORT, is_mobile=True).new_page())
+        control_click = click_events(browser.new_page(no_viewport=True))
+        touch_click = click_events(browser.new_context(viewport=VIEWPORT, has_touch=True).new_page())
 
     print(f"  launch page:      {control}")
     print(f"  viewport context: {emulated}")
     print(f"  is_mobile:        {mobile}")
+    print(f"  click, launch page:           {control_click}")
+    print(f"  click, viewport + has_touch:  {touch_click}")
 
     failures = []
     if control["page"] <= 0 or control["box"] <= 0:
@@ -76,12 +99,18 @@ def main() -> int:
         failures.append(
             f"is_mobile=True did not enable Responsive Design Mode: scrollbars measure "
             f"{mobile['page']}/{mobile['box']} px, not RDM's 0/0 overlay")
+    if "pointerdown" not in control_click:
+        failures.append(f"a click on the launch page fired no pointerdown ({control_click!r}): the check is vacuous")
+    if touch_click != control_click:
+        failures.append(
+            f"a click with has_touch fired {touch_click!r}, not {control_click!r} "
+            "(Responsive Design Mode drops a mouse click's pointer events)")
 
     for f in failures:
         print(f"FAIL: {f}")
     if failures:
         return 1
-    print("PASS: a viewport keeps the platform's scrollbars; only is_mobile enables Responsive Design Mode.")
+    print("PASS: a viewport keeps the platform's scrollbars; only is_mobile enables Responsive Design Mode, and a click keeps its pointer events.")
     return 0
 
 
