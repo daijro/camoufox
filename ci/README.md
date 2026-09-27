@@ -263,7 +263,7 @@ isolation itself regresses.
 entry has to claim a test cannot pass in *either* world, or the suite would have
 counted it as a fallback rather than a failure.
 
-Fourteen tests are deselected outright by [`ci/skiplist.yml`](skiplist.yml), which
+Seventeen tests are deselected outright by [`ci/skiplist.yml`](skiplist.yml), which
 requires a stated reason per entry — `ci/summarize.py` fails the run on an
 unreasoned one.
 
@@ -276,21 +276,23 @@ leaving them bare.
 
 `ci/run_skiplist_audit.py` now runs every entry with the skiplist disabled and
 **fails the build if a skipped test passes**. It is cheap precisely because a
-correct skiplist is short — twelve tests, a few seconds — and it is what keeps the
+correct skiplist is short — seventeen tests, a few seconds — and it is what keeps the
 list from drifting back into a place failing tests go to disappear.
 
 ```bash
 python3 -m ci.run_skiplist_audit --binary /path/to/camoufox-bin
 ```
 
-What remains, 12 tests: two `test_keyboard.py`
+What remains, 17 tests: two `test_keyboard.py`
 tests that assert a shifted character arrives without Shift, which Camoufox
 presses as a real keyboard would; six client-certificate tests (async and sync)
 that need the **browser** to present a certificate during the TLS handshake —
 the two that go through the Node driver's own request context instead pass, and
 are not skipped; two upstream expectations that encode a stock-Firefox quirk,
-replaced by `tests/camoufox/`; and two popup tests that rely on Playwright
-shipping Firefox's popup blocker off, which Camoufox keeps on.
+replaced by `tests/camoufox/`; two popup tests that rely on Playwright
+shipping Firefox's popup blocker off, which Camoufox keeps on; and five layout
+tests that assume headless scrollbars take no width, which Playwright gets by
+hiding them and Camoufox does not do.
 
 That client-certificate split is the audit earning its place. The entry was
 first written as a whole module, because on a local machine all five fail —
