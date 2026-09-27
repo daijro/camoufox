@@ -1,14 +1,15 @@
 diff --git a/dom/base/WebRTCIPManager.cpp b/dom/base/WebRTCIPManager.cpp
 new file mode 100644
-index 0000000000..8834c93e4b
+index 0000000000..75f57a03f2
 --- /dev/null
 +++ b/dom/base/WebRTCIPManager.cpp
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,147 @@
 +#include "WebRTCIPManager.h"
 +#include "nsTHashMap.h"
 +#include "RoverfoxStorageManager.h"
 +#include "nsPrintfCString.h"
 +#include "nsGlobalWindowInner.h"
++#include "nsPIDOMWindowInlines.h"
 +#include "nsDocShell.h"
 +#include "xpcpublic.h"
 +#include "mozilla/dom/BrowsingContext.h"
@@ -262,10 +263,10 @@ index 0000000000..c9810a06d2
 +
 +#endif // mozilla_dom_WebRTCIPManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index ba674a00d9..ef7c9bdff2 100644
+index cb146517aa..f2fa8a3543 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -296,10 +296,15 @@ EXPORTS.mozilla.dom += [
+@@ -302,10 +302,15 @@ EXPORTS.mozilla.dom += [
      "VideoFrameProvider.h",
      "ViewportMetaData.h",
      "VisualViewport.h",
@@ -282,10 +283,10 @@ index ba674a00d9..ef7c9bdff2 100644
  # in unified builds (it includes RoverfoxStorageManager.h which can affect
  # alphabetically-later files like BarProps.cpp)
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 740c59ed8b..4b7d3d1297 100644
+index d0e286b11f..8ead869729 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -334,6 +334,10 @@
+@@ -333,6 +333,10 @@
  #include "xpcprivate.h"
  #include "xpcpublic.h"
  
@@ -296,7 +297,7 @@ index 740c59ed8b..4b7d3d1297 100644
  #ifdef NS_PRINTING
  #  include "nsIPrintSettings.h"
  #endif
-@@ -7810,6 +7814,42 @@ void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aR
+@@ -7812,6 +7816,42 @@ void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aR
    }
  }
  
@@ -340,10 +341,10 @@ index 740c59ed8b..4b7d3d1297 100644
    MOZ_ASSERT(aSharedWorker);
    MOZ_ASSERT(!mSharedWorkers.Contains(aSharedWorker));
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index 9199f08fdf..66f858aad5 100644
+index f3fbefbbfd..2b581e729a 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -685,6 +685,10 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -687,6 +687,10 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
  
    void SetTimezone(const nsAString& timezone, mozilla::ErrorResult& aRv);
  
@@ -355,10 +356,10 @@ index 9199f08fdf..66f858aad5 100644
  
    void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-index e9afe2cfb2..97263a3d04 100644
+index 0eefdc2645..40f8f1499f 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-@@ -98,6 +98,11 @@
+@@ -100,6 +100,11 @@
  #include "mozilla/glean/DomMediaWebrtcMetrics.h"
  #include "mozilla/net/DataChannelProtocol.h"
  #include "mozilla/net/WebrtcProxyConfig.h"
@@ -370,7 +371,7 @@ index e9afe2cfb2..97263a3d04 100644
  #include "nsContentUtils.h"
  #include "nsDOMJSUtils.h"
  #include "nsGlobalWindowInner.h"
-@@ -227,6 +232,14 @@ class DataChannel;
+@@ -230,6 +235,14 @@ class DataChannel;
  
  namespace mozilla {
  
@@ -385,7 +386,7 @@ index e9afe2cfb2..97263a3d04 100644
  void PeerConnectionAutoTimer::RegisterConnection() { mRefCnt++; }
  
  void PeerConnectionAutoTimer::UnregisterConnection(bool aContainedAV) {
-@@ -1585,7 +1598,15 @@ PeerConnectionImpl::SetLocalDescription(int32_t aAction, const char* aSDP) {
+@@ -1622,7 +1635,15 @@ PeerConnectionImpl::SetLocalDescription(int32_t aAction, const char* aSDP) {
      }
    };
  
@@ -402,7 +403,7 @@ index e9afe2cfb2..97263a3d04 100644
  
    SyncToJsep();
  
-@@ -1751,11 +1772,85 @@ already_AddRefed<dom::Promise> PeerConnectionImpl::GetStats(
+@@ -1788,11 +1809,90 @@ already_AddRefed<dom::Promise> PeerConnectionImpl::GetStats(
      MOZ_CRASH("Failed to create a promise!");
    }
  
@@ -412,6 +413,7 @@ index e9afe2cfb2..97263a3d04 100644
 +  // entry below matches the candidate/SDP exactly. 0 = nothing fabricated.
 +  uint16_t fabricatedSrflxPort = mFabricatedSrflxPort;
 +  nsString fabricatedSrflxStatsId = mFabricatedSrflxStatsId;
++  nsString fabricatedSrflxUfrag = mFabricatedSrflxUfrag;
 +
    GetStats(aSelector, false)
        ->Then(
@@ -419,7 +421,7 @@ index e9afe2cfb2..97263a3d04 100644
 -          [promise,
 -           window = mWindow](UniquePtr<dom::RTCStatsReportInternal>&& aReport) {
 +          [promise, window = mWindow, shouldSanitizeStats,
-+           fabricatedSrflxPort, fabricatedSrflxStatsId](
++           fabricatedSrflxPort, fabricatedSrflxStatsId, fabricatedSrflxUfrag](
 +              UniquePtr<dom::RTCStatsReportInternal>&& aReport) {
 +            // Camoufox: Sanitize IP addresses in stats before exposing to JS
 +            if (shouldSanitizeStats && aReport) {
@@ -474,23 +476,27 @@ index e9afe2cfb2..97263a3d04 100644
 +                cand.mProtocol.Construct(NS_ConvertASCIItoUTF16("udp"));
 +                cand.mProxied.Construct(NS_ConvertASCIItoUTF16("proxied"));
 +                cand.mId.Construct(fabricatedSrflxStatsId);
-+                // Associate with the same transport as the real candidates.
-+                for (const auto& existing : aReport->mIceCandidateStats) {
-+                  if (existing.mTransportId.WasPassed()) {
-+                    cand.mTransportId.Construct(existing.mTransportId.Value());
-+                    break;
++                // Firefox 156 exposes foundation and usernameFragment on
++                // candidate stats: the same values as the SDP line.
++                cand.mFoundation.Construct(u"1"_ns);
++                cand.mUsernameFragment.Construct(fabricatedSrflxUfrag);
++                // Associate with the same transport as the real candidates;
++                // transportId is required, so with none there is nothing to
++                // attach a candidate to.
++                if (!aReport->mIceCandidateStats.IsEmpty()) {
++                  cand.mTransportId =
++                      aReport->mIceCandidateStats[0].mTransportId;
++                  if (!aReport->mIceCandidateStats.AppendElement(cand,
++                                                                 fallible)) {
++                    mozalloc_handle_oom(0);
 +                  }
-+                }
-+                if (!aReport->mIceCandidateStats.AppendElement(cand,
-+                                                               fallible)) {
-+                  mozalloc_handle_oom(0);
 +                }
 +              }
 +            }
-             RefPtr<RTCStatsReport> report(new RTCStatsReport(window));
+             RefPtr report = MakeRefPtr<RTCStatsReport>(window);
              report->Incorporate(*aReport);
              promise->MaybeResolve(std::move(report));
-@@ -3274,12 +3369,22 @@ const std::string& PeerConnectionImpl::GetName() {
+@@ -3313,12 +3413,22 @@ const std::string& PeerConnectionImpl::GetName() {
    return mName;
  }
  
@@ -514,7 +520,7 @@ index e9afe2cfb2..97263a3d04 100644
    if (mForceIceTcp && std::string::npos != candidate.find(" UDP ")) {
      CSFLogWarn(LOGTAG, "Blocking local UDP candidate: %s", candidate.c_str());
      STAMP_TIMECARD(mTimeCard, "UDP Ice Candidate blocked");
-@@ -3342,10 +3447,438 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
+@@ -3381,10 +3491,439 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
      uint16_t level, const std::string& mid, const std::string& candidate,
      const std::string& ufrag) {
    STAMP_TIMECARD(mTimeCard, "Send Ice Candidate to content");
@@ -824,6 +830,7 @@ index e9afe2cfb2..97263a3d04 100644
 +      mSurfacedHostUdpPort ? mSurfacedHostUdpPort : RandomEphemeralPort();
 +  if (wantSrflx) {
 +    mFabricatedSrflxPort = port;
++    mFabricatedSrflxUfrag = NS_ConvertUTF8toUTF16(ufrag.c_str());
 +    if (mFabricatedSrflxStatsId.IsEmpty()) {
 +      // Candidate stats ids are 8 lowercase hex digits.
 +      char id[9];
@@ -955,10 +962,10 @@ index e9afe2cfb2..97263a3d04 100644
 +      RandomSrflxDelayMs());
  }
  
- void PeerConnectionImpl::IceConnectionStateChange(
-@@ -3434,6 +3967,47 @@ void PeerConnectionImpl::IceConnectionStateChange(
-   // If connectionIceConnectionStateChanged is true, fire an event named
-   // iceconnectionstatechange at connection.
+ // Implements the steps to "change the selected candidate pair and state".
+@@ -3514,6 +4053,47 @@ void PeerConnectionImpl::IceConnectionStateChange(
+   // 12. If connectionIceConnectionStateChanged is true, fire an event
+   //     named iceconnectionstatechange at connection.
    if (connectionIceConnectionStateChanged) {
 +    // Camoufox: behind a TCP proxy, ICE fails almost immediately and gathering
 +    // never reaches "complete" (no null-candidate event fires), so the
@@ -1004,7 +1011,7 @@ index e9afe2cfb2..97263a3d04 100644
      pcObserver->OnStateChange(PCObserverStateType::IceConnectionState, rv);
    }
  
-@@ -3619,6 +4193,12 @@ void PeerConnectionImpl::IceGatheringStateChange(
+@@ -3699,6 +4279,12 @@ void PeerConnectionImpl::IceGatheringStateChange(
    // If connectionIceGatheringStateChanged is true, fire an event named
    // icegatheringstatechange at connection.
    if (gatheringStateChanged) {
@@ -1017,7 +1024,7 @@ index e9afe2cfb2..97263a3d04 100644
      // NOTE: If we're in the "complete" case, our JS code will fire a null
      // icecandidate event after firing the icegatheringstatechange event.
      // Fire an event named icecandidate using the RTCPeerConnectionIceEvent
-@@ -3710,11 +4290,27 @@ void PeerConnectionImpl::UpdateDefaultCandidate(
+@@ -3790,11 +4376,27 @@ void PeerConnectionImpl::UpdateDefaultCandidate(
      const std::string& defaultRtcpAddr, uint16_t defaultRtcpPort,
      const std::string& transportId) {
    CSFLogDebug(LOGTAG, "%s", __FUNCTION__);
@@ -1047,7 +1054,7 @@ index e9afe2cfb2..97263a3d04 100644
          transportId);
    }
  }
-@@ -4485,8 +5081,10 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
+@@ -4578,8 +5180,10 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
  
    uint64_t winId = mWindow->WindowID();
  
@@ -1061,10 +1068,10 @@ index e9afe2cfb2..97263a3d04 100644
        !MediaManager::Get()->IsActivelyCapturingOrHasAPermission(winId);
    return default_address_only;
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.h b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
-index 084a437313..b556e82084 100644
+index dfda4b5b9c..7919a66eed 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.h
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
-@@ -620,8 +620,17 @@ class PeerConnectionImpl final
+@@ -610,8 +610,17 @@ class PeerConnectionImpl final
    RefPtr<MediaPipeline> GetMediaPipelineForTrack(
        dom::MediaStreamTrack& aRecvTrack);
  
@@ -1083,7 +1090,7 @@ index 084a437313..b556e82084 100644
    void SendLocalIceCandidateToContent(uint16_t level, const std::string& mid,
                                        const std::string& candidate,
                                        const std::string& ufrag);
-@@ -719,6 +728,21 @@ class PeerConnectionImpl final
+@@ -709,6 +718,24 @@ class PeerConnectionImpl final
    unsigned int mDataChannelsClosed = 0;
  
    bool mForceIceTcp;
@@ -1097,6 +1104,9 @@ index 084a437313..b556e82084 100644
 +  // Camoufox: the fabricated srflx's getStats() id, in the shape real candidate
 +  // ids have (8 hex digits), fixed for the life of the connection.
 +  nsString mFabricatedSrflxStatsId;
++  // Camoufox: the local ICE ufrag the fabricated srflx was emitted under; its
++  // getStats() entry reports it as usernameFragment, as a real candidate does.
++  nsString mFabricatedSrflxUfrag;
 +  // Camoufox: set once a host candidate reached content (real or fabricated),
 +  // with the UDP host's port, so a fabricated srflx never brings a second host
 +  // set and shares the host's port as a real gather does.
@@ -1106,10 +1116,10 @@ index 084a437313..b556e82084 100644
    RefPtr<MediaTransportHandler> mTransportHandler;
  
 diff --git a/dom/media/webrtc/jsapi/moz.build b/dom/media/webrtc/jsapi/moz.build
-index d32e08c2b0..40a750196a 100644
+index 92c2255785..d1c4a6788a 100644
 --- a/dom/media/webrtc/jsapi/moz.build
 +++ b/dom/media/webrtc/jsapi/moz.build
-@@ -68,3 +68,6 @@ EXPORTS.mozilla.dom += [
+@@ -72,3 +72,6 @@ EXPORTS.mozilla.dom += [
  ]
  
  FINAL_LIBRARY = "xul"
@@ -1117,10 +1127,10 @@ index d32e08c2b0..40a750196a 100644
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index 2471488e16..b7833efded 100644
+index 6cf202d17a..6a5b50744d 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -958,6 +958,17 @@ partial interface Window {
+@@ -961,6 +961,17 @@ partial interface Window {
    undefined setTimezone(DOMString timezone);
  };
  
