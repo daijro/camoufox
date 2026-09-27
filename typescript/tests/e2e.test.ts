@@ -113,10 +113,13 @@ function packagedLocales(): string[] | null {
 
 let server: http.Server;
 let url = "";
+/** The User-Agent header of the last request the probe page served. */
+let lastRequestUserAgent = "";
 
 beforeAll(async () => {
 	if (!ENABLED) return;
-	server = http.createServer((_req, res) => {
+	server = http.createServer((req, res) => {
+		lastRequestUserAgent = req.headers["user-agent"] ?? "";
 		res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
 		res.end(
 			"<!doctype html><html><head><title>probe</title></head><body>probe</body></html>",
@@ -435,6 +438,10 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 						preset,
 					});
 					probe = await probePage(await context.newPage());
+					// The HTTP header must tell the same story as navigator: a
+					// context that dropped its userAgent option sent the
+					// browser's own UA here while navigator was spoofed.
+					expect(lastRequestUserAgent).toBe(probe.navigator.userAgent);
 					// Contexts are isolated: another preset, another device.
 					const other = await mods.sync.NewContext(browser as any, {
 						preset: INPUTS.presets.linux,
