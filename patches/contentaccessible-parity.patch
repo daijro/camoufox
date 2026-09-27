@@ -12,15 +12,13 @@ content page:
 
   chrome://browser/content/browser-development-helpers.js was present, because
   it is gated #ifndef MOZILLA_OFFICIAL and Camoufox is not an official build.
-  Its presence is a positive "built from source" tell. Two RUNTIME
-  AppConstants.MOZILLA_OFFICIAL checks reach it -- browser-main.js loads the
-  script and browser-init.js calls DevelopmentHelpers.init() from
-  _delayedStartup -- so dropping the file from the package alone throws
-  `ReferenceError: DevelopmentHelpers is not defined` there. That is not just a
-  console error: _delayedStartup never reaches its
-  "browser-delayed-startup-finished" notification, and juggler's newPage awaits
-  exactly that, so every Playwright launch hangs on its first page. Both call
-  sites go with the file.
+  Its presence is a positive "built from source" tell. Two other places reach
+  it -- browser-main.js loads the script, and BrowserComponents.manifest
+  registers DevelopmentHelpers.init as a browser-window-delayed-startup
+  category entry (browser-init.js called it directly before Firefox 156) -- so
+  dropping the file from the package alone breaks _delayedStartup, which must
+  reach its "browser-delayed-startup-finished" notification because juggler's
+  newPage awaits exactly that. Both call sites go with the file.
 
 Setting MOZILLA_OFFICIAL=1 would fix the second one at the source, but it also
 moves telemetry, update-channel and branding defaults that Camoufox sets
@@ -28,23 +26,8 @@ deliberately, so the narrower change is here.
 
 Guard: tests/patches/contentaccessible-parity.py.
 
-diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
-index cc1fe4b27b..d8a76b601d 100644
---- a/browser/base/content/browser-init.js
-+++ b/browser/base/content/browser-init.js
-@@ -841,10 +841,6 @@ var gBrowserInit = {
-       gDataNotificationInfoBar.init();
-     }
- 
--    if (!AppConstants.MOZILLA_OFFICIAL) {
--      DevelopmentHelpers.init();
--    }
--
-     gExtensionsNotifications.init();
- 
-     let wasMinimized = window.windowState == window.STATE_MINIMIZED;
 diff --git a/browser/base/content/browser-main.js b/browser/base/content/browser-main.js
-index 1af1dd9d56..f3fd55631b 100644
+index f7f364290e..9d9be0eb33 100644
 --- a/browser/base/content/browser-main.js
 +++ b/browser/base/content/browser-main.js
 @@ -11,9 +11,6 @@
@@ -58,10 +41,10 @@ index 1af1dd9d56..f3fd55631b 100644
    Services.scriptloader.loadSubScript("chrome://browser/content/sidebar/browser-sidebar.js", this);
    Services.scriptloader.loadSubScript("chrome://browser/content/browser-customtitlebar.js", this);
 diff --git a/browser/base/jar.mn b/browser/base/jar.mn
-index dd0f873535..aa102d3ba3 100644
+index 783c67d397..2118fe4611 100644
 --- a/browser/base/jar.mn
 +++ b/browser/base/jar.mn
-@@ -45,9 +45,6 @@ browser.jar:
+@@ -41,9 +41,6 @@ browser.jar:
          content/browser/browser-context.js            (content/browser-context.js)
          content/browser/browser-customization.js      (content/browser-customization.js)
          content/browser/browser-data-submission-info-bar.js (content/browser-data-submission-info-bar.js)
@@ -71,6 +54,20 @@ index dd0f873535..aa102d3ba3 100644
          content/browser/browser-fullScreenAndPointerLock.js (content/browser-fullScreenAndPointerLock.js)
          content/browser/browser-gestureSupport.js           (content/browser-gestureSupport.js)
          content/browser/browser-init.js                     (content/browser-init.js)
+diff --git a/browser/components/BrowserComponents.manifest b/browser/components/BrowserComponents.manifest
+index 7214821fc5..489c64ea19 100644
+--- a/browser/components/BrowserComponents.manifest
++++ b/browser/components/BrowserComponents.manifest
+@@ -89,9 +89,6 @@ category browser-window-delayed-startup chrome://browser/content/browser-fullScr
+ #ifdef MOZ_DATA_REPORTING
+ category browser-window-delayed-startup chrome://browser/content/browser-data-submission-info-bar.js gDataNotificationInfoBar.init
+ #endif
+-#ifndef MOZILLA_OFFICIAL
+-category browser-window-delayed-startup chrome://browser/content/browser-development-helpers.js DevelopmentHelpers.init
+-#endif
+ category browser-window-delayed-startup chrome://browser/content/browser-addons.js gExtensionsNotifications.init
+ category browser-window-delayed-startup chrome://browser/content/browser-captivePortal.js CaptivePortalWatcher.delayedStartup
+ 
 diff --git a/toolkit/crashreporter/jar.mn b/toolkit/crashreporter/jar.mn
 index 641fcaa2fe..0d9f215fd2 100644
 --- a/toolkit/crashreporter/jar.mn
