@@ -955,4 +955,43 @@ describe("cpu_affinity", () => {
 			expect(cpuAffinity.hostCores()).toEqual(before);
 		},
 	);
+
+	it.runIf(process.platform === "linux")(
+		"a concurrent launch sees the host's cores, not another launch's pin",
+		() => {
+			if (!cpuAffinity.supported()) return;
+			const host = cpuAffinity.hostCores() ?? [];
+			if (host.length < 3) return;
+			const options = utils.getEnvVars(
+				{ "navigator.hardwareConcurrency": 2 },
+				"win",
+				BUNDLE_EXE,
+			);
+			const previous = cpuAffinity.pin(process.pid, 1);
+			try {
+				expect(cpuAffinity.hostCores()).toHaveLength(1);
+				expect(cpuAffinity.hostCoreCount()).toBe(host.length);
+				expect(fingerprints.hostCpuCount()).toBe(host.length);
+				expect(utils.pinnedCoreCount({ env: options })).toBe(2);
+			} finally {
+				cpuAffinity.restore(process.pid, previous);
+			}
+		},
+	);
+
+	it("an unpinned launch waits for a pinned one to spawn and restore", async () => {
+		const order: string[] = [];
+		const pinned = cpuAffinity.withPinLock(async () => {
+			await new Promise((r) => setTimeout(r, 30));
+			order.push("pinned launch restored");
+		});
+		const unpinned = cpuAffinity.withUnpinnedLaunch(async () => {
+			order.push("unpinned launch spawned");
+		});
+		await Promise.all([pinned, unpinned]);
+		expect(order).toEqual([
+			"pinned launch restored",
+			"unpinned launch spawned",
+		]);
+	});
 });

@@ -101,6 +101,22 @@ export function hostCores(): number[] | null {
 	return n ? Array.from({ length: n }, (_, i) => i) : null;
 }
 
+let hostCountSnapshot: number | undefined;
+
+/**
+ * How many cores the host lets this process use, as read before this process
+ * first pinned itself. playwright-core spawns the browser from this process,
+ * so pin() narrows this process's own mask during a launch; a live reading
+ * taken then by a concurrent launch (hostCores(), or Node's
+ * availableParallelism()) would see the pinned count and pass it off as the
+ * host's. Python pins a separate driver process and never has this problem.
+ */
+export function hostCoreCount(): number {
+	hostCountSnapshot ??=
+		hostCores()?.length || os.availableParallelism() || os.cpus().length;
+	return hostCountSnapshot;
+}
+
 /**
  * `count` adjacent cores from a random starting point (wrapping). Always
  * taking the first `count` stacked every browser on one host onto cores
@@ -124,6 +140,7 @@ export function pick(cores: readonly number[], count: number): number[] {
  */
 export function pin(pid: number, count: number): number[] | null {
 	if (count < 1 || !supported()) return null;
+	if (pid === process.pid) hostCoreCount(); // read the host before narrowing it
 	if (process.platform === "linux") {
 		const before = linuxGetAffinity(pid);
 		if (!before || count >= before.length) return null;
@@ -192,6 +209,7 @@ function winSetMask(pid: number, mask: bigint): boolean {
 // -- launch serialisation --------------------------------------------------
 
 let pinChain: Promise<unknown> = Promise.resolve();
+let everPinned = false;
 
 /**
  * Run `fn` while holding the process-wide pin lock. The browser inherits the
@@ -200,7 +218,18 @@ let pinChain: Promise<unknown> = Promise.resolve();
  * restore would leave the driver pinned. (Python: async_api._pin_lock.)
  */
 export function withPinLock<T>(fn: () => Promise<T>): Promise<T> {
+	everPinned = true;
 	const result = pinChain.then(fn, fn);
 	pinChain = result.catch(() => undefined);
 	return result;
+}
+
+/**
+ * Run an UNPINNED launch. It spawns a browser too, which inherits whatever
+ * mask this process has at that moment, so once any launch in this process
+ * has pinned, it waits for the lock rather than spawning into another
+ * launch's pin. Until then (pin_cpu_cores is opt-in) it runs straight away.
+ */
+export function withUnpinnedLaunch<T>(fn: () => Promise<T>): Promise<T> {
+	return everPinned ? withPinLock(fn) : fn();
 }

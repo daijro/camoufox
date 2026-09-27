@@ -12,9 +12,11 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import * as fs from "node:fs";
-import * as nodeOs from "node:os";
 import * as path from "node:path";
-import { supported as cpuAffinitySupported } from "./cpu_affinity.js";
+import {
+	supported as cpuAffinitySupported,
+	hostCoreCount,
+} from "./cpu_affinity.js";
 import { Generator, InvalidConstraints } from "./fpgen/index.js";
 import { validateIP, validIPv4 } from "./ip.js";
 import { normalizeLocale } from "./locale.js";
@@ -902,13 +904,12 @@ export function normalizePresetVoices(
 // Hardware concurrency and navigator arch
 // ---------------------------------------------------------------------------
 
-/** Logical CPUs this process may actually run on (affinity aware). */
+/**
+ * Logical CPUs this process may run on (affinity aware), as they were before
+ * any launch pinned it: see cpu_affinity.hostCoreCount().
+ */
 export function hostCpuCount(): number | null {
-	try {
-		return nodeOs.availableParallelism() || null;
-	} catch {
-		return nodeOs.cpus().length || null;
-	}
+	return hostCoreCount() || null;
 }
 
 /**

@@ -134,7 +134,7 @@ export async function NewBrowser(
 		);
 	try {
 		if (!pinTo) {
-			return await launch();
+			return await cpuAffinity.withUnpinnedLaunch(launch);
 		}
 		const pid = driverPid();
 		// The browser inherits the driver's mask at spawn, so two concurrent

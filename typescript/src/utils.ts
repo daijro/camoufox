@@ -912,13 +912,14 @@ export function pinnedCoreCount(
 	} catch {
 		return null;
 	}
-	const cores = cpuAffinity.hostCores();
+	// The host's count, not this process's live mask: a concurrent pinned
+	// launch narrows that while its browser spawns.
+	const cores = cpuAffinity.hostCoreCount();
 	if (
 		typeof value === "number" &&
 		Number.isInteger(value) &&
-		cores?.length &&
 		value >= 1 &&
-		value < cores.length
+		value < cores
 	) {
 		return value;
 	}
