@@ -235,17 +235,35 @@ index xxxxxxxxxx..yyyyyyyyyy 100644
  #include "mozilla/gfx/2D.h"
  #include "mozilla/ipc/FileDescriptorUtils.h"
  #include "mozilla/TextUtils.h"
-@@ -1632,6 +1633,16 @@
+@@ -1632,6 +1633,34 @@
    nsAutoCString key;
    GenerateFontListKey(aFamily, key);
 
-+  // Per-context font list filtering
-+  {
++  // Per-context font list filtering.
++  //
++  // Guarded on HasFontList() alone. userContextId 0 is juggler's default
++  // browser context -- "Default context has userContextId === 0"
++  // (TargetRegistry.js) -- which is the context Playwright's
++  // launch_persistent_context() runs in, so a `ctx != 0` guard meant
++  // setFontList() stored a list there and nothing ever read it. Measured on
++  // 152.0.4-beta.30 with a macOS mask and no global "fonts" allowlist: a
++  // persistent context resolved all 14 probed Windows-only families, the
++  // same as an unmasked baseline, while navigator.platform read MacIntel.
++  // A non-default context resolved 4. HasFontList() is the correct test on
++  // its own: false until setFontList() has run for that context.
++  //
++  // Chrome documents are exempt for the reason font-hijacker.patch gives: the
++  // parent process paints the browser UI from this same list, and filtering it
++  // leaves the Windows titlebar drawing tofu instead of its Segoe Fluent Icons
++  // glyphs (#695). `ctx != 0` masked that before -- chrome resolves fonts with
++  // the thread-local still at 0 -- so the exemption has to be explicit now. A
++  // null provider is an internal lookup with no document behind it, which
++  // upstream likewise treats as privileged.
++  if (aFontVisibilityProvider && !aFontVisibilityProvider->IsChrome()) {
 +    uint32_t ctx = mozilla::dom::FontListManager::GetCurrentContext();
-+    if (ctx != 0 && mozilla::dom::FontListManager::HasFontList(ctx)) {
-+      if (!mozilla::dom::FontListManager::IsFontAllowed(ctx, key)) {
-+        return false;
-+      }
++    if (mozilla::dom::FontListManager::HasFontList(ctx) &&
++        !mozilla::dom::FontListManager::IsFontAllowed(ctx, key)) {
++      return false;
 +    }
 +  }
 +
