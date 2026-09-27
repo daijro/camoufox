@@ -37,4 +37,4 @@ export class CONSTRAINTS {
 
 /** Version of this launcher library. Kept in step with package.json and
  *  pythonlib's pyproject.toml. */
-export const LIBRARY_VERSION = "0.5.6";
+export const LIBRARY_VERSION = "0.5.7";
