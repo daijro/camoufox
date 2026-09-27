@@ -6,6 +6,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { finished } from "node:stream/promises";
 import { INSTALL_DIR, OS_NAME, rprint } from "./paths.js";
 // pkgman and multiversion are mutually dependent, exactly as the Python twin's
 // function-local imports are. Every use of these sits inside a function body,
@@ -497,6 +498,12 @@ export async function installVersioned(
 		fs.mkdirSync(installPath, { recursive: true });
 
 		const tempFileStream = fs.createWriteStream(tempFilePath);
+		// finished() listens for the stream's 'error' from the start. Without a
+		// listener, a failed write (disk full) is an uncaught 'error' event that
+		// kills the process before the catch below can remove the partial
+		// install.
+		const written = finished(tempFileStream);
+		written.catch(() => {}); // awaited below; a download error wins
 		try {
 			// Through the instance's class, as Python's fetcher.download_file(),
 			// so a subclass can override it.
@@ -505,8 +512,9 @@ export async function installVersioned(
 				fetcher.url,
 			);
 		} finally {
-			await new Promise<void>((resolve) => tempFileStream.end(() => resolve()));
+			tempFileStream.end();
 		}
+		await written;
 
 		const expectedSha = fetcher._selectedVersion
 			? fetcher._selectedVersion.sha256

@@ -6,6 +6,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { once } from "node:events";
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as os from "node:os";
@@ -1142,7 +1143,11 @@ export async function webdl(
 		}
 		for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
 			if (buffer) {
-				buffer.write(chunk);
+				// A stream that already failed (disk full) never drains: surface
+				// its error instead of waiting on it. When it is merely slow,
+				// wait for it, or the whole archive ends up queued in memory.
+				if (buffer.errored) throw buffer.errored;
+				if (!buffer.write(chunk)) await once(buffer, "drain");
 			} else {
 				chunks.push(chunk);
 			}
