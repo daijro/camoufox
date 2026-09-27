@@ -166,6 +166,12 @@ export class VirtualDisplay {
 				},
 			});
 
+			// A spawn that fails after spawn() returns (EACCES, ENOEXEC, a noexec
+			// mount) is an 'error' event on the child; with no listener Node
+			// treats it as uncaught and exits. readDisplayNumber() turns it into
+			// CannotExecuteXvfb; this keeps any later one from killing the process.
+			this.proc.on("error", () => {});
+
 			const displayFd = this.proc.stdio[3] as NodeJS.ReadableStream | null;
 			if (!displayFd) {
 				this.kill();
@@ -198,8 +204,18 @@ export class VirtualDisplay {
 				stream.removeAllListeners("data");
 				stream.removeAllListeners("end");
 				stream.removeAllListeners("error");
+				stream.on("error", () => {}); // a late pipe error is not fatal
+				proc?.removeListener("error", onSpawnError);
 				fn();
 			};
+
+			const proc = this.proc;
+			const onSpawnError = (error: Error) =>
+				finish(() => {
+					this.kill();
+					reject(new CannotExecuteXvfb(`Could not start Xvfb: ${error}`));
+				});
+			proc?.once("error", onSpawnError);
 
 			const timer = setTimeout(() => {
 				finish(() => {

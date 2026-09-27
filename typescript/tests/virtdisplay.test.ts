@@ -7,8 +7,13 @@
  */
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { VirtualDisplayNotSupported } from "../src/exceptions.js";
+import {
+	CannotExecuteXvfb,
+	VirtualDisplayNotSupported,
+} from "../src/exceptions.js";
 import {
 	COMPOSITE_ENV_VAR,
 	DEFAULT_SCREEN,
@@ -196,3 +201,25 @@ describe.skipIf(
 		expect(fs.existsSync(`/tmp/.X11-unix/X${display}`)).toBe(false);
 	});
 });
+
+describe.runIf(process.platform === "linux")(
+	"an Xvfb that cannot start",
+	() => {
+		it("throws CannotExecuteXvfb instead of crashing the process", async () => {
+			// Bypass the xvfbPath getter's up-front checks, as a binary that changes
+			// between them and the spawn would: execve then fails with EACCES after
+			// spawn() returns, as an 'error' event on the child.
+			const dir = fs.mkdtempSync(path.join(os.tmpdir(), "camoufox-xvfb-"));
+			const fake = path.join(dir, "Xvfb");
+			fs.writeFileSync(fake, "#!/bin/sh\n");
+			fs.chmodSync(fake, 0o644);
+			const vd = new VirtualDisplay();
+			Object.defineProperty(vd, "xvfbPath", { get: () => fake });
+			try {
+				await expect(vd.get()).rejects.toThrow(CannotExecuteXvfb);
+			} finally {
+				fs.rmSync(dir, { recursive: true, force: true });
+			}
+		});
+	},
+);
