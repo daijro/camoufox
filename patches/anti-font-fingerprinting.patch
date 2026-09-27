@@ -3,9 +3,10 @@ new file mode 100644
 index 0000000000..dcb359d25a
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -0,0 +1,194 @@
+@@ -0,0 +1,236 @@
 +#include "RoverfoxStorageManager.h"
 +#include "mozilla/Preferences.h"
++#include "nsIPrefBranch.h"
 +#include "nsXULAppAPI.h"
 +#include "mozilla/dom/ContentChild.h"
 +#include "nsThreadUtils.h"
@@ -46,17 +47,60 @@ index 0000000000..dcb359d25a
 +}
 +
 +static void OnStoragePrefChanged(const char* aPrefName, void*) {
-+  RoverfoxStorageManager::ForgetMiss(nsDependentCString(aPrefName));
++  RoverfoxStorageManager::MirrorPref(nsDependentCString(aPrefName));
 +}
 +
-+/* static */ void RoverfoxStorageManager::ForgetMiss(const nsACString& aPrefName) {
++/* static */ void RoverfoxStorageManager::MirrorPref(const nsACString& aPrefName) {
++  MOZ_ASSERT(NS_IsMainThread());
++  nsAutoCString value;
++  Preferences::GetCString(PromiseFlatCString(aPrefName).get(), value, kKind);
 +  MutexAutoLock lock(GetLocalCacheMutex());
 +  GetMissCache().Remove(aPrefName);
++  if (value.IsEmpty()) {
++    GetLocalCache().Remove(aPrefName);
++  } else {
++    GetLocalCache().InsertOrUpdate(aPrefName, value);
++  }
++}
++
++// libpref's table is main-thread only: a release build looks it up without a
++// lock, so a worker reading it while the main thread inserted a pref (another
++// context putting its values) crashed the content process -- measured within
++// seconds with workers reading navigator while contexts were created. Workers
++// read the local cache alone, and the main thread keeps that cache a mirror of
++// every roverfox.s.* pref: a snapshot the first time this process uses the
++// storage on the main thread, then the prefix callback. A value already cached
++// locally wins over the snapshot, as it does in ReadValue.
++/* static */ void RoverfoxStorageManager::EnsureMirror() {
++  static bool sMirrored = false;
++  if (sMirrored || !NS_IsMainThread()) {
++    return;
++  }
++  sMirrored = true;
++  Preferences::RegisterPrefixCallback(OnStoragePrefChanged, "roverfox.s."_ns);
++
++  nsTArray<nsCString> names;
++  nsIPrefBranch* root = Preferences::GetRootBranch(kKind);
++  if (!root || NS_FAILED(root->GetChildList("roverfox.s.", names))) {
++    return;
++  }
++  for (const nsCString& name : names) {
++    nsAutoCString value;
++    Preferences::GetCString(name.get(), value, kKind);
++    if (value.IsEmpty()) {
++      continue;
++    }
++    MutexAutoLock lock(GetLocalCacheMutex());
++    if (!GetLocalCache().Contains(name)) {
++      GetLocalCache().InsertOrUpdate(name, nsCString(value));
++    }
++  }
 +}
 +
 +/* static */ void
 +RoverfoxStorageManager::SetPrefValue(const nsCString& prefName,
 +                                      const nsCString& value) {
++  EnsureMirror();
 +  // Always store locally for immediate reads in this process
 +  {
 +    MutexAutoLock lock(GetLocalCacheMutex());
@@ -76,18 +120,21 @@ index 0000000000..dcb359d25a
 +
 +/* static */ void RoverfoxStorageManager::ReadValue(const nsCString& prefName,
 +                                                    nsACString& outValue) {
-+  // Local cache first (values set in this process)
++  EnsureMirror();
++  // Local cache first (values set in this process, and the pref mirror)
 +  {
 +    MutexAutoLock lock(GetLocalCacheMutex());
 +    if (auto entry = GetLocalCache().Lookup(prefName)) {
 +      outValue = entry.Data();
 +    }
 +  }
-+  // Then Preferences (values synced from other processes)
-+  if (outValue.IsEmpty()) {
-+    Preferences::GetCString(prefName.get(), outValue, kKind);
++  // Off the main thread the mirror is the whole answer (see EnsureMirror).
++  if (!outValue.IsEmpty() || !NS_IsMainThread()) {
++    return;
 +  }
-+  if (!outValue.IsEmpty() || XRE_IsParentProcess() || !NS_IsMainThread()) {
++  // Then Preferences (values synced from other processes)
++  Preferences::GetCString(prefName.get(), outValue, kKind);
++  if (!outValue.IsEmpty() || XRE_IsParentProcess()) {
 +    return;
 +  }
 +  // Sync IPC read from the parent covers a value another process put that has
@@ -101,11 +148,6 @@ index 0000000000..dcb359d25a
 +    if (GetMissCache().Contains(prefName)) {
 +      return;
 +    }
-+  }
-+  static bool sObserving = false;
-+  if (!sObserving) {
-+    sObserving = true;
-+    Preferences::RegisterPrefixCallback(OnStoragePrefChanged, "roverfox.s."_ns);
 +  }
 +  ContentChild* cc = ContentChild::GetSingleton();
 +  if (!cc) {
@@ -203,7 +245,7 @@ new file mode 100644
 index 0000000000..e6d64378e1
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.h
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,43 @@
 +#ifndef mozilla_dom_RoverfoxStorageManager_h
 +#define mozilla_dom_RoverfoxStorageManager_h
 +
@@ -229,13 +271,15 @@ index 0000000000..e6d64378e1
 +  static void PutString(const nsAString& key, const nsAString& value);
 +  static bool GetString(const nsAString& key, nsAString& outValue);
 +  static void Remove(const nsAString& key);
-+  // A put reached this process's prefs: the key is no longer a known miss.
-+  static void ForgetMiss(const nsACString& aPrefName);
++  // A put reached this process's prefs: copy it into the local cache (main
++  // thread only), which is all a worker thread reads.
++  static void MirrorPref(const nsACString& aPrefName);
 +
 + private:
 +  static nsCString MakePrefName(const nsAString& key);
 +  static void SetPrefValue(const nsCString& prefName, const nsCString& value);
 +  static void ReadValue(const nsCString& prefName, nsACString& outValue);
++  static void EnsureMirror();
 +  static nsTHashSet<nsCString>& GetMissCache();
 +  static nsTHashMap<nsCStringHashKey, nsCString>& GetLocalCache();
 +  static mozilla::Mutex& GetLocalCacheMutex();
