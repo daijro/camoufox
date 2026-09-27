@@ -123,7 +123,8 @@ describe("NewContext identity", () => {
 		// Re-casing these turned userAgent into `useragent`, which Playwright
 		// drops: the HTTP User-Agent then disagreed with navigator.userAgent.
 		const { browser, calls } = fakeBrowser();
-		const preset = getRandomPreset("windows");
+		// The v150 presets all carry a DPR; the older bundle's do not.
+		const preset = getRandomPreset("windows", "152");
 		expect(preset?.screen?.devicePixelRatio).toBeGreaterThan(0);
 		await NewContext(browser, { preset, timezoneId: "Asia/Tokyo" } as any);
 		const userAgent = /setNavigatorUserAgent\("([^"]+)"\)/.exec(
