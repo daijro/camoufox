@@ -1,16 +1,24 @@
 #!/usr/bin/env python3
-"""Patch-guard gate: tests/patches/*.py, one standalone guard per shipped behaviour.
+"""Patch-guard gates: tests/patches/*.py, one standalone guard per shipped behaviour.
 
-These are the assertions that each spoofing patch still does what it claims --
-isolated evaluate, trusted events, font spoofing, mouse trajectories and so on.
-They are the most direct evidence that a Firefox bump did not quietly neuter a
-patch that still applies cleanly, which is the failure mode a compile check
-cannot catch.
+Whether the patches *apply* is the build's job (scripts/patch.py fails it).
+These check that what they do still works in the built browser -- the most
+direct evidence that a Firefox bump did not quietly neuter a patch that still
+applies cleanly, which is the failure mode a compile check cannot catch.
+
+The guards fall into three groups, each its own suite and CI job:
+
+  spoofing    a spoofed value still reaches the page and holds together
+  automation  Playwright stays invisible to the page and never deadlocks it
+  parity      what a page, or the OS, can observe matches stock Firefox
 
 Each guard is a standalone script exiting 0 or 1. Policy allows zero failures.
+Every guard belongs to exactly one group (ci/tests checks this), so a new one
+cannot be left out of CI.
 
 Run:
     python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin
+    python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin --group automation
 """
 
 from __future__ import annotations
@@ -19,12 +27,56 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from . import results as evidence
 from ._util import EVIDENCE_DIR, REPO_ROOT, log, run
 
 GUARD_DIR = REPO_ROOT / "tests" / "patches"
+
+
+GROUPS: Dict[str, Tuple[str, ...]] = {
+    "spoofing": (
+        "animation-timing",
+        "fingerprint-setter-seal",
+        "media-devices-coherence",
+        "spoofed-voice-speaks",
+        "startup-prefs",
+        "system-ui-font-spoofing",
+        "touchscreen-digitizer",
+        "worker-config-reads",
+    ),
+    "automation": (
+        "addons-install-once",
+        "force-scope-access",
+        "humanize-edge-deadlock",
+        "humanize-mouse-trajectory",
+        "input-ack-backstop",
+        "isolated-evaluate",
+        "main-world-eval",
+        "main-world-init-script",
+        "mouse-boundary-sweep",
+        "near-edge-mouse-deadlock",
+        "noop-mousemove-deadlock",
+        "trusted-events",
+        "visible-automation-cues",
+    ),
+    "parity": (
+        "contentaccessible-parity",
+        "gfx-probes-packaged",
+        "hardware-acceleration-policy",
+        "popup-blocker-parity",
+        "search-service-init",
+        "stock-parity-probes",
+        "viewport-no-rdm",
+        "windows-exe-manifest",
+    ),
+}
+
+
+def gate_name(group: Optional[str]) -> str:
+    """patch_guards for the whole set, patch_guards_<group> for one group."""
+    return f"patch_guards_{group}" if group else "patch_guards"
 
 
 def guards() -> List[Path]:
@@ -38,11 +90,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--evidence-dir", type=Path, default=EVIDENCE_DIR)
     parser.add_argument("--timeout", type=int, default=600, help="per guard")
     parser.add_argument("--only", nargs="*", help="run only these guard names")
+    parser.add_argument("--group", choices=sorted(GROUPS), help="run one group (default: all)")
     args = parser.parse_args(argv)
 
     from ._pytest import built_binary
 
-    result = evidence.GateResult(gate="patch_guards")
+    result = evidence.GateResult(gate=gate_name(args.group))
     binary = args.binary or built_binary()
     if not binary.exists():
         result.note(f"no built binary at {binary}")
@@ -58,7 +111,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         ),
     }
 
-    selected = [g for g in guards() if not args.only or g.stem in args.only]
+    selected = [
+        g for g in guards()
+        if (not args.only or g.stem in args.only)
+        and (not args.group or g.stem in GROUPS[args.group])
+    ]
     if not selected:
         result.note("no guards found -- tests/patches/ is empty or the filter matched nothing")
         result.finish(evidence.ERROR).save(args.evidence_dir)

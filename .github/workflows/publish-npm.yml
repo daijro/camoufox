@@ -1,8 +1,19 @@
 name: Publish to npm
 
-# The npm twin of publish-pypi.yml: dispatched by hand, checks, builds, verifies
-# the tarball, publishes. The package version is typescript/package.json's and
-# must equal pythonlib's -- scripts/check-pack.mjs refuses to go on otherwise.
+# The npm half of a launcher release. The two packages ship together, at one
+# version (scripts/check-pack.mjs refuses a package.json that differs from
+# pythonlib's), and "Publish to pypi" is the one place a release starts:
+#
+#   1. publish-pypi.yml calls this workflow as a dry run -- every check, the
+#      build, the pack check and `npm publish --dry-run` -- so a broken npm
+#      package stops the release before anything is uploaded anywhere;
+#   2. it uploads to PyPI;
+#   3. its success triggers this workflow again (workflow_run), which publishes
+#      the same commit to npm.
+#
+# Started by hand, this workflow only retries step 3 -- after an npm outage,
+# say -- and refuses unless PyPI already has this version, so npm can never get
+# a release PyPI does not.
 #
 # Authentication is npm trusted publishing (OIDC): no token is stored anywhere.
 # npm accepts this workflow's identity because the package's settings on
@@ -12,6 +23,14 @@ name: Publish to npm
 # publisher is configured on a package that already exists.
 
 on:
+  workflow_run:
+    workflows: ["Publish to pypi"]
+    types: [completed]
+  workflow_call:
+    inputs:
+      dry_run:
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       dry_run:
@@ -24,6 +43,8 @@ permissions:
 
 jobs:
   publish:
+    # After a PyPI run, only a successful one.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,6 +58,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          # The commit PyPI was released from, not whatever main is now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -83,5 +107,22 @@ jobs:
       - name: Check package
         run: node scripts/check-pack.mjs
 
+      - name: PyPI has this version
+        # npm never gets a release PyPI does not have. Retried for a few minutes:
+        # straight after the upload, PyPI's JSON API can lag.
+        if: ${{ !inputs.dry_run }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          for attempt in $(seq 1 20); do
+            if curl -fsS -o /dev/null "https://pypi.org/pypi/camoufox/$version/json"; then
+              echo "camoufox $version is on PyPI"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::camoufox $version is not on PyPI. Release through 'Publish to pypi', which publishes to npm after it."
+          exit 1
+
       - name: Publish to npm
-        run: npm publish --access public ${{ inputs.dry_run && '--dry-run' || '' }}
+        # A dry run uploads nothing, so it has nothing to attest.
+        run: npm publish --access public ${{ inputs.dry_run && '--dry-run --provenance=false' || '' }}

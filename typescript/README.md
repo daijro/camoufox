@@ -166,11 +166,15 @@ CAMOUFOX_E2E=1 CAMOUFOX_EXECUTABLE=/path/to/camoufox-bin pnpm test tests/e2e.tes
 
 ## Releasing
 
-`.github/workflows/publish-npm.yml` is dispatched by hand, like the PyPI
-workflow. It type-checks, lints, tests, builds, runs `scripts/check-pack.mjs`
-(the version must equal pythonlib's; every data file must be in the tarball;
-the tarball must install and import in an empty project), then publishes with
-npm trusted publishing -- no token is stored.
+The npm package and pythonlib are released together, at one version, from one
+place: **Actions → Publish to pypi**. That run first calls
+`.github/workflows/publish-npm.yml` as a dry run -- type check, lint, tests,
+build, and `scripts/check-pack.mjs` (the version must equal pythonlib's; every
+data file must be in the tarball; the tarball must install and import in an
+empty project) -- then uploads to PyPI, and its success triggers
+`publish-npm.yml` to publish the same commit to npm with trusted publishing (no
+token is stored). Starting `publish-npm.yml` by hand only retries the npm half,
+and it refuses unless PyPI already has the version.
 
 ## Licence
 

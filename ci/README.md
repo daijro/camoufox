@@ -9,14 +9,15 @@ pass", not two.
 resolve ── static ─────────────── lint, tribal rules, skiplist, self-tests  (seconds)
              ├─ typescript ────── type check, lint, vitest, golden parity
              └─ pythonlib ─────── the package's own tests                   (a minute)
-                  └─ build or fetch ─┬─ patch guards ─────── one per spoofing patch, + skiplist audit
+                  └─ build or fetch ─┬─ patch guards × 3 ─── spoofing, automation, stock parity
+                                     ├─ skiplist audit ───── every skip still fails
                                      ├─ build-tester ─────── 8 fingerprint profiles
                                      ├─ typescript-browser ─ the npm launcher end to end
                                      └─ once guards and build-tester pass:
                                           ├─ playwright × 6 shards   (conformance + our own)
                                           ├─ native ───────── leaks, contexts, crash recovery
                                           ├─ sundial ──────── stealth grade
-                                          └─ growth ───────── memory growth  (scheduled only)
+                                          └─ growth × 7 shards  memory growth, one test per runner
                                   │
                                summary ──► one comment on the PR
 ```
@@ -321,8 +322,9 @@ authority for what fails; a local run is a hypothesis.**
 - **Memory growth.** Drive one mechanism (iframes, canvas readback, WebGL
   contexts, workers, script compilation, font measurement) N and 4N times and
   compare the growth: a bounded cost stays flat, a per-iteration leak scales
-  (`test_memory_growth.py`). It takes over half an hour, so it runs on the
-  schedule and on demand (the `growth` job, `--subset growth`), not in the gate.
+  (`test_memory_growth.py`). It takes over half an hour in one process, so CI
+  runs it one test per runner (the `growth` job, `--subset growth --shard i/7`)
+  on every pull request, in the gate.
 - **Settled decisions.** `ci/tribal-rules.yml` lists choices this project already
   made, each with the issue or PR that made it, and
   `native-tests/test_tribal_rules.py` asserts them. A comment explaining a
@@ -544,9 +546,11 @@ Each tier gates the next, so a two-second lint failure never reaches the build:
 1  unit      pythonlib, typescript                      ~1 min
 2  browser   build  (patches/additions/settings/assets/upstream.sh/Makefile/scripts changed)
              fetch  (anything else, when the published release has this tree's browser sources)
-3a smoke     patch guards, skiplist audit, build-tester,
+3a smoke     patch guards (spoofing, automation, parity),
+             skiplist audit, build-tester,
              typescript-browser                         ~15 min
-3b full      Playwright x6, leaks, stealth              ~40 min
+3b full      Playwright x6, leaks, memory growth x7,
+             stealth                                    ~40 min
 4  gate      the required check
 ```
 
@@ -642,6 +646,7 @@ python3 -m ci.run_playwright     --binary path/to/camoufox-bin --shard 3/6
 python3 -m ci.run_native         --subset rules          # no browser needed
 python3 -m ci.run_native         --subset browser --binary path/to/camoufox-bin
 python3 -m ci.run_native         --subset growth  --binary path/to/camoufox-bin
+python3 -m ci.run_native         --subset growth  --binary path/to/camoufox-bin --shard 3/7
 python3 -m ci.run_sundial        --binary path/to/camoufox-bin
 python3 -m ci.summarize          --results-dir .ci-work/results
 ```

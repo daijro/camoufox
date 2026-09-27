@@ -40,6 +40,7 @@ from helpers import resolve_binary  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROBES = ("glxtest", "vaapitest")
 LOAD_TIMEOUT_S = 90
+ATTEMPTS = 2
 
 PAGE = b"""<!doctype html><meta charset=utf-8><title>gfx-probes</title><body><script>
 const out = {};
@@ -103,20 +104,30 @@ def webgl_report(binary: Path) -> dict:
         'user_pref("browser.shell.checkDefaultBrowser", false);\n'
         'user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);\n'
     )
-    proc = subprocess.Popen(
-        [str(binary), "-headless", "-no-remote", "-profile", profile,
-         f"http://127.0.0.1:{port}/"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
+    stderr = Path(profile, "stderr.log")
+    with stderr.open("wb") as err:
+        proc = subprocess.Popen(
+            [str(binary), "-headless", "-no-remote", "-profile", profile,
+             f"http://127.0.0.1:{port}/"],
+            stdout=subprocess.DEVNULL, stderr=err,
+        )
     try:
-        if not done.wait(LOAD_TIMEOUT_S):
-            return {"context": None, "note": f"no report within {LOAD_TIMEOUT_S}s"}
-        return dict(received)
+        if done.wait(LOAD_TIMEOUT_S):
+            report = dict(received)
+        else:
+            report = {"context": None, "note": f"no report within {LOAD_TIMEOUT_S}s"}
     finally:
         proc.terminate()
         proc.wait(timeout=20)
         srv.shutdown()
-        shutil.rmtree(profile, ignore_errors=True)
+    # What the probes said, if they said anything: an empty gfxInfo reads the
+    # same to the page whether glxtest is missing or ran and failed.
+    report["gfx_stderr"] = [
+        line for line in stderr.read_text(errors="replace").splitlines()
+        if "glxtest" in line or "vaapitest" in line or "GfxInfo" in line
+    ][-10:]
+    shutil.rmtree(profile, ignore_errors=True)
+    return report
 
 
 def main() -> int:
@@ -132,14 +143,22 @@ def main() -> int:
     if missing:
         failures.append(f"{install} has no {', '.join(missing)}")
 
-    report = webgl_report(binary)
-    error = report.get("error") or ""
+    # Only the blocklist refusal is this guard's business. A machine with no
+    # usable GL at all (a bare CI container) fails for its own reasons and would
+    # otherwise turn this into a flaky gate; the missing-probe defect has a
+    # signature, so match that. The signature is really "gfxInfo is empty",
+    # which a present glxtest that failed or timed out on a loaded runner also
+    # produces -- once in a while, where missing probes produce it every launch
+    # -- so a refusal gets one more launch before it counts.
+    for attempt in range(1, ATTEMPTS + 1):
+        report = webgl_report(binary)
+        error = report.get("error") or ""
+        blocklisted = report.get("context") is not True and (
+            "Exhausted GL driver options" in error or "restricts context creation" in error)
+        if not blocklisted or attempt == ATTEMPTS:
+            break
+        print(f"NOTE: launch {attempt} refused by the blocklist, launching again: {error}")
     if report.get("context") is not True:
-        # Only the blocklist refusal is this guard's business. A machine with no
-        # usable GL at all (a bare CI container) fails for its own reasons and
-        # would otherwise turn this into a flaky gate; the missing-probe defect
-        # has a signature, so match that.
-        blocklisted = "Exhausted GL driver options" in error or "restricts context creation" in error
         if blocklisted:
             failures.append(f"a bare launch was refused a WebGL context by the blocklist: {error}")
         else:

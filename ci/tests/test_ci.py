@@ -951,6 +951,7 @@ def test_required_suites_are_names_a_runner_actually_writes():
 
     producible = {
         "build", "build_tester", "patch_guards", "pythonlib", "sundial",
+        "patch_guards_spoofing", "patch_guards_automation", "patch_guards_parity",
         "native", "native_rules", "native_browser", "native_growth",
         "playwright", "skiplist_audit", "typescript", "typescript_browser",
     }
@@ -1818,8 +1819,9 @@ def test_the_browser_suites_are_required_either_way():
     for changed in ("true", "false"):
         required = _required_suites(changed, "false")
         assert {
-            "pythonlib", "native_rules", "patch_guards", "skiplist_audit",
-            "build_tester", "playwright", "native_browser",
+            "pythonlib", "native_rules", "skiplist_audit", "build_tester",
+            "playwright", "native_browser", "native_growth",
+            "patch_guards_spoofing", "patch_guards_automation", "patch_guards_parity",
         } <= required, changed
 
 
@@ -2709,3 +2711,62 @@ def test_unpublished_release_tag_builds(release_repo):
     (release_repo / "typescript" / "x.ts").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
     assert _scope(release_repo, base)[0] == "browser_changed=true"
+
+
+# ---------------------------------------------------------------------------
+# patch guards: every guard runs in exactly one CI leg
+# ---------------------------------------------------------------------------
+
+
+def _jobs() -> dict:
+    import yaml
+
+    return yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+
+
+def test_every_patch_guard_is_in_exactly_one_group():
+    """A guard in no group would never run in CI; one in two would run twice."""
+    from ci.run_patch_guards import GROUPS, guards
+
+    on_disk = {g.stem for g in guards()}
+    assigned = [name for names in GROUPS.values() for name in names]
+    assert not on_disk - set(assigned), (
+        f"guards in no group, so CI never runs them: {sorted(on_disk - set(assigned))}. "
+        "Add each to a group in ci/run_patch_guards.py."
+    )
+    assert not set(assigned) - on_disk, f"grouped but missing: {sorted(set(assigned) - on_disk)}"
+    doubled = sorted({n for n in assigned if assigned.count(n) > 1})
+    assert not doubled, f"guards in more than one group: {doubled}"
+
+
+def test_the_patch_guard_matrix_runs_every_group():
+    from ci.run_patch_guards import GROUPS
+
+    legs = {leg["leg"] for leg in _jobs()["patch-guards"]["strategy"]["matrix"]["include"]}
+    assert legs == set(GROUPS) | {"skiplist"}
+
+
+# ---------------------------------------------------------------------------
+# memory growth: sharded onto pull requests, and gated
+# ---------------------------------------------------------------------------
+
+
+def test_native_shards_split_the_tests_without_overlap():
+    from ci.run_native import parse_shard
+
+    ids = [f"t{i}" for i in range(9)]
+    parts = [ids[i - 1 :: n] for i, n in (parse_shard(f"{k}/4") for k in range(1, 5))]
+    assert sorted(t for part in parts for t in part) == ids
+    with pytest.raises(SystemExit):
+        parse_shard("5/4")
+
+
+def test_memory_growth_runs_on_pull_requests_and_gates_the_merge():
+    jobs = _jobs()
+    growth = jobs["growth"]
+    assert "event_name" not in str(growth.get("if", "")), "growth is limited to some events"
+    shards = growth["strategy"]["matrix"]["shard"]
+    n = len(shards)
+    assert shards == [f"{i}/{n}" for i in range(1, n + 1)]
+    assert "growth" in jobs["gate"]["needs"]
+    assert "growth" in jobs["summary"]["needs"]
