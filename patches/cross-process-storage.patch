@@ -1,8 +1,8 @@
 diff --git a/dom/ipc/ContentParent.cpp b/dom/ipc/ContentParent.cpp
-index a63cb68d9f..2a96a949e3 100644
+index a3b9fd9ead..fb4011d2c3 100644
 --- a/dom/ipc/ContentParent.cpp
 +++ b/dom/ipc/ContentParent.cpp
-@@ -1265,6 +1265,28 @@ mozilla::ipc::IPCResult ContentParent::RecvCreateGMPService() {
+@@ -1276,6 +1276,28 @@ mozilla::ipc::IPCResult ContentParent::RecvCreateGMPService() {
    return IPC_OK();
  }
  
@@ -28,14 +28,14 @@ index a63cb68d9f..2a96a949e3 100644
 +  return IPC_OK();
 +}
 +
- IPCResult ContentParent::RecvAttributionEvent(
-     const nsACString& aHost, PrivateAttributionImpressionType aType,
-     uint32_t aIndex, const nsAString& aAd, const nsACString& aTargetHost) {
+ static mozilla::glean::security::FissionPrincipalsExtra
+ GetAndLogPrincipalValidationFailure(nsIPrincipal* aPrincipal,
+                                     const char* aMethod) {
 diff --git a/dom/ipc/ContentParent.h b/dom/ipc/ContentParent.h
-index 4c84f11137..a090082892 100644
+index 1f7b097d00..a2f3ca8c04 100644
 --- a/dom/ipc/ContentParent.h
 +++ b/dom/ipc/ContentParent.h
-@@ -363,6 +363,11 @@ class ContentParent final : public PContentParent,
+@@ -367,6 +367,11 @@ class ContentParent final : public PContentParent,
        Endpoint<PClipboardContentAnalysisParent>&& aParentEndpoint);
    mozilla::ipc::IPCResult RecvCreateGMPService();
  
@@ -46,12 +46,12 @@ index 4c84f11137..a090082892 100644
 +
    NS_DECL_CYCLE_COLLECTION_CLASS_AMBIGUOUS(ContentParent, nsIObserver)
  
-   NS_DECL_CYCLE_COLLECTING_ISUPPORTS
+   NS_DECL_CYCLE_COLLECTING_ISUPPORTS_FINAL
 diff --git a/dom/ipc/PContent.ipdl b/dom/ipc/PContent.ipdl
-index edb1259e51..10a0bea039 100644
+index 78edbcaac1..b18ffd969f 100644
 --- a/dom/ipc/PContent.ipdl
 +++ b/dom/ipc/PContent.ipdl
-@@ -1136,6 +1136,13 @@ parent:
+@@ -1163,6 +1163,13 @@ parent:
  
      async CreateGMPService();
  
@@ -83,10 +83,10 @@ index d562255670..6ea4f999b0 100644
  description = This must be synchronous until quota file streams become non-blocking. The synchronous message is never used on the main thread or the PBackground thread or a DOM worker threed.
  
 diff --git a/modules/libpref/Preferences.cpp b/modules/libpref/Preferences.cpp
-index 6e2b95ff7f..c13dd1eb5b 100644
+index 916d0e3728..f2127ef18b 100644
 --- a/modules/libpref/Preferences.cpp
 +++ b/modules/libpref/Preferences.cpp
-@@ -6517,6 +6517,8 @@ static const PrefListEntry sDynamicPrefOverrideList[]{
+@@ -7315,6 +7315,8 @@ static const PrefListEntry sDynamicPrefOverrideList[]{
      PREF_LIST_ENTRY("toolkit.mozprotocol.url"),
      PREF_LIST_ENTRY("toolkit.telemetry.log.level"),
      PREF_LIST_ENTRY("ui."),
