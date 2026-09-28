@@ -297,7 +297,7 @@ index 1fa976de8a..69f04ccd90 100644
  }
  
 diff --git a/docshell/base/nsDocShell.cpp b/docshell/base/nsDocShell.cpp
-index 6fe906d343..d40ab89bc3 100644
+index 6fe906d343..16703bcea9 100644
 --- a/docshell/base/nsDocShell.cpp
 +++ b/docshell/base/nsDocShell.cpp
 @@ -15,6 +15,12 @@
@@ -653,7 +653,19 @@ index 6fe906d343..d40ab89bc3 100644
      return NS_OK;
    }
  
-@@ -12276,6 +12543,8 @@ nsresult nsDocShell::OnLinkClick(
+@@ -12138,6 +12405,11 @@ nsresult nsDocShell::OnFormSubmit(HTMLFormElement* aForm,
+     return OnLinkClickSync(aForm, aLoadState, false, aForm->NodePrincipal());
+   }
+ 
++  nsCOMPtr<nsIObserverService> observerService =
++      mozilla::services::GetObserverService();
++  observerService->NotifyObservers(ToSupports(aForm), "juggler-link-click",
++                                   nullptr);
++
+   auto result = OnLinkClickWithLoadState(aForm, aLoadState, false,
+                                          aForm->NodePrincipal());
+   if (result.isErr()) {
+@@ -12276,6 +12548,8 @@ nsresult nsDocShell::OnLinkClick(
        ownerDoc->GetScriptTrackingFlags());
    loadState->SetHistoryBehavior(NavigationHistoryBehavior::Auto);
  
