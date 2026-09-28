@@ -4,7 +4,7 @@
 
 const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
 const {Preferences} = ChromeUtils.importESModule("resource://gre/modules/Preferences.sys.mjs");
-const {ContextualIdentityService} = ChromeUtils.importESModule("resource://gre/modules/ContextualIdentityService.sys.mjs");
+const {ContextualIdentityService} = ChromeUtils.importESModule("moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs");
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
 const {AppConstants} = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
 // This module's scope has no timer globals (unlike the content-side juggler
@@ -57,6 +57,8 @@ const SNAPSHOT_SCREENCAST_FPS = 25;
 const ALL_PERMISSIONS = [
   'geo',
   'desktop-notification',
+  'local-network',
+  'loopback-network',
 ];
 
 let globalTabAndWindowActivationChain = Promise.resolve();

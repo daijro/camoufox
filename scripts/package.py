@@ -12,13 +12,14 @@ from shlex import join
 
 from _mixin import find_src_dir, get_moz_target, list_files, run, temp_cd
 
-# glxtest and vaapitest are NOT here: Firefox runs them at startup to learn what
-# the GPU and the video stack can do, and without them nsIGfxInfo has no data,
-# so the driver blocklist refuses every WebGL context ("WebglAllowWindowsNativeGl:
+# The GPU probe is NOT here (gfxtest; glxtest and vaapitest before Firefox 156):
+# Firefox runs it at startup to learn what the GPU and the video stack can do,
+# and without it nsIGfxInfo has no data, so the driver blocklist refuses every
+# WebGL context ("WebglAllowWindowsNativeGl:
 # false restricts context creation on this system ... Exhausted GL driver
 # options", measured 2026-09-18 against stock 152.0.4 on the same machine, which
 # returned a full WebGL 2.0 context from the real GPU). The launcher papers over
-# it with webgl.force-enabled; shipping the two probes is what makes the browser
+# it with webgl.force-enabled; shipping the probe is what makes the browser
 # decide the way stock does in the first place. ~50 KB.
 UNNEEDED_PATHS = {'uninstall', 'pingsender.exe', 'pingsender'}
 

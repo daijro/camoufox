@@ -1,13 +1,28 @@
-diff --git a/browser/app/Makefile.in b/browser/app/Makefile.in
-index a615f68a6f..f950c876fa 100644
---- a/browser/app/Makefile.in
-+++ b/browser/app/Makefile.in
-@@ -84,7 +84,7 @@ tools repackage:: $(DIST)/bin/$(MOZ_APP_NAME) $(objdir)/macbuild/Contents/MacOS-
- 	rsync -aL $(DIST)/bin/$(MOZ_APP_NAME) '$(dist_dest)/Contents/MacOS'
- 	cp -RL $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/firefox.icns '$(dist_dest)/Contents/Resources/firefox.icns'
- 	cp -RL $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/document.icns '$(dist_dest)/Contents/Resources/document.icns'
--	cp -RL $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/Assets.car '$(dist_dest)/Contents/Resources/Assets.car'
-+	test ! -f $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/Assets.car || cp -RL $(topsrcdir)/$(MOZ_BRANDING_DIRECTORY)/Assets.car '$(dist_dest)/Contents/Resources/Assets.car'
- 	$(MKDIR) -p '$(dist_dest)/Contents/Library/LaunchServices'
- ifdef MOZ_UPDATER
- 	cp -f '$(dist_dest)/Contents/MacOS/updater.app/Contents/MacOS/org.mozilla.updater' '$(dist_dest)/Contents/Library/LaunchServices'
+Camoufox: build the macOS bundle when the branding has no Assets.car.
+
+Assets.car is compiled with actool, which only ships with Xcode on macOS;
+elsewhere scripts/generate-assets-car.sh can only reuse an existing catalog.
+Firefox used to copy it in browser/app/Makefile.in's repackage recipe, which
+this patch made conditional. From Firefox 156 the bundle is declared with
+MacOSBundle() in browser/app/moz.build and every extra file becomes a make
+prerequisite of the bundle, so the same tolerance now lives where those
+prerequisites are generated. Only that one file is optional.
+
+diff --git a/python/mozbuild/mozbuild/backend/recursivemake.py b/python/mozbuild/mozbuild/backend/recursivemake.py
+index 33e69209c3..0174787548 100644
+--- a/python/mozbuild/mozbuild/backend/recursivemake.py
++++ b/python/mozbuild/mozbuild/backend/recursivemake.py
+@@ -1989,6 +1989,13 @@ class RecursiveMakeBackend(MakeBackend):
+         for key in ("binaries", "extra_files"):
+             for source, dest in spec[key]:
+                 path = Path(context, source)
++                # Camoufox: the Assets.car icon catalog can only be compiled on
++                # macOS, so a branding built elsewhere may not have one. Bundle
++                # without it rather than failing on a missing prerequisite.
++                if dest == "Resources/Assets.car" and not os.path.exists(
++                    path.full_path
++                ):
++                    continue
+                 resolved[key].append([path.full_path, dest])
+                 inputs.append(path)
+         if spec["stage"]:

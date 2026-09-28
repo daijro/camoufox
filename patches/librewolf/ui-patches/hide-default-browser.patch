@@ -6,9 +6,10 @@ the globals it declares; removing the blocks outright changed that order away
 from stock Firefox's. Guard: tests/patches/contentaccessible-parity.py.
 
 diff --git a/browser/components/preferences/main.js b/browser/components/preferences/main.js
+index f28e32899b..d98ea24917 100644
 --- a/browser/components/preferences/main.js
 +++ b/browser/components/preferences/main.js
-@@ -509,7 +509,7 @@
+@@ -367,7 +367,7 @@ Preferences.addSetting({
     * Show button for setting browser as default browser or information that
     * browser is already the default browser.
     */
@@ -17,12 +18,15 @@ diff --git a/browser/components/preferences/main.js b/browser/components/prefere
    disabled: (_, setting) =>
      !DefaultBrowserHelper.canCheck ||
      setting.locked ||
-@@ -519,15 +519,13 @@
+@@ -377,21 +377,13 @@ Preferences.addSetting({
  Preferences.addSetting({
    id: "isDefaultPane",
    deps: ["alwaysCheckDefault"],
 -  visible: () =>
--    DefaultBrowserHelper.canCheck && DefaultBrowserHelper.isBrowserDefault,
+-    DefaultBrowserHelper.canCheck &&
+-    DefaultBrowserHelper.isBrowserDefault &&
+-    Services.policies.isAllowed("setDefaultBrowser") &&
+-    !Services.prefs.prefIsLocked("pref.general.disable_button.default_browser"),
 +  visible: () => false,
  });
  
@@ -30,7 +34,10 @@ diff --git a/browser/components/preferences/main.js b/browser/components/prefere
    id: "isNotDefaultPane",
    deps: ["alwaysCheckDefault"],
 -  visible: () =>
--    DefaultBrowserHelper.canCheck && !DefaultBrowserHelper.isBrowserDefault,
+-    DefaultBrowserHelper.canCheck &&
+-    !DefaultBrowserHelper.isBrowserDefault &&
+-    Services.policies.isAllowed("setDefaultBrowser") &&
+-    !Services.prefs.prefIsLocked("pref.general.disable_button.default_browser"),
 +  visible: () => false,
    onUserClick: (e, { alwaysCheckDefault }) => {
      if (!DefaultBrowserHelper.canCheck) {

@@ -1,6 +1,6 @@
 diff --git a/dom/base/RoverfoxStorageManager.cpp b/dom/base/RoverfoxStorageManager.cpp
 new file mode 100644
-index 0000000000..dcb359d25a
+index 0000000000..c172727062
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
 @@ -0,0 +1,236 @@
@@ -242,7 +242,7 @@ index 0000000000..dcb359d25a
 +}  // namespace mozilla
 diff --git a/dom/base/RoverfoxStorageManager.h b/dom/base/RoverfoxStorageManager.h
 new file mode 100644
-index 0000000000..e6d64378e1
+index 0000000000..92dbb8aa07
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.h
 @@ -0,0 +1,43 @@
@@ -290,10 +290,10 @@ index 0000000000..e6d64378e1
 +
 +#endif  // mozilla_dom_RoverfoxStorageManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 7e8d942191..e44e7259bf 100644
+index 4cab12c55e..ab6d76a796 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -257,6 +257,7 @@ EXPORTS.mozilla.dom += [
+@@ -260,6 +260,7 @@ EXPORTS.mozilla.dom += [
      "RequestCallbackManager.h",
      "ResizeObserver.h",
      "ResponsiveImageSelector.h",
@@ -301,7 +301,7 @@ index 7e8d942191..e44e7259bf 100644
      "SameProcessMessageQueue.h",
      "ScreenLuminance.h",
      "ScreenOrientation.h",
-@@ -461,6 +462,7 @@ UNIFIED_SOURCES += [
+@@ -475,6 +476,7 @@ UNIFIED_SOURCES += [
      "RemoteOuterWindowProxy.cpp",
      "ResizeObserver.cpp",
      "ResponsiveImageSelector.cpp",
@@ -310,7 +310,7 @@ index 7e8d942191..e44e7259bf 100644
      "ScreenLuminance.cpp",
      "ScreenOrientation.cpp",
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 7cdddd10c1..922ddbc377 100644
+index f6307312b3..64768a46a9 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -56,6 +56,7 @@
@@ -321,7 +321,7 @@ index 7cdddd10c1..922ddbc377 100644
  #include "mozilla/ExtensionPolicyService.h"
  #include "mozilla/FloatingPoint.h"
  #include "mozilla/FlushType.h"
-@@ -241,6 +242,8 @@
+@@ -240,6 +241,8 @@
  #include "nsICookieService.h"
  #include "nsID.h"
  #include "nsIDOMStorageManager.h"
@@ -331,10 +331,10 @@ index 7cdddd10c1..922ddbc377 100644
  #include "nsIDeviceSensors.h"
  #include "nsIDocShell.h"
 diff --git a/dom/canvas/OffscreenCanvas.cpp b/dom/canvas/OffscreenCanvas.cpp
-index 7234240711..df84b793dc 100644
+index 345455c14e..f46f13ebf6 100644
 --- a/dom/canvas/OffscreenCanvas.cpp
 +++ b/dom/canvas/OffscreenCanvas.cpp
-@@ -654,6 +654,15 @@ void OffscreenCanvas::ReportBlockedFontFamily(const nsCString& aMsg) const {
+@@ -655,6 +655,15 @@ void OffscreenCanvas::ReportBlockedFontFamily(const nsCString& aMsg) const {
    }
  }
  
@@ -351,10 +351,10 @@ index 7234240711..df84b793dc 100644
    if (NS_IsMainThread()) {
      nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(GetRelevantGlobal());
 diff --git a/dom/workers/WorkerPrivate.h b/dom/workers/WorkerPrivate.h
-index 7f56e1c86d..80b050c08b 100644
+index b38f31f547..2321f5acd5 100644
 --- a/dom/workers/WorkerPrivate.h
 +++ b/dom/workers/WorkerPrivate.h
-@@ -1107,8 +1107,6 @@ class WorkerPrivate final
+@@ -1161,8 +1161,6 @@ class WorkerPrivate final
  
    void WorkerScriptLoaded();
  
@@ -364,10 +364,10 @@ index 7f56e1c86d..80b050c08b 100644
  
    void UpdateContextOptions(const JS::ContextOptions& aContextOptions);
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
-index b3c22e2bb1..6bdcd2a57c 100644
+index a0b8c260c4..2ea46a9810 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
 +++ b/gfx/thebes/gfxPlatformFontList.cpp
-@@ -448,6 +448,7 @@ class ListFontsVisibilityProvider final : public FontVisibilityProvider {
+@@ -455,6 +455,7 @@ class ListFontsVisibilityProvider final : public FontVisibilityProvider {
      return mozilla::Nothing();
    }
    void UserFontSetUpdated(gfxUserFontEntry*) override {}
@@ -376,10 +376,10 @@ index b3c22e2bb1..6bdcd2a57c 100644
  
   private:
 diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
-index fc1293be42..cac43a8b1f 100644
+index f2c42a498e..2191ce6129 100644
 --- a/gfx/thebes/gfxTextRun.cpp
 +++ b/gfx/thebes/gfxTextRun.cpp
-@@ -24,6 +24,7 @@
+@@ -18,6 +18,7 @@
  #include "mozilla/Likely.h"
  #include "mozilla/MruCache.h"
  #include "mozilla/ServoStyleSet.h"
@@ -387,27 +387,18 @@ index fc1293be42..cac43a8b1f 100644
  #include "mozilla/Sprintf.h"
  #include "mozilla/StaticPresData.h"
  #include "mozilla/UniquePtr.h"
-@@ -33,6 +34,9 @@
+@@ -33,6 +34,10 @@
+ #include "nsStyleConsts.h"
+ #include "nsStyleUtil.h"
  #include "nsUnicodeProperties.h"
- #include "SharedFontList-impl.h"
- #include "TextDrawTarget.h"
 +#include "mozilla/dom/BrowsingContext.h"
 +#include "mozilla/dom/Document.h"
 +#include "nsPIDOMWindow.h"
++#include "nsPIDOMWindowInlines.h"
  
  #ifdef XP_WIN
  #  include "gfxWindowsPlatform.h"
-@@ -699,7 +703,8 @@ void gfxTextRun::DrawEmphasisMarks(
-     gfxContext* aContext, gfxTextRun* aMark, gfxFloat aMarkAdvance,
-     gfx::Point aPt, Range aRange, const PropertyProvider* aProvider,
-     mozilla::gfx::PaletteCache& aPaletteCache) const {
--  MOZ_ASSERT(aRange.end <= GetLength());
-+  MOZ_ASSERT(
-+      aRange.end <= GetLength());
- 
-   EmphasisMarkDrawParams params(aContext, aPaletteCache);
-   params.mark = aMark;
-@@ -1841,6 +1846,18 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+@@ -1871,6 +1876,18 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
        mFontVariantEmoji(aVariantEmoji) {
    // We don't use SetUserFontSet() here, as we want to unconditionally call
    // EnsureFontList() rather than only do UpdateUserFonts() if it changed.
@@ -426,7 +417,7 @@ index fc1293be42..cac43a8b1f 100644
  }
  
  gfxFontGroup::~gfxFontGroup() {
-@@ -2583,8 +2600,9 @@ static Script ResolveScriptForLang(const nsAtom* aLanguage, Script aDefault) {
+@@ -2598,8 +2615,9 @@ static Script ResolveScriptForLang(const nsAtom* aLanguage, Script aDefault) {
    static LangScriptCache sCache;
    static RWLock sLock("LangScriptCache lock");
  
@@ -438,20 +429,20 @@ index fc1293be42..cac43a8b1f 100644
  
    {
      // Try to use a cached value without taking an exclusive lock.
-@@ -3418,7 +3436,7 @@ already_AddRefed<gfxFont> gfxFontGroup::FindFontForChar(
-         font = FindFallbackFaceForChar(ff, aCh, aNextCh, presentation);
-         if (font) {
-           if (CheckCandidate(font,
--                             {FontMatchType::Kind::kFontGroup, ff.Generic()})) {
+@@ -3479,7 +3497,7 @@ already_AddRefed<gfxFont> gfxFontGroup::FindFontForChar(
+       font = FindFallbackFaceForChar(ff, aCh, aNextCh, presentation);
+       if (font) {
+         if (CheckCandidate(font,
+-                           {FontMatchType::Kind::kFontGroup, ff.Generic()})) {
 +                             {FontMatchType::Kind::kFontGroup, mFonts[i].Generic()})) {
-             return font.forget();
-           }
+           return font.forget();
          }
+       }
 diff --git a/gfx/thebes/gfxTextRun.h b/gfx/thebes/gfxTextRun.h
-index 85aecf5fdd..79f4df71a4 100644
+index f04c835506..10ddd68fc1 100644
 --- a/gfx/thebes/gfxTextRun.h
 +++ b/gfx/thebes/gfxTextRun.h
-@@ -1401,6 +1401,8 @@ class gfxFontGroup final : public gfxTextRunFactory {
+@@ -1433,6 +1433,8 @@ class gfxFontGroup final : public gfxTextRunFactory {
    uint32_t mFontListGeneration = 0;  // platform font list generation for this
                                       // fontgroup
  
@@ -461,7 +452,7 @@ index 85aecf5fdd..79f4df71a4 100644
     * Textrun creation short-cuts for special cases where we don't need to
     * call a font shaper to generate glyphs.
 diff --git a/layout/base/nsPresContext.cpp b/layout/base/nsPresContext.cpp
-index b2394c6106..da755e553c 100644
+index 02a771ca93..8d6bbebed3 100644
 --- a/layout/base/nsPresContext.cpp
 +++ b/layout/base/nsPresContext.cpp
 @@ -426,6 +426,10 @@ bool nsPresContext::IsChrome() const {

@@ -719,10 +719,15 @@ async def scan(
             f"{base_url.rstrip('/')}/?auto=1&score=1&post="
             + urllib.parse.quote(f"http://127.0.0.1:{collector.port}/collect", safe="")
         )
+        # The report reaches the collector as a public page POSTing to loopback.
+        # From Firefox 156 that request is held for a Local Network Access
+        # prompt nobody can answer, so exempt sundial's own origin -- the
+        # permission state the page can read stays stock ("prompt").
         async with AsyncCamoufox(
             executable_path=str(binary),
             headless=headless,
             os=os_name,
+            firefox_user_prefs={"network.lna.skip-domains": host},
             i_know_what_im_doing=True,
         ) as browser:
             context = await browser.new_context()

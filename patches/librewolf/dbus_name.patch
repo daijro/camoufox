@@ -1,8 +1,8 @@
 diff --git a/toolkit/components/remote/nsDBusRemoteClient.cpp b/toolkit/components/remote/nsDBusRemoteClient.cpp
-index aad9d7054af8..a926d8b6abdc 100644
+index bd1fe5f9cf..b986da164a 100644
 --- a/toolkit/components/remote/nsDBusRemoteClient.cpp
 +++ b/toolkit/components/remote/nsDBusRemoteClient.cpp
-@@ -76,7 +76,7 @@ bool nsDBusRemoteClient::GetRemoteDestinationName(const char* aProgram,
+@@ -73,14 +73,14 @@ bool nsDBusRemoteClient::GetRemoteDestinationName(const char* aProgram,
    mozilla::XREAppData::SanitizeNameForDBus(profileName);
  
    aDestinationName =
@@ -11,25 +11,24 @@ index aad9d7054af8..a926d8b6abdc 100644
    if (aDestinationName.Length() > DBUS_MAXIMUM_NAME_LENGTH)
      aDestinationName.Truncate(DBUS_MAXIMUM_NAME_LENGTH);
  
-@@ -90,7 +90,7 @@ bool nsDBusRemoteClient::GetRemoteDestinationName(const char* aProgram,
-   if (!sDBusValidateBusName(aDestinationName.get(), nullptr)) {
+   if (!g_dbus_is_name(aDestinationName.get())) {
      // We don't have a valid busName yet - try to create a default one.
      aDestinationName =
 -        nsPrintfCString("org.mozilla.%s.%s", aProgram, "default");
 +        nsPrintfCString("io.gitlab.%s.%s", aProgram, "default");
-     if (!sDBusValidateBusName(aDestinationName.get(), nullptr)) {
-       // We failed completelly to get a valid bus name - just quit
-       // to prevent crash at dbus_bus_request_name().
-@@ -117,7 +117,7 @@ nsresult nsDBusRemoteClient::DoSendDBusCommandLine(const char* aProfile,
+     if (!g_dbus_is_name(aDestinationName.get())) {
+       // We failed completely to get a valid bus name - just quit.
+       LOG("  failed to validate profile DBus name");
+@@ -110,7 +110,7 @@ nsresult nsDBusRemoteClient::DoSendDBusCommandLine(const char* aProfile,
    }
  
    nsAutoCString pathName;
 -  pathName = nsPrintfCString("/org/mozilla/%s/Remote", appName.get());
 +  pathName = nsPrintfCString("/io/gitlab/%s/Remote", appName.get());
  
-   static auto sDBusValidatePathName = (bool (*)(const char*, DBusError*))dlsym(
-       RTLD_DEFAULT, "dbus_validate_path");
-@@ -128,7 +128,7 @@ nsresult nsDBusRemoteClient::DoSendDBusCommandLine(const char* aProfile,
+   if (!g_variant_is_object_path(pathName.get())) {
+     LOG("  failed to validate path name");
+@@ -118,7 +118,7 @@ nsresult nsDBusRemoteClient::DoSendDBusCommandLine(const char* aProfile,
    }
  
    nsAutoCString remoteInterfaceName;
@@ -39,10 +38,10 @@ index aad9d7054af8..a926d8b6abdc 100644
    LOG("  DBus destination: %s\n", destinationName.get());
    LOG("  DBus path: %s\n", pathName.get());
 diff --git a/toolkit/components/remote/nsDBusRemoteServer.cpp b/toolkit/components/remote/nsDBusRemoteServer.cpp
-index 4afb8381d0bc..bd927334b817 100644
+index 226b2dc528..9cd7bad84a 100644
 --- a/toolkit/components/remote/nsDBusRemoteServer.cpp
 +++ b/toolkit/components/remote/nsDBusRemoteServer.cpp
-@@ -29,7 +29,7 @@ static const char* introspect_template =
+@@ -25,7 +25,7 @@ static const char* introspect_template =
      "1.0//EN\"\n"
      "\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
      "<node>\n"
@@ -51,7 +50,7 @@ index 4afb8381d0bc..bd927334b817 100644
      "   <method name=\"OpenURL\">\n"
      "     <arg name=\"url\" direction=\"in\" type=\"ay\"/>\n"
      "   </method>\n"
-@@ -39,7 +39,7 @@ static const char* introspect_template =
+@@ -35,7 +35,7 @@ static const char* introspect_template =
  bool nsDBusRemoteServer::HandleOpenURL(const gchar* aInterfaceName,
                                         const gchar* aMethodName,
                                         Span<const gchar> aParam) {
@@ -60,16 +59,16 @@ index 4afb8381d0bc..bd927334b817 100644
  
    if ((strcmp("OpenURL", aMethodName) != 0) ||
        (strcmp(ourInterfaceName.get(), aInterfaceName) != 0)) {
-@@ -132,7 +132,7 @@ static const GDBusInterfaceVTable gInterfaceVTable = {
+@@ -128,7 +128,7 @@ static const GDBusInterfaceVTable gInterfaceVTable = {
      HandleMethodCall, HandleGetProperty, HandleSetProperty};
  
  void nsDBusRemoteServer::OnBusAcquired(GDBusConnection* aConnection) {
 -  mPathName = nsPrintfCString("/org/mozilla/%s/Remote", mAppName.get());
 +  mPathName = nsPrintfCString("/io/gitlab/%s/Remote", mAppName.get());
-   static auto sDBusValidatePathName = (bool (*)(const char*, DBusError*))dlsym(
-       RTLD_DEFAULT, "dbus_validate_path");
-   if (!sDBusValidatePathName ||
-@@ -206,8 +206,7 @@ nsresult nsDBusRemoteServer::Startup(const char* aAppName,
+   if (!g_variant_is_object_path(mPathName.get())) {
+     g_warning("nsDBusRemoteServer: object path is not valid");
+     return;
+@@ -199,15 +199,14 @@ nsresult nsDBusRemoteServer::Startup(const char* aAppName,
  
    mozilla::XREAppData::SanitizeNameForDBus(profileName);
  
@@ -79,12 +78,11 @@ index 4afb8381d0bc..bd927334b817 100644
    if (busName.Length() > DBUS_MAXIMUM_NAME_LENGTH) {
      busName.Truncate(DBUS_MAXIMUM_NAME_LENGTH);
    }
-@@ -221,7 +220,7 @@ nsresult nsDBusRemoteServer::Startup(const char* aAppName,
  
    // We don't have a valid busName yet - try to create a default one.
-   if (!sDBusValidateBusName(busName.get(), nullptr)) {
+   if (!g_dbus_is_name(busName.get())) {
 -    busName = nsPrintfCString("org.mozilla.%s.%s", mAppName.get(), "default");
 +    busName = nsPrintfCString("io.gitlab.%s.%s", mAppName.get(), "default");
-     if (!sDBusValidateBusName(busName.get(), nullptr)) {
-       // We failed completelly to get a valid bus name - just quit
-       // to prevent crash at dbus_bus_request_name().
+     if (!g_dbus_is_name(busName.get())) {
+       // We failed completely to get a valid bus name - just quit.
+       g_warning("nsDBusRemoteServer: couldn't get a valid bus name!");

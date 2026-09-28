@@ -1,19 +1,19 @@
 diff --git a/dom/media/mp4/MP4Decoder.cpp b/dom/media/mp4/MP4Decoder.cpp
-index abcdef0001..abcdef0002 100644
+index fb37d83754..c2e5b16a0a 100644
 --- a/dom/media/mp4/MP4Decoder.cpp
 +++ b/dom/media/mp4/MP4Decoder.cpp
 @@ -10,6 +10,7 @@
  #include "MediaContainerType.h"
- #include "PDMFactory.h"
+ #include "PDMFactorySupport.h"
  #include "PlatformDecoderModule.h"
 +#include "MaskConfig.hpp"
  #include "VPXDecoder.h"
  #include "VideoUtils.h"
  #include "mozilla/StaticPrefs_media.h"
-@@ -133,6 +134,14 @@ bool MP4Decoder::IsSupportedType(const MediaContainerType& aType,
+@@ -137,6 +138,14 @@ bool MP4Decoder::IsSupportedType(const MediaContainerType& aType,
      return false;
    }
-
+ 
 +  // Camoufox: When media:spoof_codecs is enabled, always report MP4 as
 +  // supported. This prevents canPlayType()/isTypeSupported() from leaking
 +  // which system codec libraries (FFmpeg, VideoToolbox, GStreamer) are
@@ -24,32 +24,32 @@ index abcdef0001..abcdef0002 100644
 +
    if (!tracks.IsEmpty()) {
      // Look for exact match as we know used codecs.
-     RefPtr<PDMFactory> platform = new PDMFactory();
+     for (const auto& track : tracks) {
 diff --git a/dom/media/mp4/moz.build b/dom/media/mp4/moz.build
-index abcdef0003..abcdef0004 100644
+index 88956ccea8..296b168ded 100644
 --- a/dom/media/mp4/moz.build
 +++ b/dom/media/mp4/moz.build
-@@ -32,3 +32,6 @@ CXXFLAGS += [
-
+@@ -44,3 +44,6 @@ CXXFLAGS += [
+ 
  # Add libFuzzer configuration directives
  include("/tools/fuzzing/libfuzzer-config.mozbuild")
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
 diff --git a/dom/media/webm/MatroskaDecoder.cpp b/dom/media/webm/MatroskaDecoder.cpp
-index abcdef0005..abcdef0006 100644
+index ca63eb884a..32bc3e184b 100644
 --- a/dom/media/webm/MatroskaDecoder.cpp
 +++ b/dom/media/webm/MatroskaDecoder.cpp
-@@ -12,6 +12,7 @@
+@@ -8,6 +8,7 @@
  #include "MediaContainerType.h"
- #include "PDMFactory.h"
+ #include "PDMFactorySupport.h"
  #include "PlatformDecoderModule.h"
 +#include "MaskConfig.hpp"
  #include "VideoUtils.h"
  #include "mozilla/StaticPrefs_media.h"
  #include "nsMimeTypes.h"
-@@ -130,6 +131,12 @@ bool MatroskaDecoder::IsSupportedType(const MediaContainerType& aContainerType,
-
+@@ -124,6 +125,12 @@ bool MatroskaDecoder::IsSupportedType(const MediaContainerType& aContainerType,
+ 
    if (!tracks.IsEmpty()) {
      // Look for exact match as we know the codecs used.
 +
@@ -58,15 +58,15 @@ index abcdef0005..abcdef0006 100644
 +      return true;
 +    }
 +
-     RefPtr<PDMFactory> platform = new PDMFactory();
      for (const auto& track : tracks) {
-       if (!track ||
+       if (!track || PDMFactorySupport::IsSupported(SupportDecoderParams(*track),
+                                                    aDiagnostics)
 diff --git a/dom/media/webm/moz.build b/dom/media/webm/moz.build
-index abcdef0007..abcdef0008 100644
+index 46749416af..0f58406576 100644
 --- a/dom/media/webm/moz.build
 +++ b/dom/media/webm/moz.build
-@@ -29,3 +29,6 @@ FINAL_LIBRARY = "xul"
-
+@@ -31,3 +31,6 @@ FINAL_LIBRARY = "xul"
+ 
  # Add libFuzzer configuration directives
  include("/tools/fuzzing/libfuzzer-config.mozbuild")
 +

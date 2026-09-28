@@ -1,8 +1,8 @@
 diff --git a/netwerk/protocol/http/moz.build b/netwerk/protocol/http/moz.build
-index b090a56d88..9fe4a5e1e8 100644
+index 1b8068f235..101ab978e2 100644
 --- a/netwerk/protocol/http/moz.build
 +++ b/netwerk/protocol/http/moz.build
-@@ -218,3 +218,6 @@ XPCOM_MANIFESTS += [
+@@ -257,3 +257,6 @@ XPCOM_MANIFESTS += [
  ]
  
  include("/tools/fuzzing/libfuzzer-config.mozbuild")
@@ -11,18 +11,18 @@ index b090a56d88..9fe4a5e1e8 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/netwerk/protocol/http/nsHttpHandler.cpp b/netwerk/protocol/http/nsHttpHandler.cpp
-index d0aebdf965..01472ec205 100644
+index 0192e5f6f2..a43ecf238e 100644
 --- a/netwerk/protocol/http/nsHttpHandler.cpp
 +++ b/netwerk/protocol/http/nsHttpHandler.cpp
-@@ -14,6 +14,7 @@
- #include "nsError.h"
- #include "nsHttp.h"
- #include "nsHttpHandler.h"
+@@ -12,6 +12,7 @@
+ #include "EventTokenBucket.h"
+ #include "HttpLog.h"
+ #include "LoadContextInfo.h"
 +#include "MaskConfig.hpp"
- #include "nsHttpChannel.h"
- #include "nsHTTPCompressConv.h"
- #include "nsHttpAuthCache.h"
-@@ -747,6 +748,15 @@ uint8_t nsHttpHandler::UrgencyFromCoSFlags(uint32_t cos) {
+ #include "SerializedLoadContext.h"
+ #include "TRRServiceChannel.h"
+ #include "Tickler.h"
+@@ -993,6 +994,15 @@ uint8_t nsHttpHandler::UrgencyFromCoSFlags(uint32_t cos,
  //-----------------------------------------------------------------------------
  
  const nsCString& nsHttpHandler::UserAgent(bool aShouldResistFingerprinting) {
@@ -38,19 +38,19 @@ index d0aebdf965..01472ec205 100644
    if (aShouldResistFingerprinting && !mSpoofedUserAgent.IsEmpty()) {
      LOG(("using spoofed userAgent : %s\n", mSpoofedUserAgent.get()));
      return mSpoofedUserAgent;
-@@ -2077,6 +2087,10 @@ nsresult nsHttpHandler::SetAcceptLanguages() {
+@@ -2107,6 +2117,10 @@ nsresult nsHttpHandler::SetAcceptLanguages() {
    }
-
+ 
    MOZ_ASSERT(NS_IsMainThread());
 +  if (auto value = MaskConfig::GetString("headers.Accept-Language")) {
 +    mAcceptLanguages.Assign(nsCString(value.value().c_str()));
 +    return NS_OK;
 +  }
-
+ 
    mAcceptLanguagesIsDirty = false;
-
-@@ -2098,6 +2112,11 @@ nsresult nsHttpHandler::SetAcceptLanguages() {
-
+ 
+@@ -2123,6 +2137,11 @@ nsresult nsHttpHandler::SetAcceptLanguages() {
+ 
  nsresult nsHttpHandler::SetAcceptEncodings(const char* aAcceptEncodings,
                                             bool isSecure, bool isDictionary) {
 +  nsCString encodingOverride;
@@ -61,5 +61,3 @@ index d0aebdf965..01472ec205 100644
    if (isDictionary) {
      mDictionaryAcceptEncodings = aAcceptEncodings;
    } else if (isSecure) {
-     mHttpsAcceptEncodings = aAcceptEncodings;
-   } else {
