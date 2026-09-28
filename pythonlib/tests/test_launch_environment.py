@@ -171,6 +171,41 @@ class TestUiLocaleFollowsIntlLocale:
         assert prefs[self.PREF] == "de"
 
 
+class TestToggleSettingsAreWrittenBothWays:
+    """A persistent profile keeps every pref it was ever launched with.
+
+    Firefox saves a user.js pref into prefs.js, and a later launch that simply
+    omits it does not clear it. A profile once launched with block_webrtc kept
+    WebRTC off after the flag was removed (a real profile's prefs.js still held
+    media.peerconnection.enabled=false), so each toggle writes its pref on every
+    launch, on or off.
+    """
+
+    UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0"
+    TOGGLES = [
+        ("block_webrtc", "media.peerconnection.enabled", True, False),
+        ("block_images", "permissions.default.image", 1, 2),
+        ("disable_coop", "browser.tabs.remote.useCrossOriginOpenerPolicy", True, False),
+    ]
+
+    def _prefs(self, **kwargs):
+        return utils.launch_options(
+            config={"navigator.userAgent": self.UA}, i_know_what_im_doing=True, **kwargs
+        )["firefox_user_prefs"]
+
+    @pytest.mark.parametrize("flag, pref, stock, toggled", TOGGLES)
+    def test_off_writes_the_stock_value(self, isolated_launch_dependencies, flag, pref, stock, toggled):
+        assert self._prefs()[pref] == stock
+
+    @pytest.mark.parametrize("flag, pref, stock, toggled", TOGGLES)
+    def test_on_writes_the_toggled_value(self, isolated_launch_dependencies, flag, pref, stock, toggled):
+        assert self._prefs(**{flag: True})[pref] == toggled
+
+    @pytest.mark.parametrize("flag, pref, stock, toggled", TOGGLES)
+    def test_caller_pref_wins(self, isolated_launch_dependencies, flag, pref, stock, toggled):
+        assert self._prefs(firefox_user_prefs={pref: toggled})[pref] == toggled
+
+
 class TestPrefsReachStartup:
     """Launcher prefs must be readable by camoufox.cfg at startup.
 
