@@ -1,14 +1,26 @@
 name: Build and Release
 
+# A browser prerelease for every tested merge to main that changes the browser.
+#
+# Runs after the Tests workflow passes on a push to main. `plan` hashes the
+# browser's sources (ci.browser_inputs.source_digest): if a release was already
+# built from exactly these sources, nothing is built and the library release
+# that follows (publish-pypi.yml) pairs with that one. Otherwise `plan` takes the
+# next unused release number, commits it beside main as the release commit
+# (main is protected; the tag points at the tested commit plus that one line),
+# and the matrix builds from the tag. The result is a GitHub *prerelease*, never
+# a draft: users only get it by opting in (`camoufox set official/prerelease`)
+# or through a prerelease library pinned to it. Promotion to stable is a tag on
+# the tested main commit -- see publish-pypi.yml and ci/release.py.
+#
+# workflow_dispatch builds the head of main the same way.
+
 on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
-  push:
-    tags:
-      - "*"
-      # The font bundle ships as its own release, in a separate tag namespace so
-      # it does not appear among the browser downloads. Those tags must not
-      # trigger a browser build (see scripts/fetch-fonts.py).
-      - "!font-bundle-*"
 
 permissions: {}
 
@@ -17,8 +29,58 @@ env:
   # same interpreter every pull request's build job already exercised.
   PYTHON_VERSION: "3.12"
 
+# Release numbers are allocated here; two plans must never race for one.
+concurrency:
+  group: browser-release
+  cancel-in-progress: false
+
 jobs:
+  plan:
+    # A push to main in this repository whose tests passed. `branches: [main]`
+    # alone would also match a pull request from someone's fork named main.
+    if: >-
+      github.event_name == 'workflow_dispatch' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the release commit's tag
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      tag: ${{ steps.plan.outputs.tag }}
+      digest: ${{ steps.plan.outputs.digest }}
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || 'main' }}
+          fetch-depth: 0
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -m ci.release browser-plan
+      - name: Cut the release commit
+        if: steps.plan.outputs.build == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 -m ci.release cut --tag "${{ steps.plan.outputs.tag }}"
+      - name: Record the tested commit for publish-pypi.yml
+        # A workflow started by this one's completion is told main's head, not
+        # the commit tested here; two quick merges would otherwise publish the
+        # second, untested one.
+        run: echo "${{ steps.sha.outputs.sha }}" > tested-commit
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tested-commit
+          path: tested-commit
+
   build:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -72,6 +134,8 @@ jobs:
           sudo apt-get clean > /dev/null
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: refs/tags/${{ needs.plan.outputs.tag }}
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -147,22 +211,31 @@ jobs:
           path: dist/*
 
   release:
-    needs: build
+    needs: [plan, build]
     permissions:
       contents: write
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: refs/tags/${{ needs.plan.outputs.tag }}
+
       - name: Download all artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
 
-      - name: Create Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: artifacts/**/*
-          generate_release_notes: true
-          draft: true
-          prerelease: true
+      - name: Publish the prerelease
+        # Not a draft: the library prerelease that follows pairs with it, and
+        # finds it by the markers in its notes (ci.release paired).
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          python3 -m ci.release notes \
+            --digest "${{ needs.plan.outputs.digest }}" --commit "${{ needs.plan.outputs.sha }}" > notes.md
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --prerelease --latest=false --title "$TAG" \
+            --notes-file notes.md --generate-notes \
+            $(find artifacts -type f)

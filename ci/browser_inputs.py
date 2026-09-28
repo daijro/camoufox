@@ -175,6 +175,36 @@ def native_digest(root: Optional[Path] = None) -> str:
     return digest.hexdigest()[:32]
 
 
+def source_inputs(root: Optional[Path] = None) -> List[str]:
+    """Every file that goes into the browser, compiled or packaged, sorted."""
+    root = root or REPO_ROOT
+    return sorted(set(native_inputs(root)) | resource_sources(root))
+
+
+def source_digest(root: Optional[Path] = None) -> str:
+    """A hash of everything the browser is built from, except its release number.
+
+    This is what pairs a library release with a browser release: two commits
+    with the same source digest produce the same browser, so a library built
+    from either may name that browser's release. The release number is left
+    out because the release workflow sets it on a release commit of its own
+    (ci/release.py), and that must not make the browser look different from
+    the main commit it was cut from.
+    """
+    root = root or REPO_ROOT
+    digest = hashlib.sha256()
+    for rel in source_inputs(root):
+        data = (root / rel).read_bytes()
+        if rel == "upstream.sh":
+            data = b"\n".join(
+                line for line in data.splitlines() if not line.strip().startswith(b"release=")
+            )
+        digest.update(rel.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(data).digest())
+    return digest.hexdigest()[:32]
+
+
 def overlay(dist_bin: Path, root: Optional[Path] = None) -> List[str]:
     """Lay the current resources over an already-built dist/bin.
 
@@ -196,6 +226,7 @@ def overlay(dist_bin: Path, root: Optional[Path] = None) -> List[str]:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--digest", action="store_true")
+    parser.add_argument("--source-digest", action="store_true")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--resources", action="store_true")
     parser.add_argument("--overlay", type=Path, metavar="DIST_BIN")
@@ -203,6 +234,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.digest:
         print(native_digest())
+    if args.source_digest:
+        print(source_digest())
     if args.list:
         for rel in native_inputs():
             print(rel)
