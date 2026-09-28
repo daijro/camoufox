@@ -72,6 +72,7 @@ export const INSTALL_DIR: string = userCacheDir("camoufox");
  * tarball, so one seed draws one identity in either launcher.
  */
 export const DATA_FILES: readonly string[] = [
+	"browser-pin.json",
 	"essential-fonts.json",
 	"fingerprint-presets.json",
 	"fingerprint-presets-v150.json",

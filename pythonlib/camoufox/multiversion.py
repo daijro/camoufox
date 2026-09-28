@@ -323,6 +323,20 @@ def get_active_path() -> Optional[Path]:
     config = load_config()
     active = config.get('active_version')
 
+    # A released library launches the build it was released with, whatever
+    # happens to be marked active, unless the user explicitly chose otherwise.
+    from .browser_pin import effective_pin, matches
+
+    pin = effective_pin(config)
+    if pin:
+        for inst in list_installed():
+            if matches(pin, inst.repo_name, inst.version.version or '', inst.version.build):
+                if active != inst.relative_path:
+                    config['active_version'] = inst.relative_path
+                    save_config(config)
+                return inst.path
+        return None
+
     if active:
         path = INSTALL_DIR / active
         if path.exists() and (path / 'version.json').exists():

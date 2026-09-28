@@ -7,6 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { finished } from "node:stream/promises";
+import { effectivePin, pinMatches } from "./browser-pin.js";
 import { INSTALL_DIR, OS_NAME, rprint } from "./paths.js";
 // pkgman and multiversion are mutually dependent, exactly as the Python twin's
 // function-local imports are. Every use of these sits inside a function body,
@@ -382,6 +383,29 @@ export function listInstalled(): InstalledVersion[] {
 export function getActivePath(): string | null {
 	const config = loadConfig();
 	const active = config.active_version;
+
+	// A released library launches the build it was released with, whatever
+	// happens to be marked active, unless the user explicitly chose otherwise.
+	const pin = effectivePin(config);
+	if (pin) {
+		for (const inst of listInstalled()) {
+			if (
+				pinMatches(
+					pin,
+					inst.repoName,
+					inst.version.version ?? "",
+					inst.version.build,
+				)
+			) {
+				if (active !== inst.relativePath) {
+					config.active_version = inst.relativePath;
+					saveConfig(config);
+				}
+				return inst.path;
+			}
+		}
+		return null;
+	}
 
 	if (active) {
 		const activePath = path.join(INSTALL_DIR, active);

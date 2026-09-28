@@ -125,9 +125,19 @@ Synced 26 versions from 2 repos.
 
 <hr width=50>
 
+### Which browser build is used
+
+Each camoufox release is paired with the one browser build it was built and tested with. By default, `camoufox fetch` installs exactly that build and every launch uses it. That holds even when other builds are installed, and even when the paired build is a prerelease (a prerelease of this package pairs with a prerelease browser). Upgrading the package therefore never runs a browser it was not tested with. Run `camoufox fetch` after upgrading to install the new pairing.
+
+Choosing a channel or a build with `camoufox set` overrides the pairing. The choice is kept, and a launch warns that the build differs from the paired one. `camoufox set --release` goes back to the paired build.
+
+A development checkout (installed from the repository, not from PyPI) is paired with nothing and follows its channel, `official/stable` by default.
+
+<hr width=50>
+
 ### `set`
 
-Choose a version channel or pin a specific version. Can also be called with a specifier to activate directly.
+Choose a version channel or pin a specific version, overriding the paired build. Can also be called with a specifier to activate directly.
 
 Interactive selector:
 
@@ -135,10 +145,10 @@ Interactive selector:
 > camoufox set
 ```
 
-You can also pass a specifier to pin a specific version or choose a channel to follow directly. This will pull the latest stable version from the official repo on `camoufox fetch`.
+You can also pass a specifier to pin a specific version or choose a channel to follow directly. Following `official/stable` pulls the latest stable version from the official repo on `camoufox fetch`:
 
 ```bash
-> camoufox set official/stable  # Default setting
+> camoufox set official/stable
 ```
 
 Follow latest prerelease version from the official repo, if applicable:
@@ -153,6 +163,12 @@ Pin a specific version:
 > camoufox set official/stable/134.0.2-beta.20
 ```
 
+Go back to the build this release is paired with:
+
+```bash
+> camoufox set --release
+```
+
 <hr width=50>
 
 ### `active`
@@ -160,8 +176,8 @@ Pin a specific version:
 Prints the current active version string:
 
 ```bash
-> camoufox active  # Default channel is active
-official/stable
+> camoufox active  # A released package uses its paired build by default
+official/prerelease/156.0.1-beta.33 (1a2b3c4d) (paired with this release)
 ```
 
 ```bash
@@ -177,10 +193,10 @@ coryking/stable/142.0.1-fork.26 (not installed)
 
 ### `fetch`
 
-Install the latest version from the active channel. By default, this is official/stable. This will also automatically sync repository assets.
+Install the browser build this release is paired with, or, after `camoufox set`, the latest version from the chosen channel. This will also automatically sync repository assets.
 
 ```bash
-> camoufox fetch  # Install the latest in the channel
+> camoufox fetch  # Install the paired build (or the latest in the chosen channel)
 ```
 
 To download the latest from a different channel, or pin a version:
