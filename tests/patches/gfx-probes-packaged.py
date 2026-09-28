@@ -1,10 +1,11 @@
 r"""
 The GPU probes ship, so the browser decides about graphics the way stock does.
 
-Firefox runs two small helper binaries at startup -- `glxtest` (GL/EGL) and
-`vaapitest` (video decode) -- and feeds what they report into nsIGfxInfo. Without
-them gfxInfo has nothing, and the driver blocklist refuses **every** WebGL
-context:
+Firefox runs a small helper binary at startup -- `gfxtest`, which probes GL/EGL
+(its glxtest mode) and video decode (its vaapitest mode); before Firefox 156 these
+were two binaries, `glxtest` and `vaapitest` -- and feeds what it reports into
+nsIGfxInfo. Without it gfxInfo has nothing, and the driver blocklist refuses
+**every** WebGL context:
 
     WebGL creation failed:
     * WebglAllowWindowsNativeGl:false restricts context creation on this system.
@@ -38,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PROBES = ("glxtest", "vaapitest")
+PROBES = ("gfxtest",)
 LOAD_TIMEOUT_S = 90
 ATTEMPTS = 2
 
@@ -171,7 +172,7 @@ def main() -> int:
         print(f"FAIL: {failure}")
     if failures:
         return 1
-    print("PASS: glxtest and vaapitest ship, and WebGL works without a pref forcing it")
+    print("PASS: gfxtest ships, and WebGL works without a pref forcing it")
     return 0
 
 
