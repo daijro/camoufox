@@ -661,6 +661,13 @@ records that number in a *release commit* beside `main` and tags that commit.
 release is a prerelease, never a draft. Its notes carry the source digest and
 the source commit as HTML comments.
 
+Releases cut before those markers existed (up to `v156.0.1-beta.32`) are paired
+the old way: the tag `upstream.sh` names, published (a prerelease counts, a
+draft does not), with no browser source changed since. So the first merge after
+this scheme lands reuses `v156.0.1-beta.32` instead of rebuilding it, and a
+driver-only pull request tests that prerelease rather than the latest stable
+release.
+
 **The packages** (`publish-pypi.yml`, then `publish-npm.yml`) are released from
 the same commit, one version spelled for each registry: `0.5.8b2` on PyPI,
 `0.5.8-beta.2` on npm. `pip install camoufox` ignores prereleases unless

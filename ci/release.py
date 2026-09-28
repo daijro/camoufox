@@ -16,7 +16,7 @@ released with unless its user explicitly chooses another.
 
     python3 -m ci.release browser-plan          # build a new browser, or reuse one
     python3 -m ci.release cut --tag TAG          # the release commit and tag
-    python3 -m ci.release paired                 # the browser release for this tree
+    python3 -m ci.release paired [--root DIR] [--releases JSON]  # the browser release for this tree
     python3 -m ci.release lib-plan --channel prerelease|stable [--tag vX.Y.Z]
     python3 -m ci.release stamp --browser-tag T --py-version V --npm-version V
     python3 -m ci.release promote                # paired browser -> stable, latest
@@ -32,10 +32,11 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 from ._util import REPO_ROOT, die, http_json, log, read_upstream_sh, run, set_output
-from .browser_inputs import source_digest
+from .browser_inputs import BROWSER_DIRS, BROWSER_FILES, NON_NATIVE_SCRIPTS, source_digest
 
 PYPI_PROJECT = "camoufox"
 NPM_PACKAGE = "@camoufox/camoufox"
@@ -152,6 +153,50 @@ def paired_release(releases: Sequence[dict], digest: str) -> Optional[dict]:
     return None
 
 
+def is_browser_source(rel: str) -> bool:
+    """Whether a repo-relative path goes into the browser (as source_digest counts it)."""
+    if rel in NON_NATIVE_SCRIPTS:
+        return False
+    return rel in BROWSER_FILES or rel.split("/", 1)[0] in BROWSER_DIRS
+
+
+@dataclass(frozen=True)
+class Pairing:
+    release: Optional[dict]
+    why: str
+    ahead: Tuple[str, ...] = ()
+
+
+def find_paired(releases: Sequence[dict], root: Path = REPO_ROOT) -> Pairing:
+    """The published browser release built from the sources at `root`, and why.
+
+    A release built by build.yml carries its source digest in its notes, and a
+    match there is exact. Releases cut before that marker existed (up to and
+    including v156.0.1-beta.32) are found the way tests.yml used to find them:
+    the tag upstream.sh names, published, with no browser source changed since.
+    Anything else -- a draft, a tag that was never released, or a base branch
+    whose browser sources moved past every release -- pairs with nothing, and
+    the caller builds.
+    """
+    digest = source_digest(root)
+    found = paired_release(releases, digest)
+    if found:
+        return Pairing(found, f"{found['tag_name']} carries source digest {digest}")
+
+    up = read_upstream_sh(root / "upstream.sh")
+    tag = f"v{up['version']}-{up['release']}"
+    rel = next((r for r in releases if r.get("tag_name") == tag), None)
+    if rel is None or rel.get("draft"):
+        return Pairing(None, f"no published release {tag}, and none carries source digest {digest}")
+    if not run(["git", "rev-parse", "-q", "--verify", f"refs/tags/{tag}"], cwd=root).ok:
+        return Pairing(None, f"release {tag} is published but its tag is not in this checkout")
+    diff = run(["git", "diff", "--name-only", tag, "HEAD"], cwd=root, check=True).stdout.split()
+    ahead = tuple(sorted(f for f in diff if is_browser_source(f)))
+    if ahead:
+        return Pairing(None, f"the browser sources differ from {tag} in {len(ahead)} files", ahead)
+    return Pairing(rel, f"no browser source differs from {tag}")
+
+
 # ---------------------------------------------------------------------------
 # I/O
 # ---------------------------------------------------------------------------
@@ -204,10 +249,11 @@ def repo_name() -> str:
 
 def cmd_browser_plan(_: argparse.Namespace) -> int:
     digest = source_digest()
-    found = paired_release(github_releases(repo_name()), digest)
+    pairing = find_paired(github_releases(repo_name()))
+    found = pairing.release
     set_output("digest", digest)
     if found:
-        log(f"{found['tag_name']} was built from these sources; no browser build needed")
+        log(f"{found['tag_name']} was built from these sources ({pairing.why}); no browser build needed")
         set_output("build", "false")
         set_output("tag", found["tag_name"])
         return 0
@@ -248,13 +294,22 @@ def cmd_notes(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_paired(_: argparse.Namespace) -> int:
-    digest = source_digest()
-    found = paired_release(github_releases(repo_name()), digest)
+def _releases(args: argparse.Namespace) -> List[dict]:
+    if getattr(args, "releases", None):
+        return json.loads(Path(args.releases).read_text(encoding="utf-8"))
+    return github_releases(repo_name())
+
+
+def cmd_paired(args: argparse.Namespace) -> int:
+    pairing = find_paired(_releases(args), Path(args.root).resolve())
+    for rel in pairing.ahead:
+        print(f"  {rel}")
+    found = pairing.release
     if not found:
-        die(f"no browser release was built from these sources (source digest {digest}). "
-            "The browser build for this commit failed or has not finished; see the "
-            "'Build and Release' workflow.")
+        die(f"no browser release was built from these sources: {pairing.why}. "
+            "If this commit changed the browser, its build has failed or not finished; "
+            "see the 'Build and Release' workflow.")
+    log(f"paired with {found['tag_name']}: {pairing.why}")
     set_output("browser_tag", found["tag_name"])
     set_output("browser_prerelease", "true" if found.get("prerelease") else "false")
     return 0
@@ -328,10 +383,10 @@ def cmd_stamp(args: argparse.Namespace) -> int:
 
 
 def cmd_promote(_: argparse.Namespace) -> int:
-    digest = source_digest()
-    found = paired_release(github_releases(repo_name()), digest)
+    pairing = find_paired(github_releases(repo_name()))
+    found = pairing.release
     if not found:
-        die(f"no browser release was built from these sources (source digest {digest})")
+        die(f"no browser release was built from these sources: {pairing.why}")
     tag = found["tag_name"]
     if found.get("prerelease"):
         run(["gh", "release", "edit", tag, "--repo", repo_name(), "--prerelease=false", "--latest"],
@@ -350,7 +405,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     p = sub.add_parser("cut"); p.add_argument("--tag", required=True); p.set_defaults(fn=cmd_cut)
     p = sub.add_parser("notes"); p.add_argument("--digest", required=True)
     p.add_argument("--commit", required=True); p.set_defaults(fn=cmd_notes)
-    sub.add_parser("paired").set_defaults(fn=cmd_paired)
+    p = sub.add_parser("paired")
+    p.add_argument("--root", default=str(REPO_ROOT), help="the checkout to pair (default: this one)")
+    p.add_argument("--releases", metavar="JSON",
+                   help="the releases as the GitHub API lists them, instead of asking it")
+    p.set_defaults(fn=cmd_paired)
     p = sub.add_parser("lib-plan"); p.add_argument("--channel", choices=["prerelease", "stable"], required=True)
     p.add_argument("--tag"); p.set_defaults(fn=cmd_lib_plan)
     sub.add_parser("check-tested").set_defaults(fn=cmd_check_tested)
