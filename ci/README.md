@@ -555,13 +555,16 @@ Each tier gates the next, so a two-second lint failure never reaches the build:
 ```
 
 **Driver-only pull requests test the published release, when it matches.**
-There is nothing new to compile, so `fetch-browser` downloads the published
-release and the browser suites run against the build users are actually on — a
-minute instead of seventy. That is only right while the release was built from
-this tree's browser sources: once a browser change has merged but not been
-released, the guards in the checkout would judge an older browser. So the scope
-step compares the browser sources against the release tag, and when they
-differ it builds instead, which restores the base branch's cached browser.
+There is nothing new to compile, so `fetch-browser` downloads a published
+release and the browser suites run against a build users actually get, in a
+minute instead of seventy. That is only right when the release was built from
+this tree's browser sources. Once a browser change has merged but not been
+built, the guards in the checkout would judge an older browser. So the scope
+step asks `ci.release paired` for the release built from exactly this tree's
+sources, which is the one this tree's library would be paired with (see
+[Releases](#releases)). The job then installs it through the same pin a
+released package carries. When no release matches, it builds instead, and the
+build restores the base branch's cached browser.
 
 **Changing Juggler's JavaScript does not rebuild the browser.** Measured on a
 real build: ccache reported a **98.63%** hit rate, so almost none of those 24
@@ -630,6 +633,66 @@ way, so a tagged build gets the same hardening.
 > running build. That is right while iterating, but a 70-minute build will not
 > survive a push made 20 minutes in.
 
+## Releases
+
+Every tested merge to `main` is released as a **prerelease**. A maintainer
+promotes one to **stable** by pushing a tag. Both channels ship all three
+artifacts, and each library release is paired with exactly one browser build.
+
+```
+merge to main ─► Tests ─► Build and Release ─► Publish to pypi ─► Publish to npm
+                 (green)   browser prerelease    camoufox 0.5.8bN   0.5.8-beta.N @next
+                           v156.0.1-beta.N       (pip: --pre only)
+
+git tag v0.5.8 <tested main commit> && git push origin v0.5.8
+                      ─► Publish to pypi ─► Publish to npm
+                         paired browser → stable + latest, then
+                         camoufox 0.5.8     0.5.8 @latest
+```
+
+**The browser** (`build.yml`) is built only when the merge changed its sources.
+`ci.browser_inputs.source_digest()` hashes everything the browser is built
+from, except the release number. If a published release already carries that
+digest, nothing is built. Otherwise the workflow takes the next unused
+`beta.N`, which is never below `upstream.sh`'s `release` and never reused. It
+records that number in a *release commit* beside `main` and tags that commit.
+`main` is protected, so the release commit is the tested merge plus one line of
+`upstream.sh`, and rebuilding from the tag reproduces the release. The GitHub
+release is a prerelease, never a draft. Its notes carry the source digest and
+the source commit as HTML comments.
+
+**The packages** (`publish-pypi.yml`, then `publish-npm.yml`) are released from
+the same commit, one version spelled for each registry: `0.5.8b2` on PyPI,
+`0.5.8-beta.2` on npm. `pip install camoufox` ignores prereleases unless
+`--pre` is passed, and `npm install @camoufox/camoufox` takes `latest`, not
+`next`. A prerelease is of the version in `pyproject.toml` while that version
+is unreleased, and of the next patch once it has shipped.
+
+**The pairing.** `ci.release stamp` writes the browser release built from the
+package's own sources into `pythonlib/camoufox/browser-pin.json`, which both
+launchers read. By default, `camoufox fetch` installs exactly that build and a
+launch uses exactly that build, prerelease or not, and whatever else is
+installed or was marked active. A user who explicitly chooses another channel
+or build keeps it, with a warning at launch. `camoufox set --release` goes back
+to the paired build. On `main` the file is `{}`, so a development checkout
+follows its channel as before.
+
+**Promotion** is a `vX.Y.Z` tag, and it is refused unless:
+
+- the tagged commit is on `main`;
+- `All tests passed` succeeded on it;
+- X.Y.Z is newer than every published release;
+- a browser release was built from its sources. Wait for Build and Release to
+  finish on that commit first.
+
+The paired browser release then becomes the stable, latest release, with no
+rebuild, so users get the binaries that were tested. The packages are then
+published at X.Y.Z. Browser release tags (`v156.0.1-beta.N`) are created by the
+workflow token and never start a release run.
+
+Secrets: `TWINE_PASSWORD` for PyPI. npm uses trusted publishing, bound to
+`publish-npm.yml` by name.
+
 ## Running a piece by hand
 
 ```bash
@@ -649,6 +712,9 @@ python3 -m ci.run_native         --subset growth  --binary path/to/camoufox-bin
 python3 -m ci.run_native         --subset growth  --binary path/to/camoufox-bin --shard 3/7
 python3 -m ci.run_sundial        --binary path/to/camoufox-bin
 python3 -m ci.summarize          --results-dir .ci-work/results
+python3 -m ci.release            browser-plan            # build a browser, or reuse one
+python3 -m ci.release            paired                  # the release built from this tree
+python3 -m ci.release            lib-plan --channel prerelease
 ```
 
 Each suite runner writes one result file to `.ci-work/results/` (`run_prepare`
