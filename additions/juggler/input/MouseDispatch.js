@@ -183,6 +183,14 @@ export class MouseDispatch {
    * point it belongs to, and it is taken even for a point that is then skipped,
    * so dropping a point shifts nothing that follows it in time.
    *
+   * The pauses are a schedule counted from the start of the curve, not gaps
+   * taken after each ack: every point waits until its own due time. Waiting a
+   * full gap after the ack added each ack's latency to the curve, so a move ran
+   * as long as its plan plus one round trip per point: on a page busy 19ms in
+   * every 20, moves planned at 0.5s took 0.54-0.71s (tests/patches/
+   * humanize-pacing.py). A late point is dispatched as soon as it can be; the
+   * ones after it are still due on the original clock.
+   *
    * Points outside the viewport are skipped, and a curve leaves the viewport
    * more often than it sounds: measured over 400 random moves, 69% of Cursory
    * paths stray outside the box spanned by their own endpoints, by up to 184px.
@@ -215,9 +223,15 @@ export class MouseDispatch {
     // dispatched is the only place that check is reliable.
     let lastX = NaN;
     let lastY = NaN;
+    const startMs = ChromeUtils.now();
+    let dueMs = 0;
+    const untilDue = () => {
+      const waitMs = startMs + dueMs - ChromeUtils.now();
+      return waitMs > 0 ? new Promise(resolve => setTimeout(resolve, waitMs)) : null;
+    };
     for (const [x, y, delayMs] of steps) {
-      if (delayMs > 0)
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+      dueMs += delayMs;
+      await untilDue();
       if (!this.isInViewport(x, y))
         continue;
       if (Math.round(x) === lastX && Math.round(y) === lastY)
@@ -227,8 +241,8 @@ export class MouseDispatch {
       lastX = Math.round(x);
       lastY = Math.round(y);
     }
-    if (trailingDelayMs > 0)
-      await new Promise(resolve => setTimeout(resolve, trailingDelayMs));
+    dueMs += trailingDelayMs;
+    await untilDue();
     return true;
   }
 

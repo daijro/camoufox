@@ -1683,19 +1683,19 @@ export async function launchOptions({
 		setInto(config, "allowAddonNewtab", true);
 	}
 
-	// Set Firefox user preferences
+	// Set Firefox user preferences. Each toggle writes its pref on or off: a
+	// persistent profile keeps a user.js pref in prefs.js after the launch that
+	// set it, so a flag that only wrote when on stayed on for good.
 	if (block_images) {
 		LeakWarning.warn("block_images", i_know_what_im_doing);
-		firefox_user_prefs["permissions.default.image"] = 2;
-	}
-	if (block_webrtc) {
-		firefox_user_prefs["media.peerconnection.enabled"] = false;
 	}
 	if (disable_coop) {
 		LeakWarning.warn("disable_coop", i_know_what_im_doing);
-		firefox_user_prefs["browser.tabs.remote.useCrossOriginOpenerPolicy"] =
-			false;
 	}
+	firefox_user_prefs["permissions.default.image"] ??= block_images ? 2 : 1;
+	firefox_user_prefs["media.peerconnection.enabled"] ??= !block_webrtc;
+	firefox_user_prefs["browser.tabs.remote.useCrossOriginOpenerPolicy"] ??=
+		!disable_coop;
 	// A persistent context takes its context options here.
 	if (passthrough.is_mobile || passthrough.isMobile) {
 		LeakWarning.warn("is_mobile", i_know_what_im_doing);

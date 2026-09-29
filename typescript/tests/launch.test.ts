@@ -175,6 +175,38 @@ describe("test_launch_environment: prefs", () => {
 		});
 	});
 
+	describe("toggle settings are written both ways (test_launch_environment.py)", () => {
+		// A persistent profile keeps a user.js pref in prefs.js, so a toggle that
+		// only wrote when on stayed on after the flag was removed.
+		const TOGGLES: [string, string, unknown, unknown][] = [
+			["block_webrtc", "media.peerconnection.enabled", true, false],
+			["block_images", "permissions.default.image", 1, 2],
+			[
+				"disable_coop",
+				"browser.tabs.remote.useCrossOriginOpenerPolicy",
+				true,
+				false,
+			],
+		];
+		for (const [flag, pref, stock, toggled] of TOGGLES) {
+			it(`${flag} off writes the stock ${pref}`, async () => {
+				expect((await prefsFor(ua(LINUX_UA)))[pref]).toBe(stock);
+			});
+			it(`${flag} on writes the toggled ${pref}`, async () => {
+				expect((await prefsFor({ ...ua(LINUX_UA), [flag]: true }))[pref]).toBe(
+					toggled,
+				);
+			});
+			it(`the caller's ${pref} wins`, async () => {
+				const prefs = await prefsFor({
+					...ua(LINUX_UA),
+					firefox_user_prefs: { [pref]: toggled },
+				});
+				expect(prefs[pref]).toBe(toggled);
+			});
+		}
+	});
+
 	describe("UI locale follows the Intl locale", () => {
 		const PREF = "intl.locale.requested";
 		it("a default identity pins en-US", async () => {
