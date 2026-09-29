@@ -176,3 +176,19 @@ describe("AvailableVersion.toMetadata", () => {
 		);
 	});
 });
+
+describe("parseSemver", () => {
+	// Mirrors test_prerelease_library_versions_parse_as_their_release.
+	it.each([
+		["0.5.8", [0, 5, 8]],
+		["0.5.8b1", [0, 5, 8]],
+		["0.5.8rc2", [0, 5, 8]],
+		["0.5.8.dev3", [0, 5, 8]],
+		["0.5.8-beta.1", [0, 5, 8]],
+		["^0.5.0", [0, 5, 0]],
+		["1", [1, 0, 0]],
+	])("%s parses as its release", async (raw, expected) => {
+		const { parseSemver } = await import("../src/pkgman.js");
+		expect(parseSemver(raw)).toEqual(expected);
+	});
+});

@@ -180,7 +180,9 @@ async def _launch(
 
 async def _resolve_proxy_geo(proxy: Dict[str, str]) -> Tuple[str, str]:
     """The proxy's exit IP and timezone, looked up off the event loop."""
-    return await asyncio.to_thread(proxy_exit_geo, Proxy(**proxy).as_string())
+    # run_in_executor rather than asyncio.to_thread, which needs Python 3.9.
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, proxy_exit_geo, Proxy(**proxy).as_string())
 
 
 async def AsyncNewContext(

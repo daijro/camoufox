@@ -18,6 +18,12 @@ import prettyBytes from "pretty-bytes";
 import { parse as parseYaml } from "yaml";
 import { CONSTRAINTS, LIBRARY_VERSION } from "./__version__.js";
 import {
+	effectivePin,
+	pinMatches,
+	pinSpec,
+	warnIfUnpaired,
+} from "./browser-pin.js";
+import {
 	CamoufoxNotInstalled,
 	CorruptedDownload,
 	FileNotFoundError,
@@ -136,8 +142,13 @@ function expandUser(p: string): string {
 /**
  * Parse a semver string into a comparable tuple.
  */
-function parseSemver(version: string): number[] {
-	const parts = version.replace(/^[\^~]+/, "").split(".");
+export function parseSemver(version: string): number[] {
+	// A prerelease compares as its release: 0.5.8b1 (PEP 440) and 0.5.8-beta.1
+	// (semver) are both 0.5.8, exactly as in the Python twin.
+	const release = version
+		.replace(/^[\^~]+/, "")
+		.split(/(?<=\d)(?:[-+]|(?:a|b|rc|dev|\.dev|\.post)\d*)/)[0];
+	const parts = release.split(".");
 	// int() semantics: the whole part must be an integer ("1a" -> 0).
 	const out = parts.map((part) =>
 		/^\s*[+-]?\d+\s*$/.test(part) ? Number.parseInt(part, 10) : 0,
@@ -731,8 +742,22 @@ export class CamoufoxFetcher extends GitHubDownloader {
 		if (!match?.groups) return null;
 
 		const version = new Version(match.groups.build, match.groups.version);
+		// A released library installs exactly the browser it was released with
+		// (browser-pin.ts), unless the user explicitly chose something else.
+		const pin = effectivePin(loadConfig());
+		if (
+			pin &&
+			!pinMatches(
+				pin,
+				this.repoConfig.name,
+				match.groups.version,
+				match.groups.build,
+			)
+		) {
+			return null;
+		}
 		const isPrerelease = Boolean(release?.prerelease) || version.isAlpha;
-		if (!this.repoConfig.isVersionSupported(version, isPrerelease)) {
+		if (!pin && !this.repoConfig.isVersionSupported(version, isPrerelease)) {
 			return null;
 		}
 
@@ -922,16 +947,16 @@ export function installedVerStr(fromDir?: string): string {
 	}
 
 	const active = getActivePath();
-	if (active === null) {
-		const config = loadConfig();
-		const pinned = config.pinned;
-		const channel = config.channel || getDefaultChannel();
-		const activeDisplay = pinned ? `${channel}/${pinned}` : channel;
-		throw new CamoufoxNotInstalled(
-			`${activeDisplay} is not installed. Please run \`camoufox fetch\` to install.`,
+	if (active === null) throw notInstalledError();
+	const version = Version.fromPath(active);
+	if (path.basename(path.dirname(path.dirname(active))) === "browsers") {
+		warnIfUnpaired(
+			path.basename(path.dirname(active)),
+			version.version ?? "",
+			version.build,
 		);
 	}
-	return Version.fromPath(active).fullString;
+	return version.fullString;
 }
 
 /**
@@ -952,13 +977,19 @@ export function rootInstallSupported(): boolean {
 	}
 }
 
+/** What is missing -- the paired build, a pin, or a channel -- and how to get it. */
 function notInstalledError(): CamoufoxNotInstalled {
 	const config = loadConfig();
+	const pin = effectivePin(config);
 	const pinned = config.pinned;
 	const channel = config.channel || getDefaultChannel();
-	const activeDisplay = pinned ? `${channel}/${pinned}` : channel;
+	const missing = pin
+		? `${pin.repoName} ${pinSpec(pin)}, the browser this camoufox release pairs with,`
+		: pinned
+			? `${channel}/${pinned}`
+			: channel;
 	return new CamoufoxNotInstalled(
-		`${activeDisplay} is not installed. Please run \`camoufox fetch\` to install.`,
+		`${missing} is not installed. Please run \`camoufox fetch\` to install.`,
 	);
 }
 
@@ -988,6 +1019,8 @@ function resolveInstalledPath(downloadIfMissing: boolean): string | null {
 	} else if (rootInstallSupported()) {
 		return INSTALL_DIR;
 	} else if (!downloadIfMissing) {
+		// Other builds are installed, but not the one this release pairs with.
+		if (effectivePin(loadConfig())) throw notInstalledError();
 		throw new UnsupportedVersion("Camoufox executable is outdated.");
 	}
 	return null;

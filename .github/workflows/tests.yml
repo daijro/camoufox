@@ -1,10 +1,10 @@
 name: Tests
 
-# The repository's test pipeline. Runs on every pull request, on pushes to main,
-# on demand, and -- via workflow_call -- from any workflow that needs to test a
-# specific browser version,
-# so a contributor's pull request and an automated Firefox bump are judged by
-# exactly the same checks.
+# The repository's test pipeline. Runs on every pull request, on demand, and --
+# via workflow_call -- from release.yml on every push to main (a release is only
+# built from a commit this pipeline passed) and from any workflow that needs to
+# test a specific browser version, so a contributor's pull request, a release and
+# an automated Firefox bump are judged by exactly the same checks.
 #
 # The browser version comes from upstream.sh unless a caller passes one in,
 # which is what lets one pipeline test both a pull request and a version bump.
@@ -42,8 +42,7 @@ name: Tests
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  # Pushes to main are tested by release.yml, which calls this workflow.
   schedule:
     # Keeps the ccache alive. GitHub evicts a cache after 7 days unused, and a
     # cold Firefox build is over an hour; twice a week keeps pull-request builds
@@ -119,6 +118,7 @@ jobs:
       playwright_firefox: ${{ steps.versions.outputs.playwright_firefox }}
       version_note: ${{ steps.versions.outputs.note }}
       browser_changed: ${{ steps.scope.outputs.browser_changed }}
+      browser_tag: ${{ steps.scope.outputs.browser_tag }}
       has_sundial: ${{ steps.sundial.outputs.has_sundial }}
       shard_matrix: ${{ steps.shards.outputs.matrix }}
     steps:
@@ -136,10 +136,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           # --check-upstream: only suite SELECTION follows browser_version.
-          # The build reads upstream.sh, and the fetch path downloads whatever
-          # pythonlib considers current, so a browser_version the branch does not
-          # pin would compile the OLD browser and judge it against the NEW
-          # suite -- silently. A real Firefox bump edits upstream.sh, and then
+          # The build reads upstream.sh, and the fetch path downloads the release
+          # built from this tree's sources, so a browser_version the branch does
+          # not pin would test the OLD browser against the NEW suite --
+          # silently. A real Firefox bump edits upstream.sh, and then
           # resolution reads it by default and the two cannot disagree.
           python3 -m ci.versions --check-upstream \
             ${{ inputs.browser_version && format('--browser-version {0}', inputs.browser_version) || '' }} \
@@ -147,6 +147,8 @@ jobs:
 
       - name: Does this change the browser?
         id: scope
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         # Only a change that can alter the binary justifies compiling one. A
         # pull request that touches pythonlib/ or ci/ is a driver change: it
         # still gets the full browser suite, but against the published build its
@@ -167,31 +169,21 @@ jobs:
             echo "::notice::Browser sources changed -- rebuilding from source."
             exit 0
           fi
-          # The pull request leaves the browser alone -- but the published
-          # release is only the right browser to test it on if it was built from
-          # the SAME browser sources as this tree. The patch guards and suites
-          # come from this checkout, so when the base branch has moved past the
-          # release (a merged browser change that is not published yet), testing
-          # the release pairs new guards with an old browser, and every guard for
-          # the unreleased change fails on a pull request that never touched it.
-          # Compare against the tag the release was cut from; if they differ,
-          # build -- which restores the base branch's cached browser when its
-          # compiled half matches, so it costs minutes, not the full build.
-          . ./upstream.sh
-          tag="v${version}-${release}"
-          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "browser_changed=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::No release tag $tag -- the release this tree targets is not published; building."
-            exit 0
-          fi
-          ahead=$(git diff --name-only "$tag" HEAD | grep -E "$sources" || true)
-          if [ -n "$ahead" ]; then
-            echo "browser sources that differ from $tag:"; echo "$ahead" | sed 's/^/  /'
-            echo "browser_changed=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::The base branch's browser sources are ahead of the published $tag ($(echo "$ahead" | wc -l) files) -- building (a cache hit when the base branch already built it)."
-          else
+          # The pull request leaves the browser alone -- but a published release
+          # is only the right browser to test it on if it was built from the
+          # SAME browser sources as this tree. The patch guards and suites come
+          # from this checkout, so when the base branch has moved past every
+          # release (a merged browser change not built yet), testing a release
+          # pairs new guards with an old browser, and every guard for the
+          # unbuilt change fails on a pull request that never touched it. So
+          # test the release built from exactly these sources -- the one this
+          # tree's library would be paired with (ci/release.py) -- or build.
+          if python3 -m ci.release paired; then
             echo "browser_changed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No browser sources differ from the published $tag -- testing against it."
+            echo "::notice::A published release was built from these browser sources -- testing against it."
+          else
+            echo "browser_changed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::No published release was built from these browser sources -- building (a cache hit when the base branch already built it)."
           fi
 
       - name: May the stealth check run?
@@ -687,6 +679,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # The release built from this tree's sources, installed the way a
+          # released library installs its paired browser: stamp the pin, fetch.
+          python3 -m ci.release stamp --browser-tag "${{ needs.resolve.outputs.browser_tag }}" \
+            --py-version "$(sed -n 's/^version = "\(.*\)"/\1/p' pythonlib/pyproject.toml)" \
+            --npm-version "$(python3 -c "import json; print(json.load(open('typescript/package.json'))['version'])")"
           python -m camoufox fetch
           # The ACTIVE build's directory, resolved the way the launcher resolves
           # it. `camoufox path` prints the cache root, and multiversion installs
@@ -694,13 +691,11 @@ jobs:
           # binary from the root failed every driver-only run since #772.
           install_dir="$(python -c 'from camoufox.pkgman import camoufox_path; print(camoufox_path(download_if_missing=False))')"
           echo "install dir: $install_dir"
-          # Which browser did we actually get? This path does not build, it
-          # downloads the current release -- correct for a driver change, since
-          # that is what users run. But the SUITE comes from upstream.sh, and in
-          # an upgrade window the two part company: upstream.sh moves to the new
-          # Firefox before any build of it is published, and this would then test
-          # the old browser against the new suite. Beta drift inside a generation
-          # is fine; a generation apart is not.
+          # Which browser did we actually get? This path does not build: it
+          # downloads the release built from exactly these sources, so its
+          # Firefox is upstream.sh's by construction (the source digest covers
+          # the version line). The suite comes from upstream.sh too; assert that
+          # the two agree rather than assume it.
           active="$(python -m camoufox active)"
           echo "fetched: $active"
           python3 -m ci.versions --check-fetched "$active" \

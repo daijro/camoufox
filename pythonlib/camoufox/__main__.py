@@ -38,6 +38,7 @@ from .multiversion import (
     save_config,
     save_repo_cache,
 )
+from .browser_pin import effective_pin, load_pin
 from .pkgman import (
     INSTALL_DIR,
     AvailableVersion,
@@ -268,6 +269,7 @@ def fetch(version):
     repo_name = None
     repo_data = None
     ver_data = None
+    paired = False
     if version:
         parts = version.lower().split("/")
         if len(parts) == 1:
@@ -286,6 +288,17 @@ def fetch(version):
         repo_data = _repo_data(cache, repo_name)
         if repo_data is not None:
             ver_data = _pin_target(repo_data, config["pinned"], config.get("pinned_sha"))
+    elif pin := effective_pin(config):
+        # This library release pairs with exactly one browser build.
+        repo_name = pin.repo_name
+        repo_data = _repo_data(cache, repo_name)
+        if repo_data is not None:
+            ver_data = _pin_target(repo_data, pin.spec, None)
+        if ver_data is None:
+            rprint(f"{pin.tag}, the browser this camoufox release pairs with, is not in "
+                   f"{repo_name}'s releases. Run 'camoufox sync' and try again.", fg="red")
+            return
+        paired = True
     else:
         channel = config.get("channel") or get_default_channel()
         repo_name, ctype = (channel.split("/", 1) + ["stable"])[:2]
@@ -312,7 +325,11 @@ def fetch(version):
     )
     repo_config = RepoConfig.find_by_name(repo_data["name"])
     try:
-        CamoufoxUpdate(repo_config=repo_config, selected_version=selected).update()
+        # The paired build is what this release was tested with; installing it
+        # needs no "this is a prerelease" confirmation even when it is one.
+        CamoufoxUpdate(repo_config=repo_config, selected_version=selected).update(
+            i_know_what_im_doing=paired
+        )
     except Exception as e:
         msg = str(e)
         if "404" in msg or "Not Found" in msg:
@@ -426,7 +443,11 @@ def _set_pinned(repo_name: str, channel_type: str, ver_data: dict, inst, sha: Op
 @cli.command(name="set")
 @click.argument("specifier", required=False)
 @click.option("--geoip", is_flag=True, help="Select GeoIP source instead")
-def set_cmd(specifier, geoip):
+@click.option(
+    "--release", "paired", is_flag=True,
+    help="Forget any explicit choice and use the browser this camoufox release pairs with",
+)
+def set_cmd(specifier, geoip, paired):
     """
     \b
     Set the active Camoufox version to use & fetch.
@@ -439,6 +460,19 @@ def set_cmd(specifier, geoip):
     """
     if geoip:
         _select_geoip_source()
+        return
+
+    if paired:
+        pin = load_pin()
+        if pin is None:
+            rprint("This camoufox is a development copy; it pairs with no particular browser.", fg="yellow")
+            return
+        config = load_config()
+        for key in ("channel", "pinned", "pinned_sha", "active_version"):
+            config.pop(key, None)
+        save_config(config)
+        click.secho(f"Using the paired browser: {pin.repo_name} {pin.spec} ({pin.tag})", fg="green")
+        click.secho("Run 'camoufox fetch' if it is not installed.", fg="yellow")
         return
 
     if specifier:
@@ -1019,6 +1053,16 @@ def active_cmd():
     def _label(v):
         sha8 = (v.sha256 or "")[:8]
         return f"{v.channel_path} ({sha8})" if sha8 else v.channel_path
+
+    pin = effective_pin(config)
+    if pin:
+        target = _find_installed(f"{pin.repo_name}/{pin.spec}")
+        if target:
+            click.echo(f"{_label(target)} (paired with this release)")
+        else:
+            click.echo(f"{pin.repo_name}/{pin.spec} (paired with this release) ", nl=False)
+            rprint("(not fetched)", fg="yellow")
+        return
 
     if pinned:
         pinned_sha = config.get("pinned_sha")

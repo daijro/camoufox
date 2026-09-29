@@ -39,8 +39,8 @@ repo or deletes the release.
 
 Publishing a new bundle: rebuild the archive, `python3 scripts/fetch-fonts.py
 --write-spec <archive> --tag font-bundle-vN`, then upload it under that tag.
-Font-bundle tags are excluded from `build.yml`, so they do not trigger a browser
-build or appear among the browser downloads.
+Font-bundle tags do not match `release.yml`'s `vX.Y.Z` trigger, so they do not
+start a release, and they carry no `manifest.json`, so no library pairs with them.
 
 ## Layout: each face stored once
 

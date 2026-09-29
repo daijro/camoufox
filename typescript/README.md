@@ -111,8 +111,9 @@ Python, `headless: "virtual"` is handled by `Camoufox()`, `NewBrowser()` and
 
 ```
 camoufox sync                     # refresh the version catalogue
-camoufox fetch [version]          # install the active or a specific version
+camoufox fetch [version]          # install the paired (or chosen) build, or a specific version
 camoufox set [specifier]          # pin a version or channel; no specifier opens a picker
+camoufox set --release            # go back to the build this release is paired with
 camoufox set --geoip              # pick a GeoIP source
 camoufox list [installed|all]     # list versions
 camoufox remove [version]         # remove one version, or everything (--select to pick)
@@ -122,6 +123,13 @@ camoufox version                  # version / storage info
 camoufox test [url]               # open the Playwright inspector
 camoufox server                   # launch a Playwright server
 ```
+
+Each release of this package is paired with the one browser build it was built
+and tested with, the same build as the `camoufox` Python release of the same
+version. The first launch installs that build, and every launch uses it, until
+you choose another with `camoufox set`. A launch then warns that the build
+differs from the paired one. See the Python package's README, under "Which
+browser build is used".
 
 The commands and pickers match the Python CLI. The one exception is `gui`, a
 PySide6 desktop app that only the Python package provides.
@@ -166,15 +174,15 @@ CAMOUFOX_E2E=1 CAMOUFOX_EXECUTABLE=/path/to/camoufox-bin pnpm test tests/e2e.tes
 
 ## Releasing
 
-The npm package and pythonlib are released together, at one version, from one
-place: **Actions → Publish to pypi**. That run first calls
-`.github/workflows/publish-npm.yml` as a dry run -- type check, lint, tests,
-build, and `scripts/check-pack.mjs` (the version must equal pythonlib's; every
-data file must be in the tarball; the tarball must install and import in an
-empty project) -- then uploads to PyPI, and its success triggers
-`publish-npm.yml` to publish the same commit to npm with trusted publishing (no
-token is stored). Starting `publish-npm.yml` by hand only retries the npm half,
-and it refuses unless PyPI already has the version.
+The npm package and pythonlib are released together by
+[`.github/workflows/release.yml`](../.github/workflows/release.yml): a
+prerelease under the `next` dist-tag for every tested merge to `main` that
+changes the package, and a stable release under `latest` for a `vX.Y.Z` tag (see
+[`ci/README.md`](../ci/README.md#releases)). One job builds both packages and
+runs `scripts/check-pack.mjs` (the version must equal pythonlib's; every data
+file must be in the tarball; the tarball must install and import in an empty
+project); PyPI gets its upload first, then npm gets that same tarball, published
+with trusted publishing (no token is stored).
 
 ## Licence
 

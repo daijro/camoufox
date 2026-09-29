@@ -1,0 +1,463 @@
+name: Release
+
+# Every release of the browser, the Python package and the npm package, from one
+# workflow. Two ways in:
+#
+#   push to main   (prerelease)  the test pipeline runs on the pushed commit;
+#                  if it passes, a browser prerelease is built when the browser's
+#                  sources changed, and -- when anything a library ships changed
+#                  -- camoufox <next>bN goes to PyPI (pip ignores it without
+#                  --pre) and <next>-beta.N to npm under the `next` dist-tag.
+#   tag vX.Y.Z     (stable)      on a main commit whose tests passed: the
+#                  browser prerelease built from that commit's sources becomes
+#                  the stable, latest release (no rebuild), and X.Y.Z goes to
+#                  PyPI and to npm `latest`.
+#
+# Each package is stamped with the browser release built from the same sources
+# (ci/release.py stamp -> pythonlib/camoufox/browser-pin.json), and both
+# launchers fetch and launch exactly that build by default. A browser release is
+# found by the source digest in its manifest.json asset (ci.browser_inputs).
+#
+# Packages are built once, in build-library, and the publish jobs upload exactly
+# those files. PyPI and npm both use trusted publishing (OIDC): no token is
+# stored, and each registry accepts uploads only from this file in this
+# repository. A failed publish is retried with "Re-run failed jobs": every
+# version and tag comes from `plan`, so a re-run publishes the same release.
+#
+# Branch protection makes main unwritable; nothing here commits to it. A browser
+# release's number lives only in its tag, which points at the tested main commit
+# (see `ci.release set-build`). Every published library version is tagged too
+# (vX.Y.Z by the maintainer, vX.Y.ZbN by tag-library).
+
+on:
+  push:
+    branches: [main]
+    # vX.Y.Z only. Browser tags (v156.0.1-beta.33) and library prerelease tags
+    # (v0.5.8b2) are created by this workflow's token, which starts no run, and
+    # check-promotable refuses anything else a person pushes.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions: {}
+
+# One run at a time per channel. Browser release numbers are allocated in `plan`,
+# so two prerelease runs must never overlap; GitHub keeps only the newest pending
+# run in a group, so a burst of merges releases the last of them, which contains
+# the others. A promotion never waits on a prerelease.
+concurrency:
+  group: release-${{ github.ref_type }}
+  cancel-in-progress: false
+
+env:
+  # The version tests.yml builds and tests with, so a release is compiled by the
+  # same interpreter every pull request's build job already exercised.
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  tests:
+    # The pushed commit, exactly -- not whatever main is by the time a job checks out.
+    if: github.ref_type == 'branch'
+    permissions:
+      contents: read
+      pull-requests: write # tests.yml's summary job declares it; it comments on pull requests only
+    uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ github.sha }}
+    secrets: inherit
+
+  # ---------------------------------------------------------------------------
+  plan:
+    needs: tests
+    # A tag skips `tests`: check-promotable requires that they passed on its commit.
+    if: >-
+      !cancelled() &&
+      (github.ref_type == 'tag' || needs.tests.result == 'success')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      checks: read # check-promotable: the test gate on the tagged commit
+    outputs:
+      channel: ${{ steps.channel.outputs.channel }}
+      build_browser: ${{ steps.browser.outputs.build || 'false' }}
+      browser_tag: ${{ steps.browser.outputs.tag || steps.paired.outputs.browser_tag }}
+      digest: ${{ steps.browser.outputs.digest }}
+      publish_library: ${{ steps.library.outputs.publish }}
+      py_version: ${{ steps.library.outputs.py_version }}
+      npm_version: ${{ steps.library.outputs.npm_version }}
+      dist_tag: ${{ steps.library.outputs.dist_tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0 # every tag: release numbers, the last library release, main
+
+      - id: channel
+        run: echo "channel=${{ github.ref_type == 'tag' && 'stable' || 'prerelease' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Only a tested main commit is promoted
+        if: steps.channel.outputs.channel == 'stable'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -m ci.release check-promotable --tag "$GITHUB_REF_NAME"
+
+      - id: paired
+        name: The browser release built from these sources
+        if: steps.channel.outputs.channel == 'stable'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -m ci.release paired
+
+      - id: browser
+        name: Build a browser, or reuse the one built from these sources
+        if: steps.channel.outputs.channel == 'prerelease'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -m ci.release browser-plan
+
+      - id: library
+        name: The library versions, and whether to publish them
+        run: |
+          python3 -m ci.release lib-plan --channel "${{ steps.channel.outputs.channel }}" \
+            ${{ github.ref_type == 'tag' && format('--tag {0}', github.ref_name) || '' }}
+
+  # ---------------------------------------------------------------------------
+  build-browser:
+    needs: plan
+    if: needs.plan.outputs.build_browser == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      # `make dir` (inside ci.run_prepare) writes the mozconfig and adds the Rust
+      # targets from BUILD_TARGET, defaulting to macos,arm64 when it is unset.
+      # multibuild.py sets the same value again before building.
+      BUILD_TARGET: ${{ matrix.target }},${{ matrix.arch }}
+    strategy:
+      matrix:
+        target: [linux, windows, macos]
+        arch: [x86_64, arm64, i686]
+        exclude:
+          # Fails (.mozbuild does not include clang++-cl)
+          - target: windows
+            arch: arm64
+          # Unsupported
+          - target: macos
+            arch: i686
+          - target: linux
+            arch: i686
+
+    steps:
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@8831c82abf29b34eb2caac48d5f999ecfc0d8eef # v4.1
+        with:
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+          remove-docker-images: "true"
+          remove-cached-tools: "true"
+          remove-swapfile: "true"
+          verbose: "false"
+
+      - name: Remove unwanted tools
+        # Originally from here: https://github.com/AdityaGarg8/remove-unwanted-software/blob/master/action.yml
+        run: |
+          sudo apt-get remove -y '^aspnetcore-.*' > /dev/null
+          sudo apt-get remove -y '^dotnet-.*' > /dev/null
+          sudo apt-get remove -y '^llvm-.*' > /dev/null
+          sudo apt-get remove -y 'php.*' > /dev/null
+          sudo apt-get remove -y '^mongodb-.*' > /dev/null
+          sudo apt-get remove -y '^mysql-.*' > /dev/null
+          sudo apt-get remove -y azure-cli google-chrome-stable firefox ${POWERSHELL} mono-devel libgl1-mesa-dri --fix-missing > /dev/null
+          if [[ (${CODENAME} = focal) || (${CODENAME} = jammy) ]]; then
+            sudo apt-get remove -y google-cloud-sdk --fix-missing > /dev/null
+            sudo apt-get remove -y google-cloud-cli --fix-missing > /dev/null
+          fi
+          sudo apt-get autoremove -y > /dev/null
+          sudo apt-get clean > /dev/null
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Name this release
+        # The tested commit's upstream.sh names the floor its number was taken
+        # from; the build takes the number itself from the tag.
+        run: python3 -m ci.release set-build --tag "${{ needs.plan.outputs.browser_tag }}"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up LLVM
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 18
+          sudo apt-get install -y lld-18 clang-18
+          if [ "${{ matrix.arch }}" != "x86_64" ]; then
+            sudo apt-get install -y libc6-i386 lib32gcc-s1 lib32stdc++6 gcc-multilib g++-multilib
+          fi
+          sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-18 100
+
+      - name: Check disk space
+        run: df -h
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          # ccache: the mozconfig enables --with-ccache, but the runner image no
+          # longer ships it, so configure fails with "Cannot find ccache".
+          # fontconfig: scripts/verify-fonts.py resolves every reportable family
+          # through fc-list/fc-match, so the bundle is checked with the same tool
+          # the browser uses rather than assumed correct.
+          sudo apt-get install -y msitools p7zip-full aria2 ccache fontconfig
+
+      - name: Fetch the font bundle
+        # The bundle is a release asset, not repo content (~2.16 GB extracted,
+        # 843 MB as .tar.xz -- see scripts/fetch-fonts.py). Without this the
+        # package would ship with NO fonts while pythonlib/camoufox/fonts.json
+        # still reports hundreds of families, which is a reverse leak in the
+        # shipped browser. After the dependency install, so the download uses
+        # aria2c's parallel connections rather than the curl fallback.
+        run: make fonts-extract
+
+      - name: Verify the font bundle matches the manifest
+        # Full run, not --quick: this is the release path, and the one invariant
+        # that cannot be recovered after publishing is a family fonts.json
+        # reports that the packaged fontconfig cannot resolve.
+        run: python3 scripts/verify-fonts.py
+
+      - name: Prepare the source tree
+        # setup-minimal (which fetches the tarball) -> dir -> mozbootstrap, with
+        # the two network-bound steps retried on transient failures, exactly as
+        # the tests.yml build job does. multibuild.py then finds _READY and
+        # builds without re-patching.
+        run: python3 -m ci.run_prepare
+
+      - name: Create swap space
+        run: |
+          sudo fallocate -l 24G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+          df -h /
+
+      - name: Build
+        env:
+          # Cap Rust parallelism to lower peak memory (avoids OOM/SIGTERM).
+          # Tune to taste: higher = faster but more RAM.
+          CARGO_BUILD_JOBS: "1"
+        run: python3 ./multibuild.py --target ${{ matrix.target }} --arch ${{ matrix.arch }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: CamoufoxBuilds-${{ matrix.target }}-${{ matrix.arch }}
+          path: dist/*
+
+  publish-browser:
+    needs: [plan, build-browser]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the release and its tag
+      id-token: write # build provenance
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download the builds
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: CamoufoxBuilds-*
+          path: artifacts
+
+      - name: Attest where the builds came from
+        # `gh attestation verify <zip> --repo daijro/camoufox` proves a download
+        # was built by this workflow from this commit.
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: artifacts/**/*
+
+      - name: Publish the prerelease
+        # Not a draft: the library release that follows pairs with it through its
+        # manifest.json (ci.release paired). `--target` creates the tag on the
+        # tested commit.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.browser_tag }}
+        run: |
+          python3 -m ci.release manifest --tag "$TAG" \
+            --digest "${{ needs.plan.outputs.digest }}" --commit "$GITHUB_SHA" > manifest.json
+          cat manifest.json
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --prerelease --latest=false --title "$TAG" --generate-notes \
+            $(find artifacts -type f) manifest.json
+
+  # ---------------------------------------------------------------------------
+  build-library:
+    # Built and checked once, before anything is published or promoted; the
+    # publish jobs upload exactly these files.
+    needs: plan
+    if: needs.plan.outputs.publish_library == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      CAMOUFOX_FPGEN_DATA: ${{ github.workspace }}/.fpgen
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install tools and pythonlib
+        # The npm build copies pythonlib's data files and the pinned fpgen model.
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install vermin build twine -r ci/requirements.txt -e pythonlib
+          .venv/bin/python scripts/pin-fpgen-model.py
+
+      - name: Check Python compatibility
+        # The package must run on the floor pyproject.toml declares (python =
+        # "^3.10"); `3.10-` means "needs at most 3.10". typing_extensions is a
+        # dependency, not a stdlib module for vermin to date.
+        working-directory: pythonlib
+        run: ../.venv/bin/vermin . --eval-annotations --backport typing_extensions --target=3.10- --violations camoufox/
+
+      - name: Stamp the version and the paired browser
+        run: |
+          python3 -m ci.release stamp \
+            --browser-tag "${{ needs.plan.outputs.browser_tag }}" \
+            --py-version "${{ needs.plan.outputs.py_version }}" \
+            --npm-version "${{ needs.plan.outputs.npm_version }}"
+          cat pythonlib/camoufox/browser-pin.json
+
+      - name: Build the Python package
+        working-directory: pythonlib
+        run: |
+          ../.venv/bin/python -m build
+          ../.venv/bin/twine check dist/*
+
+      - name: The wheel carries its browser pin
+        working-directory: pythonlib
+        run: |
+          ../.venv/bin/python - <<'EOF'
+          import glob, json, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          pin = json.loads(zipfile.ZipFile(wheel).read("camoufox/browser-pin.json"))
+          assert pin["tag"] == "${{ needs.plan.outputs.browser_tag }}", pin
+          print(f"{wheel} pins {pin['tag']}")
+          EOF
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          package_json_file: typescript/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: typescript/pnpm-lock.yaml
+
+      - name: Build the npm package
+        working-directory: typescript
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          node scripts/check-pack.mjs
+          tag=$(node -p "require('./dist/data-files/browser-pin.json').tag")
+          test "$tag" = "${{ needs.plan.outputs.browser_tag }}" || {
+            echo "::error::dist pins '$tag', expected ${{ needs.plan.outputs.browser_tag }}"; exit 1; }
+          mkdir ../npm-dist
+          npm pack --ignore-scripts --pack-destination ../npm-dist
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: python-dist
+          path: pythonlib/dist/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: npm-dist
+          path: npm-dist/
+
+  # ---------------------------------------------------------------------------
+  promote-browser:
+    # After both packages are built and checked, so a broken package never
+    # leaves a promoted browser behind.
+    needs: [plan, build-library]
+    if: needs.plan.outputs.channel == 'stable'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # release flags
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -m ci.release promote
+
+  publish-pypi:
+    # The browser a package pins is published (and, for stable, promoted) first:
+    # a failed browser build stops the release rather than pinning a tag that
+    # does not exist.
+    needs: [plan, build-library, publish-browser, promote-browser]
+    if: >-
+      !cancelled() && needs.build-library.result == 'success' &&
+      (needs.plan.outputs.build_browser != 'true' || needs.publish-browser.result == 'success') &&
+      (needs.plan.outputs.channel != 'stable' || needs.promote-browser.result == 'success')
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write # trusted publishing and attestations
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: python-dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
+  publish-npm:
+    # After PyPI, so npm never has a version PyPI does not.
+    needs: [plan, publish-pypi]
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write # trusted publishing and provenance
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          # Trusted publishing needs npm >= 11.5.1, which Node 24 ships.
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: npm-dist
+          path: npm-dist
+      - run: npm publish npm-dist/*.tgz --access public --tag "${{ needs.plan.outputs.dist_tag }}"
+
+  tag-library:
+    # Every published library version has a tag; the next merge compares against
+    # it to decide whether the library changed. A stable version's tag is the one
+    # that started this run.
+    needs: [plan, publish-npm]
+    if: needs.plan.outputs.channel == 'prerelease'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/v${{ needs.plan.outputs.py_version }}" -f sha="$GITHUB_SHA"

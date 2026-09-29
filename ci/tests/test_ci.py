@@ -2632,8 +2632,16 @@ def test_build_tester_accepts_every_core_count_pythonlib_presents():
 # ---------------------------------------------------------------------------
 
 
-def _scope(repo: pathlib.Path, base: str) -> tuple[str, str]:
-    """Run the workflow's own "Does this change the browser?" step in `repo`."""
+# What the GitHub API says is published, for the fixture below.
+PUBLISHED = [{"tag_name": "v1.0-beta.1", "draft": False, "prerelease": True, "body": ""}]
+
+
+def _scope(repo: pathlib.Path, base: str, releases=None) -> tuple[str, str]:
+    """Run the workflow's own "Does this change the browser?" step in `repo`.
+
+    The step asks `ci.release paired` for the release built from the tree's
+    sources; here it pairs `repo` against `releases` instead of the live API.
+    """
     import subprocess
 
     text = WORKFLOW.read_text(encoding="utf-8")
@@ -2643,13 +2651,20 @@ def _scope(repo: pathlib.Path, base: str) -> tuple[str, str]:
     block = "\n".join(line[10:] if line.startswith(" " * 10) else line.strip() for line in lines)
     block = block.replace("${{ github.event_name }}", "pull_request")
     block = block.replace("${{ github.event.pull_request.base.sha }}", base)
-    out = repo / "out.txt"
+    listed = repo.parent / "releases.json"
+    listed.write_text(json.dumps(PUBLISHED if releases is None else releases))
+    assert "python3 -m ci.release paired" in block, "the step no longer asks ci.release for the pairing"
+    block = block.replace(
+        "python3 -m ci.release paired",
+        f"python3 -m ci.release paired --root {repo} --releases {listed}",
+    )
+    out = repo.parent / "out.txt"
     proc = subprocess.run(
         ["bash", "-e", "-c", block], cwd=repo, capture_output=True, text=True,
-        env={**os.environ, "GITHUB_OUTPUT": str(out)},
+        env={**os.environ, "GITHUB_OUTPUT": str(out), "PYTHONPATH": str(CI_ROOT.parent)},
     )
     assert proc.returncode == 0, proc.stderr
-    return out.read_text().strip(), proc.stdout
+    return out.read_text().strip(), proc.stdout + proc.stderr
 
 
 def _git(repo: pathlib.Path, *args: str) -> str:
@@ -2670,6 +2685,8 @@ def release_repo(tmp_path):
     (repo / "upstream.sh").write_text("version=1.0\nrelease=beta.1\n")
     (repo / "patches").mkdir()
     (repo / "patches" / "a.patch").write_text("a\n")
+    (repo / "additions" / "juggler").mkdir(parents=True)
+    (repo / "additions" / "juggler" / "jar.mn").write_text("% content juggler %content/\n")
     (repo / "typescript").mkdir()
     (repo / "typescript" / "x.ts").write_text("x\n")
     _git(repo, "add", "-A")
@@ -2682,7 +2699,7 @@ def test_driver_pr_on_the_released_sources_tests_the_release(release_repo):
     base = _git(release_repo, "rev-parse", "HEAD")
     (release_repo / "typescript" / "x.ts").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
-    assert _scope(release_repo, base)[0] == "browser_changed=false"
+    assert "browser_changed=false" in _scope(release_repo, base)[0].splitlines()
 
 
 def test_driver_pr_on_unreleased_browser_sources_builds(release_repo):
@@ -2711,6 +2728,47 @@ def test_unpublished_release_tag_builds(release_repo):
     (release_repo / "typescript" / "x.ts").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
     assert _scope(release_repo, base)[0] == "browser_changed=true"
+
+
+@pytest.mark.parametrize("releases", [[], [{**PUBLISHED[0], "draft": True}]], ids=["missing", "draft"])
+def test_driver_pr_whose_release_is_not_published_builds(release_repo, releases):
+    """A tag alone is not a release: #811 must not pair with a draft or a missing one."""
+    base = _git(release_repo, "rev-parse", "HEAD")
+    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    _git(release_repo, "commit", "-qam", "driver change")
+    assert _scope(release_repo, base, releases)[0] == "browser_changed=true"
+
+
+def test_driver_pr_tests_the_prerelease_of_its_sources_not_the_latest_release(release_repo):
+    """#811: v156.0.1-beta.32 was a prerelease and the fetch took the latest stable
+    release, 152.0.4. The pairing names the prerelease, and the fetch job uses it."""
+    base = _git(release_repo, "rev-parse", "HEAD")
+    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    _git(release_repo, "commit", "-qam", "driver change")
+    stable = {"tag_name": "v0.9-beta.0", "draft": False, "prerelease": False, "body": ""}
+    result, _ = _scope(release_repo, base, PUBLISHED + [stable])
+    assert "browser_changed=false" in result.splitlines()
+    assert "browser_tag=v1.0-beta.1" in (release_repo.parent / "out.txt").read_text()
+    fetch = _jobs()["fetch-browser"]["steps"]
+    assert any("--browser-tag \"${{ needs.resolve.outputs.browser_tag }}\"" in (s.get("run") or "")
+               for s in fetch), "the fetch job no longer installs the paired release"
+
+
+def test_driver_pr_pairs_by_the_source_digest_in_the_release_manifest(release_repo):
+    """A release built by release.yml takes its number from its tag; main's
+    upstream.sh never names it, so the pairing comes from the digest in the
+    release's manifest.json."""
+    from ci.browser_inputs import source_digest
+    from ci.release import manifest
+
+    base = _git(release_repo, "rev-parse", "HEAD")
+    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    _git(release_repo, "commit", "-qam", "driver change")
+    cut = {"tag_name": "v1.0-beta.2", "draft": False, "prerelease": True,
+           "manifest": manifest("v1.0-beta.2", source_digest(release_repo), "0" * 40)}
+    result, _ = _scope(release_repo, base, [cut])
+    assert "browser_changed=false" in result.splitlines()
+    assert "browser_tag=v1.0-beta.2" in (release_repo.parent / "out.txt").read_text()
 
 
 # ---------------------------------------------------------------------------

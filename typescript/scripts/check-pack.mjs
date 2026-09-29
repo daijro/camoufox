@@ -26,7 +26,9 @@ const problems = [];
 // 1. version lockstep with pythonlib
 const pyproject = readFileSync(join(root, "..", "pythonlib", "pyproject.toml"), "utf8");
 const pyVersion = pyproject.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
-if (pyVersion !== pkg.version) {
+// One release, spelled for each registry: npm's 0.5.8-beta.2 is PyPI's 0.5.8b2.
+const asPep440 = (v) => v.replace(/-beta\.(\d+)$/, "b$1");
+if (pyVersion !== asPep440(pkg.version)) {
 	problems.push(`package.json version ${pkg.version} != pythonlib ${pyVersion}`);
 }
 if (pkg.private) problems.push("package.json is private: npm will refuse to publish it");

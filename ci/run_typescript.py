@@ -125,7 +125,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             result.record(f"pnpm {script}", evidence.PASS if proc.ok else evidence.FAIL)
 
     # The tarball a user would install: builds, ships every data file, installs
-    # and imports in an empty project, and its CLI starts. publish-npm.yml runs
+    # and imports in an empty project, and its CLI starts. release.yml runs
     # the same check before uploading; running it here means a packaging mistake
     # is caught on the pull request that makes it, not on release day.
     if not args.browser:

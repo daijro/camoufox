@@ -15,6 +15,7 @@ import * as readline from "node:readline";
 import { Argument, Command, Option } from "commander";
 import { LIBRARY_VERSION } from "./__version__.js";
 import { DefaultAddons, maybeDownloadAddons } from "./addons.js";
+import { effectivePin, loadPin, pinSpec } from "./browser-pin.js";
 import { FileNotFoundError } from "./exceptions.js";
 import {
 	allowGeoip,
@@ -522,6 +523,8 @@ program
 		let repoName: string | null = null;
 		let repo: RepoBlock | null = null;
 		let verData: CachedVersion | null = null;
+		let paired = false;
+		const pin = effectivePin(config);
 
 		if (version) {
 			const parts = version.toLowerCase().split("/");
@@ -546,6 +549,20 @@ program
 			repoName = channel.includes("/") ? channel.split("/")[0] : channel;
 			repo = repoData(cache, repoName);
 			if (repo) verData = pinTarget(repo, config.pinned, config.pinned_sha);
+		} else if (pin) {
+			// This library release pairs with exactly one browser build.
+			repoName = pin.repoName;
+			repo = repoData(cache, repoName);
+			if (repo) verData = pinTarget(repo, pinSpec(pin), undefined);
+			if (!verData) {
+				rprint(
+					`${pin.tag}, the browser this camoufox release pairs with, is not in ` +
+						`${repoName}'s releases. Run 'camoufox sync' and try again.`,
+					"red",
+				);
+				return;
+			}
+			paired = true;
 		} else {
 			const channel = config.channel || getDefaultChannel();
 			const slash = channel.indexOf("/");
@@ -580,7 +597,9 @@ program
 		const repoConfig = RepoConfig.findByName(repo.name);
 		try {
 			const updater = await new CamoufoxUpdate(repoConfig, selected).init();
-			await updater.update();
+			// The paired build is what this release was tested with; installing
+			// it needs no "this is a prerelease" confirmation even when it is one.
+			await updater.update(false, paired);
 		} catch (e) {
 			const msg = errorMessage(e);
 			if (msg.includes("404") || msg.includes("Not Found")) {
@@ -615,9 +634,36 @@ program
 	)
 	.argument("[specifier]")
 	.option("--geoip", "Select GeoIP source instead")
-	.action(async (specifier: string | undefined, { geoip }) => {
+	.option(
+		"--release",
+		"Forget any explicit choice and use the browser this camoufox release pairs with",
+	)
+	.action(async (specifier: string | undefined, { geoip, release }) => {
 		if (geoip) {
 			await selectGeoIPSource();
+			return;
+		}
+
+		if (release) {
+			const releasePin = loadPin();
+			if (!releasePin) {
+				rprint(
+					"This camoufox is a development copy; it pairs with no particular browser.",
+					"yellow",
+				);
+				return;
+			}
+			const config = loadConfig();
+			delete config.channel;
+			delete config.pinned;
+			delete config.pinned_sha;
+			delete config.active_version;
+			saveConfig(config);
+			rprint(
+				`Using the paired browser: ${releasePin.repoName} ${pinSpec(releasePin)} (${releasePin.tag})`,
+				"green",
+			);
+			rprint("Run 'camoufox fetch' if it is not installed.", "yellow");
 			return;
 		}
 
@@ -1304,6 +1350,21 @@ program
 			const sha8 = (v.sha256 ?? "").slice(0, 8);
 			return sha8 ? `${v.channelPath} (${sha8})` : v.channelPath;
 		};
+
+		const pin = effectivePin(config);
+		if (pin) {
+			const target = findInstalled(`${pin.repoName}/${pinSpec(pin)}`);
+			if (target) {
+				echo(`${label(target)} (paired with this release)`);
+			} else {
+				echo(
+					`${pin.repoName}/${pinSpec(pin)} (paired with this release) `,
+					false,
+				);
+				rprint("(not fetched)", "yellow");
+			}
+			return;
+		}
 
 		if (pinned) {
 			const pinnedSha = config.pinned_sha;
