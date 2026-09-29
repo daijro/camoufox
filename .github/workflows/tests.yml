@@ -1,10 +1,10 @@
 name: Tests
 
-# The repository's test pipeline. Runs on every pull request, on pushes to main,
-# on demand, and -- via workflow_call -- from any workflow that needs to test a
-# specific browser version,
-# so a contributor's pull request and an automated Firefox bump are judged by
-# exactly the same checks.
+# The repository's test pipeline. Runs on every pull request, on demand, and --
+# via workflow_call -- from release.yml on every push to main (a release is only
+# built from a commit this pipeline passed) and from any workflow that needs to
+# test a specific browser version, so a contributor's pull request, a release and
+# an automated Firefox bump are judged by exactly the same checks.
 #
 # The browser version comes from upstream.sh unless a caller passes one in,
 # which is what lets one pipeline test both a pull request and a version bump.
@@ -42,8 +42,7 @@ name: Tests
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  # Pushes to main are tested by release.yml, which calls this workflow.
   schedule:
     # Keeps the ccache alive. GitHub evicts a cache after 7 days unused, and a
     # cold Firefox build is over an hour; twice a week keeps pull-request builds

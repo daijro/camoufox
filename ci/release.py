@@ -1,26 +1,31 @@
 #!/usr/bin/env python3
-"""Release plumbing: prereleases on every merge, stable releases by tag.
+"""Release plumbing for .github/workflows/release.yml.
 
-Every merge to main that passes the test pipeline publishes a prerelease of
-everything: a browser build if the browser's sources changed (a GitHub
-prerelease with its own release number), then the Python package on PyPI and the
-npm package under the `next` dist-tag. Pushing a `vX.Y.Z` tag on a tested main
+Every merge to main that passes the test pipeline publishes a prerelease: a
+browser build if the browser's sources changed (a GitHub prerelease with its own
+release number), then -- if the library changed -- the Python package on PyPI and
+the npm package under the `next` dist-tag. Pushing a `vX.Y.Z` tag on a tested main
 commit promotes it: the browser release built from that commit's sources becomes
 the stable, latest release, and X.Y.Z is published to PyPI and to npm `latest`.
 
 Each library release is paired with exactly one browser release -- the one built
-from the same sources, found by `ci.browser_inputs.source_digest()` -- and
-`stamp` writes that pairing into the package (pythonlib/camoufox/browser-pin.json,
-read by both launchers). A library therefore never runs a browser it was not
-released with unless its user explicitly chooses another.
+from the same sources, found by `ci.browser_inputs.source_digest()` in the
+release's manifest.json asset -- and `stamp` writes that pairing into the package
+(pythonlib/camoufox/browser-pin.json, read by both launchers). A library therefore
+never runs a browser it was not released with unless its user explicitly chooses
+another.
 
-    python3 -m ci.release browser-plan          # build a new browser, or reuse one
-    python3 -m ci.release cut --tag TAG          # the release commit and tag
+A browser release's number is not committed anywhere: its tag points at the
+tested main commit, and `set-build` writes the number from the tag name into the
+build's working tree. Rebuilding from the tag with `set-build` reproduces it.
+
+    python3 -m ci.release browser-plan           # build a new browser, or reuse one
+    python3 -m ci.release set-build --tag TAG     # upstream.sh names TAG's number (working tree only)
+    python3 -m ci.release manifest --tag T --digest D --commit C   # the release's manifest.json
     python3 -m ci.release paired [--root DIR] [--releases JSON]  # the browser release for this tree
     python3 -m ci.release lib-plan --channel prerelease|stable [--tag vX.Y.Z]
     python3 -m ci.release stamp --browser-tag T --py-version V --npm-version V
-    python3 -m ci.release promote                # paired browser -> stable, latest
-    python3 -m ci.release check-tested           # 'All tests passed' on HEAD
+    python3 -m ci.release promote                 # paired browser -> stable, latest
     python3 -m ci.release check-promotable --tag vX.Y.Z
 """
 
@@ -45,11 +50,19 @@ PYPROJECT = REPO_ROOT / "pythonlib" / "pyproject.toml"
 PACKAGE_JSON = REPO_ROOT / "typescript" / "package.json"
 TS_VERSION = REPO_ROOT / "typescript" / "src" / "__version__.ts"
 
-# Written into every browser release's notes; how a library finds its browser.
-DIGEST_MARKER = "camoufox-source-digest"
-COMMIT_MARKER = "camoufox-source-commit"
+# Attached to every browser release; how a library finds its browser.
+MANIFEST_ASSET = "manifest.json"
+
+# The one check the test pipeline reports. Run by release.yml it is named
+# "tests / All tests passed"; run on a pull request, "All tests passed".
+GATE_CHECK = "All tests passed"
 
 STABLE_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+# Every published library version is tagged: vX.Y.Z, or vX.Y.ZbN for a
+# prerelease (PEP 440 spelling, so it never reads as a browser tag).
+LIBRARY_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:b(\d+))?$")
+# What a library release ships besides the browser it pairs with.
+LIBRARY_DIRS = ("pythonlib", "typescript")
 _BROWSER_TAG = re.compile(r"^v(?P<version>[^-]+)-(?P<prefix>[a-z]+)\.(?P<n>\d+)$")
 
 
@@ -136,21 +149,53 @@ def next_browser_release(upstream_release: str, tags: Iterable[str]) -> str:
     return f"{prefix}.{max([floor] + [u + 1 for u in used])}"
 
 
-def marker(name: str, value: str) -> str:
-    return f"<!-- {name}: {value} -->"
+def manifest(tag: str, digest: str, commit: str) -> dict:
+    """What every browser release carries as its manifest.json asset."""
+    return {"schema": 1, "tag": tag, "source_digest": digest, "commit": commit}
 
 
-def read_marker(body: Optional[str], name: str) -> Optional[str]:
-    m = re.search(rf"<!--\s*{re.escape(name)}:\s*(\S+)\s*-->", body or "")
-    return m[1] if m else None
+def release_manifest(rel: dict) -> Optional[dict]:
+    """A release's manifest.json, or None for a release published without one.
+
+    A release dict may carry it pre-fetched under "manifest" (the tests do);
+    otherwise the asset is downloaded. The repository is public, so no token is
+    sent -- the download redirects to a host that must not receive it.
+    """
+    if "manifest" in rel:
+        return rel["manifest"]
+    asset = next((a for a in rel.get("assets") or [] if a.get("name") == MANIFEST_ASSET), None)
+    if asset is None:
+        return None
+    return http_json(asset["browser_download_url"])
 
 
 def paired_release(releases: Sequence[dict], digest: str) -> Optional[dict]:
     """The newest published browser release built from these sources."""
     for rel in releases:  # the API lists newest first
-        if not rel.get("draft") and read_marker(rel.get("body"), DIGEST_MARKER) == digest:
+        if rel.get("draft"):
+            continue
+        found = release_manifest(rel)
+        if found and found.get("source_digest") == digest:
             return rel
     return None
+
+
+def library_version_key(tag: str) -> Optional[Tuple[int, int, int, float]]:
+    """Version order for a library tag: 0.5.7b1 < 0.5.7b2 < 0.5.7 < 0.5.8b1."""
+    m = LIBRARY_TAG.match(tag)
+    if not m:
+        return None
+    return int(m[1]), int(m[2]), int(m[3]), float(m[4]) if m[4] else float("inf")
+
+
+def last_library_tag(tags: Iterable[str]) -> Optional[str]:
+    keyed = [(k, t) for t in tags if (k := library_version_key(t))]
+    return max(keyed)[1] if keyed else None
+
+
+def is_library_source(rel: str) -> bool:
+    """Whether a change to `rel` changes what a library release would ship."""
+    return rel.split("/", 1)[0] in LIBRARY_DIRS or is_browser_source(rel)
 
 
 def is_browser_source(rel: str) -> bool:
@@ -170,8 +215,8 @@ class Pairing:
 def find_paired(releases: Sequence[dict], root: Path = REPO_ROOT) -> Pairing:
     """The published browser release built from the sources at `root`, and why.
 
-    A release built by build.yml carries its source digest in its notes, and a
-    match there is exact. Releases cut before that marker existed (up to and
+    A release built by release.yml carries its source digest in its manifest.json,
+    and a match there is exact. Releases cut before the manifest existed (up to and
     including v156.0.1-beta.32) are found the way tests.yml used to find them:
     the tag upstream.sh names, published, with no browser source changed since.
     Anything else -- a draft, a tag that was never released, or a base branch
@@ -268,29 +313,26 @@ def cmd_browser_plan(_: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_cut(args: argparse.Namespace) -> int:
-    """The release commit, beside main: upstream.sh names this release's number.
+def cmd_set_build(args: argparse.Namespace) -> int:
+    """upstream.sh names TAG's release number -- in the working tree only.
 
-    main is protected, so the number cannot be committed there; the tag points at
-    a commit whose only difference from the tested main commit is that line, and
-    rebuilding from the tag reproduces the release exactly.
+    The tag points at the tested main commit, whose upstream.sh names the floor
+    the number was allocated from; the build takes the number from the tag.
     """
     m = _BROWSER_TAG.match(args.tag)
     if not m:
         die(f"{args.tag!r} is not a browser release tag")
+    up = read_upstream_sh()
+    if m["version"] != up["version"]:
+        die(f"{args.tag} is Firefox {m['version']}, but upstream.sh builds {up['version']}")
     path = REPO_ROOT / "upstream.sh"
-    text = re.sub(r"^release=.*$", f"release={m['prefix']}.{m['n']}", path.read_text(), flags=re.M)
-    path.write_text(text)
-    run(["git", "commit", "-q", "-m", f"Release {args.tag}", "upstream.sh"], cwd=REPO_ROOT, check=True)
-    run(["git", "tag", args.tag], cwd=REPO_ROOT, check=True)
-    run(["git", "push", "origin", f"refs/tags/{args.tag}"], cwd=REPO_ROOT, check=True)
+    path.write_text(re.sub(r"^release=.*$", f"release={m['prefix']}.{m['n']}", path.read_text(), flags=re.M))
+    log(f"upstream.sh: release={m['prefix']}.{m['n']}")
     return 0
 
 
-def cmd_notes(args: argparse.Namespace) -> int:
-    """The markers every browser release carries, for `paired` to find it by."""
-    print(marker(DIGEST_MARKER, args.digest))
-    print(marker(COMMIT_MARKER, args.commit))
+def cmd_manifest(args: argparse.Namespace) -> int:
+    print(json.dumps(manifest(args.tag, args.digest, args.commit), indent=2))
     return 0
 
 
@@ -308,7 +350,7 @@ def cmd_paired(args: argparse.Namespace) -> int:
     if not found:
         die(f"no browser release was built from these sources: {pairing.why}. "
             "If this commit changed the browser, its build has failed or not finished; "
-            "see the 'Build and Release' workflow.")
+            "see that commit's run of the Release workflow.")
     log(f"paired with {found['tag_name']}: {pairing.why}")
     set_output("browser_tag", found["tag_name"])
     set_output("browser_prerelease", "true" if found.get("prerelease") else "false")
@@ -325,27 +367,54 @@ def cmd_lib_plan(args: argparse.Namespace) -> int:
     set_output("py_version", plan.py)
     set_output("npm_version", plan.npm)
     set_output("dist_tag", plan.dist_tag)
+    publish = True
+    if args.channel == "prerelease":
+        publish, why = library_changed(Path(args.root).resolve())
+        log(why)
+    set_output("publish", "true" if publish else "false")
     return 0
 
 
+def library_changed(root: Path = REPO_ROOT) -> Tuple[bool, str]:
+    """Whether HEAD ships anything the last library release did not.
+
+    A docs- or CI-only merge publishes no library prerelease: it would be the
+    same package under a new number.
+    """
+    tags = run(["git", "tag", "-l", "v*"], cwd=root, check=True).stdout.split()
+    last = last_library_tag(tags)
+    if last is None:
+        return True, "no library release is tagged yet"
+    diff = run(["git", "diff", "--name-only", last, "HEAD"], cwd=root, check=True).stdout.split()
+    changed = sorted(f for f in diff if is_library_source(f))
+    if not changed:
+        return False, f"nothing a library release ships has changed since {last}"
+    return True, f"{len(changed)} shipped files changed since {last}, e.g. {', '.join(changed[:3])}"
+
+
+def is_gate_check(name: str) -> bool:
+    """The test pipeline's gate, run directly or called by release.yml."""
+    return name == GATE_CHECK or name.endswith(f" / {GATE_CHECK}")
+
+
 def _require_tested(sha: str) -> None:
-    """The test pipeline's required check passed on exactly this commit."""
-    checks = http_json(
-        f"https://api.github.com/repos/{repo_name()}/commits/{sha}/check-runs"
-        "?check_name=All%20tests%20passed&per_page=100",
-        headers=_gh_headers(),
-    ).get("check_runs", [])
-    if not any(c.get("conclusion") == "success" for c in checks):
-        die(f"'All tests passed' has not passed on {sha[:10]}; nothing untested is released")
+    """The test pipeline's gate check passed on exactly this commit."""
+    checks: List[dict] = []
+    for page in range(1, 11):
+        batch = http_json(
+            f"https://api.github.com/repos/{repo_name()}/commits/{sha}/check-runs"
+            f"?filter=latest&per_page=100&page={page}",
+            headers=_gh_headers(),
+        ).get("check_runs", [])
+        checks += batch
+        if len(batch) < 100:
+            break
+    if not any(is_gate_check(c.get("name", "")) and c.get("conclusion") == "success" for c in checks):
+        die(f"'{GATE_CHECK}' has not passed on {sha[:10]}; nothing untested is released")
 
 
 def _head() -> str:
     return run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, check=True).stdout.strip()
-
-
-def cmd_check_tested(_: argparse.Namespace) -> int:
-    _require_tested(_head())
-    return 0
 
 
 def cmd_check_promotable(args: argparse.Namespace) -> int:
@@ -402,17 +471,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("browser-plan").set_defaults(fn=cmd_browser_plan)
-    p = sub.add_parser("cut"); p.add_argument("--tag", required=True); p.set_defaults(fn=cmd_cut)
-    p = sub.add_parser("notes"); p.add_argument("--digest", required=True)
-    p.add_argument("--commit", required=True); p.set_defaults(fn=cmd_notes)
+    p = sub.add_parser("set-build"); p.add_argument("--tag", required=True); p.set_defaults(fn=cmd_set_build)
+    p = sub.add_parser("manifest"); p.add_argument("--tag", required=True); p.add_argument("--digest", required=True)
+    p.add_argument("--commit", required=True); p.set_defaults(fn=cmd_manifest)
     p = sub.add_parser("paired")
     p.add_argument("--root", default=str(REPO_ROOT), help="the checkout to pair (default: this one)")
     p.add_argument("--releases", metavar="JSON",
                    help="the releases as the GitHub API lists them, instead of asking it")
     p.set_defaults(fn=cmd_paired)
     p = sub.add_parser("lib-plan"); p.add_argument("--channel", choices=["prerelease", "stable"], required=True)
-    p.add_argument("--tag"); p.set_defaults(fn=cmd_lib_plan)
-    sub.add_parser("check-tested").set_defaults(fn=cmd_check_tested)
+    p.add_argument("--tag")
+    p.add_argument("--root", default=str(REPO_ROOT), help="the checkout to compare (default: this one)")
+    p.set_defaults(fn=cmd_lib_plan)
     p = sub.add_parser("check-promotable"); p.add_argument("--tag", required=True)
     p.set_defaults(fn=cmd_check_promotable)
     p = sub.add_parser("stamp"); p.add_argument("--browser-tag", required=True)

@@ -2754,17 +2754,18 @@ def test_driver_pr_tests_the_prerelease_of_its_sources_not_the_latest_release(re
                for s in fetch), "the fetch job no longer installs the paired release"
 
 
-def test_driver_pr_pairs_by_source_digest_after_a_release_commit(release_repo):
-    """A release cut by build.yml tags a commit beside main; main's upstream.sh never
-    names it, so the pairing comes from the digest in the release notes."""
+def test_driver_pr_pairs_by_the_source_digest_in_the_release_manifest(release_repo):
+    """A release built by release.yml takes its number from its tag; main's
+    upstream.sh never names it, so the pairing comes from the digest in the
+    release's manifest.json."""
     from ci.browser_inputs import source_digest
-    from ci.release import DIGEST_MARKER, marker
+    from ci.release import manifest
 
     base = _git(release_repo, "rev-parse", "HEAD")
     (release_repo / "typescript" / "x.ts").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
     cut = {"tag_name": "v1.0-beta.2", "draft": False, "prerelease": True,
-           "body": marker(DIGEST_MARKER, source_digest(release_repo))}
+           "manifest": manifest("v1.0-beta.2", source_digest(release_repo), "0" * 40)}
     result, _ = _scope(release_repo, base, [cut])
     assert "browser_changed=false" in result.splitlines()
     assert "browser_tag=v1.0-beta.2" in (release_repo.parent / "out.txt").read_text()

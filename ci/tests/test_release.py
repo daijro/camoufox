@@ -8,9 +8,11 @@ import shutil
 import pytest
 
 from ci import browser_inputs, release
+from ci._util import read_upstream_sh
 from ci.release import (
-    DIGEST_MARKER,
-    marker,
+    is_gate_check,
+    last_library_tag,
+    library_changed,
     next_browser_release,
     paired_release,
     plan_prerelease,
@@ -60,15 +62,88 @@ def test_browser_release_numbers_are_global_and_never_reused():
     assert next_browser_release("beta.32", []) == "beta.32"
 
 
+def _released(tag, digest, **extra):
+    return {"tag_name": tag, "manifest": release.manifest(tag, digest, "0" * 40), **extra}
+
+
 def test_a_library_pairs_with_the_newest_non_draft_release_from_its_sources():
     releases = [
-        {"tag_name": "v156.0.1-beta.35", "draft": True, "body": marker(DIGEST_MARKER, "aaa")},
-        {"tag_name": "v156.0.1-beta.34", "body": "notes\n" + marker(DIGEST_MARKER, "bbb")},
-        {"tag_name": "v156.0.1-beta.33", "body": marker(DIGEST_MARKER, "aaa") + "\nnotes"},
-        {"tag_name": "v152.0.4-beta.31", "body": None},
+        _released("v156.0.1-beta.35", "aaa", draft=True),
+        _released("v156.0.1-beta.34", "bbb"),
+        _released("v156.0.1-beta.33", "aaa"),
+        {"tag_name": "v152.0.4-beta.31", "assets": []},  # before manifests
     ]
     assert paired_release(releases, "aaa")["tag_name"] == "v156.0.1-beta.33"
     assert paired_release(releases, "ccc") is None
+
+
+def test_a_release_without_a_manifest_asset_is_not_downloaded(monkeypatch):
+    monkeypatch.setattr(release, "http_json", lambda url: pytest.fail(f"fetched {url}"))
+    assert release.release_manifest({"tag_name": "v152.0.4-beta.30", "assets": [{"name": "a.zip"}]}) is None
+
+
+def test_library_tags_order_as_versions_and_never_as_browser_tags():
+    tags = ["v0.5.7b1", "v0.5.7b10", "v0.5.7b2", "v0.5.6", "v156.0.1-beta.33", "font-bundle-v1"]
+    assert last_library_tag(tags) == "v0.5.7b10"
+    assert last_library_tag(tags + ["v0.5.7"]) == "v0.5.7"
+    assert last_library_tag(["v156.0.1-beta.33"]) is None
+    # a library prerelease tag must not take a browser release number
+    assert next_browser_release("beta.32", ["v0.5.7b40"]) == "beta.32"
+
+
+def test_the_gate_check_is_found_when_release_yml_runs_the_tests():
+    assert is_gate_check("All tests passed")
+    assert is_gate_check("tests / All tests passed")
+    assert not is_gate_check("Not All tests passed")
+
+
+def _git(repo, *args):
+    import subprocess
+
+    return subprocess.run(["git", "-c", "user.email=ci@test", "-c", "user.name=ci", *args],
+                          cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+
+
+@pytest.fixture
+def library_repo(tmp_path):
+    """A repo whose last library release, v0.5.7b1, is tagged on HEAD."""
+    for rel in ("pythonlib/camoufox/a.py", "docs/a.md", "patches/a.patch", "upstream.sh"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("a\n")
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "released")
+    _git(tmp_path, "tag", "v0.5.7b1")
+    return tmp_path
+
+
+@pytest.mark.parametrize("changed, publish", [
+    ("docs/a.md", False),
+    ("pythonlib/camoufox/a.py", True),
+    ("patches/a.patch", True),  # a new browser means a new pin
+])
+def test_a_library_prerelease_is_published_only_when_what_it_ships_changed(library_repo, changed, publish):
+    (library_repo / changed).write_text("b\n")
+    _git(library_repo, "commit", "-qam", "change")
+    assert library_changed(library_repo)[0] is publish
+
+
+def test_the_first_library_prerelease_is_always_published(library_repo):
+    _git(library_repo, "tag", "-d", "v0.5.7b1")
+    assert library_changed(library_repo)[0] is True
+
+
+def test_set_build_names_the_tags_release_in_the_working_tree_only(tmp_path, monkeypatch):
+    shutil.copy(release.REPO_ROOT / "upstream.sh", tmp_path / "upstream.sh")
+    monkeypatch.setattr(release, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(release, "read_upstream_sh",
+                        lambda: read_upstream_sh(tmp_path / "upstream.sh"))
+    version = read_upstream_sh(tmp_path / "upstream.sh")["version"]
+
+    release.cmd_set_build(argparse.Namespace(tag=f"v{version}-beta.77"))
+    assert re.search(r"^release=beta\.77$", (tmp_path / "upstream.sh").read_text(), re.M)
+    with pytest.raises(SystemExit):
+        release.cmd_set_build(argparse.Namespace(tag="v1.0-beta.78"))  # another Firefox
 
 
 def _copy_browser_inputs(tmp_path):

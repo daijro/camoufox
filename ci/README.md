@@ -626,8 +626,8 @@ whole pull request. `ci.run_prepare` runs `setup-minimal` → `dir` →
 text reads as transient. A failed patch hunk or a compile error still fails on
 the first attempt — retrying a broken tree only spends a runner to reach the
 same answer, and a retry loop that swallows a real breakage turns a red build
-into a slow red build. The release workflow (`build.yml`) prepares its tree the same
-way, so a tagged build gets the same hardening.
+into a slow red build. The release workflow (`release.yml`) prepares its tree the same
+way, so a release build gets the same hardening.
 
 > One consequence of `cancel-in-progress`: pushing to a branch cancels its
 > running build. That is right while iterating, but a 70-minute build will not
@@ -635,45 +635,52 @@ way, so a tagged build gets the same hardening.
 
 ## Releases
 
-Every tested merge to `main` is released as a **prerelease**. A maintainer
-promotes one to **stable** by pushing a tag. Both channels ship all three
-artifacts, and each library release is paired with exactly one browser build.
+One workflow, [`release.yml`](../.github/workflows/release.yml), makes every
+release. Every tested merge to `main` is released as a **prerelease**; a
+maintainer promotes one to **stable** by pushing a tag. Each
+library release is paired with exactly one browser build.
 
 ```
-merge to main ─► Tests ─► Build and Release ─► Publish to pypi ─► Publish to npm
-                 (green)   browser prerelease    camoufox 0.5.8bN   0.5.8-beta.N @next
-                           v156.0.1-beta.N       (pip: --pre only)
+merge to main ─► tests ─► plan ─┬─► build-browser ─► publish-browser ─┐
+               (tests.yml,      │   (only if its      v156.0.1-beta.N  │
+                this commit)    │    sources changed)                  ├─► publish-pypi ─► publish-npm ─► tag-library
+                                └─► build-library ─────────────────────┘   0.5.8bN          0.5.8-beta.N    v0.5.8bN
+                                    (only if what it ships changed)        (pip: --pre)     @next
 
 git tag v0.5.8 <tested main commit> && git push origin v0.5.8
-                      ─► Publish to pypi ─► Publish to npm
-                         paired browser → stable + latest, then
-                         camoufox 0.5.8     0.5.8 @latest
+               ─► plan ─► build-library ─► promote-browser ─► publish-pypi ─► publish-npm
+                  (checks)                 paired → stable       0.5.8           0.5.8 @latest
 ```
 
-**The browser** (`build.yml`) is built only when the merge changed its sources.
+**Only a tested commit is released.** On a push to `main`, `release.yml` calls
+`tests.yml` on the pushed commit and goes on only if it passes; `tests.yml` has no
+push trigger of its own. Every later job checks out that same commit.
+
+**The browser** is built only when the merge changed its sources.
 `ci.browser_inputs.source_digest()` hashes everything the browser is built
-from, except the release number. If a published release already carries that
-digest, nothing is built. Otherwise the workflow takes the next unused
-`beta.N`, which is never below `upstream.sh`'s `release` and never reused. It
-records that number in a *release commit* beside `main` and tags that commit.
-`main` is protected, so the release commit is the tested merge plus one line of
-`upstream.sh`, and rebuilding from the tag reproduces the release. The GitHub
-release is a prerelease, never a draft. Its notes carry the source digest and
-the source commit as HTML comments.
+from, except the release number. Every browser release carries a
+`manifest.json` asset with that digest and the commit it was built from; if a
+published release already carries this digest, nothing is built. Otherwise
+`plan` takes the next unused `beta.N`, never below `upstream.sh`'s `release` and
+never reused. Nothing is committed: the tag points at the tested `main` commit,
+and `ci.release set-build` writes the number from the tag into the build's
+working tree, so rebuilding from the tag reproduces the release. The builds are
+attested (`gh attestation verify <file> --repo daijro/camoufox`) and published
+as a GitHub prerelease, never a draft.
 
-Releases cut before those markers existed (up to `v156.0.1-beta.32`) are paired
+Releases cut before manifests existed (up to `v156.0.1-beta.32`) are paired
 the old way: the tag `upstream.sh` names, published (a prerelease counts, a
-draft does not), with no browser source changed since. So the first merge after
-this scheme lands reuses `v156.0.1-beta.32` instead of rebuilding it, and a
-driver-only pull request tests that prerelease rather than the latest stable
-release.
+draft does not), with no browser source changed since.
 
-**The packages** (`publish-pypi.yml`, then `publish-npm.yml`) are released from
-the same commit, one version spelled for each registry: `0.5.8b2` on PyPI,
-`0.5.8-beta.2` on npm. `pip install camoufox` ignores prereleases unless
-`--pre` is passed, and `npm install @camoufox/camoufox` takes `latest`, not
-`next`. A prerelease is of the version in `pyproject.toml` while that version
-is unreleased, and of the next patch once it has shipped.
+**The packages** are built once, in `build-library`, and `publish-pypi` and
+`publish-npm` upload exactly those files: one version spelled for each
+registry, `0.5.8b2` on PyPI and `0.5.8-beta.2` on npm. `pip install camoufox`
+ignores prereleases unless `--pre` is passed, and `npm install
+@camoufox/camoufox` takes `latest`, not `next`. A prerelease is of the version
+in `pyproject.toml` while that version is unreleased, and of the next patch once
+it has shipped. A merge that changes nothing a package ships (`pythonlib/`,
+`typescript/` or the browser it pins) publishes no library prerelease; the last
+published version is found by its tag, `vX.Y.Z` or `vX.Y.ZbN`.
 
 **The pairing.** `ci.release stamp` writes the browser release built from the
 package's own sources into `pythonlib/camoufox/browser-pin.json`, which both
@@ -689,16 +696,18 @@ follows its channel as before.
 - the tagged commit is on `main`;
 - `All tests passed` succeeded on it;
 - X.Y.Z is newer than every published release;
-- a browser release was built from its sources. Wait for Build and Release to
-  finish on that commit first.
+- a browser release was built from its sources. Wait for that commit's release
+  run to finish first.
 
-The paired browser release then becomes the stable, latest release, with no
-rebuild, so users get the binaries that were tested. The packages are then
-published at X.Y.Z. Browser release tags (`v156.0.1-beta.N`) are created by the
-workflow token and never start a release run.
+Both packages are then built and checked. The paired browser release becomes
+the stable, latest release, with no rebuild, so users get the binaries that were
+tested; the packages are published at X.Y.Z.
 
-Secrets: `TWINE_PASSWORD` for PyPI. npm uses trusted publishing, bound to
-`publish-npm.yml` by name.
+**A failed publish** is retried with *Re-run failed jobs*. Every version and
+tag comes from `plan`, so a re-run publishes the same release.
+
+**Credentials.** None are stored. PyPI and npm both use trusted publishing
+(OIDC): each accepts uploads only from `release.yml` in this repository.
 
 ## Running a piece by hand
 

@@ -187,9 +187,9 @@ def source_digest(root: Optional[Path] = None) -> str:
     This is what pairs a library release with a browser release: two commits
     with the same source digest produce the same browser, so a library built
     from either may name that browser's release. The release number is left
-    out because the release workflow sets it on a release commit of its own
-    (ci/release.py), and that must not make the browser look different from
-    the main commit it was cut from.
+    out because the release workflow writes it into the build's working tree
+    from the release tag (ci/release.py set-build), and that must not make the
+    browser look different from the main commit it was built from.
     """
     root = root or REPO_ROOT
     digest = hashlib.sha256()
