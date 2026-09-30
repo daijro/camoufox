@@ -264,3 +264,67 @@ def test_npm_publish_is_given_a_local_path():
     for run in runs:
         target = re.search(r"npm publish\s+(\S+)", run).group(1)
         assert target.startswith(("./", "/")), f"not a local path to npm: {target}"
+
+
+def _wheel(tmp_path, version, body=b"print('hi')\n"):
+    import zipfile
+
+    path = tmp_path / f"camoufox-{version}-py3-none-any.whl"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("camoufox/__init__.py", body)
+        z.writestr(f"camoufox-{version}.dist-info/METADATA", f"Name: camoufox\nVersion: {version}\n")
+        z.writestr(f"camoufox-{version}.dist-info/RECORD", f"camoufox/__init__.py,sha256={version}\n")
+    return path
+
+
+def _tarball(tmp_path, version, body=b"export {};\n"):
+    import io
+    import tarfile
+
+    path = tmp_path / f"camoufox-camoufox-{version}.tgz"
+    with tarfile.open(path, "w:gz") as t:
+        for name, data in {"package/package.json": f'{{"version": "{version}"}}'.encode(),
+                           "package/dist/index.js": body}.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            t.addfile(info, io.BytesIO(data))
+    return path
+
+
+def test_the_newest_published_version_orders_prereleases_below_their_release():
+    assert release.newest_version(["0.5.6", "0.5.7b1", "0.5.7b10", "0.5.7b2"], release._PY_VERSION) == "0.5.7b10"
+    assert release.newest_version(["0.5.7b3", "0.5.7"], release._PY_VERSION) == "0.5.7"
+    assert release.newest_version(["0.5.6", "0.5.7-beta.2", "0.1.19"], release._NPM_VERSION) == "0.5.7-beta.2"
+    assert release.newest_version([], release._NPM_VERSION) is None
+
+
+@pytest.mark.parametrize("build", [_wheel, _tarball])
+def test_a_package_that_differs_only_in_its_version_is_not_new(tmp_path, build):
+    (tmp_path / "old").mkdir()
+    (tmp_path / "new").mkdir()
+    old = build(tmp_path / "old", "0.5.7b2" if build is _wheel else "0.5.7-beta.2")
+    new = build(tmp_path / "new", "0.5.7b3" if build is _wheel else "0.5.7-beta.3")
+    changed = build(tmp_path / "new", "0.5.7b4" if build is _wheel else "0.5.7-beta.4", body=b"changed\n")
+    spelling = release._PY_VERSION if build is _wheel else release._NPM_VERSION
+    published = ["0.5.6", "0.5.7b2"] if build is _wheel else ["0.5.6", "0.5.7-beta.2"]
+
+    def fetch(version, dest):
+        assert version == published[-1], "compared with the newest published version"
+        return old
+
+    ver = lambda p: p.name.split("-")[1] if build is _wheel else p.name[len("camoufox-camoufox-"):-4]  # noqa: E731
+    assert release.changed_since_published(new, ver(new), published, spelling, fetch, "x")[0] is False
+    is_new, why = release.changed_since_published(changed, ver(changed), published, spelling, fetch, "x")
+    assert is_new and ("__init__.py" in why or "index.js" in why), why
+    assert release.changed_since_published(new, ver(new), [], spelling, fetch, "x")[0] is True
+
+
+def test_each_registry_is_published_only_when_its_own_package_changed():
+    jobs = yaml.safe_load((release.REPO_ROOT / ".github/workflows/release.yml")
+                          .read_text(encoding="utf-8"))["jobs"]
+    assert "outputs.publish_pypi == 'true'" in jobs["publish-pypi"]["if"]
+    assert "outputs.publish_npm == 'true'" in jobs["publish-npm"]["if"]
+    # npm must not depend on PyPI having published: a TypeScript-only change skips PyPI.
+    assert "needs.publish-pypi.result == 'skipped'" in jobs["publish-npm"]["if"]
+    steps = jobs["build-library"]["steps"]
+    assert any("ci.release lib-diff" in s.get("run", "") for s in steps)
