@@ -251,3 +251,16 @@ def test_no_job_a_channel_needs_is_skipped_by_a_job_it_skips(channel):
         and not re.search(r"!cancelled\(\)|always\(\)", str(jobs[name].get("if", "")))
     ]
     assert not unguarded, f"{channel}: skipped by an upstream job it does not need: {unguarded}"
+
+
+def test_npm_publish_is_given_a_local_path():
+    """npm reads `dir/file.tgz` as a GitHub owner/repo and tries to clone it; the
+    first npm publish failed that way. A local tarball needs `./` or `/`."""
+    jobs = yaml.safe_load((release.REPO_ROOT / ".github/workflows/release.yml")
+                          .read_text(encoding="utf-8"))["jobs"]
+    runs = [step["run"] for job in jobs.values() for step in job.get("steps", [])
+            if "npm publish" in step.get("run", "")]
+    assert runs
+    for run in runs:
+        target = re.search(r"npm publish\s+(\S+)", run).group(1)
+        assert target.startswith(("./", "/")), f"not a local path to npm: {target}"
