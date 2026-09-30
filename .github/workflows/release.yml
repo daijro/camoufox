@@ -454,7 +454,8 @@ jobs:
         with:
           name: npm-dist
           path: npm-dist
-      - run: npm publish npm-dist/*.tgz --access public --tag "${{ needs.plan.outputs.dist_tag }}"
+      # `./` keeps npm from reading `npm-dist/<file>.tgz` as a GitHub owner/repo.
+      - run: npm publish ./npm-dist/*.tgz --access public --tag "${{ needs.plan.outputs.dist_tag }}"
 
   tag-library:
     # Every published library version has a tag; the next merge compares against
