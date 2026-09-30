@@ -264,3 +264,53 @@ def test_npm_publish_is_given_a_local_path():
     for run in runs:
         target = re.search(r"npm publish\s+(\S+)", run).group(1)
         assert target.startswith(("./", "/")), f"not a local path to npm: {target}"
+
+
+@pytest.mark.parametrize("rel, browser", [
+    ("bundle/fontconfig/linux/fonts.conf", True),  # packaged by `make package-*`
+    ("multibuild.py", True),  # what build-browser runs
+    ("bundle/fonts/groups.json", False),  # the downloaded font bundle, pinned in scripts/data
+    ("bundle/FONTS-README.txt", False),
+    ("scripts/data/fpgen-model.json", False),  # the libraries' model pin
+    ("scripts/pin-fpgen-model.py", False),
+    ("scripts/patch.py", True),
+])
+def test_what_counts_as_a_browser_source(rel, browser):
+    assert release.is_browser_source(rel) is browser
+
+
+@pytest.fixture
+def browser_repo(tmp_path):
+    """A repo with browser release v156.0.1-beta.33 tagged on HEAD."""
+    for rel, text in (("patches/a.patch", "a\n"), ("docs/a.md", "a\n"),
+                      ("additions/juggler/jar.mn", "% content juggler %content/\n"),
+                      ("upstream.sh", "version=156.0.1\nrelease=beta.32\n")):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text)
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "built")
+    _git(tmp_path, "tag", "v156.0.1-beta.33")
+    return tmp_path
+
+
+def test_a_release_pairs_by_diff_when_its_digest_was_counted_differently(browser_repo):
+    """beta.33's manifest holds the digest over the inputs as they were then. A
+    later change to which files the digest counts must not rebuild -- and
+    republish -- a browser none of whose sources moved. upstream.sh names
+    beta.32, so this is the newer release being found, not the named one."""
+    releases = [_released("v156.0.1-beta.33", "digest-under-the-old-inputs"),
+                {"tag_name": "v156.0.1-beta.32", "assets": []}]
+    (browser_repo / "docs/a.md").write_text("b\n")
+    _git(browser_repo, "commit", "-qam", "docs")
+    assert release.find_paired(releases, browser_repo).release["tag_name"] == "v156.0.1-beta.33"
+
+    (browser_repo / "patches/a.patch").write_text("b\n")
+    _git(browser_repo, "commit", "-qam", "a browser change")
+    pairing = release.find_paired(releases, browser_repo)
+    assert pairing.release is None and pairing.ahead == ("patches/a.patch",)
+
+
+def test_a_draft_release_never_pairs_by_diff(browser_repo):
+    releases = [_released("v156.0.1-beta.33", "other", draft=True)]
+    assert release.find_paired(releases, browser_repo).release is None

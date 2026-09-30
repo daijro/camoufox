@@ -160,7 +160,7 @@ jobs:
             echo "::notice::Not a pull request -- building, which also refreshes the shared ccache."
             exit 0
           fi
-          sources='^(patches/|additions/|settings/|assets/|upstream\.sh|Makefile|scripts/)'
+          sources='^(patches/|additions/|settings/|assets/|bundle/fontconfig/|upstream\.sh|Makefile|multibuild\.py|scripts/)'
           base="${{ github.event.pull_request.base.sha }}"
           changed=$(git diff --name-only "$base"...HEAD || echo "")
           echo "changed files:"; echo "$changed" | sed 's/^/  /'
