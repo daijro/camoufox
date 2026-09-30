@@ -8,6 +8,9 @@ name: Release
 #                  sources changed, and -- when anything a library ships changed
 #                  -- camoufox <next>bN goes to PyPI (pip ignores it without
 #                  --pre) and <next>-beta.N to npm under the `next` dist-tag.
+#                  Each registry gets it only if its own package differs from
+#                  the newest version already there (ci.release lib-diff), so
+#                  a TypeScript-only change publishes nothing to PyPI.
 #   tag vX.Y.Z     (stable)      on a main commit whose tests passed: the
 #                  browser prerelease built from that commit's sources becomes
 #                  the stable, latest release (no rebuild), and X.Y.Z goes to
@@ -308,6 +311,9 @@ jobs:
     # Built and checked once, before anything is published or promoted; the
     # publish jobs upload exactly these files.
     needs: plan
+    outputs:
+      publish_pypi: ${{ steps.diff.outputs.publish_pypi }}
+      publish_npm: ${{ steps.diff.outputs.publish_npm }}
     if: >-
       !cancelled() && needs.plan.result == 'success' &&
       needs.plan.outputs.publish_library == 'true'
@@ -388,6 +394,16 @@ jobs:
           mkdir ../npm-dist
           npm pack --ignore-scripts --pack-destination ../npm-dist
 
+      - id: diff
+        name: Which registries this release changes anything on
+        # A package identical to the newest one on its registry is not
+        # published again under a new number.
+        run: |
+          .venv/bin/python -m ci.release lib-diff --channel "${{ needs.plan.outputs.channel }}" \
+            --wheel pythonlib/dist/*.whl --tarball npm-dist/*.tgz \
+            --py-version "${{ needs.plan.outputs.py_version }}" \
+            --npm-version "${{ needs.plan.outputs.npm_version }}"
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: python-dist
@@ -425,6 +441,7 @@ jobs:
     needs: [plan, build-library, publish-browser, promote-browser]
     if: >-
       !cancelled() && needs.build-library.result == 'success' &&
+      needs.build-library.outputs.publish_pypi == 'true' &&
       (needs.plan.outputs.build_browser != 'true' || needs.publish-browser.result == 'success') &&
       (needs.plan.outputs.channel != 'stable' || needs.promote-browser.result == 'success')
     runs-on: ubuntu-24.04
@@ -438,9 +455,16 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
   publish-npm:
-    # After PyPI, so npm never has a version PyPI does not.
-    needs: [plan, publish-pypi]
-    if: ${{ !cancelled() && needs.publish-pypi.result == 'success' }}
+    # After PyPI when both publish, so a failed PyPI upload stops the release
+    # before npm has a version PyPI does not. PyPI is skipped when the wheel is
+    # unchanged; npm then goes alone, on the same browser conditions.
+    needs: [plan, build-library, publish-browser, promote-browser, publish-pypi]
+    if: >-
+      !cancelled() && needs.build-library.result == 'success' &&
+      needs.build-library.outputs.publish_npm == 'true' &&
+      (needs.plan.outputs.build_browser != 'true' || needs.publish-browser.result == 'success') &&
+      (needs.plan.outputs.channel != 'stable' || needs.promote-browser.result == 'success') &&
+      (needs.publish-pypi.result == 'success' || needs.publish-pypi.result == 'skipped')
     runs-on: ubuntu-24.04
     permissions:
       id-token: write # trusted publishing and provenance
@@ -458,13 +482,14 @@ jobs:
       - run: npm publish ./npm-dist/*.tgz --access public --tag "${{ needs.plan.outputs.dist_tag }}"
 
   tag-library:
-    # Every published library version has a tag; the next merge compares against
-    # it to decide whether the library changed. A stable version's tag is the one
-    # that started this run.
-    needs: [plan, publish-npm]
+    # Every published library version has a tag, on either registry; the next
+    # merge compares against it to decide whether the library changed. A stable
+    # version's tag is the one that started this run.
+    needs: [plan, publish-pypi, publish-npm]
     if: >-
-      !cancelled() && needs.publish-npm.result == 'success' &&
-      needs.plan.outputs.channel == 'prerelease'
+      !cancelled() && needs.plan.outputs.channel == 'prerelease' &&
+      (needs.publish-pypi.result == 'success' || needs.publish-npm.result == 'success') &&
+      needs.publish-pypi.result != 'failure' && needs.publish-npm.result != 'failure'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
