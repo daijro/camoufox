@@ -6,6 +6,7 @@ import re
 import shutil
 
 import pytest
+import yaml
 
 from ci import browser_inputs, release
 from ci._util import read_upstream_sh
@@ -208,3 +209,45 @@ def test_the_pin_and_the_launchers_agree_on_its_format(tmp_path, monkeypatch):
     pin = load_pin(release.PIN_FILE)
     assert (pin.repo_name, pin.version, pin.build, pin.tag) == \
         ("official", "156.0.1", "beta.33", "v156.0.1-beta.33")
+
+
+# The jobs each channel skips by design, and the jobs it must reach.
+CHANNELS = {
+    "prerelease": ({"promote-browser"},
+                   {"build-browser", "publish-browser", "build-library", "publish-pypi",
+                    "publish-npm", "tag-library"}),
+    "stable": ({"tests", "build-browser", "publish-browser", "tag-library"},
+               {"plan", "build-library", "promote-browser", "publish-pypi", "publish-npm"}),
+}
+
+
+@pytest.mark.parametrize("channel", CHANNELS)
+def test_no_job_a_channel_needs_is_skipped_by_a_job_it_skips(channel):
+    """A job whose `if` has no status function gets an implicit success(), which
+    is false when any job upstream of it -- not only its direct needs -- was
+    skipped. The first prerelease published to PyPI and skipped npm that way:
+    promote-browser, skipped on every push, sits upstream of publish-npm."""
+    jobs = yaml.safe_load((release.REPO_ROOT / ".github/workflows/release.yml")
+                          .read_text(encoding="utf-8"))["jobs"]
+
+    def needs(name):
+        n = jobs[name].get("needs", [])
+        return [n] if isinstance(n, str) else n
+
+    def upstream(name):
+        seen = set()
+        stack = list(needs(name))
+        while stack:
+            job = stack.pop()
+            if job not in seen:
+                seen.add(job)
+                stack.extend(needs(job))
+        return seen
+
+    skipped, required = CHANNELS[channel]
+    unguarded = [
+        name for name in sorted(required)
+        if upstream(name) & skipped
+        and not re.search(r"!cancelled\(\)|always\(\)", str(jobs[name].get("if", "")))
+    ]
+    assert not unguarded, f"{channel}: skipped by an upstream job it does not need: {unguarded}"

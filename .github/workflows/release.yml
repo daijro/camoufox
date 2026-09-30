@@ -52,6 +52,11 @@ env:
   # same interpreter every pull request's build job already exercised.
   PYTHON_VERSION: "3.12"
 
+# A job with no status function in its `if` gets an implicit success(), which is
+# false when ANY job upstream of it -- not just its direct needs -- was skipped.
+# Each channel always skips a job (`tests` on a tag, promote-browser on a push),
+# so every job downstream of one starts its `if` with !cancelled() and checks
+# the results it actually depends on.
 jobs:
   # ---------------------------------------------------------------------------
   tests:
@@ -303,7 +308,9 @@ jobs:
     # Built and checked once, before anything is published or promoted; the
     # publish jobs upload exactly these files.
     needs: plan
-    if: needs.plan.outputs.publish_library == 'true'
+    if: >-
+      !cancelled() && needs.plan.result == 'success' &&
+      needs.plan.outputs.publish_library == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -395,7 +402,9 @@ jobs:
     # After both packages are built and checked, so a broken package never
     # leaves a promoted browser behind.
     needs: [plan, build-library]
-    if: needs.plan.outputs.channel == 'stable'
+    if: >-
+      !cancelled() && needs.build-library.result == 'success' &&
+      needs.plan.outputs.channel == 'stable'
     runs-on: ubuntu-24.04
     permissions:
       contents: write # release flags
@@ -431,6 +440,7 @@ jobs:
   publish-npm:
     # After PyPI, so npm never has a version PyPI does not.
     needs: [plan, publish-pypi]
+    if: ${{ !cancelled() && needs.publish-pypi.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       id-token: write # trusted publishing and provenance
@@ -451,7 +461,9 @@ jobs:
     # it to decide whether the library changed. A stable version's tag is the one
     # that started this run.
     needs: [plan, publish-npm]
-    if: needs.plan.outputs.channel == 'prerelease'
+    if: >-
+      !cancelled() && needs.publish-npm.result == 'success' &&
+      needs.plan.outputs.channel == 'prerelease'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
