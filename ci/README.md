@@ -13,7 +13,7 @@ resolve ── static ─────────────── lint, tribal
                                      ├─ skiplist audit ───── every skip still fails
                                      ├─ build-tester ─────── 8 fingerprint profiles
                                      ├─ typescript-browser ─ the npm launcher end to end
-                                     └─ once guards and build-tester pass:
+                                     └─ once the guards and build-tester that ran pass:
                                           ├─ playwright × 6 shards   (conformance + our own)
                                           ├─ native ───────── leaks, contexts, crash recovery
                                           ├─ sundial ──────── stealth grade
@@ -21,6 +21,9 @@ resolve ── static ─────────────── lint, tribal
                                   │
                                summary ──► one comment on the PR
 ```
+
+A pull request runs only the suites that read the files it changes
+([Cost control](#cost-control)); everything else runs all of them.
 
 ## Which browser, which suite
 
@@ -491,21 +494,23 @@ Branch protection on `main` requires exactly one check: **`All tests passed`**,
 the `gate` job. Pointing at one job instead of a dozen means the required-check
 list does not need editing every time a suite is added, renamed, or resharded.
 
-The gate allows exactly three skips, each for a stated reason:
+The gate (`python3 -m ci.scope gate`) allows a skip only for a stated reason:
 
 | Skipped | Because |
 | --- | --- |
-| `build` | the browser was fetched, not compiled |
-| `fetch-browser` | the browser was compiled, not fetched |
+| a suite's job | [`ci/scope.py`](scope.py) left the suite out: no changed file is read by it |
+| `build` | the browser was fetched, not compiled, or no selected suite drives a browser |
+| `fetch-browser` | the browser was compiled, not fetched, or no selected suite drives a browser |
 | `sundial` | disabled in `ci/sundial.yml`, or a fork pull request with no stealth credentials |
 
-Anything else that is not `success` fails it — **including `skipped`**. A suite
-that did not run has not passed, and quietly skipping one is the cheapest route
-to a green tick.
+Anything else that is not `success` fails it — **including `skipped`**. A
+selected suite that did not run has not passed, and quietly skipping one is the
+cheapest route to a green tick.
 
-`build` is also the one suite dropped from `--require` when the browser was
-fetched rather than compiled: that job writes no result, and requiring a name
-nothing produces fails a run where everything passed.
+`--require` is assembled the same way (`python3 -m ci.scope required`): the
+result names of the selected suites, plus `build` only when the browser was
+compiled. A job that did not run writes no result, and requiring a name nothing
+produces fails a run where everything passed.
 
 One suite may additionally record a **`skip` result** without failing the run,
 named explicitly in `--allow-skip`: `sundial`, and only when sundial itself is
@@ -544,8 +549,9 @@ Each tier gates the next, so a two-second lint failure never reaches the build:
 ```
 0  static    lint, self-tests, settled decisions        seconds
 1  unit      pythonlib, typescript                      ~1 min
-2  browser   build  (patches/additions/settings/assets/upstream.sh/Makefile/scripts changed)
+2  browser   build  (a browser source changed: ci.release.is_browser_source)
              fetch  (anything else, when the published release has this tree's browser sources)
+             neither, when no selected suite drives a browser
 3a smoke     patch guards (spoofing, automation, parity),
              skiplist audit, build-tester,
              typescript-browser                         ~15 min
@@ -553,6 +559,18 @@ Each tier gates the next, so a two-second lint failure never reaches the build:
              stealth                                    ~40 min
 4  gate      the required check
 ```
+
+**A pull request runs the suites that read what it changes.**
+[`ci/scope.py`](scope.py) maps every changed file to the suites that read it,
+and the `resolve` job schedules only those. A `release.yml` fix or a docs change
+runs the static checks alone; a `typescript/` change runs `typescript` and
+`typescript (browser)`; a `pythonlib/` change runs everything except the
+upstream Playwright suite and the skiplist audit, which drive the binary
+directly. It fails closed: a browser source, the pipeline itself
+(`tests.yml`, the shared `ci/` modules) or a path no rule covers selects every
+suite. Pushes to `main`, the schedule and manual runs always run everything, so
+every release is still judged by the whole pipeline. The summary comment names
+the suites a pull request left out.
 
 **Driver-only pull requests test the published release, when it matches.**
 There is nothing new to compile, so `fetch-browser` downloads a published

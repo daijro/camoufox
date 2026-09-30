@@ -20,6 +20,7 @@ import json
 import os
 import pathlib
 import re
+import sys
 import tempfile
 import urllib.error
 import urllib.parse
@@ -1776,25 +1777,23 @@ def test_the_workflow_checks_the_fetched_build():
 # ---------------------------------------------------------------------------
 
 
-def _required_suites(browser_changed: str, has_sundial: str) -> set:
-    """Run the workflow's own `required=` assembly and report what it produced.
+def _required_suites(browser_changed: str, has_sundial: str, suites=None) -> set:
+    """Run the summary step's `required` assembly (ci.scope required) as the step does.
 
-    Extracted and executed rather than pattern-matched, because the bug this
-    guards was a comparison that read as deliberate (`!= "skip"`) against a
-    value that is only ever `true` or `false`. Only running it says what it
-    does.
+    Executed rather than pattern-matched, because the bug this guards was a
+    comparison that read as deliberate (`!= "skip"`) against a value that is
+    only ever `true` or `false`. Only running it says what it does.
     """
     import subprocess
 
+    from ci.scope import SUITES
+
     text = WORKFLOW.read_text(encoding="utf-8")
-    start = text.index('required="pythonlib')
-    end = text.index("python3 -m ci.summarize", start)
-    block = text[start:end]
-    block = block.replace("${{ needs.resolve.outputs.browser_changed }}", browser_changed)
-    block = block.replace("${{ needs.resolve.outputs.has_sundial }}", has_sundial)
+    assert "required=$(python3 -m ci.scope required" in text, "the summary no longer asks ci.scope"
     proc = subprocess.run(
-        ["bash", "-c", block + '\necho "$required"'],
-        capture_output=True, text=True,
+        [sys.executable, "-m", "ci.scope", "required", "--suites", json.dumps(list(SUITES if suites is None else suites)),
+         "--browser-changed", browser_changed, "--has-sundial", has_sundial],
+        capture_output=True, text=True, cwd=CI_ROOT.parent,
     )
     assert proc.returncode == 0, proc.stderr
     return set(proc.stdout.split())
@@ -2252,27 +2251,16 @@ def _build_job():
 def test_the_native_inputs_cover_everything_that_can_change_the_binary():
     """The cache key and the "did the browser change?" test must agree.
 
-    `resolve` decides whether to build at all by grepping the diff for paths
-    that can alter the binary. The build job then reuses a cached browser keyed
-    on a hash of the native inputs. If the first list ever grows and the second
-    does not, a change to the new path would neither force a build nor
-    invalidate the cache -- and every suite would report on a browser that
-    predates it, looking perfectly healthy while doing so.
+    `resolve` decides whether to build at all from the diff. The build job then
+    reuses a cached browser keyed on a hash of the native inputs. If the first
+    ever counted a path the second does not hash, a change to that path would
+    neither force a build nor invalidate the cache -- and every suite would
+    report on a browser that predates it. So the step asks the digest's own
+    definition (ci.release.is_browser_source) instead of keeping a second list.
     """
-    from ci.browser_inputs import BROWSER_DIRS, BROWSER_FILES
-
     text = WORKFLOW.read_text(encoding="utf-8")
-    scope = re.search(r"sources='\^\(([^)]*)\)'", text)
-    assert scope, "the browser_changed grep is gone or was reshaped"
-    considered = {
-        part.replace("\\", "").rstrip("/") for part in scope.group(1).split("|") if part
-    }
-    hashed = set(BROWSER_DIRS) | set(BROWSER_FILES)
-    missing = considered - hashed
-    assert not missing, (
-        f"{sorted(missing)} can change the binary but does not feed the native hash, "
-        "so a change there would be served a stale browser"
-    )
+    assert "from ci.release import is_browser_source" in text, "the browser_changed test no longer uses the digest's definition"
+    assert "sources='" not in text, "a hand-kept list of browser paths is back"
 
 
 def test_nothing_the_build_runs_is_excluded_from_the_native_hash():
@@ -2636,7 +2624,7 @@ def test_build_tester_accepts_every_core_count_pythonlib_presents():
 PUBLISHED = [{"tag_name": "v1.0-beta.1", "draft": False, "prerelease": True, "body": ""}]
 
 
-def _scope(repo: pathlib.Path, base: str, releases=None) -> tuple[str, str]:
+def _scope(repo: pathlib.Path, base: str, releases=None, needs_browser: str = "true") -> tuple[str, str]:
     """Run the workflow's own "Does this change the browser?" step in `repo`.
 
     The step asks `ci.release paired` for the release built from the tree's
@@ -2651,6 +2639,7 @@ def _scope(repo: pathlib.Path, base: str, releases=None) -> tuple[str, str]:
     block = "\n".join(line[10:] if line.startswith(" " * 10) else line.strip() for line in lines)
     block = block.replace("${{ github.event_name }}", "pull_request")
     block = block.replace("${{ github.event.pull_request.base.sha }}", base)
+    block = block.replace("${{ steps.suites.outputs.needs_browser }}", needs_browser)
     listed = repo.parent / "releases.json"
     listed.write_text(json.dumps(PUBLISHED if releases is None else releases))
     assert "python3 -m ci.release paired" in block, "the step no longer asks ci.release for the pairing"
@@ -2720,6 +2709,18 @@ def test_browser_pr_builds(release_repo):
     (release_repo / "patches" / "a.patch").write_text("b\n")
     _git(release_repo, "commit", "-qam", "browser change")
     assert _scope(release_repo, base)[0] == "browser_changed=true"
+
+
+def test_a_run_with_no_browser_suite_neither_builds_nor_pairs(release_repo):
+    """ci/scope.py selected nothing that drives a browser: no build, no fetch,
+    and no release lookup -- even with no published release to pair with."""
+    _git(release_repo, "tag", "-d", "v1.0-beta.1")
+    base = _git(release_repo, "rev-parse", "HEAD")
+    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    _git(release_repo, "commit", "-qam", "driver change")
+    out, log = _scope(release_repo, base, needs_browser="false")
+    assert out == "browser_changed=false"
+    assert "paired" not in log
 
 
 def test_unpublished_release_tag_builds(release_repo):
@@ -2800,8 +2801,11 @@ def test_every_patch_guard_is_in_exactly_one_group():
 def test_the_patch_guard_matrix_runs_every_group():
     from ci.run_patch_guards import GROUPS
 
-    legs = {leg["leg"] for leg in _jobs()["patch-guards"]["strategy"]["matrix"]["include"]}
-    assert legs == set(GROUPS) | {"skiplist"}
+    from ci.scope import GUARD_LEGS
+
+    assert _jobs()["patch-guards"]["strategy"]["matrix"]["include"] == \
+        "${{ fromJSON(needs.resolve.outputs.guard_matrix) }}"
+    assert {leg["leg"] for leg in GUARD_LEGS} == set(GROUPS) | {"skiplist"}
 
 
 # ---------------------------------------------------------------------------
