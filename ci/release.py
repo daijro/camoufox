@@ -202,7 +202,7 @@ def is_browser_source(rel: str) -> bool:
     """Whether a repo-relative path goes into the browser (as source_digest counts it)."""
     if rel in NON_NATIVE_SCRIPTS:
         return False
-    return rel in BROWSER_FILES or rel.split("/", 1)[0] in BROWSER_DIRS
+    return rel in BROWSER_FILES or any(rel.startswith(f"{d}/") for d in BROWSER_DIRS)
 
 
 @dataclass(frozen=True)
@@ -216,30 +216,47 @@ def find_paired(releases: Sequence[dict], root: Path = REPO_ROOT) -> Pairing:
     """The published browser release built from the sources at `root`, and why.
 
     A release built by release.yml carries its source digest in its manifest.json,
-    and a match there is exact. Releases cut before the manifest existed (up to and
-    including v156.0.1-beta.32) are found the way tests.yml used to find them:
-    the tag upstream.sh names, published, with no browser source changed since.
-    Anything else -- a draft, a tag that was never released, or a base branch
-    whose browser sources moved past every release -- pairs with nothing, and
-    the caller builds.
+    and a match there is exact. Otherwise a published release pairs when no browser
+    source differs between its tag and HEAD: that finds releases cut before the
+    manifest existed (up to and including v156.0.1-beta.32), and releases whose
+    digest was computed over a different set of inputs. Anything else -- a draft,
+    a tag that was never released, or a base branch whose browser sources moved
+    past every release -- pairs with nothing, and the caller builds.
     """
     digest = source_digest(root)
     found = paired_release(releases, digest)
     if found:
         return Pairing(found, f"{found['tag_name']} carries source digest {digest}")
 
+    # By diff, which also covers a change to what the digest counts: a release's
+    # manifest holds the digest as it was defined when it was built, so adding a
+    # file the build always used, or dropping one it never did, would otherwise
+    # rebuild -- and republish -- a browser no source of which had moved. The
+    # upstream.sh-named release first, then every other one newest first.
     up = read_upstream_sh(root / "upstream.sh")
-    tag = f"v{up['version']}-{up['release']}"
-    rel = next((r for r in releases if r.get("tag_name") == tag), None)
-    if rel is None or rel.get("draft"):
-        return Pairing(None, f"no published release {tag}, and none carries source digest {digest}")
-    if not run(["git", "rev-parse", "-q", "--verify", f"refs/tags/{tag}"], cwd=root).ok:
-        return Pairing(None, f"release {tag} is published but its tag is not in this checkout")
-    diff = run(["git", "diff", "--name-only", tag, "HEAD"], cwd=root, check=True).stdout.split()
-    ahead = tuple(sorted(f for f in diff if is_browser_source(f)))
-    if ahead:
-        return Pairing(None, f"the browser sources differ from {tag} in {len(ahead)} files", ahead)
-    return Pairing(rel, f"no browser source differs from {tag}")
+    named = f"v{up['version']}-{up['release']}"
+    candidates = [r for r in releases if r.get("tag_name") == named]
+    candidates += [r for r in releases
+                   if r.get("tag_name") != named and _BROWSER_TAG.match(r.get("tag_name") or "")]
+    first: Optional[Pairing] = None
+    for rel in candidates:
+        tag = rel["tag_name"]
+        if rel.get("draft"):
+            found = Pairing(None, f"release {tag} is a draft")
+        elif not run(["git", "rev-parse", "-q", "--verify", f"refs/tags/{tag}"], cwd=root).ok:
+            found = Pairing(None, f"release {tag} is published but its tag is not in this checkout")
+        else:
+            diff = run(["git", "diff", "--name-only", tag, "HEAD"], cwd=root, check=True).stdout.split()
+            ahead = tuple(sorted(f for f in diff if is_browser_source(f)))
+            if not ahead:
+                return Pairing(rel, f"no browser source differs from {tag}")
+            found = Pairing(None, f"the browser sources differ from {tag} in {len(ahead)} files", ahead)
+        # Say why by the closest release that could be compared at all.
+        if first is None or (found.ahead and not first.ahead):
+            first = found
+    if first is None:
+        return Pairing(None, f"no published release {named}, and none carries source digest {digest}")
+    return first
 
 
 # ---------------------------------------------------------------------------

@@ -61,8 +61,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # The same set `resolve` greps to decide whether the browser changed at all.
 # Kept in step by ci/tests/test_ci.py, because a path that can change the binary
 # and is not hashed here would be served a stale browser.
-BROWSER_DIRS = ("patches", "additions", "settings", "assets", "scripts")
-BROWSER_FILES = ("upstream.sh", "Makefile")
+#
+# bundle/fontconfig is copied into every package (`make package-*` --includes),
+# and multibuild.py is what release.yml's build-browser runs; both change what a
+# release ships without touching anything else here.
+BROWSER_DIRS = ("patches", "additions", "settings", "assets", "scripts", "bundle/fontconfig")
+BROWSER_FILES = ("upstream.sh", "Makefile", "multibuild.py")
 
 # Scripts under scripts/ that cannot change compiled output, and so must not
 # invalidate a 665 MB cached browser.
@@ -79,10 +83,19 @@ BROWSER_FILES = ("upstream.sh", "Makefile")
 # script that IS reachable from a build cannot sit in this list: getting that
 # wrong serves a stale binary to every suite downstream, which is far worse
 # than an unnecessary rebuild.
+#
+# The same goes for what CI runs out of scripts/ and the library's pins kept
+# there: each of these once forced a new browser release for all six platforms
+# (scripts/data/fpgen-model.json alone three times since June), for a browser
+# nothing had changed in.
 NON_NATIVE_SCRIPTS = frozenset(
     {
+        "scripts/check-input-dispatch.py",  # a CI lint that reads additions/juggler
         "scripts/clean-fingerprint-data.py",
         "scripts/cursor-demo.py",
+        "scripts/data/fpgen-model.json",  # the libraries' fpgen model pin
+        "scripts/pin-fpgen-model.py",  # installs that pin for CI and the library build
+        "scripts/pref-diff.py",  # compares a running browser's prefs with stock
     }
 )
 
