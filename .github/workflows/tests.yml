@@ -1214,7 +1214,7 @@ jobs:
           if [ -n "$skipped" ] && [ "$skipped" != "[]" ]; then
             {
               echo
-              echo "**Not run on this pull request:** $(echo "$skipped" | tr -d '[]"' | sed 's/,/, /g')." \
+              echo "**Not run on this pull request:** $(python3 -c 'import json, sys; print(", ".join(json.loads(sys.argv[1])))' "$skipped")." \
                 "No file it changes is read by these suites (ci/scope.py); they run on every push to main."
             } >> summary.md
           fi
