@@ -2,8 +2,10 @@
 Helpers to fetch geolocation, timezone, and locale data given an IP
 """
 
+import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
@@ -12,6 +14,7 @@ from yaml import CDumper, CLoader
 from yaml import dump as yaml_dump
 from yaml import load as yaml_load
 
+from ._warnings import WARNINGS_DATA, _warn_from_caller
 from .exceptions import NotInstalledGeoIPExtra, UnknownIPLocation
 from .ip import validate_ip
 from .locales import SELECTOR, Geolocation
@@ -28,6 +31,15 @@ else:
 GEOIP_DIR = Path(user_cache_dir("camoufox")) / "geoip"
 MMDB_DIR = GEOIP_DIR / "mmdb"
 GEOIP_CONFIG = GEOIP_DIR / "config.yml"
+
+# A database whose data was built longer ago than this is refreshed. The
+# default source publishes weekly, so a week and a day catches every release.
+UPDATE_DAYS = 8
+# ...but at most once a day, so a source that stops publishing costs one
+# download a day rather than one per launch.
+RECHECK_DAYS = 1
+# A freshly downloaded build older than this means its source is frozen.
+FROZEN_DAYS = 30
 
 
 def _find_in(data: Dict, key: str) -> Any:
@@ -50,7 +62,7 @@ def _load_geoip_repos() -> Tuple[List[Dict], str]:
     with open(LOCAL_DATA / 'repos.yml', 'r') as f:
         data = yaml_load(f, Loader=CLoader)
     geoip_repos = data.get('geoip', [])
-    default_name = data.get('default', {}).get('geoip', 'GeoLite2')
+    default_name = data.get('default', {}).get('geoip', 'GeoIP AIO by daijro')
     return geoip_repos, default_name
 
 
@@ -81,27 +93,49 @@ def _get_geoip_config_by_name(name: Optional[str] = None) -> Dict:
     raise ValueError("No GeoIP repos configured in repos.yml")
 
 
+def warn_if_deprecated(config: Dict) -> None:
+    """
+    Warn that a GeoIP source is deprecated and name the default to use instead
+    """
+    if config.get('deprecated'):
+        _, default_name = _load_geoip_repos()
+        _warn_from_caller(
+            WARNINGS_DATA['geoip_deprecated'].format(name=config['name'], default=default_name),
+            FutureWarning,
+        )
+
+
 def load_geoip_config() -> Dict:
     """
-    Load active GeoIP config from disk, falling back to repos.yml default
+    Load active GeoIP config from disk, falling back to repos.yml default.
+
+    A saved deprecated source that the user did not pick explicitly (every
+    cache written before the default changed) resolves to the default.
     """
     if GEOIP_CONFIG.exists():
         with open(GEOIP_CONFIG, 'r') as f:
-            saved = yaml_load(f, Loader=CLoader)
+            saved = yaml_load(f, Loader=CLoader) or {}
         try:
-            return _get_geoip_config_by_name(saved.get('name'))
+            config = _get_geoip_config_by_name(saved.get('name'))
         except (ValueError, KeyError):
             return saved
+        if config.get('deprecated') and not saved.get('explicit'):
+            return _get_geoip_config_by_name(None)
+        return config
     return _get_geoip_config_by_name(None)
 
 
-def save_geoip_config(config: Dict) -> None:
+def save_geoip_config(config: Dict, explicit: bool = False) -> None:
     """
-    Save active GeoIP source name to disk
+    Save active GeoIP source name to disk. `explicit` records that the user
+    chose it, so a later default change does not move them off it.
     """
     GEOIP_DIR.mkdir(parents=True, exist_ok=True)
+    saved: Dict[str, Any] = {'name': config['name']}
+    if explicit:
+        saved['explicit'] = True
     with open(GEOIP_CONFIG, 'w') as f:
-        yaml_dump({'name': config['name']}, f, Dumper=CDumper, default_flow_style=False)
+        yaml_dump(saved, f, Dumper=CDumper, default_flow_style=False)
 
 
 def get_mmdb_path(ip_version: str = 'ipv4', config: Optional[Dict] = None) -> Path:
@@ -130,9 +164,11 @@ def geoip_allowed() -> None:
 def download_mmdb(
     source: Optional[str] = None,
     progress_callback: Optional[callable] = None,
+    activate: bool = True,
 ) -> None:
     """
-    Downloads the GeoIP database(s) to geoip/mmdb/
+    Downloads the GeoIP database(s) to geoip/mmdb/. A named `source` becomes
+    the user's explicit choice unless `activate` is False.
     """
     geoip_allowed()
 
@@ -180,6 +216,8 @@ def download_mmdb(
                         tmp.seek(0)
                         with open(mmdb_path, 'wb') as dst:
                             shutil.copyfileobj(tmp, dst)
+                # The mtime is when we last checked, which needs_update() throttles on
+                os.utime(mmdb_path)
                 break
             except Exception as e:
                 last_error = e
@@ -187,7 +225,40 @@ def download_mmdb(
         else:
             raise last_error or Exception(f"Failed to download {ip_ver}")
 
-    save_geoip_config(config)
+        age = _build_age_days(mmdb_path)
+        if age is not None and age > FROZEN_DAYS:
+            _warn_from_caller(
+                WARNINGS_DATA['geoip_frozen'].format(name=config['name'], days=int(age)),
+                RuntimeWarning,
+            )
+
+    _remove_deprecated_databases(keep=config)
+    if activate:
+        # A refresh of the active source keeps whether the user chose it
+        save_geoip_config(config, explicit=bool(source) or _chosen_explicitly(config))
+
+
+def _chosen_explicitly(config: Dict) -> bool:
+    """
+    Whether the saved config names this source as the user's explicit choice
+    """
+    if not GEOIP_CONFIG.exists():
+        return False
+    with open(GEOIP_CONFIG, 'r') as f:
+        saved = yaml_load(f, Loader=CLoader) or {}
+    return bool(saved.get('explicit')) and saved.get('name') == config['name']
+
+
+def _remove_deprecated_databases(keep: Dict) -> None:
+    """
+    Delete downloaded databases of deprecated sources other than `keep`
+    """
+    repos, _ = _load_geoip_repos()
+    for repo in repos:
+        if not repo.get('deprecated') or repo['name'] == keep['name']:
+            continue
+        for path in MMDB_DIR.glob(f"{repo['name'].lower()}-*.mmdb"):
+            path.unlink(missing_ok=True)
 
 
 def remove_mmdb() -> None:
@@ -202,24 +273,39 @@ def remove_mmdb() -> None:
     rprint("GeoIP database removed.")
 
 
+def _build_age_days(mmdb_path: Path) -> Optional[float]:
+    """
+    Days since the database's data was built, from its metadata
+    """
+    import maxminddb
+
+    try:
+        with maxminddb.open_database(str(mmdb_path)) as reader:
+            return (time.time() - reader.metadata().build_epoch) / 86400
+    except Exception:
+        return None
+
+
 def needs_update(config: Optional[Dict] = None) -> bool:
     """
-    Check if the GeoIP database needs an update (older than 30 days)
-    """
-    from datetime import datetime, timedelta
+    Check if the GeoIP database needs an update: its data was built over
+    UPDATE_DAYS ago and it was last downloaded over RECHECK_DAYS ago.
 
+    This reads the build date rather than the file's age, so a source that
+    keeps serving an old build is noticed.
+    """
     if config is None:
         config = load_geoip_config()
-
-    update_days = 30
 
     ipv4_path = get_mmdb_path('ipv4', config)
     if not ipv4_path.exists():
         return True
 
-    mtime = datetime.fromtimestamp(ipv4_path.stat().st_mtime)
-    age = datetime.now() - mtime
-    return age > timedelta(days=update_days)
+    checked_days = (time.time() - ipv4_path.stat().st_mtime) / 86400
+    if checked_days < RECHECK_DAYS:
+        return False
+    build_days = _build_age_days(ipv4_path)
+    return build_days is None or build_days > UPDATE_DAYS
 
 
 def get_geolocation(ip: str, geoip_db: Optional[str] = None) -> Geolocation:
@@ -230,16 +316,14 @@ def get_geolocation(ip: str, geoip_db: Optional[str] = None) -> Geolocation:
 
     validate_ip(ip)
     ip_version = 'ipv6' if ':' in ip else 'ipv4'
-    mmdb_path = get_mmdb_path(ip_version)
 
-    if not mmdb_path.exists() or needs_update():
-        download_mmdb()
-        mmdb_path = get_mmdb_path(ip_version)
+    # A per-call geoip_db reads its own database without becoming the active one
+    config = _get_geoip_config_by_name(geoip_db) if geoip_db else load_geoip_config()
+    warn_if_deprecated(config)
+    mmdb_path = get_mmdb_path(ip_version, config)
 
-    if geoip_db:
-        config = _get_geoip_config_by_name(geoip_db)
-    else:
-        config = load_geoip_config()
+    if not mmdb_path.exists() or needs_update(config):
+        download_mmdb(geoip_db, activate=not geoip_db)
     paths = config['paths']
 
     with maxminddb.open_database(str(mmdb_path)) as reader:

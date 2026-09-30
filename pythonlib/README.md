@@ -31,6 +31,8 @@ pip install -U camoufox[geoip]
 
 The `geoip` parameter is optional, but heavily recommended if you are using proxies. It will download an extra dataset to determine the user's longitude, latitude, timezone, country, & locale.
 
+The dataset is [GeoIP All-in-One](https://github.com/daijro/geoip-all-in-one), which merges several IP databases and is rebuilt weekly. Camoufox fetches the newest build and refreshes it once it is a week old.
+
 Next, download the Camoufox browser:
 
 ```bash
@@ -266,12 +268,12 @@ Browser
   Latest in official/stable?  Yes
   Last Sync                   2026-03-07 00:23
 GeoIP
-  Database                    MaxMind GeoLite2
+  Database                    GeoIP AIO by daijro
   Updated                     2026-03-07 00:24
 Storage
   Install path                /home/name/.cache/camoufox
   Browser(s) directory size   1.2 GB
-  GeoIP database size         40.7 MB
+  GeoIP database size         116.4 MB
   Config file                 /home/name/.cache/camoufox/config.json
   Repo cache                  /home/name/.cache/camoufox/repo_cache.json
 ```

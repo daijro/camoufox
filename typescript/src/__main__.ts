@@ -25,6 +25,7 @@ import {
 	getMmdbPath,
 	loadGeoipConfig,
 	saveGeoipConfig,
+	warnIfDeprecated,
 } from "./geolocation.js";
 import {
 	BROWSERS_DIR,
@@ -886,15 +887,18 @@ async function selectGeoIPSource(): Promise<void> {
 		// unreadable config: nothing is marked active
 	}
 	const choices: Array<[string, GeoIPRepo]> = repos.map((r) => [
-		r.name + (r.name === current ? " [active]" : ""),
+		r.name +
+			(r.deprecated ? " (deprecated)" : "") +
+			(r.name === current ? " [active]" : ""),
 		r,
 	]);
 
 	const selected = await select(choices, "Select GeoIP source");
 	if (!selected) return;
 
-	saveGeoipConfig(selected);
+	saveGeoipConfig(selected, true);
 	rprint(`GeoIP source: ${selected.name}`, "green");
+	warnIfDeprecated(selected);
 }
 
 program

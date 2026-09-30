@@ -56,6 +56,15 @@ GEO_TABLE = {
     '2a01:4f8::1': {'country_code': 'DE', 'longitude': 9.491, 'latitude': 51.2993, 'timezone': 'Europe/Berlin'},
     '203.0.113.7': {'country_code': 'JP', 'longitude': 139.6899, 'latitude': 35.6893, 'timezone': 'Asia/Tokyo'},
 }
+# Each record answers in both layouts: GeoLite2's flat fields and the nested
+# ones the default source (GeoIP AIO) is read through.
+for _rec in GEO_TABLE.values():
+    _rec['country'] = {'iso_code': _rec['country_code']}
+    _rec['location'] = {
+        'longitude': _rec['longitude'],
+        'latitude': _rec['latitude'],
+        'time_zone': _rec['timezone'],
+    }
 _fake_mmdb = types.ModuleType('maxminddb')
 
 
@@ -88,7 +97,7 @@ from camoufox.utils import launch_options  # noqa: E402
 assert str(utils.INSTALL_DIR) == str(CACHE), (utils.INSTALL_DIR, CACHE)
 
 # The mmdb files only have to exist and be fresh; the fake reader answers.
-for name in ('maxmind geolite2-ipv4.mmdb', 'maxmind geolite2-ipv6.mmdb'):
+for name in ('geoip aio by daijro-combined.mmdb', 'maxmind geolite2-ipv4.mmdb', 'maxmind geolite2-ipv6.mmdb'):
     p = geolocation.MMDB_DIR / name
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_bytes(b'')

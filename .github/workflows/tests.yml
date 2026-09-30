@@ -303,7 +303,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
-          pip install -r ci/requirements.txt pytest -e pythonlib
+          # The geoip extra: tests/test_geoip_sources.py downloads every GeoIP
+          # source and fails when one stops publishing, which gates releases.
+          pip install -r ci/requirements.txt pytest -e 'pythonlib[geoip]'
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
