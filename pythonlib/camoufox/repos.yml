@@ -1,7 +1,7 @@
 # Default configurations
 default:
   browser: Official
-  geoip: MaxMind GeoLite2
+  geoip: GeoIP AIO by daijro
 
 # Browser repositories
 browsers:
@@ -39,23 +39,18 @@ browsers:
         # Assume all browsers
 
 # GeoIP database repositories
+#
+# Every URL points at the source's newest build, never a pinned one: the
+# launcher re-downloads once the build it has is a week old (see
+# needs_update() in geolocation.py), and tests/test_geoip_sources.py fails CI
+# and the release when a source stops publishing.
+#
+# `deprecated: true` sources still work when chosen by name, with a warning.
+# A cache that holds one without an explicit `camoufox set --geoip` choice
+# (every install that predates the switch to AIO) moves to the default.
 geoip:
-  # GeoLite2 City - Full city-level data with timezone
-  - name: MaxMind GeoLite2
-    urls:
-      ipv4:
-        - https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv4.mmdb
-        - https://raw.githubusercontent.com/sapics/ip-location-db/refs/heads/main/geolite2-city-mmdb/geolite2-city-ipv4.mmdb
-      ipv6:
-        - https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv6.mmdb
-        - https://raw.githubusercontent.com/sapics/ip-location-db/refs/heads/main/geolite2-city-mmdb/geolite2-city-ipv6.mmdb
-    paths:
-      iso_code: country_code
-      longitude: longitude
-      latitude: latitude
-      timezone: timezone
-
-  # GeoIP All-in-One - Combined IPv4/IPv6 with all fields
+  # GeoIP All-in-One - Combined IPv4/IPv6 with all fields. Merges several
+  # databases per range; rebuilt weekly by daijro/geoip-all-in-one.
   - name: GeoIP AIO by daijro
     extract: true
     urls:
@@ -66,3 +61,18 @@ geoip:
       longitude: location.longitude
       latitude: location.latitude
       timezone: location.time_zone
+
+  # GeoLite2 City via sapics/ip-location-db, which publishes to GitHub
+  # Releases since 2026-06-18 (URLs from daijro/camoufox#815).
+  - name: MaxMind GeoLite2
+    deprecated: true
+    urls:
+      ipv4:
+        - https://github.com/sapics/ip-location-db/releases/download/latest/geolite2-city-ipv4.mmdb
+      ipv6:
+        - https://github.com/sapics/ip-location-db/releases/download/latest/geolite2-city-ipv6.mmdb
+    paths:
+      iso_code: country_code
+      longitude: longitude
+      latitude: latitude
+      timezone: timezone

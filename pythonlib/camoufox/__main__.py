@@ -20,6 +20,7 @@ from .geolocation import (
     get_mmdb_path,
     load_geoip_config,
     save_geoip_config,
+    warn_if_deprecated,
 )
 from .multiversion import (
     BROWSERS_DIR,
@@ -666,14 +667,23 @@ def _select_geoip_source():
         return
 
     current = load_geoip_config().get("name", "")
-    choices = [(r["name"] + (" [active]" if r.get("name") == current else ""), r) for r in repos]
+    choices = [
+        (
+            r["name"]
+            + (" (deprecated)" if r.get("deprecated") else "")
+            + (" [active]" if r.get("name") == current else ""),
+            r,
+        )
+        for r in repos
+    ]
 
     selected = _inquirer_select(choices, "Select GeoIP source")
     if not selected:
         return
 
-    save_geoip_config(selected)
+    save_geoip_config(selected, explicit=True)
     rprint(f"GeoIP source: {selected['name']}", fg="green")
+    warn_if_deprecated(selected)
 
 
 @cli.command(name="list")

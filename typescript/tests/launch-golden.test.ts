@@ -137,6 +137,7 @@ beforeAll(async () => {
 	// The mmdb files only have to exist and be fresh; the fake reader answers.
 	fs.mkdirSync(mods.geolocation.MMDB_DIR, { recursive: true });
 	for (const name of [
+		"geoip aio by daijro-combined.mmdb",
 		"maxmind geolite2-ipv4.mmdb",
 		"maxmind geolite2-ipv6.mmdb",
 	]) {

@@ -861,7 +861,7 @@ class Backend(QObject):
 
         if source not in self._geoip_downloaded:
             return
-        save_geoip_config(_get_geoip_config_by_name(source))
+        save_geoip_config(_get_geoip_config_by_name(source), explicit=True)
         self._load_geoip()
 
     @Slot(int)

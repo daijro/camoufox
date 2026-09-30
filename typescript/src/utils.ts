@@ -1148,7 +1148,7 @@ export interface LaunchOptions {
 	/** Calculate longitude, latitude, timezone, country, & locale based on the IP
 	 * address. Pass the target IP address to use, or `true` to find it. */
 	geoip?: string | boolean;
-	/** Name of the GeoIP database to use (e.g. "MaxMind GeoLite2"). */
+	/** Name of the GeoIP database to use (e.g. "GeoIP AIO by daijro"). */
 	geoip_db?: string;
 	/** Humanize the cursor movement: `true`, or the MAX duration in seconds. */
 	humanize?: boolean | number;

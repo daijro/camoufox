@@ -878,8 +878,8 @@ def launch_options(
             Calculate longitude, latitude, timezone, country, & locale based on the IP address.
             Pass the target IP address to use, or `True` to find the IP address automatically.
         geoip_db (Optional[str]):
-            Name of the GeoIP database to use (e.g., "MaxMind").
-            If not specified, uses the configured default.
+            Name of the GeoIP database to use (e.g., "GeoIP AIO by daijro").
+            If not specified, uses the one chosen with `camoufox set --geoip`, or the default.
         humanize (Optional[Union[bool, float]]):
             Humanize the cursor movement.
             Takes either `True`, or the MAX duration in seconds of the cursor movement.
