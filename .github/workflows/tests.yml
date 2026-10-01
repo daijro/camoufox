@@ -35,6 +35,9 @@ name: Tests
 #   3b full        Playwright (6 shards), leaks, stealth      ~40 min
 #   4  gate        the single required status check
 #
+# A pull request runs only the suites that read what it changes (ci/scope.py,
+# fail closed); a push, the schedule and a dispatch run all of them.
+#
 # A driver-only pull request never builds: there is nothing new to compile, so it
 # is tested against the published browser its users actually run. Tier 3b waits
 # on 3a so a browser that fails its guards does not also burn six Playwright
@@ -118,6 +121,10 @@ jobs:
       playwright_firefox: ${{ steps.versions.outputs.playwright_firefox }}
       version_note: ${{ steps.versions.outputs.note }}
       browser_changed: ${{ steps.scope.outputs.browser_changed }}
+      suites: ${{ steps.suites.outputs.suites }}
+      skipped_suites: ${{ steps.suites.outputs.skipped_suites }}
+      needs_browser: ${{ steps.suites.outputs.needs_browser }}
+      guard_matrix: ${{ steps.suites.outputs.guard_matrix }}
       browser_tag: ${{ steps.scope.outputs.browser_tag }}
       has_sundial: ${{ steps.sundial.outputs.has_sundial }}
       shard_matrix: ${{ steps.shards.outputs.matrix }}
@@ -145,6 +152,20 @@ jobs:
             ${{ inputs.browser_version && format('--browser-version {0}', inputs.browser_version) || '' }} \
             ${{ inputs.playwright_tag && format('--playwright-tag {0}', inputs.playwright_tag) || '' }}
 
+      - name: Which suites does this change need?
+        id: suites
+        # ci/scope.py maps every changed file to the suites that read it, and a
+        # pull request runs only those: a release.yml fix no longer waits on six
+        # Playwright shards that never open it. It fails closed -- a file no rule
+        # covers, a browser source, or the pipeline itself selects every suite --
+        # and anything that is not a pull request runs everything.
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 -m ci.scope plan --base "${{ github.event.pull_request.base.sha }}"
+          else
+            python3 -m ci.scope plan --all "${{ github.event_name }}"
+          fi
+
       - name: Does this change the browser?
         id: scope
         env:
@@ -160,11 +181,17 @@ jobs:
             echo "::notice::Not a pull request -- building, which also refreshes the shared ccache."
             exit 0
           fi
-          sources='^(patches/|additions/|settings/|assets/|upstream\.sh|Makefile|scripts/)'
+          if [ "${{ steps.suites.outputs.needs_browser }}" != "true" ]; then
+            echo "browser_changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No selected suite drives a browser -- neither building nor fetching one."
+            exit 0
+          fi
           base="${{ github.event.pull_request.base.sha }}"
           changed=$(git diff --name-only "$base"...HEAD || echo "")
           echo "changed files:"; echo "$changed" | sed 's/^/  /'
-          if echo "$changed" | grep -qE "$sources"; then
+          # The source digest's own definition of a browser source (ci/release.py),
+          # so this and the release pairing cannot disagree.
+          if echo "$changed" | python3 -c 'import sys; from ci.release import is_browser_source; sys.exit(0 if any(is_browser_source(l.strip()) for l in sys.stdin if l.strip()) else 1)'; then
             echo "browser_changed=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Browser sources changed -- rebuilding from source."
             exit 0
@@ -292,6 +319,7 @@ jobs:
     name: pythonlib
     # Tier 1. Waits on the static checks so an obvious mistake costs seconds.
     needs: [resolve, static]
+    if: contains(fromJSON(needs.resolve.outputs.suites), 'pythonlib')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -335,6 +363,7 @@ jobs:
     # for byte -- so a pythonlib change that typescript/ does not mirror fails
     # here, in a minute, not after the build.
     needs: [resolve, static]
+    if: contains(fromJSON(needs.resolve.outputs.suites), 'typescript')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -399,8 +428,13 @@ jobs:
     name: Build (linux x86_64)
     # Tier 2. Nothing gets compiled until the cheap tiers are green -- this is
     # over an hour cold, and a lint failure should never cost that.
+    # pythonlib is skipped when no changed file is read by it; only its failure stops this.
     needs: [resolve, static, pythonlib]
-    if: needs.resolve.outputs.browser_changed == 'true'
+    if: >-
+      !cancelled() && needs.static.result == 'success' &&
+      contains(fromJSON('["success","skipped"]'), needs.pythonlib.result) &&
+      needs.resolve.outputs.needs_browser == 'true' &&
+      needs.resolve.outputs.browser_changed == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 330
     permissions:
@@ -654,7 +688,11 @@ jobs:
     # the same artifact name as `build`, so every downstream job is identical
     # whichever way the browser arrived.
     needs: [resolve, static, pythonlib]
-    if: needs.resolve.outputs.browser_changed == 'false'
+    if: >-
+      !cancelled() && needs.static.result == 'success' &&
+      contains(fromJSON('["success","skipped"]'), needs.pythonlib.result) &&
+      needs.resolve.outputs.needs_browser == 'true' &&
+      needs.resolve.outputs.browser_changed == 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -728,7 +766,12 @@ jobs:
     # Tier 3b. Gated on 3a: a browser that fails its patch guards is broken, and
     # six shards would take forty minutes to reach the same conclusion.
     needs: [resolve, build, fetch-browser, patch-guards, build-tester]
-    if: always() && needs.patch-guards.result == 'success' && needs.build-tester.result == 'success'
+    # Tier 3a jobs that were left out of this run are skipped, not failed.
+    if: >-
+      always() && contains(fromJSON(needs.resolve.outputs.suites), 'playwright') &&
+      (needs.build.result == 'success' || needs.fetch-browser.result == 'success') &&
+      !contains(fromJSON('["failure","cancelled"]'), needs.patch-guards.result) &&
+      !contains(fromJSON('["failure","cancelled"]'), needs.build-tester.result)
     runs-on: ubuntu-24.04
     # A healthy shard is 5-9 minutes. At 120 a wedged shard sat on a runner for
     # two hours before anyone found out, four shards at a time -- which is also
@@ -788,17 +831,18 @@ jobs:
     # GROUPS), plus the skiplist audit, so a failure names which kind broke and
     # the legs run side by side. One job id, so everything that waits on the
     # guards keeps `needs: patch-guards`.
-    if: always() && (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
+    #
+    # The legs come from ci/scope.py GUARD_LEGS: only the selected ones run, and
+    # the job is skipped when none is.
+    if: >-
+      always() && needs.resolve.outputs.guard_matrix != '[]' &&
+      (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
     name: ${{ matrix.title }}
     needs: [resolve, build, fetch-browser]
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {leg: spoofing, title: "Patch guards: spoofing"}
-          - {leg: automation, title: "Patch guards: automation"}
-          - {leg: parity, title: "Patch guards: stock parity"}
-          - {leg: skiplist, title: "Skiplist audit"}
+        include: ${{ fromJSON(needs.resolve.outputs.guard_matrix) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -846,7 +890,9 @@ jobs:
   build-tester:
     # Tier 3a: the cheap checks on a fresh browser. If these fail the browser is
     # broken in an obvious way and tier 3b would only say so more slowly.
-    if: always() && (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
+    if: >-
+      always() && contains(fromJSON(needs.resolve.outputs.suites), 'build-tester') &&
+      (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
     name: build-tester
     needs: [resolve, build, fetch-browser]
     runs-on: ubuntu-24.04
@@ -894,7 +940,11 @@ jobs:
   native:
     name: Leaks and context semantics
     needs: [resolve, build, fetch-browser, patch-guards, build-tester]
-    if: always() && needs.patch-guards.result == 'success' && needs.build-tester.result == 'success'
+    if: >-
+      always() && contains(fromJSON(needs.resolve.outputs.suites), 'native') &&
+      (needs.build.result == 'success' || needs.fetch-browser.result == 'success') &&
+      !contains(fromJSON('["failure","cancelled"]'), needs.patch-guards.result) &&
+      !contains(fromJSON('["failure","cancelled"]'), needs.build-tester.result)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -951,7 +1001,8 @@ jobs:
     # same identity pythonlib's launch of it shows.
     needs: [resolve, build, fetch-browser, typescript]
     if: >-
-      always() && needs.typescript.result == 'success' &&
+      always() && contains(fromJSON(needs.resolve.outputs.suites), 'typescript-browser') &&
+      needs.typescript.result == 'success' &&
       (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -1016,9 +1067,10 @@ jobs:
     # simply runs two.
     needs: [resolve, build, fetch-browser, patch-guards, build-tester]
     if: >-
-      always()
-      && needs.patch-guards.result == 'success'
-      && needs.build-tester.result == 'success'
+      always() && contains(fromJSON(needs.resolve.outputs.suites), 'growth') &&
+      (needs.build.result == 'success' || needs.fetch-browser.result == 'success') &&
+      !contains(fromJSON('["failure","cancelled"]'), needs.patch-guards.result) &&
+      !contains(fromJSON('["failure","cancelled"]'), needs.build-tester.result)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -1055,7 +1107,12 @@ jobs:
   sundial:
     name: Stealth check
     needs: [resolve, build, fetch-browser, patch-guards, build-tester]
-    if: always() && needs.resolve.outputs.has_sundial == 'true' && needs.patch-guards.result == 'success' && needs.build-tester.result == 'success'
+    if: >-
+      always() && contains(fromJSON(needs.resolve.outputs.suites), 'sundial') &&
+      needs.resolve.outputs.has_sundial == 'true' &&
+      (needs.build.result == 'success' || needs.fetch-browser.result == 'success') &&
+      !contains(fromJSON('["failure","cancelled"]'), needs.patch-guards.result) &&
+      !contains(fromJSON('["failure","cancelled"]'), needs.build-tester.result)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -1132,25 +1189,17 @@ jobs:
         id: summarize
         run: |
           set +e
-          # Suite names, not job names. `static` is a job; the suites it runs are
-          # the pipeline self-tests, which write no result, and native_rules,
-          # which is named here. The gate separately fails if the job itself did
-          # not succeed, so nothing is lost by leaving it out.
-          #
-          # The browser suites are required either way -- they run against a
-          # fetched release just as they do against a fresh build. `build` is
-          # the one that is not: on a driver-only pull request that job is
-          # skipped by design and writes no result, and requiring it there made
-          # summarize report "produced no result file" and fail the gate on
-          # every pull request that did not touch the browser. Which is most of
-          # them, and exactly the cheap path this pipeline advertises.
-          required="pythonlib typescript typescript_browser native_rules patch_guards_spoofing patch_guards_automation patch_guards_parity skiplist_audit build_tester playwright native_browser native_growth"
-          if [ "${{ needs.resolve.outputs.browser_changed }}" = "true" ]; then
-            required="$required build"
-          fi
-          if [ "${{ needs.resolve.outputs.has_sundial }}" = "true" ]; then
-            required="$required sundial"
-          fi
+          # Result names, not job names, for exactly the suites this run
+          # scheduled (ci/scope.py required). A suite ci/scope.py left out writes
+          # nothing and is not required; one it selected is, and "produced no
+          # result file" fails it. native_rules comes from the static job, which
+          # always runs; `build` is required only when the browser was built
+          # rather than fetched, and sundial only with a credential.
+          required=$(python3 -m ci.scope required \
+            --suites '${{ needs.resolve.outputs.suites }}' \
+            --browser-changed "${{ needs.resolve.outputs.browser_changed }}" \
+            --has-sundial "${{ needs.resolve.outputs.has_sundial }}")
+          echo "required: $required"
           python3 -m ci.summarize \
             --results-dir .ci-work/results \
             --require $required \
@@ -1163,6 +1212,14 @@ jobs:
             --playwright-firefox "${{ needs.resolve.outputs.playwright_firefox }}" \
             --version-note "${{ needs.resolve.outputs.version_note }}"
           code=$?
+          skipped='${{ needs.resolve.outputs.skipped_suites }}'
+          if [ -n "$skipped" ] && [ "$skipped" != "[]" ]; then
+            {
+              echo
+              echo "**Not run on this pull request:** $(python3 -c 'import json, sys; print(", ".join(json.loads(sys.argv[1])))' "$skipped")." \
+                "No file it changes is read by these suites (ci/scope.py); they run on every push to main."
+            } >> summary.md
+          fi
           echo "verdict=$([ $code -eq 0 ] && echo pass || echo fail)" >> "$GITHUB_OUTPUT"
           exit $code
 
@@ -1205,10 +1262,10 @@ jobs:
     # A job that was legitimately not applicable is allowed to be skipped -- the
     # build when the browser was fetched instead, the fetch when it was built,
     # the stealth check on a fork pull request with no credentials or while it is
-    # disabled in ci/sundial.yml. Anything else
-    # that is not `success`, including `skipped`, fails the gate: a suite that
-    # did not run has not passed, and silently skipping one is the cheapest way
-    # to a green tick.
+    # disabled in ci/sundial.yml, and a suite ci/scope.py left out because no
+    # changed file is read by it. Anything else that is not `success`, including
+    # `skipped`, fails the gate: a selected suite that did not run has not
+    # passed, and silently skipping one is the cheapest way to a green tick.
     needs: [resolve, static, pythonlib, typescript, build, fetch-browser, playwright,
             patch-guards, build-tester, native, typescript-browser, growth, sundial, summary]
     if: always()
@@ -1216,44 +1273,16 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
       - name: Check every tier
         env:
           RESULTS: ${{ toJSON(needs) }}
+          SUITES: ${{ needs.resolve.outputs.suites }}
           BROWSER_CHANGED: ${{ needs.resolve.outputs.browser_changed }}
           HAS_SUNDIAL: ${{ needs.resolve.outputs.has_sundial }}
-        run: |
-          python3 - <<'PY'
-          import json, os, sys
-
-          results = {name: job["result"] for name, job in json.loads(os.environ["RESULTS"]).items()}
-          built = os.environ.get("BROWSER_CHANGED") == "true"
-
-          # The only jobs allowed to be skipped, and only for these reasons.
-          may_skip = {
-              "build": not built,
-              "fetch-browser": built,
-              "sundial": os.environ.get("HAS_SUNDIAL") != "true",
-          }
-
-          problems = []
-          for name, result in sorted(results.items()):
-              if result == "success":
-                  continue
-              if result == "skipped" and may_skip.get(name):
-                  print(f"  - {name}: skipped (not applicable to this run)")
-                  continue
-              problems.append(f"{name}: {result}")
-
-          width = max(len(n) for n in results)
-          print("\ntier results:")
-          for name, result in sorted(results.items()):
-              mark = "ok  " if result == "success" else "FAIL"
-              print(f"  {mark}  {name:<{width}}  {result}")
-
-          if problems:
-              print("\nnot mergeable:")
-              for problem in problems:
-                  print(f"  - {problem}")
-              sys.exit(1)
-          print("\nevery tier passed; this pull request is mergeable.")
-          PY
+        # ci/scope.py gate: a job may be skipped only when ci/scope.py left all
+        # of its suites out of this run, or for the reasons may_skip() names
+        # (build vs fetch, sundial with no credential).
+        run: python3 -m ci.scope gate
