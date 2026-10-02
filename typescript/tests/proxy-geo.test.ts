@@ -74,6 +74,22 @@ describe("NewContext proxy lookup", () => {
 		expect(calls.script).toContain("203.0.113.7");
 	});
 
+	it("credentials with URL delimiters survive the proxy URL", async () => {
+		// A raw `#`, `/` or `?` stops the URL parsing, and a raw `%41` would be
+		// decoded into a different password (#823).
+		const username = "us@r name";
+		const password = "p#ss/w?rd:%41";
+		const { browser } = fakeBrowser();
+		await NewContext(browser, {
+			os: "linux",
+			proxy: { server: "proxy.example.com:8080", username, password },
+		});
+		const url = new URL(impit.proxyUrls[0] as string);
+		expect([url.hostname, url.port]).toEqual(["proxy.example.com", "8080"]);
+		expect(decodeURIComponent(url.username)).toBe(username);
+		expect(decodeURIComponent(url.password)).toBe(password);
+	});
+
 	it.each([
 		[
 			"an unreachable proxy",

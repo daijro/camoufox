@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Dict, Optional, Tuple
+from urllib.parse import quote
 
 import requests
 
@@ -38,10 +39,12 @@ class Proxy:
         if not schema:
             schema = 'http'
         result = f"{schema}://"
+        # Percent-encode the credentials: a raw `#`, `/`, `?` or `@` breaks the
+        # URL, and a raw `%XX` is decoded into a different password.
         if self.username:
-            result += f"{self.username}"
+            result += quote(self.username, safe='')
             if self.password:
-                result += f":{self.password}"
+                result += f":{quote(self.password, safe='')}"
             result += "@"
 
         result += url
