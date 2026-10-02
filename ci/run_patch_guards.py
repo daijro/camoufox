@@ -39,6 +39,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
     "spoofing": (
         "animation-timing",
         "fingerprint-setter-seal",
+        "locale-explicit-names",
         "media-devices-coherence",
         "spoofed-voice-speaks",
         "startup-prefs",
