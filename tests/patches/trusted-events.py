@@ -56,6 +56,9 @@ PAGE = f"""
 <input id="date" type="date">
 <input id="color" type="color">
 <input id="file" type="file">
+<input id="typed">
+<input id="filled">
+<input id="capped" maxlength="3">
 <button id="btn">b</button>
 <button id="own" onclick="pageDispatch()">own</button>
 <script>
@@ -63,9 +66,10 @@ PAGE = f"""
   const desc = e => ({{
     type: e.type, trusted: e.isTrusted, bubbles: e.bubbles,
     cancelable: e.cancelable, composed: e.composed, ctor: e.constructor.name,
+    inputType: e.inputType, data: e.data,
     target: e.target.id || e.target.tagName,
   }});
-  for (const t of ['input', 'change', 'focus', 'blur', 'pointerdown',
+  for (const t of ['beforeinput', 'input', 'change', 'focus', 'blur', 'pointerdown',
                    'mousedown', 'pointerup', 'mouseup', 'click', 'custom'])
     document.addEventListener(t, e => {{
       // Focus/blur also fire with the window as target; only elements count.
@@ -179,6 +183,29 @@ async def main() -> int:
                  "cancelable": False, "composed": True, "ctor": "Event"},
                 {"type": "change", "trusted": True, "bubbles": True,
                  "cancelable": False, "composed": False, "ctor": "Event"}])
+
+        # --- fill on a text input: the reference is a real keystroke ---
+        # A keystroke edits through the control's editor, so the value counts as
+        # user-edited and blur commits a "change"; pages that save on change
+        # (onchange handlers, form libraries) depend on it.
+        text_events = ("beforeinput", "input", "change")
+        await page.focus("#typed")
+        await page.keyboard.type("x")
+        await page.focus("#btn")
+        typed = shape(await rec.drain(), *text_events)
+        _check(results, "reference keystroke produced beforeinput+input+change",
+               [(e["type"], e["trusted"]) for e in typed],
+               [("beforeinput", True), ("input", True), ("change", True)])
+
+        await page.fill("#filled", "x")
+        await page.focus("#btn")
+        _check(results, "fill on a text input is identical to a keystroke",
+               shape(await rec.drain(), *text_events), typed)
+
+        await page.fill("#capped", "123456")
+        await rec.drain()
+        _check(results, "fill on a text input honours maxlength",
+               await page.input_value("#capped"), "123")
 
         await page.dispatch_event("#btn", "click")
         _check(results, "dispatch_event is trusted",
