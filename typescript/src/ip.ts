@@ -37,10 +37,12 @@ export class ProxyHelper {
 	static asString(proxy: ProxyConfig): string {
 		const { schema, url, port } = ProxyHelper.parseServer(proxy.server);
 		let result = `${schema}://`;
+		// Percent-encode the credentials: a raw `#`, `/`, `?` or `@` breaks the
+		// URL, and a raw `%XX` is decoded into a different password.
 		if (proxy.username) {
-			result += proxy.username;
+			result += encodeURIComponent(proxy.username);
 			if (proxy.password) {
-				result += `:${proxy.password}`;
+				result += `:${encodeURIComponent(proxy.password)}`;
 			}
 			result += "@";
 		}

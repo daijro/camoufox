@@ -11,6 +11,7 @@ timezone while its traffic went through the proxy:
 
 import asyncio
 from unittest import mock
+from urllib.parse import unquote, urlsplit
 
 import pytest
 
@@ -73,6 +74,18 @@ def test_lookup_goes_through_the_proxy_with_its_credentials(api, server, expecte
     assert get.call_args.kwargs["proxies"] == {"http": expected, "https": expected}
     assert options["timezone_id"] == "Europe/Paris"
     assert "203.0.113.7" in context.add_init_script.call_args.args[0]
+
+
+@pytest.mark.parametrize("api", ["sync", "async"])
+def test_credentials_with_url_delimiters_survive_the_proxy_url(api):
+    # A raw `#`, `/` or `?` stops the URL parsing, and a raw `%41` would be
+    # decoded into a different password (#823).
+    username, password = "us@r name", "p#ss/w?rd:%41"
+    with mock.patch.object(ip.requests, "get", return_value=_Response(EXIT)) as get:
+        _new_context(api, {"server": "proxy.example.com:8080", "username": username, "password": password})
+    url = urlsplit(get.call_args.kwargs["proxies"]["https"])
+    assert (url.hostname, url.port) == ("proxy.example.com", 8080)
+    assert (unquote(url.username), unquote(url.password)) == (username, password)
 
 
 @pytest.mark.parametrize("api", ["sync", "async"])
