@@ -18,7 +18,7 @@ from ._warnings import WARNINGS_DATA, _warn_from_caller
 from .exceptions import NotInstalledGeoIPExtra, UnknownIPLocation
 from .ip import validate_ip
 from .locales import SELECTOR, Geolocation
-from .pkgman import LOCAL_DATA, rprint, unzip, webdl
+from .pkgman import LOCAL_DATA, rprint, unzip, webdl, write_atomic
 
 try:
     import maxminddb  # type: ignore
@@ -211,7 +211,7 @@ def download_mmdb(
                             mmdb_files = list(Path(tmpdir).rglob('*.mmdb'))
                             if not mmdb_files:
                                 raise ValueError("No .mmdb file found in archive")
-                            shutil.move(str(mmdb_files[0]), str(mmdb_path))
+                            write_atomic(mmdb_path, mmdb_files[0].read_bytes())
                     else:
                         tmp.seek(0)
                         with open(mmdb_path, 'wb') as dst:

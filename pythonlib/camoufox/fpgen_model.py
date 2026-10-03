@@ -18,9 +18,7 @@ import hashlib
 import importlib.util
 import json
 import os
-import shutil
 import sys
-import tempfile
 import time
 from pathlib import Path
 from threading import Lock
@@ -29,7 +27,7 @@ from typing import Optional
 from zipfile import ZipFile
 
 from .exceptions import CorruptedDownload, FpgenModelError
-from .pkgman import verify_sha256, webdl
+from .pkgman import verify_sha256, webdl, write_atomic
 
 PIN = json.loads((Path(__file__).parent / 'fpgen-model.json').read_text(encoding='utf-8'))
 
@@ -110,9 +108,11 @@ def ensure_fpgen_model(data_dir: Optional[Path] = None, force: bool = False) -> 
             _stamp(data_dir)
         except PermissionError as e:
             raise FpgenModelError(
-                f"fpgen's model directory is not writable by this user: {data_dir}\n"
-                'Install the model as its owner once, e.g. while building an image: '
-                'camoufox fetch'
+                f"This user cannot read or write fpgen's model file {e.filename}.\n"
+                'Install the model once as the account that owns the directory, e.g. while '
+                'building an image: camoufox fetch. A model this user cannot read was installed '
+                'by another account or elevation level: remove it from that account with '
+                '`python -m fpgen remove`, then run camoufox fetch.'
             ) from e
 
 
@@ -121,29 +121,25 @@ def _install(data_dir: Path) -> None:
     buffer = webdl(PIN['url'], progress_callback=lambda done, total: None)
     verify_sha256(buffer, PIN['sha256'], 'fpgen model')
 
+    members = {}
+    with ZipFile(buffer) as zf:
+        if sorted(zf.namelist()) != sorted(PIN['file_sha256']):
+            raise CorruptedDownload(
+                f"fpgen model archive holds {sorted(zf.namelist())}, "
+                f"expected {sorted(PIN['file_sha256'])}."
+            )
+        # Members are read by name, never extracted by path, and every one is
+        # verified before any is written.
+        for name, expected in PIN['file_sha256'].items():
+            members[name] = zf.read(name)
+            if hashlib.sha256(members[name]).hexdigest() != expected:
+                raise CorruptedDownload(f'fpgen model member {name} does not match its pinned sha256.')
     data_dir.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix='.model-', dir=data_dir))
-    try:
-        with ZipFile(buffer) as zf:
-            if sorted(zf.namelist()) != sorted(PIN['file_sha256']):
-                raise CorruptedDownload(
-                    f"fpgen model archive holds {sorted(zf.namelist())}, "
-                    f"expected {sorted(PIN['file_sha256'])}."
-                )
-            # Members are read by name, never extracted by path.
-            for name, expected in PIN['file_sha256'].items():
-                data = zf.read(name)
-                if hashlib.sha256(data).hexdigest() != expected:
-                    raise CorruptedDownload(f'fpgen model member {name} does not match its pinned sha256.')
-                (staging / name).write_bytes(data)
-        (data_dir / STAMP).unlink(missing_ok=True)
-        for name in PIN['file_sha256']:
-            # Dated before the move, so fpgen never sees it as stale; each
-            # replace is atomic, so a concurrent reader never sees a torn file.
-            os.utime(staging / name, (PINNED_MTIME, PINNED_MTIME))
-            os.replace(staging / name, data_dir / name)
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
+    (data_dir / STAMP).unlink(missing_ok=True)
+    for name, data in members.items():
+        # Dated before the replace, so fpgen never sees it as stale; each
+        # replace is atomic, so a concurrent reader never sees a torn file.
+        write_atomic(data_dir / name, data, mtime=PINNED_MTIME)
 
 
 def _drop_foreign_decompressed(data_dir: Path) -> None:

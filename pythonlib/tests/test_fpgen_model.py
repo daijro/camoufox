@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 from pathlib import Path
@@ -289,6 +290,35 @@ def test_read_only_current_pinned_model_is_used(read_only, pinned):
     ensure_fpgen_model(read_only)
 
     assert pinned == []
+
+
+def test_install_never_stages_in_a_private_temporary_directory(tmp_path, pinned, monkeypatch):
+    # Since Python 3.13, tempfile.mkdtemp() makes an owner-only directory on
+    # Windows, and a file moved out of it keeps that ACL: a model installed from
+    # an elevated shell could not be read by the same user unelevated, or by any
+    # other account. Each file is written beside its destination instead.
+    def private(*args, **kwargs):
+        raise AssertionError("the model was staged in a private temporary directory")
+
+    monkeypatch.setattr(tempfile, "mkdtemp", private)
+    data_dir = tmp_path / "data"
+    ensure_fpgen_model(data_dir)
+    assert fpgen_model.is_pinned(data_dir)
+    assert not list(data_dir.glob(".*.tmp"))
+
+
+@needs_non_root
+def test_an_unreadable_model_names_the_file_and_the_fix(tmp_path, pinned):
+    data_dir = tmp_path / "data"
+    ensure_fpgen_model(data_dir)
+    unreadable = data_dir / "values.json.zst"
+    unreadable.chmod(0)
+    try:
+        with pytest.raises(FpgenModelError, match="fpgen remove") as raised:
+            ensure_fpgen_model(data_dir)
+        assert str(unreadable) in str(raised.value)
+    finally:
+        unreadable.chmod(0o644)
 
 
 def test_install_writes_nothing_to_stdout(tmp_path, pinned, capfd):
