@@ -953,7 +953,7 @@ def test_required_suites_are_names_a_runner_actually_writes():
         "build", "build_tester", "patch_guards", "pythonlib", "sundial",
         "patch_guards_spoofing", "patch_guards_automation", "patch_guards_parity",
         "native", "native_rules", "native_browser", "native_growth",
-        "playwright", "skiplist_audit", "typescript", "typescript_browser",
+        "playwright", "skiplist_audit", "typescript", "typescript_browser", "install",
     }
     unknown = required - producible
     assert not unknown, (
@@ -1819,7 +1819,7 @@ def test_the_browser_suites_are_required_either_way():
     for changed in ("true", "false"):
         required = _required_suites(changed, "false")
         assert {
-            "pythonlib", "native_rules", "skiplist_audit", "build_tester",
+            "pythonlib", "install", "native_rules", "skiplist_audit", "build_tester",
             "playwright", "native_browser", "native_growth",
             "patch_guards_spoofing", "patch_guards_automation", "patch_guards_parity",
         } <= required, changed

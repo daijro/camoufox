@@ -5,6 +5,7 @@
  * and a slow disk must hold the download back rather than queue it in memory.
  */
 import * as fs from "node:fs";
+import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Writable } from "node:stream";
@@ -98,4 +99,18 @@ it("waits for a slow stream to drain instead of queueing the download", async ()
 	expect(received).toBe(chunks * size);
 	// Without waiting for 'drain' all 64 KiB sit in the stream's buffer.
 	expect(peak).toBeLessThanOrEqual(2 * size);
+});
+
+it("a network failure names the URL and its cause", async () => {
+	// Node's own error is only "fetch failed".
+	const { webdl } = await import("../src/pkgman.js");
+	// A port that was just free, so nothing is listening on it.
+	const server = net.createServer();
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	const { port } = server.address() as net.AddressInfo;
+	await new Promise((resolve) => server.close(resolve));
+	const url = `http://127.0.0.1:${port}/geoip.zip`;
+	await expect(webdl(url, "x", false)).rejects.toThrow(
+		`Could not download ${url}: fetch failed (ECONNREFUSED`,
+	);
 });

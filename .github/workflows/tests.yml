@@ -395,6 +395,56 @@ jobs:
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
+  install:
+    name: Install from the packages
+    # Tier 1. Every other suite runs from the source tree; this one installs
+    # the packed pythonlib and npm package into clean environments and runs the
+    # real `camoufox fetch`, with TMPDIR on its own tmpfs so a rename from the
+    # temporary directory into the cache fails here as it fails for users
+    # (EXDEV). See ci/run_install.py.
+    needs: [resolve, static]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r ci/requirements.txt
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: typescript/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: typescript/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: typescript
+      - name: A temporary directory on its own filesystem
+        run: |
+          sudo mkdir -p /mnt/install-tmp
+          sudo mount -t tmpfs -o size=4g,mode=1777 tmpfs /mnt/install-tmp
+      - name: Run
+        # Both launchers resolve the release through the GitHub API; an
+        # anonymous runner shares a 60-an-hour quota for its IP range.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        # Pinned like a published package: to the release built from these
+        # browser sources when there is one, else the newest release.
+        run: python3 -m ci.run_install --tmpdir /mnt/install-tmp --browser-tag "${{ needs.resolve.outputs.browser_tag }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-install
+          path: .ci-work/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
   build:
     name: Build (linux x86_64)
     # Tier 2. Nothing gets compiled until the cheap tiers are green -- this is
@@ -1103,7 +1153,7 @@ jobs:
   # ---------------------------------------------------------------------------
   summary:
     name: Summary
-    needs: [resolve, static, pythonlib, typescript, build, fetch-browser, playwright,
+    needs: [resolve, static, pythonlib, typescript, install, build, fetch-browser, playwright,
             patch-guards, build-tester, native, typescript-browser, growth, sundial]
     if: always() && needs.resolve.result == 'success'
     runs-on: ubuntu-24.04
@@ -1144,7 +1194,7 @@ jobs:
           # summarize report "produced no result file" and fail the gate on
           # every pull request that did not touch the browser. Which is most of
           # them, and exactly the cheap path this pipeline advertises.
-          required="pythonlib typescript typescript_browser native_rules patch_guards_spoofing patch_guards_automation patch_guards_parity skiplist_audit build_tester playwright native_browser native_growth"
+          required="pythonlib typescript install typescript_browser native_rules patch_guards_spoofing patch_guards_automation patch_guards_parity skiplist_audit build_tester playwright native_browser native_growth"
           if [ "${{ needs.resolve.outputs.browser_changed }}" = "true" ]; then
             required="$required build"
           fi
@@ -1209,7 +1259,7 @@ jobs:
     # that is not `success`, including `skipped`, fails the gate: a suite that
     # did not run has not passed, and silently skipping one is the cheapest way
     # to a green tick.
-    needs: [resolve, static, pythonlib, typescript, build, fetch-browser, playwright,
+    needs: [resolve, static, pythonlib, typescript, install, build, fetch-browser, playwright,
             patch-guards, build-tester, native, typescript-browser, growth, sundial, summary]
     if: always()
     runs-on: ubuntu-24.04
