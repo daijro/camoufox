@@ -138,7 +138,7 @@ class TestRules:
         assert not coherence.gpu_fits_os("Apple M1, or similar", "win")
 
     def test_apple_silicon_reports_deep_colour(self):
-        # Measured on jobharvest-mac: colorDepth 30, (color: 10).
+        # Measured on a real Apple Silicon Mac: colorDepth 30, (color: 10).
         config = {"webGl:renderer": "Apple M1, or similar", "screen.colorDepth": 24}
         assert [v.rule for v in coherence.validate(config, "mac")] == ["color-depth"]
         assert coherence.apply(config, "mac") == []
@@ -156,7 +156,7 @@ class TestRules:
         assert [v.rule for v in coherence.validate(config, "win")] == ["touch-points"]
         assert coherence.apply(config, "win") == []
         assert config["navigator.maxTouchPoints"] == 0
-        # 5 is real -- measured on win-i9, a touchscreen laptop -- and so are
+        # 5 is real -- measured on a Windows 11 touchscreen laptop -- and so are
         # 2 and 10; fpgen offers none of 2/5 and the presets carry 40.
         for real in (0, 1, 2, 5, 10):
             assert coherence.validate({"navigator.maxTouchPoints": real}, "win") == [], real
@@ -171,7 +171,7 @@ class TestRules:
         assert [v.rule for v in coherence.validate(config, "win")] == ["device-pixel-ratio"]
         assert coherence.apply(config, "win") == []
         assert config["window.devicePixelRatio"] == 1.75
-        # The three measured machines: 1 on linux, 2.5 on win-i9, 2 on the Mac.
+        # The three measured machines: 1 on Linux, 2.5 on the Windows laptop, 2 on the Mac.
         assert coherence.validate({"window.devicePixelRatio": 1}, "lin") == []
         assert coherence.validate({"window.devicePixelRatio": 2.5}, "win") == []
         assert coherence.validate({"window.devicePixelRatio": 2}, "mac") == []

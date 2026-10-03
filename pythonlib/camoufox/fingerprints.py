@@ -152,7 +152,7 @@ _ESSENTIAL_FONTS_LINUX: List[str] = _ESSENTIAL['lin']
 # does not. macOS has a single bundled base (Sonoma). Format: (probability, fonts).
 _BASE_VARIANT_FONTS_MACOS = (0.0, [])
 _BASE_VARIANT_FONTS_WINDOWS = (1.0, [
-    # Verified present on win-i9 (real Windows 11 build 26200.9457). Windows 10
+    # Verified present on a real Windows 11 laptop (build 26200.9457). Windows 10
     # was dropped 2026-09-22 (end of support Oct 2025), so every Windows identity
     # is Windows 11 and these are always drawn. Cascadia Code/Mono are NOT here:
     # they are not on a stock Windows 11 and are modelled as an addition.
