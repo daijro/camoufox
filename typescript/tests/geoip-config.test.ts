@@ -78,6 +78,28 @@ it("keeps an explicit choice through a refresh", async () => {
 	expect(fs.readFileSync(g.getMmdbPath("ipv4"), "utf-8")).toBe("x");
 });
 
+it("unpacks the archive beside the database, not in os.tmpdir()", async () => {
+	// Renaming out of a tmpfs /tmp into the cache fails with EXDEV, which made
+	// `camoufox fetch` fail on the default (zipped) source.
+	let unpackedIn = "";
+	vi.doMock("../src/pkgman.js", async (importOriginal) => ({
+		...(await importOriginal<typeof import("../src/pkgman.js")>()),
+		webdl: async () => Buffer.from("zip"),
+		unzip: (_buffer: Buffer, dir: string) => {
+			unpackedIn = dir;
+			fs.writeFileSync(path.join(dir, "geoip.mmdb"), "db");
+		},
+	}));
+	try {
+		await g.downloadMmdb();
+	} finally {
+		vi.doUnmock("../src/pkgman.js");
+	}
+	expect(path.relative(g.GEOIP_DIR, unpackedIn).startsWith("..")).toBe(false);
+	expect(fs.readFileSync(g.getMmdbPath("ipv4"), "utf-8")).toBe("db");
+	expect(fs.existsSync(unpackedIn)).toBe(false);
+});
+
 it("warns on a deprecated source", async () => {
 	const { warnings } = await w.recordWarnings(() => {
 		g.warnIfDeprecated(g.getGeoipConfigByName(DEPRECATED));
