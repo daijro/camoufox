@@ -79,6 +79,27 @@ function githubHeaders(url: string): Record<string, string> {
 		: {};
 }
 
+/**
+ * fetch(), but a network failure names the URL and its cause. Node's own
+ * error is only "fetch failed", which says neither what was being downloaded
+ * nor why (DNS, refused, reset, timeout).
+ */
+async function request(url: string, init: RequestInit): Promise<Response> {
+	try {
+		return await fetch(url, init);
+	} catch (error) {
+		const cause = (error as { cause?: { code?: string; message?: string } })
+			.cause;
+		const detail = cause
+			? `${cause.code ?? ""} ${cause.message ?? ""}`.trim()
+			: "";
+		throw new Error(
+			`Could not download ${url}: ${(error as Error).message}${detail ? ` (${detail})` : ""}`,
+			{ cause: error },
+		);
+	}
+}
+
 /** requests' raise_for_status() message, so callers can match "404". */
 function raiseForStatus(response: Response, url: string): void {
 	if (response.ok) return;
@@ -596,7 +617,7 @@ export class GitHubDownloader {
 
 	protected async getReleases(githubRepo: string): Promise<GitHubRelease[]> {
 		const apiUrl = `https://api.github.com/repos/${githubRepo}/releases`;
-		const response = await fetch(apiUrl, {
+		const response = await request(apiUrl, {
 			headers: githubHeaders(apiUrl),
 			signal: AbortSignal.timeout(20_000),
 		});
@@ -870,7 +891,7 @@ export async function listAvailableVersions(
 	for (const repo of config.repos) {
 		try {
 			const apiUrl = `https://api.github.com/repos/${repo}/releases`;
-			const resp = await fetch(apiUrl, {
+			const resp = await request(apiUrl, {
 				headers: githubHeaders(apiUrl),
 				signal: AbortSignal.timeout(20_000),
 			});
@@ -1147,7 +1168,7 @@ export async function webdl(
 	buffer: Writable | null = null,
 	{ progressCallback }: { progressCallback?: ProgressCallback } = {},
 ): Promise<Buffer> {
-	const response = await fetch(url, { headers: githubHeaders(url) });
+	const response = await request(url, { headers: githubHeaders(url) });
 	raiseForStatus(response, url);
 
 	const totalSize = Number.parseInt(
