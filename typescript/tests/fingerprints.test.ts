@@ -817,15 +817,33 @@ describe("fromFpgen", () => {
 
 describe.skipIf(!MODEL.ok)("fpgen generation (needs the model)", () => {
 	it("generates a Firefox fingerprint for each OS", () => {
-		for (const [os, platform] of [
-			["windows", "Win32"],
-			["macos", "MacIntel"],
+		// The OS shows in the UA. navigator.platform is not checked on the raw
+		// draw: about 1 Linux record in 80 in the corpus says "Win32", and the
+		// launch path's fixNavigatorArch is what makes it agree (checked below).
+		for (const [os, token] of [
+			["windows", "Windows NT"],
+			["macos", "Macintosh"],
 			["linux", "Linux"],
 		]) {
 			const f = generateFingerprint({ os });
-			expect(String(f.navigator.platform)).toContain(platform);
+			expect(String(f.navigator.userAgent)).toContain(token);
 			expect(String(f.navigator.userAgent)).toContain("Firefox");
 		}
+	});
+
+	it("a Linux identity's platform matches its UA once the arch fix runs", () => {
+		// Draw until the corpus hands back the incoherent kind, so the check
+		// cannot pass vacuously.
+		let fingerprint: Record<string, any> | undefined;
+		for (let i = 0; i < 5000 && !fingerprint; i++) {
+			const f = generateFingerprint({ os: "linux" });
+			if (String(f.navigator.platform) === "Win32") fingerprint = f;
+		}
+		expect(fingerprint).toBeDefined();
+		const config = fromFpgen(fingerprint as Record<string, any>, "152");
+		fixNavigatorArch(config, "lin");
+		expect(config["navigator.platform"]).toBe("Linux x86_64");
+		expect(config["navigator.oscpu"]).toBe("Linux x86_64");
 	});
 
 	it("does not carry a drawn scroll offset into the config", () => {
