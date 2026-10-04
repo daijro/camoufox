@@ -518,7 +518,7 @@ Anti-bot systems also run client-side scripts to monitor your behavior. For exam
 
 Every dot above is a `mousemove` event the page received from six `page.mouse.move()` calls, replayed at the speed it arrived. Close dots mean the hand slowed down. `scripts/cursor-demo.py` regenerates the figure from a build.
 
-Camoufox does not draw its cursor paths. With `humanize=True` it uses [**Cursory**](https://github.com/Vinyzu/cursory) by [Vinyzu](https://github.com/Vinyzu), which holds 2357 mouse movements recorded from real people: it picks a recording whose direction, distance and wander suit the move being made, morphs it onto the requested start and end points, and replays it with that recording's own timing — pauses, overshoots and all.
+Camoufox does not draw its cursor paths. With `humanize=True` it uses [**Cursory**](https://github.com/Vinyzu/cursory) by [Vinyzu](https://github.com/Vinyzu), which holds 2356 mouse movements recorded from real people: it picks a recording whose direction, distance and wander suit the move being made, morphs it onto the requested start and end points, and replays it with that recording's own timing — pauses, overshoots and all.
 
 That last part matters as much as the shape. Camoufox previously walked a Bézier curve through two random knots and emitted a point every 10ms. Both halves of that are tells: an analytic curve sampled at a fixed rate has velocity and jerk profiles that separate cleanly from a hand's, and the acceleration came entirely from one easing function, so every movement Camoufox ever made sped up and slowed down the same way. A replayed recording has neither property.
 
