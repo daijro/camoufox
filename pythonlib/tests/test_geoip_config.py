@@ -96,3 +96,27 @@ def test_needs_update_reads_the_build_date(cache, monkeypatch, checked, built, s
 
 def test_missing_database_needs_update():
     assert geolocation.needs_update() is True
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX mode bits stand in for the Windows ACL")
+def test_the_database_takes_its_directory_permissions_not_the_staging_files(cache, monkeypatch):
+    # The archive is unpacked in a private temporary directory. Since Python
+    # 3.13 that directory is owner-only on Windows, and a file moved out of it
+    # keeps that ACL, so another account or elevation level could not read the
+    # database. An owner-only staged file reproduces that here.
+    def unzip(zip_file, extract_path, **kw):
+        fd = os.open(os.path.join(extract_path, "geoip.mmdb"), os.O_WRONLY | os.O_CREAT, 0o600)
+        os.write(fd, b"db")
+        os.close(fd)
+
+    monkeypatch.setattr(geolocation, "webdl", lambda url, buffer, **kw: buffer.write(b"zip"))
+    monkeypatch.setattr(geolocation, "unzip", unzip)
+    monkeypatch.setattr(geolocation, "_build_age_days", lambda path: 1)
+    geolocation.download_mmdb()
+
+    mmdb = geolocation.get_mmdb_path("ipv4")
+    umask = os.umask(0)
+    os.umask(umask)
+    assert mmdb.read_bytes() == b"db"
+    assert mmdb.stat().st_mode & 0o777 == 0o666 & ~umask
+    assert not list(mmdb.parent.glob(".*.tmp"))

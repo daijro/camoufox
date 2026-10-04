@@ -937,6 +937,24 @@ def webdl(
     return buffer
 
 
+def write_atomic(dest: Path, data: bytes, mtime: Optional[float] = None) -> None:
+    """Write `dest` through a temporary file beside it, then replace it in one step.
+
+    The temporary file is created in dest's own directory, so it takes that
+    directory's permissions. A file staged in tempfile.mkdtemp() does not: since
+    Python 3.13 that directory is private on Windows, and a file moved out of it
+    keeps an owner-only ACL, so another account or elevation level cannot read it.
+    """
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_bytes(data)
+        if mtime is not None:
+            os.utime(tmp, (mtime, mtime))
+        os.replace(tmp, dest)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def verify_sha256(buffer: DownloadBuffer, expected: Optional[str], desc: str = "asset") -> None:
     """
     Check a downloaded buffer against its expected sha256 digest.
