@@ -14,7 +14,7 @@
  * Bezier is an equation, and an equation sampled at a fixed rate has velocity
  * and jerk profiles that separate cleanly from a hand's; the old path's speed
  * also came entirely from an easing function, so every movement Camoufox ever
- * made accelerated and decelerated the same way. Cursory replays one of 2357
+ * made accelerated and decelerated the same way. Cursory replays one of 2356
  * movements recorded from real people, morphed onto the requested endpoints,
  * and keeps that recording's own timing -- pauses, overshoots and all.
  *
