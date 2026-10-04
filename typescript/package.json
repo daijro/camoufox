@@ -47,7 +47,7 @@
   "//playwright-core": "Range mirrors pythonlib/pyproject.toml's `playwright = \"<1.63\"`: every Playwright minor is free to change Juggler, so the ceiling is bumped deliberately, with a run of `make tests`. The dev pin (1.62.0) is the version the Python venv resolves, so the goldens compare like with like.",
   "packageManager": "pnpm@10.33.4",
   "dependencies": {
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.1",
     "cli-progress": "^3.12.0",
     "commander": "^14.0.0",
     "impit": "^0.14.1",
@@ -60,7 +60,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.10",
-    "@types/adm-zip": "^0.5.7",
     "@types/cli-progress": "^3.11.6",
     "@types/language-tags": "^1.0.4",
     "@types/node": "^24.0.0",

@@ -18,7 +18,7 @@ pinned identity presents identically from either language.
 ```bash
 npm install @camoufox/camoufox playwright-core
 # then download the browser
-npx camoufox fetch
+npx @camoufox/camoufox fetch
 ```
 
 `playwright-core` is a peer dependency — bring your own version (`<1.63`,

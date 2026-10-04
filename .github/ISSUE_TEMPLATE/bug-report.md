@@ -21,4 +21,4 @@ Provide steps or a code snippet that reproduces the bug.
 
 ### Version:
 
-Run `python -m camoufox version` (or `npx camoufox version` for the npm package) and paste the output here.
+Run `python -m camoufox version` (or `npx @camoufox/camoufox version` for the npm package) and paste the output here.
