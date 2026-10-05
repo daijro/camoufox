@@ -268,6 +268,7 @@ async function doSync(spoofOs?: string, spoofArch?: string): Promise<boolean> {
 							asset_updated_at: v.assetUpdatedAt ?? null,
 							sha256: v.sha256 ?? null,
 							created_at: v.assetCreatedAt ?? null,
+							interface: v.interface,
 						}) as unknown as CachedVersion,
 				),
 			});
@@ -594,6 +595,7 @@ program
 			isPrerelease: verData.is_prerelease ?? false,
 			sha256: verData.sha256 ?? undefined,
 			assetCreatedAt: verData.created_at ?? undefined,
+			interface: verData.interface ?? 1,
 		});
 		const repoConfig = RepoConfig.findByName(repo.name);
 		try {

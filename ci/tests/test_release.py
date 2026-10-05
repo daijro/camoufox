@@ -328,3 +328,15 @@ def test_each_registry_is_published_only_when_its_own_package_changed():
     assert "needs.publish-pypi.result == 'skipped'" in jobs["publish-npm"]["if"]
     steps = jobs["build-library"]["steps"]
     assert any("ci.release lib-diff" in s.get("run", "") for s in steps)
+
+
+def test_the_manifest_declares_the_interface_both_libraries_speak():
+    """Python and TypeScript must refuse the same browsers (#835)."""
+    interface = release.browser_interface()
+    assert release.manifest("v1", "d", "0" * 40)["interface"] == interface
+    ts = (release.REPO_ROOT / "typescript" / "src" / "__version__.ts").read_text(encoding="utf-8")
+    assert re.search(rf"^\s*static readonly INTERFACE: number = {interface};$", ts, re.M), "typescript/src/__version__.ts INTERFACE differs"
+    py = (release.REPO_ROOT / "pythonlib" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
+    ts_min = re.search(r"^\s*static readonly MIN_INTERFACE: number = (\d+);$", ts, re.M)
+    py_min = re.search(r"^\s*MIN_INTERFACE = (\d+)$", py, re.M)
+    assert ts_min and py_min and ts_min[1] == py_min[1], "MIN_INTERFACE differs between the libraries"

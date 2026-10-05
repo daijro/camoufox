@@ -151,6 +151,7 @@ def _do_sync(spoof_os=None, spoof_arch=None) -> bool:
                         "asset_updated_at": v.asset_updated_at,
                         "sha256": v.sha256,
                         "created_at": v.asset_created_at,
+                        "interface": v.interface,
                     }
                     for v in versions
                 ],
@@ -323,6 +324,7 @@ def fetch(version):
         is_prerelease=ver_data.get("is_prerelease", False),
         sha256=ver_data.get("sha256"),
         asset_created_at=ver_data.get("created_at"),
+        interface=ver_data.get("interface", 1),
     )
     repo_config = RepoConfig.find_by_name(repo_data["name"])
     try:

@@ -432,6 +432,46 @@ def effective_version_min() -> 'Version':
     return floor
 
 
+def interface_supported(interface: int) -> bool:
+    """Whether this library speaks a browser's declared interface."""
+    return CONSTRAINTS.MIN_INTERFACE <= interface <= CONSTRAINTS.INTERFACE
+
+
+_release_interfaces: Dict[Any, int] = {}
+
+
+def release_interface(release: Dict) -> int:
+    """
+    The browser interface a GitHub release declares in its manifest.json. A
+    release without a manifest, or a manifest without the field, predates the
+    field and is interface 1.
+    """
+    manifest = next((a for a in release.get('assets', []) if a.get('name') == 'manifest.json'), None)
+    if manifest is None:
+        return 1
+    key = manifest.get('id') or manifest['browser_download_url']
+    if key not in _release_interfaces:
+        resp = requests.get(manifest['browser_download_url'], timeout=20)
+        resp.raise_for_status()
+        _release_interfaces[key] = int(resp.json().get('interface', 1))
+    return _release_interfaces[key]
+
+
+def installed_interface(path: Path) -> int:
+    """The interface recorded in an install's version.json at install time."""
+    with open(path / 'version.json', 'rb') as f:
+        return int(orjson.loads(f.read()).get('interface', 1))
+
+
+def incompatible_message(version: 'Version', interface: int) -> str:
+    return (
+        f"Camoufox v{version.full_string} needs a newer camoufox package: it uses browser interface "
+        f"{interface}, and this package supports {CONSTRAINTS.MIN_INTERFACE}-"
+        f"{CONSTRAINTS.INTERFACE}. Upgrade the package (pip install -U camoufox), "
+        f"or run `camoufox fetch` to install a browser this one supports."
+    )
+
+
 class GitHubDownloader:
     """
     Manages fetching GitHub releases with fallback repos
@@ -504,6 +544,7 @@ class AvailableVersion:
     asset_updated_at: Optional[str] = None
     sha256: Optional[str] = None
     asset_created_at: Optional[str] = None
+    interface: int = 1
 
     @property
     def sha8(self) -> str:
@@ -533,6 +574,7 @@ class AvailableVersion:
             'asset_updated_at': self.asset_updated_at,
             'sha256': self.sha256,
             'created_at': self.asset_created_at,
+            'interface': self.interface,
         }
 
 
@@ -555,6 +597,7 @@ class CamoufoxFetcher(GitHubDownloader):
         self.pattern: re.Pattern = self.repo_config.build_pattern()
         self.installed_sha256: Optional[str] = None
         self.installed_created_at: Optional[str] = None
+        self.installed_interface: int = 1
 
         if selected_version:
             self._selected_version = selected_version
@@ -563,6 +606,7 @@ class CamoufoxFetcher(GitHubDownloader):
             self.is_prerelease = selected_version.is_prerelease
             self.installed_sha256 = selected_version.sha256
             self.installed_created_at = selected_version.asset_created_at
+            self.installed_interface = selected_version.interface
         else:
             self.fetch_latest()
 
@@ -594,6 +638,11 @@ class CamoufoxFetcher(GitHubDownloader):
         is_prerelease = bool(release and release.get('prerelease')) or version.is_alpha
         if not pin and not self.repo_config.is_version_supported(version, is_prerelease):
             return None
+        interface = release_interface(release) if release else 1
+        if not interface_supported(interface):
+            rprint(incompatible_message(version, interface), fg="yellow")
+            return None
+        self.installed_interface = interface
 
         digest = asset.get('digest') or ''
         if digest.startswith('sha256:'):
@@ -722,6 +771,10 @@ def list_available_versions(
                 continue
             if not config.is_version_supported(version, asset_prerelease):
                 continue
+            interface = release_interface(release)
+            if not interface_supported(interface):
+                rprint(incompatible_message(version, interface), fg="yellow")
+                continue
 
             digest = asset.get('digest') or ''
             sha256 = digest.split(':', 1)[1] if digest.startswith('sha256:') else None
@@ -736,6 +789,7 @@ def list_available_versions(
                     asset_updated_at=asset.get('updated_at'),
                     sha256=sha256,
                     asset_created_at=asset.get('created_at'),
+                    interface=interface,
                 )
             )
 
@@ -806,8 +860,13 @@ def camoufox_path(download_if_missing: bool = True) -> Path:
         shutil.rmtree(INSTALL_DIR)
 
     active = get_active_path()
-    if active and Version.from_path(active).is_supported():
-        return active
+    if active:
+        installed = Version.from_path(active)
+        interface = installed_interface(active)
+        if not interface_supported(interface):
+            raise UnsupportedVersion(incompatible_message(installed, interface))
+        if installed.is_supported():
+            return active
 
     if not os.path.exists(INSTALL_DIR) or not os.listdir(INSTALL_DIR):
         if not download_if_missing:

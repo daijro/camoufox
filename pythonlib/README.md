@@ -129,9 +129,11 @@ Synced 26 versions from 2 repos.
 
 ### Which browser build is used
 
-Each camoufox release is paired with the one browser build it was built and tested with. By default, `camoufox fetch` installs exactly that build and every launch uses it. That holds even when other builds are installed, and even when the paired build is a prerelease (a prerelease of this package pairs with a prerelease browser). Upgrading the package therefore never runs a browser it was not tested with. Run `camoufox fetch` after upgrading to install the new pairing.
+Each camoufox release is paired with the one browser build it was built and tested with. By default, `camoufox fetch` installs exactly that build and every launch uses it. A launch with the paired build missing downloads it first. That holds even when other builds are installed, and even when the paired build is a prerelease (a prerelease of this package pairs with a prerelease browser). Upgrading the package therefore never runs a browser it was not tested with. Run `camoufox fetch` after upgrading to install the new pairing.
 
 Choosing a channel or a build with `camoufox set` overrides the pairing. The choice is kept, and a launch warns that the build differs from the paired one. `camoufox set --release` goes back to the paired build.
+
+Every browser release also declares the interface it speaks, and this package refuses one it cannot drive. `camoufox sync` and `camoufox fetch` leave such a build out and say which package upgrade it needs, and a launch with one installed fails with the same advice rather than misbehaving.
 
 A development checkout (installed from the repository, not from PyPI) is paired with nothing and follows its channel, `official/stable` by default.
 

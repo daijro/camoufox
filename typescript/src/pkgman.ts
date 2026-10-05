@@ -608,6 +608,58 @@ export interface GitHubRelease {
 	assets: GitHubAsset[];
 }
 
+/** Whether this library speaks a browser's declared interface. */
+export function interfaceSupported(iface: number): boolean {
+	return CONSTRAINTS.MIN_INTERFACE <= iface && iface <= CONSTRAINTS.INTERFACE;
+}
+
+const releaseInterfaces = new Map<string | number, number>();
+
+/**
+ * The browser interface a GitHub release declares in its manifest.json. A
+ * release without a manifest, or a manifest without the field, predates the
+ * field and is interface 1.
+ */
+export async function releaseInterface(
+	release: GitHubRelease,
+): Promise<number> {
+	const manifest = (release.assets ?? []).find(
+		(a) => a.name === "manifest.json",
+	);
+	if (!manifest) return 1;
+	const key = manifest.id ?? manifest.browser_download_url;
+	let iface = releaseInterfaces.get(key);
+	if (iface === undefined) {
+		const url = manifest.browser_download_url;
+		const response = await request(url, {
+			signal: AbortSignal.timeout(20_000),
+		});
+		raiseForStatus(response, url);
+		iface = Number(
+			((await response.json()) as { interface?: number }).interface ?? 1,
+		);
+		releaseInterfaces.set(key, iface);
+	}
+	return iface;
+}
+
+/** The interface recorded in an install's version.json at install time. */
+export function installedInterface(installPath: string): number {
+	const data = JSON.parse(
+		fs.readFileSync(path.join(installPath, "version.json"), "utf-8"),
+	) as { interface?: number };
+	return Number(data.interface ?? 1);
+}
+
+export function incompatibleMessage(version: Version, iface: number): string {
+	return (
+		`Camoufox v${version.fullString} needs a newer camoufox package: it uses browser interface ` +
+		`${iface}, and this package supports ${CONSTRAINTS.MIN_INTERFACE}-` +
+		`${CONSTRAINTS.INTERFACE}. Upgrade the package (npm install camoufox@latest), ` +
+		"or run `camoufox fetch` to install a browser this one supports."
+	);
+}
+
 /**
  * Manages fetching GitHub releases with fallback repos.
  */
@@ -625,6 +677,15 @@ export class GitHubDownloader {
 	/** Return truthy data if this is the desired asset, else null. */
 	checkAsset(asset: GitHubAsset, _release?: GitHubRelease): any {
 		return asset.browser_download_url;
+	}
+
+	/**
+	 * Whether a release whose asset checkAsset() matched may be used. The
+	 * Python twin decides this inside check_asset(); reading a manifest is
+	 * async here, so it is a separate step.
+	 */
+	async acceptRelease(_release: GitHubRelease, _data: any): Promise<boolean> {
+		return true;
 	}
 
 	missingAssetError(): never {
@@ -654,7 +715,7 @@ export class GitHubDownloader {
 				for (const release of releases) {
 					for (const asset of release.assets ?? []) {
 						const data = this.checkAsset(asset, release);
-						if (data) {
+						if (data && (await this.acceptRelease(release, data))) {
 							this.githubRepo = repo;
 							this.isPrerelease = release.prerelease ?? false;
 							return data;
@@ -683,6 +744,7 @@ export class AvailableVersion {
 	assetUpdatedAt?: string;
 	sha256?: string;
 	assetCreatedAt?: string;
+	interface = 1;
 
 	constructor(init: {
 		version: Version;
@@ -693,6 +755,7 @@ export class AvailableVersion {
 		assetUpdatedAt?: string;
 		sha256?: string;
 		assetCreatedAt?: string;
+		interface?: number;
 	}) {
 		Object.assign(this, init);
 		this.version = init.version;
@@ -720,6 +783,7 @@ export class AvailableVersion {
 			asset_updated_at: this.assetUpdatedAt ?? null,
 			sha256: this.sha256 ?? null,
 			created_at: this.assetCreatedAt ?? null,
+			interface: this.interface,
 		};
 	}
 }
@@ -733,6 +797,7 @@ export class CamoufoxFetcher extends GitHubDownloader {
 	pattern: RegExp;
 	installedSha256?: string;
 	installedCreatedAt?: string;
+	installedInterface = 1;
 	_versionObj?: Version;
 	_selectedVersion?: AvailableVersion;
 	_url?: string;
@@ -751,6 +816,7 @@ export class CamoufoxFetcher extends GitHubDownloader {
 			this.isPrerelease = selectedVersion.isPrerelease;
 			this.installedSha256 = selectedVersion.sha256;
 			this.installedCreatedAt = selectedVersion.assetCreatedAt;
+			this.installedInterface = selectedVersion.interface;
 		}
 	}
 
@@ -809,10 +875,23 @@ export class CamoufoxFetcher extends GitHubDownloader {
 		return [version, asset.browser_download_url];
 	}
 
+	async acceptRelease(
+		release: GitHubRelease,
+		[version]: [Version, string],
+	): Promise<boolean> {
+		const iface = await releaseInterface(release);
+		if (!interfaceSupported(iface)) {
+			rprint(incompatibleMessage(version, iface), "yellow");
+			return false;
+		}
+		this.installedInterface = iface;
+		return true;
+	}
+
 	missingAssetError(): never {
 		throw new MissingRelease(
 			`No matching release found for ${OS_NAME} ${this.arch} in the ` +
-				"supported range. Please update the Python library.",
+				"supported range. Please update the camoufox package.",
 		);
 	}
 
@@ -936,6 +1015,11 @@ export async function listAvailableVersions(
 			const assetPrerelease = isPrerelease || version.isAlpha;
 			if (assetPrerelease && !includePrerelease) continue;
 			if (!config.isVersionSupported(version, assetPrerelease)) continue;
+			const iface = await releaseInterface(release);
+			if (!interfaceSupported(iface)) {
+				rprint(incompatibleMessage(version, iface), "yellow");
+				continue;
+			}
 
 			const digest = asset.digest ?? "";
 			const sha256 = digest.startsWith("sha256:")
@@ -952,6 +1036,7 @@ export async function listAvailableVersions(
 					assetUpdatedAt: asset.updated_at,
 					sha256,
 					assetCreatedAt: asset.created_at,
+					interface: iface,
 				}),
 			);
 		}
@@ -1049,8 +1134,13 @@ function resolveInstalledPath(downloadIfMissing: boolean): string | null {
 	}
 
 	const active = getActivePath();
-	if (active && Version.fromPath(active).isSupported()) {
-		return active;
+	if (active) {
+		const installed = Version.fromPath(active);
+		const iface = installedInterface(active);
+		if (!interfaceSupported(iface)) {
+			throw new UnsupportedVersion(incompatibleMessage(installed, iface));
+		}
+		if (installed.isSupported()) return active;
 	}
 
 	if (!fs.existsSync(INSTALL_DIR) || fs.readdirSync(INSTALL_DIR).length === 0) {

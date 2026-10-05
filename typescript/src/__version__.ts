@@ -33,6 +33,17 @@ export class CONSTRAINTS {
 	static readonly PLAYWRIGHT_BROWSER_FLOORS: ReadonlyArray<
 		readonly [readonly number[], string]
 	> = [[[1, 61], "beta.30"]];
+
+	/**
+	 * The browser interface built from this tree. Every browser release
+	 * declares it in its manifest.json (ci/release.py reads it from the Python
+	 * twin), and this library accepts browsers from MIN_INTERFACE up to it.
+	 * Raise it when a browser change would break released libraries; raise
+	 * MIN_INTERFACE when this library can no longer drive older browsers.
+	 * Releases from before manifests carried the field are interface 1.
+	 */
+	static readonly INTERFACE: number = 1;
+	static readonly MIN_INTERFACE: number = 1;
 }
 
 /** Version of this launcher library. Kept in step with package.json and
