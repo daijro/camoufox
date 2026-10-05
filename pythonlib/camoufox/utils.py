@@ -330,9 +330,11 @@ def get_env_vars(
     return env_vars
 
 
-def _load_properties(path: Optional[Path] = None) -> Dict[str, str]:
+def _load_properties(path: Optional[Path] = None) -> Dict[str, Dict[str, str]]:
     """
-    Loads the properties.json file.
+    Loads the properties.json file: property -> its entry. An entry with a
+    "removed" field is a key the browser no longer reads; it stays declared so
+    that older libraries, which reject undeclared keys, still launch.
     """
     if path:
         prop_file = str(path.parent / "properties.json")
@@ -347,20 +349,24 @@ def _load_properties(path: Optional[Path] = None) -> Dict[str, str]:
     with open(prop_file, "rb") as f:
         prop_dict = orjson.loads(f.read())
 
-    return {prop['property']: prop['type'] for prop in prop_dict}
+    return {prop['property']: prop for prop in prop_dict}
 
 
 def validate_config(config_map: Dict[str, str], path: Optional[Path] = None) -> None:
     """
     Validates the config map.
     """
-    property_types = _load_properties(path=path)
+    properties = _load_properties(path=path)
 
     for key, value in config_map.items():
-        expected_type = property_types.get(key)
-        if not expected_type:
+        entry = properties.get(key)
+        if not entry:
             print(f'Skipping unknown patch {key} : {value}')
             continue  # Property not supported by this browser version; skip silently
+        if 'removed' in entry:
+            print(f'Skipping {key}: removed in {entry["removed"]}, it has no effect')
+            continue
+        expected_type = entry['type']
 
         if not validate_type(value, expected_type):
             raise InvalidPropertyType(

@@ -522,12 +522,20 @@ export function getEnvVars(
 	return envVars;
 }
 
+interface PropertyEntry {
+	property: string;
+	type: string;
+	removed?: string;
+}
+
 /**
- * Loads the properties.json file.
+ * Loads the properties.json file: property -> its entry. An entry with a
+ * "removed" field is a key the browser no longer reads; it stays declared so
+ * that older libraries, which reject undeclared keys, still launch.
  */
 function loadProperties(
 	executablePath?: string | null,
-): Record<string, string> {
+): Record<string, PropertyEntry> {
 	let propFile: string;
 	if (executablePath) {
 		propFile = path.join(path.dirname(executablePath), "properties.json");
@@ -544,11 +552,11 @@ function loadProperties(
 	} else {
 		propFile = utilsDeps.getPath("properties.json");
 	}
-	const propDict: Array<{ property: string; type: string }> = JSON.parse(
+	const propDict: PropertyEntry[] = JSON.parse(
 		fs.readFileSync(propFile, "utf-8"),
 	);
-	const out: Record<string, string> = {};
-	for (const prop of propDict) out[prop.property] = prop.type;
+	const out: Record<string, PropertyEntry> = {};
+	for (const prop of propDict) out[prop.property] = prop;
 	return out;
 }
 
@@ -559,14 +567,21 @@ export function validateConfig(
 	configMap: Record<string, any>,
 	executablePath?: string | null,
 ): void {
-	const propertyTypes = loadProperties(executablePath);
+	const properties = loadProperties(executablePath);
 
 	for (const [key, value] of Object.entries(configMap)) {
-		const expectedType = propertyTypes[key];
-		if (!expectedType) {
+		const entry = properties[key];
+		if (!entry) {
 			utilsDeps.print(`Skipping unknown patch ${key} : ${pyStr(value)}`);
 			continue; // Property not supported by this browser version; skip silently
 		}
+		if (entry.removed !== undefined) {
+			utilsDeps.print(
+				`Skipping ${key}: removed in ${entry.removed}, it has no effect`,
+			);
+			continue;
+		}
+		const expectedType = entry.type;
 
 		if (!validateType(value, expectedType)) {
 			throw new InvalidPropertyType(

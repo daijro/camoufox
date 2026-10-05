@@ -342,3 +342,24 @@ rules:
       rounding accident in the fractional height of spoofed browser chrome. One
       unbounded await for an ack that never arrives wedges input for every tab
       in the process, permanently, at 0% CPU.
+
+  # -------------------------------------------------------------------------
+  # Config schema
+  # -------------------------------------------------------------------------
+
+  - id: config-keys-are-never-deleted
+    title: A key leaves settings/properties.json only by being marked removed
+    check: automated
+    evidence:
+      - "issue #835: camoufox 0.4.11 failed to launch v156.0.1-beta.34 with 'Unknown property navigator.appCodeName in config'"
+      - "#787 (180e655) deleted 35 keys the browser no longer read; every release from v156.0.1-beta.32 shipped without them"
+    rationale: >-
+      properties.json ships inside the browser, and every released library
+      validates its config against the copy in whatever browser it finds.
+      Libraries up to 0.4.x raise on a key they send that the browser does not
+      declare, and they accept every browser release below 1, so they download
+      new releases on their own. Deleting a key therefore breaks launches for
+      everyone on an older library the moment a release ships. A key the
+      browser stops reading is instead kept with a "removed" field: older
+      libraries still validate it, the browser ignores it, and current
+      libraries skip it with a warning that it has no effect.
