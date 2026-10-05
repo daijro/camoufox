@@ -79,24 +79,42 @@ function githubHeaders(url: string): Record<string, string> {
 		: {};
 }
 
+/** Delays before each retry of a request that failed without a response. */
+const NETWORK_RETRY_DELAYS_MS = [1000, 2000];
+
 /**
- * fetch(), but a network failure names the URL and its cause. Node's own
- * error is only "fetch failed", which says neither what was being downloaded
- * nor why (DNS, refused, reset, timeout).
+ * fetch(), retried when the request fails without any response, and naming
+ * the URL and cause when it gives up. Node's own error is only "fetch failed",
+ * which says neither what was being downloaded nor why (DNS, refused, reset,
+ * timeout).
+ *
+ * Unlike requests.get(), which opens a connection per call, fetch() reuses
+ * pooled keep-alive connections, and a server may close one just as it is
+ * reused ("other side closed"). On GitHub's runners that failed `camoufox
+ * fetch` right after the browser download, before any byte of the GeoIP
+ * request was answered. HTTP errors are responses, never retried.
  */
 async function request(url: string, init: RequestInit): Promise<Response> {
-	try {
-		return await fetch(url, init);
-	} catch (error) {
-		const cause = (error as { cause?: { code?: string; message?: string } })
-			.cause;
-		const detail = cause
-			? `${cause.code ?? ""} ${cause.message ?? ""}`.trim()
-			: "";
-		throw new Error(
-			`Could not download ${url}: ${(error as Error).message}${detail ? ` (${detail})` : ""}`,
-			{ cause: error },
-		);
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await fetch(url, init);
+		} catch (error) {
+			if (attempt < NETWORK_RETRY_DELAYS_MS.length) {
+				await new Promise((resolve) =>
+					setTimeout(resolve, NETWORK_RETRY_DELAYS_MS[attempt]),
+				);
+				continue;
+			}
+			const cause = (error as { cause?: { code?: string; message?: string } })
+				.cause;
+			const detail = cause
+				? `${cause.code ?? ""} ${cause.message ?? ""}`.trim()
+				: "";
+			throw new Error(
+				`Could not download ${url}: ${(error as Error).message}${detail ? ` (${detail})` : ""}`,
+				{ cause: error },
+			);
+		}
 	}
 }
 
@@ -1158,8 +1176,8 @@ export type ProgressCallback = (downloaded: number, total: number) => void;
  * Download a file from the given URL. Streams into `buffer` when one is given,
  * otherwise accumulates and returns the bytes.
  *
- * One attempt, like the Python twin's requests.get(): an HTTP error raises
- * requests' "<status> Client Error: ... for url: ..." message.
+ * An HTTP error raises requests' "<status> Client Error: ... for url: ..."
+ * message, like the Python twin; see request() for network failures.
  */
 export async function webdl(
 	url: string,
