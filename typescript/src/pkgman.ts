@@ -42,6 +42,7 @@ import {
 	getDefaultChannel,
 	installVersioned,
 	loadConfig,
+	loadRepoCache,
 } from "./multiversion.js";
 import {
 	ARCH_MAP,
@@ -53,6 +54,7 @@ import {
 	OS_NAME,
 	rprint,
 } from "./paths.js";
+import { warn } from "./warnings.js";
 
 // Platform constants and install paths live in paths.ts so that the
 // pkgman <-> multiversion cycle never needs them mid-evaluation. Re-exported
@@ -651,13 +653,51 @@ export function installedInterface(installPath: string): number {
 	return Number(data.interface ?? 1);
 }
 
-export function incompatibleMessage(version: Version, iface: number): string {
+/** Why a browser needs a newer package, and the command that gets one. */
+export function upgradeMessage(version: Version, iface: number): string {
 	return (
 		`Camoufox v${version.fullString} needs a newer camoufox package: it uses browser interface ` +
 		`${iface}, and this package supports ${CONSTRAINTS.MIN_INTERFACE}-` +
-		`${CONSTRAINTS.INTERFACE}. Upgrade the package (npm install camoufox@latest), ` +
-		"or run `camoufox fetch` to install a browser this one supports."
+		`${CONSTRAINTS.INTERFACE}. Upgrade with \`npm install @camoufox/camoufox@latest\`.`
 	);
+}
+
+export function incompatibleMessage(version: Version, iface: number): string {
+	return (
+		`${upgradeMessage(version, iface)} ` +
+		"Or run `camoufox fetch` to install a browser this package supports."
+	);
+}
+
+/** A build the last `camoufox sync` found that needs a newer package. */
+export interface IncompatibleBuild {
+	repo: string;
+	version: string;
+	build: string;
+	interface: number;
+}
+
+let outdatedWarned = false;
+
+/**
+ * Warn once when the last `camoufox sync` found a browser release that needs
+ * a newer package. Reads the sync cache, so a launch makes no request.
+ */
+export function warnIfPackageOutdated(): void {
+	if (outdatedWarned) return;
+	const newer = (loadRepoCache().incompatible ?? []) as IncompatibleBuild[];
+	if (!newer.length) return;
+	outdatedWarned = true;
+	const versionOf = (v: IncompatibleBuild) => new Version(v.build, v.version);
+	const newest = newer.reduce((a, b) =>
+		versionOf(b).compare(versionOf(a)) > 0 ? b : a,
+	);
+	warn(upgradeMessage(versionOf(newest), newest.interface));
+}
+
+/** Test hook: forget that the warning was already issued. */
+export function resetOutdatedWarning(): void {
+	outdatedWarned = false;
 }
 
 /**
@@ -964,13 +1004,16 @@ export class CamoufoxFetcher extends GitHubDownloader {
 }
 
 /**
- * Fetch all supported versions from GitHub for the current platform.
+ * Fetch all supported versions from GitHub for the current platform. With
+ * includeIncompatible, builds that need a newer package are returned too
+ * (check `interfaceSupported(v.interface)`) instead of being reported.
  */
 export async function listAvailableVersions(
 	repoConfig?: RepoConfig,
 	includePrerelease: boolean = true,
 	spoofOs?: string,
 	spoofArch?: string,
+	includeIncompatible: boolean = false,
 ): Promise<AvailableVersion[]> {
 	const config = repoConfig ?? RepoConfig.getDefault();
 	const pattern = config.buildPattern(spoofOs, spoofArch);
@@ -1016,7 +1059,7 @@ export async function listAvailableVersions(
 			if (assetPrerelease && !includePrerelease) continue;
 			if (!config.isVersionSupported(version, assetPrerelease)) continue;
 			const iface = await releaseInterface(release);
-			if (!interfaceSupported(iface)) {
+			if (!interfaceSupported(iface) && !includeIncompatible) {
 				rprint(incompatibleMessage(version, iface), "yellow");
 				continue;
 			}

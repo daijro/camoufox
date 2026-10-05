@@ -70,6 +70,7 @@ import {
 	OS_NAME,
 	resolvedPlaywrightVersionStr,
 	Version,
+	warnIfPackageOutdated,
 } from "./pkgman.js";
 import {
 	formatPyFloatRepr,
@@ -1343,6 +1344,7 @@ export async function launchOptions({
 	if (!executable_path) {
 		await utilsDeps.ensureCamoufoxInstalled();
 	}
+	warnIfPackageOutdated();
 
 	// Get the Firefox version
 	let ffVersionStr: string;

@@ -463,12 +463,46 @@ def installed_interface(path: Path) -> int:
         return int(orjson.loads(f.read()).get('interface', 1))
 
 
-def incompatible_message(version: 'Version', interface: int) -> str:
+def upgrade_message(version: 'Version', interface: int) -> str:
+    """Why a browser needs a newer package, and the command that gets one."""
     return (
         f"Camoufox v{version.full_string} needs a newer camoufox package: it uses browser interface "
         f"{interface}, and this package supports {CONSTRAINTS.MIN_INTERFACE}-"
-        f"{CONSTRAINTS.INTERFACE}. Upgrade the package (pip install -U camoufox), "
-        f"or run `camoufox fetch` to install a browser this one supports."
+        f"{CONSTRAINTS.INTERFACE}. Upgrade with `pip install -U camoufox`."
+    )
+
+
+def incompatible_message(version: 'Version', interface: int) -> str:
+    return (
+        f"{upgrade_message(version, interface)} "
+        f"Or run `camoufox fetch` to install a browser this package supports."
+    )
+
+
+_outdated_warned = False
+
+
+def warn_if_package_outdated() -> None:
+    """
+    Warn once when the last `camoufox sync` found a browser release that needs
+    a newer package. Reads the sync cache, so a launch makes no request.
+    """
+    global _outdated_warned
+    from .multiversion import load_repo_cache
+
+    if _outdated_warned:
+        return
+    newer = load_repo_cache().get('incompatible') or []
+    if not newer:
+        return
+    _outdated_warned = True
+    newest = max(newer, key=lambda v: Version(build=v['build'], version=v['version']))
+    import warnings
+
+    warnings.warn(
+        upgrade_message(Version(build=newest['build'], version=newest['version']), newest['interface']),
+        RuntimeWarning,
+        stacklevel=3,
     )
 
 
@@ -724,9 +758,12 @@ def list_available_versions(
     include_prerelease: bool = True,
     spoof_os: Optional[str] = None,
     spoof_arch: Optional[str] = None,
+    include_incompatible: bool = False,
 ) -> List[AvailableVersion]:
     """
-    Fetch all supported versions from GitHub for the current platform
+    Fetch all supported versions from GitHub for the current platform. With
+    include_incompatible, builds that need a newer package are returned too
+    (check `interface_supported(v.interface)`) instead of being reported.
     """
     config = repo_config or RepoConfig.get_default()
     pattern = config.build_pattern(spoof_os=spoof_os, spoof_arch=spoof_arch)
@@ -772,7 +809,7 @@ def list_available_versions(
             if not config.is_version_supported(version, asset_prerelease):
                 continue
             interface = release_interface(release)
-            if not interface_supported(interface):
+            if not interface_supported(interface) and not include_incompatible:
                 rprint(incompatible_message(version, interface), fg="yellow")
                 continue
 

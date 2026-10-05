@@ -144,7 +144,9 @@ describe("launching", () => {
 
 	it("refuses an installed browser this library cannot drive", async () => {
 		const { pkgman } = await activeInstall(NEWER);
-		expect(() => pkgman.camoufoxPath()).toThrow(/npm install camoufox@latest/);
+		expect(() => pkgman.camoufoxPath()).toThrow(
+			/npm install @camoufox\/camoufox@latest/,
+		);
 	});
 
 	it.each([
@@ -153,5 +155,53 @@ describe("launching", () => {
 	])("keeps a browser it can drive (version.json interface %j)", async (iface) => {
 		const { pkgman, dir } = await activeInstall(iface);
 		expect(pkgman.camoufoxPath()).toBe(dir);
+	});
+});
+
+describe("upgrade warning", () => {
+	async function synced(incompatible: object[]) {
+		const pkgman = await import("../src/pkgman.js");
+		const root = pkgman.INSTALL_DIR;
+		fs.mkdirSync(root, { recursive: true });
+		fs.writeFileSync(
+			path.join(root, "repo_cache.json"),
+			JSON.stringify({ repos: [], incompatible }),
+		);
+		pkgman.resetOutdatedWarning();
+		const warnings = await import("../src/warnings.js");
+		const seen: string[] = [];
+		vi.spyOn(process, "emitWarning").mockImplementation(((msg: unknown) => {
+			seen.push(String(msg));
+		}) as typeof process.emitWarning);
+		return { pkgman, warnings, seen };
+	}
+
+	it("warns once when sync found a browser that needs an upgrade", async () => {
+		const { pkgman, seen } = await synced([
+			{
+				repo: "Official",
+				version: "156.0.1",
+				build: "beta.40",
+				interface: NEWER,
+			},
+			{
+				repo: "Official",
+				version: "156.0.1",
+				build: "beta.41",
+				interface: NEWER,
+			},
+		]);
+		pkgman.warnIfPackageOutdated();
+		pkgman.warnIfPackageOutdated();
+		expect(seen).toHaveLength(1);
+		expect(seen[0]).toMatch(
+			/v156\.0\.1-beta\.41 needs a newer camoufox package.*npm install @camoufox\/camoufox@latest/,
+		);
+	});
+
+	it("is silent when every synced browser is drivable", async () => {
+		const { pkgman, seen } = await synced([]);
+		pkgman.warnIfPackageOutdated();
+		expect(seen).toEqual([]);
 	});
 });

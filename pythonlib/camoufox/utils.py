@@ -38,6 +38,7 @@ from .pkgman import (
     get_path,
     installed_verstr,
     launch_path,
+    warn_if_package_outdated,
 )
 from .virtdisplay import VirtualDisplay
 from ._warnings import FallbackWarning, LeakWarning
@@ -1065,6 +1066,7 @@ def launch_options(
         browser_binary = launch_path(browser_path)
     else:
         browser_binary = launch_path()
+    warn_if_package_outdated()
 
     # Get the Firefox version
     if ff_version:
