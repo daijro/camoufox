@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FileNotFoundError } from "../src/exceptions.js";
 import {
 	AvailableVersion,
@@ -13,6 +13,7 @@ import {
 	pkgmanDeps,
 	RepoConfig,
 	Version,
+	webdl,
 } from "../src/pkgman.js";
 
 describe("Version ordering", () => {
@@ -190,5 +191,48 @@ describe("parseSemver", () => {
 	])("%s parses as its release", async (raw, expected) => {
 		const { parseSemver } = await import("../src/pkgman.js");
 		expect(parseSemver(raw)).toEqual(expected);
+	});
+});
+
+describe("webdl network failures", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("retries a request that failed before any response", async () => {
+		const closed = Object.assign(new TypeError("fetch failed"), {
+			cause: { code: "UND_ERR_SOCKET", message: "other side closed" },
+		});
+		const fetchMock = vi
+			.fn()
+			.mockRejectedValueOnce(closed)
+			.mockResolvedValueOnce(new Response("mmdb"));
+		vi.stubGlobal("fetch", fetchMock);
+		const body = await webdl(
+			"https://example.test/a.zip",
+			undefined,
+			false,
+			null,
+			{
+				progressCallback: () => {},
+			},
+		);
+		expect(body.toString()).toBe("mmdb");
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not retry an HTTP error", async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(
+				new Response("", { status: 404, statusText: "Not Found" }),
+			);
+		vi.stubGlobal("fetch", fetchMock);
+		await expect(
+			webdl("https://example.test/missing.zip", undefined, false, null, {
+				progressCallback: () => {},
+			}),
+		).rejects.toThrow("404 Client Error");
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 });
