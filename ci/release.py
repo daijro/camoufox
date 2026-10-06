@@ -150,9 +150,22 @@ def next_browser_release(upstream_release: str, tags: Iterable[str]) -> str:
     return f"{prefix}.{max([floor] + [u + 1 for u in used])}"
 
 
+def browser_interface(root: Path = REPO_ROOT) -> int:
+    """The browser interface this tree declares (CONSTRAINTS.INTERFACE)."""
+    text = (root / "pythonlib" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
+    m = re.search(r"^\s*INTERFACE = (\d+)$", text, re.M)
+    if not m:
+        raise ValueError("pythonlib/camoufox/__version__.py declares no INTERFACE")
+    return int(m[1])
+
+
 def manifest(tag: str, digest: str, commit: str) -> dict:
-    """What every browser release carries as its manifest.json asset."""
-    return {"schema": 1, "tag": tag, "source_digest": digest, "commit": commit}
+    """What every browser release carries as its manifest.json asset.
+
+    The libraries read `interface` to refuse a browser they cannot drive.
+    """
+    return {"schema": 1, "tag": tag, "source_digest": digest, "commit": commit,
+            "interface": browser_interface()}
 
 
 def release_manifest(rel: dict) -> Optional[dict]:

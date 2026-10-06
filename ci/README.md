@@ -659,8 +659,11 @@ push trigger of its own. Every later job checks out that same commit.
 **The browser** is built only when the merge changed its sources.
 `ci.browser_inputs.source_digest()` hashes everything the browser is built
 from, except the release number. Every browser release carries a
-`manifest.json` asset with that digest and the commit it was built from; if a
-published release already carries this digest, nothing is built. Otherwise
+`manifest.json` asset with that digest, the commit it was built from, and the
+browser interface it speaks (`CONSTRAINTS.INTERFACE` in
+`pythonlib/camoufox/__version__.py`; the libraries refuse a browser outside the
+range they support). If a published release already carries this digest,
+nothing is built. Otherwise
 `plan` takes the next unused `beta.N`, never below `upstream.sh`'s `release` and
 never reused. Nothing is committed: the tag points at the tested `main` commit,
 and `ci.release set-build` writes the number from the tag into the build's

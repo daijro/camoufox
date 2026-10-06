@@ -29,3 +29,12 @@ class CONSTRAINTS:
     # actually break get moved.
     PLAYWRIGHT_BROWSER_FLOORS = (((1, 61), 'beta.30'),)
 
+    # The browser interface built from this tree. Every browser release
+    # declares it in its manifest.json (ci/release.py reads it from here), and
+    # this library accepts browsers from MIN_INTERFACE up to it. Raise it when a
+    # browser change would break released libraries; raise MIN_INTERFACE when
+    # this library can no longer drive older browsers. Releases from before
+    # manifests carried the field are interface 1.
+    INTERFACE = 1
+    MIN_INTERFACE = 1
+

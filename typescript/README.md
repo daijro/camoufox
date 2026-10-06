@@ -128,7 +128,10 @@ Each release of this package is paired with the one browser build it was built
 and tested with, the same build as the `camoufox` Python release of the same
 version. The first launch installs that build, and every launch uses it, until
 you choose another with `camoufox set`. A launch then warns that the build
-differs from the paired one. See the Python package's README, under "Which
+differs from the paired one. A browser release that declares an interface this
+package cannot drive is left out of `sync` and `fetch`, and refused at launch,
+with the package upgrade it needs; once a sync has seen one, every launch warns
+that the package needs upgrading. See the Python package's README, under "Which
 browser build is used".
 
 The commands and pickers match the Python CLI. The one exception is `gui`, a

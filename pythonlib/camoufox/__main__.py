@@ -47,9 +47,12 @@ from .pkgman import (
     RepoConfig,
     Version,
     format_asset_date,
+    incompatible_message,
     installed_verstr,
+    interface_supported,
     list_available_versions,
     rprint,
+    upgrade_message,
 )
 
 
@@ -126,17 +129,29 @@ def _do_sync(spoof_os=None, spoof_arch=None) -> bool:
     """
     rprint("Syncing repositories...", fg="yellow")
 
-    cache = {"repos": [], "spoof_os": spoof_os, "spoof_arch": spoof_arch}
+    cache = {"repos": [], "incompatible": [], "spoof_os": spoof_os, "spoof_arch": spoof_arch}
 
     for repo_config in RepoConfig.load_repos():
         rprint(f"  {repo_config.name}...", fg="cyan", nl=False)
         try:
-            versions = list_available_versions(
+            listed = list_available_versions(
                 repo_config=repo_config,
                 include_prerelease=True,
                 spoof_os=spoof_os,
                 spoof_arch=spoof_arch,
+                include_incompatible=True,
             )
+            versions = [v for v in listed if interface_supported(v.interface)]
+            cache["incompatible"] += [
+                {
+                    "repo": repo_config.name,
+                    "version": v.version.version,
+                    "build": v.version.build,
+                    "interface": v.interface,
+                }
+                for v in listed
+                if not interface_supported(v.interface)
+            ]
             repo_data = {
                 "name": repo_config.name,
                 "repo": repo_config.repo,
@@ -151,6 +166,7 @@ def _do_sync(spoof_os=None, spoof_arch=None) -> bool:
                         "asset_updated_at": v.asset_updated_at,
                         "sha256": v.sha256,
                         "created_at": v.asset_created_at,
+                        "interface": v.interface,
                     }
                     for v in versions
                 ],
@@ -161,6 +177,9 @@ def _do_sync(spoof_os=None, spoof_arch=None) -> bool:
             rprint(f" Error: {e}", fg="red")
 
     save_repo_cache(cache)
+    if cache["incompatible"]:
+        newest = max(cache["incompatible"], key=lambda v: Version(v["build"], v["version"]))
+        rprint(upgrade_message(Version(newest["build"], newest["version"]), newest["interface"]), fg="yellow")
     total = sum(len(r["versions"]) for r in cache["repos"])
     platform_str = f" ({spoof_os}/{spoof_arch})" if spoof_os else ""
     rprint(
@@ -314,6 +333,12 @@ def fetch(version):
             ver_data = latest[0] if latest else None
 
     if ver_data is None:
+        if version:
+            for v in cache.get("incompatible", []):
+                if v["repo"].lower() == (repo_name or "").lower() and \
+                        f"{v['version']}-{v['build']}" == spec.lstrip("v"):
+                    rprint(incompatible_message(Version(v["build"], v["version"]), v["interface"]), fg="red")
+                    return
         rprint(f"Version '{version or repo_name}' not found in cache. Run 'camoufox sync'.", fg="red")
         return
 
@@ -323,6 +348,7 @@ def fetch(version):
         is_prerelease=ver_data.get("is_prerelease", False),
         sha256=ver_data.get("sha256"),
         asset_created_at=ver_data.get("created_at"),
+        interface=ver_data.get("interface", 1),
     )
     repo_config = RepoConfig.find_by_name(repo_data["name"])
     try:

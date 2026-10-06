@@ -446,6 +446,7 @@ def install_versioned(fetcher, replace: bool = False) -> bool:
                     'prerelease': fetcher.is_prerelease,
                     'sha256': getattr(fetcher, "installed_sha256", None),
                     'created_at': getattr(fetcher, "installed_created_at", None),
+                    'interface': getattr(fetcher, "installed_interface", 1),
                 }
             with open(install_path / 'version.json', 'wb') as f:
                 f.write(orjson.dumps(metadata))

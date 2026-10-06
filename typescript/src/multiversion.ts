@@ -80,6 +80,7 @@ export interface CachedVersion {
 	asset_updated_at?: string;
 	sha256?: string;
 	created_at?: string;
+	interface?: number;
 }
 
 export interface RepoCache {
@@ -556,6 +557,7 @@ export async function installVersioned(
 					prerelease: fetcher.isPrerelease,
 					sha256: fetcher.installedSha256 ?? null,
 					created_at: fetcher.installedCreatedAt ?? null,
+					interface: fetcher.installedInterface,
 				};
 		fs.writeFileSync(
 			path.join(installPath, "version.json"),

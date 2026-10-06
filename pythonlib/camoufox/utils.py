@@ -38,6 +38,7 @@ from .pkgman import (
     get_path,
     installed_verstr,
     launch_path,
+    warn_if_package_outdated,
 )
 from .virtdisplay import VirtualDisplay
 from ._warnings import FallbackWarning, LeakWarning
@@ -1054,12 +1055,31 @@ def launch_options(
         confirm_paths(addons)
         config['addons'] = addons
 
+    # Resolve the binary that will launch before reading its version:
+    # launch_path() downloads the browser when none is installed, and the
+    # identity has to match the Firefox that actually runs.
+    if executable_path:
+        browser_binary = str(executable_path)
+    elif browser:
+        # Select a specific installed browser version
+        from .multiversion import find_installed_version
+
+        browser_path = find_installed_version(browser)
+        if not browser_path:
+            raise ValueError(
+                f"Browser version '{browser}' not found. Run `camoufox list` to see installed versions."
+            )
+        browser_binary = launch_path(browser_path)
+    else:
+        browser_binary = launch_path()
+    warn_if_package_outdated()
+
     # Get the Firefox version
     if ff_version:
         ff_version_str = str(ff_version)
         LeakWarning.warn('ff_version', i_know_what_im_doing)
     else:
-        ff_version_str = resolve_verstr(executable_path).split('.', 1)[0]
+        ff_version_str = resolve_verstr(browser_binary).split('.', 1)[0]
 
     # Generate a fingerprint
     _used_preset = False
@@ -1522,24 +1542,8 @@ def launch_options(
         **get_pref_env_vars(firefox_user_prefs),
         **env,
     }
-    # Prepare the executable path
-    if executable_path:
-        executable_path = str(executable_path)
-    elif browser:
-        # Select a specific installed browser version
-        from .multiversion import find_installed_version
-
-        browser_path = find_installed_version(browser)
-        if not browser_path:
-            raise ValueError(
-                f"Browser version '{browser}' not found. Run `camoufox list` to see installed versions."
-            )
-        executable_path = launch_path(browser_path)
-    else:
-        executable_path = launch_path()
-
     result = {
-        "executable_path": executable_path,
+        "executable_path": browser_binary,
         "args": args,
         "env": env_vars,
         "firefox_user_prefs": firefox_user_prefs,

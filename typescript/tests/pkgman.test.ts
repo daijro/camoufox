@@ -173,7 +173,7 @@ describe("AvailableVersion.toMetadata", () => {
 			isPrerelease: false,
 		});
 		expect(JSON.stringify(v.toMetadata())).toBe(
-			'{"version":"152.0.4","build":"beta.30","prerelease":false,"asset_id":null,"asset_size":null,"asset_updated_at":null,"sha256":null,"created_at":null}',
+			'{"version":"152.0.4","build":"beta.30","prerelease":false,"asset_id":null,"asset_size":null,"asset_updated_at":null,"sha256":null,"created_at":null,"interface":1}',
 		);
 	});
 });

@@ -52,11 +52,15 @@ import {
 	CamoufoxFetcher,
 	formatAssetDate,
 	INSTALL_DIR,
+	type IncompatibleBuild,
+	incompatibleMessage,
 	installedVerStr,
+	interfaceSupported,
 	listAvailableVersions,
 	loadYaml,
 	RepoConfig,
 	rprint,
+	upgradeMessage,
 	Version,
 } from "./pkgman.js";
 
@@ -236,10 +240,12 @@ async function doSync(spoofOs?: string, spoofArch?: string): Promise<boolean> {
 
 	const cache: {
 		repos: Array<{ name: string; repo: string; versions: CachedVersion[] }>;
+		incompatible: IncompatibleBuild[];
 		spoof_os: string | null;
 		spoof_arch: string | null;
 	} = {
 		repos: [],
+		incompatible: [],
 		spoof_os: spoofOs ?? null,
 		spoof_arch: spoofArch ?? null,
 	};
@@ -247,12 +253,23 @@ async function doSync(spoofOs?: string, spoofArch?: string): Promise<boolean> {
 	for (const repoConfig of RepoConfig.loadRepos()) {
 		rprint(`  ${repoConfig.name}...`, "cyan", false);
 		try {
-			const versions = await listAvailableVersions(
+			const listed = await listAvailableVersions(
 				repoConfig,
 				true,
 				spoofOs,
 				spoofArch,
+				true,
 			);
+			const versions = listed.filter((v) => interfaceSupported(v.interface));
+			for (const v of listed) {
+				if (interfaceSupported(v.interface)) continue;
+				cache.incompatible.push({
+					repo: repoConfig.name,
+					version: v.version.version ?? "",
+					build: v.version.build,
+					interface: v.interface,
+				});
+			}
 			cache.repos.push({
 				name: repoConfig.name,
 				repo: repoConfig.repo,
@@ -268,6 +285,7 @@ async function doSync(spoofOs?: string, spoofArch?: string): Promise<boolean> {
 							asset_updated_at: v.assetUpdatedAt ?? null,
 							sha256: v.sha256 ?? null,
 							created_at: v.assetCreatedAt ?? null,
+							interface: v.interface,
 						}) as unknown as CachedVersion,
 				),
 			});
@@ -278,6 +296,13 @@ async function doSync(spoofOs?: string, spoofArch?: string): Promise<boolean> {
 	}
 
 	saveRepoCache(cache as RepoCache);
+	if (cache.incompatible.length) {
+		const versionOf = (v: IncompatibleBuild) => new Version(v.build, v.version);
+		const newest = cache.incompatible.reduce((a, b) =>
+			versionOf(b).compare(versionOf(a)) > 0 ? b : a,
+		);
+		rprint(upgradeMessage(versionOf(newest), newest.interface), "yellow");
+	}
 	const total = cache.repos.reduce((sum, r) => sum + r.versions.length, 0);
 	const platformStr = spoofOs ? ` (${spoofOs}/${spoofArch})` : "";
 	rprint(
@@ -527,9 +552,9 @@ program
 		let paired = false;
 		const pin = effectivePin(config);
 
+		let spec = "";
 		if (version) {
 			const parts = version.toLowerCase().split("/");
-			let spec: string;
 			if (parts.length === 1) {
 				repoName = RepoConfig.getDefaultName();
 				spec = parts[0];
@@ -581,6 +606,25 @@ program
 		}
 
 		if (!verData || !repo) {
+			const wanted = spec.replace(/^v+/, "");
+			const incompatible = (
+				(cache.incompatible ?? []) as IncompatibleBuild[]
+			).find(
+				(v) =>
+					version &&
+					v.repo.toLowerCase() === (repoName ?? "").toLowerCase() &&
+					`${v.version}-${v.build}` === wanted,
+			);
+			if (incompatible) {
+				rprint(
+					incompatibleMessage(
+						new Version(incompatible.build, incompatible.version),
+						incompatible.interface,
+					),
+					"red",
+				);
+				return;
+			}
 			rprint(
 				`Version '${version || repoName}' not found in cache. Run 'camoufox sync'.`,
 				"red",
@@ -594,6 +638,7 @@ program
 			isPrerelease: verData.is_prerelease ?? false,
 			sha256: verData.sha256 ?? undefined,
 			assetCreatedAt: verData.created_at ?? undefined,
+			interface: verData.interface ?? 1,
 		});
 		const repoConfig = RepoConfig.findByName(repo.name);
 		try {
