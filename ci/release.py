@@ -45,7 +45,7 @@ from ._util import REPO_ROOT, die, http_json, log, read_upstream_sh, run, set_ou
 from .browser_inputs import BROWSER_DIRS, BROWSER_FILES, NON_NATIVE_SCRIPTS, source_digest
 
 PYPI_PROJECT = "camoufox"
-NPM_PACKAGE = "@camoufox/camoufox"
+NPM_PACKAGE = "camoufox"
 PIN_FILE = REPO_ROOT / "pythonlib" / "camoufox" / "browser-pin.json"
 PYPROJECT = REPO_ROOT / "pythonlib" / "pyproject.toml"
 PACKAGE_JSON = REPO_ROOT / "typescript" / "package.json"
@@ -332,7 +332,7 @@ def published_wheel(version: str, dest: Path) -> Path:
 
 
 def published_tarball(version: str, dest: Path) -> Path:
-    meta = http_json(f"https://registry.npmjs.org/{NPM_PACKAGE.replace('/', '%2f')}/{version}")
+    meta = http_json(f"https://registry.npmjs.org/{NPM_PACKAGE}/{version}")
     return _download(meta["dist"]["tarball"], dest / f"published-{version}.tgz")
 
 
@@ -385,7 +385,7 @@ def registry_versions() -> Tuple[List[str], List[str]]:
             raise
 
     return (fetch(f"https://pypi.org/pypi/{PYPI_PROJECT}/json", "releases"),
-            fetch(f"https://registry.npmjs.org/{NPM_PACKAGE.replace('/', '%2f')}", "versions"))
+            fetch(f"https://registry.npmjs.org/{NPM_PACKAGE}", "versions"))
 
 
 def checked_in_version() -> str:
