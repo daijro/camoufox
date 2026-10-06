@@ -410,7 +410,7 @@ async with AsyncCamoufox() as browser:
 **JavaScript / TypeScript**
 
 ```javascript
-import { Camoufox } from "@camoufox/camoufox";
+import { Camoufox } from "camoufox";
 
 const browser = await Camoufox({ headless: true });
 const page = await browser.newPage();

@@ -144,9 +144,7 @@ describe("launching", () => {
 
 	it("refuses an installed browser this library cannot drive", async () => {
 		const { pkgman } = await activeInstall(NEWER);
-		expect(() => pkgman.camoufoxPath()).toThrow(
-			/npm install @camoufox\/camoufox@latest/,
-		);
+		expect(() => pkgman.camoufoxPath()).toThrow(/npm install camoufox@latest/);
 	});
 
 	it.each([
@@ -195,7 +193,7 @@ describe("upgrade warning", () => {
 		pkgman.warnIfPackageOutdated();
 		expect(seen).toHaveLength(1);
 		expect(seen[0]).toMatch(
-			/v156\.0\.1-beta\.41 needs a newer camoufox package.*npm install @camoufox\/camoufox@latest/,
+			/v156\.0\.1-beta\.41 needs a newer camoufox package.*npm install camoufox@latest/,
 		);
 	});
 

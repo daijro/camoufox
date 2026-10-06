@@ -16,9 +16,9 @@ pinned identity presents identically from either language.
 ## Installation
 
 ```bash
-npm install @camoufox/camoufox playwright-core
+npm install camoufox playwright-core
 # then download the browser
-npx @camoufox/camoufox fetch
+npx camoufox fetch
 ```
 
 `playwright-core` is a peer dependency — bring your own version (`<1.63`,
@@ -27,7 +27,7 @@ the same ceiling as the Python package). Node 22.15 or newer is required.
 ## Usage
 
 ```javascript
-import { Camoufox } from "@camoufox/camoufox";
+import { Camoufox } from "camoufox";
 
 const browser = await Camoufox({
     // any Camoufox option, plus any Playwright Firefox launch option
@@ -56,7 +56,7 @@ values are applied through `addInitScript`, so the setters self-destruct before
 any page script runs.
 
 ```javascript
-import { Camoufox, NewContext } from "@camoufox/camoufox";
+import { Camoufox, NewContext } from "camoufox";
 
 const browser = await Camoufox({ headless: true });
 const context = await NewContext(browser, {
@@ -72,7 +72,7 @@ from the proxy's exit IP. If that lookup fails, `NewContext()` throws
 ### Server mode
 
 ```javascript
-import { launchServer } from "@camoufox/camoufox";
+import { launchServer } from "camoufox";
 
 const server = await launchServer({ headless: true, port: 9222 });
 console.log(server.wsEndpoint());
@@ -84,7 +84,7 @@ expose a pre-launched `Browser`.
 ### Building launch options yourself
 
 ```javascript
-import { launchOptions } from "@camoufox/camoufox";
+import { launchOptions } from "camoufox";
 import { firefox } from "playwright-core";
 
 const browser = await firefox.launch(await launchOptions({ os: "linux" }));

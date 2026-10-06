@@ -658,7 +658,7 @@ export function upgradeMessage(version: Version, iface: number): string {
 	return (
 		`Camoufox v${version.fullString} needs a newer camoufox package: it uses browser interface ` +
 		`${iface}, and this package supports ${CONSTRAINTS.MIN_INTERFACE}-` +
-		`${CONSTRAINTS.INTERFACE}. Upgrade with \`npm install @camoufox/camoufox@latest\`.`
+		`${CONSTRAINTS.INTERFACE}. Upgrade with \`npm install camoufox@latest\`.`
 	);
 }
 

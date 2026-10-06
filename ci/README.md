@@ -679,7 +679,7 @@ draft does not), with no browser source changed since.
 `publish-npm` upload exactly those files: one version spelled for each
 registry, `0.5.8b2` on PyPI and `0.5.8-beta.2` on npm. `pip install camoufox`
 ignores prereleases unless `--pre` is passed, and `npm install
-@camoufox/camoufox` takes `latest`, not `next`. A prerelease is of the version
+camoufox` takes `latest`, not `next`. A prerelease is of the version
 in `pyproject.toml` while that version is unreleased, and of the next patch once
 it has shipped. A merge that changes nothing a package ships (`pythonlib/`,
 `typescript/` or the browser it pins) publishes no library prerelease; the last
