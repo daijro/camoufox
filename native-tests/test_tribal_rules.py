@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -555,12 +556,18 @@ def test_spoofed_voices_complete_without_a_config_switch():
     )
 
 
-def test_no_glyph_spacing_seed_anywhere():
-    """No config key, no setter, no shaper hook."""
-    declared = {
+def _live_properties() -> set:
+    """Declared keys, less those marked removed (kept only for older libraries)."""
+    return {
         entry["property"]
         for entry in json.loads((REPO_ROOT / "settings" / "properties.json").read_text())
+        if "removed" not in entry
     }
+
+
+def test_no_glyph_spacing_seed_anywhere():
+    """No config key, no setter, no shaper hook."""
+    declared = _live_properties()
     assert "fonts:spacing_seed" not in declared, explain("no-glyph-spacing-noise")
     for source in [*sorted((REPO_ROOT / "patches").rglob("*.patch")),
                    REPO_ROOT / "pythonlib" / "camoufox" / "fingerprints.py"]:
@@ -572,10 +579,7 @@ def test_no_glyph_spacing_seed_anywhere():
 
 def test_no_canvas_seed_is_declared_or_sent():
     """Nothing in the browser reads a canvas seed, so neither launcher sends one."""
-    declared = {
-        entry["property"]
-        for entry in json.loads((REPO_ROOT / "settings" / "properties.json").read_text())
-    }
+    declared = _live_properties()
     assert not {k for k in declared if k.startswith("canvas:")}, explain("canvas-is-not-noised")
     for launcher in ("pythonlib/camoufox/fingerprints.py", "typescript/src/fingerprints.ts"):
         assert "setCanvasSeed" not in (REPO_ROOT / launcher).read_text(encoding="utf-8"), (
@@ -610,4 +614,48 @@ def test_the_canvas_check_hashes_pixels_rather_than_a_data_url_prefix():
     assert code.count("simpleHash(ctx.getImageData") >= 2, (
         "the canvas and emoji-canvas fingerprints should both hash their pixels"
         + explain("canvas-fingerprint-is-hashed-not-truncated")
+    )
+
+
+# ---------------------------------------------------------------------------
+# config schema
+# ---------------------------------------------------------------------------
+
+
+def _properties_ever_declared() -> Dict[str, str]:
+    """Every key settings/properties.json has declared, from git history."""
+    path = "settings/properties.json"
+    shallow = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert shallow == "false", "needs full git history (actions/checkout fetch-depth: 0)"
+    commits = subprocess.run(
+        ["git", "log", "--format=%H", "--", path],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+    ).stdout.split()
+    assert commits, f"git log found no history for {path}"
+    seen: Dict[str, str] = {}
+    for commit in commits:
+        text = subprocess.run(
+            ["git", "show", f"{commit}:{path}"],
+            cwd=REPO_ROOT, capture_output=True, text=True,
+        ).stdout
+        if not text:
+            continue  # the commit deleted or renamed the file
+        for entry in json.loads(text):
+            seen.setdefault(entry["property"], commit[:7])
+    return seen
+
+
+def test_no_config_key_is_ever_deleted():
+    declared = {
+        entry["property"]
+        for entry in json.loads((REPO_ROOT / "settings" / "properties.json").read_text())
+    }
+    deleted = {k: c for k, c in _properties_ever_declared().items() if k not in declared}
+    assert not deleted, (
+        "keys deleted from settings/properties.json (last declared in the commit shown); "
+        f"mark them \"removed\" instead: {sorted(deleted.items())}"
+        + explain("config-keys-are-never-deleted")
     )

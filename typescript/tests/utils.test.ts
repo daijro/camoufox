@@ -1,6 +1,8 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PyFloat } from "../src/pycompat.js";
 import {
 	checkValidOs,
@@ -14,6 +16,8 @@ import {
 	pyTypeName,
 	setInto,
 	spoofsWindowDimensions,
+	utilsDeps,
+	validateConfig,
 	validateType,
 } from "../src/utils.js";
 
@@ -192,5 +196,54 @@ describe("Python-compatible serialisation", () => {
 		expect(pyJsonDumpsAscii({ a: "é\u007f", b: 1e-5, c: [true, null] })).toBe(
 			'{"a":"\\u00e9\\u007f","b":1e-05,"c":[true,null]}',
 		);
+	});
+});
+
+describe("validateConfig with removed keys (#835)", () => {
+	afterEach(() => vi.restoreAllMocks());
+
+	function browserWith(entries: object[]): string {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "camoufox-props-"));
+		fs.writeFileSync(
+			path.join(dir, "properties.json"),
+			JSON.stringify(entries),
+		);
+		return path.join(dir, "camoufox-bin");
+	}
+
+	it("skips a removed key and names the release that removed it", () => {
+		const printed: string[] = [];
+		vi.spyOn(utilsDeps, "print").mockImplementation((msg: string) => {
+			printed.push(msg);
+		});
+		const binary = browserWith([
+			{ property: "navigator.userAgent", type: "str" },
+			{
+				property: "navigator.appCodeName",
+				type: "str",
+				removed: "156.0.1-beta.32",
+			},
+		]);
+		validateConfig(
+			{ "navigator.appCodeName": "Mozilla", "navigator.userAgent": "x" },
+			binary,
+		);
+		expect(printed.join("\n")).toContain(
+			"navigator.appCodeName: removed in 156.0.1-beta.32",
+		);
+	});
+
+	it("does not type-check a removed key", () => {
+		vi.spyOn(utilsDeps, "print").mockImplementation(() => undefined);
+		const binary = browserWith([
+			{
+				property: "navigator.languages",
+				type: "array",
+				removed: "156.0.1-beta.32",
+			},
+		]);
+		expect(() =>
+			validateConfig({ "navigator.languages": "not-an-array" }, binary),
+		).not.toThrow();
 	});
 });

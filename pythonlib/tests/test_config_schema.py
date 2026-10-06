@@ -59,7 +59,20 @@ def _sources():
 
 
 def _declared_keys() -> set:
-    return {entry["property"] for entry in json.loads(PROPERTIES.read_text())}
+    """Live keys: an entry marked "removed" is kept only for older libraries."""
+    return {
+        entry["property"]
+        for entry in json.loads(PROPERTIES.read_text())
+        if "removed" not in entry
+    }
+
+
+def _removed_keys() -> set:
+    return {
+        entry["property"]
+        for entry in json.loads(PROPERTIES.read_text())
+        if "removed" in entry
+    }
 
 
 def _keys_read() -> dict:
@@ -122,9 +135,21 @@ def test_every_declared_key_is_read_by_the_browser():
     )
     assert not unread, (
         "settings/properties.json declares keys that no patch or Juggler file "
-        f"reads, so setting them does nothing: {unread}. Remove them, or add them "
-        "to NOT_READ_BY_THE_BROWSER with the reason they are declared."
+        f"reads, so setting them does nothing: {unread}. Mark them \"removed\" "
+        "(never delete an entry: older libraries reject undeclared keys, #835), "
+        "or add them to NOT_READ_BY_THE_BROWSER with the reason they are declared."
     )
+
+
+def test_removed_keys_are_really_unread():
+    """A key marked removed that the browser reads again is a live key, and the
+    launchers would drop it before it reached the browser."""
+    text = "".join(path.read_text(errors="ignore") for path in _sources())
+    read = sorted(
+        key for key in _removed_keys()
+        if any(form.format(key=key) in text for form in QUOTED)
+    )
+    assert not read, f"marked removed in settings/properties.json but read by the browser: {read}"
 
 
 def test_keys_not_read_by_the_browser_are_really_unread():
