@@ -144,9 +144,7 @@ describe("launching", () => {
 
 	it("refuses an installed browser this library cannot drive", async () => {
 		const { pkgman } = await activeInstall(NEWER);
-		expect(() => pkgman.camoufoxPath()).toThrow(
-			/npm install camoufox@latest/,
-		);
+		expect(() => pkgman.camoufoxPath()).toThrow(/npm install camoufox@latest/);
 	});
 
 	it.each([
