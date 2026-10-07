@@ -1,17 +1,3 @@
-diff --git a/browser/app/moz.build b/browser/app/moz.build
-index db09aba7e9..57a4ecd214 100644
---- a/browser/app/moz.build
-+++ b/browser/app/moz.build
-@@ -290,6 +290,9 @@ for icon in (
-         icon,
-     )
- 
-+
-+# DOM Mask
-+LOCAL_INCLUDES += ["/camoucfg"]
- if CONFIG["MOZ_ASAN"] or CONFIG["MOZ_DEBUG"]:
-     WINCONSOLE = True
- else:
 diff --git a/dom/base/moz.build b/dom/base/moz.build
 index e8f35ff5c4..88cea77d60 100644
 --- a/dom/base/moz.build
@@ -25,7 +11,7 @@ index e8f35ff5c4..88cea77d60 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index fb3a1f640d..bc65e5256b 100644
+index 4bc8548e31..2bea4b618a 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -3,6 +3,7 @@
@@ -36,7 +22,7 @@ index fb3a1f640d..bc65e5256b 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -3718,6 +3719,8 @@ void nsGlobalWindowInner::SetName(const nsAString& aName,
+@@ -3715,6 +3716,8 @@ void nsGlobalWindowInner::SetName(const nsAString& aName,
  
  double nsGlobalWindowInner::GetInnerWidth(CallerType aCallerType,
                                            ErrorResult& aError) {
@@ -45,7 +31,7 @@ index fb3a1f640d..bc65e5256b 100644
    FORWARD_TO_OUTER_OR_THROW(GetInnerWidthOuter, (aCallerType, aError), aError,
                              0);
  }
-@@ -3731,6 +3734,8 @@ nsresult nsGlobalWindowInner::GetInnerWidth(CallerType aCallerType,
+@@ -3728,6 +3731,8 @@ nsresult nsGlobalWindowInner::GetInnerWidth(CallerType aCallerType,
  
  double nsGlobalWindowInner::GetInnerHeight(CallerType aCallerType,
                                             ErrorResult& aError) {
@@ -54,7 +40,7 @@ index fb3a1f640d..bc65e5256b 100644
    FORWARD_TO_OUTER_OR_THROW(GetInnerHeightOuter, (aCallerType, aError), aError,
                              0);
  }
-@@ -3744,6 +3749,12 @@ nsresult nsGlobalWindowInner::GetInnerHeight(CallerType aCallerType,
+@@ -3741,6 +3746,12 @@ nsresult nsGlobalWindowInner::GetInnerHeight(CallerType aCallerType,
  
  int32_t nsGlobalWindowInner::GetOuterWidth(CallerType aCallerType,
                                             ErrorResult& aError) {
@@ -67,7 +53,7 @@ index fb3a1f640d..bc65e5256b 100644
    FORWARD_TO_OUTER_OR_THROW(GetOuterWidthOuter, (aCallerType, aError), aError,
                              0);
  }
-@@ -3764,11 +3775,13 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
+@@ -3761,11 +3772,13 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
  
  int32_t nsGlobalWindowInner::GetScreenX(CallerType aCallerType,
                                          ErrorResult& aError) {
@@ -81,7 +67,7 @@ index fb3a1f640d..bc65e5256b 100644
    FORWARD_TO_OUTER_OR_THROW(GetScreenYOuter, (aCallerType, aError), aError, 0);
  }
  
-@@ -3802,6 +3815,8 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
+@@ -3799,6 +3812,8 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
  double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
                                                  ErrorResult& aError) {
    ENSURE_ACTIVE_DOCUMENT(aError, 0.0);
@@ -128,7 +114,7 @@ index 3b48a7f1e2..4b989dd48a 100644
    if (ShouldResistFingerprinting(RFPTarget::ScreenAvailRect)) {
      return GetTopWindowInnerRectForRFP();
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
-index 519668019e..078d0d975a 100644
+index 519668019e..f12ea64bc0 100644
 --- a/dom/workers/WorkerNavigator.cpp
 +++ b/dom/workers/WorkerNavigator.cpp
 @@ -3,6 +3,7 @@
@@ -143,7 +129,7 @@ index 519668019e..078d0d975a 100644
  }
  
  bool WorkerNavigator::GlobalPrivacyControl() const {
-+  if (auto value = MaskConfig::GetBool("navigator.globalPrivacyControl");
++  if (auto value = MaskConfig::GetOptionalBool("navigator.globalPrivacyControl");
 +      value.has_value())
 +    return value.value();
    bool gpcStatus = StaticPrefs::privacy_globalprivacycontrol_enabled();

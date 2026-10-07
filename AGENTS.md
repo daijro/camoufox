@@ -124,12 +124,12 @@ persist a change there as a patch, never as an edit to that tree.
 | Path | What it is |
 |---|---|
 | `browser/` | The browser build: `Makefile`, `upstream.sh`, `multibuild.py`, `Dockerfile`, and the directories below. |
-| `browser/patches/` | Diffs applied to Firefox (44 top level, plus `playwright/`, `librewolf/`, `ghostery/`). Browser behaviour changes here. |
+| `browser/patches/` | Diffs applied to Firefox (41 top level, plus `playwright/`, `librewolf/`, `ghostery/`). Browser behaviour changes here. |
 | `browser/additions/camoucfg/` | The C++ config layer. `MaskConfig.hpp` reads `CAMOU_CONFIG`, which the patches consult. |
 | `browser/additions/juggler/` | Camoufox's Juggler, Playwright's Firefox protocol. The page agent runs in an isolated world. `input/` holds the Cursory cursor trajectories. |
-| `browser/settings/` | `camoufox.cfg` (prefs), `properties.json` (every config key and its type; a key the browser stops reading is marked `removed`, never deleted), `chrome.css`, policies. |
+| `browser/settings/` | `camoufox.cfg` (prefs), `properties.json` (every config key and its type; a key the browser stops reading is marked `removed`, never deleted), policies. |
 | `browser/scripts/` | `patch.py` applies patches and writes the mozconfig; `copy-additions.sh`, `package.py`, `install-deps.sh`, font tooling. |
-| `browser/assets/` | Mozconfigs, the search config, uBlock Origin's filter-list manifest, README images. |
+| `browser/assets/` | Mozconfigs, README images. |
 | `browser/bundle/` | The per-OS `fontconfig/` files and `FONTS-README.txt`. The fonts are a release asset (`make fonts-extract`), pinned by `browser/scripts/data/font-bundle.json`. |
 | `browser/tests/` | Browser test suites (below): `build-tester/`, `native/`, `service/`, `playwright/`. |
 | `python/` | The `camoufox` PyPI package (`pythonlib`), the reference launcher. It draws identities with [fpgen](https://github.com/scrapfly/fingerprint-generator), checks them with `coherence.py`, and launches the binary. Source in `src/camoufox/`, tests in `tests/`. |

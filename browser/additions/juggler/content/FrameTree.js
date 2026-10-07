@@ -742,9 +742,9 @@ class Frame {
     // setters a given fingerprint happened to set. A value the config left
     // alone (no timezone, no IPv6) left its setter sitting on window, and a
     // launch that registers no init script at all -- Camoufox() +
-    // browser.new_page(), the documented default -- left all fifteen. Fifteen
-    // window properties no other Firefox has is a sharper fingerprint than
-    // anything they were hiding.
+    // browser.new_page(), the documented default -- left all of them. Window
+    // properties no other Firefox has are a sharper fingerprint than anything
+    // they were hiding.
     ChromeUtils.camouSealFingerprintSetters(camouInnerWindowId);
 
     const url = this.domWindow().location?.href;

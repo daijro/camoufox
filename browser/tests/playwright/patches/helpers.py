@@ -63,7 +63,11 @@ def resolve_binary() -> Path:
 
 @contextlib.contextmanager
 def hidden_display() -> Iterator[str]:
-    """A private Xvfb display for the duration of the block."""
+    """A private Xvfb display for the duration of the block.
+
+    The process environment points at it too. On a Wayland desktop an inherited
+    WAYLAND_DISPLAY makes GTK skip the X display, so the browser never opens it.
+    """
     if not shutil.which("Xvfb"):
         raise SystemExit("Xvfb is required for this guard")
     for n in range(140, 160):
@@ -73,9 +77,14 @@ def hidden_display() -> Iterator[str]:
     proc = subprocess.Popen(["Xvfb", display, "-screen", "0", "1400x900x24", "-nolisten", "tcp"],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1.5)
+    saved = dict(os.environ)
+    os.environ.update(DISPLAY=display, MOZ_ENABLE_WAYLAND="0", GDK_BACKEND="x11")
+    os.environ.pop("WAYLAND_DISPLAY", None)
     try:
         yield display
     finally:
+        os.environ.clear()
+        os.environ.update(saved)
         proc.terminate()
 
 

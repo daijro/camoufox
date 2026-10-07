@@ -863,7 +863,7 @@ def clamp_screen_to_display(
 
     The Screen bound passed to generate_fingerprint() is dropped when the model
     has nothing that fits it, and a preset or a caller's fingerprint is not
-    bounded at all. browser-init.patch resizes the real chrome window to window.outerWidth/outerHeight, so an unbounded value
+    bounded at all. CamoufoxWindow.sys.mjs resizes the real chrome window to window.outerWidth/outerHeight, so an unbounded value
     renders past the edge of the monitor (daijro/camoufox#499).
 
     Keeps the taskbar delta (screen - avail) intact so fix_screen_no_taskbar's

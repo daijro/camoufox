@@ -66,7 +66,7 @@ index 78edbcaac1..b18ffd969f 100644
  
      async InitStreamFilter(uint64_t channelId, nsString addonId)
 diff --git a/ipc/ipdl/sync-messages.ini b/ipc/ipdl/sync-messages.ini
-index d562255670..6ea4f999b0 100644
+index d562255670..b3dc7070d7 100644
 --- a/ipc/ipdl/sync-messages.ini
 +++ b/ipc/ipdl/sync-messages.ini
 @@ -371,6 +371,12 @@ description = Finds certificates and private keys in the parent process. As this
@@ -74,10 +74,10 @@ index d562255670..6ea4f999b0 100644
  description = Performs a signature on given data with a key corresponding to the given identifier. This is called from PKCS#11, so there is no way to make this asynchronous.
  # -
 +[PContent::RoverfoxStoragePut]
-+description = Writes a roverfox-namespaced preference to the parent process. Synchronous to ensure the value is available in Firefox Preferences before any worker content process starts.
++description = Writes a roverfox-namespaced preference to the parent process. Synchronous so the parent holds the value before a document of the same context reads it from another content process.
 +# -
 +[PContent::RoverfoxStorageGet]
-+description = Reads a roverfox-namespaced preference from the parent process for cross-process fingerprint storage synchronization. Only used during initial fingerprint reads in worker processes.
++description = Reads a roverfox-namespaced preference another content process stored that has not yet reached this process. Sent from the main thread on a local miss, at most once per key and process.
 +# -
  [PRemoteQuotaObject::MaybeUpdateSize]
  description = This must be synchronous until quota file streams become non-blocking. The synchronous message is never used on the main thread or the PBackground thread or a DOM worker threed.

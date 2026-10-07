@@ -1,5 +1,5 @@
 diff --git a/dom/media/mp4/MP4Decoder.cpp b/dom/media/mp4/MP4Decoder.cpp
-index fb37d83754..c2e5b16a0a 100644
+index fb37d83754..f92936cb84 100644
 --- a/dom/media/mp4/MP4Decoder.cpp
 +++ b/dom/media/mp4/MP4Decoder.cpp
 @@ -10,6 +10,7 @@
@@ -18,7 +18,7 @@ index fb37d83754..c2e5b16a0a 100644
 +  // supported. This prevents canPlayType()/isTypeSupported() from leaking
 +  // which system codec libraries (FFmpeg, VideoToolbox, GStreamer) are
 +  // installed. Actual playback may fail if no decoder is present.
-+  if (MaskConfig::GetBool("media:spoof_codecs").value_or(false)) {
++  if (MaskConfig::GetBool("media:spoof_codecs")) {
 +    return true;
 +  }
 +
@@ -37,7 +37,7 @@ index 88956ccea8..296b168ded 100644
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
 diff --git a/dom/media/webm/MatroskaDecoder.cpp b/dom/media/webm/MatroskaDecoder.cpp
-index ca63eb884a..32bc3e184b 100644
+index ca63eb884a..a2b99cfdcb 100644
 --- a/dom/media/webm/MatroskaDecoder.cpp
 +++ b/dom/media/webm/MatroskaDecoder.cpp
 @@ -8,6 +8,7 @@
@@ -54,7 +54,7 @@ index ca63eb884a..32bc3e184b 100644
      // Look for exact match as we know the codecs used.
 +
 +    // Camoufox: bypass system decoder check when media:spoof_codecs is enabled.
-+    if (MaskConfig::GetBool("media:spoof_codecs").value_or(false)) {
++    if (MaskConfig::GetBool("media:spoof_codecs")) {
 +      return true;
 +    }
 +

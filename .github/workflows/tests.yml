@@ -611,9 +611,7 @@ jobs:
           #                            FileNotFoundError without it. That breaks
           #                            patch-guards, the leak suite and sundial.
           make -C browser stage-fonts
-          for f in properties.json chrome.css; do
-            [ -f "$src/$f" ] || cp -v "browser/settings/$f" "$src/$f"
-          done
+          [ -f "$src/properties.json" ] || cp -v browser/settings/properties.json "$src/properties.json"
 
           # Fail here, once, rather than in five browser jobs with five
           # different confusing errors.

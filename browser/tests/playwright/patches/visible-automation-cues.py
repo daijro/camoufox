@@ -6,7 +6,7 @@ Two cues a real Firefox never draws, neither readable by page JS:
   78. Every Playwright browser context is a Firefox container. A PUBLIC container
       renders its name ("JUGGLER <id>") and colour in the URL bar and tab strip.
       additions/juggler/TargetRegistry.js marks juggler's identities non-public.
-  79. browser-init.patch adds a #cursor-highlighter dot following the mouse when
+  79. CamoufoxWindow.sys.mjs adds a #cursor-highlighter dot following the mouse when
       the `showcursor` config is true -- and the default used to be true.
 
 The guard launches camoufox through Playwright, headed on a private Xvfb display,
@@ -20,7 +20,6 @@ opt-in still creates the element, so the id being checked is the real one.
     python browser/tests/playwright/patches/visible-automation-cues.py
 """
 
-import os
 import sys
 import time
 from pathlib import Path
@@ -44,11 +43,9 @@ return out;
 """
 
 
-def inspect(binary: Path, display: str, config=None):
+def inspect(binary: Path, config=None):
     from camoufox.sync_api import Camoufox
     port = free_port()
-    os.environ.update(DISPLAY=display, MOZ_ENABLE_WAYLAND="0", GDK_BACKEND="x11")
-    os.environ.pop("WAYLAND_DISPLAY", None)
     with Camoufox(headless=False, executable_path=str(binary), args=marionette_args(),
                   firefox_user_prefs={"marionette.port": port}, config=config or {},
                   i_know_what_im_doing=True) as browser:
@@ -67,8 +64,8 @@ def inspect(binary: Path, display: str, config=None):
 def main() -> int:
     binary = resolve_binary()
     failures = []
-    with hidden_display() as display:
-        windows = inspect(binary, display)
+    with hidden_display():
+        windows = inspect(binary)
         for w in windows:
             print(f"  window: contexts={w['userContextIds']} public={w['publicIdentities']} "
                   f"iconsHidden={w['iconsHidden']} label={w['label']!r} cursorHighlighter={w['cursorHighlighter']}")
@@ -81,7 +78,7 @@ def main() -> int:
         if any(w["cursorHighlighter"] for w in windows):
             failures.append("#cursor-highlighter exists with the default config")
 
-        opted_in = inspect(binary, display, config={"showcursor": True})
+        opted_in = inspect(binary, config={"showcursor": True})
         print(f"  showcursor=true -> cursorHighlighter={[w['cursorHighlighter'] for w in opted_in]}")
         if not any(w["cursorHighlighter"] for w in opted_in):
             failures.append("showcursor=true no longer creates #cursor-highlighter (checked id is stale)")

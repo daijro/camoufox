@@ -1,8 +1,8 @@
 """
-Verify the `addons` config is installed once per launch (browser-init.patch).
+Verify the `addons` config is installed once per launch (CamoufoxWindow.sys.mjs).
 
-browser-init.patch installs the `addons` entries (uBlock Origin by default) as
-temporary addons from gBrowserInit, which runs for every browser window, and
+CamoufoxWindow.sys.mjs installs the `addons` entries (uBlock Origin by default)
+as temporary addons from every browser window's onLoad, and
 Juggler opens a window for every page of every new context. Installing an
 already-installed temporary addon restarts it. A navigation that uBO's
 webRequest listener had suspended when the restart hit is never resumed, so

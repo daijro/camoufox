@@ -289,10 +289,10 @@ index 1bf2e04fdb..4e7f31c852 100644
      // pointer" by PresShell::ProcessSynthMouseOrPointerMoveEvent().  However:
      // 1. if the event is synthesized via nsIDOMWindowUtils, it's not marked as
 diff --git a/dom/events/PointerEventHandler.h b/dom/events/PointerEventHandler.h
-index 266ab7ece7..f7e5fb66ec 100644
+index 266ab7ece7..d7d1344754 100644
 --- a/dom/events/PointerEventHandler.h
 +++ b/dom/events/PointerEventHandler.h
-@@ -694,6 +694,17 @@ class PointerEventHandler final {
+@@ -694,6 +694,15 @@ class PointerEventHandler final {
    // Stores the last pointerId which has not left from all documents managed in
    // this process.
    static Maybe<uint32_t> sLastPointerId;
@@ -305,8 +305,6 @@ index 266ab7ece7..f7e5fb66ec 100644
 +  static void NotifyDropDownOpenedByMouseDown() {
 +    sDropDownOpenedByLastMouseDown = true;
 +  }
-+
-+ private:
  };
  
  }  // namespace mozilla

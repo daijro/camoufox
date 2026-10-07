@@ -89,17 +89,15 @@ index 0000000000..020afee28f
 +}  // namespace mozilla
 diff --git a/dom/base/WebGLParamsManager.h b/dom/base/WebGLParamsManager.h
 new file mode 100644
-index 0000000000..72df27b6e5
+index 0000000000..b472e367bc
 --- /dev/null
 +++ b/dom/base/WebGLParamsManager.h
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,30 @@
 +/* Camoufox: Per-context WebGL parameter manager */
 +#ifndef mozilla_dom_WebGLParamsManager_h
 +#define mozilla_dom_WebGLParamsManager_h
 +
 +#include "nsString.h"
-+#include "nsTHashMap.h"
-+#include "nsHashKeys.h"
 +#include "RoverfoxStorageManager.h"
 +
 +namespace mozilla {
@@ -145,7 +143,7 @@ index ee5d0b9149..cb146517aa 100644
  # CharacterDataBuffer.cpp
  if CONFIG["INTEL_ARCHITECTURE"]:
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index fe3cdaebd5..d0e286b11f 100644
+index ff63d5e4dc..e48e309d33 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -27,6 +27,7 @@
@@ -156,7 +154,7 @@ index fe3cdaebd5..d0e286b11f 100644
  #include "WindowDestroyedEvent.h"
  #include "WindowNamedPropertiesHandler.h"
  #include "js/ComparisonOperators.h"
-@@ -8042,6 +8043,51 @@ void nsGlobalWindowInner::SetSpeechVoices(const nsAString& aVoices,
+@@ -8038,6 +8039,51 @@ void nsGlobalWindowInner::SetSpeechVoices(const nsAString& aVoices,
    }
  }
  
@@ -224,7 +222,7 @@ index a9d8fb50ba..f3fbefbbfd 100644
    void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
    void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
 diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
-index 5aaa4279fd..ead3743ac0 100644
+index 5aaa4279fd..d9ed54144e 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
 +++ b/dom/canvas/ClientWebGLContext.cpp
 @@ -3,6 +3,14 @@
@@ -242,17 +240,10 @@ index 5aaa4279fd..ead3743ac0 100644
  
  #include <fmt/format.h>
  
-@@ -781,6 +789,35 @@ void ClientWebGLContext::SetUnpackColorSpace(
+@@ -781,6 +789,28 @@ void ClientWebGLContext::SetUnpackColorSpace(
    Run<RPROC(SetUnpackColorSpace)>(*mUnpackColorSpace);
  }
  
-+bool ClientWebGLContext::MBoolVal(const std::string& key, bool defaultValue) {
-+  if (auto value = MaskConfig::GetAttribute<bool>(key, mIsWebGL2);
-+      value.has_value())
-+    return value.value();
-+  return defaultValue;
-+}
-+
 +uint32_t ClientWebGLContext::GetUserContextId() const {
 +  if (mCanvasElement) {
 +    if (Document* doc = mCanvasElement->OwnerDoc()) {
@@ -278,7 +269,7 @@ index 5aaa4279fd..ead3743ac0 100644
  void ClientWebGLContext::GetContextAttributes(
      dom::Nullable<dom::WebGLContextAttributes>& retval) {
    retval.SetNull();
-@@ -794,6 +831,9 @@ void ClientWebGLContext::GetContextAttributes(
+@@ -794,6 +824,9 @@ void ClientWebGLContext::GetContextAttributes(
  
    const auto& options = notLost->info.options;
  
@@ -288,46 +279,7 @@ index 5aaa4279fd..ead3743ac0 100644
    result.mAlpha.Construct(options.alpha);
    result.mDepth = options.depth;
    result.mStencil = options.stencil;
-@@ -999,18 +1039,28 @@ bool ClientWebGLContext::CreateHostContext(const uvec2& requestedSize) {
- std::unordered_map<GLenum, bool> webgl::MakeIsEnabledMap(const bool webgl2) {
-   auto ret = std::unordered_map<GLenum, bool>{};
- 
--  ret[LOCAL_GL_BLEND] = false;
--  ret[LOCAL_GL_CULL_FACE] = false;
--  ret[LOCAL_GL_DEPTH_TEST] = false;
--  ret[LOCAL_GL_DITHER] = true;
--  ret[LOCAL_GL_POLYGON_OFFSET_FILL] = false;
--  ret[LOCAL_GL_SAMPLE_ALPHA_TO_COVERAGE] = false;
--  ret[LOCAL_GL_SAMPLE_COVERAGE] = false;
--  ret[LOCAL_GL_SCISSOR_TEST] = false;
--  ret[LOCAL_GL_STENCIL_TEST] = false;
-+  ret[LOCAL_GL_BLEND] =
-+      false;
-+  ret[LOCAL_GL_CULL_FACE] =
-+      false;
-+  ret[LOCAL_GL_DEPTH_TEST] =
-+      false;
-+  ret[LOCAL_GL_DITHER] =
-+      true;
-+  ret[LOCAL_GL_POLYGON_OFFSET_FILL] =
-+      false;
-+  ret[LOCAL_GL_SAMPLE_ALPHA_TO_COVERAGE] =
-+      false;
-+  ret[LOCAL_GL_SAMPLE_COVERAGE] =
-+      false;
-+  ret[LOCAL_GL_SCISSOR_TEST] =
-+      false;
-+  ret[LOCAL_GL_STENCIL_TEST] =
-+      false;
- 
-   if (webgl2) {
--    ret[LOCAL_GL_RASTERIZER_DISCARD] = false;
-+    ret[LOCAL_GL_RASTERIZER_DISCARD] =
-+        false;
-   }
- 
-   return ret;
-@@ -2179,6 +2229,129 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2179,6 +2212,107 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
    const auto& state = State();
  
    // -
@@ -337,8 +289,8 @@ index 5aaa4279fd..ead3743ac0 100644
 +  // Everything else is answered by the real context: live state (bindings,
 +  // enables, clear values, viewport, pixel-store flags, hints, draw buffers),
 +  // values that follow the bound framebuffer (*_BITS,
-+  // IMPLEMENTATION_COLOR_READ_*), the strings (VENDOR/RENDERER/VERSION; the
-+  // UNMASKED_* strings come from webGl:vendor/renderer on the extension path
++  // IMPLEMENTATION_COLOR_READ_*), the strings (VENDOR/VERSION; RENDERER and the
++  // UNMASKED_* strings come from webGl:vendor/renderer on the string path
 +  // below) and invalid enums. Answering those from the table read back state
 +  // the page had just changed (UNPACK_FLIP_Y_WEBGL false after pixelStorei,
 +  // ALPHA_BITS 8 on an {alpha: false} context, DRAW_BUFFER0 after
@@ -432,40 +384,10 @@ index 5aaa4279fd..ead3743ac0 100644
 +    // real context answers (an extension constant the page can query after
 +    // getExtension() succeeded must never come back null).
 +  }
-+  // If the value is not array (we will handle those later),
-+  // then check if it should be blocked.
-+  switch (pname) {
-+    case LOCAL_GL_DEPTH_RANGE:
-+    case LOCAL_GL_ALIASED_POINT_SIZE_RANGE:
-+    case LOCAL_GL_ALIASED_LINE_WIDTH_RANGE:
-+    case LOCAL_GL_COLOR_CLEAR_VALUE:
-+    case LOCAL_GL_BLEND_COLOR:
-+    case LOCAL_GL_MAX_VIEWPORT_DIMS:
-+    case LOCAL_GL_SCISSOR_BOX:
-+    case LOCAL_GL_VIEWPORT:
-+    case LOCAL_GL_COMPRESSED_TEXTURE_FORMATS:
-+    case LOCAL_GL_COLOR_WRITEMASK:
-+    case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
-+    case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
-+      break;
-+    default:
-+      // Camoufox: a pname outside the spoofed table (extension constants such
-+      // as MAX_TEXTURE_MAX_ANISOTROPY_EXT, live state) is answered by the real
-+      // context. Returning null here was itself a tell.
-+      break;
-+  }
  
    const auto fnSetRetval_Buffer = [&](const GLenum target) {
      const auto buffer = *MaybeFind(state.mBoundBufferByTarget, target);
-@@ -2284,49 +2457,80 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
- 
-     // 2 floats
-     case LOCAL_GL_DEPTH_RANGE:
--      retval.set(Create<dom::Float32Array>(cx, this, state.mDepthRange, rv));
-+      retval.set(Create<dom::Float32Array>(
-+          cx, this,
-+          state.mDepthRange,
-+          rv));
+@@ -2288,13 +2422,19 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
        return;
  
      case LOCAL_GL_ALIASED_POINT_SIZE_RANGE:
@@ -489,23 +411,7 @@ index 5aaa4279fd..ead3743ac0 100644
        return;
  
      // 4 floats
-     case LOCAL_GL_COLOR_CLEAR_VALUE:
--      retval.set(Create<dom::Float32Array>(cx, this, state.mClearColor, rv));
-+      retval.set(Create<dom::Float32Array>(
-+          cx, this,
-+          state.mClearColor,
-+          rv));
-       return;
- 
-     case LOCAL_GL_BLEND_COLOR:
--      retval.set(Create<dom::Float32Array>(cx, this, state.mBlendColor, rv));
-+      retval.set(Create<dom::Float32Array>(
-+          cx, this,
-+          state.mBlendColor,
-+          rv));
-       return;
- 
-     // 2 ints
+@@ -2310,7 +2450,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
      case LOCAL_GL_MAX_VIEWPORT_DIMS: {
        auto maxViewportDim = BitwiseCast<int32_t>(limits.maxViewportDim);
        const auto dims = std::array<int32_t, 2>{maxViewportDim, maxViewportDim};
@@ -518,58 +424,56 @@ index 5aaa4279fd..ead3743ac0 100644
        return;
      }
  
-     // 4 ints
-     case LOCAL_GL_SCISSOR_BOX:
--      retval.set(Create<dom::Int32Array>(cx, this, state.mScissor, rv));
-+      retval.set(Create<dom::Int32Array>(
-+          cx, this,
-+          state.mScissor,
-+          rv));
-       return;
+@@ -2438,6 +2582,21 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+   // -
  
-     case LOCAL_GL_VIEWPORT:
--      retval.set(Create<dom::Int32Array>(cx, this, state.mViewport, rv));
-+      retval.set(Create<dom::Int32Array>(
-+          cx, this,
-+          state.mViewport,
-+          rv));
-       return;
- 
--    // any
-     case LOCAL_GL_COMPRESSED_TEXTURE_FORMATS:
--      retval.set(Create<dom::Uint32Array>(cx, this,
--                                          state.mCompressedTextureFormats, rv));
-+      std::vector<uint32_t> compressedTextureUint32(
-+          state.mCompressedTextureFormats.begin(),
-+          state.mCompressedTextureFormats.end());
-+      // Camoufox: the formats of the compressed-texture extensions the page
-+      // has enabled, as stock reports them -- not a captured list.
-+      retval.set(Create<dom::Uint32Array>(
-+          cx, this,
-+          compressedTextureUint32,
-+          rv));
-       return;
-   }
- 
-@@ -2506,6 +2710,17 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+   if (!debug) {
++    // Camoufox: the identity's renderer, when it has one. Stock answers RENDERER
++    // and UNMASKED_RENDERER_WEBGL with the same string, so both come from here;
++    // answering RENDERER from the real context paired the host GPU with the
++    // spoofed one.
++    const auto GetSpoofedRenderer = [&]() -> Maybe<std::string> {
++      nsAutoString stored;
++      if (WebGLParamsManager::GetRenderer(GetUserContextId(), stored)) {
++        return Some(std::string(NS_ConvertUTF16toUTF8(stored).get()));
++      }
++      if (auto value = MaskConfig::GetString("webGl:renderer")) {
++        return Some(value.value());
++      }
++      return Nothing();
++    };
++
+     const auto GetUnmaskedRenderer = [&]() {
+       const auto prefLock = StaticPrefs::webgl_override_unmasked_renderer();
+       if (!prefLock->IsEmpty()) {
+@@ -2470,9 +2629,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+           allowRenderer = false;
+         }
+         if (allowRenderer) {
+-          ret = GetUnmaskedRenderer();
+-          if (ret) {
+-            ret = Some(webgl::SanitizeRenderer(*ret));
++          ret = GetSpoofedRenderer();
++          if (!ret) {
++            ret = GetUnmaskedRenderer();
++            if (ret) {
++              ret = Some(webgl::SanitizeRenderer(*ret));
++            }
+           }
+         }
+         if (!ret) {
+@@ -2506,6 +2668,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
  
          switch (pname) {
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
-+            {
-+              nsAutoString stored;
-+              if (WebGLParamsManager::GetRenderer(GetUserContextId(), stored)) {
-+                ret = Some(NS_ConvertUTF16toUTF8(stored));
-+                break;
-+              }
-+            }
-+            if (auto value = MaskConfig::GetString("webGl:renderer")) {
-+              ret = Some(value.value());
++            ret = GetSpoofedRenderer();
++            if (ret) {
 +              break;
 +            }
              if (ShouldResistFingerprinting(RFPTarget::WebGLRenderInfo) ||
                  ShouldResistFingerprinting(RFPTarget::WebGLRendererConstant)) {
                ret = Some("Mozilla"_ns);
-@@ -2518,6 +2733,17 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2518,6 +2684,17 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
              break;
  
            case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
@@ -587,18 +491,7 @@ index 5aaa4279fd..ead3743ac0 100644
              if (ShouldResistFingerprinting(RFPTarget::WebGLRenderInfo)) {
                ret = Some("Mozilla"_ns);
              } else if (ShouldResistFingerprinting(
-@@ -2629,7 +2855,9 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
-         case LOCAL_GL_COLOR_WRITEMASK: {
-           const auto mask = uint8_t(*maybe);
-           const auto bs = std::bitset<4>(mask);
--          const auto src = std::array<bool, 4>{bs[0], bs[1], bs[2], bs[3]};
-+          const auto src = MaskConfig::MParamGL<std::array<bool, 4>>(
-+              pname, std::array<bool, 4>{bs[0], bs[1], bs[2], bs[3]},
-+              mIsWebGL2);
-           JS::Rooted<JS::Value> arr(cx);
-           if (!dom::ToJSValue(cx, src.data(), src.size(), &arr)) {
-             rv = NS_ERROR_OUT_OF_MEMORY;
-@@ -3020,6 +3248,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
+@@ -3020,6 +3197,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
      return nullptr;
    }
  
@@ -614,7 +507,7 @@ index 5aaa4279fd..ead3743ac0 100644
 +    return AsAddRefed(new WebGLShaderPrecisionFormatJS(spoofed));
 +  }
 +  // Check if block if not defined is on
-+  if (MaskConfig::CheckBool(
++  if (MaskConfig::GetBool(
 +          mIsWebGL2 ? "webGl2:shaderPrecisionFormats:blockIfNotDefined"
 +                    : "webGl:shaderPrecisionFormats:blockIfNotDefined")) {
 +    return nullptr;
@@ -623,7 +516,7 @@ index 5aaa4279fd..ead3743ac0 100644
    const auto& shaderPrecisions = *notLost->info.shaderPrecisions;
    const auto args =
        webgl::GetShaderPrecisionFormatArgs{shadertype, precisiontype};
-@@ -6392,6 +6638,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
+@@ -6392,6 +6587,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
      return false;
    }
  
@@ -641,7 +534,7 @@ index 5aaa4279fd..ead3743ac0 100644
    const auto& limits = Limits();
    return limits.supportedExtensions[ext];
  }
-@@ -6406,6 +6663,18 @@ void ClientWebGLContext::GetSupportedExtensions(
+@@ -6406,6 +6612,18 @@ void ClientWebGLContext::GetSupportedExtensions(
    }
  
    auto& retarr = retval.SetValue();
@@ -661,15 +554,13 @@ index 5aaa4279fd..ead3743ac0 100644
      if (!IsSupported(i, callerType)) continue;
  
 diff --git a/dom/canvas/ClientWebGLContext.h b/dom/canvas/ClientWebGLContext.h
-index 6f73f55eef..53693f8fec 100644
+index 6f73f55eef..902f9b3a0d 100644
 --- a/dom/canvas/ClientWebGLContext.h
 +++ b/dom/canvas/ClientWebGLContext.h
-@@ -1089,6 +1089,11 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
+@@ -1089,6 +1089,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
    void GetContextAttributes(dom::Nullable<dom::WebGLContextAttributes>& retval);
  
   private:
-+  // Helper for mask config values
-+  bool MBoolVal(const std::string& key, bool defaultValue);
 +  // Per-context WebGL parameter support
 +  uint32_t GetUserContextId() const;
 +

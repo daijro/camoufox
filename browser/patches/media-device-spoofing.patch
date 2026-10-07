@@ -1,5 +1,5 @@
 diff --git a/dom/media/MediaManager.cpp b/dom/media/MediaManager.cpp
-index cc38a8f750..b5e80a22d2 100644
+index 07725888a4..043d67c750 100644
 --- a/dom/media/MediaManager.cpp
 +++ b/dom/media/MediaManager.cpp
 @@ -44,6 +44,7 @@
@@ -32,7 +32,7 @@ index cc38a8f750..b5e80a22d2 100644
 +  // enumerateDevices(), getUserMedia() tracks and their settings all agree.
 +  const bool fakeByPref =
 +      Preferences::GetBool("media.navigator.streams.fake") ||
-+      MaskConfig::GetBool("mediaDevices:enabled").value_or(false);
++      MaskConfig::GetBool("mediaDevices:enabled");
    Maybe<VideoDeviceEnumerationParams> videoParams;
    Maybe<DeviceEnumerationParams> audioParams;
    nsAutoCString audioDev;
@@ -57,7 +57,7 @@ index cc38a8f750..b5e80a22d2 100644
 -                                  MediaSinkEnum::Speaker, &outputs);
 +    // Camoufox: the identity's speakers come from the fake engine too.
 +    RefPtr<MediaEngine> speakerBackend = realBackend;
-+    if (MaskConfig::GetBool("mediaDevices:enabled").value_or(false)) {
++    if (MaskConfig::GetBool("mediaDevices:enabled")) {
 +      if (!fakeBackend) {
 +        fakeBackend = new MediaEngineFake();
 +      }
@@ -69,7 +69,7 @@ index cc38a8f750..b5e80a22d2 100644
      speakers = Some(MediaDeviceSet());
      speakers->AppendElements(outputs);
      devices->AppendElements(std::move(outputs));
-@@ -4885,7 +4907,7 @@ bool DeviceListener::CapturingVideo() const {
+@@ -4907,7 +4929,7 @@ bool DeviceListener::CapturingVideo() const {
    MOZ_ASSERT(NS_IsMainThread());
    return Activated() && mDeviceState && !mDeviceState->mStopped &&
           MediaEngineSource::IsVideo(GetDevice()->GetMediaSource()) &&
@@ -78,7 +78,7 @@ index cc38a8f750..b5e80a22d2 100644
            Preferences::GetBool("media.navigator.permission.fake"));
  }
  
-@@ -4893,7 +4915,7 @@ bool DeviceListener::CapturingAudio() const {
+@@ -4915,7 +4937,7 @@ bool DeviceListener::CapturingAudio() const {
    MOZ_ASSERT(NS_IsMainThread());
    return Activated() && mDeviceState && !mDeviceState->mStopped &&
           MediaEngineSource::IsAudio(GetDevice()->GetMediaSource()) &&
@@ -87,7 +87,7 @@ index cc38a8f750..b5e80a22d2 100644
            Preferences::GetBool("media.navigator.permission.fake"));
  }
  
-@@ -4911,7 +4933,7 @@ CaptureState DeviceListener::CapturingSource(MediaSourceEnum aSource) const {
+@@ -4933,7 +4955,7 @@ CaptureState DeviceListener::CapturingSource(MediaSourceEnum aSource) const {
  
    if ((aSource == MediaSourceEnum::Camera ||
         aSource == MediaSourceEnum::Microphone) &&
@@ -110,7 +110,7 @@ index 3dac2943b3..8f6b3f363d 100644
    const dom::MediaTrackConstraints& Constraints() const;
  
 diff --git a/dom/media/webrtc/MediaEngineFake.cpp b/dom/media/webrtc/MediaEngineFake.cpp
-index 8123aa05e5..f45136a27c 100644
+index b87d8c5659..a1a73bfa62 100644
 --- a/dom/media/webrtc/MediaEngineFake.cpp
 +++ b/dom/media/webrtc/MediaEngineFake.cpp
 @@ -4,6 +4,9 @@
@@ -123,7 +123,7 @@ index 8123aa05e5..f45136a27c 100644
  #include "AudioSegment.h"
  #include "FakeVideoSource.h"
  #include "ImageContainer.h"
-@@ -577,7 +580,15 @@ void AudioSourcePullListener::NotifyPull(MediaTrackGraph* aGraph,
+@@ -577,7 +580,12 @@ void AudioSourcePullListener::NotifyPull(MediaTrackGraph* aGraph,
    mTrack->AppendData(&segment);
  }
  
@@ -132,15 +132,12 @@ index 8123aa05e5..f45136a27c 100644
 +    : mIdentityDevices(aIdentityDevices) {}
 +
 +bool MediaEngineFake::ServesIdentityDevices() const {
-+  // GetBool returns std::optional<bool>: test the value, not its presence
-+  // ("mediaDevices:enabled": false must disable them).
-+  return mIdentityDevices &&
-+         MaskConfig::GetBool("mediaDevices:enabled").value_or(false);
++  return mIdentityDevices && MaskConfig::GetBool("mediaDevices:enabled");
 +}
  MediaEngineFake::~MediaEngineFake() = default;
  
  void MediaEngineFake::EnumerateDevices(
-@@ -587,6 +598,70 @@ void MediaEngineFake::EnumerateDevices(
+@@ -587,6 +595,70 @@ void MediaEngineFake::EnumerateDevices(
    using IsScary = MediaDevice::IsScary;
    using OsPromptable = MediaDevice::OsPromptable;
  
@@ -212,7 +209,7 @@ index 8123aa05e5..f45136a27c 100644
      NS_WARNING("No default implementation for MediaSinkEnum::Speaker");
    }
 diff --git a/dom/media/webrtc/MediaEngineFake.h b/dom/media/webrtc/MediaEngineFake.h
-index 256a26a279..ab0c3ecd48 100644
+index cd9c407af5..0bcfe65c0c 100644
 --- a/dom/media/webrtc/MediaEngineFake.h
 +++ b/dom/media/webrtc/MediaEngineFake.h
 @@ -16,7 +16,14 @@ namespace mozilla {
@@ -231,7 +228,7 @@ index 256a26a279..ab0c3ecd48 100644
  
    void EnumerateDevices(dom::MediaSourceEnum, MediaSinkEnum,
                          nsTArray<RefPtr<MediaDevice>>*) override;
-@@ -33,6 +40,7 @@ class MediaEngineFake : public MediaEngine {
+@@ -34,6 +41,7 @@ class MediaEngineFake : public MediaEngine {
   private:
    ~MediaEngineFake();
    MediaEventProducer<void> mDeviceListChangeEvent;
@@ -240,10 +237,10 @@ index 256a26a279..ab0c3ecd48 100644
  
  }  // namespace mozilla
 diff --git a/dom/media/webrtc/moz.build b/dom/media/webrtc/moz.build
-index 63466ef7f7..08f2e035a1 100644
+index a40204e475..d0644be504 100644
 --- a/dom/media/webrtc/moz.build
 +++ b/dom/media/webrtc/moz.build
-@@ -134,3 +134,6 @@ FINAL_LIBRARY = "xul"
+@@ -136,3 +136,6 @@ FINAL_LIBRARY = "xul"
  
  # Add libFuzzer configuration directives
  include("/tools/fuzzing/libfuzzer-config.mozbuild")

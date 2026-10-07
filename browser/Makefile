@@ -7,7 +7,7 @@ ff_source_tarball := firefox-$(version).source.tar.xz
 .PHONY: help fetch setup-minimal setup ff-dbg revert fetch-fonts fonts-extract fonts-check \
         fonts-clean dir set-target mozbootstrap setup-macos-sdk bootstrap diff first-checkpoint \
         checkpoint clean distclean build package-linux package-macos package-windows run edit-cfg \
-        check-arg grep patch unpatch workspace tests stage-fonts unbusy path update-ubo-assets \
+        check-arg grep patch unpatch workspace tests stage-fonts unbusy path \
         generate-assets-car
 
 help:
@@ -44,7 +44,6 @@ help:
 	@echo "  diff                - Diff the tree against first-checkpoint"
 	@echo "  grep                - Search the patches for a string"
 	@echo "  tests               - Runs the Playwright tests"
-	@echo "  update-ubo-assets   - Update the uBOAssets.json file"
 	@echo "  generate-assets-car - Regenerate the macOS Assets.car icon catalog"
 
 _ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
@@ -78,7 +77,7 @@ setup: setup-minimal
 ff-dbg: setup
 	# Only apply patches to help debug vanilla Firefox
 	make patch ./patches/chromeutil.patch
-	make patch ./patches/browser-init.patch
+	make patch ./patches/camoufox-window-module.patch
 	echo "LOCAL_INCLUDES += ['/camoucfg']" >> $(cf_source_dir)/dom/base/moz.build
 	touch $(cf_source_dir)/_READY
 	make checkpoint
@@ -168,7 +167,6 @@ build: unbusy
 package-linux: fonts-extract
 	python3 scripts/package.py linux \
 		--includes \
-			settings/chrome.css \
 			settings/properties.json \
 			bundle/fontconfig \
 		--version $(version) \
@@ -179,7 +177,6 @@ package-linux: fonts-extract
 package-macos: fonts-extract
 	python3 scripts/package.py macos \
 		--includes \
-			settings/chrome.css \
 			settings/properties.json \
 		--version $(version) \
 		--release $(release) \
@@ -189,7 +186,6 @@ package-macos: fonts-extract
 package-windows: fonts-extract
 	python3 scripts/package.py windows \
 		--includes \
-			settings/chrome.css \
 			settings/properties.json \
 			~/.mozbuild/vs/VC/Redist/MSVC/*/$(vcredist_arch)/Microsoft.VC*.CRT/*.dll \
 		--version $(version) \
@@ -258,9 +254,6 @@ unbusy:
 
 path:
 	@realpath $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin
-
-update-ubo-assets:
-	bash ./scripts/update-ubo-assets.sh
 
 generate-assets-car:
 	bash ./scripts/generate-assets-car.sh

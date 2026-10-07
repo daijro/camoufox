@@ -50,6 +50,10 @@ const GTX_980_FIXTURE = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
 	"../../python/tests/data/webgl-gtx980-linux.json",
 );
+const PROPERTIES = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	"../../browser/settings/properties.json",
+);
 
 describe.skipIf(!MODEL.ok)("webgl (test_webgl.py)", () => {
 	it.skipIf(
@@ -61,7 +65,22 @@ describe.skipIf(!MODEL.ok)("webgl (test_webgl.py)", () => {
 	)("the converter reproduces the recorded device", () => {
 		// What the retired webgl_data.db gave for this GPU. Parameters are
 		// compared where the old row had a value, less the UNMASKED_* strings.
-		const old = JSON.parse(fs.readFileSync(GTX_980_FIXTURE, "utf-8"));
+		// Keys since marked removed (contextAttributes) are no longer sent.
+		const removed = new Set(
+			(
+				JSON.parse(fs.readFileSync(PROPERTIES, "utf-8")) as Array<{
+					property: string;
+					removed?: string;
+				}>
+			)
+				.filter((entry) => entry.removed)
+				.map((entry) => entry.property),
+		);
+		const old = Object.fromEntries(
+			Object.entries(
+				JSON.parse(fs.readFileSync(GTX_980_FIXTURE, "utf-8")),
+			).filter(([key]) => !removed.has(key)),
+		);
 		const fresh = JSON.parse(
 			orjsonDumps(webglForGpu("lin", ...GTX_980_LINUX, 0), false),
 		);

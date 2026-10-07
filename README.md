@@ -506,10 +506,10 @@ Each context of one browser can carry its own identity:
 
 | Feature | Where |
 |---|---|
-| Load extracted addons without a debug server: `addons=["/path/to/addon"]` | launcher, `browser-init` patch |
-| uBlock Origin installed by default, with LibreWolf's filter-list set (`exclude_addons=[DefaultAddons.UBO]` to drop it) | launcher, [`browser/assets/uBOAssets.json`](browser/assets/uBOAssets.json) |
+| Load extracted addons without a debug server: `addons=["/path/to/addon"]` | launcher, `camoufox-window-module` patch |
+| uBlock Origin installed by default, with its own default filter lists (`exclude_addons=[DefaultAddons.UBO]` to drop it) | launcher |
 | Addons cannot open tabs unless `allow_addon_new_tab=True` | `disable-extension-newtab` patch |
-| Addons run in private browsing and are pinned to the toolbar | `all-addons-private-mode`, `pin-addons` patches |
+| Addons run in private browsing | `all-addons-private-mode` patch |
 
 ### Launcher
 
@@ -535,7 +535,7 @@ The full option list is in the [Python README](python/README.md#launch-options).
 | Onboarding messages disabled | `ghostery/` patch |
 | No bundled search engines | `no-search-engines` patch |
 | Mozilla services and background traffic turned off | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
-| Minimal browser theme | [`browser/settings/chrome.css`](browser/settings/chrome.css) |
+| Stock browser UI: no theme, toolbar or dialog changes | |
 
 > [!NOTE]
 > Camoufox presents Firefox identities only. Some WAFs test SpiderMonkey engine
@@ -718,4 +718,3 @@ flowchart TD
 | [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor) | The Bézier cursor Camoufox used before Cursory |
 | [scrapfly/fingerprint-generator](https://github.com/scrapfly/fingerprint-generator) (fpgen) | The device distribution identities are drawn from |
 | [CreepJS](https://github.com/abrahamjuliot/creepjs), [Browserleaks](https://browserleaks.com), [BrowserScan](https://www.browserscan.net/) | Leak testing |
-| [Jamir-boop/minimalisticfox](https://github.com/Jamir-boop/minimalisticfox) | The minimal theme ([`chrome.css`](browser/settings/chrome.css)) |

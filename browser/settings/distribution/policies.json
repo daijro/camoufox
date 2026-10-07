@@ -17,7 +17,6 @@
     "NoDefaultBookmarks": true,
     "DisableFirefoxScreenshots": true,
     "DisableSafeMode": true,
-    "DisplayBookmarksToolbar": "never",
     "DontCheckDefaultBrowser": true,
     "DisableFirefoxAccounts": true,
     "DisableFormHistory": true,
@@ -25,14 +24,6 @@
     "PasswordManagerEnabled": false,
     "OfferToSaveLogins": false,
     "ExtensionUpdate": false,
-    "PDFjs": {
-      "Enabled": true,
-      "EnablePermissions": true
-    },
-    "WebsiteFilter": {
-      "Block": ["https://localhost/*"],
-      "Exceptions": ["https://localhost/*"]
-    },
     "Extensions": {
       "Uninstall": [
         "google@search.mozilla.org",
@@ -48,11 +39,6 @@
     },
     "ExtensionSettings": {
       "uBlock0@raymondhill.net": {
-        "default_area": "navbar",
-        "updates_disabled": true
-      },
-      "magnolia@12.34": {
-        "default_area": "navbar",
         "updates_disabled": true
       }
     },

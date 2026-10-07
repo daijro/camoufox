@@ -178,7 +178,10 @@ inline std::optional<double> GetDouble(const std::string& key) {
   return std::nullopt;
 }
 
-inline std::optional<bool> GetBool(const std::string& key) {
+// For the rare caller that must tell an unset key from false. A plain
+// std::optional<bool> in a condition tests presence, not the value, so the
+// common case is GetBool below.
+inline std::optional<bool> GetOptionalBool(const std::string& key) {
   const auto& data = GetJson();
   if (!HasKey(key, data)) return std::nullopt;
   if (data[key].is_boolean()) return data[key].get<bool>();
@@ -186,8 +189,8 @@ inline std::optional<bool> GetBool(const std::string& key) {
   return std::nullopt;
 }
 
-inline bool CheckBool(const std::string& key) {
-  return GetBool(key).value_or(false);
+inline bool GetBool(const std::string& key) {
+  return GetOptionalBool(key).value_or(false);
 }
 
 inline std::optional<std::array<uint32_t, 4>> GetRect(
@@ -224,15 +227,6 @@ inline std::optional<nlohmann::json> GetNested(const std::string& domain,
   return data[domain][keyStr];
 }
 
-template <typename T>
-inline std::optional<T> GetAttribute(const std::string attrib, bool isWebGL2) {
-  auto value = MaskConfig::GetNested(
-      isWebGL2 ? "webGl2:contextAttributes" : "webGl:contextAttributes",
-      attrib);
-  if (!value) return std::nullopt;
-  return value.value().get<T>();
-}
-
 inline std::optional<
     std::variant<int64_t, bool, double, std::string, std::nullptr_t>>
 GLParam(uint32_t pname, bool isWebGL2) {
@@ -256,22 +250,6 @@ inline T MParamGL(uint32_t pname, T defaultValue, bool isWebGL2) {
           std::to_string(pname));
       value.has_value()) {
     return value.value().get<T>();
-  }
-  return defaultValue;
-}
-
-template <typename T>
-inline std::vector<T> MParamGLVector(uint32_t pname,
-                                     std::vector<T> defaultValue,
-                                     bool isWebGL2) {
-  if (auto value = MaskConfig::GetNested(
-          isWebGL2 ? "webGl2:parameters" : "webGl:parameters",
-          std::to_string(pname));
-      value.has_value()) {
-    if (value.value().is_array()) {
-      std::array<T, 4UL> result = value.value().get<std::array<T, 4UL>>();
-      return std::vector<T>(result.begin(), result.end());
-    }
   }
   return defaultValue;
 }

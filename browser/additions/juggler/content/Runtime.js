@@ -723,8 +723,8 @@ class ExecutionContext {
   // Camoufox: `page.evaluate(() => window.open(...))` has to keep working while
   // the popup blocker stays at Firefox's default, because a gesture-less
   // window.open() returning a window instead of null is a one-bit automation
-  // tell any page can read (dom.disable_open_during_load; sundial
-  // ls-popup-blocker). nsIDocShell.driverPopupsAllowed lifts the blocker for
+  // tell any page can read (dom.disable_open_during_load).
+  // nsIDocShell.driverPopupsAllowed lifts the blocker for
   // this docShell -- unlike upstream's setHandlingUserInput() it grants NO
   // user-gesture activation, so navigator.userActivation and the autoplay
   // policy are untouched.
@@ -737,7 +737,7 @@ class ExecutionContext {
   // exactly as it is on stock without an activation.
   withDriverPopups(fn) {
     const docShell = this._domWindow?.docShell;
-    if (!docShell || !('driverPopupsAllowed' in docShell))
+    if (!docShell)
       return fn();
     // Counted, not a plain boolean: one docShell carries both the isolated and
     // the main world, and two evaluates can interleave, so the inner one must

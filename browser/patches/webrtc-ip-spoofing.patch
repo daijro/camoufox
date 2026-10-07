@@ -1,16 +1,14 @@
 diff --git a/dom/base/WebRTCIPManager.cpp b/dom/base/WebRTCIPManager.cpp
 new file mode 100644
-index 0000000000..75f57a03f2
+index 0000000000..9e8e805085
 --- /dev/null
 +++ b/dom/base/WebRTCIPManager.cpp
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,123 @@
 +#include "WebRTCIPManager.h"
-+#include "nsTHashMap.h"
 +#include "RoverfoxStorageManager.h"
 +#include "nsPrintfCString.h"
 +#include "nsGlobalWindowInner.h"
 +#include "nsPIDOMWindowInlines.h"
-+#include "nsDocShell.h"
 +#include "xpcpublic.h"
 +#include "mozilla/dom/BrowsingContext.h"
 +#include "mozilla/dom/Document.h"
@@ -51,13 +49,11 @@ index 0000000000..75f57a03f2
 +  return key;
 +}
 +
-+
-+
 +/* static */ void
 +WebRTCIPManager::SetIPv4(uint32_t userContextId, const nsAString& ipv4) {
 +  nsString key = IPv4KeyForUserContext(userContextId);
 +  RoverfoxStorageManager::PutString(key, ipv4);
-+  
++
 +  // Mark the function as disabled for this context after first use
 +  DisableIPv4Function(userContextId);
 +}
@@ -72,7 +68,7 @@ index 0000000000..75f57a03f2
 +WebRTCIPManager::SetIPv6(uint32_t userContextId, const nsAString& ipv6) {
 +  nsString key = IPv6KeyForUserContext(userContextId);
 +  RoverfoxStorageManager::PutString(key, ipv6);
-+  
++
 +  // Mark the function as disabled for this context after first use
 +  DisableIPv6Function(userContextId);
 +}
@@ -83,26 +79,10 @@ index 0000000000..75f57a03f2
 +  return RoverfoxStorageManager::GetString(key, outIPv6);
 +}
 +
-+
-+
-+/* static */ bool
-+WebRTCIPManager::IsIPv4FunctionDisabled(uint32_t userContextId) {
-+  nsString key = IPv4DisabledKeyForUserContext(userContextId);
-+  bool disabled = false;
-+  return RoverfoxStorageManager::GetBool(key, disabled) && disabled;
-+}
-+
 +/* static */ void
 +WebRTCIPManager::DisableIPv4Function(uint32_t userContextId) {
 +  nsString key = IPv4DisabledKeyForUserContext(userContextId);
 +  RoverfoxStorageManager::PutBool(key, true);
-+}
-+
-+/* static */ bool
-+WebRTCIPManager::IsIPv6FunctionDisabled(uint32_t userContextId) {
-+  nsString key = IPv6DisabledKeyForUserContext(userContextId);
-+  bool disabled = false;
-+  return RoverfoxStorageManager::GetBool(key, disabled) && disabled;
 +}
 +
 +/* static */ void
@@ -110,8 +90,6 @@ index 0000000000..75f57a03f2
 +  nsString key = IPv6DisabledKeyForUserContext(userContextId);
 +  RoverfoxStorageManager::PutBool(key, true);
 +}
-+
-+
 +
 +/* static */ bool
 +WebRTCIPManager::IsIPv4FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
@@ -147,16 +125,14 @@ index 0000000000..75f57a03f2
 +  return !disabled;
 +}
 +
-+
-+
 +} // namespace dom
 +} // namespace mozilla
 diff --git a/dom/base/WebRTCIPManager.h b/dom/base/WebRTCIPManager.h
 new file mode 100644
-index 0000000000..c9810a06d2
+index 0000000000..39e64d1637
 --- /dev/null
 +++ b/dom/base/WebRTCIPManager.h
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,85 @@
 +#ifndef mozilla_dom_WebRTCIPManager_h
 +#define mozilla_dom_WebRTCIPManager_h
 +
@@ -203,15 +179,6 @@ index 0000000000..c9810a06d2
 +   */
 +  static bool GetIPv6(uint32_t userContextId, nsAString& outIPv6);
 +
-+
-+
-+  /**
-+   * Check if the setWebRTCIPv4 function has been used and should be disabled for a context.
-+   * @param userContextId The user context ID
-+   * @return true if the function has been used for this context and should not appear on new windows
-+   */
-+  static bool IsIPv4FunctionDisabled(uint32_t userContextId);
-+
 +  /**
 +   * Mark the setWebRTCIPv4 function as used/disabled for a context.
 +   * @param userContextId The user context ID
@@ -219,19 +186,10 @@ index 0000000000..c9810a06d2
 +  static void DisableIPv4Function(uint32_t userContextId);
 +
 +  /**
-+   * Check if the setWebRTCIPv6 function has been used and should be disabled for a context.
-+   * @param userContextId The user context ID
-+   * @return true if the function has been used for this context and should not appear on new windows
-+   */
-+  static bool IsIPv6FunctionDisabled(uint32_t userContextId);
-+
-+  /**
 +   * Mark the setWebRTCIPv6 function as used/disabled for a context.
 +   * @param userContextId The user context ID
 +   */
 +  static void DisableIPv6Function(uint32_t userContextId);
-+
-+
 +
 +  /**
 +   * WebIDL-compatible function to check if setWebRTCIPv4 should be enabled.
@@ -248,8 +206,6 @@ index 0000000000..c9810a06d2
 +   * @return true if the function should be enabled, false otherwise
 +   */
 +  static bool IsIPv6FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
-+
-+
 +
 +private:
 +  static nsString IPv4KeyForUserContext(uint32_t userContextId);
@@ -283,21 +239,19 @@ index cb146517aa..f2fa8a3543 100644
  # in unified builds (it includes RoverfoxStorageManager.h which can affect
  # alphabetically-later files like BarProps.cpp)
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index d0e286b11f..8ead869729 100644
+index e48e309d33..6eba5ec5aa 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -333,6 +333,10 @@
+@@ -330,6 +330,8 @@
  #include "xpcprivate.h"
  #include "xpcpublic.h"
  
 +#include "WebRTCIPManager.h"
-+#include "nsDocShell.h"
-+#include "mozilla/OriginAttributes.h"
 +
  #ifdef NS_PRINTING
  #  include "nsIPrintSettings.h"
  #endif
-@@ -7812,6 +7816,42 @@ void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aR
+@@ -7809,6 +7811,40 @@ void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aR
    }
  }
  
@@ -309,7 +263,7 @@ index d0e286b11f..8ead869729 100644
 +
 +  WebRTCIPManager::SetIPv4(userContextId, ipv4);
 +
-+  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
++  // Self-destruct.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
@@ -326,7 +280,7 @@ index d0e286b11f..8ead869729 100644
 +
 +  WebRTCIPManager::SetIPv6(userContextId, ipv6);
 +
-+  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
++  // Self-destruct.
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
 +    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
 +    if (global) {
@@ -334,8 +288,6 @@ index d0e286b11f..8ead869729 100644
 +    }
 +  }
 +}
-+
-+
 +
  void nsGlobalWindowInner::StoreSharedWorker(SharedWorker* aSharedWorker) {
    MOZ_ASSERT(aSharedWorker);
@@ -356,7 +308,7 @@ index f3fbefbbfd..2b581e729a 100644
  
    void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-index 0eefdc2645..40f8f1499f 100644
+index 0eefdc2645..02cd06521d 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 @@ -100,6 +100,11 @@
@@ -407,8 +359,10 @@ index 0eefdc2645..40f8f1499f 100644
      MOZ_CRASH("Failed to create a promise!");
    }
  
-+  // Camoufox: stats sanitization reads the spoof IP from MaskConfig.
-+  bool shouldSanitizeStats = ShouldSpoofCandidateIP();
++  // Camoufox: the stats continuation has no `this`, so resolve the spoof IP now.
++  auto ipv4Opt = SpoofIP(false);
++  auto ipv6Opt = SpoofIP(true);
++  bool shouldSanitizeStats = ipv4Opt || ipv6Opt;
 +  // The port of the fabricated srflx (if any), so the synthetic getStats
 +  // entry below matches the candidate/SDP exactly. 0 = nothing fabricated.
 +  uint16_t fabricatedSrflxPort = mFabricatedSrflxPort;
@@ -420,13 +374,11 @@ index 0eefdc2645..40f8f1499f 100644
            GetMainThreadSerialEventTarget(), __func__,
 -          [promise,
 -           window = mWindow](UniquePtr<dom::RTCStatsReportInternal>&& aReport) {
-+          [promise, window = mWindow, shouldSanitizeStats,
++          [promise, window = mWindow, shouldSanitizeStats, ipv4Opt, ipv6Opt,
 +           fabricatedSrflxPort, fabricatedSrflxStatsId, fabricatedSrflxUfrag](
 +              UniquePtr<dom::RTCStatsReportInternal>&& aReport) {
 +            // Camoufox: Sanitize IP addresses in stats before exposing to JS
 +            if (shouldSanitizeStats && aReport) {
-+              auto ipv4Opt = MaskConfig::GetString("webrtc:ipv4");
-+              auto ipv6Opt = MaskConfig::GetString("webrtc:ipv6");
 +              bool haveSrflx = false;
 +              for (auto& candStat : aReport->mIceCandidateStats) {
 +                // Only this side's candidates carry our address, and an mDNS
@@ -520,7 +472,7 @@ index 0eefdc2645..40f8f1499f 100644
    if (mForceIceTcp && std::string::npos != candidate.find(" UDP ")) {
      CSFLogWarn(LOGTAG, "Blocking local UDP candidate: %s", candidate.c_str());
      STAMP_TIMECARD(mTimeCard, "UDP Ice Candidate blocked");
-@@ -3381,10 +3491,439 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
+@@ -3381,10 +3491,425 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
      uint16_t level, const std::string& mid, const std::string& candidate,
      const std::string& ufrag) {
    STAMP_TIMECARD(mTimeCard, "Send Ice Candidate to content");
@@ -562,9 +514,23 @@ index 0eefdc2645..40f8f1499f 100644
 +  }
 +}
 +
++std::optional<std::string> PeerConnectionImpl::SpoofIP(bool aIPv6) const {
++  uint32_t userContextId = 0;
++  if (mWindow) {
++    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
++      userContextId = bc->OriginAttributesRef().mUserContextId;
++    }
++  }
++  nsAutoString stored;
++  if (aIPv6 ? WebRTCIPManager::GetIPv6(userContextId, stored)
++            : WebRTCIPManager::GetIPv4(userContextId, stored)) {
++    return std::string(NS_ConvertUTF16toUTF8(stored).get());
++  }
++  return MaskConfig::GetString(aIPv6 ? "webrtc:ipv6" : "webrtc:ipv4");
++}
++
 +bool PeerConnectionImpl::ShouldSpoofCandidateIP() const {
-+  return MaskConfig::GetString("webrtc:ipv4").has_value() ||
-+         MaskConfig::GetString("webrtc:ipv6").has_value();
++  return SpoofIP(false) || SpoofIP(true);
 +}
 +
 +// *****
@@ -573,44 +539,21 @@ index 0eefdc2645..40f8f1499f 100644
 +
 +bool isSpecialIP(const std::string& ip) {
 +  // Check if an IP should not be masked (special addresses)
-+  return (ip == "0.0.0.0" || ip == "127.0.0.1" || 
-+          ip == "::" || ip == "::1" || 
-+          ip.compare(0, 8, "169.254.") == 0 || 
++  return (ip == "0.0.0.0" || ip == "127.0.0.1" ||
++          ip == "::" || ip == "::1" ||
++          ip.compare(0, 8, "169.254.") == 0 ||
 +          ip.compare(0, 4, "fe80") == 0);
 +}
 +
-+bool isPrivateIP(const std::string& ip) {
-+  // Check if an IP is on a private network
-+  // Use colons AND no periods to avoid IPv4:port false positives
-+  bool isIPv6 = (ip.find(':') != std::string::npos) && (ip.find('.') == std::string::npos);
-+  
-+  if (isIPv6) {
-+    // check for private ipv6 (fc00::/7)
-+    return (ip.length() >= 4 && 
-+            ((ip[0] == 'f' || ip[0] == 'F') && 
-+             (ip[1] == 'c' || ip[1] == 'd' || 
-+              ip[1] == 'C' || ip[1] == 'D')));
-+  } else {
-+    // check ipv4 private ranges (RFC1918)
-+    return (ip.compare(0, 8, "192.168.") == 0 || 
-+            ip.compare(0, 3, "10.") == 0 || 
-+            (ip.compare(0, 4, "172.") == 0 && 
-+             ip.length() >= 7 && 
-+             ip[4] >= '1' && ip[4] <= '3' && 
-+             (ip[5] >= '0' && ip[5] <= '9')));
-+  }
-+}
-+
-+std::string getMaskForIP(const std::string& ip, uint32_t userContextId) {
++std::string getMaskForIP(const std::string& ip,
++                         const std::optional<std::string>& ipv4Value,
++                         const std::optional<std::string>& ipv6Value) {
 +  // Get the corresponding mask for an ip address
 +  if (isSpecialIP(ip)) {
 +    return ip;  // dont mask special IPs
 +  }
 +  // Use colons AND no periods to avoid IPv4:port false positives
 +  bool isIPv6 = (ip.find(':') != std::string::npos) && (ip.find('.') == std::string::npos);
-+
-+  auto ipv4Value = MaskConfig::GetString("webrtc:ipv4");
-+  auto ipv6Value = MaskConfig::GetString("webrtc:ipv6");
 +
 +  if (isIPv6) {
 +    if (ipv6Value) {
@@ -625,32 +568,33 @@ index 0eefdc2645..40f8f1499f 100644
 +  return ip;
 +}
 +
-+std::string replaceIPAddresses(
-+    const std::string& input, const char* pattern, uint32_t userContextId) {
++std::string replaceIPAddresses(const std::string& input, const char* pattern,
++                               const std::optional<std::string>& ipv4,
++                               const std::optional<std::string>& ipv6) {
 +  // Replace IP addresses in a output line
 +  mozilla::RustRegex regex(pattern);
 +  if (!regex.IsValid()) {
 +    return input;
 +  }
-+  
++
 +  std::string result;
 +  auto iter = regex.IterMatches(input);
 +  size_t lastEnd = 0;
-+  
++
 +  while (auto match = iter.Next()) {
 +    std::string ip = input.substr(match->start, match->end - match->start);
-+    std::string mask = getMaskForIP(ip, userContextId);
-+    
++    std::string mask = getMaskForIP(ip, ipv4, ipv6);
++
 +    if (mask != ip) {
 +      result.append(input, lastEnd, match->start - lastEnd);
 +      result.append(mask);
 +    } else {
 +      result.append(input, lastEnd, match->end - lastEnd);
 +    }
-+    
++
 +    lastEnd = match->end;
 +  }
-+  
++
 +  result.append(input, lastEnd);
 +  return result;
 +}
@@ -660,19 +604,15 @@ index 0eefdc2645..40f8f1499f 100644
 +    return candidate;
 +  }
 +
-+  uint32_t userContextId = 0;
-+  if (mWindow) {
-+    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
-+      userContextId = bc->OriginAttributesRef().mUserContextId;
-+    }
-+  }
++  const auto ipv4 = SpoofIP(false);
++  const auto ipv6 = SpoofIP(true);
 +
 +  // ipv4
 +  const char* ipv4Pattern = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
-+  std::string result = replaceIPAddresses(candidate, ipv4Pattern, userContextId);
++  std::string result = replaceIPAddresses(candidate, ipv4Pattern, ipv4, ipv6);
 +  // ipv6 - comprehensive pattern handles all formats including compressed (::1, fe80::, etc.)
 +  const char* ipv6Pattern = "(?:(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|(?:[0-9A-Fa-f]{1,4}:){1,7}:|(?:[0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|(?:[0-9A-Fa-f]{1,4}:){1,5}(?::[0-9A-Fa-f]{1,4}){1,2}|(?:[0-9A-Fa-f]{1,4}:){1,4}(?::[0-9A-Fa-f]{1,4}){1,3}|(?:[0-9A-Fa-f]{1,4}:){1,3}(?::[0-9A-Fa-f]{1,4}){1,4}|(?:[0-9A-Fa-f]{1,4}:){1,2}(?::[0-9A-Fa-f]{1,4}){1,5}|[0-9A-Fa-f]{1,4}:(?::[0-9A-Fa-f]{1,4}){1,6}|:(?::[0-9A-Fa-f]{1,4}){1,7}|::)";
-+  result = replaceIPAddresses(result, ipv6Pattern, userContextId);
++  result = replaceIPAddresses(result, ipv6Pattern, ipv4, ipv6);
 +
 +  return result;
 +}
@@ -682,12 +622,8 @@ index 0eefdc2645..40f8f1499f 100644
 +    return NS_OK;
 +  }
 +
-+  uint32_t userContextId = 0;
-+  if (mWindow) {
-+    if (BrowsingContext* bc = mWindow->GetBrowsingContext()) {
-+      userContextId = bc->OriginAttributesRef().mUserContextId;
-+    }
-+  }
++  const auto ipv4 = SpoofIP(false);
++  const auto ipv6 = SpoofIP(true);
 +
 +  // process the SDP line by line to handle candidate lines
 +  std::istringstream iss(sdp);
@@ -712,14 +648,14 @@ index 0eefdc2645..40f8f1499f 100644
 +  // process the entire SDP for any remaining IP addresses
 +  std::string processedSdp = oss.str();
 +  std::string originalSdp = processedSdp;
-+  
++
 +  // ipv4
 +  const char* ipv4Pattern = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
-+  processedSdp = replaceIPAddresses(processedSdp, ipv4Pattern, userContextId);
++  processedSdp = replaceIPAddresses(processedSdp, ipv4Pattern, ipv4, ipv6);
 +  // ipv6 - comprehensive pattern handles all formats including compressed (::1, fe80::, etc.)
 +  const char* ipv6Pattern = "(?:(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|(?:[0-9A-Fa-f]{1,4}:){1,7}:|(?:[0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|(?:[0-9A-Fa-f]{1,4}:){1,5}(?::[0-9A-Fa-f]{1,4}){1,2}|(?:[0-9A-Fa-f]{1,4}:){1,4}(?::[0-9A-Fa-f]{1,4}){1,3}|(?:[0-9A-Fa-f]{1,4}:){1,3}(?::[0-9A-Fa-f]{1,4}){1,4}|(?:[0-9A-Fa-f]{1,4}:){1,2}(?::[0-9A-Fa-f]{1,4}){1,5}|[0-9A-Fa-f]{1,4}:(?::[0-9A-Fa-f]{1,4}){1,6}|:(?::[0-9A-Fa-f]{1,4}){1,7}|::)";
-+  processedSdp = replaceIPAddresses(processedSdp, ipv6Pattern, userContextId);
-+  
++  processedSdp = replaceIPAddresses(processedSdp, ipv6Pattern, ipv4, ipv6);
++
 +  if (processedSdp != originalSdp) {
 +    sdp = processedSdp;
 +  }
@@ -787,7 +723,7 @@ index 0eefdc2645..40f8f1499f 100644
 +  return std::string();
 +}
 +
-+void PeerConnectionImpl::MaybeFabricateSrflxCandidate() {
++uint32_t PeerConnectionImpl::MaybeFabricateSrflxCandidate() {
 +  // Only what a real gather could have produced and did not: host candidates
 +  // when none reached the page, and a srflx only when the page configured an
 +  // ICE server. `new RTCPeerConnection()` with no iceServers gathers host
@@ -797,15 +733,15 @@ index 0eefdc2645..40f8f1499f 100644
 +  const bool wantSrflx =
 +      !mSurfacedPublicCandidate && !mJsConfiguration.mIceServers.IsEmpty();
 +  if (!ShouldSpoofCandidateIP() || (!wantHosts && !wantSrflx)) {
-+    return;
++    return 0;
 +  }
 +
-+  auto ipv4Opt = MaskConfig::GetString("webrtc:ipv4");
-+  auto ipv6Opt = MaskConfig::GetString("webrtc:ipv6");
++  auto ipv4Opt = SpoofIP(false);
++  auto ipv6Opt = SpoofIP(true);
 +  std::string spoofIp = ipv4Opt ? ipv4Opt.value()
 +                                : (ipv6Opt ? ipv6Opt.value() : std::string());
 +  if (spoofIp.empty()) {
-+    return;
++    return 0;
 +  }
 +
 +  // Attach to the first media section of the local description. Prefer the
@@ -814,12 +750,12 @@ index 0eefdc2645..40f8f1499f 100644
 +                               ? mPendingLocalDescription
 +                               : mCurrentLocalDescription;
 +  if (sdp.empty()) {
-+    return;
++    return 0;
 +  }
 +  std::string mid = FirstSdpLineValue(sdp, "a=mid:");
 +  std::string ufrag = FirstSdpLineValue(sdp, "a=ice-ufrag:");
 +  if (mid.empty() || ufrag.empty()) {
-+    return;
++    return 0;
 +  }
 +
 +  // One ephemeral port, shared by the UDP host candidate and the srflx, exactly
@@ -853,7 +789,7 @@ index 0eefdc2645..40f8f1499f 100644
 +    }
 +  }
 +  if (wantHosts && mdnsHost.empty()) {
-+    return;
++    return 0;
 +  }
 +
 +  // Helper: append an a=candidate line into both local-description strings,
@@ -929,7 +865,7 @@ index 0eefdc2645..40f8f1499f 100644
 +  }
 +
 +  if (!wantSrflx) {
-+    return;
++    return 0;
 +  }
 +
 +  // STEP 2: the srflx (foundation 1, spoof/proxy IP, SAME port as the UDP host),
@@ -946,6 +882,7 @@ index 0eefdc2645..40f8f1499f 100644
 +  RefPtr<PeerConnectionImpl> self(this);
 +  std::string midCopy = mid;
 +  std::string ufragCopy = ufrag;
++  const uint32_t delayMs = RandomSrflxDelayMs();
 +  GetMainThreadSerialEventTarget()->DelayedDispatch(
 +      NS_NewRunnableFunction(
 +          "PeerConnectionImpl::EmitFabricatedSrflx",
@@ -959,11 +896,12 @@ index 0eefdc2645..40f8f1499f 100644
 +                0, ObString(midCopy.c_str()), ObString(srflxCand.c_str()),
 +                ObString(ufragCopy.c_str()), rv2);
 +          }),
-+      RandomSrflxDelayMs());
++      delayMs);
++  return delayMs;
  }
  
  // Implements the steps to "change the selected candidate pair and state".
-@@ -3514,6 +4053,47 @@ void PeerConnectionImpl::IceConnectionStateChange(
+@@ -3514,6 +4039,47 @@ void PeerConnectionImpl::IceConnectionStateChange(
    // 12. If connectionIceConnectionStateChanged is true, fire an event
    //     named iceconnectionstatechange at connection.
    if (connectionIceConnectionStateChanged) {
@@ -1011,28 +949,41 @@ index 0eefdc2645..40f8f1499f 100644
      pcObserver->OnStateChange(PCObserverStateType::IceConnectionState, rv);
    }
  
-@@ -3699,6 +4279,12 @@ void PeerConnectionImpl::IceGatheringStateChange(
-   // If connectionIceGatheringStateChanged is true, fire an event named
-   // icegatheringstatechange at connection.
-   if (gatheringStateChanged) {
-+    // Camoufox: gathering just finished. If spoofing is on but ICE produced no
-+    // public candidate (TCP-proxy case), fabricate a synthetic srflx now, so it
-+    // reaches the page before the null-candidate "done" event fired below.
-+    if (mIceGatheringState == RTCIceGatheringState::Complete) {
-+      MaybeFabricateSrflxCandidate();
+@@ -3678,6 +4244,25 @@ void PeerConnectionImpl::IceGatheringStateChange(
+     return;
+   }
+ 
++  // Camoufox: if spoofing is on but ICE produced no public candidate (TCP
++  // proxy), the fabricated srflx arrives a STUN round trip from now. Stock
++  // never sends a candidate after end-of-candidates, so finish gathering only
++  // once it has. The second call finds the srflx surfaced and goes through.
++  if (state == dom::RTCIceGathererState::Complete) {
++    if (uint32_t srflxDelayMs = MaybeFabricateSrflxCandidate()) {
++      RefPtr<PeerConnectionImpl> self(this);
++      GetMainThreadSerialEventTarget()->DelayedDispatch(
++          NS_NewRunnableFunction(
++              "PeerConnectionImpl::CompleteGatheringAfterSrflx",
++              [self, aTransportId]() {
++                self->IceGatheringStateChange(
++                    aTransportId, dom::RTCIceGathererState::Complete);
++              }),
++          srflxDelayMs + 1);
++      return;
 +    }
-     // NOTE: If we're in the "complete" case, our JS code will fire a null
-     // icecandidate event after firing the icegatheringstatechange event.
-     // Fire an event named icecandidate using the RTCPeerConnectionIceEvent
-@@ -3790,11 +4376,27 @@ void PeerConnectionImpl::UpdateDefaultCandidate(
++  }
++
+   // Set transport.[[IceGathererState]] to gathering.
+   // or
+   // Set transport.[[IceGathererState]] to complete.
+@@ -3790,11 +4375,27 @@ void PeerConnectionImpl::UpdateDefaultCandidate(
      const std::string& defaultRtcpAddr, uint16_t defaultRtcpPort,
      const std::string& transportId) {
    CSFLogDebug(LOGTAG, "%s", __FUNCTION__);
-+  
++
 +  // sanitize the default candidate addresses if IP spoofing is enabled
 +  std::string sanitizedDefaultAddr = defaultAddr;
 +  std::string sanitizedDefaultRtcpAddr = defaultRtcpAddr;
-+  
++
 +  if (ShouldSpoofCandidateIP()) {
 +    // apply masking
 +    if (!defaultAddr.empty()) {
@@ -1042,7 +993,7 @@ index 0eefdc2645..40f8f1499f 100644
 +      sanitizedDefaultRtcpAddr = SpoofCandidateIP(defaultRtcpAddr);
 +    }
 +  }
-+  
++
 +  // use the sanitized addresses
    mJsepSession->UpdateDefaultCandidate(
 -      defaultAddr, defaultPort, defaultRtcpAddr, defaultRtcpPort, transportId);
@@ -1054,7 +1005,7 @@ index 0eefdc2645..40f8f1499f 100644
          transportId);
    }
  }
-@@ -4578,8 +5180,10 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
+@@ -4578,8 +5179,10 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
  
    uint64_t winId = mWindow->WindowID();
  
@@ -1068,10 +1019,10 @@ index 0eefdc2645..40f8f1499f 100644
        !MediaManager::Get()->IsActivelyCapturingOrHasAPermission(winId);
    return default_address_only;
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.h b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
-index dfda4b5b9c..7919a66eed 100644
+index dfda4b5b9c..c7f2592edf 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.h
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
-@@ -610,8 +610,17 @@ class PeerConnectionImpl final
+@@ -610,8 +610,21 @@ class PeerConnectionImpl final
    RefPtr<MediaPipeline> GetMediaPipelineForTrack(
        dom::MediaStreamTrack& aRecvTrack);
  
@@ -1079,18 +1030,22 @@ index dfda4b5b9c..7919a66eed 100644
 +  void CandidateReady(const std::string& candidate_,
                        const std::string& transportId, const std::string& ufrag);
 +
++  // The address this connection's context reports: the one it set through
++  // setWebRTCIPv4/6, else the launch-level webrtc:ipv4/ipv6.
++  std::optional<std::string> SpoofIP(bool aIPv6) const;
 +  bool ShouldSpoofCandidateIP() const;
 +  nsresult SanitizeSDPForIPLeak(std::string& sdp);
 +  std::string SpoofCandidateIP(const std::string& candidate);
 +  // Camoufox: when spoofing is on and ICE surfaced no public candidate (TCP
 +  // proxy: STUN is UDP, can't traverse, so no srflx forms), fabricate a
 +  // synthetic srflx carrying the spoof IP into the live candidate stream and
-+  // the local SDP so WebRTC reports the proxy IP instead of n/a.
-+  void MaybeFabricateSrflxCandidate();
++  // the local SDP so WebRTC reports the proxy IP instead of n/a. Returns the
++  // delay in ms before a fabricated srflx reaches the page, 0 if none.
++  uint32_t MaybeFabricateSrflxCandidate();
    void SendLocalIceCandidateToContent(uint16_t level, const std::string& mid,
                                        const std::string& candidate,
                                        const std::string& ufrag);
-@@ -709,6 +718,24 @@ class PeerConnectionImpl final
+@@ -709,6 +722,24 @@ class PeerConnectionImpl final
    unsigned int mDataChannelsClosed = 0;
  
    bool mForceIceTcp;

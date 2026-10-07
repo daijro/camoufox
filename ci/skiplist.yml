@@ -153,8 +153,7 @@ skip:
   # one bit of page JS with no permission and nothing to wait for, so Camoufox
   # keeps Firefox's default and lifts it only for the driver's own evaluate
   # (nsIDocShell.driverPopupsAllowed; browser/patches/popup-blocker-parity.patch,
-  # browser/tests/playwright/patches/popup-blocker-parity.py, sundial
-  # ls-popup-blocker).
+  # browser/tests/playwright/patches/popup-blocker-parity.py).
   #
   # page.evaluate(() => window.open(...)) therefore still works, which is what
   # nearly every popup test in the suite does. This one is the exception.

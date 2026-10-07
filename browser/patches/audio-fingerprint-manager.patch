@@ -1,9 +1,9 @@
 diff --git a/dom/base/AudioFingerprintManager.cpp b/dom/base/AudioFingerprintManager.cpp
 new file mode 100644
-index 0000000000..22a7d41b3c
+index 0000000000..e2f26859ae
 --- /dev/null
 +++ b/dom/base/AudioFingerprintManager.cpp
-@@ -0,0 +1,107 @@
+@@ -0,0 +1,100 @@
 +#include "AudioFingerprintManager.h"
 +#include "nsTHashMap.h"  // Must come before RoverfoxStorageManager.h for template defs
 +#include "nsHashKeys.h"  // For nsStringHashKey
@@ -47,11 +47,22 @@ index 0000000000..22a7d41b3c
 +  if (RoverfoxStorageManager::GetUint(key, seed) && seed != 0) {
 +    return seed;
 +  }
-+  // Fallback to CAMOU_CONFIG for Workers in separate processes
++  // A context that set no seed of its own uses the launch-level one.
 +  if (auto val = MaskConfig::GetUint32("audio:seed")) {
 +    return val.value();
 +  }
 +  return 0;
++}
++
++/* static */ uint32_t
++AudioFingerprintManager::GetSeed(nsPIDOMWindowInner* aWindow) {
++  uint32_t userContextId = 0;
++  if (aWindow) {
++    if (BrowsingContext* bc = aWindow->GetBrowsingContext()) {
++      userContextId = bc->OriginAttributesRef().mUserContextId;
++    }
++  }
++  return GetSeed(userContextId);
 +}
 +
 +/* static */ void
@@ -61,7 +72,6 @@ index 0000000000..22a7d41b3c
 +  }
 +  // LCG for deterministic transformation - same seed always produces same result
 +  // Uses 0.8% variance (range [0.996, 1.004]) with non-linear polynomial component
-+  // This is more robust than Brave's 0.1-0.2% variance which was bypassed
 +  uint32_t state = seed;
 +  for (uint32_t i = 0; i < length; ++i) {
 +    state = (state * 1664525u + 1013904223u);
@@ -72,23 +82,6 @@ index 0000000000..22a7d41b3c
 +    float adjustment = (normalized * normalized - 0.5f) * 0.002f;
 +    float multiplier = base + adjustment;
 +    data[i] *= multiplier;
-+  }
-+}
-+
-+/* static */ void
-+AudioFingerprintManager::ApplyTransformationToBytes(uint8_t* data, uint32_t length, uint32_t seed) {
-+  if (seed == 0 || length == 0 || !data) {
-+    return;
-+  }
-+  // For byte data, apply small integer adjustments based on seed
-+  uint32_t state = seed;
-+  for (uint32_t i = 0; i < length; ++i) {
-+    state = (state * 1664525u + 1013904223u);
-+    // Small adjustment: -1, 0, or +1
-+    int32_t adjustment = static_cast<int32_t>(state % 3) - 1;
-+    int32_t newValue = static_cast<int32_t>(data[i]) + adjustment;
-+    // Clamp to valid byte range
-+    data[i] = static_cast<uint8_t>(std::max(0, std::min(255, newValue)));
 +  }
 +}
 +
@@ -113,10 +106,10 @@ index 0000000000..22a7d41b3c
 +}  // namespace mozilla
 diff --git a/dom/base/AudioFingerprintManager.h b/dom/base/AudioFingerprintManager.h
 new file mode 100644
-index 0000000000..6848990431
+index 0000000000..8e9fd4f994
 --- /dev/null
 +++ b/dom/base/AudioFingerprintManager.h
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,33 @@
 +#ifndef mozilla_dom_AudioFingerprintManager_h
 +#define mozilla_dom_AudioFingerprintManager_h
 +
@@ -125,6 +118,7 @@ index 0000000000..6848990431
 +// Forward declarations for SpiderMonkey types (needed when compiled separately)
 +struct JSContext;
 +class JSObject;
++class nsPIDOMWindowInner;
 +
 +namespace mozilla {
 +namespace dom {
@@ -133,9 +127,10 @@ index 0000000000..6848990431
 + public:
 +  static void SetSeed(uint32_t aUserContextId, uint32_t aSeed);
 +  static uint32_t GetSeed(uint32_t aUserContextId);
++  // The seed for the context a window belongs to.
++  static uint32_t GetSeed(nsPIDOMWindowInner* aWindow);
 +
 +  static void ApplyTransformation(float* data, uint32_t length, uint32_t seed);
-+  static void ApplyTransformationToBytes(uint8_t* data, uint32_t length, uint32_t seed);
 +
 +  static void DisableFunction(uint32_t userContextId);
 +  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
@@ -173,10 +168,10 @@ index ab6d76a796..e8f35ff5c4 100644
      EXPORTS.mozilla.dom += [
          "FuzzingFunctions.h",
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 64768a46a9..fb3a1f640d 100644
+index f6307312b3..4bc8548e31 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -88,6 +88,7 @@
+@@ -87,6 +87,7 @@
  #include "mozilla/UniquePtr.h"
  #include "mozilla/Utf16.h"
  #include "mozilla/dom/AudioContext.h"
@@ -184,11 +179,10 @@ index 64768a46a9..fb3a1f640d 100644
  #include "mozilla/dom/AutoEntryScript.h"
  #include "mozilla/dom/BarProps.h"
  #include "mozilla/dom/BindingDeclarations.h"
-@@ -7779,6 +7780,29 @@ void nsGlobalWindowInner::UpdateSharedWorkerTimezoneOverride(
+@@ -7776,6 +7777,28 @@ void nsGlobalWindowInner::UpdateSharedWorkerTimezoneOverride(
    }
  }
  
-+
 +void nsGlobalWindowInner::SetAudioFingerprintSeed(uint32_t seed,
 +                                                    ErrorResult& aRv) {
 +  uint32_t userContextId = 0;
@@ -229,151 +223,136 @@ index a1162b29e3..eec89694f8 100644
  
    mozilla::dom::IntlUtils* GetIntlUtils(mozilla::ErrorResult& aRv);
 diff --git a/dom/media/webaudio/AnalyserNode.cpp b/dom/media/webaudio/AnalyserNode.cpp
-index 3c80514a1d..befe6ee2bc 100644
+index 3c80514a1d..28374e9780 100644
 --- a/dom/media/webaudio/AnalyserNode.cpp
 +++ b/dom/media/webaudio/AnalyserNode.cpp
-@@ -11,6 +11,11 @@
+@@ -11,6 +11,9 @@
  #include "mozilla/PodOperations.h"
  #include "mozilla/dom/AnalyserNodeBinding.h"
  #include "nsMathUtils.h"
 +#include "AudioFingerprintManager.h"
 +#include "nsPIDOMWindow.h"
 +#include "nsIGlobalObject.h"
-+#include "mozilla/dom/BrowsingContext.h"
-+#include "mozilla/dom/WorkerPrivate.h"
  
  namespace mozilla {
  
-@@ -214,6 +219,24 @@ void AnalyserNode::GetFloatFrequencyData(const Float32Array& aArray) {
+@@ -208,18 +211,41 @@ void AnalyserNode::SetSmoothingTimeConstant(double aValue, ErrorResult& aRv) {
+   mSmoothingTimeConstant = aValue;
+ }
+ 
++// Camoufox: the window whose context's audio noise applies.
++static nsPIDOMWindowInner* OwnerWindow(AudioContext* aContext) {
++  nsIGlobalObject* global = aContext ? aContext->GetParentObject() : nullptr;
++  return global ? global->GetAsInnerWindow() : nullptr;
++}
++
++// Camoufox: the frequency data with the context's audio noise, as a copy.
++// mOutputBuffer is the smoothing state the next FFTAnalysis() blends into, so
++// noising it in place compounded the noise with every read.
++const float* AnalyserNode::NoisedOutput(AlignedTArray<float>& aScratch) const {
++  uint32_t seed =
++      AudioFingerprintManager::GetSeed(OwnerWindow(GetParentObject()));
++  if (!seed || !aScratch.SetLength(mOutputBuffer.Length(), fallible)) {
++    return mOutputBuffer.Elements();
++  }
++  PodCopy(aScratch.Elements(), mOutputBuffer.Elements(), mOutputBuffer.Length());
++  AudioFingerprintManager::ApplyTransformation(aScratch.Elements(),
++                                               aScratch.Length(), seed);
++  return aScratch.Elements();
++}
++
+ void AnalyserNode::GetFloatFrequencyData(const Float32Array& aArray) {
+   if (!FFTAnalysis()) {
+     // Might fail to allocate memory
      return;
    }
  
-+  // Apply audio fingerprint transformation to frequency data
-+  {
-+    uint32_t userContextId = 0;
-+    AudioContext* context = GetParentObject();
-+    nsIGlobalObject* globalObj = context ? context->GetParentObject() : nullptr;
-+    nsPIDOMWindowInner* global = globalObj ? globalObj->GetAsInnerWindow() : nullptr;
-+    if (global) {
-+      if (BrowsingContext* bc = global->GetBrowsingContext()) {
-+        userContextId = bc->OriginAttributesRef().mUserContextId;
-+      }
-+    } else if (WorkerPrivate* wp = GetCurrentThreadWorkerPrivate()) {
-+      userContextId = wp->GetOriginAttributes().mUserContextId;
-+    }
-+    uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
-+    if (seed != 0) {
-+      AudioFingerprintManager::ApplyTransformation(mOutputBuffer.Elements(), mOutputBuffer.Length(), seed);
-+    }
-+  }
++  AlignedTArray<float> noised;
++  const float* output = NoisedOutput(noised);
    aArray.ProcessData([&](const Span<float>& aData, JS::AutoCheckCannotGC&&) {
      size_t length = std::min(size_t(aData.Length()), mOutputBuffer.Length());
  
-@@ -230,6 +253,24 @@ void AnalyserNode::GetByteFrequencyData(const Uint8Array& aArray) {
+     for (size_t i = 0; i < length; ++i) {
+       aData[i] = WebAudioUtils::ConvertLinearToDecibels(
+-          mOutputBuffer[i], -std::numeric_limits<float>::infinity());
++          output[i], -std::numeric_limits<float>::infinity());
+     }
+   });
+ }
+@@ -230,14 +256,16 @@ void AnalyserNode::GetByteFrequencyData(const Uint8Array& aArray) {
      return;
    }
  
-+  // Apply audio fingerprint transformation to frequency data
-+  {
-+    uint32_t userContextId = 0;
-+    AudioContext* context = GetParentObject();
-+    nsIGlobalObject* globalObj = context ? context->GetParentObject() : nullptr;
-+    nsPIDOMWindowInner* global = globalObj ? globalObj->GetAsInnerWindow() : nullptr;
-+    if (global) {
-+      if (BrowsingContext* bc = global->GetBrowsingContext()) {
-+        userContextId = bc->OriginAttributesRef().mUserContextId;
-+      }
-+    } else if (WorkerPrivate* wp = GetCurrentThreadWorkerPrivate()) {
-+      userContextId = wp->GetOriginAttributes().mUserContextId;
-+    }
-+    uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
-+    if (seed != 0) {
-+      AudioFingerprintManager::ApplyTransformation(mOutputBuffer.Elements(), mOutputBuffer.Length(), seed);
-+    }
-+  }
++  AlignedTArray<float> noised;
++  const float* output = NoisedOutput(noised);
    const double rangeScaleFactor = 1.0 / (mMaxDecibels - mMinDecibels);
  
    aArray.ProcessData([&](const Span<uint8_t>& aData, JS::AutoCheckCannotGC&&) {
-@@ -253,6 +294,24 @@ void AnalyserNode::GetFloatTimeDomainData(const Float32Array& aArray) {
+     size_t length = std::min(size_t(aData.Length()), mOutputBuffer.Length());
+ 
+     for (size_t i = 0; i < length; ++i) {
+-      const double decibels = WebAudioUtils::ConvertLinearToDecibels(
+-          mOutputBuffer[i], mMinDecibels);
++      const double decibels =
++          WebAudioUtils::ConvertLinearToDecibels(output[i], mMinDecibels);
+       // scale down the value to the range of [0, UCHAR_MAX]
+       const double scaled = std::max(
+           0.0,
+@@ -253,6 +281,10 @@ void AnalyserNode::GetFloatTimeDomainData(const Float32Array& aArray) {
      size_t length = std::min(aData.Length(), size_t(FftSize()));
  
      GetTimeDomainData(aData.Elements(), length);
-+    // Apply audio fingerprint transformation to time domain data
-+    {
-+      uint32_t userContextId = 0;
-+      AudioContext* context = GetParentObject();
-+      nsIGlobalObject* globalObj = context ? context->GetParentObject() : nullptr;
-+      nsPIDOMWindowInner* global = globalObj ? globalObj->GetAsInnerWindow() : nullptr;
-+      if (global) {
-+        if (BrowsingContext* bc = global->GetBrowsingContext()) {
-+          userContextId = bc->OriginAttributesRef().mUserContextId;
-+        }
-+      } else if (WorkerPrivate* wp = GetCurrentThreadWorkerPrivate()) {
-+        userContextId = wp->GetOriginAttributes().mUserContextId;
-+      }
-+      uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
-+      if (seed != 0) {
-+        AudioFingerprintManager::ApplyTransformation(aData.Elements(), length, seed);
-+      }
++    if (uint32_t seed =
++            AudioFingerprintManager::GetSeed(OwnerWindow(GetParentObject()))) {
++      AudioFingerprintManager::ApplyTransformation(aData.Elements(), length, seed);
 +    }
    });
  }
  
-@@ -267,6 +326,24 @@ void AnalyserNode::GetByteTimeDomainData(const Uint8Array& aArray) {
+@@ -267,6 +299,10 @@ void AnalyserNode::GetByteTimeDomainData(const Uint8Array& aArray) {
  
      GetTimeDomainData(tmpBuffer.Elements(), length);
  
-+    // Apply audio fingerprint transformation before byte conversion
-+    {
-+      uint32_t userContextId = 0;
-+      AudioContext* context = GetParentObject();
-+      nsIGlobalObject* globalObj = context ? context->GetParentObject() : nullptr;
-+      nsPIDOMWindowInner* global = globalObj ? globalObj->GetAsInnerWindow() : nullptr;
-+      if (global) {
-+        if (BrowsingContext* bc = global->GetBrowsingContext()) {
-+          userContextId = bc->OriginAttributesRef().mUserContextId;
-+        }
-+      } else if (WorkerPrivate* wp = GetCurrentThreadWorkerPrivate()) {
-+        userContextId = wp->GetOriginAttributes().mUserContextId;
-+      }
-+      uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
-+      if (seed != 0) {
-+        AudioFingerprintManager::ApplyTransformation(tmpBuffer.Elements(), length, seed);
-+      }
++    if (uint32_t seed =
++            AudioFingerprintManager::GetSeed(OwnerWindow(GetParentObject()))) {
++      AudioFingerprintManager::ApplyTransformation(tmpBuffer.Elements(), length, seed);
 +    }
      unsigned char* buffer = aData.Elements();
      for (size_t i = 0; i < length; ++i) {
        const float value = tmpBuffer[i];
+diff --git a/dom/media/webaudio/AnalyserNode.h b/dom/media/webaudio/AnalyserNode.h
+index 93aef9ba18..e60041ac7b 100644
+--- a/dom/media/webaudio/AnalyserNode.h
++++ b/dom/media/webaudio/AnalyserNode.h
+@@ -62,6 +62,7 @@ class AnalyserNode final : public AudioNode {
+   bool FFTAnalysis();
+   void ApplyBlackmanWindow(float* aBuffer, uint32_t aSize);
+   void GetTimeDomainData(float* aData, size_t aLength);
++  const float* NoisedOutput(AlignedTArray<float>& aScratch) const;
+ 
+  private:
+   explicit AnalyserNode(AudioContext* aContext);
 diff --git a/dom/media/webaudio/AudioBuffer.cpp b/dom/media/webaudio/AudioBuffer.cpp
-index 74fe4e6470..2416f63fa1 100644
+index 74fe4e6470..dac1a914e8 100644
 --- a/dom/media/webaudio/AudioBuffer.cpp
 +++ b/dom/media/webaudio/AudioBuffer.cpp
-@@ -19,6 +19,9 @@
+@@ -19,6 +19,8 @@
  #include "mozilla/dom/AudioBufferBinding.h"
  #include "nsPrintfCString.h"
  #include "nsTHashSet.h"
 +#include "AudioFingerprintManager.h"
 +#include "nsPIDOMWindow.h"
-+#include "mozilla/dom/BrowsingContext.h"
  
  namespace mozilla::dom {
  
-@@ -301,6 +304,27 @@ bool AudioBuffer::RestoreJSChannelData(JSContext* aJSContext) {
+@@ -301,6 +303,19 @@ bool AudioBuffer::RestoreJSChannelData(JSContext* aJSContext) {
        MOZ_ASSERT(!isShared);  // Was created as unshared above
        CopyChannelDataToFloat(mSharedChannels, i, 0, jsData, Length());
      }
 +
 +    // Apply audio fingerprint transformation if a seed is set for this context
 +    {
-+      uint32_t userContextId = 0;
-+      nsPIDOMWindowInner* global = GetParentObject();
-+      if (global) {
-+        if (BrowsingContext* bc = global->GetBrowsingContext()) {
-+          userContextId = bc->OriginAttributesRef().mUserContextId;
-+        }
-+      }
-+      // Seed lookup runs even when global is null (workers get ucid=0 fallback)
-+      uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
++      uint32_t seed = AudioFingerprintManager::GetSeed(GetParentObject());
 +      if (seed != 0) {
 +        JS::AutoCheckCannotGC nogc;
 +        bool isShared;
@@ -386,7 +365,7 @@ index 74fe4e6470..2416f63fa1 100644
      mJSChannels[i] = array;
    }
  
-@@ -352,6 +376,24 @@ void AudioBuffer::CopyFromChannel(const Float32Array& aDestination,
+@@ -352,6 +367,16 @@ void AudioBuffer::CopyFromChannel(const Float32Array& aDestination,
                                   JS::AutoCheckCannotGC&&) {
        CopyChannelDataToFloat(mSharedChannels, aChannelNumber, aBufferOffset,
                               aData.Elements(), calculateCount(aData.Length()));
@@ -394,15 +373,7 @@ index 74fe4e6470..2416f63fa1 100644
 +      // Path 1 (mJSChannels) already has transformed data from
 +      // RestoreJSChannelData, so only transform here in Path 2.
 +      {
-+        uint32_t userContextId = 0;
-+        nsPIDOMWindowInner* global = GetParentObject();
-+        if (global) {
-+          if (BrowsingContext* bc = global->GetBrowsingContext()) {
-+            userContextId = bc->OriginAttributesRef().mUserContextId;
-+          }
-+        }
-+        // Seed lookup runs even when global is null (workers get ucid=0 fallback)
-+        uint32_t seed = AudioFingerprintManager::GetSeed(userContextId);
++        uint32_t seed = AudioFingerprintManager::GetSeed(GetParentObject());
 +        if (seed != 0) {
 +          AudioFingerprintManager::ApplyTransformation(
 +              aData.Elements(), calculateCount(aData.Length()), seed);

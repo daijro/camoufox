@@ -12,6 +12,7 @@ from camoufox import webgl
 from camoufox.fingerprints import gpu_screen_is_plausible, is_software_renderer
 from camoufox.webgl import sample_webgl_for_screen, webgl_for_gpu
 
+PROPERTIES = Path(__file__).resolve().parents[2] / "browser" / "settings" / "properties.json"
 SEEDS = range(300)
 OSES = ("win", "mac", "lin")
 
@@ -39,8 +40,15 @@ def test_converter_reproduces_the_recorded_device():
     this GPU. fpgen records the same device, so everything the browser reads
     must come out identical: parameters are compared where the old row had a
     value, less the UNMASKED_* strings, which the browser takes from
-    webGl:vendor/renderer rather than the table."""
+    webGl:vendor/renderer rather than the table. Keys since marked removed
+    (contextAttributes) are no longer sent."""
+    removed = {
+        entry["property"]
+        for entry in json.loads(PROPERTIES.read_text())
+        if "removed" in entry
+    }
     old = json.loads((Path(__file__).parent / "data" / "webgl-gtx980-linux.json").read_text())
+    old = {key: value for key, value in old.items() if key not in removed}
     new = webgl_for_gpu("lin", *_GTX_980_LINUX, seed=0)
 
     assert new.keys() == old.keys()

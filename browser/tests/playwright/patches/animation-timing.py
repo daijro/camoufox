@@ -8,8 +8,8 @@ where stock Firefox reports 1000, and a CSS transition reported 0 as well. It is
 now an opt-in.
 
 What PASS means:
-    * by default, a 1000ms Web Animation and a 500ms CSS transition report
-      their real durations;
+    * by default, and with config {"instantAnimations": False}, a 1000ms Web
+      Animation and a 500ms CSS transition report their real durations;
     * with config {"instantAnimations": True}, both report 0.
 
     python browser/tests/playwright/patches/animation-timing.py
@@ -50,9 +50,11 @@ async def probe(config):
 
 async def main() -> int:
     passed = True
-    for config, expected in (({}, {"animation": 1000, "transition": [500]}),
+    stock = {"animation": 1000, "transition": [500]}
+    for config, expected in (({}, stock),
+                             ({"instantAnimations": False}, stock),
                              ({"instantAnimations": True}, {"animation": 0, "transition": [0]})):
-        label = "instantAnimations" if config else "default"
+        label = f"instantAnimations={config['instantAnimations']}" if config else "default"
         got = await probe(dict(config))  # the launcher fills in the dict it is given
         if got == expected:
             print(f"  PASS {label}: {got}")

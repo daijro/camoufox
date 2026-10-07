@@ -34,7 +34,9 @@ answer for the spoofed OS:
                      (matches CreepJS GeckoFonts entry "-apple-system" -> "Mac")
   - "Segoe UI"       when navigator.platform starts with "Win"
                      (matches CreepJS GeckoFonts entry "Segoe UI" -> "Windows")
-  - (falls through)  otherwise (Linux / iPhone / unspoofed)
+  - "Ubuntu" 14.6667px when navigator.platform starts with "Linux"
+                     (a stock Ubuntu desktop's GTK interface font, "Ubuntu 11")
+  - (falls through)  otherwise (iPhone / unspoofed)
 
 Chrome documents are excluded from the spoof branch and keep the host's real
 system font. They are not reachable by the page, and handing the browser's own

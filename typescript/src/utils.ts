@@ -84,8 +84,7 @@ export type TargetOS = "mac" | "win" | "lin";
 type EnvVars = Record<string, string | number | boolean>;
 
 // Camoufox preferences to cache previous pages and requests
-const CACHE_PREFS: Record<string, any> = {
-	"browser.sessionhistory.max_entries": 10,
+export const CACHE_PREFS: Record<string, any> = {
 	"browser.sessionhistory.max_total_viewers": -1,
 	"browser.cache.memory.enable": true,
 	"browser.cache.disk_cache_ssl": true,

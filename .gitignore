@@ -57,6 +57,7 @@ closedsrc
 
 *.pem
 .DS_Store
+.claude
 
 # Build outputs
 *.so
@@ -67,7 +68,6 @@ closedsrc
 /browser/application.ini
 /browser/platform.ini
 /browser/camoufox.cfg
-/browser/chrome.css
 /browser/properties.json
 /browser/removed-files
 /browser/nul

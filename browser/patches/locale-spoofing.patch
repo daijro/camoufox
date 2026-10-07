@@ -1,30 +1,3 @@
-diff --git a/browser/base/content/browser-init.js b/browser/base/content/browser-init.js
-index 28f294db75..50426aafca 100644
---- a/browser/base/content/browser-init.js
-+++ b/browser/base/content/browser-init.js
-@@ -237,6 +237,22 @@ var gBrowserInit = {
-     // correctly.
-     window.TabBarVisibility.update();
- 
-+    // If a list of languages were passed, use them.
-+    let camouLocale = ChromeUtils.camouGetString("locale:all")
-+      || ChromeUtils.camouGetString("navigator.language");
-+    // If locale:all was NOT passed, but locale:language and locale:region was,
-+    // fall back to it instead.
-+    if (!camouLocale) {
-+      let language = ChromeUtils.camouGetString("locale:language");
-+      let region = ChromeUtils.camouGetString("locale:region");
-+      if (language && region) {
-+        camouLocale = language + "-" + region + ", " + language;
-+      }
-+    }
-+    // Set the locale if it was found.
-+    if (camouLocale)
-+      Services.prefs.setCharPref("intl.accept_languages", camouLocale);
-+
-     if (
-       Services.prefs.getBoolPref(
-         "toolkit.legacyUserProfileCustomizations.windowIcon",
 diff --git a/intl/components/moz.build b/intl/components/moz.build
 index a3319c7a59..0a86aec7d2 100644
 --- a/intl/components/moz.build
@@ -76,10 +49,10 @@ index 718d8814d8..7dc23ab003 100644
  bool IsStructurallyValidLanguageTag(Span<const CharT> aLanguage) {
    // unicode_language_subtag = alpha{2,3} | alpha{5,8};
 diff --git a/intl/components/src/Locale.h b/intl/components/src/Locale.h
-index b7314ec5f6..3a07b97cfa 100644
+index c3519ab861..ffcd4fb37d 100644
 --- a/intl/components/src/Locale.h
 +++ b/intl/components/src/Locale.h
-@@ -518,7 +518,15 @@ class MOZ_STACK_CLASS Locale final {
+@@ -514,7 +514,15 @@ class MOZ_STACK_CLASS Locale final {
     *
     * Also see <https://unicode-org.github.io/icu/userguide/locale>.
     */

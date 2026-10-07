@@ -33,10 +33,9 @@ either. Reaching that case would mean making this a synced BrowsingContext field
 instead of a docShell member. page.click() is unaffected: it synthesizes a real
 click, which grants a real activation.
 
-Guards: tests/patches/popup-blocker-parity.py (both directions, plus that no
-user activation is granted), sundial ls-popup-blocker (a gesture-less
-window.open must be blocked), and the upstream suite's popup tests
-(page.evaluate(window.open) must keep working).
+Guards: browser/tests/playwright/patches/popup-blocker-parity.py (both
+directions, plus that no user activation is granted), and the upstream suite's
+popup tests (page.evaluate(window.open) must keep working).
 
 diff --git a/docshell/base/nsIDocShell.idl b/docshell/base/nsIDocShell.idl
 --- a/docshell/base/nsIDocShell.idl

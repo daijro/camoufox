@@ -1,9 +1,9 @@
 diff --git a/dom/base/FontListManager.cpp b/dom/base/FontListManager.cpp
 new file mode 100644
-index 0000000000..3134b8e816
+index 0000000000..ce68062033
 --- /dev/null
 +++ b/dom/base/FontListManager.cpp
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,110 @@
 +/* Camoufox: Per-context font list manager */
 +#include "FontListManager.h"
 +
@@ -16,6 +16,9 @@ index 0000000000..3134b8e816
 +namespace mozilla {
 +namespace dom {
 +
++// The list itself lives in RoverfoxStorageManager, which every process reads:
++// a context's documents land in any content process, and only the first one
++// calls the setter. This is each process's parsed copy.
 +static Mutex sFontListMutex("FontListManager");
 +static nsTHashMap<nsUint32HashKey, nsTHashSet<nsCString>> sFontLists;
 +static thread_local uint32_t sCurrentContextId = 0;
@@ -26,7 +29,13 @@ index 0000000000..3134b8e816
 +  return key;
 +}
 +
-+void FontListManager::SetFontList(uint32_t aId, const nsAString& aFontList) {
++static nsString FontListKey(uint32_t aId) {
++  nsAutoString key;
++  key.AppendPrintf("fontlist_%u", aId);
++  return key;
++}
++
++static nsTHashSet<nsCString> ParseFontList(const nsAString& aFontList) {
 +  nsTHashSet<nsCString> fontSet;
 +  nsAutoString remaining(aFontList);
 +  while (!remaining.IsEmpty()) {
@@ -46,21 +55,36 @@ index 0000000000..3134b8e816
 +    ToLowerCase(utf8);
 +    fontSet.Insert(utf8);
 +  }
-+  MutexAutoLock lock(sFontListMutex);
-+  sFontLists.InsertOrUpdate(aId, std::move(fontSet));
++  return fontSet;
 +}
 +
-+bool FontListManager::HasFontList(uint32_t aId) {
++void FontListManager::SetFontList(uint32_t aId, const nsAString& aFontList) {
++  RoverfoxStorageManager::PutString(FontListKey(aId), aFontList);
 +  MutexAutoLock lock(sFontListMutex);
-+  return sFontLists.Contains(aId);
++  sFontLists.InsertOrUpdate(aId, ParseFontList(aFontList));
 +}
++
++// Parses the context's list into this process's copy the first time it is
++// needed. An absent list is not remembered: another process may set it later.
++static bool EnsureFontList(uint32_t aId) {
++  {
++    MutexAutoLock lock(sFontListMutex);
++    if (sFontLists.Contains(aId)) return true;
++  }
++  nsAutoString list;
++  if (!RoverfoxStorageManager::GetString(FontListKey(aId), list)) return false;
++  MutexAutoLock lock(sFontListMutex);
++  sFontLists.InsertOrUpdate(aId, ParseFontList(list));
++  return true;
++}
++
++bool FontListManager::HasFontList(uint32_t aId) { return EnsureFontList(aId); }
 +
 +bool FontListManager::IsFontAllowed(uint32_t aId,
 +                                     const nsACString& aFontName) {
++  if (!EnsureFontList(aId)) return true;
 +  MutexAutoLock lock(sFontListMutex);
-+  auto entry = sFontLists.Lookup(aId);
-+  if (!entry) return true;
-+  return entry.Data().Contains(aFontName);
++  return sFontLists.Lookup(aId).Data().Contains(aFontName);
 +}
 +
 +void FontListManager::SetCurrentContext(uint32_t aId) {
@@ -160,7 +184,7 @@ index 88cea77d60..fa277ae122 100644
  # CharacterDataBuffer.cpp
  if CONFIG["INTEL_ARCHITECTURE"]:
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index bc65e5256b..7151bc0ba7 100644
+index 2bea4b618a..f5dfed61a5 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -21,6 +21,7 @@
@@ -171,7 +195,7 @@ index bc65e5256b..7151bc0ba7 100644
  #include "Units.h"
  #include "VRManagerChild.h"
  #include "WindowDestroyedEvent.h"
-@@ -7818,6 +7819,25 @@ void nsGlobalWindowInner::SetAudioFingerprintSeed(uint32_t seed,
+@@ -7814,6 +7815,25 @@ void nsGlobalWindowInner::SetAudioFingerprintSeed(uint32_t seed,
    }
  }
  
@@ -258,10 +282,10 @@ index 039316b8d6..42b2b42650 100644
    FontVisibility visibilityLevel =
        aFontVisibilityProvider ? aFontVisibilityProvider->GetFontVisibility()
 diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
-index 3ff9d5ec71..bcb2e5ae0c 100644
+index bb2894d68c..b553a4b00c 100644
 --- a/gfx/thebes/gfxTextRun.cpp
 +++ b/gfx/thebes/gfxTextRun.cpp
-@@ -34,6 +34,7 @@
+@@ -33,6 +33,7 @@
  #include "nsStyleConsts.h"
  #include "nsStyleUtil.h"
  #include "nsUnicodeProperties.h"

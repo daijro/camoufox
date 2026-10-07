@@ -131,7 +131,6 @@ function contextConfig(
 ): Record<string, any> {
 	const blocked = filteredExtensions(targetOs);
 	return {
-		[`${prefix}:contextAttributes`]: webgl.contextAttributes,
 		[`${prefix}:supportedExtensions`]: (
 			webgl.supportedExtensions as string[]
 		).filter((extension) => !blocked.has(extension)),

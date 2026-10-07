@@ -12,13 +12,13 @@ Self-removal only covered the setters that were actually called:
   * a fingerprint that leaves a value alone never calls that value's setter, so
     it stayed on window -- setTimezone (no timezone configured) and
     setWebRTCIPv6 (never emitted at all) leaked on every single context;
-  * a launch that registers no init script at all leaked all fifteen. That is
+  * a launch that registers no init script at all leaked all of them. That is
     `Camoufox()` followed by `browser.new_page()`, the documented default --
     there, fingerprints come from CAMOU_CONFIG in C++ and nothing ever touches
     a setter, so nothing ever self-destructed.
 
-Fifteen window properties that no other Firefox build has is a sharper
-fingerprint than any of the values they were hiding, and page script could not
+Window properties that no other Firefox build has are a sharper fingerprint
+than any of the values they were hiding, and page script could not
 only see them but call them: `window.setNavigatorHardwareConcurrency(999)` from
 a page moved navigator.hardwareConcurrency to 999.
 
@@ -33,7 +33,7 @@ Run against a specific build:
     CAMOUFOX_EXECUTABLE_PATH=/path/to/camoufox-bin python browser/tests/playwright/patches/fingerprint-setter-seal.py
 
 What PASS means:
-    * none of the fifteen setters is visible to page script, in the default
+    * none of the setters is visible to page script, in the default
       launch path or through NewContext();
     * none of them is callable either -- a name can be missing from `for...in`
       and still work when called;
@@ -132,7 +132,7 @@ def main():
         with Camoufox(**launch) as browser:
             # The documented default: no init script anywhere, fingerprints come
             # from CAMOU_CONFIG in C++. Nothing ever calls a setter here, so this
-            # is the launch that used to leak all fifteen.
+            # is the launch that used to leak all of them.
             results.append(("default launch", probe(browser.new_context(), url), None))
 
             # Two contexts with deliberately different identities. The seal is

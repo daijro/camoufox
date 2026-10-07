@@ -56,8 +56,6 @@
   { "property": "webGl:shaderPrecisionFormats:blockIfNotDefined", "type": "bool" },
   { "property": "webGl2:shaderPrecisionFormats", "type": "dict" },
   { "property": "webGl2:shaderPrecisionFormats:blockIfNotDefined", "type": "bool" },
-  { "property": "webGl:contextAttributes", "type": "dict" },
-  { "property": "webGl2:contextAttributes", "type": "dict" },
   { "property": "voices", "type": "array" },
   { "property": "voices:blockIfNotDefined", "type": "bool" },
   { "property": "mediaDevices:micros", "type": "uint" },
@@ -76,7 +74,6 @@
   { "property": "allowAddonNewtab", "type": "bool" },
   { "property": "forceScopeAccess", "type": "bool" },
 
-  { "property": "disableTheming", "type": "bool" },
   { "property": "instantAnimations", "type": "bool" },
   { "property": "addons", "type": "array" },
   { "property": "certificatePaths", "type": "array" },
@@ -131,5 +128,8 @@
   { "property": "window.scrollMaxX", "type": "int", "removed": "156.0.1-beta.32" },
   { "property": "window.scrollMaxY", "type": "int", "removed": "156.0.1-beta.32" },
   { "property": "window.scrollMinX", "type": "int", "removed": "156.0.1-beta.32" },
-  { "property": "window.scrollMinY", "type": "int", "removed": "156.0.1-beta.32" }
+  { "property": "window.scrollMinY", "type": "int", "removed": "156.0.1-beta.32" },
+  { "property": "disableTheming", "type": "bool", "removed": "156.0.1-beta.37" },
+  { "property": "webGl:contextAttributes", "type": "dict", "removed": "156.0.1-beta.37" },
+  { "property": "webGl2:contextAttributes", "type": "dict", "removed": "156.0.1-beta.37" }
 ]

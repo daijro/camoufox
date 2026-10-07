@@ -1,9 +1,9 @@
 diff --git a/browser/installer/package-manifest.in b/browser/installer/package-manifest.in
-index 36eafe3506..1787249b72 100644
+index 8aa34cf7cc..4112ed9808 100644
 --- a/browser/installer/package-manifest.in
 +++ b/browser/installer/package-manifest.in
-@@ -255,6 +255,11 @@
- #endif
+@@ -267,6 +267,11 @@
+ @RESPATH@/browser/components/shell/assets/kit.gif
  #endif
  
 +; Camoufox specific files
@@ -15,13 +15,12 @@ index 36eafe3506..1787249b72 100644
  ; All the pref files must be part of base to prevent migration bugs
  @RESPATH@/browser/@PREF_DIR@/firefox.js
 diff --git a/lw/moz.build b/lw/moz.build
-index e69de29bb2..5459e4ac36 100644
+index e69de29bb2..484d7bf134 100644
 --- a/lw/moz.build
 +++ b/lw/moz.build
-@@ -0,0 +1,14 @@
+@@ -0,0 +1,12 @@
 +FINAL_TARGET_FILES += [
 +  "camoufox.cfg",
-+  "chrome.css",
 +  "properties.json"
 +]
 +
@@ -29,15 +28,14 @@ index e69de29bb2..5459e4ac36 100644
 +  "policies.json",
 +]
 +
-+# local-settings does not yet end up being pacakged.
 +FINAL_TARGET_FILES.defaults.pref += [
 +  "local-settings.js",
 +]
 diff --git a/moz.build b/moz.build
-index fc7ffd9077..41917bd445 100644
+index 2eb5922b24..fe667fc5f6 100644
 --- a/moz.build
 +++ b/moz.build
-@@ -247,3 +247,5 @@ SPHINX_TREES["jsloader"] = "docs/jsloader"
+@@ -362,3 +362,5 @@ SPHINX_TREES["jsloader"] = "docs/jsloader"
  SPHINX_TREES["ai-agent-tools"] = "docs/ai-agent-tools"
  
  include("build/templates.mozbuild")

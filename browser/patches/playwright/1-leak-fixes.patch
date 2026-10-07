@@ -1,5 +1,5 @@
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index bf63df47f6..60293c00b6 100644
+index ccf2153d03..7af722b926 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
 @@ -2351,28 +2351,7 @@ dom::ModelContext* Navigator::ModelContext() {
@@ -32,18 +32,3 @@ index bf63df47f6..60293c00b6 100644
  }
  
  AutoplayPolicy Navigator::GetAutoplayPolicy(AutoplayPolicyMediaType aType) {
-diff --git a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-index 8123110513..14cd00bc43 100644
---- a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-+++ b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-@@ -113,9 +113,7 @@ EnterprisePoliciesManager.prototype = {
-       Services.prefs.clearUserPref(PREF_POLICIES_APPLIED);
-     }
- 
--    // --- Playwright begin ---
--    let provider = new PlaywrightPoliciesProvider();
--    // --- Playwright end ---
-+    let provider = this._buildProvider();
- 
-     if (provider.failed) {
-       this.status = Ci.nsIEnterprisePolicies.FAILED;

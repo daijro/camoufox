@@ -1,38 +1,18 @@
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index 7af722b926..d9d1c9ad7a 100644
+index 7af722b926..d02c530cd5 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
-@@ -4,6 +4,10 @@
+@@ -4,6 +4,9 @@
  
  // Needs to be first.
  #include "Navigator.h"
 +// Camoufox: per-context + global navigator spoofing
 +#include "NavigatorManager.h"
 +#include "MaskConfig.hpp"
-+#include "nsJSUtils.h"
  
  #include "Geolocation.h"
  #include "base/basictypes.h"
-@@ -114,6 +118,18 @@
- #include "mozilla/intl/LocaleService.h"
- #include "mozilla/webgpu/Instance.h"
- 
-+
-+// Camoufox: Lazy initialization for global timezone config.
-+// Cannot use static init because SpiderMonkey may not be ready yet.
-+static void EnsureGlobalTimezoneInitialized() {
-+  static bool sInitialized = false;
-+  if (sInitialized) return;
-+  sInitialized = true;
-+  if (auto tz = MaskConfig::GetString("timezone")) {
-+    nsJSUtils::SetTimeZoneOverride(tz.value().c_str());
-+  }
-+}
-+
- namespace mozilla::dom {
- 
- static const nsLiteralCString kVibrationPermissionType = "vibration"_ns;
-@@ -270,6 +286,18 @@ void Navigator::Invalidate() {
+@@ -270,6 +273,18 @@ void Navigator::Invalidate() {
  
  void Navigator::GetUserAgent(nsAString& aUserAgent, CallerType aCallerType,
                               ErrorResult& aRv) const {
@@ -51,7 +31,7 @@ index 7af722b926..d9d1c9ad7a 100644
    nsCOMPtr<nsPIDOMWindowInner> window;
  
    if (mWindow) {
-@@ -317,6 +345,11 @@ void Navigator::GetAppCodeName(nsAString& aAppCodeName, ErrorResult& aRv) {
+@@ -317,6 +332,11 @@ void Navigator::GetAppCodeName(nsAString& aAppCodeName, ErrorResult& aRv) {
  
  void Navigator::GetAppVersion(nsAString& aAppVersion, CallerType aCallerType,
                                ErrorResult& aRv) const {
@@ -63,11 +43,10 @@ index 7af722b926..d9d1c9ad7a 100644
    nsCOMPtr<Document> doc = mWindow->GetExtantDoc();
  
    nsresult rv = GetAppVersion(
-@@ -432,6 +465,24 @@ void Navigator::GetLanguages(nsTArray<nsString>& aLanguages) {
+@@ -432,6 +452,23 @@ void Navigator::GetLanguages(nsTArray<nsString>& aLanguages) {
  
  void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
                              ErrorResult& aRv) const {
-+  EnsureGlobalTimezoneInitialized();
 +  // Camoufox: per-context navigator platform
 +  if (mWindow) {
 +    uint32_t userContextId = 0;
@@ -88,7 +67,7 @@ index 7af722b926..d9d1c9ad7a 100644
    if (mWindow) {
      BrowsingContext* bc = mWindow->GetBrowsingContext();
      nsString customPlatform;
-@@ -457,6 +508,23 @@ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
+@@ -457,6 +494,23 @@ void Navigator::GetPlatform(nsAString& aPlatform, CallerType aCallerType,
  
  void Navigator::GetOscpu(nsAString& aOSCPU, CallerType aCallerType,
                           ErrorResult& aRv) const {
@@ -112,7 +91,7 @@ index 7af722b926..d9d1c9ad7a 100644
    if (aCallerType != CallerType::System) {
      // If fingerprinting resistance is on, we will spoof this value. See
      // nsRFPService.h for details about spoofed values.
-@@ -685,6 +753,15 @@ void Navigator::GetDoNotTrack(nsAString& aResult) {
+@@ -685,6 +739,15 @@ void Navigator::GetDoNotTrack(nsAString& aResult) {
  }
  
  bool Navigator::GlobalPrivacyControl() {
@@ -121,18 +100,17 @@ index 7af722b926..d9d1c9ad7a 100644
 +  // window and a worker disagreeing (daijro/camoufox#760). The launcher also
 +  // mirrors the key into privacy.globalprivacycontrol.enabled so the Sec-GPC
 +  // request header agrees with both.
-+  if (auto value = MaskConfig::GetBool("navigator.globalPrivacyControl");
++  if (auto value = MaskConfig::GetOptionalBool("navigator.globalPrivacyControl");
 +      value.has_value()) {
 +    return value.value();
 +  }
    bool gpcStatus = StaticPrefs::privacy_globalprivacycontrol_enabled();
    if (!gpcStatus) {
      nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(mWindow);
-@@ -696,6 +773,22 @@ bool Navigator::GlobalPrivacyControl() {
+@@ -696,6 +759,21 @@ bool Navigator::GlobalPrivacyControl() {
  }
  
  uint64_t Navigator::HardwareConcurrency() {
-+  EnsureGlobalTimezoneInitialized();
 +  // Camoufox: per-context hardware concurrency
 +  if (mWindow) {
 +    uint32_t userContextId = 0;
@@ -153,10 +131,10 @@ index 7af722b926..d9d1c9ad7a 100644
    if (!rts) {
 diff --git a/dom/base/NavigatorManager.cpp b/dom/base/NavigatorManager.cpp
 new file mode 100644
-index 0000000000..c872037f02
+index 0000000000..cf3febe299
 --- /dev/null
 +++ b/dom/base/NavigatorManager.cpp
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,69 @@
 +/* Camoufox: Per-context navigator property manager */
 +#include "NavigatorManager.h"
 +
@@ -167,16 +145,6 @@ index 0000000000..c872037f02
 +
 +namespace mozilla {
 +namespace dom {
-+
-+static uint32_t GetUserContextId(JSObject* aObj) {
-+  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  if (!win) return 0;
-+  uint32_t id = 0;
-+  if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+    id = bc->OriginAttributesRef().mUserContextId;
-+  }
-+  return id;
-+}
 +
 +static bool IsDisabled(const char* aPrefix, uint32_t aId) {
 +  nsAutoString dKey;
@@ -238,17 +206,15 @@ index 0000000000..c872037f02
 +}  // namespace mozilla
 diff --git a/dom/base/NavigatorManager.h b/dom/base/NavigatorManager.h
 new file mode 100644
-index 0000000000..918d94be04
+index 0000000000..407fd6d671
 --- /dev/null
 +++ b/dom/base/NavigatorManager.h
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,95 @@
 +/* Camoufox: Per-context navigator property manager */
 +#ifndef mozilla_dom_NavigatorManager_h
 +#define mozilla_dom_NavigatorManager_h
 +
 +#include "nsString.h"
-+#include "nsTHashMap.h"
-+#include "nsHashKeys.h"
 +#include "RoverfoxStorageManager.h"
 +
 +namespace mozilla {
@@ -363,7 +329,7 @@ index fa277ae122..b0973412be 100644
  SOURCES += ["FontListManager.cpp"]
  
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 7151bc0ba7..99da751676 100644
+index f5dfed61a5..6cf1179dd0 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -4,6 +4,7 @@
@@ -374,7 +340,7 @@ index 7151bc0ba7..99da751676 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -7838,6 +7839,92 @@ void nsGlobalWindowInner::SetFontList(const nsAString& aFontList,
+@@ -7834,6 +7835,92 @@ void nsGlobalWindowInner::SetFontList(const nsAString& aFontList,
    }
  }
  
@@ -522,7 +488,7 @@ index 38227acada..bfb0332a1c 100644
    USVString targetOrigin = "/";
  };
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
-index 078d0d975a..f081fbf9ee 100644
+index f12ea64bc0..9fb3b9ebed 100644
 --- a/dom/workers/WorkerNavigator.cpp
 +++ b/dom/workers/WorkerNavigator.cpp
 @@ -4,6 +4,8 @@

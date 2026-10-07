@@ -24,7 +24,7 @@ Setting MOZILLA_OFFICIAL=1 would fix the second one at the source, but it also
 moves telemetry, update-channel and branding defaults that Camoufox sets
 deliberately, so the narrower change is here.
 
-Guard: tests/patches/contentaccessible-parity.py.
+Guard: browser/tests/playwright/patches/contentaccessible-parity.py.
 
 diff --git a/browser/base/content/browser-main.js b/browser/base/content/browser-main.js
 index f7f364290e..9d9be0eb33 100644

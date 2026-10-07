@@ -107,7 +107,6 @@ def firefox_gpus(target_os: str) -> FrozenSet[Tuple[str, str]]:
 def _context_config(prefix: str, webgl: Dict[str, Any], target_os: str) -> Dict[str, Any]:
     blocked = _filtered_extensions(target_os)
     return {
-        f'{prefix}:contextAttributes': webgl['contextAttributes'],
         f'{prefix}:supportedExtensions': [
             extension for extension in webgl['supportedExtensions'] if extension not in blocked
         ],

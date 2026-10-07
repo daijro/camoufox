@@ -47,7 +47,6 @@ ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
 
 # Camoufox preferences to cache previous pages and requests
 CACHE_PREFS = {
-    'browser.sessionhistory.max_entries': 10,
     'browser.sessionhistory.max_total_viewers': -1,
     'browser.cache.memory.enable': True,
     'browser.cache.disk_cache_ssl': True,

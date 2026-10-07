@@ -50,11 +50,10 @@ def main() -> int:
 
     binary = resolve_binary()
     port = free_port()
-    with tempfile.TemporaryDirectory() as profile, hidden_display() as display:
+    with tempfile.TemporaryDirectory() as profile, hidden_display():
         Path(profile, "user.js").write_text(f'user_pref("marionette.port", {port});\n')
         proc = subprocess.Popen(
             [str(binary), "-no-remote", "-profile", profile, *marionette_args(), "about:blank"],
-            env={**__import__("os").environ, "DISPLAY": display, "MOZ_ENABLE_WAYLAND": "0"},
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         try:

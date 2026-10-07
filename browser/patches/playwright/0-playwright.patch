@@ -2815,41 +2815,6 @@ index c5c10b0e20..9f36ca5334 100644
  
      const unsigned long CHROME_CENTER_SCREEN          = 1 << 27;
  
-diff --git a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-index 7c5bde49c4..8123110513 100644
---- a/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-+++ b/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs
-@@ -113,7 +113,9 @@ EnterprisePoliciesManager.prototype = {
-       Services.prefs.clearUserPref(PREF_POLICIES_APPLIED);
-     }
- 
--    let provider = this._buildProvider();
-+    // --- Playwright begin ---
-+    let provider = new PlaywrightPoliciesProvider();
-+    // --- Playwright end ---
- 
-     if (provider.failed) {
-       this.status = Ci.nsIEnterprisePolicies.FAILED;
-@@ -760,6 +762,19 @@ class JSONPoliciesProvider extends PoliciesProvider {
-   }
- }
- 
-+class PlaywrightPoliciesProvider extends JSONPoliciesProvider {
-+  _getConfigurationFile() {
-+    let prefPath = Services.prefs.getStringPref(PREF_ALTERNATE_PATH, "");
-+    if (!prefPath)
-+      return null;
-+
-+    dump(`Playwright: loading enterprise policies from ${prefPath}\n`);
-+    let configFile = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
-+    configFile.initWithPath(prefPath);
-+    return configFile;
-+  }
-+}
-+
- class WindowsGPOPoliciesProvider extends PoliciesProvider {
-   constructor() {
-     super();
 diff --git a/toolkit/components/geolocation/GeolocationService.cpp b/toolkit/components/geolocation/GeolocationService.cpp
 index 70af7ec0c2..b416d24f61 100644
 --- a/toolkit/components/geolocation/GeolocationService.cpp
