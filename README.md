@@ -477,6 +477,29 @@ Left as stock Firefox has it, on purpose:
 Each context of one browser can carry its own identity:
 [docs/per-context-patches.md](docs/per-context-patches.md).
 
+### Canvas
+
+Canvas and WebGL pixels come from the real OS, driver and GPU, whatever the
+identity claims. The launcher chooses the canvas behaviour from two facts: does
+the identity claim the host's OS, and does the host render on a GPU?
+
+| | Identity on the host's OS | Identity on another OS |
+|---|---|---|
+| **GPU rendering** | 🟢 <ins><b>Most stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ No canvas noise: looks like stock Firefox<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ The claimed GPU is the host's, so the pixels agree with it<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Every identity on this machine claims the same GPU, so there is less fingerprint diversity | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Readback is random, so the real OS does not show<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Canvas noise: looks like LibreWolf, Tor Browser or Mullvad Browser, which are rarer than stock Firefox |
+| **Software rendering**<br/>(no GPU driver, as on most servers) | 🟢 <ins><b>Stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ No canvas noise: looks like stock Firefox<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Looks like a GPU falling back to software rendering, which is rarer than a working GPU | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Readback is random, so the real OS does not show<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Canvas noise: looks like LibreWolf, Tor Browser or Mullvad Browser, which are rarer than stock Firefox |
+
+That is the default. These options override it:
+
+| Override | Result |
+|---|---|
+| `canvas_noise=False` on another OS | 🔴 Stock Firefox, but the pixels show the real OS |
+| `canvas_noise=True` on the host's OS | 🟡 Looks like LibreWolf with no need to |
+| `webgl_config` naming a GPU other than the host's, without noise | 🔴 WebGL reports one GPU while the pixels come from another |
+
+Noise is set per browser, not per context. Without it, every `NewContext()`
+claims the host's OS. Details are in
+[the canvas on another OS](python/README.md#the-canvas-on-another-os).
+
 ### Hiding automation
 
 | What | Where |
@@ -588,26 +611,31 @@ This repository is not the Firefox source. It fetches Firefox, copies in
 Windows and macOS binaries are cross-compiled. WSL does not work.
 
 ```mermaid
-flowchart LR
-    FX(["Firefox source<br/>pinned by upstream.sh"])
-    ADD["additions/ + settings/"]
-    PAT["patches/"]
-    FONTS["font bundle + fontconfig"]
+flowchart TB
+    subgraph IN["From this repository"]
+        direction LR
+        UP["upstream.sh<br/>Firefox version"]
+        ADD["additions/ + settings/<br/>files copied in"]
+        PAT["patches/<br/>diffs applied"]
+    end
 
-    FX -- "make fetch<br/>make setup" --> TREE["Firefox git tree"]
-    ADD --> TREE
-    TREE -- "make dir" --> PATCHED["Patched tree<br/>camoufox-version-release/"]
-    PAT --> PATCHED
-    PATCHED -- "make bootstrap, once<br/>make build" --> OBJ["Compiled browser"]
-    OBJ -- "make package-linux<br/>package-macos<br/>package-windows" --> ZIP[("Release archive")]
-    FONTS --> ZIP
+    S1["<b>1. make dir</b><br/>download Firefox, copy additions,<br/>apply every patch"]
+    S2["<b>2. make bootstrap</b><br/>toolchains, once per machine"]
+    S3["<b>3. make build</b><br/>./mach build"]
+    S4["<b>4. make package-linux</b><br/>or package-macos, package-windows"]
+    FONTS["font bundle + fontconfig"]
+    OUT[("Release archive")]
+
+    IN --> S1 --> S2 --> S3 --> S4 --> OUT
+    FONTS --> S4
 
     classDef input fill:#ddf4ff,stroke:#0969da,color:#0a3069
     classDef step fill:#fff1e5,stroke:#bc4c00,color:#4a1c00
     classDef out fill:#dafbe1,stroke:#1a7f37,color:#0f3d1c
-    class FX,ADD,PAT,FONTS input
-    class TREE,PATCHED,OBJ step
-    class ZIP out
+    class UP,ADD,PAT,FONTS input
+    class S1,S2,S3,S4 step
+    class OUT out
+    style IN fill:none,stroke:#0969da,stroke-dasharray:4 3,color:#0969da
 ```
 
 ```bash
@@ -665,24 +693,38 @@ A way to find what a site detects without deobfuscating its JavaScript: start
 from stock Firefox and add Camoufox's changes back until the site flags.
 
 <details>
-<summary>Flow chart</summary>
+<summary>Leak debugging flow chart</summary>
 
 ```mermaid
 flowchart TD
-    A[Start] --> B[Does the site flag stock Firefox?]
-    B -->|Yes| C[Likely a bad IP or rate limiting, not the browser]
-    B -->|No| D["make ff-dbg (1), build (2). Does it flag headless (4)?"]
-    D -->|Yes| E["Does it flag headed (3) and headless (4)?"]
-    D -->|No| F["Apply config.patch (5), rebuild (2). Does it flag (3)?"]
-    E -->|Yes| C
-    E -->|No| G["Enable privacy.resistFingerprinting in the config (6). Does it flag (3)?"]
-    G -->|No| H[Enable FPP and drop overrides until the leak returns]
-    G -->|Yes| I[Deobfuscate the site's JavaScript to see what it tests]
-    F -->|No| J["Remove prefs from camoufox.cfg (6) until the leak is gone"]
-    F -->|Yes| K["Apply playwright/0-playwright.patch (5), rebuild. Does it flag?"]
-    K -->|No| M[Debug Juggler]
-    K -->|Yes| L[Apply the other patches one at a time until it flags]
-    M --> I
+    START(["A site flags Camoufox"]) --> Q1{"Does it flag<br/>stock Firefox?"}
+    Q1 -- yes --> NB["Not the browser:<br/>a bad IP or rate limiting"]
+    Q1 -- no --> BASE["Build the debug baseline<br/>make ff-dbg (1), make build (2)"]
+    BASE --> Q2{"Does it flag the<br/>baseline headless (4)?"}
+
+    Q2 -- yes --> Q3{"Headed (3)<br/>as well?"}
+    Q3 -- yes --> NB
+    Q3 -- no --> Q4{"Still flagged with<br/>privacy.resistFingerprinting (6)?"}
+    Q4 -- no --> FPP["Enable FPP and drop overrides<br/>until the leak returns"]
+    Q4 -- yes --> DEOB["Deobfuscate the site's script<br/>to see what it tests"]
+
+    Q2 -- no --> CFG["Apply config.patch (5)<br/>and rebuild (2)"]
+    CFG --> Q5{"Still passes (3)?"}
+    Q5 -- no --> PREFS["Remove prefs from camoufox.cfg (6)<br/>until it passes"]
+    Q5 -- yes --> PW["Apply playwright/0-playwright.patch (5)<br/>and rebuild (2)"]
+    PW --> Q6{"Still passes (3)?"}
+    Q6 -- no --> JUG["Debug Juggler"]
+    Q6 -- yes --> REST["Apply the other patches one at a time<br/>until it flags"]
+    JUG -. "if Juggler looks clean" .-> DEOB
+
+    classDef start fill:#eef2f6,stroke:#57606a,color:#1f2328
+    classDef ask fill:#ddf4ff,stroke:#0969da,color:#0a3069
+    classDef step fill:#fff1e5,stroke:#bc4c00,color:#4a1c00
+    classDef found fill:#dafbe1,stroke:#1a7f37,color:#0f3d1c
+    class START start
+    class Q1,Q2,Q3,Q4,Q5,Q6 ask
+    class BASE,CFG,PW step
+    class NB,FPP,DEOB,PREFS,JUG,REST found
 ```
 
 | # | Command | What it does |

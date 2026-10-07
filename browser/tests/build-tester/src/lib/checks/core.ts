@@ -538,13 +538,20 @@ export async function runCoreChecks(): Promise<
         : "PRESENT (Chrome-only)",
   };
 
-  result.firefoxAPIs.noWebSerial = {
-    passed: typeof (navigator as any).serial === "undefined",
-    detail:
-      typeof (navigator as any).serial === "undefined"
-        ? "Not present (correct)"
-        : "PRESENT (Chrome-only)",
-  };
+  // Desktop Firefox ships Web Serial from 151, in secure contexts only.
+  result.firefoxAPIs.webSerial = (() => {
+    const version = Number((navigator.userAgent.match(/Firefox\/(\d+)/) || [])[1]);
+    const expected = isSecureContext && version >= 151;
+    const present = typeof (navigator as any).serial !== "undefined";
+    return {
+      passed: present === expected,
+      detail:
+        (present ? "Present" : "Not present") +
+        (present === expected ? " (as in Firefox " : " (WRONG for Firefox ") +
+        version +
+        (isSecureContext ? ", secure context)" : ", insecure context)"),
+    };
+  })();
 
   result.firefoxAPIs.hasBuildID = {
     passed: typeof (navigator as any).buildID === "string",

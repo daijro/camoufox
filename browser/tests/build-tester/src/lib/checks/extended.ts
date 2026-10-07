@@ -1124,9 +1124,11 @@ export async function runExtendedChecks(): Promise<
     // can present must be here -- ci/tests/test_ci.py checks it.
     result.trashDetection.plausibleHWC = (() => {
       const hwc = navigator.hardwareConcurrency;
+      // 11 is Apple's M3 Pro (5 performance + 6 efficiency cores), which the
+      // recorded macOS fingerprints include.
       const common = [
-        1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48, 56,
-        64, 96, 128, 256,
+        1, 2, 4, 6, 8, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48,
+        56, 64, 96, 128, 256,
       ];
       const isCommon = common.indexOf(hwc) !== -1;
       return {

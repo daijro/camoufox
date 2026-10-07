@@ -1,6 +1,7 @@
 """
 Manages the esbuild bundle of the checks library.
-Builds checks-bundle.js from TypeScript source on first run.
+Builds checks-bundle.js from the TypeScript source when it is missing or older
+than the source, so an edited check always reaches the browser.
 """
 
 import subprocess
@@ -10,7 +11,10 @@ from pathlib import Path
 
 def ensure_bundle(project_dir: Path) -> Path:
     bundle_path = project_dir / "scripts" / "checks-bundle.js"
-    if bundle_path.exists():
+    sources = (project_dir / "src").rglob("*.ts")
+    if bundle_path.exists() and all(
+        src.stat().st_mtime <= bundle_path.stat().st_mtime for src in sources
+    ):
         return bundle_path
 
     node_modules = project_dir / "node_modules"
@@ -24,7 +28,7 @@ def ensure_bundle(project_dir: Path) -> Path:
         if esbuild_cmd_path.exists():
             esbuild = esbuild_cmd_path
 
-    print("Building checks bundle (first run)...")
+    print("Building checks bundle...")
     entry = project_dir / "src" / "lib" / "checks" / "index.ts"
     result = subprocess.run(
         [

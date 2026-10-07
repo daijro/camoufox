@@ -1,8 +1,8 @@
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
-index b93a691f75..004110d862 100644
+index 42b2b42650..4955943e4a 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
 +++ b/gfx/thebes/gfxPlatformFontList.cpp
-@@ -2302,6 +2302,43 @@ void gfxPlatformFontList::MaybeRemoveCmap(gfxCharacterMap* aCharMap,
+@@ -2301,6 +2301,36 @@ void gfxPlatformFontList::MaybeRemoveCmap(gfxCharacterMap* aCharMap,
  static void GetSystemUIFontFamilies(
      FontVisibilityProvider* aFontVisibilityProvider,
      [[maybe_unused]] nsAtom* aLangGroup, nsTArray<nsCString>& aFamilies) {
@@ -12,34 +12,27 @@ index b93a691f75..004110d862 100644
 +  // serif font (daijro/camoufox#695). A null provider means there is no
 +  // document behind the lookup, where spoofing is the safe default.
 +  if (!(aFontVisibilityProvider && aFontVisibilityProvider->IsChrome())) {
-+    if (auto platform = MaskConfig::GetString("navigator.platform"); platform) {
-+      // A native identity (the host's own OS) keeps the real system font:
-+      // on macOS that is -apple-system (SF Pro), which Helvetica does not
-+      // match (measured 2026-09-14: ascent 16 vs 13, 537.6 vs 526.6 px).
-+#ifdef XP_MACOSX
-+      if (*platform == "MacIntel") {
-+        // fall through to the platform's own system-ui resolution
-+      } else
++    const auto os = MaskConfig::GetSpoofedOS();
++    // A native identity (the host's own OS) keeps the real system font: on
++    // macOS that is -apple-system (SF Pro), which Helvetica does not match
++    // (measured 2026-09-14: ascent 16 vs 13, 537.6 vs 526.6 px).
++#ifndef XP_MACOSX
++    if (os == MaskConfig::SpoofedOS::MacOS) {
++      *aFamilies.AppendElement() = "Helvetica"_ns;
++      return;
++    }
 +#endif
-+      if (*platform == "MacIntel") {
-+        *aFamilies.AppendElement() = "Helvetica"_ns;
-+        return;
-+      }
-+#ifdef XP_WIN
-+      if (*platform == "Win32") {
-+        // the real Segoe UI
-+      } else
++#ifndef XP_WIN
++    if (os == MaskConfig::SpoofedOS::Windows) {
++      *aFamilies.AppendElement() = "Segoe UI"_ns;
++      return;
++    }
 +#endif
-+      if (*platform == "Win32") {
-+        *aFamilies.AppendElement() = "Segoe UI"_ns;
-+        return;
-+      }
-+      if (platform->rfind("Linux", 0) == 0) {
-+        // The GTK interface font of a stock Ubuntu desktop; see
-+        // font-system-fonts-css2.patch for the CSS2 keywords.
-+        *aFamilies.AppendElement() = "Ubuntu"_ns;
-+        return;
-+      }
++    if (os == MaskConfig::SpoofedOS::Linux) {
++      // The GTK interface font of a stock Ubuntu desktop; see
++      // font-system-fonts-css2.patch for the CSS2 keywords.
++      *aFamilies.AppendElement() = "Ubuntu"_ns;
++      return;
 +    }
 +  }
 +

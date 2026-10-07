@@ -85,14 +85,15 @@ def test_app_version_agrees_with_the_user_agent():
     assert "Windows" not in config["navigator.appVersion"]
 
 
-def test_a_preset_that_carries_its_own_app_version_keeps_it():
-    """A captured value is the real device's, so it wins over the derived one."""
+def test_a_preset_that_carries_its_own_app_version_follows_its_user_agent():
+    """Firefox computes appVersion from the user agent, so a carried value that
+    differs ("5.0 (Windows NT 10.0; Win64; x64)" is Chrome's form) is replaced."""
     preset = _preset("Win32", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Firefox/152.0")
     preset["navigator"]["appVersion"] = "5.0 (Windows NT 10.0; Win64; x64)"
 
     config = from_preset(preset)
 
-    assert config["navigator.appVersion"] == "5.0 (Windows NT 10.0; Win64; x64)"
+    assert config["navigator.appVersion"] == "5.0 (Windows)"
 
 
 def test_an_unknown_platform_follows_its_user_agent():
@@ -138,3 +139,23 @@ def test_a_user_agent_it_cannot_read_is_left_alone():
     config = from_preset(_preset("Win32", "not a user agent"))
 
     assert "navigator.appVersion" not in config
+
+
+def test_a_drawn_app_version_follows_the_drawn_user_agent():
+    """fpgen draws appVersion as a value of its own.
+
+    Its recorded data pairs some Linux user agents with "5.0 (Windows)", which a
+    browser only reports with an extension rewriting one of the two. Firefox
+    computes appVersion from the user agent, so the config does the same.
+    """
+    from camoufox.fingerprints import from_fpgen, generate_fingerprint
+
+    fingerprint = generate_fingerprint(os="linux")
+    fingerprint["navigator"] = {
+        **fingerprint["navigator"],
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0",
+        "appVersion": "5.0 (Windows)",
+    }
+    config = from_fpgen(fingerprint, "156")
+
+    assert config["navigator.appVersion"] == "5.0 (X11)"

@@ -1,3 +1,351 @@
+diff --git a/dom/base/RoverfoxStorageManager.cpp b/dom/base/RoverfoxStorageManager.cpp
+new file mode 100644
+index 0000000000..32a3cb96ec
+--- /dev/null
++++ b/dom/base/RoverfoxStorageManager.cpp
+@@ -0,0 +1,263 @@
++#include "RoverfoxStorageManager.h"
++#include "mozilla/Preferences.h"
++#include "nsIPrefBranch.h"
++#include "nsXULAppAPI.h"
++#include "mozilla/dom/ContentChild.h"
++#include "nsThreadUtils.h"
++#include "jsapi.h"
++#include "js/PropertyAndElement.h"
++#include "mozilla/dom/BrowsingContext.h"
++#include "nsContentUtils.h"
++#include "nsGlobalWindowInner.h"
++#include "xpcpublic.h"
++
++namespace mozilla {
++namespace dom {
++
++// Values live on the DEFAULT pref branch. They are session state (per-context
++// values a launch sets up), and default prefs are never written to prefs.js:
++// as user prefs a persistent profile kept them, so a relaunch with a different
++// config still reported the previous session's timezone and navigator values.
++// Reading the default branch alone also ignores user values an older build
++// left in a profile's prefs.js.
++static constexpr auto kKind = PrefValueKind::Default;
++
++/* static */ nsTHashMap<nsCStringHashKey, nsCString>&
++RoverfoxStorageManager::GetLocalCache() {
++  static nsTHashMap<nsCStringHashKey, nsCString> sCache;
++  return sCache;
++}
++
++/* static */ nsTHashSet<nsCString>& RoverfoxStorageManager::GetMissCache() {
++  static nsTHashSet<nsCString> sMisses;
++  return sMisses;
++}
++
++/* static */ mozilla::Mutex&
++RoverfoxStorageManager::GetLocalCacheMutex() {
++  static mozilla::Mutex sMutex("RoverfoxStorageCache");
++  return sMutex;
++}
++
++/* static */ nsCString
++RoverfoxStorageManager::MakePrefName(const nsAString& key) {
++  nsAutoCString prefName("roverfox.s.");
++  AppendUTF16toUTF8(key, prefName);
++  return nsCString(prefName);
++}
++
++static void OnStoragePrefChanged(const char* aPrefName, void*) {
++  RoverfoxStorageManager::MirrorPref(nsDependentCString(aPrefName));
++}
++
++/* static */ void RoverfoxStorageManager::MirrorPref(const nsACString& aPrefName) {
++  MOZ_ASSERT(NS_IsMainThread());
++  nsAutoCString value;
++  Preferences::GetCString(PromiseFlatCString(aPrefName).get(), value, kKind);
++  MutexAutoLock lock(GetLocalCacheMutex());
++  GetMissCache().Remove(aPrefName);
++  if (value.IsEmpty()) {
++    GetLocalCache().Remove(aPrefName);
++  } else {
++    GetLocalCache().InsertOrUpdate(aPrefName, value);
++  }
++}
++
++// libpref's table is main-thread only: a release build looks it up without a
++// lock, so a worker reading it while the main thread inserted a pref (another
++// context putting its values) crashed the content process -- measured within
++// seconds with workers reading navigator while contexts were created. Workers
++// read the local cache alone, and the main thread keeps that cache a mirror of
++// every roverfox.s.* pref: a snapshot the first time this process uses the
++// storage on the main thread, then the prefix callback. A value already cached
++// locally wins over the snapshot, as it does in ReadValue.
++/* static */ void RoverfoxStorageManager::EnsureMirror() {
++  static bool sMirrored = false;
++  if (sMirrored || !NS_IsMainThread()) {
++    return;
++  }
++  sMirrored = true;
++  Preferences::RegisterPrefixCallback(OnStoragePrefChanged, "roverfox.s."_ns);
++
++  nsTArray<nsCString> names;
++  nsIPrefBranch* root = Preferences::GetRootBranch(kKind);
++  if (!root || NS_FAILED(root->GetChildList("roverfox.s.", names))) {
++    return;
++  }
++  for (const nsCString& name : names) {
++    nsAutoCString value;
++    Preferences::GetCString(name.get(), value, kKind);
++    if (value.IsEmpty()) {
++      continue;
++    }
++    MutexAutoLock lock(GetLocalCacheMutex());
++    if (!GetLocalCache().Contains(name)) {
++      GetLocalCache().InsertOrUpdate(name, nsCString(value));
++    }
++  }
++}
++
++/* static */ void
++RoverfoxStorageManager::SetPrefValue(const nsCString& prefName,
++                                      const nsCString& value) {
++  EnsureMirror();
++  // Always store locally for immediate reads in this process
++  {
++    MutexAutoLock lock(GetLocalCacheMutex());
++    GetLocalCache().InsertOrUpdate(prefName, nsCString(value));
++    GetMissCache().Remove(prefName);
++  }
++  // Sync to parent for cross-process availability
++  if (XRE_IsParentProcess()) {
++    Preferences::SetCString(prefName.get(), value, kKind);
++  } else {
++    ContentChild* cc = ContentChild::GetSingleton();
++    if (cc) {
++      cc->SendRoverfoxStoragePut(prefName, value);
++    }
++  }
++}
++
++/* static */ void RoverfoxStorageManager::ReadValue(const nsCString& prefName,
++                                                    nsACString& outValue) {
++  EnsureMirror();
++  // Local cache first (values set in this process, and the pref mirror)
++  {
++    MutexAutoLock lock(GetLocalCacheMutex());
++    if (auto entry = GetLocalCache().Lookup(prefName)) {
++      outValue = entry.Data();
++    }
++  }
++  // Off the main thread the mirror is the whole answer (see EnsureMirror).
++  if (!outValue.IsEmpty() || !NS_IsMainThread()) {
++    return;
++  }
++  // Then Preferences (values synced from other processes)
++  Preferences::GetCString(prefName.get(), outValue, kKind);
++  if (!outValue.IsEmpty() || XRE_IsParentProcess()) {
++    return;
++  }
++  // Sync IPC read from the parent covers a value another process put that has
++  // not reached this process's prefs yet. Once per key: a sync IPC on every
++  // read of an unset key (every read in a launch without per-context values)
++  // made navigator.hardwareConcurrency, screen.* and (color) queries ~20x
++  // slower than stock, a timing a page can measure. A later put anywhere
++  // clears the miss (pref callback / SetPrefValue).
++  {
++    MutexAutoLock lock(GetLocalCacheMutex());
++    if (GetMissCache().Contains(prefName)) {
++      return;
++    }
++  }
++  ContentChild* cc = ContentChild::GetSingleton();
++  if (!cc) {
++    return;
++  }
++  nsCString fromParent;
++  cc->SendRoverfoxStorageGet(prefName, &fromParent);
++  outValue = fromParent;
++  MutexAutoLock lock(GetLocalCacheMutex());
++  if (fromParent.IsEmpty()) {
++    GetMissCache().Insert(prefName);
++  } else {
++    GetLocalCache().InsertOrUpdate(prefName, fromParent);
++  }
++}
++
++/* static */ void
++RoverfoxStorageManager::PutUint(const nsAString& key, uint32_t value) {
++  nsCString prefName = MakePrefName(key);
++  nsAutoCString strValue;
++  strValue.AppendInt(static_cast<int64_t>(value));
++  SetPrefValue(prefName, strValue);
++}
++
++/* static */ bool
++RoverfoxStorageManager::GetUint(const nsAString& key, uint32_t& outValue) {
++  nsAutoCString strValue;
++  ReadValue(MakePrefName(key), strValue);
++  if (!strValue.IsEmpty()) {
++    nsresult parseRv;
++    int64_t parsed = strValue.ToInteger64(&parseRv);
++    if (NS_SUCCEEDED(parseRv) && parsed >= 0) {
++      outValue = static_cast<uint32_t>(parsed);
++      return true;
++    }
++  }
++  return false;
++}
++
++/* static */ void
++RoverfoxStorageManager::PutBool(const nsAString& key, bool value) {
++  nsCString prefName = MakePrefName(key);
++  nsAutoCString strValue(value ? "1" : "0");
++  SetPrefValue(prefName, strValue);
++}
++
++/* static */ bool
++RoverfoxStorageManager::GetBool(const nsAString& key, bool& outValue) {
++  nsAutoCString strValue;
++  ReadValue(MakePrefName(key), strValue);
++  if (!strValue.IsEmpty()) {
++    outValue = strValue.EqualsLiteral("1");
++    return true;
++  }
++  return false;
++}
++
++/* static */ void
++RoverfoxStorageManager::PutString(const nsAString& key,
++                                   const nsAString& value) {
++  nsCString prefName = MakePrefName(key);
++  nsAutoCString utf8Value;
++  CopyUTF16toUTF8(value, utf8Value);
++  SetPrefValue(prefName, utf8Value);
++}
++
++/* static */ bool
++RoverfoxStorageManager::GetString(const nsAString& key, nsAString& outValue) {
++  nsAutoCString utf8Value;
++  ReadValue(MakePrefName(key), utf8Value);
++  if (!utf8Value.IsEmpty()) {
++    CopyUTF8toUTF16(utf8Value, outValue);
++    return true;
++  }
++  return false;
++}
++
++static nsString SetterUsedKey(const char* aName, uint32_t aUserContextId) {
++  nsString key;
++  key.AppendPrintf("%s_d_%u", aName, aUserContextId);
++  return key;
++}
++
++/* static */ void RoverfoxStorageManager::MarkSetterUsed(
++    const char* aName, uint32_t aUserContextId) {
++  PutBool(SetterUsedKey(aName, aUserContextId), true);
++}
++
++/* static */ bool RoverfoxStorageManager::IsSetterOffered(JSObject* aObj,
++                                                          const char* aName) {
++  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
++  if (!win) return false;
++  uint32_t userContextId = 0;
++  if (BrowsingContext* bc = win->GetBrowsingContext()) {
++    userContextId = bc->OriginAttributesRef().mUserContextId;
++  }
++  bool used = false;
++  GetBool(SetterUsedKey(aName, userContextId), used);
++  return !used;
++}
++
++/* static */ void RoverfoxStorageManager::RemoveSetter(const char* aName) {
++  JSContext* cx = nsContentUtils::GetCurrentJSContext();
++  if (!cx) return;
++  JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
++  if (!global) return;
++  JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
++  JS_SetProperty(cx, global, aName, undef);
++  JS_DeleteProperty(cx, global, aName);
++}
++
++}  // namespace dom
++}  // namespace mozilla
+diff --git a/dom/base/RoverfoxStorageManager.h b/dom/base/RoverfoxStorageManager.h
+new file mode 100644
+index 0000000000..db0e038aed
+--- /dev/null
++++ b/dom/base/RoverfoxStorageManager.h
+@@ -0,0 +1,53 @@
++#ifndef mozilla_dom_RoverfoxStorageManager_h
++#define mozilla_dom_RoverfoxStorageManager_h
++
++#include "nsString.h"
++#include "nsTHashMap.h"
++#include "nsTHashSet.h"
++#include "nsHashKeys.h"
++#include "mozilla/Mutex.h"
++
++class JSObject;
++
++namespace mozilla {
++namespace dom {
++
++// Cross-process key-value storage using Firefox Preferences + local cache.
++// Write-through: values stored locally (immediate reads) and sent to parent
++// process via IPDL (cross-process sync via Preferences API).
++// Keys prefixed with "roverfox.s." to avoid conflicts.
++class RoverfoxStorageManager {
++ public:
++  static void PutUint(const nsAString& key, uint32_t value);
++  static bool GetUint(const nsAString& key, uint32_t& outValue);
++  static void PutBool(const nsAString& key, bool value);
++  static bool GetBool(const nsAString& key, bool& outValue);
++  static void PutString(const nsAString& key, const nsAString& value);
++  static bool GetString(const nsAString& key, nsAString& outValue);
++  // A put reached this process's prefs: copy it into the local cache (main
++  // thread only), which is all a worker thread reads.
++  static void MirrorPref(const nsACString& aPrefName);
++
++  // Per-context window.setX() setters. A setter is offered to a window until
++  // its context has used it; aName names the setter's "used" flag.
++  static void MarkSetterUsed(const char* aName, uint32_t aUserContextId);
++  static bool IsSetterOffered(JSObject* aObj, const char* aName);
++  // Removes a setter the running script has just called from its global.
++  // Assigning undefined first busts the IC/shape caches that otherwise keep a
++  // deleted name reachable on ARM64.
++  static void RemoveSetter(const char* aName);
++
++ private:
++  static nsCString MakePrefName(const nsAString& key);
++  static void SetPrefValue(const nsCString& prefName, const nsCString& value);
++  static void ReadValue(const nsCString& prefName, nsACString& outValue);
++  static void EnsureMirror();
++  static nsTHashSet<nsCString>& GetMissCache();
++  static nsTHashMap<nsCStringHashKey, nsCString>& GetLocalCache();
++  static mozilla::Mutex& GetLocalCacheMutex();
++};
++
++}  // namespace dom
++}  // namespace mozilla
++
++#endif  // mozilla_dom_RoverfoxStorageManager_h
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index ad24dc91a2..e8f35ff5c4 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -261,6 +261,7 @@ EXPORTS.mozilla.dom += [
+     "RequestCallbackManager.h",
+     "ResizeObserver.h",
+     "ResponsiveImageSelector.h",
++    "RoverfoxStorageManager.h",
+     "SameProcessMessageQueue.h",
+     "ScreenLuminance.h",
+     "ScreenOrientation.h",
+@@ -481,6 +482,7 @@ UNIFIED_SOURCES += [
+     "RemoteOuterWindowProxy.cpp",
+     "ResizeObserver.cpp",
+     "ResponsiveImageSelector.cpp",
++    "RoverfoxStorageManager.cpp",
+     "SameProcessMessageQueue.cpp",
+     "ScreenLuminance.cpp",
+     "ScreenOrientation.cpp",
 diff --git a/dom/ipc/ContentParent.cpp b/dom/ipc/ContentParent.cpp
 index a3b9fd9ead..fb4011d2c3 100644
 --- a/dom/ipc/ContentParent.cpp

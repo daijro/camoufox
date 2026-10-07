@@ -667,6 +667,120 @@ def test_zero_distinct_is_absence_not_collision():
     assert not out["leaks"] and not out["noise"]
 
 
+def _build_tester_run(tmp_path, monkeypatch, child):
+    """Run ci.run_build_tester.main with `child` standing in for the suite."""
+    import ci.run_build_tester as bt
+
+    monkeypatch.setattr(bt, "WORK_DIR", tmp_path)
+    monkeypatch.setattr(bt, "run", child)
+    binary = tmp_path / "camoufox-bin"
+    binary.touch()
+    monkeypatch.chdir(tmp_path)
+    return bt.main(["--binary", binary.name, "--evidence-dir", str(tmp_path / "evidence")])
+
+
+def test_build_tester_does_not_grade_a_previous_runs_result(tmp_path, monkeypatch):
+    """A suite that writes nothing is an error, even with an old result on disk.
+
+    The result file lives in the work directory between runs. A suite that
+    failed before grading (here: it could not find the binary) left the last
+    run's file in place, and the gate graded that and passed.
+    """
+    from ci._util import Result
+
+    (tmp_path / "build-tester-result.json").write_text(json.dumps({"overallGrade": "A"}))
+    code = _build_tester_run(tmp_path, monkeypatch,
+                             lambda cmd, **kw: Result(1, "", "ERROR: Binary not found"))
+    assert code == 1
+
+
+def test_run_pytest_clears_a_previous_runs_junit(tmp_path, monkeypatch):
+    """pytest that dies before writing junit must leave no results to parse."""
+    from ci import _pytest
+    from ci._util import Result
+
+    junit = tmp_path / "junit.xml"
+    junit.write_text('<testsuite><testcase classname="t" name="old"/></testsuite>')
+    monkeypatch.setattr(_pytest, "run", lambda cmd, **kw: Result(4, "", ""))
+    _pytest.run_pytest(cwd=tmp_path, python=pathlib.Path("python"), args=[], junit=junit,
+                       per_test_timeout=None)
+    assert _pytest.parse_junit(junit) == {}
+
+
+def test_typescript_does_not_grade_a_previous_runs_junit(tmp_path, monkeypatch):
+    """vitest that dies before writing junit is an error, not the last result."""
+    import ci.run_typescript as ts
+    from ci._util import Result
+
+    monkeypatch.setattr(ts, "WORK_DIR", tmp_path)
+    (tmp_path / "junit-typescript_browser.xml").write_text(
+        '<testsuites><testsuite name="tests/e2e.test.ts">'
+        '<testcase classname="tests/e2e.test.ts" name="e2e old"/></testsuite></testsuites>')
+    monkeypatch.setattr(ts, "run", lambda cmd, **kw: Result(1 if "vitest" in cmd else 0, "", ""))
+    binary = tmp_path / "camoufox-bin"
+    binary.touch()
+    code = ts.main(["--browser", str(binary), "--evidence-dir", str(tmp_path / "evidence")])
+    assert code == 1
+
+
+def test_build_tester_rebuilds_a_checks_bundle_older_than_its_source(tmp_path):
+    """An edited check must reach the browser, not the bundle built before it."""
+    import importlib.util
+    import time
+
+    spec = importlib.util.spec_from_file_location(
+        "bt_bundle", CI_ROOT.parent / "browser/tests/build-tester/scripts/bundle.py")
+    bundle = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bundle)
+
+    (tmp_path / "scripts").mkdir()
+    built = tmp_path / "scripts" / "checks-bundle.js"
+    built.write_text("old")
+    time.sleep(0.01)
+    (tmp_path / "src/lib/checks").mkdir(parents=True)
+    (tmp_path / "src/lib/checks/index.ts").write_text("export {};")
+    esbuild = tmp_path / "node_modules/.bin/esbuild"
+    esbuild.parent.mkdir(parents=True)
+    esbuild.write_text('#!/bin/sh\nfor a; do case "$a" in --outfile=*) echo new > "${a#--outfile=}";; esac; done\n')
+    esbuild.chmod(0o755)
+
+    bundle.ensure_bundle(tmp_path)
+    assert built.read_text().strip() == "new"
+
+
+def test_build_tester_identities_claim_the_binarys_firefox_version(monkeypatch):
+    """The launchers claim the browser's own version; the suite must test that.
+
+    Its identities kept the recorded version (Firefox 145/146) on a 156 binary,
+    so they described identities the product never makes, and an API that
+    shipped in between read as a leak.
+    """
+    scripts = CI_ROOT.parent / "browser/tests/build-tester/scripts"
+    monkeypatch.syspath_prepend(str(scripts))
+    import presets
+
+    generated = presets.generate_presets("156")
+    every = (generated["macPerContext"] + generated["linuxPerContext"]
+             + [generated["macGlobal"], generated["linuxGlobal"]])
+    for preset in every:
+        assert "Firefox/156.0" in preset["profileConfig"]["navigatorUserAgent"]
+        assert "Firefox/156.0" in preset["contextOptions"]["userAgent"]
+
+
+def test_build_tester_gets_an_absolute_binary_path(tmp_path, monkeypatch):
+    """The suite runs from its own directory, so a relative --binary missed."""
+    from ci._util import Result
+
+    seen = []
+
+    def child(cmd, **kw):
+        seen.append(pathlib.Path(cmd[2]))
+        return Result(1, "", "")
+
+    _build_tester_run(tmp_path, monkeypatch, child)
+    assert seen == [tmp_path / "camoufox-bin"]
+
+
 def test_version_resolution_honours_pythonlibs_playwright_ceiling():
     """The resolver must not pick a client pythonlib refuses to install.
 

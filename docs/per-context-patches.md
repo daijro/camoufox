@@ -34,8 +34,8 @@ Supporting patches, with no setter of their own:
 
 | Patch | Provides |
 |---|---|
-| `anti-font-fingerprinting.patch` | `RoverfoxStorageManager`, the per-context store; the context id on each font group |
-| `cross-process-storage.patch` | IPC so a value set in one process is readable in every other |
+| `anti-font-fingerprinting.patch` | The context id on each font group |
+| `cross-process-storage.patch` | `RoverfoxStorageManager`, the per-context store, with the IPC that makes a value set in one process readable in every other, and the guard and removal every setter uses |
 
 There is no canvas pixel noise and no glyph-spacing noise: both produce output
 no real machine does ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml)).
@@ -109,8 +109,18 @@ parent before any worker process starts. The patch also adds `roverfox.s.` to
 `sDynamicPrefOverrideList` in `Preferences.cpp`, because Firefox otherwise
 strips dynamically created string prefs from content processes.
 
-Files: `ContentParent.cpp/h`, `PContent.ipdl`, `ipc/ipdl/sync-messages.ini`,
-`modules/libpref/Preferences.cpp`.
+Files: `dom/base/RoverfoxStorageManager.cpp/h`, `ContentParent.cpp/h`,
+`PContent.ipdl`, `ipc/ipdl/sync-messages.ini`, `modules/libpref/Preferences.cpp`.
+
+### Setter guard and removal
+
+Every setter uses the same three `RoverfoxStorageManager` helpers:
+
+| Helper | Used by | Does |
+|---|---|---|
+| `IsSetterOffered` | The setter's WebIDL `Func=` guard | False once the window is sealed or the context has used the setter |
+| `MarkSetterUsed` | The setter, or its manager's `Set*` | Records the use in the shared store, so later documents of the context, in any process, are never offered it |
+| `RemoveSetter` | The setter, after it runs | Deletes the name from the calling global |
 
 ### Context resolution and lookup order
 
@@ -146,10 +156,10 @@ real value.
 | `audio-fingerprint-manager.patch` | `AudioBuffer.getChannelData`, `copyFromChannel`; `AnalyserNode.getFloatFrequencyData`, `getByteFrequencyData`, `getFloatTimeDomainData`, `getByteTimeDomainData` | A small deterministic transform of the samples, seeded per context. All six read paths are covered, because covering only `getChannelData` is bypassable. Falls back to `audio:seed` in `CAMOU_CONFIG`. |
 | `timezone-spoofing.patch` | SpiderMonkey `DateTimeInfo` per realm (`JS::SetRealmTimeZoneOverride`), `nsGlobalWindowOuter::SetNewDocument`, `WorkerPrivate::GetOrCreateGlobalScope` | The only patch inside SpiderMonkey. Re-applied on navigation and in dedicated, shared and service workers; also sets a process-wide override. Invalid IDs throw `TypeError`. |
 | `screen-spoofing.patch` | `nsScreen::GetRect`, `nsDeviceContext`, `nsMediaFeatures.cpp` | CSS `device-width` and `color` agree with `screen.*`. |
-| `navigator-spoofing.patch` | `Navigator::GetPlatform`, `GetOscpu`, `HardwareConcurrency`, `GetUserAgent`, `GetAppVersion` (global only); the `WorkerNavigator` versions of platform, cores and UA | Lazily reads `timezone` from `CAMOU_CONFIG` on first use, because a static initializer ran before SpiderMonkey was ready. |
-| `webrtc-ip-spoofing.patch` | `SanitizeSDPForIPLeak`, `CandidateReady`, candidate `.address`/`.relatedAddress`, `getStats()`, `UpdateDefaultCandidate` | Forces `default_address_only` while spoofing; loopback, link-local and private addresses are left alone. |
-| `webgl-spoofing.patch` | `ClientWebGLContext::GetParameter` | Per context: vendor and renderer. Global only (`CAMOU_CONFIG`): parameters, extensions, shader precision, context attributes. Works from `OffscreenCanvas` in workers. |
-| `font-list-spoofing.patch` | `gfxPlatformFontList::FindAndAddFamiliesLocked` | A thread-local context id, set by an RAII guard in `FontFaceSet::Check/Load` and `gfxFontGroup::EnsureFontList`, avoids changing ~50 signatures. The list is per process, not in the shared store. Workers are not filtered. |
+| `navigator-spoofing.patch` | `Navigator::GetPlatform`, `GetOscpu`, `HardwareConcurrency`, `GetUserAgent`, `GetAppVersion` (global only); the `WorkerNavigator` versions of platform, cores and UA | Falls back to `navigator.*` in `CAMOU_CONFIG`. |
+| `webrtc-ip-spoofing.patch` | `SanitizeSDPForIPLeak`, `CandidateReady`, candidate `.address`/`.relatedAddress`, `getStats()`, `UpdateDefaultCandidate`, `NrSocketBase::CreateSocket` | Forces `default_address_only` while spoofing; loopback, link-local and private addresses are left alone. UDP candidate ports come from the ephemeral range of the identity's OS (`MaskConfig::SpoofedEphemeralPorts()`), so a Windows identity on Linux never shows a Linux port. |
+| `webgl-spoofing.patch` | `ClientWebGLContext::GetParameter` | Per context: vendor and renderer. Global only (`CAMOU_CONFIG`): parameters, extensions, shader precision. Works from `OffscreenCanvas` in workers. |
+| `font-list-spoofing.patch` | `gfxPlatformFontList::FindAndAddFamiliesLocked` | A thread-local context id, set by an RAII guard in `FontFaceSet::Check/Load` and `gfxFontGroup::EnsureFontList`, avoids changing ~50 signatures. The list is in the shared store, so it holds in every content process. Workers are not filtered. |
 | `speech-voices-spoofing.patch` | `SpeechSynthesis::GetVoices` | Filters the real list by name; a listed voice that is not installed is left out. |
 
 Global-only patches (no setter) read `CAMOU_CONFIG` at startup:

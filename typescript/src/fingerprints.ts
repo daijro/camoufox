@@ -1372,6 +1372,16 @@ export function appVersionFromUserAgent(
 	return kept.length ? `5.0 (${kept.join("; ")})` : null;
 }
 
+/**
+ * Sets navigator.appVersion the way Firefox computes it: from the userAgent.
+ * Left unset it falls through to the HOST's value; taken from fpgen it is a
+ * draw of its own, and fpgen pairs some Linux user agents with "5.0 (Windows)".
+ */
+function setAppVersion(config: Config): void {
+	const derived = appVersionFromUserAgent(config["navigator.userAgent"] ?? "");
+	if (derived) config["navigator.appVersion"] = derived;
+}
+
 function oscpuFromPlatform(plat: string): string | null {
 	if (plat === "MacIntel") return "Intel Mac OS X 10.15";
 	if (plat === "Win32") return "Windows NT 10.0; Win64; x64";
@@ -1411,14 +1421,7 @@ export function fromPreset(
 		const oscpu = oscpuFromPlatform(nav.platform);
 		if (oscpu) config["navigator.oscpu"] = oscpu;
 	}
-	if (pyTruthy(nav.appVersion)) {
-		config["navigator.appVersion"] = nav.appVersion;
-	} else if (pyTruthy(config["navigator.userAgent"])) {
-		// Left unset, appVersion falls through to the HOST's value and
-		// contradicts the userAgent and platform set above.
-		const derived = appVersionFromUserAgent(config["navigator.userAgent"]);
-		if (derived) config["navigator.appVersion"] = derived;
-	}
+	setAppVersion(config);
 	if (Object.hasOwn(nav, "maxTouchPoints"))
 		config["navigator.maxTouchPoints"] = nav.maxTouchPoints;
 
@@ -1930,6 +1933,7 @@ export function fromFpgen(
 	const camoufoxData: Config = {};
 	castToProperties(camoufoxData, FPGEN_DATA, fingerprint, ffVersion);
 	handleScreenXY(camoufoxData, fingerprint);
+	setAppVersion(camoufoxData);
 	return camoufoxData;
 }
 

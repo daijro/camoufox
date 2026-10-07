@@ -228,7 +228,8 @@ async def run_tests(
 
     # 2. Generate fingerprint presets
     print("\nGenerating fingerprint presets via Camoufox Python API...")
-    presets = generate_presets()
+    from camoufox.utils import resolve_verstr
+    presets = generate_presets(resolve_verstr(Path(binary_path)).split(".", 1)[0])
     print("Presets generated.")
 
     # 3. Inject timezones and WebRTC

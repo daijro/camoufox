@@ -1,61 +1,35 @@
 diff --git a/dom/base/ScreenDimensionManager.cpp b/dom/base/ScreenDimensionManager.cpp
 new file mode 100644
-index 0000000000..336fe886ee
+index 0000000000..044cc7787a
 --- /dev/null
 +++ b/dom/base/ScreenDimensionManager.cpp
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,20 @@
 +/* Camoufox: Per-context screen dimension manager */
 +#include "ScreenDimensionManager.h"
-+
-+#include "mozilla/dom/BrowsingContext.h"
-+#include "nsGlobalWindowInner.h"
-+#include "nsPIDOMWindowInlines.h"
-+#include "xpcpublic.h"
 +
 +namespace mozilla {
 +namespace dom {
 +
-+static uint32_t UserContextIdFor(JSObject* aObj) {
-+  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  if (!win) return 0;
-+  if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+    return bc->OriginAttributesRef().mUserContextId;
-+  }
-+  return 0;
-+}
-+
-+static bool IsDisabled(const char* aPrefix, uint32_t aId) {
-+  nsAutoString dKey;
-+  dKey.AppendPrintf("%s_d_%u", aPrefix, aId);
-+  bool disabled = false;
-+  RoverfoxStorageManager::GetBool(dKey, disabled);
-+  return disabled;
-+}
-+
 +/* static */
 +bool ScreenDimensionManager::IsDimensionsFunctionEnabledForWebIDL(
 +    JSContext* aCx, JSObject* aObj) {
-+  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  if (!win) return false;
-+  return !IsDisabled("scr_dim", UserContextIdFor(aObj));
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "scr_dim");
 +}
 +
 +/* static */
 +bool ScreenDimensionManager::IsColorDepthFunctionEnabledForWebIDL(
 +    JSContext* aCx, JSObject* aObj) {
-+  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  if (!win) return false;
-+  return !IsDisabled("scr_depth", UserContextIdFor(aObj));
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "scr_depth");
 +}
 +
 +}  // namespace dom
 +}  // namespace mozilla
 diff --git a/dom/base/ScreenDimensionManager.h b/dom/base/ScreenDimensionManager.h
 new file mode 100644
-index 0000000000..6861cdcfbc
+index 0000000000..a36944f3c6
 --- /dev/null
 +++ b/dom/base/ScreenDimensionManager.h
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,81 @@
 +/* Camoufox: Per-context screen dimension manager */
 +#ifndef mozilla_dom_ScreenDimensionManager_h
 +#define mozilla_dom_ScreenDimensionManager_h
@@ -83,9 +57,7 @@ index 0000000000..6861cdcfbc
 +    nsAutoString hKey;
 +    hKey.AppendPrintf("scr_h_%u", aId);
 +    RoverfoxStorageManager::PutUint(hKey, aHeight);
-+    nsAutoString dKey;
-+    dKey.AppendPrintf("scr_dim_d_%u", aId);
-+    RoverfoxStorageManager::PutBool(dKey, true);
++    RoverfoxStorageManager::MarkSetterUsed("scr_dim", aId);
 +  }
 +
 +  static bool GetDimensions(uint32_t aId, uint32_t& aWidth, uint32_t& aHeight) {
@@ -113,9 +85,7 @@ index 0000000000..6861cdcfbc
 +    nsAutoString key;
 +    key.AppendPrintf("scr_depth_%u", aId);
 +    RoverfoxStorageManager::PutUint(key, aDepth);
-+    nsAutoString dKey;
-+    dKey.AppendPrintf("scr_depth_d_%u", aId);
-+    RoverfoxStorageManager::PutBool(dKey, true);
++    RoverfoxStorageManager::MarkSetterUsed("scr_depth", aId);
 +  }
 +
 +  static bool GetColorDepth(uint32_t aId, uint32_t& aDepth) {
@@ -164,7 +134,7 @@ index b0973412be..926cadf3dc 100644
  SOURCES += ["FontListManager.cpp"]
  
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 99da751676..469c30e02c 100644
+index 592f119026..7196e45448 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -5,6 +5,7 @@
@@ -175,8 +145,8 @@ index 99da751676..469c30e02c 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -7925,6 +7926,56 @@ void nsGlobalWindowInner::SetNavigatorUserAgent(const nsAString& ua,
-   }
+@@ -7874,6 +7875,40 @@ void nsGlobalWindowInner::SetNavigatorUserAgent(const nsAString& ua,
+   RoverfoxStorageManager::RemoveSetter("setNavigatorUserAgent");
  }
  
 +void nsGlobalWindowInner::SetScreenDimensions(uint32_t width, uint32_t height,
@@ -193,15 +163,7 @@ index 99da751676..469c30e02c 100644
 +  if (userContextId != 0) {
 +    ScreenDimensionManager::SetDimensions(0, width, height);
 +  }
-+  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
-+  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
-+    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
-+    if (global) {
-+      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
-+      JS_SetProperty(cx, global, "setScreenDimensions", undef);
-+      JS_DeleteProperty(cx, global, "setScreenDimensions");
-+    }
-+  }
++  RoverfoxStorageManager::RemoveSetter("setScreenDimensions");
 +}
 +
 +void nsGlobalWindowInner::SetScreenColorDepth(uint32_t depth,
@@ -218,15 +180,7 @@ index 99da751676..469c30e02c 100644
 +  if (userContextId != 0) {
 +    ScreenDimensionManager::SetColorDepth(0, depth);
 +  }
-+  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
-+  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
-+    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
-+    if (global) {
-+      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
-+      JS_SetProperty(cx, global, "setScreenColorDepth", undef);
-+      JS_DeleteProperty(cx, global, "setScreenColorDepth");
-+    }
-+  }
++  RoverfoxStorageManager::RemoveSetter("setScreenColorDepth");
 +}
 +
  RefPtr<GenericPromise> nsGlobalWindowInner::StorageAccessPermissionChanged(

@@ -1,5 +1,5 @@
 diff --git a/gfx/thebes/CoreTextFontList.cpp b/gfx/thebes/CoreTextFontList.cpp
-index b6696c70c4..099c8efa19 100644
+index b6696c70c4..4727cae871 100644
 --- a/gfx/thebes/CoreTextFontList.cpp
 +++ b/gfx/thebes/CoreTextFontList.cpp
 @@ -6,6 +6,7 @@
@@ -18,7 +18,7 @@ index b6696c70c4..099c8efa19 100644
 +  // Camoufox: a native macOS identity uses the real system fonts only; the
 +  // bundle is for identities of other OSes (see font-hijacker.patch).
 +  const bool camouNativeIdentity =
-+      MaskConfig::GetString("navigator.platform").value_or("") == "MacIntel";
++      MaskConfig::GetSpoofedOS() == MaskConfig::SpoofedOS::MacOS;
 +  if (StaticPrefs::gfx_bundled_fonts_activate_AtStartup() != 0 &&
 +      !camouNativeIdentity) {
      auto timerId = glean::fontlist::bundledfonts_activate.Start();
@@ -52,7 +52,7 @@ index b6696c70c4..099c8efa19 100644
  
  static void ReleaseFontData(void* aInfo, const void* aData, size_t aSize) {
 diff --git a/gfx/thebes/gfxDWriteFontList.cpp b/gfx/thebes/gfxDWriteFontList.cpp
-index 63169b05b7..8cb601b7d6 100644
+index 63169b05b7..5b659113f3 100644
 --- a/gfx/thebes/gfxDWriteFontList.cpp
 +++ b/gfx/thebes/gfxDWriteFontList.cpp
 @@ -5,6 +5,7 @@
@@ -72,7 +72,7 @@ index 63169b05b7..8cb601b7d6 100644
    if (StaticPrefs::gfx_bundled_fonts_activate_AtStartup() != 0) {
      mBundledFonts = CreateBundledFontsCollection(factory);
    }
-@@ -2627,22 +2630,49 @@ class BundledFontFileEnumerator : public IDWriteFontFileEnumerator {
+@@ -2627,22 +2630,48 @@ class BundledFontFileEnumerator : public IDWriteFontFileEnumerator {
    nsCOMPtr<nsIFile> mFontDir;
    nsCOMPtr<nsIDirectoryEnumerator> mEntries;
    nsCOMPtr<nsISupports> mCurrent;
@@ -101,8 +101,7 @@ index 63169b05b7..8cb601b7d6 100644
 +    : mFactory(aFactory),
 +      mFontDir(aFontDir),
 +      mStockFilesOnly(
-+          MaskConfig::GetString("navigator.platform").value_or("") ==
-+          "Win32") {
++          MaskConfig::GetSpoofedOS() == MaskConfig::SpoofedOS::Windows) {
    mFontDir->GetDirectoryEntries(getter_AddRefs(mEntries));
  }
  

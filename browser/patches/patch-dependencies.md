@@ -13,10 +13,11 @@ compile.
 `additions/camoucfg/MaskConfig.hpp` reads the spoofing config (`CAMOU_CONFIG` /
 `camoufox.cfg`) through `MaskConfig::GetBool()`, `GetString()`, `GetUint32()`
 and friends. `GetBool()` is false for an unset key; `GetOptionalBool()` is for
-the rare caller that must tell unset from false. `scripts/copy-additions.sh`
-copies it into the source tree before any patch applies. A patch that calls
-MaskConfig from a directory whose `moz.build` does not already see `/camoucfg`
-must add `LOCAL_INCLUDES += ["/camoucfg"]` itself.
+the rare caller that must tell unset from false. `GetSpoofedOS()` is the one
+reading of `navigator.platform` as an OS, for every patch that varies by OS.
+`scripts/copy-additions.sh` copies it into the source tree before any patch
+applies. A patch that calls MaskConfig from a directory whose `moz.build` does
+not already see `/camoucfg` must add `LOCAL_INCLUDES += ["/camoucfg"]` itself.
 
 Config keys are declared in `settings/properties.json`; a key a patch reads must
 be listed there.
@@ -61,16 +62,18 @@ already set up, and do not add the include or `LOCAL_INCLUDES` themselves:
 | `system-ui-font-spoofing.patch` | `font-hijacker.patch` for `MaskConfig.hpp` in `gfx/thebes/gfxPlatformFontList.cpp` and `/camoucfg` in `gfx/thebes/moz.build` |
 | `touchscreen-fingerprint-spoofing.patch` | `navigator-spoofing.patch` for `MaskConfig.hpp` in `dom/base/Navigator.cpp` |
 | `font-list-spoofing.patch` | `anti-font-fingerprinting.patch` for `gfxFontGroup::mUserContextId` |
+| `timezone-spoofing.patch`, `webrtc-ip-spoofing.patch` | `audio-fingerprint-manager.patch` for `RoverfoxStorageManager.h` in `dom/base/nsGlobalWindowInner.cpp` |
 
 ## RoverfoxStorageManager
 
 Per-context values set from Playwright (audio seed, WebRTC IP, timezone,
 screen, navigator, WebGL, font list, voices, ...) are kept in
-`RoverfoxStorageManager`, which `anti-font-fingerprinting.patch` adds under
-`dom/base/`. Every content process reads it: a context's documents can land in
-any of them, and only the first document calls the setter. Its cross-process
-put/get IPC lives in `cross-process-storage.patch`. Any patch that uses the
-storage manager needs both.
+`RoverfoxStorageManager`, which `cross-process-storage.patch` adds under
+`dom/base/` with its cross-process put/get IPC. Every content process reads it:
+a context's documents can land in any of them, and only the first document
+calls the setter. The same patch provides the guard and removal every setter
+uses (`IsSetterOffered`, `MarkSetterUsed`, `RemoveSetter`), and
+`window-setter-seal.patch` adds its seal check to `IsSetterOffered`.
 
 ## Playwright
 

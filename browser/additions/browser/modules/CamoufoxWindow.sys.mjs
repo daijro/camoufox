@@ -117,20 +117,28 @@ function applyWindowSize(win) {
   const outerHeight = ChromeUtils.camouGetInt("window.outerHeight");
   if (outerWidth || outerHeight) {
     win.resizeTo(outerWidth || win.outerWidth, outerHeight || win.outerHeight);
-    // mutter auto-maximizes a new window covering >= 80% of the work area; undo
-    // a maximize during startup. After the deadline a maximize is the user's own.
+    // Hold that size through startup. mutter auto-maximizes a new window
+    // covering >= 80% of the work area, and GTK adds its decoration margins to
+    // the outer size only once the window is mapped, which left a page reading
+    // the identity's size plus 10px. After the deadline a change is the user's.
     const deadline = Date.now() + 5000;
-    const undoStartupMaximize = () => {
+    const holdStartupSize = () => {
       if (Date.now() > deadline) {
-        win.removeEventListener("sizemodechange", undoStartupMaximize);
+        win.removeEventListener("sizemodechange", holdStartupSize);
+        win.removeEventListener("resize", holdStartupSize);
         return;
       }
       if (win.windowState === win.STATE_MAXIMIZED) {
         win.restore();
-        win.resizeTo(outerWidth || win.outerWidth, outerHeight || win.outerHeight);
+      }
+      const dw = outerWidth ? outerWidth - win.outerWidth : 0;
+      const dh = outerHeight ? outerHeight - win.outerHeight : 0;
+      if (dw || dh) {
+        win.resizeBy(dw, dh);
       }
     };
-    win.addEventListener("sizemodechange", undoStartupMaximize);
+    win.addEventListener("sizemodechange", holdStartupSize);
+    win.addEventListener("resize", holdStartupSize);
   }
 
   const innerWidth = ChromeUtils.camouGetInt("window.innerWidth");

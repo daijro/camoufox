@@ -9,6 +9,8 @@ Written by daijro.
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
+#include <cstdint>
 #include <optional>
 #include <codecvt>
 #include "mozilla/glue/Debug.h"
@@ -191,6 +193,39 @@ inline std::optional<bool> GetOptionalBool(const std::string& key) {
 
 inline bool GetBool(const std::string& key) {
   return GetOptionalBool(key).value_or(false);
+}
+
+// The OS the identity presents, from navigator.platform. Every patch that
+// varies by OS asks this, so no two of them can disagree about it. None means
+// no platform is configured; Other, one no identity uses.
+enum class SpoofedOS { None, Windows, MacOS, Linux, Other };
+
+inline SpoofedOS GetSpoofedOS() {
+  static const SpoofedOS os = [] {
+    auto platform = GetString("navigator.platform");
+    if (!platform) return SpoofedOS::None;
+    if (*platform == "Win32") return SpoofedOS::Windows;
+    if (*platform == "MacIntel") return SpoofedOS::MacOS;
+    if (platform->rfind("Linux", 0) == 0) return SpoofedOS::Linux;
+    return SpoofedOS::Other;
+  }();
+  return os;
+}
+
+// The ephemeral port range of the OS the identity presents, which is where
+// that OS's kernel puts a socket bound to port 0. A page sees these ports in
+// WebRTC candidates.
+inline std::optional<std::pair<uint16_t, uint16_t>> SpoofedEphemeralPorts() {
+  switch (GetSpoofedOS()) {
+    case SpoofedOS::Windows:
+    case SpoofedOS::MacOS:
+      return std::pair<uint16_t, uint16_t>{49152, 65535};
+    case SpoofedOS::Linux:
+      // The kernel's default net.ipv4.ip_local_port_range.
+      return std::pair<uint16_t, uint16_t>{32768, 60999};
+    default:
+      return std::nullopt;
+  }
 }
 
 inline std::optional<std::array<uint32_t, 4>> GetRect(

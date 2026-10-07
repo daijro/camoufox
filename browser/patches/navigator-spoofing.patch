@@ -131,85 +131,48 @@ index 7af722b926..d02c530cd5 100644
    if (!rts) {
 diff --git a/dom/base/NavigatorManager.cpp b/dom/base/NavigatorManager.cpp
 new file mode 100644
-index 0000000000..cf3febe299
+index 0000000000..398c5dc969
 --- /dev/null
 +++ b/dom/base/NavigatorManager.cpp
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,32 @@
 +/* Camoufox: Per-context navigator property manager */
 +#include "NavigatorManager.h"
-+
-+#include "mozilla/dom/BrowsingContext.h"
-+#include "nsGlobalWindowInner.h"
-+#include "nsPIDOMWindowInlines.h"
-+#include "xpcpublic.h"
 +
 +namespace mozilla {
 +namespace dom {
 +
-+static bool IsDisabled(const char* aPrefix, uint32_t aId) {
-+  nsAutoString dKey;
-+  dKey.AppendPrintf("%s_d_%u", aPrefix, aId);
-+  bool disabled = false;
-+  RoverfoxStorageManager::GetBool(dKey, disabled);
-+  return disabled;
-+}
-+
 +/* static */
 +bool NavigatorManager::IsPlatformFunctionEnabledForWebIDL(JSContext* aCx,
 +                                                          JSObject* aObj) {
-+  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  if (!win) return false;
-+  uint32_t id = 0;
-+  if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+    id = bc->OriginAttributesRef().mUserContextId;
-+  }
-+  return !IsDisabled("nav_plat", id);
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "nav_plat");
 +}
 +
 +/* static */
 +bool NavigatorManager::IsOscpuFunctionEnabledForWebIDL(JSContext* aCx,
 +                                                       JSObject* aObj) {
-+  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  if (!win) return false;
-+  uint32_t id = 0;
-+  if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+    id = bc->OriginAttributesRef().mUserContextId;
-+  }
-+  return !IsDisabled("nav_oscpu", id);
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "nav_oscpu");
 +}
 +
 +/* static */
 +bool NavigatorManager::IsHwcFunctionEnabledForWebIDL(JSContext* aCx,
 +                                                     JSObject* aObj) {
-+  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  if (!win) return false;
-+  uint32_t id = 0;
-+  if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+    id = bc->OriginAttributesRef().mUserContextId;
-+  }
-+  return !IsDisabled("nav_hwc", id);
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "nav_hwc");
 +}
 +
 +/* static */
 +bool NavigatorManager::IsUaFunctionEnabledForWebIDL(JSContext* aCx,
 +                                                    JSObject* aObj) {
-+  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  if (!win) return false;
-+  uint32_t id = 0;
-+  if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+    id = bc->OriginAttributesRef().mUserContextId;
-+  }
-+  return !IsDisabled("nav_ua", id);
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "nav_ua");
 +}
 +
 +}  // namespace dom
 +}  // namespace mozilla
 diff --git a/dom/base/NavigatorManager.h b/dom/base/NavigatorManager.h
 new file mode 100644
-index 0000000000..407fd6d671
+index 0000000000..6a4f90dae3
 --- /dev/null
 +++ b/dom/base/NavigatorManager.h
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,87 @@
 +/* Camoufox: Per-context navigator property manager */
 +#ifndef mozilla_dom_NavigatorManager_h
 +#define mozilla_dom_NavigatorManager_h
@@ -227,9 +190,7 @@ index 0000000000..407fd6d671
 +    nsAutoString key;
 +    key.AppendPrintf("nav_plat_%u", aId);
 +    RoverfoxStorageManager::PutString(key, aValue);
-+    nsAutoString dKey;
-+    dKey.AppendPrintf("nav_plat_d_%u", aId);
-+    RoverfoxStorageManager::PutBool(dKey, true);
++    RoverfoxStorageManager::MarkSetterUsed("nav_plat", aId);
 +  }
 +
 +  static bool GetPlatform(uint32_t aId, nsAString& aOut) {
@@ -246,9 +207,7 @@ index 0000000000..407fd6d671
 +    nsAutoString key;
 +    key.AppendPrintf("nav_oscpu_%u", aId);
 +    RoverfoxStorageManager::PutString(key, aValue);
-+    nsAutoString dKey;
-+    dKey.AppendPrintf("nav_oscpu_d_%u", aId);
-+    RoverfoxStorageManager::PutBool(dKey, true);
++    RoverfoxStorageManager::MarkSetterUsed("nav_oscpu", aId);
 +  }
 +
 +  static bool GetOscpu(uint32_t aId, nsAString& aOut) {
@@ -264,9 +223,7 @@ index 0000000000..407fd6d671
 +    nsAutoString key;
 +    key.AppendPrintf("nav_hwc_%u", aId);
 +    RoverfoxStorageManager::PutUint(key, aValue);
-+    nsAutoString dKey;
-+    dKey.AppendPrintf("nav_hwc_d_%u", aId);
-+    RoverfoxStorageManager::PutBool(dKey, true);
++    RoverfoxStorageManager::MarkSetterUsed("nav_hwc", aId);
 +  }
 +
 +  static uint32_t GetHardwareConcurrency(uint32_t aId) {
@@ -286,9 +243,7 @@ index 0000000000..407fd6d671
 +    nsAutoString key;
 +    key.AppendPrintf("nav_ua_%u", aId);
 +    RoverfoxStorageManager::PutString(key, aValue);
-+    nsAutoString dKey;
-+    dKey.AppendPrintf("nav_ua_d_%u", aId);
-+    RoverfoxStorageManager::PutBool(dKey, true);
++    RoverfoxStorageManager::MarkSetterUsed("nav_ua", aId);
 +  }
 +
 +  static bool GetUserAgent(uint32_t aId, nsAString& aOut) {
@@ -329,7 +284,7 @@ index fa277ae122..b0973412be 100644
  SOURCES += ["FontListManager.cpp"]
  
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index f5dfed61a5..6cf1179dd0 100644
+index 226c3aeadb..592f119026 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -4,6 +4,7 @@
@@ -340,8 +295,8 @@ index f5dfed61a5..6cf1179dd0 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -7834,6 +7835,92 @@ void nsGlobalWindowInner::SetFontList(const nsAString& aFontList,
-   }
+@@ -7819,6 +7820,60 @@ void nsGlobalWindowInner::SetFontList(const nsAString& aFontList,
+   RoverfoxStorageManager::RemoveSetter("setFontList");
  }
  
 +
@@ -356,15 +311,7 @@ index f5dfed61a5..6cf1179dd0 100644
 +  if (userContextId != 0) {
 +    NavigatorManager::SetPlatform(0, platform);
 +  }
-+  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
-+  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
-+    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
-+    if (global) {
-+      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
-+      JS_SetProperty(cx, global, "setNavigatorPlatform", undef);
-+      JS_DeleteProperty(cx, global, "setNavigatorPlatform");
-+    }
-+  }
++  RoverfoxStorageManager::RemoveSetter("setNavigatorPlatform");
 +}
 +
 +void nsGlobalWindowInner::SetNavigatorOscpu(const nsAString& oscpu,
@@ -377,15 +324,7 @@ index f5dfed61a5..6cf1179dd0 100644
 +  if (userContextId != 0) {
 +    NavigatorManager::SetOscpu(0, oscpu);
 +  }
-+  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
-+  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
-+    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
-+    if (global) {
-+      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
-+      JS_SetProperty(cx, global, "setNavigatorOscpu", undef);
-+      JS_DeleteProperty(cx, global, "setNavigatorOscpu");
-+    }
-+  }
++  RoverfoxStorageManager::RemoveSetter("setNavigatorOscpu");
 +}
 +
 +void nsGlobalWindowInner::SetNavigatorHardwareConcurrency(uint32_t cores,
@@ -398,15 +337,7 @@ index f5dfed61a5..6cf1179dd0 100644
 +  if (userContextId != 0) {
 +    NavigatorManager::SetHardwareConcurrency(0, cores);
 +  }
-+  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
-+  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
-+    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
-+    if (global) {
-+      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
-+      JS_SetProperty(cx, global, "setNavigatorHardwareConcurrency", undef);
-+      JS_DeleteProperty(cx, global, "setNavigatorHardwareConcurrency");
-+    }
-+  }
++  RoverfoxStorageManager::RemoveSetter("setNavigatorHardwareConcurrency");
 +}
 +
 +void nsGlobalWindowInner::SetNavigatorUserAgent(const nsAString& ua,
@@ -419,15 +350,7 @@ index f5dfed61a5..6cf1179dd0 100644
 +  if (userContextId != 0) {
 +    NavigatorManager::SetUserAgent(0, ua);
 +  }
-+  // Self-destruct: set to undefined first to bust IC/shape caches on ARM64.
-+  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
-+    JS::Rooted<JSObject*> global(cx, JS::CurrentGlobalOrNull(cx));
-+    if (global) {
-+      JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
-+      JS_SetProperty(cx, global, "setNavigatorUserAgent", undef);
-+      JS_DeleteProperty(cx, global, "setNavigatorUserAgent");
-+    }
-+  }
++  RoverfoxStorageManager::RemoveSetter("setNavigatorUserAgent");
 +}
 +
  RefPtr<GenericPromise> nsGlobalWindowInner::StorageAccessPermissionChanged(

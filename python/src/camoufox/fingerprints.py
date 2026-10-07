@@ -1251,6 +1251,22 @@ def _app_version_from_user_agent(user_agent: str) -> Optional[str]:
     return f"5.0 ({'; '.join(kept)})" if kept else None
 
 
+def _set_app_version(config: Dict[str, Any]) -> None:
+    """Set navigator.appVersion the way Firefox computes it: from the userAgent.
+
+    Left unset, appVersion falls through to the *host's* value and contradicts
+    the userAgent and platform: a Linux preset on a macOS host reported
+    "5.0 (Macintosh)" beside platform "Linux x86_64". Taken from fpgen, it is a
+    draw of its own, and fpgen's data pairs some Linux user agents with
+    "5.0 (Windows)", which only an extension rewriting one of the two produces.
+    Deriving from the UA rather than the platform keeps the distro token that 20
+    of the bundled Linux presets carry ("X11; Ubuntu").
+    """
+    derived = _app_version_from_user_agent(config.get('navigator.userAgent', ''))
+    if derived:
+        config['navigator.appVersion'] = derived
+
+
 def from_preset(preset: Dict, ff_version: Optional[str] = None, salt: Optional[int] = None) -> Dict[str, Any]:
     """
     Convert a real fingerprint preset to CAMOU_CONFIG format.
@@ -1277,23 +1293,7 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None, salt: Optional[i
     oscpu = nav.get('oscpu') or (oscpu_for_platform(nav['platform']) if nav.get('platform') else None)
     if oscpu:
         config['navigator.oscpu'] = oscpu
-    if nav.get('appVersion'):
-        config['navigator.appVersion'] = nav['appVersion']
-    elif config.get('navigator.userAgent'):
-        # Left unset, appVersion falls through to the *host's* value and then
-        # contradicts the userAgent and platform set above: a Linux preset on a
-        # macOS host reported "5.0 (Macintosh)" beside platform "Linux x86_64",
-        # which any page can read in two properties.
-        #
-        # Firefox builds it from the same OS tokens as the userAgent, minus the
-        # architecture and rv, with Windows collapsed to its family name. Deriving
-        # it from the UA rather than from the platform keeps the distro token that
-        # 20 of the bundled Linux presets carry ("X11; Ubuntu"), which a platform
-        # lookup would flatten to "X11" — a mismatch of the same kind, if a
-        # smaller one.
-        derived = _app_version_from_user_agent(config['navigator.userAgent'])
-        if derived:
-            config['navigator.appVersion'] = derived
+    _set_app_version(config)
     if 'maxTouchPoints' in nav:
         config['navigator.maxTouchPoints'] = nav['maxTouchPoints']
 
@@ -1712,6 +1712,7 @@ def from_fpgen(fingerprint: Dict[str, Any], ff_version: Optional[str] = None) ->
         ff_version=ff_version,
     )
     handle_screenXY(camoufox_data, fingerprint)
+    _set_app_version(camoufox_data)
 
     return camoufox_data
 

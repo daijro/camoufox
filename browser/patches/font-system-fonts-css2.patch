@@ -73,7 +73,7 @@ index 2ec366ca45..bcdc4301b9 100644
      "/dom/base",
      "/dom/html",
 diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
-index 1e76b87091..53a7006f01 100644
+index 056c0e2f7f..88efe2eeb7 100644
 --- a/layout/base/nsLayoutUtils.cpp
 +++ b/layout/base/nsLayoutUtils.cpp
 @@ -4,6 +4,7 @@
@@ -84,7 +84,7 @@ index 1e76b87091..53a7006f01 100644
  #include <algorithm>
  #include <limits>
  
-@@ -9748,6 +9749,113 @@ already_AddRefed<nsFontMetrics> nsLayoutUtils::GetMetricsFor(
+@@ -9822,6 +9823,93 @@ already_AddRefed<nsFontMetrics> nsLayoutUtils::GetMetricsFor(
  
  static void GetSpoofedSystemFontForRFP(LookAndFeel::FontID aFontID,
                                         gfxFontStyle& aStyle, nsAString& aName) {
@@ -102,36 +102,16 @@ index 1e76b87091..53a7006f01 100644
 +  // ComputeSystemFont() below only routes *content* documents here, so this
 +  // never changes what the browser's own chrome UI resolves to.
 +  //
-+  // The platform classification is cached in a function-static because
-+  // CreepJS calls this six times in tight succession (one per CSS2 keyword)
-+  // and uses probe duration as a probabilistic headless signal.
-+  // navigator.platform is set from CAMOU_CONFIG at process start and never
-+  // changes, so a single lookup per process is safe.
-+  enum class SpoofedOS { Other, Mac, Win, Linux };
-+  static const SpoofedOS sSpoofedOS = []() {
-+    auto platform = MaskConfig::GetString("navigator.platform");
-+    if (!platform) return SpoofedOS::Other;
-+    const std::string& p = platform.value();
-+    auto starts_with = [&](const char* prefix) {
-+      size_t n = std::strlen(prefix);
-+      return p.size() >= n &&
-+             std::equal(prefix, prefix + n, p.begin(),
-+                        [](char a, char b) {
-+                          return std::tolower(static_cast<unsigned char>(a)) ==
-+                                 std::tolower(static_cast<unsigned char>(b));
-+                        });
-+    };
-+    if (starts_with("mac")) return SpoofedOS::Mac;
-+    if (starts_with("win")) return SpoofedOS::Win;
-+    if (starts_with("linux")) return SpoofedOS::Linux;
-+    return SpoofedOS::Other;
-+  }();
++  // GetSpoofedOS() caches its answer: CreepJS calls this six times in tight
++  // succession (one per CSS2 keyword) and uses probe duration as a
++  // probabilistic headless signal.
++  const auto os = MaskConfig::GetSpoofedOS();
 +  // Every branch must mark the result as a system font, as the upstream path at
 +  // the end of this function does: ComputeSystemFont copies the flag into
 +  // FontFamilyList::is_system_font, and without it canvas's font setter
 +  // overrides the size and cannot serialize the value, so
 +  // `ctx.font = "caption"` was silently ignored ("10px sans-serif").
-+  if (sSpoofedOS == SpoofedOS::Mac) {
++  if (os == MaskConfig::SpoofedOS::MacOS) {
 +    // Same per-keyword table as a real macOS (see the XP_MACOSX branch below).
 +    aName = u"-apple-system"_ns;
 +    switch (aFontID) {
@@ -153,7 +133,7 @@ index 1e76b87091..53a7006f01 100644
 +    aStyle.systemFont = true;
 +    return;
 +  }
-+  if (sSpoofedOS == SpoofedOS::Win) {
++  if (os == MaskConfig::SpoofedOS::Windows) {
 +    // Windows reports the system font in device pixels, so every keyword is
 +    // 12 px x the display scale (30 px at 250 %). Use the DPR the identity
 +    // presents, which is the one the page cross-checks it against.
@@ -184,7 +164,7 @@ index 1e76b87091..53a7006f01 100644
 +    aStyle.systemFont = true;
 +    return;
 +  }
-+  if (sSpoofedOS == SpoofedOS::Linux) {
++  if (os == MaskConfig::SpoofedOS::Linux) {
 +    // A stock Ubuntu desktop: GTK interface font "Ubuntu 11" (11pt = 14.6667
 +    // CSS px). Upstream's RFP value for Linux ("sans-serif" 15px) is what a
 +    // resistFingerprinting user shows, not a regular desktop.
@@ -198,7 +178,7 @@ index 1e76b87091..53a7006f01 100644
  #if defined(XP_MACOSX) || defined(MOZ_WIDGET_UIKIT)
    aName = u"-apple-system"_ns;
    // Values taken from a macOS 10.15 system.
-@@ -9802,8 +9910,22 @@ void nsLayoutUtils::ComputeSystemFont(nsFont* aSystemFont,
+@@ -9876,8 +9964,22 @@ void nsLayoutUtils::ComputeSystemFont(nsFont* aSystemFont,
                                        const Document* aDocument) {
    gfxFontStyle fontStyle;
    nsAutoString systemFontName;
@@ -217,7 +197,7 @@ index 1e76b87091..53a7006f01 100644
 +  // Linux, "-apple-system" on Windows) leaves the toolbar and menus falling
 +  // back to the default serif font -- see daijro/camoufox#695.
 +  if (aDocument && !aDocument->IsInChromeDocShell() &&
-+      (MaskConfig::GetString("navigator.platform").has_value() ||
++      (MaskConfig::GetSpoofedOS() != MaskConfig::SpoofedOS::None ||
 +       aDocument->ShouldResistFingerprinting(
 +           RFPTarget::FontVisibilityRestrictGenerics))) {
      GetSpoofedSystemFontForRFP(aFontID, fontStyle, systemFontName);

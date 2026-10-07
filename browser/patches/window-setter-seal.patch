@@ -1,19 +1,5 @@
-diff --git a/dom/base/AudioFingerprintManager.cpp b/dom/base/AudioFingerprintManager.cpp
-index e2f26859ae..b9414c9bc8 100644
---- a/dom/base/AudioFingerprintManager.cpp
-+++ b/dom/base/AudioFingerprintManager.cpp
-@@ -85,6 +85,9 @@ AudioFingerprintManager::IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aO
-   if (!win) {
-     return false;
-   }
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
- 
-   uint32_t userContextId = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
 diff --git a/dom/base/ChromeUtils.cpp b/dom/base/ChromeUtils.cpp
-index c921614484..e68b339f83 100644
+index c921614484..516a13d7c7 100644
 --- a/dom/base/ChromeUtils.cpp
 +++ b/dom/base/ChromeUtils.cpp
 @@ -5,6 +5,10 @@
@@ -85,10 +71,10 @@ index c921614484..e68b339f83 100644
 +    return;
 +  }
 +  for (const char* name : kCamouFingerprintSetters) {
-+    // Assigning undefined before deleting matches the per-setter self-destruct:
-+    // it busts the shape/IC caches that otherwise keep a deleted name reachable
-+    // on ARM64. Failures are swallowed on purpose -- a name that will not go is
-+    // worth less than a document that fails to load because of it.
++    // Assigning undefined before deleting matches RoverfoxStorageManager::
++    // RemoveSetter: it busts the shape/IC caches that otherwise keep a deleted
++    // name reachable on ARM64. Failures are swallowed on purpose -- a name that
++    // will not go is worth less than a document that fails to load because of it.
 +    JS::Rooted<JS::Value> undef(cx, JS::UndefinedValue());
 +    if (!JS_SetProperty(cx, global, name, undef)) {
 +      JS_ClearPendingException(cx);
@@ -119,164 +105,20 @@ index 11b1a5dcdc..677194cf17 100644
    static bool ShouldResistFingerprinting(
        GlobalObject& aGlobal, JSRFPTarget aTarget,
        nsIRFPTargetSetIDL* aOverriddenFingerprintingSettings,
-diff --git a/dom/base/FontListManager.cpp b/dom/base/FontListManager.cpp
-index ce68062033..fe356cc736 100644
---- a/dom/base/FontListManager.cpp
-+++ b/dom/base/FontListManager.cpp
-@@ -97,6 +97,9 @@ bool FontListManager::IsFunctionEnabledForWebIDL(JSContext* aCx,
-                                                   JSObject* aObj) {
+diff --git a/dom/base/RoverfoxStorageManager.cpp b/dom/base/RoverfoxStorageManager.cpp
+index 32a3cb96ec..cd87bb2bf7 100644
+--- a/dom/base/RoverfoxStorageManager.cpp
++++ b/dom/base/RoverfoxStorageManager.cpp
+@@ -240,6 +240,9 @@ static nsString SetterUsedKey(const char* aName, uint32_t aUserContextId) {
+                                                           const char* aName) {
    nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
    if (!win) return false;
 +  // Camoufox: sealed once this window's init scripts have run, so page
 +  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
 +  if (win->CamouSettersSealed()) return false;
-   uint32_t id = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
-     id = bc->OriginAttributesRef().mUserContextId;
-diff --git a/dom/base/NavigatorManager.cpp b/dom/base/NavigatorManager.cpp
-index cf3febe299..92f7c7e60a 100644
---- a/dom/base/NavigatorManager.cpp
-+++ b/dom/base/NavigatorManager.cpp
-@@ -22,6 +22,9 @@ bool NavigatorManager::IsPlatformFunctionEnabledForWebIDL(JSContext* aCx,
-                                                           JSObject* aObj) {
-   nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-   if (!win) return false;
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
-   uint32_t id = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
-     id = bc->OriginAttributesRef().mUserContextId;
-@@ -34,6 +37,9 @@ bool NavigatorManager::IsOscpuFunctionEnabledForWebIDL(JSContext* aCx,
-                                                        JSObject* aObj) {
-   nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-   if (!win) return false;
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
-   uint32_t id = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
-     id = bc->OriginAttributesRef().mUserContextId;
-@@ -46,6 +52,9 @@ bool NavigatorManager::IsHwcFunctionEnabledForWebIDL(JSContext* aCx,
-                                                      JSObject* aObj) {
-   nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-   if (!win) return false;
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
-   uint32_t id = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
-     id = bc->OriginAttributesRef().mUserContextId;
-@@ -58,6 +67,9 @@ bool NavigatorManager::IsUaFunctionEnabledForWebIDL(JSContext* aCx,
-                                                     JSObject* aObj) {
-   nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-   if (!win) return false;
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
-   uint32_t id = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
-     id = bc->OriginAttributesRef().mUserContextId;
-diff --git a/dom/base/ScreenDimensionManager.cpp b/dom/base/ScreenDimensionManager.cpp
-index 336fe886ee..0140361731 100644
---- a/dom/base/ScreenDimensionManager.cpp
-+++ b/dom/base/ScreenDimensionManager.cpp
-@@ -31,6 +31,9 @@ bool ScreenDimensionManager::IsDimensionsFunctionEnabledForWebIDL(
-     JSContext* aCx, JSObject* aObj) {
-   nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-   if (!win) return false;
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
-   return !IsDisabled("scr_dim", UserContextIdFor(aObj));
- }
- 
-@@ -39,6 +42,9 @@ bool ScreenDimensionManager::IsColorDepthFunctionEnabledForWebIDL(
-     JSContext* aCx, JSObject* aObj) {
-   nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-   if (!win) return false;
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
-   return !IsDisabled("scr_depth", UserContextIdFor(aObj));
- }
- 
-diff --git a/dom/base/SpeechVoicesManager.cpp b/dom/base/SpeechVoicesManager.cpp
-index 9edf152bfd..f9804eb554 100644
---- a/dom/base/SpeechVoicesManager.cpp
-+++ b/dom/base/SpeechVoicesManager.cpp
-@@ -90,6 +90,9 @@ bool SpeechVoicesManager::IsFunctionEnabledForWebIDL(JSContext* aCx,
-                                                       JSObject* aObj) {
-   nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-   if (!win) return false;
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
-   uint32_t id = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
-     id = bc->OriginAttributesRef().mUserContextId;
-diff --git a/dom/base/TimezoneManager.cpp b/dom/base/TimezoneManager.cpp
-index cca83e01c7..0f781b2d38 100644
---- a/dom/base/TimezoneManager.cpp
-+++ b/dom/base/TimezoneManager.cpp
-@@ -70,6 +70,9 @@ TimezoneManager::IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
-   if (!win) {
-     return false;
-   }
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
- 
    uint32_t userContextId = 0;
    if (BrowsingContext* bc = win->GetBrowsingContext()) {
-diff --git a/dom/base/WebGLParamsManager.cpp b/dom/base/WebGLParamsManager.cpp
-index 020afee28f..e3ebf793e2 100644
---- a/dom/base/WebGLParamsManager.cpp
-+++ b/dom/base/WebGLParamsManager.cpp
-@@ -57,6 +57,9 @@ bool WebGLParamsManager::IsVendorFunctionEnabledForWebIDL(JSContext* aCx,
-                                                            JSObject* aObj) {
-   nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-   if (!win) return false;
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
-   uint32_t id = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
-     id = bc->OriginAttributesRef().mUserContextId;
-@@ -70,6 +73,9 @@ bool WebGLParamsManager::IsRendererFunctionEnabledForWebIDL(JSContext* aCx,
-                                                              JSObject* aObj) {
-   nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-   if (!win) return false;
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
-   uint32_t id = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
-     id = bc->OriginAttributesRef().mUserContextId;
-diff --git a/dom/base/WebRTCIPManager.cpp b/dom/base/WebRTCIPManager.cpp
-index 9e8e805085..38598e6d93 100644
---- a/dom/base/WebRTCIPManager.cpp
-+++ b/dom/base/WebRTCIPManager.cpp
-@@ -91,6 +91,9 @@ WebRTCIPManager::IsIPv4FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj)
-   if (!win) {
-     return false;
-   }
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
- 
-   uint32_t userContextId = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
-@@ -108,6 +111,9 @@ WebRTCIPManager::IsIPv6FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj)
-   if (!win) {
-     return false;
-   }
-+  // Camoufox: sealed once this window's init scripts have run, so page
-+  // script never sees the setter (FrameTree -> camouSealFingerprintSetters).
-+  if (win->CamouSettersSealed()) return false;
- 
-   uint32_t userContextId = 0;
-   if (BrowsingContext* bc = win->GetBrowsingContext()) {
+     userContextId = bc->OriginAttributesRef().mUserContextId;
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
 index 2b581e729a..9629fce2a4 100644
 --- a/dom/base/nsGlobalWindowInner.h

@@ -23,11 +23,7 @@ Write a test here when, and only when, one of these is true:
   to *ignore* the context locale (microsoft/playwright#38919); Camoufox sets the
   locale below that layer, so its workers agree with the main thread. The
   upstream test is skiplisted in `ci/skiplist.yml` and the version here takes
-  over guarding the behaviour. `test_user_agent_token.py` is the other one:
-  upstream expects `Firefox` in the User-Agent, while the bare binary
-  advertises `Camoufox/<version>` until the Python package injects a
-  fingerprint, so it asserts a well-formed Gecko UA that matches between the
-  request header and `navigator.userAgent`.
+  over guarding the behaviour.
 
 In the second case the `ci/skiplist.yml` entry must name the test that replaces
 it, so a skip can never quietly mean "nothing checks this any more".

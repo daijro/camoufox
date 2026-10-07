@@ -422,14 +422,14 @@ describe("preset appVersion (test_preset_appversion.py)", () => {
 		}
 	});
 
-	it("keeps a captured appVersion, follows an unknown platform's UA", () => {
+	it("replaces a captured appVersion with the UA's, follows an unknown platform's UA", () => {
 		const p: any = preset(
 			"Win32",
 			"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Firefox/152.0",
 		);
 		p.navigator.appVersion = "5.0 (Windows NT 10.0; Win64; x64)";
 		expect(fromPreset(p, null, 0)["navigator.appVersion"]).toBe(
-			"5.0 (Windows NT 10.0; Win64; x64)",
+			"5.0 (Windows)",
 		);
 		expect(
 			fromPreset(
@@ -805,6 +805,7 @@ describe("fromFpgen", () => {
 				"Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0",
 			"navigator.platform": "Linux x86_64",
 			"navigator.hardwareConcurrency": 8,
+			"navigator.appVersion": "5.0 (X11)",
 			"screen.width": 1920,
 			"screen.height": 1080,
 			"screen.availLeft": 0,
@@ -929,5 +930,22 @@ describe.skipIf(!MODEL.ok)("fpgen generation (needs the model)", () => {
 		} finally {
 			spy.mockRestore();
 		}
+	});
+});
+
+describe("fromFpgen appVersion", () => {
+	it("follows the drawn user agent, not a separately drawn value", () => {
+		// fpgen's data pairs some Linux user agents with "5.0 (Windows)", which
+		// Firefox never reports: it computes appVersion from the user agent.
+		const fingerprint = generateFingerprint({ os: "linux" });
+		fingerprint.navigator = {
+			...fingerprint.navigator,
+			userAgent:
+				"Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0",
+			appVersion: "5.0 (Windows)",
+		};
+		expect(fromFpgen(fingerprint, "156")["navigator.appVersion"]).toBe(
+			"5.0 (X11)",
+		);
 	});
 });

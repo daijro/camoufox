@@ -202,6 +202,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         result.note(str(exc))
         result.finish(evidence.ERROR).save(args.evidence_dir)
         return 1
+    # The suite runs from its own directory.
+    binary = binary.resolve()
+    # A run that dies before grading must not find the last run's result.
+    out_json.unlink(missing_ok=True)
 
     proc = run(
         [

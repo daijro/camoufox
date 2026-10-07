@@ -51,6 +51,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "webgl-live-state",
         "webgl-renderer-pair",
         "webrtc-context-ip",
+        "webrtc-port-range",
         "worker-config-reads",
     ),
     "automation": (

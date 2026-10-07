@@ -1,16 +1,12 @@
 diff --git a/dom/base/TimezoneManager.cpp b/dom/base/TimezoneManager.cpp
 new file mode 100644
-index 0000000000..cca83e01c7
+index 0000000000..6e63ce3bb6
 --- /dev/null
 +++ b/dom/base/TimezoneManager.cpp
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,61 @@
 +#include "TimezoneManager.h"
 +#include "RoverfoxStorageManager.h"
 +#include "MaskConfig.hpp"
-+#include "nsGlobalWindowInner.h"
-+#include "nsPIDOMWindowInlines.h"
-+#include "xpcpublic.h"
-+#include "mozilla/dom/BrowsingContext.h"
 +#include "mozilla/StaticMutex.h"
 +
 +namespace mozilla {
@@ -57,44 +53,24 @@ index 0000000000..cca83e01c7
 +         NS_ConvertUTF16toUTF8(timezone).Equals(*sProcessTimezone);
 +}
 +
-+/* static */ nsString
-+TimezoneManager::DisabledKeyForUserContext(uint32_t userContextId) {
-+  nsString key;
-+  key.AppendPrintf("tz_disabled_%u", userContextId);
-+  return key;
-+}
-+
 +/* static */ void
 +TimezoneManager::DisableFunction(uint32_t userContextId) {
-+  nsString key = DisabledKeyForUserContext(userContextId);
-+  RoverfoxStorageManager::PutBool(key, true);
++  RoverfoxStorageManager::MarkSetterUsed("tz", userContextId);
 +}
 +
 +/* static */ bool
 +TimezoneManager::IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
-+  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
-+  if (!win) {
-+    return false;
-+  }
-+
-+  uint32_t userContextId = 0;
-+  if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+    userContextId = bc->OriginAttributesRef().mUserContextId;
-+  }
-+
-+  bool disabled = false;
-+  RoverfoxStorageManager::GetBool(DisabledKeyForUserContext(userContextId), disabled);
-+  return !disabled;
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "tz");
 +}
 +
 +}  // namespace dom
 +}  // namespace mozilla
 diff --git a/dom/base/TimezoneManager.h b/dom/base/TimezoneManager.h
 new file mode 100644
-index 0000000000..888303c315
+index 0000000000..34c35cfd76
 --- /dev/null
 +++ b/dom/base/TimezoneManager.h
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,30 @@
 +#ifndef mozilla_dom_TimezoneManager_h
 +#define mozilla_dom_TimezoneManager_h
 +
@@ -119,9 +95,6 @@ index 0000000000..888303c315
 +
 +  static void DisableFunction(uint32_t userContextId);
 +  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
-+
-+ private:
-+  static nsString DisabledKeyForUserContext(uint32_t userContextId);
 +};
 +
 +}  // namespace dom
@@ -149,10 +122,10 @@ index c1b1fbf7e6..ee5d0b9149 100644
      "UIDirectionManager.cpp",
      "UserActivation.cpp",
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 026fd4794d..ff63d5e4dc 100644
+index 3db19d8956..d915d3ced3 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -246,6 +246,8 @@
+@@ -247,6 +247,8 @@
  #include "nsICookieService.h"
  #include "nsID.h"
  #include "nsIDOMStorageManager.h"
@@ -161,7 +134,7 @@ index 026fd4794d..ff63d5e4dc 100644
  #include "nsIDOMXULControlElement.h"
  #include "nsIDeviceSensors.h"
  #include "nsIDocShell.h"
-@@ -7762,6 +7764,50 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
+@@ -7763,6 +7765,39 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
    return mIntlUtils;
  }
  
@@ -195,18 +168,7 @@ index 026fd4794d..ff63d5e4dc 100644
 +    TimezoneManager::NoteProcessTimezone(timezoneASCII);
 +  }
 +
-+  // Self-destruct: remove this function from the window object after first use.
-+  // Set to undefined first to bust IC/shape caches on ARM64 (macOS Apple Silicon),
-+  // then delete. Without this, the resolve hook may not re-fire on ARM64 and the
-+  // Func guard never gets checked, causing the property to survive deletion.
-+  if (JSContext* selfDestructCx = nsContentUtils::GetCurrentJSContext()) {
-+    JS::Rooted<JSObject*> global(selfDestructCx, JS::CurrentGlobalOrNull(selfDestructCx));
-+    if (global) {
-+      JS::Rooted<JS::Value> undef(selfDestructCx, JS::UndefinedValue());
-+      JS_SetProperty(selfDestructCx, global, "setTimezone", undef);
-+      JS_DeleteProperty(selfDestructCx, global, "setTimezone");
-+    }
-+  }
++  RoverfoxStorageManager::RemoveSetter("setTimezone");
 +}
 +
  void nsGlobalWindowInner::StoreSharedWorker(SharedWorker* aSharedWorker) {

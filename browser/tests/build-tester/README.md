@@ -5,7 +5,7 @@ Tests a raw Camoufox binary (Firefox) directly against the same antibot-detectio
 ## Prerequisites
 
 - Python 3.10+ (what `python/` requires)
-- Node.js (for building the TypeScript checks bundle via `esbuild`, first run only)
+- Node.js (for building the TypeScript checks bundle via `esbuild`)
 
 ## Setup
 
@@ -91,12 +91,7 @@ service tests).
 
 ## The Checks Bundle
 
-`scripts/checks-bundle.js` is a compiled artifact built from the TypeScript sources in `src/lib/checks/`. It is built automatically on first run. To force a rebuild, delete it:
-
-```bash
-rm scripts/checks-bundle.js
-python scripts/run_tests.py <binary_path>
-```
+`scripts/checks-bundle.js` is a compiled artifact built from the TypeScript sources in `src/`. A run rebuilds it whenever it is missing or older than any of them, so an edited check always takes effect.
 
 Source files:
 - `src/lib/checks/index.ts` — entry point

@@ -309,8 +309,8 @@ pieces:
 
 1. **Manager classes** (e.g., AudioFingerprintManager, WebRTCIPManager):
    - Store per-context settings using RoverfoxStorageManager
-   - Provide WebIDL-compatible enable/disable checks
-   - Handle self-destructing functions
+   - Gate their setter with `RoverfoxStorageManager::IsSetterOffered` and
+     `MarkSetterUsed`
 
 2. **Window.webidl functions**:
    - JavaScript APIs exposed to Playwright
@@ -319,7 +319,7 @@ pieces:
 3. **nsGlobalWindowInner.cpp implementations**:
    - Extract userContextId from window/document/docshell
    - Call manager classes
-   - Self-destruct logic (remove function after first use)
+   - Remove the setter after use with `RoverfoxStorageManager::RemoveSetter`
 
 4. **Core logic changes**:
    - Consult the per-context manager before the global config (MaskConfig)

@@ -1,5 +1,5 @@
 """
-Verify worker reads of per-context values (anti-font-fingerprinting.patch,
+Verify worker reads of per-context values (cross-process-storage.patch,
 RoverfoxStorageManager).
 
   values  a worker in a macOS context of a Windows launch reports the context's

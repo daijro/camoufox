@@ -140,6 +140,8 @@ def run_pytest(
     is actually importable in that interpreter.
     """
     junit.parent.mkdir(parents=True, exist_ok=True)
+    # A run that dies before writing junit must not leave the last run's.
+    junit.unlink(missing_ok=True)
     cmd = [str(python), "-m", "pytest", f"--junitxml={junit}", "-p", "no:randomly"]
     if per_test_timeout and _has_plugin(python, "pytest_timeout"):
         cmd.append(f"--timeout={per_test_timeout}")

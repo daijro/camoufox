@@ -47,7 +47,9 @@ def convert_preset(ctx: dict) -> dict:
     }
 
 
-def generate_presets() -> dict:
+def generate_presets(ff_version: str) -> dict:
+    """Identities for the binary under test, claiming its Firefox version as the
+    launchers do (NewContext defaults ff_version to the browser's own)."""
     try:
         from camoufox.fingerprints import generate_context_fingerprint
     except ImportError:
@@ -60,13 +62,13 @@ def generate_presets() -> dict:
         sys.exit(1)
 
     print("  Generating 3 macOS per-context profiles...")
-    mac_per_context = [convert_preset(generate_context_fingerprint(os="macos")) for _ in range(3)]
+    mac_per_context = [convert_preset(generate_context_fingerprint(os="macos", ff_version=ff_version)) for _ in range(3)]
     print("  Generating 3 Linux per-context profiles...")
-    linux_per_context = [convert_preset(generate_context_fingerprint(os="linux")) for _ in range(3)]
+    linux_per_context = [convert_preset(generate_context_fingerprint(os="linux", ff_version=ff_version)) for _ in range(3)]
     print("  Generating macOS global profile...")
-    mac_global = convert_preset(generate_context_fingerprint(os="macos"))
+    mac_global = convert_preset(generate_context_fingerprint(os="macos", ff_version=ff_version))
     print("  Generating Linux global profile...")
-    linux_global = convert_preset(generate_context_fingerprint(os="linux"))
+    linux_global = convert_preset(generate_context_fingerprint(os="linux", ff_version=ff_version))
 
     return {
         "macPerContext": mac_per_context,
