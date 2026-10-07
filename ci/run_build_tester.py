@@ -19,18 +19,15 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from . import results as evidence
-from ._util import CI_DIR, RESULTS_DIR, REPO_ROOT, WORK_DIR, read_json, run
+from ._util import BROWSER_ROOT, CI_DIR, RESULTS_DIR, WORK_DIR, read_json, run
 
-BUILD_TESTER = REPO_ROOT / "build-tester"
+BUILD_TESTER = BROWSER_ROOT / "tests" / "build-tester"
 CONFIG_PATH = CI_DIR / "build-tester.yml"
 
-# Cross-profile uniqueness, split by what each slot actually promises. Treating
-# them alike made the gate fail a run that scored 1054/1054: it counted three
-# macOS contexts all reporting "MacIntel" as three collisions, which is the
-# correct answer to a question nobody asked.
+# Cross-profile uniqueness, split by what each slot promises: three macOS
+# contexts all reporting "MacIntel" is correct, not a collision.
 #
-# Values Camoufox derives per context. Two contexts sharing one is the leak
-# this whole suite exists to catch, so a single collision here is fatal.
+# Values Camoufox derives per context, where one collision is the leak itself.
 _MUST_VARY = ("uniqueAudio", "uniqueTimezones")
 
 # Values that follow the device rather than the context. fonts, screens, voices

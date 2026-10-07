@@ -7,7 +7,7 @@
 # get re-litigated by the next well-meaning contributor, or quietly undone by an
 # agent rebasing patches at 3am.
 #
-# `native-tests/test_tribal_rules.py` asserts every entry that is mechanically
+# `browser/tests/native/test_tribal_rules.py` asserts every entry that is mechanically
 # checkable. An entry with `check: manual` is documentation only.
 #
 # Adding one: cite the issue, PR, or commit. "I think this is how it works" is
@@ -61,7 +61,7 @@ rules:
     check: automated
     evidence:
       - "issue #93: no video under headless='virtual'"
-      - "pythonlib/camoufox/virtdisplay.py: the measurement table"
+      - "python/src/camoufox/virtdisplay.py: the measurement table"
     rationale: >-
       Briefly enabled on the theory that disabling it caused #93. It did not --
       #93 was a Juggler bug, fixed by capturing the screencast from the
@@ -107,7 +107,7 @@ rules:
     title: The display's lock and socket are removed whether or not we killed it
     check: automated
     evidence:
-      - "found by native-tests/test_crash_recovery.py::test_xvfb_sigkill_under_a_virtual_display"
+      - "found by browser/tests/native/test_crash_recovery.py::test_xvfb_sigkill_under_a_virtual_display"
       - "isolated: Xvfb alive -> socket removed; Xvfb already dead -> socket leaked"
     rationale: >-
       kill() used to gate its entire body on `self.proc.poll() is None`, so a
@@ -141,7 +141,7 @@ rules:
     evidence:
       - "PR #521 (2026-03-15) added `cloverlabs-camoufox` to build-tester/requirements.txt"
       - "the commit's author is the PyPI author of that package"
-      - "build-tester/scripts/presets.py already prints the correct answer in its ImportError handler"
+      - "browser/tests/build-tester/scripts/presets.py already prints the correct answer in its ImportError handler"
     rationale: >-
       build-tester generates its fingerprints with camoufox.fingerprints, so
       whichever distribution provides `camoufox` decides what is actually being
@@ -149,11 +149,11 @@ rules:
       graded against someone else's fingerprint generation, a divergence between
       the two reads as a browser bug, and every CI run pulls an outside package
       into a job holding repository credentials. The only `camoufox` this
-      repository may install is pythonlib/ from this tree.
+      repository may install is python/ from this tree.
     expect:
       no_dependency_matching: "camoufox"
-      except_paths: ["pythonlib/pyproject.toml"]
-      allowed_forms: ["-e ../pythonlib", "-e ./pythonlib", "-e pythonlib"]
+      except_paths: ["python/pyproject.toml"]
+      allowed_forms: ["-e ../../../python", "-e ./python", "-e python"]
 
   # -------------------------------------------------------------------------
   # Measurement
@@ -207,10 +207,14 @@ rules:
       - "PR #528 (e4528a2): 'Disable Canvas Noise' -- removed the canvas noise patch"
       - "issue #721: canvas:seed declared and passed through, but nothing consumed it"
       - "24 profiles across 3 runs on v152.0.4-beta.30: canvas 16 distinct of 24, audio 24 of 24"
+      - "toolkit/components/resistfingerprinting/RFPTargetsDefaultBaseline.inc: EfficientCanvasRandomization is on by default in every window"
+      - "v156.0.1-beta.32: two contexts, identical getImageData, PNG data URLs differing only by a deBG chunk"
     rationale: >-
-      No stock Firefox perturbs its canvas output, so noise is itself a tell:
+      Stock Firefox does not perturb canvas pixels, so noise is itself a tell:
       a page that renders the same image twice and gets two answers has found
-      a spoofing browser. A context's canvas therefore follows what really
+      a spoofing browser. What stock Firefox does do, through baseline
+      fingerprinting protection, is append a per-session deBG chunk to PNGs
+      from toDataURL and toBlob; Camoufox leaves that on, as Firefox ships it. A context's canvas therefore follows what really
       determines it on a real machine, the GPU and the fonts, and two contexts
       that share those share a canvas. That is why build-tester counts canvas
       collisions with the device-level values and does not gate on them. The
@@ -221,7 +225,7 @@ rules:
     title: The canvas check hashes pixels, not a prefix of the data URL
     check: automated
     evidence:
-      - "build-tester/src/lib/checks/collectors.ts returned canvas.toDataURL().substring(0, 100)"
+      - "browser/tests/build-tester/src/lib/checks/collectors.ts returned canvas.toDataURL().substring(0, 100)"
       - "CI reported two contexts sharing a canvas fingerprint; 8 local runs across two rendering paths never did"
     rationale: >-
       A hundred characters of a data URL is not the image. "data:image/png;base64,"
@@ -283,7 +287,7 @@ rules:
     title: A virtual display never clamps the generated screen
     check: automated
     evidence:
-      - "pythonlib/camoufox/utils.py: the `not virtual_display` guards"
+      - "python/src/camoufox/utils.py: the `not virtual_display` guards"
     rationale: >-
       This is what makes the 1x1 default safe. If clamping applied, a 1x1 root
       window would clamp every generated screen down to 1x1 and the fingerprint
@@ -311,7 +315,7 @@ rules:
     title: Anything reset when the document changes is also released when the frame dies
     check: automated
     evidence:
-      - "additions/juggler/content/FrameTree.js: _masterSandbox was cleared in _onGlobalObjectCleared() but not in Frame.dispose()"
+      - "browser/additions/juggler/content/FrameTree.js: _masterSandbox was cleared in _onGlobalObjectCleared() but not in Frame.dispose()"
       - "upstream Playwright's FrameTree.js has no _masterSandbox, and dispose() was inherited from it verbatim"
     rationale: >-
       Frame.dispose() came from upstream, which has no Camoufox-specific
@@ -331,7 +335,7 @@ rules:
 
   - id: input-through-one-chokepoint
     title: Every synthesized input event goes through MouseDispatch.js
-    check: manual   # enforced by scripts/check-input-dispatch.py in CI
+    check: manual   # enforced by browser/scripts/check-input-dispatch.py in CI
     evidence:
       - "docs/input-dispatch.md: four deadlocks between 2026-04 and 2026-09"
       - "issues #225, #677, #751, #752"
@@ -348,7 +352,7 @@ rules:
   # -------------------------------------------------------------------------
 
   - id: config-keys-are-never-deleted
-    title: A key leaves settings/properties.json only by being marked removed
+    title: A key leaves browser/settings/properties.json only by being marked removed
     check: automated
     evidence:
       - "issue #835: camoufox 0.4.11 failed to launch v156.0.1-beta.34 with 'Unknown property navigator.appCodeName in config'"

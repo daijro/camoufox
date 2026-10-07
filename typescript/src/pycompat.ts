@@ -129,6 +129,26 @@ export function comparePyStr(a: string, b: string): number {
 	return a.length - b.length;
 }
 
+/** type(value).__name__ for a JSON-ish value. */
+export function pyTypeName(value: unknown): string {
+	if (value === null || value === undefined) return "NoneType";
+	if (typeof value === "boolean") return "bool";
+	if (value instanceof PyFloat) return "float";
+	if (typeof value === "number")
+		return Number.isInteger(value) ? "int" : "float";
+	if (typeof value === "bigint") return "int";
+	if (typeof value === "string") return "str";
+	if (Array.isArray(value)) return "list";
+	return "dict";
+}
+
+/** isinstance(value, dict) for a JSON-like value. */
+export function isPlainObject(value: unknown): value is Record<string, any> {
+	if (value === null || typeof value !== "object") return false;
+	const proto = Object.getPrototypeOf(value);
+	return proto === Object.prototype || proto === null;
+}
+
 /** Python truthiness of a JSON-like value. */
 export function pyTruthy(value: unknown): boolean {
 	if (value === null || value === undefined) return false;

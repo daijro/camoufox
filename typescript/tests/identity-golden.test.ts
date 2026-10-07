@@ -9,11 +9,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
+import * as random from "python-random";
 import { describe, expect, it } from "vitest";
 import * as coherence from "../src/coherence.js";
 import * as fp from "../src/fingerprints.js";
 import { pairwiseSum } from "../src/locales.js";
-import { LOCAL_DATA } from "../src/pkgman.js";
+import { LOCAL_DATA } from "../src/paths.js";
 import {
 	crc32,
 	formatOrjsonFloat,
@@ -26,7 +27,6 @@ import {
 	pySum,
 	pySumFloats,
 } from "../src/pycompat.js";
-import { PyRandom, pyRandom } from "../src/pyrandom.js";
 import * as webgl from "../src/webgl.js";
 import { prerequisite } from "./prereq.js";
 
@@ -123,58 +123,6 @@ describe("constants", () => {
 		expect([...fp.MAC_NOVELTY_VOICES].sort()).toEqual(c.macNovelty);
 		expect([...fp.MAC_ELOQUENCE_VOICES].sort()).toEqual(c.macEloquence);
 		expect(fp.PRESETS_V150_MIN_FF).toBe(c.presetsV150MinFf);
-	});
-});
-
-describe("pyrandom (CPython random.Random)", () => {
-	const { cases } = load("pyrandom.json.gz");
-	it(`reproduces ${cases.length} seeded streams`, () => {
-		for (const c of cases) {
-			const r = new PyRandom(
-				"int" in c.seed ? BigInt(c.seed.int) : (c.seed.str as string),
-			);
-			const label = JSON.stringify(c.seed);
-			expect(
-				Array.from({ length: 8 }, () => r.random()),
-				label,
-			).toEqual(c.random);
-			for (const [k, v] of c.getrandbits) {
-				expect(r.getrandbitsBig(k).toString(), `${label} bits ${k}`).toBe(v);
-			}
-			for (const [n, v] of c.randbelow) expect(r.randbelow(n)).toBe(v);
-			for (const [args, v] of c.randrange) {
-				expect(r.randrange(args[0], args[1], args[2] ?? 1)).toBe(v);
-			}
-			for (const [a, b, v] of c.randint) expect(r.randint(a, b)).toBe(v);
-			const pop = [..."abcdefghijklmnopqrstuvwxyz"];
-			expect(Array.from({ length: 5 }, () => r.choice(pop))).toEqual(c.choice);
-			expect(r.choices(pop, { k: 6 })).toEqual(c.choices.plain);
-			expect(
-				r.choices(pop.slice(0, 5), {
-					weights: [0.1, 0.5, 2.0, 1.25, 0.15],
-					k: 6,
-				}),
-			).toEqual(c.choices.weights);
-			expect(
-				r.choices(pop.slice(0, 4), { cumWeights: [1, 3, 6, 10], k: 6 }),
-			).toEqual(c.choices.cum_weights);
-			const shuffled = Array.from({ length: 20 }, (_, i) => i);
-			r.shuffle(shuffled);
-			expect(shuffled).toEqual(c.shuffle);
-			for (const [n, k, v] of c.sample) {
-				expect(
-					r.sample(
-						Array.from({ length: n }, (_, i) => i),
-						k,
-					),
-					`${label} sample(${n}, ${k})`,
-				).toEqual(v);
-			}
-			expect(Array.from({ length: 3 }, () => r.uniform(-3.5, 10.25))).toEqual(
-				c.uniform,
-			);
-			expect(r.random()).toBe(c.after);
-		}
 	});
 });
 
@@ -568,7 +516,7 @@ describe("fromFpgen", () => {
 	const fx = load("from-fpgen.json.gz");
 	it(`reproduces ${fx.cases.length} configs`, () => {
 		for (const c of fx.cases) {
-			pyRandom.seed(c.moduleSeed);
+			random.seed(c.moduleSeed);
 			const config = fp.fromFpgen(clone(fx.inputs[c.input]), c.ffVersion);
 			const label = `input ${c.input} ff ${c.ffVersion}`;
 			expect(config, label).toEqual(c.config);
@@ -629,7 +577,7 @@ describe("presets", () => {
 	};
 	it(`fromPreset over ${fx.cases.length} bundled presets`, () => {
 		for (const c of fx.cases) {
-			pyRandom.seed(c.moduleSeed);
+			random.seed(c.moduleSeed);
 			const preset = bundles[c.file][c.os][c.index];
 			const config = fp.fromPreset(clone(preset), c.ffVersion, big(c.salt));
 			const label = `${c.file} ${c.os}[${c.index}] salt ${c.salt}`;
@@ -641,7 +589,7 @@ describe("presets", () => {
 			).toEqual(c.validate);
 		}
 		for (const c of fx.full) {
-			pyRandom.seed(c.index * 7);
+			random.seed(c.index * 7);
 			const config = fp.fromPreset(
 				clone(bundles[c.file][c.os][c.index]),
 				c.file.includes("v150") ? "152" : null,
@@ -652,14 +600,14 @@ describe("presets", () => {
 	});
 	it("synthetic presets", () => {
 		for (const c of fx.synthetic) {
-			pyRandom.seed(c.moduleSeed);
+			random.seed(c.moduleSeed);
 			const config = fp.fromPreset(clone(c.preset), c.ffVersion, 99);
 			expect(hashedLists(config)).toEqual(c.config);
 		}
 	});
 	it("getRandomPreset", () => {
 		for (const c of fx.random) {
-			pyRandom.seed(c.moduleSeed);
+			random.seed(c.moduleSeed);
 			const preset = fp.getRandomPreset(c.os, c.ffVersion);
 			expect(preset === null ? null : h(preset), JSON.stringify(c)).toBe(
 				c.hash,

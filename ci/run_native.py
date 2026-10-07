@@ -30,7 +30,7 @@ from . import results
 from ._pytest import parse_junit, run_pytest
 from ._util import REPO_ROOT, RESULTS_DIR, WORK_DIR, run
 
-SUITE_DIR = REPO_ROOT / "native-tests"
+SUITE_DIR = REPO_ROOT / "browser" / "tests" / "native"
 
 FILES = {
     "rules": ["test_tribal_rules.py"],
@@ -93,10 +93,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
 
     env = {
-        # native-tests/conftest.py puts pythonlib on sys.path itself; this is
+        # browser/tests/native/conftest.py puts pythonlib on sys.path itself; this is
         # for the browser half, which needs a binary to point at.
         "PYTHONPATH": os.pathsep.join(
-            filter(None, [str(REPO_ROOT / "pythonlib"), os.environ.get("PYTHONPATH", "")])
+            filter(None, [str(REPO_ROOT / "python" / "src"), os.environ.get("PYTHONPATH", "")])
         ),
     }
     if args.subset != "rules":

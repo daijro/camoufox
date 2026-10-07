@@ -1,13 +1,15 @@
 /**
  * The launcher entry points: Camoufox(), NewBrowser(), NewContext().
  *
- * TypeScript twin of pythonlib/camoufox/sync_api.py (and async_api.py, whose
+ * TypeScript twin of python/src/camoufox/sync_api.py (and async_api.py, whose
  * names async_api.ts re-exports). The Python library ships a sync and an
  * async variant because Playwright-Python has two APIs; playwright-core has
  * only one (promise-based), so the behaviours of both live here: the
  * no-viewport default, the stock media defaults, CPU-core pinning with its
  * launch lock (async_api), and virtual-display teardown.
  */
+
+import { ensureModel } from "fpgen";
 import {
 	type Browser,
 	type BrowserContext,
@@ -16,7 +18,6 @@ import {
 } from "playwright-core";
 import * as cpuAffinity from "./cpu_affinity.js";
 import { generateContextFingerprint } from "./fingerprints.js";
-import { ensureModel } from "./fpgen/index.js";
 import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "./ip.js";
 import {
 	applyNoViewport,
@@ -213,12 +214,6 @@ export interface NewContextOptions extends Record<string, any> {
 	geolocation?: { latitude: number; longitude: number; accuracy?: number };
 }
 
-/** Injection point for the proxy exit-IP lookup (tests replace it). */
-export const contextDeps = {
-	resolveProxyGeo: (proxy: ProxyConfig) =>
-		proxyExitGeo(ProxyHelper.asString(proxy)),
-};
-
 /** snake_case -> camelCase, as camoufox.server.camel_case does. */
 export function camelCase(snake: string): string {
 	if (snake.length < 2) return snake;
@@ -264,7 +259,7 @@ export async function NewContext(
 	// aren't explicitly provided.
 	let webrtcIp = webrtc_ip;
 	if (proxy && (!webrtcIp || !("timezoneId" in contextOptions))) {
-		const [exitIp, timezone] = await contextDeps.resolveProxyGeo(proxy);
+		const [exitIp, timezone] = await proxyExitGeo(ProxyHelper.asString(proxy));
 		webrtcIp ||= exitIp;
 		if (!("timezoneId" in contextOptions)) contextOptions.timezoneId = timezone;
 	}
@@ -291,8 +286,6 @@ export async function NewContext(
 	}
 
 	const context = await browser.newContext(opts);
-	await context.addInitScript(
-		(fp as any).initScript ?? (fp as any).init_script,
-	);
+	await context.addInitScript(fp.init_script);
 	return context;
 }

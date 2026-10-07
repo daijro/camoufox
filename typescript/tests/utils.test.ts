@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PyFloat } from "../src/pycompat.js";
+import { PyFloat, pyTypeName } from "../src/pycompat.js";
 import {
 	checkValidOs,
 	configJson,
@@ -13,7 +13,6 @@ import {
 	isDomainSet,
 	mergeInto,
 	pyJsonDumpsAscii,
-	pyTypeName,
 	setInto,
 	spoofsWindowDimensions,
 	utilsDeps,

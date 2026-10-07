@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Patch-guard gates: tests/patches/*.py, one standalone guard per shipped behaviour.
+"""Patch-guard gates: browser/tests/playwright/patches/*.py, one standalone guard per shipped behaviour.
 
-Whether the patches *apply* is the build's job (scripts/patch.py fails it).
+Whether the patches *apply* is the build's job (browser/scripts/patch.py fails it).
 These check that what they do still works in the built browser -- the most
 direct evidence that a Firefox bump did not quietly neuter a patch that still
 applies cleanly, which is the failure mode a compile check cannot catch.
@@ -32,7 +32,7 @@ from typing import Dict, List, Optional, Tuple
 from . import results as evidence
 from ._util import EVIDENCE_DIR, REPO_ROOT, log, run
 
-GUARD_DIR = REPO_ROOT / "tests" / "patches"
+GUARD_DIR = REPO_ROOT / "browser" / "tests" / "playwright" / "patches"
 
 
 GROUPS: Dict[str, Tuple[str, ...]] = {
@@ -109,7 +109,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         # The guards drive the browser through the Python package, which resolves
         # the binary from this variable rather than a packaged install.
         "PYTHONPATH": os.pathsep.join(
-            filter(None, [str(REPO_ROOT / "pythonlib"), os.environ.get("PYTHONPATH", "")])
+            filter(None, [str(REPO_ROOT / "python" / "src"), os.environ.get("PYTHONPATH", "")])
         ),
     }
 
@@ -119,7 +119,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         and (not args.group or g.stem in GROUPS[args.group])
     ]
     if not selected:
-        result.note("no guards found -- tests/patches/ is empty or the filter matched nothing")
+        result.note("no guards found -- browser/tests/playwright/patches/ is empty or the filter matched nothing")
         result.finish(evidence.ERROR).save(args.evidence_dir)
         return 1
 

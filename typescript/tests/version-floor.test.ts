@@ -1,5 +1,5 @@
 /**
- * Mirrors pythonlib/tests/test_version_floor_upgrade.py: raising the browser
+ * Mirrors python/tests/test_version_floor_upgrade.py: raising the browser
  * floor must upgrade a below-floor install, in both install layouts, and the
  * floor is keyed on the resolved Playwright.
  *
@@ -43,7 +43,7 @@ async function install(
 	floor: string,
 ) {
 	const { pkgman, exc } = await load();
-	const root = pkgman.INSTALL_DIR;
+	const root = (await import("../src/paths.js")).INSTALL_DIR;
 	fs.mkdirSync(root, { recursive: true });
 	fs.writeFileSync(path.join(root, ".0.5_FLAG"), "");
 	fs.writeFileSync(path.join(root, "repo_cache.json"), "{}");
@@ -115,7 +115,9 @@ it("upgrades a below-floor install instead of raising", async () => {
 
 it("the root probe reports false, rather than raising, with no root file", async () => {
 	const { pkgman } = await load();
-	fs.mkdirSync(pkgman.INSTALL_DIR, { recursive: true });
+	fs.mkdirSync((await import("../src/paths.js")).INSTALL_DIR, {
+		recursive: true,
+	});
 	expect(pkgman.rootInstallSupported()).toBe(false);
 });
 

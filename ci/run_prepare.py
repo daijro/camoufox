@@ -34,7 +34,7 @@ import threading
 import time
 from typing import List, Optional, Tuple
 
-from ._util import REPO_ROOT, log
+from ._util import BROWSER_ROOT, log
 
 # Substrings that mark a failure as "the network went away", not "this tree is
 # broken". Matched against combined stdout/stderr, case-insensitively.
@@ -92,9 +92,9 @@ def _run_capturing(cmd: List[str], *, timeout: int) -> Tuple[int, str]:
     that prints nothing for five minutes while aria2c pulls a 500MB tarball
     looks exactly like a hung job.
     """
-    log("$ " + " ".join(cmd) + f"  (cwd={REPO_ROOT})")
+    log("$ " + " ".join(cmd) + f"  (cwd={BROWSER_ROOT})")
     proc = subprocess.Popen(
-        cmd, cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        cmd, cwd=str(BROWSER_ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, bufsize=1,
     )
     lines: List[str] = []

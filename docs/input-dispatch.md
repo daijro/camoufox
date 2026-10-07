@@ -1,9 +1,10 @@
 # Synthesized input dispatch
 
 Every synthesized mouse and wheel event in the parent process goes through
-`additions/juggler/input/MouseDispatch.js`. `scripts/check-input-dispatch.py`
-fails the build if anything else dispatches input or does browser-relative
-coordinate arithmetic, and it runs on every pull request.
+`browser/additions/juggler/input/MouseDispatch.js`.
+`browser/scripts/check-input-dispatch.py` fails the build if anything else
+dispatches input or does browser-relative coordinate arithmetic, and it runs on
+every pull request.
 
 ## The invariant
 
@@ -74,15 +75,17 @@ that is the same deadlock reached from inside a curve rather than from
 reachable from the same slot (`apz-repaints-flushed`, `TabSwitchDone`, the drag
 path's waits), none of which has failed yet.
 
-**The static check.** `scripts/check-input-dispatch.py`, wired into
-the `static` job of `.github/workflows/tests.yml`. Two exemptions, both content-process:
-`PageAgent.js` (drag events, already content-relative, no ack) and
-`FrameTree.js` (the ack *producer*).
+**The static check.** `browser/scripts/check-input-dispatch.py`, wired into the
+`static` job of `.github/workflows/tests.yml`. Two exemptions, both
+content-process: `PageAgent.js` (drag events, already content-relative, no ack)
+and `FrameTree.js` (the ack *producer*).
 
-**Boundary coverage.** `tests/patches/mouse-boundary-sweep.py` sweeps the whole
+**Boundary coverage.**
+`browser/tests/playwright/patches/mouse-boundary-sweep.py` sweeps the whole
 viewport ring across every spoofed OS with humanize on and off, asserting each
 point is acked *and observed by the page*. Hand-picked coordinate lists are what
 let each of the four bugs through: `humanize-edge-deadlock.py` probed only the
 far edges, and `humanize-mouse-trajectory.py` pins `os="linux"` — the one
-fingerprint immune to `#751`. `tests/patches/input-ack-backstop.py` covers the
-bounded wait itself.
+fingerprint immune to `#751`.
+`browser/tests/playwright/patches/input-ack-backstop.py` covers the bounded wait
+itself.

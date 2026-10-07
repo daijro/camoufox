@@ -17,6 +17,9 @@ importers:
       commander:
         specifier: ^14.0.0
         version: 14.0.3
+      fpgen:
+        specifier: link:../../fpgen-js
+        version: link:../../fpgen-js
       impit:
         specifier: ^0.14.1
         version: 0.14.3
@@ -29,6 +32,9 @@ importers:
       pretty-bytes:
         specifier: ^7.1.0
         version: 7.1.1
+      python-random:
+        specifier: link:../../python-random-js
+        version: link:../../python-random-js
       ua-parser-js:
         specifier: ^2.0.2
         version: 2.0.10

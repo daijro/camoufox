@@ -2,17 +2,16 @@
 /**
  * The `camoufox` CLI.
  *
- * TypeScript twin of pythonlib/camoufox/__main__.py. Every command is present,
- * with the same arguments, output and config/cache files. `gui` drives a
- * PySide6 desktop app with no Node equivalent, so here it only says so. The
- * interactive pickers (`set`, `set --geoip`, `remove --select`) use a numbered
+ * TypeScript twin of python/src/camoufox/__main__.py. Every command is present,
+ * with the same arguments, output and config/cache files. The interactive
+ * pickers (`set`, `set --geoip`, `remove --select`) use a numbered
  * prompt in place of inquirer's arrow-key list.
  */
 import * as fs from "node:fs";
-import { createRequire } from "node:module";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import { Argument, Command, Option } from "commander";
+import { ensureModel, MODEL_PIN } from "fpgen";
 import { LIBRARY_VERSION } from "./__version__.js";
 import { DefaultAddons, maybeDownloadAddons } from "./addons.js";
 import { effectivePin, loadPin, pinSpec } from "./browser-pin.js";
@@ -24,6 +23,7 @@ import {
 	type GeoIPRepo,
 	getMmdbPath,
 	loadGeoipConfig,
+	loadGeoipRepos,
 	saveGeoipConfig,
 	warnIfDeprecated,
 } from "./geolocation.js";
@@ -47,19 +47,18 @@ import {
 	saveConfig,
 	saveRepoCache,
 } from "./multiversion.js";
+import { INSTALL_DIR, rprint, style } from "./paths.js";
 import {
 	AvailableVersion,
 	CamoufoxFetcher,
 	formatAssetDate,
-	INSTALL_DIR,
 	type IncompatibleBuild,
 	incompatibleMessage,
 	installedVerStr,
 	interfaceSupported,
 	listAvailableVersions,
-	loadYaml,
 	RepoConfig,
-	rprint,
+	resolvedPlaywrightVersionRaw,
 	upgradeMessage,
 	Version,
 } from "./pkgman.js";
@@ -67,32 +66,6 @@ import {
 // --------------------------------------------------------------------------
 // click-style output + prompts
 // --------------------------------------------------------------------------
-
-const ANSI: Record<string, string> = {
-	red: "31",
-	green: "32",
-	yellow: "33",
-	blue: "34",
-	cyan: "36",
-	bright_black: "90",
-};
-
-function useColor(): boolean {
-	return Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
-}
-
-/** click.style */
-function style(
-	text: string,
-	{ fg, bold, dim }: { fg?: string | null; bold?: boolean; dim?: boolean } = {},
-): string {
-	if (!useColor()) return text;
-	const codes: string[] = [];
-	if (bold) codes.push("1");
-	if (dim) codes.push("2");
-	if (fg && ANSI[fg]) codes.push(ANSI[fg]);
-	return codes.length ? `\x1b[${codes.join(";")}m${text}\x1b[0m` : text;
-}
 
 /** click.secho */
 function secho(
@@ -663,7 +636,6 @@ program
 		// TS addition: Python's fpgen package ships its model with the wheel;
 		// the TS port fetches the pinned model into the cache, so do it here
 		// rather than on the first launch.
-		const { ensureModel } = await import("./fpgen/index.js");
 		await ensureModel();
 	});
 
@@ -919,7 +891,7 @@ async function interactiveSet(): Promise<void> {
 
 /** Interactive selection of the GeoIP source. */
 async function selectGeoIPSource(): Promise<void> {
-	const repos: GeoIPRepo[] = loadYaml("repos.yml").geoip ?? [];
+	const [repos] = loadGeoipRepos();
 	if (!repos.length) {
 		rprint("No GeoIP sources configured.", "red");
 		return;
@@ -1163,47 +1135,9 @@ program
 		await server.close();
 	});
 
-program
-	.command("gui")
-	.description("Launch the Camoufox Manager GUI (requires PySide6)")
-	.option("--debug", "Enable debug options in the GUI.")
-	.action(() => {
-		rprint(
-			"The GUI is a PySide6 app and is only available from the Python package: pip install 'camoufox[gui]'",
-			"red",
-		);
-	});
-
 // --------------------------------------------------------------------------
 // version
 // --------------------------------------------------------------------------
-
-/** Version of an installed npm package, or null. */
-function pkgVersion(name: string): string | null {
-	try {
-		const require = createRequire(import.meta.url);
-		const pkg = JSON.parse(
-			fs.readFileSync(require.resolve(`${name}/package.json`), "utf-8"),
-		);
-		return typeof pkg.version === "string" ? pkg.version : null;
-	} catch {
-		return null;
-	}
-}
-
-/** The TypeScript fpgen port's version, when it exposes one. */
-async function fpgenVersion(): Promise<string | null> {
-	const specifier = "./fpgen/index.js";
-	try {
-		const mod: Record<string, unknown> = await import(specifier);
-		for (const key of ["VERSION", "version", "__version__", "FPGEN_VERSION"]) {
-			if (typeof mod[key] === "string") return mod[key] as string;
-		}
-		return null;
-	} catch {
-		return null;
-	}
-}
 
 class VersionInfo {
 	rows: Array<
@@ -1227,11 +1161,11 @@ class VersionInfo {
 		else this.row(label, "?", "dim");
 	}
 
-	async packages(): Promise<void> {
+	packages(): void {
 		this.header("Packages");
 		this.pkg("Camoufox", LIBRARY_VERSION);
-		this.pkg("fpgen", await fpgenVersion());
-		this.pkg("Playwright", pkgVersion("playwright-core"));
+		this.row("fpgen model", MODEL_PIN.tag);
+		this.pkg("Playwright", resolvedPlaywrightVersionRaw());
 	}
 
 	browser(): void {
@@ -1336,7 +1270,7 @@ class VersionInfo {
 	}
 
 	async printAll(): Promise<void> {
-		await this.packages();
+		this.packages();
 		this.browser();
 		this.geoip();
 		this.storage();

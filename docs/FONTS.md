@@ -2,9 +2,9 @@
 
 Camoufox ships its own fonts so that font enumeration and text rendering are a
 property of the *claimed* OS rather than of the host. There are two halves: a
-font bundle (`bundle/fonts/`) and one fontconfig per OS
-(`bundle/fontconfig/<os>/fonts.conf`). The data the launcher draws from
-(`pythonlib/camoufox/fonts.json`, `font-bases.json`, `font-groups.json` and the
+font bundle (`browser/bundle/fonts/`) and one fontconfig per OS
+(`browser/bundle/fontconfig/<os>/fonts.conf`). The data the launcher draws from
+(`python/src/camoufox/fonts.json`, `font-bases.json`, `font-groups.json` and the
 `_ESSENTIAL_FONTS_*` / `_BASE_VARIANT_FONTS_*` / `_*_MARKER_FONTS` constants in
 `fingerprints.py`) is generated against that bundle and must be regenerated with
 it.
@@ -20,24 +20,24 @@ whole bundle with no splitting and no LFS. It is the same trust model the build
 already uses for the Firefox source itself.
 
 ```
-make fetch-fonts     # download + verify the archive (bundle/fonts-bundle-*.tar.xz)
-make fonts-extract   # ...and unpack it to bundle/fonts/   (gitignored)
-make fonts-check     # verify the archive against the pin; non-zero if absent
-make fonts-clean     # drop the extracted tree
+make -C browser fetch-fonts     # download + verify the archive (browser/bundle/fonts-bundle-*.tar.xz)
+make -C browser fonts-extract   # ...and unpack it to browser/bundle/fonts/   (gitignored)
+make -C browser fonts-check     # verify the archive against the pin; non-zero if absent
+make -C browser fonts-clean     # drop the extracted tree
 ```
 
-`scripts/data/font-bundle.json` pins the tag, asset name, size and **sha256**,
+`browser/scripts/data/font-bundle.json` pins the tag, asset name, size and **sha256**,
 so a given commit expects one exact bundle and a truncated or substituted
 download fails loudly instead of silently producing a browser that reports fonts
 it cannot draw. `make fonts-extract` stamps the unpacked tree with that sha256
-(`bundle/fonts/.bundle-sha256`), so re-running it is free — which is what lets
+(`browser/bundle/fonts/.bundle-sha256`), so re-running it is free — which is what lets
 `package-*` and `stage-fonts` depend on it unconditionally.
 
 The asset is hosted by this repository, never by a fork: a build input that
 lives in someone's personal account breaks the moment that account renames the
 repo or deletes the release.
 
-Publishing a new bundle: rebuild the archive, `python3 scripts/fetch-fonts.py
+Publishing a new bundle: rebuild the archive, `python3 browser/scripts/fetch-fonts.py
 --write-spec <archive> --tag font-bundle-vN`, then upload it under that tag.
 Font-bundle tags do not match `release.yml`'s `vX.Y.Z` trigger, so they do not
 start a release, and they carry no `manifest.json`, so no library pairs with them.
@@ -45,7 +45,7 @@ start a release, and they carry no `manifest.json`, so no library pairs with the
 ## Layout: each face stored once
 
 A face used by several OSes is stored **once**, in a directory named for the set
-of OSes that use it. `bundle/fonts/groups.json` records which groups each OS
+of OSes that use it. `browser/bundle/fonts/groups.json` records which groups each OS
 reads.
 
 | group | faces | read by |
@@ -74,7 +74,7 @@ fonts actually available. What differs is how they are gated:
 - **macOS and Windows packages** flatten the groups into one directory: CoreText
   and DirectWrite activate a single directory and cannot read subfolders. There
   is no directory gate on those hosts; the allowlist in
-  `patches/font-hijacker.patch` is what restricts a lookup. Basenames therefore
+  `browser/patches/font-hijacker.patch` is what restricts a lookup. Basenames therefore
   must not collide within a package's group set, which `verify-fonts.py` checks.
 
 This replaced the 455 `<glob>` duplicate-face rejects the Windows fontconfig used
@@ -108,14 +108,14 @@ subfamilies DirectWrite folds into their parent ("Barlow Black"), the bare
 `Sitka` / `Segoe UI Variable` umbrella names, and CJK families a stock install
 does not report. They stay renderable but unreported.
 
-## How `fonts.json` is derived (`scripts/gen-fonts-json.py`)
+## How `fonts.json` is derived (`browser/scripts/gen-fonts-json.py`)
 
 ```
 reportable[os] = fc-scan(the groups <os> reads)          families fontconfig publishes
                + SCAN_FAMILIES                           Sitka * / Segoe UI Variable * (scan-time matches)
                + ALIASES                                 names fonts.conf rewrites to a bundled target
                + SHIPPED_BY_BROWSER                      Twemoji Mozilla (from the Firefox build)
-               ∩ names(scripts/data/font-manifests.json) bases + additions + marker fonts for that OS
+               ∩ names(browser/scripts/data/font-manifests.json) bases + additions + marker fonts for that OS
                + ALIASES, REPORTABLE_EXTRA               forced in
 ```
 
@@ -133,10 +133,10 @@ becomes a no-op.
 Regenerate together whenever the bundle changes:
 
 ```
-python3 scripts/gen-font-groups.py          # font-groups.json + font-bases.json
-python3 scripts/gen-fonts-json.py           # fonts.json
-python3 scripts/gen-fonts-json.py --print-bases   # paste into fingerprints.py
-python3 scripts/verify-fonts.py             # must pass before committing
+python3 browser/scripts/gen-font-groups.py          # font-groups.json + font-bases.json
+python3 browser/scripts/gen-fonts-json.py           # fonts.json
+python3 browser/scripts/gen-fonts-json.py --print-bases   # paste into fingerprints.py
+python3 browser/scripts/verify-fonts.py             # must pass before committing
 ```
 
 Deliberate choices:
@@ -144,7 +144,7 @@ Deliberate choices:
 - **Windows aliases are unconditional and always reported.** The 13
   GDI-substitution / Light-Semilight rules (`Courier -> Courier New`,
   `Helvetica -> Arial`, `Calibri Light -> Calibri`, ...) are unconditional in
-  `bundle/fontconfig/windows/fonts.conf` because there is no per-launch
+  `browser/bundle/fontconfig/windows/fonts.conf` because there is no per-launch
   fontconfig hook, and the names are in `_ESSENTIAL_FONTS_WINDOWS`. That matches
   reality: every Windows install resolves all of them.
 - **macOS TTC weight names are reported.** The confs rewrite `American
@@ -214,7 +214,7 @@ and `font-hijacker.patch` does not activate the bundle. On a Windows host the
 Win11 marker families are *subtracted* when the host cannot render them, rather
 than added when it can; claiming a marker the host lacks is the leak.
 
-`pythonlib/tests/test_font_distribution.py` covers this: base
+`python/tests/test_font_distribution.py` covers this: base
 completeness and weights, per-unit probability, bundle atomicity, à-la-carte
 sizing, locale gating, determinism, renderable-only, and that the draw actually
 varies (distinct lists, no single list dominating). Tolerances are binomial, at
@@ -237,9 +237,9 @@ three — `verify-fonts.py` fails if it is missing.
 ## Verifying
 
 ```
-python3 scripts/verify-fonts.py          # full: builds a fontconfig cache over the bundle, minutes on first run
-python3 scripts/verify-fonts.py --quick  # constants, draws and layout only
-cd pythonlib && python3 -m pytest -q -k "font or humanize or launch_environment"
+python3 browser/scripts/verify-fonts.py          # full: builds a fontconfig cache over the bundle, minutes on first run
+python3 browser/scripts/verify-fonts.py --quick  # constants, draws and layout only
+cd python && python3 -m pytest -q -k "font or humanize or launch_environment"
 ```
 
 The full run checks, per OS: `fonts.json[os]` ⊆ what `fc-list` publishes (aliases

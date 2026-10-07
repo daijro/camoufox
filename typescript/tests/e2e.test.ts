@@ -22,8 +22,9 @@
  *    knows every key the launcher sets (its properties.json lists them). An
  *    older binary -- the published release, on a driver-only pull request, while
  *    the launcher is ahead of it -- ignores the keys it does not know, exactly
- *    as pythonlib's "Skipping unknown patch" says, and those tests skip naming
- *    the missing keys rather than failing on the skew.
+ *    as pythonlib's "Skipping unknown patch" says. That is the
+ *    "binary-config-keys" prerequisite: missing in CI, it fails unless the job
+ *    lists it in CAMOUFOX_TEST_ALLOW_MISSING.
  */
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
@@ -83,10 +84,20 @@ function unknownToBinary(config: Record<string, any>): string[] {
 	return Object.keys(config).filter((k) => !known.has(k));
 }
 
+/** Whether the binary knows every key in `config` (a prerequisite). */
+function binaryKnows(config: Record<string, any>): boolean {
+	const missing = unknownToBinary(config);
+	return prerequisite(
+		"binary-config-keys",
+		!missing.length,
+		`binary predates the launcher; it does not know: ${missing.join(", ")}`,
+	);
+}
+
 /**
  * The locales the binary under test packages (res/multilocale.txt): loose in
  * an unpackaged dist/bin, inside omni.ja in a packaged build. A spoofed locale
- * the binary does not package falls back to en-US -- scripts/package.py adds the
+ * the binary does not package falls back to en-US -- browser/scripts/package.py adds the
  * langpacks, so a packaged release has them and CI's unpackaged dist/bin does
  * not. null when it cannot be read.
  */
@@ -484,11 +495,7 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 
 			it("the browser honours the config (headless, persistent, launchServer)", async (ctx) => {
 				const config = results[`${identity}:config`];
-				const missing = unknownToBinary(config);
-				if (missing.length)
-					ctx.skip(
-						`binary predates the launcher; it does not know: ${missing.join(", ")}`,
-					);
+				if (!binaryKnows(config)) return ctx.skip();
 				for (const mode of ["headless", "persistent", "server"]) {
 					expect(results[`${identity}:${mode}`], mode).toBeTruthy();
 					expectMatchesConfig(results[`${identity}:${mode}`], config);
@@ -602,11 +609,7 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 				"the browser honours the config headful, as it does headless",
 				async (ctx) => {
 					const config = results[`${identity}:config`];
-					const missing = unknownToBinary(config);
-					if (missing.length)
-						ctx.skip(
-							`binary predates the launcher; it does not know: ${missing.join(", ")}`,
-						);
+					if (!binaryKnows(config)) return ctx.skip();
 					const probe = results[`${identity}:virtual`];
 					expect(probe, "the virtual-display test ran").toBeTruthy();
 					expectMatchesConfig(probe, config, true);

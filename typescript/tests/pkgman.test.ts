@@ -4,12 +4,14 @@ import * as path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FileNotFoundError } from "../src/exceptions.js";
 import {
-	AvailableVersion,
-	formatAssetDate,
 	LOCAL_DATA,
-	loadYaml,
+	loadDataFile,
 	OS_ARCH_MATRIX,
 	OS_NAME,
+} from "../src/paths.js";
+import {
+	AvailableVersion,
+	formatAssetDate,
 	pkgmanDeps,
 	RepoConfig,
 	Version,
@@ -153,15 +155,41 @@ describe("formatAssetDate", () => {
 	});
 });
 
+describe("the fpgen model directory", () => {
+	/** fpgen's model directory once paths.ts is imported with this env. */
+	async function modelDirWith(env: string): Promise<[string, string]> {
+		vi.stubEnv("CAMOUFOX_FPGEN_DATA", env);
+		vi.resetModules();
+		const { INSTALL_DIR } = await import("../src/paths.js");
+		const { modelDir } = await import("fpgen");
+		return [modelDir(), INSTALL_DIR];
+	}
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		vi.resetModules();
+	});
+
+	it("is fpgen/ in the Camoufox cache", async () => {
+		const [dir, installDir] = await modelDirWith("");
+		expect(dir).toBe(path.join(installDir, "fpgen"));
+	});
+
+	it("is $CAMOUFOX_FPGEN_DATA when set", async () => {
+		const env = path.join(os.tmpdir(), "camoufox-fpgen-data");
+		expect((await modelDirWith(env))[0]).toBe(env);
+	});
+});
+
 describe("repos.yml", () => {
 	it("is the file the Python package ships", () => {
 		const shipped = fs.readFileSync(
-			path.join(import.meta.dirname, "../../pythonlib/camoufox/repos.yml"),
+			path.join(import.meta.dirname, "../../python/src/camoufox/repos.yml"),
 			"utf-8",
 		);
 		const ours = fs.readFileSync(path.join(LOCAL_DATA, "repos.yml"), "utf-8");
 		expect(ours).toBe(shipped);
-		expect(loadYaml("repos.yml").default.browser).toBe("Official");
+		expect(loadDataFile("repos.yml").default.browser).toBe("Official");
 	});
 });
 

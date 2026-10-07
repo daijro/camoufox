@@ -20,7 +20,7 @@ from . import results as evidence
 from ._util import EVIDENCE_DIR, REPO_ROOT, WORK_DIR
 from ._pytest import parse_junit, run_pytest
 
-PYTHONLIB = REPO_ROOT / "pythonlib"
+PYTHONLIB = REPO_ROOT / "python"
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -32,7 +32,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     result = evidence.GateResult(gate="pythonlib")
     if not (PYTHONLIB / "tests").is_dir():
-        result.note("pythonlib/tests does not exist")
+        result.note("python/tests does not exist")
         result.finish(evidence.ERROR).save(args.evidence_dir)
         return 1
 

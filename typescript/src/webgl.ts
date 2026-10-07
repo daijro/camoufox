@@ -1,25 +1,21 @@
 /**
- * WebGL identities, drawn from the Firefox devices fpgen has recorded.
- *
- * TypeScript twin of pythonlib/camoufox/webgl.py. Everything a page can read
- * from WebGL -- vendor, renderer, context attributes, extensions, parameters
- * and shader precisions, for WebGL1 and WebGL2 -- comes from one recorded
- * device. fpgen's `webgl` node is conditioned on the GPU, and `webgl2` on the
- * GPU and the `webgl` chosen for it, so a WebGL2 limit never contradicts its
- * WebGL1 counterpart.
- *
- * Every draw takes one seeded PyRandom, in a fixed order (GPU, then webgl,
- * then webgl2), so a seeded identity presents the same device in both
- * launchers.
+ * WebGL identities from the Firefox devices fpgen recorded, the twin of webgl.py.
+ * One device supplies every WebGL1 and WebGL2 value, so the two never disagree,
+ * and the draws run in a fixed order so a seed gives the same device in both.
  */
+
+import {
+	lookupPossibilities,
+	type TraceResult,
+	traceWithEvidence,
+} from "fpgen";
+import { Random, type Seed } from "python-random";
 import { gpuFitsMachine, gpuFitsOs } from "./coherence.js";
 import {
 	FPGEN_OS,
 	gpuScreenIsPlausible,
 	isSoftwareRenderer,
 } from "./fingerprints.js";
-import { type TraceResult, traceWithEvidence } from "./fpgen/trace.js";
-import { lookupPossibilities } from "./fpgen/utils.js";
 import {
 	comparePyStr,
 	KeyError,
@@ -29,7 +25,6 @@ import {
 	pyStrRepr,
 	ValueError,
 } from "./pycompat.js";
-import { PyRandom, type PySeed } from "./pyrandom.js";
 
 export type TargetOS = "win" | "mac" | "lin";
 
@@ -110,7 +105,7 @@ function trace(
 	return results;
 }
 
-function choose(rng: PyRandom, results: readonly TraceResult[]): TraceResult {
+function choose(rng: Random, results: readonly TraceResult[]): TraceResult {
 	return rng.choices(results, {
 		weights: results.map((result) => result.probability),
 	})[0];
@@ -186,7 +181,7 @@ export function toConfig(
 function webglConfig(
 	targetOs: string,
 	gpuText: string,
-	rng: PyRandom,
+	rng: Random,
 ): WebGLData {
 	const gpuPin = pin("gpu", gpuText);
 	const webgl = choose(rng, trace("webgl", targetOs, [gpuPin]));
@@ -208,7 +203,7 @@ export function webglForGpu(
 	targetOs: string,
 	vendor: string,
 	renderer: string,
-	seed?: PySeed,
+	seed?: Seed,
 ): WebGLData {
 	const gpus = firefoxGpus(targetOs);
 	if (!gpus.some(([v, r]) => v === vendor && r === renderer)) {
@@ -223,7 +218,7 @@ export function webglForGpu(
 	return webglConfig(
 		targetOs,
 		orjsonDumps({ vendor, renderer }, false),
-		new PyRandom(seed),
+		new Random(seed),
 	);
 }
 
@@ -243,7 +238,7 @@ export function sampleWebglForScreen(
 	targetOs: string,
 	width?: number | null,
 	height?: number | null,
-	seed?: PySeed,
+	seed?: Seed,
 	cores?: number | null,
 ): WebGLData {
 	const candidates = trace("gpu", targetOs).filter(
@@ -259,6 +254,6 @@ export function sampleWebglForScreen(
 			`No recorded ${targetOs} GPU fits a ${pyStr(width)}x${pyStr(height)} screen`,
 		);
 	}
-	const rng = new PyRandom(seed);
+	const rng = new Random(seed);
 	return webglConfig(targetOs, choose(rng, candidates).text, rng);
 }

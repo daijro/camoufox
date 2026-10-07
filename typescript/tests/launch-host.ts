@@ -66,7 +66,7 @@ export function stubHost(): void {
 }
 
 /**
- * pythonlib/tests' `isolated_launch_dependencies`: launchOptions() reduced to
+ * python/tests' `isolated_launch_dependencies`: launchOptions() reduced to
  * environment assembly -- no fingerprint, fonts, voices, geometry fixes,
  * validation or env generation.
  */

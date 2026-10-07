@@ -1,19 +1,14 @@
 /**
- * Shared setup for the fpgen tests: the model, the Python golden fixtures, and
- * the named predicates they refer to.
- *
- * The model is the pinned one (src/fpgen/pin.ts), fetched into the Camoufox
- * cache on first run -- or read from $CAMOUFOX_FPGEN_DATA. When it is neither
- * cached nor downloadable (offline CI), the model-dependent suites skip with
- * the reason printed rather than failing.
- *
- * Fixtures come from scripts/golden/fpgen_golden.py (run with the worktree's
- * .venv, which has fpgen 1.3.0 and the same pinned model).
+ * Shared setup for the fpgen tests: the pinned model (read from where camoufox
+ * keeps it, so the suites share one copy), the golden fixtures recorded by
+ * scripts/golden/fpgen_golden.py, and the named predicates those refer to.
+ * A model that can be neither read nor downloaded is a missing prerequisite.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ensureModel } from "../src/fpgen/index.js";
+import { ensureModel } from "fpgen";
+import "../src/paths.js";
 import { prerequisite } from "./prereq.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

@@ -11,7 +11,7 @@ the stable, latest release, and X.Y.Z is published to PyPI and to npm `latest`.
 Each library release is paired with exactly one browser release -- the one built
 from the same sources, found by `ci.browser_inputs.source_digest()` in the
 release's manifest.json asset -- and `stamp` writes that pairing into the package
-(pythonlib/camoufox/browser-pin.json, read by both launchers). A library therefore
+(python/src/camoufox/browser-pin.json, read by both launchers). A library therefore
 never runs a browser it was not released with unless its user explicitly chooses
 another.
 
@@ -41,13 +41,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-from ._util import REPO_ROOT, die, http_json, log, read_upstream_sh, run, set_output
+from ._util import BROWSER_ROOT, REPO_ROOT, die, http_json, log, read_upstream_sh, run, set_output
 from .browser_inputs import BROWSER_DIRS, BROWSER_FILES, NON_NATIVE_SCRIPTS, source_digest
 
 PYPI_PROJECT = "camoufox"
 NPM_PACKAGE = "camoufox"
-PIN_FILE = REPO_ROOT / "pythonlib" / "camoufox" / "browser-pin.json"
-PYPROJECT = REPO_ROOT / "pythonlib" / "pyproject.toml"
+PIN_FILE = REPO_ROOT / "python" / "src" / "camoufox" / "browser-pin.json"
+PYPROJECT = REPO_ROOT / "python" / "pyproject.toml"
 PACKAGE_JSON = REPO_ROOT / "typescript" / "package.json"
 TS_VERSION = REPO_ROOT / "typescript" / "src" / "__version__.ts"
 
@@ -63,7 +63,7 @@ STABLE_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 # prerelease (PEP 440 spelling, so it never reads as a browser tag).
 LIBRARY_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:b(\d+))?$")
 # What a library release ships besides the browser it pairs with.
-LIBRARY_DIRS = ("pythonlib", "typescript")
+LIBRARY_DIRS = ("python", "typescript")
 _BROWSER_TAG = re.compile(r"^v(?P<version>[^-]+)-(?P<prefix>[a-z]+)\.(?P<n>\d+)$")
 
 
@@ -152,10 +152,10 @@ def next_browser_release(upstream_release: str, tags: Iterable[str]) -> str:
 
 def browser_interface(root: Path = REPO_ROOT) -> int:
     """The browser interface this tree declares (CONSTRAINTS.INTERFACE)."""
-    text = (root / "pythonlib" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
+    text = (root / "python" / "src" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
     m = re.search(r"^\s*INTERFACE = (\d+)$", text, re.M)
     if not m:
-        raise ValueError("pythonlib/camoufox/__version__.py declares no INTERFACE")
+        raise ValueError("python/src/camoufox/__version__.py declares no INTERFACE")
     return int(m[1])
 
 
@@ -216,7 +216,7 @@ def is_browser_source(rel: str) -> bool:
     """Whether a repo-relative path goes into the browser (as source_digest counts it)."""
     if rel in NON_NATIVE_SCRIPTS:
         return False
-    return rel in BROWSER_FILES or rel.split("/", 1)[0] in BROWSER_DIRS
+    return rel in BROWSER_FILES or rel.startswith(tuple(f"{d}/" for d in BROWSER_DIRS))
 
 
 @dataclass(frozen=True)
@@ -242,7 +242,7 @@ def find_paired(releases: Sequence[dict], root: Path = REPO_ROOT) -> Pairing:
     if found:
         return Pairing(found, f"{found['tag_name']} carries source digest {digest}")
 
-    up = read_upstream_sh(root / "upstream.sh")
+    up = read_upstream_sh(root / "browser" / "upstream.sh")
     tag = f"v{up['version']}-{up['release']}"
     rel = next((r for r in releases if r.get("tag_name") == tag), None)
     if rel is None or rel.get("draft"):
@@ -391,7 +391,7 @@ def registry_versions() -> Tuple[List[str], List[str]]:
 def checked_in_version() -> str:
     m = re.search(r'^version = "([^"]+)"', PYPROJECT.read_text(), re.M)
     if not m:
-        die("pythonlib/pyproject.toml has no version")
+        die("python/pyproject.toml has no version")
     return m[1]
 
 
@@ -436,7 +436,7 @@ def cmd_set_build(args: argparse.Namespace) -> int:
     up = read_upstream_sh()
     if m["version"] != up["version"]:
         die(f"{args.tag} is Firefox {m['version']}, but upstream.sh builds {up['version']}")
-    path = REPO_ROOT / "upstream.sh"
+    path = BROWSER_ROOT / "upstream.sh"
     path.write_text(re.sub(r"^release=.*$", f"release={m['prefix']}.{m['n']}", path.read_text(), flags=re.M))
     log(f"upstream.sh: release={m['prefix']}.{m['n']}")
     return 0

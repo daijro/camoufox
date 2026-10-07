@@ -2,7 +2,7 @@
  * Browser package management: version resolution, GitHub release discovery,
  * download/extract, and path lookup.
  *
- * TypeScript twin of pythonlib/camoufox/pkgman.py.
+ * TypeScript twin of python/src/camoufox/pkgman.py.
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -15,7 +15,6 @@ import type { Writable } from "node:stream";
 import AdmZip from "adm-zip";
 import cliProgress, { type Options as BarOptions } from "cli-progress";
 import prettyBytes from "pretty-bytes";
-import { parse as parseYaml } from "yaml";
 import { CONSTRAINTS, LIBRARY_VERSION } from "./__version__.js";
 import {
 	effectivePin,
@@ -48,28 +47,14 @@ import {
 	ARCH_MAP,
 	INSTALL_DIR,
 	LAUNCH_FILE,
-	LOCAL_DATA,
+	loadDataFile,
 	OS_ARCH_MATRIX,
 	OS_MAP,
 	OS_NAME,
 	rprint,
 } from "./paths.js";
+import { comparePyStr } from "./pycompat.js";
 import { warn } from "./warnings.js";
-
-// Platform constants and install paths live in paths.ts so that the
-// pkgman <-> multiversion cycle never needs them mid-evaluation. Re-exported
-// here so pkgman stays the single public entry point for them.
-export {
-	ARCH_MAP,
-	INSTALL_DIR,
-	LAUNCH_FILE,
-	LOCAL_DATA,
-	OS_ARCH_MATRIX,
-	OS_MAP,
-	OS_NAME,
-	rprint,
-	userCacheDir,
-} from "./paths.js";
 
 /** GITHUB_TOKEN, as the Python twin reads it: once, at import. */
 const GITHUB_TOKEN: string | undefined = process.env.GITHUB_TOKEN;
@@ -310,7 +295,7 @@ export const pkgmanDeps = {
  * The Python twin asks importlib.metadata for `playwright`; the npm package
  * that plays that role here is playwright-core.
  */
-function resolvedPlaywrightVersionRaw(): string | null {
+export function resolvedPlaywrightVersionRaw(): string | null {
 	try {
 		const require = createRequire(import.meta.url);
 		const pkg = JSON.parse(
@@ -379,18 +364,6 @@ export interface BrowserRepoEntry {
 	name: string;
 	pattern?: string;
 	versions?: BrowserVersionConstraint[];
-}
-
-/**
- * Load a bundled YAML data file (repos.yml, warnings.yml, ...).
- */
-export function loadYaml(file: string): Record<string, any> {
-	return (
-		(parseYaml(fs.readFileSync(path.join(LOCAL_DATA, file), "utf-8")) as Record<
-			string,
-			any
-		>) ?? {}
-	);
 }
 
 /**
@@ -473,14 +446,14 @@ export class RepoConfig {
 	}
 
 	static loadRepos(spoofLibraryVersion?: string): RepoConfig[] {
-		const data = loadYaml("repos.yml");
+		const data = loadDataFile("repos.yml");
 		return ((data.browsers ?? []) as BrowserRepoEntry[]).map((r) =>
 			RepoConfig.fromEntry(r, spoofLibraryVersion),
 		);
 	}
 
 	static getDefaultName(): string {
-		return loadYaml("repos.yml").default?.browser ?? "Official";
+		return loadDataFile("repos.yml").default?.browser ?? "Official";
 	}
 
 	static fromEntry(
@@ -584,11 +557,6 @@ export class RepoConfig {
 			version.compare(new Version(buildMax)) <= 0
 		);
 	}
-}
-
-/** Python's str ordering (code points), not localeCompare's collation. */
-export function cmpStr(a: string, b: string): number {
-	return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function escapeRegExp(value: string): string {
@@ -700,6 +668,17 @@ export function resetOutdatedWarning(): void {
 	outdatedWarned = false;
 }
 
+/** A GitHub repo's releases, newest first. */
+async function githubReleases(repo: string): Promise<GitHubRelease[]> {
+	const apiUrl = `https://api.github.com/repos/${repo}/releases`;
+	const response = await request(apiUrl, {
+		headers: githubHeaders(apiUrl),
+		signal: AbortSignal.timeout(20_000),
+	});
+	raiseForStatus(response, apiUrl);
+	return (await response.json()) as GitHubRelease[];
+}
+
 /**
  * Manages fetching GitHub releases with fallback repos.
  */
@@ -734,14 +713,8 @@ export class GitHubDownloader {
 		);
 	}
 
-	protected async getReleases(githubRepo: string): Promise<GitHubRelease[]> {
-		const apiUrl = `https://api.github.com/repos/${githubRepo}/releases`;
-		const response = await request(apiUrl, {
-			headers: githubHeaders(apiUrl),
-			signal: AbortSignal.timeout(20_000),
-		});
-		raiseForStatus(response, apiUrl);
-		return (await response.json()) as GitHubRelease[];
+	protected getReleases(githubRepo: string): Promise<GitHubRelease[]> {
+		return githubReleases(githubRepo);
 	}
 
 	/**
@@ -1030,13 +1003,7 @@ export async function listAvailableVersions(
 	let lastError: unknown;
 	for (const repo of config.repos) {
 		try {
-			const apiUrl = `https://api.github.com/repos/${repo}/releases`;
-			const resp = await request(apiUrl, {
-				headers: githubHeaders(apiUrl),
-				signal: AbortSignal.timeout(20_000),
-			});
-			raiseForStatus(resp, apiUrl);
-			releases = (await resp.json()) as GitHubRelease[];
+			releases = await githubReleases(repo);
 			break;
 		} catch (error) {
 			lastError = error;
@@ -1088,7 +1055,7 @@ export async function listAvailableVersions(
 	versions.sort((a, b) => {
 		const byVersion = b.version.compare(a.version);
 		if (byVersion !== 0) return byVersion;
-		return cmpStr(b.assetCreatedAt ?? "", a.assetCreatedAt ?? "");
+		return comparePyStr(b.assetCreatedAt ?? "", a.assetCreatedAt ?? "");
 	});
 	return versions;
 }

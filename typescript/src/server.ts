@@ -1,7 +1,7 @@
 /**
  * Playwright server mode.
  *
- * TypeScript twin of pythonlib/camoufox/server.py. Python has to shell out to
+ * TypeScript twin of python/src/camoufox/server.py. Python has to shell out to
  * the Node runtime bundled with its Playwright driver (and hand it a base64
  * config frame over stdin, via launchServer.js) because there is no Python
  * binding for BrowserServer. Here we already are that runtime, so this calls

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from . import results as evidence
-from ._util import EVIDENCE_DIR, REPO_ROOT, read_upstream_sh, run
+from ._util import BROWSER_ROOT, EVIDENCE_DIR, read_upstream_sh, run
 from ._pytest import built_binary
 
 # mach prints errors in a few shapes; catch the common ones for the summary.
@@ -41,7 +41,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     result = evidence.GateResult(gate="build")
     result.metrics.update(version=up.get("version"), release=up.get("release"), target="linux-x86_64")
 
-    proc = run(["make", "build"], cwd=REPO_ROOT, timeout=args.timeout, tee=True, capture=False)
+    proc = run(["make", "build"], cwd=BROWSER_ROOT, timeout=args.timeout, tee=True, capture=False)
 
     binary = built_binary()
     result.metrics["exit_code"] = proc.code

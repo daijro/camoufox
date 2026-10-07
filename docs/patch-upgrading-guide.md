@@ -1,6 +1,6 @@
 # Firefox Patch Upgrading Guide
 
-How to update Camoufox's patches when `upstream.sh` moves to a new Firefox
+How to update Camoufox's patches when `browser/upstream.sh` moves to a new Firefox
 version. Patches break because Firefox renames APIs, moves code and shifts line
 numbers; this guide covers finding and fixing those rejects.
 
@@ -12,7 +12,7 @@ numbers; this guide covers finding and fixing those rejects.
 4. [Fixing Common Reject Types](#fixing-common-reject-types)
 5. [Per-Context Machinery](#per-context-machinery)
 6. [Testing and Validation](#testing-and-validation)
-7. [Best Practices](#best-practices)
+7. [Pitfalls](#pitfalls)
 
 ---
 
@@ -20,7 +20,7 @@ numbers; this guide covers finding and fixing those rejects.
 
 ### Patch Categories
 
-All patches live under `patches/`, and `scripts/patch.py` applies every
+All patches live under `browser/patches/`, and `browser/scripts/patch.py` applies every
 `*.patch` in it (subdirectories included), sorted by file name:
 
 - **Playwright**: `playwright/0-playwright.patch` (Juggler integration) and
@@ -32,7 +32,7 @@ All patches live under `patches/`, and `scripts/patch.py` applies every
 - **`librewolf/`, `ghostery/`**: patches taken from those projects.
 
 Compile-time dependencies between patches (MaskConfig, RoverfoxStorageManager)
-are listed in [`patches/patch-dependencies.md`](../patches/patch-dependencies.md).
+are listed in [`browser/patches/patch-dependencies.md`](../browser/patches/patch-dependencies.md).
 
 ### Key Infrastructure Files
 
@@ -44,9 +44,10 @@ are listed in [`patches/patch-dependencies.md`](../patches/patch-dependencies.md
 
 ## The Source Tree and Its Make Targets
 
-The Firefox tree is `camoufox-<version>-<release>/` (from `upstream.sh`). It is
-a git repository whose `unpatched` tag is plain Firefox plus `additions/` and
-`settings/`. Run every target from the repository root:
+The Firefox tree is `browser/camoufox-<version>-<release>/` (from
+`browser/upstream.sh`). It is a git repository whose `unpatched` tag is plain
+Firefox plus `browser/additions/` and `browser/settings/`. Run every target, and
+every command in this guide, from `browser/`:
 
 | Target | What it does |
 |---|---|
@@ -58,6 +59,14 @@ a git repository whose `unpatched` tag is plain Firefox plus `additions/` and
 | `make first-checkpoint` | Commits the current tree and tags it `first-checkpoint`. |
 | `make workspace ./patches/x.patch` | Unapplies `x` if it is applied, runs `first-checkpoint`, then applies `x` again, so the working tree differs from the checkpoint by exactly that patch. |
 | `make diff` | `git diff first-checkpoint`. Redirect it into the patch file. |
+| `make checkpoint` | Commits tracked changes, keeping the `first-checkpoint` tag where it is. |
+| `make grep <text>` | Searches the top-level patches for a string. |
+| `make build` | `./mach build` (runs `make dir` first if the tree was never prepared). |
+| `make run` | Runs the build with `debug` on in `CAMOU_CONFIG`; wipes `~/.camoufox`. `args="..."` passes arguments. |
+| `make path` | Prints the built `camoufox-bin`. |
+| `make stage-fonts` | Stages the font bundle into the unpackaged build, which tests through the launchers need. |
+| `make tests` | The Playwright suite against the build (`headful=true` for headed). |
+| `make help` | Lists every target. |
 
 `git diff` does not show untracked files. Before `make diff`, mark new files
 with `git add -N <file>` inside the source tree, or they will be missing from
@@ -69,7 +78,7 @@ the patch.
 
 ### Step 1: Bump the Version and Find the Broken Patches
 
-Update `version` and `release` in `upstream.sh`, then:
+Update `version` and `release` in `browser/upstream.sh`, then:
 
 ```bash
 make dir
@@ -82,7 +91,7 @@ each failure one patch at a time (Step 2).
 ### Step 2: Set Up One Patch
 
 Start from a clean unpatched tree, apply what the patch builds on (at least the
-Playwright patches, plus anything from `patches/patch-dependencies.md`),
+Playwright patches, plus anything from `browser/patches/patch-dependencies.md`),
 checkpoint, then apply the broken patch. Use `make clean` rather than
 `make revert` here: files that other patches created survive a revert and make
 `patch` stop on "previously applied" prompts.
@@ -138,7 +147,7 @@ find . -name '*.rej' -o -name '*.orig' | xargs rm -f
 
 ### Step 7: Write the Updated Patch
 
-From the repository root:
+From `browser/`:
 
 ```bash
 (cd camoufox-<version>-<release> && git add -N path/to/new/file.cpp)   # new files only
@@ -270,22 +279,18 @@ MakeTextRun(text, len, drawTarget, appUnitsPerDevPixel, flags, recorder, userCon
 2. Add proper extraction code before the call
 3. Pass userContextId as the last parameter
 
-**Standard userContextId Extraction Pattern**:
+**userContextId extraction**: the per-context patches resolve it from the
+`BrowsingContext`, which exists before the document's attributes are set:
 
 ```cpp
 uint32_t userContextId = 0;
-if (mozilla::dom::Document* doc = presContext->Document()) {
-  if (nsIPrincipal* principal = doc->NodePrincipal()) {
-    auto* bp = mozilla::BasePrincipal::Cast(principal);
-    if (bp) {
-      userContextId = bp->OriginAttributesRef().mUserContextId;
-    }
-  }
+if (BrowsingContext* bc = win->GetBrowsingContext()) {
+  userContextId = bc->OriginAttributesRef().mUserContextId;
 }
-
-// Now pass userContextId to the function
 MakeTextRun(..., userContextId);
 ```
+
+Workers use `WorkerPrivate::GetOriginAttributes()` instead.
 
 ### Type 5: Line Number Shifts (No Code Changes)
 
@@ -345,38 +350,17 @@ evidence that a patch which still applies was not neutered by the upgrade.
 
 ---
 
-## Best Practices
+## Pitfalls
 
-### DO:
-
-1. ✅ **Start each patch from `make clean`** plus the patches it builds on
-2. ✅ **Read and understand** what the patch is trying to do before fixing rejects
-3. ✅ **Search for API changes** in Firefox release notes when functions have changed
-4. ✅ **Use grep/search** extensively to find where code moved
-5. ✅ **Extract userContextId properly** using the standard pattern
-6. ✅ **Check with `make dir`** that the whole stack applies before considering a patch done
-7. ✅ **Keep commits atomic** - one patch fix per session
-8. ✅ **Document major API changes** you discover
-
-### DON'T:
-
-1. ❌ **Don't hand-edit `.patch` files** - edit the tree and regenerate with `make diff`
-2. ❌ **Don't leave TODO comments** - fix things properly as you go
-3. ❌ **Don't guess parameter values** - extract them properly or investigate
-4. ❌ **Don't skip verification** - always test the patch applies cleanly
-5. ❌ **Don't batch multiple patch updates** - do them one at a time
-6. ❌ **Don't assume line numbers are correct** in reject files
-7. ❌ **Don't ignore warnings** during patch application
-
-### Common Pitfalls
-
-1. **Assuming reject line numbers are accurate**: They're usually wrong in new Firefox versions
-2. **Not understanding API changes**: Firefox refactors often - read the new code
-3. **Forgetting new files**: `git diff` skips untracked files; `git add -N` them before `make diff`
-4. **Diffing against the wrong base**: `make first-checkpoint` before applying the patch you are fixing, or `make diff` will include its dependencies
-5. **Leaving reject files**: Remove all `.rej` and `.orig` files after fixing
-
----
+| Pitfall | Avoid it by |
+|---|---|
+| Trusting reject line numbers | Searching for the context lines instead |
+| Hand-editing a `.patch` file | Editing the tree and running `make diff` |
+| Missing new files in the patch | `git add -N` them before `make diff` |
+| A diff that includes the patch's dependencies | Running `make first-checkpoint` after applying them and before the patch being fixed |
+| `.rej` and `.orig` files in the diff | Deleting them first (Step 6) |
+| Guessing a value a refactored API now needs | Reading the new Firefox code, or the release notes |
+| Fixing several patches in one pass | One patch at a time, each from `make clean` |
 
 ## Appendix: Firefox Source Navigation
 
@@ -405,65 +389,17 @@ grep -r "class Navigator" . --include="*.h"
   - `layout/generic/`: Text frames
   - `layout/mathml/`: MathML rendering
 
-### Common Firefox Patterns
-
-**User Context ID Extraction**:
-```cpp
-uint32_t userContextId = 0;
-if (Document* doc = GetDocument()) {
-  if (nsIPrincipal* principal = doc->NodePrincipal()) {
-    auto* bp = mozilla::BasePrincipal::Cast(principal);
-    if (bp) {
-      userContextId = bp->OriginAttributesRef().mUserContextId;
-    }
-  }
-}
-```
-
-**Three-tier userContextId fallback** (for WebIDL functions):
-```cpp
-// 1) Document's principal (preferred)
-if (Document* doc = win->GetDoc()) {
-  if (nsIPrincipal* p = doc->NodePrincipal()) {
-    userContextId = p->OriginAttributesRef().mUserContextId;
-  }
-}
-
-// 2) DocShell origin attributes
-if (userContextId == 0) {
-  if (nsIDocShell* ds = win->GetDocShell()) {
-    auto* concrete = static_cast<nsDocShell*>(ds);
-    userContextId = concrete->GetOriginAttributes().mUserContextId;
-  }
-}
-
-// 3) Top browsing context
-if (userContextId == 0) {
-  if (BrowsingContext* bc = win->GetBrowsingContext()) {
-    RefPtr<BrowsingContext> top = bc->Top();
-    // ... extract from top window
-  }
-}
-```
-
 ---
 
-## Summary Checklist
+## Checklist
 
-When updating patches for a new Firefox version:
-
-- [ ] Bump `upstream.sh` and run `make dir` to list the failing patches
+- [ ] Bump `browser/upstream.sh` and run `make dir` to list the failing patches
 - [ ] For each: `make clean`, apply its dependencies, `make first-checkpoint`, `make patch` it
-- [ ] Analyze each reject to understand what changed
-- [ ] Search Firefox source for moved/refactored code
-- [ ] Fix rejects by porting logic to new Firefox APIs
-- [ ] Extract userContextId properly using standard patterns
-- [ ] Don't leave TODO comments - fix everything immediately
-- [ ] Remove all `.rej` and `.orig` files after fixing
-- [ ] `git add -N` any new files
+- [ ] Port each reject to the new Firefox code
+- [ ] Remove `.rej` and `.orig` files, `git add -N` new files
 - [ ] `make diff > patches/<name>.patch`
 - [ ] `make dir` applies the whole stack cleanly
-- [ ] Document any major API changes discovered
+- [ ] `make build`, then run the patch guards
 
 ---
 

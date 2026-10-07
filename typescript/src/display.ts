@@ -1,25 +1,10 @@
 /**
- * Host display geometry, in the units Firefox lays its windows out in.
- *
- * TypeScript twin of pythonlib/camoufox/display.py.
- *
- * Firefox sizes windows in **CSS pixels**. Python uses `screeninfo`, which
- * marks the process per-monitor DPI aware and therefore reports **physical**
- * pixels; where Windows display scaling is enabled the two differ by the scale
- * factor (a 1920x1080 panel at 150% is only 1280x720 CSS px), so deriving a
- * window size from the physical numbers opens it partly off-screen
- * (daijro/camoufox#425).
- *
- * There is no dependency-free `screeninfo` equivalent on npm, so the probes
- * below shell out per platform and are deliberately best-effort: any failure
- * returns null, exactly as the Python twin does when enumeration fails, and
- * the caller simply skips the screen constraint.
- *
- * X11 (xrandr) and macOS already report CSS pixels; only Windows needs the
- * scale correction, and there the DPI-aware value is what PowerShell reports.
+ * Host display geometry in CSS pixels, the unit Firefox sizes windows in: a
+ * physical-pixel size opens a scaled Windows window off-screen (#425). Twin of
+ * display.py; a failed probe returns null, and the screen constraint is skipped.
  */
 import { execFileSync } from "node:child_process";
-import { OS_NAME } from "./pkgman.js";
+import { OS_NAME } from "./paths.js";
 
 /** Size of a monitor in CSS pixels. */
 export interface DisplaySize {

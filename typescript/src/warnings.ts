@@ -1,7 +1,7 @@
 /**
  * Leak and fallback warnings, and the warning channel the launcher reports through.
  *
- * TypeScript twin of pythonlib/camoufox/_warnings.py. The messages are read
+ * TypeScript twin of python/src/camoufox/_warnings.py. The messages are read
  * from the same warnings.yml the Python package ships, so both launchers say
  * the same thing.
  *
@@ -11,22 +11,17 @@
  * `warnings.catch_warnings(record=True)` is `recordWarnings()` here.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
-import * as fs from "node:fs";
 import * as os from "node:os";
-import * as path from "node:path";
-import { parse as parseYaml } from "yaml";
 import { LIBRARY_VERSION } from "./__version__.js";
 import { CamoufoxNotInstalled } from "./exceptions.js";
-import { LOCAL_DATA } from "./paths.js";
+import { loadDataFile } from "./paths.js";
 import { installedVerStr } from "./pkgman.js";
 
 let warningsData: Record<string, string> | undefined;
 
 /** warnings.yml, loaded once. */
 export function loadWarnings(): Record<string, string> {
-	warningsData ??= parseYaml(
-		fs.readFileSync(path.join(LOCAL_DATA, "warnings.yml"), "utf-8"),
-	) as Record<string, string>;
+	warningsData ??= loadDataFile<Record<string, string>>("warnings.yml");
 	return warningsData;
 }
 

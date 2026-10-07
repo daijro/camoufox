@@ -42,7 +42,7 @@ from ._util import (
 
 BROWSERS_JSON = "https://raw.githubusercontent.com/microsoft/playwright/{ref}/packages/playwright-core/browsers.json"
 TAGS_API = "https://api.github.com/repos/microsoft/playwright-python/tags?per_page=100"
-PYPROJECT = "pythonlib/pyproject.toml"
+PYPROJECT = "python/pyproject.toml"
 _CEILING = re.compile(r'^playwright\s*=\s*"<\s*([0-9][0-9.]*)"', re.M)
 
 # Consulted only when the network is unavailable or GitHub is rate-limiting an

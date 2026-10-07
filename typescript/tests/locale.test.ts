@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { InvalidLocale } from "../src/exceptions.js";
-import { handleLocale, handleLocales, normalizeLocale } from "../src/locale.js";
+import {
+	handleLocale,
+	handleLocales,
+	normalizeLocale,
+} from "../src/locales.js";
 
 describe("normalizeLocale", () => {
 	it("splits language and region", () => {

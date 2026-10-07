@@ -11,18 +11,18 @@ over them.
 
 ## Patch Files
 
-Location: `patches/playwright/`
+Location: `browser/patches/playwright/`
 
 | File                   | Purpose                                                                                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0-playwright.patch`   | Playwright's [bootstrap.diff](https://github.com/microsoft/playwright/blob/main/browser_patches/firefox/patches/bootstrap.diff), ported to the Firefox version in `upstream.sh`, plus Camoufox fixes to the Juggler input and navigation paths |
+| `0-playwright.patch`   | Playwright's [bootstrap.diff](https://github.com/microsoft/playwright/blob/main/browser_patches/firefox/patches/bootstrap.diff), ported to the Firefox version in `browser/upstream.sh`, plus Camoufox fixes to the Juggler input and navigation paths |
 | `1-leak-fixes.patch`   | Undoes two changes from `0-playwright.patch` that expose automation: `navigator.webdriver` always reports `false`, and enterprise policies load from Firefox's normal provider instead of Playwright's |
 
-Both sort ahead of every other patch, so `scripts/patch.py` applies them first.
+Both sort ahead of every other patch, so `browser/scripts/patch.py` applies them first.
 
 ## Addition Files
 
-Location: `additions/juggler/`
+Location: `browser/additions/juggler/`
 
 Camoufox's Juggler, started from
 [upstream](https://github.com/microsoft/playwright/tree/main/browser_patches/firefox/juggler).
@@ -46,6 +46,8 @@ no longer supports `jsm`):
 ```
 
 ## Updating Playwright Integration
+
+Every command in this section runs from `browser/`.
 
 ### 1. Port Upstream Patch Changes
 

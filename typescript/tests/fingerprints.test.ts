@@ -1,11 +1,12 @@
 /**
- * The identity layer's behaviour: ports of pythonlib/tests/
+ * The identity layer's behaviour: ports of python/tests/
  * test_fingerprint_fixes.py, test_preset_appversion.py, test_voices.py,
  * test_font_distribution.py and the unit half of test_identity_salt.py.
  * Exact parity with Python is pinned separately in identity-golden.test.ts.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { Generator } from "fpgen";
 import { describe, expect, it, vi } from "vitest";
 import { InvalidIP } from "../src/exceptions.js";
 import {
@@ -35,8 +36,7 @@ import {
 	setMediaDevicesDefaults,
 	WINDOWS_11_MARKER_FONTS,
 } from "../src/fingerprints.js";
-import { Generator } from "../src/fpgen/index.js";
-import { LOCAL_DATA } from "../src/pkgman.js";
+import { LOCAL_DATA } from "../src/paths.js";
 import { MODEL } from "./fpgen-setup.js";
 
 function data(name: string): any {

@@ -17,7 +17,7 @@ name: Release
 #                  PyPI and to npm `latest`.
 #
 # Each package is stamped with the browser release built from the same sources
-# (ci/release.py stamp -> pythonlib/camoufox/browser-pin.json), and both
+# (ci/release.py stamp -> python/src/camoufox/browser-pin.json), and both
 # launchers fetch and launch exactly that build by default. A browser release is
 # found by the source digest in its manifest.json asset (ci.browser_inputs).
 #
@@ -217,24 +217,27 @@ jobs:
           sudo apt-get update
           # ccache: the mozconfig enables --with-ccache, but the runner image no
           # longer ships it, so configure fails with "Cannot find ccache".
-          # fontconfig: scripts/verify-fonts.py resolves every reportable family
+          # fontconfig: browser/scripts/verify-fonts.py resolves every reportable family
           # through fc-list/fc-match, so the bundle is checked with the same tool
           # the browser uses rather than assumed correct.
           sudo apt-get install -y msitools p7zip-full aria2 ccache fontconfig
 
       - name: Fetch the font bundle
         # The bundle is a release asset, not repo content (~2.16 GB extracted,
-        # 843 MB as .tar.xz -- see scripts/fetch-fonts.py). Without this the
-        # package would ship with NO fonts while pythonlib/camoufox/fonts.json
-        # still reports hundreds of families, which is a reverse leak in the
-        # shipped browser. After the dependency install, so the download uses
-        # aria2c's parallel connections rather than the curl fallback.
+        # 843 MB as .tar.xz -- see browser/scripts/fetch-fonts.py). Without this
+        # the package would ship with NO fonts while
+        # python/src/camoufox/fonts.json still reports hundreds of families,
+        # which is a reverse leak in the shipped browser. After the dependency
+        # install, so the download uses aria2c's parallel connections rather
+        # than the curl fallback.
+        working-directory: browser
         run: make fonts-extract
 
       - name: Verify the font bundle matches the manifest
         # Full run, not --quick: this is the release path, and the one invariant
         # that cannot be recovered after publishing is a family fonts.json
         # reports that the packaged fontconfig cannot resolve.
+        working-directory: browser
         run: python3 scripts/verify-fonts.py
 
       - name: Prepare the source tree
@@ -258,13 +261,14 @@ jobs:
           # Cap Rust parallelism to lower peak memory (avoids OOM/SIGTERM).
           # Tune to taste: higher = faster but more RAM.
           CARGO_BUILD_JOBS: "1"
+        working-directory: browser
         run: python3 ./multibuild.py --target ${{ matrix.target }} --arch ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: CamoufoxBuilds-${{ matrix.target }}-${{ matrix.arch }}
-          path: dist/*
+          path: browser/dist/*
 
   publish-browser:
     needs: [plan, build-browser]
@@ -335,15 +339,15 @@ jobs:
         # The npm build copies pythonlib's data files and the pinned fpgen model.
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install vermin build twine -r ci/requirements.txt -e pythonlib
-          .venv/bin/python scripts/pin-fpgen-model.py
+          .venv/bin/pip install vermin build twine -r ci/requirements.txt -e python
+          .venv/bin/python browser/scripts/pin-fpgen-model.py
 
       - name: Check Python compatibility
         # The package must run on the floor pyproject.toml declares (python =
         # "^3.10"); `3.10-` means "needs at most 3.10". typing_extensions is a
         # dependency, not a stdlib module for vermin to date.
-        working-directory: pythonlib
-        run: ../.venv/bin/vermin . --eval-annotations --backport typing_extensions --target=3.10- --violations camoufox/
+        working-directory: python
+        run: ../.venv/bin/vermin . --eval-annotations --backport typing_extensions --target=3.10- --violations src/camoufox/
 
       - name: Stamp the version and the paired browser
         run: |
@@ -351,16 +355,16 @@ jobs:
             --browser-tag "${{ needs.plan.outputs.browser_tag }}" \
             --py-version "${{ needs.plan.outputs.py_version }}" \
             --npm-version "${{ needs.plan.outputs.npm_version }}"
-          cat pythonlib/camoufox/browser-pin.json
+          cat python/src/camoufox/browser-pin.json
 
       - name: Build the Python package
-        working-directory: pythonlib
+        working-directory: python
         run: |
           ../.venv/bin/python -m build
           ../.venv/bin/twine check dist/*
 
       - name: The wheel carries its browser pin
-        working-directory: pythonlib
+        working-directory: python
         run: |
           ../.venv/bin/python - <<'EOF'
           import glob, json, zipfile
@@ -400,14 +404,14 @@ jobs:
         # published again under a new number.
         run: |
           .venv/bin/python -m ci.release lib-diff --channel "${{ needs.plan.outputs.channel }}" \
-            --wheel pythonlib/dist/*.whl --tarball npm-dist/*.tgz \
+            --wheel python/dist/*.whl --tarball npm-dist/*.tgz \
             --py-version "${{ needs.plan.outputs.py_version }}" \
             --npm-version "${{ needs.plan.outputs.npm_version }}"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: python-dist
-          path: pythonlib/dist/
+          path: python/dist/
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: npm-dist

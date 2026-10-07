@@ -25,20 +25,14 @@ import {
 	utils,
 	warnings,
 } from "./launch-host.js";
-import { prerequisite } from "./prereq.js";
 
-const { ensureModel } = await import("../src/fpgen/index.js");
 const { OSError, PyFloat } = await import("../src/pycompat.js");
 const { Version } = await import("../src/pkgman.js");
 const { InvalidPropertyType } = await import("../src/exceptions.js");
 const cpuAffinity = await import("../src/cpu_affinity.js");
 
-let modelReady = true;
-try {
-	await ensureModel();
-} catch (e) {
-	modelReady = prerequisite("fpgen-model", false, String(e));
-}
+// Imported after launch-host, which has to set the cache directory first.
+const { MODEL } = await import("./fpgen-setup.js");
 
 const deps = utils.utilsDeps;
 // The real disk probe, captured before any test stubs it.
@@ -686,7 +680,7 @@ describe("test_voices (launch half)", () => {
 	});
 });
 
-describe.skipIf(!modelReady)(
+describe.skipIf(!MODEL.ok)(
 	"test_launch_geometry / test_identity_salt (fpgen draws)",
 	() => {
 		beforeEach(() => stubHost());

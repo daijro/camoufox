@@ -232,7 +232,9 @@ def render(merged: Dict[str, dict], required: List[str], problems: List[str], me
     lines += [
         "",
         "<sub>The Playwright suite is upstream playwright-python at the tag above, "
-        "fetched fresh, with [`tests/camoufox/`](tests/camoufox) overlaid. It runs with "
+        "fetched fresh, with "
+        "[`browser/tests/playwright/camoufox/`](browser/tests/playwright/camoufox) "
+        "overlaid. It runs with "
         "world isolation on — the configuration Camoufox ships — and only the failures "
         "are re-run with it off; those count as passes and are reported above as "
         "main-world fallbacks, which is the size of the isolated-world gap. Tests "

@@ -9,7 +9,7 @@ the TypeScript functions and requires the identical result.
 
 Everything recorded is a pure function of its recorded inputs: seeded draws
 take their seed from the case, the unseeded module-level `random` is re-seeded
-per case (the TS side seeds its `pyRandom` the same way), and the host probes
+per case (the TS side seeds python-random's module-level generator the same way), and the host probes
 fix_hardware_concurrency reads are patched. Large outputs (font / voice lists,
 WebGL parameter blobs, preset configs) are recorded as a short hash:
 
@@ -39,7 +39,6 @@ TS_ROOT = HERE.parent.parent
 FIXTURES = TS_ROOT / 'tests' / 'fixtures' / 'identity'
 sys.path.insert(0, str(HERE))
 
-import pyrandom_cases  # noqa: E402
 
 from camoufox import coherence  # noqa: E402
 from camoufox import cpu_affinity  # noqa: E402
@@ -97,12 +96,8 @@ def err(fn):
 
 
 # ---------------------------------------------------------------------------
-# pyrandom + numpy + python-compat primitives
+# numpy + python-compat primitives
 # ---------------------------------------------------------------------------
-
-
-def record_pyrandom():
-    write('pyrandom.json', {'cases': pyrandom_cases.cases()})
 
 
 def record_numpy():
@@ -727,7 +722,6 @@ def record_init_script():
 
 def main():
     record_constants()
-    record_pyrandom()
     record_numpy()
     record_pycompat()
     record_fpgen_salts()

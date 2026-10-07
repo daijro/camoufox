@@ -1,7 +1,7 @@
 /**
  * Helpers to find the user's public IP address for geolocation.
  *
- * TypeScript twin of pythonlib/camoufox/ip.py.
+ * TypeScript twin of python/src/camoufox/ip.py.
  */
 import { Impit } from "impit";
 import { InvalidIP, InvalidProxy } from "./exceptions.js";
@@ -104,7 +104,7 @@ function getImpit(proxy?: string): Impit {
 	return impit;
 }
 
-export const PROXY_LOOKUP_FAILED =
+const PROXY_LOOKUP_FAILED =
 	"Could not look up the proxy's exit IP and timezone. Pass webrtc_ip and " +
 	"timezone_id explicitly to skip the lookup";
 

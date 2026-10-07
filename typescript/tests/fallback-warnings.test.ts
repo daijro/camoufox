@@ -1,5 +1,5 @@
 /**
- * Port of pythonlib/tests/test_fallback_warnings.py (identity half; the launch
+ * Port of python/tests/test_fallback_warnings.py (identity half; the launch
  * half is in launch.test.ts): every place an identity falls back to a
  * substitute value says so, with a report block to paste into an issue.
  *
@@ -11,17 +11,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DATA_FILES, LOCAL_DATA } from "../src/paths.js";
-import { prerequisite } from "./prereq.js";
+import { MODEL } from "./fpgen-setup.js";
 
 const REPORT =
 	"Please report this at https://github.com/daijro/camoufox/issues/new";
-
-let modelReady = true;
-try {
-	await (await import("../src/fpgen/index.js")).ensureModel();
-} catch (e) {
-	modelReady = prerequisite("fpgen-model", false, String(e));
-}
 
 let tmp: string;
 
@@ -47,11 +40,14 @@ async function withData(broken: (dir: string) => void) {
 	for (const name of DATA_FILES)
 		fs.copyFileSync(path.join(LOCAL_DATA, name), path.join(data, name));
 	broken(data);
-	vi.doMock("../src/paths.js", async (importOriginal) => ({
-		...(await importOriginal<typeof import("../src/paths.js")>()),
-		LOCAL_DATA: data,
-	}));
-	await (await import("../src/fpgen/index.js")).ensureModel();
+	vi.doMock("../src/paths.js", async (importOriginal) => {
+		const paths = await importOriginal<typeof import("../src/paths.js")>();
+		return {
+			...paths,
+			LOCAL_DATA: data,
+			loadDataFile: (file: string) => paths.loadDataFile(path.join(data, file)),
+		};
+	});
 	return {
 		fp: await import("../src/fingerprints.js"),
 		warnings: await import("../src/warnings.js"),
@@ -97,7 +93,7 @@ it("a failed preset voice draw warns", async () => {
 	expect(text).toContain("error: SyntaxError:");
 });
 
-describe.skipIf(!modelReady)("context draws", () => {
+describe.skipIf(!MODEL.ok)("context draws", () => {
 	it.each([
 		["fonts.json", missing("fonts.json"), "fonts", "ENOENT"],
 		[
