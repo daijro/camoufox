@@ -96,6 +96,7 @@ $ python -m camoufox --help
 │ path      Print the install directory path                                            │
 │ remove    Remove downloaded data. By default, this removes everything.                │
 │           Pass --select to pick a browser version to remove.                          │
+│ rest      Launch a REST API that runs page jobs                                       │
 │ server    Launch a Playwright server                                                  │
 │ set       Set the active Camoufox version to use & fetch.                             │
 │           By default, this opens an interactive selector for versions and settings.   │
@@ -311,6 +312,54 @@ Launch a remote Playwright server.
 ```bash
 > camoufox server
 ```
+
+<hr width=50>
+
+### `rest`
+
+Launch a REST API, for clients that want plain HTTP instead of the SDK. It runs
+one headless Camoufox and gives every job a fresh browser context, closed when
+the job ends.
+
+```bash
+> camoufox rest --port 8000 --concurrency 2 --timeout 30
+Camoufox REST API listening on http://127.0.0.1:8000
+```
+
+Submit a job, poll it, then fetch the result. `operation` is `content` (final
+URL, title and HTML) or `screenshot` (final URL, title and a base64 PNG of the
+viewport).
+
+```bash
+id=$(curl -s -X POST localhost:8000/jobs -d '{"url": "https://example.com", "operation": "content"}' | jq -r .id)
+curl -s localhost:8000/jobs/$id          # {"id": ..., "status": "succeeded", "error": null, ...}
+curl -s localhost:8000/jobs/$id/result   # {"url": "https://example.com/", "title": "Example Domain", "html": ...}
+```
+
+| Endpoint | Response |
+|---|---|
+| `POST /jobs` | `202` and the job; `400` for a bad or blocked URL; `503` when `--max-jobs` unfinished jobs are held |
+| `GET /jobs/{id}` | The job's `status` (`queued`, `running`, `succeeded`, `failed`) and `error` |
+| `GET /jobs/{id}/result` | `200` and the result once succeeded, otherwise `409` with the job and its error |
+
+At most `--concurrency` jobs run at once; the rest queue. `--timeout` bounds a
+running job. Results stay in memory, and the oldest finished job is dropped
+when a new one needs its slot. Stopping the service (Ctrl-C or SIGTERM) cancels
+unfinished jobs and closes the browser.
+
+The defaults are restrictive:
+
+- Only `http` and `https` URLs are accepted, and launch options and page
+  scripts cannot be set over HTTP.
+- A URL that resolves to a loopback, private, link-local or otherwise
+  non-public address is refused, a page's requests to one are aborted, and a
+  job whose redirect lands on one fails without returning anything. Pass
+  `--allow-private-networks` to lift this. The check cannot stop the browser
+  from sending a redirected request, or a WebSocket, to such an address, so
+  restrict egress at the network level when the service is exposed to
+  untrusted clients.
+- It binds to `127.0.0.1`. To bind elsewhere, set `CAMOUFOX_REST_TOKEN`;
+  clients then send an `Authorization` header of `Bearer <token>`.
 
 ---
 
