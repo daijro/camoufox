@@ -134,6 +134,13 @@ def job_schema(max_timeout: float) -> Dict[str, Any]:
                 ),
                 'example': '#content',
             },
+            'format': {
+                'type': 'string', 'enum': ['html', 'text'], 'default': 'html',
+                'description': (
+                    'What `content` returns: `html`, the markup, or `text`, the text a reader sees '
+                    '(its `innerText`), without tags, scripts or styles. Content only.'
+                ),
+            },
             'full_page': {
                 'type': 'boolean', 'default': False,
                 'description': 'Screenshot the whole scrollable page, not only the viewport. Screenshots only.',
@@ -173,6 +180,8 @@ def parse_job(body: Any, max_timeout: float) -> Dict[str, Any]:
             raise InvalidJob(f"{name} is required")
     for name, value in body.items():
         _check_field(name, value, schema['properties'][name])
+    if 'format' in body and body['operation'] != 'content':
+        raise InvalidJob('format applies only to content')
     if body.get('full_page') and (body['operation'] != 'screenshot' or 'selector' in body):
         raise InvalidJob('full_page applies only to a screenshot without a selector')
     defaults = {name: rule['default'] for name, rule in schema['properties'].items() if 'default' in rule}
@@ -196,7 +205,8 @@ def openapi(max_timeout: float, token_required: bool) -> Dict[str, Any]:
         'properties': {
             'url': {'type': 'string', 'description': 'The final URL, after redirects.'},
             'title': {'type': 'string'},
-            'html': {'type': 'string', 'description': '`content` only.'},
+            'html': {'type': 'string', 'description': '`content` with `format` html.'},
+            'text': {'type': 'string', 'description': '`content` with `format` text.'},
             'screenshot': {'type': 'string', 'contentEncoding': 'base64', 'description': '`screenshot` only: a PNG.'},
         },
     }
@@ -366,7 +376,9 @@ class JobRunner:
                 params['selector'], state='visible' if screenshot else 'attached'
             )
         result: Dict[str, Any] = {'url': page.url, 'title': await page.title()}
-        if not screenshot:
+        if params['format'] == 'text':
+            result['text'] = await (element.inner_text() if element else page.inner_text('body'))
+        elif not screenshot:
             result['html'] = await (element.evaluate('e => e.outerHTML') if element else page.content())
         else:
             image = await (element.screenshot() if element else page.screenshot(full_page=params['full_page']))

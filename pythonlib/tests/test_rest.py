@@ -52,6 +52,9 @@ class FakeElement:
     async def screenshot(self):
         return b"\x89PNG element"
 
+    async def inner_text(self):
+        return "element"
+
 
 class FakePage:
     def __init__(self, context):
@@ -79,6 +82,10 @@ class FakePage:
 
     async def content(self):
         return "<html>example</html>"
+
+    async def inner_text(self, selector):
+        assert selector == "body"
+        return "example"
 
     async def screenshot(self, full_page):
         self.full_page = full_page
@@ -204,6 +211,8 @@ def test_screenshot_job_returns_base64_png():
         ({"url": PUBLIC_URL, "operation": "content", "selector": ""}, None),
         ({"url": PUBLIC_URL, "operation": "content", "full_page": True}, None),
         ({"url": PUBLIC_URL, "operation": "screenshot", "full_page": "yes"}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "format": "markdown"}, None),
+        ({"url": PUBLIC_URL, "operation": "screenshot", "format": "text"}, None),
         ({"url": PUBLIC_URL, "operation": "screenshot", "full_page": True, "selector": "h1"}, None),
         ({"url": "http://" + "a" * rest.MAX_URL_LENGTH, "operation": "content"}, None),
         (None, b"not json"),
@@ -255,6 +264,20 @@ def test_a_selector_waits_for_and_returns_only_that_element(operation, state, fi
     assert result[field] == expected
     element = launcher.browser.contexts[0].page.element
     assert (element.selector, element.state) == ("#main", state)
+
+
+@pytest.mark.parametrize("selector, expected", [(None, "example"), ("#main", "element")])
+def test_content_as_text_returns_the_rendered_text_instead_of_html(selector, expected):
+    body = {"url": PUBLIC_URL, "operation": "content", "format": "text"}
+    if selector:
+        body["selector"] = selector
+    service, _ = make_service()
+    with service:
+        _, job = request(service, "POST", "/jobs", body)
+        wait_finished(service, job["id"])
+        _, result = request(service, "GET", f"/jobs/{job['id']}/result")
+    assert job["format"] == "text"
+    assert result == {"url": PUBLIC_URL, "title": "Example", "text": expected}
 
 
 def test_a_job_timeout_shorter_than_the_service_limit_applies():

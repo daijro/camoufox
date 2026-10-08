@@ -333,7 +333,8 @@ endpoint and field, generated from `/openapi.json`; its **Authorize** button
 takes the token.
 
 Submit a job, poll it, then fetch the result. `operation` is `content` (final
-URL, title and HTML) or `screenshot` (final URL, title and a base64 PNG).
+URL, title and HTML, or text with `"format": "text"`) or `screenshot` (final
+URL, title and a base64 PNG).
 
 ```bash
 id=$(curl -s -X POST localhost:8000/jobs -d '{"url": "https://example.com", "operation": "content"}' | jq -r .id)
@@ -349,6 +350,7 @@ A job takes these fields:
 | `operation` | required | `content` or `screenshot` |
 | `wait_until` | `load` | When navigation counts as done: `commit`, `domcontentloaded`, `load` or `networkidle` |
 | `selector` | none | A [Playwright selector](https://playwright.dev/python/docs/selectors) to wait for; the result is then only that element (its outer HTML, or a screenshot of it) |
+| `format` | `html` | What `content` returns: `html` (the markup) or `text` (the text a reader sees, without tags, scripts or styles) |
 | `full_page` | `false` | Screenshot the whole page, not only the viewport (screenshots without `selector`) |
 | `timeout` | `--timeout` | Seconds the job may run, at most `--timeout` |
 

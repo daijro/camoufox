@@ -60,6 +60,12 @@
         <option value="commit">commit: response started</option>
       </select>
     </label>
+    <label>Content format
+      <select id="format">
+        <option value="html">html: the markup</option>
+        <option value="text">text: what a reader sees</option>
+      </select>
+    </label>
     <label>Selector
       <input id="selector" placeholder="#content (wait for it, return only it)">
     </label>
@@ -138,7 +144,7 @@
       image.src = 'data:image/png;base64,' + data.screenshot;
       result.replaceChildren(heading, link, image);
     } else {
-      result.replaceChildren(heading, link, element('pre', data.html));
+      result.replaceChildren(heading, link, element('pre', data.text ?? data.html));
     }
   }
 
@@ -160,6 +166,7 @@
       const job = { url: $('url').value, operation: $('operation').value, wait_until: $('wait_until').value };
       if ($('selector').value) job.selector = $('selector').value;
       if ($('timeout').value) job.timeout = Number($('timeout').value);
+      if (job.operation === 'content') job.format = $('format').value;
       if (job.operation === 'screenshot' && $('full_page').checked) job.full_page = true;
       const { status, data } = await api('POST', '/jobs', job);
       if (status !== 202) return ($('error').textContent = data.error);
