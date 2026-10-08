@@ -328,11 +328,12 @@ Camoufox REST API listening on http://127.0.0.1:8000
 
 Open that address in a browser for a web page that submits jobs, follows their
 status and shows the HTML or screenshot. Paste the token under **Token** when
-the service has one.
+the service has one. `/docs` is an interactive (Swagger UI) reference for every
+endpoint and field, generated from `/openapi.json`; its **Authorize** button
+takes the token.
 
 Submit a job, poll it, then fetch the result. `operation` is `content` (final
-URL, title and HTML) or `screenshot` (final URL, title and a base64 PNG of the
-viewport).
+URL, title and HTML) or `screenshot` (final URL, title and a base64 PNG).
 
 ```bash
 id=$(curl -s -X POST localhost:8000/jobs -d '{"url": "https://example.com", "operation": "content"}' | jq -r .id)
@@ -340,14 +341,38 @@ curl -s localhost:8000/jobs/$id          # {"id": ..., "status": "succeeded", "e
 curl -s localhost:8000/jobs/$id/result   # {"url": "https://example.com/", "title": "Example Domain", "html": ...}
 ```
 
+A job takes these fields:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `url` | required | The `http` or `https` page to open |
+| `operation` | required | `content` or `screenshot` |
+| `wait_until` | `load` | When navigation counts as done: `commit`, `domcontentloaded`, `load` or `networkidle` |
+| `selector` | none | A [Playwright selector](https://playwright.dev/python/docs/selectors) to wait for; the result is then only that element (its outer HTML, or a screenshot of it) |
+| `full_page` | `false` | Screenshot the whole page, not only the viewport (screenshots without `selector`) |
+| `timeout` | `--timeout` | Seconds the job may run, at most `--timeout` |
+
+A page that keeps loading third-party resources may never fire `load` and
+times out. For such pages, wait for `domcontentloaded` plus a `selector` for
+the content you need:
+
+```bash
+curl -s -X POST localhost:8000/jobs -d '{"url": "https://example.com", "operation": "screenshot",
+  "wait_until": "domcontentloaded", "selector": "h1", "timeout": 60}'
+```
+
+Send the URL as the browser would, percent-encoded and with `&` (not `&amp;`)
+between query parameters.
+
 | Endpoint | Response |
 |---|---|
-| `POST /jobs` | `202` and the job; `400` for a bad or blocked URL; `503` when `--max-jobs` unfinished jobs are held |
-| `GET /jobs/{id}` | The job's `status` (`queued`, `running`, `succeeded`, `failed`) and `error` |
+| `POST /jobs` | `202` and the job; `400` for an invalid field or a blocked URL; `503` when `--max-jobs` unfinished jobs are held |
+| `GET /jobs/{id}` | The job's fields, its `status` (`queued`, `running`, `succeeded`, `failed`) and `error` |
 | `GET /jobs/{id}/result` | `200` and the result once succeeded, otherwise `409` with the job and its error |
+| `GET /openapi.json`, `GET /docs` | The OpenAPI 3.1 description, and Swagger UI for it (loaded from jsDelivr, pinned and integrity-checked); neither needs the token |
 
 At most `--concurrency` jobs run at once; the rest queue. `--timeout` bounds a
-running job. Results stay in memory, and the oldest finished job is dropped
+running job, and a job's own `timeout` can only shorten it. Results stay in memory, and the oldest finished job is dropped
 when a new one needs its slot. Stopping the service (Ctrl-C or SIGTERM) cancels
 unfinished jobs and closes the browser.
 
@@ -373,8 +398,11 @@ it needs a token; publish the port on loopback unless clients are remote.
 ```bash
 docker build -t camoufox-rest pythonlib
 export CAMOUFOX_REST_TOKEN=$(openssl rand -hex 16) && echo "$CAMOUFOX_REST_TOKEN"
-docker run --rm -p 127.0.0.1:8000:8000 -e CAMOUFOX_REST_TOKEN camoufox-rest
+docker run --rm --shm-size=1g -p 127.0.0.1:8000:8000 -e CAMOUFOX_REST_TOKEN camoufox-rest
 ```
+
+Docker gives a container 64 MB of `/dev/shm`, which Firefox can outgrow on heavy
+pages; `--shm-size` raises it.
 
 Options go after the image name, for example `camoufox-rest --concurrency 4`.
 

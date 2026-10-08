@@ -9,13 +9,19 @@
   :root { color-scheme: light dark; --accent: #e8590c; --muted: #868e96; --line: #8884; }
   * { box-sizing: border-box; }
   body { margin: 0 auto; max-width: 960px; padding: 2rem 1rem; font: 15px/1.5 system-ui, sans-serif; }
-  h1 { margin: 0 0 1.5rem; font-size: 1.5rem; }
-  h1 span { color: var(--accent); }
+  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.5rem; }
+  h1 { margin: 0; font-size: 1.5rem; }
+  h1 span, a { color: var(--accent); }
   form { display: grid; grid-template-columns: 1fr auto auto; gap: .5rem; margin-bottom: 1rem; }
   input, select, button { font: inherit; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; }
   button { background: var(--accent); border-color: var(--accent); color: #fff; cursor: pointer; }
-  details { margin-bottom: 1.5rem; color: var(--muted); }
-  details input { width: 100%; margin-top: .5rem; }
+  details { margin-bottom: 1rem; color: var(--muted); }
+  details > input { width: 100%; margin-top: .5rem; }
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .5rem 1rem; margin-top: .5rem; }
+  .options label { display: grid; gap: .25rem; }
+  .options select, .options input { width: 100%; min-width: 0; }
+  .options label.check { display: flex; align-items: center; gap: .5rem; }
+  .options label.check input { width: auto; }
   #error { color: #e03131; min-height: 1.5em; }
   table { width: 100%; border-collapse: collapse; }
   th, td { padding: .5rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
@@ -30,7 +36,10 @@
 </style>
 </head>
 <body>
-<h1><span>Camoufox</span> REST</h1>
+<header>
+  <h1><span>Camoufox</span> REST</h1>
+  <a href="/docs">API docs</a>
+</header>
 
 <form id="submit">
   <input id="url" type="url" placeholder="https://example.com" required>
@@ -41,13 +50,33 @@
   <button>Run</button>
 </form>
 <details>
+  <summary>Options</summary>
+  <div class="options">
+    <label>Wait until
+      <select id="wait_until">
+        <option value="load">load: every resource</option>
+        <option value="domcontentloaded">domcontentloaded: HTML parsed</option>
+        <option value="networkidle">networkidle: 500 ms quiet</option>
+        <option value="commit">commit: response started</option>
+      </select>
+    </label>
+    <label>Selector
+      <input id="selector" placeholder="#content (wait for it, return only it)">
+    </label>
+    <label>Timeout (seconds)
+      <input id="timeout" type="number" min="0" step="any" placeholder="the service limit">
+    </label>
+    <label class="check"><input id="full_page" type="checkbox"> Full-page screenshot</label>
+  </div>
+</details>
+<details>
   <summary>Token</summary>
   <input id="token" type="password" placeholder="CAMOUFOX_REST_TOKEN, when the service has one" autocomplete="off">
 </details>
 <div id="error"></div>
 
 <table>
-  <thead><tr><th>Status</th><th>Operation</th><th>URL</th></tr></thead>
+  <thead><tr><th>Status</th><th>Operation</th><th>Wait until</th><th>URL</th></tr></thead>
   <tbody id="jobs"></tbody>
 </table>
 <section id="result"></section>
@@ -82,7 +111,8 @@
       row.classList.toggle('selected', job.id === selected);
       row.append(
         element('td', job.status, 'status ' + job.status),
-        element('td', job.operation),
+        element('td', job.operation + (job.selector ? ' ' + job.selector : '')),
+        element('td', job.wait_until),
         element('td', job.url, 'url'),
       );
       row.addEventListener('click', () => show(job.id));
@@ -127,7 +157,11 @@
     event.preventDefault();
     $('error').textContent = '';
     try {
-      const { status, data } = await api('POST', '/jobs', { url: $('url').value, operation: $('operation').value });
+      const job = { url: $('url').value, operation: $('operation').value, wait_until: $('wait_until').value };
+      if ($('selector').value) job.selector = $('selector').value;
+      if ($('timeout').value) job.timeout = Number($('timeout').value);
+      if (job.operation === 'screenshot' && $('full_page').checked) job.full_page = true;
+      const { status, data } = await api('POST', '/jobs', job);
       if (status !== 202) return ($('error').textContent = data.error);
       jobs.set(data.id, data);
       show(data.id);

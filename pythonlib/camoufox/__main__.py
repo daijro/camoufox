@@ -895,7 +895,7 @@ def server():
 )
 @click.option(
     "--timeout", default=30.0, show_default=True, type=click.FloatRange(min=0, min_open=True),
-    help="Seconds a running job may take",
+    help="Seconds a running job may take, and the most a job may ask for",
 )
 @click.option(
     "--allow-private-networks", is_flag=True,

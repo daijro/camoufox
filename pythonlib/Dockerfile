@@ -2,7 +2,7 @@
 # The Camoufox REST API (`camoufox rest`) and its web page.
 #
 #   docker build -t camoufox-rest pythonlib
-#   docker run --rm -p 127.0.0.1:8000:8000 -e CAMOUFOX_REST_TOKEN camoufox-rest
+#   docker run --rm --shm-size=1g -p 127.0.0.1:8000:8000 -e CAMOUFOX_REST_TOKEN camoufox-rest
 #
 # The service binds 0.0.0.0 inside the container, so it refuses to start
 # without CAMOUFOX_REST_TOKEN.
