@@ -365,8 +365,9 @@ The defaults are restrictive:
 - It binds to `127.0.0.1`. To bind elsewhere, set `CAMOUFOX_REST_TOKEN`;
   clients then send an `Authorization` header of `Bearer <token>`.
 
-To run it in Docker, build the image from `pythonlib/`. The browser is
-downloaded at build time. Inside the container the service binds `0.0.0.0`, so
+To run it in Docker, build the image from `pythonlib/` (BuildKit, the default
+since Docker 23). The browser is downloaded at build time, in a layer that
+editing the REST service or the README does not rebuild. Inside the container the service binds `0.0.0.0`, so
 it needs a token; publish the port on loopback unless clients are remote.
 
 ```bash
