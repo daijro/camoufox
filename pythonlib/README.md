@@ -326,6 +326,10 @@ the job ends.
 Camoufox REST API listening on http://127.0.0.1:8000
 ```
 
+Open that address in a browser for a web page that submits jobs, follows their
+status and shows the HTML or screenshot. Paste the token under **Token** when
+the service has one.
+
 Submit a job, poll it, then fetch the result. `operation` is `content` (final
 URL, title and HTML) or `screenshot` (final URL, title and a base64 PNG of the
 viewport).
@@ -360,6 +364,18 @@ The defaults are restrictive:
   untrusted clients.
 - It binds to `127.0.0.1`. To bind elsewhere, set `CAMOUFOX_REST_TOKEN`;
   clients then send an `Authorization` header of `Bearer <token>`.
+
+To run it in Docker, build the image from `pythonlib/`. The browser is
+downloaded at build time. Inside the container the service binds `0.0.0.0`, so
+it needs a token; publish the port on loopback unless clients are remote.
+
+```bash
+docker build -t camoufox-rest pythonlib
+export CAMOUFOX_REST_TOKEN=$(openssl rand -hex 16) && echo "$CAMOUFOX_REST_TOKEN"
+docker run --rm -p 127.0.0.1:8000:8000 -e CAMOUFOX_REST_TOKEN camoufox-rest
+```
+
+Options go after the image name, for example `camoufox-rest --concurrency 4`.
 
 ---
 

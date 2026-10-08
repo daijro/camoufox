@@ -5,7 +5,7 @@ Clients submit a job (a URL and an operation), poll its status and fetch its
 result. Every job runs in its own browser context, so jobs share no cookies or
 storage, and that context is closed whether the job succeeds, fails, times out
 or is cancelled by shutdown. Launch options and page scripts are deliberately
-not reachable over HTTP.
+not reachable over HTTP. `GET /` serves a small web page for the same API.
 """
 
 import asyncio
@@ -22,6 +22,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any, AsyncContextManager, Callable, Dict, Optional, Tuple
 from urllib.parse import urlsplit
 
@@ -33,6 +34,12 @@ OPERATIONS = ('content', 'screenshot')
 TOKEN_ENV_VAR = 'CAMOUFOX_REST_TOKEN'
 MAX_BODY_BYTES = 16 * 1024
 MAX_URL_LENGTH = 2048
+PAGE = (Path(__file__).parent / 'rest.html').read_bytes()
+# The page renders job results, so it may reach only this service and show only inline images.
+PAGE_CSP = (
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+    "img-src data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
+)
 
 
 class InvalidJob(ValueError):
@@ -356,6 +363,9 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(202, job)
 
     def do_GET(self) -> None:
+        # The page holds no data, so it loads without a token; the API calls it makes send one.
+        if urlsplit(self.path).path == '/':
+            return self._send_page()
         if not self._authorized():
             return
         parts = urlsplit(self.path).path.strip('/').split('/')
@@ -389,6 +399,15 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_page(self) -> None:
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(PAGE)))
+        self.send_header('Content-Security-Policy', PAGE_CSP)
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers()
+        self.wfile.write(PAGE)
 
 
 def serve(

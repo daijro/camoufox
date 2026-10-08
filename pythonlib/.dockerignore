@@ -1,0 +1,5 @@
+# Only the package itself goes into the REST API image.
+tests/
+dist/
+**/__pycache__
+*.egg-info

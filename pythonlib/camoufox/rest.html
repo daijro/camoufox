@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camoufox REST</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: light dark; --accent: #e8590c; --muted: #868e96; --line: #8884; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 960px; padding: 2rem 1rem; font: 15px/1.5 system-ui, sans-serif; }
+  h1 { margin: 0 0 1.5rem; font-size: 1.5rem; }
+  h1 span { color: var(--accent); }
+  form { display: grid; grid-template-columns: 1fr auto auto; gap: .5rem; margin-bottom: 1rem; }
+  input, select, button { font: inherit; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; }
+  button { background: var(--accent); border-color: var(--accent); color: #fff; cursor: pointer; }
+  details { margin-bottom: 1.5rem; color: var(--muted); }
+  details input { width: 100%; margin-top: .5rem; }
+  #error { color: #e03131; min-height: 1.5em; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: .5rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  td.url { word-break: break-all; }
+  tr[data-id] { cursor: pointer; }
+  tr.selected { background: #e8590c22; }
+  .status { font-weight: 600; }
+  .succeeded { color: #2f9e44; } .failed { color: #e03131; } .queued, .running { color: var(--muted); }
+  #result { margin-top: 1.5rem; }
+  #result img { max-width: 100%; border: 1px solid var(--line); }
+  #result pre { max-height: 60vh; overflow: auto; padding: 1rem; border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<h1><span>Camoufox</span> REST</h1>
+
+<form id="submit">
+  <input id="url" type="url" placeholder="https://example.com" required>
+  <select id="operation">
+    <option value="content">Content</option>
+    <option value="screenshot">Screenshot</option>
+  </select>
+  <button>Run</button>
+</form>
+<details>
+  <summary>Token</summary>
+  <input id="token" type="password" placeholder="CAMOUFOX_REST_TOKEN, when the service has one" autocomplete="off">
+</details>
+<div id="error"></div>
+
+<table>
+  <thead><tr><th>Status</th><th>Operation</th><th>URL</th></tr></thead>
+  <tbody id="jobs"></tbody>
+</table>
+<section id="result"></section>
+
+<script>
+  // Page content is untrusted: it is only ever placed with textContent, never as markup.
+  const $ = (id) => document.getElementById(id);
+  const jobs = new Map();
+  let selected = null;
+
+  $('token').value = sessionStorage.getItem('token') || '';
+  $('token').addEventListener('change', () => sessionStorage.setItem('token', $('token').value));
+
+  async function api(method, path, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    if ($('token').value) headers.Authorization = 'Bearer ' + $('token').value;
+    const response = await fetch(path, { method, headers, body: body && JSON.stringify(body) });
+    return { status: response.status, data: await response.json() };
+  }
+
+  function element(tag, text, className) {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+
+  function render() {
+    $('jobs').replaceChildren(...[...jobs.values()].reverse().map((job) => {
+      const row = element('tr');
+      row.dataset.id = job.id;
+      row.classList.toggle('selected', job.id === selected);
+      row.append(
+        element('td', job.status, 'status ' + job.status),
+        element('td', job.operation),
+        element('td', job.url, 'url'),
+      );
+      row.addEventListener('click', () => show(job.id));
+      return row;
+    }));
+  }
+
+  async function show(id) {
+    selected = id;
+    render();
+    const job = jobs.get(id);
+    const result = $('result');
+    if (job.status === 'failed') return result.replaceChildren(element('p', job.error, 'failed'));
+    if (job.status !== 'succeeded') return result.replaceChildren(element('p', 'Job is ' + job.status + '…', job.status));
+    const { status, data } = await api('GET', '/jobs/' + id + '/result');
+    if (selected !== id) return;
+    if (status !== 200) return result.replaceChildren(element('p', data.error, 'failed'));
+    const heading = element('h2', data.title || '(untitled)');
+    const link = element('p', data.url, 'url');
+    if (data.screenshot) {
+      const image = element('img');
+      image.alt = 'Screenshot of ' + data.url;
+      image.src = 'data:image/png;base64,' + data.screenshot;
+      result.replaceChildren(heading, link, image);
+    } else {
+      result.replaceChildren(heading, link, element('pre', data.html));
+    }
+  }
+
+  async function poll() {
+    for (const job of jobs.values()) {
+      if (job.status !== 'queued' && job.status !== 'running') continue;
+      const { status, data } = await api('GET', '/jobs/' + job.id);
+      const updated = status === 200 ? data : { ...job, status: 'failed', error: data.error };
+      jobs.set(job.id, updated);
+      if (updated.status !== job.status && selected === job.id) show(job.id);
+    }
+    render();
+  }
+
+  $('submit').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    $('error').textContent = '';
+    try {
+      const { status, data } = await api('POST', '/jobs', { url: $('url').value, operation: $('operation').value });
+      if (status !== 202) return ($('error').textContent = data.error);
+      jobs.set(data.id, data);
+      show(data.id);
+    } catch (error) {
+      $('error').textContent = error.message;
+    }
+  });
+
+  setInterval(() => poll().catch((error) => ($('error').textContent = error.message)), 1000);
+</script>
+</body>
+</html>

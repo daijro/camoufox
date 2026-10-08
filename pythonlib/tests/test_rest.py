@@ -260,7 +260,7 @@ def test_unknown_jobs_and_paths_are_404():
     with service:
         assert request(service, "GET", "/jobs/nope")[0] == 404
         assert request(service, "GET", "/jobs/nope/result")[0] == 404
-        assert request(service, "GET", "/")[0] == 404
+        assert request(service, "GET", "/jobs")[0] == 404
         assert request(service, "POST", "/other", {})[0] == 404
 
 
@@ -325,3 +325,15 @@ def test_binding_beyond_loopback_requires_a_token():
     with pytest.raises(ValueError, match=rest.TOKEN_ENV_VAR):
         rest.RestService(lambda: FakeLauncher(FakeBrowser()), host="0.0.0.0")
     rest.RestService(lambda: FakeLauncher(FakeBrowser()), host="0.0.0.0", token="s3cret")
+
+
+def test_the_web_page_loads_without_a_token_under_a_strict_policy():
+    service, _ = make_service(token="s3cret")
+    with service:
+        with urllib.request.urlopen(service.url + "/", timeout=10) as response:
+            page = response.read()
+            headers = response.headers
+    assert page == rest.PAGE
+    assert headers["Content-Type"] == "text/html; charset=utf-8"
+    assert "default-src 'none'" in headers["Content-Security-Policy"]
+    assert "connect-src 'self'" in headers["Content-Security-Policy"]
