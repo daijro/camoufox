@@ -1,13 +1,12 @@
 diff --git a/browser/components/preferences/preferences.js b/browser/components/preferences/preferences.js
-index 0a2a789..0601d28 100644
+index 35e044bd84..bfb6fbb8b2 100644
 --- a/browser/components/preferences/preferences.js
 +++ b/browser/components/preferences/preferences.js
-@@ -234,8 +234,6 @@ function init_all() {
-     this.removeAttribute("keyboard-navigation");
+@@ -646,7 +646,6 @@ function init_all() {
+     gotoPref(event.target.view);
    });
  
 -  maybeDisplayPoliciesNotice();
--
-   window.addEventListener("hashchange", onHashChange);
+   maybeDisplayTLSKeyLoggingNotice();
  
-   document.getElementById("focusSearch1").addEventListener("command", () => {
+   window.addEventListener("hashchange", onHashChange);
