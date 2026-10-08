@@ -1,5 +1,5 @@
 {
- "firefox_version": "157.0",
+ "firefox_version": "157.0.1",
  "packages": {
   "browser/omni.ja|content|activity-stream": {
    "files": [
