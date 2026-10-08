@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camoufox REST</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: light dark; --accent: #e8590c; --muted: #868e96; --line: #8884; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 960px; padding: 2rem 1rem; font: 15px/1.5 system-ui, sans-serif; }
+  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.5rem; }
+  h1 { margin: 0; font-size: 1.5rem; }
+  h1 span, a { color: var(--accent); }
+  form { display: grid; grid-template-columns: 1fr auto auto; gap: .5rem; margin-bottom: 1rem; }
+  input, select, button { font: inherit; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; }
+  button { background: var(--accent); border-color: var(--accent); color: #fff; cursor: pointer; }
+  details { margin-bottom: 1rem; color: var(--muted); }
+  details > input { width: 100%; margin-top: .5rem; }
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .5rem 1rem; margin-top: .5rem; }
+  .options label { display: grid; gap: .25rem; }
+  .options select, .options input { width: 100%; min-width: 0; }
+  .options label.check { display: flex; align-items: center; gap: .5rem; }
+  .options label.check input { width: auto; }
+  #error { color: #e03131; min-height: 1.5em; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: .5rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  td.url { word-break: break-all; }
+  tr[data-id] { cursor: pointer; }
+  tr.selected { background: #e8590c22; }
+  .status { font-weight: 600; }
+  .succeeded { color: #2f9e44; } .failed { color: #e03131; } .queued, .running { color: var(--muted); }
+  #result { margin-top: 1.5rem; }
+  #result pre.calls { max-height: none; font-size: 13px; color: var(--muted); }
+  #result img { max-width: 100%; border: 1px solid var(--line); }
+  #result pre { max-height: 60vh; overflow: auto; padding: 1rem; border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Camoufox</span> REST</h1>
+  <a href="/docs">API docs</a>
+</header>
+
+<form id="submit">
+  <input id="url" type="url" placeholder="https://example.com" required>
+  <select id="operation">
+    <option value="content">Content</option>
+    <option value="screenshot">Screenshot</option>
+  </select>
+  <button>Run</button>
+</form>
+<details>
+  <summary>Options</summary>
+  <div class="options">
+    <label>Wait until
+      <select id="wait_until">
+        <option value="load">load: every resource</option>
+        <option value="domcontentloaded">domcontentloaded: HTML parsed</option>
+        <option value="networkidle">networkidle: 500 ms quiet</option>
+        <option value="commit">commit: response started</option>
+      </select>
+    </label>
+    <label>Content format
+      <select id="format">
+        <option value="html">html: the markup</option>
+        <option value="text">text: what a reader sees</option>
+      </select>
+    </label>
+    <label>Selector
+      <input id="selector" placeholder="#content (wait for it, return only it)">
+    </label>
+    <label>Timeout (seconds)
+      <input id="timeout" type="number" min="0" step="any" placeholder="the service limit">
+    </label>
+    <label class="check"><input id="full_page" type="checkbox"> Full-page screenshot</label>
+  </div>
+</details>
+<details>
+  <summary>Identity</summary>
+  <div class="options">
+    <label>OS
+      <select id="os">
+        <option value="">any</option>
+        <option value="windows">windows</option>
+        <option value="macos">macos</option>
+        <option value="linux">linux</option>
+      </select>
+    </label>
+    <label>Timezone
+      <input id="timezone_id" placeholder="Europe/Amsterdam">
+    </label>
+    <label>Latitude
+      <input id="latitude" type="number" min="-90" max="90" step="any">
+    </label>
+    <label>Longitude
+      <input id="longitude" type="number" min="-180" max="180" step="any">
+    </label>
+    <label>Proxy
+      <input id="proxy_server" placeholder="http://proxy.example:3128">
+    </label>
+    <label>Proxy username
+      <input id="proxy_username" autocomplete="off">
+    </label>
+    <label>Proxy password
+      <input id="proxy_password" type="password" autocomplete="off">
+    </label>
+  </div>
+</details>
+<details>
+  <summary>Token</summary>
+  <input id="token" type="password" placeholder="CAMOUFOX_REST_TOKEN, when the service has one" autocomplete="off">
+</details>
+<div id="error"></div>
+
+<table>
+  <thead><tr><th>Status</th><th>Operation</th><th>Wait until</th><th>URL</th></tr></thead>
+  <tbody id="jobs"></tbody>
+</table>
+<section id="result"></section>
+
+<script>
+  // Page content is untrusted: it is only ever placed with textContent, never as markup.
+  const $ = (id) => document.getElementById(id);
+  const jobs = new Map();
+  let selected = null;
+
+  $('token').value = sessionStorage.getItem('token') || '';
+  $('token').addEventListener('change', () => sessionStorage.setItem('token', $('token').value));
+
+  async function api(method, path, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    if ($('token').value) headers.Authorization = 'Bearer ' + $('token').value;
+    const response = await fetch(path, { method, headers, body: body && JSON.stringify(body) });
+    return { status: response.status, data: await response.json() };
+  }
+
+  function element(tag, text, className) {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+
+  function render() {
+    $('jobs').replaceChildren(...[...jobs.values()].reverse().map((job) => {
+      const row = element('tr');
+      row.dataset.id = job.id;
+      row.classList.toggle('selected', job.id === selected);
+      row.append(
+        element('td', job.status, 'status ' + job.status),
+        element('td', job.operation + (job.selector ? ' ' + job.selector : '')),
+        element('td', job.wait_until),
+        element('td', job.url, 'url'),
+      );
+      row.addEventListener('click', () => show(job.id));
+      return row;
+    }));
+  }
+
+  // The same job as API calls, to copy into a script. The token stays a variable, never the value.
+  function calls(job) {
+    const fields = ['url', 'operation', 'wait_until', 'selector', 'format', 'full_page', 'os', 'timezone_id', 'geolocation', 'proxy', 'timeout'];
+    const body = Object.fromEntries(fields.filter((name) => job[name] != null).map((name) => [name, job[name]]));
+    const auth = $('token').value ? ' -H "Authorization: Bearer $CAMOUFOX_REST_TOKEN"' : '';
+    const base = location.origin;
+    return element('pre', [
+      "curl -s -X POST " + base + "/jobs" + auth + " -d '" + JSON.stringify(body).replaceAll("'", "'\\''") + "'",
+      'curl -s ' + base + '/jobs/' + job.id + auth,
+      'curl -s ' + base + '/jobs/' + job.id + '/result' + auth,
+    ].join('\n'), 'calls');
+  }
+
+  async function show(id) {
+    selected = id;
+    render();
+    const job = jobs.get(id);
+    const result = $('result');
+    const api_calls = calls(job);
+    if (job.status === 'failed') return result.replaceChildren(api_calls, element('p', job.error, 'failed'));
+    if (job.status !== 'succeeded') return result.replaceChildren(api_calls, element('p', 'Job is ' + job.status + '…', job.status));
+    const { status, data } = await api('GET', '/jobs/' + id + '/result');
+    if (selected !== id) return;
+    if (status !== 200) return result.replaceChildren(api_calls, element('p', data.error, 'failed'));
+    const heading = element('h2', data.title || '(untitled)');
+    const link = element('p', data.url, 'url');
+    if (data.screenshot) {
+      const image = element('img');
+      image.alt = 'Screenshot of ' + data.url;
+      image.src = 'data:image/png;base64,' + data.screenshot;
+      result.replaceChildren(api_calls, heading, link, image);
+    } else {
+      result.replaceChildren(api_calls, heading, link, element('pre', data.text ?? data.html));
+    }
+  }
+
+  async function poll() {
+    for (const job of jobs.values()) {
+      if (job.status !== 'queued' && job.status !== 'running') continue;
+      const { status, data } = await api('GET', '/jobs/' + job.id);
+      const updated = status === 200 ? data : { ...job, status: 'failed', error: data.error };
+      jobs.set(job.id, updated);
+      if (updated.status !== job.status && selected === job.id) show(job.id);
+    }
+    render();
+  }
+
+  $('submit').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    $('error').textContent = '';
+    try {
+      const job = { url: $('url').value, operation: $('operation').value, wait_until: $('wait_until').value };
+      if ($('selector').value) job.selector = $('selector').value;
+      if ($('timeout').value) job.timeout = Number($('timeout').value);
+      if (job.operation === 'content') job.format = $('format').value;
+      if (job.operation === 'screenshot' && $('full_page').checked) job.full_page = true;
+      for (const name of ['os', 'timezone_id']) if ($(name).value) job[name] = $(name).value;
+      if ($('latitude').value || $('longitude').value) {
+        // Send only what was filled in, so a missing coordinate is reported rather than sent as 0.
+        job.geolocation = {};
+        for (const name of ['latitude', 'longitude']) if ($(name).value) job.geolocation[name] = Number($(name).value);
+      }
+      if ($('proxy_server').value) {
+        job.proxy = { server: $('proxy_server').value };
+        for (const name of ['username', 'password']) if ($('proxy_' + name).value) job.proxy[name] = $('proxy_' + name).value;
+      }
+      const { status, data } = await api('POST', '/jobs', job);
+      if (status !== 202) return ($('error').textContent = data.error);
+      jobs.set(data.id, data);
+      show(data.id);
+    } catch (error) {
+      $('error').textContent = error.message;
+    }
+  });
+
+  setInterval(() => poll().catch((error) => ($('error').textContent = error.message)), 1000);
+</script>
+</body>
+</html>
