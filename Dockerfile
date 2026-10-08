@@ -6,7 +6,7 @@ WORKDIR /app
 COPY . /app
 
 # Install necessary packages
-RUN apt-get update && apt-get install -y \
+RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y libc6:i386 \
     # Mach build tools
     build-essential make msitools wget unzip rustc \
     # Python
