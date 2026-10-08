@@ -33,6 +33,9 @@ RUN useradd --create-home camoufox
 # edit to it reuses this layer. `camoufox fetch` reports a failed download
 # without failing, so check the install, or the image would have no browser.
 COPY --exclude=rest.* camoufox camoufox
+# fpgen keeps its model inside its own package directory, which root owns, so
+# root installs it; the unprivileged fetch below then finds it in place.
+RUN python -c "from camoufox.fpgen_model import ensure_fpgen_model; ensure_fpgen_model()"
 USER camoufox
 RUN python -m camoufox fetch \
     && python -c "from camoufox.pkgman import installed_verstr; print(installed_verstr())"
