@@ -96,6 +96,7 @@ $ python -m camoufox --help
 │ path      Print the install directory path                                            │
 │ remove    Remove downloaded data. By default, this removes everything.                │
 │           Pass --select to pick a browser version to remove.                          │
+│ rest      Launch a REST API that runs page jobs                                       │
 │ server    Launch a Playwright server                                                  │
 │ set       Set the active Camoufox version to use & fetch.                             │
 │           By default, this opens an interactive selector for versions and settings.   │
@@ -311,6 +312,115 @@ Launch a remote Playwright server.
 ```bash
 > camoufox server
 ```
+
+<hr width=50>
+
+### `rest`
+
+Launch a REST API, for clients that want plain HTTP instead of the SDK. It runs
+one headless Camoufox and gives every job a fresh browser context with its own
+fingerprint (the SDK's `AsyncNewContext`), closed when the job ends.
+
+```bash
+> camoufox rest --port 8000 --concurrency 2 --timeout 30
+Camoufox REST API listening on http://127.0.0.1:8000
+```
+
+Open that address in a browser for a web page that submits jobs, follows their
+status and shows the HTML, text or screenshot, along with the `curl` calls
+for that job. Paste the token under **Token** when the service has one.
+`/docs` is an interactive (Swagger UI) reference for every endpoint and field,
+generated from `/openapi.json`. Opened from the web page's **API docs** link,
+it already has the token; otherwise enter it under **Authorize**.
+
+Submit a job, poll it, then fetch the result. `operation` is `content` (final
+URL, title and HTML, or text with `"format": "text"`) or `screenshot` (final
+URL, title and a base64 PNG).
+
+```bash
+id=$(curl -s -X POST localhost:8000/jobs -d '{"url": "https://example.com", "operation": "content"}' | jq -r .id)
+curl -s localhost:8000/jobs/$id          # {"id": ..., "status": "succeeded", "error": null, ...}
+curl -s localhost:8000/jobs/$id/result   # {"url": "https://example.com/", "title": "Example Domain", "html": ...}
+```
+
+A job takes these fields:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `url` | required | The `http` or `https` page to open |
+| `operation` | required | `content` or `screenshot` |
+| `wait_until` | `load` | When navigation counts as done: `commit`, `domcontentloaded`, `load` or `networkidle` |
+| `selector` | none | A [Playwright selector](https://playwright.dev/python/docs/selectors) to wait for; the result is then only that element (its outer HTML, or a screenshot of it) |
+| `format` | `html` | What `content` returns: `html` (the markup) or `text` (the text a reader sees, without tags, scripts or styles) |
+| `full_page` | `false` | Screenshot the whole page, not only the viewport (screenshots without `selector`) |
+| `os` | any | The OS the job's fingerprint claims: `windows`, `macos` or `linux` |
+| `timezone_id` | the proxy's, else the host's | An IANA timezone, such as `Europe/Amsterdam` |
+| `geolocation` | none | `{"latitude": ..., "longitude": ...}`, reported by the Geolocation API |
+| `proxy` | none | `{"server": "http://host:port", "username": ..., "password": ...}` for this job (`http`, `https` or `socks5`); the WebRTC IP and timezone follow its exit IP, and the password is never shown in the job's status |
+| `timeout` | `--timeout` | Seconds the job may run, at most `--timeout` |
+
+A page that keeps loading third-party resources may never fire `load` and
+times out. For such pages, wait for `domcontentloaded` plus a `selector` for
+the content you need:
+
+```bash
+curl -s -X POST localhost:8000/jobs -d '{"url": "https://example.com", "operation": "screenshot",
+  "wait_until": "domcontentloaded", "selector": "h1", "timeout": 60}'
+```
+
+Send the URL as the browser would, percent-encoded and with `&` (not `&amp;`)
+between query parameters.
+
+| Endpoint | Response |
+|---|---|
+| `POST /jobs` | `202` and the job; `400` for an invalid field or a blocked URL; `503` when `--max-jobs` unfinished jobs are held |
+| `GET /jobs/{id}` | The job's fields, its `status` (`queued`, `running`, `succeeded`, `failed`) and `error` |
+| `GET /jobs/{id}/result` | `200` and the result once succeeded, otherwise `409` with the job and its error |
+| `GET /openapi.json`, `GET /docs` | The OpenAPI 3.1 description, and Swagger UI for it (loaded from jsDelivr, pinned and integrity-checked); neither needs the token |
+
+At most `--concurrency` jobs run at once; the rest queue. `--timeout` bounds a
+running job, and a job's own `timeout` can only shorten it. Results stay in memory, and the oldest finished job is dropped
+when a new one needs its slot. Stopping the service (Ctrl-C or SIGTERM) cancels
+unfinished jobs and closes the browser.
+
+Every job shares one browser, so the SDK's launch options (`humanize`,
+`block_images`, `addons`, `firefox_user_prefs` and the rest) apply to the whole
+service, and only whoever starts it can set them. Some of them run code or read
+files on the server, so clients never can. Pass them as a JSON object:
+
+```bash
+> camoufox rest --launch-options '{"humanize": true, "block_images": true}'
+```
+
+The defaults are restrictive:
+
+- Only `http` and `https` URLs are accepted, and launch options and page
+  scripts cannot be set over HTTP. A proxy's address is checked like a URL.
+- A URL that resolves to a loopback, private, link-local or otherwise
+  non-public address is refused, a page's requests to one are aborted, and a
+  job whose redirect lands on one fails without returning anything. Pass
+  `--allow-private-networks` to lift this. The check cannot stop the browser
+  from sending a redirected request, or a WebSocket, to such an address, so
+  restrict egress at the network level when the service is exposed to
+  untrusted clients.
+- It binds to `127.0.0.1`. To bind elsewhere, set `CAMOUFOX_REST_TOKEN`;
+  clients then send an `Authorization` header of `Bearer <token>`.
+
+To run it in Docker, build the image from `pythonlib/` (BuildKit, the default
+since Docker 23). The browser is downloaded at build time, in a layer that
+editing the REST service or the README does not rebuild. Inside the container the service binds `0.0.0.0`, so
+it needs a token; publish the port on loopback unless clients are remote.
+
+```bash
+docker build -t camoufox-rest pythonlib
+export CAMOUFOX_REST_TOKEN=$(openssl rand -hex 16) && echo "$CAMOUFOX_REST_TOKEN"
+docker run --rm --shm-size=1g -p 127.0.0.1:8000:8000 -e CAMOUFOX_REST_TOKEN camoufox-rest
+```
+
+Docker gives a container 64 MB of `/dev/shm`, which Firefox can outgrow on heavy
+pages; `--shm-size` raises it.
+
+Options go after the image name, for example `camoufox-rest --concurrency 4`.
 
 ---
 
