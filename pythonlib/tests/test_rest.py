@@ -128,6 +128,19 @@ class FakeBrowser:
         return context
 
 
+@pytest.fixture(autouse=True)
+def context_options(monkeypatch):
+    """Stand in for AsyncNewContext, whose fingerprinting is tested elsewhere, and record what each job asked for."""
+    received = []
+
+    async def new_context(browser, **options):
+        received.append(options)
+        return await browser.new_context()
+
+    monkeypatch.setattr(rest, "AsyncNewContext", new_context)
+    return received
+
+
 class FakeLauncher:
     def __init__(self, browser, fail=False):
         self.browser = browser
@@ -212,6 +225,12 @@ def test_screenshot_job_returns_base64_png():
         ({"url": PUBLIC_URL, "operation": "content", "full_page": True}, None),
         ({"url": PUBLIC_URL, "operation": "screenshot", "full_page": "yes"}, None),
         ({"url": PUBLIC_URL, "operation": "content", "format": "markdown"}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "os": "android"}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "geolocation": {"latitude": 91, "longitude": 0}}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "geolocation": {"latitude": 52}}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "proxy": {"server": "http://127.0.0.1:3128"}}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "proxy": {"server": "file:///etc/passwd"}}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "proxy": {"server": PUBLIC_URL, "bypass": "*"}}, None),
         ({"url": PUBLIC_URL, "operation": "screenshot", "format": "text"}, None),
         ({"url": PUBLIC_URL, "operation": "screenshot", "full_page": True, "selector": "h1"}, None),
         ({"url": "http://" + "a" * rest.MAX_URL_LENGTH, "operation": "content"}, None),
@@ -278,6 +297,25 @@ def test_content_as_text_returns_the_rendered_text_instead_of_html(selector, exp
         _, result = request(service, "GET", f"/jobs/{job['id']}/result")
     assert job["format"] == "text"
     assert result == {"url": PUBLIC_URL, "title": "Example", "text": expected}
+
+
+def test_identity_options_reach_the_context_and_the_proxy_password_stays_private(context_options):
+    proxy = {"server": "socks5://93.184.215.14:1080", "username": "user", "password": "hunter2"}
+    body = {
+        "url": PUBLIC_URL, "operation": "content", "os": "macos", "timezone_id": "Europe/Amsterdam",
+        "geolocation": {"latitude": 52.37, "longitude": 4.89}, "proxy": proxy,
+    }
+    service, _ = make_service()
+    with service:
+        _, plain = request(service, "POST", "/jobs", {"url": PUBLIC_URL, "operation": "content"})
+        _, job = request(service, "POST", "/jobs", body)
+        wait_finished(service, plain["id"])
+        finished = wait_finished(service, job["id"])
+    assert finished["status"] == "succeeded"
+    assert sorted(context_options, key=len) == [
+        {}, {key: body[key] for key in ("os", "timezone_id", "geolocation", "proxy")},
+    ]
+    assert job["proxy"] == finished["proxy"] == {"server": proxy["server"], "username": "user"}
 
 
 def test_a_job_timeout_shorter_than_the_service_limit_applies():
@@ -463,3 +501,15 @@ def test_the_api_description_and_its_docs_load_without_a_token():
     assert spec["security"] == [{"token": []}]
     assert docs == rest.DOCS_PAGE and b"/openapi.json" in docs
     assert "default-src 'none'" in policy and "connect-src 'self'" in policy
+
+
+@pytest.mark.parametrize("operation", rest.OPERATIONS)
+def test_a_job_resubmitted_from_its_status_is_accepted(operation):
+    # The web page shows each job as API calls built from its status, defaults included.
+    service, _ = make_service()
+    with service:
+        _, job = request(service, "POST", "/jobs", {"url": PUBLIC_URL, "operation": operation})
+        wait_finished(service, job["id"])
+        fields = {key: value for key, value in job.items() if key not in ("id", "status", "error") and value is not None}
+        status, response = request(service, "POST", "/jobs", fields)
+    assert status == 202, response

@@ -318,8 +318,8 @@ Launch a remote Playwright server.
 ### `rest`
 
 Launch a REST API, for clients that want plain HTTP instead of the SDK. It runs
-one headless Camoufox and gives every job a fresh browser context, closed when
-the job ends.
+one headless Camoufox and gives every job a fresh browser context with its own
+fingerprint (the SDK's `AsyncNewContext`), closed when the job ends.
 
 ```bash
 > camoufox rest --port 8000 --concurrency 2 --timeout 30
@@ -327,10 +327,11 @@ Camoufox REST API listening on http://127.0.0.1:8000
 ```
 
 Open that address in a browser for a web page that submits jobs, follows their
-status and shows the HTML or screenshot. Paste the token under **Token** when
-the service has one. `/docs` is an interactive (Swagger UI) reference for every
-endpoint and field, generated from `/openapi.json`; its **Authorize** button
-takes the token.
+status and shows the HTML, text or screenshot, along with the `curl` calls
+for that job. Paste the token under **Token** when the service has one.
+`/docs` is an interactive (Swagger UI) reference for every endpoint and field,
+generated from `/openapi.json`. Opened from the web page's **API docs** link,
+it already has the token; otherwise enter it under **Authorize**.
 
 Submit a job, poll it, then fetch the result. `operation` is `content` (final
 URL, title and HTML, or text with `"format": "text"`) or `screenshot` (final
@@ -352,6 +353,10 @@ A job takes these fields:
 | `selector` | none | A [Playwright selector](https://playwright.dev/python/docs/selectors) to wait for; the result is then only that element (its outer HTML, or a screenshot of it) |
 | `format` | `html` | What `content` returns: `html` (the markup) or `text` (the text a reader sees, without tags, scripts or styles) |
 | `full_page` | `false` | Screenshot the whole page, not only the viewport (screenshots without `selector`) |
+| `os` | any | The OS the job's fingerprint claims: `windows`, `macos` or `linux` |
+| `timezone_id` | the proxy's, else the host's | An IANA timezone, such as `Europe/Amsterdam` |
+| `geolocation` | none | `{"latitude": ..., "longitude": ...}`, reported by the Geolocation API |
+| `proxy` | none | `{"server": "http://host:port", "username": ..., "password": ...}` for this job (`http`, `https` or `socks5`); the WebRTC IP and timezone follow its exit IP, and the password is never shown in the job's status |
 | `timeout` | `--timeout` | Seconds the job may run, at most `--timeout` |
 
 A page that keeps loading third-party resources may never fire `load` and
@@ -378,10 +383,19 @@ running job, and a job's own `timeout` can only shorten it. Results stay in memo
 when a new one needs its slot. Stopping the service (Ctrl-C or SIGTERM) cancels
 unfinished jobs and closes the browser.
 
+Every job shares one browser, so the SDK's launch options (`humanize`,
+`block_images`, `addons`, `firefox_user_prefs` and the rest) apply to the whole
+service, and only whoever starts it can set them. Some of them run code or read
+files on the server, so clients never can. Pass them as a JSON object:
+
+```bash
+> camoufox rest --launch-options '{"humanize": true, "block_images": true}'
+```
+
 The defaults are restrictive:
 
 - Only `http` and `https` URLs are accepted, and launch options and page
-  scripts cannot be set over HTTP.
+  scripts cannot be set over HTTP. A proxy's address is checked like a URL.
 - A URL that resolves to a loopback, private, link-local or otherwise
   non-public address is refused, a page's requests to one are aborted, and a
   job whose redirect lands on one fails without returning anything. Pass

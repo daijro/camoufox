@@ -29,7 +29,7 @@ from urllib.parse import urlsplit
 
 from playwright.async_api import Browser, BrowserContext, Request, Route
 
-from .async_api import AsyncCamoufox
+from .async_api import AsyncCamoufox, AsyncNewContext
 
 OPERATIONS = ('content', 'screenshot')
 WAIT_UNTIL = ('commit', 'domcontentloaded', 'load', 'networkidle')
@@ -37,6 +37,7 @@ TOKEN_ENV_VAR = 'CAMOUFOX_REST_TOKEN'
 MAX_BODY_BYTES = 16 * 1024
 MAX_URL_LENGTH = 2048
 MAX_SELECTOR_LENGTH = 1024
+PROXY_SCHEMES = ('http', 'https', 'socks5')
 PAGE = (Path(__file__).parent / 'rest.html').read_bytes()
 # The page renders job results, so it may reach only this service and show only inline images.
 PAGE_CSP = (
@@ -58,7 +59,14 @@ DOCS_PAGE = f"""<!doctype html>
 <div id="docs"></div>
 <script src="{SWAGGER_UI}/swagger-ui-bundle.js"
   integrity="sha384-ZPehFMQommnnuaZ4rpxgkgTT2DKFVp4hZC/7pLit+9Lek9T1YGSo23eHFbvNkXkw" crossorigin="anonymous"></script>
-<script>SwaggerUIBundle({{ url: '/openapi.json', dom_id: '#docs' }});</script>
+<script>
+  // The web page keeps the token in this tab's sessionStorage; carry it into Authorize.
+  const ui = SwaggerUIBundle({{
+    url: '/openapi.json',
+    dom_id: '#docs',
+    onComplete: () => sessionStorage.getItem('token') && ui.preauthorizeApiKey('token', sessionStorage.getItem('token')),
+  }});
+</script>
 </body>
 </html>
 """.encode()
@@ -80,15 +88,15 @@ class JobStoreFull(RuntimeError):
     """Every job slot holds a job that has not finished yet."""
 
 
-async def check_url(url: str, allow_private_networks: bool) -> None:
-    """Raise BlockedURL unless `url` is http(s) and, by default, resolves only to public addresses."""
+async def check_url(url: str, allow_private_networks: bool, schemes: Tuple[str, ...] = ('http', 'https')) -> None:
+    """Raise BlockedURL unless `url` has one of `schemes` and, by default, resolves only to public addresses."""
     try:
         parts = urlsplit(url)
         host = parts.hostname
     except ValueError as error:
         raise BlockedURL(f"{url!r} is not a valid URL: {error}") from error
-    if parts.scheme not in ('http', 'https') or not host:
-        raise BlockedURL(f"{url!r} is not an http(s) URL")
+    if parts.scheme not in schemes or not host:
+        raise BlockedURL(f"{url!r} is not a {'/'.join(schemes)} URL")
     if allow_private_networks:
         return
     try:
@@ -145,6 +153,38 @@ def job_schema(max_timeout: float) -> Dict[str, Any]:
                 'type': 'boolean', 'default': False,
                 'description': 'Screenshot the whole scrollable page, not only the viewport. Screenshots only.',
             },
+            'os': {
+                'type': 'string', 'enum': ['windows', 'macos', 'linux'],
+                'description': 'The OS the job\'s fingerprint claims. Every job draws its own fingerprint; '
+                'by default from any OS.',
+            },
+            'timezone_id': {
+                'type': 'string', 'minLength': 1, 'maxLength': 64,
+                'description': 'An IANA timezone, e.g. `Europe/Amsterdam`. With a `proxy`, it defaults to the '
+                'timezone of the proxy\'s exit IP.',
+                'example': 'Europe/Amsterdam',
+            },
+            'geolocation': {
+                'type': 'object', 'required': ['latitude', 'longitude'], 'additionalProperties': False,
+                'description': 'The position the Geolocation API reports; permission to read it is granted.',
+                'properties': {
+                    'latitude': {'type': 'number', 'minimum': -90, 'maximum': 90},
+                    'longitude': {'type': 'number', 'minimum': -180, 'maximum': 180},
+                },
+            },
+            'proxy': {
+                'type': 'object', 'required': ['server'], 'additionalProperties': False,
+                'description': 'A proxy for this job only. The fingerprint\'s WebRTC IP and timezone follow its '
+                'exit IP. The password is never shown in the job\'s status.',
+                'properties': {
+                    'server': {
+                        'type': 'string', 'minLength': 1, 'maxLength': MAX_URL_LENGTH,
+                        'description': f"{', '.join(PROXY_SCHEMES)} URL", 'example': 'http://proxy.example:3128',
+                    },
+                    'username': {'type': 'string', 'minLength': 1, 'maxLength': 256},
+                    'password': {'type': 'string', 'minLength': 1, 'maxLength': 256},
+                },
+            },
             'timeout': {
                 'type': 'number', 'exclusiveMinimum': 0, 'maximum': max_timeout, 'default': max_timeout,
                 'description': 'Seconds the job may run once started, at most the service\'s `--timeout`.',
@@ -153,18 +193,37 @@ def job_schema(max_timeout: float) -> Dict[str, Any]:
     }
 
 
-def _check_field(name: str, value: Any, rule: Dict[str, Any]) -> None:
+def _check(name: str, value: Any, rule: Dict[str, Any]) -> None:
+    """Validate `value` against the subset of JSON schema that `job_schema` uses."""
     if 'enum' in rule:
         if value not in rule['enum']:
             raise InvalidJob(f"{name} must be one of {', '.join(rule['enum'])}")
+    elif rule['type'] == 'object':
+        if not isinstance(value, dict):
+            raise InvalidJob(f"{name} must be a JSON object")
+        prefix = f"{name}." if name else ''
+        unknown = sorted(set(value) - set(rule['properties']))
+        if unknown:
+            raise InvalidJob(f"unknown field(s): {', '.join(prefix + field for field in unknown)}; see /openapi.json")
+        for field in rule['required']:
+            if field not in value:
+                raise InvalidJob(f"{prefix}{field} is required")
+        for field, item in value.items():
+            _check(prefix + field, item, rule['properties'][field])
     elif rule['type'] == 'string':
         if not isinstance(value, str) or not rule['minLength'] <= len(value) <= rule['maxLength']:
             raise InvalidJob(f"{name} must be a string of {rule['minLength']} to {rule['maxLength']} characters")
     elif rule['type'] == 'boolean':
         if not isinstance(value, bool):
             raise InvalidJob(f"{name} must be true or false")
-    elif isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= rule['maximum']:
-        raise InvalidJob(f"{name} must be a number above 0 and at most {rule['maximum']:g}")
+    else:
+        low = rule.get('minimum', rule.get('exclusiveMinimum'))
+        if (
+            isinstance(value, bool) or not isinstance(value, (int, float))
+            or value < low or value > rule['maximum'] or ('exclusiveMinimum' in rule and value == low)
+        ):
+            bound = 'above' if 'exclusiveMinimum' in rule else 'at least'
+            raise InvalidJob(f"{name} must be a number {bound} {low:g} and at most {rule['maximum']:g}")
 
 
 def parse_job(body: Any, max_timeout: float) -> Dict[str, Any]:
@@ -172,20 +231,13 @@ def parse_job(body: Any, max_timeout: float) -> Dict[str, Any]:
     schema = job_schema(max_timeout)
     if not isinstance(body, dict):
         raise InvalidJob('body must be a JSON object')
-    unknown = sorted(set(body) - set(schema['properties']))
-    if unknown:
-        raise InvalidJob(f"unknown field(s): {', '.join(unknown)}; see /openapi.json")
-    for name in schema['required']:
-        if name not in body:
-            raise InvalidJob(f"{name} is required")
-    for name, value in body.items():
-        _check_field(name, value, schema['properties'][name])
-    if 'format' in body and body['operation'] != 'content':
+    _check('', body, schema)
+    if body.get('format') == 'text' and body['operation'] != 'content':
         raise InvalidJob('format applies only to content')
     if body.get('full_page') and (body['operation'] != 'screenshot' or 'selector' in body):
         raise InvalidJob('full_page applies only to a screenshot without a selector')
     defaults = {name: rule['default'] for name, rule in schema['properties'].items() if 'default' in rule}
-    return {**defaults, 'selector': None, **body}
+    return {**defaults, 'selector': None, 'os': None, 'timezone_id': None, 'geolocation': None, 'proxy': None, **body}
 
 
 def openapi(max_timeout: float, token_required: bool) -> Dict[str, Any]:
@@ -274,7 +326,10 @@ class Job:
         return self.status in ('succeeded', 'failed')
 
     def describe(self) -> Dict[str, Any]:
-        return {'id': self.id, **self.params, 'status': self.status, 'error': self.error}
+        params = dict(self.params)
+        if params['proxy']:
+            params['proxy'] = {key: value for key, value in params['proxy'].items() if key != 'password'}
+        return {'id': self.id, **params, 'status': self.status, 'error': self.error}
 
 
 class JobRunner:
@@ -299,6 +354,8 @@ class JobRunner:
     async def submit(self, body: Any) -> Dict[str, Any]:
         params = parse_job(body, self._timeout)
         await check_url(params['url'], self._allow_private_networks)
+        if params['proxy']:
+            await check_url(params['proxy']['server'], self._allow_private_networks, PROXY_SCHEMES)
 
         if len(self._jobs) >= self._max_jobs:
             oldest_finished = next((job for job in self._jobs.values() if job.finished), None)
@@ -346,7 +403,8 @@ class JobRunner:
     async def _execute(self, job: Job) -> Dict[str, Any]:
         # The context is created outside the timeout so a timeout can never
         # orphan a context that was still being created.
-        context = await self._browser.new_context()
+        options = {name: job.params[name] for name in ('os', 'timezone_id', 'geolocation', 'proxy')}
+        context = await AsyncNewContext(self._browser, **{name: value for name, value in options.items() if value})
         try:
             return await asyncio.wait_for(self._operate(context, job.params), job.params['timeout'])
         finally:
@@ -609,12 +667,18 @@ def serve(
     max_jobs: int = 100,
     timeout: float = 30.0,
     allow_private_networks: bool = False,
+    launch_options: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """Run the REST API on a headless Camoufox until interrupted or terminated."""
+    """
+    Run the REST API on a headless Camoufox until interrupted or terminated.
+
+    `launch_options` go to AsyncCamoufox, so every SDK launch option can be set
+    for the service; clients can never set them.
+    """
     # SIGTERM (e.g. `docker stop`) unwinds like Ctrl-C, so the browser is closed.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     with RestService(
-        lambda: AsyncCamoufox(headless=True),
+        lambda: AsyncCamoufox(**{'headless': True, **(launch_options or {})}),
         host=host,
         port=port,
         token=os.environ.get(TOKEN_ENV_VAR) or None,

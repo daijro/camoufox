@@ -31,6 +31,7 @@
   .status { font-weight: 600; }
   .succeeded { color: #2f9e44; } .failed { color: #e03131; } .queued, .running { color: var(--muted); }
   #result { margin-top: 1.5rem; }
+  #result pre.calls { max-height: none; font-size: 13px; color: var(--muted); }
   #result img { max-width: 100%; border: 1px solid var(--line); }
   #result pre { max-height: 60vh; overflow: auto; padding: 1rem; border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; word-break: break-all; }
 </style>
@@ -73,6 +74,37 @@
       <input id="timeout" type="number" min="0" step="any" placeholder="the service limit">
     </label>
     <label class="check"><input id="full_page" type="checkbox"> Full-page screenshot</label>
+  </div>
+</details>
+<details>
+  <summary>Identity</summary>
+  <div class="options">
+    <label>OS
+      <select id="os">
+        <option value="">any</option>
+        <option value="windows">windows</option>
+        <option value="macos">macos</option>
+        <option value="linux">linux</option>
+      </select>
+    </label>
+    <label>Timezone
+      <input id="timezone_id" placeholder="Europe/Amsterdam">
+    </label>
+    <label>Latitude
+      <input id="latitude" type="number" min="-90" max="90" step="any">
+    </label>
+    <label>Longitude
+      <input id="longitude" type="number" min="-180" max="180" step="any">
+    </label>
+    <label>Proxy
+      <input id="proxy_server" placeholder="http://proxy.example:3128">
+    </label>
+    <label>Proxy username
+      <input id="proxy_username" autocomplete="off">
+    </label>
+    <label>Proxy password
+      <input id="proxy_password" type="password" autocomplete="off">
+    </label>
   </div>
 </details>
 <details>
@@ -126,25 +158,39 @@
     }));
   }
 
+  // The same job as API calls, to copy into a script. The token stays a variable, never the value.
+  function calls(job) {
+    const fields = ['url', 'operation', 'wait_until', 'selector', 'format', 'full_page', 'os', 'timezone_id', 'geolocation', 'proxy', 'timeout'];
+    const body = Object.fromEntries(fields.filter((name) => job[name] != null).map((name) => [name, job[name]]));
+    const auth = $('token').value ? ' -H "Authorization: Bearer $CAMOUFOX_REST_TOKEN"' : '';
+    const base = location.origin;
+    return element('pre', [
+      "curl -s -X POST " + base + "/jobs" + auth + " -d '" + JSON.stringify(body).replaceAll("'", "'\\''") + "'",
+      'curl -s ' + base + '/jobs/' + job.id + auth,
+      'curl -s ' + base + '/jobs/' + job.id + '/result' + auth,
+    ].join('\n'), 'calls');
+  }
+
   async function show(id) {
     selected = id;
     render();
     const job = jobs.get(id);
     const result = $('result');
-    if (job.status === 'failed') return result.replaceChildren(element('p', job.error, 'failed'));
-    if (job.status !== 'succeeded') return result.replaceChildren(element('p', 'Job is ' + job.status + '…', job.status));
+    const api_calls = calls(job);
+    if (job.status === 'failed') return result.replaceChildren(api_calls, element('p', job.error, 'failed'));
+    if (job.status !== 'succeeded') return result.replaceChildren(api_calls, element('p', 'Job is ' + job.status + '…', job.status));
     const { status, data } = await api('GET', '/jobs/' + id + '/result');
     if (selected !== id) return;
-    if (status !== 200) return result.replaceChildren(element('p', data.error, 'failed'));
+    if (status !== 200) return result.replaceChildren(api_calls, element('p', data.error, 'failed'));
     const heading = element('h2', data.title || '(untitled)');
     const link = element('p', data.url, 'url');
     if (data.screenshot) {
       const image = element('img');
       image.alt = 'Screenshot of ' + data.url;
       image.src = 'data:image/png;base64,' + data.screenshot;
-      result.replaceChildren(heading, link, image);
+      result.replaceChildren(api_calls, heading, link, image);
     } else {
-      result.replaceChildren(heading, link, element('pre', data.text ?? data.html));
+      result.replaceChildren(api_calls, heading, link, element('pre', data.text ?? data.html));
     }
   }
 
@@ -168,6 +214,16 @@
       if ($('timeout').value) job.timeout = Number($('timeout').value);
       if (job.operation === 'content') job.format = $('format').value;
       if (job.operation === 'screenshot' && $('full_page').checked) job.full_page = true;
+      for (const name of ['os', 'timezone_id']) if ($(name).value) job[name] = $(name).value;
+      if ($('latitude').value || $('longitude').value) {
+        // Send only what was filled in, so a missing coordinate is reported rather than sent as 0.
+        job.geolocation = {};
+        for (const name of ['latitude', 'longitude']) if ($(name).value) job.geolocation[name] = Number($(name).value);
+      }
+      if ($('proxy_server').value) {
+        job.proxy = { server: $('proxy_server').value };
+        for (const name of ['username', 'password']) if ($('proxy_' + name).value) job.proxy[name] = $('proxy_' + name).value;
+      }
       const { status, data } = await api('POST', '/jobs', job);
       if (status !== 202) return ($('error').textContent = data.error);
       jobs.set(data.id, data);

@@ -2,6 +2,7 @@
 CLI package manager for Camoufox
 """
 
+import json
 from collections import Counter
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
@@ -901,7 +902,11 @@ def server():
     "--allow-private-networks", is_flag=True,
     help="Allow jobs to reach loopback, private and other non-public addresses",
 )
-def rest(host, port, concurrency, max_jobs, timeout, allow_private_networks):
+@click.option(
+    "--launch-options", default="{}", metavar="JSON", callback=lambda _ctx, _param, value: _json_object(value),
+    help='Camoufox launch options for the shared browser, e.g. \'{"humanize": true, "block_images": true}\'',
+)
+def rest(host, port, concurrency, max_jobs, timeout, allow_private_networks, launch_options):
     """
     Launch a REST API that runs page jobs
     """
@@ -914,7 +919,18 @@ def rest(host, port, concurrency, max_jobs, timeout, allow_private_networks):
         max_jobs=max_jobs,
         timeout=timeout,
         allow_private_networks=allow_private_networks,
+        launch_options=launch_options,
     )
+
+
+def _json_object(value):
+    try:
+        options = json.loads(value)
+    except json.JSONDecodeError as error:
+        raise click.BadParameter(f"not valid JSON: {error}")
+    if not isinstance(options, dict):
+        raise click.BadParameter("must be a JSON object")
+    return options
 
 
 @cli.command(name="gui")
