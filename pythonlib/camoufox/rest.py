@@ -5,7 +5,8 @@ Clients submit a job (a URL and an operation), poll its status and fetch its
 result. Every job runs in its own browser context, so jobs share no cookies or
 storage, and that context is closed whether the job succeeds, fails, times out
 or is cancelled by shutdown. Launch options and page scripts are deliberately
-not reachable over HTTP. `GET /` serves a small web page for the same API.
+not reachable over HTTP. `GET /` serves a small web page for the same API,
+`GET /openapi.json` describes it and `GET /docs` renders that description.
 """
 
 import asyncio
@@ -31,13 +32,38 @@ from playwright.async_api import Browser, BrowserContext, Request, Route
 from .async_api import AsyncCamoufox
 
 OPERATIONS = ('content', 'screenshot')
+WAIT_UNTIL = ('commit', 'domcontentloaded', 'load', 'networkidle')
 TOKEN_ENV_VAR = 'CAMOUFOX_REST_TOKEN'
 MAX_BODY_BYTES = 16 * 1024
 MAX_URL_LENGTH = 2048
+MAX_SELECTOR_LENGTH = 1024
 PAGE = (Path(__file__).parent / 'rest.html').read_bytes()
 # The page renders job results, so it may reach only this service and show only inline images.
 PAGE_CSP = (
     "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+    "img-src data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
+)
+# Swagger UI, pinned and checked by Subresource Integrity, so the CDN can serve nothing else.
+SWAGGER_UI = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.33.1'
+DOCS_PAGE = f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Camoufox REST API</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="{SWAGGER_UI}/swagger-ui.css"
+  integrity="sha384-Ov4/wv3j2bmct8cDc5X4ngJZohVPzEmc6uDPH8WeljUxO5vtoykvMEfbu9Vh6RaW" crossorigin="anonymous">
+</head>
+<body>
+<div id="docs"></div>
+<script src="{SWAGGER_UI}/swagger-ui-bundle.js"
+  integrity="sha384-ZPehFMQommnnuaZ4rpxgkgTT2DKFVp4hZC/7pLit+9Lek9T1YGSo23eHFbvNkXkw" crossorigin="anonymous"></script>
+<script>SwaggerUIBundle({{ url: '/openapi.json', dom_id: '#docs' }});</script>
+</body>
+</html>
+""".encode()
+DOCS_CSP = (
+    f"default-src 'none'; script-src {SWAGGER_UI}/ 'unsafe-inline'; style-src {SWAGGER_UI}/ 'unsafe-inline'; "
     "img-src data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
 )
 
@@ -77,11 +103,157 @@ async def check_url(url: str, allow_private_networks: bool) -> None:
             raise BlockedURL(f"{host!r} resolves to the non-public address {address}")
 
 
+def job_schema(max_timeout: float) -> Dict[str, Any]:
+    """The JSON schema of a job submission: the one source for validation and the API docs."""
+    return {
+        'type': 'object',
+        'required': ['url', 'operation'],
+        'additionalProperties': False,
+        'properties': {
+            'url': {
+                'type': 'string', 'minLength': 1, 'maxLength': MAX_URL_LENGTH,
+                'description': 'The http(s) page to open.', 'example': 'https://example.com',
+            },
+            'operation': {
+                'type': 'string', 'enum': list(OPERATIONS),
+                'description': '`content` returns the HTML, `screenshot` a base64 PNG.',
+            },
+            'wait_until': {
+                'type': 'string', 'enum': list(WAIT_UNTIL), 'default': 'load',
+                'description': (
+                    'When navigation counts as done. `domcontentloaded` does not wait for images, '
+                    'frames or slow third-party resources; `networkidle` waits until no request '
+                    'has run for 500 ms.'
+                ),
+            },
+            'selector': {
+                'type': 'string', 'minLength': 1, 'maxLength': MAX_SELECTOR_LENGTH,
+                'description': (
+                    'A Playwright selector to wait for after navigation. The result is then that '
+                    'element alone: its outer HTML, or a screenshot of it, once visible.'
+                ),
+                'example': '#content',
+            },
+            'full_page': {
+                'type': 'boolean', 'default': False,
+                'description': 'Screenshot the whole scrollable page, not only the viewport. Screenshots only.',
+            },
+            'timeout': {
+                'type': 'number', 'exclusiveMinimum': 0, 'maximum': max_timeout, 'default': max_timeout,
+                'description': 'Seconds the job may run once started, at most the service\'s `--timeout`.',
+            },
+        },
+    }
+
+
+def _check_field(name: str, value: Any, rule: Dict[str, Any]) -> None:
+    if 'enum' in rule:
+        if value not in rule['enum']:
+            raise InvalidJob(f"{name} must be one of {', '.join(rule['enum'])}")
+    elif rule['type'] == 'string':
+        if not isinstance(value, str) or not rule['minLength'] <= len(value) <= rule['maxLength']:
+            raise InvalidJob(f"{name} must be a string of {rule['minLength']} to {rule['maxLength']} characters")
+    elif rule['type'] == 'boolean':
+        if not isinstance(value, bool):
+            raise InvalidJob(f"{name} must be true or false")
+    elif isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= rule['maximum']:
+        raise InvalidJob(f"{name} must be a number above 0 and at most {rule['maximum']:g}")
+
+
+def parse_job(body: Any, max_timeout: float) -> Dict[str, Any]:
+    """Validate a job submission against `job_schema` and fill in its defaults."""
+    schema = job_schema(max_timeout)
+    if not isinstance(body, dict):
+        raise InvalidJob('body must be a JSON object')
+    unknown = sorted(set(body) - set(schema['properties']))
+    if unknown:
+        raise InvalidJob(f"unknown field(s): {', '.join(unknown)}; see /openapi.json")
+    for name in schema['required']:
+        if name not in body:
+            raise InvalidJob(f"{name} is required")
+    for name, value in body.items():
+        _check_field(name, value, schema['properties'][name])
+    if body.get('full_page') and (body['operation'] != 'screenshot' or 'selector' in body):
+        raise InvalidJob('full_page applies only to a screenshot without a selector')
+    defaults = {name: rule['default'] for name, rule in schema['properties'].items() if 'default' in rule}
+    return {**defaults, 'selector': None, **body}
+
+
+def openapi(max_timeout: float, token_required: bool) -> Dict[str, Any]:
+    """The OpenAPI description of this service, served at /openapi.json."""
+    error = {'type': 'object', 'properties': {'error': {'type': 'string'}}}
+    job = {
+        'type': 'object',
+        'properties': {
+            'id': {'type': 'string'},
+            'status': {'type': 'string', 'enum': ['queued', 'running', 'succeeded', 'failed']},
+            'error': {'type': ['string', 'null']},
+            **{name: {'type': rule['type']} for name, rule in job_schema(max_timeout)['properties'].items()},
+        },
+    }
+    result = {
+        'type': 'object',
+        'properties': {
+            'url': {'type': 'string', 'description': 'The final URL, after redirects.'},
+            'title': {'type': 'string'},
+            'html': {'type': 'string', 'description': '`content` only.'},
+            'screenshot': {'type': 'string', 'contentEncoding': 'base64', 'description': '`screenshot` only: a PNG.'},
+        },
+    }
+
+    def responses(codes: Dict[str, Tuple[str, Dict[str, Any]]]) -> Dict[str, Any]:
+        described: Dict[str, Any] = {
+            code: {'description': text, 'content': {'application/json': {'schema': schema}}}
+            for code, (text, schema) in codes.items()
+        }
+        if token_required:
+            described['401'] = {'description': 'Missing or wrong bearer token.'}
+        return described
+
+    job_id = [{'name': 'id', 'in': 'path', 'required': True, 'schema': {'type': 'string'}}]
+    spec: Dict[str, Any] = {
+        'openapi': '3.1.0',
+        'info': {
+            'title': 'Camoufox REST API',
+            'version': '1',
+            'description': 'Submit a page job, poll its status, then fetch its result.',
+        },
+        'paths': {
+            '/jobs': {'post': {
+                'summary': 'Submit a job',
+                'requestBody': {'required': True, 'content': {'application/json': {'schema': job_schema(max_timeout)}}},
+                'responses': responses({
+                    '202': ('The job, queued.', job),
+                    '400': ('The body is invalid, or the URL is blocked.', error),
+                    '503': ('Every job slot holds an unfinished job; retry later.', error),
+                }),
+            }},
+            '/jobs/{id}': {'get': {
+                'summary': "A job's status",
+                'parameters': job_id,
+                'responses': responses({'200': ('The job.', job), '404': ('No such job.', error)}),
+            }},
+            '/jobs/{id}/result': {'get': {
+                'summary': "A job's result",
+                'parameters': job_id,
+                'responses': responses({
+                    '200': ('The result.', result),
+                    '404': ('No such job.', error),
+                    '409': ('The job has not succeeded; its status and error.', job),
+                }),
+            }},
+        },
+    }
+    if token_required:
+        spec['components'] = {'securitySchemes': {'token': {'type': 'http', 'scheme': 'bearer'}}}
+        spec['security'] = [{'token': []}]
+    return spec
+
+
 @dataclass
 class Job:
     id: str
-    url: str
-    operation: str
+    params: Dict[str, Any]
     status: str = 'queued'  # queued -> running -> succeeded | failed
     error: Optional[str] = None
     result: Optional[Dict[str, Any]] = None
@@ -92,13 +264,7 @@ class Job:
         return self.status in ('succeeded', 'failed')
 
     def describe(self) -> Dict[str, Any]:
-        return {
-            'id': self.id,
-            'url': self.url,
-            'operation': self.operation,
-            'status': self.status,
-            'error': self.error,
-        }
+        return {'id': self.id, **self.params, 'status': self.status, 'error': self.error}
 
 
 class JobRunner:
@@ -120,12 +286,9 @@ class JobRunner:
         self._allow_private_networks = allow_private_networks
         self._jobs: Dict[str, Job] = {}
 
-    async def submit(self, url: Any, operation: Any) -> Dict[str, Any]:
-        if operation not in OPERATIONS:
-            raise InvalidJob(f"operation must be one of {', '.join(OPERATIONS)}")
-        if not isinstance(url, str) or not url or len(url) > MAX_URL_LENGTH:
-            raise InvalidJob(f"url must be a string of at most {MAX_URL_LENGTH} characters")
-        await check_url(url, self._allow_private_networks)
+    async def submit(self, body: Any) -> Dict[str, Any]:
+        params = parse_job(body, self._timeout)
+        await check_url(params['url'], self._allow_private_networks)
 
         if len(self._jobs) >= self._max_jobs:
             oldest_finished = next((job for job in self._jobs.values() if job.finished), None)
@@ -133,7 +296,7 @@ class JobRunner:
                 raise JobStoreFull(f"all {self._max_jobs} job slots are in use; retry later")
             del self._jobs[oldest_finished.id]
 
-        job = Job(id=uuid.uuid4().hex, url=url, operation=operation)
+        job = Job(id=uuid.uuid4().hex, params=params)
         self._jobs[job.id] = job
         job.task = asyncio.create_task(self._run(job))
         return job.describe()
@@ -163,7 +326,10 @@ class JobRunner:
             job.status, job.error = 'failed', 'cancelled: the service is shutting down'
             raise
         except asyncio.TimeoutError:
-            job.status, job.error = 'failed', f"timed out after {self._timeout:g}s"
+            waited = f"wait_until {job.params['wait_until']}"
+            if job.params['selector']:
+                waited += f" and selector {job.params['selector']!r}"
+            job.status, job.error = 'failed', f"timed out after {job.params['timeout']:g}s ({waited})"
         except Exception as error:
             job.status, job.error = 'failed', f"{type(error).__name__}: {error}"
 
@@ -172,11 +338,11 @@ class JobRunner:
         # orphan a context that was still being created.
         context = await self._browser.new_context()
         try:
-            return await asyncio.wait_for(self._operate(context, job), self._timeout)
+            return await asyncio.wait_for(self._operate(context, job.params), job.params['timeout'])
         finally:
             await context.close()
 
-    async def _operate(self, context: BrowserContext, job: Job) -> Dict[str, Any]:
+    async def _operate(self, context: BrowserContext, params: Dict[str, Any]) -> Dict[str, Any]:
         redirects = []
 
         def record_redirect(request: Request) -> None:
@@ -190,12 +356,21 @@ class JobRunner:
             context.on('request', record_redirect)
 
         page = await context.new_page()
-        await page.goto(job.url)
+        # The job's own timeout bounds every step, rather than Playwright's 30s default.
+        page.set_default_timeout(0)
+        await page.goto(params['url'], wait_until=params['wait_until'])
+        screenshot = params['operation'] == 'screenshot'
+        element = None
+        if params['selector']:
+            element = await page.wait_for_selector(
+                params['selector'], state='visible' if screenshot else 'attached'
+            )
         result: Dict[str, Any] = {'url': page.url, 'title': await page.title()}
-        if job.operation == 'content':
-            result['html'] = await page.content()
+        if not screenshot:
+            result['html'] = await (element.evaluate('e => e.outerHTML') if element else page.content())
         else:
-            result['screenshot'] = base64.b64encode(await page.screenshot()).decode()
+            image = await (element.screenshot() if element else page.screenshot(full_page=params['full_page']))
+            result['screenshot'] = base64.b64encode(image).decode()
 
         for url in redirects:
             await check_url(url, allow_private_networks=False)
@@ -250,6 +425,7 @@ class RestService:
         self._launcher = launcher
         self._address = (host, port)
         self._token = token
+        self.openapi = openapi(timeout, token_required=bool(token))
         self._runner_options = dict(
             concurrency=concurrency,
             max_jobs=max_jobs,
@@ -349,13 +525,11 @@ class _Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
         except ValueError:
             return self._send(400, {'error': 'body is not valid JSON'})
-        if not isinstance(body, dict) or set(body) - {'url', 'operation'}:
-            return self._send(400, {'error': 'body must be a JSON object with only "url" and "operation"'})
 
         service = self.server.service
         assert service.jobs is not None
         try:
-            job = service.call(service.jobs.submit(body.get('url'), body.get('operation')))
+            job = service.call(service.jobs.submit(body))
         except InvalidJob as error:
             return self._send(400, {'error': str(error)})
         except JobStoreFull as error:
@@ -363,13 +537,18 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(202, job)
 
     def do_GET(self) -> None:
-        # The page holds no data, so it loads without a token; the API calls it makes send one.
-        if urlsplit(self.path).path == '/':
-            return self._send_page()
+        # These pages hold no data, so they load without a token; the API calls they make send one.
+        path = urlsplit(self.path).path
+        service = self.server.service
+        if path == '/':
+            return self._send_page(PAGE, PAGE_CSP)
+        if path == '/docs':
+            return self._send_page(DOCS_PAGE, DOCS_CSP)
+        if path == '/openapi.json':
+            return self._send(200, service.openapi)
         if not self._authorized():
             return
-        parts = urlsplit(self.path).path.strip('/').split('/')
-        service = self.server.service
+        parts = path.strip('/').split('/')
         assert service.jobs is not None
         if len(parts) == 2 and parts[0] == 'jobs':
             job = service.call(service.jobs.describe(parts[1]))
@@ -400,14 +579,14 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_page(self) -> None:
+    def _send_page(self, page: bytes, policy: str) -> None:
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
-        self.send_header('Content-Length', str(len(PAGE)))
-        self.send_header('Content-Security-Policy', PAGE_CSP)
+        self.send_header('Content-Length', str(len(page)))
+        self.send_header('Content-Security-Policy', policy)
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.end_headers()
-        self.wfile.write(PAGE)
+        self.wfile.write(page)
 
 
 def serve(

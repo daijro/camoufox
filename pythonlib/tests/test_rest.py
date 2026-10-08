@@ -40,14 +40,39 @@ class FakeRoute:
         self.outcome = "continued"
 
 
+class FakeElement:
+    def __init__(self, selector, state):
+        self.selector = selector
+        self.state = state
+
+    async def evaluate(self, expression):
+        assert expression == "e => e.outerHTML"
+        return "<div>element</div>"
+
+    async def screenshot(self):
+        return b"\x89PNG element"
+
+
 class FakePage:
     def __init__(self, context):
         self.context = context
         self.url = "about:blank"
+        self.default_timeout = 30000
+        self.wait_until = None
+        self.element = None
+        self.full_page = None
 
-    async def goto(self, url):
+    def set_default_timeout(self, timeout):
+        self.default_timeout = timeout
+
+    async def goto(self, url, wait_until):
+        self.wait_until = wait_until
         await self.context.browser.on_goto(self.context, url)
         self.url = url
+
+    async def wait_for_selector(self, selector, state):
+        self.element = FakeElement(selector, state)
+        return self.element
 
     async def title(self):
         return "Example"
@@ -55,7 +80,8 @@ class FakePage:
     async def content(self):
         return "<html>example</html>"
 
-    async def screenshot(self):
+    async def screenshot(self, full_page):
+        self.full_page = full_page
         return b"\x89PNG"
 
 
@@ -73,7 +99,8 @@ class FakeContext:
         self.listeners[event] = listener
 
     async def new_page(self):
-        return FakePage(self)
+        self.page = FakePage(self)
+        return self.page
 
     async def close(self):
         self.closed = True
@@ -169,6 +196,15 @@ def test_screenshot_job_returns_base64_png():
         ({"url": "http://[::ffff:10.0.0.1]/", "operation": "content"}, None),
         ({"url": "http://169.254.169.254/latest/meta-data/", "operation": "content"}, None),
         ({"url": PUBLIC_URL, "operation": "content", "script": "1"}, None),
+        ({"operation": "content"}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "wait_until": "never"}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "timeout": 0}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "timeout": 31}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "timeout": True}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "selector": ""}, None),
+        ({"url": PUBLIC_URL, "operation": "content", "full_page": True}, None),
+        ({"url": PUBLIC_URL, "operation": "screenshot", "full_page": "yes"}, None),
+        ({"url": PUBLIC_URL, "operation": "screenshot", "full_page": True, "selector": "h1"}, None),
         ({"url": "http://" + "a" * rest.MAX_URL_LENGTH, "operation": "content"}, None),
         (None, b"not json"),
         (None, b"[]"),
@@ -180,6 +216,57 @@ def test_invalid_or_unsafe_jobs_are_rejected(body, raw):
         status, response = request(service, "POST", "/jobs", body, raw=raw)
     assert status == 400, response
     assert launcher.browser.contexts == []
+
+
+def test_job_parameters_default_and_reach_the_page():
+    service, launcher = make_service(timeout=30)
+    with service:
+        _, job = request(service, "POST", "/jobs", {"url": PUBLIC_URL, "operation": "content"})
+        _, other = request(
+            service, "POST", "/jobs",
+            {"url": PUBLIC_URL, "operation": "screenshot", "wait_until": "domcontentloaded", "full_page": True,
+             "timeout": 5},
+        )
+        wait_finished(service, job["id"])
+        wait_finished(service, other["id"])
+    assert {key: job[key] for key in ("wait_until", "selector", "full_page", "timeout")} == {
+        "wait_until": "load", "selector": None, "full_page": False, "timeout": 30,
+    }
+    assert other["wait_until"] == "domcontentloaded" and other["timeout"] == 5
+    pages = [context.page for context in launcher.browser.contexts]
+    assert [(page.wait_until, page.full_page) for page in pages] == [("load", None), ("domcontentloaded", True)]
+    # Playwright's own 30s default would cut a longer job short.
+    assert [page.default_timeout for page in pages] == [0, 0]
+
+
+@pytest.mark.parametrize(
+    "operation, state, field, expected",
+    [
+        ("content", "attached", "html", "<div>element</div>"),
+        ("screenshot", "visible", "screenshot", base64.b64encode(b"\x89PNG element").decode()),
+    ],
+)
+def test_a_selector_waits_for_and_returns_only_that_element(operation, state, field, expected):
+    service, launcher = make_service()
+    with service:
+        _, job = request(service, "POST", "/jobs", {"url": PUBLIC_URL, "operation": operation, "selector": "#main"})
+        wait_finished(service, job["id"])
+        _, result = request(service, "GET", f"/jobs/{job['id']}/result")
+    assert result[field] == expected
+    element = launcher.browser.contexts[0].page.element
+    assert (element.selector, element.state) == ("#main", state)
+
+
+def test_a_job_timeout_shorter_than_the_service_limit_applies():
+    async def hang(_context, _url):
+        await asyncio.sleep(60)
+
+    service, launcher = make_service(FakeBrowser(on_goto=hang), timeout=60)
+    with service:
+        _, job = request(service, "POST", "/jobs", {"url": PUBLIC_URL, "operation": "content", "timeout": 0.2})
+        finished = wait_finished(service, job["id"])
+    assert finished["error"] == "timed out after 0.2s (wait_until load)"
+    assert launcher.browser.contexts[0].closed
 
 
 def test_private_networks_can_be_allowed_explicitly():
@@ -337,3 +424,19 @@ def test_the_web_page_loads_without_a_token_under_a_strict_policy():
     assert headers["Content-Type"] == "text/html; charset=utf-8"
     assert "default-src 'none'" in headers["Content-Security-Policy"]
     assert "connect-src 'self'" in headers["Content-Security-Policy"]
+
+
+def test_the_api_description_and_its_docs_load_without_a_token():
+    service, _ = make_service(token="s3cret", timeout=45)
+    with service:
+        with urllib.request.urlopen(service.url + "/openapi.json", timeout=10) as response:
+            spec = json.loads(response.read())
+        with urllib.request.urlopen(service.url + "/docs", timeout=10) as response:
+            docs = response.read()
+            policy = response.headers["Content-Security-Policy"]
+    body = spec["paths"]["/jobs"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+    assert body == rest.job_schema(45)
+    assert body["properties"]["timeout"]["maximum"] == 45
+    assert spec["security"] == [{"token": []}]
+    assert docs == rest.DOCS_PAGE and b"/openapi.json" in docs
+    assert "default-src 'none'" in policy and "connect-src 'self'" in policy
