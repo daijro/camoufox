@@ -45,7 +45,7 @@ import os
 import subprocess
 import sys
 
-from _font_bundle import require_bundle
+from _font_bundle import read_groups, require_bundle
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACKAGE = os.path.join(os.path.dirname(REPO), 'python', 'src', 'camoufox')
@@ -147,16 +147,10 @@ REPORTABLE_EXTRA = {
 }
 
 
-def bundle_dirs_for(bundle, os_key, sub):
-    """The directories this OS renders from: its groups, else the old per-OS dir."""
-    groups = os.path.join(bundle, 'groups.json')
-    if os.path.exists(groups):
-        with open(groups, encoding='utf-8') as fh:
-            read_by = json.load(fh).get('readBy', {}).get(os_key, [])
-        dirs = [os.path.join(bundle, g) for g in read_by if os.path.isdir(os.path.join(bundle, g))]
-        if dirs:
-            return dirs
-    return [os.path.join(bundle, sub)]
+def bundle_dirs_for(bundle, os_key):
+    """The group directories this OS renders from."""
+    _, read_by = read_groups(bundle)
+    return [os.path.join(bundle, g) for g in read_by[os_key]]
 
 
 def scan_families(directory):
@@ -220,8 +214,8 @@ def main():
     man = load_manifest(args)
     result = {}
     bases_out = {}
-    for os_key, sub in OSDIRS.items():
-        union = scan_families(bundle_dirs_for(args.bundle, os_key, sub))
+    for os_key in OSDIRS:
+        union = scan_families(bundle_dirs_for(args.bundle, os_key))
         for src, added in SCAN_FAMILIES[os_key].items():
             if src in union:
                 union.update(added)
@@ -252,7 +246,7 @@ def main():
         unreported = sorted(union - reportable)
         result[os_key] = sorted(reportable)
         print(f'{os_key}: {len(union)} renderable families from '
-              f'{"+".join(os.path.basename(d) for d in bundle_dirs_for(args.bundle, os_key, sub))}, '
+              f'{"+".join(os.path.basename(d) for d in bundle_dirs_for(args.bundle, os_key))}, '
               f'{len(result[os_key])} reportable, {len(unreported)} renderable-but-unreported, '
               f'{len(unbundled)} manifest names unbundled', file=sys.stderr)
         if args.dump_union:

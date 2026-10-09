@@ -39,7 +39,7 @@ import subprocess
 import sys
 import tempfile
 
-from _font_bundle import require_bundle
+from _font_bundle import read_groups, require_bundle
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PYTHON_SRC = os.path.join(os.path.dirname(REPO), 'python', 'src')
@@ -149,14 +149,7 @@ def main():
     #    groups its letter appears in; macOS and Windows packages flatten those
     #    groups into one directory, so basenames must not collide within a
     #    package's group set.
-    groups_file = os.path.join(fonts_root, 'groups.json')
-    if not os.path.exists(groups_file):
-        fail(f'{groups_file} is missing; run scripts/gen-font-groups.py')
-        read_by, groups = {}, []
-    else:
-        with open(groups_file, encoding='utf-8') as fh:
-            gj = json.load(fh)
-        read_by, groups = gj.get('readBy', {}), gj.get('groups', [])
+    groups, read_by = read_groups(fonts_root)
 
     names, digests = {}, {}
     for g in groups:
@@ -193,7 +186,7 @@ def main():
 
     # every OS must have somewhere to read from, and its flattened set must not clash
     for os_key in ('win', 'mac', 'lin'):
-        gs = [g for g in read_by.get(os_key, []) if g in names]
+        gs = [g for g in read_by[os_key] if g in names]
         if not gs:
             fail(f'{os_key} reads no existing group')
             continue
@@ -217,9 +210,9 @@ def main():
             if reportable != sorted(reportable) or len(set(reportable)) != len(reportable):
                 fail(f'{os_key}: fonts.json list is not sorted/unique')
             rset = set(reportable)
-            scan = [os.path.join(fonts_root, g) for g in read_by.get(os_key, []) if g in names]
+            scan = [os.path.join(fonts_root, g) for g in read_by[os_key] if g in names]
             if not scan:
-                scan = [fonts_root]  # pre-groups bundle; utils.py falls back the same way
+                continue  # already a failure: this OS reads no existing group
             conf, text = runtime_conf(os_key, [*scan, *extra_dirs], cache, tmp)
             aliases = conf_aliases(text)
             alias_elems = conf_alias_elements(text)
@@ -305,7 +298,7 @@ def main():
                      f'identity: {[os.path.relpath(f, fonts_root) for f in stray[:5]]}')
             else:
                 print(f'OK: {len(scanned)} faces reachable, all inside '
-                      f'{"+".join(g for g in read_by.get(os_key, []) if g in names) or "fonts/"}')
+                      f'{"+".join(g for g in read_by[os_key] if g in names)}')
             unrenderable = [f for f in reportable if f.lower() not in pub_lower]
             resolved = []
             for name in list(unrenderable):
@@ -355,7 +348,7 @@ def main():
                 rejected = re.findall(r'<glob>\*/fonts/windows/([^<]+)</glob>', text)
                 if rejected:
                     files = set()
-                    for g in read_by.get('win', []):
+                    for g in read_by['win']:
                         gd = os.path.join(fonts_root, g)
                         if os.path.isdir(gd):
                             files |= set(os.listdir(gd))

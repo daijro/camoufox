@@ -93,6 +93,11 @@ class TestPinnedIdentityIsStable:
     def test_caller_seed_is_kept(self):
         assert launch(config={"audio:seed": 9})["audio:seed"] == 9
 
+    def test_salt_of_equal_objects_is_equal(self):
+        a = fp.generate_fingerprint(os="windows")
+        assert fp.identity_salt(a) == fp.identity_salt(a)
+        assert fp.identity_salt({"a": 1, "b": 2}) == fp.identity_salt({"b": 2, "a": 1})
+
 
 def test_no_canvas_seed_is_generated():
     """The browser adds no canvas noise (#528), and no patch reads canvas:seed
@@ -101,11 +106,6 @@ def test_no_canvas_seed_is_generated():
     context = fp.generate_context_fingerprint(os="linux")
     assert "canvas:seed" not in context["config"]
     assert "setCanvasSeed" not in context["init_script"]
-
-    def test_salt_of_equal_objects_is_equal(self):
-        a = fp.generate_fingerprint(os="windows")
-        assert fp.identity_salt(a) == fp.identity_salt(a)
-        assert fp.identity_salt({"a": 1, "b": 2}) == fp.identity_salt({"b": 2, "a": 1})
 
 
 class TestVoicesFollowLocale:
