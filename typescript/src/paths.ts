@@ -110,6 +110,8 @@ export interface LauncherConstants {
 	plausibleDpr: Record<string, number[]>;
 	macNoveltyVoices: string[];
 	macEloquenceVoices: string[];
+	baselineTaskbarHeight: Record<"win" | "mac" | "lin", number>;
+	baselineMultiTouchPoints: number;
 	cachePrefs: Record<string, any>;
 }
 export const LAUNCHER_CONSTANTS: Readonly<LauncherConstants> = loadDataFile(

@@ -617,9 +617,10 @@ def test_cross_os_canvas_is_rfps_placeholder_and_spoofs_feed_baseline_protection
 
     assert BASELINE_TASKBAR_HEIGHT == {"win": 48, "mac": 76, "lin": 0}, why
     assert BASELINE_MULTI_TOUCH_POINTS == 5, why
+    # TypeScript reads the same launcher-constants.json entries.
     fingerprints_ts = (REPO_ROOT / "typescript" / "src" / "fingerprints.ts").read_text(encoding="utf-8")
-    for line in ("win: 48,", "mac: 76,", "lin: 0,", "BASELINE_MULTI_TOUCH_POINTS = 5;"):
-        assert line in fingerprints_ts, why
+    for key in ("LAUNCHER_CONSTANTS.baselineTaskbarHeight", "LAUNCHER_CONSTANTS.baselineMultiTouchPoints"):
+        assert key in fingerprints_ts, why
 
 
 def test_webgpu_follows_the_claimed_device():

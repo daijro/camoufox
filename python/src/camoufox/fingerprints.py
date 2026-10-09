@@ -772,8 +772,8 @@ def fix_navigator_arch(config: Dict[str, Any], target_os: str) -> None:
 # applies it to the spoofed ones for the claimed OS: the available screen is
 # the whole screen less a fixed taskbar (nsRFPService::GetSpoofedScreenAvailSize),
 # and more than one touch point reads as 5 (CollapseMaxTouchPoints).
-BASELINE_TASKBAR_HEIGHT = {'win': 48, 'mac': 76, 'lin': 0}
-BASELINE_MULTI_TOUCH_POINTS = 5
+BASELINE_TASKBAR_HEIGHT: Dict[str, int] = LAUNCHER_CONSTANTS['baselineTaskbarHeight']
+BASELINE_MULTI_TOUCH_POINTS: int = LAUNCHER_CONSTANTS['baselineMultiTouchPoints']
 
 
 def follow_baseline_protection(config: Dict[str, Any], target_os: str) -> None:

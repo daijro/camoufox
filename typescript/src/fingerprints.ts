@@ -882,12 +882,10 @@ export function fixNavigatorArch(config: Config, targetOs: string): void {
 // applies it to the spoofed ones for the claimed OS: the available screen is
 // the whole screen less a fixed taskbar (nsRFPService::GetSpoofedScreenAvailSize),
 // and more than one touch point reads as 5 (CollapseMaxTouchPoints).
-export const BASELINE_TASKBAR_HEIGHT: Record<string, number> = {
-	win: 48,
-	mac: 76,
-	lin: 0,
-};
-export const BASELINE_MULTI_TOUCH_POINTS = 5;
+export const BASELINE_TASKBAR_HEIGHT: Record<string, number> =
+	LAUNCHER_CONSTANTS.baselineTaskbarHeight;
+export const BASELINE_MULTI_TOUCH_POINTS: number =
+	LAUNCHER_CONSTANTS.baselineMultiTouchPoints;
 
 /**
  * Claim the available screen and touch points the browser will report.
