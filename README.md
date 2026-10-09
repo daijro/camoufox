@@ -269,27 +269,6 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://niuproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox" target="_blank">
-        <img width="380" alt="NiuProxy" src="https://github.com/user-attachments/assets/d1fc12cc-4113-4a8e-a7d3-e34df6c93731"/>
-      </a>
-    </td>
-    <td valign="middle">
-      <strong><a href="https://niuproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">NiuProxy</a> | Rotating Residential Proxies from &#36;0.35/GB<br></strong>
-      NiuProxy provides residential, ISP, mobile, and datacenter proxies for scraping, browser automation, SEO, AI agents, and data collection.<br>
-      <strong>Why NiuProxy?</strong><br>
-      • Residential proxies from &#36;0.35/GB<br>
-      • ISP proxies from &#36;3/IP<br>
-      • Mobile proxies from &#36;1.5/GB<br>
-      • Datacenter proxies from &#36;0.5/GB<br>
-      • HTTP(S) & SOCKS5 support<br>
-      • Flexible geo targeting and sessions<br>
-      • Alipay, USDT, cards, Google Pay & Apple Pay<br>
-      Special offer for Camoufox users: Use code PAY2 for 10% off your recharge.<br>
-      Start now: <a href="https://niuproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">https://niuproxy.com</a>
-    </td>
-  </tr>
-  <tr>
-    <td width="25%" align="center" valign="middle">
       <a href="https://www.thordata.com/?ls=dcx&lk=dcx" target="_blank">
         <img width="380" alt="Thordata" src="https://github.com/user-attachments/assets/0476bd5a-0063-4c31-8dc2-d3f982d58e6c"/>
       </a>
