@@ -39,6 +39,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
     "spoofing": (
         "animation-timing",
         "audio-frequency-noise",
+        "baseline-protections",
         "context-lists-across-processes",
         "fingerprint-setter-seal",
         "locale-explicit-names",
@@ -77,6 +78,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "hardware-acceleration-policy",
         "popup-blocker-parity",
         "search-service-init",
+        "stock-gpu-parity",
         "stock-parity-probes",
         "viewport-no-rdm",
         "windows-exe-manifest",

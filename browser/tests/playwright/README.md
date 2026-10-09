@@ -15,7 +15,7 @@ Each guard belongs to one of three groups (`GROUPS` in
 
 - **spoofing**: a spoofed value still reaches the page and holds together (media devices, voices, fonts, the touchscreen digitizer, the sealed setters, …);
 - **automation**: Playwright stays invisible to the page and never deadlocks it (isolated evaluate, trusted events, humanized and edge-case mouse input, …);
-- **parity**: what a page or the OS can observe matches stock Firefox (content-accessible files, GPU probes, the popup blocker, the Windows manifest, …).
+- **parity**: what a page or the OS can observe matches stock Firefox (content-accessible files, GPU probes, browser-owned WebGL and WebGPU values against stock Firefox of the same version, the popup blocker, the Windows manifest, …).
 
 A new guard must be added to a group; `ci/tests` fails until it is.
 

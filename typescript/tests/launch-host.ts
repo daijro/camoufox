@@ -54,8 +54,10 @@ export function restoreDeps(): void {
 	Object.assign(deps, ORIGINAL);
 }
 
-/** The host every launch test runs against: no display, a fixed disk. */
+/** The host every launch test runs against: no display, a fixed disk, and no
+ * WebGL, so launchOptions never launches the browser to read the host's GPU. */
 export function stubHost(): void {
+	deps.hostGpu = async () => null;
 	deps.hasDisplay = () => false;
 	deps.getScreenCons = () => null;
 	deps.stockProfileDiskCapacityKb = () => 250_000_000;

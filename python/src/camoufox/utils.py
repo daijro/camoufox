@@ -21,7 +21,7 @@ from .exceptions import (
     InvalidPropertyType,
     NonFirefoxFingerprint,
 )
-from .fingerprints import Screen, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_hardware_concurrency, identity_salt, identity_seed, fix_screen_no_taskbar, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
+from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_hardware_concurrency, identity_salt, identity_seed, fix_screen_no_taskbar, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
@@ -41,7 +41,8 @@ from .pkgman import (
 )
 from .virtdisplay import VirtualDisplay
 from ._warnings import FallbackWarning, LeakWarning
-from .webgl import sample_webgl_for_screen, webgl_for_gpu
+from .host_rendering import add_canvas_placeholder, has_canvas_placeholder, host_gpu, renders_on_hardware, set_webgpu
+from .webgl import firefox_gpus, sample_webgl_for_screen, webgl_for_gpu
 
 ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
 
@@ -729,6 +730,54 @@ def attach_context_defaults(browser: Any, no_viewport_default: bool) -> None:
     attach_desktop_only_warning(browser)
 
 
+def host_identity(from_options: Dict[str, Any], canvas_noise: Optional[bool]) -> Optional[Tuple[str, Optional[Tuple[str, str]]]]:
+    """For a launch without the canvas placeholder, the machine its contexts must
+    claim: the host's OS, and its GPU when that is hardware (context_identity).
+    Only for the default canvas_noise=None; a caller who chose it, or built the
+    options, keeps their contexts as they ask. Read before the launch, so a
+    failed probe leaves no browser behind."""
+    prefs = from_options.get('firefox_user_prefs', {})
+    if canvas_noise is not None or has_canvas_placeholder(prefs):
+        return None
+    gpu = None
+    if not prefs.get('webgl.disabled'):
+        gpu = host_gpu(from_options['executable_path'], from_options['headless'], from_options['env'])
+    return _host_os_key(), gpu if renders_on_hardware(gpu) else None
+
+
+def attach_host_identity(browser: Any, identity: Optional[Tuple[str, Optional[Tuple[str, str]]]]) -> None:
+    if identity is not None:
+        browser._camoufox_host_identity = identity
+
+
+def context_identity(
+    browser: Any, os: Optional[str], preset: Optional[Dict[str, Any]]
+) -> Tuple[Optional[str], Optional[Tuple[str, str]]]:
+    """The OS and GPU a new context on `browser` claims (None: drawn).
+
+    On a browser without the canvas placeholder they are the host's, since the
+    canvas renders there; asking for anything else raises.
+    """
+    host_identity = vars(browser).get('_camoufox_host_identity')
+    if host_identity is None:
+        return os, None
+    host_os, gpu = host_identity
+    host_name = OS_NAMES[host_os]
+    preset_os = platform_to_os(preset.get('navigator', {}).get('platform', '')) if preset else None
+    preset_gpu = preset.get('webgl', {}) if preset else {}
+    if (
+        (os or host_name) != host_name
+        or (preset_os or host_name) != host_name
+        or (gpu and preset and (preset_gpu.get('unmaskedVendor'), preset_gpu.get('unmaskedRenderer')) != gpu)
+    ):
+        raise ValueError(
+            f'This browser renders its canvas as this {host_name} machine, so its contexts claim it'
+            f'{" and its GPU " + repr(gpu) if gpu else ""}. Launch it with canvas_noise=True to give '
+            'a context another OS or GPU.'
+        )
+    return host_name, gpu
+
+
 def new_context_options(
     fingerprint: Dict[str, Any],
     context_kwargs: Dict[str, Any],
@@ -854,6 +903,7 @@ def launch_options(
     debug: Optional[bool] = None,
     virtual_display: Optional[str] = None,
     pin_cpu_cores: Optional[bool] = None,
+    canvas_noise: Optional[bool] = None,
     **launch_options: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
@@ -956,6 +1006,13 @@ def launch_options(
             Use a specific WebGL vendor/renderer pair. Passed as a tuple of (vendor, renderer).
             The pair must be one fpgen has recorded from Firefox on `os`
             (camoufox.webgl.firefox_gpus); any other raises ValueError.
+        canvas_noise (Optional[bool]):
+            Replace canvas and WebGL readback with random data, as
+            privacy.resistFingerprinting does in LibreWolf, Tor Browser and
+            Mullvad Browser. Stock Firefox does not, so it warns. By default
+            (None) it is on only when the identity claims another OS than the
+            host's, whose canvas would otherwise show the host. On the host's
+            OS the identity claims the GPU the host renders with instead.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -1446,6 +1503,23 @@ def launch_options(
     # the screen, which the host core count and the display clamp replace.
     coherence.drop_incoherent_source_values(config, target_os)
 
+    # The canvas renders on the host, so an identity on another OS needs it
+    # covered, and one on the host's OS claims the host's GPU.
+    host_os = _host_os_key()
+    if canvas_noise is None:
+        canvas_noise = target_os != host_os
+    claims_host_gpu = (
+        target_os == host_os
+        and not canvas_noise
+        and not block_webgl
+        and not webgl_config
+        and not (config.get('webGl:vendor') and config.get('webGl:renderer'))
+    )
+    host = host_gpu(browser_binary, headless, env) if claims_host_gpu else None
+    if canvas_noise:
+        add_canvas_placeholder(firefox_user_prefs)
+        LeakWarning.warn('canvas_noise', i_know_what_im_doing)
+
     if block_webgl:
         firefox_user_prefs['webgl.disabled'] = True
         LeakWarning.warn('block_webgl', i_know_what_im_doing)
@@ -1460,6 +1534,9 @@ def launch_options(
                 target_os, config['webGl:vendor'], config['webGl:renderer'],
                 seed=identity_seed(config, _identity_salt),
             )
+        elif renders_on_hardware(host) and host in firefox_gpus(target_os):
+            # Claim the GPU the canvas really renders on.
+            webgl_fp = webgl_for_gpu(target_os, *host, seed=identity_seed(config, _identity_salt))
         else:
             # Synthetic path: keep the GPU coherent with the screen fpgen
             # already picked. Sampling the two independently yields pairs no
@@ -1493,6 +1570,8 @@ def launch_options(
     if _incoherent and debug:
         for _violation in _incoherent:
             print(f'Incoherent identity ({_violation.rule}): {_violation.detail}')
+
+    set_webgpu(firefox_user_prefs, target_os, (config.get('webGl:vendor'), config.get('webGl:renderer')), host)
 
     # Cache previous pages, requests, etc (uses more memory)
     if enable_cache:

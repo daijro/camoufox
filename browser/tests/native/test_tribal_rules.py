@@ -587,6 +587,81 @@ def test_no_canvas_seed_is_declared_or_sent():
         )
 
 
+def test_cross_os_canvas_is_rfps_placeholder_and_spoofs_feed_baseline_protection():
+    """The canvas cover is Firefox's RFP targets, identical in both launchers,
+    and spoofed values go through baseline protection with the claimed OS."""
+    from camoufox.host_rendering import BASELINE_OVERRIDES_PREF, CANVAS_PLACEHOLDER_TARGETS
+
+    why = explain("cross-os-canvas-is-the-rfp-placeholder")
+    assert BASELINE_OVERRIDES_PREF == "privacy.baselineFingerprintingProtection.overrides", why
+    assert CANVAS_PLACEHOLDER_TARGETS == (
+        "+CanvasImageExtractionPrompt",
+        "+CanvasExtractionBeforeUserInputIsBlocked",
+        "+CanvasExtractionFromThirdPartiesIsBlocked",
+    ), why
+    ts = (REPO_ROOT / "typescript" / "src" / "host_rendering.ts").read_text(encoding="utf-8")
+    for target in (BASELINE_OVERRIDES_PREF, *CANVAS_PLACEHOLDER_TARGETS):
+        assert f'"{target}"' in ts, why
+
+    patches = BROWSER / "patches"
+    screen = (patches / "screen-spoofing.patch").read_text(encoding="utf-8")
+    assert "const nsAString& aPlatform" in screen, why
+    assert "!availFromResolution && ScreenDimensionManager::GetDimensions" in screen, why
+    assert "rect.has_value() && !availFromResolution" in screen, why
+    touch = (patches / "touchscreen-fingerprint-spoofing.patch").read_text(encoding="utf-8")
+    assert "CollapseMaxTouchPoints(value.value())" in touch, why
+
+
+def test_webgpu_follows_the_claimed_device():
+    """navigator.gpu follows Firefox's build rule for the claimed device, and
+    the host's adapter is kept only behind the host's own GPU, in both launchers."""
+    from camoufox.host_rendering import (
+        FEATURE_BLOCKED_DEVICE,
+        FEATURE_STATUS_OK,
+        WEBGPU_BLOCKLIST_PREF,
+        set_webgpu,
+    )
+
+    why = explain("webgpu-follows-the-claimed-device")
+    assert (WEBGPU_BLOCKLIST_PREF, FEATURE_STATUS_OK, FEATURE_BLOCKED_DEVICE) == ("gfx.blacklist.webgpu", 1, 4), why
+    ts = (REPO_ROOT / "typescript" / "src" / "host_rendering.ts").read_text(encoding="utf-8")
+    for line in (f'WEBGPU_BLOCKLIST_PREF = "{WEBGPU_BLOCKLIST_PREF}"', "FEATURE_STATUS_OK = 1", "FEATURE_BLOCKED_DEVICE = 4"):
+        assert line in ts, why
+
+    nvidia = ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar")
+    for target_os, gpu, host, want in (
+        ("win", nvidia, nvidia, (True, FEATURE_STATUS_OK)),
+        ("win", nvidia, None, (True, FEATURE_BLOCKED_DEVICE)),
+        ("mac", ("Apple", "Apple M1, or similar"), None, (True, FEATURE_BLOCKED_DEVICE)),
+        ("mac", ("Intel Inc.", "Intel(R) HD Graphics, or similar"), None, (False, None)),
+        ("lin", nvidia, nvidia, (False, None)),
+    ):
+        prefs = {}
+        set_webgpu(prefs, target_os, gpu, host)
+        assert (prefs["dom.webgpu.enabled"], prefs.get(WEBGPU_BLOCKLIST_PREF)) == want, why
+
+
+def test_webgl_browser_owned_values_follow_firefox():
+    """A recording's browser-owned WebGL values are corrected for the shipped
+    Firefox in both launchers, and the stock-parity guard that finds the next
+    drift runs in CI."""
+    from camoufox import webgl
+
+    why = explain("webgl-browser-owned-values-follow-firefox")
+    recorded = {"params": {"33902": {"value": [1, 2048]}}, "shaderPrecisionFormats": [], "supportedExtensions": []}
+    webgl2 = {**recorded, "params": {"33902": {"value": [1, 1]}}}
+    for target_os in ("win", "mac", "lin"):
+        config = webgl.to_config({"vendor": "v", "renderer": "r", **recorded}, webgl2, target_os)
+        assert config["webGl:parameters"]["33902"] == [1, 1], why
+        assert ("EXT_depth_clamp" in config["webGl:supportedExtensions"]) == (target_os == "win"), why
+    ts = (REPO_ROOT / "typescript" / "src" / "webgl.ts").read_text(encoding="utf-8")
+    for line in ('win: ["EXT_depth_clamp"]', 'ALIASED_LINE_WIDTH_RANGE = "33902"'):
+        assert line in ts, why
+
+    assert (BROWSER / "tests" / "playwright" / "patches" / "stock-gpu-parity.py").exists(), why
+    assert '"stock-gpu-parity"' in (REPO_ROOT / "ci" / "run_patch_guards.py").read_text(encoding="utf-8"), why
+
+
 def test_the_canvas_check_hashes_pixels_rather_than_a_data_url_prefix():
     """A truncated data URL is mostly PNG header, not image.
 

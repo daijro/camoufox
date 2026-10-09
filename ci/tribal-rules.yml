@@ -219,7 +219,79 @@ rules:
       that share those share a canvas. That is why build-tester counts canvas
       collisions with the device-level values and does not gate on them. The
       launchers generated a canvas:seed for three releases after the patch
-      that read it was gone; it is not generated or declared any more.
+      that read it was gone; it is not generated or declared any more. The one
+      exception is an identity on another OS, whose canvas cannot agree with it
+      (cross-os-canvas-is-the-rfp-placeholder).
+
+  - id: cross-os-canvas-is-the-rfp-placeholder
+    title: On the host's OS the identity claims the host's GPU; on another OS canvas readback is RFP's random placeholder
+    check: automated
+    evidence:
+      - "v156.0.1-beta.32, 2026-10-06: getImageData and readPixels identical with privacy.fingerprintingProtection on and off; CanvasUtils.cpp checks EfficientCanvasRandomization (PNG deBG chunk only) before CanvasRandomization"
+      - "LibreWolf librewolf.cfg: privacy.resistFingerprinting true, no canvas prefs of its own; RFP readback without permission is TryToGenerateRandomDataForPlaceholderCanvasData"
+      - "v156.0.1-beta.32: the three RFP canvas targets in privacy.baselineFingerprintingProtection.overrides give RFP's readback (random, toDataURL ~770 bytes) with hardwareConcurrency untouched"
+      - "v156.0.1-beta.32: a Linux host with an RTX 5080 and a Ryzen iGPU reported 'AMD, Radeon HD 3200 Graphics, or similar' to WebGL, headless and headed"
+    rationale: >-
+      Canvas and WebGL pixels come from the host's OS, driver and GPU. On the
+      host's OS the identity claims the GPU Firefox reports there, read from the
+      browser itself because Firefox may render on another device than system
+      tools name and sanitizes the name its own way; a software renderer
+      matches any GPU, as a machine whose driver failed to load. On another OS
+      nothing can agree, and Firefox 156's private windows do not hide pixels,
+      so the launchers turn on privacy.resistFingerprinting's canvas targets
+      through the baseline overrides and nothing else. The readback is then
+      what LibreWolf, Tor Browser and Mullvad Browser return; stock Firefox
+      does not, so the launch warns. Firefox's older keyed pixel noise
+      (CanvasRandomization) was rejected: no current Firefox produces it by
+      default. Spoofed avail-screen and touch values go through baseline
+      protection like the real ones, for the claimed OS.
+
+  - id: webgpu-follows-the-claimed-device
+    title: navigator.gpu where Firefox on the claimed device has it; the host's adapter only behind the host's own GPU
+    check: automated
+    evidence:
+      - "StaticPrefList.yaml (156.0.1): dom.webgpu.enabled is true on XP_WIN and on aarch64 XP_MACOSX, early-beta only elsewhere"
+      - "fpgen gpuInfo, Firefox: navigator.gpu with no adapter on Windows on the Microsoft Basic Render Driver; no navigator.gpu on Intel and AMD Macs; no navigator.gpu for 97% of Linux"
+      - "dom/webgpu/Adapter.h: GPUAdapterInfo vendor, architecture, device and description are always empty; limits and features are the real adapter's"
+      - "v156.0.1-beta.32, Linux, prefs at startup: gfx.blacklist.webgpu 1 gives a real adapter, 4 (FEATURE_BLOCKED_DEVICE) resolves requestAdapter() to null"
+      - "the same prefs through Playwright's firefox_user_prefs alone arrive after gfxPlatform::InitWebGPUConfig and are ignored"
+    rationale: >-
+      WebGPU hands the page the host's adapter: its limits and features name
+      the real GPU even though Firefox blanks the adapter strings. Exposure
+      follows Firefox's own build rule for the claimed device, so a Linux or
+      Intel Mac identity has no navigator.gpu and a Windows or Apple Silicon one
+      does. The adapter is the host's only when the identity claims the host's
+      hardware GPU; otherwise the launchers set the downloadable blocklist's
+      pref to a blocked device, and requestAdapter() resolves to null as it
+      does for real users on a blocked or software GPU. The pref is read once at
+      startup, so it goes through CAMOU_PREFS. It is written either way,
+      because a persistent profile saves it and the next startup reads it.
+
+  - id: webgl-browser-owned-values-follow-firefox
+    title: WebGL values the browser decides follow the running Firefox and the claimed OS's backend, not fpgen's recording
+    check: automated
+    evidence:
+      - "fpgen model-2/2026 records Firefox 146 (90% of Windows, 89% of macOS, 66% of Linux user agents); Camoufox ships 156.0.1"
+      - "stock 146.0 and 156.0.1 on the same machines, twice each: Windows 11 on Intel Iris Xe and RTX 3050 Ti (headed), M1 Pro (headed), Linux on a Ryzen iGPU (headless); fpgen's records match 146 on the same hardware"
+      - "Windows: 156 exposes EXT_depth_clamp in WebGL1 and WebGL2 on both GPUs, 146 on neither, and no fpgen Windows record has it. third_party/angle/src/libANGLE/renderer/d3d/d3d11/renderer11_utils.cpp:1334 (156, ANGLE chromium/7778) sets depthClampEXT = true on every D3D11 feature level; 146's ANGLE (chromium/5359) never sets it"
+      - "Linux: WebGL1 ALIASED_LINE_WIDTH_RANGE is [1, 2048] on 146 and [1, 1] on 156, WebGL2 [1, 1] on both. 146's dom/canvas/WebGLContext.cpp:324 forced REQUIRE_COMPAT_PROFILE on WebGL1 unless webgl.1.allow-core-profiles, which 146's StaticPrefList.yaml set on macOS only; 156 removed both, and WebGLContextValidate.cpp:211 reads the driver's range only off a core profile, leaving WebGLTypes.h:654's {1, 1}"
+      - "fpgen Linux WebGL2 records: [1, 1] on 97%, the driver's range on the 3% without EXT_depth_clamp (GLES drivers, where Firefox reads it)"
+      - "browser/tests/playwright/patches/stock-gpu-parity.py fails on the 146-style WebGL1 range on Linux, on a hardware GPU and on llvmpipe, and passes with the fix"
+    rationale: >-
+      fpgen's records are right for the Firefox that made them; what goes
+      stale is what that Firefox decided rather than the GPU. Hardware-owned
+      values (the renderer, most limits, the extensions a Linux or macOS
+      driver offers) keep coming from the recording. Browser-owned ones are
+      corrected where the launchers convert a recording (to_config). ANGLE's
+      D3D11 backend gives every Windows GPU EXT_depth_clamp, which takes its
+      place in Firefox's alphabetical extension order. WebGL1 now shares
+      WebGL2's GL profile, so it reports the line width range the same device
+      recorded for WebGL2, which is right for core profiles and GLES drivers
+      alike. Live state that also changed (the stencil masks) is answered by
+      the real context and needs nothing. stock-gpu-parity finds the next
+      drift: it fails where stock Firefox of the recorded release and of the
+      shipped one differ on the same machine and Camoufox does not follow the
+      shipped one.
 
   - id: canvas-fingerprint-is-hashed-not-truncated
     title: The canvas check hashes pixels, not a prefix of the data URL

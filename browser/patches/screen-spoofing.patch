@@ -203,10 +203,10 @@ index 9616144511..ff8c14d011 100644
    void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
    void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index 4b989dd48a..6dfd4ea066 100644
+index 4b989dd48a..ed40ca3ca5 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
-@@ -5,8 +5,10 @@
+@@ -5,11 +5,14 @@
  #include "nsScreen.h"
  
  #include "MaskConfig.hpp"
@@ -217,7 +217,11 @@ index 4b989dd48a..6dfd4ea066 100644
  #include "mozilla/dom/BrowsingContextBinding.h"
  #include "mozilla/dom/Document.h"
  #include "mozilla/dom/DocumentInlines.h"
-@@ -24,6 +26,19 @@
++#include "mozilla/dom/Navigator.h"
+ #include "mozilla/widget/ScreenManager.h"
+ #include "nsCOMPtr.h"
+ #include "nsDeviceContext.h"
+@@ -24,6 +27,19 @@
  using namespace mozilla;
  using namespace mozilla::dom;
  
@@ -237,7 +241,7 @@ index 4b989dd48a..6dfd4ea066 100644
  nsScreen::nsScreen(nsPIDOMWindowInner* aWindow)
      : DOMEventTargetHelper(aWindow) {}
  
-@@ -47,6 +62,12 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
+@@ -47,6 +63,12 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
                                     mScreenOrientation)
  
  int32_t nsScreen::PixelDepth() {
@@ -250,7 +254,7 @@ index 4b989dd48a..6dfd4ea066 100644
    if (auto value = MaskConfig::GetUint32("screen.colorDepth"))
      return value.value();
    if (auto value = MaskConfig::GetUint32("screen.pixelDepth"))
-@@ -74,6 +95,17 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
+@@ -74,6 +96,17 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
  }
  
  CSSIntRect nsScreen::GetRect() {
@@ -268,22 +272,59 @@ index 4b989dd48a..6dfd4ea066 100644
    // Return window inner rect to prevent fingerprinting.
    if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
      return GetTopWindowInnerRectForRFP();
-@@ -106,6 +138,15 @@ CSSIntRect nsScreen::GetRect() {
+@@ -106,9 +139,24 @@ CSSIntRect nsScreen::GetRect() {
  }
  
  CSSIntRect nsScreen::GetAvailRect() {
++  // Camoufox: stock Firefox's baseline fingerprinting protection derives the
++  // available rect from the screen size below. The spoofed available rect
++  // must not bypass it.
++  const bool availFromResolution =
++      ShouldResistFingerprinting(RFPTarget::ScreenAvailToResolution);
 +  // Camoufox: the per-context API sets one size, so the available rect is the
 +  // whole screen. That matches the generated fingerprints, whose availWidth /
 +  // availHeight equal width / height, and keeps availWidth <= width true.
-+  if (uint32_t w = 0, h = 0; ScreenDimensionManager::GetDimensions(
-+          CamouUserContextId(GetOwnerWindow()), w, h)) {
++  if (uint32_t w = 0, h = 0;
++      !availFromResolution && ScreenDimensionManager::GetDimensions(
++                                  CamouUserContextId(GetOwnerWindow()), w, h)) {
 +    return {0, 0, static_cast<int32_t>(w), static_cast<int32_t>(h)};
 +  }
 +  // Camoufox: report the spoofed available screen rect from the injected
 +  // config.
    auto rect = MaskConfig::GetRect("screen.availLeft", "screen.availTop",
                                    "screen.availWidth", "screen.availHeight");
-   if (rect.has_value()) {
+-  if (rect.has_value()) {
++  if (rect.has_value() && !availFromResolution) {
+     auto values = rect.value();
+     return {values[0], values[1], values[2], values[3]};
+   }
+@@ -137,7 +185,7 @@ CSSIntRect nsScreen::GetAvailRect() {
+     }
+   }
+ 
+-  if (ShouldResistFingerprinting(RFPTarget::ScreenAvailToResolution)) {
++  if (availFromResolution) {
+     nsDeviceContext* context = GetDeviceContext();
+     if (NS_WARN_IF(!context)) {
+       return {};
+@@ -153,8 +201,16 @@ CSSIntRect nsScreen::GetAvailRect() {
+       }
+     }
+ 
++    // Camoufox: from the screen the page sees, for the platform it is told.
++    nsAutoString platform;
++    if (nsGlobalWindowInner* owner =
++            nsGlobalWindowInner::Cast(GetOwnerWindow())) {
++      owner->Navigator()->GetPlatform(platform, CallerType::NonSystem,
++                                      IgnoreErrors());
++    }
+     return nsRFPService::GetSpoofedScreenAvailSize(
+-        context->GetRect(), context->GetFullZoom(), IsFullscreen());
++        CSSPixel::ToAppUnits(GetRect()), context->GetFullZoom(),
++        IsFullscreen(), platform);
+   }
+ 
+   nsDeviceContext* context = GetDeviceContext();
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
 index bfb0332a1c..c4cb127e83 100644
 --- a/dom/webidl/Window.webidl
@@ -438,3 +479,60 @@ index 1587fcffd8..53c079bc55 100644
    // Use depth of 24 when resisting fingerprinting, or when we're not being
    // rendered.
    int32_t depth = 24;
+diff --git a/toolkit/components/resistfingerprinting/nsRFPService.cpp b/toolkit/components/resistfingerprinting/nsRFPService.cpp
+index 93a9efd068..5a91649b05 100644
+--- a/toolkit/components/resistfingerprinting/nsRFPService.cpp
++++ b/toolkit/components/resistfingerprinting/nsRFPService.cpp
+@@ -3209,25 +3209,19 @@ void nsRFPService::GetExemptedDomainsLowercase(nsCString& aExemptedDomains) {
+ /* static */
+ CSSIntRect nsRFPService::GetSpoofedScreenAvailSize(const nsRect& aRect,
+                                                    float aScale,
+-                                                   bool aIsFullscreen) {
+-  int spoofedHeightOffset = aIsFullscreen ? 0 :
+-#ifdef XP_WIN
+-                                          48;
+-#elif defined(XP_MACOSX)
+-                                          76;
+-#else
+-                                          // Linux, Android and other platforms
+-                                0;
+-#endif
++                                                   bool aIsFullscreen,
++                                                   const nsAString& aPlatform) {
++  const bool isWindows = StringBeginsWith(aPlatform, u"Win"_ns);
++  const bool isMac = StringBeginsWith(aPlatform, u"Mac"_ns);
++  // Linux, Android and other platforms have no offset.
++  int spoofedHeightOffset = aIsFullscreen ? 0
++                            : isWindows   ? 48
++                            : isMac       ? 76
++                                          : 0;
+   spoofedHeightOffset =
+       NS_lround(float(spoofedHeightOffset) / aScale * AppUnitsPerCSSPixel());
+ 
+-  int spoofedHeightStart = aIsFullscreen ? 0 :
+-#ifdef XP_MACOSX
+-                                         25;
+-#else
+-                                         0;
+-#endif
++  int spoofedHeightStart = aIsFullscreen || !isMac ? 0 : 25;
+   spoofedHeightStart =
+       NS_lround(float(spoofedHeightStart) / aScale * AppUnitsPerCSSPixel());
+ 
+diff --git a/toolkit/components/resistfingerprinting/nsRFPService.h b/toolkit/components/resistfingerprinting/nsRFPService.h
+index 73637fad0d..08f281dc17 100644
+--- a/toolkit/components/resistfingerprinting/nsRFPService.h
++++ b/toolkit/components/resistfingerprinting/nsRFPService.h
+@@ -603,8 +603,11 @@ class nsRFPService final : public nsIObserver, public nsIRFPService {
+   // Returns the value of privacy.resistFingerprinting.exemptedDomains pref
+   static void GetExemptedDomainsLowercase(nsCString& aExemptedDomains);
+ 
++  // Camoufox: aPlatform is navigator.platform, which picks the OS whose
++  // taskbar and menu bar are subtracted.
+   static CSSIntRect GetSpoofedScreenAvailSize(const nsRect& aRect, float aScale,
+-                                              bool aIsFullscreen);
++                                              bool aIsFullscreen,
++                                              const nsAString& aPlatform);
+ 
+   static uint64_t GetSpoofedStorageLimit();
+ 

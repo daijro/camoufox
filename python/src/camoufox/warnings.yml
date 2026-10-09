@@ -51,6 +51,13 @@ is_mobile: >-
 block_webgl: >-
     Disabling WebGL is not recommended. Many WAFs will check if WebGL is enabled.
 
+canvas_noise: >-
+    Canvas and WebGL readback return random data, as privacy.resistFingerprinting
+    does in LibreWolf, Tor Browser and Mullvad Browser. Stock Firefox does not
+    do this, so the browser reads as a privacy-hardened Firefox. It is on because
+    the identity claims another OS than this machine's, whose canvas would show
+    the real OS. Pass `canvas_noise=False` to keep stock canvas behaviour.
+
 block_images: >-
     Blocking image requests has been reported to cause detection issues on major WAFs.
 

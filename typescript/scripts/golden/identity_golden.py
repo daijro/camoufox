@@ -368,14 +368,16 @@ def record_webgl():
     }
 
     recorded = {
-        'vendor': 'v', 'renderer': 'r', 'contextAttributes': {'alpha': True}, 'params': {'3379': {'value': 1.0}},
+        'vendor': 'v', 'renderer': 'r', 'contextAttributes': {'alpha': True},
+        'params': {'3379': {'value': 1.0}, '33902': {'value': [1, 2048]}},
         'shaderPrecisionFormats': [{'shaderType': 35633, 'precisionType': 36336,
                                     'shaderPrecisionFormat': {'rangeMin': 127, 'rangeMax': 127, 'precision': 23}}],
         'supportedExtensions': ['ANGLE_instanced_arrays', 'WEBGL_multi_draw', 'OVR_multiview2',
                                 'WEBGL_compressed_texture_etc1'],
     }
-    recorded2 = {**recorded, 'supportedExtensions': ['EXT_texture_norm16', 'WEBGL_clip_cull_distance',
-                                                     'OVR_multiview2', 'EXT_color_buffer_float']}
+    recorded2 = {**recorded, 'params': {'3379': {'value': 1.0}, '33902': {'value': [1, 1]}},
+                 'supportedExtensions': ['EXT_texture_norm16', 'WEBGL_clip_cull_distance',
+                                         'OVR_multiview2', 'EXT_color_buffer_float']}
     converted = [{'os': os_key, 'webgl2': w2, 'hash': exact(webgl.to_config(recorded, w2, os_key))}
                  for os_key in OS_KEYS for w2 in (recorded2, [])]
 

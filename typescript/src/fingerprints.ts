@@ -37,7 +37,7 @@ import {
 	ValueError,
 } from "./pycompat.js";
 import { FallbackWarning } from "./warnings.js";
-import { sampleWebglForScreen, type TargetOS } from "./webgl.js";
+import { sampleWebglForScreen, type TargetOS, webglForGpu } from "./webgl.js";
 
 export type { TargetOS } from "./webgl.js";
 
@@ -1639,7 +1639,8 @@ export interface ContextFingerprint {
 	preset: Preset;
 }
 
-function targetOsFromPlatform(plat: string): SupportedOS {
+/** The OS a navigator.platform value presents, as a Camoufox OS name. */
+export function targetOsFromPlatform(plat: string): SupportedOS {
 	if (plat === "Win32") return "windows";
 	if (plat.includes("Linux") || plat.includes("linux")) return "linux";
 	return "macos";
@@ -1656,6 +1657,8 @@ function targetOsFromPlatform(plat: string): SupportedOS {
  * @param locale BCP-47 locale; also sets context_options.locale.
  * @param config_overrides CAMOU_CONFIG keys applied after the config is built
  *   and before the init script is rendered.
+ * @param webgl_config The [vendor, renderer] a drawn identity claims, instead
+ *   of drawing one.
  */
 export function generateContextFingerprint({
 	preset,
@@ -1665,6 +1668,7 @@ export function generateContextFingerprint({
 	timezone,
 	locale,
 	config_overrides,
+	webgl_config,
 }: {
 	preset?: Preset | null;
 	os?: string | null;
@@ -1673,6 +1677,7 @@ export function generateContextFingerprint({
 	timezone?: string | null;
 	locale?: string | null;
 	config_overrides?: Config | null;
+	webgl_config?: [string, string] | null;
 } = {}): ContextFingerprint {
 	let config: Config;
 	let nav: Record<string, any>;
@@ -1769,13 +1774,15 @@ export function generateContextFingerprint({
 			// Same coherence treatment launchOptions applies (#729): lift netbook
 			// geometry, then keep the GPU consistent with the resulting screen.
 			raiseScreenToModernFloor(config);
-			const webglFp = sampleWebglForScreen(
-				targetOs,
-				config["screen.width"],
-				config["screen.height"],
-				undefined,
-				config["navigator.hardwareConcurrency"],
-			);
+			const webglFp = webgl_config
+				? webglForGpu(targetOs, ...webgl_config)
+				: sampleWebglForScreen(
+						targetOs,
+						config["screen.width"],
+						config["screen.height"],
+						undefined,
+						config["navigator.hardwareConcurrency"],
+					);
 			delete webglFp.webGl2Enabled;
 			Object.assign(config, webglFp);
 		}

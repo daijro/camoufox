@@ -1,10 +1,8 @@
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index d02c530cd5..bd48a0f323 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
-@@ -893,12 +977,21 @@ bool Navigator::Vibrate(const nsTArray<uint32_t>& aPattern) {
- 
- //*****************************************************************************
- //  Pointer Events interface
+@@ -974,6 +974,21 @@ bool Navigator::Vibrate(const nsTArray<uint32_t>& aPattern) {
  //*****************************************************************************
  
  uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
@@ -13,23 +11,24 @@ diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
 +  // collapses it to 0. The target is not a phone: it is the ordinary Windows
 +  // touchscreen laptop, which reports a digitizer here while keeping a fine
 +  // primary pointer. See force-default-pointer.patch for the matching
-+  // `any-pointer: coarse` half.
++  // `any-pointer: coarse` half. Stock Firefox's baseline fingerprinting
++  // protection collapses the spoofed count as it would the real one.
 +  if (auto value = MaskConfig::GetUint32("navigator.maxTouchPoints")) {
++    if (aCallerType != CallerType::System &&
++        nsContentUtils::ShouldResistFingerprinting(
++            GetDocShell(), RFPTarget::MaxTouchPointsCollapse)) {
++      return nsRFPService::CollapseMaxTouchPoints(value.value());
++    }
 +    return value.value();
 +  }
    nsIDocShell* docshell = GetDocShell();
    BrowsingContext* bc = docshell ? docshell->GetBrowsingContext() : nullptr;
  
-   // Responsive Design Mode overrides the maxTouchPoints property when
-   // touch simulation is enabled.
-   if (bc && bc->Top()->InRDMPane()) {
 diff --git a/dom/events/TouchEvent.cpp b/dom/events/TouchEvent.cpp
+index 7d72211e35..d68cd15f0e 100644
 --- a/dom/events/TouchEvent.cpp
 +++ b/dom/events/TouchEvent.cpp
-@@ -1,12 +1,14 @@
- /* This Source Code Form is subject to the terms of the Mozilla Public
-  * License, v. 2.0. If a copy of the MPL was not distributed with this
-  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+@@ -4,6 +4,8 @@
  
  #include "mozilla/dom/TouchEvent.h"
  
@@ -38,13 +37,7 @@ diff --git a/dom/events/TouchEvent.cpp b/dom/events/TouchEvent.cpp
  #include "gfxPlatform.h"
  #include "mozilla/BasePrincipal.h"
  #include "mozilla/LookAndFeel.h"
- #include "mozilla/Preferences.h"
- #include "mozilla/StaticPrefs_dom.h"
- #include "mozilla/TouchEvents.h"
-@@ -221,12 +223,24 @@ bool TouchEvent::PrefEnabled(nsIDocShell* aDocShell) {
-   bool enabled = false;
-   if (touchEventsOverride == mozilla::dom::TouchEventsOverride::Enabled) {
-     enabled = true;
+@@ -224,6 +226,18 @@ bool TouchEvent::PrefEnabled(nsIDocShell* aDocShell) {
    } else if (touchEventsOverride ==
               mozilla::dom::TouchEventsOverride::Disabled) {
      enabled = false;
@@ -63,16 +56,11 @@ diff --git a/dom/events/TouchEvent.cpp b/dom/events/TouchEvent.cpp
    } else if (nsContentUtils::ShouldResistFingerprinting(
                   aDocShell, RFPTarget::PointerEvents)) {
  #ifdef MOZ_WIDGET_COCOA
-     enabled = false;
- #else
-     enabled = true;
 diff --git a/dom/events/moz.build b/dom/events/moz.build
+index 1426931797..d4a3f0c618 100644
 --- a/dom/events/moz.build
 +++ b/dom/events/moz.build
-@@ -186,6 +186,9 @@ LOCAL_INCLUDES += [
-     "/js/xpconnect/wrappers",
-     "/layout/forms",
-     "/layout/generic",
+@@ -189,3 +189,6 @@ LOCAL_INCLUDES += [
      "/layout/xul",
      "/layout/xul/tree/",
  ]

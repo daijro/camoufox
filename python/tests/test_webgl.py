@@ -41,7 +41,8 @@ def test_converter_reproduces_the_recorded_device():
     must come out identical: parameters are compared where the old row had a
     value, less the UNMASKED_* strings, which the browser takes from
     webGl:vendor/renderer rather than the table. Keys since marked removed
-    (contextAttributes) are no longer sent."""
+    (contextAttributes) are no longer sent. WebGL1's line width range is
+    WebGL2's since Firefox 156 (test_webgl1_line_width_range_is_webgl2s)."""
     removed = {
         entry["property"]
         for entry in json.loads(PROPERTIES.read_text())
@@ -49,6 +50,7 @@ def test_converter_reproduces_the_recorded_device():
     }
     old = json.loads((Path(__file__).parent / "data" / "webgl-gtx980-linux.json").read_text())
     old = {key: value for key, value in old.items() if key not in removed}
+    old["webGl:parameters"]["33902"] = old["webGl2:parameters"]["33902"]
     new = webgl_for_gpu("lin", *_GTX_980_LINUX, seed=0)
 
     assert new.keys() == old.keys()
@@ -148,7 +150,11 @@ def test_preset_keeps_its_own_gpu():
     config = launch(os="linux", fingerprint_preset=preset)
     assert (config["webGl:vendor"], config["webGl:renderer"]) == gpu
     pinned = (webgl._pin("gpu", {"vendor": gpu[0], "renderer": gpu[1]}),)
-    recorded = [webgl.to_config(r.value, [], "lin")["webGl:parameters"] for r in webgl._trace("webgl", "lin", pinned)]
+    recorded = [
+        webgl.to_config(w1.value, w2.value, "lin")["webGl:parameters"]
+        for w1 in webgl._trace("webgl", "lin", pinned)
+        for w2 in webgl._trace("webgl2", "lin", (*pinned, webgl._pin("webgl", w1.value)))
+    ]
     assert config["webGl:parameters"] in recorded
 
 
@@ -183,12 +189,55 @@ def test_draft_extensions_filtered_on_every_os():
         "vendor": "v",
         "renderer": "r",
         "contextAttributes": {},
-        "params": {},
+        "params": {"33902": {"value": [1, 1]}},
         "shaderPrecisionFormats": [],
         "supportedExtensions": ["ANGLE_instanced_arrays", "WEBGL_multi_draw", "WEBGL_compressed_texture_etc1"],
     }
     webgl2 = {**recorded, "supportedExtensions": ["EXT_texture_norm16", "WEBGL_clip_cull_distance", "OVR_multiview2"]}
     for target_os in OSES:
         config = webgl.to_config(recorded, webgl2, target_os)
-        assert config["webGl:supportedExtensions"] == ["ANGLE_instanced_arrays"]
-        assert config["webGl2:supportedExtensions"] == (["OVR_multiview2"] if target_os == "win" else [])
+        backend = ["EXT_depth_clamp"] if target_os == "win" else []
+        assert config["webGl:supportedExtensions"] == ["ANGLE_instanced_arrays", *backend]
+        assert config["webGl2:supportedExtensions"] == (backend + ["OVR_multiview2"] if target_os == "win" else [])
+
+
+def test_windows_exposes_ext_depth_clamp_on_every_device():
+    """ANGLE's D3D11 backend reports depth clamp on every GPU from Firefox 156;
+    fpgen's Windows records come from Firefox 146, which did not."""
+    for key in ("webGl:supportedExtensions", "webGl2:supportedExtensions"):
+        assert all("EXT_depth_clamp" in exts for exts in _extensions("win", key) if exts), key
+
+
+def test_extensions_are_in_firefoxs_order():
+    """getSupportedExtensions lists in WebGLExtensionID order: alphabetical,
+    ignoring case. An extension the backend adds takes its place there."""
+    recorded = {
+        "vendor": "v",
+        "renderer": "r",
+        "params": {},
+        "shaderPrecisionFormats": [],
+        "supportedExtensions": ["ANGLE_instanced_arrays", "EXT_color_buffer_half_float", "EXT_disjoint_timer_query"],
+    }
+    assert webgl.to_config(recorded, [], "win")["webGl:supportedExtensions"] == [
+        "ANGLE_instanced_arrays",
+        "EXT_color_buffer_half_float",
+        "EXT_depth_clamp",
+        "EXT_disjoint_timer_query",
+    ]
+    for target_os in OSES:
+        for s in range(100):
+            config = sample_webgl_for_screen(target_os, 1920, 1080, s)
+            for key in ("webGl:supportedExtensions", "webGl2:supportedExtensions"):
+                exts = config.get(key, [])
+                assert exts == sorted(exts, key=str.casefold), (target_os, s, key)
+
+
+def test_webgl1_line_width_range_is_webgl2s():
+    """Firefox 156 creates WebGL1 on the same GL profile as WebGL2. 146 forced
+    a compatibility profile for WebGL1, where fpgen recorded the driver's
+    wide-line range (Linux: [1, 2048], [1, 7.375], [1, 10] ...)."""
+    for target_os in OSES:
+        for s in range(100):
+            config = sample_webgl_for_screen(target_os, 1920, 1080, s)
+            if config["webGl2Enabled"]:
+                assert config["webGl:parameters"]["33902"] == config["webGl2:parameters"]["33902"], (target_os, s)

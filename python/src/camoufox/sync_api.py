@@ -14,6 +14,9 @@ from .fingerprints import generate_context_fingerprint
 from .ip import Proxy, proxy_exit_geo
 from .utils import (
     attach_context_defaults,
+    attach_host_identity,
+    context_identity,
+    host_identity,
     launch_options,
     new_context_options,
     persistent_context_options,
@@ -106,7 +109,10 @@ def NewBrowser(
     else:
         virtual_display = None
 
+    # Options the caller built leave its contexts to the caller (host_identity).
+    canvas_noise: Optional[bool] = False
     if not from_options:
+        canvas_noise = kwargs.get('canvas_noise')
         # Opt-in (2026-09-17). Pinning keeps the identity's core count by
         # constraining the browser to that many cores; it costs real CPU, needs
         # a launch lock, and does nothing on macOS. What it defends against is a
@@ -136,8 +142,10 @@ def NewBrowser(
             )
             return sync_attach_vd(context, virtual_display)
 
+        identity = host_identity(from_options, canvas_noise)
         browser = playwright.firefox.launch(**from_options)
         attach_context_defaults(browser, no_viewport_default)
+        attach_host_identity(browser, identity)
         return sync_attach_vd(browser, virtual_display)
     finally:
         if pid:
@@ -170,7 +178,9 @@ def NewContext(
     Parameters:
         browser: A Browser instance from NewBrowser or Camoufox.
         preset: A fingerprint preset dict to use. If None, fpgen draws a new identity.
-        os: Target OS for the drawn identity ("windows", "macos", "linux").
+        os: Target OS for the drawn identity ("windows", "macos", "linux"). On a browser launched
+            without canvas noise, contexts claim the host's OS and GPU, and another os or preset
+            raises ValueError.
         ff_version: Firefox major version to claim in the UA. Defaults to the browser's own.
         webrtc_ip: IPv4 or IPv6 address to spoof for WebRTC ICE candidates.
         proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).
@@ -189,7 +199,10 @@ def NewContext(
         webrtc_ip = webrtc_ip or exit_ip
         context_kwargs.setdefault("timezone_id", timezone)
 
-    fp = generate_context_fingerprint(preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip)
+    os, webgl_config = context_identity(browser, os, preset)
+    fp = generate_context_fingerprint(
+        preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config
+    )
 
     context = browser.new_context(**new_context_options(fp, context_kwargs, proxy, geolocation))
     context.add_init_script(fp['init_script'])

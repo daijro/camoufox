@@ -39,9 +39,18 @@ import {
 	raiseScreenToModernFloor,
 	Screen,
 	setMediaDevicesDefaults,
+	targetOsFromPlatform,
 	WINDOWS_11_MARKER_FONTS,
 } from "./fingerprints.js";
 import { geoipAllowed, getGeolocation } from "./geolocation.js";
+import {
+	addCanvasPlaceholder,
+	type Gpu,
+	hasCanvasPlaceholder,
+	hostGpu,
+	rendersOnHardware,
+	setWebgpu,
+} from "./host_rendering.js";
 import {
 	type ProxyConfig,
 	ProxyHelper,
@@ -77,11 +86,14 @@ import {
 } from "./pycompat.js";
 import type { VirtualDisplay } from "./virtdisplay.js";
 import { FallbackWarning, LeakWarning, warn } from "./warnings.js";
-import { sampleWebglForScreen, webglForGpu } from "./webgl.js";
+import { firefoxGpus, sampleWebglForScreen, webglForGpu } from "./webgl.js";
 
 type ListOrString = string | string[];
 export type TargetOS = "mac" | "win" | "lin";
 type EnvVars = Record<string, string | number | boolean>;
+
+/** The OS names Camoufox takes, by target_os key. */
+const OS_NAMES = { win: "windows", mac: "macos", lin: "linux" } as const;
 
 // Camoufox preferences to cache previous pages and requests
 export const CACHE_PREFS: Record<string, any> = {
@@ -210,7 +222,12 @@ export const utilsDeps = {
 	generateRandomFontSubset,
 	generateRandomVoiceSubset,
 	setMediaDevicesDefaults,
+	hostGpu,
 	// The WebGL draws read fpgen's model, fetched on first use like Python's.
+	firefoxGpus: async (targetOs: string) => {
+		await ensureModel();
+		return firefoxGpus(targetOs);
+	},
 	webglForGpu: async (...args: Parameters<typeof webglForGpu>) => {
 		await ensureModel();
 		return webglForGpu(...args);
@@ -985,6 +1002,76 @@ export function attachDesktopOnlyWarning<T>(target: T): T {
 	return target;
 }
 
+/** The machine a browser's contexts must claim: its OS and, if hardware, its GPU. */
+export type HostIdentity = [TargetOS | null, Gpu | null];
+
+/**
+ * For a launch without the canvas placeholder, the machine its contexts must
+ * claim: the host's OS, and its GPU when that is hardware (contextIdentity).
+ * Only for the default `canvasNoise` (undefined); a caller who chose it, or
+ * built the options, keeps their contexts as they ask. Read before the launch,
+ * so a failed probe leaves no browser behind.
+ */
+export async function hostIdentity(
+	fromOptions: Record<string, any>,
+	canvasNoise: boolean | undefined,
+): Promise<HostIdentity | null> {
+	const prefs = fromOptions.firefoxUserPrefs ?? {};
+	if (canvasNoise != null || hasCanvasPlaceholder(prefs)) return null;
+	let gpu: Gpu | null = null;
+	if (!prefs["webgl.disabled"]) {
+		gpu = await utilsDeps.hostGpu(
+			fromOptions.executablePath,
+			fromOptions.headless,
+			fromOptions.env,
+		);
+	}
+	return [utilsDeps.hostOsKey(), rendersOnHardware(gpu) ? gpu : null];
+}
+
+export function attachHostIdentity(
+	browser: any,
+	identity: HostIdentity | null,
+): void {
+	if (identity !== null) browser._camoufoxHostIdentity = identity;
+}
+
+/**
+ * The OS and GPU a new context on `browser` claims (null: drawn).
+ *
+ * On a browser without the canvas placeholder they are the host's, since the
+ * canvas renders there; asking for anything else throws.
+ */
+export function contextIdentity(
+	browser: any,
+	os: string | undefined,
+	preset: Record<string, any> | undefined,
+): [string | undefined, Gpu | null] {
+	const hostIdentity: [TargetOS, Gpu | null] | undefined =
+		browser._camoufoxHostIdentity;
+	if (!hostIdentity) return [os, null];
+	const [hostOs, gpu] = hostIdentity;
+	const hostName = OS_NAMES[hostOs];
+	const hasPreset = pyTruthy(preset);
+	const presetGpu = preset?.webgl ?? {};
+	if (
+		(os || hostName) !== hostName ||
+		(hasPreset &&
+			targetOsFromPlatform(preset?.navigator?.platform ?? "") !== hostName) ||
+		(gpu &&
+			hasPreset &&
+			(presetGpu.unmaskedVendor !== gpu[0] ||
+				presetGpu.unmaskedRenderer !== gpu[1]))
+	) {
+		throw new ValueError(
+			`This browser renders its canvas as this ${hostName} machine, so its contexts claim it` +
+				`${gpu ? ` and its GPU ${JSON.stringify(gpu)}` : ""}. Launch it with canvas_noise: true ` +
+				"to give a context another OS or GPU.",
+		);
+	}
+	return [hostName, gpu];
+}
+
 /**
  * Normalise a context-options object onto the JS API's `viewport: null`,
  * defaulting to it when the caller expressed no preference. Playwright-Python
@@ -1181,6 +1268,13 @@ export interface LaunchOptions {
 	/** Pin the browser to navigator.hardwareConcurrency cores (Linux/Windows).
 	 * OFF by default -- it costs real CPU and serializes concurrent launches. */
 	pin_cpu_cores?: boolean;
+	/** Replace canvas and WebGL readback with random data, as
+	 * privacy.resistFingerprinting does in LibreWolf, Tor Browser and Mullvad
+	 * Browser. Stock Firefox does not, so it warns. By default (undefined) it is
+	 * on only when the identity claims another OS than the host's, whose canvas
+	 * would otherwise show the host. On the host's OS the identity claims the
+	 * GPU the host renders with instead. */
+	canvas_noise?: boolean | null;
 	/** Additional Firefox launch options, passed straight through to Playwright. */
 	[key: string]: any;
 }
@@ -1226,6 +1320,7 @@ export async function launchOptions({
 	debug,
 	virtual_display,
 	pin_cpu_cores,
+	canvas_noise,
 	...passthrough
 }: LaunchOptions = {}): Promise<Record<string, any>> {
 	utilsDeps.ensureBrowserProfileDir(env);
@@ -1434,9 +1529,7 @@ export async function launchOptions({
 		// Draw the font subset HERE, after every identity fix-up above, so the
 		// seed sees the final UA/screen/cores/GPU: the same presented identity
 		// always gets the same font list (#442/#765).
-		const osName =
-			({ win: "windows", mac: "macos", lin: "linux" } as const)[targetOs] ??
-			"macos";
+		const osName = OS_NAMES[targetOs] ?? "macos";
 		try {
 			config.fonts = utilsDeps.generateRandomFontSubset(
 				osName,
@@ -1608,9 +1701,7 @@ export async function launchOptions({
 	// the locale is resolved: the Windows voice list is the display language's
 	// pack.
 	if (!userSetVoices || !("voices" in config)) {
-		const osNameV =
-			({ win: "windows", mac: "macos", lin: "linux" } as const)[targetOs] ??
-			"macos";
+		const osNameV = OS_NAMES[targetOs] ?? "macos";
 		let voiceLocale = config["navigator.language"];
 		if (pyTruthy(config["locale:language"])) {
 			voiceLocale = [config["locale:language"], config["locale:region"]]
@@ -1685,6 +1776,41 @@ export async function launchOptions({
 	// reads the core count and the screen, which the launch replaces above.
 	coherence.dropIncoherentSourceValues(config, targetOs);
 
+	// Prepare the executable path
+	let resolvedExecutable: string;
+	if (executable_path) {
+		resolvedExecutable = String(executable_path);
+	} else if (browser) {
+		// Select a specific installed browser version
+		const browserPath = await utilsDeps.findInstalledVersion(browser);
+		if (!browserPath) {
+			throw new Error(
+				`Browser version '${browser}' not found. Run \`camoufox list\` to see installed versions.`,
+			);
+		}
+		resolvedExecutable = utilsDeps.launchPath(browserPath);
+	} else {
+		resolvedExecutable = utilsDeps.launchPath();
+	}
+
+	// The canvas renders on the host, so an identity on another OS needs it
+	// covered, and one on the host's OS claims the host's GPU.
+	const hostOs = utilsDeps.hostOsKey();
+	canvas_noise ??= targetOs !== hostOs;
+	const claimsHostGpu =
+		targetOs === hostOs &&
+		!canvas_noise &&
+		!block_webgl &&
+		!pyTruthy(webgl_config) &&
+		!(pyTruthy(config["webGl:vendor"]) && pyTruthy(config["webGl:renderer"]));
+	const host = claimsHostGpu
+		? await utilsDeps.hostGpu(resolvedExecutable, headless, env)
+		: null;
+	if (canvas_noise) {
+		addCanvasPlaceholder(firefox_user_prefs);
+		LeakWarning.warn("canvas_noise", i_know_what_im_doing);
+	}
+
 	if (block_webgl) {
 		firefox_user_prefs["webgl.disabled"] = true;
 		LeakWarning.warn("block_webgl", i_know_what_im_doing);
@@ -1708,6 +1834,14 @@ export async function launchOptions({
 				config["webGl:renderer"],
 				seed(),
 			);
+		} else if (
+			rendersOnHardware(host) &&
+			(await utilsDeps.firefoxGpus(targetOs)).some(
+				([vendor, renderer]) => vendor === host[0] && renderer === host[1],
+			)
+		) {
+			// Claim the GPU the canvas really renders on.
+			webglFp = await utilsDeps.webglForGpu(targetOs, ...host, seed());
 		} else {
 			// Synthetic path: keep the GPU coherent with the screen fpgen already
 			// picked. Sampling the two independently yields pairs no real machine
@@ -1744,6 +1878,13 @@ export async function launchOptions({
 		}
 	}
 
+	setWebgpu(
+		firefox_user_prefs,
+		targetOs,
+		[config["webGl:vendor"], config["webGl:renderer"]],
+		host,
+	);
+
 	// Cache previous pages, requests, etc (uses more memory)
 	if (enable_cache) {
 		mergeInto(firefox_user_prefs, CACHE_PREFS);
@@ -1765,23 +1906,6 @@ export async function launchOptions({
 		...getPrefEnvVars(firefox_user_prefs),
 		...env,
 	};
-
-	// Prepare the executable path
-	let resolvedExecutable: string;
-	if (executable_path) {
-		resolvedExecutable = String(executable_path);
-	} else if (browser) {
-		// Select a specific installed browser version
-		const browserPath = await utilsDeps.findInstalledVersion(browser);
-		if (!browserPath) {
-			throw new Error(
-				`Browser version '${browser}' not found. Run \`camoufox list\` to see installed versions.`,
-			);
-		}
-		resolvedExecutable = utilsDeps.launchPath(browserPath);
-	} else {
-		resolvedExecutable = utilsDeps.launchPath();
-	}
 
 	const result: Record<string, any> = {
 		executablePath: resolvedExecutable,

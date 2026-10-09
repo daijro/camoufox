@@ -22,10 +22,13 @@ import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "./ip.js";
 import {
 	applyNoViewport,
 	attachDesktopOnlyWarning,
+	attachHostIdentity,
 	attachNoViewportDefault,
 	attachStockMediaDefaults,
 	attachVirtualDisplay,
+	contextIdentity,
 	driverPid,
+	hostIdentity,
 	type LaunchOptions,
 	launchOptions,
 	pinnedCoreCount,
@@ -99,8 +102,12 @@ export async function NewBrowser(
 	}
 
 	let fromOptions = from_options;
+	// Options the caller built leave its contexts to the caller
+	// (hostIdentity).
+	let canvasNoise: boolean | undefined = false;
 	try {
 		if (!fromOptions || !Object.keys(fromOptions).length) {
+			canvasNoise = kwargs.canvas_noise ?? undefined;
 			// Opt-in (2026-09-17). Pinning keeps the identity's core count by
 			// constraining the browser to that many cores; it costs real CPU,
 			// needs a launch lock, and does nothing on macOS. Off, the host's own
@@ -133,6 +140,7 @@ export async function NewBrowser(
 			Boolean(persistent_context),
 			noViewportDefault,
 			virtualDisplay,
+			canvasNoise,
 		);
 	try {
 		if (!pinTo) {
@@ -161,6 +169,7 @@ async function launchWith(
 	persistentContext: boolean,
 	noViewportDefault: boolean,
 	virtualDisplay: VirtualDisplay | null,
+	canvasNoise: boolean | undefined,
 ): Promise<Browser | BrowserContext> {
 	// Persistent context. Python passes user_data_dir inside the options; the
 	// JS API takes it positionally. A user_data_dir alone also selects it.
@@ -190,19 +199,23 @@ async function launchWith(
 	}
 
 	// Browser
+	const identity = await hostIdentity(fromOptions, canvasNoise);
 	const browser = await playwright.launch(fromOptions);
 	if (noViewportDefault) {
 		attachNoViewportDefault(browser);
 	}
 	attachStockMediaDefaults(browser);
 	attachDesktopOnlyWarning(browser);
+	attachHostIdentity(browser, identity);
 	return attachVirtualDisplay(browser, virtualDisplay);
 }
 
 export interface NewContextOptions extends Record<string, any> {
 	/** A fingerprint preset to use. If omitted, fpgen draws a new identity. */
 	preset?: Record<string, any>;
-	/** Target OS for the drawn identity ("windows", "macos", "linux"). */
+	/** Target OS for the drawn identity ("windows", "macos", "linux"). On a
+	 * browser launched without canvas noise, contexts claim the host's OS and
+	 * GPU, and another os or preset throws ValueError. */
 	os?: string;
 	/** Firefox major version to claim in the UA. Defaults to the browser's own. */
 	ff_version?: string;
@@ -264,11 +277,13 @@ export async function NewContext(
 		if (!("timezoneId" in contextOptions)) contextOptions.timezoneId = timezone;
 	}
 
+	const [contextOs, webglConfig] = contextIdentity(browser, os, preset);
 	const fp = generateContextFingerprint({
 		preset: preset as any,
-		os,
+		os: contextOs,
 		ff_version: ffVersion,
 		webrtc_ip: webrtcIp,
+		webgl_config: webglConfig,
 	});
 
 	// Merge the generated context options with user overrides (user wins). They

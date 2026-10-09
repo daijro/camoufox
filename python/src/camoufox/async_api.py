@@ -17,6 +17,9 @@ from .ip import Proxy, proxy_exit_geo
 from .utils import (
     async_attach_vd,
     attach_context_defaults,
+    attach_host_identity,
+    context_identity,
+    host_identity,
     launch_options,
     new_context_options,
     persistent_context_options,
@@ -104,7 +107,10 @@ async def AsyncNewBrowser(
     else:
         virtual_display = None
 
+    # Options the caller built leave its contexts to the caller (host_identity).
+    canvas_noise: Optional[bool] = False
     if not from_options:
+        canvas_noise = kwargs.get('canvas_noise')
         # Opt-in; see the note in sync_api.NewBrowser.
         kwargs.setdefault('pin_cpu_cores', False)
         from_options = await asyncio.get_event_loop().run_in_executor(
@@ -125,14 +131,18 @@ async def AsyncNewBrowser(
     pin_to = pinned_core_count(from_options)
     pid = driver_pid(playwright) if pin_to else None
     if not pid:
-        return await _launch(playwright, from_options, persistent_context, no_viewport_default, virtual_display)
+        return await _launch(
+            playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise
+        )
     # The browser inherits the driver's mask at spawn, so two concurrent launches
     # on one driver must not interleave pin/restore: the second pin would land on
     # the first browser, and the first restore would leave the driver pinned.
     async with _pin_lock(pid):
         previous = cpu_affinity.pin(pid, pin_to)
         try:
-            return await _launch(playwright, from_options, persistent_context, no_viewport_default, virtual_display)
+            return await _launch(
+                playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise
+            )
         finally:
             cpu_affinity.restore(pid, previous)
 
@@ -154,6 +164,7 @@ async def _launch(
     persistent_context: bool,
     no_viewport_default: bool,
     virtual_display: Optional[VirtualDisplay],
+    canvas_noise: Optional[bool],
 ) -> Union[Browser, BrowserContext]:
     if persistent_context:
         context = await playwright.firefox.launch_persistent_context(
@@ -161,8 +172,10 @@ async def _launch(
         )
         return await async_attach_vd(context, virtual_display)
 
+    identity = await asyncio.get_running_loop().run_in_executor(None, host_identity, from_options, canvas_noise)
     browser = await playwright.firefox.launch(**from_options)
     attach_context_defaults(browser, no_viewport_default)
+    attach_host_identity(browser, identity)
     return await async_attach_vd(browser, virtual_display)
 
 
@@ -194,7 +207,9 @@ async def AsyncNewContext(
     Parameters:
         browser: A Browser instance from AsyncNewBrowser or AsyncCamoufox.
         preset: A fingerprint preset dict to use. If None, fpgen draws a new identity.
-        os: Target OS for the drawn identity ("windows", "macos", "linux").
+        os: Target OS for the drawn identity ("windows", "macos", "linux"). On a browser launched
+            without canvas noise, contexts claim the host's OS and GPU, and another os or preset
+            raises ValueError.
         ff_version: Firefox major version to claim in the UA. Defaults to the browser's own.
         webrtc_ip: IPv4 or IPv6 address to spoof for WebRTC ICE candidates.
         proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).
@@ -213,9 +228,12 @@ async def AsyncNewContext(
         webrtc_ip = webrtc_ip or exit_ip
         context_kwargs.setdefault("timezone_id", timezone)
 
+    os, webgl_config = context_identity(browser, os, preset)
     fp = await asyncio.get_event_loop().run_in_executor(
         None,
-        lambda: generate_context_fingerprint(preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip),
+        lambda: generate_context_fingerprint(
+            preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config
+        ),
     )
 
     context = await browser.new_context(**new_context_options(fp, context_kwargs, proxy, geolocation))

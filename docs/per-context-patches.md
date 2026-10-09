@@ -38,7 +38,9 @@ Supporting patches, with no setter of their own:
 | `cross-process-storage.patch` | `RoverfoxStorageManager`, the per-context store, with the IPC that makes a value set in one process readable in every other, and the guard and removal every setter uses |
 
 There is no canvas pixel noise and no glyph-spacing noise: both produce output
-no real machine does ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml)).
+no real machine does ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml)). A
+browser launched with `canvas_noise=True` returns random canvas readback, as
+`privacy.resistFingerprinting` does, for every context.
 
 ## Using the setters
 
@@ -220,4 +222,8 @@ renders, so some signals still show the real OS:
 | Shader precision behaviour | Actual precision follows the real driver even when the reported formats are spoofed |
 
 Run each identity on the OS it claims. The per-context patches make each
-context a different person on the same OS, not a different OS.
+context a different person on the same OS, not a different OS. Where that is
+not possible, launch with `canvas_noise=True`: canvas and WebGL readback then
+return random data, which covers the two rasterization rows above. A browser
+launched without it gives its contexts the host's OS and GPU, and `NewContext`
+raises for another OS.

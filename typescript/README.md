@@ -91,7 +91,7 @@ fonts, voices, audio seed, timezone, WebRTC IP), applied through
 ```javascript
 import { Camoufox, NewContext } from "camoufox";
 
-const browser = await Camoufox({ headless: true });
+const browser = await Camoufox({ headless: true, canvas_noise: true });
 const alice = await NewContext(browser, { os: "windows" });
 const bob = await NewContext(browser, {
     os: "macos",
@@ -105,12 +105,42 @@ await browser.close();
 | `NewContext` option | Effect |
 |---|---|
 | `preset` | Use this fingerprint preset object instead of an fpgen draw. |
-| `os` | `"windows"`, `"macos"` or `"linux"` for the drawn identity. |
+| `os` | `"windows"`, `"macos"` or `"linux"` for the drawn identity. On a browser without canvas noise, the host's OS, and anything else throws `ValueError`. |
 | `ff_version` | Firefox major version claimed in the User-Agent. Defaults to the browser's own. |
 | `webrtc_ip` | IPv4 or IPv6 address WebRTC reports. |
 | `proxy` | Per-context proxy, in Playwright's format. Unless `webrtc_ip` and `timezoneId` are both given, they are looked up from the proxy's exit IP, and `InvalidIP` is thrown if the lookup fails. |
 | `geolocation` | `{ latitude, longitude }`; also grants the `geolocation` permission. |
 | anything else | Passed to Playwright's `browser.newContext()` (camelCase, e.g. `timezoneId`), overriding the generated value. |
+
+Canvas noise belongs to the browser, not the context (see
+[The canvas on another OS](#the-canvas-on-another-os)). On a browser without it,
+every context claims the host's OS and GPU too, since its canvas renders there.
+Contexts with other OSes, like the ones above, need `canvas_noise: true`.
+
+### The canvas on another OS
+
+A page can draw a canvas or a WebGL scene and read the pixels back. Those pixels
+come from the real OS, driver and GPU, whatever the identity claims.
+
+- **On the host's OS**, the launcher starts the browser once, unspoofed and with
+  the same display, reads the GPU Firefox reports, and the identity claims it.
+  The pixels then agree with the identity. A host that renders in software (no
+  GPU driver, as on most servers) keeps a drawn GPU: it reads as a machine
+  whose driver failed to load.
+- **On another OS**, the pixels would show the real one. Camoufox then turns on
+  the canvas protection of `privacy.resistFingerprinting`, and only that:
+  canvas and WebGL readback return random data, as in LibreWolf, Tor Browser
+  and Mullvad Browser. Stock Firefox does not do this, so the launch emits a
+  `LeakWarning`; the browser reads as a privacy-hardened Firefox rather than a
+  stock one.
+
+`canvas_noise: true` turns the protection on for any OS, `canvas_noise: false`
+never.
+
+WebGPU follows the same rule. `navigator.gpu` exists only where Firefox on the
+claimed device has it (Windows and Apple Silicon Macs), and the adapter is the
+host's only when the identity claims the host's GPU. Otherwise
+`requestAdapter()` returns `null`, as Firefox does for a blocked or software GPU.
 
 ### Headless modes
 
@@ -179,6 +209,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `block_webrtc` | `boolean` | `false` | Disable WebRTC entirely. |
 | `block_webgl` | `boolean` | `false` | Disable WebGL. Warns: many WAFs check for it. |
 | `webgl_config` | `[vendor, renderer]` | drawn | Use one GPU fpgen has recorded for Firefox on `os`; any other pair throws. Needs `os`. |
+| `canvas_noise` | `boolean` | on for another OS | Random canvas and WebGL readback, as in LibreWolf. Warns. See [The canvas on another OS](#the-canvas-on-another-os). |
 | `disable_coop` | `boolean` | `false` | Turn off Cross-Origin-Opener-Policy so elements in cross-origin iframes (such as the Turnstile checkbox) can be clicked. Warns. |
 | `main_world_eval` | `boolean` | `false` | Allow `page.evaluate("mw:...")` and `mw:` init scripts to run in the page's own world. |
 | `allow_addon_new_tab` | `boolean` | `false` | Let addons open tabs. |

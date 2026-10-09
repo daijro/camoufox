@@ -1464,6 +1464,7 @@ def generate_context_fingerprint(
     timezone: Optional[str] = None,
     locale: Optional[str] = None,
     config_overrides: Optional[Dict[str, Any]] = None,
+    webgl_config: Optional[Tuple[str, str]] = None,
 ) -> Dict[str, Any]:
     """
     Generate fingerprint values for a single per-context identity.
@@ -1481,6 +1482,8 @@ def generate_context_fingerprint(
             context_options['locale'] for Playwright.
         config_overrides: Dict of CAMOU_CONFIG keys to override after config
             is built but before init_script is rendered (e.g. {'audio:seed': 7}).
+        webgl_config: The (vendor, renderer) a drawn identity claims, instead of
+            drawing one.
     """
     if preset is not None:
         # Use real fingerprint preset
@@ -1531,7 +1534,7 @@ def generate_context_fingerprint(
         # Draw the GPU and its WebGL data (fpgen.yml does not map these)
         if not config.get('webGl:vendor') or not config.get('webGl:renderer'):
             # Not at the top: camoufox.webgl imports this module.
-            from .webgl import sample_webgl_for_screen
+            from .webgl import sample_webgl_for_screen, webgl_for_gpu
 
             _target_os = OS_KEYS.get(os or '') or OS_KEYS[platform_to_os(config.get('navigator.platform', ''))]
             # Same coherence treatment launch_options applies (#729): lift
@@ -1539,10 +1542,13 @@ def generate_context_fingerprint(
             # screen this identity ended up with. This path has no real
             # display to reconcile against, so the floor is unconditional.
             raise_screen_to_modern_floor(config)
-            webgl_fp = sample_webgl_for_screen(
-                _target_os, config.get('screen.width'), config.get('screen.height'),
-                cores=config.get('navigator.hardwareConcurrency'),
-            )
+            if webgl_config:
+                webgl_fp = webgl_for_gpu(_target_os, *webgl_config)
+            else:
+                webgl_fp = sample_webgl_for_screen(
+                    _target_os, config.get('screen.width'), config.get('screen.height'),
+                    cores=config.get('navigator.hardwareConcurrency'),
+                )
             webgl_fp.pop('webGl2Enabled')
             config.update(webgl_fp)
 

@@ -53,6 +53,15 @@ const HOST_DEPENDENT_EXTENSIONS: ReadonlySet<string> = new Set([
 	"OVR_multiview2",
 ]);
 
+// Extensions the claimed OS's backend exposes on every GPU in Firefox 156,
+// which fpgen's Firefox 146 records lack. ANGLE sets depthClampEXT
+// unconditionally on D3D11 (renderer11_utils.cpp); 146's ANGLE did not.
+const BACKEND_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
+	win: ["EXT_depth_clamp"],
+};
+
+const ALIASED_LINE_WIDTH_RANGE = "33902";
+
 // What Firefox reports under privacy.resistFingerprinting, which a Camoufox
 // identity otherwise does not present.
 const RFP_RENDERER = "Mozilla";
@@ -130,10 +139,19 @@ function contextConfig(
 	targetOs: string,
 ): Record<string, any> {
 	const blocked = filteredExtensions(targetOs);
+	const extensions = (webgl.supportedExtensions as string[]).filter(
+		(extension) => !blocked.has(extension),
+	);
+	for (const extension of BACKEND_EXTENSIONS[targetOs] ?? []) {
+		if (extensions.includes(extension)) continue;
+		// Firefox lists them in WebGLExtensionID order: alphabetical, ignoring case.
+		const at = extensions.findIndex(
+			(other) => other.toLowerCase() > extension.toLowerCase(),
+		);
+		extensions.splice(at === -1 ? extensions.length : at, 0, extension);
+	}
 	return {
-		[`${prefix}:supportedExtensions`]: (
-			webgl.supportedExtensions as string[]
-		).filter((extension) => !blocked.has(extension)),
+		[`${prefix}:supportedExtensions`]: extensions,
 		[`${prefix}:parameters`]: Object.fromEntries(
 			Object.entries(webgl.params as Record<string, any>).map(
 				([pname, param]) => [pname, param.value],
@@ -171,8 +189,14 @@ export function toConfig(
 		...contextConfig("webGl", webgl, targetOs),
 		webGl2Enabled: hasWebgl2,
 	};
-	if (hasWebgl2)
+	if (hasWebgl2) {
 		Object.assign(config, contextConfig("webGl2", webgl2, targetOs));
+		// Firefox 156 creates WebGL1 on the same GL profile as WebGL2, so both
+		// report one line width range. 146 forced WebGL1 onto a compatibility
+		// profile, and fpgen recorded that profile's driver range.
+		config["webGl:parameters"][ALIASED_LINE_WIDTH_RANGE] =
+			config["webGl2:parameters"][ALIASED_LINE_WIDTH_RANGE];
+	}
 	// The values are the trace's cached objects; the caller gets its own copy.
 	return parsePyJson(orjsonDumps(config, false));
 }

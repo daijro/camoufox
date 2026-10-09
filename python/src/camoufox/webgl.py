@@ -46,6 +46,13 @@ _NEVER_EXPOSED_EXTENSIONS = frozenset(
 # extension the GPU cannot back; it stays filtered off Windows.
 _HOST_DEPENDENT_EXTENSIONS = frozenset({'OVR_multiview2'})
 
+# Extensions the claimed OS's backend exposes on every GPU in Firefox 156,
+# which fpgen's Firefox 146 records lack. ANGLE sets depthClampEXT
+# unconditionally on D3D11 (renderer11_utils.cpp); 146's ANGLE did not.
+_BACKEND_EXTENSIONS = {'win': ('EXT_depth_clamp',)}
+
+_ALIASED_LINE_WIDTH_RANGE = '33902'
+
 # What Firefox reports under privacy.resistFingerprinting. A Camoufox identity
 # presents none of RFP's other changes (UTC, rounded windows), so "Mozilla"
 # beside them names a browser that does not exist.
@@ -106,10 +113,14 @@ def firefox_gpus(target_os: str) -> FrozenSet[Tuple[str, str]]:
 
 def _context_config(prefix: str, webgl: Dict[str, Any], target_os: str) -> Dict[str, Any]:
     blocked = _filtered_extensions(target_os)
+    extensions = [extension for extension in webgl['supportedExtensions'] if extension not in blocked]
+    for extension in _BACKEND_EXTENSIONS.get(target_os, ()):
+        if extension not in extensions:
+            # Firefox lists them in WebGLExtensionID order: alphabetical, ignoring case.
+            at = next((i for i, other in enumerate(extensions) if other.casefold() > extension.casefold()), None)
+            extensions.insert(len(extensions) if at is None else at, extension)
     return {
-        f'{prefix}:supportedExtensions': [
-            extension for extension in webgl['supportedExtensions'] if extension not in blocked
-        ],
+        f'{prefix}:supportedExtensions': extensions,
         f'{prefix}:parameters': {pname: param['value'] for pname, param in webgl['params'].items()},
         f'{prefix}:shaderPrecisionFormats': {
             f"{entry['shaderType']},{entry['precisionType']}": entry['shaderPrecisionFormat']
@@ -131,6 +142,10 @@ def to_config(webgl: Dict[str, Any], webgl2: Any, target_os: str) -> Dict[str, A
     }
     if webgl2:
         config.update(_context_config('webGl2', webgl2, target_os))
+        # Firefox 156 creates WebGL1 on the same GL profile as WebGL2, so both
+        # report one line width range. 146 forced WebGL1 onto a compatibility
+        # profile, and fpgen recorded that profile's driver range.
+        config['webGl:parameters'][_ALIASED_LINE_WIDTH_RANGE] = config['webGl2:parameters'][_ALIASED_LINE_WIDTH_RANGE]
     # The values are fpgen's cached objects; the caller gets its own copy.
     return orjson.loads(orjson.dumps(config))
 

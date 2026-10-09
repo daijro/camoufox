@@ -270,6 +270,7 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | `python3 -m ci.run_typescript --browser <bin>` | yes | The npm launcher end to end |
 | `python3 -m ci.run_install --tmpdir /mnt/tmpfs` | | Packed packages and a real fetch; the tmpdir must be its own filesystem |
 | `python3 -m ci.run_patch_guards --binary <bin>` | yes | Patch guards; `--group spoofing\|automation\|parity`, `--only <name>` |
+| `python3 -m ci.run_patch_guards --binary <bin> --only stock-gpu-parity` | yes | WebGL and WebGPU against stock Firefox of the same version, downloaded into `.ci-work` ([upgrade step](../docs/patch-upgrading-guide.md#browser-owned-gpu-values)) |
 | `python3 -m ci.run_build_tester --binary <bin>` | yes | build-tester |
 | `python3 -m ci.run_skiplist_audit --binary <bin>` | yes | Every skiplist entry still fails |
 | `python3 -m ci.run_playwright --binary <bin>` | yes | The Playwright suite; `--shard 3/6` for one shard |

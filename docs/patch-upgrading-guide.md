@@ -348,6 +348,36 @@ Run the suites that cover the patch (see [`ci/README.md`](../ci/README.md)):
 `python3 -m ci.run_patch_guards --binary <camoufox-bin>` is the most direct
 evidence that a patch which still applies was not neutered by the upgrade.
 
+### Browser-Owned GPU Values
+
+The launchers build WebGL from fpgen's recordings, which an older Firefox made.
+Some values are the browser's rather than the GPU's, and an upgrade can change
+them on every device: Firefox 156 added `EXT_depth_clamp` on Windows and fixed
+WebGL1's `ALIASED_LINE_WIDTH_RANGE` at `[1, 1]` on Linux
+([`webgl-browser-owned-values-follow-firefox`](../ci/tribal-rules.yml)). The
+`stock-gpu-parity` guard finds them. It runs stock Firefox of the new version,
+stock Firefox of the release fpgen's model recorded, and Camoufox claiming the
+machine's GPU, and fails where the two stock releases differ and Camoufox does
+not follow the new one:
+
+```bash
+python3 -m ci.run_patch_guards --binary <camoufox-bin> --only stock-gpu-parity
+```
+
+CI runs it on Linux with a software renderer. Run it on Windows and macOS too,
+passing the stock binaries by hand, because each OS has its own graphics
+backend:
+
+```bash
+python browser/tests/playwright/patches/stock-gpu-parity.py --binary <camoufox-bin> \
+    --stock <Firefox of upstream.sh's version> --recorded-stock <Firefox of fpgen's release>
+```
+
+For each failure, find in the Firefox source why the value changed and whether
+it holds on every device of that backend, then follow it where the launchers
+convert a recording (`to_config` in `python/src/camoufox/webgl.py` and
+`typescript/src/webgl.ts`).
+
 ---
 
 ## Pitfalls
@@ -400,6 +430,7 @@ grep -r "class Navigator" . --include="*.h"
 - [ ] `make diff > patches/<name>.patch`
 - [ ] `make dir` applies the whole stack cleanly
 - [ ] `make build`, then run the patch guards
+- [ ] Run `stock-gpu-parity` on Linux, Windows and macOS ([Browser-Owned GPU Values](#browser-owned-gpu-values))
 
 ---
 
