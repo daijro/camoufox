@@ -146,23 +146,32 @@ def test_a_missing_paired_build_is_reported_as_not_installed_not_outdated(tmp_pa
         pkgman.camoufox_path(download_if_missing=False)
 
 
-@pytest.fixture
-def selected_build(tmp_path, monkeypatch):
+# Where a build keeps its executable and application.ini on each OS.
+BUILD_LAYOUTS = {
+    "lin": ("camoufox-bin", "application.ini"),
+    "mac": ("Camoufox.app/Contents/MacOS/camoufox", "Camoufox.app/Contents/Resources/application.ini"),
+}
+
+
+@pytest.fixture(params=sorted(BUILD_LAYOUTS))
+def selected_build(request, tmp_path, monkeypatch):
     """The paired build is missing and another is installed; the launch's
     identity steps are stubbed so only build resolution is exercised."""
     root = _setup(tmp_path, monkeypatch, pin=PIN, installed=["152.0.4-beta.31"], config={})
     build = root / "browsers" / "official" / "152.0.4-beta.31"
-    (build / "camoufox-bin").write_text("")
-    (build / "application.ini").write_text("[App]\nVersion=152.0.4\n")
-    monkeypatch.setattr(pkgman, "OS_NAME", "lin")
+    executable, ini = (build / part for part in BUILD_LAYOUTS[request.param])
+    for path in (executable, ini):
+        path.parent.mkdir(parents=True, exist_ok=True)
+    executable.write_text("")
+    ini.write_text("[App]\nVersion=152.0.4\n")
+    monkeypatch.setattr(pkgman, "OS_NAME", request.param)
     monkeypatch.delenv("CAMOUFOX_EXECUTABLE_PATH", raising=False)
 
     def download(*_args, **_kwargs):
         raise AssertionError("resolved or downloaded the paired build despite `browser`")
 
+    # The one way to the paired build: everything else runs for real.
     monkeypatch.setattr(pkgman, "camoufox_path", download)
-    monkeypatch.setattr(utils, "get_path", download)
-    monkeypatch.setattr(utils, "launch_path", download)
 
     seen = {}
 
@@ -179,30 +188,56 @@ def selected_build(tmp_path, monkeypatch):
     monkeypatch.setattr(utils, "_generate_random_font_subset", lambda *args, **kwargs: [])
     monkeypatch.setattr(utils, "_generate_random_voice_subset", lambda *args, **kwargs: [])
     monkeypatch.setattr(utils, "validate_config", lambda _config, path: seen.setdefault("properties", path))
-    monkeypatch.setattr(utils, "get_env_vars", lambda _config, _os, path: seen.setdefault("bundle", path) and {})
-    return build, seen
+    def get_env_vars(_config, _os, path):
+        seen["bundle"] = path
+        return {}
+
+    monkeypatch.setattr(utils, "get_env_vars", get_env_vars)
+    return executable, seen
 
 
 @pytest.mark.parametrize("specifier", ["152.0.4-beta.31", "official/beta.31", "beta.31"])
 def test_the_browser_option_launches_the_selected_build(selected_build, specifier):
     """#843: `browser=` named an installed build, yet the launch fetched the paired one."""
-    build, seen = selected_build
-    with pytest.warns(RuntimeWarning, match="selected explicitly"):
+    binary, seen = selected_build
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         options = utils.launch_options(
             browser=specifier, os="linux", canvas_noise=False, block_webgl=True,
             headless=True, i_know_what_im_doing=True,
         )
 
-    binary = build / "camoufox-bin"
     assert options["executable_path"] == str(binary)
     assert seen["properties"] == seen["bundle"] == binary
     assert seen["ff_version"] == "152"
+    assert any("selected explicitly" in str(w.message) for w in caught)
 
 
-def test_the_browser_option_refuses_a_build_it_cannot_drive(selected_build):
-    build, _ = selected_build
+def test_the_browser_option_refuses_a_build_it_cannot_drive(selected_build, tmp_path):
+    build = tmp_path / "cache" / "browsers" / "official" / "152.0.4-beta.31"
     (build / "version.json").write_text(json.dumps(
         {"version": "152.0.4", "build": "beta.31", "interface": pkgman.CONSTRAINTS.INTERFACE + 1}
     ))
     with pytest.raises(UnsupportedVersion, match="pip install -U camoufox"):
         utils.launch_options(browser="beta.31", os="linux", headless=True, i_know_what_im_doing=True)
+
+
+def test_the_browser_option_refuses_an_executable_path_too(tmp_path, monkeypatch):
+    monkeypatch.delenv("CAMOUFOX_EXECUTABLE_PATH", raising=False)
+    with pytest.raises(ValueError, match="executable_path"):
+        utils.launch_options(
+            browser="beta.31", executable_path=str(tmp_path / "other"), os="linux", i_know_what_im_doing=True
+        )
+
+
+def test_the_browser_option_refuses_camoufox_executable_path_too(tmp_path, monkeypatch):
+    monkeypatch.setenv("CAMOUFOX_EXECUTABLE_PATH", str(tmp_path / "other"))
+    with pytest.raises(ValueError, match="CAMOUFOX_EXECUTABLE_PATH"):
+        utils.launch_options(browser="beta.31", os="linux", i_know_what_im_doing=True)
+
+
+def test_a_named_executable_without_application_ini_raises(tmp_path, monkeypatch):
+    """Its version is never borrowed from the installed release (#843)."""
+    monkeypatch.setattr(utils, "installed_verstr", lambda: "156.0.1-beta.33")
+    with pytest.raises(FileNotFoundError, match="application.ini"):
+        utils.resolve_verstr(tmp_path / "camoufox-bin")

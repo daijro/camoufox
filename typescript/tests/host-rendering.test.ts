@@ -25,6 +25,7 @@ const {
 	FEATURE_BLOCKED_DEVICE,
 	hasCanvasPlaceholder,
 	hostGpu,
+	setWebgpu,
 	WEBGPU_BLOCKLIST_PREF,
 } = await import("../src/host_rendering.js");
 type Gpu = import("../src/host_rendering.js").Gpu;
@@ -35,6 +36,7 @@ const deps = utils.utilsDeps;
 const HOST_GPU: Gpu = ["AMD", "Radeon HD 3200 Graphics, or similar"];
 const OTHER_GPU: Gpu = ["NVIDIA Corporation", "GeForce GTX 980, or similar"];
 const SOFTWARE_GPU: Gpu = ["Mesa", "llvmpipe, or similar"];
+const UNRECORDED_GPU: Gpu = ["AMD", "Radeon Unrecorded, or similar"];
 const WINDOWS_GPU: Gpu = [
 	"Google Inc. (NVIDIA)",
 	"ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar",
@@ -104,20 +106,68 @@ describe.skipIf(!MODEL.ok)("the host's OS", () => {
 		expect(placeholder(options)).toBe(false);
 	});
 
-	it("a host GPU fpgen never recorded is not claimed", async () => {
-		const unrecorded: Gpu = ["AMD", "Radeon Unrecorded, or similar"];
-		onHost(unrecorded);
-		const { config } = await launch({ os: "linux" });
+	it("a host GPU fpgen never recorded is not claimed, and the canvas is covered", async () => {
+		onHost(UNRECORDED_GPU);
+		const {
+			result,
+			error,
+			warnings: caught,
+		} = await warnings.recordWarnings(() =>
+			utils.launchOptions({ env: { HOME }, os: "linux" }),
+		);
+		if (error) throw error;
 
-		expect(gpuOf(config)).not.toEqual(unrecorded);
+		expect(gpuOf(configOf(result as any))).not.toEqual(UNRECORDED_GPU);
+		expect(placeholder(result as any)).toBe(true);
+		expect(
+			caught.some(
+				(w) =>
+					w.category === "LeakWarning" &&
+					w.message.includes("canvas_noise=False"),
+			),
+		).toBe(true);
 	});
 
-	it("a pinned GPU is kept without a probe", async () => {
+	it("an unrecorded host GPU stays uncovered on request", async () => {
+		onHost(UNRECORDED_GPU);
+		const { options } = await launch({ os: "linux", canvas_noise: false });
+
+		expect(placeholder(options)).toBe(false);
+	});
+
+	it("a pinned GPU is kept without a probe and covers the canvas", async () => {
 		const probes = onHost(HOST_GPU);
-		const { config } = await launch({ os: "linux", webgl_config: OTHER_GPU });
+		const { options, config } = await launch({
+			os: "linux",
+			webgl_config: OTHER_GPU,
+		});
 
 		expect(gpuOf(config)).toEqual(OTHER_GPU);
+		expect(placeholder(options)).toBe(true);
 		expect(probes).toEqual([]);
+	});
+
+	it("a named GPU in the config covers the canvas", async () => {
+		const probes = onHost(HOST_GPU);
+		const { options, config } = await launch({
+			os: "linux",
+			config: { "webGl:vendor": OTHER_GPU[0], "webGl:renderer": OTHER_GPU[1] },
+		});
+
+		expect(gpuOf(config)).toEqual(OTHER_GPU);
+		expect(placeholder(options)).toBe(true);
+		expect(probes).toEqual([]);
+	});
+
+	it("a pinned GPU stays uncovered on request", async () => {
+		onHost(HOST_GPU);
+		const { options } = await launch({
+			os: "linux",
+			webgl_config: OTHER_GPU,
+			canvas_noise: false,
+		});
+
+		expect(placeholder(options)).toBe(false);
 	});
 
 	it("noise on request needs no probe", async () => {
@@ -219,6 +269,16 @@ describe.skipIf(!MODEL.ok)("WebGPU", () => {
 		expect(webgpu(options)).toEqual([true, false]);
 	});
 
+	it("a caller pref set to null is kept, as Python's setdefault keeps it", () => {
+		const prefs: Record<string, any> = {
+			"dom.webgpu.enabled": true,
+			[WEBGPU_BLOCKLIST_PREF]: null,
+		};
+		setWebgpu(prefs, "win", WINDOWS_GPU, null);
+
+		expect(prefs[WEBGPU_BLOCKLIST_PREF]).toBeNull();
+	});
+
 	it("Linux has no navigator.gpu", async () => {
 		onHost(HOST_GPU);
 		const { options } = await launch({ os: "linux" });
@@ -307,12 +367,17 @@ describe.skipIf(!MODEL.ok)("contexts of a browser on the host", () => {
 });
 
 describe("hostIdentity", () => {
-	const identity = (noised: boolean, canvasNoise: boolean | undefined) => {
+	const identity = (
+		noised: boolean,
+		canvasNoise: boolean | undefined,
+		gpu: Gpu = HOST_GPU,
+	) => {
 		const prefs: Record<string, any> = {};
 		if (noised)
 			prefs[BASELINE_OVERRIDES_PREF] = CANVAS_PLACEHOLDER_TARGETS.join(",");
 		deps.hostOsKey = () => "lin";
-		deps.hostGpu = async () => HOST_GPU;
+		deps.hostGpu = async () => gpu;
+		deps.firefoxGpus = async () => [HOST_GPU];
 		return utils.hostIdentity(
 			{
 				executablePath: "/nonexistent/camoufox",
@@ -326,6 +391,19 @@ describe("hostIdentity", () => {
 
 	it("a browser without noise records the host", async () => {
 		expect(await identity(false, undefined)).toEqual(["lin", HOST_GPU]);
+	});
+
+	it("a software host records its OS only", async () => {
+		expect(await identity(false, undefined, SOFTWARE_GPU)).toEqual([
+			"lin",
+			null,
+		]);
+	});
+
+	it("an unrecorded host GPU binds no context", async () => {
+		// Its launch claims a drawn GPU behind the placeholder, so its contexts
+		// may claim any GPU instead of one fpgen has no data for.
+		expect(await identity(false, undefined, UNRECORDED_GPU)).toBeNull();
 	});
 
 	it("a noised browser records nothing", async () => {

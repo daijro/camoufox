@@ -1212,21 +1212,18 @@ export async function ensureCamoufoxInstalled(): Promise<string> {
 }
 
 /**
- * Get the path to a file in the camoufox directory.
- *
- * `baseDir` (the directory of an explicit/sandbox executable_path) resolves
- * resources relative to that build instead of the active install, so a sandbox
- * binary doesn't fall back to the cache dir.
+ * A file the build ships, found from its executable: beside it, or in
+ * Contents/Resources when the executable is a macOS app bundle's Contents/MacOS/.
  */
-export function getPath(file: string, baseDir?: string): string {
-	if (baseDir) {
-		// Mac-bundle aware: an executable in Camoufox.app/Contents/MacOS/ keeps
-		// its resources under ../Resources/.
-		if (path.basename(baseDir) === "MacOS") {
-			return path.join(baseDir, "..", "Resources", file);
-		}
-		return path.join(baseDir, file);
-	}
+export function buildFile(executablePath: string, name: string): string {
+	const directory = path.dirname(executablePath);
+	return path.basename(directory) === "MacOS"
+		? path.join(path.dirname(directory), "Resources", name)
+		: path.join(directory, name);
+}
+
+/** Get the path to a file in the camoufox directory. */
+export function getPath(file: string): string {
 	if (OS_NAME === "mac") {
 		return path.resolve(
 			camoufoxPath(),

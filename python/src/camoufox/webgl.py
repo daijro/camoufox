@@ -12,7 +12,7 @@ webgl2), so a seeded identity always presents the same device.
 
 from functools import lru_cache
 from random import Random
-from typing import Any, Dict, FrozenSet, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 import orjson
 
@@ -148,6 +148,17 @@ def to_config(webgl: Dict[str, Any], webgl2: Any, target_os: str) -> Dict[str, A
         config['webGl:parameters'][_ALIASED_LINE_WIDTH_RANGE] = config['webGl2:parameters'][_ALIASED_LINE_WIDTH_RANGE]
     # The values are fpgen's cached objects; the caller gets its own copy.
     return orjson.loads(orjson.dumps(config))
+
+
+def recorded_devices(target_os: str, vendor: str, renderer: str) -> List[Dict[str, Any]]:
+    """Every device fpgen recorded behind this GPU from Firefox on `target_os`,
+    as the launchers configure it."""
+    gpu_pin = _pin('gpu', {'vendor': vendor, 'renderer': renderer})
+    return [
+        to_config(webgl.value, webgl2.value, target_os)
+        for webgl in _trace('webgl', target_os, (gpu_pin,))
+        for webgl2 in _trace('webgl2', target_os, (gpu_pin, _pin('webgl', webgl.value)))
+    ]
 
 
 def _webgl_config(target_os: str, gpu: Dict[str, str], rng: Random) -> Dict[str, Any]:

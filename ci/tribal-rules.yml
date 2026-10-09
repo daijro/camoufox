@@ -220,11 +220,11 @@ rules:
       collisions with the device-level values and does not gate on them. The
       launchers generated a canvas:seed for three releases after the patch
       that read it was gone; it is not generated or declared any more. The one
-      exception is an identity on another OS, whose canvas cannot agree with it
-      (cross-os-canvas-is-the-rfp-placeholder).
+      exception is an identity on another OS or GPU than the host's, whose
+      canvas cannot agree with it (cross-os-canvas-is-the-rfp-placeholder).
 
   - id: cross-os-canvas-is-the-rfp-placeholder
-    title: On the host's OS the identity claims the host's GPU; on another OS canvas readback is RFP's random placeholder
+    title: On the host's OS the identity claims the host's GPU; on another OS or GPU canvas readback is RFP's random placeholder
     check: automated
     evidence:
       - "v156.0.1-beta.32, 2026-10-06: getImageData and readPixels identical with privacy.fingerprintingProtection on and off; CanvasUtils.cpp checks EfficientCanvasRandomization (PNG deBG chunk only) before CanvasRandomization"
@@ -236,10 +236,15 @@ rules:
       host's OS the identity claims the GPU Firefox reports there, read from the
       browser itself because Firefox may render on another device than system
       tools name and sanitizes the name its own way; a software renderer
-      matches any GPU, as a machine whose driver failed to load. On another OS
-      nothing can agree, and Firefox 156's private windows do not hide pixels,
-      so the launchers turn on privacy.resistFingerprinting's canvas targets
-      through the baseline overrides and nothing else. The readback is then
+      matches any GPU, as a machine whose driver failed to load. On another OS,
+      or with another GPU (one the caller or a preset names, or a host GPU
+      fpgen never recorded, which has no WebGL data to claim), nothing can
+      agree, and Firefox 156's private windows do not hide pixels, so the
+      launchers turn on privacy.resistFingerprinting's canvas targets through
+      the baseline overrides and nothing else. One function in each launcher
+      (plan_rendering, planRendering) makes that decision for the launch and
+      for the host identity its contexts must keep; a covered browser binds
+      no context to the host. The readback is then
       what LibreWolf, Tor Browser and Mullvad Browser return; stock Firefox
       does not, so the launch warns. Firefox's older keyed pixel noise
       (CanvasRandomization) was rejected: no current Firefox produces it by

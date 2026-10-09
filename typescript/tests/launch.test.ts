@@ -10,7 +10,15 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import {
 	BUNDLE,
 	BUNDLE_EXE,
@@ -568,16 +576,38 @@ describe("test_executable_path_bundle", () => {
 });
 
 describe("the browser option", () => {
-	it("launches the selected build and never the paired one (#843)", async () => {
+	beforeEach(() => vi.stubEnv("CAMOUFOX_EXECUTABLE_PATH", ""));
+	afterEach(() => vi.unstubAllEnvs());
+
+	// Where a build keeps its executable and application.ini on each OS.
+	const LAYOUTS: Record<string, [string, string]> = {
+		lin: ["camoufox-bin", "application.ini"],
+		mac: [
+			"Camoufox.app/Contents/MacOS/camoufox",
+			"Camoufox.app/Contents/Resources/application.ini",
+		],
+	};
+
+	it.each(
+		Object.keys(LAYOUTS),
+	)("launches the selected build and never the paired one (#843, %s)", async (layout) => {
 		isolateLaunch();
-		const paired = async () => {
+		const dir = path.join(SCRATCH, `selected-${layout}`);
+		const [exe, ini] = LAYOUTS[layout].map((part) => path.join(dir, part));
+		for (const file of [exe, ini]) {
+			fs.mkdirSync(path.dirname(file), { recursive: true });
+		}
+		fs.writeFileSync(exe, "");
+		fs.writeFileSync(ini, "[App]\nVersion=152.0.4\n");
+		const paired = () => {
 			throw new Error("resolved the paired build despite `browser`");
 		};
-		deps.ensureCamoufoxInstalled = paired;
+		deps.ensureCamoufoxInstalled = paired as any;
 		deps.launchPath = paired as any;
+		deps.installedVerStr = paired;
 		deps.selectedLaunchPath = (spec: string) => {
 			expect(spec).toBe("152.0.4-beta.31");
-			return BUNDLE_EXE;
+			return exe;
 		};
 		const read: (string | null | undefined)[] = [];
 		deps.validateConfig = (_config, p) => {
@@ -587,6 +617,11 @@ describe("the browser option", () => {
 			read.push(p);
 			return {};
 		};
+		let ffVersion: string | undefined;
+		deps.fromFpgen = ((_fp: unknown, version: string) => {
+			ffVersion = version;
+			return {};
+		}) as any;
 		const options = await launch({
 			browser: "152.0.4-beta.31",
 			os: "linux",
@@ -595,8 +630,31 @@ describe("the browser option", () => {
 			headless: true,
 			i_know_what_im_doing: true,
 		});
-		expect(options.executablePath).toBe(BUNDLE_EXE);
-		expect(read).toEqual([BUNDLE_EXE, BUNDLE_EXE]);
+		expect(options.executablePath).toBe(exe);
+		expect(read).toEqual([exe, exe]);
+		expect(ffVersion).toBe("152");
+	});
+
+	it("refuses an executable_path too", async () => {
+		isolateLaunch();
+		await expect(
+			launch({ browser: "beta.31", executable_path: BUNDLE_EXE, os: "linux" }),
+		).rejects.toThrow("executable_path");
+	});
+
+	it("refuses CAMOUFOX_EXECUTABLE_PATH too", async () => {
+		isolateLaunch();
+		vi.stubEnv("CAMOUFOX_EXECUTABLE_PATH", BUNDLE_EXE);
+		await expect(launch({ browser: "beta.31", os: "linux" })).rejects.toThrow(
+			"CAMOUFOX_EXECUTABLE_PATH",
+		);
+	});
+
+	it("never borrows the installed version for a named executable without application.ini", () => {
+		deps.installedVerStr = () => "156.0.1-beta.33";
+		expect(() =>
+			utils.resolveVerstr(path.join(SCRATCH, "no-ini", "camoufox-bin")),
+		).toThrow("application.ini");
 	});
 });
 

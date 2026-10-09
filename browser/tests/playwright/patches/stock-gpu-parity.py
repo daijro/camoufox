@@ -20,7 +20,8 @@ the GPU stock reports, with the recorded device of that GPU nearest to stock,
 so a machine whose GPU fpgen never recorded fails.
 
 Stock Firefox is downloaded from archive.mozilla.org, checked against the
-release's SHA256SUMS, and cached under .ci-work. That is implemented for Linux;
+release's SHA256SUMS, whose signature gpg checks against Mozilla's release
+signing key, and cached under .ci-work. That is implemented for Linux;
 elsewhere, pass both stock binaries.
 
     python browser/tests/playwright/patches/stock-gpu-parity.py
@@ -56,13 +57,16 @@ from camoufox import webgl  # noqa: E402
 from camoufox.fingerprints import _FPGEN_OS  # noqa: E402
 from camoufox.fpgen_model import load_fpgen  # noqa: E402
 from camoufox.host_rendering import renders_on_hardware  # noqa: E402
-from camoufox.utils import launch_options  # noqa: E402
+from camoufox.utils import launch_options, resolve_verstr  # noqa: E402
 
 ARCHIVE = "https://archive.mozilla.org/pub/firefox/releases/{version}/"
 LINUX_PACKAGE = "linux-{machine}/en-US/firefox-{version}.tar.xz"
 OS_NAMES = {"Linux": "linux", "Darwin": "macos", "Windows": "windows"}
 OS_KEYS = {"linux": "lin", "macos": "mac", "windows": "win"}
 CONTEXTS = {"webgl": "webGl", "webgl2": "webGl2"}
+# Mozilla Software Releases' primary key, which signs every release's SHA256SUMS:
+# https://blog.mozilla.org/security/2026/08/10/updated-gpg-key-for-signing-firefox-and-thunderbird-releases/
+MOZILLA_RELEASE_KEY = "14F26682D0916CDD81E37B6D61B7B526D98F0353"
 
 PAGE = b"""<!doctype html><script>
 function gl(kind, constants) {
@@ -140,12 +144,7 @@ def probe(binary: Path, env: Dict[str, str]) -> Dict[str, Any]:
 
 
 def ini_version(binary: Path) -> str:
-    for ini in (binary.parent / "application.ini", binary.parent.parent / "Resources" / "application.ini"):
-        if ini.exists():
-            for line in ini.read_text(encoding="utf-8").splitlines():
-                if line.startswith("Version="):
-                    return line.partition("=")[2].split("-")[0]
-    raise SystemExit(f"no application.ini beside {binary}")
+    return resolve_verstr(binary).split("-")[0]
 
 
 def recorded_version(host_os: str) -> str:
@@ -176,8 +175,7 @@ def download_stock(version: str) -> Path:
     if binary.exists():
         return binary
     base = ARCHIVE.format(version=version)
-    with urllib.request.urlopen(base + "SHA256SUMS", timeout=60) as resp:  # noqa: S310
-        sums = {name: digest for digest, name in (line.split("  ", 1) for line in resp.read().decode().splitlines())}
+    sums = {name: digest for digest, name in (line.split("  ", 1) for line in signed_sums(base).splitlines())}
     if package not in sums:
         raise SystemExit(f"{base}SHA256SUMS lists no {package}")
     binary.parent.parent.mkdir(parents=True, exist_ok=True)
@@ -198,6 +196,34 @@ def download_stock(version: str) -> Path:
     return binary
 
 
+def signed_sums(base: str) -> str:
+    """The release's SHA256SUMS, once gpg finds it signed by Mozilla's release
+    key. The KEY file beside it is trusted only through the pinned fingerprint."""
+    gpg = shutil.which("gpg")
+    if not gpg:
+        raise SystemExit("gpg is required to verify stock Firefox's SHA256SUMS; install GnuPG")
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp, "gnupg")
+        home.mkdir(mode=0o700)
+        for name in ("KEY", "SHA256SUMS", "SHA256SUMS.asc"):
+            with urllib.request.urlopen(base + name, timeout=60) as resp:  # noqa: S310
+                Path(tmp, name).write_bytes(resp.read())
+        subprocess.run(
+            [gpg, "--homedir", str(home), "--batch", "--quiet", "--import", str(Path(tmp, "KEY"))],
+            check=True, capture_output=True,
+        )
+        verify = subprocess.run(
+            [gpg, "--homedir", str(home), "--batch", "--status-fd", "1",
+             "--verify", str(Path(tmp, "SHA256SUMS.asc")), str(Path(tmp, "SHA256SUMS"))],
+            capture_output=True, text=True,
+        )
+        # VALIDSIG ends with the primary key of whichever subkey signed.
+        signers = [line.split()[-1] for line in verify.stdout.splitlines() if line.startswith("[GNUPG:] VALIDSIG ")]
+        if verify.returncode or signers != [MOZILLA_RELEASE_KEY]:
+            raise SystemExit(f"{base}SHA256SUMS is not signed by Mozilla's release key:\n{verify.stdout}{verify.stderr}")
+        return Path(tmp, "SHA256SUMS").read_text(encoding="utf-8")
+
+
 def flatten(output: Dict[str, Any]) -> Dict[str, Any]:
     """One value per supported extension and per getParameter answer."""
     flat: Dict[str, Any] = {}
@@ -211,12 +237,7 @@ def flatten(output: Dict[str, Any]) -> Dict[str, Any]:
 def nearest_device(target_os: str, gpu: List[str], stock: Dict[str, Any]) -> Dict[str, Any]:
     """The device fpgen recorded behind this GPU that stock agrees with most,
     as the launchers configure it: a fixed choice where a draw would vary."""
-    pin = webgl._pin("gpu", {"vendor": gpu[0], "renderer": gpu[1]})
-    devices = [
-        webgl.to_config(w1.value, w2.value, target_os)
-        for w1 in webgl._trace("webgl", target_os, (pin,))
-        for w2 in webgl._trace("webgl2", target_os, (pin, webgl._pin("webgl", w1.value)))
-    ]
+    devices = webgl.recorded_devices(target_os, *gpu)
 
     def disagreements(device: Dict[str, Any]) -> int:
         recorded = flatten({

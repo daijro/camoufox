@@ -1,11 +1,12 @@
-"""What this machine renders, and covering it when the identity claims another OS.
+"""What this machine renders, and covering it when the identity claims another machine.
 
 A page can draw a canvas or a WebGL scene and read the pixels back, and those
 pixels come from the real OS, driver and GPU whatever the identity claims. On
 the host's own OS the identity claims the GPU the host renders with, so the
-pixels agree with it. An identity on another OS cannot agree, so its canvas
-readback is replaced with random data, as privacy.resistFingerprinting does in
-LibreWolf, Tor Browser and Mullvad Browser. Stock Firefox does not do that.
+pixels agree with it. An identity on another OS, or naming another GPU,
+cannot agree, so its canvas readback is replaced with random data, as
+privacy.resistFingerprinting does in LibreWolf, Tor Browser and Mullvad
+Browser. Stock Firefox does not do that.
 WebGPU hands the page the host's adapter, so the identity gets it only when it
 claims the host's GPU.
 """

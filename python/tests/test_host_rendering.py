@@ -26,11 +26,13 @@ from camoufox.host_rendering import (  # noqa: E402
     WEBGPU_BLOCKLIST_PREF,
     has_canvas_placeholder,
     host_gpu,
+    set_webgpu,
 )
 
 HOST_GPU = ("AMD", "Radeon HD 3200 Graphics, or similar")
 OTHER_GPU = ("NVIDIA Corporation", "GeForce GTX 980, or similar")
 SOFTWARE_GPU = ("Mesa", "llvmpipe, or similar")
+UNRECORDED_GPU = ("AMD", "Radeon Unrecorded, or similar")
 WINDOWS_GPU = ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar")
 WINDOWS_SOFTWARE_GPU = (
     "Google Inc. (Microsoft)",
@@ -92,19 +94,44 @@ class TestHostOs:
         assert "llvmpipe" not in config["webGl:renderer"]
         assert not placeholder(options)
 
-    def test_a_host_gpu_fpgen_never_recorded_is_not_claimed(self):
-        unrecorded = ("AMD", "Radeon Unrecorded, or similar")
-        with on_host(unrecorded):
-            _, config = launch(os="linux")
+    def test_a_host_gpu_fpgen_never_recorded_is_not_claimed_and_the_canvas_is_covered(self):
+        with on_host(UNRECORDED_GPU), warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            options, config = launch(os="linux", i_know_what_im_doing=False)
 
-        assert (config["webGl:vendor"], config["webGl:renderer"]) != unrecorded
+        assert (config["webGl:vendor"], config["webGl:renderer"]) != UNRECORDED_GPU
+        assert placeholder(options)
+        assert any(issubclass(w.category, LeakWarning) and "canvas_noise=False" in str(w.message) for w in caught)
 
-    def test_a_pinned_gpu_is_kept_without_a_probe(self):
+    def test_an_unrecorded_host_gpu_stays_uncovered_on_request(self):
+        with on_host(UNRECORDED_GPU):
+            options, _ = launch(os="linux", canvas_noise=False)
+
+        assert not placeholder(options)
+
+    def test_a_pinned_gpu_is_kept_without_a_probe_and_covers_the_canvas(self):
         with on_host(HOST_GPU) as probes:
-            _, config = launch(os="linux", webgl_config=OTHER_GPU)
+            options, config = launch(os="linux", webgl_config=OTHER_GPU)
 
         assert (config["webGl:vendor"], config["webGl:renderer"]) == OTHER_GPU
+        assert placeholder(options)
         assert probes == []
+
+    def test_a_named_gpu_in_the_config_covers_the_canvas(self):
+        with on_host(HOST_GPU) as probes:
+            options, config = launch(
+                os="linux", config={"webGl:vendor": OTHER_GPU[0], "webGl:renderer": OTHER_GPU[1]}
+            )
+
+        assert (config["webGl:vendor"], config["webGl:renderer"]) == OTHER_GPU
+        assert placeholder(options)
+        assert probes == []
+
+    def test_a_pinned_gpu_stays_uncovered_on_request(self):
+        with on_host(HOST_GPU):
+            options, _ = launch(os="linux", webgl_config=OTHER_GPU, canvas_noise=False)
+
+        assert not placeholder(options)
 
     def test_noise_on_request_needs_no_probe(self):
         with on_host(HOST_GPU) as probes:
@@ -183,6 +210,12 @@ class TestWebGpu:
 
         assert webgpu(options) == (True, False)
 
+    def test_a_caller_pref_set_to_none_is_kept(self):
+        prefs = {"dom.webgpu.enabled": True, WEBGPU_BLOCKLIST_PREF: None}
+        set_webgpu(prefs, "win", WINDOWS_GPU, None)
+
+        assert prefs[WEBGPU_BLOCKLIST_PREF] is None
+
     def test_linux_has_no_navigator_gpu(self):
         with on_host(HOST_GPU):
             options, _ = launch(os="linux")
@@ -253,18 +286,26 @@ class TestContextsOfAHostBrowser:
 
 
 class TestHostIdentity:
-    def attach(self, noised, canvas_noise):
+    def attach(self, noised, canvas_noise, gpu=HOST_GPU):
         prefs = {}
         if noised:
             prefs[BASELINE_OVERRIDES_PREF] = ",".join(CANVAS_PLACEHOLDER_TARGETS)
         options = {"executable_path": "/nonexistent/camoufox", "headless": True, "env": {}, "firefox_user_prefs": prefs}
         with mock.patch.object(utils, "_host_os_key", lambda: "lin"), mock.patch.object(
-            utils, "host_gpu", lambda *args: HOST_GPU
+            utils, "host_gpu", lambda *args: gpu
         ):
             return utils.host_identity(options, canvas_noise)
 
     def test_a_browser_without_noise_records_the_host(self):
         assert self.attach(False, None) == ("lin", HOST_GPU)
+
+    def test_a_software_host_records_its_os_only(self):
+        assert self.attach(False, None, SOFTWARE_GPU) == ("lin", None)
+
+    def test_an_unrecorded_host_gpu_binds_no_context(self):
+        """Its launch claims a drawn GPU behind the placeholder, so its contexts
+        may claim any GPU instead of one fpgen has no data for."""
+        assert self.attach(False, None, UNRECORDED_GPU) is None
 
     def test_a_noised_browser_records_nothing(self):
         assert self.attach(True, None) is None

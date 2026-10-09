@@ -945,6 +945,15 @@ def get_path(file: str) -> str:
     return str(camoufox_path() / file)
 
 
+def build_file(executable_path: Union[str, Path], name: str) -> Path:
+    """A file the build ships, found from its executable: beside it, or in
+    Contents/Resources when the executable is a macOS app bundle's Contents/MacOS/."""
+    directory = Path(executable_path).parent
+    if directory.name == 'MacOS':
+        directory = directory.parent / 'Resources'
+    return directory / name
+
+
 def launch_path(browser_path: Optional[Path] = None) -> str:
     """
     Get the path to the camoufox executable

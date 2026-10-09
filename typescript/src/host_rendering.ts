@@ -1,13 +1,14 @@
 /**
  * What this machine renders, and covering it when the identity claims another
- * OS. The twin of host_rendering.py.
+ * machine. The twin of host_rendering.py.
  *
  * A page can draw a canvas or a WebGL scene and read the pixels back, and those
  * pixels come from the real OS, driver and GPU whatever the identity claims. On
  * the host's own OS the identity claims the GPU the host renders with, so the
- * pixels agree with it. An identity on another OS cannot agree, so its canvas
- * readback is replaced with random data, as privacy.resistFingerprinting does
- * in LibreWolf, Tor Browser and Mullvad Browser. Stock Firefox does not do that.
+ * pixels agree with it. An identity on another OS, or naming another GPU,
+ * cannot agree, so its canvas readback is replaced with random data, as
+ * privacy.resistFingerprinting does in LibreWolf, Tor Browser and Mullvad
+ * Browser. Stock Firefox does not do that.
  * WebGPU hands the page the host's adapter, so the identity gets it only when it
  * claims the host's GPU.
  */
@@ -73,12 +74,16 @@ export function setWebgpu(
 	gpu: [string | undefined, string | undefined],
 	host: Gpu | null,
 ): void {
-	prefs["dom.webgpu.enabled"] ??=
-		targetOs === "win" || (targetOs === "mac" && gpu[0] === "Apple");
-	if (prefs["dom.webgpu.enabled"]) {
+	// A key the caller set is kept even when its value is null, as Python's
+	// setdefault keeps it.
+	if (!("dom.webgpu.enabled" in prefs)) {
+		prefs["dom.webgpu.enabled"] =
+			targetOs === "win" || (targetOs === "mac" && gpu[0] === "Apple");
+	}
+	if (prefs["dom.webgpu.enabled"] && !(WEBGPU_BLOCKLIST_PREF in prefs)) {
 		const ownAdapter =
 			rendersOnHardware(host) && gpu[0] === host[0] && gpu[1] === host[1];
-		prefs[WEBGPU_BLOCKLIST_PREF] ??= ownAdapter
+		prefs[WEBGPU_BLOCKLIST_PREF] = ownAdapter
 			? FEATURE_STATUS_OK
 			: FEATURE_BLOCKED_DEVICE;
 	}

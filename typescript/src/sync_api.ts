@@ -22,7 +22,6 @@ import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "./ip.js";
 import {
 	applyNoViewport,
 	attachDesktopOnlyWarning,
-	attachHostIdentity,
 	attachNoViewportDefault,
 	attachStockMediaDefaults,
 	attachVirtualDisplay,
@@ -206,7 +205,7 @@ async function launchWith(
 	}
 	attachStockMediaDefaults(browser);
 	attachDesktopOnlyWarning(browser);
-	attachHostIdentity(browser, identity);
+	(browser as any)._camoufoxHostIdentity = identity;
 	return attachVirtualDisplay(browser, virtualDisplay);
 }
 

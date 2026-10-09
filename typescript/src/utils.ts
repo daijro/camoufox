@@ -61,6 +61,7 @@ import {
 import { handleLocales } from "./locales.js";
 import { INSTALL_DIR, OS_NAME } from "./paths.js";
 import {
+	buildFile,
 	effectiveVersionMin,
 	ensureBrowserProfileDir,
 	ensureCamoufoxInstalled,
@@ -533,22 +534,9 @@ interface PropertyEntry {
 function loadProperties(
 	executablePath?: string | null,
 ): Record<string, PropertyEntry> {
-	let propFile: string;
-	if (executablePath) {
-		propFile = path.join(path.dirname(executablePath), "properties.json");
-		if (!fs.existsSync(propFile)) {
-			// macOS app bundle: the binary is Contents/MacOS/camoufox, the
-			// packaged settings live in Contents/Resources/.
-			const bundled = path.join(
-				path.dirname(path.dirname(executablePath)),
-				"Resources",
-				"properties.json",
-			);
-			if (fs.existsSync(bundled)) propFile = bundled;
-		}
-	} else {
-		propFile = utilsDeps.getPath("properties.json");
-	}
+	const propFile = executablePath
+		? buildFile(executablePath, "properties.json")
+		: utilsDeps.getPath("properties.json");
 	const propDict: PropertyEntry[] = JSON.parse(
 		fs.readFileSync(propFile, "utf-8"),
 	);
@@ -1006,11 +994,43 @@ export function attachDesktopOnlyWarning<T>(target: T): T {
 export type HostIdentity = [TargetOS | null, Gpu | null];
 
 /**
+ * Whether the canvas is covered, and the host GPU the identity claims.
+ *
+ * The canvas renders on the host, so the identity claims the host's GPU when it
+ * can: on the host's OS, with no GPU named, on a hardware GPU fpgen has
+ * recorded there. A software renderer matches any GPU, and with WebGL off no GPU
+ * is claimed. Any other identity contradicts the pixels, so the canvas is
+ * covered unless the caller chose canvas_noise: false.
+ */
+export async function planRendering(
+	targetOs: string | null,
+	canvasNoise: boolean | null | undefined,
+	namedGpu: boolean,
+	webglDisabled: boolean,
+	probe: () => Promise<Gpu | null>,
+): Promise<[boolean, Gpu | null]> {
+	if (canvasNoise) return [true, null];
+	if (targetOs && targetOs === utilsDeps.hostOsKey() && !namedGpu) {
+		const host = webglDisabled ? null : await probe();
+		if (!rendersOnHardware(host)) return [false, null];
+		const recorded = await utilsDeps.firefoxGpus(targetOs);
+		if (
+			recorded.some(
+				([vendor, renderer]) => vendor === host[0] && renderer === host[1],
+			)
+		) {
+			return [false, host];
+		}
+	}
+	return [canvasNoise == null, null];
+}
+
+/**
  * For a launch without the canvas placeholder, the machine its contexts must
- * claim: the host's OS, and its GPU when that is hardware (contextIdentity).
- * Only for the default `canvasNoise` (undefined); a caller who chose it, or
- * built the options, keeps their contexts as they ask. Read before the launch,
- * so a failed probe leaves no browser behind.
+ * claim: the host's OS, and the host GPU it claims (planRendering). Only for
+ * the default `canvasNoise` (undefined); a caller who chose it, or built the
+ * options, keeps their contexts as they ask. Read before the launch, so a
+ * failed probe leaves no browser behind.
  */
 export async function hostIdentity(
 	fromOptions: Record<string, any>,
@@ -1018,22 +1038,21 @@ export async function hostIdentity(
 ): Promise<HostIdentity | null> {
 	const prefs = fromOptions.firefoxUserPrefs ?? {};
 	if (canvasNoise != null || hasCanvasPlaceholder(prefs)) return null;
-	let gpu: Gpu | null = null;
-	if (!prefs["webgl.disabled"]) {
-		gpu = await utilsDeps.hostGpu(
-			fromOptions.executablePath,
-			fromOptions.headless,
-			fromOptions.env,
-		);
-	}
-	return [utilsDeps.hostOsKey(), rendersOnHardware(gpu) ? gpu : null];
-}
-
-export function attachHostIdentity(
-	browser: any,
-	identity: HostIdentity | null,
-): void {
-	if (identity !== null) browser._camoufoxHostIdentity = identity;
+	// Without the placeholder, the launch claimed the host's OS and no named GPU.
+	const hostOs = utilsDeps.hostOsKey();
+	const [covered, gpu] = await planRendering(
+		hostOs,
+		undefined,
+		false,
+		Boolean(prefs["webgl.disabled"]),
+		() =>
+			utilsDeps.hostGpu(
+				fromOptions.executablePath,
+				fromOptions.headless,
+				fromOptions.env,
+			),
+	);
+	return covered ? null : [hostOs, gpu];
 }
 
 /**
@@ -1143,28 +1162,19 @@ export function attachVirtualDisplay<T>(
 }
 
 /**
- * The version of the build about to be launched.
- *
- * installedVerStr() answers "which release did `camoufox fetch` put in the
- * cache", which is the wrong question when the caller named a binary. Firefox
- * writes application.ini beside the executable, so when a path is given the
- * answer is right there. Falls back to the installed release when it is not.
+ * The Firefox version of the build about to launch: the named executable's own
+ * application.ini, or the installed release. A named executable without one
+ * throws, since claiming another build's version would leak in the UA.
  */
-function resolveVerstr(executablePath?: string | null): string {
-	if (executablePath) {
-		const ini = path.join(path.dirname(executablePath), "application.ini");
-		try {
-			for (const line of fs.readFileSync(ini, "utf-8").split(/\r\n|\r|\n/)) {
-				if (line.startsWith("Version=")) {
-					const version = line.split("=").slice(1).join("=").trim();
-					if (version) return version;
-				}
-			}
-		} catch {
-			// fall through
+export function resolveVerstr(executablePath?: string | null): string {
+	if (!executablePath) return utilsDeps.installedVerStr();
+	const ini = buildFile(executablePath, "application.ini");
+	for (const line of fs.readFileSync(ini, "utf-8").split(/\r\n|\r|\n/)) {
+		if (line.startsWith("Version=")) {
+			return line.slice("Version=".length).trim();
 		}
 	}
-	return utilsDeps.installedVerStr();
+	throw new ValueError(`${ini} names no Version`);
 }
 
 /** A bound on the screen a generated fingerprint may claim. */
@@ -1270,10 +1280,11 @@ export interface LaunchOptions {
 	pin_cpu_cores?: boolean;
 	/** Replace canvas and WebGL readback with random data, as
 	 * privacy.resistFingerprinting does in LibreWolf, Tor Browser and Mullvad
-	 * Browser. Stock Firefox does not, so it warns. By default (undefined) it is
-	 * on only when the identity claims another OS than the host's, whose canvas
-	 * would otherwise show the host. On the host's OS the identity claims the
-	 * GPU the host renders with instead. */
+	 * Browser. Stock Firefox does not, so it warns. By default (undefined) the
+	 * identity on the host's OS claims the GPU the host renders with, uncovered;
+	 * it is on whenever the identity claims another OS or another GPU
+	 * (webgl_config, a preset's, or a host GPU fpgen never recorded), whose
+	 * canvas would otherwise show the host. */
 	canvas_noise?: boolean | null;
 	/** Additional Firefox launch options, passed straight through to Playwright. */
 	[key: string]: any;
@@ -1339,17 +1350,22 @@ export async function launchOptions({
 	// mappings supplied by callers. In particular, DISPLAY must not outlive the
 	// virtual display that owns it.
 	env = env == null ? ({ ...process.env } as EnvVars) : { ...env };
-	if (executable_path == null) {
-		// Point every launch at a specific build without threading the path
-		// through each call site. Absent the variable nothing changes.
-		const envExecutable = (process.env.CAMOUFOX_EXECUTABLE_PATH ?? "").trim();
-		if (envExecutable) {
-			executable_path = envExecutable;
-		} else if (browser) {
-			// A selected build is launched like a caller's own binary: its files
-			// are read from beside it, and the paired build is neither used nor fetched.
-			executable_path = utilsDeps.selectedLaunchPath(browser);
+	// CAMOUFOX_EXECUTABLE_PATH points every launch at a specific build without
+	// threading the path through each call site; the CI runners set it.
+	const envExecutable = (process.env.CAMOUFOX_EXECUTABLE_PATH ?? "").trim();
+	if (browser) {
+		if (executable_path || envExecutable) {
+			throw new ValueError(
+				`browser '${browser}' selects an installed build, but ` +
+					`${executable_path ? "executable_path" : "CAMOUFOX_EXECUTABLE_PATH"} ` +
+					"names a binary too. Pass one of them.",
+			);
 		}
+		// A selected build is launched like a caller's own binary: its files
+		// are read from beside it, and the paired build is neither used nor fetched.
+		executable_path = utilsDeps.selectedLaunchPath(browser);
+	} else if (executable_path == null && envExecutable) {
+		executable_path = envExecutable;
 	}
 	if (typeof executable_path === "string") {
 		executable_path = path.resolve(executable_path);
@@ -1784,20 +1800,15 @@ export async function launchOptions({
 		? String(executable_path)
 		: utilsDeps.launchPath();
 
-	// The canvas renders on the host, so an identity on another OS needs it
-	// covered, and one on the host's OS claims the host's GPU.
-	const hostOs = utilsDeps.hostOsKey();
-	canvas_noise ??= targetOs !== hostOs;
-	const claimsHostGpu =
-		targetOs === hostOs &&
-		!canvas_noise &&
-		!block_webgl &&
-		!pyTruthy(webgl_config) &&
-		!(pyTruthy(config["webGl:vendor"]) && pyTruthy(config["webGl:renderer"]));
-	const host = claimsHostGpu
-		? await utilsDeps.hostGpu(resolvedExecutable, headless, env)
-		: null;
-	if (canvas_noise) {
+	const [coverCanvas, host] = await planRendering(
+		targetOs,
+		canvas_noise,
+		pyTruthy(webgl_config) ||
+			(pyTruthy(config["webGl:vendor"]) && pyTruthy(config["webGl:renderer"])),
+		Boolean(block_webgl),
+		() => utilsDeps.hostGpu(resolvedExecutable, headless, env),
+	);
+	if (coverCanvas) {
 		addCanvasPlaceholder(firefox_user_prefs);
 		LeakWarning.warn("canvas_noise", i_know_what_im_doing);
 	}
@@ -1825,12 +1836,7 @@ export async function launchOptions({
 				config["webGl:renderer"],
 				seed(),
 			);
-		} else if (
-			rendersOnHardware(host) &&
-			(await utilsDeps.firefoxGpus(targetOs)).some(
-				([vendor, renderer]) => vendor === host[0] && renderer === host[1],
-			)
-		) {
+		} else if (host) {
 			// Claim the GPU the canvas really renders on.
 			webglFp = await utilsDeps.webglForGpu(targetOs, ...host, seed());
 		} else {

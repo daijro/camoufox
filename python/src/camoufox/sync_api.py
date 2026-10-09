@@ -14,7 +14,6 @@ from .fingerprints import generate_context_fingerprint
 from .ip import Proxy, proxy_exit_geo
 from .utils import (
     attach_context_defaults,
-    attach_host_identity,
     context_identity,
     host_identity,
     launch_options,
@@ -145,7 +144,7 @@ def NewBrowser(
         identity = host_identity(from_options, canvas_noise)
         browser = playwright.firefox.launch(**from_options)
         attach_context_defaults(browser, no_viewport_default)
-        attach_host_identity(browser, identity)
+        browser._camoufox_host_identity = identity
         return sync_attach_vd(browser, virtual_display)
     finally:
         if pid:

@@ -17,15 +17,16 @@ from camoufox.exceptions import CamoufoxNotInstalled
 @pytest.fixture
 def nothing_installed(monkeypatch, tmp_path):
     """No active install; launch_path() is where the download happens."""
-    def not_installed():
-        raise CamoufoxNotInstalled("Official is not installed. Please run `camoufox fetch` to install.")
-
     binary = tmp_path / "camoufox-bin"
     downloads = []
 
+    def installed_verstr():
+        if not downloads:
+            raise CamoufoxNotInstalled("Official is not installed. Please run `camoufox fetch` to install.")
+        return "157.0-beta.34"
+
     def launch_path(*_args, **_kwargs):
         downloads.append(True)
-        (tmp_path / "application.ini").write_text("[App]\nVersion=157.0\n")
         return str(binary)
 
     seen = {}
@@ -34,7 +35,7 @@ def nothing_installed(monkeypatch, tmp_path):
         seen["ff_version"] = ff_version
         return {}
 
-    monkeypatch.setattr(utils, "installed_verstr", not_installed)
+    monkeypatch.setattr(utils, "installed_verstr", installed_verstr)
     monkeypatch.setattr(utils, "launch_path", launch_path)
     monkeypatch.setattr(utils, "generate_fingerprint", lambda *args, **kwargs: object())
     monkeypatch.setattr(utils, "from_fpgen", from_fpgen)

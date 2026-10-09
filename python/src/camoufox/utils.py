@@ -7,7 +7,7 @@ from os import environ
 from os.path import abspath
 from pathlib import Path
 from pprint import pprint
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import orjson
@@ -32,6 +32,7 @@ from .pkgman import (
     INSTALL_DIR,
     OS_NAME,
     Version,
+    build_file,
     effective_version_min,
     ensure_browser_profile_dir,
     get_path,
@@ -42,7 +43,7 @@ from .pkgman import (
 )
 from .virtdisplay import VirtualDisplay
 from ._warnings import FallbackWarning, LeakWarning
-from .host_rendering import add_canvas_placeholder, has_canvas_placeholder, host_gpu, renders_on_hardware, set_webgpu
+from .host_rendering import Gpu, add_canvas_placeholder, has_canvas_placeholder, host_gpu, renders_on_hardware, set_webgpu
 from .webgl import firefox_gpus, sample_webgl_for_screen, webgl_for_gpu
 
 ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
@@ -321,16 +322,7 @@ def _load_properties(path: Optional[Path] = None) -> Dict[str, Dict[str, str]]:
     "removed" field is a key the browser no longer reads; it stays declared so
     that older libraries, which reject undeclared keys, still launch.
     """
-    if path:
-        prop_file = str(path.parent / "properties.json")
-        if not os.path.exists(prop_file):
-            # macOS app bundle: the binary is Contents/MacOS/camoufox, the
-            # packaged settings live in Contents/Resources/.
-            bundled = path.parent.parent / "Resources" / "properties.json"
-            if bundled.exists():
-                prop_file = str(bundled)
-    else:
-        prop_file = get_path("properties.json")
+    prop_file = build_file(path, "properties.json") if path else get_path("properties.json")
     with open(prop_file, "rb") as f:
         prop_dict = orjson.loads(f.read())
 
@@ -731,24 +723,48 @@ def attach_context_defaults(browser: Any, no_viewport_default: bool) -> None:
     attach_desktop_only_warning(browser)
 
 
-def host_identity(from_options: Dict[str, Any], canvas_noise: Optional[bool]) -> Optional[Tuple[str, Optional[Tuple[str, str]]]]:
+def plan_rendering(
+    target_os: str,
+    canvas_noise: Optional[bool],
+    named_gpu: bool,
+    webgl_disabled: bool,
+    probe: Callable[[], Optional[Gpu]],
+) -> Tuple[bool, Optional[Gpu]]:
+    """Whether the canvas is covered, and the host GPU the identity claims.
+
+    The canvas renders on the host, so the identity claims the host's GPU when
+    it can: on the host's OS, with no GPU named, on a hardware GPU fpgen has
+    recorded there. A software renderer matches any GPU, and with WebGL off no
+    GPU is claimed. Any other identity contradicts the pixels, so the canvas is
+    covered unless the caller chose canvas_noise=False.
+    """
+    if canvas_noise:
+        return True, None
+    if target_os == _host_os_key() and not named_gpu:
+        host = None if webgl_disabled else probe()
+        if not renders_on_hardware(host):
+            return False, None
+        if host in firefox_gpus(target_os):
+            return False, host
+    return canvas_noise is None, None
+
+
+def host_identity(from_options: Dict[str, Any], canvas_noise: Optional[bool]) -> Optional[Tuple[str, Optional[Gpu]]]:
     """For a launch without the canvas placeholder, the machine its contexts must
-    claim: the host's OS, and its GPU when that is hardware (context_identity).
-    Only for the default canvas_noise=None; a caller who chose it, or built the
-    options, keeps their contexts as they ask. Read before the launch, so a
-    failed probe leaves no browser behind."""
+    claim: the host's OS, and the host GPU it claims (plan_rendering). Only for
+    the default canvas_noise=None; a caller who chose it, or built the options,
+    keeps their contexts as they ask. Read before the launch, so a failed probe
+    leaves no browser behind."""
     prefs = from_options.get('firefox_user_prefs', {})
     if canvas_noise is not None or has_canvas_placeholder(prefs):
         return None
-    gpu = None
-    if not prefs.get('webgl.disabled'):
-        gpu = host_gpu(from_options['executable_path'], from_options['headless'], from_options['env'])
-    return _host_os_key(), gpu if renders_on_hardware(gpu) else None
-
-
-def attach_host_identity(browser: Any, identity: Optional[Tuple[str, Optional[Tuple[str, str]]]]) -> None:
-    if identity is not None:
-        browser._camoufox_host_identity = identity
+    # Without the placeholder, the launch claimed the host's OS and no named GPU.
+    host_os = _host_os_key()
+    covered, gpu = plan_rendering(
+        host_os, None, False, bool(prefs.get('webgl.disabled')),
+        lambda: host_gpu(from_options['executable_path'], from_options['headless'], from_options['env']),
+    )
+    return None if covered else (host_os, gpu)
 
 
 def context_identity(
@@ -843,29 +859,16 @@ def sync_attach_vd(
 
 
 def resolve_verstr(executable_path: Optional[Path] = None) -> str:
-    """The version of the build about to be launched.
-
-    installed_verstr() answers "which release did `camoufox fetch` put in the
-    cache", which is the wrong question when the caller named a binary: it
-    raises CamoufoxNotInstalled on a machine that has a perfectly good build and
-    simply never downloaded one. That is what every browser/tests/playwright/patches guard hit in
-    CI -- 14 of 16 died before launching anything.
-
-    Firefox writes application.ini beside the executable, so when a path is
-    given the answer is right there. Falls back to the installed release when it
-    is not, which is the ordinary `pip install camoufox` case.
-    """
-    if executable_path:
-        ini = Path(executable_path).parent / 'application.ini'
-        try:
-            for line in ini.read_text(encoding='utf-8', errors='replace').splitlines():
-                if line.startswith('Version='):
-                    version = line.split('=', 1)[1].strip()
-                    if version:
-                        return version
-        except OSError:
-            pass
-    return installed_verstr()
+    """The Firefox version of the build about to launch: the named executable's
+    own application.ini, or the installed release. A named executable without
+    one raises, since claiming another build's version would leak in the UA."""
+    if not executable_path:
+        return installed_verstr()
+    ini = build_file(executable_path, 'application.ini')
+    for line in ini.read_text(encoding='utf-8').splitlines():
+        if line.startswith('Version='):
+            return line.split('=', 1)[1].strip()
+    raise ValueError(f'{ini} names no Version')
 
 
 def launch_options(
@@ -981,7 +984,8 @@ def launch_options(
             - Build alone like "beta.20"
             - Full version like "134.0.2-beta.20"
             The build must be installed; it is never downloaded.
-            If not specified, uses the paired build.
+            If not specified, uses the paired build. Raises ValueError with
+            executable_path or CAMOUFOX_EXECUTABLE_PATH.
         firefox_user_prefs (Optional[Dict[str, Any]]):
             Firefox user preferences to set.
         proxy (Optional[Dict[str, str]]):
@@ -1012,9 +1016,10 @@ def launch_options(
             Replace canvas and WebGL readback with random data, as
             privacy.resistFingerprinting does in LibreWolf, Tor Browser and
             Mullvad Browser. Stock Firefox does not, so it warns. By default
-            (None) it is on only when the identity claims another OS than the
-            host's, whose canvas would otherwise show the host. On the host's
-            OS the identity claims the GPU the host renders with instead.
+            (None) the identity on the host's OS claims the GPU the host
+            renders with, uncovered; it is on whenever the identity claims
+            another OS or another GPU (webgl_config, a preset's, or a host GPU
+            fpgen never recorded), whose canvas would otherwise show the host.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -1041,19 +1046,22 @@ def launch_options(
     # mappings supplied by callers. In particular, DISPLAY must not outlive the
     # virtual display that owns it.
     env = dict(environ) if env is None else dict(env)
-    if executable_path is None:
-        # Point every launch at a specific build without threading the path
-        # through each call site. The CI runners set it, and honouring it in the
-        # library is what lets browser/tests/playwright/patches/*.py run against a local build,
-        # since those construct AsyncCamoufox directly.
-        # Absent the variable nothing changes.
-        _env_executable = environ.get('CAMOUFOX_EXECUTABLE_PATH', '').strip()
-        if _env_executable:
-            executable_path = _env_executable
-        elif browser:
-            # A selected build is launched like a caller's own binary: its files
-            # are read from beside it, and the paired build is neither used nor fetched.
-            executable_path = selected_launch_path(browser)
+    # CAMOUFOX_EXECUTABLE_PATH points every launch at a specific build without
+    # threading the path through each call site; the CI runners set it for the
+    # browser/tests/playwright/patches guards, which construct AsyncCamoufox directly.
+    _env_executable = environ.get('CAMOUFOX_EXECUTABLE_PATH', '').strip()
+    if browser:
+        if executable_path or _env_executable:
+            raise ValueError(
+                f'browser={browser!r} selects an installed build, but '
+                f'{"executable_path" if executable_path else "CAMOUFOX_EXECUTABLE_PATH"} '
+                'names a binary too. Pass one of them.'
+            )
+        # A selected build is launched like a caller's own binary: its files
+        # are read from beside it, and the paired build is neither used nor fetched.
+        executable_path = selected_launch_path(browser)
+    elif executable_path is None and _env_executable:
+        executable_path = _env_executable
     if isinstance(executable_path, str):
         # Convert executable path to a Path object
         executable_path = Path(abspath(executable_path))
@@ -1124,7 +1132,7 @@ def launch_options(
         ff_version_str = str(ff_version)
         LeakWarning.warn('ff_version', i_know_what_im_doing)
     else:
-        ff_version_str = resolve_verstr(browser_binary).split('.', 1)[0]
+        ff_version_str = resolve_verstr(executable_path).split('.', 1)[0]
 
     # Generate a fingerprint
     _used_preset = False
@@ -1496,20 +1504,14 @@ def launch_options(
     # the screen, which the host core count and the display clamp replace.
     coherence.drop_incoherent_source_values(config, target_os)
 
-    # The canvas renders on the host, so an identity on another OS needs it
-    # covered, and one on the host's OS claims the host's GPU.
-    host_os = _host_os_key()
-    if canvas_noise is None:
-        canvas_noise = target_os != host_os
-    claims_host_gpu = (
-        target_os == host_os
-        and not canvas_noise
-        and not block_webgl
-        and not webgl_config
-        and not (config.get('webGl:vendor') and config.get('webGl:renderer'))
+    cover_canvas, host = plan_rendering(
+        target_os,
+        canvas_noise,
+        bool(webgl_config or (config.get('webGl:vendor') and config.get('webGl:renderer'))),
+        bool(block_webgl),
+        lambda: host_gpu(browser_binary, headless, env),
     )
-    host = host_gpu(browser_binary, headless, env) if claims_host_gpu else None
-    if canvas_noise:
+    if cover_canvas:
         add_canvas_placeholder(firefox_user_prefs)
         LeakWarning.warn('canvas_noise', i_know_what_im_doing)
 
@@ -1527,7 +1529,7 @@ def launch_options(
                 target_os, config['webGl:vendor'], config['webGl:renderer'],
                 seed=identity_seed(config, _identity_salt),
             )
-        elif renders_on_hardware(host) and host in firefox_gpus(target_os):
+        elif host:
             # Claim the GPU the canvas really renders on.
             webgl_fp = webgl_for_gpu(target_os, *host, seed=identity_seed(config, _identity_salt))
         else:
