@@ -53,9 +53,9 @@ def inject_locales(target_dir, target, version, src_dir):
 
 
 def font_groups_for(groups_file, oses):
-    """Group directories the named OSes read, or None if the bundle predates groups."""
+    """Group directories the named OSes read."""
     if not os.path.exists(groups_file):
-        return None
+        raise FileNotFoundError(f'{groups_file} is missing: run `make fonts-extract`')
     with open(groups_file, encoding='utf-8') as fh:
         read_by = json.load(fh).get('readBy', {})
     key = {'linux': 'lin', 'macos': 'mac', 'windows': 'win'}
@@ -63,19 +63,6 @@ def font_groups_for(groups_file, oses):
     for o in oses:
         out.update(read_by.get(key.get(o, o), []))
     return sorted(out)
-
-
-def legacy_font_copy(target, fonts, fonts_dir):
-    """The pre-groups layout: one full copy of each OS's set under fonts/<os>/."""
-    if target == 'linux':
-        for font in fonts or []:
-            shutil.copytree(os.path.join('bundle', 'fonts', font),
-                            os.path.join(fonts_dir, font), dirs_exist_ok=True)
-    else:
-        os.makedirs(fonts_dir, exist_ok=True)
-        for font in fonts or []:
-            for file in list_files(root_dir=os.path.join('bundle', 'fonts', font), suffix='*'):
-                shutil.copy2(file, os.path.join(fonts_dir, os.path.basename(file)))
 
 
 def add_includes_to_package(package_file, includes, fonts, new_file, target, version, src_dir):
@@ -146,9 +133,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target, ver
         fonts_dir = os.path.join(target_dir, 'fonts')
         groups_file = os.path.join('bundle', 'fonts', 'groups.json')
         wanted = font_groups_for(groups_file, fonts or [])
-        if wanted is None:
-            legacy_font_copy(target, fonts, fonts_dir)
-        elif target == 'linux':
+        if target == 'linux':
             # Linux resolves fonts through fontconfig, which is handed the exact
             # group directories for the claimed OS at launch (utils._generate_fontconfig),
             # so the subdirectories are the per-OS gate and must be preserved.

@@ -59,7 +59,7 @@ import {
 	validIPv6,
 } from "./ip.js";
 import { handleLocales } from "./locales.js";
-import { INSTALL_DIR, OS_NAME } from "./paths.js";
+import { INSTALL_DIR, LAUNCHER_CONSTANTS, OS_NAME } from "./paths.js";
 import {
 	buildFile,
 	effectiveVersionMin,
@@ -98,12 +98,7 @@ type EnvVars = Record<string, string | number | boolean>;
 const OS_NAMES = { win: "windows", mac: "macos", lin: "linux" } as const;
 
 // Camoufox preferences to cache previous pages and requests
-export const CACHE_PREFS: Record<string, any> = {
-	"browser.sessionhistory.max_total_viewers": -1,
-	"browser.cache.memory.enable": true,
-	"browser.cache.disk_cache_ssl": true,
-	"browser.cache.disk.smart_size.enabled": true,
-};
+export const CACHE_PREFS: Record<string, any> = LAUNCHER_CONSTANTS.cachePrefs;
 
 /** The host OS in fonts.json / target_os terms ('mac', 'win', 'lin'). */
 function hostOsKey(): TargetOS | null {

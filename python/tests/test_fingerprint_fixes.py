@@ -8,12 +8,8 @@ These guard the headless / impossible-geometry tells a generated fingerprint
 can carry. typescript/tests/fingerprints.test.ts mirrors them.
 """
 
-import os
-import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from camoufox.fingerprints import (  # noqa: E402
+from camoufox.fingerprints import (
     clamp_screen_to_display,
     clamp_window_dimensions,
     clamp_window_position,

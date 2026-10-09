@@ -6,10 +6,9 @@ import os
 import shlex
 import shutil
 import tempfile
-from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
     from .pkgman import AvailableVersion
@@ -188,36 +187,6 @@ def _match_install(
     if legacy.sha256:
         return legacy if legacy.sha256 == sha256 else None
     return legacy if count <= 1 else None
-
-
-def classify_installs(
-    versions: List['AvailableVersion'], installed: List['InstalledVersion']
-) -> Tuple[List[Optional['InstalledVersion']], List[Tuple['InstalledVersion', str]]]:
-    """
-    Match each catalog item to an install folder.
-    Returns matches and any orphaned leftovers
-    """
-    counts = Counter(v.version.full_string for v in versions)
-    by_folder = {iv.path.name: iv for iv in installed}
-
-    row_inst: List[Optional['InstalledVersion']] = []
-    matched: set = set()
-    for v in versions:
-        full = v.version.full_string
-        inst = _match_install(full, v.sha256, by_folder, counts[full])
-        row_inst.append(inst)
-        if inst is not None:
-            matched.add(inst.path.name)
-
-    extras: List[Tuple['InstalledVersion', str]] = []
-    for iv in installed:
-        if iv.path.name in matched:
-            continue
-        in_catalog = counts[iv.version.full_string] > 0
-        note = "date unknown" if in_catalog and not iv.sha256 else "unavailable"
-        extras.append((iv, note))
-
-    return row_inst, extras
 
 
 def find_install(

@@ -19,8 +19,8 @@ What it covers:
       into a file whose entire purpose is being real.
 
 Usage:
-    python3 scripts/clean-fingerprint-data.py            # report only
-    python3 scripts/clean-fingerprint-data.py --write    # rewrite the files
+    python3 python/scripts/clean-fingerprint-data.py            # report only
+    python3 python/scripts/clean-fingerprint-data.py --write    # rewrite the files
 
 `--check` exits non-zero when anything would be dropped;
 python/tests/test_shipped_data.py asserts the same thing, so a data refresh that
@@ -33,7 +33,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-PYTHON_SRC = Path(__file__).resolve().parents[2] / 'python' / 'src'
+PYTHON_SRC = Path(__file__).resolve().parents[1] / 'src'
 sys.path.insert(0, str(PYTHON_SRC))
 
 from camoufox import coherence  # noqa: E402

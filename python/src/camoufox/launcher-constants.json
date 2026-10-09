@@ -1,0 +1,40 @@
+{
+  "markerFonts": {
+    "win": ["Segoe UI", "Tahoma", "Cambria Math", "Nirmala UI"],
+    "mac": ["Helvetica Neue"],
+    "lin": ["Noto Sans", "Noto Serif", "DejaVu Sans Mono", "Arimo", "Cousine", "Tinos", "Twemoji Mozilla"]
+  },
+  "windows11MarkerFonts": [
+    "Sans Serif Collection", "Segoe Fluent Icons", "Segoe UI Variable",
+    "Segoe UI Variable Display", "Segoe UI Variable Small", "Segoe UI Variable Text"
+  ],
+  "plausibleCoreCounts": [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32],
+  "appleSiliconCores": [8, 10, 11, 12, 14, 16, 20, 24, 28, 32],
+  "appleSiliconPanels": {
+    "MacBook Air 13.6\"": [[1024, 665], [1280, 832], [1470, 956], [1710, 1112]],
+    "MacBook Air 15.3\"": [[1280, 828], [1440, 932], [1710, 1107]],
+    "MacBook Pro 14\"": [[1147, 745], [1352, 878], [1512, 982], [1800, 1169]],
+    "MacBook Pro 16\"": [[1312, 848], [1496, 967], [1728, 1117], [2056, 1329]],
+    "iMac 24\"": [[2240, 1260]]
+  },
+  "intelMacIgpCores": [2, 4, 6, 8, 12, 16],
+  "intelMacDgpuExtraCores": [10, 14, 18, 20, 24, 28, 32, 36, 48, 56],
+  "plausibleDpr": {
+    "win": [1, 1.25, 1.5, 1.75, 2, 2.5, 3],
+    "mac": [1, 2],
+    "lin": [1, 1.25, 1.5, 1.75, 2]
+  },
+  "macNoveltyVoices": [
+    "Albert", "Bad News", "Bahh", "Bells", "Boing", "Bubbles", "Cellos", "Wobble", "Good News",
+    "Jester", "Organ", "Superstar", "Trinoids", "Whisper", "Zarvox", "Fred", "Junior", "Kathy",
+    "Ralph", "Bruce", "Vicki", "Victoria", "Agnes", "Princess", "Hysterical", "Pipe Organ",
+    "Deranged", "Alex"
+  ],
+  "macEloquenceVoices": ["Eddy", "Flo", "Grandma", "Grandpa", "Reed", "Rocko", "Sandy", "Shelley"],
+  "cachePrefs": {
+    "browser.sessionhistory.max_total_viewers": -1,
+    "browser.cache.memory.enable": true,
+    "browser.cache.disk_cache_ssl": true,
+    "browser.cache.disk.smart_size.enabled": true
+  }
+}

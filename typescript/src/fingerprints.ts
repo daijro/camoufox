@@ -21,7 +21,7 @@ import {
 } from "./cpu_affinity.js";
 import { validateIP, validIPv4 } from "./ip.js";
 import { normalizeLocale } from "./locales.js";
-import { LOCAL_DATA, loadDataFile } from "./paths.js";
+import { LAUNCHER_CONSTANTS, LOCAL_DATA, loadDataFile } from "./paths.js";
 import {
 	comparePyStr,
 	crc32,
@@ -166,22 +166,12 @@ const PRESETS_CACHE = new Map<string, PresetBundle>();
 // ---------------------------------------------------------------------------
 
 // CreepJS OS marker fonts used for OS detection (see fingerprints.py).
-export const MACOS_MARKER_FONTS: readonly string[] = ["Helvetica Neue"];
-export const LINUX_MARKER_FONTS: readonly string[] = [
-	"Noto Sans",
-	"Noto Serif",
-	"DejaVu Sans Mono",
-	"Arimo",
-	"Cousine",
-	"Tinos",
-	"Twemoji Mozilla",
-];
-export const WINDOWS_MARKER_FONTS: readonly string[] = [
-	"Segoe UI",
-	"Tahoma",
-	"Cambria Math",
-	"Nirmala UI",
-];
+export const MACOS_MARKER_FONTS: readonly string[] =
+	LAUNCHER_CONSTANTS.markerFonts.mac;
+export const LINUX_MARKER_FONTS: readonly string[] =
+	LAUNCHER_CONSTANTS.markerFonts.lin;
+export const WINDOWS_MARKER_FONTS: readonly string[] =
+	LAUNCHER_CONSTANTS.markerFonts.win;
 
 /** Add any missing marker fonts to the font list (in place). */
 function ensureMarkerFonts(fonts: string[], markers: readonly string[]): void {
@@ -211,35 +201,11 @@ export const ESSENTIAL_FONTS_WINDOWS: readonly string[] = ESSENTIAL_FONTS.win;
 export const ESSENTIAL_FONTS_LINUX: readonly string[] = ESSENTIAL_FONTS.lin;
 
 /**
- * OS-version variant of the Windows base: drawn with probability 1 since
- * Windows 10 was dropped as a target (2026-09-22). Format: [probability, fonts].
- */
-const BASE_VARIANT_FONTS_MACOS: readonly [number, readonly string[]] = [
-	0.0,
-	[],
-];
-const BASE_VARIANT_FONTS_WINDOWS: readonly [number, readonly string[]] = [
-	1.0,
-	[
-		"Sans Serif Collection",
-		"Segoe Fluent Icons",
-		"Segoe UI Variable",
-		"Segoe UI Variable Display",
-		"Segoe UI Variable Small",
-		"Segoe UI Variable Text",
-	],
-];
-const BASE_VARIANT_FONTS_LINUX: readonly [number, readonly string[]] = [
-	0.0,
-	[],
-];
-
-/**
  * Fonts only a Windows 11 base has: a Windows identity whose font list
  * contains them presents Windows 11, and the rest of the identity must agree.
  */
 export const WINDOWS_11_MARKER_FONTS: ReadonlySet<string> = new Set(
-	BASE_VARIANT_FONTS_WINDOWS[1],
+	LAUNCHER_CONSTANTS.windows11MarkerFonts,
 );
 
 /**
@@ -451,19 +417,15 @@ export function generateRandomFontSubset(
 
 	let essential: Set<string>;
 	let markers: readonly string[];
-	let variantFonts: readonly string[];
 	if (targetOs === "windows") {
 		essential = new Set(ESSENTIAL_FONTS_WINDOWS);
 		markers = WINDOWS_MARKER_FONTS;
-		variantFonts = BASE_VARIANT_FONTS_WINDOWS[1];
 	} else if (targetOs === "linux") {
 		essential = new Set(ESSENTIAL_FONTS_LINUX);
 		markers = LINUX_MARKER_FONTS;
-		variantFonts = BASE_VARIANT_FONTS_LINUX[1];
 	} else {
 		essential = new Set(ESSENTIAL_FONTS_MACOS);
 		markers = MACOS_MARKER_FONTS;
-		variantFonts = BASE_VARIANT_FONTS_MACOS[1];
 	}
 
 	if (native) {
@@ -472,9 +434,10 @@ export function generateRandomFontSubset(
 		result.push(
 			...[...essential].filter((f) => !full.has(f)).sort(comparePyStr),
 		);
-		if (variantFonts.length && !hostHasVariantFonts(targetOs)) {
-			const absent = new Set(variantFonts);
-			result = result.filter((f) => !absent.has(f));
+		// A native identity may run on a Windows 10 host, which cannot render
+		// the Windows 11 families the base carries.
+		if (targetOs === "windows" && !hostHasVariantFonts(targetOs)) {
+			result = result.filter((f) => !WINDOWS_11_MARKER_FONTS.has(f));
 		}
 		return result;
 	}
@@ -523,47 +486,12 @@ const VOICE_URI_PREFIX: Readonly<Record<string, string>> = {
 	lin: "urn:moz-tts:speechd:",
 };
 
-export const MAC_NOVELTY_VOICES: ReadonlySet<string> = new Set([
-	"Albert",
-	"Bad News",
-	"Bahh",
-	"Bells",
-	"Boing",
-	"Bubbles",
-	"Cellos",
-	"Wobble",
-	"Good News",
-	"Jester",
-	"Organ",
-	"Superstar",
-	"Trinoids",
-	"Whisper",
-	"Zarvox",
-	"Fred",
-	"Junior",
-	"Kathy",
-	"Ralph",
-	"Bruce",
-	"Vicki",
-	"Victoria",
-	"Agnes",
-	"Princess",
-	"Hysterical",
-	"Pipe Organ",
-	"Deranged",
-	// not a novelty voice, but the same MacinTalk identifier family
-	"Alex",
-]);
-export const MAC_ELOQUENCE_VOICES: ReadonlySet<string> = new Set([
-	"Eddy",
-	"Flo",
-	"Grandma",
-	"Grandpa",
-	"Reed",
-	"Rocko",
-	"Sandy",
-	"Shelley",
-]);
+export const MAC_NOVELTY_VOICES: ReadonlySet<string> = new Set(
+	LAUNCHER_CONSTANTS.macNoveltyVoices,
+);
+export const MAC_ELOQUENCE_VOICES: ReadonlySet<string> = new Set(
+	LAUNCHER_CONSTANTS.macEloquenceVoices,
+);
 
 let voiceUrisCache: Record<string, Record<string, string>> | null = null;
 
@@ -878,9 +806,8 @@ export function hostCpuCount(): number | null {
  * corpus. 2 is excluded: no Apple Silicon part has 2 cores, and 85% of macOS
  * identities draw an Apple GPU (see fingerprints.py).
  */
-export const PLAUSIBLE_CORE_COUNTS: readonly number[] = [
-	4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32,
-];
+export const PLAUSIBLE_CORE_COUNTS: readonly number[] =
+	LAUNCHER_CONSTANTS.plausibleCoreCounts;
 
 export interface HostCpu {
 	/** Logical CPUs of the host (default: hostCpuCount()). */

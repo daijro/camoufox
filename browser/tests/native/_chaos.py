@@ -32,7 +32,6 @@ from typing import List, Optional
 
 
 # Names as the kernel reports them, from an observed tree.
-DRIVER = "node"
 BROWSER = "camoufox-bin"
 SOCKET_PROCESS = "Socket Process"
 FORKSERVER = "forkserver"

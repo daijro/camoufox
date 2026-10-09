@@ -5,15 +5,15 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PYTHONLIB = path.resolve(ROOT, "..", "python", "src", "camoufox");
+const PYTHON_DATA = path.resolve(ROOT, "..", "python", "src", "camoufox");
 const DATA = path.join(ROOT, "dist", "data-files");
 
 fs.rmSync(DATA, { recursive: true, force: true });
 const { DATA_FILES } = await import(path.join(ROOT, "dist", "paths.js"));
 fs.mkdirSync(DATA, { recursive: true });
 for (const name of DATA_FILES) {
-	fs.copyFileSync(path.join(PYTHONLIB, name), path.join(DATA, name));
+	fs.copyFileSync(path.join(PYTHON_DATA, name), path.join(DATA, name));
 }
 console.log(
-	`copied ${DATA_FILES.length} data files from pythonlib -> dist/data-files`,
+	`copied ${DATA_FILES.length} data files from python/src/camoufox -> dist/data-files`,
 );

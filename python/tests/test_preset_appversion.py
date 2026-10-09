@@ -20,14 +20,10 @@ The generated (fpgen) path already emits a coherent pair, which is why
 this only shows up on the preset path.
 """
 
-import os
-import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from camoufox.fingerprints import _app_version_from_user_agent, from_preset  # noqa: E402
+from camoufox.fingerprints import _app_version_from_user_agent, from_preset
 
 # The tokens Firefox actually reports: Windows and Macintosh collapse to the family name, X11 keeps a
 # distro token when the user agent carries one, and Android keeps its version.

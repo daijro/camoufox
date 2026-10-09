@@ -74,7 +74,7 @@ redistribution, and the fpgen corpus puts every one of those families on under
 2% of real machines (Minion Pro 1.5%, the rest at 0.0%), so shipping them bought
 no realism. The `adobe-cc` unit was dropped from scripts/data/font-manifests.json
 in the same change, because reporting a family the bundle cannot render is a
-reverse leak. Run scripts/font-metrics/licences.py for the current licence split.
+reverse leak.
 
 The per-OS list of families the launcher may REPORT is generated from these
 files, in this order, and checked by scripts/verify-fonts.py:

@@ -3,7 +3,7 @@
 Left to itself, `import fpgen` downloads the first release the GitHub API
 lists -- model-4/2025, whose WebGL records carry no vendor or renderer -- so a
 pip-installed camoufox failed every generated launch with KeyError: 'vendor' in
-webgl.py. browser/scripts/pin-fpgen-model.py pinned the model for CI only.
+webgl.py. python/scripts/pin-fpgen-model.py pinned the model for CI only.
 """
 
 import ast
@@ -20,11 +20,9 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from camoufox import fpgen_model  # noqa: E402
-from camoufox.exceptions import CorruptedDownload, FpgenModelError  # noqa: E402
-from camoufox.fpgen_model import FPGEN_MAX_AGE_S, PINNED_MTIME, STAMP, ensure_fpgen_model  # noqa: E402
+from camoufox import fpgen_model
+from camoufox.exceptions import CorruptedDownload, FpgenModelError
+from camoufox.fpgen_model import FPGEN_MAX_AGE_S, PINNED_MTIME, STAMP, ensure_fpgen_model
 
 PACKAGE = Path(fpgen_model.__file__).resolve().parent
 MEMBERS = {
@@ -121,7 +119,7 @@ def test_missing_model_is_installed_verified_and_stamped(tmp_path, pinned):
     for name, data in MEMBERS.items():
         assert (data_dir / name).read_bytes() == data
     assert _mtimes(data_dir) == {PINNED_MTIME}
-    # The same stamp browser/scripts/pin-fpgen-model.py and the TypeScript launcher write.
+    # The same stamp python/scripts/pin-fpgen-model.py and the TypeScript launcher write.
     assert (data_dir / STAMP).read_text().strip() == fpgen_model.PIN["sha256"]
     assert sorted(p.name for p in data_dir.iterdir()) == sorted([*MEMBERS, STAMP])
 
@@ -328,12 +326,6 @@ def test_install_writes_nothing_to_stdout(tmp_path, pinned, capfd):
     out, err = capfd.readouterr()
     assert out == ""
     assert "fpgen model" in err
-
-
-def test_the_packaged_pin_is_the_repo_pin():
-    """The package cannot ship browser/scripts/, so it carries a copy. Bump both."""
-    repo_pin = PACKAGE.parents[2] / "browser" / "scripts" / "data" / "fpgen-model.json"
-    assert fpgen_model.PIN == json.loads(repo_pin.read_text(encoding="utf-8"))
 
 
 def test_the_real_pin_is_complete():

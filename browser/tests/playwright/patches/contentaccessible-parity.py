@@ -18,6 +18,7 @@ so the static diff cannot pass while the surface is really different.
     python browser/tests/playwright/patches/contentaccessible-parity.py
 """
 
+import importlib.util
 import json
 import re
 import subprocess
@@ -32,7 +33,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
 BROWSER_ROOT = Path(__file__).resolve().parents[3]
-MANIFEST = BROWSER_ROOT / "scripts" / "data" / "contentaccessible-manifest.json"
+
+# The jar listing is the generator's, so the guard reads a build exactly the way
+# the manifest was recorded.
+_spec = importlib.util.spec_from_file_location(
+    "gen_contentaccessible_manifest", BROWSER_ROOT / "scripts" / "gen-contentaccessible-manifest.py"
+)
+_generator = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_generator)
+zip_entries = _generator.zip_entries
+MANIFEST = _generator.OUT
 
 # Loaded from a page and asserted against stock Firefox 152.0.4. Each entry is
 # (url, must_load). Regenerate by running the same probe against a stock build.
@@ -93,18 +103,6 @@ def package_listing(root: Path, jar: str) -> dict:
     if (base / 'chrome').is_dir():
         return loose_entries(base)
     return None
-
-
-def zip_entries(jar: Path) -> dict:
-    """Member -> size. unzip, not zipfile: Firefox's optimized jars put the
-    central directory at the front and zipfile cannot open them."""
-    out = subprocess.run(["unzip", "-l", str(jar)], capture_output=True, text=True).stdout
-    entries = {}
-    for line in out.splitlines():
-        parts = line.split(None, 3)
-        if len(parts) == 4 and parts[0].isdigit() and not parts[3].endswith("/"):
-            entries[parts[3]] = int(parts[0])
-    return entries
 
 
 def static_check(binary: Path, manifest: dict, failures: list) -> None:

@@ -19,18 +19,15 @@ that GPU reports.
 
 import re
 import sys
-from os.path import dirname, join
 
 import pytest
 
-sys.path.insert(0, join(dirname(__file__), "..", "src"))
+from camoufox import coherence
+from camoufox import fingerprints as fp
+from camoufox.utils import get_target_os
+from camoufox.webgl import sample_webgl_for_screen
 
-from camoufox import coherence  # noqa: E402
-from camoufox import fingerprints as fp  # noqa: E402
-from camoufox.utils import get_target_os  # noqa: E402
-from camoufox.webgl import sample_webgl_for_screen  # noqa: E402
-
-from test_identity_salt import launch  # noqa: E402
+from test_identity_salt import launch
 
 
 def _firefox_bucket(raw):

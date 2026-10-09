@@ -20,10 +20,7 @@ from typing import List, Set
 
 import pytest
 
-# Make `import camoufox` resolve to the in-tree package without an install.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from camoufox.virtdisplay import VirtualDisplay  # noqa: E402
+from camoufox.virtdisplay import VirtualDisplay
 
 DISPLAY_RE = re.compile(r"^:\d+$")
 N = int(os.environ.get("VIRTDISPLAY_TEST_N", "50"))

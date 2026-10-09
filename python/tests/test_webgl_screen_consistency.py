@@ -17,21 +17,17 @@ and a bucket spanning a desktop RTX 4090 and a mobile GTX 1650 Max-Q cannot
 carry a 1080p floor.
 """
 
-import os
-import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from camoufox.fingerprints import (  # noqa: E402
+from camoufox.fingerprints import (
     MODERN_SCREEN_FLOOR,
     _renderer_bucket,
     gpu_screen_is_plausible,
     is_software_renderer,
     raise_screen_to_modern_floor,
 )
-from camoufox.webgl import sample_webgl_for_screen  # noqa: E402
+from camoufox.webgl import sample_webgl_for_screen
 
 # The three spellings Gecko emits for one discrete-NVIDIA bucket.
 _NV_ANGLE = "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar"

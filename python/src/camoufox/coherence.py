@@ -30,13 +30,15 @@ the renderer string itself).
 
 from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
+from .pkgman import LAUNCHER_CONSTANTS
+
 # Core counts Apple Silicon actually ships. The M1 is the floor at 8; nothing
 # Apple has made has fewer. Firefox reports "Apple M1, or similar" for every
 # M-series part, so the renderer string cannot narrow it further than this.
 # 11 is in the set because the M3 Pro is 6P+5E -- an odd count that is real, and
 # the reason this is an explicit list rather than "8 to 32": 9, 13 and 15 are
 # not Apple parts. Apple Silicon has no SMT, so logical cores == physical.
-APPLE_SILICON_CORES = frozenset({8, 10, 11, 12, 14, 16, 20, 24, 28, 32})
+APPLE_SILICON_CORES = frozenset(LAUNCHER_CONSTANTS['appleSiliconCores'])
 
 # devicePixelRatio by platform. Windows exposes the display-scaling steps
 # (100/125/150/175/200/250/300%); macOS reports 1 or 2 and nothing between;
@@ -48,11 +50,7 @@ APPLE_SILICON_CORES = frozenset({8, 10, 11, 12, 14, 16, 20, 24, 28, 32})
 # steps, and a frozenset literal iterates in a different order when compiled
 # than when loaded from a .pyc -- so a set made the first launch repair an
 # identity differently from every later one.
-PLAUSIBLE_DPR = {
-    'win': (1, 1.25, 1.5, 1.75, 2, 2.5, 3),
-    'mac': (1, 2),
-    'lin': (1, 1.25, 1.5, 1.75, 2),
-}
+PLAUSIBLE_DPR = {os_key: tuple(steps) for os_key, steps in LAUNCHER_CONSTANTS['plausibleDpr'].items()}
 
 # colorDepth: Firefox reports 24, or 30 on a deep-colour display. macOS defaults
 # to deep colour, so an Apple Silicon Mac reports 30 (measured). 32 appears in
@@ -96,20 +94,18 @@ _NOT_A_MAC_GPU = ('ANGLE', 'llvmpipe')
 # the logical count otherwise (RuntimeService::ClampedHardwareConcurrency), so
 # either is real. Macs running WebGL on the Intel IGP have 2-8 physical cores,
 # 4-16 logical.
-INTEL_MAC_IGP_CORES = frozenset({2, 4, 6, 8, 12, 16})
+INTEL_MAC_IGP_CORES = frozenset(LAUNCHER_CONSTANTS['intelMacIgpCores'])
 # A discrete GPU adds the desktops, up to the 2019 Mac Pro's 28 cores (56
 # threads). An eGPU puts one behind any Intel Mac, so the IGP counts stay in.
-INTEL_MAC_DGPU_CORES = INTEL_MAC_IGP_CORES | frozenset({10, 14, 18, 20, 24, 28, 32, 36, 48, 56})
+INTEL_MAC_DGPU_CORES = INTEL_MAC_IGP_CORES | frozenset(LAUNCHER_CONSTANTS['intelMacDgpuExtraCores'])
 
 # The notched MacBook panels' scaled resolutions (Air 13.6"/15.3", Pro 14"/16")
 # and the 24" iMac's default. Only Apple Silicon Macs have them.
-APPLE_SILICON_PANELS = frozenset({
-    (1024, 665), (1280, 832), (1470, 956), (1710, 1112),  # Air 13.6"
-    (1280, 828), (1440, 932), (1710, 1107),  # Air 15.3"
-    (1147, 745), (1352, 878), (1512, 982), (1800, 1169),  # Pro 14"
-    (1312, 848), (1496, 967), (1728, 1117), (2056, 1329),  # Pro 16"
-    (2240, 1260),  # iMac 24"
-})
+APPLE_SILICON_PANELS = frozenset(
+    (width, height)
+    for panels in LAUNCHER_CONSTANTS['appleSiliconPanels'].values()
+    for width, height in panels
+)
 
 
 class Violation(NamedTuple):

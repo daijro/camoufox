@@ -18,7 +18,6 @@ import base64
 import os
 import queue
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
@@ -26,11 +25,8 @@ from pathlib import Path
 import orjson
 import pytest
 
-# Make `import camoufox` resolve to the in-tree package without an install.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from camoufox import server  # noqa: E402
-from camoufox.server import get_nodejs  # noqa: E402
+from camoufox import server
+from camoufox.server import get_nodejs
 
 # Anything on the driver's private lib/ path is fair game for Playwright to
 # move between releases; only the package entrypoint is a supported contract.

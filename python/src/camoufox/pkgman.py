@@ -62,6 +62,8 @@ OS_NAME: Literal['mac', 'win', 'lin'] = OS_MAP[sys.platform]
 
 INSTALL_DIR: Path = Path(user_cache_dir("camoufox"))
 LOCAL_DATA: Path = Path(os.path.abspath(__file__)).parent
+# Values both launchers hard-code, kept in one file the TypeScript package also ships.
+LAUNCHER_CONSTANTS: Dict[str, Any] = orjson.loads((LOCAL_DATA / 'launcher-constants.json').read_bytes())
 
 OS_ARCH_MATRIX: Dict[str, List[str]] = {
     'win': ['x86_64', 'i686'],
@@ -506,63 +508,6 @@ def warn_if_package_outdated() -> None:
     )
 
 
-class GitHubDownloader:
-    """
-    Manages fetching GitHub releases with fallback repos
-    """
-
-    def __init__(self, github_repos: Union[str, List[str]]) -> None:
-        if isinstance(github_repos, str):
-            github_repos = [github_repos]
-        self.github_repos = github_repos
-        self.github_repo = github_repos[0]
-        self.is_prerelease: bool = False
-
-    def check_asset(self, asset: Dict, release: Optional[Dict] = None) -> Any:
-        """
-        Return truthy data if this is the desired asset, else None
-        """
-        return asset.get('browser_download_url')
-
-    def missing_asset_error(self) -> None:
-        """
-        Raise a MissingRelease exception
-        """
-        raise MissingRelease(f"Could not find a release asset in {self.github_repo}.")
-
-    def _get_releases(self, github_repo: str) -> List[Dict]:
-        """
-        Fetch releases from a single GitHub repo
-        """
-        headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
-        api_url = f"https://api.github.com/repos/{github_repo}/releases"
-        resp = requests.get(api_url, timeout=20, headers=headers)
-        resp.raise_for_status()
-        return resp.json()
-
-    def get_asset(self) -> Any:
-        """
-        Fetch the first matching release asset, trying fallback repos on failure
-        """
-        last_error = None
-        for repo in self.github_repos:
-            try:
-                releases = self._get_releases(repo)
-                for release in releases:
-                    for asset in release['assets']:
-                        if data := self.check_asset(asset, release):
-                            self.github_repo = repo
-                            self.is_prerelease = release.get('prerelease', False)
-                            return data
-            except Exception as e:
-                last_error = e
-                continue
-
-        if last_error:
-            raise last_error
-        self.missing_asset_error()
-
-
 @dataclass
 class AvailableVersion:
     """
@@ -612,7 +557,7 @@ class AvailableVersion:
         }
 
 
-class CamoufoxFetcher(GitHubDownloader):
+class CamoufoxFetcher:
     """
     Handles fetching and installing Camoufox
     """
@@ -623,7 +568,9 @@ class CamoufoxFetcher(GitHubDownloader):
         selected_version: Optional[AvailableVersion] = None,
     ) -> None:
         self.repo_config = repo_config or RepoConfig.get_default()
-        super().__init__(self.repo_config.repos)
+        self.github_repos: List[str] = self.repo_config.repos
+        self.github_repo = self.github_repos[0]
+        self.is_prerelease: bool = False
 
         self.arch = self.get_platform_arch()
         self._version_obj: Optional[Version] = None
@@ -690,6 +637,38 @@ class CamoufoxFetcher(GitHubDownloader):
             f"No matching release found for {OS_NAME} {self.arch} in the "
             f"supported range. Please update the Python library."
         )
+
+    def _get_releases(self, github_repo: str) -> List[Dict]:
+        """
+        Fetch releases from a single GitHub repo
+        """
+        headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
+        api_url = f"https://api.github.com/repos/{github_repo}/releases"
+        resp = requests.get(api_url, timeout=20, headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_asset(self) -> Tuple[Version, str]:
+        """
+        Fetch the first matching release asset, trying fallback repos on failure
+        """
+        last_error = None
+        for repo in self.github_repos:
+            try:
+                releases = self._get_releases(repo)
+                for release in releases:
+                    for asset in release['assets']:
+                        if data := self.check_asset(asset, release):
+                            self.github_repo = repo
+                            self.is_prerelease = release.get('prerelease', False)
+                            return data
+            except Exception as e:
+                last_error = e
+                continue
+
+        if last_error:
+            raise last_error
+        self.missing_asset_error()
 
     def get_platform_arch(self) -> str:
         """

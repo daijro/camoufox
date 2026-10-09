@@ -29,11 +29,6 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "python" / "src"))
 
-# Names a leaked browser or display process could be running under.
-BROWSER_NAMES = ("camoufox", "camoufox-bin", "firefox", "firefox-bin")
-DISPLAY_NAMES = ("Xvfb",)
-
-
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--browsers", type=int, default=3,
                      help="how many browsers the leak tests launch per round")

@@ -11,7 +11,7 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from camoufox._warnings import FallbackWarning
 from camoufox.ip import valid_ipv4, validate_ip
-from camoufox.pkgman import load_yaml
+from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
 # Load the fpgen mapping file
 FPGEN_DATA = load_yaml('fpgen.yml')
@@ -92,24 +92,16 @@ PRESETS_V150_FILE = Path(__file__).parent / 'fingerprint-presets-v150.json'
 PRESETS_V150_MIN_FF = 149
 _PRESETS_CACHE: Dict[Path, Dict] = {}
 
-# CreepJS OS marker fonts used for OS detection. Twin of MARKER_FONTS in
-# browser/scripts/gen-fonts-json.py. Every name must be in fonts.json for its OS
-# (browser/scripts/verify-fonts.py checks): a marker the bundle cannot render would be a
-# reverse leak. That is why PingFang HK/SC/TC are no longer macOS markers -- the
-# bundle carries no PingFang file. On Linux the first three are also
-# the families browser/bundle/fontconfig/linux/fonts.conf resolves sans-serif / serif /
-# monospace to, so an identity without them would have no face behind any CSS
-# generic; Arimo / Cousine / Tinos stay because a real Ubuntu answers "present"
-# for them via its metric aliases.
-_MACOS_MARKER_FONTS = [
-    'Helvetica Neue',
-]
-_LINUX_MARKER_FONTS = [
-    'Noto Sans', 'Noto Serif', 'DejaVu Sans Mono', 'Arimo', 'Cousine', 'Tinos', 'Twemoji Mozilla',
-]
-_WINDOWS_MARKER_FONTS = [
-    'Segoe UI', 'Tahoma', 'Cambria Math', 'Nirmala UI',
-]
+# CreepJS OS marker fonts used for OS detection, always added back after the
+# draw. Every name must be in fonts.json for its OS (browser/scripts/verify-fonts.py
+# checks): a marker the bundle cannot render would be a reverse leak. On Linux
+# the first three are also the families browser/bundle/fontconfig/linux/fonts.conf
+# resolves sans-serif / serif / monospace to, so an identity without them would
+# have no face behind any CSS generic; Arimo / Cousine / Tinos stay because a
+# real Ubuntu answers "present" for them via its metric aliases.
+_MACOS_MARKER_FONTS: List[str] = LAUNCHER_CONSTANTS['markerFonts']['mac']
+_LINUX_MARKER_FONTS: List[str] = LAUNCHER_CONSTANTS['markerFonts']['lin']
+_WINDOWS_MARKER_FONTS: List[str] = LAUNCHER_CONSTANTS['markerFonts']['win']
 
 
 def _ensure_marker_fonts(fonts: List[str], markers: List[str]) -> None:
@@ -150,10 +142,7 @@ _ESSENTIAL_FONTS_LINUX: List[str] = _ESSENTIAL['lin']
 # Fonts only a Windows 11 base has (verified on a stock Windows 11, build
 # 26200.9457). Every drawn Windows identity is Windows 11 and has them; the rest
 # of the identity (overlay scrollbars in utils.launch_options) must agree.
-WINDOWS_11_MARKER_FONTS = frozenset({
-    'Sans Serif Collection', 'Segoe Fluent Icons', 'Segoe UI Variable',
-    'Segoe UI Variable Display', 'Segoe UI Variable Small', 'Segoe UI Variable Text',
-})
+WINDOWS_11_MARKER_FONTS = frozenset(LAUNCHER_CONSTANTS['windows11MarkerFonts'])
 
 
 def identity_salt(pinned: Any = None) -> int:
@@ -463,14 +452,10 @@ def _voice_uri(os_key: str, name: str, lang: str) -> str:
     return f"{_VOICE_URI_PREFIX.get(os_key, '')}{_voice_uri_slug(name)}"
 
 
-_MAC_NOVELTY_VOICES = frozenset(
-    {'Albert', 'Bad News', 'Bahh', 'Bells', 'Boing', 'Bubbles', 'Cellos', 'Wobble', 'Good News', 'Jester',
-     'Organ', 'Superstar', 'Trinoids', 'Whisper', 'Zarvox', 'Fred', 'Junior', 'Kathy', 'Ralph',
-     'Bruce', 'Vicki', 'Victoria', 'Agnes', 'Princess', 'Hysterical', 'Pipe Organ', 'Deranged',
-     # not a novelty voice, but the same MacinTalk identifier family
-     'Alex'}
-)
-_MAC_ELOQUENCE_VOICES = frozenset({'Eddy', 'Flo', 'Grandma', 'Grandpa', 'Reed', 'Rocko', 'Sandy', 'Shelley'})
+# MacinTalk voices (the novelty voices, and Alex, which is not one but shares
+# their identifier family), and the Eloquence voices.
+_MAC_NOVELTY_VOICES = frozenset(LAUNCHER_CONSTANTS['macNoveltyVoices'])
+_MAC_ELOQUENCE_VOICES = frozenset(LAUNCHER_CONSTANTS['macEloquenceVoices'])
 _VOICE_URIS_CACHE: Optional[Dict[str, Dict[str, str]]] = None
 
 
@@ -696,7 +681,7 @@ def host_cpu_count() -> Optional[int]:
 # excluded although the scraped corpus has it: no Apple Silicon part has fewer
 # than 8 cores, so 2 beside the common "Apple M1" renderer is a machine that
 # does not exist. A host outside the table is snapped into it.
-PLAUSIBLE_CORE_COUNTS = (4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32)
+PLAUSIBLE_CORE_COUNTS = tuple(LAUNCHER_CONSTANTS['plausibleCoreCounts'])
 
 
 def fix_hardware_concurrency(config: Dict[str, Any], can_pin: Optional[bool] = None) -> None:

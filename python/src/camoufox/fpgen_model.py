@@ -7,11 +7,10 @@ release listed is model-4/2025, whose WebGL records have no vendor or renderer,
 so every generated launch failed with KeyError: 'vendor'.
 
 So fpgen is only ever imported through load_fpgen(), which first installs the
-release named by fpgen-model.json (a copy of browser/scripts/data/fpgen-model.json),
-checks the archive and each file against its sha256, and dates the files in the
-future so fpgen's five-week refresh never replaces them. The data directory
-layout, including the `.pinned-model` stamp, is the one
-browser/scripts/pin-fpgen-model.py and the TypeScript launcher write.
+release named by fpgen-model.json, checks the archive and each file against its
+sha256, and dates the files in the future so fpgen's five-week refresh never
+replaces them. The data directory layout, including the `.pinned-model` stamp,
+is the one python/scripts/pin-fpgen-model.py and the TypeScript launcher write.
 """
 
 import hashlib

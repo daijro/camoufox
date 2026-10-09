@@ -17,7 +17,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, NoReturn, Optional, Sequence, Tuple
+from typing import Any, Dict, NoReturn, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # The browser build: its Makefile, upstream.sh, and the generated Firefox tree.
@@ -179,6 +179,12 @@ def write_json(path: Path, obj: Any) -> None:
         fh.write("\n")
 
 
+def gh_headers() -> Dict[str, str]:
+    """GitHub API auth from the job's token, when there is one."""
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
 def http_json(url: str, *, timeout: int = 30, headers: Optional[Dict[str, str]] = None) -> Any:
     """GET a URL and parse JSON. Stdlib only so this works pre-pip."""
     import urllib.request
@@ -233,30 +239,3 @@ def read_upstream_sh(path: Optional[Path] = None) -> Dict[str, str]:
         out[key.strip()] = val.strip().strip("'\"")
     return out
 
-
-def write_upstream_sh(values: Dict[str, str], path: Optional[Path] = None) -> None:
-    """Rewrite upstream.sh in place, preserving key order and comments."""
-    path = path or (BROWSER_ROOT / "upstream.sh")
-    lines: List[str] = []
-    seen = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            key = stripped.partition("=")[0].strip()
-            if key in values:
-                lines.append(f"{key}={values[key]}")
-                seen.add(key)
-                continue
-        lines.append(line)
-    for key, val in values.items():
-        if key not in seen:
-            lines.append(f"{key}={val}")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def bump_release(release: str) -> str:
-    """beta.31 -> beta.32. Anything unrecognised gets a .1 suffix."""
-    m = re.match(r"^(.*?)(\d+)$", release)
-    if not m:
-        return f"{release}.1"
-    return f"{m.group(1)}{int(m.group(2)) + 1}"

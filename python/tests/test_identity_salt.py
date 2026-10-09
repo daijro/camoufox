@@ -73,8 +73,7 @@ class TestPinnedIdentityIsStable:
 
     def test_fixed_preset_reproduces_noise_seeds(self):
         preset = fp.get_random_preset(os="windows", ff_version="150")
-        if not preset:
-            pytest.skip("no presets bundled")
+        assert preset, "no Windows presets bundled"
         first = launch(os="windows", fingerprint_preset=preset)
         second = launch(os="windows", fingerprint_preset=preset)
         assert first["audio:seed"] == second["audio:seed"]

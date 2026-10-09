@@ -7,9 +7,9 @@ for jobs that need the model in place before they start: CI, image builds, and
 the TypeScript golden recorder.
 
 Usage:
-    python3 scripts/pin-fpgen-model.py           # install if not already pinned
-    python3 scripts/pin-fpgen-model.py --check    # verify only; non-zero if not pinned
-    python3 scripts/pin-fpgen-model.py --force    # re-download and reinstall
+    python3 python/scripts/pin-fpgen-model.py           # install if not already pinned
+    python3 python/scripts/pin-fpgen-model.py --check    # verify only; non-zero if not pinned
+    python3 python/scripts/pin-fpgen-model.py --force    # re-download and reinstall
 """
 
 import argparse
@@ -32,7 +32,7 @@ def main():
         if is_pinned():
             print(f'OK: fpgen model pinned to {PIN["tag"]}')
             return 0
-        print(f'fpgen model is NOT pinned to {PIN["tag"]}; run scripts/pin-fpgen-model.py',
+        print(f'fpgen model is NOT pinned to {PIN["tag"]}; run python/scripts/pin-fpgen-model.py',
               file=sys.stderr)
         return 1
 

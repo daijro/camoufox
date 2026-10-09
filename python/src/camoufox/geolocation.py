@@ -261,18 +261,6 @@ def _remove_deprecated_databases(keep: Dict) -> None:
             path.unlink(missing_ok=True)
 
 
-def remove_mmdb() -> None:
-    """
-    Removes the GeoIP database and config
-    """
-    if not GEOIP_DIR.exists():
-        rprint("GeoIP database not found.")
-        return
-
-    shutil.rmtree(GEOIP_DIR)
-    rprint("GeoIP database removed.")
-
-
 def _build_age_days(mmdb_path: Path) -> Optional[float]:
     """
     Days since the database's data was built, from its metadata

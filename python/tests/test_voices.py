@@ -12,15 +12,10 @@ must yield a non-empty list of MaskConfig voice OBJECTS (not raw
 them and the host machine's native voices leak through.
 """
 
-import os
-import sys
 
 import pytest
 
-# Make `import camoufox` resolve to the in-tree package without an install.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from camoufox.fingerprints import (  # noqa: E402
+from camoufox.fingerprints import (
     _generate_random_voice_subset,
     _normalize_preset_voices,
 )

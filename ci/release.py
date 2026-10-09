@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-from ._util import BROWSER_ROOT, REPO_ROOT, die, http_json, log, read_upstream_sh, run, set_output
+from ._util import BROWSER_ROOT, REPO_ROOT, die, gh_headers, http_json, log, read_upstream_sh, run, set_output
 from .browser_inputs import BROWSER_DIRS, BROWSER_FILES, NON_NATIVE_SCRIPTS, source_digest
 
 PYPI_PROJECT = "camoufox"
@@ -357,16 +357,11 @@ def changed_since_published(built: Path, built_version: str, published: Sequence
 # I/O
 # ---------------------------------------------------------------------------
 
-def _gh_headers() -> dict:
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    return {"Authorization": f"Bearer {token}"} if token else {}
-
-
 def github_releases(repo: str) -> List[dict]:
     out: List[dict] = []
     for page in range(1, 11):
         batch = http_json(f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}",
-                          headers=_gh_headers())
+                          headers=gh_headers())
         out += batch
         if len(batch) < 100:
             break
@@ -542,7 +537,7 @@ def _require_tested(sha: str) -> None:
         batch = http_json(
             f"https://api.github.com/repos/{repo_name()}/commits/{sha}/check-runs"
             f"?filter=latest&per_page=100&page={page}",
-            headers=_gh_headers(),
+            headers=gh_headers(),
         ).get("check_runs", [])
         checks += batch
         if len(batch) < 100:

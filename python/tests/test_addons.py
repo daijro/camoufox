@@ -12,15 +12,11 @@ Run with:
 """
 
 import os
-import sys
 
 import pytest
 
-# Make `import camoufox` resolve to the in-tree package without an install.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from camoufox import addons as addons_mod  # noqa: E402
-from camoufox.addons import DefaultAddons, maybe_download_addons  # noqa: E402
+from camoufox import addons as addons_mod
+from camoufox.addons import DefaultAddons, maybe_download_addons
 
 UBO = DefaultAddons.UBO.name
 

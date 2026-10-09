@@ -127,16 +127,20 @@ def skip_reason(nodeid: str, entries: List[Dict[str, str]]) -> Optional[str]:
 
 
 def parse_shard(raw: Optional[str]) -> Optional[Tuple[int, int]]:
-    """"3/6" -> (3, 6). One-based, like every CI UI that will display it."""
+    """"3/6" -> (3, 6). One-based, like every CI UI that will display it.
+
+    Also ci/run_native.py's: this plugin is copied into the Playwright checkout
+    on its own, so it cannot import ci/_util.py.
+    """
     if not raw:
         return None
     try:
         index, _, total = raw.partition("/")
         shard, count = int(index), int(total)
     except ValueError:
-        raise RuntimeError(f"{_SHARD_ENV} must look like '3/6', got {raw!r}") from None
+        raise RuntimeError(f"a shard must look like '3/6', got {raw!r}") from None
     if not (1 <= shard <= count):
-        raise RuntimeError(f"{_SHARD_ENV}={raw!r} is out of range")
+        raise RuntimeError(f"shard {raw!r} is out of range")
     return shard, count
 
 

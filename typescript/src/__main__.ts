@@ -11,7 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import { Argument, Command, Option } from "commander";
-import { ensureModel, MODEL_PIN } from "fpgen";
+import { ensureModel } from "fpgen";
 import { LIBRARY_VERSION } from "./__version__.js";
 import { DefaultAddons, maybeDownloadAddons } from "./addons.js";
 import { effectivePin, loadPin, pinSpec } from "./browser-pin.js";
@@ -54,6 +54,7 @@ import {
 	formatAssetDate,
 	type IncompatibleBuild,
 	incompatibleMessage,
+	installedPackageVersion,
 	installedVerStr,
 	interfaceSupported,
 	listAvailableVersions,
@@ -633,9 +634,7 @@ program
 			await downloadMmdb();
 		}
 		await maybeDownloadAddons({ ...DefaultAddons });
-		// TS addition: Python's fpgen package ships its model with the wheel;
-		// the TS port fetches the pinned model into the cache, so do it here
-		// rather than on the first launch.
+		// Fetch the pinned fpgen model now rather than on the first launch.
 		await ensureModel();
 	});
 
@@ -1164,7 +1163,7 @@ class VersionInfo {
 	packages(): void {
 		this.header("Packages");
 		this.pkg("Camoufox", LIBRARY_VERSION);
-		this.row("fpgen model", MODEL_PIN.tag);
+		this.pkg("fpgen", installedPackageVersion("fpgen"));
 		this.pkg("Playwright", resolvedPlaywrightVersionRaw());
 	}
 

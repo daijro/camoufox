@@ -139,11 +139,11 @@ def extract(spec, path):
         tf.extractall(BUNDLE_DIR)
 
     # The v1 archive was built while 000_README.txt and cleanfonts.sh still sat
-    # inside bundle/fonts/. They are tracked at bundle/FONTS-README.txt and
-    # scripts/cleanfonts.sh now, so an extracted copy is a stale duplicate of a
-    # file git owns -- harmless (bundle/fonts/ is ignored) but confusing, and it
-    # would be folded back in if the bundle were rebuilt from this tree. Prune
-    # them; a future archive simply will not contain them.
+    # inside bundle/fonts/. The README is tracked as bundle/FONTS-README.txt now
+    # and the script is gone, so an extracted copy is stale -- harmless
+    # (bundle/fonts/ is ignored) but confusing, and it would be folded back in
+    # if the bundle were rebuilt from this tree. Prune them; a future archive
+    # simply will not contain them.
     for stray in ('000_README.txt', 'cleanfonts.sh'):
         p = os.path.join(target, stray)
         if os.path.exists(p):

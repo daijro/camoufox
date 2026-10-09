@@ -42,10 +42,11 @@ from collections import Counter
 
 import pytest
 
+from camoufox import fingerprints
+from camoufox.fingerprints import OS_KEYS
 from camoufox.fingerprints import _generate_random_font_subset as draw
 
 DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src', 'camoufox')
-OS_KEYS = {'windows': 'win', 'macos': 'mac', 'linux': 'lin'}
 N = 1500
 
 
@@ -92,8 +93,6 @@ def test_every_draw_contains_one_complete_base(os_name, samples):
 def test_base_weights_match_the_manifest(os_name, samples):
     """Each OS version turns up at its real-world share."""
     bases = BASES[OS_KEYS[os_name]]
-    if len(bases) < 2:
-        pytest.skip(f'{os_name} has a single base; nothing to weight')
     # Identify a base by the families that ONLY it has. A base with none (a
     # strict subset of another, e.g. Windows 10 under Windows 11) is not
     # separable and is not asserted here.
@@ -207,22 +206,17 @@ def test_alacarte_units_are_piecemeal_not_all_or_nothing(os_name, samples):
     assert checked, f'{os_name}: no alacarte units to check'
 
 
-def test_locale_gated_units_need_their_locale():
-    """A zh-TW-only pack must not land on an en-US identity."""
-    gated = [(k, u) for k, units in GROUPS.items() for u in units if u.get('requiresLocale')]
-    if not gated:
-        pytest.skip('no locale-gated units currently reportable')
-    name = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}
-    for os_key, unit in gated:
-        ex = _unit_exclusive(os_key, unit)
-        if not ex:
-            continue
-        for i in range(300):
-            fonts = set(draw(name[os_key], seed=i, locale='en-US'))
-            assert not (ex & fonts), (
-                f'{os_key} unit {unit["id"]} requires {unit["requiresLocale"]} '
-                f'but appeared on an en-US identity (draw #{i})'
-            )
+def test_locale_gated_units_need_their_locale(monkeypatch):
+    """A zh-TW-only pack must not land on an en-US identity.
+
+    No shipped unit is locale-gated today, so the gate is exercised on one
+    that is certain to be drawn whenever its locale matches.
+    """
+    unit = {'id': 'zh-tw-pack', 'kind': 'bundle', 'prob': 1.0,
+            'fonts': ['Locale Gated Family'], 'requiresLocale': 'zh-TW'}
+    monkeypatch.setattr(fingerprints, '_FONT_GROUPS_CACHE', {'win': [unit]})
+    assert 'Locale Gated Family' not in draw('windows', seed=0, locale='en-US')
+    assert 'Locale Gated Family' in draw('windows', seed=0, locale='zh-TW')
 
 
 # ---------------------------------------------------------------------------

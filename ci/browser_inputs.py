@@ -77,12 +77,12 @@ BROWSER_FILES = ("browser/upstream.sh", "browser/Makefile")
 # run would serve a stale binary to every suite downstream.
 NON_NATIVE_SCRIPTS = frozenset(
     {
+        "browser/scripts/_font_bundle.py",
         "browser/scripts/check-input-dispatch.py",
         "browser/scripts/cursor-demo.py",
         "browser/scripts/gen-contentaccessible-manifest.py",
         "browser/scripts/gen-font-groups.py",
         "browser/scripts/gen-fonts-json.py",
-        "browser/scripts/pin-fpgen-model.py",
         "browser/scripts/verify-fonts.py",
     }
 )

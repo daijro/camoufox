@@ -30,6 +30,7 @@ import warnings
 
 from .pkgman import (
     INSTALL_DIR,
+    LAUNCHER_CONSTANTS,
     OS_NAME,
     Version,
     build_file,
@@ -49,12 +50,7 @@ from .webgl import firefox_gpus, sample_webgl_for_screen, webgl_for_gpu
 ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
 
 # Camoufox preferences to cache previous pages and requests
-CACHE_PREFS = {
-    'browser.sessionhistory.max_total_viewers': -1,
-    'browser.cache.memory.enable': True,
-    'browser.cache.disk_cache_ssl': True,
-    'browser.cache.disk.smart_size.enabled': True,
-}
+CACHE_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['cachePrefs']
 
 
 def _host_os_key() -> Optional[str]:
@@ -830,7 +826,6 @@ async def async_attach_vd(
             virtual_display.kill()
 
     browser.close = new_close
-    browser._virtual_display = virtual_display
 
     return browser
 
@@ -853,7 +848,6 @@ def sync_attach_vd(
             virtual_display.kill()
 
     browser.close = new_close
-    browser._virtual_display = virtual_display
 
     return browser
 

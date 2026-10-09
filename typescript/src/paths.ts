@@ -73,6 +73,7 @@ export const DATA_FILES: readonly string[] = [
 	"font-groups.json",
 	"fonts.json",
 	"fpgen.yml",
+	"launcher-constants.json",
 	"media-devices.json",
 	"repos.yml",
 	"territoryInfo.xml",
@@ -96,6 +97,24 @@ export function loadDataFile<T = any>(file: string): T {
 	const text = fs.readFileSync(path.resolve(LOCAL_DATA, file), "utf-8");
 	return (file.endsWith(".yml") ? parseYaml(text) : JSON.parse(text)) as T;
 }
+
+/** Values both launchers use, kept in one file (python/src/camoufox/launcher-constants.json). */
+export interface LauncherConstants {
+	markerFonts: Record<"win" | "mac" | "lin", string[]>;
+	windows11MarkerFonts: string[];
+	plausibleCoreCounts: number[];
+	appleSiliconCores: number[];
+	appleSiliconPanels: Record<string, [number, number][]>;
+	intelMacIgpCores: number[];
+	intelMacDgpuExtraCores: number[];
+	plausibleDpr: Record<string, number[]>;
+	macNoveltyVoices: string[];
+	macEloquenceVoices: string[];
+	cachePrefs: Record<string, any>;
+}
+export const LAUNCHER_CONSTANTS: Readonly<LauncherConstants> = loadDataFile(
+	"launcher-constants.json",
+);
 
 // Camoufox keeps the fpgen model in its cache, beside the browsers and addons.
 setModelDir(process.env.CAMOUFOX_FPGEN_DATA || path.join(INSTALL_DIR, "fpgen"));

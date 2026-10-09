@@ -29,7 +29,7 @@ import pytest
 from ci import results
 from ci._util import CI_DIR as CI_ROOT
 from ci._pytest import junit_test_id
-from ci._util import bump_release, opaque_id, parse_version, read_upstream_sh, write_upstream_sh
+from ci._util import opaque_id, parse_version, read_upstream_sh
 from ci.pw_camoufox_plugin import load_skiplist, parse_shard, shard_of, skip_reason
 from ci.run_sundial import _iter_entries, grade, redact
 from ci.summarize import merge_shards, validate_skiplist
@@ -222,27 +222,15 @@ def test_a_class_based_id_is_a_node_id_pytest_would_accept():
     assert rest == "TestWhileRunning::test_should_pause"
 
 
-@pytest.mark.parametrize(
-    "given,expected",
-    [("beta.31", "beta.32"), ("beta.9", "beta.10"), ("alpha", "alpha.1")],
-)
-def test_release_bump(given, expected):
-    assert bump_release(given) == expected
-
-
 def test_version_parsing():
     assert parse_version("153.0.4") == (153, 0, 4)
     assert parse_version("155.0") == (155, 0, 0)
 
 
-def test_upstream_sh_roundtrip_preserves_comments(tmp_path):
+def test_upstream_sh_parsing_skips_comments(tmp_path):
     path = tmp_path / "upstream.sh"
-    path.write_text("# a comment\nversion=152.0.4\nrelease=beta.31\nextra=1\n")
-    write_upstream_sh({"version": "153.0.4", "release": "beta.32"}, path)
-    text = path.read_text()
-    assert "# a comment" in text
-    assert "extra=1" in text
-    assert read_upstream_sh(path)["version"] == "153.0.4"
+    path.write_text("# a comment\nversion=152.0.4\nrelease='beta.31'\n")
+    assert read_upstream_sh(path) == {"version": "152.0.4", "release": "beta.31"}
 
 
 def test_gate_result_keeps_the_best_outcome_across_retries():
@@ -757,6 +745,8 @@ def test_build_tester_identities_claim_the_binarys_firefox_version(monkeypatch):
     """
     scripts = CI_ROOT.parent / "browser/tests/build-tester/scripts"
     monkeypatch.syspath_prepend(str(scripts))
+    # presets builds the identities with the in-tree camoufox package.
+    monkeypatch.syspath_prepend(str(CI_ROOT.parent / "python/src"))
     import presets
 
     generated = presets.generate_presets("156")
@@ -2724,13 +2714,8 @@ def test_build_tester_accepts_every_core_count_pythonlib_presents():
                 hwc = row.get("navigator", {}).get("hardwareConcurrency")
                 if isinstance(hwc, int):
                     presented.add(hwc)
-    table = re.search(
-        r"^PLAUSIBLE_CORE_COUNTS = \(([^)]*)\)",
-        (lib / "fingerprints.py").read_text(encoding="utf-8"),
-        re.M,
-    )
-    assert table, "PLAUSIBLE_CORE_COUNTS was not found in fingerprints.py"
-    presented |= {int(n) for n in re.findall(r"\d+", table.group(1))}
+    constants = json.loads((lib / "launcher-constants.json").read_text(encoding="utf-8"))
+    presented |= set(constants["plausibleCoreCounts"])
 
     missing = sorted(presented - accepted)
     assert not missing, (
@@ -2922,12 +2907,10 @@ def test_the_patch_guard_matrix_runs_every_group():
 
 
 def test_native_shards_split_the_tests_without_overlap():
-    from ci.run_native import parse_shard
-
     ids = [f"t{i}" for i in range(9)]
     parts = [ids[i - 1 :: n] for i, n in (parse_shard(f"{k}/4") for k in range(1, 5))]
     assert sorted(t for part in parts for t in part) == ids
-    with pytest.raises(SystemExit):
+    with pytest.raises(RuntimeError):
         parse_shard("5/4")
 
 

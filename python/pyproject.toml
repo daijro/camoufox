@@ -55,3 +55,7 @@ geoip = ["maxminddb"]
 
 [tool.poetry.scripts]
 camoufox = "camoufox.__main__:cli"
+
+[tool.pytest.ini_options]
+# Test the in-tree package, whatever camoufox is installed.
+pythonpath = ["src"]

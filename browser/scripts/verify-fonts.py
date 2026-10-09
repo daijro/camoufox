@@ -2,10 +2,10 @@
 """Verify the font bundle, the per-OS fontconfig and fonts.json agree.
 
 The invariant this guards: every family the Python launcher can REPORT for an
-OS (python/src/camoufox/fonts.json[os], plus the essential / variant / marker
-constants in python/src/camoufox/fingerprints.py) is a family the packaged
-browser can RENDER under that OS's bundled fontconfig. A name that fails this
-is a reverse leak: the page is told the font exists and then measures the
+OS (python/src/camoufox/fonts.json[os], plus the essential, Windows 11 and
+marker fonts in essential-fonts.json and launcher-constants.json beside it) is a
+family the packaged browser can RENDER under that OS's bundled fontconfig. A
+name that fails this is a reverse leak: the page is told the font exists and then measures the
 fallback.
 
 For each OS it
@@ -18,8 +18,7 @@ For each OS it
      fc-match: the alias must resolve to its bundled target);
   3. checks the CSS generics resolve to a family in fonts.json[os];
   4. checks every essential / variant / marker name is in fonts.json[os];
-  5. draws _generate_random_font_subset a few times (when the camoufox package
-     imports) and checks each draw is inside fonts.json[os] and contains the
+  5. draws _generate_random_font_subset a few times and checks each draw is inside fonts.json[os] and contains the
      essentials and markers;
   6. checks scripts/package.py's flattening is safe: no basename collides
      across the OS dirs that share a package, and no OS dir has subfolders;
@@ -31,7 +30,6 @@ fonts the first time, which takes a few minutes).
 Exit status is non-zero on any failure.
 """
 import argparse
-import ast
 import glob
 import hashlib
 import json
@@ -41,13 +39,16 @@ import subprocess
 import sys
 import tempfile
 
+from _font_bundle import require_bundle
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PYTHON_SRC = os.path.join(os.path.dirname(REPO), 'python', 'src')
 PACKAGE = os.path.join(PYTHON_SRC, 'camoufox')
+sys.path.insert(0, PYTHON_SRC)
+from camoufox.fingerprints import _generate_random_font_subset  # noqa: E402
+
 OSDIRS = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}
 GENERICS = ['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'system-ui']
-# Alias names each conf rewrites (pattern rules whose test is one of these).
-GIB = 1024 ** 3
 failures = []
 warnings = []
 
@@ -60,24 +61,6 @@ def fail(msg):
 def warn(msg):
     warnings.append(msg)
     print('WARN:', msg)
-
-
-def load_constants():
-    """Read the font constants from fingerprints.py without importing it."""
-    path = os.path.join(PACKAGE, 'fingerprints.py')
-    tree = ast.parse(open(path, encoding='utf-8').read())
-    consts = {}
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            name = node.targets[0].id
-            if 'FONTS' in name and name.startswith('_'):
-                consts[name] = ast.literal_eval(node.value)
-    # The OS bases live in essential-fonts.json, shared with the TS launcher.
-    with open(os.path.join(PACKAGE, 'essential-fonts.json'), encoding='utf-8') as f:
-        for key, fonts in json.load(f).items():
-            suffix = {'win': 'WINDOWS', 'mac': 'MACOS', 'lin': 'LINUX'}[key]
-            consts[f'_ESSENTIAL_FONTS_{suffix}'] = fonts
-    return consts
 
 
 def conf_aliases(conf_text):
@@ -139,19 +122,6 @@ def fc(cmd, conf):
     return subprocess.run(cmd, capture_output=True, text=True, env=env, check=True).stdout
 
 
-
-def require_bundle(bundle):
-    """The font bundle is a release asset; fail with the fix, not a stack trace."""
-    if os.path.isdir(bundle) and os.listdir(bundle):
-        return
-    sys.exit(
-        f'font bundle not present at {bundle}.\n'
-        f'It ships as a release asset rather than repo content (~2.1 GB); run:\n'
-        f'    make fonts-extract\n'
-        f'See scripts/fetch-fonts.py for why it is not in git.'
-    )
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--bundle', default=os.path.join(REPO, 'bundle'))
@@ -159,12 +129,14 @@ def main():
     ap.add_argument('--quick', action='store_true', help='skip fc-list / fc-match')
     ap.add_argument('--draws', type=int, default=20)
     args = ap.parse_args()
-    require_bundle(os.path.join(args.bundle, "fonts")
-                   if not args.bundle.rstrip("/").endswith("fonts") else args.bundle)
+    require_bundle(args.bundle)
 
     fonts_root = os.path.abspath(os.path.join(args.bundle, 'fonts'))
     fonts_json = json.load(open(os.path.join(PACKAGE, 'fonts.json'), encoding='utf-8'))
-    consts = load_constants()
+    with open(os.path.join(PACKAGE, 'essential-fonts.json'), encoding='utf-8') as fh:
+        essentials = json.load(fh)
+    with open(os.path.join(PACKAGE, 'launcher-constants.json'), encoding='utf-8') as fh:
+        constants = json.load(fh)
 
     # Browser-shipped fonts live beside the bundle in the package (fonts/ holds
     # TwemojiMozilla.ttf from the Firefox build plus the per-OS subdirs).
@@ -254,22 +226,17 @@ def main():
 
             # 4. constants
             suffix = {'win': 'WINDOWS', 'mac': 'MACOS', 'lin': 'LINUX'}[os_key]
-            essential = consts[f'_ESSENTIAL_FONTS_{suffix}']
-            markers = consts[f'_{suffix}_MARKER_FONTS']
-            prob, variant = consts[f'_BASE_VARIANT_FONTS_{suffix}']
+            essential = essentials[os_key]
+            markers = constants['markerFonts'][os_key]
+            # The Windows 11 families: part of the Windows base, and only
+            # subtracted on a native host that lacks them.
+            variant = constants['windows11MarkerFonts'] if os_key == 'win' else []
             for label, lst in (('essential', essential), ('marker', markers), ('variant', variant)):
                 missing = sorted(set(lst) - rset)
                 if missing:
                     fail(f'{os_key}: {label} names not in fonts.json: {missing}')
                 else:
                     print(f'OK: {len(lst)} {label} names all in fonts.json[{os_key}] ({len(reportable)})')
-            # A variant drawn with probability < 1 is a tier ON TOP of the base,
-            # so it must be disjoint from it. At probability 1 there is only one
-            # OS version left to spoof (Windows 10 was dropped 2026-09-22), the
-            # variant IS part of that base, and the overlap is correct -- it is
-            # then only used to subtract on a native host that lacks it.
-            if prob < 1.0 and set(essential) & set(variant):
-                fail(f'{os_key}: essential and variant overlap: {sorted(set(essential) & set(variant))}')
             # An unconditional pattern rewrite whose TARGET is reportable makes the
             # alias renderable for every identity, so the alias must be reported by
             # every identity too (essential). Rewrites to an unbundled/unreported
@@ -292,29 +259,23 @@ def main():
                 print(f'note: {len(inert)} alias rewrites are inert for {os_key} (target not reportable): {inert[:4]}...')
 
             # 5. draws
-            sys.path.insert(0, PYTHON_SRC)
-            try:
-                from camoufox.fingerprints import _generate_random_font_subset  # noqa: E402
-            except Exception as e:  # pragma: no cover - optional deps
-                warn(f'camoufox package not importable ({e.__class__.__name__}: {e}); skipping draw check')
-            else:
-                target = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}[os_key]
-                sizes = []
-                for _ in range(args.draws):
-                    draw = _generate_random_font_subset(target)
-                    sizes.append(len(draw))
-                    if len(set(draw)) != len(draw):
-                        fail(f'{os_key}: draw has duplicates')
-                    extra = sorted(set(draw) - rset)
-                    if extra:
-                        fail(f'{os_key}: draw reports names outside fonts.json: {extra[:5]}')
-                    missing = sorted((set(essential) | set(markers)) - set(draw))
-                    if missing:
-                        fail(f'{os_key}: draw lacks essential/marker names: {missing[:5]}')
-                    vs = set(variant) & set(draw)
-                    if vs and vs != set(variant):
-                        fail(f'{os_key}: variant drawn partially: {sorted(vs)}')
-                print(f'OK: {args.draws} draws inside fonts.json; sizes {min(sizes)}..{max(sizes)} of {len(reportable)} (base {len(essential)})')
+            target = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}[os_key]
+            sizes = []
+            for _ in range(args.draws):
+                draw = _generate_random_font_subset(target)
+                sizes.append(len(draw))
+                if len(set(draw)) != len(draw):
+                    fail(f'{os_key}: draw has duplicates')
+                extra = sorted(set(draw) - rset)
+                if extra:
+                    fail(f'{os_key}: draw reports names outside fonts.json: {extra[:5]}')
+                missing = sorted((set(essential) | set(markers)) - set(draw))
+                if missing:
+                    fail(f'{os_key}: draw lacks essential/marker names: {missing[:5]}')
+                vs = set(variant) & set(draw)
+                if vs and vs != set(variant):
+                    fail(f'{os_key}: variant drawn partially: {sorted(vs)}')
+            print(f'OK: {args.draws} draws inside fonts.json; sizes {min(sizes)}..{max(sizes)} of {len(reportable)} (base {len(essential)})')
 
             if args.quick:
                 continue
@@ -401,9 +362,6 @@ def main():
                     dangling = [r for r in rejected if r not in files]
                     if dangling:
                         warn(f'win: {len(dangling)} reject globs name files not in any Windows group: {dangling[:5]}')
-                for r in []:
-                    if '[' in r:
-                        warn(f'win: reject glob {r!r} contains [ ] which fontconfig treats as a character class')
 
     print()
     for w in warnings:

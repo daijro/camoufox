@@ -9,15 +9,11 @@ Run with:
     cd python && python -m pytest tests/test_display.py -v
 """
 
-import os
-import sys
 from types import SimpleNamespace
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+import pytest
 
-import pytest  # noqa: E402
-
-from camoufox import display  # noqa: E402
+from camoufox import display
 
 
 def monitor(width, height, x=0, y=0):

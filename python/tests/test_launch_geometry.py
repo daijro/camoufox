@@ -6,17 +6,14 @@ Run with:
 """
 
 import os
-import sys
 from contextlib import contextmanager
 from unittest import mock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+import orjson
+import pytest
+from camoufox.fingerprints import Screen
 
-import orjson  # noqa: E402
-import pytest  # noqa: E402
-from camoufox.fingerprints import Screen  # noqa: E402
-
-from camoufox import utils  # noqa: E402
+from camoufox import utils
 
 # What get_screen_cons() reports under the Xvfb that headless='virtual' starts:
 # virtdisplay.py sizes it "1x1x24", and launch_options mutates os.environ's

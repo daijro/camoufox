@@ -37,7 +37,7 @@ export default function setup(): void {
 				"From the repo root:\n" +
 				"  python3.14 -m venv .venv\n" +
 				"  .venv/bin/pip install -r ci/requirements.txt -e python\n" +
-				"  .venv/bin/python browser/scripts/pin-fpgen-model.py\n" +
+				"  .venv/bin/python python/scripts/pin-fpgen-model.py\n" +
 				"or point CAMOUFOX_PYTHON at an interpreter that has them.",
 		);
 	}

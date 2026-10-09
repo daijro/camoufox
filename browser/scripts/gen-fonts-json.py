@@ -45,6 +45,8 @@ import os
 import subprocess
 import sys
 
+from _font_bundle import require_bundle
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACKAGE = os.path.join(os.path.dirname(REPO), 'python', 'src', 'camoufox')
 OSDIRS = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}
@@ -130,13 +132,9 @@ SHIPPED_BY_BROWSER = {'win': ['Twemoji Mozilla'], 'mac': [], 'lin': ['Twemoji Mo
 
 # The CreepJS OS-marker families the font draw adds back after the random
 # subset (when bundled). They are reportable even when no base or addition
-# names them, so they count as wanted here. Twin of _*_MARKER_FONTS in
-# python/src/camoufox/fingerprints.py.
-MARKER_FONTS = {
-    'win': ['Segoe UI', 'Tahoma', 'Cambria Math', 'Nirmala UI'],
-    'mac': ['Helvetica Neue', 'PingFang HK', 'PingFang SC', 'PingFang TC'],
-    'lin': ['Noto Sans', 'Noto Serif', 'DejaVu Sans Mono', 'Arimo', 'Cousine', 'Tinos', 'Twemoji Mozilla'],
-}
+# names them, so they count as wanted here.
+with open(os.path.join(PACKAGE, 'launcher-constants.json'), encoding='utf-8') as _fh:
+    MARKER_FONTS = json.load(_fh)['markerFonts']
 
 # Reportable names that are NOT in the manifest for that OS. Each entry is a
 # deliberate camoufox deviation and must be renderable (checked below).
@@ -144,10 +142,9 @@ REPORTABLE_EXTRA = {
     'win': [],
     'mac': [],
     # Firefox exposes its bundled Twemoji Mozilla to content on Linux; it has
-    # been a _LINUX_MARKER_FONTS entry since the font draw was introduced.
+    # been a Linux marker font since the font draw was introduced.
     'lin': ['Twemoji Mozilla'],
 }
-
 
 
 def bundle_dirs_for(bundle, os_key, sub):
@@ -209,19 +206,6 @@ def manifest_names(man, os_key):
     return names
 
 
-
-def require_bundle(bundle):
-    """The font bundle is a release asset; fail with the fix, not a stack trace."""
-    if os.path.isdir(bundle) and os.listdir(bundle):
-        return
-    sys.exit(
-        f'font bundle not present at {bundle}.\n'
-        f'It ships as a release asset rather than repo content (~2.1 GB); run:\n'
-        f'    make fonts-extract\n'
-        f'See scripts/fetch-fonts.py for why it is not in git.'
-    )
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--bundle', default=os.path.join(REPO, 'bundle', 'fonts'))
@@ -231,8 +215,7 @@ def main():
     ap.add_argument('--print-bases', action='store_true', help='print OS base lists as Python literals')
     ap.add_argument('--dump-union', default=None, help='dir to write <os>-union.txt / <os>-unreported.txt')
     args = ap.parse_args()
-    require_bundle(os.path.join(args.bundle, "fonts")
-                   if not args.bundle.rstrip("/").endswith("fonts") else args.bundle)
+    require_bundle(args.bundle)
 
     man = load_manifest(args)
     result = {}

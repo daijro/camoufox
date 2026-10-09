@@ -54,7 +54,7 @@ import {
 	OS_NAME,
 	rprint,
 } from "./paths.js";
-import { comparePyStr } from "./pycompat.js";
+import { comparePyStr, ValueError } from "./pycompat.js";
 import { warn } from "./warnings.js";
 
 /** GITHUB_TOKEN, as the Python twin reads it: once, at import. */
@@ -297,10 +297,15 @@ export const pkgmanDeps = {
  * that plays that role here is playwright-core.
  */
 export function resolvedPlaywrightVersionRaw(): string | null {
+	return installedPackageVersion("playwright-core");
+}
+
+/** An installed npm package's version, or null if it cannot be read. */
+export function installedPackageVersion(name: string): string | null {
 	try {
 		const require = createRequire(import.meta.url);
 		const pkg = JSON.parse(
-			fs.readFileSync(require.resolve("playwright-core/package.json"), "utf-8"),
+			fs.readFileSync(require.resolve(`${name}/package.json`), "utf-8"),
 		);
 		return typeof pkg.version === "string" ? pkg.version : null;
 	} catch {
@@ -681,72 +686,6 @@ async function githubReleases(repo: string): Promise<GitHubRelease[]> {
 }
 
 /**
- * Manages fetching GitHub releases with fallback repos.
- */
-export class GitHubDownloader {
-	githubRepos: string[];
-	githubRepo: string;
-	isPrerelease = false;
-
-	constructor(githubRepos: string | string[]) {
-		this.githubRepos =
-			typeof githubRepos === "string" ? [githubRepos] : githubRepos;
-		this.githubRepo = this.githubRepos[0];
-	}
-
-	/** Return truthy data if this is the desired asset, else null. */
-	checkAsset(asset: GitHubAsset, _release?: GitHubRelease): any {
-		return asset.browser_download_url;
-	}
-
-	/**
-	 * Whether a release whose asset checkAsset() matched may be used. The
-	 * Python twin decides this inside check_asset(); reading a manifest is
-	 * async here, so it is a separate step.
-	 */
-	async acceptRelease(_release: GitHubRelease, _data: any): Promise<boolean> {
-		return true;
-	}
-
-	missingAssetError(): never {
-		throw new MissingRelease(
-			`Could not find a release asset in ${this.githubRepo}.`,
-		);
-	}
-
-	protected getReleases(githubRepo: string): Promise<GitHubRelease[]> {
-		return githubReleases(githubRepo);
-	}
-
-	/**
-	 * Fetch the first matching release asset, trying fallback repos on failure.
-	 */
-	async getAsset(): Promise<any> {
-		let lastError: unknown;
-		for (const repo of this.githubRepos) {
-			try {
-				const releases = await this.getReleases(repo);
-				for (const release of releases) {
-					for (const asset of release.assets ?? []) {
-						const data = this.checkAsset(asset, release);
-						if (data && (await this.acceptRelease(release, data))) {
-							this.githubRepo = repo;
-							this.isPrerelease = release.prerelease ?? false;
-							return data;
-						}
-					}
-				}
-			} catch (error) {
-				lastError = error;
-			}
-		}
-
-		if (lastError) throw lastError;
-		this.missingAssetError();
-	}
-}
-
-/**
  * Information about an available Camoufox version on GitHub.
  */
 export class AvailableVersion {
@@ -805,7 +744,10 @@ export class AvailableVersion {
 /**
  * Handles fetching and installing Camoufox.
  */
-export class CamoufoxFetcher extends GitHubDownloader {
+export class CamoufoxFetcher {
+	githubRepos: string[];
+	githubRepo: string;
+	isPrerelease = false;
 	repoConfig: RepoConfig;
 	arch: string;
 	pattern: RegExp;
@@ -817,9 +759,9 @@ export class CamoufoxFetcher extends GitHubDownloader {
 	_url?: string;
 
 	constructor(repoConfig?: RepoConfig, selectedVersion?: AvailableVersion) {
-		const config = repoConfig ?? RepoConfig.getDefault();
-		super(config.repos);
-		this.repoConfig = config;
+		this.repoConfig = repoConfig ?? RepoConfig.getDefault();
+		this.githubRepos = this.repoConfig.repos;
+		this.githubRepo = this.githubRepos[0];
 		this.arch = this.getPlatformArch();
 		this.pattern = this.repoConfig.buildPattern();
 
@@ -889,6 +831,11 @@ export class CamoufoxFetcher extends GitHubDownloader {
 		return [version, asset.browser_download_url];
 	}
 
+	/**
+	 * Whether a release whose asset checkAsset() matched may be used. The
+	 * Python twin decides this inside check_asset(); reading a manifest is
+	 * async here, so it is a separate step.
+	 */
 	async acceptRelease(
 		release: GitHubRelease,
 		[version]: [Version, string],
@@ -907,6 +854,37 @@ export class CamoufoxFetcher extends GitHubDownloader {
 			`No matching release found for ${OS_NAME} ${this.arch} in the ` +
 				"supported range. Please update the camoufox package.",
 		);
+	}
+
+	protected getReleases(githubRepo: string): Promise<GitHubRelease[]> {
+		return githubReleases(githubRepo);
+	}
+
+	/**
+	 * Fetch the first matching release asset, trying fallback repos on failure.
+	 */
+	async getAsset(): Promise<[Version, string]> {
+		let lastError: unknown;
+		for (const repo of this.githubRepos) {
+			try {
+				const releases = await this.getReleases(repo);
+				for (const release of releases) {
+					for (const asset of release.assets ?? []) {
+						const data = this.checkAsset(asset, release);
+						if (data && (await this.acceptRelease(release, data))) {
+							this.githubRepo = repo;
+							this.isPrerelease = release.prerelease ?? false;
+							return data;
+						}
+					}
+				}
+			} catch (error) {
+				lastError = error;
+			}
+		}
+
+		if (lastError) throw lastError;
+		this.missingAssetError();
 	}
 
 	getPlatformArch(): string {
@@ -944,14 +922,16 @@ export class CamoufoxFetcher extends GitHubDownloader {
 
 	get url(): string {
 		if (!this._url) {
-			throw new Error("Url is not available. Make sure to run init() first.");
+			throw new ValueError(
+				"Url is not available. Make sure to run init() first.",
+			);
 		}
 		return this._url;
 	}
 
 	get version(): string {
 		if (!this._versionObj?.version) {
-			throw new Error(
+			throw new ValueError(
 				"Version is not available. Make sure to run init() first.",
 			);
 		}
@@ -960,7 +940,7 @@ export class CamoufoxFetcher extends GitHubDownloader {
 
 	get build(): string {
 		if (!this._versionObj) {
-			throw new Error(
+			throw new ValueError(
 				"Build information is not available. Make sure to run init() first.",
 			);
 		}
@@ -969,7 +949,7 @@ export class CamoufoxFetcher extends GitHubDownloader {
 
 	get verstr(): string {
 		if (!this._versionObj) {
-			throw new Error(
+			throw new ValueError(
 				"Version is not available. Make sure to run init() first.",
 			);
 		}
@@ -1273,7 +1253,7 @@ export function launchPath(browserPath?: string): string {
 export function selectedLaunchPath(specifier: string): string {
 	const installPath = findInstalledVersion(specifier);
 	if (installPath === null) {
-		throw new Error(
+		throw new ValueError(
 			`Browser version '${specifier}' not found. Run \`camoufox list\` to see installed versions.`,
 		);
 	}

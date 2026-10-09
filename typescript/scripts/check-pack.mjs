@@ -3,11 +3,12 @@
  * The npm twin of `twine check`: prove the tarball `npm publish` would upload is
  * a working package before it goes anywhere.
  *
- *   1. its version equals pythonlib's (the two launchers ship in lockstep, and
- *      a user comparing `camoufox version` across them should see one number);
+ *   1. its version equals the Python package's (the two launchers ship in
+ *      lockstep, and a user comparing `camoufox version` across them should
+ *      see one number);
  *   2. it carries every file src/ reads at runtime -- the DATA_FILES it takes
- *      from pythonlib and any non-TS file under src/ -- since a file missing
- *      only shows up on a user's machine, as an ENOENT from inside dist/;
+ *      from python/src/camoufox and any non-TS file under src/ -- since a file
+ *      missing only shows up on a user's machine, as an ENOENT from inside dist/;
  *   3. installed into an empty project, it imports and exposes its entry
  *      points, and its CLI starts.
  *
@@ -29,7 +30,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const problems = [];
 
-// 1. version lockstep with pythonlib
+// 1. version lockstep with the Python package
 const pyproject = readFileSync(
 	join(root, "..", "python", "pyproject.toml"),
 	"utf8",
@@ -39,7 +40,7 @@ const pyVersion = pyproject.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
 const asPep440 = (v) => v.replace(/-beta\.(\d+)$/, "b$1");
 if (pyVersion !== asPep440(pkg.version)) {
 	problems.push(
-		`package.json version ${pkg.version} != pythonlib ${pyVersion}`,
+		`package.json version ${pkg.version} != python/pyproject.toml ${pyVersion}`,
 	);
 }
 if (pkg.private)
