@@ -1,9 +1,9 @@
 diff --git a/dom/base/RoverfoxStorageManager.cpp b/dom/base/RoverfoxStorageManager.cpp
 new file mode 100644
-index 0000000000..32a3cb96ec
+index 0000000000..c5f3dd4247
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -0,0 +1,263 @@
+@@ -0,0 +1,275 @@
 +#include "RoverfoxStorageManager.h"
 +#include "mozilla/Preferences.h"
 +#include "nsIPrefBranch.h"
@@ -12,7 +12,8 @@ index 0000000000..32a3cb96ec
 +#include "nsThreadUtils.h"
 +#include "jsapi.h"
 +#include "js/PropertyAndElement.h"
-+#include "mozilla/dom/BrowsingContext.h"
++#include "mozilla/dom/Document.h"
++#include "nsIPrincipal.h"
 +#include "nsContentUtils.h"
 +#include "nsGlobalWindowInner.h"
 +#include "xpcpublic.h"
@@ -231,6 +232,21 @@ index 0000000000..32a3cb96ec
 +  return false;
 +}
 +
++/* static */ uint32_t RoverfoxStorageManager::UserContextId(
++    nsIPrincipal* aPrincipal) {
++  return aPrincipal ? aPrincipal->OriginAttributesRef().mUserContextId : 0;
++}
++
++/* static */ uint32_t RoverfoxStorageManager::UserContextId(
++    const nsINode* aNode) {
++  return aNode ? UserContextId(aNode->NodePrincipal()) : 0;
++}
++
++/* static */ uint32_t RoverfoxStorageManager::UserContextId(
++    nsPIDOMWindowInner* aWindow) {
++  return aWindow ? UserContextId(aWindow->GetExtantDoc()) : 0;
++}
++
 +static nsString SetterUsedKey(const char* aName, uint32_t aUserContextId) {
 +  nsString key;
 +  key.AppendPrintf("%s_d_%u", aName, aUserContextId);
@@ -246,12 +262,8 @@ index 0000000000..32a3cb96ec
 +                                                          const char* aName) {
 +  nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
 +  if (!win) return false;
-+  uint32_t userContextId = 0;
-+  if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+    userContextId = bc->OriginAttributesRef().mUserContextId;
-+  }
 +  bool used = false;
-+  GetBool(SetterUsedKey(aName, userContextId), used);
++  GetBool(SetterUsedKey(aName, UserContextId(win)), used);
 +  return !used;
 +}
 +
@@ -269,10 +281,10 @@ index 0000000000..32a3cb96ec
 +}  // namespace mozilla
 diff --git a/dom/base/RoverfoxStorageManager.h b/dom/base/RoverfoxStorageManager.h
 new file mode 100644
-index 0000000000..db0e038aed
+index 0000000000..c7dad0158f
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.h
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,64 @@
 +#ifndef mozilla_dom_RoverfoxStorageManager_h
 +#define mozilla_dom_RoverfoxStorageManager_h
 +
@@ -283,6 +295,9 @@ index 0000000000..db0e038aed
 +#include "mozilla/Mutex.h"
 +
 +class JSObject;
++class nsINode;
++class nsIPrincipal;
++class nsPIDOMWindowInner;
 +
 +namespace mozilla {
 +namespace dom {
@@ -302,6 +317,14 @@ index 0000000000..db0e038aed
 +  // A put reached this process's prefs: copy it into the local cache (main
 +  // thread only), which is all a worker thread reads.
 +  static void MirrorPref(const nsACString& aPrefName);
++
++  // The userContextId per-context values are stored under: the principal's.
++  // A document without a browsing context of its own (createHTMLDocument,
++  // DOMParser) shares its creator's principal, so it finds its context's
++  // values where a browsing-context lookup found none.
++  static uint32_t UserContextId(nsIPrincipal* aPrincipal);
++  static uint32_t UserContextId(const nsINode* aNode);
++  static uint32_t UserContextId(nsPIDOMWindowInner* aWindow);
 +
 +  // Per-context window.setX() setters. A setter is offered to a window until
 +  // its context has used it; aName names the setter's "used" flag.

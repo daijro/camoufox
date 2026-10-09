@@ -1,23 +1,21 @@
 diff --git a/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs b/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
-index e5bda9f62c..f8988a4430 100644
+index f47f9993c9..ed0cca10dd 100644
 --- a/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
 +++ b/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
-@@ -482,7 +482,7 @@ export class UrlbarProviderInterventions extends UrlbarProvider {
+@@ -444,7 +444,7 @@ export class UrlbarProviderInterventions extends UrlbarProvider {
     * @param {UrlbarQueryContext} queryContext The query context object
     */
    async isActive(queryContext) {
 -    if (
 +    if (true ||
        !queryContext.searchString ||
-       queryContext.searchString.length > UrlbarUtils.MAX_TEXT_LENGTH ||
+       queryContext.searchString.length > UrlbarShared.MAX_TEXT_LENGTH ||
        lazy.UrlUtils.REGEXP_LIKE_PROTOCOL.test(queryContext.searchString) ||
 diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/components/search/SearchEngineSelector.sys.mjs
+index 3a42b383af..0a528ea491 100644
 --- a/toolkit/components/search/SearchEngineSelector.sys.mjs
 +++ b/toolkit/components/search/SearchEngineSelector.sys.mjs
-@@ -325,12 +325,65 @@ export class SearchEngineSelector {
-    *   Internal boolean to indicate if this is the first time check or not.
-    * @returns {Promise<object[]>}
-    *   An array of objects in the database, or an empty array if none
+@@ -328,6 +328,59 @@ export class SearchEngineSelector {
     *   could be obtained.
     */
    async #getConfiguration(firstTime = true) {
@@ -77,6 +75,3 @@ diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/co
      let result = [];
      let failed = false;
      try {
-       result = await this.#remoteConfig.get({
-         order: "id",
-       });

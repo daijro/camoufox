@@ -606,7 +606,9 @@ def test_cross_os_canvas_is_rfps_placeholder_and_spoofs_feed_baseline_protection
     patches = BROWSER / "patches"
     screen = (patches / "screen-spoofing.patch").read_text(encoding="utf-8")
     assert "const nsAString& aPlatform" in screen, why
-    assert "!availFromResolution && ScreenDimensionManager::GetDimensions" in screen, why
+    # Formatting may wrap the condition, so compare the added lines joined up.
+    added = " ".join(l[1:].strip() for l in screen.splitlines() if l.startswith("+"))
+    assert "!availFromResolution && ScreenDimensionManager::GetDimensions" in added, why
     assert "rect.has_value() && !availFromResolution" in screen, why
     touch = (patches / "touchscreen-fingerprint-spoofing.patch").read_text(encoding="utf-8")
     assert "CollapseMaxTouchPoints(value.value())" in touch, why

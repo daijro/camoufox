@@ -406,6 +406,25 @@ rules:
       resetting when the document changes is worth releasing when the frame goes
       away, and a sandbox needs nuking rather than just dropping.
 
+  - id: fingerprint-setters-sealed-per-window
+    title: The window.setXxx() fingerprint setters start sealed, and the seal is per window
+    check: manual   # browser/tests/playwright/patches/fingerprint-setter-seal.py
+    evidence:
+      - "PR #749 (7911f4a): setters a fingerprint never called stayed on window, and a launch with no init script leaked all of them"
+      - "browser/patches/window-setter-seal.patch"
+    rationale: >-
+      The setters are configuration API for the automation side, not page API.
+      A window starts sealed; juggler unseals it, runs the init scripts that
+      apply a per-context fingerprint, and seals it again before page script
+      runs. Sealed is the default so the failure is closed: a window automation
+      never drives (the binary launched as a plain browser) never offers them,
+      instead of offering them permanently to whatever loads. The flag is per
+      window, not per browsing context: every new document needs its own
+      configuration window, and a context-wide flag would seal on the first
+      about:blank and leave every later navigation unable to apply a
+      fingerprint. The Func= guards consult the flag, which is what stops the
+      DOM resolve hook handing a name back after it has been deleted.
+
   # -------------------------------------------------------------------------
   # Input
   # -------------------------------------------------------------------------

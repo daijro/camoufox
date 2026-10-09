@@ -13,8 +13,13 @@ compile.
 `additions/camoucfg/MaskConfig.hpp` reads the spoofing config (`CAMOU_CONFIG` /
 `camoufox.cfg`) through `MaskConfig::GetBool()`, `GetString()`, `GetUint32()`
 and friends. `GetBool()` is false for an unset key; `GetOptionalBool()` is for
-the rare caller that must tell unset from false. `GetSpoofedOS()` is the one
-reading of `navigator.platform` as an OS, for every patch that varies by OS.
+the rare caller that must tell unset from false. `SpoofedOSFor()` is the one
+reading of a `navigator.platform` as an OS. `GetSpoofedOS()` is the launch's,
+for process-wide decisions only (`font-hijacker.patch`'s bundled fonts, the
+WebRTC host socket's port range in `webrtc-ip-spoofing.patch`); anything a page
+can observe asks `NavigatorManager::GetSpoofedOS()` (`navigator-spoofing.patch`)
+for its own context's OS, which is that context's `navigator.platform` when it
+set one and the launch's otherwise.
 `scripts/copy-additions.sh` copies it into the source tree before any patch
 applies. A patch that calls MaskConfig from a directory whose `moz.build` does
 not already see `/camoucfg` must add `LOCAL_INCLUDES += ["/camoucfg"]` itself.
@@ -63,6 +68,7 @@ already set up, and do not add the include or `LOCAL_INCLUDES` themselves:
 | `touchscreen-fingerprint-spoofing.patch` | `navigator-spoofing.patch` for `MaskConfig.hpp` in `dom/base/Navigator.cpp` |
 | `font-list-spoofing.patch` | `anti-font-fingerprinting.patch` for `gfxFontGroup::mUserContextId` |
 | `timezone-spoofing.patch`, `webrtc-ip-spoofing.patch` | `audio-fingerprint-manager.patch` for `RoverfoxStorageManager.h` in `dom/base/nsGlobalWindowInner.cpp` |
+| `font-system-fonts-css2.patch`, `system-ui-font-spoofing.patch`, `webrtc-ip-spoofing.patch` | `navigator-spoofing.patch` for `NavigatorManager::GetSpoofedOS()` |
 
 ## RoverfoxStorageManager
 
@@ -74,6 +80,13 @@ a context's documents can land in any of them, and only the first document
 calls the setter. The same patch provides the guard and removal every setter
 uses (`IsSetterOffered`, `MarkSetterUsed`, `RemoveSetter`), and
 `window-setter-seal.patch` adds its seal check to `IsSetterOffered`.
+
+`RoverfoxStorageManager::UserContextId()` is the one way a patch finds the
+context a value is stored under: the principal of the node, document or window
+at hand. A browsing context is not used, because a document created by
+`document.implementation.createHTMLDocument()` or `DOMParser` has none, while it
+shares its creator's principal. A value is stored only under its own context;
+nothing writes a fallback copy under context 0.
 
 ## Playwright
 

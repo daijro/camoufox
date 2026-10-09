@@ -34,17 +34,12 @@ PROPERTIES = REPO / "browser" / "settings" / "properties.json"
 # MaskConfig::GetBool("k") / GetString("k") / GetUint32("k") / HasKey("k") ...
 MASKCONFIG_READ = re.compile(r'MaskConfig::(?:Get|Has)\w*\(\s*"([^"]+)"')
 
-# Keys read through a variable or built at runtime rather than a string literal.
-# Add here (with a reason) only when the read genuinely cannot name its key.
-ALLOWED_UNDECLARED: set = set()
-
 # Declared keys the browser never reads, each with the reason it is declared
 # anyway. Everything else in properties.json must be read by a patch or by
 # Juggler: a key nothing reads does nothing, silently.
 NOT_READ_BY_THE_BROWSER = {
     "locale:script": "the launcher joins it with locale:language/region into the UI locale",
     "navigator.doNotTrack": "the launcher applies it as privacy.donottrackheader.enabled (#760)",
-    "navigator.buildID": "declared ahead of the patch that reads it (#780)",
 }
 
 # How Juggler and the patches name a key: a quoted string literal.
@@ -105,7 +100,7 @@ def test_every_key_the_browser_reads_is_declared():
     undeclared = {
         key: files
         for key, files in read.items()
-        if key not in declared and key not in ALLOWED_UNDECLARED
+        if key not in declared
     }
     if undeclared:
         lines = [

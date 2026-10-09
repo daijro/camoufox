@@ -44,35 +44,26 @@ index a0b8c260c4..2ea46a9810 100644
  
   private:
 diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
-index f2c42a498e..bb2894d68c 100644
+index f2c42a498e..bc887921c8 100644
 --- a/gfx/thebes/gfxTextRun.cpp
 +++ b/gfx/thebes/gfxTextRun.cpp
-@@ -33,6 +33,10 @@
+@@ -33,6 +33,8 @@
  #include "nsStyleConsts.h"
  #include "nsStyleUtil.h"
  #include "nsUnicodeProperties.h"
-+#include "mozilla/dom/BrowsingContext.h"
 +#include "mozilla/dom/Document.h"
-+#include "nsPIDOMWindow.h"
-+#include "nsPIDOMWindowInlines.h"
++#include "mozilla/dom/RoverfoxStorageManager.h"
  
  #ifdef XP_WIN
  #  include "gfxWindowsPlatform.h"
-@@ -1871,6 +1875,18 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+@@ -1871,6 +1873,11 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
        mFontVariantEmoji(aVariantEmoji) {
    // We don't use SetUserFontSet() here, as we want to unconditionally call
    // EnsureFontList() rather than only do UpdateUserFonts() if it changed.
 +
-+  // Initialize cached user context ID via BrowsingContext (canonical source).
-+  mUserContextId = 0;
 +  if (mFontVisibilityProvider) {
-+    if (auto* doc = mFontVisibilityProvider->GetDocument()) {
-+      if (auto* win = doc->GetInnerWindow()) {
-+        if (auto* bc = win->GetBrowsingContext()) {
-+          mUserContextId = bc->OriginAttributesRef().mUserContextId;
-+        }
-+      }
-+    }
++    mUserContextId = mozilla::dom::RoverfoxStorageManager::UserContextId(
++        mFontVisibilityProvider->GetDocument());
 +  }
  }
  

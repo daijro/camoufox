@@ -122,7 +122,7 @@ index c1b1fbf7e6..ee5d0b9149 100644
      "UIDirectionManager.cpp",
      "UserActivation.cpp",
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 3db19d8956..d915d3ced3 100644
+index 56d4c9500f..3590b9f2b0 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -247,6 +247,8 @@
@@ -134,16 +134,11 @@ index 3db19d8956..d915d3ced3 100644
  #include "nsIDOMXULControlElement.h"
  #include "nsIDeviceSensors.h"
  #include "nsIDocShell.h"
-@@ -7763,6 +7765,39 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
+@@ -7763,6 +7765,29 @@ IntlUtils* nsGlobalWindowInner::GetIntlUtils(ErrorResult& aError) {
    return mIntlUtils;
  }
  
 +void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aRv) {
-+  uint32_t userContextId = 0;
-+  if (BrowsingContext* bc = GetBrowsingContext()) {
-+    userContextId = bc->OriginAttributesRef().mUserContextId;
-+  }
-+
 +  NS_LossyConvertUTF16toASCII timezoneASCII(timezone);
 +
 +  if (JSContext* cx = nsContentUtils::GetCurrentJSContext()) {
@@ -153,13 +148,8 @@ index 3db19d8956..d915d3ced3 100644
 +    }
 +  }
 +
-+  TimezoneManager::SetTimezone(userContextId, timezone);
-+
-+  // Also store under userContextId=0 as fallback for shared/service workers
-+  // which may have a different userContextId than the parent page.
-+  if (userContextId != 0) {
-+    TimezoneManager::SetTimezone(0, timezone);
-+  }
++  TimezoneManager::SetTimezone(RoverfoxStorageManager::UserContextId(this),
++                               timezone);
 +
 +  // Set global process-wide timezone as ultimate fallback.
 +  // Per-realm overrides (windows + dedicated workers) take priority.
@@ -188,29 +178,28 @@ index d6826ed802..a9d8fb50ba 100644
  
    void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
 diff --git a/dom/base/nsGlobalWindowOuter.cpp b/dom/base/nsGlobalWindowOuter.cpp
-index c0bd92f276..7f6ea88dea 100644
+index c0bd92f276..f604d14eaa 100644
 --- a/dom/base/nsGlobalWindowOuter.cpp
 +++ b/dom/base/nsGlobalWindowOuter.cpp
-@@ -87,6 +87,8 @@
+@@ -87,6 +87,9 @@
  #include "js/friend/WindowProxy.h"  // js::IsWindowProxy, js::SetWindowProxy
  #include "jsapi.h"
  #include "jsfriendapi.h"
 +#include "TimezoneManager.h"
++#include "mozilla/dom/RoverfoxStorageManager.h"
 +#include "js/Date.h"
  #include "mozilla/Likely.h"
  #include "mozilla/Preferences.h"
  #include "mozilla/SchedulerGroup.h"
-@@ -2515,6 +2517,31 @@ nsresult nsGlobalWindowOuter::SetNewDocument(Document* aDocument,
+@@ -2515,6 +2518,29 @@ nsresult nsGlobalWindowOuter::SetNewDocument(Document* aDocument,
      MOZ_ALWAYS_SUCCEEDS(bc->SetCurrentInnerWindowId(mInnerWindow->WindowID()));
    }
  
 +  // Camoufox: Auto-apply stored timezone when navigating to new document
 +  // This ensures timezone persists across page navigations within same context
 +  {
-+    uint32_t userContextId = 0;
-+    if (bc) {
-+      userContextId = bc->OriginAttributesRef().mUserContextId;
-+    }
++    const uint32_t userContextId =
++        mozilla::dom::RoverfoxStorageManager::UserContextId(aDocument);
 +    nsAutoString storedTimezone;
 +    // Only when the zone differs from the process-wide one: a per-realm
 +    // override releases all JIT code and makes every Date call slower, both

@@ -107,7 +107,7 @@ index ee5d0b9149..cb146517aa 100644
  # CharacterDataBuffer.cpp
  if CONFIG["INTEL_ARCHITECTURE"]:
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index d915d3ced3..3afcb48ec2 100644
+index 3590b9f2b0..e1281931d5 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -27,6 +27,7 @@
@@ -118,35 +118,23 @@ index d915d3ced3..3afcb48ec2 100644
  #include "WindowDestroyedEvent.h"
  #include "WindowNamedPropertiesHandler.h"
  #include "js/ComparisonOperators.h"
-@@ -7956,6 +7957,35 @@ void nsGlobalWindowInner::SetSpeechVoices(const nsAString& aVoices,
+@@ -7898,6 +7899,23 @@ void nsGlobalWindowInner::SetSpeechVoices(const nsAString& aVoices,
    RoverfoxStorageManager::RemoveSetter("setSpeechVoices");
  }
  
 +
 +void nsGlobalWindowInner::SetWebGLVendor(const nsAString& vendor,
 +                                          ErrorResult& aRv) {
-+  uint32_t userContextId = 0;
-+  if (BrowsingContext* bc = GetBrowsingContext()) {
-+    userContextId = bc->OriginAttributesRef().mUserContextId;
-+  }
++  const uint32_t userContextId = RoverfoxStorageManager::UserContextId(this);
 +  WebGLParamsManager::SetVendor(userContextId, vendor);
-+  if (userContextId != 0) {
-+    WebGLParamsManager::SetVendor(0, vendor);
-+  }
 +  WebGLParamsManager::DisableVendorFunction(userContextId);
 +  RoverfoxStorageManager::RemoveSetter("setWebGLVendor");
 +}
 +
 +void nsGlobalWindowInner::SetWebGLRenderer(const nsAString& renderer,
 +                                            ErrorResult& aRv) {
-+  uint32_t userContextId = 0;
-+  if (BrowsingContext* bc = GetBrowsingContext()) {
-+    userContextId = bc->OriginAttributesRef().mUserContextId;
-+  }
++  const uint32_t userContextId = RoverfoxStorageManager::UserContextId(this);
 +  WebGLParamsManager::SetRenderer(userContextId, renderer);
-+  if (userContextId != 0) {
-+    WebGLParamsManager::SetRenderer(0, renderer);
-+  }
 +  WebGLParamsManager::DisableRendererFunction(userContextId);
 +  RoverfoxStorageManager::RemoveSetter("setWebGLRenderer");
 +}
@@ -170,17 +158,15 @@ index a9d8fb50ba..f3fbefbbfd 100644
    void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
    void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
 diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
-index 5aaa4279fd..d9ed54144e 100644
+index 5aaa4279fd..03163036ee 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
 +++ b/dom/canvas/ClientWebGLContext.cpp
-@@ -3,6 +3,14 @@
+@@ -3,6 +3,12 @@
   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
  
  #include "ClientWebGLContext.h"
 +#include "MaskConfig.hpp"
 +#include "WebGLParamsManager.h"
-+#include "mozilla/dom/BrowsingContext.h"
-+#include "mozilla/dom/Document.h"
 +#include "mozilla/dom/WorkerPrivate.h"
 +#include "nsPIDOMWindow.h"
 +#include <algorithm>
@@ -188,27 +174,22 @@ index 5aaa4279fd..d9ed54144e 100644
  
  #include <fmt/format.h>
  
-@@ -781,6 +789,28 @@ void ClientWebGLContext::SetUnpackColorSpace(
+@@ -781,6 +787,23 @@ void ClientWebGLContext::SetUnpackColorSpace(
    Run<RPROC(SetUnpackColorSpace)>(*mUnpackColorSpace);
  }
  
 +uint32_t ClientWebGLContext::GetUserContextId() const {
 +  if (mCanvasElement) {
-+    if (Document* doc = mCanvasElement->OwnerDoc()) {
-+      if (BrowsingContext* bc = doc->GetBrowsingContext()) {
-+        return bc->OriginAttributesRef().mUserContextId;
-+      }
++    return RoverfoxStorageManager::UserContextId(mCanvasElement);
++  }
++  if (mOffscreenCanvas) {
++    nsCOMPtr<nsPIDOMWindowInner> win =
++        do_QueryInterface(mOffscreenCanvas->GetParentObject());
++    if (win) {
++      return RoverfoxStorageManager::UserContextId(win);
 +    }
-+  } else if (mOffscreenCanvas) {
-+    if (nsIGlobalObject* global = mOffscreenCanvas->GetParentObject()) {
-+      nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(global);
-+      if (win) {
-+        if (BrowsingContext* bc = win->GetBrowsingContext()) {
-+          return bc->OriginAttributesRef().mUserContextId;
-+        }
-+      } else if (WorkerPrivate* wp = GetCurrentThreadWorkerPrivate()) {
-+        return wp->GetOriginAttributes().mUserContextId;
-+      }
++    if (WorkerPrivate* wp = GetCurrentThreadWorkerPrivate()) {
++      return wp->GetOriginAttributes().mUserContextId;
 +    }
 +  }
 +  return 0;
@@ -217,7 +198,7 @@ index 5aaa4279fd..d9ed54144e 100644
  void ClientWebGLContext::GetContextAttributes(
      dom::Nullable<dom::WebGLContextAttributes>& retval) {
    retval.SetNull();
-@@ -794,6 +824,9 @@ void ClientWebGLContext::GetContextAttributes(
+@@ -794,6 +817,9 @@ void ClientWebGLContext::GetContextAttributes(
  
    const auto& options = notLost->info.options;
  
@@ -227,7 +208,7 @@ index 5aaa4279fd..d9ed54144e 100644
    result.mAlpha.Construct(options.alpha);
    result.mDepth = options.depth;
    result.mStencil = options.stencil;
-@@ -2179,6 +2212,107 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2179,6 +2205,107 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
    const auto& state = State();
  
    // -
@@ -335,7 +316,7 @@ index 5aaa4279fd..d9ed54144e 100644
  
    const auto fnSetRetval_Buffer = [&](const GLenum target) {
      const auto buffer = *MaybeFind(state.mBoundBufferByTarget, target);
-@@ -2288,13 +2422,19 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2288,13 +2415,19 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
        return;
  
      case LOCAL_GL_ALIASED_POINT_SIZE_RANGE:
@@ -359,7 +340,7 @@ index 5aaa4279fd..d9ed54144e 100644
        return;
  
      // 4 floats
-@@ -2310,7 +2450,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2310,7 +2443,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
      case LOCAL_GL_MAX_VIEWPORT_DIMS: {
        auto maxViewportDim = BitwiseCast<int32_t>(limits.maxViewportDim);
        const auto dims = std::array<int32_t, 2>{maxViewportDim, maxViewportDim};
@@ -372,14 +353,13 @@ index 5aaa4279fd..d9ed54144e 100644
        return;
      }
  
-@@ -2438,6 +2582,21 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2438,6 +2575,31 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
    // -
  
    if (!debug) {
-+    // Camoufox: the identity's renderer, when it has one. Stock answers RENDERER
-+    // and UNMASKED_RENDERER_WEBGL with the same string, so both come from here;
-+    // answering RENDERER from the real context paired the host GPU with the
-+    // spoofed one.
++    // Camoufox: the identity's GPU, when it has one. It stands in for the real
++    // context's strings only, after stock's fingerprinting-protection checks,
++    // so RENDERER and the UNMASKED_* strings always name the same GPU.
 +    const auto GetSpoofedRenderer = [&]() -> Maybe<std::string> {
 +      nsAutoString stored;
 +      if (WebGLParamsManager::GetRenderer(GetUserContextId(), stored)) {
@@ -391,10 +371,21 @@ index 5aaa4279fd..d9ed54144e 100644
 +      return Nothing();
 +    };
 +
++    const auto GetSpoofedVendor = [&]() -> Maybe<std::string> {
++      nsAutoString stored;
++      if (WebGLParamsManager::GetVendor(GetUserContextId(), stored)) {
++        return Some(std::string(NS_ConvertUTF16toUTF8(stored).get()));
++      }
++      if (auto value = MaskConfig::GetString("webGl:vendor")) {
++        return Some(value.value());
++      }
++      return Nothing();
++    };
++
      const auto GetUnmaskedRenderer = [&]() {
        const auto prefLock = StaticPrefs::webgl_override_unmasked_renderer();
        if (!prefLock->IsEmpty()) {
-@@ -2470,9 +2629,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+@@ -2470,9 +2632,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
            allowRenderer = false;
          }
          if (allowRenderer) {
@@ -410,36 +401,41 @@ index 5aaa4279fd..d9ed54144e 100644
            }
          }
          if (!ret) {
-@@ -2506,6 +2668,10 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
- 
-         switch (pname) {
-           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_RENDERER_WEBGL:
-+            ret = GetSpoofedRenderer();
-+            if (ret) {
-+              break;
-+            }
-             if (ShouldResistFingerprinting(RFPTarget::WebGLRenderInfo) ||
+@@ -2510,9 +2675,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
                  ShouldResistFingerprinting(RFPTarget::WebGLRendererConstant)) {
                ret = Some("Mozilla"_ns);
-@@ -2518,6 +2684,17 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+             } else {
+-              ret = GetUnmaskedRenderer();
+-              if (ret && StaticPrefs::webgl_sanitize_unmasked_renderer()) {
+-                ret = Some(webgl::SanitizeRenderer(*ret));
++              ret = GetSpoofedRenderer();
++              if (!ret) {
++                ret = GetUnmaskedRenderer();
++                if (ret && StaticPrefs::webgl_sanitize_unmasked_renderer()) {
++                  ret = Some(webgl::SanitizeRenderer(*ret));
++                }
+               }
+             }
              break;
- 
-           case dom::WEBGL_debug_renderer_info_Binding::UNMASKED_VENDOR_WEBGL:
-+            {
-+              nsAutoString stored;
-+              if (WebGLParamsManager::GetVendor(GetUserContextId(), stored)) {
-+                ret = Some(NS_ConvertUTF16toUTF8(stored));
-+                break;
-+              }
-+            }
-+            if (auto value = MaskConfig::GetString("webGl:vendor")) {
-+              ret = Some(value.value());
-+              break;
-+            }
-             if (ShouldResistFingerprinting(RFPTarget::WebGLRenderInfo)) {
+@@ -2542,10 +2710,13 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+                            RFPTarget::WebGLVendorConstant)) {
                ret = Some("Mozilla"_ns);
-             } else if (ShouldResistFingerprinting(
-@@ -3020,6 +3197,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
+             } else {
+-              ret = GetUnmaskedVendor();
+-              if (ret &&
+-                  ShouldResistFingerprinting(RFPTarget::WebGLVendorSanitize)) {
+-                ret = Some(webgl::SanitizeVendor(*ret));
++              ret = GetSpoofedVendor();
++              if (!ret) {
++                ret = GetUnmaskedVendor();
++                if (ret && ShouldResistFingerprinting(
++                               RFPTarget::WebGLVendorSanitize)) {
++                  ret = Some(webgl::SanitizeVendor(*ret));
++                }
+               }
+             }
+             break;
+@@ -3020,6 +3191,24 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
      return nullptr;
    }
  
@@ -464,7 +460,7 @@ index 5aaa4279fd..d9ed54144e 100644
    const auto& shaderPrecisions = *notLost->info.shaderPrecisions;
    const auto args =
        webgl::GetShaderPrecisionFormatArgs{shadertype, precisiontype};
-@@ -6392,6 +6587,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
+@@ -6392,6 +6581,17 @@ bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
      return false;
    }
  
@@ -482,7 +478,7 @@ index 5aaa4279fd..d9ed54144e 100644
    const auto& limits = Limits();
    return limits.supportedExtensions[ext];
  }
-@@ -6406,6 +6612,18 @@ void ClientWebGLContext::GetSupportedExtensions(
+@@ -6406,6 +6606,18 @@ void ClientWebGLContext::GetSupportedExtensions(
    }
  
    auto& retarr = retval.SetValue();

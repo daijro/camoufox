@@ -195,28 +195,32 @@ inline bool GetBool(const std::string& key) {
   return GetOptionalBool(key).value_or(false);
 }
 
-// The OS the identity presents, from navigator.platform. Every patch that
-// varies by OS asks this, so no two of them can disagree about it. None means
-// no platform is configured; Other, one no identity uses.
+// The OS an identity presents, from its navigator.platform. None means no
+// platform is configured; Other, one no identity uses.
 enum class SpoofedOS { None, Windows, MacOS, Linux, Other };
 
+inline SpoofedOS SpoofedOSFor(std::string_view platform) {
+  if (platform == "Win32") return SpoofedOS::Windows;
+  if (platform == "MacIntel") return SpoofedOS::MacOS;
+  if (platform.rfind("Linux", 0) == 0) return SpoofedOS::Linux;
+  return SpoofedOS::Other;
+}
+
+// The launch's OS. Only process-wide decisions use it; anything a page of one
+// context can observe asks NavigatorManager::GetSpoofedOS for that context's.
 inline SpoofedOS GetSpoofedOS() {
   static const SpoofedOS os = [] {
     auto platform = GetString("navigator.platform");
-    if (!platform) return SpoofedOS::None;
-    if (*platform == "Win32") return SpoofedOS::Windows;
-    if (*platform == "MacIntel") return SpoofedOS::MacOS;
-    if (platform->rfind("Linux", 0) == 0) return SpoofedOS::Linux;
-    return SpoofedOS::Other;
+    return platform ? SpoofedOSFor(*platform) : SpoofedOS::None;
   }();
   return os;
 }
 
-// The ephemeral port range of the OS the identity presents, which is where
-// that OS's kernel puts a socket bound to port 0. A page sees these ports in
-// WebRTC candidates.
-inline std::optional<std::pair<uint16_t, uint16_t>> SpoofedEphemeralPorts() {
-  switch (GetSpoofedOS()) {
+// The ephemeral port range of an OS, which is where its kernel puts a socket
+// bound to port 0. A page sees these ports in WebRTC candidates.
+inline std::optional<std::pair<uint16_t, uint16_t>> SpoofedEphemeralPorts(
+    SpoofedOS aOS = GetSpoofedOS()) {
+  switch (aOS) {
     case SpoofedOS::Windows:
     case SpoofedOS::MacOS:
       return std::pair<uint16_t, uint16_t>{49152, 65535};

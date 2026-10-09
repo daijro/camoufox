@@ -142,7 +142,7 @@ index 926cadf3dc..c1b1fbf7e6 100644
  # CharacterDataBuffer.cpp
  if CONFIG["INTEL_ARCHITECTURE"]:
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 7196e45448..3db19d8956 100644
+index 25f413db16..56d4c9500f 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -19,6 +19,7 @@
@@ -153,16 +153,13 @@ index 7196e45448..3db19d8956 100644
  #include "MainThreadUtils.h"
  #include "Navigator.h"
  #include "PaintWorkletImpl.h"
-@@ -7909,6 +7910,17 @@ void nsGlobalWindowInner::SetScreenColorDepth(uint32_t depth,
+@@ -7864,6 +7865,14 @@ void nsGlobalWindowInner::SetScreenColorDepth(uint32_t depth,
    RoverfoxStorageManager::RemoveSetter("setScreenColorDepth");
  }
  
 +void nsGlobalWindowInner::SetSpeechVoices(const nsAString& aVoices,
 +                                           ErrorResult& aRv) {
-+  uint32_t userContextId = 0;
-+  if (BrowsingContext* bc = GetBrowsingContext()) {
-+    userContextId = bc->OriginAttributesRef().mUserContextId;
-+  }
++  const uint32_t userContextId = RoverfoxStorageManager::UserContextId(this);
 +  SpeechVoicesManager::SetVoices(userContextId, aVoices);
 +  SpeechVoicesManager::DisableFunction(userContextId);
 +  RoverfoxStorageManager::RemoveSetter("setSpeechVoices");
@@ -186,37 +183,28 @@ index ff8c14d011..d6826ed802 100644
    void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
    void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
 diff --git a/dom/media/webspeech/synth/SpeechSynthesis.cpp b/dom/media/webspeech/synth/SpeechSynthesis.cpp
-index e6ce729415..4dc0b589da 100644
+index e6ce729415..0e142e7971 100644
 --- a/dom/media/webspeech/synth/SpeechSynthesis.cpp
 +++ b/dom/media/webspeech/synth/SpeechSynthesis.cpp
-@@ -12,6 +12,8 @@
+@@ -12,6 +12,7 @@
  #include "mozilla/dom/WindowGlobalChild.h"
  #include "nsContentUtils.h"
  #include "nsGlobalWindowInner.h"
-+#include "mozilla/dom/BrowsingContext.h"
 +#include "SpeechVoicesManager.h"
  #include "nsIDocShell.h"
  #include "nsISupportsPrimitives.h"
  #include "nsPIDOMWindowInlines.h"
-@@ -236,6 +238,17 @@ void SpeechSynthesis::OnEnd(const nsSpeechTask* aTask) {
+@@ -236,6 +237,9 @@ void SpeechSynthesis::OnEnd(const nsSpeechTask* aTask) {
  void SpeechSynthesis::GetVoices(
      nsTArray<RefPtr<SpeechSynthesisVoice> >& aResult) {
    aResult.Clear();
 +  // Per-context speech voice filtering
-+  uint32_t speechVoiceCtxId = 0;
-+  {
-+    nsCOMPtr<nsPIDOMWindowInner> ownerWin = GetOwnerWindow();
-+    if (ownerWin) {
-+      nsGlobalWindowInner* gwin = nsGlobalWindowInner::Cast(ownerWin);
-+      if (BrowsingContext* bc = gwin->GetBrowsingContext()) {
-+        speechVoiceCtxId = bc->OriginAttributesRef().mUserContextId;
-+      }
-+    }
-+  }
++  const uint32_t speechVoiceCtxId =
++      RoverfoxStorageManager::UserContextId(GetOwnerWindow());
    uint32_t voiceCount = 0;
    nsCOMPtr<nsPIDOMWindowInner> window = GetOwnerWindow();
    nsCOMPtr<nsIDocShell> docShell = window ? window->GetDocShell() : nullptr;
-@@ -261,6 +274,16 @@ void SpeechSynthesis::GetVoices(
+@@ -261,6 +265,16 @@ void SpeechSynthesis::GetVoices(
        continue;
      }
  

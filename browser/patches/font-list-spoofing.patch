@@ -164,7 +164,7 @@ index 88cea77d60..fa277ae122 100644
  # CharacterDataBuffer.cpp
  if CONFIG["INTEL_ARCHITECTURE"]:
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 3122c79b71..226c3aeadb 100644
+index fe4e23c993..466785f591 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -21,6 +21,7 @@
@@ -175,16 +175,13 @@ index 3122c79b71..226c3aeadb 100644
  #include "Units.h"
  #include "VRManagerChild.h"
  #include "WindowDestroyedEvent.h"
-@@ -7807,6 +7808,17 @@ void nsGlobalWindowInner::SetAudioFingerprintSeed(uint32_t seed,
+@@ -7801,6 +7802,14 @@ void nsGlobalWindowInner::SetAudioFingerprintSeed(uint32_t seed,
    RoverfoxStorageManager::RemoveSetter("setAudioFingerprintSeed");
  }
  
 +void nsGlobalWindowInner::SetFontList(const nsAString& aFontList,
 +                                      ErrorResult& aRv) {
-+  uint32_t userContextId = 0;
-+  if (BrowsingContext* bc = GetBrowsingContext()) {
-+    userContextId = bc->OriginAttributesRef().mUserContextId;
-+  }
++  const uint32_t userContextId = RoverfoxStorageManager::UserContextId(this);
 +  FontListManager::SetFontList(userContextId, aFontList);
 +  FontListManager::DisableFunction(userContextId);
 +  RoverfoxStorageManager::RemoveSetter("setFontList");
@@ -254,7 +251,7 @@ index 039316b8d6..42b2b42650 100644
    FontVisibility visibilityLevel =
        aFontVisibilityProvider ? aFontVisibilityProvider->GetFontVisibility()
 diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
-index bb2894d68c..b553a4b00c 100644
+index bc887921c8..a1d299e650 100644
 --- a/gfx/thebes/gfxTextRun.cpp
 +++ b/gfx/thebes/gfxTextRun.cpp
 @@ -33,6 +33,7 @@
@@ -262,10 +259,10 @@ index bb2894d68c..b553a4b00c 100644
  #include "nsStyleUtil.h"
  #include "nsUnicodeProperties.h"
 +#include "mozilla/dom/FontListManager.h"
- #include "mozilla/dom/BrowsingContext.h"
  #include "mozilla/dom/Document.h"
- #include "nsPIDOMWindow.h"
-@@ -1931,6 +1932,8 @@ class DeferredClearResolvedFonts final : public nsIRunnable {
+ #include "mozilla/dom/RoverfoxStorageManager.h"
+ 
+@@ -1922,6 +1923,8 @@ class DeferredClearResolvedFonts final : public nsIRunnable {
  NS_IMPL_ISUPPORTS(DeferredClearResolvedFonts, nsIRunnable)
  
  void gfxFontGroup::EnsureFontList() {
@@ -275,46 +272,36 @@ index bb2894d68c..b553a4b00c 100644
    auto* pfl = gfxPlatformFontList::PlatformFontList();
    if (mFontListGeneration != pfl->GetGeneration()) {
 diff --git a/layout/style/FontFaceSet.cpp b/layout/style/FontFaceSet.cpp
-index 638454ab5e..8f8d767ba8 100644
+index 638454ab5e..d79060dd93 100644
 --- a/layout/style/FontFaceSet.cpp
 +++ b/layout/style/FontFaceSet.cpp
 @@ -26,6 +26,9 @@
  #include "mozilla/css/Loader.h"
  #include "mozilla/dom/CSSFontFaceRule.h"
  #include "mozilla/dom/Document.h"
-+#include "mozilla/dom/BrowsingContext.h"
 +#include "mozilla/dom/FontListManager.h"
++#include "mozilla/dom/RoverfoxStorageManager.h"
 +#include "nsGlobalWindowInner.h"
  #include "mozilla/dom/DocumentInlines.h"
  #include "mozilla/dom/Event.h"
  #include "mozilla/dom/FontFaceImpl.h"
-@@ -134,6 +137,14 @@ already_AddRefed<Promise> FontFaceSet::Load(JSContext* aCx,
+@@ -134,6 +137,9 @@ already_AddRefed<Promise> FontFaceSet::Load(JSContext* aCx,
                                              const nsACString& aFont,
                                              const nsAString& aText,
                                              ErrorResult& aRv) {
 +  // Per-context font list filtering
-+  uint32_t fontListCtxId = 0;
-+  if (nsGlobalWindowInner* owner = GetOwnerWindow()) {
-+    if (auto* bc = owner->GetBrowsingContext()) {
-+      fontListCtxId = bc->OriginAttributesRef().mUserContextId;
-+    }
-+  }
-+  AutoFontListContext autoFontListCtx(fontListCtxId);
++  AutoFontListContext autoFontListCtx(
++      RoverfoxStorageManager::UserContextId(GetOwnerWindow()));
    FlushUserFontSet();
  
    nsTArray<RefPtr<Promise>> promises;
-@@ -165,6 +176,14 @@ already_AddRefed<Promise> FontFaceSet::Load(JSContext* aCx,
+@@ -165,6 +171,9 @@ already_AddRefed<Promise> FontFaceSet::Load(JSContext* aCx,
  
  bool FontFaceSet::Check(const nsACString& aFont, const nsAString& aText,
                          ErrorResult& aRv) {
 +  // Per-context font list filtering
-+  uint32_t fontListCtxId = 0;
-+  if (nsGlobalWindowInner* owner = GetOwnerWindow()) {
-+    if (auto* bc = owner->GetBrowsingContext()) {
-+      fontListCtxId = bc->OriginAttributesRef().mUserContextId;
-+    }
-+  }
-+  AutoFontListContext autoFontListCtx(fontListCtxId);
++  AutoFontListContext autoFontListCtx(
++      RoverfoxStorageManager::UserContextId(GetOwnerWindow()));
    FlushUserFontSet();
  
    nsTArray<FontFace*> faces;

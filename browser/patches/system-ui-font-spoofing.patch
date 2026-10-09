@@ -1,41 +1,125 @@
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
-index 42b2b42650..4955943e4a 100644
+index 42b2b42650..b0aac2e38a 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
 +++ b/gfx/thebes/gfxPlatformFontList.cpp
-@@ -2301,6 +2301,36 @@ void gfxPlatformFontList::MaybeRemoveCmap(gfxCharacterMap* aCharMap,
+@@ -30,6 +30,7 @@
+ #include "mozilla/dom/ContentProcessMessageManager.h"
+ #include "mozilla/dom/Document.h"
+ #include "mozilla/dom/FontListManager.h"
++#include "mozilla/dom/NavigatorManager.h"
+ #include "mozilla/gfx/2D.h"
+ #include "mozilla/gfx/Logging.h"
+ #include "mozilla/glean/GfxMetrics.h"
+@@ -2298,9 +2299,57 @@ void gfxPlatformFontList::MaybeRemoveCmap(gfxCharacterMap* aCharMap,
+   }
+ }
+ 
++// Camoufox: the OS whose system-ui family a lookup resolves to: the one the
++// document's context presents, or None to resolve it as the host does. Chrome
++// documents are not reachable by the page and keep the host's: pointing the
++// browser's own UI at a family from another OS leaves it falling back to the
++// default serif font (daijro/camoufox#695). So does a native identity: on macOS
++// the real system font is -apple-system (SF Pro), which Helvetica does not
++// match (measured 2026-09-14: ascent 16 vs 13, 537.6 vs 526.6 px).
++static MaskConfig::SpoofedOS SystemUISpoofedOS(
++    FontVisibilityProvider* aFontVisibilityProvider) {
++  using MaskConfig::SpoofedOS;
++  if (aFontVisibilityProvider && aFontVisibilityProvider->IsChrome()) {
++    return SpoofedOS::None;
++  }
++  const mozilla::dom::Document* doc =
++      aFontVisibilityProvider ? aFontVisibilityProvider->GetDocument()
++                              : nullptr;
++  const auto os = mozilla::dom::NavigatorManager::GetSpoofedOS(
++      mozilla::dom::RoverfoxStorageManager::UserContextId(doc));
++  switch (os) {
++#ifndef XP_MACOSX
++    case SpoofedOS::MacOS:
++#endif
++#ifndef XP_WIN
++    case SpoofedOS::Windows:
++#endif
++    case SpoofedOS::Linux:
++      return os;
++    default:
++      return SpoofedOS::None;
++  }
++}
++
  static void GetSystemUIFontFamilies(
      FontVisibilityProvider* aFontVisibilityProvider,
      [[maybe_unused]] nsAtom* aLangGroup, nsTArray<nsCString>& aFamilies) {
-+  // Camoufox: spoof system-ui to match the spoofed OS. Chrome documents are
-+  // excluded: they are not reachable by the page, and pointing the browser's
-+  // own UI at a family from another OS leaves it falling back to the default
-+  // serif font (daijro/camoufox#695). A null provider means there is no
-+  // document behind the lookup, where spoofing is the safe default.
-+  if (!(aFontVisibilityProvider && aFontVisibilityProvider->IsChrome())) {
-+    const auto os = MaskConfig::GetSpoofedOS();
-+    // A native identity (the host's own OS) keeps the real system font: on
-+    // macOS that is -apple-system (SF Pro), which Helvetica does not match
-+    // (measured 2026-09-14: ascent 16 vs 13, 537.6 vs 526.6 px).
-+#ifndef XP_MACOSX
-+    if (os == MaskConfig::SpoofedOS::MacOS) {
++  switch (SystemUISpoofedOS(aFontVisibilityProvider)) {
++    case MaskConfig::SpoofedOS::MacOS:
 +      *aFamilies.AppendElement() = "Helvetica"_ns;
 +      return;
-+    }
-+#endif
-+#ifndef XP_WIN
-+    if (os == MaskConfig::SpoofedOS::Windows) {
++    case MaskConfig::SpoofedOS::Windows:
 +      *aFamilies.AppendElement() = "Segoe UI"_ns;
 +      return;
-+    }
-+#endif
-+    if (os == MaskConfig::SpoofedOS::Linux) {
++    case MaskConfig::SpoofedOS::Linux:
 +      // The GTK interface font of a stock Ubuntu desktop; see
 +      // font-system-fonts-css2.patch for the CSS2 keywords.
 +      *aFamilies.AppendElement() = "Ubuntu"_ns;
 +      return;
-+    }
++    default:
++      break;
 +  }
 +
    // TODO: On macOS, use CTCreateUIFontForLanguage or such thing (though the
    // code below ends up using [NSFont systemFontOfSize: 0.0].
    nsFont systemFont;
+@@ -2428,12 +2477,23 @@ gfxPlatformFontList::GetPrefFontsLangGroupLocked(
+   }
+ 
+   auto index = static_cast<size_t>(aGenericType);
+-  PrefFontList* prefFonts = mLangGroupPrefFonts[aPrefLang][index].get();
++  // Camoufox: system-ui follows the OS the document's context presents, so it
++  // is cached once per OS rather than once per process.
++  static_assert(size_t(MaskConfig::SpoofedOS::Other) + 1 ==
++                std::tuple_size_v<decltype(mSpoofedSystemUIPrefFonts)>);
++  const auto spoofedOS = aGenericType == StyleGenericFontFamily::SystemUi
++                             ? SystemUISpoofedOS(aFontVisibilityProvider)
++                             : MaskConfig::SpoofedOS::None;
++  UniquePtr<PrefFontList>& cached =
++      spoofedOS == MaskConfig::SpoofedOS::None
++          ? mLangGroupPrefFonts[aPrefLang][index]
++          : mSpoofedSystemUIPrefFonts[size_t(spoofedOS)][aPrefLang];
++  PrefFontList* prefFonts = cached.get();
+   if (MOZ_UNLIKELY(!prefFonts)) {
+     prefFonts = new PrefFontList;
+     ResolveGenericFontNames(aFontVisibilityProvider, aGenericType, aPrefLang,
+                             prefFonts);
+-    mLangGroupPrefFonts[aPrefLang][index].reset(prefFonts);
++    cached.reset(prefFonts);
+   }
+   return prefFonts;
+ }
+@@ -3028,6 +3088,11 @@ void gfxPlatformFontList::ClearLangGroupPrefFontsLocked() {
+       pref = nullptr;
+     }
+   }
++  for (auto& prefFontsForOS : mSpoofedSystemUIPrefFonts) {
++    for (auto& pref : prefFontsForOS) {
++      pref = nullptr;
++    }
++  }
+   mEmojiPrefFont = nullptr;
+ 
+   // Create a new FontPrefs and replace the existing one.
+diff --git a/gfx/thebes/gfxPlatformFontList.h b/gfx/thebes/gfxPlatformFontList.h
+index bdd4b52666..f8a5f8b748 100644
+--- a/gfx/thebes/gfxPlatformFontList.h
++++ b/gfx/thebes/gfxPlatformFontList.h
+@@ -1077,6 +1077,12 @@ class gfxPlatformFontList : public gfxFontInfoLoader {
+                        eFontPrefLang_Count>
+       mLangGroupPrefFonts MOZ_GUARDED_BY(mLock);
+   mozilla::UniquePtr<PrefFontList> mEmojiPrefFont MOZ_GUARDED_BY(mLock);
++  // Camoufox: system-ui as each OS an identity presents resolves it, indexed by
++  // MaskConfig::SpoofedOS (GetPrefFontsLangGroupLocked).
++  std::array<mozilla::RangedArray<mozilla::UniquePtr<PrefFontList>,
++                                  eFontPrefLang_First, eFontPrefLang_Count>,
++             5>
++      mSpoofedSystemUIPrefFonts MOZ_GUARDED_BY(mLock);
+ 
+   // When system-wide font lookup fails for a character, cache it to skip future
+   // searches. This is an array of bitsets, one for each FontVisibility level.

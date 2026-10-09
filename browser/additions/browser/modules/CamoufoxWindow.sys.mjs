@@ -112,7 +112,14 @@ function applyWindowSize(win) {
   // outerWidth/outerHeight report the real window, so the real window is resized
   // to the identity's size; pinning the document instead deadlocks Juggler's
   // viewport handshake (daijro/camoufox#666). Without an identity size, stock's
-  // own startup sizing applies.
+  // own startup sizing applies. So it does for a window a page opened: stock
+  // gives it the size its window.open() features ask for.
+  const appWindow = win.docShell.treeOwner
+    .QueryInterface(Ci.nsIInterfaceRequestor)
+    .getInterface(Ci.nsIAppWindow);
+  if (appWindow.initialOpenWindowInfo) {
+    return;
+  }
   const outerWidth = ChromeUtils.camouGetInt("window.outerWidth");
   const outerHeight = ChromeUtils.camouGetInt("window.outerHeight");
   if (outerWidth || outerHeight) {

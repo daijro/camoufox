@@ -52,11 +52,13 @@ reached only when the spoof branch is *not* taken, which is exactly when
 navigator.platform is unspoofed (where they were no-ops) or when the document
 is chrome (where they broke the UI). They are dropped here.
 
-The classification is cached in a function-static. CreepJS calls the CSS
+The OS is the one the document's context presents
+(NavigatorManager::GetSpoofedOS: the context's own navigator.platform, else the
+launch's), so a context drawn for another OS than the launch gets its own
+interface font. Both lookups are cached (the launch's in a function-static, the
+context's in RoverfoxStorageManager's local cache): CreepJS calls the CSS
 resolver six times in tight succession (one per CSS2 keyword) and uses probe
-duration as a probabilistic headless signal, so we don't want to re-parse
-CAMOU_CONFIG on every call. The config is set at process start and never
-changes, so a single classification per process is safe.
+duration as a probabilistic headless signal.
 
 Bug: daijro/camoufox#598, daijro/camoufox#695
 
@@ -73,23 +75,28 @@ index 2ec366ca45..bcdc4301b9 100644
      "/dom/base",
      "/dom/html",
 diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
-index 056c0e2f7f..88efe2eeb7 100644
+index 056c0e2f7f..06dbf09955 100644
 --- a/layout/base/nsLayoutUtils.cpp
 +++ b/layout/base/nsLayoutUtils.cpp
-@@ -4,6 +4,7 @@
+@@ -4,6 +4,8 @@
  
  #include "nsLayoutUtils.h"
  
 +#include "MaskConfig.hpp"
++#include "mozilla/dom/NavigatorManager.h"
  #include <algorithm>
  #include <limits>
  
-@@ -9822,6 +9823,93 @@ already_AddRefed<nsFontMetrics> nsLayoutUtils::GetMetricsFor(
+@@ -9820,8 +9822,91 @@ already_AddRefed<nsFontMetrics> nsLayoutUtils::GetMetricsFor(
+   return aPresContext->GetMetricsFor(font, params);
+ }
  
- static void GetSpoofedSystemFontForRFP(LookAndFeel::FontID aFontID,
+-static void GetSpoofedSystemFontForRFP(LookAndFeel::FontID aFontID,
++static void GetSpoofedSystemFontForRFP(MaskConfig::SpoofedOS aOS,
++                                       LookAndFeel::FontID aFontID,
                                         gfxFontStyle& aStyle, nsAString& aName) {
-+  // Camoufox: when navigator.platform is spoofed, return the family-name
-+  // string the spoofed OS would. Firefox's CSS resolver routes the CSS2
++  // Camoufox: return the family-name string aOS, the OS the document's context
++  // presents, would. Firefox's CSS resolver routes the CSS2
 +  // system-font keywords (caption / icon / menu / message-box /
 +  // small-caption / status-bar) through this function. CreepJS's headless
 +  // detector reads `getComputedStyle().fontFamily` after setting
@@ -101,17 +108,12 @@ index 056c0e2f7f..88efe2eeb7 100644
 +  //
 +  // ComputeSystemFont() below only routes *content* documents here, so this
 +  // never changes what the browser's own chrome UI resolves to.
-+  //
-+  // GetSpoofedOS() caches its answer: CreepJS calls this six times in tight
-+  // succession (one per CSS2 keyword) and uses probe duration as a
-+  // probabilistic headless signal.
-+  const auto os = MaskConfig::GetSpoofedOS();
 +  // Every branch must mark the result as a system font, as the upstream path at
 +  // the end of this function does: ComputeSystemFont copies the flag into
 +  // FontFamilyList::is_system_font, and without it canvas's font setter
 +  // overrides the size and cannot serialize the value, so
 +  // `ctx.font = "caption"` was silently ignored ("10px sans-serif").
-+  if (os == MaskConfig::SpoofedOS::MacOS) {
++  if (aOS == MaskConfig::SpoofedOS::MacOS) {
 +    // Same per-keyword table as a real macOS (see the XP_MACOSX branch below).
 +    aName = u"-apple-system"_ns;
 +    switch (aFontID) {
@@ -133,7 +135,7 @@ index 056c0e2f7f..88efe2eeb7 100644
 +    aStyle.systemFont = true;
 +    return;
 +  }
-+  if (os == MaskConfig::SpoofedOS::Windows) {
++  if (aOS == MaskConfig::SpoofedOS::Windows) {
 +    // Windows reports the system font in device pixels, so every keyword is
 +    // 12 px x the display scale (30 px at 250 %). Use the DPR the identity
 +    // presents, which is the one the page cross-checks it against.
@@ -164,7 +166,7 @@ index 056c0e2f7f..88efe2eeb7 100644
 +    aStyle.systemFont = true;
 +    return;
 +  }
-+  if (os == MaskConfig::SpoofedOS::Linux) {
++  if (aOS == MaskConfig::SpoofedOS::Linux) {
 +    // A stock Ubuntu desktop: GTK interface font "Ubuntu 11" (11pt = 14.6667
 +    // CSS px). Upstream's RFP value for Linux ("sans-serif" 15px) is what a
 +    // resistFingerprinting user shows, not a regular desktop.
@@ -178,12 +180,13 @@ index 056c0e2f7f..88efe2eeb7 100644
  #if defined(XP_MACOSX) || defined(MOZ_WIDGET_UIKIT)
    aName = u"-apple-system"_ns;
    // Values taken from a macOS 10.15 system.
-@@ -9876,8 +9964,22 @@ void nsLayoutUtils::ComputeSystemFont(nsFont* aSystemFont,
+@@ -9876,9 +9961,27 @@ void nsLayoutUtils::ComputeSystemFont(nsFont* aSystemFont,
                                        const Document* aDocument) {
    gfxFontStyle fontStyle;
    nsAutoString systemFontName;
 -  if (aDocument->ShouldResistFingerprinting(
 -          RFPTarget::FontVisibilityRestrictGenerics)) {
+-    GetSpoofedSystemFontForRFP(aFontID, fontStyle, systemFontName);
 +  // Camoufox: take the spoof path whenever navigator.platform is spoofed, not
 +  // only when the FontVisibilityRestrictGenerics RFP target is active. That
 +  // target is NOT in Firefox's default-enabled set (RFPTargetsDefault.inc) and
@@ -196,10 +199,15 @@ index 056c0e2f7f..88efe2eeb7 100644
 +  // handing the browser's own UI a family name from another OS ("Segoe UI" on
 +  // Linux, "-apple-system" on Windows) leaves the toolbar and menus falling
 +  // back to the default serif font -- see daijro/camoufox#695.
-+  if (aDocument && !aDocument->IsInChromeDocShell() &&
-+      (MaskConfig::GetSpoofedOS() != MaskConfig::SpoofedOS::None ||
-+       aDocument->ShouldResistFingerprinting(
-+           RFPTarget::FontVisibilityRestrictGenerics))) {
-     GetSpoofedSystemFontForRFP(aFontID, fontStyle, systemFontName);
++  const bool content = aDocument && !aDocument->IsInChromeDocShell();
++  const auto os = content ? mozilla::dom::NavigatorManager::GetSpoofedOS(
++                                mozilla::dom::RoverfoxStorageManager::
++                                    UserContextId(aDocument))
++                          : MaskConfig::SpoofedOS::None;
++  if (content && (os != MaskConfig::SpoofedOS::None ||
++                  aDocument->ShouldResistFingerprinting(
++                      RFPTarget::FontVisibilityRestrictGenerics))) {
++    GetSpoofedSystemFontForRFP(os, aFontID, fontStyle, systemFontName);
    } else if (!LookAndFeel::GetFont(aFontID, systemFontName, fontStyle)) {
      return;
+   }
