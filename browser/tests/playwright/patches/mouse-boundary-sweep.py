@@ -40,10 +40,10 @@ was acked and seen by the page; and input is still live at the end of each run.
 """
 
 import asyncio
-import os
 import sys
 
 from camoufox.async_api import AsyncCamoufox
+from helpers import launch_kwargs
 
 SPOOFED_OSES = ["windows", "macos", "linux"]
 # Well inside the viewport, so every dispatched point is a real displacement.
@@ -52,16 +52,7 @@ INTERIOR = (0.34, 0.34)
 # shows up as "not delivered" with a fast return rather than as a timeout here.
 POINT_TIMEOUT_S = 25
 
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
-
 RECORDER = "window.__moves=0;addEventListener('mousemove',()=>window.__moves++)"
-
-
-def _launch_kwargs(humanize, spoofed_os):
-    kwargs = dict(headless=True, os=spoofed_os, humanize=humanize)
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    return kwargs
 
 
 def _ring(w, h):
@@ -73,7 +64,7 @@ def _ring(w, h):
 async def _sweep(spoofed_os, humanize) -> list:
     """Returns the coordinates that did not reach the renderer."""
     undelivered = []
-    async with AsyncCamoufox(**_launch_kwargs(humanize, spoofed_os)) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os=spoofed_os, humanize=humanize)) as browser:
         page = await browser.new_page()
         await page.set_content('<body style="margin:0;height:1600px"></body>')
         await page.evaluate(RECORDER)

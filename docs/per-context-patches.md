@@ -226,4 +226,4 @@ context a different person on the same OS, not a different OS. Where that is
 not possible, launch with `canvas_noise=True`: canvas and WebGL readback then
 return random data, which covers the two rasterization rows above. A browser
 launched without it gives its contexts the host's OS and GPU, and `NewContext`
-raises for another OS.
+raises for another OS or GPU.

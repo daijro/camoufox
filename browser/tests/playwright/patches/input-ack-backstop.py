@@ -43,11 +43,11 @@ Before the backstop the first move waits out the entire block.
 """
 
 import asyncio
-import os
 import sys
 import time
 
 from camoufox.async_api import AsyncCamoufox
+from helpers import launch_kwargs
 
 # Far longer than kAckDeadlineMs (5s), so the two outcomes cannot be confused.
 BLOCK_MS = 40000
@@ -55,19 +55,10 @@ BLOCK_MS = 40000
 BOUNDED_S = 20
 RECOVERY_TIMEOUT_S = 30
 
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
-
-
-def _launch_kwargs():
-    kwargs = dict(headless=True, os="windows", humanize=False)
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    return kwargs
-
 
 async def main() -> int:
     print("\n=== bounded renderer-ack wait ===")
-    async with AsyncCamoufox(**_launch_kwargs()) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os="windows", humanize=False)) as browser:
         page = await browser.new_page()
         await page.set_content('<body style="margin:0;height:1200px"></body>')
         await page.evaluate(

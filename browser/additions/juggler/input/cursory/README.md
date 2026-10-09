@@ -47,8 +47,8 @@ Both API substitutions are marked `CAMOUFOX:` in the files themselves.
 2. Replace each `.js` here with the matching `src/*.ts`, stripping the types.
 3. Re-apply the two `CAMOUFOX:` substitutions and the `.js` import suffixes.
 4. `gunzip -c src/trajectories.json.gz > trajectories.json`.
-5. Re-run the parity check below, then
-   `python3 tests/playwright/patches/humanize-mouse-trajectory.py` against a build.
+5. Re-run the parity check below, then, from the repository root,
+   `CAMOUFOX_EXECUTABLE_PATH=<camoufox-bin> python3 browser/tests/playwright/patches/humanize-mouse-trajectory.py`.
 
 ## Parity
 

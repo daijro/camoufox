@@ -37,10 +37,10 @@ What PASS means:
 """
 
 import asyncio
-import os
 import sys
 
 from camoufox.async_api import AsyncCamoufox
+from helpers import launch_kwargs
 
 # The far corner of the move, clamped to the viewport the identity happened to
 # draw. It used to be a flat (1100, 650), which silently tested nothing whenever
@@ -60,8 +60,6 @@ RECORDER = """
 MIN_DURATION_MS = 50
 MAX_DURATION_MS = 3000
 
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
-
 
 async def _dest_within(page):
     """DEST_MAX, or the far corner of this viewport if it is smaller."""
@@ -72,15 +70,8 @@ async def _dest_within(page):
     )
 
 
-def _launch_kwargs(humanize):
-    kwargs = dict(headless=True, os="linux", humanize=humanize)
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    return kwargs
-
-
 async def _collect_moves(humanize):
-    async with AsyncCamoufox(**_launch_kwargs(humanize)) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os="linux", humanize=humanize)) as browser:
         page = await browser.new_page()
         await page.set_content(BODY)
         await page.evaluate(RECORDER)
@@ -91,7 +82,7 @@ async def _collect_moves(humanize):
 
 
 async def _humanized_click_hits_target():
-    async with AsyncCamoufox(**_launch_kwargs(True)) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os="linux", humanize=True)) as browser:
         page = await browser.new_page()
         await page.set_content(
             '<button id="b" style="position:absolute;left:600px;top:400px">go</button>'

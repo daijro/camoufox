@@ -38,13 +38,11 @@ What PASS means:
 """
 
 import asyncio
-import os
 import sys
 from typing import Any, Dict
 
 from camoufox.async_api import AsyncCamoufox
-
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
+from helpers import launch_kwargs
 
 PAGE = """
 <div id="host"></div>
@@ -65,16 +63,6 @@ PAGE = """
 """
 
 
-def _launch_kwargs(force_scope_access: bool) -> Dict[str, Any]:
-    kwargs: Dict[str, Any] = dict(headless=True, os="linux")
-    if force_scope_access:
-        # Not a documented Camoufox() kwarg; pass it straight through as config.
-        kwargs["config"] = {"forceScopeAccess": True}
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    return kwargs
-
-
 def _check(results: Dict[str, Any], label: str, got: Any, expected: Any) -> None:
     ok = got == expected
     results[label] = ok
@@ -86,7 +74,9 @@ def _check(results: Dict[str, Any], label: str, got: Any, expected: Any) -> None
 async def _run(force_scope_access: bool) -> bool:
     results: Dict[str, Any] = {}
     print(f"\n=== forceScopeAccess={force_scope_access} ===")
-    async with AsyncCamoufox(**_launch_kwargs(force_scope_access)) as browser:
+    # Not a documented Camoufox() kwarg; pass it straight through as config.
+    config = {"forceScopeAccess": True} if force_scope_access else None
+    async with AsyncCamoufox(**launch_kwargs(os="linux", config=config)) as browser:
         page = await browser.new_page()
         await page.set_content(PAGE)
 

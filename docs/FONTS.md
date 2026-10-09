@@ -4,10 +4,11 @@ Camoufox ships its own fonts so that font enumeration and text rendering are a
 property of the *claimed* OS rather than of the host. There are two halves: a
 font bundle (`browser/bundle/fonts/`) and one fontconfig per OS
 (`browser/bundle/fontconfig/<os>/fonts.conf`). The data the launcher draws from
-(`python/src/camoufox/fonts.json`, `font-bases.json`, `font-groups.json` and the
-`_ESSENTIAL_FONTS_*` / `_BASE_VARIANT_FONTS_*` / `_*_MARKER_FONTS` constants in
-`fingerprints.py`) is generated against that bundle and must be regenerated with
-it.
+(`python/src/camoufox/fonts.json`, `font-bases.json`, `font-groups.json` and
+`essential-fonts.json`) is generated against that bundle and must be regenerated
+with it. The marker fonts and Windows 11 marker fonts, in `markerFonts` and
+`windows11MarkerFonts` of `python/src/camoufox/launcher-constants.json`, are
+kept by hand and must name fonts the bundle has.
 
 ## Getting the bundle
 
@@ -124,8 +125,8 @@ Namespace matters here and is easy to get wrong: Windows and macOS enumerate the
 `system_profiler` and WPF report *typographic* families (nameID 16), a different
 namespace — a list gathered that way will disagree with what a browser sees.
 
-`--print-bases` prints the OS base lists intersected with the result, which is
-what the `_ESSENTIAL_FONTS_*` constants are pasted from. Those constants are the
+`--print-bases` prints the OS base lists intersected with the result and writes
+them to `essential-fonts.json`. Each OS's list there is the
 **intersection** of an OS's bases, never a superset: a name present in only one
 version's base must not be forced onto every identity, or that version's base
 becomes a no-op.
@@ -135,7 +136,7 @@ Regenerate together whenever the bundle changes:
 ```
 python3 browser/scripts/gen-font-groups.py          # font-groups.json + font-bases.json
 python3 browser/scripts/gen-fonts-json.py           # fonts.json
-python3 browser/scripts/gen-fonts-json.py --print-bases   # paste into fingerprints.py
+python3 browser/scripts/gen-fonts-json.py --print-bases   # essential-fonts.json
 python3 browser/scripts/verify-fonts.py             # must pass before committing
 ```
 
@@ -145,7 +146,7 @@ Deliberate choices:
   GDI-substitution / Light-Semilight rules (`Courier -> Courier New`,
   `Helvetica -> Arial`, `Calibri Light -> Calibri`, ...) are unconditional in
   `browser/bundle/fontconfig/windows/fonts.conf` because there is no per-launch
-  fontconfig hook, and the names are in `_ESSENTIAL_FONTS_WINDOWS`. That matches
+  fontconfig hook, and the names are in `essential-fonts.json`'s Windows list. That matches
   reality: every Windows install resolves all of them.
 - **macOS TTC weight names are reported.** The confs rewrite `American
   Typewriter Semibold`, `Futura Bold`, `STIX Two Math Regular`, ... to their base
@@ -175,7 +176,7 @@ plus independent per-unit draws. Not a uniform percentage of a pool.
    families and is identified by the *absence* of `Noto Sans Brahmi` /
    `Noto Sans CanAborig`.
 
-2. **The essential floor** (`_ESSENTIAL_FONTS_*`: 125 / 369 / 274) — the
+2. **The essential floor** (`essential-fonts.json`: 125 / 369 / 274) — the
    intersection of that OS's bases, so it holds whichever base was drawn.
 
 3. **Per-unit Bernoulli draws, per OS.** Each addition is one independent

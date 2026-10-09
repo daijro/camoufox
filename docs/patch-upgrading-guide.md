@@ -11,8 +11,9 @@ numbers; this guide covers finding and fixing those rejects.
 3. [General Workflow](#general-workflow)
 4. [Fixing Common Reject Types](#fixing-common-reject-types)
 5. [Per-Context Machinery](#per-context-machinery)
-6. [Testing and Validation](#testing-and-validation)
-7. [Pitfalls](#pitfalls)
+6. [Porting Playwright](#porting-playwright)
+7. [Testing and Validation](#testing-and-validation)
+8. [Pitfalls](#pitfalls)
 
 ---
 
@@ -47,7 +48,7 @@ are listed in [`browser/patches/patch-dependencies.md`](../browser/patches/patch
 The Firefox tree is `browser/camoufox-<version>-<release>/` (from
 `browser/upstream.sh`). It is a git repository whose `unpatched` tag is plain
 Firefox plus `browser/additions/` and `browser/settings/`. Run every target, and
-every command in this guide, from `browser/`:
+every command in this guide that does not say otherwise, from `browser/`:
 
 | Target | What it does |
 |---|---|
@@ -329,6 +330,62 @@ See [`per-context-patches.md`](per-context-patches.md) for the full list.
 
 ---
 
+## Porting Playwright
+
+The two Playwright patches ([`browser/patches/playwright/`](../browser/patches/playwright/README.md))
+and Camoufox's Juggler (`browser/additions/juggler/`) both started from upstream
+Playwright and both carry Camoufox changes: fixes to Juggler's input and
+navigation paths, the isolated-world page agent, and the human cursor
+(`input/`). Port upstream changes into them; never copy upstream over them.
+
+### The Bootstrap Patch
+
+Compare what changed in Playwright's
+[bootstrap.diff](https://github.com/microsoft/playwright/blob/main/browser_patches/firefox/patches/bootstrap.diff)
+since the last sync, then port it like any other patch:
+
+```bash
+make dir
+make workspace ./patches/playwright/0-playwright.patch
+# port the upstream changes into camoufox-<version>-<release>/
+make diff > patches/playwright/0-playwright.patch
+```
+
+### Juggler
+
+```bash
+git clone https://github.com/microsoft/playwright.git /tmp/playwright
+diff -r additions/juggler/ /tmp/playwright/browser_patches/firefox/juggler/
+```
+
+Port the upstream hunks one by one, keeping the Camoufox changes. Then check:
+
+1. `components/Juggler.js` still exports `JugglerFactory`.
+2. `components/components.conf` registers it with `esModule` (Firefox no longer
+   supports `jsm`) and `"constructor": "JugglerFactory"`:
+
+   ```python
+   {
+       "esModule": "chrome://juggler/content/components/Juggler.js",
+       "constructor": "JugglerFactory",
+   }
+   ```
+
+3. Every file upstream added or renamed is listed in `jar.mn`, and every
+   `ChromeUtils.importESModule()` path still exists.
+
+Then `make dir && make build && make tests`. A wrong `components.conf` shows up
+as one of these:
+
+| Error | Cause |
+|---|---|
+| `undefined symbol: ... mozCreateComponent<nsICommandLineHandler>()` at link time | `components.conf` is not an ESM component |
+| `Externally-constructed components may not specify 'constructor' or 'legacy_constructor' properties` | It uses `jsm` instead of `esModule` |
+| `Externally-constructed components must specify a type other than nsISupports` | It is an external component with no type; make it an ESM component |
+| `JavaScript components must specify a constructor` | The `constructor` field is missing |
+
+---
+
 ## Testing and Validation
 
 ### Minimal Verification
@@ -344,7 +401,8 @@ After updating a patch, always verify:
 
 ### Full Testing
 
-Run the suites that cover the patch (see [`ci/README.md`](../ci/README.md)):
+Run the suites that cover the patch (see [`ci/README.md`](../ci/README.md)).
+From the repository root,
 `python3 -m ci.run_patch_guards --binary <camoufox-bin>` is the most direct
 evidence that a patch which still applies was not neutered by the upgrade.
 
@@ -358,7 +416,7 @@ WebGL1's `ALIASED_LINE_WIDTH_RANGE` at `[1, 1]` on Linux
 `stock-gpu-parity` guard finds them. It runs stock Firefox of the new version,
 stock Firefox of the release fpgen's model recorded, and Camoufox claiming the
 machine's GPU, and fails where the two stock releases differ and Camoufox does
-not follow the new one:
+not follow the new one. From the repository root:
 
 ```bash
 python3 -m ci.run_patch_guards --binary <camoufox-bin> --only stock-gpu-parity
@@ -366,10 +424,10 @@ python3 -m ci.run_patch_guards --binary <camoufox-bin> --only stock-gpu-parity
 
 CI runs it on Linux with a software renderer. Run it on Windows and macOS too,
 passing the stock binaries by hand, because each OS has its own graphics
-backend:
+backend. From the repository root:
 
 ```bash
-python browser/tests/playwright/patches/stock-gpu-parity.py --binary <camoufox-bin> \
+python3 browser/tests/playwright/patches/stock-gpu-parity.py --binary <camoufox-bin> \
     --stock <Firefox of upstream.sh's version> --recorded-stock <Firefox of fpgen's release>
 ```
 

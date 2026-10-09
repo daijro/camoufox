@@ -61,20 +61,15 @@ PAGES_PER_RUN = 6
 # fresh pages below.
 NOOP_TARGETS = [(0.0, 0.0), (0.4, 0.4)]
 
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
-
 
 def _run_child() -> int:
     """Open several fresh pages; each does a no-op first move then a real move."""
     from camoufox.sync_api import Camoufox
+    from helpers import launch_kwargs
 
     # Default fingerprint on purpose — see the module docstring on why (0,0) must
     # land on the window corner for the stock build to coalesce it into a no-op.
-    kwargs = dict(headless=True)
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-
-    with Camoufox(**kwargs) as browser:
+    with Camoufox(**launch_kwargs()) as browser:
         for i in range(PAGES_PER_RUN):
             x, y = NOOP_TARGETS[i % len(NOOP_TARGETS)]
             print(f"    page {i + 1}/{PAGES_PER_RUN}: first move -> ({x}, {y})", flush=True)

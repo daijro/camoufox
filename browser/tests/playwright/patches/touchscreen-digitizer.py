@@ -27,7 +27,7 @@ Run from any venv that has playwright:
     python browser/tests/playwright/patches/touchscreen-digitizer.py --binary /path/to/camoufox-bin
 
 Which binary is tested, in order of precedence:
-    --binary <path> | $CAMOUFOX_BINARY | the in-tree obj-*/dist/bin/camoufox-bin
+    --binary <path> | $CAMOUFOX_EXECUTABLE_PATH | $CAMOUFOX_BINARY | the in-tree build
 """
 
 import asyncio
@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-BROWSER_ROOT = Path(__file__).resolve().parents[3]
+from helpers import resolve_binary
 
 # The digitizer count the reference was recorded with.
 SPOOFED_TOUCH_POINTS = 5
@@ -147,19 +147,6 @@ PROBE_JS = r"""() => {
 }"""
 
 
-def resolve_binary(argv) -> Optional[Path]:
-    if "--binary" in argv:
-        return Path(argv[argv.index("--binary") + 1]).resolve()
-    # ci.run_patch_guards passes the binary under test as CAMOUFOX_EXECUTABLE_PATH;
-    # ignoring it made this guard run the newest objdir instead -- after a macOS
-    # cross build, an arm64 Mach-O that cannot execute here ("Exec format error").
-    for var in ("CAMOUFOX_EXECUTABLE_PATH", "CAMOUFOX_BINARY"):
-        if os.environ.get(var):
-            return Path(os.environ[var]).resolve()
-    matches = sorted(BROWSER_ROOT.glob("camoufox-*/obj-*-linux-gnu/dist/bin/camoufox-bin"))
-    return matches[-1] if matches else None
-
-
 async def probe(binary: Path, max_touch_points: Optional[int]) -> Dict[str, Any]:
     """Launch the binary with a config and read every touch signal back."""
     from playwright.async_api import async_playwright
@@ -205,8 +192,8 @@ def compare(actual: Dict[str, Any], expected: Dict[str, Any]) -> bool:
 
 
 async def main() -> int:
-    binary = resolve_binary(sys.argv)
-    if binary is None or not binary.exists():
+    binary = resolve_binary()
+    if not binary.exists():
         print(f"FATAL: no camoufox binary found (looked for {binary})")
         return 1
 

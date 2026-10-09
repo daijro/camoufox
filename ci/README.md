@@ -127,7 +127,7 @@ keeps the two apart.
 
 The entries cover keyboard input Camoufox presses as a real keyboard would,
 client certificates the browser must present during the TLS handshake,
-stock-Firefox quirks that `browser/tests/playwright/camoufox/` replaces, the popup blocker Camoufox
+HTTPS-First through upstream's GET-only test proxy, the popup blocker Camoufox
 keeps on, and scrollbars Camoufox does not hide in headless mode. CI is the
 authority on what fails; a local run is a hypothesis.
 

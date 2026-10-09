@@ -42,15 +42,18 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import Iterator, List
+from typing import Any, Dict, Iterator, List
 
 
 def resolve_binary() -> Path:
-    """The camoufox binary under test: the runner's CAMOUFOX_EXECUTABLE_PATH, else
-    CAMOUFOX_BINARY, else the newest in-tree Linux build (never another target's
-    objdir, which cannot execute here)."""
+    """The camoufox binary under test: `--binary <path>`, else the runner's
+    CAMOUFOX_EXECUTABLE_PATH, else CAMOUFOX_BINARY, else the newest in-tree Linux
+    build (never another target's objdir, which cannot execute here)."""
+    if "--binary" in sys.argv:
+        return Path(sys.argv[sys.argv.index("--binary") + 1]).resolve()
     for var in ("CAMOUFOX_EXECUTABLE_PATH", "CAMOUFOX_BINARY"):
         if os.environ.get(var):
             return Path(os.environ[var]).resolve()
@@ -59,6 +62,11 @@ def resolve_binary() -> Path:
     if not matches:
         raise SystemExit("no camoufox binary: set CAMOUFOX_EXECUTABLE_PATH")
     return matches[-1]
+
+
+def launch_kwargs(**overrides: Any) -> Dict[str, Any]:
+    """Camoufox() kwargs for a guard: headless, on the binary under test."""
+    return {"headless": True, "executable_path": str(resolve_binary()), **overrides}
 
 
 @contextlib.contextmanager

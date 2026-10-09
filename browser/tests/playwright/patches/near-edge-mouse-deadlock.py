@@ -70,10 +70,10 @@ Before the fix the first direct move times out; after it, every move completes.
 """
 
 import asyncio
-import os
 import sys
 
 from camoufox.async_api import AsyncCamoufox
+from helpers import launch_kwargs
 
 # The chrome height, and so whether the top row rounds into chrome, depends on
 # the spoofed OS. Cover all three rather than assuming which one this host's
@@ -90,16 +90,7 @@ HUMANIZED_TARGET = (660, 186)
 INTERIOR = (250, 250)
 TIMEOUT_S = 20
 
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
-
 RECORDER = "window.__moves=0;addEventListener('mousemove',()=>window.__moves++)"
-
-
-def _launch_kwargs(humanize, spoofed_os):
-    kwargs = dict(headless=True, os=spoofed_os, humanize=humanize)
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    return kwargs
 
 
 def _deadlock_report(what):
@@ -116,7 +107,7 @@ async def _direct_moves() -> bool:
     """A plain move onto the top edge must complete and be seen by the page."""
     print("\n=== direct moves onto the top edge (humanize off) ===")
     for spoofed_os in SPOOFED_OSES:
-        async with AsyncCamoufox(**_launch_kwargs(False, spoofed_os)) as browser:
+        async with AsyncCamoufox(**launch_kwargs(os=spoofed_os, humanize=False)) as browser:
             page = await browser.new_page()
             await page.set_content('<body style="margin:0;height:1200px"></body>')
             await page.evaluate(RECORDER)
@@ -166,7 +157,7 @@ async def _humanized() -> bool:
     """The humanize path reaches the same conversion, by endpoint and by curve."""
     print("\n=== humanized moves (humanize on) ===")
     for spoofed_os in SPOOFED_OSES:
-        async with AsyncCamoufox(**_launch_kwargs(True, spoofed_os)) as browser:
+        async with AsyncCamoufox(**launch_kwargs(os=spoofed_os, humanize=True)) as browser:
             # A humanized move whose destination IS the top edge: the trajectory's
             # explicit endpoint dispatch is unconditional, so this is the
             # deterministic half.

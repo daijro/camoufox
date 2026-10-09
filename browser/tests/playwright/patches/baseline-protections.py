@@ -112,7 +112,7 @@ def check(failures: List[str], label: str, got: Any, want: Any) -> None:
 
 
 async def main() -> int:
-    binary = Path(sys.argv[sys.argv.index("--binary") + 1]).resolve() if "--binary" in sys.argv else resolve_binary()
+    binary = resolve_binary()
     print(f"Binary: {binary}")
     failures: List[str] = []
 

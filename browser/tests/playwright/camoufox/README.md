@@ -19,11 +19,8 @@ Write a test here when, and only when, one of these is true:
   care, so upstream has nothing to say about it.
 
 - **Upstream asserts the stock-Firefox behaviour and Camoufox is right not to
-  match it.** `test_worker_locale.py` is the example: upstream expects a worker
-  to *ignore* the context locale (microsoft/playwright#38919); Camoufox sets the
-  locale below that layer, so its workers agree with the main thread. The
-  upstream test is skiplisted in `ci/skiplist.yml` and the version here takes
-  over guarding the behaviour.
+  match it.** The upstream test is skiplisted in `ci/skiplist.yml` and the
+  version here takes over guarding the behaviour.
 
 In the second case the `ci/skiplist.yml` entry must name the test that replaces
 it, so a skip can never quietly mean "nothing checks this any more".

@@ -61,13 +61,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # The same set `resolve` greps to decide whether the browser changed at all.
 # Kept in step by ci/tests/test_ci.py, because a path that can change the binary
-# and is not hashed here would be served a stale browser.
+# and is not hashed here would be served a stale browser. The fontconfig files
+# are not compiled, but `make package-*` ships them, so they pair a release.
 BROWSER_DIRS = (
     "browser/patches",
     "browser/additions",
     "browser/settings",
     "browser/assets",
     "browser/scripts",
+    "browser/bundle/fontconfig",
 )
 BROWSER_FILES = ("browser/upstream.sh", "browser/Makefile")
 

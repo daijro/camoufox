@@ -32,12 +32,11 @@ What PASS means, for each spoofed OS and for the camera-only identity:
 """
 
 import asyncio
-import os
 import sys
 
 from camoufox.async_api import AsyncCamoufox
+from helpers import launch_kwargs
 
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
 SPOOFED_OSES = ["windows", "macos", "linux"]
 FAKE_NAMES = ("Default Audio Device", "Default Video Device", "Fake Video Group", "Fake Audio Group")
 
@@ -54,23 +53,14 @@ GUM_JS = """async (c) => {
 }"""
 
 
-def _launch_kwargs(spoofed_os, config=None):
-    kwargs = dict(
-        headless=True,
-        os=spoofed_os,
-        firefox_user_prefs={"media.navigator.permission.disabled": True},
-    )
-    if config:
-        kwargs["config"] = config
-        kwargs["i_know_what_im_doing"] = True
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    return kwargs
-
-
 async def _check(spoofed_os, config=None) -> bool:
     label = f"[{spoofed_os}{' camera-only' if config else ''}]"
-    async with AsyncCamoufox(**_launch_kwargs(spoofed_os, config)) as browser:
+    async with AsyncCamoufox(**launch_kwargs(
+        os=spoofed_os,
+        firefox_user_prefs={"media.navigator.permission.disabled": True},
+        config=config,
+        i_know_what_im_doing=bool(config),
+    )) as browser:
         page = await browser.new_page()
         await page.goto("https://example.com/")
         pre = await page.evaluate(ENUM_JS)

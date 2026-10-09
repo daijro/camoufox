@@ -340,7 +340,7 @@ jobs:
         run: |
           python3 -m venv .venv
           .venv/bin/pip install vermin build twine -r ci/requirements.txt -e python
-          .venv/bin/python browser/scripts/pin-fpgen-model.py
+          .venv/bin/python python/scripts/pin-fpgen-model.py
 
       - name: Check Python compatibility
         # The package must run on the floor pyproject.toml declares (python =

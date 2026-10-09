@@ -160,7 +160,7 @@ jobs:
             echo "::notice::Not a pull request -- building, which also refreshes the shared ccache."
             exit 0
           fi
-          sources='^(browser/patches/|browser/additions/|browser/settings/|browser/assets/|browser/scripts/|browser/upstream\.sh|browser/Makefile)'
+          sources='^(browser/patches/|browser/additions/|browser/settings/|browser/assets/|browser/scripts/|browser/bundle/fontconfig/|browser/upstream\.sh|browser/Makefile)'
           base="${{ github.event.pull_request.base.sha }}"
           changed=$(git diff --name-only "$base"...HEAD || echo "")
           echo "changed files:"; echo "$changed" | sed 's/^/  /'
@@ -252,8 +252,8 @@ jobs:
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # browser/scripts/pin-fpgen-model.py.
-          python3 browser/scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
 
       - name: Synthesized input goes through one chokepoint
         run: python3 browser/scripts/check-input-dispatch.py
@@ -312,8 +312,8 @@ jobs:
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # browser/scripts/pin-fpgen-model.py.
-          python3 browser/scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       - name: Run
         # pythonlib resolves the published release through the GitHub API
         # (pkgman.py honours GITHUB_TOKEN). Unauthenticated, a runner shares the
@@ -343,7 +343,7 @@ jobs:
       contents: read
     env:
       # The fpgen model the TS port downloads (sha256-pinned by
-      # browser/scripts/data/fpgen-model.json). Kept in the workspace so it can be cached.
+      # python/src/camoufox/fpgen-model.json). Kept in the workspace so it can be cached.
       CAMOUFOX_FPGEN_DATA: ${{ github.workspace }}/.ci-work/fpgen
     steps:
       - uses: actions/checkout@v4
@@ -364,8 +364,8 @@ jobs:
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # browser/scripts/pin-fpgen-model.py.
-          .venv/bin/python browser/scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          .venv/bin/python python/scripts/pin-fpgen-model.py
       - name: Test prerequisites
         # Everything tests/prereq.ts may ask for. In CI a missing prerequisite
         # FAILS its tests rather than skipping them, so this list is the job's
@@ -384,7 +384,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .ci-work/fpgen
-          key: fpgen-model-${{ hashFiles('browser/scripts/data/fpgen-model.json') }}
+          key: fpgen-model-${{ hashFiles('python/src/camoufox/fpgen-model.json') }}
       - name: Run
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -723,8 +723,8 @@ jobs:
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # browser/scripts/pin-fpgen-model.py.
-          python3 browser/scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
 
       - name: Download
         # Same GitHub API path as the pythonlib job above, and the same anonymous
@@ -867,17 +867,18 @@ jobs:
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # browser/scripts/pin-fpgen-model.py.
-          python3 browser/scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       # Fonts and properties.json are staged into the artifact by the build job;
       # `make stage-fonts` here would find no source tree and do nothing.
       - if: matrix.leg != 'skiplist'
         run: xvfb-run -a python3 -m ci.run_patch_guards --group "${{ matrix.leg }}" --binary "$CAMOUFOX_BINARY"
       - name: Every skiplist entry is still failing
         if: matrix.leg == 'skiplist'
-        # Seconds, because a correct skiplist is short. This is what stops
-        # ci/skiplist.yml turning into a list of tests that would now pass --
-        # which is what it was: 193 of the 202 tests it skipped passed.
+        # About two minutes: one fresh browser per entry, and a correct skiplist
+        # is short. This is what stops ci/skiplist.yml turning into a list of
+        # tests that would now pass -- which is what it was: 193 of the 202
+        # tests it skipped passed.
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -920,7 +921,7 @@ jobs:
           # to be spelled out here. Without it this job was still downloading
           # fpgen's model itself: TLS verification off, no checksum, and only
           # ever the April-2025 release (observed in run 36050915401).
-          python3 "$GITHUB_WORKSPACE/browser/scripts/pin-fpgen-model.py"
+          python3 "$GITHUB_WORKSPACE/python/scripts/pin-fpgen-model.py"
       - run: xvfb-run -a python3 -m ci.run_build_tester --binary "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -963,8 +964,8 @@ jobs:
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # browser/scripts/pin-fpgen-model.py.
-          python3 browser/scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       - name: Run
         # Launches browsers, kills them, and proves nothing survived -- the
         # failure a long-running scraper hits after six hours and no Playwright
@@ -1017,9 +1018,7 @@ jobs:
       # packaged release presents de-DE. The e2e locale assertions skip on that
       # (named) gap; everything else in the page-vs-config checks still runs.
       # Remove this once the test artifact carries the langpacks.
-      # On a driver-only PR the browser is the published release, which can
-      # predate config keys the launcher now sets (binary-config-keys).
-      CAMOUFOX_TEST_ALLOW_MISSING: ${{ needs.build.result == 'success' && 'packaged-locales' || 'packaged-locales,binary-config-keys' }}
+      CAMOUFOX_TEST_ALLOW_MISSING: packaged-locales
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1032,8 +1031,8 @@ jobs:
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # browser/scripts/pin-fpgen-model.py.
-          python3 browser/scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: typescript/package.json
@@ -1045,7 +1044,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .ci-work/fpgen
-          key: fpgen-model-${{ hashFiles('browser/scripts/data/fpgen-model.json') }}
+          key: fpgen-model-${{ hashFiles('python/src/camoufox/fpgen-model.json') }}
       - name: Run
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -1093,8 +1092,8 @@ jobs:
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # browser/scripts/pin-fpgen-model.py.
-          python3 browser/scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       - run: xvfb-run -a python3 -m ci.run_native --subset growth --shard "${{ matrix.shard }}" --binary "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -1126,8 +1125,8 @@ jobs:
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # browser/scripts/pin-fpgen-model.py.
-          python3 browser/scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       - name: Run
         # Exits 0 with a SKIP result if sundial itself is unreachable -- the
         # browser was never measured, so neither a pass nor a failure would be

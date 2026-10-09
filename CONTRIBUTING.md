@@ -9,8 +9,7 @@ Thanks for your interest in contributing.
 | Feature request | Open an issue describing the use case. |
 | Code or docs | Fork, branch, and open a pull request tied to an issue. |
 
-Planned work is in [`ROADMAP.md`](ROADMAP.md). Comment on an item's issue before
-you start on it.
+Comment on an issue before you start work on it.
 
 ## Setup
 
@@ -21,7 +20,7 @@ enables it, so a rebuild after a small change takes about 5 minutes instead of
 40.
 
 The launchers need no browser build to develop:
-[`python/README.md`](python/README.md) and
+[`python/README.md`](python/README.md#development) and
 [`typescript/README.md`](typescript/README.md#development).
 
 ## Pull request rules

@@ -34,15 +34,13 @@ Run from any venv (no playwright needed -- this drives the binary directly):
     python browser/tests/playwright/patches/search-service-init.py --binary /path/to/camoufox-bin
 """
 
-import os
 import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Optional
 
-BROWSER_ROOT = Path(__file__).resolve().parents[3]
+from helpers import resolve_binary
 
 # Long enough for the search service to init and write settings; the browser
 # does not exit on its own with -headless about:blank, so it is killed after.
@@ -54,19 +52,6 @@ REAL_ENGINES = ("Google", "Bing", "DuckDuckGo", "Perplexity", "Wikipedia",
                 "Yahoo", "Ecosia", "Qwant", "Baidu", "Yandex")
 
 ADDED_ENGINE_RE = re.compile(r'"#addEngineToStore: Adding engine:" "([^"]*)"')
-
-
-def resolve_binary(argv: List[str]) -> Optional[Path]:
-    if "--binary" in argv:
-        return Path(argv[argv.index("--binary") + 1]).resolve()
-    # ci.run_patch_guards passes the binary under test as CAMOUFOX_EXECUTABLE_PATH;
-    # ignoring it made this guard run the newest objdir instead -- after a macOS
-    # cross build, an arm64 Mach-O that cannot execute here ("Exec format error").
-    for var in ("CAMOUFOX_EXECUTABLE_PATH", "CAMOUFOX_BINARY"):
-        if os.environ.get(var):
-            return Path(os.environ[var]).resolve()
-    matches = sorted(BROWSER_ROOT.glob("camoufox-*/obj-*-linux-gnu/dist/bin/camoufox-bin"))
-    return matches[-1] if matches else None
 
 
 def launch_and_capture(binary: Path, profile: Path) -> str:
@@ -87,8 +72,8 @@ def launch_and_capture(binary: Path, profile: Path) -> str:
 
 
 def main() -> int:
-    binary = resolve_binary(sys.argv)
-    if binary is None or not binary.exists():
+    binary = resolve_binary()
+    if not binary.exists():
         print(f"FATAL: no camoufox binary found (looked for {binary})")
         return 1
 

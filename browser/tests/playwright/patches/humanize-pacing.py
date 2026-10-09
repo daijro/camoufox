@@ -26,17 +26,15 @@ What PASS means:
 """
 
 import asyncio
-import os
 import statistics
 import sys
 
 from camoufox.async_api import AsyncCamoufox
+from helpers import launch_kwargs
 
 CAP_S = 0.5
 MAX_MEDIAN_MS = CAP_S * 1000 * 1.08
 MOVES = 11
-
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
 
 BUSY_PAGE = """
     setInterval(() => { const t = performance.now(); while (performance.now() - t < 19); }, 20);
@@ -46,10 +44,7 @@ BUSY_PAGE = """
 
 
 async def main() -> int:
-    kwargs = dict(headless=True, os="linux", humanize=CAP_S)
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    async with AsyncCamoufox(**kwargs) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os="linux", humanize=CAP_S)) as browser:
         page = await browser.new_page()
         await page.set_content('<body style="margin:0;width:1400px;height:800px"></body>')
         await page.evaluate(BUSY_PAGE)

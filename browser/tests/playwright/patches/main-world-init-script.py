@@ -40,15 +40,13 @@ What PASS means:
 
 import asyncio
 import http.server
-import os
 import socketserver
 import sys
 import threading
 from typing import Any, Dict, Tuple
 
 from camoufox.async_api import AsyncCamoufox
-
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
+from helpers import launch_kwargs
 
 # The page reports, in its own world, whether the init script reached it.
 PROBE_PAGE = (
@@ -83,18 +81,9 @@ def _serve() -> Tuple[socketserver.TCPServer, str]:
     return server, f"http://127.0.0.1:{server.server_address[1]}/"
 
 
-def _launch_kwargs(main_world_eval: bool) -> Dict[str, Any]:
-    kwargs: Dict[str, Any] = dict(
-        headless=True, os="linux", main_world_eval=main_world_eval
-    )
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    return kwargs
-
-
 async def _page_sees(url: str, script: str, main_world_eval: bool) -> bool:
     """Whether the page's own script observed the init script's write."""
-    async with AsyncCamoufox(**_launch_kwargs(main_world_eval)) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os="linux", main_world_eval=main_world_eval)) as browser:
         context = browser.contexts[0] if browser.contexts else await browser.new_context()
         await context.add_init_script(script)
         page = await context.new_page()

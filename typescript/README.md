@@ -8,17 +8,17 @@
 
 `camoufox` drives the Camoufox browser through `playwright-core`. On every
 launch it draws a complete device identity from
-[`fpgen`](https://www.npmjs.com/package/fpgen), the TypeScript port of
+[`fpgen-js`](https://www.npmjs.com/package/fpgen-js), the TypeScript port of
 [scrapfly's fpgen](https://github.com/scrapfly/fingerprint-generator), checks that the
 parts agree with each other, and hands it to the browser, which spoofs it in
 C++. With a proxy and `geoip: true` it also matches timezone, locale,
 geolocation and the WebRTC IP to the proxy's exit IP.
 
-It is a port of the Python package ([`../python`](../python)) and does not call
+It is a port of the Python package ([`python/`](https://github.com/daijro/camoufox/tree/main/python)) and does not call
 Python. Both launchers read the same `properties.json`, write the same
 `CAMOU_CONFIG`, share one browser install directory, and draw the same
 identities: a pinned identity looks the same from either language. Notes for
-AI coding agents are in [`../AGENTS.md`](../AGENTS.md#using-camoufox).
+AI coding agents are in [`AGENTS.md`](https://github.com/daijro/camoufox/blob/main/AGENTS.md#using-camoufox).
 
 ## Install
 
@@ -127,8 +127,10 @@ come from the real OS, driver and GPU, whatever the identity claims.
   The pixels then agree with the identity. A host that renders in software (no
   GPU driver, as on most servers) keeps a drawn GPU: it reads as a machine
   whose driver failed to load.
-- **On another OS**, the pixels would show the real one. Camoufox then turns on
-  the canvas protection of `privacy.resistFingerprinting`, and only that:
+- **On another OS, or with another GPU** (`webgl_config`, a preset's GPU, or a
+  host GPU fpgen never recorded), the pixels would show the real one. Camoufox
+  then turns on the canvas protection of `privacy.resistFingerprinting`, and
+  only that:
   canvas and WebGL readback return random data, as in LibreWolf, Tor Browser
   and Mullvad Browser. Stock Firefox does not do this, so the launch emits a
   `LeakWarning`; the browser reads as a privacy-hardened Firefox rather than a
@@ -209,7 +211,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `block_webrtc` | `boolean` | `false` | Disable WebRTC entirely. |
 | `block_webgl` | `boolean` | `false` | Disable WebGL. Warns: many WAFs check for it. |
 | `webgl_config` | `[vendor, renderer]` | drawn | Use one GPU fpgen has recorded for Firefox on `os`; any other pair throws. Needs `os`. |
-| `canvas_noise` | `boolean` | on for another OS | Random canvas and WebGL readback, as in LibreWolf. Warns. See [The canvas on another OS](#the-canvas-on-another-os). |
+| `canvas_noise` | `boolean` | on for another OS or GPU | Random canvas and WebGL readback, as in LibreWolf. Warns. See [The canvas on another OS](#the-canvas-on-another-os). |
 | `disable_coop` | `boolean` | `false` | Turn off Cross-Origin-Opener-Policy so elements in cross-origin iframes (such as the Turnstile checkbox) can be clicked. Warns. |
 | `main_world_eval` | `boolean` | `false` | Allow `page.evaluate("mw:...")` and `mw:` init scripts to run in the page's own world. |
 | `allow_addon_new_tab` | `boolean` | `false` | Let addons open tabs. |
@@ -218,11 +220,11 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `fingerprint` | fpgen fingerprint object | drawn | Use this fpgen fingerprint instead of drawing one. Warns. |
 | `fingerprint_preset` | `boolean \| object` | `undefined` | Opt into a recorded real-device preset instead of fpgen: `true` picks a random bundled one, an object uses that one. |
 | `ff_version` | `number` | the browser's own | Firefox version to claim. Warns: a mismatch with the engine is detectable. |
-| `config` | `object` | none | Raw Camoufox properties ([`properties.json`](../browser/settings/properties.json)). Overrides the generated identity; manual identity keys warn. |
+| `config` | `object` | none | Raw Camoufox properties ([`properties.json`](https://github.com/daijro/camoufox/blob/main/browser/settings/properties.json)). Overrides the generated identity; manual identity keys warn. |
 | `firefox_user_prefs` | `object` | none | Extra Firefox prefs. |
 | `args` | `string[]` | none | Extra browser command-line arguments. |
 | `env` | `object` | a copy of `process.env` | Environment variables for the browser. |
-| `executable_path` | `string` | the installed build | Use this binary. `CAMOUFOX_EXECUTABLE_PATH` sets it too. |
+| `executable_path` | `string` | the installed build | Use this binary. `CAMOUFOX_EXECUTABLE_PATH` sets it too. Raises with `browser`. |
 | `browser` | `string` | the paired build | Launch another installed build: `"official/beta.20"`, `"beta.20"` or `"134.0.2-beta.20"`. Never downloads; warns like `camoufox set`. |
 | `virtual_display` | `string` | none | Use an existing X display, e.g. `":99"`. |
 | `i_know_what_im_doing` | `boolean` | `false` | Silence the leak warnings above. |
@@ -252,7 +254,7 @@ and `from_options` (an object from `launchOptions()` to use as is).
 Each release is paired with the one browser build it was built and tested with,
 the same build as the Python release of the same version, and every launch uses
 it until `camoufox set` chooses another. The Python README explains the rules:
-[Which browser build is used](../python/README.md#which-browser-build-is-used).
+[Which browser build is used](https://github.com/daijro/camoufox/blob/main/python/README.md#which-browser-build-is-used).
 
 ## Development
 
@@ -263,7 +265,7 @@ a Python with `python/` installed: the repository's `.venv`, or
 ```bash
 python3.14 -m venv .venv                                           # repo root
 .venv/bin/pip install -r ci/requirements.txt -e python
-.venv/bin/python browser/scripts/pin-fpgen-model.py
+.venv/bin/python python/scripts/pin-fpgen-model.py
 cd typescript
 pnpm install
 pnpm build       # tsc -> dist/, then copy the Python package's data files into dist/data-files
@@ -291,16 +293,17 @@ CAMOUFOX_E2E=1 CAMOUFOX_EXECUTABLE=/path/to/camoufox-bin pnpm test tests/e2e.tes
 ```
 
 **Releases.** The npm and PyPI packages are released together by
-[`release.yml`](../.github/workflows/release.yml), at the same version
-([`ci/README.md`](../ci/README.md#releases)). `scripts/check-pack.mjs` checks
+[`release.yml`](https://github.com/daijro/camoufox/blob/main/.github/workflows/release.yml), at the same version
+([`ci/README.md`](https://github.com/daijro/camoufox/blob/main/ci/README.md#releases)). `scripts/check-pack.mjs` checks
 that the tarball carries every data file and installs into an empty project.
 npm uploads use trusted publishing; no token is stored.
 
 ## Licence
 
-MIT ([`LICENSE`](LICENSE)). The browser itself is MPL-2.0. The package
-contains a port of NumPy's pairwise summation; its notice is in
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). It depends on
-[`fpgen`](https://www.npmjs.com/package/fpgen) (Apache-2.0) and
+MIT ([`LICENSE`](https://github.com/daijro/camoufox/blob/main/typescript/LICENSE)).
+The browser itself is MPL-2.0. The package contains a port of NumPy's pairwise
+summation; its notice is in
+[`THIRD_PARTY_NOTICES.md`](https://github.com/daijro/camoufox/blob/main/typescript/THIRD_PARTY_NOTICES.md).
+It depends on [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and
 [`python-random`](https://www.npmjs.com/package/python-random), a bit-exact port
 of CPython's `random`, so seeded draws match the Python launcher.

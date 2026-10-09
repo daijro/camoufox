@@ -47,7 +47,6 @@ What PASS means:
 
 import http.server
 import json
-import os
 import socketserver
 import sys
 import threading
@@ -120,16 +119,12 @@ def probe(context, url):
 def main():
     from camoufox.sync_api import Camoufox
     from camoufox.fingerprints import generate_context_fingerprint
-
-    launch = {"headless": True}
-    exe = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
-    if exe:
-        launch["executable_path"] = exe
+    from helpers import launch_kwargs
 
     httpd, url = serve()
     results = []
     try:
-        with Camoufox(**launch) as browser:
+        with Camoufox(**launch_kwargs()) as browser:
             # The documented default: no init script anywhere, fingerprints come
             # from CAMOU_CONFIG in C++. Nothing ever calls a setter here, so this
             # is the launch that used to leak all of them.

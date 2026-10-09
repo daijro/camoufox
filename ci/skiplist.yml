@@ -157,30 +157,48 @@ skip:
       The same http:// navigation through a GET-only proxy that asks for
       credentials, with an empty password.
 
+  # test_browsercontext_proxy.py shares one browser across the module, and once
+  # HTTPS-First's https:// attempt fails, Firefox adds an exception for the host
+  # (dom.security.https_first_add_exception_on_failure) that lasts as long as
+  # that browser's profile. So only the module's first proxied navigation fails,
+  # and which test makes it depends on order and on which shard each test lands
+  # in.
+  # Each test fails when it runs first, as the skiplist audit runs it, so every
+  # one is listed. Listing only some leaves a failure in whichever shard runs
+  # an unlisted one first.
+
   - test: tests/async/test_browsercontext_proxy.py::test_should_use_proxy
     reason: >-
       The same http:// navigation through a GET-only proxy, set on the context
-      instead of the browser.
+      instead of the browser. Fails whenever it is the first proxied navigation
+      of the module's shared browser.
 
-  # --- upstream expectations that encode a stock-Firefox quirk ---------------
-  #
-  # This is not a place Camoufox is worse than Firefox. It is a place the
-  # upstream test bakes in something specific to the *stock* browser, which the
-  # fork deliberately does not reproduce. It was reproduced against the built
-  # binary and read in upstream's source before being listed here -- it is not
-  # on this list because it was failing and looked plausible.
-
-  - test: tests/async/test_worker.py::test_workers_should_format_number_using_context_locale
-    replaced-by: browser/tests/playwright/camoufox/test_worker_locale.py
+  - test: tests/async/test_browsercontext_proxy.py::test_proxy_should_allow_none_for_optional_settings
     reason: >-
-      Asserts that a worker does NOT inherit the context locale. Upstream marks
-      this with a link to playwright#38919 and expects "10,000.2" -- en-US --
-      from a context created with locale="ru-RU", because stock Firefox applies
-      Playwright's locale override to the page and not to its workers. Camoufox
-      sets the locale below that layer, so a worker sees it too and formats
-      "10 000,2", which is what a genuinely ru-RU Firefox prints. Matching
-      upstream here would mean reintroducing a main-thread/worker locale
-      disagreement -- a free signal for anything that bothers to look in both.
+      The context-proxy navigation with the optional settings passed as None.
+      Fails whenever it is the first proxied navigation of the module's shared
+      browser.
+
+  - test: tests/async/test_browsercontext_proxy.py::test_should_use_proxy_for_second_page
+    reason: >-
+      The context-proxy navigation on two pages. Fails whenever it is the first
+      proxied navigation of the module's shared browser.
+
+  - test: tests/async/test_browsercontext_proxy.py::test_should_work_with_ip_port_notion
+    reason: >-
+      The context-proxy navigation, given as ip:port. Fails whenever it is the
+      first proxied navigation of the module's shared browser.
+
+  - test: tests/async/test_browsercontext_proxy.py::test_should_authenticate
+    reason: >-
+      The context-proxy navigation through a proxy that asks for credentials.
+      Fails whenever it is the first proxied navigation of the module's shared
+      browser.
+
+  - test: tests/async/test_browsercontext_proxy.py::test_should_authenticate_with_empty_password
+    reason: >-
+      The context-proxy navigation with an empty password. Fails whenever it is
+      the first proxied navigation of the module's shared browser.
 
   # --- the popup blocker -----------------------------------------------------
   #

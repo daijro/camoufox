@@ -13,9 +13,9 @@ hands it to the browser, which spoofs it in C++. With a proxy and `geoip=True`
 it also matches timezone, locale, geolocation and the WebRTC IP to the proxy's
 exit IP.
 
-The TypeScript package ([`../typescript`](../typescript)) is a port of this one
+The TypeScript package ([`typescript/`](https://github.com/daijro/camoufox/tree/main/typescript)) is a port of this one
 with the same options. Notes for AI coding agents are in
-[`../AGENTS.md`](../AGENTS.md#using-camoufox).
+[`AGENTS.md`](https://github.com/daijro/camoufox/blob/main/AGENTS.md#using-camoufox).
 
 ## Install
 
@@ -140,8 +140,10 @@ come from the real OS, driver and GPU, whatever the identity claims.
   The pixels then agree with the identity. A host that renders in software (no
   GPU driver, as on most servers) keeps a drawn GPU: it reads as a machine
   whose driver failed to load.
-- **On another OS**, the pixels would show the real one. Camoufox then turns on
-  the canvas protection of `privacy.resistFingerprinting`, and only that:
+- **On another OS, or with another GPU** (`webgl_config`, a preset's GPU, or a
+  host GPU fpgen never recorded), the pixels would show the real one. Camoufox
+  then turns on the canvas protection of `privacy.resistFingerprinting`, and
+  only that:
   canvas and WebGL readback return random data, as in LibreWolf, Tor Browser
   and Mullvad Browser. Stock Firefox does not do this, so the launch prints a
   `LeakWarning`; the browser reads as a privacy-hardened Firefox rather than a
@@ -223,7 +225,7 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | `block_webrtc` | `bool` | `False` | Disable WebRTC entirely. |
 | `block_webgl` | `bool` | `False` | Disable WebGL. Warns: many WAFs check for it. |
 | `webgl_config` | `(vendor, renderer)` | drawn | Use one GPU fpgen has recorded for Firefox on `os` (see `camoufox.webgl.firefox_gpus`); any other pair raises `ValueError`. Needs `os`. |
-| `canvas_noise` | `bool` | on for another OS | Random canvas and WebGL readback, as in LibreWolf. Warns. See [The canvas on another OS](#the-canvas-on-another-os). |
+| `canvas_noise` | `bool` | on for another OS or GPU | Random canvas and WebGL readback, as in LibreWolf. Warns. See [The canvas on another OS](#the-canvas-on-another-os). |
 | `disable_coop` | `bool` | `False` | Turn off Cross-Origin-Opener-Policy so elements in cross-origin iframes (such as the Turnstile checkbox) can be clicked. Warns. |
 | `main_world_eval` | `bool` | `False` | Allow `page.evaluate("mw:...")` and `mw:` init scripts to run in the page's own world. |
 | `allow_addon_new_tab` | `bool` | `False` | Let addons open tabs. |
@@ -232,11 +234,11 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | `fingerprint` | fpgen fingerprint `dict` | drawn | Use this fpgen fingerprint instead of drawing one. Warns. |
 | `fingerprint_preset` | `bool` or `dict` | `None` | Opt into a recorded real-device preset instead of fpgen: `True` picks a random bundled one, a dict uses that one. |
 | `ff_version` | `int` | the browser's own | Firefox version to claim. Warns: a mismatch with the engine is detectable. |
-| `config` | `dict` | none | Raw Camoufox properties ([`properties.json`](../browser/settings/properties.json)). Overrides the generated identity; manual identity keys warn. |
+| `config` | `dict` | none | Raw Camoufox properties ([`properties.json`](https://github.com/daijro/camoufox/blob/main/browser/settings/properties.json)). Overrides the generated identity; manual identity keys warn. |
 | `firefox_user_prefs` | `dict` | none | Extra Firefox prefs. |
 | `args` | `list[str]` | none | Extra browser command-line arguments. |
 | `env` | `dict` | a copy of the environment | Environment variables for the browser. |
-| `executable_path` | `str` or `Path` | the installed build | Use this binary. `CAMOUFOX_EXECUTABLE_PATH` sets it too. |
+| `executable_path` | `str` or `Path` | the installed build | Use this binary. `CAMOUFOX_EXECUTABLE_PATH` sets it too. Raises with `browser`. |
 | `browser` | `str` | the paired build | Launch another installed build: `"official/beta.20"`, `"beta.20"` or `"134.0.2-beta.20"`. Never downloads; warns like `camoufox set`. |
 | `virtual_display` | `str` | none | Use an existing X display, e.g. `":99"`. |
 | `i_know_what_im_doing` | `bool` | `False` | Silence the leak warnings above. |
@@ -293,6 +295,20 @@ build, every launch warns that the package needs upgrading.
 A development checkout (installed from the repository, not from PyPI) is
 paired with nothing and follows its channel, `official/stable` by default.
 
+## Development
+
+From the repository root:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r ci/requirements.txt -e 'python[geoip]'
+.venv/bin/python python/scripts/pin-fpgen-model.py
+.venv/bin/python -m ci.run_pythonlib
+```
+
+`ci.run_pythonlib` runs `python/tests/`, the same job CI runs. Which suite covers
+which change is in [`AGENTS.md`](https://github.com/daijro/camoufox/blob/main/AGENTS.md#testing).
+
 ## Licence
 
-MIT ([`LICENSE`](LICENSE)). The browser itself is MPL-2.0.
+MIT ([`LICENSE`](https://github.com/daijro/camoufox/blob/main/python/LICENSE)). The browser itself is MPL-2.0.

@@ -43,10 +43,10 @@ Before the fix this times out on one of the edge moves. After it, all complete.
 """
 
 import asyncio
-import os
 import sys
 
 from camoufox.async_api import AsyncCamoufox
+from helpers import launch_kwargs
 
 VIEWPORT = {"width": 1000, "height": 700}
 # Targets inside the viewport but within the trajectory's +/-80px knot boundary
@@ -60,18 +60,9 @@ EDGE_TARGETS = [
 ]
 MOVE_TIMEOUT_S = 20
 
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
-
-
-def _launch_kwargs():
-    kwargs = dict(headless=True, os="linux", humanize=True)
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    return kwargs
-
 
 async def main() -> int:
-    async with AsyncCamoufox(**_launch_kwargs()) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os="linux", humanize=True)) as browser:
         page = await browser.new_page(no_viewport=True)
         await page.set_viewport_size(VIEWPORT)
         await page.set_content(

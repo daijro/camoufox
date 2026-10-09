@@ -171,8 +171,9 @@ make diff > patches/x.patch
 `make patch` and `make unpatch` apply or reverse one patch. `make revert` resets
 the tree to unpatched Firefox. Every make target is described in
 [`docs/patch-upgrading-guide.md`](docs/patch-upgrading-guide.md#the-source-tree-and-its-make-targets),
-which also covers porting patches to a new Firefox. Keep the `Makefile` diff
-minimal: host dependencies belong in `browser/scripts/install-deps.sh`.
+which also covers porting patches to a new Firefox and porting Playwright. Keep
+the `Makefile` diff minimal: host dependencies belong in
+`browser/scripts/install-deps.sh`.
 
 ## Testing
 
@@ -238,4 +239,5 @@ this section in step with the launcher options.
 - **`UnknownIPLocation`**: the IP is not in the GeoIP database; pass `locale` and set coordinates another way.
 - **Version ceilings:** Playwright below 1.63; Node.js 22.15 or newer.
 - **Each package release is paired with one browser build.** `camoufox set` overrides it (with a warning at launch), the `browser` option overrides it for one launch, and `camoufox set --release` restores it.
-- **Canvas is not noised on the host's OS**: the identity claims the host's GPU, and the canvas hash is stable per machine. An identity on another OS gets `privacy.resistFingerprinting`'s random canvas readback (as in LibreWolf), with a `LeakWarning`; `canvas_noise=True`/`False` forces it. It is per browser: contexts of a browser without it claim the host's OS and GPU, and `NewContext` raises for another OS.
+- **`browser` and `executable_path` are exclusive**: passing `browser` with `executable_path`, or while `CAMOUFOX_EXECUTABLE_PATH` is set, raises `ValueError`.
+- **Canvas is not noised on the host's OS**: the identity claims the host's GPU, and the canvas hash is stable per machine. An identity on another OS, or claiming a GPU that is not the host's (`webgl_config`, a preset's GPU, or a host GPU fpgen never recorded), gets `privacy.resistFingerprinting`'s random canvas readback (as in LibreWolf), with a `LeakWarning`; `canvas_noise=True`/`False` forces it. It is per browser: contexts of a browser without it claim the host's OS and GPU, and `NewContext` raises for another OS or GPU.

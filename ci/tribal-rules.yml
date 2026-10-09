@@ -444,3 +444,23 @@ rules:
       browser stops reading is instead kept with a "removed" field: older
       libraries still validate it, the browser ignores it, and current
       libraries skip it with a warning that it has no effect.
+
+  # -------------------------------------------------------------------------
+  # Network
+  # -------------------------------------------------------------------------
+
+  - id: https-first-stays-on
+    title: HTTPS-First keeps Firefox's default, on
+    check: manual
+    evidence:
+      - "#638 (restored in 0e4151f) set dom.security.https_first=false in camoufox.cfg so Playwright's GET-only test proxy passed"
+      - "914b575 removed it again; ci/skiplist.yml lists the proxy tests it fails, with the reason"
+      - "measured 2026-10-08 on a v156.0.1-beta.32 build: every proxy test in test_proxy.py and test_browsercontext_proxy.py passes with the pref appended to camoufox.cfg, and fails without it"
+    rationale: >-
+      Stock Firefox tries an http:// navigation as https:// first, and a server
+      sees whether a browser does, so turning it off marks the browser as not
+      stock Firefox. Playwright's own Firefox turns it off (playwright.cfg), and
+      upstream's proxy tests depend on that: their proxy is the test server,
+      which answers plain GETs and cannot open the CONNECT tunnel the upgrade
+      needs. A real proxy handles CONNECT, as every https:// site needs it to.
+      Those tests are skiplisted rather than passed by changing the browser.

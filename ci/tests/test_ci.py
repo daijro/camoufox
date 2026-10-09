@@ -2371,11 +2371,35 @@ def test_the_native_inputs_cover_everything_that_can_change_the_binary():
         part.replace("\\", "").rstrip("/") for part in scope.group(1).split("|") if part
     }
     hashed = set(BROWSER_DIRS) | set(BROWSER_FILES)
-    missing = considered - hashed
-    assert not missing, (
-        f"{sorted(missing)} can change the binary but does not feed the native hash, "
-        "so a change there would be served a stale browser"
+    assert considered == hashed, (
+        f"resolve greps {sorted(considered - hashed)} without hashing them and hashes "
+        f"{sorted(hashed - considered)} without grepping them, so a change there "
+        "would be served a stale browser"
     )
+
+
+def test_everything_a_package_ships_from_the_repo_is_a_browser_input():
+    """A file `make package-*` copies into a release must pair that release.
+
+    The packaged fontconfig once sat outside BROWSER_DIRS, so changing it
+    neither rebuilt the browser nor moved the source digest, and a library
+    release could name a browser that shipped the old files.
+    """
+    from ci.browser_inputs import BROWSER_DIRS, BROWSER_FILES
+
+    makefile = (CI_ROOT.parent / "browser" / "Makefile").read_text(encoding="utf-8")
+    shipped = set()
+    for block in re.findall(r"--includes\s*\\\n((?:[ \t]+[^-\s]\S*\s*\\\n)+)", makefile):
+        for line in block.splitlines():
+            path = line.strip().rstrip("\\").strip()
+            if not path.startswith(("~", "/")):
+                shipped.add(f"browser/{path}")
+    assert "browser/bundle/fontconfig" in shipped, "the --includes parse no longer finds the packaged files"
+    uncovered = {
+        p for p in shipped
+        if p not in BROWSER_FILES and not any(p == d or p.startswith(f"{d}/") for d in BROWSER_DIRS)
+    }
+    assert not uncovered, f"{sorted(uncovered)} ship in a release but are not browser inputs"
 
 
 def test_nothing_the_build_runs_is_excluded_from_the_native_hash():

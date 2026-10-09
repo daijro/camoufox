@@ -495,7 +495,7 @@ That is the default. These options override it:
 |---|---|
 | `canvas_noise=False` on another OS | 🔴 Stock Firefox, but the pixels show the real OS |
 | `canvas_noise=True` on the host's OS | 🟡 Looks like LibreWolf with no need to |
-| `webgl_config` naming a GPU other than the host's, without noise | 🔴 WebGL reports one GPU while the pixels come from another |
+| `webgl_config` naming a GPU other than the host's | 🟡 Canvas noise is turned on, as on another OS; with `canvas_noise=False`, 🔴 WebGL reports one GPU while the pixels come from another |
 
 Noise is set per browser, not per context. Without it, every `NewContext()`
 claims the host's OS. Details are in
@@ -749,7 +749,7 @@ flowchart TD
 | The browser (`browser/`: patches, additions, settings, build system) | [MPL-2.0](LICENSE), the licence of the Firefox source it modifies |
 | Vendored Cursory trajectories | LGPLv3-or-later ([`NOTICE`](browser/additions/juggler/input/cursory/NOTICE)) |
 | Python package | MIT ([`python/LICENSE`](python/LICENSE)) |
-| TypeScript package | MIT ([`typescript/LICENSE`](typescript/LICENSE)); includes a port of NumPy's pairwise summation ([notice](typescript/THIRD_PARTY_NOTICES.md)) and depends on [`fpgen`](https://www.npmjs.com/package/fpgen) (Apache-2.0) and [`python-random`](https://www.npmjs.com/package/python-random) |
+| TypeScript package | MIT ([`typescript/LICENSE`](typescript/LICENSE)); includes a port of NumPy's pairwise summation ([notice](typescript/THIRD_PARTY_NOTICES.md)) and depends on [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and [`python-random`](https://www.npmjs.com/package/python-random) |
 
 ## Thanks
 

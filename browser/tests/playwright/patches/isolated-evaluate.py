@@ -31,13 +31,11 @@ What PASS means:
 """
 
 import asyncio
-import os
 import sys
 from typing import Any, Dict
 
 from camoufox.async_api import AsyncCamoufox
-
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
+from helpers import launch_kwargs
 
 PAGE = """
 <main id="target">content</main>
@@ -82,13 +80,6 @@ PAGE = """
 """
 
 
-def _launch_kwargs() -> Dict[str, Any]:
-    kwargs: Dict[str, Any] = dict(headless=True, os="linux")
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    return kwargs
-
-
 def _check(results: Dict[str, Any], label: str, got: Any, expected: Any) -> None:
     ok = got == expected
     results[label] = ok
@@ -99,7 +90,7 @@ def _check(results: Dict[str, Any], label: str, got: Any, expected: Any) -> None
 
 async def _run() -> bool:
     results: Dict[str, Any] = {}
-    async with AsyncCamoufox(**_launch_kwargs()) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os="linux")) as browser:
         page = await browser.new_page()
         await page.set_content(PAGE)
 

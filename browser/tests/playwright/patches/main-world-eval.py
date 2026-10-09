@@ -43,13 +43,11 @@ What PASS means:
 """
 
 import asyncio
-import os
 import sys
 from typing import Any, Dict, List, Tuple
 
 from camoufox.async_api import AsyncCamoufox
-
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
+from helpers import launch_kwargs
 
 PAGE = """
 <button id="probe">probe</button>
@@ -90,13 +88,6 @@ SERIALIZER_CASES: List[Tuple[str, str, Any]] = [
 ]
 
 
-def _launch_kwargs(main_world_eval: bool) -> Dict[str, Any]:
-    kwargs: Dict[str, Any] = dict(headless=True, os="linux", main_world_eval=main_world_eval)
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-    return kwargs
-
-
 def _check(results: Dict[str, Any], label: str, got: Any, expected: Any) -> None:
     ok = got == expected and type(got) is type(expected)
     results[label] = ok
@@ -108,7 +99,7 @@ def _check(results: Dict[str, Any], label: str, got: Any, expected: Any) -> None
 async def _run_disabled() -> bool:
     results: Dict[str, Any] = {}
     print("\n=== main_world_eval=False ===")
-    async with AsyncCamoufox(**_launch_kwargs(False)) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os="linux", main_world_eval=False)) as browser:
         page = await browser.new_page()
         await page.set_content(PAGE)
 
@@ -133,7 +124,7 @@ async def _run_disabled() -> bool:
 async def _run_enabled() -> bool:
     results: Dict[str, Any] = {}
     print("\n=== main_world_eval=True ===")
-    async with AsyncCamoufox(**_launch_kwargs(True)) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os="linux", main_world_eval=True)) as browser:
         page = await browser.new_page()
         await page.set_content(PAGE)
 

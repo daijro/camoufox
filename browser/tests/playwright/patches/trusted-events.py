@@ -44,8 +44,7 @@ import tempfile
 from typing import Any, Dict, List
 
 from camoufox.async_api import AsyncCamoufox
-
-EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
+from helpers import launch_kwargs
 
 OPTIONS = '<option value="a">a</option><option value="b">b</option><option value="c">c</option>'
 PAGE = f"""
@@ -127,11 +126,7 @@ def shape(events: List[Dict[str, Any]], *types: str) -> List[Dict[str, Any]]:
 
 async def main() -> int:
     results: Dict[str, bool] = {}
-    kwargs: Dict[str, Any] = dict(headless=True, os="linux")
-    if EXECUTABLE_PATH:
-        kwargs["executable_path"] = EXECUTABLE_PATH
-
-    async with AsyncCamoufox(**kwargs) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os="linux")) as browser:
         page = await browser.new_page()
         await page.set_content(PAGE)
         rec = Recorder(page)
