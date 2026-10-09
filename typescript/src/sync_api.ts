@@ -9,7 +9,7 @@
  * launch lock (async_api), and virtual-display teardown.
  */
 
-import { ensureModel } from "fpgen";
+import { ensureModel } from "fpgen-js";
 import {
 	type Browser,
 	type BrowserContext,

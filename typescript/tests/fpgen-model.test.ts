@@ -6,7 +6,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { MODEL_PIN } from "fpgen";
+import { MODEL_PIN } from "fpgen-js";
 import { describe, expect, it } from "vitest";
 
 const PYTHON_PIN = path.resolve(

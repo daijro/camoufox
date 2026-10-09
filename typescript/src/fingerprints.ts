@@ -13,7 +13,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { generate, InvalidConstraints } from "fpgen";
+import { generate, InvalidConstraints } from "fpgen-js";
 import * as random from "python-random";
 import {
 	supported as cpuAffinitySupported,

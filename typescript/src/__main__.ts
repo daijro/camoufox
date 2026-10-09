@@ -11,7 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import { Argument, Command, Option } from "commander";
-import { ensureModel } from "fpgen";
+import { ensureModel } from "fpgen-js";
 import { LIBRARY_VERSION } from "./__version__.js";
 import { DefaultAddons, maybeDownloadAddons } from "./addons.js";
 import { effectivePin, loadPin, pinSpec } from "./browser-pin.js";
@@ -1163,7 +1163,7 @@ class VersionInfo {
 	packages(): void {
 		this.header("Packages");
 		this.pkg("Camoufox", LIBRARY_VERSION);
-		this.pkg("fpgen", installedPackageVersion("fpgen"));
+		this.pkg("fpgen", installedPackageVersion("fpgen-js"));
 		this.pkg("Playwright", resolvedPlaywrightVersionRaw());
 	}
 

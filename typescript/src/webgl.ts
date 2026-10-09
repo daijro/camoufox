@@ -8,7 +8,7 @@ import {
 	lookupPossibilities,
 	type TraceResult,
 	traceWithEvidence,
-} from "fpgen";
+} from "fpgen-js";
 import { Random, type Seed } from "python-random";
 import { gpuFitsMachine, gpuFitsOs } from "./coherence.js";
 import {

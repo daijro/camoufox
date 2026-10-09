@@ -8,7 +8,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { inspect } from "node:util";
-import { ensureModel } from "fpgen";
+import { ensureModel } from "fpgen-js";
 import { UAParser } from "ua-parser-js";
 import { addDefaultAddons, confirmPaths, type DefaultAddon } from "./addons.js";
 import * as coherence from "./coherence.js";

@@ -161,7 +161,7 @@ describe("the fpgen model directory", () => {
 		vi.stubEnv("CAMOUFOX_FPGEN_DATA", env);
 		vi.resetModules();
 		const { INSTALL_DIR } = await import("../src/paths.js");
-		const { modelDir } = await import("fpgen");
+		const { modelDir } = await import("fpgen-js");
 		return [modelDir(), INSTALL_DIR];
 	}
 

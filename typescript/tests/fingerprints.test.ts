@@ -6,7 +6,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { Generator } from "fpgen";
+import { Generator } from "fpgen-js";
 import { describe, expect, it, vi } from "vitest";
 import { InvalidIP } from "../src/exceptions.js";
 import {

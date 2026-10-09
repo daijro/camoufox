@@ -3,7 +3,7 @@
  * keeps it, so the suites share one copy. A model that can be neither read nor
  * downloaded is a missing prerequisite.
  */
-import { ensureModel } from "fpgen";
+import { ensureModel } from "fpgen-js";
 import "../src/paths.js";
 import { prerequisite } from "./prereq.js";
 
