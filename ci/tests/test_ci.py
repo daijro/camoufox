@@ -749,12 +749,13 @@ def test_build_tester_identities_claim_the_binarys_firefox_version(monkeypatch):
     monkeypatch.syspath_prepend(str(CI_ROOT.parent / "python/src"))
     import presets
 
-    generated = presets.generate_presets("156")
+    major = read_upstream_sh()["version"].split(".", 1)[0]
+    generated = presets.generate_presets(major)
     every = (generated["macPerContext"] + generated["linuxPerContext"]
              + [generated["macGlobal"], generated["linuxGlobal"]])
     for preset in every:
-        assert "Firefox/156.0" in preset["profileConfig"]["navigatorUserAgent"]
-        assert "Firefox/156.0" in preset["contextOptions"]["userAgent"]
+        assert f"Firefox/{major}.0" in preset["profileConfig"]["navigatorUserAgent"]
+        assert f"Firefox/{major}.0" in preset["contextOptions"]["userAgent"]
 
 
 def test_build_tester_gets_an_absolute_binary_path(tmp_path, monkeypatch):

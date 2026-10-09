@@ -486,8 +486,8 @@ grep -r "class Navigator" . --include="*.h"
 - [ ] Port each reject to the new Firefox code
 - [ ] Remove `.rej` and `.orig` files, `git add -N` new files
 - [ ] `make diff > patches/<name>.patch`
-- [ ] `make dir` applies the whole stack cleanly
-- [ ] `make build`, then run the patch guards
+- [ ] `make dir` applies the whole stack cleanly, with no fuzz
+- [ ] `make build`, then run the patch guards; `firefox-version-pin` checks that the build and every identity are the new Firefox
 - [ ] Run `stock-gpu-parity` on Linux, Windows and macOS ([Browser-Owned GPU Values](#browser-owned-gpu-values))
 
 ---
