@@ -767,41 +767,24 @@ def fix_navigator_arch(config: Dict[str, Any], target_os: str) -> None:
         config['navigator.oscpu'] = target
 
 
-def fix_screen_no_taskbar(config: Dict[str, Any], target_os: str) -> None:
-    """Ensure screen.availHeight < screen.height so CreepJS's noTaskbar flag
-    (screen.height == availHeight and screen.width == availWidth) doesn't flip.
+# What Firefox's baseline fingerprinting protection, on by default, reports in
+# place of the device's values (RFPTargetsDefaultBaseline.inc), and the browser
+# applies it to the spoofed ones for the claimed OS: the available screen is
+# the whole screen less a fixed taskbar (nsRFPService::GetSpoofedScreenAvailSize),
+# and more than one touch point reads as 5 (CollapseMaxTouchPoints).
+BASELINE_TASKBAR_HEIGHT = {'win': 48, 'mac': 76, 'lin': 0}
+BASELINE_MULTI_TOUCH_POINTS = 5
 
-    Every desktop OS keeps some chrome visible (Mac menu bar ~25px, Win taskbar
-    ~40px, Linux panel ~27px); the pool occasionally ships fingerprints with
-    identical screen/avail values which leak as a headless tell. Also clamp
-    window.outerHeight (and innerHeight) to the new avail so the window isn't
-    taller than the available area.
 
-    The trigger is the HEIGHT alone, not both axes. Requiring `aw == sw` too
-    missed the shape `availWidth < width, availHeight == height` -- a Windows
-    taskbar docked left or right. That is a real geometry, but a rare one, and
-    letting it through means claiming no vertical chrome at all: no menu bar on
-    a Mac, no bottom taskbar on Windows, no panel on Linux. Those defaults are
-    overwhelmingly more common than a side dock, so the vertical delta is worth
-    more than the handful of genuine side-docked machines it overwrites. fpgen's
-    2026 model surfaced this: conditioned on a small display it produced that
-    shape in ~30% of draws, where the unconditioned rate is under 1%.
-    """
-    sw = config.get('screen.width')
-    sh = config.get('screen.height')
-    ah = config.get('screen.availHeight')
-    if not (sw and sh and ah == sh):
-        return
-    taskbar = 40 if target_os == 'win' else 25 if target_os == 'mac' else 27
-    new_avail = sh - taskbar
-    config['screen.availHeight'] = new_avail
-    oh = config.get('window.outerHeight')
-    if oh and oh > new_avail:
-        ih = config.get('window.innerHeight')
-        chrome = oh - ih if ih else 0
-        config['window.outerHeight'] = new_avail
-        if ih:
-            config['window.innerHeight'] = new_avail - chrome
+def follow_baseline_protection(config: Dict[str, Any], target_os: str) -> None:
+    """Claim the available screen and touch points the browser will report.
+    clamp_window_dimensions then fits the window inside that screen."""
+    width, height = config.get('screen.width'), config.get('screen.height')
+    if width and height:
+        config['screen.availWidth'] = width
+        config['screen.availHeight'] = height - BASELINE_TASKBAR_HEIGHT[target_os]
+    if (config.get('navigator.maxTouchPoints') or 0) > 1:
+        config['navigator.maxTouchPoints'] = BASELINE_MULTI_TOUCH_POINTS
 
 
 def clamp_window_dimensions(config: Dict[str, Any]) -> None:
@@ -811,7 +794,7 @@ def clamp_window_dimensions(config: Dict[str, Any]) -> None:
     fingerprint that ships e.g. outerWidth > screen.width or innerWidth >
     outerWidth leaks as an impossible geometry. Shrink each level down to its
     container, preserving the chrome delta between outer and inner where
-    possible. Complements fix_screen_no_taskbar (which only clamps height).
+    possible.
     """
     for axis in ('Width', 'Height'):
         screen = config.get(f'screen.{axis.lower()}')
@@ -851,9 +834,9 @@ def clamp_screen_to_display(
     bounded at all. CamoufoxWindow.sys.mjs resizes the real chrome window to window.outerWidth/outerHeight, so an unbounded value
     renders past the edge of the monitor (daijro/camoufox#499).
 
-    Keeps the taskbar delta (screen - avail) intact so fix_screen_no_taskbar's
-    invariant survives. Callers must run clamp_window_dimensions afterwards to
-    cascade the new bounds down to avail/outer/inner.
+    Keeps the taskbar delta (screen - avail) intact. Callers must run
+    clamp_window_dimensions afterwards to cascade the new bounds down to
+    avail/outer/inner.
     """
     for axis, cap in (('width', max_width), ('height', max_height)):
         screen = config.get(f'screen.{axis}')
@@ -1098,10 +1081,10 @@ def raise_screen_to_modern_floor(config: Dict[str, Any]) -> None:
     Panels like 1024x600 left production a decade and a half ago, so the
     screen is what has to move: no GPU choice makes that profile look current.
 
-    Keeps the screen-to-avail gap intact so fix_screen_no_taskbar's invariant
-    survives; the window box is reconciled by clamp_window_dimensions and
-    clamp_window_position, which run after this. Call BEFORE
-    clamp_screen_to_display so a genuinely small real monitor still wins.
+    Keeps the screen-to-avail gap intact; the window box is reconciled by
+    clamp_window_dimensions and clamp_window_position, which run after this.
+    Call BEFORE clamp_screen_to_display so a genuinely small real monitor
+    still wins.
     """
     min_w, min_h = MODERN_SCREEN_FLOOR
     sw = config.get('screen.width')

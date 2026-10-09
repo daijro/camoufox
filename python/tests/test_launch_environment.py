@@ -1,5 +1,6 @@
 """Regression tests for per-launch environment isolation."""
 
+import copy
 import os
 
 import pytest
@@ -17,7 +18,7 @@ def isolated_launch_dependencies(monkeypatch):
     monkeypatch.setattr(utils, "_generate_random_font_subset", lambda *args, **kwargs: [])
     monkeypatch.setattr(utils, "_generate_random_voice_subset", lambda *args, **kwargs: [])
     monkeypatch.setattr(utils, "fix_navigator_arch", lambda *args: None)
-    monkeypatch.setattr(utils, "fix_screen_no_taskbar", lambda *args: None)
+    monkeypatch.setattr(utils, "follow_baseline_protection", lambda *args: None)
     monkeypatch.setattr(utils, "clamp_window_dimensions", lambda *args: None)
     monkeypatch.setattr(utils, "set_media_devices_defaults", lambda *args: None)
     monkeypatch.setattr(utils, "installed_verstr", lambda: "152.0.4-beta.28")
@@ -75,6 +76,26 @@ def test_virtual_display_does_not_mutate_caller_environment(
     assert "WAYLAND_DISPLAY" not in options["env"]
     assert options["env"]["MOZ_ENABLE_WAYLAND"] == "0"
 
+
+
+def test_launch_does_not_mutate_caller_inputs(monkeypatch, isolated_launch_dependencies):
+    """A caller's mappings, reused for a second launch, must not carry the first
+    launch's identity in. The first launch's webGl:vendor left in a reused config
+    read as a GPU the caller named, so the second launch covered its canvas."""
+    monkeypatch.setattr(utils, "add_default_addons", lambda addons, *_: addons.append("/default-addon"))
+    monkeypatch.setattr(utils, "confirm_paths", lambda paths: None)
+    inputs = {
+        "config": {"navigator.userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0"},
+        "firefox_user_prefs": {"caller.pref": 1},
+        "args": ["-caller-arg"],
+        "addons": ["/caller-addon"],
+    }
+    before = copy.deepcopy(inputs)
+
+    options = utils.launch_options(block_webgl=True, i_know_what_im_doing=True, **inputs)
+
+    assert inputs == before
+    assert options["firefox_user_prefs"]["caller.pref"] == 1
 
 class TestFontFallbackAsyncPref:
     """Per-character font fallback must not skip families whose

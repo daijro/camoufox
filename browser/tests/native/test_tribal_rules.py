@@ -612,6 +612,14 @@ def test_cross_os_canvas_is_rfps_placeholder_and_spoofs_feed_baseline_protection
     assert "rect.has_value() && !availFromResolution" in screen, why
     touch = (patches / "touchscreen-fingerprint-spoofing.patch").read_text(encoding="utf-8")
     assert "CollapseMaxTouchPoints(value.value())" in touch, why
+    # The launchers claim those values as baseline protection reports them.
+    from camoufox.fingerprints import BASELINE_MULTI_TOUCH_POINTS, BASELINE_TASKBAR_HEIGHT
+
+    assert BASELINE_TASKBAR_HEIGHT == {"win": 48, "mac": 76, "lin": 0}, why
+    assert BASELINE_MULTI_TOUCH_POINTS == 5, why
+    fingerprints_ts = (REPO_ROOT / "typescript" / "src" / "fingerprints.ts").read_text(encoding="utf-8")
+    for line in ("win: 48,", "mac: 76,", "lin: 0,", "BASELINE_MULTI_TOUCH_POINTS = 5;"):
+        assert line in fingerprints_ts, why
 
 
 def test_webgpu_follows_the_claimed_device():

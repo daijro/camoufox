@@ -148,6 +148,35 @@ describe("test_launch_environment: virtual display", () => {
 	});
 });
 
+describe("test_launch_environment: caller inputs", () => {
+	beforeEach(() => isolateLaunch());
+
+	// A caller's objects, reused for a second launch, must not carry the first
+	// launch's identity in. The first launch's webGl:vendor left in a reused
+	// config read as a GPU the caller named, so the second launch covered its
+	// canvas.
+	it("does not mutate the caller's inputs", async () => {
+		deps.addDefaultAddons = async (addons: string[]) => {
+			addons.push("/default-addon");
+		};
+		deps.confirmPaths = () => undefined;
+		const inputs = {
+			config: { "navigator.userAgent": WIN_UA },
+			firefox_user_prefs: { "caller.pref": 1 },
+			args: ["-caller-arg"],
+			addons: ["/caller-addon"],
+		};
+		const before = structuredClone(inputs);
+		const options = await launch({
+			block_webgl: true,
+			i_know_what_im_doing: true,
+			...inputs,
+		});
+		expect(inputs).toEqual(before);
+		expect(options.firefoxUserPrefs["caller.pref"]).toBe(1);
+	});
+});
+
 describe("test_launch_environment: prefs", () => {
 	beforeEach(() => isolateLaunch());
 

@@ -167,8 +167,7 @@ def test_screen_floor_lifts_netbook_geometry():
     }
     raise_screen_to_modern_floor(config)
     assert (config["screen.width"], config["screen.height"]) == MODERN_SCREEN_FLOOR
-    # The taskbar gap has to survive, or fix_screen_no_taskbar's invariant --
-    # and CreepJS's noTaskbar check -- breaks.
+    # The taskbar gap survives the lift.
     assert config["screen.height"] - config["screen.availHeight"] == 40
     assert config["screen.width"] - config["screen.availWidth"] == 0
     assert config["screen.availHeight"] < config["screen.height"]

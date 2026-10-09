@@ -21,7 +21,7 @@ from .exceptions import (
     InvalidPropertyType,
     NonFirefoxFingerprint,
 )
-from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_hardware_concurrency, identity_salt, identity_seed, fix_screen_no_taskbar, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
+from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_hardware_concurrency, identity_salt, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
@@ -1019,19 +1019,17 @@ def launch_options(
     """
     ensure_browser_profile_dir(env)
 
-    # Build the config
-    if config is None:
-        config = {}
+    # The launch fills these in, so it works on copies: a caller's mapping
+    # reused for a second launch would otherwise carry the first identity's
+    # values in, as if the caller had set them.
+    config = dict(config or {})
+    addons = list(addons or [])
+    args = list(args or [])
+    firefox_user_prefs = dict(firefox_user_prefs or {})
 
     # Set default values for optional arguments
     if headless is None:
         headless = False
-    if addons is None:
-        addons = []
-    if args is None:
-        args = []
-    if firefox_user_prefs is None:
-        firefox_user_prefs = {}
     if custom_fonts_only is None:
         custom_fonts_only = False
     if i_know_what_im_doing is None:
@@ -1197,7 +1195,7 @@ def launch_options(
         # a 1x1 Xvfb (virtdisplay.py) that is not a real screen.
         if headless is False and not virtual_display and screen_cons:
             clamp_screen_to_display(config, screen_cons.max_width, screen_cons.max_height)
-        fix_screen_no_taskbar(config, target_os)
+        follow_baseline_protection(config, target_os)
         clamp_window_dimensions(config)
         clamp_window_position(config)
 

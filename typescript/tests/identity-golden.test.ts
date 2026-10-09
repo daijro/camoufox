@@ -386,7 +386,7 @@ describe("geometry fixes", () => {
 	it(`reproduces ${fx.cases.length} random geometries`, () => {
 		fx.cases.forEach((c: any, i: number) => {
 			const fns: Record<string, (d: any) => unknown> = {
-				fixScreenNoTaskbar: (d) => fp.fixScreenNoTaskbar(d, c.os),
+				followBaselineProtection: (d) => fp.followBaselineProtection(d, c.os),
 				clampWindowDimensions: fp.clampWindowDimensions,
 				clampScreenToDisplay: (d) => fp.clampScreenToDisplay(d, c.capW, c.capH),
 				clampWindowPosition: fp.clampWindowPosition,
@@ -414,7 +414,7 @@ describe("geometry fixes", () => {
 			}
 			fp.raiseScreenToModernFloor(d);
 			fp.clampScreenToDisplay(d, c.capW, c.capH);
-			fp.fixScreenNoTaskbar(d, c.os);
+			fp.followBaselineProtection(d, c.os);
 			fp.clampWindowDimensions(d);
 			fp.clampWindowPosition(d);
 			const want = c.out.pipeline;

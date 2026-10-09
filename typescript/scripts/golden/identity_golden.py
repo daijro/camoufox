@@ -444,7 +444,7 @@ def record_geometry():
         cap_h = rng.choice([None, 768, 1080, 720, 1440, 0])
         out = {}
         for name, fn in (
-            ('fixScreenNoTaskbar', lambda d: fp.fix_screen_no_taskbar(d, target)),
+            ('followBaselineProtection', lambda d: fp.follow_baseline_protection(d, target)),
             ('clampWindowDimensions', fp.clamp_window_dimensions),
             ('clampScreenToDisplay', lambda d: fp.clamp_screen_to_display(d, cap_w, cap_h)),
             ('clampWindowPosition', fp.clamp_window_position),
@@ -462,7 +462,7 @@ def record_geometry():
             fp.raise_screen_to_modern_floor(d)
         fp.raise_screen_to_modern_floor(d)
         fp.clamp_screen_to_display(d, cap_w, cap_h)
-        fp.fix_screen_no_taskbar(d, target)
+        fp.follow_baseline_protection(d, target)
         fp.clamp_window_dimensions(d)
         fp.clamp_window_position(d)
         out['pipeline'] = {'config': d} if i < 15 else {'hash': h(d), 'keys': h(list(d))}

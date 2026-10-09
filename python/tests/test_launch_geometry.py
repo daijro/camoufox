@@ -73,8 +73,8 @@ class TestVirtualDisplayIsNotAScreen:
         assert config["window.outerWidth"] > 1
 
     def test_screen_dimensions_stay_valid(self):
-        """Clamping to 1x1 drives availHeight negative once fix_screen_no_taskbar
-        subtracts the taskbar, which validate_config rejects as a uint."""
+        """Clamping to 1x1 drives availHeight negative once the taskbar is
+        subtracted, which validate_config rejects as a uint."""
         with host(XVFB_STUB):
             config = launch(headless=False, virtual_display=":99")
 

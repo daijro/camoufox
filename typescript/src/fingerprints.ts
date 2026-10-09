@@ -877,25 +877,35 @@ export function fixNavigatorArch(config: Config, targetOs: string): void {
 // Screen / window geometry
 // ---------------------------------------------------------------------------
 
+// What Firefox's baseline fingerprinting protection, on by default, reports in
+// place of the device's values (RFPTargetsDefaultBaseline.inc), and the browser
+// applies it to the spoofed ones for the claimed OS: the available screen is
+// the whole screen less a fixed taskbar (nsRFPService::GetSpoofedScreenAvailSize),
+// and more than one touch point reads as 5 (CollapseMaxTouchPoints).
+export const BASELINE_TASKBAR_HEIGHT: Record<string, number> = {
+	win: 48,
+	mac: 76,
+	lin: 0,
+};
+export const BASELINE_MULTI_TOUCH_POINTS = 5;
+
 /**
- * Ensure screen.availHeight < screen.height (CreepJS's noTaskbar flag), and
- * clamp the window's outer/inner height to the new avail.
+ * Claim the available screen and touch points the browser will report.
+ * clampWindowDimensions then fits the window inside that screen.
  */
-export function fixScreenNoTaskbar(config: Config, targetOs: string): void {
-	const sw = config["screen.width"];
-	const sh = config["screen.height"];
-	const ah = config["screen.availHeight"];
-	if (!(pyTruthy(sw) && pyTruthy(sh) && num(ah) === num(sh) && !isNone(ah)))
-		return;
-	const taskbar = targetOs === "win" ? 40 : targetOs === "mac" ? 25 : 27;
-	const newAvail = num(sh) - taskbar;
-	config["screen.availHeight"] = newAvail;
-	const oh = config["window.outerHeight"];
-	if (pyTruthy(oh) && num(oh) > newAvail) {
-		const ih = config["window.innerHeight"];
-		const chrome = pyTruthy(ih) ? num(oh) - num(ih) : 0;
-		config["window.outerHeight"] = newAvail;
-		if (pyTruthy(ih)) config["window.innerHeight"] = newAvail - chrome;
+export function followBaselineProtection(
+	config: Config,
+	targetOs: string,
+): void {
+	const width = config["screen.width"];
+	const height = config["screen.height"];
+	if (pyTruthy(width) && pyTruthy(height)) {
+		config["screen.availWidth"] = width;
+		config["screen.availHeight"] =
+			num(height) - BASELINE_TASKBAR_HEIGHT[targetOs];
+	}
+	if (num(config["navigator.maxTouchPoints"] ?? 0) > 1) {
+		config["navigator.maxTouchPoints"] = BASELINE_MULTI_TOUCH_POINTS;
 	}
 }
 

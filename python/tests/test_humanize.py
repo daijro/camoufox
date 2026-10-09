@@ -22,7 +22,7 @@ def captured_launch_config(monkeypatch):
     monkeypatch.setattr(utils, "add_default_addons", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(utils, "fix_navigator_arch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        utils, "fix_screen_no_taskbar", lambda *_args, **_kwargs: None
+        utils, "follow_baseline_protection", lambda *_args, **_kwargs: None
     )
     monkeypatch.setattr(
         utils, "clamp_window_dimensions", lambda *_args, **_kwargs: None

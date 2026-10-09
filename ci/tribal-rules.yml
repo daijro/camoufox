@@ -231,6 +231,7 @@ rules:
       - "LibreWolf librewolf.cfg: privacy.resistFingerprinting true, no canvas prefs of its own; RFP readback without permission is TryToGenerateRandomDataForPlaceholderCanvasData"
       - "v156.0.1-beta.32: the three RFP canvas targets in privacy.baselineFingerprintingProtection.overrides give RFP's readback (random, toDataURL ~770 bytes) with hardwareConcurrency untouched"
       - "v156.0.1-beta.32: a Linux host with an RTX 5080 and a Ryzen iGPU reported 'AMD, Radeon HD 3200 Graphics, or similar' to WebGL, headless and headed"
+      - "v156.0.1-beta.32: a Linux identity whose config claimed availHeight 1053 on a 1080 screen read 1080 (nsRFPService::GetSpoofedScreenAvailSize, no Linux offset)"
     rationale: >-
       Canvas and WebGL pixels come from the host's OS, driver and GPU. On the
       host's OS the identity claims the GPU Firefox reports there, read from the
@@ -249,7 +250,12 @@ rules:
       does not, so the launch warns. Firefox's older keyed pixel noise
       (CanvasRandomization) was rejected: no current Firefox produces it by
       default. Spoofed avail-screen and touch values go through baseline
-      protection like the real ones, for the claimed OS.
+      protection like the real ones, for the claimed OS, so the launchers
+      claim them as it reports them (follow_baseline_protection,
+      followBaselineProtection): the available screen is the screen less 48px
+      on Windows, 76px on macOS and nothing on Linux, and more than one touch
+      point is 5. A config claiming fpgen's recorded values read differently
+      on the page.
 
   - id: webgpu-follows-the-claimed-device
     title: navigator.gpu where Firefox on the claimed device has it; the host's adapter only behind the host's own GPU

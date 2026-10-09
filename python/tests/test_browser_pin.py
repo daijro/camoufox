@@ -182,7 +182,7 @@ def selected_build(request, tmp_path, monkeypatch):
     monkeypatch.setattr(utils, "generate_fingerprint", lambda *args, **kwargs: object())
     monkeypatch.setattr(utils, "from_fpgen", from_fpgen)
     for name in ("add_default_addons", "get_screen_cons", "fix_navigator_arch",
-                 "fix_screen_no_taskbar", "clamp_window_dimensions",
+                 "follow_baseline_protection", "clamp_window_dimensions",
                  "set_media_devices_defaults"):
         monkeypatch.setattr(utils, name, lambda *args, **kwargs: None)
     monkeypatch.setattr(utils, "_generate_random_font_subset", lambda *args, **kwargs: [])

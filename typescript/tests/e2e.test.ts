@@ -231,11 +231,6 @@ function pythonProbe(
 }
 
 /**
- * The probe minus the canvas hash. The canvas readback differs between two
- * launches of the SAME config -- measured with this build,
- * TS and Python alike -- so it is compared by its size only.
- */
-/**
  * `promise`, or a rejection naming the step after `ms`. A hung launch otherwise
  * surfaces only as vitest's whole-test timeout, which says nothing about where.
  */
@@ -252,9 +247,15 @@ function step<T>(what: string, promise: Promise<T>, ms = 60_000): Promise<T> {
 	]).finally(() => clearTimeout(timer));
 }
 
+/**
+ * The probe minus the canvas hash. A rendered canvas's PNG carries a
+ * per-session chunk (baseline protection's EfficientCanvasRandomization), so
+ * two launches of the same config compare by its size; a covered one by being
+ * covered, since its size is random too.
+ */
 function stable(probe: any): any {
 	const { canvasHash, ...rest } = probe;
-	return { ...rest, canvasSize: String(canvasHash).split(":")[1] };
+	return { ...rest, canvasSize: String(canvasHash).split(":").at(-1) };
 }
 
 /** What the page must report for a config the launcher sent. */
@@ -448,13 +449,16 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 
 			it("NewContext: a per-context identity, same as Python", async () => {
 				// A different identity from the launch one, so a context that
-				// inherited the browser's identity would be caught.
+				// inherited the browser's identity would be caught. Another
+				// device's contexts need the canvas covered: an uncovered browser
+				// binds its contexts to the host's OS and GPU.
 				const preset =
 					identity === "fpgen_linux_de"
 						? INPUTS.presets.windows
 						: INPUTS.presets.macos;
+				const kwargs = { ...kwargsFor(identity), canvas_noise: true };
 				const { result: browser } = await mods.warnings.recordWarnings(() =>
-					mods.sync.Camoufox(kwargsFor(identity)),
+					mods.sync.Camoufox(kwargs),
 				);
 				let probe: any;
 				let second: any;
@@ -487,9 +491,7 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 					timeZone: p.intl.timeZone,
 					webgl: p.webgl,
 				});
-				const py = await pythonProbe("context", kwargsFor(identity), {
-					preset,
-				});
+				const py = await pythonProbe("context", kwargs, { preset });
 				expect(identityOf(probe)).toEqual(identityOf(py.probe));
 			}, 240_000);
 
@@ -591,6 +593,20 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 							"virtual: probe the page",
 							page.evaluate(`(${PROBE})()`),
 						);
+						// The config this launch sent: Xvfb can render on another
+						// device than headless, and the identity claims the one the
+						// canvas renders on.
+						const { result: options } = await mods.warnings.recordWarnings(
+							async () =>
+								mods.utils.launchOptions({
+									...kwargsFor(identity),
+									headless: false,
+									virtual_display: await display.get(),
+								}),
+						);
+						results[`${identity}:virtualConfig`] = configOf(
+							options as Record<string, any>,
+						);
 					} finally {
 						await step("virtual: close", (browser as any).close());
 					}
@@ -608,19 +624,34 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 			it.runIf(identity === "fpgen_linux_de" && process.platform === "linux")(
 				"the browser honours the config headful, as it does headless",
 				async (ctx) => {
-					const config = results[`${identity}:config`];
+					const config = results[`${identity}:virtualConfig`];
 					if (!binaryKnows(config)) return ctx.skip();
 					const probe = results[`${identity}:virtual`];
 					expect(probe, "the virtual-display test ran").toBeTruthy();
 					expectMatchesConfig(probe, config, true);
-					// A headful window presents the same device as headless. On a
-					// runner with no media hardware, published beta.31 never settled
-					// enumerateDevices() headful while headless answered.
-					const { media: _m, ...headful } = stable(probe);
-					const { media: _h, ...headless } = stable(
-						results[`${identity}:headless`],
+					// A headful window presents the same device as headless, but
+					// for the GPU when the display renders on another one (Xvfb
+					// renders in software): then WebGL and the canvas follow it.
+					// On a runner with no media hardware, published beta.31 never
+					// settled enumerateDevices() headful while headless answered.
+					const headlessConfig = results[`${identity}:config`];
+					const part = (c: Record<string, any>, gpu: boolean) =>
+						Object.fromEntries(
+							Object.entries(c).filter(([k]) => /^webGl2?:/.test(k) === gpu),
+						);
+					expect(part(config, false)).toEqual(part(headlessConfig, false));
+					const sameGpu =
+						JSON.stringify(part(config, true)) ===
+						JSON.stringify(part(headlessConfig, true));
+					const deviceOf = (p: any) => {
+						const { media: _media, ...rest } = stable(p);
+						if (sameGpu) return rest;
+						const { webgl: _webgl, canvasSize: _canvas, ...unrendered } = rest;
+						return unrendered;
+					};
+					expect(deviceOf(probe)).toEqual(
+						deviceOf(results[`${identity}:headless`]),
 					);
-					expect(headful).toEqual(headless);
 				},
 				240_000,
 			);

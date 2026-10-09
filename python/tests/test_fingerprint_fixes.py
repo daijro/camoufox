@@ -14,7 +14,7 @@ from camoufox.fingerprints import (
     clamp_window_dimensions,
     clamp_window_position,
     fix_navigator_arch,
-    fix_screen_no_taskbar,
+    follow_baseline_protection,
     set_media_devices_defaults,
 )
 
@@ -50,42 +50,41 @@ class TestFixNavigatorArch:
         assert c["navigator.platform"] == "Linux armv81"
 
 
-class TestFixScreenNoTaskbar:
-    def test_subtracts_taskbar_when_avail_equals_screen(self):
-        c = {
-            "screen.width": 1920,
-            "screen.height": 1080,
-            "screen.availWidth": 1920,
-            "screen.availHeight": 1080,
-            "window.outerHeight": 1080,
-            "window.innerHeight": 1040,
-        }
-        fix_screen_no_taskbar(c, "lin")
-        assert c["screen.availHeight"] == 1080 - 27  # linux panel
-        assert c["window.outerHeight"] == 1053
-        # chrome delta (1080-1040=40) preserved
-        assert c["window.innerHeight"] == 1053 - 40
+class TestFollowBaselineProtection:
+    """The browser reports these through Firefox's baseline fingerprinting
+    protection whatever the config says, so the config must claim the same.
+    A Linux identity claiming availHeight 1053 on a 1080 screen read 1080."""
 
-    def test_per_os_taskbar_height(self):
-        for os_name, px in (("win", 40), ("mac", 25), ("lin", 27)):
+    def test_avail_is_the_screen_less_the_baseline_taskbar(self):
+        for os_name, px in (("win", 48), ("mac", 76), ("lin", 0)):
             c = {
                 "screen.width": 1920,
                 "screen.height": 1080,
-                "screen.availWidth": 1920,
-                "screen.availHeight": 1080,
+                "screen.availWidth": 1900,
+                "screen.availHeight": 1053,
             }
-            fix_screen_no_taskbar(c, os_name)
+            follow_baseline_protection(c, os_name)
+            assert c["screen.availWidth"] == 1920
             assert c["screen.availHeight"] == 1080 - px
 
-    def test_noop_when_avail_already_less_than_screen(self):
+    def test_multi_touch_collapses_to_five(self):
+        for touch, seen in ((0, 0), (1, 1), (2, 5), (10, 5)):
+            c = {"navigator.maxTouchPoints": touch}
+            follow_baseline_protection(c, "win")
+            assert c["navigator.maxTouchPoints"] == seen
+
+    def test_window_fits_the_available_screen(self):
         c = {
             "screen.width": 1920,
             "screen.height": 1080,
-            "screen.availWidth": 1920,
             "screen.availHeight": 1040,
+            "window.outerHeight": 1040,
+            "window.innerHeight": 1000,
         }
-        fix_screen_no_taskbar(c, "lin")
-        assert c["screen.availHeight"] == 1040
+        follow_baseline_protection(c, "win")
+        clamp_window_dimensions(c)
+        assert c["window.outerHeight"] == 1032
+        assert c["window.innerHeight"] == 1032 - 40
 
 
 class TestClampWindowDimensions:
@@ -137,8 +136,7 @@ class TestClampScreenToDisplay:
         clamp_screen_to_display(c, 1366, 768)
         assert c["screen.width"] == 1366
         assert c["screen.height"] == 768
-        # taskbar delta (1440-1400=40) preserved, so fix_screen_no_taskbar's
-        # avail < height invariant still holds
+        # taskbar delta (1440-1400=40) preserved
         assert c["screen.availWidth"] == 1366
         assert c["screen.availHeight"] == 768 - 40
 

@@ -26,7 +26,7 @@ import {
 	clampWindowPosition,
 	fixHardwareConcurrency,
 	fixNavigatorArch,
-	fixScreenNoTaskbar,
+	followBaselineProtection,
 	fromFpgen,
 	fromPreset,
 	generateFingerprint,
@@ -212,7 +212,7 @@ export const utilsDeps = {
 	getRandomPreset,
 	fixNavigatorArch,
 	fixHardwareConcurrency,
-	fixScreenNoTaskbar,
+	followBaselineProtection,
 	clampScreenToDisplay,
 	clampWindowDimensions,
 	clampWindowPosition,
@@ -1331,14 +1331,16 @@ export async function launchOptions({
 }: LaunchOptions = {}): Promise<Record<string, any>> {
 	utilsDeps.ensureBrowserProfileDir(env);
 
-	// Build the config
-	config ??= {};
+	// The launch fills these in, so it works on copies: a caller's object
+	// reused for a second launch would otherwise carry the first identity's
+	// values in, as if the caller had set them.
+	config = { ...config };
+	addons = [...(addons ?? [])];
+	args = [...(args ?? [])];
+	firefox_user_prefs = { ...firefox_user_prefs };
 
 	// Set default values for optional arguments
 	headless ??= false;
-	addons ??= [];
-	args ??= [];
-	firefox_user_prefs ??= {};
 	custom_fonts_only ??= false;
 	i_know_what_im_doing ??= false;
 	// Keep per-launch overrides isolated from the process environment and from
@@ -1517,7 +1519,7 @@ export async function launchOptions({
 				screenCons.maxHeight as number,
 			);
 		}
-		utilsDeps.fixScreenNoTaskbar(config, targetOs);
+		utilsDeps.followBaselineProtection(config, targetOs);
 		utilsDeps.clampWindowDimensions(config);
 		utilsDeps.clampWindowPosition(config);
 	}

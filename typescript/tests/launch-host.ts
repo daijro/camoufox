@@ -81,7 +81,7 @@ export function isolateLaunch(): void {
 	deps.generateRandomFontSubset = () => [];
 	deps.generateRandomVoiceSubset = () => [];
 	deps.fixNavigatorArch = () => undefined;
-	deps.fixScreenNoTaskbar = () => undefined;
+	deps.followBaselineProtection = () => undefined;
 	deps.clampWindowDimensions = () => undefined;
 	deps.setMediaDevicesDefaults = () => undefined;
 	deps.validateConfig = () => undefined;

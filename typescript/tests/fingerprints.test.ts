@@ -19,7 +19,7 @@ import {
 	drawMediaDevices,
 	fixHardwareConcurrency,
 	fixNavigatorArch,
-	fixScreenNoTaskbar,
+	followBaselineProtection,
 	fromFpgen,
 	fromPreset,
 	generateContextFingerprint,
@@ -68,48 +68,53 @@ describe("fixNavigatorArch", () => {
 	});
 });
 
-describe("fixScreenNoTaskbar", () => {
-	it("subtracts the taskbar when avail equals the screen", () => {
-		const c: Record<string, number> = {
-			"screen.width": 1920,
-			"screen.height": 1080,
-			"screen.availWidth": 1920,
-			"screen.availHeight": 1080,
-			"window.outerHeight": 1080,
-			"window.innerHeight": 1040,
-		};
-		fixScreenNoTaskbar(c, "lin");
-		expect(c["screen.availHeight"]).toBe(1080 - 27);
-		expect(c["window.outerHeight"]).toBe(1053);
-		expect(c["window.innerHeight"]).toBe(1053 - 40);
-	});
-
-	it("uses each OS's taskbar height", () => {
+// The browser reports these through Firefox's baseline fingerprinting
+// protection whatever the config says, so the config must claim the same. A
+// Linux identity claiming availHeight 1053 on a 1080 screen read 1080.
+describe("followBaselineProtection", () => {
+	it("makes avail the screen less the baseline taskbar", () => {
 		for (const [os, px] of [
-			["win", 40],
-			["mac", 25],
-			["lin", 27],
+			["win", 48],
+			["mac", 76],
+			["lin", 0],
 		] as const) {
 			const c: Record<string, number> = {
 				"screen.width": 1920,
 				"screen.height": 1080,
-				"screen.availWidth": 1920,
-				"screen.availHeight": 1080,
+				"screen.availWidth": 1900,
+				"screen.availHeight": 1053,
 			};
-			fixScreenNoTaskbar(c, os);
+			followBaselineProtection(c, os);
+			expect(c["screen.availWidth"]).toBe(1920);
 			expect(c["screen.availHeight"]).toBe(1080 - px);
 		}
 	});
 
-	it("is a no-op when avail is already below the screen", () => {
-		const c = {
+	it("collapses multi-touch to five", () => {
+		for (const [touch, seen] of [
+			[0, 0],
+			[1, 1],
+			[2, 5],
+			[10, 5],
+		]) {
+			const c = { "navigator.maxTouchPoints": touch };
+			followBaselineProtection(c, "win");
+			expect(c["navigator.maxTouchPoints"]).toBe(seen);
+		}
+	});
+
+	it("fits the window inside the available screen", () => {
+		const c: Record<string, number> = {
 			"screen.width": 1920,
 			"screen.height": 1080,
-			"screen.availWidth": 1920,
 			"screen.availHeight": 1040,
+			"window.outerHeight": 1040,
+			"window.innerHeight": 1000,
 		};
-		fixScreenNoTaskbar(c, "lin");
-		expect(c["screen.availHeight"]).toBe(1040);
+		followBaselineProtection(c, "win");
+		clampWindowDimensions(c);
+		expect(c["window.outerHeight"]).toBe(1032);
+		expect(c["window.innerHeight"]).toBe(1032 - 40);
 	});
 });
 
