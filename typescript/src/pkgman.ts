@@ -37,6 +37,7 @@ import {
 // the ESM cycle resolves before any binding is read.
 import {
 	COMPAT_FLAG,
+	findInstalledVersion,
 	getActivePath,
 	getDefaultChannel,
 	installVersioned,
@@ -1265,6 +1266,31 @@ export function launchPath(browserPath?: string): string {
 		);
 	}
 	return execPath;
+}
+
+/**
+ * The executable of the installed build `specifier` names (the `browser`
+ * launch option). Like `camoufox set`, it overrides the pairing: it never
+ * downloads, and it warns when the build is not the paired one.
+ */
+export function selectedLaunchPath(specifier: string): string {
+	const installPath = findInstalledVersion(specifier);
+	if (installPath === null) {
+		throw new Error(
+			`Browser version '${specifier}' not found. Run \`camoufox list\` to see installed versions.`,
+		);
+	}
+	const version = Version.fromPath(installPath);
+	const iface = installedInterface(installPath);
+	if (!interfaceSupported(iface)) {
+		throw new UnsupportedVersion(incompatibleMessage(version, iface));
+	}
+	warnIfUnpaired(
+		path.basename(path.dirname(installPath)),
+		version.version ?? "",
+		version.build,
+	);
+	return launchPath(installPath);
 }
 
 const formatBytes = (v: number, _: BarOptions, type: string) =>

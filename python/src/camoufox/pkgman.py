@@ -966,6 +966,28 @@ def launch_path(browser_path: Optional[Path] = None) -> str:
     return exec_path
 
 
+def selected_launch_path(specifier: str) -> str:
+    """
+    The executable of the installed build `specifier` names (the `browser`
+    launch option). Like `camoufox set`, it overrides the pairing: it never
+    downloads, and it warns when the build is not the paired one.
+    """
+    from .browser_pin import warn_if_unpaired
+    from .multiversion import find_installed_version
+
+    path = find_installed_version(specifier)
+    if path is None:
+        raise ValueError(
+            f"Browser version '{specifier}' not found. Run `camoufox list` to see installed versions."
+        )
+    version = Version.from_path(path)
+    interface = installed_interface(path)
+    if not interface_supported(interface):
+        raise UnsupportedVersion(incompatible_message(version, interface))
+    warn_if_unpaired(path.parent.name, version.version or "", version.build)
+    return launch_path(path)
+
+
 ProgressCallback: TypeAlias = 'Callable[[int, int], None]'
 
 

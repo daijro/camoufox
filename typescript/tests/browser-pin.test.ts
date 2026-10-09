@@ -171,6 +171,47 @@ describe("launch", () => {
 	});
 });
 
+describe("the browser option", () => {
+	async function selected(versionJson: Record<string, unknown> = {}) {
+		const ctx = await setup({
+			pin: PIN,
+			installed: ["152.0.4-beta.31"],
+			config: {},
+		});
+		const { LAUNCH_FILE, OS_NAME } = await import("../src/paths.js");
+		const dir = path.join(ctx.root, "browsers", "official", "152.0.4-beta.31");
+		const exe =
+			OS_NAME === "mac"
+				? path.resolve(dir, "Camoufox.app/Contents/Resources", LAUNCH_FILE.mac)
+				: path.join(dir, LAUNCH_FILE[OS_NAME]);
+		fs.mkdirSync(path.dirname(exe), { recursive: true });
+		fs.writeFileSync(exe, "");
+		fs.writeFileSync(
+			path.join(dir, "version.json"),
+			JSON.stringify({ version: "152.0.4", build: "beta.31", ...versionJson }),
+		);
+		return { ...ctx, exe };
+	}
+
+	it.each([
+		"152.0.4-beta.31",
+		"official/beta.31",
+		"beta.31",
+	])("resolves %s to the installed build, warning that it is not the paired one", async (spec) => {
+		const { pkgman, exe } = await selected();
+		const emit = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
+		expect(pkgman.selectedLaunchPath(spec)).toBe(exe);
+		expect(String(emit.mock.calls[0]?.[0])).toContain("selected explicitly");
+	});
+
+	it("refuses a build this package cannot drive", async () => {
+		const { pkgman, exc } = await selected({ interface: 1_000 });
+		expect(() => pkgman.selectedLaunchPath("beta.31")).toThrow(
+			exc.UnsupportedVersion,
+		);
+	});
+});
+
 describe("the fetcher", () => {
 	it.each([
 		[{}, false],

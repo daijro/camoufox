@@ -37,6 +37,7 @@ from .pkgman import (
     get_path,
     installed_verstr,
     launch_path,
+    selected_launch_path,
     warn_if_package_outdated,
 )
 from .virtdisplay import VirtualDisplay
@@ -979,7 +980,8 @@ def launch_options(
             - Repo/build like "official/beta.20"
             - Build alone like "beta.20"
             - Full version like "134.0.2-beta.20"
-            If not specified, uses the active version.
+            The build must be installed; it is never downloaded.
+            If not specified, uses the paired build.
         firefox_user_prefs (Optional[Dict[str, Any]]):
             Firefox user preferences to set.
         proxy (Optional[Dict[str, str]]):
@@ -1048,6 +1050,10 @@ def launch_options(
         _env_executable = environ.get('CAMOUFOX_EXECUTABLE_PATH', '').strip()
         if _env_executable:
             executable_path = _env_executable
+        elif browser:
+            # A selected build is launched like a caller's own binary: its files
+            # are read from beside it, and the paired build is neither used nor fetched.
+            executable_path = selected_launch_path(browser)
     if isinstance(executable_path, str):
         # Convert executable path to a Path object
         executable_path = Path(abspath(executable_path))
@@ -1110,20 +1116,7 @@ def launch_options(
     # Resolve the binary that will launch before reading its version:
     # launch_path() downloads the browser when none is installed, and the
     # identity has to match the Firefox that actually runs.
-    if executable_path:
-        browser_binary = str(executable_path)
-    elif browser:
-        # Select a specific installed browser version
-        from .multiversion import find_installed_version
-
-        browser_path = find_installed_version(browser)
-        if not browser_path:
-            raise ValueError(
-                f"Browser version '{browser}' not found. Run `camoufox list` to see installed versions."
-            )
-        browser_binary = launch_path(browser_path)
-    else:
-        browser_binary = launch_path()
+    browser_binary = str(executable_path) if executable_path else launch_path()
     warn_if_package_outdated()
 
     # Get the Firefox version

@@ -237,7 +237,7 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | `args` | `list[str]` | none | Extra browser command-line arguments. |
 | `env` | `dict` | a copy of the environment | Environment variables for the browser. |
 | `executable_path` | `str` or `Path` | the installed build | Use this binary. `CAMOUFOX_EXECUTABLE_PATH` sets it too. |
-| `browser` | `str` | the active build | Use another installed build: `"official/beta.20"`, `"beta.20"` or `"134.0.2-beta.20"`. |
+| `browser` | `str` | the paired build | Launch another installed build: `"official/beta.20"`, `"beta.20"` or `"134.0.2-beta.20"`. Never downloads; warns like `camoufox set`. |
 | `virtual_display` | `str` | none | Use an existing X display, e.g. `":99"`. |
 | `i_know_what_im_doing` | `bool` | `False` | Silence the leak warnings above. |
 | `debug` | `bool` | `False` | Print the config sent to the browser. |
@@ -282,6 +282,8 @@ upgrading the package never runs a browser it was not tested with.
 
 `camoufox set` overrides the pairing. The choice is kept, and each launch warns
 that the build differs from the paired one. `camoufox set --release` goes back.
+The `browser` launch option overrides it for one launch, the same way: the named
+build must already be installed, and nothing is downloaded.
 
 Every browser release declares the interface it speaks, and the package refuses
 one it cannot drive: `sync` leaves it out, `fetch` refuses it, and a launch

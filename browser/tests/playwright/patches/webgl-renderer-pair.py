@@ -10,7 +10,9 @@ to the spoofed one:
     gl.getParameter(gl.RENDERER) !== gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
 
 Checked on a page and in a worker (OffscreenCanvas), for WebGL 1 and 2, on a
-virtual display so the context is real.
+virtual display so the context is real. Two identities claim two different
+recorded GPUs, so at least one differs from the host's and the pair cannot agree
+by coincidence (#839).
 
     python browser/tests/playwright/patches/webgl-renderer-pair.py
 """
@@ -41,34 +43,42 @@ PROBE = """async () => {
 }"""
 
 
-async def probe(binary):
+async def probe(binary, gpu):
     from camoufox.async_api import AsyncCamoufox
 
     async with AsyncCamoufox(headless="virtual", os="linux", executable_path=str(binary),
-                             i_know_what_im_doing=True) as browser:
+                             webgl_config=gpu, i_know_what_im_doing=True) as browser:
         page = await browser.new_page()
         await page.goto("about:blank")
         return json.loads(await page.evaluate(PROBE))
 
 
 def main() -> int:
-    out = asyncio.run(probe(resolve_binary()))
-    print(out)
+    from camoufox.fingerprints import is_software_renderer
+    from camoufox.webgl import firefox_gpus
+
+    binary = resolve_binary()
+    gpus = sorted(gpu for gpu in firefox_gpus("linux") if not is_software_renderer(gpu[1]))[:2]
     failures = []
-    for where, got in out.items():
-        if not isinstance(got, list):
-            failures.append(f"{where}: no WebGL context ({got!r})")
-            continue
-        vendor, renderer, unmasked = got
-        if vendor != "Mozilla":
-            failures.append(f"{where}: VENDOR is {vendor!r}, stock answers 'Mozilla'")
-        if renderer != unmasked:
-            failures.append(f"{where}: RENDERER {renderer!r} but UNMASKED_RENDERER_WEBGL {unmasked!r}")
+    for gpu in gpus:
+        out = asyncio.run(probe(binary, gpu))
+        print(gpu, out)
+        for where, got in out.items():
+            if not isinstance(got, list):
+                failures.append(f"{gpu[1]} {where}: no WebGL context ({got!r})")
+                continue
+            vendor, renderer, unmasked = got
+            if vendor != "Mozilla":
+                failures.append(f"{gpu[1]} {where}: VENDOR is {vendor!r}, stock answers 'Mozilla'")
+            if renderer != gpu[1] or unmasked != gpu[1]:
+                failures.append(
+                    f"{gpu[1]} {where}: RENDERER {renderer!r}, UNMASKED_RENDERER_WEBGL {unmasked!r}"
+                )
     for failure in failures:
         print(f"FAIL: {failure}")
     if failures:
         return 1
-    print("PASS: RENDERER and UNMASKED_RENDERER_WEBGL agree on the page and in workers")
+    print("PASS: RENDERER and UNMASKED_RENDERER_WEBGL name the identity's GPU on the page and in workers")
     return 0
 
 

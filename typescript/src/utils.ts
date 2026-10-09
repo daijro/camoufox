@@ -68,6 +68,7 @@ import {
 	installedVerStr,
 	launchPath,
 	resolvedPlaywrightVersionStr,
+	selectedLaunchPath,
 	Version,
 	warnIfPackageOutdated,
 } from "./pkgman.js";
@@ -200,6 +201,7 @@ export const utilsDeps = {
 	resolvedPlaywrightVersionStr,
 	getPath,
 	launchPath,
+	selectedLaunchPath,
 	identitySalt,
 	identitySeed,
 	generateFingerprint: async (
@@ -244,8 +246,6 @@ export const utilsDeps = {
 		validateConfig(config, p),
 	getEnvVars: (config: Record<string, any>, uaOs: string, p?: string | null) =>
 		getEnvVars(config, uaOs, p),
-	findInstalledVersion: async (spec: string): Promise<string | null> =>
-		(await import("./multiversion.js")).findInstalledVersion(spec) ?? null,
 };
 
 /*
@@ -1247,7 +1247,7 @@ export interface LaunchOptions {
 	/** Custom Camoufox browser executable path. */
 	executable_path?: string;
 	/** Select a specific installed browser version ("official/beta.20",
-	 * "beta.20", "134.0.2-beta.20"). Defaults to the active version. */
+	 * "beta.20", "134.0.2-beta.20"). Never downloaded. Defaults to the paired build. */
 	browser?: string;
 	/** Firefox user preferences to set. */
 	firefox_user_prefs?: Record<string, any>;
@@ -1345,6 +1345,10 @@ export async function launchOptions({
 		const envExecutable = (process.env.CAMOUFOX_EXECUTABLE_PATH ?? "").trim();
 		if (envExecutable) {
 			executable_path = envExecutable;
+		} else if (browser) {
+			// A selected build is launched like a caller's own binary: its files
+			// are read from beside it, and the paired build is neither used nor fetched.
+			executable_path = utilsDeps.selectedLaunchPath(browser);
 		}
 	}
 	if (typeof executable_path === "string") {
@@ -1776,22 +1780,9 @@ export async function launchOptions({
 	// reads the core count and the screen, which the launch replaces above.
 	coherence.dropIncoherentSourceValues(config, targetOs);
 
-	// Prepare the executable path
-	let resolvedExecutable: string;
-	if (executable_path) {
-		resolvedExecutable = String(executable_path);
-	} else if (browser) {
-		// Select a specific installed browser version
-		const browserPath = await utilsDeps.findInstalledVersion(browser);
-		if (!browserPath) {
-			throw new Error(
-				`Browser version '${browser}' not found. Run \`camoufox list\` to see installed versions.`,
-			);
-		}
-		resolvedExecutable = utilsDeps.launchPath(browserPath);
-	} else {
-		resolvedExecutable = utilsDeps.launchPath();
-	}
+	const resolvedExecutable = executable_path
+		? String(executable_path)
+		: utilsDeps.launchPath();
 
 	// The canvas renders on the host, so an identity on another OS needs it
 	// covered, and one on the host's OS claims the host's GPU.

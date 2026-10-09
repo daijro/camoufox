@@ -237,5 +237,5 @@ this section in step with the launcher options.
 - **`InvalidProxy`** means the proxy `server` string could not be parsed.
 - **`UnknownIPLocation`**: the IP is not in the GeoIP database; pass `locale` and set coordinates another way.
 - **Version ceilings:** Playwright below 1.63; Node.js 22.15 or newer.
-- **Each package release is paired with one browser build.** `camoufox set` overrides it (with a warning at launch), `camoufox set --release` restores it.
+- **Each package release is paired with one browser build.** `camoufox set` overrides it (with a warning at launch), the `browser` option overrides it for one launch, and `camoufox set --release` restores it.
 - **Canvas is not noised on the host's OS**: the identity claims the host's GPU, and the canvas hash is stable per machine. An identity on another OS gets `privacy.resistFingerprinting`'s random canvas readback (as in LibreWolf), with a `LeakWarning`; `canvas_noise=True`/`False` forces it. It is per browser: contexts of a browser without it claim the host's OS and GPU, and `NewContext` raises for another OS.

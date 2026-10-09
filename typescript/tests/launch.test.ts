@@ -567,6 +567,39 @@ describe("test_executable_path_bundle", () => {
 	});
 });
 
+describe("the browser option", () => {
+	it("launches the selected build and never the paired one (#843)", async () => {
+		isolateLaunch();
+		const paired = async () => {
+			throw new Error("resolved the paired build despite `browser`");
+		};
+		deps.ensureCamoufoxInstalled = paired;
+		deps.launchPath = paired as any;
+		deps.selectedLaunchPath = (spec: string) => {
+			expect(spec).toBe("152.0.4-beta.31");
+			return BUNDLE_EXE;
+		};
+		const read: (string | null | undefined)[] = [];
+		deps.validateConfig = (_config, p) => {
+			read.push(p);
+		};
+		deps.getEnvVars = (_config, _os, p) => {
+			read.push(p);
+			return {};
+		};
+		const options = await launch({
+			browser: "152.0.4-beta.31",
+			os: "linux",
+			block_webgl: true,
+			canvas_noise: false,
+			headless: true,
+			i_know_what_im_doing: true,
+		});
+		expect(options.executablePath).toBe(BUNDLE_EXE);
+		expect(read).toEqual([BUNDLE_EXE, BUNDLE_EXE]);
+	});
+});
+
 describe("test_executable_path_version_warning", () => {
 	const bundle = (build: string) => {
 		const dir = path.join(SCRATCH, `bundle-${build}`);

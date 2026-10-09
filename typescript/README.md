@@ -223,7 +223,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `args` | `string[]` | none | Extra browser command-line arguments. |
 | `env` | `object` | a copy of `process.env` | Environment variables for the browser. |
 | `executable_path` | `string` | the installed build | Use this binary. `CAMOUFOX_EXECUTABLE_PATH` sets it too. |
-| `browser` | `string` | the active build | Use another installed build: `"official/beta.20"`, `"beta.20"` or `"134.0.2-beta.20"`. |
+| `browser` | `string` | the paired build | Launch another installed build: `"official/beta.20"`, `"beta.20"` or `"134.0.2-beta.20"`. Never downloads; warns like `camoufox set`. |
 | `virtual_display` | `string` | none | Use an existing X display, e.g. `":99"`. |
 | `i_know_what_im_doing` | `boolean` | `false` | Silence the leak warnings above. |
 | `debug` | `boolean` | `false` | Print the config sent to the browser. |
