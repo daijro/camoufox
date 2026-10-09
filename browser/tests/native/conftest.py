@@ -40,16 +40,17 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def binary() -> Path:
     path = os.environ.get("CAMOUFOX_EXECUTABLE_PATH") or os.environ.get("CAMOUFOX_BINARY")
     if not path:
-        pytest.skip("no CAMOUFOX_EXECUTABLE_PATH; these tests need a built browser")
+        pytest.fail("no CAMOUFOX_EXECUTABLE_PATH; these tests need a built browser")
     resolved = Path(path).resolve()
     if not resolved.is_file():
-        pytest.skip(f"CAMOUFOX_EXECUTABLE_PATH points at nothing: {resolved}")
+        pytest.fail(f"CAMOUFOX_EXECUTABLE_PATH points at nothing: {resolved}")
     return resolved
 
 
 @pytest.fixture(scope="session")
 def psutil_mod():
-    return pytest.importorskip("psutil", reason="the leak tests need psutil")
+    import psutil
+    return psutil
 
 
 # ---------------------------------------------------------------------------
