@@ -14,6 +14,9 @@ apply the same multiplier to the same bins. They do in stock Firefox, where
 there is no multiplier, and they do when the noise is applied to the copy
 handed to the page.
 
+The tone is rendered offline, so the probe needs no audio device: a live
+AudioContext stays suspended on a machine without one, such as a CI runner.
+
 What PASS means: the two analysers agree to within 0.01 dB on every bin above
 the noise floor, for float and byte reads alike.
 
@@ -28,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
 PROBE = """async () => {
-  const ctx = new AudioContext();
+  const ctx = new OfflineAudioContext(1, 44100, 44100);
   const osc = ctx.createOscillator();
   osc.frequency.value = 1000;
   const raw = ctx.createAnalyser();
@@ -39,8 +42,9 @@ PROBE = """async () => {
   raw.connect(ctx.destination);
   smoothed.connect(ctx.destination);
   osc.start();
-  await new Promise(r => setTimeout(r, 500));
-  // One synchronous turn: both analysers see the same audio.
+  await ctx.startRendering();
+  // Firefox analyses on every read, so the reads below converge on the
+  // rendered audio's last block.
   const out = {state: ctx.state};
   const a = new Float32Array(raw.frequencyBinCount);
   const b = new Float32Array(smoothed.frequencyBinCount);
@@ -60,7 +64,6 @@ PROBE = """async () => {
   let worstByte = 0;
   for (let i = 0; i < ab.length; i++) worstByte = Math.max(worstByte, Math.abs(ab[i] - bb[i]));
   out.byteSteps = worstByte;
-  await ctx.close();
   return out;
 }"""
 
@@ -71,9 +74,6 @@ async def main() -> int:
     async with AsyncCamoufox(headless=True, os="linux", i_know_what_im_doing=True,
                              executable_path=str(resolve_binary())) as browser:
         page = await browser.new_page()
-        await page.set_content("<body style='height: 100vh'></body>")
-        # Without a user activation the autoplay policy keeps the context suspended.
-        await page.click("body")
         got = await page.evaluate(PROBE)
 
     if got["peakDb"] < -60:
