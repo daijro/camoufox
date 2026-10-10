@@ -1,0 +1,83 @@
+Camoufox: the content-reachable file set must match a stock Firefox release.
+
+Twelve chrome/resource packages are flagged contentaccessible=yes, so any page
+can load their files as subresources and a file Camoufox adds or drops there is
+a one-line build tell. Two diverged from stock 152.0.4, both measured from a
+content page:
+
+  chrome://global/content/crashes.{html,js,css} were absent, because
+  --disable-crashreporter strips them in toolkit/crashreporter/jar.mn. The
+  JAR_MANIFESTS entry is outside that moz.build guard, so shipping the three
+  content files does not build or enable the crash reporter.
+
+  chrome://browser/content/browser-development-helpers.js was present, because
+  it is gated #ifndef MOZILLA_OFFICIAL and Camoufox is not an official build.
+  Its presence is a positive "built from source" tell. Two other places reach
+  it -- browser-main.js loads the script, and BrowserComponents.manifest
+  registers DevelopmentHelpers.init as a browser-window-delayed-startup
+  category entry (browser-init.js called it directly before Firefox 156) -- so
+  dropping the file from the package alone breaks _delayedStartup, which must
+  reach its "browser-delayed-startup-finished" notification because juggler's
+  newPage awaits exactly that. Both call sites go with the file.
+
+Setting MOZILLA_OFFICIAL=1 would fix the second one at the source, but it also
+moves telemetry, update-channel and branding defaults that Camoufox sets
+deliberately, so the narrower change is here.
+
+Guard: browser/tests/playwright/patches/contentaccessible-parity.py.
+
+diff --git a/browser/base/content/browser-main.js b/browser/base/content/browser-main.js
+index f7f364290e..9d9be0eb33 100644
+--- a/browser/base/content/browser-main.js
++++ b/browser/base/content/browser-main.js
+@@ -11,9 +11,6 @@
+   if (AppConstants.MOZ_DATA_REPORTING) {
+     Services.scriptloader.loadSubScript("chrome://browser/content/browser-data-submission-info-bar.js", this);
+   }
+-  if (!AppConstants.MOZILLA_OFFICIAL) {
+-    Services.scriptloader.loadSubScript("chrome://browser/content/browser-development-helpers.js", this);
+-  }
+   Services.scriptloader.loadSubScript("chrome://browser/content/browser-pageActions.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/sidebar/browser-sidebar.js", this);
+   Services.scriptloader.loadSubScript("chrome://browser/content/browser-customtitlebar.js", this);
+diff --git a/browser/base/jar.mn b/browser/base/jar.mn
+index 783c67d397..2118fe4611 100644
+--- a/browser/base/jar.mn
++++ b/browser/base/jar.mn
+@@ -41,9 +41,6 @@ browser.jar:
+         content/browser/browser-context.js            (content/browser-context.js)
+         content/browser/browser-customization.js      (content/browser-customization.js)
+         content/browser/browser-data-submission-info-bar.js (content/browser-data-submission-info-bar.js)
+-#ifndef MOZILLA_OFFICIAL
+-        content/browser/browser-development-helpers.js (content/browser-development-helpers.js)
+-#endif
+         content/browser/browser-fullScreenAndPointerLock.js (content/browser-fullScreenAndPointerLock.js)
+         content/browser/browser-gestureSupport.js           (content/browser-gestureSupport.js)
+         content/browser/browser-init.js                     (content/browser-init.js)
+diff --git a/browser/components/BrowserComponents.manifest b/browser/components/BrowserComponents.manifest
+index 7214821fc5..489c64ea19 100644
+--- a/browser/components/BrowserComponents.manifest
++++ b/browser/components/BrowserComponents.manifest
+@@ -89,9 +89,6 @@ category browser-window-delayed-startup chrome://browser/content/browser-fullScr
+ #ifdef MOZ_DATA_REPORTING
+ category browser-window-delayed-startup chrome://browser/content/browser-data-submission-info-bar.js gDataNotificationInfoBar.init
+ #endif
+-#ifndef MOZILLA_OFFICIAL
+-category browser-window-delayed-startup chrome://browser/content/browser-development-helpers.js DevelopmentHelpers.init
+-#endif
+ category browser-window-delayed-startup chrome://browser/content/browser-addons.js gExtensionsNotifications.init
+ category browser-window-delayed-startup chrome://browser/content/browser-captivePortal.js CaptivePortalWatcher.delayedStartup
+ 
+diff --git a/toolkit/crashreporter/jar.mn b/toolkit/crashreporter/jar.mn
+index 641fcaa2fe..0d9f215fd2 100644
+--- a/toolkit/crashreporter/jar.mn
++++ b/toolkit/crashreporter/jar.mn
+@@ -3,8 +3,6 @@
+ # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ 
+ toolkit.jar:
+-#ifdef MOZ_CRASHREPORTER
+   content/global/crashes.html            (content/crashes.html)
+   content/global/crashes.js               (content/crashes.js)
+   content/global/crashes.css              (content/crashes.css)
+-#endif

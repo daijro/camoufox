@@ -108,7 +108,7 @@ def _git(repo, *args):
 @pytest.fixture
 def library_repo(tmp_path):
     """A repo whose last library release, v0.5.7b1, is tagged on HEAD."""
-    for rel in ("pythonlib/camoufox/a.py", "docs/a.md", "patches/a.patch", "upstream.sh"):
+    for rel in ("python/src/camoufox/a.py", "docs/a.md", "browser/patches/a.patch", "browser/upstream.sh"):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text("a\n")
     _git(tmp_path, "init", "-q", "-b", "main")
@@ -120,8 +120,8 @@ def library_repo(tmp_path):
 
 @pytest.mark.parametrize("changed, publish", [
     ("docs/a.md", False),
-    ("pythonlib/camoufox/a.py", True),
-    ("patches/a.patch", True),  # a new browser means a new pin
+    ("python/src/camoufox/a.py", True),
+    ("browser/patches/a.patch", True),  # a new browser means a new pin
 ])
 def test_a_library_prerelease_is_published_only_when_what_it_ships_changed(library_repo, changed, publish):
     (library_repo / changed).write_text("b\n")
@@ -135,8 +135,8 @@ def test_the_first_library_prerelease_is_always_published(library_repo):
 
 
 def test_set_build_names_the_tags_release_in_the_working_tree_only(tmp_path, monkeypatch):
-    shutil.copy(release.REPO_ROOT / "upstream.sh", tmp_path / "upstream.sh")
-    monkeypatch.setattr(release, "REPO_ROOT", tmp_path)
+    shutil.copy(release.BROWSER_ROOT / "upstream.sh", tmp_path / "upstream.sh")
+    monkeypatch.setattr(release, "BROWSER_ROOT", tmp_path)
     monkeypatch.setattr(release, "read_upstream_sh",
                         lambda: read_upstream_sh(tmp_path / "upstream.sh"))
     version = read_upstream_sh(tmp_path / "upstream.sh")["version"]
@@ -153,6 +153,7 @@ def _copy_browser_inputs(tmp_path):
         if (browser_inputs.REPO_ROOT / name).is_dir():
             shutil.copytree(browser_inputs.REPO_ROOT / name, root / name)
     for name in browser_inputs.BROWSER_FILES:
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(browser_inputs.REPO_ROOT / name, root / name)
     return root
 
@@ -160,11 +161,11 @@ def _copy_browser_inputs(tmp_path):
 def test_the_source_digest_ignores_the_release_number_and_nothing_else(tmp_path):
     root = _copy_browser_inputs(tmp_path)
     before = browser_inputs.source_digest(root)
-    up = root / "upstream.sh"
+    up = root / "browser" / "upstream.sh"
     up.write_text(re.sub(r"^release=.*$", "release=beta.999", up.read_text(), flags=re.M))
     assert browser_inputs.source_digest(root) == before
 
-    juggler = next((root / "additions" / "juggler").rglob("*.js"))
+    juggler = next((root / "browser" / "additions" / "juggler").rglob("*.js"))
     juggler.write_text(juggler.read_text() + "\n")
     assert browser_inputs.source_digest(root) != before, "a packaged resource is a browser source"
 
@@ -196,7 +197,7 @@ def test_the_pin_and_the_launchers_agree_on_its_format(tmp_path, monkeypatch):
     """What stamp writes is what pythonlib's loader reads."""
     import sys
 
-    sys.path.insert(0, str(release.REPO_ROOT / "pythonlib"))
+    sys.path.insert(0, str(release.REPO_ROOT / "python" / "src"))
     from camoufox.browser_pin import load_pin
 
     monkeypatch.setattr(release, "PIN_FILE", tmp_path / "browser-pin.json")
@@ -336,7 +337,7 @@ def test_the_manifest_declares_the_interface_both_libraries_speak():
     assert release.manifest("v1", "d", "0" * 40)["interface"] == interface
     ts = (release.REPO_ROOT / "typescript" / "src" / "__version__.ts").read_text(encoding="utf-8")
     assert re.search(rf"^\s*static readonly INTERFACE: number = {interface};$", ts, re.M), "typescript/src/__version__.ts INTERFACE differs"
-    py = (release.REPO_ROOT / "pythonlib" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
+    py = (release.REPO_ROOT / "python" / "src" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
     ts_min = re.search(r"^\s*static readonly MIN_INTERFACE: number = (\d+);$", ts, re.M)
     py_min = re.search(r"^\s*MIN_INTERFACE = (\d+)$", py, re.M)
     assert ts_min and py_min and ts_min[1] == py_min[1], "MIN_INTERFACE differs between the libraries"

@@ -27,7 +27,7 @@ so upstream can refactor its conftest freely without breaking us. Four jobs:
    the point of measuring it this way round.
 
    Camoufox's own isolated-world behaviour keeps separate coverage in
-   `tests/patches/isolated-evaluate.py`, which must go on passing regardless --
+   `browser/tests/playwright/patches/isolated-evaluate.py`, which must go on passing regardless --
    that is the file to check if isolation itself regresses, not this suite.
 
 3. **Apply `ci/skiplist.yml`.** Deselects, rather than xfails, the tests Camoufox
@@ -102,13 +102,8 @@ def load_skiplist(path: Optional[Path] = None) -> List[Dict[str, str]]:
 
 def skip_reason(nodeid: str, entries: List[Dict[str, str]]) -> Optional[str]:
     """The reason this node id is skipped, or None to run it."""
-    # Every test in this suite is parameterised by browser, so the node ids that
-    # actually arrive here end in `[firefox]`. Compare against the id with its
-    # parameters stripped as well as the whole thing, so a `test:` entry written
-    # the way a human reads a node id out of a failure report does what its
-    # author meant. Requiring the exact `...[firefox]` spelling instead made
-    # every `test:` entry a silent no-op -- the entry looked applied, the test
-    # went on running and failing, and nothing reported the mismatch.
+    # Node ids arrive as `...[firefox]`; matching the bare id too keeps a `test:`
+    # entry copied from a failure report from being a silent no-op.
     base = nodeid.partition("[")[0]
     # pytest node ids are posix-style even on Windows.
     for entry in entries:
@@ -132,16 +127,20 @@ def skip_reason(nodeid: str, entries: List[Dict[str, str]]) -> Optional[str]:
 
 
 def parse_shard(raw: Optional[str]) -> Optional[Tuple[int, int]]:
-    """"3/6" -> (3, 6). One-based, like every CI UI that will display it."""
+    """"3/6" -> (3, 6). One-based, like every CI UI that will display it.
+
+    Also ci/run_native.py's: this plugin is copied into the Playwright checkout
+    on its own, so it cannot import ci/_util.py.
+    """
     if not raw:
         return None
     try:
         index, _, total = raw.partition("/")
         shard, count = int(index), int(total)
     except ValueError:
-        raise RuntimeError(f"{_SHARD_ENV} must look like '3/6', got {raw!r}") from None
+        raise RuntimeError(f"a shard must look like '3/6', got {raw!r}") from None
     if not (1 <= shard <= count):
-        raise RuntimeError(f"{_SHARD_ENV}={raw!r} is out of range")
+        raise RuntimeError(f"shard {raw!r} is out of range")
     return shard, count
 
 

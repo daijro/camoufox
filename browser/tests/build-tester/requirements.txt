@@ -1,0 +1,7 @@
+# This tree's python/, relative to build-tester/ (ci/tribal-rules.yml: no-third-party-camoufox-distribution).
+-e ../../../python
+
+# 1.61 sent viewport.isMobile in Browser.setDefaultViewport, which this
+# juggler's protocol schema rejected; the schema now accepts it, so the cap
+# moves up rather than away. Matches the cap in python/pyproject.toml.
+playwright<1.63

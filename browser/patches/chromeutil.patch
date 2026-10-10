@@ -1,0 +1,177 @@
+diff --git a/dom/base/ChromeUtils.cpp b/dom/base/ChromeUtils.cpp
+index dac837e733..c921614484 100644
+--- a/dom/base/ChromeUtils.cpp
++++ b/dom/base/ChromeUtils.cpp
+@@ -3,6 +3,7 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "ChromeUtils.h"
++#include "MaskConfig.hpp"
+ 
+ #include "JSOracleParent.h"
+ #include "NonSharedGlobalSyncModuleLoaderScope.h"
+@@ -2717,6 +2718,20 @@ bool ChromeUtils::IsDarkBackground(GlobalObject&, Element& aElement) {
+   return nsNativeTheme::IsDarkBackground(f);
+ }
+ 
++/* static */
++void ChromeUtils::CamouDebug(GlobalObject& aGlobal, const nsAString& aVarName) {
++  if (!MaskConfig::GetBool("debug")) {
++    return;
++  }
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  printf_stderr("DEBUG: %s\n", utf8VarName.get());
++}
++
++/* static */
++bool ChromeUtils::IsCamouDebug(GlobalObject& aGlobal) {
++  return MaskConfig::GetBool("debug");
++}
++
+ double ChromeUtils::DateNow(GlobalObject&) { return JS_Now() / 1000.0; }
+ 
+ /* static */
+@@ -2748,6 +2763,57 @@ void ChromeUtils::GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
+   }
+ }
+ 
++/* static */
++int32_t ChromeUtils::CamouGetInt(GlobalObject& aGlobal,
++                                 const nsAString& aVarName) {
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  if (auto value = MaskConfig::GetInt32(utf8VarName.get())) {
++    return value.value();
++  }
++  return 0;
++}
++
++/* static */
++double ChromeUtils::CamouGetDouble(GlobalObject& aGlobal,
++                                   const nsAString& aVarName,
++                                   double aDefaultValue) {
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  if (auto value = MaskConfig::GetDouble(utf8VarName.get())) {
++    return value.value();
++  }
++  return aDefaultValue;
++}
++
++/* static */
++bool ChromeUtils::CamouGetBool(GlobalObject& aGlobal, const nsAString& aVarName,
++                               bool aDefaultValue) {
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  return MaskConfig::GetOptionalBool(utf8VarName.get()).value_or(aDefaultValue);
++}
++
++/* static */
++void ChromeUtils::CamouGetString(GlobalObject& aGlobal,
++                                 const nsAString& aVarName,
++                                 nsAString& aRetVal) {
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  if (auto value = MaskConfig::GetString(utf8VarName.get())) {
++    aRetVal.Assign(NS_ConvertUTF8toUTF16(value.value()));
++  } else {
++    aRetVal.Truncate();
++  }
++}
++
++/* static */
++void ChromeUtils::CamouGetStringList(GlobalObject& aGlobal,
++                                     const nsAString& aVarName,
++                                     nsTArray<nsString>& aRetVal) {
++  NS_ConvertUTF16toUTF8 utf8VarName(aVarName);
++  aRetVal.Clear();
++  for (const auto& str : MaskConfig::GetStringList(utf8VarName.get())) {
++    aRetVal.AppendElement(NS_ConvertUTF8toUTF16(str));
++  }
++}
++
+ /* static */
+ bool ChromeUtils::ShouldResistFingerprinting(
+     GlobalObject& aGlobal, JSRFPTarget aTarget,
+diff --git a/dom/base/ChromeUtils.h b/dom/base/ChromeUtils.h
+index 8226005acc..11b1a5dcdc 100644
+--- a/dom/base/ChromeUtils.h
++++ b/dom/base/ChromeUtils.h
+@@ -340,6 +340,10 @@ class ChromeUtils {
+ 
+   static bool IsDarkBackground(GlobalObject&, Element&);
+ 
++  static void CamouDebug(GlobalObject& aGlobal, const nsAString& aVarName);
++
++  static bool IsCamouDebug(GlobalObject& aGlobal);
++
+   static double DateNow(GlobalObject&);
+ 
+   static double Now(GlobalObject&);
+@@ -351,6 +355,20 @@ class ChromeUtils {
+   static void GetAllPossibleUtilityActorNames(GlobalObject& aGlobal,
+                                               nsTArray<nsCString>& aNames);
+ 
++  static int32_t CamouGetInt(GlobalObject& aGlobal, const nsAString& aVarName);
++
++  static double CamouGetDouble(GlobalObject& aGlobal, const nsAString& aVarName,
++                               double aDefaultValue);
++
++  static bool CamouGetBool(GlobalObject& aGlobal, const nsAString& aVarName,
++                            bool aDefaultValue);
++
++  static void CamouGetString(GlobalObject& aGlobal, const nsAString& aVarName,
++                             nsAString& aRetVal);
++
++  static void CamouGetStringList(GlobalObject& aGlobal, const nsAString& aVarName,
++                                 nsTArray<nsString>& aRetVal);
++
+   static bool ShouldResistFingerprinting(
+       GlobalObject& aGlobal, JSRFPTarget aTarget,
+       nsIRFPTargetSetIDL* aOverriddenFingerprintingSettings,
+diff --git a/dom/chrome-webidl/ChromeUtils.webidl b/dom/chrome-webidl/ChromeUtils.webidl
+index 7434ef25ae..abe36d4451 100644
+--- a/dom/chrome-webidl/ChromeUtils.webidl
++++ b/dom/chrome-webidl/ChromeUtils.webidl
+@@ -926,6 +926,13 @@ partial namespace ChromeUtils {
+    */
+   boolean isDarkBackground(Element element);
+ 
++  /**
++   * Camoufox debug commands
++   */
++  undefined camouDebug(DOMString varName);
++
++  boolean isCamouDebug();
++
+   /**
+    * Starts the JSOracle process for ORB JavaScript validation, if it hasn't started already.
+    */
+@@ -937,6 +944,31 @@ partial namespace ChromeUtils {
+   [ChromeOnly]
+   readonly attribute unsigned long aliveUtilityProcesses;
+ 
++  /**
++   * Get an int value from Camoufox MaskConfig.
++   */
++  long camouGetInt(DOMString varName);
++
++  /**
++   * Get a double value from Camoufox MaskConfig.
++   */
++  double camouGetDouble(DOMString varName, double defaultValue);
++
++  /**
++   * Get a bool value from Camoufox MaskConfig.
++   */
++  boolean camouGetBool(DOMString varName, boolean defaultValue);
++
++  /**
++   * Get a string value from Camoufox MaskConfig.
++   */
++  DOMString camouGetString(DOMString varName);
++
++  /**
++   * Get a list of strings from Camoufox MaskConfig.
++   */
++  sequence<DOMString> camouGetStringList(DOMString varName);
++
+   /**
+    * Get a list of all possible Utility process Actor Names ; mostly useful to
+    * perform testing and ensure about:processes display is sound and misses no

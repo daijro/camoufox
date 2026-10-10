@@ -1,2 +1,2 @@
 * text=auto eol=lf
-tests/** linguist-detectable=false
+browser/tests/playwright/** linguist-detectable=false

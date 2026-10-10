@@ -1,0 +1,118 @@
+diff --git a/dom/canvas/OffscreenCanvas.cpp b/dom/canvas/OffscreenCanvas.cpp
+index 345455c14e..f46f13ebf6 100644
+--- a/dom/canvas/OffscreenCanvas.cpp
++++ b/dom/canvas/OffscreenCanvas.cpp
+@@ -655,6 +655,15 @@ void OffscreenCanvas::ReportBlockedFontFamily(const nsCString& aMsg) const {
+   }
+ }
+ 
++mozilla::dom::Document* OffscreenCanvas::GetDocument() const {
++  if (NS_IsMainThread()) {
++    if (nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(GetParentObject())) {
++      return win->GetExtantDoc();
++    }
++  }
++  return nullptr;
++}
++
+ bool OffscreenCanvas::IsChrome() const {
+   if (NS_IsMainThread()) {
+     nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(GetRelevantGlobal());
+diff --git a/dom/workers/WorkerPrivate.h b/dom/workers/WorkerPrivate.h
+index b38f31f547..2321f5acd5 100644
+--- a/dom/workers/WorkerPrivate.h
++++ b/dom/workers/WorkerPrivate.h
+@@ -1161,8 +1161,6 @@ class WorkerPrivate final
+ 
+   void WorkerScriptLoaded();
+ 
+-  Document* GetDocument() const;
+-
+   void MemoryPressure();
+ 
+   void UpdateContextOptions(const JS::ContextOptions& aContextOptions);
+diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
+index a0b8c260c4..2ea46a9810 100644
+--- a/gfx/thebes/gfxPlatformFontList.cpp
++++ b/gfx/thebes/gfxPlatformFontList.cpp
+@@ -455,6 +455,7 @@ class ListFontsVisibilityProvider final : public FontVisibilityProvider {
+     return mozilla::Nothing();
+   }
+   void UserFontSetUpdated(gfxUserFontEntry*) override {}
++  mozilla::dom::Document* GetDocument() const override { return nullptr; }
+   using FontVisibilityProvider::ReportBlockedFontFamily;
+ 
+  private:
+diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
+index f2c42a498e..bc887921c8 100644
+--- a/gfx/thebes/gfxTextRun.cpp
++++ b/gfx/thebes/gfxTextRun.cpp
+@@ -33,6 +33,8 @@
+ #include "nsStyleConsts.h"
+ #include "nsStyleUtil.h"
+ #include "nsUnicodeProperties.h"
++#include "mozilla/dom/Document.h"
++#include "mozilla/dom/RoverfoxStorageManager.h"
+ 
+ #ifdef XP_WIN
+ #  include "gfxWindowsPlatform.h"
+@@ -1871,6 +1873,11 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+       mFontVariantEmoji(aVariantEmoji) {
+   // We don't use SetUserFontSet() here, as we want to unconditionally call
+   // EnsureFontList() rather than only do UpdateUserFonts() if it changed.
++
++  if (mFontVisibilityProvider) {
++    mUserContextId = mozilla::dom::RoverfoxStorageManager::UserContextId(
++        mFontVisibilityProvider->GetDocument());
++  }
+ }
+ 
+ gfxFontGroup::~gfxFontGroup() {
+diff --git a/gfx/thebes/gfxTextRun.h b/gfx/thebes/gfxTextRun.h
+index f04c835506..10ddd68fc1 100644
+--- a/gfx/thebes/gfxTextRun.h
++++ b/gfx/thebes/gfxTextRun.h
+@@ -1433,6 +1433,8 @@ class gfxFontGroup final : public gfxTextRunFactory {
+   uint32_t mFontListGeneration = 0;  // platform font list generation for this
+                                      // fontgroup
+ 
++  uint32_t mUserContextId = 0;  // selects the per-context font list
++
+   /**
+    * Textrun creation short-cuts for special cases where we don't need to
+    * call a font shaper to generate glyphs.
+diff --git a/layout/base/nsPresContext.cpp b/layout/base/nsPresContext.cpp
+index 02a771ca93..8d6bbebed3 100644
+--- a/layout/base/nsPresContext.cpp
++++ b/layout/base/nsPresContext.cpp
+@@ -426,6 +426,10 @@ bool nsPresContext::IsChrome() const {
+   return Document()->IsInChromeDocShell();
+ }
+ 
++mozilla::dom::Document* nsPresContext::GetDocument() const {
++  return Document();
++}
++
+ void nsPresContext::GetUserPreferences() {
+   if (!GetPresShell()) {
+     // No presshell means nothing to do here.  We'll do this when we
+diff --git a/toolkit/components/resistfingerprinting/FontVisibilityProvider.h b/toolkit/components/resistfingerprinting/FontVisibilityProvider.h
+index 2f71aae0f9..c29d5ad5b5 100644
+--- a/toolkit/components/resistfingerprinting/FontVisibilityProvider.h
++++ b/toolkit/components/resistfingerprinting/FontVisibilityProvider.h
+@@ -42,6 +42,7 @@ class FontVisibilityProvider {
+   virtual nsICookieJarSettings* GetCookieJarSettings() const = 0;
+   virtual mozilla::Maybe<FontVisibility> MaybeInheritFontVisibility() const = 0;
+   virtual void UserFontSetUpdated(gfxUserFontEntry* aUpdatedFont = nullptr) = 0;
++  virtual mozilla::dom::Document* GetDocument() const = 0;
+ 
+   void ReportBlockedFontFamily(const gfxFontFamily& aFamily) const;
+   void ReportBlockedFontFamily(const mozilla::fontlist::Family& aFamily) const;
+@@ -58,6 +59,7 @@ class FontVisibilityProvider {
+   nsICookieJarSettings* GetCookieJarSettings() const override;                \
+   mozilla::Maybe<FontVisibility> MaybeInheritFontVisibility() const override; \
+   void UserFontSetUpdated(gfxUserFontEntry* aUpdatedFont = nullptr) override; \
++  mozilla::dom::Document* GetDocument() const override;                       \
+   using FontVisibilityProvider::ReportBlockedFontFamily;
+ };
+ 

@@ -1,0 +1,69 @@
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index d02c530cd5..bd48a0f323 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -974,6 +974,21 @@ bool Navigator::Vibrate(const nsTArray<uint32_t>& aPattern) {
+ //*****************************************************************************
+ 
+ uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
++  // Allow spoofing navigator.maxTouchPoints via config. A headless build has
++  // no digitizer, so the real value is 0 and Firefox's RFP path only ever
++  // collapses it to 0. The target is not a phone: it is the ordinary Windows
++  // touchscreen laptop, which reports a digitizer here while keeping a fine
++  // primary pointer. See force-default-pointer.patch for the matching
++  // `any-pointer: coarse` half. Stock Firefox's baseline fingerprinting
++  // protection collapses the spoofed count as it would the real one.
++  if (auto value = MaskConfig::GetUint32("navigator.maxTouchPoints")) {
++    if (aCallerType != CallerType::System &&
++        nsContentUtils::ShouldResistFingerprinting(
++            GetDocShell(), RFPTarget::MaxTouchPointsCollapse)) {
++      return nsRFPService::CollapseMaxTouchPoints(value.value());
++    }
++    return value.value();
++  }
+   nsIDocShell* docshell = GetDocShell();
+   BrowsingContext* bc = docshell ? docshell->GetBrowsingContext() : nullptr;
+ 
+diff --git a/dom/events/TouchEvent.cpp b/dom/events/TouchEvent.cpp
+index 7d72211e35..d68cd15f0e 100644
+--- a/dom/events/TouchEvent.cpp
++++ b/dom/events/TouchEvent.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "mozilla/dom/TouchEvent.h"
+ 
++#include "MaskConfig.hpp"
++
+ #include "gfxPlatform.h"
+ #include "mozilla/BasePrincipal.h"
+ #include "mozilla/LookAndFeel.h"
+@@ -224,6 +226,18 @@ bool TouchEvent::PrefEnabled(nsIDocShell* aDocShell) {
+   } else if (touchEventsOverride ==
+              mozilla::dom::TouchEventsOverride::Disabled) {
+     enabled = false;
++  } else if (auto maxTouchPoints =
++                 MaskConfig::GetUint32("navigator.maxTouchPoints")) {
++    // A spoofed digitizer has to bring the touch interfaces with it: a
++    // navigator.maxTouchPoints above zero next to a missing window.TouchEvent
++    // is a one-line contradiction to check for.
++    //
++    // This deliberately moves PrefEnabled only, never LegacyAPIEnabled, so
++    // `ontouchstart` stays absent. dom.w3c_touch_events.legacy_apis.enabled is
++    // false everywhere but Android, so a real Windows touchscreen laptop
++    // exposes TouchEvent and Touch while `'ontouchstart' in window` is false.
++    // Matching that shape matters more than exposing the whole touch API.
++    enabled = maxTouchPoints.value() > 0;
+   } else if (nsContentUtils::ShouldResistFingerprinting(
+                  aDocShell, RFPTarget::PointerEvents)) {
+ #ifdef MOZ_WIDGET_COCOA
+diff --git a/dom/events/moz.build b/dom/events/moz.build
+index 1426931797..d4a3f0c618 100644
+--- a/dom/events/moz.build
++++ b/dom/events/moz.build
+@@ -189,3 +189,6 @@ LOCAL_INCLUDES += [
+     "/layout/xul",
+     "/layout/xul/tree/",
+ ]
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]

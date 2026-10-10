@@ -1,7 +1,7 @@
 /**
  * A minimal virtual display implementation for Linux.
  *
- * TypeScript twin of pythonlib/camoufox/virtdisplay.py.
+ * TypeScript twin of python/src/camoufox/virtdisplay.py.
  */
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import * as fs from "node:fs";
@@ -10,45 +10,23 @@ import {
 	CannotFindXvfb,
 	VirtualDisplayNotSupported,
 } from "./exceptions.js";
-import { OS_NAME } from "./pkgman.js";
+import { OS_NAME } from "./paths.js";
 
 /** Safe timeout for Xvfb writing the display num; prevents an infinite hang. */
 const DISPLAYFD_READ_TIMEOUT_MS = 10_000;
 
 /**
- * Xvfb screen geometry for headless="virtual".
- *
- * 1x1x24 is Camoufox's long-standing default and stays the default. The root
- * window size is not observable as a fingerprint: screen.* comes from the
- * generated fingerprint, applied per context in the browser, and
- * clampScreenToDisplay() is skipped entirely for virtual displays (see the
- * `!virtual_display` guard in utils.ts), so a 1x1 root never clamps a generated
- * screen down to 1x1.
- *
- * Override with CAMOUFOX_VIRTUAL_DISPLAY_SIZE="<width>x<height>x<depth>", e.g.
- * "1920x1080x24", for the cases that do want a real framebuffer to draw into.
- * Depth may be omitted.
+ * Xvfb root geometry for headless="virtual". It is not observable (screen.* is
+ * spoofed per context), so 1x1x24 stays the default; override it with
+ * CAMOUFOX_VIRTUAL_DISPLAY_SIZE="<width>x<height>[x<depth>]".
  */
 export const DEFAULT_SCREEN = "1x1x24";
 export const SCREEN_ENV_VAR = "CAMOUFOX_VIRTUAL_DISPLAY_SIZE";
 
 /**
- * The Composite extension, disabled by default (Xvfb's `-extension COMPOSITE`).
- *
- * This was briefly enabled by default on the theory that #93 (no video under
- * headless="virtual") was caused by disabling it. It was not: #93 was a juggler
- * bug, fixed by capturing the screencast from the compositor instead of from
- * libwebrtc's X11 window capturer. Both states were measured before that fix:
- *
- *   composite off, record_video_dir  -> a valid .webm of 24 pure-white frames
- *   composite ON,  record_video_dir  -> browser dies with SIGSEGV, no video
- *   composite ON,  no recording      -> fine
- *
- * The segfault was inside the X11 capturer, which the browser no longer uses,
- * so enabling Composite is no longer dangerous -- but it is also no longer good
- * for anything, since recording never touches X11 window capture now. Leave it
- * off (Camoufox's long-standing default) and keep the escape hatch:
- * CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE=1 enables it.
+ * Composite stays off: it never caused #93 (a Juggler bug), and with it on the
+ * old X11 capture path crashed the browser. CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE=1
+ * enables it.
  */
 export const COMPOSITE_ENV_VAR = "CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE";
 
@@ -261,22 +239,9 @@ export class VirtualDisplay {
 	}
 
 	/**
-	 * Stop Xvfb if it is running, and remove its lock and socket either way.
-	 *
-	 * The cleanup deliberately does NOT depend on whether we did the killing.
-	 * It used to: the whole body sat behind "is the process still running", so
-	 * a display whose Xvfb had already died -- crashed, OOM-killed, or reaped
-	 * with the browser's process group -- was never cleaned up at all.
-	 *
-	 * That is backwards. A SIGKILLed Xvfb never gets to remove its own socket,
-	 * so the crash path is precisely the one where /tmp/.X11-unix/X<n> is left
-	 * behind. Those accumulate, and because -displayfd scans upward for a free
-	 * number, every stranded socket pushes the next display higher until a
-	 * long-running host stops being able to allocate one.
-	 *
-	 * Python waits for the killed process before unlinking; kill() is
-	 * synchronous here, but a SIGKILLed Xvfb can no longer recreate either
-	 * file, so unlinking right after the signal leaves the same end state.
+	 * Stop Xvfb if it is running, and remove its lock and socket either way: a
+	 * killed Xvfb leaves its socket behind, and every stranded one pushes
+	 * -displayfd's next display number higher.
 	 */
 	kill(): void {
 		if (!this.proc) return;

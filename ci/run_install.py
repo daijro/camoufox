@@ -34,7 +34,7 @@ from typing import Dict, List, Optional
 from . import release, results
 from ._util import RESULTS_DIR, REPO_ROOT, WORK_DIR, run
 
-PYTHONLIB = REPO_ROOT / "pythonlib"
+PYTHONLIB = REPO_ROOT / "python"
 TYPESCRIPT = REPO_ROOT / "typescript"
 
 

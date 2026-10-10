@@ -10,7 +10,15 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import {
 	BUNDLE,
 	BUNDLE_EXE,
@@ -25,20 +33,14 @@ import {
 	utils,
 	warnings,
 } from "./launch-host.js";
-import { prerequisite } from "./prereq.js";
 
-const { ensureModel } = await import("../src/fpgen/index.js");
 const { OSError, PyFloat } = await import("../src/pycompat.js");
 const { Version } = await import("../src/pkgman.js");
 const { InvalidPropertyType } = await import("../src/exceptions.js");
 const cpuAffinity = await import("../src/cpu_affinity.js");
 
-let modelReady = true;
-try {
-	await ensureModel();
-} catch (e) {
-	modelReady = prerequisite("fpgen-model", false, String(e));
-}
+// Imported after launch-host, which has to set the cache directory first.
+const { MODEL } = await import("./fpgen-setup.js");
 
 const deps = utils.utilsDeps;
 // The real disk probe, captured before any test stubs it.
@@ -143,6 +145,35 @@ describe("test_launch_environment: virtual display", () => {
 		expect(options.env.GDK_BACKEND).toBe("x11");
 		expect("WAYLAND_DISPLAY" in options.env).toBe(false);
 		expect(options.env.MOZ_ENABLE_WAYLAND).toBe("0");
+	});
+});
+
+describe("test_launch_environment: caller inputs", () => {
+	beforeEach(() => isolateLaunch());
+
+	// A caller's objects, reused for a second launch, must not carry the first
+	// launch's identity in. The first launch's webGl:vendor left in a reused
+	// config read as a GPU the caller named, so the second launch covered its
+	// canvas.
+	it("does not mutate the caller's inputs", async () => {
+		deps.addDefaultAddons = async (addons: string[]) => {
+			addons.push("/default-addon");
+		};
+		deps.confirmPaths = () => undefined;
+		const inputs = {
+			config: { "navigator.userAgent": WIN_UA },
+			firefox_user_prefs: { "caller.pref": 1 },
+			args: ["-caller-arg"],
+			addons: ["/caller-addon"],
+		};
+		const before = structuredClone(inputs);
+		const options = await launch({
+			block_webgl: true,
+			i_know_what_im_doing: true,
+			...inputs,
+		});
+		expect(inputs).toEqual(before);
+		expect(options.firefoxUserPrefs["caller.pref"]).toBe(1);
 	});
 });
 
@@ -573,6 +604,89 @@ describe("test_executable_path_bundle", () => {
 	});
 });
 
+describe("the browser option", () => {
+	beforeEach(() => vi.stubEnv("CAMOUFOX_EXECUTABLE_PATH", ""));
+	afterEach(() => vi.unstubAllEnvs());
+
+	// Where a build keeps its executable and application.ini on each OS.
+	const LAYOUTS: Record<string, [string, string]> = {
+		lin: ["camoufox-bin", "application.ini"],
+		mac: [
+			"Camoufox.app/Contents/MacOS/camoufox",
+			"Camoufox.app/Contents/Resources/application.ini",
+		],
+	};
+
+	it.each(
+		Object.keys(LAYOUTS),
+	)("launches the selected build and never the paired one (#843, %s)", async (layout) => {
+		isolateLaunch();
+		const dir = path.join(SCRATCH, `selected-${layout}`);
+		const [exe, ini] = LAYOUTS[layout].map((part) => path.join(dir, part));
+		for (const file of [exe, ini]) {
+			fs.mkdirSync(path.dirname(file), { recursive: true });
+		}
+		fs.writeFileSync(exe, "");
+		fs.writeFileSync(ini, "[App]\nVersion=152.0.4\n");
+		const paired = () => {
+			throw new Error("resolved the paired build despite `browser`");
+		};
+		deps.ensureCamoufoxInstalled = paired as any;
+		deps.launchPath = paired as any;
+		deps.installedVerStr = paired;
+		deps.selectedLaunchPath = (spec: string) => {
+			expect(spec).toBe("152.0.4-beta.31");
+			return exe;
+		};
+		const read: (string | null | undefined)[] = [];
+		deps.validateConfig = (_config, p) => {
+			read.push(p);
+		};
+		deps.getEnvVars = (_config, _os, p) => {
+			read.push(p);
+			return {};
+		};
+		let ffVersion: string | undefined;
+		deps.fromFpgen = ((_fp: unknown, version: string) => {
+			ffVersion = version;
+			return {};
+		}) as any;
+		const options = await launch({
+			browser: "152.0.4-beta.31",
+			os: "linux",
+			block_webgl: true,
+			canvas_noise: false,
+			headless: true,
+			i_know_what_im_doing: true,
+		});
+		expect(options.executablePath).toBe(exe);
+		expect(read).toEqual([exe, exe]);
+		expect(ffVersion).toBe("152");
+	});
+
+	it("refuses an executable_path too", async () => {
+		isolateLaunch();
+		await expect(
+			launch({ browser: "beta.31", executable_path: BUNDLE_EXE, os: "linux" }),
+		).rejects.toThrow("executable_path");
+	});
+
+	it("refuses CAMOUFOX_EXECUTABLE_PATH too", async () => {
+		isolateLaunch();
+		vi.stubEnv("CAMOUFOX_EXECUTABLE_PATH", BUNDLE_EXE);
+		await expect(launch({ browser: "beta.31", os: "linux" })).rejects.toThrow(
+			"CAMOUFOX_EXECUTABLE_PATH",
+		);
+	});
+
+	it("never borrows the installed version for a named executable without application.ini", () => {
+		deps.installedVerStr = () => "156.0.1-beta.33";
+		expect(() =>
+			utils.resolveVerstr(path.join(SCRATCH, "no-ini", "camoufox-bin")),
+		).toThrow("application.ini");
+	});
+});
+
 describe("test_executable_path_version_warning", () => {
 	const bundle = (build: string) => {
 		const dir = path.join(SCRATCH, `bundle-${build}`);
@@ -686,7 +800,7 @@ describe("test_voices (launch half)", () => {
 	});
 });
 
-describe.skipIf(!modelReady)(
+describe.skipIf(!MODEL.ok)(
 	"test_launch_geometry / test_identity_salt (fpgen draws)",
 	() => {
 		beforeEach(() => stubHost());

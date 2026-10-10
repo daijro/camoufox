@@ -1,27 +1,7 @@
 /**
- * Pin the browser to as many CPU cores as the identity reports.
- *
- * TypeScript twin of pythonlib/camoufox/cpu_affinity.py.
- *
- * navigator.hardwareConcurrency is spoofed by the browser, but the number of
- * cores a page can *measure* (timing N parallel workers) is the number the OS
- * lets the browser run on. Reporting the fingerprint's value and pinning the
- * browser's CPU affinity to that many cores makes the two agree, so the drawn
- * value survives instead of being replaced by the host count.
- *
- * Python pins the Playwright driver (a separate Node process) right before the
- * launch; here the driver IS this process -- playwright-core spawns the browser
- * from the main thread -- so the pin is applied to this process's main thread
- * and lifted again afterwards. Child processes inherit the affinity mask on
- * Linux and Windows, so the browser and every content/GPU process it spawns
- * run on the pinned set. macOS has no process affinity API, so nothing can be
- * pinned there and the launcher falls back to reporting the host's (snapped)
- * count.
- *
- * Node has no sched_setaffinity binding, so Linux goes through util-linux's
- * `taskset` (which, like os.sched_setaffinity(pid), sets the thread whose TID
- * is `pid` -- the main thread) and Windows through PowerShell's
- * Process.ProcessorAffinity.
+ * Pin the browser to as many cores as the identity reports, so the cores a page
+ * can measure agree with navigator.hardwareConcurrency. Twin of cpu_affinity.py;
+ * the driver is this process, so its main thread is pinned around the launch.
  */
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";

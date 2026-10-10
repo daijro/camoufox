@@ -1,0 +1,1141 @@
+diff --git a/dom/base/WebRTCIPManager.cpp b/dom/base/WebRTCIPManager.cpp
+new file mode 100644
+index 0000000000..62198f4244
+--- /dev/null
++++ b/dom/base/WebRTCIPManager.cpp
+@@ -0,0 +1,77 @@
++#include "WebRTCIPManager.h"
++#include "RoverfoxStorageManager.h"
++#include "nsPrintfCString.h"
++#include "mozilla/dom/Document.h"
++#include "nsPIDOMWindow.h"
++
++namespace mozilla {
++namespace dom {
++
++/* static */ nsString
++WebRTCIPManager::IPv4KeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendLiteral(u"webrtc_ipv4_");
++  key.AppendInt(userContextId);
++  return key;
++}
++
++/* static */ nsString
++WebRTCIPManager::IPv6KeyForUserContext(uint32_t userContextId) {
++  nsString key;
++  key.AppendLiteral(u"webrtc_ipv6_");
++  key.AppendInt(userContextId);
++  return key;
++}
++
++/* static */ void
++WebRTCIPManager::SetIPv4(uint32_t userContextId, const nsAString& ipv4) {
++  nsString key = IPv4KeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutString(key, ipv4);
++
++  // Mark the function as disabled for this context after first use
++  DisableIPv4Function(userContextId);
++}
++
++/* static */ bool
++WebRTCIPManager::GetIPv4(uint32_t userContextId, nsAString& outIPv4) {
++  nsString key = IPv4KeyForUserContext(userContextId);
++  return RoverfoxStorageManager::GetString(key, outIPv4);
++}
++
++/* static */ void
++WebRTCIPManager::SetIPv6(uint32_t userContextId, const nsAString& ipv6) {
++  nsString key = IPv6KeyForUserContext(userContextId);
++  RoverfoxStorageManager::PutString(key, ipv6);
++
++  // Mark the function as disabled for this context after first use
++  DisableIPv6Function(userContextId);
++}
++
++/* static */ bool
++WebRTCIPManager::GetIPv6(uint32_t userContextId, nsAString& outIPv6) {
++  nsString key = IPv6KeyForUserContext(userContextId);
++  return RoverfoxStorageManager::GetString(key, outIPv6);
++}
++
++/* static */ void
++WebRTCIPManager::DisableIPv4Function(uint32_t userContextId) {
++  RoverfoxStorageManager::MarkSetterUsed("webrtc_v4", userContextId);
++}
++
++/* static */ void
++WebRTCIPManager::DisableIPv6Function(uint32_t userContextId) {
++  RoverfoxStorageManager::MarkSetterUsed("webrtc_v6", userContextId);
++}
++
++/* static */ bool
++WebRTCIPManager::IsIPv4FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "webrtc_v4");
++}
++
++/* static */ bool
++WebRTCIPManager::IsIPv6FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "webrtc_v6");
++}
++
++} // namespace dom
++} // namespace mozilla
+diff --git a/dom/base/WebRTCIPManager.h b/dom/base/WebRTCIPManager.h
+new file mode 100644
+index 0000000000..a134ba615a
+--- /dev/null
++++ b/dom/base/WebRTCIPManager.h
+@@ -0,0 +1,83 @@
++#ifndef mozilla_dom_WebRTCIPManager_h
++#define mozilla_dom_WebRTCIPManager_h
++
++#include "js/TypeDecls.h"
++#include "nsString.h"
++
++namespace mozilla {
++namespace dom {
++
++/**
++ * WebRTCIPManager manages WebRTC IP addresses per user context.
++ * This enables privacy-preserving WebRTC IP spoofing by allowing deterministic
++ * IP address overrides that are isolated by user context.
++ */
++class WebRTCIPManager {
++public:
++  /**
++   * Set the WebRTC IPv4 address for a given user context.
++   * @param userContextId The user context ID (0 for default context)
++   * @param ipv4 The IPv4 address to use for WebRTC connections
++   */
++  static void SetIPv4(uint32_t userContextId, const nsAString& ipv4);
++
++  /**
++   * Get the WebRTC IPv4 address for a given user context.
++   * @param userContextId The user context ID
++   * @param outIPv4 The IPv4 address, empty if no address has been set
++   * @return true if an IPv4 address has been set, false otherwise
++   */
++  static bool GetIPv4(uint32_t userContextId, nsAString& outIPv4);
++
++  /**
++   * Set the WebRTC IPv6 address for a given user context.
++   * @param userContextId The user context ID (0 for default context)
++   * @param ipv6 The IPv6 address to use for WebRTC connections
++   */
++  static void SetIPv6(uint32_t userContextId, const nsAString& ipv6);
++
++  /**
++   * Get the WebRTC IPv6 address for a given user context.
++   * @param userContextId The user context ID
++   * @param outIPv6 The IPv6 address, empty if no address has been set
++   * @return true if an IPv6 address has been set, false otherwise
++   */
++  static bool GetIPv6(uint32_t userContextId, nsAString& outIPv6);
++
++  /**
++   * Mark the setWebRTCIPv4 function as used/disabled for a context.
++   * @param userContextId The user context ID
++   */
++  static void DisableIPv4Function(uint32_t userContextId);
++
++  /**
++   * Mark the setWebRTCIPv6 function as used/disabled for a context.
++   * @param userContextId The user context ID
++   */
++  static void DisableIPv6Function(uint32_t userContextId);
++
++  /**
++   * WebIDL-compatible function to check if setWebRTCIPv4 should be enabled.
++   * @param aCx The JavaScript context
++   * @param aObj The JavaScript object (window)
++   * @return true if the function should be enabled, false otherwise
++   */
++  static bool IsIPv4FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++
++  /**
++   * WebIDL-compatible function to check if setWebRTCIPv6 should be enabled.
++   * @param aCx The JavaScript context
++   * @param aObj The JavaScript object (window)
++   * @return true if the function should be enabled, false otherwise
++   */
++  static bool IsIPv6FunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++
++private:
++  static nsString IPv4KeyForUserContext(uint32_t userContextId);
++  static nsString IPv6KeyForUserContext(uint32_t userContextId);
++};
++
++} // namespace dom
++} // namespace mozilla
++
++#endif // mozilla_dom_WebRTCIPManager_h
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index cb146517aa..f2fa8a3543 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -302,10 +302,15 @@ EXPORTS.mozilla.dom += [
+     "VideoFrameProvider.h",
+     "ViewportMetaData.h",
+     "VisualViewport.h",
++    "WebRTCIPManager.h",
+     "WindowFeatures.h",
+     "WindowProxyHolder.h",
+ ]
+ 
++# WebRTCIPManager compiled separately to avoid unified build errors
++# (it includes RoverfoxStorageManager.h which causes template issues)
++SOURCES += ["WebRTCIPManager.cpp"]
++
+ # AudioFingerprintManager compiled separately to avoid namespace pollution
+ # in unified builds (it includes RoverfoxStorageManager.h which can affect
+ # alphabetically-later files like BarProps.cpp)
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index e1281931d5..f7006744e5 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -331,6 +331,8 @@
+ #include "xpcprivate.h"
+ #include "xpcpublic.h"
+ 
++#include "WebRTCIPManager.h"
++
+ #ifdef NS_PRINTING
+ #  include "nsIPrintSettings.h"
+ #endif
+@@ -7789,6 +7791,18 @@ void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aR
+   RoverfoxStorageManager::RemoveSetter("setTimezone");
+ }
+ 
++void nsGlobalWindowInner::SetWebRTCIPv4(const nsAString& ipv4, ErrorResult& aRv) {
++  WebRTCIPManager::SetIPv4(RoverfoxStorageManager::UserContextId(this), ipv4);
++
++  RoverfoxStorageManager::RemoveSetter("setWebRTCIPv4");
++}
++
++void nsGlobalWindowInner::SetWebRTCIPv6(const nsAString& ipv6, ErrorResult& aRv) {
++  WebRTCIPManager::SetIPv6(RoverfoxStorageManager::UserContextId(this), ipv6);
++
++  RoverfoxStorageManager::RemoveSetter("setWebRTCIPv6");
++}
++
+ void nsGlobalWindowInner::StoreSharedWorker(SharedWorker* aSharedWorker) {
+   MOZ_ASSERT(aSharedWorker);
+   MOZ_ASSERT(!mSharedWorkers.Contains(aSharedWorker));
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index f3fbefbbfd..2b581e729a 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -687,6 +687,10 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+ 
+   void SetTimezone(const nsAString& timezone, mozilla::ErrorResult& aRv);
+ 
++  // WebRTC IP addresses for privacy-preserving IP spoofing
++  void SetWebRTCIPv4(const nsAString& ipv4, mozilla::ErrorResult& aRv);
++  void SetWebRTCIPv6(const nsAString& ipv6, mozilla::ErrorResult& aRv);
++
+   void StoreSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+ 
+   void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
+diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
+index 0eefdc2645..7254ce8ca1 100644
+--- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
++++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
+@@ -100,6 +100,12 @@
+ #include "mozilla/glean/DomMediaWebrtcMetrics.h"
+ #include "mozilla/net/DataChannelProtocol.h"
+ #include "mozilla/net/WebrtcProxyConfig.h"
++#include "MaskConfig.hpp"
++#include "mozilla/RandomNum.h"
++#include "mozilla/RustRegex.h"
++#include "WebRTCIPManager.h"
++#include "mozilla/dom/NavigatorManager.h"
++#include "nsDocShell.h"
+ #include "nsContentUtils.h"
+ #include "nsDOMJSUtils.h"
+ #include "nsGlobalWindowInner.h"
+@@ -230,6 +236,14 @@ class DataChannel;
+ 
+ namespace mozilla {
+ 
++// Camoufox: ICE candidate priorities for the fabricated host/srflx candidates,
++// measured from real Firefox (constant across sessions). Defined here at the
++// top of the namespace because GetStats() (above the fabrication code) also
++// references kSrflxPriority. host UDP / host TCP / srflx.
++static constexpr uint32_t kHostUdpPriority = 2122252543u;
++static constexpr uint32_t kHostTcpPriority = 2105524479u;
++static constexpr uint32_t kSrflxPriority = 1686052863u;
++
+ void PeerConnectionAutoTimer::RegisterConnection() { mRefCnt++; }
+ 
+ void PeerConnectionAutoTimer::UnregisterConnection(bool aContainedAV) {
+@@ -1622,7 +1636,15 @@ PeerConnectionImpl::SetLocalDescription(int32_t aAction, const char* aSDP) {
+     }
+   };
+ 
+-  mLocalRequestedSDP = aSDP;
++  // Sanitize the SDP to prevent IP leaks
++  std::string sanitizedSDP(aSDP);
++  nsresult sanitizeResult = SanitizeSDPForIPLeak(sanitizedSDP);
++  if (NS_FAILED(sanitizeResult)) {
++    CSFLogError(LOGTAG, "%s - Failed to sanitize SDP", __FUNCTION__);
++    return sanitizeResult;
++  }
++
++  mLocalRequestedSDP = sanitizedSDP;
+ 
+   SyncToJsep();
+ 
+@@ -1788,11 +1810,90 @@ already_AddRefed<dom::Promise> PeerConnectionImpl::GetStats(
+     MOZ_CRASH("Failed to create a promise!");
+   }
+ 
++  // Camoufox: the stats continuation has no `this`, so resolve the spoof IP now.
++  auto ipv4Opt = SpoofIP(false);
++  auto ipv6Opt = SpoofIP(true);
++  bool shouldSanitizeStats = ipv4Opt || ipv6Opt;
++  // The port of the fabricated srflx (if any), so the synthetic getStats
++  // entry below matches the candidate/SDP exactly. 0 = nothing fabricated.
++  uint16_t fabricatedSrflxPort = mFabricatedSrflxPort;
++  nsString fabricatedSrflxStatsId = mFabricatedSrflxStatsId;
++  nsString fabricatedSrflxUfrag = mFabricatedSrflxUfrag;
++
+   GetStats(aSelector, false)
+       ->Then(
+           GetMainThreadSerialEventTarget(), __func__,
+-          [promise,
+-           window = mWindow](UniquePtr<dom::RTCStatsReportInternal>&& aReport) {
++          [promise, window = mWindow, shouldSanitizeStats, ipv4Opt, ipv6Opt,
++           fabricatedSrflxPort, fabricatedSrflxStatsId, fabricatedSrflxUfrag](
++              UniquePtr<dom::RTCStatsReportInternal>&& aReport) {
++            // Camoufox: Sanitize IP addresses in stats before exposing to JS
++            if (shouldSanitizeStats && aReport) {
++              bool haveSrflx = false;
++              for (auto& candStat : aReport->mIceCandidateStats) {
++                // Only this side's candidates carry our address, and an mDNS
++                // host name is already opaque: stock reports it as-is.
++                if (!candStat.mType.WasPassed() ||
++                    candStat.mType.Value() !=
++                        dom::RTCStatsType::Local_candidate) {
++                  continue;
++                }
++                if (candStat.mCandidateType.WasPassed() &&
++                    candStat.mCandidateType.Value() ==
++                        dom::RTCIceCandidateType::Srflx) {
++                  haveSrflx = true;
++                }
++                if (candStat.mAddress.WasPassed() && !candStat.mAddress.Value().IsEmpty() &&
++                    !StringEndsWith(candStat.mAddress.Value(), u".local"_ns)) {
++                  nsAutoCString addr;
++                  addr.Assign(NS_ConvertUTF16toUTF8(candStat.mAddress.Value()));
++                  // Check for colons AND no periods to avoid IPv4:port false positives
++                  bool isIPv6 = addr.FindChar(':') != kNotFound && addr.FindChar('.') == kNotFound;
++                  if (isIPv6 && ipv6Opt) {
++                    candStat.mAddress.Value() = NS_ConvertUTF8toUTF16(ipv6Opt.value().c_str());
++                  } else if (!isIPv6 && ipv4Opt) {
++                    candStat.mAddress.Value() = NS_ConvertUTF8toUTF16(ipv4Opt.value().c_str());
++                  }
++                }
++              }
++              // Camoufox: if we fabricated a srflx into the candidate stream /
++              // SDP (TCP-proxy case) but getStats() carries no srflx local
++              // candidate, add a matching one so the three surfaces agree.
++              // A srflx in the SDP with no local-candidate stat is itself a
++              // detectable inconsistency. Pair / RTT stats are intentionally
++              // NOT fabricated: they are legitimately absent with no remote
++              // peer, so leaving them empty matches a real browser.
++              std::string spoofIp = ipv4Opt ? ipv4Opt.value()
++                                            : (ipv6Opt ? ipv6Opt.value()
++                                                       : std::string());
++              if (!haveSrflx && !spoofIp.empty() && fabricatedSrflxPort != 0 &&
++                  !fabricatedSrflxStatsId.IsEmpty()) {
++                dom::RTCIceCandidateStats cand;
++                cand.mType.Construct(dom::RTCStatsType::Local_candidate);
++                cand.mTimestamp.Construct(aReport->mTimestamp);
++                cand.mCandidateType.Construct(dom::RTCIceCandidateType::Srflx);
++                cand.mPriority.Construct(kSrflxPriority);
++                cand.mAddress.Construct(NS_ConvertUTF8toUTF16(spoofIp.c_str()));
++                cand.mPort.Construct(fabricatedSrflxPort);
++                cand.mProtocol.Construct(NS_ConvertASCIItoUTF16("udp"));
++                cand.mProxied.Construct(NS_ConvertASCIItoUTF16("proxied"));
++                cand.mId.Construct(fabricatedSrflxStatsId);
++                // Firefox 156 exposes foundation and usernameFragment on
++                // candidate stats: the same values as the SDP line.
++                cand.mFoundation.Construct(u"1"_ns);
++                cand.mUsernameFragment.Construct(fabricatedSrflxUfrag);
++                // Associate with the same transport as the real candidates;
++                // transportId is required, so with none there is nothing to
++                // attach a candidate to.
++                if (!aReport->mIceCandidateStats.IsEmpty()) {
++                  cand.mTransportId =
++                      aReport->mIceCandidateStats[0].mTransportId;
++                  if (!aReport->mIceCandidateStats.AppendElement(cand,
++                                                                 fallible)) {
++                    mozalloc_handle_oom(0);
++                  }
++                }
++              }
++            }
+             RefPtr report = MakeRefPtr<RTCStatsReport>(window);
+             report->Incorporate(*aReport);
+             promise->MaybeResolve(std::move(report));
+@@ -3313,12 +3414,22 @@ const std::string& PeerConnectionImpl::GetName() {
+   return mName;
+ }
+ 
+-void PeerConnectionImpl::CandidateReady(const std::string& candidate,
++void PeerConnectionImpl::CandidateReady(const std::string& candidate_,
+                                         const std::string& transportId,
+                                         const std::string& ufrag) {
+   STAMP_TIMECARD(mTimeCard, "Ice Candidate gathered");
+   PC_AUTO_ENTER_API_CALL_VOID_RETURN(false);
+ 
++  const std::string& candidate = [&]() -> const std::string& {
++    if (ShouldSpoofCandidateIP()) {
++      static std::string spoofedCandidate;
++      spoofedCandidate = SpoofCandidateIP(candidate_);
++      return spoofedCandidate;
++    } else {
++      return candidate_;
++    }
++  }();
++
+   if (mForceIceTcp && std::string::npos != candidate.find(" UDP ")) {
+     CSFLogWarn(LOGTAG, "Blocking local UDP candidate: %s", candidate.c_str());
+     STAMP_TIMECARD(mTimeCard, "UDP Ice Candidate blocked");
+@@ -3381,10 +3492,415 @@ void PeerConnectionImpl::SendLocalIceCandidateToContent(
+     uint16_t level, const std::string& mid, const std::string& candidate,
+     const std::string& ufrag) {
+   STAMP_TIMECARD(mTimeCard, "Send Ice Candidate to content");
++
++  // Camoufox: remember if a real public candidate ever reached content, so we
++  // only fabricate one at gathering-complete when ICE produced none.
++  if (candidate.find(" typ srflx ") != std::string::npos ||
++      candidate.find(" typ prflx ") != std::string::npos ||
++      candidate.find(" typ relay ") != std::string::npos) {
++    mSurfacedPublicCandidate = true;
++  }
++  if (candidate.find(" typ host") != std::string::npos) {
++    mSurfacedHostCandidate = true;
++    // "candidate:<foundation> <component> <transport> <priority> <address>
++    //  <port> typ host ..."
++    std::istringstream fields(candidate);
++    std::string foundation, component, transport, priority, address, port;
++    if (!mSurfacedHostUdpPort &&
++        (fields >> foundation >> component >> transport >> priority >>
++         address >> port) &&
++        (transport == "UDP" || transport == "udp")) {
++      mSurfacedHostUdpPort =
++          static_cast<uint16_t>(std::strtoul(port.c_str(), nullptr, 10));
++    }
++  }
++
++  // Check if IP spoofing is enabled
++  if (ShouldSpoofCandidateIP()) {
++    std::string spoofedCandidate = SpoofCandidateIP(candidate);
++    JSErrorResult rv;
++    mPCObserver->OnIceCandidate(level, ObString(mid.c_str()),
++                                ObString(spoofedCandidate.c_str()),
++                                ObString(ufrag.c_str()), rv);
++  } else {
++    JSErrorResult rv;
++    mPCObserver->OnIceCandidate(level, ObString(mid.c_str()),
++                                ObString(candidate.c_str()),
++                                ObString(ufrag.c_str()), rv);
++  }
++}
++
++std::optional<std::string> PeerConnectionImpl::SpoofIP(bool aIPv6) const {
++  const uint32_t userContextId =
++      dom::RoverfoxStorageManager::UserContextId(mWindow.get());
++  nsAutoString stored;
++  if (aIPv6 ? WebRTCIPManager::GetIPv6(userContextId, stored)
++            : WebRTCIPManager::GetIPv4(userContextId, stored)) {
++    return std::string(NS_ConvertUTF16toUTF8(stored).get());
++  }
++  return MaskConfig::GetString(aIPv6 ? "webrtc:ipv6" : "webrtc:ipv4");
++}
++
++bool PeerConnectionImpl::ShouldSpoofCandidateIP() const {
++  return SpoofIP(false) || SpoofIP(true);
++}
++
++// *****
++// Helper functions to determine if IPs should be masked or not
++// *****
++
++bool isSpecialIP(const std::string& ip) {
++  // Check if an IP should not be masked (special addresses)
++  return (ip == "0.0.0.0" || ip == "127.0.0.1" ||
++          ip == "::" || ip == "::1" ||
++          ip.compare(0, 8, "169.254.") == 0 ||
++          ip.compare(0, 4, "fe80") == 0);
++}
++
++std::string getMaskForIP(const std::string& ip,
++                         const std::optional<std::string>& ipv4Value,
++                         const std::optional<std::string>& ipv6Value) {
++  // Get the corresponding mask for an ip address
++  if (isSpecialIP(ip)) {
++    return ip;  // dont mask special IPs
++  }
++  // Use colons AND no periods to avoid IPv4:port false positives
++  bool isIPv6 = (ip.find(':') != std::string::npos) && (ip.find('.') == std::string::npos);
++
++  if (isIPv6) {
++    if (ipv6Value) {
++      return ipv6Value.value();
++    }
++  } else {
++    if (ipv4Value) {
++      return ipv4Value.value();
++    }
++  }
++  // return original ip if no mask is available
++  return ip;
++}
++
++std::string replaceIPAddresses(const std::string& input, const char* pattern,
++                               const std::optional<std::string>& ipv4,
++                               const std::optional<std::string>& ipv6) {
++  // Replace IP addresses in a output line
++  mozilla::RustRegex regex(pattern);
++  if (!regex.IsValid()) {
++    return input;
++  }
++
++  std::string result;
++  auto iter = regex.IterMatches(input);
++  size_t lastEnd = 0;
++
++  while (auto match = iter.Next()) {
++    std::string ip = input.substr(match->start, match->end - match->start);
++    std::string mask = getMaskForIP(ip, ipv4, ipv6);
++
++    if (mask != ip) {
++      result.append(input, lastEnd, match->start - lastEnd);
++      result.append(mask);
++    } else {
++      result.append(input, lastEnd, match->end - lastEnd);
++    }
++
++    lastEnd = match->end;
++  }
++
++  result.append(input, lastEnd);
++  return result;
++}
++
++std::string PeerConnectionImpl::SpoofCandidateIP(const std::string& candidate) {
++  if (!ShouldSpoofCandidateIP() || candidate.empty()) {
++    return candidate;
++  }
++
++  const auto ipv4 = SpoofIP(false);
++  const auto ipv6 = SpoofIP(true);
++
++  // ipv4
++  const char* ipv4Pattern = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
++  std::string result = replaceIPAddresses(candidate, ipv4Pattern, ipv4, ipv6);
++  // ipv6 - comprehensive pattern handles all formats including compressed (::1, fe80::, etc.)
++  const char* ipv6Pattern = "(?:(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|(?:[0-9A-Fa-f]{1,4}:){1,7}:|(?:[0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|(?:[0-9A-Fa-f]{1,4}:){1,5}(?::[0-9A-Fa-f]{1,4}){1,2}|(?:[0-9A-Fa-f]{1,4}:){1,4}(?::[0-9A-Fa-f]{1,4}){1,3}|(?:[0-9A-Fa-f]{1,4}:){1,3}(?::[0-9A-Fa-f]{1,4}){1,4}|(?:[0-9A-Fa-f]{1,4}:){1,2}(?::[0-9A-Fa-f]{1,4}){1,5}|[0-9A-Fa-f]{1,4}:(?::[0-9A-Fa-f]{1,4}){1,6}|:(?::[0-9A-Fa-f]{1,4}){1,7}|::)";
++  result = replaceIPAddresses(result, ipv6Pattern, ipv4, ipv6);
++
++  return result;
++}
++
++nsresult PeerConnectionImpl::SanitizeSDPForIPLeak(std::string& sdp) {
++  if (!ShouldSpoofCandidateIP()) {
++    return NS_OK;
++  }
++
++  const auto ipv4 = SpoofIP(false);
++  const auto ipv6 = SpoofIP(true);
++
++  // process the SDP line by line to handle candidate lines
++  std::istringstream iss(sdp);
++  std::ostringstream oss;
++  std::string line;
++
++  while (std::getline(iss, line)) {
++    // process candidates and other lines that might contain IPs
++    if (line.compare(0, 12, "a=candidate:") == 0) {
++      std::string processed = SpoofCandidateIP(line);
++      if (processed != line) {
++        line = processed;
++      }
++    }
++    // add line back with proper line ending
++    if (line.empty() || (line.back() != '\r' && line.back() != '\n')) {
++      oss << line << "\r\n";
++    } else {
++      oss << line;
++    }
++  }
++  // process the entire SDP for any remaining IP addresses
++  std::string processedSdp = oss.str();
++  std::string originalSdp = processedSdp;
++
++  // ipv4
++  const char* ipv4Pattern = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
++  processedSdp = replaceIPAddresses(processedSdp, ipv4Pattern, ipv4, ipv6);
++  // ipv6 - comprehensive pattern handles all formats including compressed (::1, fe80::, etc.)
++  const char* ipv6Pattern = "(?:(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|(?:[0-9A-Fa-f]{1,4}:){1,7}:|(?:[0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|(?:[0-9A-Fa-f]{1,4}:){1,5}(?::[0-9A-Fa-f]{1,4}){1,2}|(?:[0-9A-Fa-f]{1,4}:){1,4}(?::[0-9A-Fa-f]{1,4}){1,3}|(?:[0-9A-Fa-f]{1,4}:){1,3}(?::[0-9A-Fa-f]{1,4}){1,4}|(?:[0-9A-Fa-f]{1,4}:){1,2}(?::[0-9A-Fa-f]{1,4}){1,5}|[0-9A-Fa-f]{1,4}:(?::[0-9A-Fa-f]{1,4}){1,6}|:(?::[0-9A-Fa-f]{1,4}){1,7}|::)";
++  processedSdp = replaceIPAddresses(processedSdp, ipv6Pattern, ipv4, ipv6);
++
++  if (processedSdp != originalSdp) {
++    sdp = processedSdp;
++  }
++
++  return NS_OK;
++}
++
++// *****
++// Synthetic srflx fabrication (TCP-proxy case)
++// *****
++//
++// Behind a TCP/HTTP proxy, STUN (UDP) cannot traverse, so no server-reflexive
++// candidate ever forms and the rewrite paths above have nothing to operate on
++// -> WebRTC reports n/a, which anti-bot systems flag. We fabricate a synthetic
++// srflx carrying the spoof IP (the proxy exit IP, already in config) so the
++// page sees a plausible public candidate. The port/priority are derived as a
++// pure function of the spoof IP so the live-stream, SDP, and getStats() copies
++// all agree without threading state through the stats continuation.
++
++// A fresh random ephemeral port per PeerConnection. Real Firefox binds a new
++// UDP socket per PeerConnection and REUSES that port for the host candidate and
++// its srflx; we mirror that (one port, shared, random per PC) -- never derived
++// from the IP. The only observable pattern is the RANGE: it must be the OS
++// ephemeral range of the OS the context presents; Linux's when no platform is
++// configured.
++static uint16_t RandomEphemeralPort(uint32_t aUserContextId) {
++  const auto [lo, hi] =
++      MaskConfig::SpoofedEphemeralPorts(
++          dom::NavigatorManager::GetSpoofedOS(aUserContextId))
++          .value_or(std::pair<uint16_t, uint16_t>{32768, 60999});
++  uint32_t span = static_cast<uint32_t>(hi - lo) + 1u;
++  return static_cast<uint16_t>(lo + (mozilla::RandomUint64OrDie() % span));
++}
++
++// A realistic STUN round-trip delay (ms) before the srflx surfaces. Real
++// Firefox emits the srflx ~30-90ms after the host candidate; a zero-delay
++// srflx (host and srflx arriving together) is an unnatural timing signature.
++static uint32_t RandomSrflxDelayMs() {
++  return static_cast<uint32_t>(30u + (mozilla::RandomUint64OrDie() % 60u));
++}
++
++// Extract the value of the first "<prefix><value>" line in an SDP (prefix like
++// "a=mid:" or "a=ice-ufrag:"). Returns empty string if not found.
++static std::string FirstSdpLineValue(const std::string& sdp,
++                                     const std::string& prefix) {
++  std::istringstream iss(sdp);
++  std::string line;
++  while (std::getline(iss, line)) {
++    while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) {
++      line.pop_back();
++    }
++    if (line.compare(0, prefix.size(), prefix) == 0) {
++      return line.substr(prefix.size());
++    }
++  }
++  return std::string();
++}
++
++uint32_t PeerConnectionImpl::MaybeFabricateSrflxCandidate() {
++  // Only what a real gather could have produced and did not: host candidates
++  // when none reached the page, and a srflx only when the page configured an
++  // ICE server. `new RTCPeerConnection()` with no iceServers gathers host
++  // candidates alone in stock Firefox; a srflx there (plus a second host set
++  // after end-of-candidates) was a direct tell.
++  const bool wantHosts = !mSurfacedHostCandidate;
++  const bool wantSrflx =
++      !mSurfacedPublicCandidate && !mJsConfiguration.mIceServers.IsEmpty();
++  if (!ShouldSpoofCandidateIP() || (!wantHosts && !wantSrflx)) {
++    return 0;
++  }
++
++  auto ipv4Opt = SpoofIP(false);
++  auto ipv6Opt = SpoofIP(true);
++  std::string spoofIp = ipv4Opt ? ipv4Opt.value()
++                                : (ipv6Opt ? ipv6Opt.value() : std::string());
++  if (spoofIp.empty()) {
++    return 0;
++  }
++
++  // Attach to the first media section of the local description. Prefer the
++  // pending description (offer just set); fall back to current.
++  const std::string& sdp = !mPendingLocalDescription.empty()
++                               ? mPendingLocalDescription
++                               : mCurrentLocalDescription;
++  if (sdp.empty()) {
++    return 0;
++  }
++  std::string mid = FirstSdpLineValue(sdp, "a=mid:");
++  std::string ufrag = FirstSdpLineValue(sdp, "a=ice-ufrag:");
++  if (mid.empty() || ufrag.empty()) {
++    return 0;
++  }
++
++  // One ephemeral port, shared by the UDP host candidate and the srflx, exactly
++  // as real Firefox reuses its local RTP port across both: the real host's when
++  // one surfaced. Remember it so the getStats() synthetic srflx reports the
++  // same port.
++  uint16_t port =
++      mSurfacedHostUdpPort
++          ? mSurfacedHostUdpPort
++          : RandomEphemeralPort(
++                dom::RoverfoxStorageManager::UserContextId(mWindow.get()));
++  if (wantSrflx) {
++    mFabricatedSrflxPort = port;
++    mFabricatedSrflxUfrag = NS_ConvertUTF8toUTF16(ufrag.c_str());
++    if (mFabricatedSrflxStatsId.IsEmpty()) {
++      // Candidate stats ids are 8 lowercase hex digits.
++      char id[9];
++      SprintfLiteral(id, "%08x",
++                     static_cast<uint32_t>(mozilla::RandomUint64OrDie()));
++      mFabricatedSrflxStatsId.AssignASCII(id);
++    }
++  }
++
++  // mDNS .local hostname for the host candidates, like real Firefox
++  // (obfuscate_host_addresses). PCUuidGenerator yields "{uuid}"; strip braces.
++  // Both host candidates (UDP + TCP) share the same hostname, as real FF does.
++  std::string mdnsHost;
++  if (mUuidGen) {
++    std::string uuid;
++    if (mUuidGen->Generate(&uuid)) {
++      if (!uuid.empty() && uuid.front() == '{') uuid.erase(0, 1);
++      if (!uuid.empty() && uuid.back() == '}') uuid.pop_back();
++      mdnsHost = uuid + ".local";
++    }
++  }
++  if (wantHosts && mdnsHost.empty()) {
++    return 0;
++  }
++
++  // Helper: append an a=candidate line into both local-description strings,
++  // right after the first m-section's a=mid: line. The SDP attribute form is
++  // "a=candidate:<foundation>..." (no leading "candidate:"). Captures `this` and
++  // `mid` BY VALUE so it stays valid when copied into the delayed srflx runnable
++  // below (which keeps the PC alive via a strong RefPtr).
++  auto injectIntoSdp = [this, mid](const std::string& candStr) {
++    std::string sdpCand = candStr;
++    const std::string kCandPrefix = "candidate:";
++    if (sdpCand.compare(0, kCandPrefix.size(), kCandPrefix) == 0) {
++      sdpCand.erase(0, kCandPrefix.size());
++    }
++    std::string candLine = "a=candidate:" + sdpCand + "\r\n";
++    auto into = [&](std::string& target) {
++      if (target.empty()) return;
++      std::string midLine = "a=mid:" + mid;
++      size_t pos = target.find(midLine);
++      if (pos == std::string::npos) {
++        target += candLine;
++        return;
++      }
++      size_t eol = target.find('\n', pos);
++      if (eol == std::string::npos) {
++        target += "\r\n" + candLine;
++      } else {
++        target.insert(eol + 1, candLine);
++      }
++    };
++    into(mPendingLocalDescription);
++    into(mCurrentLocalDescription);
++  };
++
++  // Mark surfaced now so re-entrant ICE-state changes during the delay below
++  // don't fabricate a second set.
++  if (wantHosts) {
++    mSurfacedHostCandidate = true;
++    mSurfacedHostUdpPort = port;
++  }
++  if (wantSrflx) {
++    mSurfacedPublicCandidate = true;
++  }
++
+   JSErrorResult rv;
+-  mPCObserver->OnIceCandidate(level, ObString(mid.c_str()),
+-                              ObString(candidate.c_str()),
+-                              ObString(ufrag.c_str()), rv);
++
++  // STEP 1: the two host candidates first (UDP foundation 0, TCP foundation 2),
++  // sharing one mDNS hostname -- the exact pair real Firefox emits. CreepJS
++  // latches the first (UDP host) as "host connection" and its foundation 0 as
++  // "type & base ip". Neither carries a real IP (.local / port 9), so an
++  // IP-from-SDP probe still sees 0.0.0.0 and keeps waiting, just like a real
++  // browser whose srflx round-trip is still in flight.
++  if (wantHosts) {
++    std::ostringstream hostUdp;
++    hostUdp << "candidate:0 1 UDP " << kHostUdpPriority << " " << mdnsHost << " "
++            << port << " typ host";
++    std::string hostUdpCand = hostUdp.str();
++    injectIntoSdp(hostUdpCand);
++    mPCObserver->OnIceCandidate(0, ObString(mid.c_str()),
++                                ObString(hostUdpCand.c_str()),
++                                ObString(ufrag.c_str()), rv);
++
++    std::ostringstream hostTcp;
++    hostTcp << "candidate:2 1 TCP " << kHostTcpPriority << " " << mdnsHost
++            << " 9 typ host tcptype active";
++    std::string hostTcpCand = hostTcp.str();
++    injectIntoSdp(hostTcpCand);
++    mPCObserver->OnIceCandidate(0, ObString(mid.c_str()),
++                                ObString(hostTcpCand.c_str()),
++                                ObString(ufrag.c_str()), rv);
++  }
++
++  if (!wantSrflx) {
++    return 0;
++  }
++
++  // STEP 2: the srflx (foundation 1, spoof/proxy IP, SAME port as the UDP host),
++  // delayed by a realistic STUN round-trip so the timing matches a real gather.
++  // The SDP line is added just before the event fires, so a fingerprinter that
++  // reads pc.localDescription.sdp inside the candidate handler (CreepJS's
++  // getIPAddress) sees the public IP on this event -> "stun connection" + "ip"
++  // populate. A strong ref keeps the PC alive across the delay; bail if closed.
++  std::ostringstream srflx;
++  srflx << "candidate:1 1 UDP " << kSrflxPriority << " " << spoofIp << " "
++        << port << " typ srflx raddr 0.0.0.0 rport 0";
++  std::string srflxCand = srflx.str();
++
++  RefPtr<PeerConnectionImpl> self(this);
++  std::string midCopy = mid;
++  std::string ufragCopy = ufrag;
++  const uint32_t delayMs = RandomSrflxDelayMs();
++  GetMainThreadSerialEventTarget()->DelayedDispatch(
++      NS_NewRunnableFunction(
++          "PeerConnectionImpl::EmitFabricatedSrflx",
++          [self, srflxCand, midCopy, ufragCopy, injectIntoSdp]() {
++            if (self->IsClosed() || !self->mPCObserver) {
++              return;
++            }
++            injectIntoSdp(srflxCand);
++            JSErrorResult rv2;
++            self->mPCObserver->OnIceCandidate(
++                0, ObString(midCopy.c_str()), ObString(srflxCand.c_str()),
++                ObString(ufragCopy.c_str()), rv2);
++          }),
++      delayMs);
++  return delayMs;
+ }
+ 
+ // Implements the steps to "change the selected candidate pair and state".
+@@ -3514,6 +4030,47 @@ void PeerConnectionImpl::IceConnectionStateChange(
+   // 12. If connectionIceConnectionStateChanged is true, fire an event
+   //     named iceconnectionstatechange at connection.
+   if (connectionIceConnectionStateChanged) {
++    // Camoufox: behind a TCP proxy, ICE fails almost immediately and gathering
++    // never reaches "complete" (no null-candidate event fires), so the
++    // gathering-complete trigger never runs. The ICE connection state DOES
++    // change (-> Failed within ~20ms), and by now SetLocalDescription has
++    // populated the local SDP. Fabricate the synthetic srflx here too, on any
++    // terminal/active ICE state, if none surfaced. Idempotent via
++    // mSurfacedPublicCandidate.
++    if (mIceConnectionState == RTCIceConnectionState::Failed ||
++        mIceConnectionState == RTCIceConnectionState::Disconnected ||
++        mIceConnectionState == RTCIceConnectionState::Connected ||
++        mIceConnectionState == RTCIceConnectionState::Completed) {
++      // Camoufox: when ICE failed before gathering ever started (forced proxy,
++      // no TURN), stock Firefox's observable sequence is still
++      // new -> gathering -> [candidates] -> complete -> null candidate. Walk
++      // it here around the fabricated candidates, otherwise the page sits at
++      // "new" forever, which no real Firefox does (daijro/camoufox#774).
++      const bool replayGathering =
++          mIceConnectionState == RTCIceConnectionState::Failed &&
++          mIceGatheringState == RTCIceGatheringState::New;
++      if (replayGathering) {
++        IceGatheringStateChange(aTransportId,
++                                dom::RTCIceGathererState::Gathering);
++      }
++      MaybeFabricateSrflxCandidate();
++      if (replayGathering) {
++        // After the delayed fabricated srflx (RandomSrflxDelayMs <= 90 ms).
++        RefPtr<PeerConnectionImpl> self(this);
++        std::string transportId = aTransportId;
++        GetMainThreadSerialEventTarget()->DelayedDispatch(
++            NS_NewRunnableFunction(
++                "PeerConnectionImpl::CompleteReplayedGathering",
++                [self, transportId]() {
++                  if (self->IsClosed()) {
++                    return;
++                  }
++                  self->IceGatheringStateChange(
++                      transportId, dom::RTCIceGathererState::Complete);
++                }),
++            120);
++      }
++    }
+     pcObserver->OnStateChange(PCObserverStateType::IceConnectionState, rv);
+   }
+ 
+@@ -3678,6 +4235,25 @@ void PeerConnectionImpl::IceGatheringStateChange(
+     return;
+   }
+ 
++  // Camoufox: if spoofing is on but ICE produced no public candidate (TCP
++  // proxy), the fabricated srflx arrives a STUN round trip from now. Stock
++  // never sends a candidate after end-of-candidates, so finish gathering only
++  // once it has. The second call finds the srflx surfaced and goes through.
++  if (state == dom::RTCIceGathererState::Complete) {
++    if (uint32_t srflxDelayMs = MaybeFabricateSrflxCandidate()) {
++      RefPtr<PeerConnectionImpl> self(this);
++      GetMainThreadSerialEventTarget()->DelayedDispatch(
++          NS_NewRunnableFunction(
++              "PeerConnectionImpl::CompleteGatheringAfterSrflx",
++              [self, aTransportId]() {
++                self->IceGatheringStateChange(
++                    aTransportId, dom::RTCIceGathererState::Complete);
++              }),
++          srflxDelayMs + 1);
++      return;
++    }
++  }
++
+   // Set transport.[[IceGathererState]] to gathering.
+   // or
+   // Set transport.[[IceGathererState]] to complete.
+@@ -3790,11 +4366,27 @@ void PeerConnectionImpl::UpdateDefaultCandidate(
+     const std::string& defaultRtcpAddr, uint16_t defaultRtcpPort,
+     const std::string& transportId) {
+   CSFLogDebug(LOGTAG, "%s", __FUNCTION__);
++
++  // sanitize the default candidate addresses if IP spoofing is enabled
++  std::string sanitizedDefaultAddr = defaultAddr;
++  std::string sanitizedDefaultRtcpAddr = defaultRtcpAddr;
++
++  if (ShouldSpoofCandidateIP()) {
++    // apply masking
++    if (!defaultAddr.empty()) {
++      sanitizedDefaultAddr = SpoofCandidateIP(defaultAddr);
++    }
++    if (!defaultRtcpAddr.empty()) {
++      sanitizedDefaultRtcpAddr = SpoofCandidateIP(defaultRtcpAddr);
++    }
++  }
++
++  // use the sanitized addresses
+   mJsepSession->UpdateDefaultCandidate(
+-      defaultAddr, defaultPort, defaultRtcpAddr, defaultRtcpPort, transportId);
++      sanitizedDefaultAddr, defaultPort, sanitizedDefaultRtcpAddr, defaultRtcpPort, transportId);
+   if (mUncommittedJsepSession) {
+     mUncommittedJsepSession->UpdateDefaultCandidate(
+-        defaultAddr, defaultPort, defaultRtcpAddr, defaultRtcpPort,
++        sanitizedDefaultAddr, defaultPort, sanitizedDefaultRtcpAddr, defaultRtcpPort,
+         transportId);
+   }
+ }
+@@ -4578,8 +5170,10 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
+ 
+   uint64_t winId = mWindow->WindowID();
+ 
+-  bool default_address_only = Preferences::GetBool(
+-      "media.peerconnection.ice.default_address_only", false);
++  bool default_address_only =
++      Preferences::GetBool("media.peerconnection.ice.default_address_only",
++                           false) ||
++      ShouldSpoofCandidateIP();
+   default_address_only |=
+       !MediaManager::Get()->IsActivelyCapturingOrHasAPermission(winId);
+   return default_address_only;
+diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.h b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
+index dfda4b5b9c..c7f2592edf 100644
+--- a/dom/media/webrtc/jsapi/PeerConnectionImpl.h
++++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
+@@ -610,8 +610,21 @@ class PeerConnectionImpl final
+   RefPtr<MediaPipeline> GetMediaPipelineForTrack(
+       dom::MediaStreamTrack& aRecvTrack);
+ 
+-  void CandidateReady(const std::string& candidate,
++  void CandidateReady(const std::string& candidate_,
+                       const std::string& transportId, const std::string& ufrag);
++
++  // The address this connection's context reports: the one it set through
++  // setWebRTCIPv4/6, else the launch-level webrtc:ipv4/ipv6.
++  std::optional<std::string> SpoofIP(bool aIPv6) const;
++  bool ShouldSpoofCandidateIP() const;
++  nsresult SanitizeSDPForIPLeak(std::string& sdp);
++  std::string SpoofCandidateIP(const std::string& candidate);
++  // Camoufox: when spoofing is on and ICE surfaced no public candidate (TCP
++  // proxy: STUN is UDP, can't traverse, so no srflx forms), fabricate a
++  // synthetic srflx carrying the spoof IP into the live candidate stream and
++  // the local SDP so WebRTC reports the proxy IP instead of n/a. Returns the
++  // delay in ms before a fabricated srflx reaches the page, 0 if none.
++  uint32_t MaybeFabricateSrflxCandidate();
+   void SendLocalIceCandidateToContent(uint16_t level, const std::string& mid,
+                                       const std::string& candidate,
+                                       const std::string& ufrag);
+@@ -709,6 +722,24 @@ class PeerConnectionImpl final
+   unsigned int mDataChannelsClosed = 0;
+ 
+   bool mForceIceTcp;
++  // Camoufox: set true once a public (srflx/prflx/relay) candidate has been
++  // surfaced to content, so MaybeFabricateSrflxCandidate() only fabricates when
++  // ICE produced none (the TCP-proxy case where STUN can't form a srflx).
++  bool mSurfacedPublicCandidate = false;
++  // Camoufox: the port of the fabricated srflx, so the getStats() synthetic
++  // entry reports the SAME port as the candidate string / SDP line. 0 = none.
++  uint16_t mFabricatedSrflxPort = 0;
++  // Camoufox: the fabricated srflx's getStats() id, in the shape real candidate
++  // ids have (8 hex digits), fixed for the life of the connection.
++  nsString mFabricatedSrflxStatsId;
++  // Camoufox: the local ICE ufrag the fabricated srflx was emitted under; its
++  // getStats() entry reports it as usernameFragment, as a real candidate does.
++  nsString mFabricatedSrflxUfrag;
++  // Camoufox: set once a host candidate reached content (real or fabricated),
++  // with the UDP host's port, so a fabricated srflx never brings a second host
++  // set and shares the host's port as a real gather does.
++  bool mSurfacedHostCandidate = false;
++  uint16_t mSurfacedHostUdpPort = 0;
+   Maybe<dom::RTCRtcpMuxPolicy> mRtcpMuxPolicy;
+   RefPtr<MediaTransportHandler> mTransportHandler;
+ 
+diff --git a/dom/media/webrtc/jsapi/moz.build b/dom/media/webrtc/jsapi/moz.build
+index 92c2255785..d1c4a6788a 100644
+--- a/dom/media/webrtc/jsapi/moz.build
++++ b/dom/media/webrtc/jsapi/moz.build
+@@ -72,3 +72,6 @@ EXPORTS.mozilla.dom += [
+ ]
+ 
+ FINAL_LIBRARY = "xul"
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+diff --git a/dom/media/webrtc/transport/common.build b/dom/media/webrtc/transport/common.build
+index 215d61190d..b7d83085ea 100644
+--- a/dom/media/webrtc/transport/common.build
++++ b/dom/media/webrtc/transport/common.build
+@@ -36,6 +36,7 @@ transport_cppsrcs = [
+ ]
+ 
+ LOCAL_INCLUDES += [
++    "/camoucfg",
+     "/dom/media/webrtc/transport/",
+     "/dom/media/webrtc/transport/third_party/",
+     "/dom/media/webrtc/transport/third_party/nICEr/src/crypto",
+diff --git a/dom/media/webrtc/transport/nr_socket_prsock.cpp b/dom/media/webrtc/transport/nr_socket_prsock.cpp
+index f15df437c8..824c40de63 100644
+--- a/dom/media/webrtc/transport/nr_socket_prsock.cpp
++++ b/dom/media/webrtc/transport/nr_socket_prsock.cpp
+@@ -111,6 +111,10 @@ nrappkit copyright:
+ #include "prnetdb.h"
+ #include "runnable_utils.h"
+ 
++// Camoufox: for the identity's ephemeral port range in CreateSocket.
++#include "MaskConfig.hpp"
++#include "mozilla/RandomNum.h"
++
+ #if defined(MOZILLA_INTERNAL_API)
+ // csi_platform.h deep in nrappkit defines LOG_INFO and LOG_WARNING
+ #  ifdef LOG_INFO
+@@ -1582,11 +1586,20 @@ static nr_socket_vtbl nr_socket_local_vtbl = {2,
+                                               nr_socket_local_listen,
+                                               nr_socket_local_accept};
+ 
++// Camoufox: the range this host's kernel gives a socket bound to port 0.
++#if defined(XP_WIN) || defined(XP_MACOSX)
++static constexpr std::pair<uint16_t, uint16_t> kHostEphemeralPorts{49152, 65535};
++#else
++static constexpr std::pair<uint16_t, uint16_t> kHostEphemeralPorts{32768, 60999};
++#endif
++
+ /* static */
+ int NrSocketBase::CreateSocket(
+     nr_transport_addr* addr, RefPtr<NrSocketBase>* sock,
+     const std::shared_ptr<NrSocketProxyConfig>& config) {
+   int r, _status;
++  uint16_t port = 0;
++  std::optional<std::pair<uint16_t, uint16_t>> ports;
+ 
+   if (IsForbiddenAddress(addr)) {
+     ABORT(R_REJECTED);
+@@ -1596,25 +1609,51 @@ int NrSocketBase::CreateSocket(
+     ABORT(R_REJECTED);
+   }
+ 
+-  // create IPC bridge for content process
+-  if (XRE_IsParentProcess()) {
+-    // TODO: Make NrTcpSocket work on the parent process
+-    *sock = new NrSocket();
+-  } else if (XRE_IsSocketProcess()) {
+-    if (addr->protocol == IPPROTO_TCP) {
+-      *sock = new NrTcpSocket(config);
+-    } else {
+-      *sock = new NrSocket();
++  // Camoufox: a UDP socket's port reaches the page in its ICE candidates. When
++  // the identity's OS gives out ephemeral ports from another range than this
++  // host does, pick one from the identity's range, at random as its kernel
++  // would, so a Windows identity on Linux never shows a Linux port.
++  if (addr->protocol == IPPROTO_UDP &&
++      !nr_transport_addr_get_port(addr, &port) && port == 0) {
++    ports = MaskConfig::SpoofedEphemeralPorts();
++    if (ports == kHostEphemeralPorts) {
++      ports.reset();
+     }
+-  } else {
+-    if (addr->protocol == IPPROTO_TCP) {
+-      *sock = new NrTcpSocket(config);
++  }
++
++  // A chosen port can be taken; the kernel would have tried another.
++  for (int attempt = 0; attempt < (ports ? 64 : 1); ++attempt) {
++    nr_transport_addr bindAddr;
++    nr_transport_addr_copy(&bindAddr, addr);
++    if (ports) {
++      uint32_t span = static_cast<uint32_t>(ports->second - ports->first) + 1u;
++      nr_transport_addr_set_port(
++          &bindAddr, ports->first + static_cast<int>(
++                                        mozilla::RandomUint64OrDie() % span));
++      nr_transport_addr_fmt_addr_string(&bindAddr);
++    }
++
++    // create IPC bridge for content process
++    if (XRE_IsParentProcess()) {
++      // TODO: Make NrTcpSocket work on the parent process
++      *sock = new NrSocket();
++    } else if (XRE_IsSocketProcess()) {
++      if (addr->protocol == IPPROTO_TCP) {
++        *sock = new NrTcpSocket(config);
++      } else {
++        *sock = new NrSocket();
++      }
+     } else {
+-      *sock = new NrUdpSocketIpc();
++      if (addr->protocol == IPPROTO_TCP) {
++        *sock = new NrTcpSocket(config);
++      } else {
++        *sock = new NrUdpSocketIpc();
++      }
+     }
+-  }
+ 
+-  r = (*sock)->create(addr);
++    r = (*sock)->create(ports ? &bindAddr : addr);
++    if (!r) break;
++  }
+   if (r) ABORT(r);
+ 
+   _status = 0;
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index 6cf202d17a..6a5b50744d 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -961,6 +961,17 @@ partial interface Window {
+   undefined setTimezone(DOMString timezone);
+ };
+ 
++// WebRTC IP interfaces for privacy-preserving IP spoofing
++partial interface Window {
++  [Throws, Func="mozilla::dom::WebRTCIPManager::IsIPv4FunctionEnabledForWebIDL"]
++  undefined setWebRTCIPv4(DOMString ipv4);
++};
++
++partial interface Window {
++  [Throws, Func="mozilla::dom::WebRTCIPManager::IsIPv6FunctionEnabledForWebIDL"]
++  undefined setWebRTCIPv6(DOMString ipv6);
++};
++
+ // Used to assign marks to appear on the scrollbar when
+ // finding on a page.
+ partial interface Window {

@@ -1,13 +1,15 @@
 /**
  * The launcher entry points: Camoufox(), NewBrowser(), NewContext().
  *
- * TypeScript twin of pythonlib/camoufox/sync_api.py (and async_api.py, whose
+ * TypeScript twin of python/src/camoufox/sync_api.py (and async_api.py, whose
  * names async_api.ts re-exports). The Python library ships a sync and an
  * async variant because Playwright-Python has two APIs; playwright-core has
  * only one (promise-based), so the behaviours of both live here: the
  * no-viewport default, the stock media defaults, CPU-core pinning with its
  * launch lock (async_api), and virtual-display teardown.
  */
+
+import { ensureModel } from "fpgen-js";
 import {
 	type Browser,
 	type BrowserContext,
@@ -16,7 +18,6 @@ import {
 } from "playwright-core";
 import * as cpuAffinity from "./cpu_affinity.js";
 import { generateContextFingerprint } from "./fingerprints.js";
-import { ensureModel } from "./fpgen/index.js";
 import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "./ip.js";
 import {
 	applyNoViewport,
@@ -24,7 +25,9 @@ import {
 	attachNoViewportDefault,
 	attachStockMediaDefaults,
 	attachVirtualDisplay,
+	contextIdentity,
 	driverPid,
+	hostIdentity,
 	type LaunchOptions,
 	launchOptions,
 	pinnedCoreCount,
@@ -98,8 +101,12 @@ export async function NewBrowser(
 	}
 
 	let fromOptions = from_options;
+	// Options the caller built leave its contexts to the caller
+	// (hostIdentity).
+	let canvasNoise: boolean | undefined = false;
 	try {
 		if (!fromOptions || !Object.keys(fromOptions).length) {
+			canvasNoise = kwargs.canvas_noise ?? undefined;
 			// Opt-in (2026-09-17). Pinning keeps the identity's core count by
 			// constraining the browser to that many cores; it costs real CPU,
 			// needs a launch lock, and does nothing on macOS. Off, the host's own
@@ -132,6 +139,7 @@ export async function NewBrowser(
 			Boolean(persistent_context),
 			noViewportDefault,
 			virtualDisplay,
+			canvasNoise,
 		);
 	try {
 		if (!pinTo) {
@@ -160,6 +168,7 @@ async function launchWith(
 	persistentContext: boolean,
 	noViewportDefault: boolean,
 	virtualDisplay: VirtualDisplay | null,
+	canvasNoise: boolean | undefined,
 ): Promise<Browser | BrowserContext> {
 	// Persistent context. Python passes user_data_dir inside the options; the
 	// JS API takes it positionally. A user_data_dir alone also selects it.
@@ -189,19 +198,23 @@ async function launchWith(
 	}
 
 	// Browser
+	const identity = await hostIdentity(fromOptions, canvasNoise);
 	const browser = await playwright.launch(fromOptions);
 	if (noViewportDefault) {
 		attachNoViewportDefault(browser);
 	}
 	attachStockMediaDefaults(browser);
 	attachDesktopOnlyWarning(browser);
+	(browser as any)._camoufoxHostIdentity = identity;
 	return attachVirtualDisplay(browser, virtualDisplay);
 }
 
 export interface NewContextOptions extends Record<string, any> {
 	/** A fingerprint preset to use. If omitted, fpgen draws a new identity. */
 	preset?: Record<string, any>;
-	/** Target OS for the drawn identity ("windows", "macos", "linux"). */
+	/** Target OS for the drawn identity ("windows", "macos", "linux"). On a
+	 * browser launched without canvas noise, contexts claim the host's OS and
+	 * GPU, and another os or preset throws ValueError. */
 	os?: string;
 	/** Firefox major version to claim in the UA. Defaults to the browser's own. */
 	ff_version?: string;
@@ -212,12 +225,6 @@ export interface NewContextOptions extends Record<string, any> {
 	/** Per-context geolocation. */
 	geolocation?: { latitude: number; longitude: number; accuracy?: number };
 }
-
-/** Injection point for the proxy exit-IP lookup (tests replace it). */
-export const contextDeps = {
-	resolveProxyGeo: (proxy: ProxyConfig) =>
-		proxyExitGeo(ProxyHelper.asString(proxy)),
-};
 
 /** snake_case -> camelCase, as camoufox.server.camel_case does. */
 export function camelCase(snake: string): string {
@@ -264,16 +271,18 @@ export async function NewContext(
 	// aren't explicitly provided.
 	let webrtcIp = webrtc_ip;
 	if (proxy && (!webrtcIp || !("timezoneId" in contextOptions))) {
-		const [exitIp, timezone] = await contextDeps.resolveProxyGeo(proxy);
+		const [exitIp, timezone] = await proxyExitGeo(ProxyHelper.asString(proxy));
 		webrtcIp ||= exitIp;
 		if (!("timezoneId" in contextOptions)) contextOptions.timezoneId = timezone;
 	}
 
+	const [contextOs, webglConfig] = contextIdentity(browser, os, preset);
 	const fp = generateContextFingerprint({
 		preset: preset as any,
-		os,
+		os: contextOs,
 		ff_version: ffVersion,
 		webrtc_ip: webrtcIp,
+		webgl_config: webglConfig,
 	});
 
 	// Merge the generated context options with user overrides (user wins). They
@@ -291,8 +300,6 @@ export async function NewContext(
 	}
 
 	const context = await browser.newContext(opts);
-	await context.addInitScript(
-		(fp as any).initScript ?? (fp as any).init_script,
-	);
+	await context.addInitScript(fp.init_script);
 	return context;
 }

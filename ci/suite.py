@@ -7,11 +7,11 @@ holding that same version of the client library. Nothing here is committed; it
 is rebuilt per run, which is what "test against the suite for this browser" has
 to mean if the result is going to be trustworthy.
 
-On top of that, `overlay()` copies `tests/camoufox/` in -- the handful of tests
+On top of that, `overlay()` copies `browser/tests/playwright/camoufox/` in -- the handful of tests
 for behaviour upstream has no equivalent for, or asserts the opposite of on
 purpose. They run against upstream's own conftest and server rather than a
 frozen copy of them, so they cannot drift out of step with the suite around
-them. See tests/camoufox/README.md.
+them. See browser/tests/playwright/camoufox/README.md.
 
 Run:
     python3 -m ci.suite --tag v1.62.0
@@ -31,7 +31,7 @@ from typing import List, Optional
 from ._util import CI_DIR, REPO_ROOT, WORK_DIR, die, log, run, write_json
 
 TARBALL = "https://github.com/microsoft/playwright-python/archive/refs/tags/{tag}.tar.gz"
-CAMOUFOX_TESTS = REPO_ROOT / "tests" / "camoufox"
+CAMOUFOX_TESTS = REPO_ROOT / "browser" / "tests" / "playwright" / "camoufox"
 # Names overlaid last time, so a reused checkout can tell our files from
 # upstream's without guessing from the name.
 OVERLAY_MANIFEST = ".camoufox-overlay.json"
@@ -89,17 +89,9 @@ def make_venv(checkout: Path, tag: str, *, reuse: bool = True) -> Path:
     run([sys.executable, "-m", "venv", str(venv)], check=True)
     run([str(python), "-m", "pip", "install", "--quiet", "--upgrade", "pip"], check=True)
 
-    # Install the suite's OWN pins, not a hand-picked list.
-    #
-    # Guessing them cost a full CI cycle: pytest-asyncio was pinned at 0.21.2
-    # while v1.62.0 needs 1.4.0, and upstream's pyproject sets
-    # asyncio_default_fixture_loop_scope = "session" -- an option 0.21 does not
-    # understand. Its session-scoped browser fixtures then got a function-scoped
-    # event loop and every single test errored at setup with ScopeMismatch,
-    # which reads like the browser is broken and is not.
-    #
-    # The suite knows what it needs, and a future tag that changes its pins just
-    # works instead of failing the same way again.
+    # Install the suite's own pins. Hand-picked ones once paired pytest-asyncio
+    # 0.21 with a suite needing 1.4, and every test errored at setup with
+    # ScopeMismatch, which reads as a broken browser.
     requirements = checkout / "local-requirements.txt"
     if requirements.exists():
         run([str(python), "-m", "pip", "install", "--quiet", "-r", str(requirements)], check=True)

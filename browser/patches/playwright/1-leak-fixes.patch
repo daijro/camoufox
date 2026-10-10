@@ -1,0 +1,34 @@
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index ccf2153d03..7af722b926 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -2351,28 +2351,7 @@ dom::ModelContext* Navigator::ModelContext() {
+ 
+ /* static */
+ bool Navigator::Webdriver() {
+-#ifdef ENABLE_WEBDRIVER
+-  nsCOMPtr<nsIMarionette> marionette = do_GetService(NS_MARIONETTE_CONTRACTID);
+-  if (marionette) {
+-    bool isBrowserAutomationRunning = false;
+-    marionette->GetIsBrowserAutomationRunning(&isBrowserAutomationRunning);
+-    if (isBrowserAutomationRunning) {
+-      return true;
+-    }
+-  }
+-
+-  nsCOMPtr<nsIRemoteAgent> agent = do_GetService(NS_REMOTEAGENT_CONTRACTID);
+-  if (agent) {
+-    bool isBrowserAutomationRunning = false;
+-    agent->GetIsBrowserAutomationRunning(&isBrowserAutomationRunning);
+-    if (isBrowserAutomationRunning) {
+-      return true;
+-    }
+-  }
+-#endif
+-
+-  // Playwright is automating the browser, so we should pretend to be a webdriver
+-  return true;
++  return false;
+ }
+ 
+ AutoplayPolicy Navigator::GetAutoplayPolicy(AutoplayPolicyMediaType aType) {

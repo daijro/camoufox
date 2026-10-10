@@ -136,6 +136,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     junit = WORK_DIR / f"junit-{gate}.xml"
     junit.parent.mkdir(parents=True, exist_ok=True)
+    # A run that dies before writing junit must not leave the last run's.
+    junit.unlink(missing_ok=True)
     # The browser gate runs the e2e file alone: the unit suite already ran in
     # tier 1, and running it again here would need that job's prerequisites.
     files = ["tests/e2e.test.ts"] if args.browser else []

@@ -1,0 +1,94 @@
+navigator: >-
+    Manually setting navigator properties is not recommended.
+    Device information is automatically generated within Camoufox
+    based on the provided `os`.
+
+locale: >-
+    Use the `locale` parameter in Camoufox instead of setting the config manually.
+
+geolocation: >-
+    Please use the `geoip` parameter in Camoufox instead of setting your geolocation manually.
+    This can lead to detection if your target geolocation does not match your IP.
+    Pass `geoip=True` or a target IP (ex: geoip='123.45.67.89') to let Camoufox populate this data for you.
+
+header-ua: >-
+    Do not set the header.User-Agent manually. Camoufox will generate a User-Agent for you.
+
+viewport: >-
+    Manually setting screen & window properties is not recommended.
+    Screen dimensions are randomly generated within Camoufox
+    based on the provided screen constraints.
+
+custom_fingerprint: >-
+    Passing your own fingerprint is not recommended.
+    Fingerprints are automatically generated within Camoufox
+    based on the provided `os` and `screen` constraints.
+
+proxy_without_geoip: >-
+    When using a proxy, it is heavily recommended that you pass `geoip=True`.
+
+ff_version: >-
+    Spoofing the Firefox version will likely lead to detection.
+    If rotating the Firefox version is absolutely necessary, it would be more advisable to
+    rotate between older versions of Camoufox instead.
+
+no_region: >-
+    Because you did not pass in a locale region, Camoufox will generate one for you.
+    This can cause suspicion if your IP does not match your locale region.
+
+instant_animations: >-
+    instantAnimations makes every finite animation finish at once, so Playwright
+    never waits on one. A page can see it: getComputedTiming() reports a duration
+    of 0 where stock Firefox reports the real one.
+
+is_mobile: >-
+    Camoufox is built for desktops and only draws desktop identities, so is_mobile
+    cannot produce a believable phone and will leak: the page still sees a desktop
+    User-Agent, platform, fonts, GPU and screen. Camoufox ignores is_mobile rather
+    than put the page in Responsive Design Mode, which a page can read too.
+    Use has_touch, device_scale_factor and viewport for the parts you need.
+
+block_webgl: >-
+    Disabling WebGL is not recommended. Many WAFs will check if WebGL is enabled.
+
+canvas_noise: >-
+    Canvas and WebGL readback return random data, as privacy.resistFingerprinting
+    does in LibreWolf, Tor Browser and Mullvad Browser. Stock Firefox does not
+    do this, so the browser reads as a privacy-hardened Firefox. It is on because
+    the identity claims another OS or GPU than this machine's, whose canvas would
+    show the real one. Pass `canvas_noise=False` to keep stock canvas behaviour.
+
+block_images: >-
+    Blocking image requests has been reported to cause detection issues on major WAFs.
+
+custom_fonts_only: >-
+    Disabling OS-specific fonts while spoofing your OS will make your browser fingerprint inconsistent.
+    WAFs can detect this mismatch between your claimed OS and available system fonts.
+
+disable_coop: >-
+    Disabling Cross-Origin-Opener-Policy (COOP) handling can potentially be detected by sophisticated WAFs.
+
+max_touch_points: >-
+    Setting navigator.maxTouchPoints manually overrides Camoufox's touchscreen handling.
+    A non-zero value presents a touch digitizer: Camoufox adds `(any-pointer: coarse)` and
+    the TouchEvent/Touch interfaces to match a touchscreen laptop, while deliberately leaving
+    `(pointer: coarse)` false and `ontouchstart` absent, exactly as a real one does.
+    The rest of your fingerprint is not adjusted to suit, so a device that claims a digitizer
+    but reports a screen size no touchscreen laptop ships with is still inconsistent.
+
+fallback: |-
+    {what} failed, so this identity uses {instead} instead.
+    A substitute is not drawn to match the rest of the identity, and a page may be able to tell.
+    Please report this at https://github.com/daijro/camoufox/issues/new and include:
+
+    {report}
+
+geoip_deprecated: >-
+    The GeoIP source "{name}" is deprecated and will be removed in a future release.
+    "{default}" is the default and resolves locations more accurately.
+    Run `camoufox set --geoip` to switch, or stop passing `geoip_db`.
+
+geoip_frozen: >-
+    The newest "{name}" GeoIP database was built {days} days ago, so its source may have
+    stopped publishing and locations may be out of date. Please report this at
+    https://github.com/daijro/camoufox/issues.

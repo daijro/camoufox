@@ -1,5 +1,5 @@
 /**
- * TypeScript twin of python/src/exceptions.py.
+ * TypeScript twin of python/src/camoufox/exceptions.py.
  *
  * The Python hierarchy leans on builtin bases (FileNotFoundError, ValueError,
  * ImportError) that have no JS analogue; those become plain Error subclasses

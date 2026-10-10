@@ -1,94 +1,88 @@
 # Local builds
-/camoufox-*
-/firefox-*
-/mozilla-unified
+/browser/camoufox-*
+/browser/firefox-*
+/browser/mozilla-unified
 dist/
 bin/
 
 
 # Internal testing
-/extra-docs
-pythonlib/test*
-!pythonlib/tests/
-/.vscode
-/bundle/fonts/extra
+python/test*
+!python/tests/
+/browser/bundle/fonts/extra
 
 # The font bundle is a release asset, not repo content: ~2.1 GB extracted,
 # ~770 MB as .tar.xz, and an xz archive cannot be delta-compressed, so tracking
 # it would append the whole thing to history on every font change. It is pinned
-# by scripts/data/font-bundle.json (asset name + size + sha256) and fetched with
-# `make fetch-fonts`. Only the compressed archive is kept; bundle/fonts/ is
-# extracted on demand.
-/bundle/fonts/
-/bundle/fonts-bundle-*.tar.xz
-/bundle/*.tar.xz.part
-/bundle/langpacks/
-pythonlib/*.png
-scripts/*.png
-scripts/test*
+# by browser/scripts/data/font-bundle.json (asset name + size + sha256) and
+# fetched with `make fetch-fonts`. Only the compressed archive is kept;
+# browser/bundle/fonts/ is extracted on demand.
+/browser/bundle/fonts/
+/browser/bundle/fonts-bundle-*.tar.xz
+/browser/bundle/*.tar.xz.part
+/browser/bundle/langpacks/
+python/*.png
+browser/scripts/*.png
+browser/scripts/test*
 .vscode
 .idea
-/tests/*.disabled
-k8s/
+/browser/tests/playwright/*.disabled
 camoufox-*.*.*/
 
 # Old data
 _old/
 _old_*/
 *.old
+*.bak
 
 # Logs
 wget-log
 *.kate-swp
 *.log
 
-# Python interface
+# Python
+.venv/
 venv/
 venv[0-9]*/
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
 *.mmdb
-pythonlib-dev/
 
 # Closed source patches
 private
 .passwd
 closedsrc
 
-.venv
 *.pem
 .DS_Store
+.claude
 
 # Build outputs
 *.so
-/camoufox
-/omni.ja
-/precomplete
-/dependentlibs.list
-/application.ini
-/platform.ini
-/camoufox.cfg
-/chrome.css
-/properties.json
-/removed-files
-/nul
-/browser/
-/defaults/
-/distribution/
-/fontconfigs/
-/fonts/
-/gmp-clearkey/
-/windows-build/
+/browser/camoufox
+/browser/omni.ja
+/browser/precomplete
+/browser/dependentlibs.list
+/browser/application.ini
+/browser/platform.ini
+/browser/camoufox.cfg
+/browser/properties.json
+/browser/removed-files
+/browser/nul
+/browser/browser/
+/browser/defaults/
+/browser/distribution/
+/browser/fontconfigs/
+/browser/fonts/
+/browser/gmp-clearkey/
+/browser/windows-build/
 _bisect_extract/
-node_modules/
-
 node_modules/
 proxies.txt
 checks-bundle.js
 .env
-
-# Auto-update harness scratch space (evidence, fetched suites, build logs)
-.harness-work/
 
 # CI scratch space (results, junit, the sealed sundial report). Never
 # committed: this is where a stealth run's output lands, and an evidence

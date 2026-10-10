@@ -1,0 +1,148 @@
+diff --git a/dom/geolocation/Geolocation.cpp b/dom/geolocation/Geolocation.cpp
+index 328b7f4406..eed4f20749 100644
+--- a/dom/geolocation/Geolocation.cpp
++++ b/dom/geolocation/Geolocation.cpp
+@@ -37,6 +37,7 @@
+ #include "nsServiceManagerUtils.h"
+ #include "nsThreadUtils.h"
+ #include "nsXULAppAPI.h"
++#include "MaskConfig.hpp"
+ 
+ class nsIPrincipal;
+ 
+@@ -1147,6 +1148,12 @@ void Geolocation::NotifyAllowedRequest(nsGeolocationRequest* aRequest) {
+ /* static */ bool Geolocation::RegisterRequestWithPrompt(
+     nsGeolocationRequest* request) {
+   nsIEventTarget* target = GetMainThreadSerialEventTarget();
++  if (MaskConfig::GetDouble("geolocation:latitude") &&
++      MaskConfig::GetDouble("geolocation:longitude")) {
++    request->RequestDelayedTask(target,
++                                nsGeolocationRequest::DelayedTaskType::Allow);
++    return true;
++  }
+   ContentPermissionRequestBase::PromptResult pr = request->CheckPromptPrefs();
+   if (pr == ContentPermissionRequestBase::PromptResult::Granted) {
+     request->RequestDelayedTask(target,
+diff --git a/dom/geolocation/GeolocationPosition.cpp b/dom/geolocation/GeolocationPosition.cpp
+index 5e24bfceed..b07c76fd6e 100644
+--- a/dom/geolocation/GeolocationPosition.cpp
++++ b/dom/geolocation/GeolocationPosition.cpp
+@@ -7,6 +7,7 @@
+ #include "mozilla/FloatingPoint.h"
+ #include "mozilla/dom/GeolocationCoordinates.h"
+ #include "mozilla/dom/GeolocationPositionBinding.h"
++#include "MaskConfig.hpp"
+ 
+ using mozilla::EqualOrBothNaN;
+ 
+@@ -58,13 +59,19 @@ NS_IMPL_RELEASE(nsGeoPositionCoords)
+ 
+ NS_IMETHODIMP
+ nsGeoPositionCoords::GetLatitude(double* aLatitude) {
+-  *aLatitude = mLat;
++  if (auto value = MaskConfig::GetDouble("geolocation:latitude"))
++    *aLatitude = value.value();
++  else
++    *aLatitude = mLat;
+   return NS_OK;
+ }
+ 
+ NS_IMETHODIMP
+ nsGeoPositionCoords::GetLongitude(double* aLongitude) {
+-  *aLongitude = mLong;
++  if (auto value = MaskConfig::GetDouble("geolocation:longitude"))
++    *aLongitude = value.value();
++  else
++    *aLongitude = mLong;
+   return NS_OK;
+ }
+ 
+@@ -76,7 +83,10 @@ nsGeoPositionCoords::GetAltitude(double* aAltitude) {
+ 
+ NS_IMETHODIMP
+ nsGeoPositionCoords::GetAccuracy(double* aAccuracy) {
+-  *aAccuracy = mHError;
++  if (auto value = MaskConfig::GetDouble("geolocation:accuracy"))
++    *aAccuracy = value.value();
++  else
++    *aAccuracy = mHError;
+   return NS_OK;
+ }
+ 
+diff --git a/dom/geolocation/moz.build b/dom/geolocation/moz.build
+index 170552ab61..b5f1efa0a8 100644
+--- a/dom/geolocation/moz.build
++++ b/dom/geolocation/moz.build
+@@ -73,3 +73,6 @@ BROWSER_CHROME_MANIFESTS += ["test/browser/browser.toml"]
+ MOCHITEST_CHROME_MANIFESTS += ["test/chrome/chrome.toml"]
+ MOCHITEST_MANIFESTS += ["test/mochitest/mochitest.toml"]
+ XPCSHELL_TESTS_MANIFESTS += ["test/unit/xpcshell.toml"]
++
++# Camoufox: include path for MaskConfig.hpp
++LOCAL_INCLUDES += ["/camoucfg"]
+diff --git a/dom/system/NetworkGeolocationProvider.sys.mjs b/dom/system/NetworkGeolocationProvider.sys.mjs
+index 29455e42de..49fd07ac19 100644
+--- a/dom/system/NetworkGeolocationProvider.sys.mjs
++++ b/dom/system/NetworkGeolocationProvider.sys.mjs
+@@ -399,17 +399,52 @@ NetworkGeolocationProvider.prototype = {
+       `Sending IP-address-based geolocation request${logStr} to network service: ${url}`
+     );
+ 
++    // Use CAMOU_CONFIG geolocation if configured
++    let DEFAULT_DEG = -180;
++
++    let latitude = ChromeUtils.camouGetDouble("geolocation:latitude", DEFAULT_DEG);
++    let longitude = ChromeUtils.camouGetDouble("geolocation:longitude", DEFAULT_DEG);
++    let accuracy = ChromeUtils.camouGetDouble("geolocation:accuracy", 0);
++
++    let countDecimalPlaces = (num) => {
++      if (Math.floor(num) === num) return 0;
++      return num.toString().split(".")[1].length || 0;
++    }
++
+     let result;
+     try {
+-      result = await this.fetchLocation(url, wifiData);
+-      lazy.log.info(
+-        `geo provider reported: ${result.location.lng}:${result.location.lat}`
+-      );
+-      let newLocation = new NetworkGeoPositionObject(
+-        result.location.lat,
+-        result.location.lng,
+-        result.accuracy
+-      );
++      let newLocation;
++      if (latitude != DEFAULT_DEG && longitude != DEFAULT_DEG) {
++        // Use the latitude and longitude from CAMOU_CONFIG
++        ChromeUtils.camouDebug(
++          `Use Camoufox geo: ${latitude}:${longitude} accuracy:${accuracy}`
++        );
++        // If accuracy is not set, calculate it using decimal precision
++        if (!accuracy) {
++          let latPrecision = countDecimalPlaces(latitude);
++          let lonPrecision = countDecimalPlaces(longitude);
++          let precision = Math.min(latPrecision, lonPrecision);
++
++          // Estimate accuracy in meters
++          accuracy = (111320 * Math.cos(latitude * Math.PI / 180)) / Math.pow(10, precision);
++        }
++        newLocation = new NetworkGeoPositionObject(
++          latitude,
++          longitude,
++          accuracy
++        );
++      } else {
++        // No CAMOU_CONFIG override, use real geolocation
++        result = await this.fetchLocation(url, wifiData);
++        lazy.log.info(
++          `geo provider reported: ${result.location.lng}:${result.location.lat}`
++        );
++        newLocation = new NetworkGeoPositionObject(
++          result.location.lat,
++          result.location.lng,
++          accuracy || result.accuracy
++        );
++      }
+ 
+       if (this.listener) {
+         this.listener.update(newLocation);

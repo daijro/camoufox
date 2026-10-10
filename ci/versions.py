@@ -25,13 +25,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from typing import Dict, List, Optional, Tuple
 
 from ._util import (
     REPO_ROOT,
+    gh_headers,
     http_json,
     log,
     major,
@@ -42,7 +42,7 @@ from ._util import (
 
 BROWSERS_JSON = "https://raw.githubusercontent.com/microsoft/playwright/{ref}/packages/playwright-core/browsers.json"
 TAGS_API = "https://api.github.com/repos/microsoft/playwright-python/tags?per_page=100"
-PYPROJECT = "pythonlib/pyproject.toml"
+PYPROJECT = "python/pyproject.toml"
 _CEILING = re.compile(r'^playwright\s*=\s*"<\s*([0-9][0-9.]*)"', re.M)
 
 # Consulted only when the network is unavailable or GitHub is rate-limiting an
@@ -57,14 +57,9 @@ FALLBACK_PINS: Tuple[Tuple[str, str], ...] = (
 )
 
 
-def _gh_headers() -> Dict[str, str]:
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    return {"Authorization": f"Bearer {token}"} if token else {}
-
-
 def released_tags(limit: int = 40) -> List[str]:
     """Final playwright-python tags, newest first."""
-    tags = http_json(TAGS_API, headers=_gh_headers())
+    tags = http_json(TAGS_API, headers=gh_headers())
     parsed: List[Tuple[Tuple[int, int, int], str]] = []
     for tag in tags:
         name = tag.get("name", "")

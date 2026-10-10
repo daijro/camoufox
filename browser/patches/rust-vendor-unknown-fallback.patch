@@ -1,0 +1,19 @@
+diff --git a/build/moz.configure/rust.configure b/build/moz.configure/rust.configure
+index ea19412890..f57be9eaab 100644
+--- a/build/moz.configure/rust.configure
++++ b/build/moz.configure/rust.configure
+@@ -429,6 +429,14 @@ def detect_rustc_target(host_or_target, arm_target, rust_supported_targets):
+         if len(narrowed) == 1:
+             return narrowed[0].rust_target
+ 
++        # An autoconf host like x86_64-pc-linux-gnu has vendor "pc", which no
++        # rust target uses, so once rustc lists a second target for the OS
++        # (x86_64-oe-linux-gnu since rustc 1.98) nothing above narrows to one.
++        # Rust spells its canonical Linux targets with "unknown"; prefer that.
++        narrowed = [c for c in candidates if c.target.vendor == "unknown"]
++        if len(narrowed) == 1:
++            return narrowed[0].rust_target
++
+         return None
+ 
+     rustc_target = find_candidate(candidates)

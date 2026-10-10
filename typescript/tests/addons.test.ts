@@ -1,5 +1,5 @@
 /**
- * Mirrors pythonlib/tests/test_addons.py: regression guard for #308, where a
+ * Mirrors python/tests/test_addons.py: regression guard for #308, where a
  * failed first download left an empty addon directory that was trusted
  * forever afterwards.
  */

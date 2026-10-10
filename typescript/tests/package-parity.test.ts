@@ -10,7 +10,7 @@ import { DATA_FILES, LOCAL_DATA } from "../src/paths.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PKG = path.resolve(HERE, "..");
-const PYLIB = path.resolve(PKG, "..", "pythonlib");
+const PYLIB = path.resolve(PKG, "..", "python");
 const pkg = JSON.parse(
 	fs.readFileSync(path.join(PKG, "package.json"), "utf-8"),
 );
@@ -42,9 +42,8 @@ describe("package.json tracks pyproject.toml", () => {
 	});
 
 	it("reads every data file from pythonlib, the one copy", () => {
-		expect(path.resolve(LOCAL_DATA)).toBe(path.join(PYLIB, "camoufox"));
+		expect(path.resolve(LOCAL_DATA)).toBe(path.join(PYLIB, "src", "camoufox"));
 		for (const name of DATA_FILES)
 			expect(fs.existsSync(path.join(LOCAL_DATA, name)), name).toBe(true);
-		expect(fs.existsSync(path.join(PKG, "src", "fpgen", "NOTICE"))).toBe(true);
 	});
 });

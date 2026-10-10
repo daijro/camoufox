@@ -1,5 +1,5 @@
 /**
- * Mirrors pythonlib/tests/test_profile_directory.py (the pkgman half; the
+ * Mirrors python/tests/test_profile_directory.py (the pkgman half; the
  * launch-preflight ordering is covered with the launcher tests): Firefox
  * probes ~/.camoufox at startup even with a Playwright-supplied profile.
  */

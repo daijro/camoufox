@@ -1,5 +1,5 @@
 /**
- * Mirrors pythonlib/tests/test_virtdisplay.py: the screen-geometry
+ * Mirrors python/tests/test_virtdisplay.py: the screen-geometry
  * resolution and the Xvfb argument vector (no X server needed), plus the real
  * Xvfb lifecycle when Xvfb is installed (Linux only).
  *

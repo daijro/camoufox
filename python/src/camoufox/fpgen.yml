@@ -1,0 +1,44 @@
+# Mappings of fpgen fingerprints to Camoufox config properties.
+#
+# Fonts, voices and the rest of what fpgen carries are drawn from Camoufox's own
+# catalogues instead; WebGL is drawn by camoufox/webgl.py. doNotTrack and
+# globalPrivacyControl are prefs Camoufox owns (utils.launch_options), so
+# neither is mapped. fpgen carries header values as lists.
+
+navigator:
+  # fpgen's UAs trail the current release; the version is rewritten to the
+  # Camoufox Firefox version in _cast_to_properties.
+  userAgent: navigator.userAgent
+  appVersion: navigator.appVersion
+  oscpu: navigator.oscpu
+  platform: navigator.platform
+  hardwareConcurrency: navigator.hardwareConcurrency
+  # Never override productSub (#105)
+  # deviceMemory is not in Firefox, and fpgen reports the string "undefined"
+  # Locale is handled separately (locale:*)
+  maxTouchPoints: navigator.maxTouchPoints
+
+screen:
+  availLeft: screen.availLeft
+  availTop: screen.availTop
+  availWidth: screen.availWidth
+  availHeight: screen.availHeight
+  height: screen.height
+  width: screen.width
+  colorDepth: screen.colorDepth
+  pixelDepth: screen.pixelDepth
+
+window:
+  outerHeight: window.outerHeight
+  outerWidth: window.outerWidth
+  # innerWidth/innerHeight are deliberately NOT mapped: Playwright's
+  # set_viewport_size() waits for the page to report the size it set, which a
+  # spoofed value never does (#666; browser/tests/playwright/patches/humanize-edge-deadlock.py).
+  screenX: window.screenX
+  screenY: window.screenY
+  # devicePixelRatio is not mapped: any value but 1 is a spoofing tell unless
+  # the whole geometry is scaled with it.
+
+headers:
+  # accept-language is redundant with locale:*, user-agent with navigator.userAgent
+  accept-encoding: headers.Accept-Encoding

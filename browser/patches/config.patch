@@ -1,0 +1,43 @@
+diff --git a/browser/installer/package-manifest.in b/browser/installer/package-manifest.in
+index 8aa34cf7cc..4112ed9808 100644
+--- a/browser/installer/package-manifest.in
++++ b/browser/installer/package-manifest.in
+@@ -267,6 +267,11 @@
+ @RESPATH@/browser/components/shell/assets/kit.gif
+ #endif
+ 
++; Camoufox specific files
++@RESPATH@/defaults/pref/local-settings.js
++@RESPATH@/distribution/policies.json
++@RESPATH@/camoufox.cfg
++
+ ; [Default Preferences]
+ ; All the pref files must be part of base to prevent migration bugs
+ @RESPATH@/browser/@PREF_DIR@/firefox.js
+diff --git a/lw/moz.build b/lw/moz.build
+index e69de29bb2..484d7bf134 100644
+--- a/lw/moz.build
++++ b/lw/moz.build
+@@ -0,0 +1,12 @@
++FINAL_TARGET_FILES += [
++  "camoufox.cfg",
++  "properties.json"
++]
++
++FINAL_TARGET_FILES.distribution += [
++  "policies.json",
++]
++
++FINAL_TARGET_FILES.defaults.pref += [
++  "local-settings.js",
++]
+diff --git a/moz.build b/moz.build
+index 2eb5922b24..fe667fc5f6 100644
+--- a/moz.build
++++ b/moz.build
+@@ -362,3 +362,5 @@ SPHINX_TREES["jsloader"] = "docs/jsloader"
+ SPHINX_TREES["ai-agent-tools"] = "docs/ai-agent-tools"
+ 
+ include("build/templates.mozbuild")
++
++DIRS += ["lw"]

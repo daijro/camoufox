@@ -4,7 +4,7 @@
 One suite: playwright-python's own tests, fetched fresh at the tag
 `ci/versions.py` resolved for this browser, run unmodified with
 `ci/skiplist.yml` applied, plus the Camoufox-specific modules `ci/suite.py`
-overlays from `tests/camoufox/`.
+overlays from `browser/tests/playwright/camoufox/`.
 
 This is the conformance check -- does Camoufox still honour the automation
 contract its users hold it to -- and, through the overlay, the regression check
@@ -47,15 +47,9 @@ from .pw_camoufox_plugin import ISOLATED_WORLD, MAIN_WORLD
 from .suite import prepare
 from .versions import resolve
 
-# What "the suite" means. Named explicitly rather than pointed at `tests/`,
-# because the one thing deliberately left out has to be visible.
-#
-# This used to be `tests/async/` alone, which excluded 722 tests -- 31% of the
-# suite -- with nothing recorded anywhere to say so. That was not a decision:
-# the vendored fork in tests/ carried `async/` and `async_imp/` and no sync
-# suite, and this runner was pointed at the same shape without checking what
-# upstream had. The sync tests were never incompatible; they had simply never
-# been run.
+# The suite is named path by path rather than as `tests/`, so anything left out
+# is visible. Pointing at `tests/async/` alone once dropped 722 tests (31%)
+# without anyone deciding to.
 class Group(NamedTuple):
     """A set of paths that share one pytest process, and whether it shards."""
 
@@ -63,20 +57,11 @@ class Group(NamedTuple):
     sharded: bool
 
 
-# Each group gets its OWN pytest process. This is not tidiness: upstream's sync
-# suite is a greenlet wrapper and its async suite runs under pytest-asyncio, and
-# putting them in one process breaks the loop for whichever runs second --
-#
-#     RuntimeError: Runner.run() cannot be called from a running event loop
-#
-# Measured: async alone, 1526 passed / 1 timing flake. async + one sync module,
-# 14 failed. Sync first, 46 errors. The damage lands in async fixture setup, so
-# it reads as "the fetch tests are flaky" rather than as a harness fault, and the
-# retry logic quietly hides it -- 50 tests passed only on retry before this split.
-#
-# tests/common/ and test_reference_count_async.py each start their own Playwright
-# inside the test body, which cannot happen while session fixtures hold a loop.
-# They are fine together (6 passed) but not with the suites above.
+# Each group gets its own pytest process: the sync suite's greenlets and the
+# async suite's pytest-asyncio loop break each other in one process ("Runner.run()
+# cannot be called from a running event loop"), which retries then hid as flakes.
+# tests/common/ and test_reference_count_async.py start their own Playwright, so
+# they cannot share a process with session fixtures holding a loop.
 GROUPS: Tuple[Group, ...] = (
     Group(("tests/async/",), sharded=True),
     # The sync API is a greenlet wrapper over the same Juggler traffic, so much of
@@ -94,71 +79,25 @@ GROUPS: Tuple[Group, ...] = (
 TARGETS: Tuple[str, ...] = tuple(t for g in GROUPS for t in g.targets)
 
 
-# The isolated pass is a classifier: its only question is "does this test pass
-# as Camoufox ships?". Both settings below bound what a "no" is allowed to cost,
-# and neither applies to the passes that adjudicate afterwards.
-#
-# Some isolated failures do not fail -- they HANG, because the waits involved
-# (a Twisted future from the test server, an asyncio future a binding was meant
-# to resolve) have no Playwright timeout behind them. Everything else that
-# isolation breaks fails at Playwright's 30s.
-#
-# The bound below catches the ones it can. The ones it cannot are declared in
-# ISOLATION_HANGS and never reach this pass -- see the note there, which is also
-# where the reason they hang is written down.
-#
-# 90s, against a measured worst case of 30.4s across all 2295 tests in the
-# main-world baseline (only two exceeded 30s, none exceeded 45s) and a 30s
-# Playwright action timeout. Three times the slowest thing that legitimately
-# happens, and half the default.
+# The isolated pass only classifies "does this pass as Camoufox ships?", so it
+# bounds what a "no" can cost. Some isolation failures hang on waits with no
+# Playwright timeout behind them; 90s is three times the slowest test measured in
+# the main-world baseline (30.4s over 2295 tests). Hangs this cannot bound are in
+# ISOLATION_HANGS.
 ISOLATED_TIMEOUT = 90
 
-# upstream's tests/conftest.py sets `reruns = 3` whenever $CI is set, which is
-# the only thing it reads $CI for. Insurance that almost never pays out -- the
-# main-world baseline recorded 2 reruns across all 2295 tests -- and under
-# isolation it turns every deterministic world difference into four attempts:
-# 138 reruns in one shard's isolated pass, recovering nothing, at up to 180s
-# each for the ones that hang. A flake missed here is not lost; it fails the
-# isolated pass, passes pass 2, and is counted as a fallback.
+# Upstream's conftest sets `reruns = 3` under $CI. Under isolation that turns
+# every deterministic world difference into four attempts (138 wasted reruns in
+# one shard); a real flake still passes pass 2 and is counted as a fallback.
 _NO_UPSTREAM_RERUNS = {"CI": ""}
 
 
-# Isolation does not fail these -- it HANGS them, and unlike everything else in
-# this file that is not a duration that can be tuned down.
-#
-# Measured on run 34799668707, with ISOLATED_TIMEOUT already at 90s:
-#
-#   tests/async/  isolated pass completed in 296s. The bound works.
-#   tests/sync/   test_should_work_with_ws_close printed pytest-timeout's
-#                 "+++ Timeout +++" banner at exactly 90s -- and the process
-#                 then sat there for the remaining 1h50m, until the job's
-#                 timeout-minutes killed it.
-#
-# So the signal fires and the test dies; the PROCESS does not. pytest-timeout's
-# signal method raises at the next bytecode boundary, and Playwright's sync API
-# is parked in a greenlet switch that never reaches one cleanly -- the raise
-# lands inside the dispatcher and wedges it. `--timeout-method=thread` would
-# fire, but it kills the interpreter outright and takes the other ~1500 tests in
-# the group with it. There is no per-test value that bounds this.
-#
-# Hence declared rather than discovered. The isolated pass cannot find out that
-# these hang without hanging, so it is told, and they are run in the main world
-# directly -- where they pass, and where they are counted as fallbacks exactly
-# as if isolation had failed them honestly. Coverage is not lost: the same tests
-# run, in the world that can run them.
-#
-# Why not ci/skiplist.yml, which is where tests Camoufox cannot pass live: that
-# list means "fails in the most permissive world", and run_skiplist_audit.py
-# enforces it by running every entry with CI_WORLD=main and failing the build on
-# any that pass. These pass there. An entry would be rejected by the audit, and
-# would be wrong on its own terms.
-#
-# The cause is real and is not a test artifact: page.route_web_socket() works by
-# replacing window.WebSocket from an init script, which under isolation lands in
-# the sandbox, so a socket the page's own script opens is never intercepted and
-# the handler never fires. A user gets no interception and no error. Tracked in
-# https://github.com/daijro/camoufox/issues/775 -- when that is fixed these stop
-# hanging under isolation and this list goes with it.
+# Isolation hangs these, and no per-test timeout can bound it: pytest-timeout's
+# signal lands inside the sync API's greenlet dispatcher and wedges the process
+# (run 34799668707 sat for 1h50m); the thread method kills the whole group. So
+# they run in the main world and count as fallbacks; they pass there, so the
+# skiplist audit would reject them. Cause: route_web_socket()'s init script lands
+# in the sandbox (https://github.com/daijro/camoufox/issues/775).
 ISOLATION_HANGS: Tuple[str, ...] = (
     "tests/async/test_route_web_socket.py",
     "tests/sync/test_route_web_socket.py",
@@ -207,13 +146,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--shard", help="e.g. 3/6")
     parser.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
     parser.add_argument("--name", help="result file name; defaults to playwright[-shard]")
-    # The backstop for a hang nothing else bounds, so it has to be shorter than
-    # the job's timeout-minutes or it can never fire: at 10800 (3h) against a
-    # 120-minute job, GitHub hard-killed the runner first and the junit and
-    # diagnostics uploads went with it. This is per pytest invocation, not per
-    # job. The slowest healthy one measured is 296s, so 20 minutes is roughly
-    # four times the real worst case -- long enough never to cut a slow-but-
-    # working group short, short enough that a wedge costs minutes.
+    # Per pytest invocation, and shorter than the job's timeout-minutes so it can
+    # fire before GitHub kills the runner and the uploads with it. About four
+    # times the slowest healthy group (296s).
     parser.add_argument("--group-timeout", type=int, default=1200)
     parser.add_argument("--retries", type=int, default=1, help="rerun failures this many times")
     parser.add_argument("--headful", action="store_true")
@@ -286,16 +221,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.shard and group.sharded:
             group_env["CI_SHARD"] = args.shard
 
-        # One pytest cache per group, never the checkout's shared default.
-        # `--last-failed` below reads it, and pytest's `lastfailed` accumulates
-        # across every run sharing a cache -- it only drops an entry when that
-        # test is collected again and passes. With one cache for the whole
-        # checkout, the async group's rerun would be selecting from a set the
-        # sync group had also written into: pytest keeps the entries it did not
-        # collect, so the selection was either "everything in this group"
-        # (when this group had no failures of its own, since pytest declines to
-        # filter when nothing selected previously failed) or nothing at all.
-        # Per-group, `--last-failed` means exactly what it says.
+        # One pytest cache per group: `lastfailed` keeps entries a run did not
+        # collect, so a shared cache made `--last-failed` select everything or
+        # nothing instead of this group's failures.
         cache_dir = WORK_DIR / f"pytest-cache{suffix}" / str(index)
         common = [*base_args, "-o", f"cache_dir={cache_dir}"]
         targets = ", ".join(group.targets)
@@ -332,22 +260,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         # --- 1b. declared hangs, straight to the main world ----------------
         #
-        # Above the `failing` guard on purpose: these owe nothing to what the
-        # isolated pass found, and a group with no failures at all still has to
-        # run them or they would silently stop being covered.
-        #
-        # Its own cache_dir, for the reason the shared one is avoided above --
-        # `--last-failed` in pass 2 reads that cache, and a module that failed
-        # here would otherwise be re-selected there and run a second time.
-        #
-        # Unsharded, and on the first shard only, for the reason tests/common/
-        # is unsharded: these are a handful of tests, and sharding a handful
-        # hands most shards an empty selection. pytest exits 5 for that and
-        # writes no junit, which is indistinguishable from "did not run" -- so
-        # the guard below fired on every shard that happened to own none of
-        # them ("collected 6 items / 6 deselected / 0 selected"). Running them
-        # once, whole, also means the fallback accounting is not spread across
-        # shards that each saw a fraction of the module.
+        # Above the `failing` guard so a group with no failures still runs them,
+        # with its own cache so pass 2's `--last-failed` does not re-select them.
+        # Whole, on the first shard only: a shard owning none of them would
+        # select nothing, and pytest's exit 5 with no junit reads as "did not run".
         if hangs and first_shard:
             log(f"  declared isolation hangs [{MAIN_WORLD} world]: {', '.join(hangs)}")
             hang_cache = WORK_DIR / f"pytest-cache{suffix}" / f"{index}-hangs"
@@ -393,23 +309,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         # --- 2. main world: what isolation, specifically, costs -----------
         #
-        # Straight to the other world, with no same-world retry in between.
-        # That retry used to sit here on the theory that a flake must not be
-        # mistaken for a world difference, and measured on the first real run it
-        # cost 7m50s a shard and recovered nothing at all:
-        #
-        #   isolated (full)   335s + 331s   35 and 11 failures
-        #   isolated retry    205s + 265s   0 recovered
-        #   main world         19s +  12s   46 recovered
-        #
-        # Two reasons it was never going to earn that. These failures are
-        # deterministic -- a test reading a global its page script defined does
-        # not intermittently see it -- and failing that way is *slow*, because
-        # the read returns undefined and the test sits on a Playwright timeout
-        # rather than throwing. And upstream's suite already ships
-        # pytest-rerunfailures: the "105 rerun" on that first line is every one
-        # of those 35 failures having been retried three times before the run
-        # even reported them. A flake does not survive that.
+        # No same-world retry first: these failures are deterministic, slow
+        # (a Playwright timeout each), and upstream's pytest-rerunfailures has
+        # already retried them three times. Measured, that retry cost 7m50s a
+        # shard and recovered nothing; the main world recovered all 46.
         isolated_failures.extend(sorted(failing))
         log(f"  fallback [{MAIN_WORLD} world]: {len(failing)} test(s) that isolation failed")
         fallback_junit = WORK_DIR / f"junit{suffix}-{index}-mainworld.xml"
@@ -431,13 +334,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         # --- 3. failed in BOTH worlds: now a retry is worth paying for -----
         #
-        # This set is normally empty, which is exactly why the retry belongs
-        # here and not one phase earlier: it costs nothing on a healthy run, and
-        # on an unhealthy one it answers the only question still open about a
-        # test that no world would satisfy -- whether it is broken or merely
-        # flaky. Re-run in the main world, the permissive one, so a pass means
-        # "not reproducible" rather than "needed isolation off", which is
-        # already known by this point.
+        # Normally empty, so the retry costs nothing on a healthy run. In the
+        # permissive world, so a pass means "not reproducible": flaky, not broken.
         for attempt in range(args.retries):
             if not failing:
                 break

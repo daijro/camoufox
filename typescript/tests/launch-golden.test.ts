@@ -153,6 +153,7 @@ beforeAll(async () => {
 		realFix(config, canPin, { cpuCount: HOST.cpu_count, canPinHost: true });
 	deps.stockProfileDiskCapacityKb = () => HOST.disk_capacity_kb;
 	deps.hostOsKey = () => HOST.host_os_key;
+	deps.hostGpu = async () => HOST.host_gpu;
 	deps.largestDisplay = () => ({
 		width: HOST.display[0],
 		height: HOST.display[1],
@@ -231,6 +232,20 @@ async function replay(scenario: any) {
 		}) as any;
 		restore.push(() => {
 			deps.getRandomPreset = before;
+		});
+	}
+	if (special.host_gpu) {
+		const before = deps.hostGpu;
+		deps.hostGpu = async (executablePath, headless) => {
+			calls.push({
+				fn: "host_gpu",
+				executable_path: executablePath,
+				headless,
+			});
+			return special.host_gpu;
+		};
+		restore.push(() => {
+			deps.hostGpu = before;
 		});
 	}
 	for (const [k, v] of Object.entries(special.process_env ?? {})) {

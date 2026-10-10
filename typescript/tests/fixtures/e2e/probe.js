@@ -79,7 +79,12 @@ async () => {
 		h ^= data.charCodeAt(i);
 		h = Math.imul(h, 0x01000193) >>> 0;
 	}
-	out.canvasHash = `${h.toString(16)}:${data.length}`;
+	// A covered canvas (privacy.resistFingerprinting's placeholder) reads back
+	// fresh random data every time; a rendered one reads back the same.
+	out.canvasHash =
+		canvas.toDataURL() === data
+			? `${h.toString(16)}:${data.length}`
+			: "placeholder";
 	const gl = document.createElement("canvas").getContext("webgl");
 	if (gl) {
 		const dbg = gl.getExtension("WEBGL_debug_renderer_info");

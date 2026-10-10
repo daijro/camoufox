@@ -1,22 +1,14 @@
 /**
- * Launch-option assembly: turns Camoufox's high-level options into the
- * Playwright Firefox launch options plus the CAMOU_CONFIG environment.
- *
- * TypeScript twin of pythonlib/camoufox/utils.py. `launchOptions()` must
- * produce what Python's `launch_options()` produces for the same inputs; the
- * goldens in tests/fixtures/launch (scripts/golden/launch_golden.py) hold it
- * to that.
- *
- * Every collaborator is reached through `utilsDeps`, the counterpart of the
- * module globals the Python tests monkeypatch (`utils.generate_fingerprint`,
- * `utils._stock_profile_disk_capacity_kb`, ...). Production code never
- * touches it.
+ * Launch-option assembly, the twin of utils.py: launchOptions() must return what
+ * launch_options() does (tests/launch-golden.test.ts). `utilsDeps` holds what the
+ * Python tests monkeypatch.
  */
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { inspect } from "node:util";
+import { ensureModel } from "fpgen-js";
 import { UAParser } from "ua-parser-js";
 import { addDefaultAddons, confirmPaths, type DefaultAddon } from "./addons.js";
 import * as coherence from "./coherence.js";
@@ -34,7 +26,7 @@ import {
 	clampWindowPosition,
 	fixHardwareConcurrency,
 	fixNavigatorArch,
-	fixScreenNoTaskbar,
+	followBaselineProtection,
 	fromFpgen,
 	fromPreset,
 	generateFingerprint,
@@ -43,13 +35,22 @@ import {
 	getRandomPreset,
 	identitySalt,
 	identitySeed,
+	loadOsFonts,
 	raiseScreenToModernFloor,
 	Screen,
 	setMediaDevicesDefaults,
+	targetOsFromPlatform,
 	WINDOWS_11_MARKER_FONTS,
 } from "./fingerprints.js";
-import { ensureModel } from "./fpgen/index.js";
 import { geoipAllowed, getGeolocation } from "./geolocation.js";
+import {
+	addCanvasPlaceholder,
+	type Gpu,
+	hasCanvasPlaceholder,
+	hostGpu,
+	rendersOnHardware,
+	setWebgpu,
+} from "./host_rendering.js";
 import {
 	type ProxyConfig,
 	ProxyHelper,
@@ -58,45 +59,46 @@ import {
 	validIPv6,
 } from "./ip.js";
 import { handleLocales } from "./locales.js";
+import { INSTALL_DIR, LAUNCHER_CONSTANTS, OS_NAME } from "./paths.js";
 import {
+	buildFile,
 	effectiveVersionMin,
 	ensureBrowserProfileDir,
 	ensureCamoufoxInstalled,
 	getPath,
-	INSTALL_DIR,
 	installedVerStr,
-	LOCAL_DATA,
 	launchPath,
-	OS_NAME,
 	resolvedPlaywrightVersionStr,
+	selectedLaunchPath,
 	Version,
 	warnIfPackageOutdated,
 } from "./pkgman.js";
 import {
+	comparePyStr,
 	formatPyFloatRepr,
+	isPlainObject,
 	isPyError,
 	orjsonDumps,
 	PyFloat,
 	pyRepr,
 	pyStr,
+	pyTruthy,
+	pyTypeName,
 	ValueError,
 } from "./pycompat.js";
 import type { VirtualDisplay } from "./virtdisplay.js";
 import { FallbackWarning, LeakWarning, warn } from "./warnings.js";
-import { sampleWebglForScreen, webglForGpu } from "./webgl.js";
+import { firefoxGpus, sampleWebglForScreen, webglForGpu } from "./webgl.js";
 
-export type ListOrString = string | string[];
+type ListOrString = string | string[];
 export type TargetOS = "mac" | "win" | "lin";
-export type EnvVars = Record<string, string | number | boolean>;
+type EnvVars = Record<string, string | number | boolean>;
+
+/** The OS names Camoufox takes, by target_os key. */
+const OS_NAMES = { win: "windows", mac: "macos", lin: "linux" } as const;
 
 // Camoufox preferences to cache previous pages and requests
-export const CACHE_PREFS: Record<string, any> = {
-	"browser.sessionhistory.max_entries": 10,
-	"browser.sessionhistory.max_total_viewers": -1,
-	"browser.cache.memory.enable": true,
-	"browser.cache.disk_cache_ssl": true,
-	"browser.cache.disk.smart_size.enabled": true,
-};
+export const CACHE_PREFS: Record<string, any> = LAUNCHER_CONSTANTS.cachePrefs;
 
 /** The host OS in fonts.json / target_os terms ('mac', 'win', 'lin'). */
 function hostOsKey(): TargetOS | null {
@@ -113,8 +115,7 @@ function hostOsKey(): TargetOS | null {
 // QuotaManager::GetGroupLimitForLimit() reports min(that / 5, 10 GiB) to the
 // page -- so any disk of 100 GB or more reads back as exactly 10 GiB, and a
 // smaller one as its own capacity / 10.
-export const QUOTA_FIXED_LIMIT_PREF =
-	"dom.quotaManager.temporaryStorage.fixedLimit";
+const QUOTA_FIXED_LIMIT_PREF = "dom.quotaManager.temporaryStorage.fixedLimit";
 // The pref is a signed 32-bit int in KB. Any value above 50 GiB already reports
 // the 10 GiB group cap, so clamping a multi-terabyte disk changes nothing a page
 // can see.
@@ -196,6 +197,7 @@ export const utilsDeps = {
 	resolvedPlaywrightVersionStr,
 	getPath,
 	launchPath,
+	selectedLaunchPath,
 	identitySalt,
 	identitySeed,
 	generateFingerprint: async (
@@ -210,7 +212,7 @@ export const utilsDeps = {
 	getRandomPreset,
 	fixNavigatorArch,
 	fixHardwareConcurrency,
-	fixScreenNoTaskbar,
+	followBaselineProtection,
 	clampScreenToDisplay,
 	clampWindowDimensions,
 	clampWindowPosition,
@@ -218,7 +220,12 @@ export const utilsDeps = {
 	generateRandomFontSubset,
 	generateRandomVoiceSubset,
 	setMediaDevicesDefaults,
+	hostGpu,
 	// The WebGL draws read fpgen's model, fetched on first use like Python's.
+	firefoxGpus: async (targetOs: string) => {
+		await ensureModel();
+		return firefoxGpus(targetOs);
+	},
 	webglForGpu: async (...args: Parameters<typeof webglForGpu>) => {
 		await ensureModel();
 		return webglForGpu(...args);
@@ -235,26 +242,11 @@ export const utilsDeps = {
 		validateConfig(config, p),
 	getEnvVars: (config: Record<string, any>, uaOs: string, p?: string | null) =>
 		getEnvVars(config, uaOs, p),
-	findInstalledVersion: async (spec: string): Promise<string | null> =>
-		(await import("./multiversion.js")).findInstalledVersion(spec) ?? null,
 };
 
 /*
  * Python-compatible serialisation helpers
  */
-
-/** type(value).__name__ for a JSON-ish value. */
-export function pyTypeName(value: unknown): string {
-	if (value === null || value === undefined) return "NoneType";
-	if (typeof value === "boolean") return "bool";
-	if (value instanceof PyFloat) return "float";
-	if (typeof value === "number")
-		return Number.isInteger(value) ? "int" : "float";
-	if (typeof value === "bigint") return "int";
-	if (typeof value === "string") return "str";
-	if (Array.isArray(value)) return "list";
-	return "dict";
-}
 
 /**
  * json.dumps(value, ensure_ascii=True, separators=(',', ':')): compact, every
@@ -326,7 +318,7 @@ function chunkCodePoints(s: string, size: number): string[] {
  * browser bundle: the bundle is commonly baked into an image as root and run
  * as a non-root user, so it is read-only at launch time.
  */
-export function generateFontconfig(
+function generateFontconfig(
 	fontconfigPath: string,
 	executablePath?: string | null,
 	osDir?: string | null,
@@ -343,8 +335,8 @@ export function generateFontconfig(
 	// the allowlist for direct lookups, but still candidates for glyph fallback.
 	//
 	// The bundle stores each face ONCE, in a directory named for the set of
-	// OSes that use it (L, M, W, LM, LW, MW, LMW) -- see bundle/fonts/groups.json
-	// and scripts/gen-font-groups.py. An OS reads the groups its letter appears
+	// OSes that use it (L, M, W, LM, LW, MW, LMW) -- see browser/bundle/fonts/groups.json
+	// and browser/scripts/gen-font-groups.py. An OS reads the groups its letter appears
 	// in, so nothing has to be hidden after the fact.
 	let scanDirs: string[] = [];
 	const groupsPath = path.join(fontsDir, "groups.json");
@@ -436,7 +428,7 @@ export function warnIfExecutablePredatesPlaywright(
 }
 
 /**
- * Pass the launcher's Firefox prefs to settings/camoufox.cfg, which applies them
+ * Pass the launcher's Firefox prefs to browser/settings/camoufox.cfg, which applies them
  * at STARTUP (CAMOU_PREFS_1..N, chunked like CAMOU_CONFIG).
  *
  * Playwright's non-persistent launch writes no user.js: firefoxUserPrefs only
@@ -537,22 +529,9 @@ interface PropertyEntry {
 function loadProperties(
 	executablePath?: string | null,
 ): Record<string, PropertyEntry> {
-	let propFile: string;
-	if (executablePath) {
-		propFile = path.join(path.dirname(executablePath), "properties.json");
-		if (!fs.existsSync(propFile)) {
-			// macOS app bundle: the binary is Contents/MacOS/camoufox, the
-			// packaged settings live in Contents/Resources/.
-			const bundled = path.join(
-				path.dirname(path.dirname(executablePath)),
-				"Resources",
-				"properties.json",
-			);
-			if (fs.existsSync(bundled)) propFile = bundled;
-		}
-	} else {
-		propFile = utilsDeps.getPath("properties.json");
-	}
+	const propFile = executablePath
+		? buildFile(executablePath, "properties.json")
+		: utilsDeps.getPath("properties.json");
 	const propDict: PropertyEntry[] = JSON.parse(
 		fs.readFileSync(propFile, "utf-8"),
 	);
@@ -639,7 +618,7 @@ export function validateType(value: any, expectedType: string): boolean {
 // skips anything missing one of them, so a bare "Name:lang:type" string or a
 // half-filled object registers nothing -- and a voice list that registers
 // nothing leaves the host's native voices exposed (#731).
-export const VOICE_FIELDS = [
+const VOICE_FIELDS = [
 	"lang",
 	"name",
 	"voiceUri",
@@ -718,39 +697,22 @@ export function getScreenCons(headless?: boolean): Screen | null {
 /**
  * Updates the fonts for the target OS.
  */
-export function updateFonts(
-	config: Record<string, any>,
-	targetOs: string,
-): void {
-	const fonts: string[] = JSON.parse(
-		fs.readFileSync(path.join(LOCAL_DATA, "fonts.json"), "utf-8"),
-	)[targetOs];
+function updateFonts(config: Record<string, any>, targetOs: string): void {
+	const fonts = [...loadOsFonts()[targetOs]];
 
 	// Merge with existing fonts (np.unique sorts)
 	if ("fonts" in config) {
-		config.fonts = [...new Set([...fonts, ...config.fonts])].sort(pyCompare);
+		config.fonts = [...new Set([...fonts, ...config.fonts])].sort(comparePyStr);
 	} else {
 		config.fonts = fonts;
 	}
-}
-
-/** Python's str ordering: by code point, not UTF-16 unit. */
-function pyCompare(a: string, b: string): number {
-	const ca = Array.from(a);
-	const cb = Array.from(b);
-	for (let i = 0; i < Math.min(ca.length, cb.length); i++) {
-		const d =
-			(ca[i].codePointAt(0) as number) - (cb[i].codePointAt(0) as number);
-		if (d) return d;
-	}
-	return ca.length - cb.length;
 }
 
 /**
  * Asserts that the passed fingerprint is a valid Firefox fingerprint, and
  * warns that passing one is not recommended.
  */
-export function checkCustomFingerprint(fingerprint: Record<string, any>): void {
+function checkCustomFingerprint(fingerprint: Record<string, any>): void {
 	const userAgent = fingerprint?.navigator?.userAgent || "";
 	const browserName = parseUaFamily(userAgent);
 	if (browserName !== "Firefox") {
@@ -844,7 +806,7 @@ export function isDomainSet(
  * Warns the user if they are manually setting properties that Camoufox already
  * sets internally.
  */
-export function warnManualConfig(config: Record<string, any>): void {
+function warnManualConfig(config: Record<string, any>): void {
 	// Manual locale setting
 	if (
 		isDomainSet(
@@ -874,7 +836,7 @@ export function warnManualConfig(config: Record<string, any>): void {
 	if (isDomainSet(config, "navigator.maxTouchPoints")) {
 		LeakWarning.warn("max_touch_points", false);
 	}
-	if (isTruthy(config.instantAnimations)) {
+	if (pyTruthy(config.instantAnimations)) {
 		LeakWarning.warn("instant_animations", false);
 	}
 	// Manual screen/window setting
@@ -980,7 +942,7 @@ export const STOCK_MEDIA_DEFAULTS = {
 } as const;
 
 /** Fill STOCK_MEDIA_DEFAULTS into any media option the caller left unset. */
-export function withStockMediaDefaults(
+function withStockMediaDefaults(
 	opts: Record<string, any>,
 ): Record<string, any> {
 	const out = { ...opts };
@@ -1021,6 +983,107 @@ export function attachDesktopOnlyWarning<T>(target: T): T {
 		};
 	}
 	return target;
+}
+
+/** The machine a browser's contexts must claim: its OS and, if hardware, its GPU. */
+export type HostIdentity = [TargetOS | null, Gpu | null];
+
+/**
+ * Whether the canvas is covered, and the host GPU the identity claims.
+ *
+ * The canvas renders on the host, so the identity claims the host's GPU when it
+ * can: on the host's OS, with no GPU named, on a hardware GPU fpgen has
+ * recorded there. A software renderer matches any GPU, and with WebGL off no GPU
+ * is claimed. Any other identity contradicts the pixels, so the canvas is
+ * covered unless the caller chose canvas_noise: false.
+ */
+export async function planRendering(
+	targetOs: string | null,
+	canvasNoise: boolean | null | undefined,
+	namedGpu: boolean,
+	webglDisabled: boolean,
+	probe: () => Promise<Gpu | null>,
+): Promise<[boolean, Gpu | null]> {
+	if (canvasNoise) return [true, null];
+	if (targetOs && targetOs === utilsDeps.hostOsKey() && !namedGpu) {
+		const host = webglDisabled ? null : await probe();
+		if (!rendersOnHardware(host)) return [false, null];
+		const recorded = await utilsDeps.firefoxGpus(targetOs);
+		if (
+			recorded.some(
+				([vendor, renderer]) => vendor === host[0] && renderer === host[1],
+			)
+		) {
+			return [false, host];
+		}
+	}
+	return [canvasNoise == null, null];
+}
+
+/**
+ * For a launch without the canvas placeholder, the machine its contexts must
+ * claim: the host's OS, and the host GPU it claims (planRendering). Only for
+ * the default `canvasNoise` (undefined); a caller who chose it, or built the
+ * options, keeps their contexts as they ask. Read before the launch, so a
+ * failed probe leaves no browser behind.
+ */
+export async function hostIdentity(
+	fromOptions: Record<string, any>,
+	canvasNoise: boolean | undefined,
+): Promise<HostIdentity | null> {
+	const prefs = fromOptions.firefoxUserPrefs ?? {};
+	if (canvasNoise != null || hasCanvasPlaceholder(prefs)) return null;
+	// Without the placeholder, the launch claimed the host's OS and no named GPU.
+	const hostOs = utilsDeps.hostOsKey();
+	const [covered, gpu] = await planRendering(
+		hostOs,
+		undefined,
+		false,
+		Boolean(prefs["webgl.disabled"]),
+		() =>
+			utilsDeps.hostGpu(
+				fromOptions.executablePath,
+				fromOptions.headless,
+				fromOptions.env,
+			),
+	);
+	return covered ? null : [hostOs, gpu];
+}
+
+/**
+ * The OS and GPU a new context on `browser` claims (null: drawn).
+ *
+ * On a browser without the canvas placeholder they are the host's, since the
+ * canvas renders there; asking for anything else throws.
+ */
+export function contextIdentity(
+	browser: any,
+	os: string | undefined,
+	preset: Record<string, any> | undefined,
+): [string | undefined, Gpu | null] {
+	const hostIdentity: [TargetOS, Gpu | null] | undefined =
+		browser._camoufoxHostIdentity;
+	if (!hostIdentity) return [os, null];
+	const [hostOs, gpu] = hostIdentity;
+	const hostName = OS_NAMES[hostOs];
+	const hasPreset = pyTruthy(preset);
+	const presetGpu = preset?.webgl ?? {};
+	if (
+		(os || hostName) !== hostName ||
+		(hasPreset &&
+			targetOsFromPlatform(preset?.navigator?.platform ?? "") !== hostName) ||
+		(gpu &&
+			hasPreset &&
+			(presetGpu.unmaskedVendor !== gpu[0] ||
+				presetGpu.unmaskedRenderer !== gpu[1]))
+	) {
+		throw new ValueError(
+			`This browser renders its canvas as this ${hostName} machine, so its contexts claim it` +
+				`${gpu ? ` and its GPU ${JSON.stringify(gpu)}` : ""}. Launch it with canvas_noise: true ` +
+				"to give a context another OS or GPU.",
+		);
+	}
+	return [hostName, gpu];
 }
 
 /**
@@ -1094,32 +1157,23 @@ export function attachVirtualDisplay<T>(
 }
 
 /**
- * The version of the build about to be launched.
- *
- * installedVerStr() answers "which release did `camoufox fetch` put in the
- * cache", which is the wrong question when the caller named a binary. Firefox
- * writes application.ini beside the executable, so when a path is given the
- * answer is right there. Falls back to the installed release when it is not.
+ * The Firefox version of the build about to launch: the named executable's own
+ * application.ini, or the installed release. A named executable without one
+ * throws, since claiming another build's version would leak in the UA.
  */
 export function resolveVerstr(executablePath?: string | null): string {
-	if (executablePath) {
-		const ini = path.join(path.dirname(executablePath), "application.ini");
-		try {
-			for (const line of fs.readFileSync(ini, "utf-8").split(/\r\n|\r|\n/)) {
-				if (line.startsWith("Version=")) {
-					const version = line.split("=").slice(1).join("=").trim();
-					if (version) return version;
-				}
-			}
-		} catch {
-			// fall through
+	if (!executablePath) return utilsDeps.installedVerStr();
+	const ini = buildFile(executablePath, "application.ini");
+	for (const line of fs.readFileSync(ini, "utf-8").split(/\r\n|\r|\n/)) {
+		if (line.startsWith("Version=")) {
+			return line.slice("Version=".length).trim();
 		}
 	}
-	return utilsDeps.installedVerStr();
+	throw new ValueError(`${ini} names no Version`);
 }
 
 /** A bound on the screen a generated fingerprint may claim. */
-export type ScreenConstraint =
+type ScreenConstraint =
 	| Screen
 	| {
 			min_width?: number;
@@ -1198,7 +1252,7 @@ export interface LaunchOptions {
 	/** Custom Camoufox browser executable path. */
 	executable_path?: string;
 	/** Select a specific installed browser version ("official/beta.20",
-	 * "beta.20", "134.0.2-beta.20"). Defaults to the active version. */
+	 * "beta.20", "134.0.2-beta.20"). Never downloaded. Defaults to the paired build. */
 	browser?: string;
 	/** Firefox user preferences to set. */
 	firefox_user_prefs?: Record<string, any>;
@@ -1219,6 +1273,14 @@ export interface LaunchOptions {
 	/** Pin the browser to navigator.hardwareConcurrency cores (Linux/Windows).
 	 * OFF by default -- it costs real CPU and serializes concurrent launches. */
 	pin_cpu_cores?: boolean;
+	/** Replace canvas and WebGL readback with random data, as
+	 * privacy.resistFingerprinting does in LibreWolf, Tor Browser and Mullvad
+	 * Browser. Stock Firefox does not, so it warns. By default (undefined) the
+	 * identity on the host's OS claims the GPU the host renders with, uncovered;
+	 * it is on whenever the identity claims another OS or another GPU
+	 * (webgl_config, a preset's, or a host GPU fpgen never recorded), whose
+	 * canvas would otherwise show the host. */
+	canvas_noise?: boolean | null;
 	/** Additional Firefox launch options, passed straight through to Playwright. */
 	[key: string]: any;
 }
@@ -1264,31 +1326,43 @@ export async function launchOptions({
 	debug,
 	virtual_display,
 	pin_cpu_cores,
+	canvas_noise,
 	...passthrough
 }: LaunchOptions = {}): Promise<Record<string, any>> {
 	utilsDeps.ensureBrowserProfileDir(env);
 
-	// Build the config
-	config ??= {};
+	// The launch fills these in, so it works on copies: a caller's object
+	// reused for a second launch would otherwise carry the first identity's
+	// values in, as if the caller had set them.
+	config = { ...config };
+	addons = [...(addons ?? [])];
+	args = [...(args ?? [])];
+	firefox_user_prefs = { ...firefox_user_prefs };
 
 	// Set default values for optional arguments
 	headless ??= false;
-	addons ??= [];
-	args ??= [];
-	firefox_user_prefs ??= {};
 	custom_fonts_only ??= false;
 	i_know_what_im_doing ??= false;
 	// Keep per-launch overrides isolated from the process environment and from
 	// mappings supplied by callers. In particular, DISPLAY must not outlive the
 	// virtual display that owns it.
 	env = env == null ? ({ ...process.env } as EnvVars) : { ...env };
-	if (executable_path == null) {
-		// Point every launch at a specific build without threading the path
-		// through each call site. Absent the variable nothing changes.
-		const envExecutable = (process.env.CAMOUFOX_EXECUTABLE_PATH ?? "").trim();
-		if (envExecutable) {
-			executable_path = envExecutable;
+	// CAMOUFOX_EXECUTABLE_PATH points every launch at a specific build without
+	// threading the path through each call site; the CI runners set it.
+	const envExecutable = (process.env.CAMOUFOX_EXECUTABLE_PATH ?? "").trim();
+	if (browser) {
+		if (executable_path || envExecutable) {
+			throw new ValueError(
+				`browser '${browser}' selects an installed build, but ` +
+					`${executable_path ? "executable_path" : "CAMOUFOX_EXECUTABLE_PATH"} ` +
+					"names a binary too. Pass one of them.",
+			);
 		}
+		// A selected build is launched like a caller's own binary: its files
+		// are read from beside it, and the paired build is neither used nor fetched.
+		executable_path = utilsDeps.selectedLaunchPath(browser);
+	} else if (executable_path == null && envExecutable) {
+		executable_path = envExecutable;
 	}
 	if (typeof executable_path === "string") {
 		executable_path = path.resolve(executable_path);
@@ -1338,9 +1412,9 @@ export async function launchOptions({
 	}
 
 	// Assert the target OS is valid
-	if (isTruthy(targetOsOption)) {
+	if (pyTruthy(targetOsOption)) {
 		checkValidOs(targetOsOption as ListOrString);
-	} else if (isTruthy(webgl_config)) {
+	} else if (pyTruthy(webgl_config)) {
 		// webgl_config requires OS to be set
 		throw new ValueError("OS must be set when using webgl_config");
 	}
@@ -1377,12 +1451,12 @@ export async function launchOptions({
 		if (!i_know_what_im_doing) {
 			checkCustomFingerprint(fingerprint);
 		}
-	} else if (isTruthy(fingerprint_preset)) {
+	} else if (pyTruthy(fingerprint_preset)) {
 		// User opted into real fingerprint presets
 		const preset = isPlainObject(fingerprint_preset)
 			? fingerprint_preset
 			: await utilsDeps.getRandomPreset(targetOsOption, ffVersionStr);
-		if (isTruthy(preset)) {
+		if (pyTruthy(preset)) {
 			mergeInto(
 				config,
 				await utilsDeps.fromPreset(preset as any, ffVersionStr, salt),
@@ -1445,12 +1519,12 @@ export async function launchOptions({
 				screenCons.maxHeight as number,
 			);
 		}
-		utilsDeps.fixScreenNoTaskbar(config, targetOs);
+		utilsDeps.followBaselineProtection(config, targetOs);
 		utilsDeps.clampWindowDimensions(config);
 		utilsDeps.clampWindowPosition(config);
 	}
 
-	// Deliberately NOT setting window.history.length: settings/camoufox.cfg runs
+	// Deliberately NOT setting window.history.length: browser/settings/camoufox.cfg runs
 	// Firefox's stock max_entries, so the real value starts at 1 and grows with
 	// each navigation; pinning it would contradict history.back().
 
@@ -1468,13 +1542,11 @@ export async function launchOptions({
 				"No custom fonts were passed, but `custom_fonts_only` is enabled.",
 			);
 		}
-	} else if (!userSetFonts || !isTruthy(config.fonts)) {
+	} else if (!userSetFonts || !pyTruthy(config.fonts)) {
 		// Draw the font subset HERE, after every identity fix-up above, so the
 		// seed sees the final UA/screen/cores/GPU: the same presented identity
 		// always gets the same font list (#442/#765).
-		const osName =
-			({ win: "windows", mac: "macos", lin: "linux" } as const)[targetOs] ??
-			"macos";
+		const osName = OS_NAMES[targetOs] ?? "macos";
 		try {
 			config.fonts = utilsDeps.generateRandomFontSubset(
 				osName,
@@ -1547,7 +1619,7 @@ export async function launchOptions({
 		dnt != null && pyStr(dnt) === "1";
 	const gpc = config["navigator.globalPrivacyControl"];
 	firefox_user_prefs["privacy.globalprivacycontrol.enabled"] =
-		gpc != null ? isTruthy(gpc) : false;
+		gpc != null ? pyTruthy(gpc) : false;
 
 	// Accept-Encoding: Firefox's own value is already what the identity claims,
 	// so the generated header is dropped unless the caller set it.
@@ -1566,7 +1638,7 @@ export async function launchOptions({
 	}
 
 	// Set geolocation
-	if (isTruthy(geoip)) {
+	if (pyTruthy(geoip)) {
 		geoipAllowed(); // Assert that geoip is allowed
 
 		let geoipIp: string;
@@ -1613,7 +1685,7 @@ export async function launchOptions({
 	} else if (
 		// Raise a warning when a proxy is being used without spoofing
 		// geolocation. This warning cannot be ignored with i_know_what_im_doing.
-		isTruthy(proxy) &&
+		pyTruthy(proxy) &&
 		!(proxy?.server ?? "").includes("localhost") &&
 		!isDomainSet(config, "geolocation")
 	) {
@@ -1621,20 +1693,20 @@ export async function launchOptions({
 	}
 
 	// Set locale
-	if (isTruthy(locale)) {
+	if (pyTruthy(locale)) {
 		await handleLocales(locale as string | string[], config);
 	}
 
 	// Select the browser's UI locale to match the Intl locale. Always set: an
 	// EMPTY value would follow the host OS locale.
 	let requested: string;
-	if (isTruthy(config["locale:language"])) {
+	if (pyTruthy(config["locale:language"])) {
 		requested = [
 			config["locale:language"],
 			config["locale:script"],
 			config["locale:region"],
 		]
-			.filter((part) => isTruthy(part))
+			.filter((part) => pyTruthy(part))
 			.join("-");
 	} else {
 		requested = "en-US";
@@ -1646,13 +1718,11 @@ export async function launchOptions({
 	// the locale is resolved: the Windows voice list is the display language's
 	// pack.
 	if (!userSetVoices || !("voices" in config)) {
-		const osNameV =
-			({ win: "windows", mac: "macos", lin: "linux" } as const)[targetOs] ??
-			"macos";
+		const osNameV = OS_NAMES[targetOs] ?? "macos";
 		let voiceLocale = config["navigator.language"];
-		if (isTruthy(config["locale:language"])) {
+		if (pyTruthy(config["locale:language"])) {
 			voiceLocale = [config["locale:language"], config["locale:region"]]
-				.filter((part) => isTruthy(part))
+				.filter((part) => pyTruthy(part))
 				.join("-");
 		}
 		try {
@@ -1681,7 +1751,7 @@ export async function launchOptions({
 	setInto(config, "voices:blockIfNotDefined", true);
 
 	// Pass the humanize option
-	if (isTruthy(humanize)) {
+	if (pyTruthy(humanize)) {
 		setInto(config, "humanize", true);
 		// MaskConfig expects maxTime to be a JSON number.
 		// float(humanize): a JSON number with a floating-point representation.
@@ -1723,6 +1793,23 @@ export async function launchOptions({
 	// reads the core count and the screen, which the launch replaces above.
 	coherence.dropIncoherentSourceValues(config, targetOs);
 
+	const resolvedExecutable = executable_path
+		? String(executable_path)
+		: utilsDeps.launchPath();
+
+	const [coverCanvas, host] = await planRendering(
+		targetOs,
+		canvas_noise,
+		pyTruthy(webgl_config) ||
+			(pyTruthy(config["webGl:vendor"]) && pyTruthy(config["webGl:renderer"])),
+		Boolean(block_webgl),
+		() => utilsDeps.hostGpu(resolvedExecutable, headless, env),
+	);
+	if (coverCanvas) {
+		addCanvasPlaceholder(firefox_user_prefs);
+		LeakWarning.warn("canvas_noise", i_know_what_im_doing);
+	}
+
 	if (block_webgl) {
 		firefox_user_prefs["webgl.disabled"] = true;
 		LeakWarning.warn("block_webgl", i_know_what_im_doing);
@@ -1733,12 +1820,12 @@ export async function launchOptions({
 		// A pair the caller named, or the preset's own GPU, keeps its name and
 		// gets that device's recorded parameters. webglForGpu raises for a GPU
 		// fpgen has never seen: the caller asked for something that does not exist.
-		if (isTruthy(webgl_config)) {
+		if (pyTruthy(webgl_config)) {
 			const [vendor, renderer] = webgl_config as [string, string];
 			webglFp = await utilsDeps.webglForGpu(targetOs, vendor, renderer, seed());
 		} else if (
-			isTruthy(config["webGl:vendor"]) &&
-			isTruthy(config["webGl:renderer"])
+			pyTruthy(config["webGl:vendor"]) &&
+			pyTruthy(config["webGl:renderer"])
 		) {
 			webglFp = await utilsDeps.webglForGpu(
 				targetOs,
@@ -1746,6 +1833,9 @@ export async function launchOptions({
 				config["webGl:renderer"],
 				seed(),
 			);
+		} else if (host) {
+			// Claim the GPU the canvas really renders on.
+			webglFp = await utilsDeps.webglForGpu(targetOs, ...host, seed());
 		} else {
 			// Synthetic path: keep the GPU coherent with the screen fpgen already
 			// picked. Sampling the two independently yields pairs no real machine
@@ -1782,6 +1872,13 @@ export async function launchOptions({
 		}
 	}
 
+	setWebgpu(
+		firefox_user_prefs,
+		targetOs,
+		[config["webGl:vendor"], config["webGl:renderer"]],
+		host,
+	);
+
 	// Cache previous pages, requests, etc (uses more memory)
 	if (enable_cache) {
 		mergeInto(firefox_user_prefs, CACHE_PREFS);
@@ -1804,23 +1901,6 @@ export async function launchOptions({
 		...env,
 	};
 
-	// Prepare the executable path
-	let resolvedExecutable: string;
-	if (executable_path) {
-		resolvedExecutable = String(executable_path);
-	} else if (browser) {
-		// Select a specific installed browser version
-		const browserPath = await utilsDeps.findInstalledVersion(browser);
-		if (!browserPath) {
-			throw new Error(
-				`Browser version '${browser}' not found. Run \`camoufox list\` to see installed versions.`,
-			);
-		}
-		resolvedExecutable = utilsDeps.launchPath(browserPath);
-	} else {
-		resolvedExecutable = utilsDeps.launchPath();
-	}
-
 	const result: Record<string, any> = {
 		executablePath: resolvedExecutable,
 		args,
@@ -1837,17 +1917,4 @@ export async function launchOptions({
 	}
 
 	return result;
-}
-
-/** Python truthiness for the option values launch_options() tests. */
-function isTruthy(value: unknown): boolean {
-	if (value === null || value === undefined || value === false) return false;
-	if (value === 0 || value === "" || Number.isNaN(value)) return false;
-	if (Array.isArray(value)) return value.length > 0;
-	if (typeof value === "object") return Object.keys(value as object).length > 0;
-	return true;
-}
-
-function isPlainObject(value: unknown): value is Record<string, any> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

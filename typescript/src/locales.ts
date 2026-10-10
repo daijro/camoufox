@@ -1,7 +1,7 @@
 /**
  * Locale data structures, validation and the statistical locale selector.
  *
- * TypeScript twin of pythonlib/camoufox/locales.py.
+ * TypeScript twin of python/src/camoufox/locales.py.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -90,7 +90,7 @@ export class Geolocation {
 /**
  * Verifies that a locale is valid. Takes either language-region or language.
  */
-export function verifyLocale(loc: string): void {
+function verifyLocale(loc: string): void {
 	if (tags.check(loc)) {
 		return;
 	}
@@ -220,7 +220,7 @@ let unicodeInfo: Promise<TerritoryElement[]> | null = null;
  * Fetches supplemental data from the territoryInfo.xml file.
  * Source: https://raw.githubusercontent.com/unicode-org/cldr/master/common/supplemental/supplementalData.xml
  */
-export function getUnicodeInfo(): Promise<TerritoryElement[]> {
+function getUnicodeInfo(): Promise<TerritoryElement[]> {
 	if (!unicodeInfo) {
 		unicodeInfo = (async () => {
 			const data = await fs.promises.readFile(

@@ -107,7 +107,7 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
   <tr>
     <td width="25%" align="center" valign="middle">
       <a href="https://scrapfly.io/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox" target="_blank">
-        <img src="https://raw.githubusercontent.com/daijro/camoufox/main/assets/scrapfly.png" alt="Scrapfly.io" width="200">
+        <img src="https://raw.githubusercontent.com/daijro/camoufox/main/browser/assets/scrapfly.png" alt="Scrapfly.io" width="200">
       </a>
     </td>
     <td valign="middle">
@@ -311,84 +311,47 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
 
 # Introduction
 
-Camoufox is a Firefox fork engineered for web scraping and AI agents. It is headless, undetectable, and optimized to run at scale. Every run gets a fresh identity drawn from the real-world distribution of devices, so it blends into normal traffic instead of standing out.
+Camoufox is a Firefox build for web scraping and AI agents. Every launch gets a
+fresh, internally consistent device identity drawn from the real-world
+distribution of devices, and the browser reports it from C++, so a page sees
+native values rather than JavaScript overrides. Playwright drives it, through
+an automation layer the page cannot see.
 
-## Highlights
+| Package | Install | Docs |
+|---|---|---|
+| Python | `pip install -U "camoufox[geoip]"` | [`python/README.md`](python/README.md) |
+| TypeScript / Node.js | `npm install camoufox playwright-core` | [`typescript/README.md`](typescript/README.md) |
+| AI coding agents | | [`AGENTS.md`](AGENTS.md#using-camoufox) |
 
-* **Built for AI agents** 🤖
-  * Minimal, debloated Firefox - fast to launch, cheap to run
-  * Drop-in Playwright compatibility from Python and JavaScript/TypeScript
-  * Invisible to anti-bot systems so you can run your agent cluster locally or in the cloud without being flagged
+## Quick start
 
-- **Undetectable by design** 🎭
-  - Page automation hidden from JavaScript inspection. See the [stealth page](https://camoufox.com/stealth) for more details.
-
-* **Fingerprint injection & rotation (without JS injection!)**
-  * All navigator properties (device, OS, hardware, browser, etc.) ✅
-  * Screen size, resolution, window, & viewport properties ✅
-  * Geolocation, timezone, locale, & Intl spoofing ✅
-  * WebRTC IP spoofing at the protocol level ✅
-  * Voices, speech playback rate, etc. ✅
-  * And much, much more!
-
-- **Anti Graphical fingerprinting**
-  - WebGL parameters, supported extensions, context attributes, & shader precision formats ✅
-  - Font spoofing & anti-fingerprinting ✅
-
-* **Optimized for automation**
-  * Human-like mouse movement 🖱️
-  * Blocks & circumvents ads 🛡️
-  * Optional instant animations (`instantAnimations`), so Playwright never waits on one 💨
-
-- Debloated & optimized for memory efficiency ⚡
-- [PyPI](https://pypi.org/project/camoufox/) and npm packages for updates & auto fingerprint injection 📦
-- Stays up to date with the latest Firefox version 🕓
-
----
-
-## Fingerprint Injection
-
-In Camoufox, data is intercepted at the C++ implementation level, making the changes undetectable through JavaScript inspection.
-
-To spoof individual fingerprint properties, pass a JSON containing properties to spoof to the [Python](pythonlib/) or [TypeScript](typescript/) interface:
-
-```py
->>> with Camoufox(config={"property": "value"}) as browser:
+```bash
+pip install -U "camoufox[geoip]"
+camoufox fetch
 ```
-
-Config data not set by the user is populated from [fpgen](https://github.com/scrapfly/fingerprint-generator), a model of the statistical distribution of device characteristics in real-world traffic. The assembled identity is then checked for coherence, so parts that are each plausible cannot combine into a machine that does not exist.
-
-[[See implemented properties](https://camoufox.com/fingerprint/)]
-
----
-
-## Usage
-
-Camoufox is compatible with your existing Playwright code. You only have to change your browser initialization.
-
-**Python, sync API**
 
 ```python
 from camoufox.sync_api import Camoufox
 
-with Camoufox() as browser:
+with Camoufox(headless=True) as browser:
     page = browser.new_page()
     page.goto("https://example.com")
 ```
 
-**Python, async API**
-
 ```python
+import asyncio
 from camoufox.async_api import AsyncCamoufox
 
-async with AsyncCamoufox() as browser:
-    page = await browser.new_page()
-    await page.goto("https://example.com")
+async def main():
+    async with AsyncCamoufox(headless=True) as browser:
+        page = await browser.new_page()
+        await page.goto("https://example.com")
+
+asyncio.run(main())
 ```
 
-**JavaScript / TypeScript**
-
 ```javascript
+// npm install camoufox playwright-core && npx camoufox fetch
 import { Camoufox } from "camoufox";
 
 const browser = await Camoufox({ headless: true });
@@ -397,384 +360,362 @@ await page.goto("https://example.com");
 await browser.close();
 ```
 
-[[Python installation & usage](https://camoufox.com/python/)] · [[TypeScript package](typescript/README.md)]
+What you get back is a normal Playwright `Browser`. Behind a proxy, add
+`proxy=...` and `geoip=True` so timezone, locale, geolocation and the WebRTC IP
+match the exit IP. For many identities in one browser, use `NewContext()`.
 
----
+## How it fits together
 
-## Capabilities
+```mermaid
+flowchart TB
+    YOU(["Your Playwright code"])
 
-Below is a list of patches and features implemented in Camoufox.
+    subgraph L["Launcher: python/ or typescript/"]
+        FP["fpgen<br/>draws a real device"] --> CO["coherence.py<br/>rejects impossible combinations"]
+        CO --> ID[["Identity"]]
+        GEO["geoip<br/>timezone, locale, WebRTC IP"] --> ID
+    end
+
+    subgraph B["Patched Firefox: browser/"]
+        MC["MaskConfig<br/>reads CAMOU_CONFIG"] --> API["Web APIs answered in C++<br/>navigator, screen, WebGL,<br/>fonts, audio, WebRTC"]
+        SET["Per-context setters<br/>sealed before page script"] --> API
+        JG["Juggler<br/>isolated world"]
+    end
+
+    PAGE(["The web page"])
+
+    YOU -- "1 launch options" --> L
+    ID == "2 CAMOU_CONFIG + prefs" ==> MC
+    ID -- "3 NewContext()" --> SET
+    YOU <-- "4 Juggler protocol" --> JG
+    API -- "native values" --> PAGE
+    JG -. "trusted input, DOM reads;<br/>no code in the page" .-> PAGE
+
+    classDef you fill:#eef2f6,stroke:#57606a,color:#1f2328
+    classDef launcher fill:#ddf4ff,stroke:#0969da,color:#0a3069
+    classDef browser fill:#fff1e5,stroke:#bc4c00,color:#4a1c00
+    classDef page fill:#dafbe1,stroke:#1a7f37,color:#0f3d1c
+    class YOU you
+    class FP,CO,ID,GEO launcher
+    class MC,API,SET,JG browser
+    class PAGE page
+    style L fill:none,stroke:#0969da,stroke-dasharray:4 3,color:#0969da
+    style B fill:none,stroke:#bc4c00,stroke-dasharray:4 3,color:#bc4c00
+```
+
+1. The launcher draws a device from [fpgen](https://github.com/scrapfly/fingerprint-generator)
+   (a model of real traffic), then adds fonts, voices, a GPU and media devices
+   seeded by that identity. `coherence.py` rejects combinations no real machine
+   produces.
+2. The identity goes to the browser as the `CAMOU_CONFIG` environment variable
+   (keys declared in [`browser/settings/properties.json`](browser/settings/properties.json)).
+   The patches read it through `MaskConfig` and answer from C++.
+3. `NewContext()` gives one context its own identity through setters that the
+   per-context patches add to `window`. They are sealed before page script runs.
+4. Playwright talks to Juggler. Camoufox's Juggler runs its page agent in an
+   isolated world, so the page never sees automation code.
+
+# Features
+
+Each row says where it is implemented. A **patch** is a file in
+[`browser/patches/`](browser/patches); **Juggler** is
+[`browser/additions/juggler/`](browser/additions/juggler); the **launcher** is
+the Python and TypeScript packages.
 
 ### Fingerprint spoofing
 
-- Navigator properties spoofing (device, browser, locale, etc.)
-- Support for emulating screen size, resolution, etc.
-- Spoof WebGL parameters, supported extensions, context attributes, and shader precision formats.
-- Spoof inner and outer window viewport sizes
-- Spoof AudioContext sample rate, output latency, and max channel count
-- Spoof device voices & playback rates
-- Spoof the amount of microphones, webcams, and speakers available.
-- Network headers (Accept-Languages and User-Agent) are spoofed to match the navigator properties
-- WebRTC IP spoofing at the protocol level
-- Geolocation, timezone, and locale spoofing
-- etc.
+The goal is a browser that behaves exactly like stock Firefox, except that it
+reports a different machine. A value is spoofed when it identifies the host
+machine or the network. Anything else stays as Firefox has it, because
+something stock Firefox never does, such as noise, is a fingerprint in its own
+right.
 
-### Stealth patches
+| Trait | What a page sees | Why it is spoofed | Where |
+|---|---|---|---|
+| Navigator: User-Agent, platform, oscpu, hardware concurrency, language, appVersion | The drawn device's values, per launch or per context, in workers too | They name the OS and hardware directly, and every other value is checked against them | `navigator-spoofing`, `fingerprint-injection` patches |
+| HTTP headers: User-Agent, Accept-Language | The navigator values | Servers compare the headers with what script reports | `network-patches` patch |
+| Screen and window sizes, color depth, CSS media features | The drawn device's display, the same in JS and CSS | Screen size is among the most identifying values, and CSS media queries read it without script | `screen-spoofing`, `fingerprint-injection` patches |
+| WebGL and WebGL2: vendor, renderer, parameters, extensions, shader precision, context attributes | One GPU fpgen recorded for Firefox on that OS. Values Firefox decides rather than the GPU follow the shipped Firefox ([`webgl-browser-owned-values-follow-firefox`](ci/tribal-rules.yml)) | The renderer string names the host's GPU, and its limits must agree with it | `webgl-spoofing` patch, `webgl.py` |
+| WebGPU: `navigator.gpu` and its adapter | `navigator.gpu` only where Firefox on the claimed device has it: Windows and Apple Silicon Macs. The adapter is the host's only when the identity claims the host's GPU; otherwise `requestAdapter()` returns `null`, as for a blocked or software GPU | The adapter's limits and features come from the real GPU | launcher, `host_rendering.py` |
+| Audio: sample rate, output latency, max channels, and the audio fingerprint | The identity's values, seeded per identity | Audio output varies with hardware and drivers, so identities sharing one could be linked | `audio-context-spoofing`, `audio-fingerprint-manager` patches |
+| Fonts: installed list, `system-ui`, CSS2 system fonts | The claimed OS's fonts, from a bundled set; see [docs/FONTS.md](docs/FONTS.md) | Installed fonts reveal the OS and the software on it | `font-list-spoofing`, `font-hijacker`, `system-ui-font-spoofing` patches |
+| Speech voices | The claimed OS's voices, which actually speak | The voice list is specific to each OS, and a voice that cannot speak is a tell | `voice-spoofing`, `speech-voices-spoofing` patches |
+| Microphones, cameras, speakers | OS-style labels and groups; see [docs/MEDIA-DEVICES.md](docs/MEDIA-DEVICES.md) | Device count and labels differ per machine and per OS | `media-device-spoofing` patch |
+| Media codecs (`canPlayType`, `isTypeSupported`) | Not the host's codec libraries | On Linux the answer depends on the host's installed codec libraries | `media-codec-spoofing` patch |
+| Timezone, locale and `Intl` | The identity's, per realm, workers included | They must agree with the IP's country | `timezone-spoofing`, `locale-spoofing` patches |
+| Geolocation | Coordinates from GeoIP, permission granted | They must agree with the IP | `geolocation-spoofing` patch, launcher |
+| WebRTC IP | ICE candidates, SDP and `getStats()` rewritten to the proxy IP | WebRTC otherwise reveals the real IP behind a proxy | `webrtc-ip-spoofing` patch |
+| Touchscreen | A touchscreen laptop, not a phone | Touch points and pointer media must agree with the claimed device | `touchscreen-fingerprint-spoofing`, `force-default-pointer` patches |
 
-- Avoids main world execution leaks. All page agent javascript is sandboxed
-- Avoids frame execution context leaks
-- Fixes `navigator.webdriver` detection
-- Fixes Firefox headless detection via pointer type ([#26](https://github.com/daijro/camoufox/issues/26))
-- Removed potentially leaking anti-zoom/meta viewport handling patches
-- Uses non-default screen & window sizes
-- Re-enable fission content isolations
-- Re-enable PDF.js
-- Other leaking config properties changed
-- Human-like cursor movement
+Left as stock Firefox has it, on purpose:
 
-### Anti font fingerprinting
+| Trait | What a page sees | Why it is not spoofed |
+|---|---|---|
+| Canvas pixels | What the GPU and fonts produce. As in stock Firefox, each context's PNG exports (`toDataURL`, `toBlob`) carry a per-session `deBG` chunk; the pixels themselves are untouched. On the host's OS the identity claims the host's GPU, so the pixels agree with it; on another OS readback returns random data, as `privacy.resistFingerprinting` does in LibreWolf ([the canvas on another OS](python/README.md#the-canvas-on-another-os)) | Stock Firefox does not perturb pixels in its default configuration, so noise would only mark the browser as a spoofer ([`canvas-is-not-noised`](ci/tribal-rules.yml)) |
+| Text widths | What the font really measures | The same font on the same OS measures the same everywhere; widths no real machine produces are a fingerprint ([`no-glyph-spacing-noise`](ci/tribal-rules.yml)) |
 
-- Automatically uses the correct system fonts for your User Agent
-- Bundled with Windows, Mac, and Linux system fonts
-- No glyph-spacing noise: measured text widths are the ones the same font gives on a real machine
+Each context of one browser can carry its own identity:
+[docs/per-context-patches.md](docs/per-context-patches.md).
 
-### Playwright support
+### Canvas
 
-- Custom implementation of Playwright for the latest Firefox
-- Various config patches to evade bot detection
+Canvas and WebGL pixels come from the real OS, driver and GPU, whatever the
+identity claims. The launcher chooses the canvas behaviour from two facts: does
+the identity claim the host's OS, and does the host render on a GPU?
 
-### Debloat/Optimizations
+| | Identity on the host's OS | Identity on another OS |
+|---|---|---|
+| **GPU rendering** | 🟢 <ins><b>Most stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ No canvas noise: looks like stock Firefox<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ The claimed GPU is the host's, so the pixels agree with it<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Every identity on this machine claims the same GPU, so there is less fingerprint diversity | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Readback is random, so the real OS does not show<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Canvas noise: looks like LibreWolf, Tor Browser or Mullvad Browser, which are rarer than stock Firefox |
+| **Software rendering**<br/>(no GPU driver, as on most servers) | 🟢 <ins><b>Stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ No canvas noise: looks like stock Firefox<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Looks like a GPU falling back to software rendering, which is rarer than a working GPU | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Readback is random, so the real OS does not show<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Canvas noise: looks like LibreWolf, Tor Browser or Mullvad Browser, which are rarer than stock Firefox |
 
-- Stripped out/disabled _many, many_ Mozilla services. Runs faster than the original Mozilla Firefox, and uses less memory (200mb)
-- Patches from LibreWolf & Ghostery to help remove telemetry & bloat
-- Debloat config from PeskyFox, LibreWolf, and others
-- Speed & network optimizations from FastFox
-- Animations run on stock timing; `instantAnimations: True` finishes them at once, at the cost of being detectable
-- Minimalistic theming
-- etc.
+That is the default. These options override it:
+
+| Override | Result |
+|---|---|
+| `canvas_noise=False` on another OS | 🔴 Stock Firefox, but the pixels show the real OS |
+| `canvas_noise=True` on the host's OS | 🟡 Looks like LibreWolf with no need to |
+| `webgl_config` naming a GPU other than the host's | 🟡 Canvas noise is turned on, as on another OS; with `canvas_noise=False`, 🔴 WebGL reports one GPU while the pixels come from another |
+
+Noise is set per browser, not per context. Without it, every `NewContext()`
+claims the host's OS. Details are in
+[the canvas on another OS](python/README.md#the-canvas-on-another-os).
+
+### Hiding automation
+
+| What | Where |
+|---|---|
+| Playwright's `evaluate`, selectors and init scripts run in an isolated world the page cannot see | Juggler |
+| `navigator.webdriver` is `false` | `playwright/1-leak-fixes` patch |
+| `select_option`, `fill` on date and colour inputs, and `set_input_files` fire trusted events | `trusted-automation-events` patch |
+| Headless reports a fine pointer, like a desktop | `force-default-pointer` patch |
+| Wheel events carry native ticks, like a physical wheel | `wheel-native-ticks` patch |
+| Juggler's debugger leaves no side effects content can observe | `debugger-invisible-to-content` patch |
+| Per-context fingerprint setters are gone before page script runs | `window-setter-seal` patch |
+| Popup blocker on, as in stock Firefox | `popup-blocker-parity` patch |
+| Content-accessible chrome files match stock Firefox | `contentaccessible-parity` patch |
+| Viewports never enter Responsive Design Mode; containers show no automation label | Juggler |
+
+### Automation
+
+| Feature | How to use it | Where |
+|---|---|---|
+| Human cursor movement, replayed from 2356 recordings of real people ([Cursory](https://github.com/Vinyzu/cursory)) | `humanize=True`, or a number of seconds to cap each move | Juggler `input/` |
+| Run code in the page's own world | `main_world_eval=True`, then `page.evaluate("mw:...")` | Juggler |
+| Finish animations at once so Playwright never waits | `config={"instantAnimations": True}` (detectable; warns) | `no-css-animations` patch |
+| Read closed shadow roots | `config={"forceScopeAccess": True}` | `shadow-root-bypass` patch |
+| Many identities in one browser | `NewContext(browser, os=..., proxy=...)` | per-context patches, launcher |
 
 ### Addons
 
-- Load Firefox addons without a debug server by passing a list of paths to the `addons` property
-- Added uBlock Origin with custom privacy filters
-- Addons are not allowed to open tabs
-- Addons are automatically enabled in Private Browsing mode
-- Addons are automatically pinned to the toolbar
-- Fixes DNS leaks with uBO prefetching
+| Feature | Where |
+|---|---|
+| Load extracted addons without a debug server: `addons=["/path/to/addon"]` | launcher, `camoufox-window-module` patch |
+| uBlock Origin installed by default, with its own default filter lists (`exclude_addons=[DefaultAddons.UBO]` to drop it) | launcher |
+| Addons cannot open tabs unless `allow_addon_new_tab=True` | `disable-extension-newtab` patch |
+| Addons run in private browsing | `all-addons-private-mode` patch |
 
-### Python & TypeScript Interfaces
+### Launcher
 
-- Automatically generates & injects unique device characteristics into Camoufox based on their real-world distribution
-- WebGL fingerprint injection & rotation
-- Uses the correct system fonts and subpixel antialiasing & hinting based on your target OS
-- Avoid proxy detection by calculating your target geolocation, timezone, & locale from your proxy's target region
-- Calculate and spoof the browser's language based on the distribution of language speakers in the proxy's target region
-- Remote server hosting to use Camoufox with other languages that support Playwright
-- Built-in virtual display buffer to run Camoufox headfully on a headless server
-- Toggle image loading, WebRTC, and WebGL
-- etc.
+| Feature | Option or command |
+|---|---|
+| Identity drawn from fpgen's real-world distribution, checked for coherence | default |
+| Recorded real-device presets instead of fpgen | `fingerprint_preset=True` |
+| Timezone, locale, geolocation and WebRTC IP from the proxy's exit IP | `proxy=..., geoip=True` |
+| Locale chosen by the languages spoken in the IP's region | `geoip=True` without `locale` |
+| Headed browser on a private Xvfb display (Linux) | `headless="virtual"` |
+| Remote Playwright server for other languages | `launch_server()`, `camoufox server` |
+| Install, pin and switch browser builds | `camoufox fetch`, `set`, `list`, `remove` |
+| Core count that a page can measure | `pin_cpu_cores=True` |
+| Block images, WebRTC or WebGL | `block_images`, `block_webrtc`, `block_webgl` |
+| The host's GPU on the host's OS; random canvas readback, as in LibreWolf, on another OS | default; `canvas_noise=True` or `False` to choose |
+
+The full option list is in the [Python README](python/README.md#launch-options).
+
+### Debloat
+
+| What | Where |
+|---|---|
+| Telemetry and data reporting removed at compile time | `librewolf/` patches |
+| Onboarding messages disabled | `ghostery/` patch |
+| No bundled search engines | `no-search-engines` patch |
+| Mozilla services and background traffic turned off | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
+| Stock browser UI: no theme, toolbar or dialog changes | |
 
 > [!NOTE]
-> Camoufox does **not** fully support injecting Chromium fingerprints. Some WAFs (such as [Interstitial](https://nopecha.com/demo/cloudflare)) test for Spidermonkey engine behavior, which is impossible to spoof.
+> Camoufox presents Firefox identities only. Some WAFs test SpiderMonkey engine
+> behaviour, which no amount of spoofing turns into Chromium.
 
----
+# How Camoufox compares
 
-# Stealth Overview
+| | JavaScript injection | CDP-based (Chromium) | Camoufox |
+|---|---|---|---|
+| Where values are spoofed | Page-world overrides | Page-world overrides or flags | Browser C++ |
+| `toString()`, property descriptors | Show the override | Show the override | Native |
+| Workers and iframes | Often missed | Often missed | Same value everywhere |
+| Headers agree with navigator | Only if set separately | Only if set separately | Always |
+| Automation code in the page | Yes | Yes (bindings, `navigator.webdriver`) | No: isolated world |
+| Identity source | Hand-picked or random | Hand-picked or random | fpgen's real-world distribution, coherence-checked |
 
-## How Camoufox hides its automation library
+Playwright drives Chromium over CDP but Firefox over Juggler, a protocol that is
+a separate module inside Firefox. That makes it possible to give Juggler its
+own copy of the page: Playwright reads and edits that copy, and the real page
+never sees a getter fire or a listener appear. Input goes through Firefox's own
+input handlers, so it is handled as a user's would be.
 
-In Camoufox, all of Playwright's internal Page Agent's code is sandboxed and isolated. This makes it impossible for a page to detect the presence of Playwright through Javascript inspection.
+Camoufox can still be detected. Thousands of values must agree with each other,
+and anti-bot vendors look for the one that does not. File a
+[detection report](https://github.com/daijro/camoufox/issues/new?template=camoufox-detected.md)
+when you find one.
 
-Normally, Playwright injects some JavaScript into the page such as `window.__playwright__binding__` and to perform actions like querying elements, evaluating javascript, or running init scripts, which can be detected by websites. In Camoufox, these actions are handled in an isolated scope outside of the page. In other words, websites can no longer "see" any JavaScript that Playwright would typically inject. This prevents traces of Playwright altogether.
+## Human cursor
 
-However, even with hiding its automation library, Camoufox is not immune to inconsistencies in fingerprint rotation. This still requires maintenance to spot and fix.
+<img src="browser/assets/humanize-cursor.svg" alt="Cursor paths Camoufox produced with humanize=True, replayed at their recorded speed" width="900">
 
-### Page Interactions
+Each dot is a `mousemove` event the page received from six `page.mouse.move()`
+calls with `humanize=True`, shown at the speed it arrived; close dots mean the
+hand slowed down. `browser/scripts/cursor-demo.py` regenerates the figure.
 
-Anti-bot systems also run client-side scripts to monitor your behavior. For example, they look for patterns in mouse movements, clicks, scrolling, and the timing between actions.
+Camoufox does not compute its cursor paths. It picks one of Cursory's 2356
+recorded human movements that suits the move, morphs it onto the start and end
+points, and replays it with the recording's own timing, including pauses and
+overshoots. It ships [cursory-js](https://github.com/JWriter20/cursory-js), a
+TypeScript port that reproduces the Python original exactly, at
+`browser/additions/juggler/input/cursory/`. **Cursory is LGPLv3-or-later, not
+MPL-2.0 like the rest of the browser**; see
+[`NOTICE`](browser/additions/juggler/input/cursory/NOTICE).
 
-<img src="assets/humanize-cursor.svg" alt="Cursor paths Camoufox produced with humanize=True, replayed at their recorded speed" width="900">
+# Building the browser
 
-Every dot above is a `mousemove` event the page received from six `page.mouse.move()` calls, replayed at the speed it arrived. Close dots mean the hand slowed down. `scripts/cursor-demo.py` regenerates the figure from a build.
-
-Camoufox does not draw its cursor paths. With `humanize=True` it uses [**Cursory**](https://github.com/Vinyzu/cursory) by [Vinyzu](https://github.com/Vinyzu), which holds 2356 mouse movements recorded from real people: it picks a recording whose direction, distance and wander suit the move being made, morphs it onto the requested start and end points, and replays it with that recording's own timing — pauses, overshoots and all.
-
-That last part matters as much as the shape. Camoufox previously walked a Bézier curve through two random knots and emitted a point every 10ms. Both halves of that are tells: an analytic curve sampled at a fixed rate has velocity and jerk profiles that separate cleanly from a hand's, and the acceleration came entirely from one easing function, so every movement Camoufox ever made sped up and slowed down the same way. A replayed recording has neither property.
-
-Camoufox ships [cursory-js](https://github.com/JWriter20/cursory-js), a TypeScript port of Cursory, vendored into Juggler at `additions/juggler/input/cursory/`. It reproduces the Python original bit for bit, so a path can be reproduced against `pip install cursory`. **Cursory is LGPLv3-or-later, not MPL-2.0 like the rest of the browser**; its licence and full provenance are in `additions/juggler/input/cursory/NOTICE`.
-
-However, this isn't perfect. It may still be detected with sophisticated enough analysis. (WIP for the future)
-
----
-
-## How Camoufox rotates identities
-
-AI agents need to operate across many sessions without getting flagged or rate-limited. Rotating your IP address isn't enough — every browser session carries thousands of signals that create a unique **fingerprint**. A website can see your OS, GPU, screen resolution, fonts, timezone, and more. If those signals are inconsistent or unusual, you get blocked.
-
-### Market Share Distribution
-
-Even if you are rotating your IP for each running bot instance, web access firewalls can still use machine learning to analyze incoming web traffic to detect if it's abnormal. If the Linux market share was 5%, then suddenly it's 20%, it's a red flag. They will unconditionally require all Linux users to complete a captcha.
-
-Camoufox draws identities from [fpgen](https://github.com/scrapfly/fingerprint-generator), a Bayesian network trained on live traffic, so each device characteristic appears about as often as it does in the real world, and in the combinations real devices produce.
-
-### How can Camoufox be detected?
-
-Camoufox can spoof fingerprints with a correct market share. However, **fingerprints must also be internally consistent.** A Windows user agent with an Apple M1 GPU, a MacOS user agent with a Windows DirectX renderer, and a mobile device with a desktop screen resolution are all impossible, and will be flagged for being suspicious.
-
-Every drawn identity passes a coherence check (`pythonlib/camoufox/coherence.py`) that rejects impossible combinations before launch. But of the thousands of datapoints that must agree with each other, Camoufox doesn't always get every one right. Anti-bot providers test Camoufox over and over again to find even 1 unique inconsistency, then they immediately update their background scripts to test for it.
-
----
-
-## How does Camoufox compare to other solutions?
-
-### JavaScript-based solutions
-
-In the past, developers tried injecting JavaScript to spoof these values, but it doesn't work reliably since JavaScript can't spoof everything. Incomplete coverage causes inconsistent fingerprints. For example, an anti-bot system will flag you if your network request's User Agent doesn't match your navigator's User Agent.
-
-Additionally, all injected JavaScript is detectable in some way. Anti-bot systems can check if `Object.getOwnPropertyDescriptor` reveals an overwritten property, if a function's `toString()` no longer returns `[native code]` (revealing it was hijacked), or if data in the window context doesn't match the worker thread context. Workarounds only take you so far, but there will always be a way to detect JS injection if you search deep enough.
-
-#### Camoufox's approach
-
-Since Camoufox intercepts calls in the browser's C++ implementation level, all of the hijacked objects and properties appear native. There is no JavaScript hijacking to be detected.
-
-Camoufox also generates consistent and believable fingerprints with fpgen and its coherence check. However, this can still be detected by complex fingerprint detection methods like mismatching data (as described earlier).
-
-<hr width=50>
-
-### CDP-based libraries
-
-CDP (Chrome DevTools Protocol) is an automation protocol built into Chromium and Firefox. However, CDP makes no effort to hide the fact that it's an automation protocol and exposes much of its functionality in the page scope. Some common methods are checking if `navigator.webdriver` is true, catching it reading the stack debugger, checking for variables that ChromeDriver injects into the document object for internal communication, and more.
-
-#### Camoufox's approach
-
-While Playwright uses CDP to control Chromium, it uses _Juggler_ for Firefox. Juggler is a custom protocol developed before Firefox supported CDP ([original repo](https://github.com/puppeteer/juggler)). It is a distinct module within Firefox, and not part of its core browser. This makes it easier to edit and control what's revealed to the page.
-
-Camoufox patches Juggler to give it its own isolated "copy" of the page to work with. Playwright can read and edit its own version of the page freely. Everything appears to work normally to it, but the real page is completely unaffected by these changes. The page also can't detect when things are being read (through tricks like hijacking getters) or listeners being added to watch elements.
-
-Additionally, Juggler sends its inputs directly through the Firefox's original user input handlers, meaning they are handled the exact same way as if you were using the browser normally. Camoufox also patches Firefox's headless mode to appear the same as if it were running in a normal window. But as a fallback, the Python library can run Camoufox in a [virtual display](https://camoufox.com/python/virtual-display/) if headless mode ever leaks.
-
----
-
-<h1 align="center">Build System</h1>
-
-> [!WARNING]
-> The content below is intended for those interested in building & debugging Camoufox. For usage instructions, see [pythonlib](pythonlib/) or [typescript](typescript/).
-
-### Overview
-
-Here is a diagram of the build system, and its associated make commands:
+This repository is not the Firefox source. It fetches Firefox, copies in
+[`browser/additions/`](browser/additions), applies
+[`browser/patches/`](browser/patches) and builds. The build runs on Linux; the
+Windows and macOS binaries are cross-compiled. WSL does not work.
 
 ```mermaid
-graph TD
-    FFSRC[Firefox Source] -->|make fetch| REPO
-
-    subgraph REPO[Camoufox Repository]
-        PATCHES[Fingerprint masking patches]
-        ADDONS[uBlock Origin]
-        DEBLOAT[Debloat/optimizations]
-        SYSTEM_FONTS[Win, Mac, Linux fonts]
-        JUGGLER[Patched Juggler]
+flowchart TB
+    subgraph IN["From this repository"]
+        direction LR
+        UP["upstream.sh<br/>Firefox version"]
+        ADD["additions/ + settings/<br/>files copied in"]
+        PAT["patches/<br/>diffs applied"]
     end
 
-    subgraph Local
-    REPO -->|make dir| PATCH[Patched Source]
-    PATCH -->|make build| BUILD[Built]
-    BUILD -->|make package-linux| LINUX[Linux Portable]
-    BUILD -->|make package-windows| WIN[Windows Portable]
-    BUILD -->|make package-macos| MAC[macOS Portable]
-    end
+    S1["<b>1. make dir</b><br/>download Firefox, copy additions,<br/>apply every patch"]
+    S2["<b>2. make bootstrap</b><br/>toolchains, once per machine"]
+    S3["<b>3. make build</b><br/>./mach build"]
+    S4["<b>4. make package-linux</b><br/>or package-macos, package-windows"]
+    FONTS["font bundle + fontconfig"]
+    OUT[("Release archive")]
+
+    IN --> S1 --> S2 --> S3 --> S4 --> OUT
+    FONTS --> S4
+
+    classDef input fill:#ddf4ff,stroke:#0969da,color:#0a3069
+    classDef step fill:#fff1e5,stroke:#bc4c00,color:#4a1c00
+    classDef out fill:#dafbe1,stroke:#1a7f37,color:#0f3d1c
+    class UP,ADD,PAT,FONTS input
+    class S1,S2,S3,S4 step
+    class OUT out
+    style IN fill:none,stroke:#0969da,stroke-dasharray:4 3,color:#0969da
 ```
-
-This was originally based on the LibreWolf build system.
-
-## Build CLI
-
-> [!WARNING]
-> Camoufox's build system is designed to be used in Linux. WSL will not work!
-
-First, clone this repository with Git:
 
 ```bash
 git clone --depth 1 https://github.com/daijro/camoufox
-cd camoufox
+cd camoufox/browser
+make dir                        # fetch Firefox, copy additions, apply every patch
+make bootstrap                  # one time: host packages and mach bootstrap
+make build                      # ./mach build
+make run                        # run the build
+make package-linux arch=x86_64  # or package-macos / package-windows
 ```
 
-Next, build the Camoufox source code with the following command:
+`make help` lists every target. Install `ccache`: a cold build takes about 40
+minutes and an incremental one about 5.
+
+To build and package several targets in one go:
 
 ```bash
-make dir
+python3 multibuild.py --target linux windows macos --arch x86_64 arm64
 ```
 
-Before bootstrapping, install the system build dependencies with the helper
-script. It detects your platform and installs everything the build needs
-(Python ≥ 3.11, Rust, `aria2`, `p7zip`, `msitools`, `wget`, `sqlite`, and
-the core build tools) using the appropriate package manager — Homebrew on macOS,
-or `apt`/`dnf`/`pacman` on Linux:
+| `multibuild.py` flag | Values |
+|---|---|
+| `--target` | `linux`, `windows`, `macos` (one or more) |
+| `--arch` | `x86_64`, `arm64`, `i686` (one or more; `i686` builds Windows only) |
+| `--bootstrap` | Bootstrap the build system first |
+| `--clean` | Clean the build directory first |
+
+Artifacts are written to `browser/dist/`.
+
+### With Docker
 
 ```bash
-bash scripts/install-deps.sh
-```
-
-> [!NOTE]
-> The dependency installer has so far only been tested on macOS.
-
-After that, you have to bootstrap your system to be able to build Camoufox. You only have to do this one time. It is done by running the following command:
-
-```bash
-make bootstrap
-```
-
-Finally you can build and package Camoufox the following command:
-
-```bash
-python3 multibuild.py --target linux windows macos --arch x86_64 arm64 i686
-```
-
-For new builds, `i686` is supported only for Windows. Unsupported target/architecture combinations are skipped.
-
-<details>
-<summary>
-CLI Parameters
-</summary>
-
-```bash
-Options:
-  -h, --help            show this help message and exit
-  --target {linux,windows,macos} [{linux,windows,macos} ...]
-                        Target platforms to build
-  --arch {x86_64,arm64,i686} [{x86_64,arm64,i686} ...]
-                        Target architectures to build for each platform
-  --bootstrap           Bootstrap the build system
-  --clean               Clean the build directory before starting
-
-Example:
-$ python3 multibuild.py --target linux windows macos --arch x86_64 arm64
-```
-
-</details>
-
-### Using Docker
-
-Camoufox can be built through Docker on all platforms.
-
-1. Create the Docker image containing Firefox's source code:
-
-```bash
+cd browser
 docker build -t camoufox-builder .
+docker run -v "$(pwd)/dist:/app/dist" camoufox-builder --target linux --arch x86_64
 ```
 
-2. Build Camoufox patches to a target platform and architecture:
+The container takes the `multibuild.py` flags. Add
+`-v "$HOME/.mozbuild":/root/.mozbuild:rw,z` to reuse the host's toolchains.
 
-```bash
-docker run -v "$(pwd)/dist:/app/dist" camoufox-builder --target <os> --arch <arch>
-```
+### Changing patches and running tests
+
+| Task | Where |
+|---|---|
+| Write or edit a patch | [`AGENTS.md`](AGENTS.md#changing-a-patch) |
+| Port patches to a new Firefox | [`docs/patch-upgrading-guide.md`](docs/patch-upgrading-guide.md) |
+| Which suite to run for a change | [`AGENTS.md`](AGENTS.md#testing) |
+| The CI pipeline and running any job locally | [`ci/README.md`](ci/README.md) |
+| Contributing | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+
+## Leak debugging
+
+A way to find what a site detects without deobfuscating its JavaScript: start
+from stock Firefox and add Camoufox's changes back until the site flags.
 
 <details>
-<summary>
-How can I use my local ~/.mozbuild directory?
-</summary>
-
-If you want to use the host's .mozbuild directory, you can use the following command instead to run the docker:
-
-```bash
-docker run \
-  -v "$HOME/.mozbuild":/root/.mozbuild:rw,z \
-  -v "$(pwd)/dist:/app/dist" \
-  camoufox-builder \
-  --target <os> \
-  --arch <arch>
-```
-
-</details>
-
-<details>
-<summary>
-Docker CLI Parameters
-</summary>
-
-```bash
-Options:
-  -h, --help            show this help message and exit
-  --target {linux,windows,macos} [{linux,windows,macos} ...]
-                        Target platforms to build
-  --arch {x86_64,arm64,i686} [{x86_64,arm64,i686} ...]
-                        Target architectures to build for each platform
-  --bootstrap           Bootstrap the build system
-  --clean               Clean the build directory before starting
-
-Example:
-$ docker run -v "$(pwd)/dist:/app/dist" camoufox-builder --target windows macos linux --arch x86_64 arm64 i686
-```
-
-</details>
-
-Build artifacts will now appear written under the `dist/` folder.
-
----
-
-## Working on patches
-
-`make dir` leaves `camoufox-<version>-<release>/` as a git repository with every patch applied. A patch is a diff against a checkpoint in that repository:
-
-```bash
-# A new patch
-make dir                 # apply every existing patch
-make first-checkpoint    # mark the starting point
-# ...edit files in camoufox-*/, test with `make build` and `make run`...
-make diff > patches/my-change.patch
-
-# An existing patch
-make dir
-make workspace ./patches/x.patch   # unapply x, checkpoint, reapply x
-# ...edit...
-make diff > patches/x.patch
-```
-
-`make diff` shows only tracked files, so `git add -N <file>` any new file first. `make workspace` needs every later patch to leave the hunks of `x.patch` alone. `make patch` and `make unpatch` apply or reverse one patch, and `make revert` resets the tree to unpatched Firefox.
-
-Then run the suites that cover what you changed. [`CONTRIBUTING.md`](CONTRIBUTING.md) says which ones, and [`ci/README.md`](ci/README.md) has the whole pipeline.
-
----
-
-## Leak Debugging
-
-This is a flow chart demonstrating my process for determining leaks without deobfuscating WAF Javascript. The method incrementally reintroduces Camoufox's features into Firefox's source code until the testing site flags.
-
-This process requires a Linux system and assumes you have Firefox build tools installed (see [here](https://github.com/daijro/camoufox?tab=readme-ov-file#build-cli)).
-
-<details>
-<summary>
-See flow chart...
-</summary>
+<summary>Leak debugging flow chart</summary>
 
 ```mermaid
 flowchart TD
-    A[Start] --> B[Does website flag in the official Firefox?]
-    B -->|Yes| C[Likely bad IP/rate-limiting. If the website fails on both headless and headful mode on the official Firefox distribution, the issue is not with the browser.]
-    B -->|No| D["Run make ff-dbg(1) and build(2) a clean distribution of Firefox. Does the website flag in Firefox **headless** mode(4)?"]
-    D -->|Yes| E["Does the website flag in headful mode(3) AND headless mode(4)?"]
-    D -->|No| F["Apply config.patch(5), then rebuild(2). Does the website still flag(3)?"]
-    E -->|No| G["Enable privacy.resistFingerprinting in the config(6). Does the website still flag(3)?"]
-    E -->|Yes| C
-    G -->|No| H["In the config(6), enable FPP and start omitting overrides until you find the one that fixed the leak."]
-    G -->|Yes| I[If you get to this point, you may need to deobfuscate the Javascript behind the website to identify what it's testing.]
-    F -->|Yes| K["Apply playwright/0-playwright.patch(5), then rebuild. Does it still flag?"]
-    F -->|No| J["Omit options from camoufox.cfg(6) and rerun(3) until you find the one causing the leak."]
-    K -->|No| M[Juggler needs to be debugged to locate the leak.]
-    K -->|Yes| L[The issue has nothing to do with Playwright. Apply the rest of the Camoufox patches one by one until the one causing the leak is found.]
-    M --> I
+    START(["A site flags Camoufox"]) --> Q1{"Does it flag<br/>stock Firefox?"}
+    Q1 -- yes --> NB["Not the browser:<br/>a bad IP or rate limiting"]
+    Q1 -- no --> BASE["Build the debug baseline<br/>make ff-dbg (1), make build (2)"]
+    BASE --> Q2{"Does it flag the<br/>baseline headless (4)?"}
+
+    Q2 -- yes --> Q3{"Headed (3)<br/>as well?"}
+    Q3 -- yes --> NB
+    Q3 -- no --> Q4{"Still flagged with<br/>privacy.resistFingerprinting (6)?"}
+    Q4 -- no --> FPP["Enable FPP and drop overrides<br/>until the leak returns"]
+    Q4 -- yes --> DEOB["Deobfuscate the site's script<br/>to see what it tests"]
+
+    Q2 -- no --> CFG["Apply config.patch (5)<br/>and rebuild (2)"]
+    CFG --> Q5{"Still passes (3)?"}
+    Q5 -- no --> PREFS["Remove prefs from camoufox.cfg (6)<br/>until it passes"]
+    Q5 -- yes --> PW["Apply playwright/0-playwright.patch (5)<br/>and rebuild (2)"]
+    PW --> Q6{"Still passes (3)?"}
+    Q6 -- no --> JUG["Debug Juggler"]
+    Q6 -- yes --> REST["Apply the other patches one at a time<br/>until it flags"]
+    JUG -. "if Juggler looks clean" .-> DEOB
+
+    classDef start fill:#eef2f6,stroke:#57606a,color:#1f2328
+    classDef ask fill:#ddf4ff,stroke:#0969da,color:#0a3069
+    classDef step fill:#fff1e5,stroke:#bc4c00,color:#4a1c00
+    classDef found fill:#dafbe1,stroke:#1a7f37,color:#0f3d1c
+    class START start
+    class Q1,Q2,Q3,Q4,Q5,Q6 ask
+    class BASE,CFG,PW step
+    class NB,FPP,DEOB,PREFS,JUG,REST found
 ```
 
-#### Cited Commands
-
-| #   | Command                                       | Description                                                                                                 |
-| --- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| (1) | `make ff-dbg`                                 | Setup vanilla Firefox with minimal patches.                                                                 |
-| (2) | `make build`                                  | Build the source code.                                                                                      |
-| (3) | `make run`                                    | Runs the built browser.                                                                                     |
-| (4) | `make run args="--headless https://test.com"` | Run a URL in headless mode. All redirects will be printed to the console to determine if the test passed.   |
-| (5) | `make patch ./patches/<name>.patch`           | Apply one patch. `make unpatch` reverses it.                                                                |
-| (6) | `make edit-cfg`                               | Edit camoufox.cfg in the default system editor.                                                             |
+| # | Command | What it does |
+|---|---|---|
+| 1 | `make ff-dbg` | Stock Firefox with the minimum Camoufox needs |
+| 2 | `make build` | Build |
+| 3 | `make run` | Run the build |
+| 4 | `make run args="--headless https://example.com"` | Run headless |
+| 5 | `make patch ./patches/<name>.patch` | Apply one patch (`make unpatch` reverses it) |
+| 6 | `make edit-cfg` | Edit `camoufox.cfg` |
 
 </details>
 
@@ -782,26 +723,21 @@ flowchart TD
 
 ## Licensing
 
-- **The browser** (`patches/`, `additions/`, `settings/`, and the build system) is [MPL-2.0](LICENSE), the licence of the Firefox source it modifies. The vendored Cursory trajectories are LGPLv3-or-later (`additions/juggler/input/cursory/NOTICE`).
-- **The launchers** are MIT: the Python package ([`pythonlib/LICENSE`](pythonlib/LICENSE)) and the TypeScript package ([`typescript/LICENSE`](typescript/LICENSE)). The TypeScript package also contains ports of fpgen, CPython's `random` and NumPy's random generators; their notices are in [`typescript/THIRD_PARTY_NOTICES.md`](typescript/THIRD_PARTY_NOTICES.md).
-
----
+| Part | Licence |
+|---|---|
+| The browser (`browser/`: patches, additions, settings, build system) | [MPL-2.0](LICENSE), the licence of the Firefox source it modifies |
+| Vendored Cursory trajectories | LGPLv3-or-later ([`NOTICE`](browser/additions/juggler/input/cursory/NOTICE)) |
+| Python package | MIT ([`python/LICENSE`](python/LICENSE)) |
+| TypeScript package | MIT ([`typescript/LICENSE`](typescript/LICENSE)); includes a port of NumPy's pairwise summation ([notice](typescript/THIRD_PARTY_NOTICES.md)) and depends on [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and [`python-random`](https://www.npmjs.com/package/python-random) |
 
 ## Thanks
 
-Debloating & references:
-
-- [LibreWolf](https://gitlab.com/librewolf-community/browser/source): Debloat patches & build system inspiration
-- [BetterFox](https://github.com/yokoffing/BetterFox): Speed and debloat preferences
-- [Ghostery](https://github.com/ghostery/user-agent-desktop): Debloat reference ([disable onboarding](https://github.com/daijro/camoufox/blob/main/patches/ghostery/Disable-Onboarding-Messages.patch))
-
-Web scraping & testing:
-
-- [Vinyzu/cursory](https://github.com/Vinyzu/cursory): The recorded human mouse trajectories behind `humanize=True`, vendored via [cursory-js](https://github.com/JWriter20/cursory-js) (LGPLv3-or-later — see `additions/juggler/input/cursory/NOTICE`)
-- [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor): The Bézier cursor algorithm Camoufox used before Cursory
-- [scrapfly/fingerprint-generator](https://github.com/scrapfly/fingerprint-generator) (fpgen): The device distribution identities are drawn from
-- [CreepJS](https://github.com/abrahamjuliot/creepjs), [Browserleaks](https://browserleaks.com), [BrowserScan](https://www.browserscan.net/) - Valuable leak testing sites
-
-UI theming:
-
-- [Jamir-boop/minimalisticfox](https://github.com/Jamir-boop/minimalisticfox): Inspired Camoufox's minimal css theming [(link)](https://github.com/daijro/camoufox/blob/main/settings/chrome.css)
+| Project | Used for |
+|---|---|
+| [LibreWolf](https://gitlab.com/librewolf-community/browser/source) | Debloat patches and the original build system |
+| [BetterFox](https://github.com/yokoffing/BetterFox) | Speed and debloat preferences |
+| [Ghostery](https://github.com/ghostery/user-agent-desktop) | Debloat reference ([disable onboarding](browser/patches/ghostery/Disable-Onboarding-Messages.patch)) |
+| [Vinyzu/cursory](https://github.com/Vinyzu/cursory) | The recorded human mouse movements behind `humanize=True`, vendored via [cursory-js](https://github.com/JWriter20/cursory-js) |
+| [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor) | The Bézier cursor Camoufox used before Cursory |
+| [scrapfly/fingerprint-generator](https://github.com/scrapfly/fingerprint-generator) (fpgen) | The device distribution identities are drawn from |
+| [CreepJS](https://github.com/abrahamjuliot/creepjs), [Browserleaks](https://browserleaks.com), [BrowserScan](https://www.browserscan.net/) | Leak testing |

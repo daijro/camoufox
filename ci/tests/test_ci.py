@@ -29,7 +29,7 @@ import pytest
 from ci import results
 from ci._util import CI_DIR as CI_ROOT
 from ci._pytest import junit_test_id
-from ci._util import bump_release, opaque_id, parse_version, read_upstream_sh, write_upstream_sh
+from ci._util import opaque_id, parse_version, read_upstream_sh
 from ci.pw_camoufox_plugin import load_skiplist, parse_shard, shard_of, skip_reason
 from ci.run_sundial import _iter_entries, grade, redact
 from ci.summarize import merge_shards, validate_skiplist
@@ -222,27 +222,15 @@ def test_a_class_based_id_is_a_node_id_pytest_would_accept():
     assert rest == "TestWhileRunning::test_should_pause"
 
 
-@pytest.mark.parametrize(
-    "given,expected",
-    [("beta.31", "beta.32"), ("beta.9", "beta.10"), ("alpha", "alpha.1")],
-)
-def test_release_bump(given, expected):
-    assert bump_release(given) == expected
-
-
 def test_version_parsing():
     assert parse_version("153.0.4") == (153, 0, 4)
     assert parse_version("155.0") == (155, 0, 0)
 
 
-def test_upstream_sh_roundtrip_preserves_comments(tmp_path):
+def test_upstream_sh_parsing_skips_comments(tmp_path):
     path = tmp_path / "upstream.sh"
-    path.write_text("# a comment\nversion=152.0.4\nrelease=beta.31\nextra=1\n")
-    write_upstream_sh({"version": "153.0.4", "release": "beta.32"}, path)
-    text = path.read_text()
-    assert "# a comment" in text
-    assert "extra=1" in text
-    assert read_upstream_sh(path)["version"] == "153.0.4"
+    path.write_text("# a comment\nversion=152.0.4\nrelease='beta.31'\n")
+    assert read_upstream_sh(path) == {"version": "152.0.4", "release": "beta.31"}
 
 
 def test_gate_result_keeps_the_best_outcome_across_retries():
@@ -485,17 +473,16 @@ def test_every_native_test_file_is_actually_run():
     test_crash_recovery.py was written, passing, and unwired for a while -- the
     kind of gap that looks like coverage on the filesystem and is nothing in CI.
     """
-    from pathlib import Path
 
     from ci._util import REPO_ROOT
     from ci.run_native import FILES
 
-    on_disk = {p.name for p in (REPO_ROOT / "native-tests").glob("test_*.py")}
+    on_disk = {p.name for p in (REPO_ROOT / "browser" / "tests" / "native").glob("test_*.py")}
     # Every group, not a hardcoded pair -- otherwise adding a subset silently
     # narrows the check, which is the same class of hole it exists to catch.
     wired = {f for group in FILES.values() for f in group}
     missing = on_disk - wired
-    assert not missing, f"native-tests files that no subset runs: {sorted(missing)}"
+    assert not missing, f"browser/tests/native files that no subset runs: {sorted(missing)}"
     assert not wired - on_disk, f"runner lists files that do not exist: {sorted(wired - on_disk)}"
 
 
@@ -668,6 +655,123 @@ def test_zero_distinct_is_absence_not_collision():
     assert not out["leaks"] and not out["noise"]
 
 
+def _build_tester_run(tmp_path, monkeypatch, child):
+    """Run ci.run_build_tester.main with `child` standing in for the suite."""
+    import ci.run_build_tester as bt
+
+    monkeypatch.setattr(bt, "WORK_DIR", tmp_path)
+    monkeypatch.setattr(bt, "run", child)
+    binary = tmp_path / "camoufox-bin"
+    binary.touch()
+    monkeypatch.chdir(tmp_path)
+    return bt.main(["--binary", binary.name, "--evidence-dir", str(tmp_path / "evidence")])
+
+
+def test_build_tester_does_not_grade_a_previous_runs_result(tmp_path, monkeypatch):
+    """A suite that writes nothing is an error, even with an old result on disk.
+
+    The result file lives in the work directory between runs. A suite that
+    failed before grading (here: it could not find the binary) left the last
+    run's file in place, and the gate graded that and passed.
+    """
+    from ci._util import Result
+
+    (tmp_path / "build-tester-result.json").write_text(json.dumps({"overallGrade": "A"}))
+    code = _build_tester_run(tmp_path, monkeypatch,
+                             lambda cmd, **kw: Result(1, "", "ERROR: Binary not found"))
+    assert code == 1
+
+
+def test_run_pytest_clears_a_previous_runs_junit(tmp_path, monkeypatch):
+    """pytest that dies before writing junit must leave no results to parse."""
+    from ci import _pytest
+    from ci._util import Result
+
+    junit = tmp_path / "junit.xml"
+    junit.write_text('<testsuite><testcase classname="t" name="old"/></testsuite>')
+    monkeypatch.setattr(_pytest, "run", lambda cmd, **kw: Result(4, "", ""))
+    _pytest.run_pytest(cwd=tmp_path, python=pathlib.Path("python"), args=[], junit=junit,
+                       per_test_timeout=None)
+    assert _pytest.parse_junit(junit) == {}
+
+
+def test_typescript_does_not_grade_a_previous_runs_junit(tmp_path, monkeypatch):
+    """vitest that dies before writing junit is an error, not the last result."""
+    import ci.run_typescript as ts
+    from ci._util import Result
+
+    monkeypatch.setattr(ts, "WORK_DIR", tmp_path)
+    (tmp_path / "junit-typescript_browser.xml").write_text(
+        '<testsuites><testsuite name="tests/e2e.test.ts">'
+        '<testcase classname="tests/e2e.test.ts" name="e2e old"/></testsuite></testsuites>')
+    monkeypatch.setattr(ts, "run", lambda cmd, **kw: Result(1 if "vitest" in cmd else 0, "", ""))
+    binary = tmp_path / "camoufox-bin"
+    binary.touch()
+    code = ts.main(["--browser", str(binary), "--evidence-dir", str(tmp_path / "evidence")])
+    assert code == 1
+
+
+def test_build_tester_rebuilds_a_checks_bundle_older_than_its_source(tmp_path):
+    """An edited check must reach the browser, not the bundle built before it."""
+    import importlib.util
+    import time
+
+    spec = importlib.util.spec_from_file_location(
+        "bt_bundle", CI_ROOT.parent / "browser/tests/build-tester/scripts/bundle.py")
+    bundle = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bundle)
+
+    (tmp_path / "scripts").mkdir()
+    built = tmp_path / "scripts" / "checks-bundle.js"
+    built.write_text("old")
+    time.sleep(0.01)
+    (tmp_path / "src/lib/checks").mkdir(parents=True)
+    (tmp_path / "src/lib/checks/index.ts").write_text("export {};")
+    esbuild = tmp_path / "node_modules/.bin/esbuild"
+    esbuild.parent.mkdir(parents=True)
+    esbuild.write_text('#!/bin/sh\nfor a; do case "$a" in --outfile=*) echo new > "${a#--outfile=}";; esac; done\n')
+    esbuild.chmod(0o755)
+
+    bundle.ensure_bundle(tmp_path)
+    assert built.read_text().strip() == "new"
+
+
+def test_build_tester_identities_claim_the_binarys_firefox_version(monkeypatch):
+    """The launchers claim the browser's own version; the suite must test that.
+
+    Its identities kept the recorded version (Firefox 145/146) on a 156 binary,
+    so they described identities the product never makes, and an API that
+    shipped in between read as a leak.
+    """
+    scripts = CI_ROOT.parent / "browser/tests/build-tester/scripts"
+    monkeypatch.syspath_prepend(str(scripts))
+    # presets builds the identities with the in-tree camoufox package.
+    monkeypatch.syspath_prepend(str(CI_ROOT.parent / "python/src"))
+    import presets
+
+    major = read_upstream_sh()["version"].split(".", 1)[0]
+    generated = presets.generate_presets(major)
+    every = (generated["macPerContext"] + generated["linuxPerContext"]
+             + [generated["macGlobal"], generated["linuxGlobal"]])
+    for preset in every:
+        assert f"Firefox/{major}.0" in preset["profileConfig"]["navigatorUserAgent"]
+        assert f"Firefox/{major}.0" in preset["contextOptions"]["userAgent"]
+
+
+def test_build_tester_gets_an_absolute_binary_path(tmp_path, monkeypatch):
+    """The suite runs from its own directory, so a relative --binary missed."""
+    from ci._util import Result
+
+    seen = []
+
+    def child(cmd, **kw):
+        seen.append(pathlib.Path(cmd[2]))
+        return Result(1, "", "")
+
+    _build_tester_run(tmp_path, monkeypatch, child)
+    assert seen == [tmp_path / "camoufox-bin"]
+
+
 def test_version_resolution_honours_pythonlibs_playwright_ceiling():
     """The resolver must not pick a client pythonlib refuses to install.
 
@@ -706,7 +810,7 @@ def test_pythonlib_still_pins_a_playwright_ceiling():
     from ci.versions import client_ceiling
 
     assert client_ceiling() is not None, (
-        "pythonlib/pyproject.toml no longer pins a playwright ceiling, so "
+        "python/pyproject.toml no longer pins a playwright ceiling, so "
         "ci.versions has nothing to clamp the suite to"
     )
 
@@ -1466,7 +1570,7 @@ def test_every_camoufox_test_module_is_named_unlike_upstreams():
     from ci.suite import CAMOUFOX_TESTS
 
     ours = sorted(p.name for p in CAMOUFOX_TESTS.glob("test_*.py"))
-    assert ours, "tests/camoufox/ has no test modules; the overlay guards nothing"
+    assert ours, "browser/tests/playwright/camoufox/ has no test modules; the overlay guards nothing"
     # Upstream names every module after the API it covers; ours are named after
     # the Camoufox behaviour, so a collision means someone copied a file in.
     generic = {"test_page.py", "test_network.py", "test_worker.py", "test_browsercontext.py"}
@@ -2268,19 +2372,42 @@ def test_the_native_inputs_cover_everything_that_can_change_the_binary():
         part.replace("\\", "").rstrip("/") for part in scope.group(1).split("|") if part
     }
     hashed = set(BROWSER_DIRS) | set(BROWSER_FILES)
-    missing = considered - hashed
-    assert not missing, (
-        f"{sorted(missing)} can change the binary but does not feed the native hash, "
-        "so a change there would be served a stale browser"
+    assert considered == hashed, (
+        f"resolve greps {sorted(considered - hashed)} without hashing them and hashes "
+        f"{sorted(hashed - considered)} without grepping them, so a change there "
+        "would be served a stale browser"
     )
+
+
+def test_everything_a_package_ships_from_the_repo_is_a_browser_input():
+    """A file `make package-*` copies into a release must pair that release.
+
+    The packaged fontconfig once sat outside BROWSER_DIRS, so changing it
+    neither rebuilt the browser nor moved the source digest, and a library
+    release could name a browser that shipped the old files.
+    """
+    from ci.browser_inputs import BROWSER_DIRS, BROWSER_FILES
+
+    makefile = (CI_ROOT.parent / "browser" / "Makefile").read_text(encoding="utf-8")
+    shipped = set()
+    for block in re.findall(r"--includes\s*\\\n((?:[ \t]+[^-\s]\S*\s*\\\n)+)", makefile):
+        for line in block.splitlines():
+            path = line.strip().rstrip("\\").strip()
+            if not path.startswith(("~", "/")):
+                shipped.add(f"browser/{path}")
+    assert "browser/bundle/fontconfig" in shipped, "the --includes parse no longer finds the packaged files"
+    uncovered = {
+        p for p in shipped
+        if p not in BROWSER_FILES and not any(p == d or p.startswith(f"{d}/") for d in BROWSER_DIRS)
+    }
+    assert not uncovered, f"{sorted(uncovered)} ship in a release but are not browser inputs"
 
 
 def test_nothing_the_build_runs_is_excluded_from_the_native_hash():
     """The exclusion list must not contain a script a build can reach.
 
-    NON_NATIVE_SCRIPTS exists so a tool that rewrites pythonlib's data files
-    does not invalidate a 665 MB cached browser and buy an hour of compiling
-    (measured: editing scripts/clean-fingerprint-data.py did exactly that).
+    NON_NATIVE_SCRIPTS exists so a tool no build runs does not invalidate a
+    665 MB cached browser and buy an hour of compiling.
     Excluding a script the build DOES run is the dangerous direction -- the
     cache would then serve a browser built from different sources, and every
     suite downstream would pass against it. So each entry is checked against
@@ -2320,14 +2447,14 @@ def test_jar_mn_is_read_not_guessed():
     from ci.browser_inputs import jar_entries
 
     entries = jar_entries()
-    assert entries["additions/juggler/TargetRegistry.js"] == "chrome/juggler/content/TargetRegistry.js"
-    assert entries["additions/juggler/content/FrameTree.js"] == "chrome/juggler/content/content/FrameTree.js"
-    assert entries["additions/juggler/content/JugglerFrameChild.sys.mjs"] == "chrome/juggler/content/JugglerFrameChild.sys.mjs"
+    assert entries["browser/additions/juggler/TargetRegistry.js"] == "chrome/juggler/content/TargetRegistry.js"
+    assert entries["browser/additions/juggler/content/FrameTree.js"] == "chrome/juggler/content/content/FrameTree.js"
+    assert entries["browser/additions/juggler/content/JugglerFrameChild.sys.mjs"] == "chrome/juggler/content/JugglerFrameChild.sys.mjs"
 
 
 def _fake_repo(tmp_path):
-    """A miniature additions/juggler with one resource and one native file."""
-    jug = tmp_path / "additions" / "juggler"
+    """A miniature browser/additions/juggler with one resource and one native file."""
+    jug = tmp_path / "browser" / "additions" / "juggler"
     (jug / "content").mkdir(parents=True)
     (jug / "screencast").mkdir()
     (jug / "Helper.js").write_text("resource\n")
@@ -2338,7 +2465,7 @@ def _fake_repo(tmp_path):
         "  content/Helper.js (Helper.js)\n"
         "  content/content/FrameTree.js (content/FrameTree.js)\n"
     )
-    (tmp_path / "upstream.sh").write_text("version=1\n")
+    (tmp_path / "browser" / "upstream.sh").write_text("version=1\n")
     return tmp_path
 
 
@@ -2348,14 +2475,14 @@ def test_a_javascript_change_does_not_move_the_native_hash(tmp_path):
 
     root = _fake_repo(tmp_path)
     before = native_digest(root)
-    (root / "additions" / "juggler" / "content" / "FrameTree.js").write_text("changed\n")
+    (root / "browser" / "additions" / "juggler" / "content" / "FrameTree.js").write_text("changed\n")
     assert native_digest(root) == before
 
 
 def test_a_cpp_change_does_move_the_native_hash(tmp_path):
     """...and the converse, which is the half that must never be wrong.
 
-    additions/juggler/ holds the screencast encoder and the debugging pipe as
+    browser/additions/juggler/ holds the screencast encoder and the debugging pipe as
     well as the JavaScript. Treating the directory as "all resources" would ship
     a browser without a C++ change in it.
     """
@@ -2363,7 +2490,7 @@ def test_a_cpp_change_does_move_the_native_hash(tmp_path):
 
     root = _fake_repo(tmp_path)
     before = native_digest(root)
-    (root / "additions" / "juggler" / "screencast" / "Encoder.cpp").write_text("changed\n")
+    (root / "browser" / "additions" / "juggler" / "screencast" / "Encoder.cpp").write_text("changed\n")
     assert native_digest(root) != before
 
 
@@ -2373,7 +2500,7 @@ def test_an_unrecognised_file_counts_as_native(tmp_path):
 
     root = _fake_repo(tmp_path)
     before = native_digest(root)
-    (root / "additions" / "juggler" / "something.rs").write_text("who knows\n")
+    (root / "browser" / "additions" / "juggler" / "something.rs").write_text("who knows\n")
     assert native_digest(root) != before
 
 
@@ -2387,7 +2514,7 @@ def test_jar_mn_itself_is_native(tmp_path):
 
     root = _fake_repo(tmp_path)
     before = native_digest(root)
-    (root / "additions" / "juggler" / "jar.mn").write_text(
+    (root / "browser" / "additions" / "juggler" / "jar.mn").write_text(
         "juggler.jar:\n% content juggler %content/\n  content/Helper.js (Helper.js)\n"
     )
     assert native_digest(root) != before
@@ -2398,7 +2525,7 @@ def test_the_overlay_writes_where_jar_mn_says(tmp_path):
 
     root = _fake_repo(tmp_path)
     dist = tmp_path / "bin"
-    (root / "additions" / "juggler" / "content" / "FrameTree.js").write_text("new js\n")
+    (root / "browser" / "additions" / "juggler" / "content" / "FrameTree.js").write_text("new js\n")
     written = overlay(dist, root)
     assert sorted(written) == [
         "chrome/juggler/content/Helper.js",
@@ -2597,14 +2724,14 @@ def test_build_tester_accepts_every_core_count_pythonlib_presents():
     pull request. The list follows the data, not the other way round.
     """
     repo = pathlib.Path(__file__).resolve().parents[2]
-    source = (repo / "build-tester/src/lib/checks/extended.ts").read_text(encoding="utf-8")
+    source = (repo / "browser/tests/build-tester/src/lib/checks/extended.ts").read_text(encoding="utf-8")
     block = source[source.index("plausibleHWC"):]
     listed = re.search(r"const common = \[([^\]]*)\]", block)
     assert listed, "plausibleHWC's list of common core counts was not found"
     accepted = {int(n) for n in re.findall(r"\d+", listed.group(1))}
 
     presented = set()
-    lib = repo / "pythonlib/camoufox"
+    lib = repo / "python/src/camoufox"
     for name in ("fingerprint-presets.json", "fingerprint-presets-v150.json"):
         data = json.loads((lib / name).read_text(encoding="utf-8"))
         for rows in data.get("presets", {}).values():
@@ -2612,18 +2739,13 @@ def test_build_tester_accepts_every_core_count_pythonlib_presents():
                 hwc = row.get("navigator", {}).get("hardwareConcurrency")
                 if isinstance(hwc, int):
                     presented.add(hwc)
-    table = re.search(
-        r"^PLAUSIBLE_CORE_COUNTS = \(([^)]*)\)",
-        (lib / "fingerprints.py").read_text(encoding="utf-8"),
-        re.M,
-    )
-    assert table, "PLAUSIBLE_CORE_COUNTS was not found in fingerprints.py"
-    presented |= {int(n) for n in re.findall(r"\d+", table.group(1))}
+    constants = json.loads((lib / "launcher-constants.json").read_text(encoding="utf-8"))
+    presented |= set(constants["plausibleCoreCounts"])
 
     missing = sorted(presented - accepted)
     assert not missing, (
         f"build-tester's plausibleHWC rejects core counts pythonlib presents: {missing}. "
-        "Add them to the list in build-tester/src/lib/checks/extended.ts."
+        "Add them to the list in browser/tests/build-tester/src/lib/checks/extended.ts."
     )
 
 
@@ -2682,11 +2804,11 @@ def release_repo(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
-    (repo / "upstream.sh").write_text("version=1.0\nrelease=beta.1\n")
-    (repo / "patches").mkdir()
-    (repo / "patches" / "a.patch").write_text("a\n")
-    (repo / "additions" / "juggler").mkdir(parents=True)
-    (repo / "additions" / "juggler" / "jar.mn").write_text("% content juggler %content/\n")
+    (repo / "browser" / "patches").mkdir(parents=True)
+    (repo / "browser" / "upstream.sh").write_text("version=1.0\nrelease=beta.1\n")
+    (repo / "browser" / "patches" / "a.patch").write_text("a\n")
+    (repo / "browser" / "additions" / "juggler").mkdir(parents=True)
+    (repo / "browser" / "additions" / "juggler" / "jar.mn").write_text("% content juggler %content/\n")
     (repo / "typescript").mkdir()
     (repo / "typescript" / "x.ts").write_text("x\n")
     _git(repo, "add", "-A")
@@ -2705,19 +2827,19 @@ def test_driver_pr_on_the_released_sources_tests_the_release(release_repo):
 def test_driver_pr_on_unreleased_browser_sources_builds(release_repo):
     """#785: main had merged browser patches (#779) that no release carried yet,
     so a TS-only pull request fetched beta.31 and ran #779's patch guards on it."""
-    (release_repo / "patches" / "a.patch").write_text("merged but unreleased\n")
+    (release_repo / "browser" / "patches" / "a.patch").write_text("merged but unreleased\n")
     _git(release_repo, "commit", "-qam", "browser change merged to main")
     base = _git(release_repo, "rev-parse", "HEAD")
     (release_repo / "typescript" / "x.ts").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
     result, log = _scope(release_repo, base)
     assert result == "browser_changed=true"
-    assert "patches/a.patch" in log
+    assert "browser/patches/a.patch" in log
 
 
 def test_browser_pr_builds(release_repo):
     base = _git(release_repo, "rev-parse", "HEAD")
-    (release_repo / "patches" / "a.patch").write_text("b\n")
+    (release_repo / "browser" / "patches" / "a.patch").write_text("b\n")
     _git(release_repo, "commit", "-qam", "browser change")
     assert _scope(release_repo, base)[0] == "browser_changed=true"
 
@@ -2810,12 +2932,10 @@ def test_the_patch_guard_matrix_runs_every_group():
 
 
 def test_native_shards_split_the_tests_without_overlap():
-    from ci.run_native import parse_shard
-
     ids = [f"t{i}" for i in range(9)]
     parts = [ids[i - 1 :: n] for i, n in (parse_shard(f"{k}/4") for k in range(1, 5))]
     assert sorted(t for part in parts for t in part) == ids
-    with pytest.raises(SystemExit):
+    with pytest.raises(RuntimeError):
         parse_shard("5/4")
 
 

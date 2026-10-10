@@ -1,0 +1,77 @@
+diff --git a/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs b/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
+index f47f9993c9..ed0cca10dd 100644
+--- a/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
++++ b/browser/components/urlbar/UrlbarProviderInterventions.sys.mjs
+@@ -444,7 +444,7 @@ export class UrlbarProviderInterventions extends UrlbarProvider {
+    * @param {UrlbarQueryContext} queryContext The query context object
+    */
+   async isActive(queryContext) {
+-    if (
++    if (true ||
+       !queryContext.searchString ||
+       queryContext.searchString.length > UrlbarShared.MAX_TEXT_LENGTH ||
+       lazy.UrlUtils.REGEXP_LIKE_PROTOCOL.test(queryContext.searchString) ||
+diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/components/search/SearchEngineSelector.sys.mjs
+index 3a42b383af..0a528ea491 100644
+--- a/toolkit/components/search/SearchEngineSelector.sys.mjs
++++ b/toolkit/components/search/SearchEngineSelector.sys.mjs
+@@ -328,6 +328,59 @@ export class SearchEngineSelector {
+    *   could be obtained.
+    */
+   async #getConfiguration(firstTime = true) {
++    if (true) {
++      // Camoufox ships no search engines. This stub stands in for the Remote
++      // Settings fetch, which is dead anyway: camoufox.cfg sets
++      // services.settings.server to "", so nothing is ever fetched.
++      //
++      // The shape matters. This used to return a search-config **v1** record
++      // (`appliesTo`/`webExtension`, no `recordType`), but the selector is the
++      // Rust SearchEngineSelector, which deserializes v2:
++      //
++      //   #[serde(tag = "recordType", rename_all = "camelCase")]
++      //   enum JSONSearchConfigurationRecords { ... }
++      //
++      // `recordType` is the enum's tag, so a record without it aborts the whole
++      // document with `missing field \`recordType\``. setSearchConfig() threw on
++      // every launch, #init() died, and the browser ended up with no search
++      // service at all -- which also takes out the urlbar's heuristic result,
++      // so history and autofill never render (daijro/camoufox#737).
++      //
++      // Returning [] is not an option either: getEngineConfiguration() rejects
++      // an empty array with "Failed to get engine data from Remote Settings".
++      // So the configuration has to carry one inert engine. Its search URL
++      // points at the loopback address, so the "no engines" stance holds even
++      // if something does try to submit a search -- the request cannot leave
++      // the machine. settings/distribution/policies.json separately defines a
++      // "None" engine and makes it the default; this simply agrees with it.
++      return [
++        {
++          "recordType": "engine",
++          "identifier": "none",
++          "base": {
++            "name": "None",
++            "classification": "unknown",
++            "urls": {
++              "search": {
++                "base": "http://127.0.0.1/",
++                "method": "GET",
++                "searchTermParamName": "q"
++              }
++            }
++          },
++          "variants": [{ "environment": { "allRegionsAndLocales": true } }]
++        },
++        {
++          "recordType": "defaultEngines",
++          "globalDefault": "none",
++          "specificDefaults": []
++        },
++        {
++          "recordType": "engineOrders",
++          "orders": []
++        }
++      ];
++    }
+     let result = [];
+     let failed = false;
+     try {
