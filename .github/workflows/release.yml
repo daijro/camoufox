@@ -237,8 +237,12 @@ jobs:
         # Full run, not --quick: this is the release path, and the one invariant
         # that cannot be recovered after publishing is a family fonts.json
         # reports that the packaged fontconfig cannot resolve.
+        # It checks the launcher's own font draws, so it needs the camoufox
+        # package and its dependencies.
         working-directory: browser
-        run: python3 scripts/verify-fonts.py
+        run: |
+          python3 -m pip install -e ../python
+          python3 scripts/verify-fonts.py
 
       - name: Prepare the source tree
         # setup-minimal (which fetches the tarball) -> dir -> mozbootstrap, with

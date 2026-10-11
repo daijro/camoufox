@@ -2948,3 +2948,20 @@ def test_memory_growth_runs_on_pull_requests_and_gates_the_merge():
     assert shards == [f"{i}/{n}" for i in range(1, n + 1)]
     assert "growth" in jobs["gate"]["needs"]
     assert "growth" in jobs["summary"]["needs"]
+
+
+def test_every_workflow_step_running_verify_fonts_installs_the_package():
+    """verify-fonts.py imports camoufox for its draw checks. The release job ran
+    it without the package, so the merged release failed on the first import."""
+    import yaml
+
+    for workflow in sorted((CI_ROOT.parent / ".github" / "workflows").glob("*.yml")):
+        jobs = yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"]
+        for name, job in jobs.items():
+            for step in job.get("steps", []):
+                run = "\n".join(line for line in (step.get("run") or "").splitlines()
+                                if not line.lstrip().startswith("#"))
+                if "verify-fonts.py" in run:
+                    assert "pip install -e ../python" in run or "pip install -e python" in run, (
+                        f"{workflow.name}:{name} runs verify-fonts.py without installing the camoufox package"
+                    )
