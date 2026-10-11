@@ -31,13 +31,13 @@
 <table>
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://go.nodemaven.com/camoufoxghsept" target="_blank">
-        <img width="380" alt="nodemaven" src="https://github.com/user-attachments/assets/1e4af9b7-3ebc-4251-96f9-2925c75efb04"/>
+      <a href="https://go.nodemaven.com/camoufoxreadmeoctober" target="_blank">
+        <img width="380" alt="nodemaven" src="https://github.com/user-attachments/assets/3bc942c9-c031-466c-a2a4-3859c3e54721"/>
       </a>
     </td>
     <td valign="middle">
-      <a href="https://go.nodemaven.com/camoufoxghsept">NodeMaven</a>: The most efficient proxy provider for Web Scrapping and Automation with the Highest Quality IP on the market.<br>
-      <strong>Why <a href="https://go.nodemaven.com/camoufoxghsept">NodeMaven</a>?</strong><br>
+      <a href="https://go.nodemaven.com/camoufoxreadmeoctober">NodeMaven</a>: The most efficient proxy provider for Web Scrapping and Automation with the Highest Quality IP on the market.<br>
+      <strong>Why <a href="https://go.nodemaven.com/camoufoxreadmeoctober">NodeMaven</a>?</strong><br>
       • 99.9% uptime<br>
       • ZIP Targeting<br>
       • IP filtering: all proxies have fraud score <97%<br>
