@@ -50,13 +50,13 @@
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://node-proxy.com" target="_blank">
+      <a href="https://node-proxy.com/?c=6P8Z23" target="_blank">
         <img width="380" alt="nodeproxy" src="https://github.com/user-attachments/assets/c25b50a7-cd7d-49ee-bfc1-3b3671ff55ed" />
       </a>
     </td>
     <td valign="middle">
       <strong>Need proxies for Camoufox?</strong><br>
-      Use <strong><a href="https://node-proxy.com">Node Proxy</a></strong> — a provider of <strong>datacenter, residential and mobile proxies</strong> offering high speed, security and near-100% uptime. <strong>Fully tested and supported in Camoufox.</strong><br>
+      Use <strong><a href="https://node-proxy.com/?c=6P8Z23">Node Proxy</a></strong> — a provider of <strong>datacenter, residential and mobile proxies</strong> offering high speed, security and near-100% uptime. <strong>Fully tested and supported in Camoufox.</strong><br>
       <strong>What sets them apart from other providers</strong><br>
       • 90+ IP score<br>
       • HTTP + SOCKS5 — multiprotocol support<br>
@@ -66,7 +66,7 @@
       • Special terms for Enterprise clients<br>
      <strong>Want to support Camoufox?</strong><br>
      Just use my promo code <strong><code>CAMOUFOX</code></strong> — it gets you a <strong>30% discount</strong> and supports the developer at the same time.<br>
-     <strong><a href="https://node-proxy.com">Get started at node-proxy.com →</a></strong>
+     <strong><a href="https://node-proxy.com/?c=6P8Z23">Get started at node-proxy.com →</a></strong>
     </td>
   </tr>
   <tr>
