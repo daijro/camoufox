@@ -16,7 +16,7 @@
 
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
 
-const TRAJECTORIES_URL = 'chrome://juggler/content/input/cursory/trajectories.json';
+const TRAJECTORIES_URL = 'resource://gre/modules/juggler/input/cursory/trajectories.json';
 
 /**
  * Read a packaged chrome:// resource as text.

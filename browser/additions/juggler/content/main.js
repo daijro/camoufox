@@ -8,12 +8,12 @@
 // NOTE: since these have to exist in both Worker and main threads, and we do
 // not know a way to load ES Modules in worker threads, we have to use the loadSubScript
 // utility instead.
-Services.scriptloader.loadSubScript('chrome://juggler/content/SimpleChannel.js');
-Services.scriptloader.loadSubScript('chrome://juggler/content/content/Runtime.js');
+Services.scriptloader.loadSubScript('resource://gre/modules/juggler/SimpleChannel.js');
+Services.scriptloader.loadSubScript('resource://gre/modules/juggler/content/Runtime.js');
 
-const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
-const {FrameTree} = ChromeUtils.importESModule('chrome://juggler/content/content/FrameTree.js');
-const {PageAgent} = ChromeUtils.importESModule('chrome://juggler/content/content/PageAgent.js');
+const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
+const {FrameTree} = ChromeUtils.importESModule('resource://gre/modules/juggler/content/FrameTree.js');
+const {PageAgent} = ChromeUtils.importESModule('resource://gre/modules/juggler/content/PageAgent.js');
 
 const helper = new Helper();
 

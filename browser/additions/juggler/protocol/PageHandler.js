@@ -4,13 +4,13 @@
 
 "use strict";
 
-const {Helper, EventWatcher} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const {Helper, EventWatcher} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
-const {NetworkObserver, PageNetwork} = ChromeUtils.importESModule('chrome://juggler/content/NetworkObserver.js');
-const {PageTarget} = ChromeUtils.importESModule('chrome://juggler/content/TargetRegistry.js');
+const {NetworkObserver, PageNetwork} = ChromeUtils.importESModule('resource://gre/modules/juggler/NetworkObserver.js');
+const {PageTarget} = ChromeUtils.importESModule('resource://gre/modules/juggler/TargetRegistry.js');
 const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
-const {MouseDispatch} = ChromeUtils.importESModule('chrome://juggler/content/input/MouseDispatch.js');
-const {humanizedSteps} = ChromeUtils.importESModule('chrome://juggler/content/input/CursorTrajectory.js');
+const {MouseDispatch} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
+const {humanizedSteps} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
 
 const Cc = Components.classes;
 const Ci = Components.interfaces;

@@ -70,8 +70,17 @@ def click_events(page) -> str:
 
 
 def main() -> int:
+    from importlib.metadata import version
+
     from camoufox._warnings import LeakWarning
     from camoufox.sync_api import Camoufox
+
+    # Playwright's own Firefox driver rejected isMobile before 1.61, so an older
+    # client fails before the browser is reached.
+    installed = version("playwright")
+    if tuple(int(p) for p in installed.split(".")[:2]) < (1, 61):
+        print(f"FAIL: Playwright {installed} rejects is_mobile for Firefox; this guard needs 1.61 or newer")
+        return 1
 
     binary = resolve_binary()
     with Camoufox(os="linux", headless=True, executable_path=str(binary),

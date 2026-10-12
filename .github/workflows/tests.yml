@@ -475,8 +475,8 @@ jobs:
 
       - name: Hash the inputs that can change compiled output
         id: native
-        # Not hashFiles(): this has to EXCLUDE the files jar.mn packages as
-        # resources, and hashFiles has no way to say "everything except".
+        # Not hashFiles(): this has to EXCLUDE the files Juggler's moz.build
+        # packages as resources, and hashFiles has no way to say "everything except".
         # ci/browser_inputs.py is stdlib-only on purpose -- it runs here, before
         # the pip install that a cache hit skips.
         run: echo "hash=$(python3 -m ci.browser_inputs --digest)" >> "$GITHUB_OUTPUT"
@@ -487,7 +487,7 @@ jobs:
         with:
           path: camoufox-dist.tar.zst
           # Keyed on the COMPILED inputs only, so a Juggler JavaScript change
-          # still hits: the .js files jar.mn packages are laid over the restored
+          # still hits: the .js files Juggler's moz.build packages are laid over the restored
           # browser below instead of relinking libxul to deliver them.
           #
           # The hash is the classification. There is no "did only JS change?"
@@ -648,10 +648,10 @@ jobs:
         # The compiled half is identical by construction -- that is what the key
         # asserts. What can still differ is the JavaScript, and in the
         # unpackaged dist/bin that CI archives there is no omni.ja to rebuild:
-        # Juggler is loose files under chrome/juggler/, so delivering new
+        # Juggler is loose files under modules/juggler/, so delivering new
         # JavaScript is a copy. ci/browser_inputs.py reads the destinations out
-        # of jar.mn rather than assuming a prefix, because two files in the same
-        # source directory land at different depths.
+        # of Juggler's moz.build rather than assuming a prefix, because two files
+        # in the same source directory land at different depths.
         run: |
           set -euo pipefail
           command -v zstd >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y zstd; }
@@ -673,10 +673,10 @@ jobs:
         run: |
           python3 -c "
           from ci import results
-          from ci.browser_inputs import jar_entries
+          from ci.browser_inputs import resource_entries
           r = results.GateResult(gate='build')
           r.metrics['from_cache'] = True
-          r.metrics['resources_overlaid'] = len(jar_entries())
+          r.metrics['resources_overlaid'] = len(resource_entries())
           r.metrics['cache_key'] = '''${{ steps.prebuilt.outputs.cache-primary-key }}'''
           r.note('restored a browser whose compiled half was built from identical '
                  'sources, and laid this branch\\'s resources over it; nothing was compiled')

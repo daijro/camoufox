@@ -23,7 +23,7 @@
  * of steps.
  */
 
-const kCursoryUrl = 'chrome://juggler/content/input/cursory/cursory.js';
+const kCursoryUrl = 'resource://gre/modules/juggler/input/cursory/cursory.js';
 
 /**
  * Samples per second.

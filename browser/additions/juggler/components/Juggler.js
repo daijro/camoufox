@@ -5,12 +5,12 @@
 // Services is available as a global in XPCOM component context
 
 // Load SimpleChannel in browser-process global.
-Services.scriptloader.loadSubScript('chrome://juggler/content/SimpleChannel.js');
-const {Dispatcher} = ChromeUtils.importESModule("chrome://juggler/content/protocol/Dispatcher.js");
-const {BrowserHandler} = ChromeUtils.importESModule("chrome://juggler/content/protocol/BrowserHandler.js");
-const {NetworkObserver} = ChromeUtils.importESModule("chrome://juggler/content/NetworkObserver.js");
-const {TargetRegistry} = ChromeUtils.importESModule("chrome://juggler/content/TargetRegistry.js");
-const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+Services.scriptloader.loadSubScript('resource://gre/modules/juggler/SimpleChannel.js');
+const {Dispatcher} = ChromeUtils.importESModule("resource://gre/modules/juggler/protocol/Dispatcher.js");
+const {BrowserHandler} = ChromeUtils.importESModule("resource://gre/modules/juggler/protocol/BrowserHandler.js");
+const {NetworkObserver} = ChromeUtils.importESModule("resource://gre/modules/juggler/NetworkObserver.js");
+const {TargetRegistry} = ChromeUtils.importESModule("resource://gre/modules/juggler/TargetRegistry.js");
+const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 const {ActorManagerParent} = ChromeUtils.importESModule('resource://gre/modules/ActorManagerParent.sys.mjs');
 const helper = new Helper();
 
@@ -21,10 +21,10 @@ const Ci = Components.interfaces;
 ActorManagerParent.addJSWindowActors({
   JugglerFrame: {
     parent: {
-      esModuleURI: 'chrome://juggler/content/JugglerFrameParent.sys.mjs',
+      esModuleURI: 'resource://gre/modules/juggler/JugglerFrameParent.sys.mjs',
     },
     child: {
-      esModuleURI: 'chrome://juggler/content/JugglerFrameChild.sys.mjs',
+      esModuleURI: 'resource://gre/modules/juggler/JugglerFrameChild.sys.mjs',
       events: {
         // Normally, we instantiate an actor when a new window is created.
         DOMWindowCreated: {},

@@ -753,3 +753,34 @@ def test_no_config_key_is_ever_deleted():
         f"mark them \"removed\" instead: {sorted(deleted.items())}"
         + explain("config-keys-are-never-deleted")
     )
+
+
+# ---------------------------------------------------------------------------
+# branding
+# ---------------------------------------------------------------------------
+
+
+def test_pages_see_an_official_firefox_build():
+    """Rule: pages-see-firefox-not-camoufox."""
+    mozconfig = (BROWSER / "assets" / "base.mozconfig").read_text(encoding="utf-8").splitlines()
+    assert "export MOZILLA_OFFICIAL=1" in mozconfig, explain("pages-see-firefox-not-camoufox")
+    assert "export MOZ_TELEMETRY_REPORTING=" in mozconfig, explain("pages-see-firefox-not-camoufox")
+    jar = (BROWSER / "additions" / "browser" / "branding" / "camoufox" / "content" / "jar.mn").read_text(encoding="utf-8")
+    entries = [line for line in jar.splitlines() if line.startswith("  content/branding/")]
+    assert entries and all("(../../official/" in line for line in entries), explain("pages-see-firefox-not-camoufox")
+
+
+# ---------------------------------------------------------------------------
+# juggler
+# ---------------------------------------------------------------------------
+
+
+def test_juggler_is_not_a_chrome_package():
+    """Rule: juggler-is-not-a-chrome-package."""
+    juggler = BROWSER / "additions" / "juggler"
+    assert not (juggler / "jar.mn").exists(), explain("juggler-is-not-a-chrome-package")
+    referencing = [
+        str(f.relative_to(juggler)) for f in juggler.rglob("*")
+        if f.is_file() and "chrome://juggler" in f.read_text(encoding="utf-8", errors="replace")
+    ]
+    assert not referencing, f"{referencing}\n" + explain("juggler-is-not-a-chrome-package")

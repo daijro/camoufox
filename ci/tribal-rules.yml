@@ -489,3 +489,45 @@ rules:
       which answers plain GETs and cannot open the CONNECT tunnel the upgrade
       needs. A real proxy handles CONNECT, as every https:// site needs it to.
       Those tests are skiplisted rather than passed by changing the browser.
+
+  # -------------------------------------------------------------------------
+  # Branding
+  # -------------------------------------------------------------------------
+
+  - id: pages-see-firefox-not-camoufox
+    title: Camoufox builds as an official Firefox, and pages load Firefox's branding files
+    check: automated
+    evidence:
+      - "issue #847: hCaptcha tokens rejected on a site that validates them server-side, with nothing attached to the browser"
+      - "measured 2026-10-10 against stock Firefox 156.0.1: every chrome://branding/content/ logo (contentaccessible=yes) was Camoufox's, and browser-main.js differed because the non-official build ships browser-development-helpers.js and contentaccessible-parity.patch had to remove its loader"
+      - "contentaccessible-parity.patch (8c2047a) had declined MOZILLA_OFFICIAL as moving telemetry, update-channel and branding defaults; base.mozconfig now sets it and switches MOZ_TELEMETRY_REPORTING back off"
+    rationale: >-
+      Stock Firefox releases are official builds with Firefox branding, so
+      anything a page can reach must be what that build ships. Camoufox keeps
+      its own name only where no page can see it: the binary, window class,
+      profile directory and OS icons. MOZILLA_OFFICIAL also switches on
+      compile-time telemetry reporting, which base.mozconfig turns back off;
+      turns dump() off, which Juggler's readiness line needs, so camoufox.cfg
+      turns it back on; and makes Widevine verify host binaries that Camoufox
+      does not sign. contentaccessible-parity.py compares every
+      content-reachable file's bytes with a stock release.
+
+  # -------------------------------------------------------------------------
+  # Juggler
+  # -------------------------------------------------------------------------
+
+  - id: juggler-is-not-a-chrome-package
+    title: Juggler loads from resource://gre/modules/juggler/, never a chrome package
+    check: automated
+    evidence:
+      - "issue #847: hCaptcha's hsw.js runs new Worker('chrome://juggler/content/content/WorkerMain.js'); the constructor returns while a juggler package is registered and throws a SecurityError when none is, and a returned Worker gets a puzzle"
+      - "the reporter's bisect on #847: removing only the manifest line passes, renaming the package passes, an inert Juggler.js under the registered name fails"
+      - "measured 2026-10-12: inside a namespace stock Firefox registers (resource://gre, chrome://devtools) the constructor behaves the same for existing and missing files"
+    rationale: >-
+      Content processes receive every registered chrome package and resource
+      host, so a name only Camoufox registers is detectable whatever the files
+      under it do. A renamed or per-build-random package only moves the tell,
+      since the next probe asks for the new name. Juggler's files are installed
+      with FINAL_TARGET_FILES under modules/juggler/, inside resource://gre,
+      which every Firefox registers. contentaccessible-parity.py compares the
+      registered names with a stock release and runs the Worker probe.

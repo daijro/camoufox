@@ -75,37 +75,6 @@ index 8337336dc8..9eb83f33bb 100644
  
    DWORD creationFlags = CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT;
  
-diff --git a/browser/installer/allowed-dupes.mn b/browser/installer/allowed-dupes.mn
-index 3bc36691ce..dbd3d465f6 100644
---- a/browser/installer/allowed-dupes.mn
-+++ b/browser/installer/allowed-dupes.mn
-@@ -66,6 +66,12 @@ browser/chrome/browser/builtin-addons/webcompat/shims/empty-shim.txt
- removed-files
- #endif
- 
-+# Juggler/marionette files
-+chrome/juggler/content/content/floating-scrollbars.css
-+browser/chrome/devtools/skin/floating-scrollbars-responsive-design.css
-+chrome/juggler/content/server/stream-utils.js
-+chrome/marionette/content/stream-utils.js
-+
- # Bug 1606928 - There's no reliable way to connect Top Sites favicons with the favicons in the Search Service
- browser/chrome/browser/content/activity-stream/data/content/tippytop/favicons/allegro-pl.ico
- browser/defaults/settings/main/search-config-icons/96327a73-c433-5eb4-a16d-b090cadfb80b
-diff --git a/browser/installer/package-manifest.in b/browser/installer/package-manifest.in
-index 46725ca049..8aa34cf7cc 100644
---- a/browser/installer/package-manifest.in
-+++ b/browser/installer/package-manifest.in
-@@ -197,6 +197,9 @@
- @RESPATH@/chrome/remote.manifest
- #endif
- 
-+@RESPATH@/chrome/juggler@JAREXT@
-+@RESPATH@/chrome/juggler.manifest
-+
- ; Modules
- @RESPATH@/browser/modules/*
- @RESPATH@/modules/*
 diff --git a/devtools/server/socket/websocket-server.js b/devtools/server/socket/websocket-server.js
 index 257e87fe0c..8c13f02010 100644
 --- a/devtools/server/socket/websocket-server.js
