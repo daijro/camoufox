@@ -190,3 +190,14 @@ class FpgenModelError(RuntimeError):
     """Raised when fpgen's pinned model cannot be installed where fpgen reads it."""
 
     ...
+
+
+class JugglerPipeTimeout(TimeoutError):
+    """
+    Raised by the opt-in pipe watchdog when a Juggler round-trip probe does not
+    return within the configured timeout: the pipe to the browser appears dead
+    (browser process alive, commands hang forever — daijro/camoufox#719 class).
+    Subclasses TimeoutError, so `except TimeoutError` keeps working.
+    """
+
+    ...

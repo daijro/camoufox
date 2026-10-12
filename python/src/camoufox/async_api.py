@@ -24,6 +24,7 @@ from .utils import (
     persistent_context_options,
     spoofs_window_dimensions,
 )
+from .watchdog import PipeWatchdog, watchdog_from
 
 
 class AsyncCamoufox(PlaywrightContextManager):
@@ -36,8 +37,14 @@ class AsyncCamoufox(PlaywrightContextManager):
         super().__init__()
         self.launch_options = launch_options
         self.browser: Optional[Union[Browser, BrowserContext]] = None
+        self._watchdog: Optional[PipeWatchdog] = None
 
     async def __aenter__(self) -> Union[Browser, BrowserContext]:
+        _watchdog_opts = (
+            watchdog_from(self.launch_options.pop("pipe_watchdog"))
+            if "pipe_watchdog" in self.launch_options
+            else None
+        )
         _playwright = await super().__aenter__()
         try:
             self.browser = await AsyncNewBrowser(_playwright, **self.launch_options)
@@ -47,12 +54,22 @@ class AsyncCamoufox(PlaywrightContextManager):
             # process/connection is not leaked.
             await super().__aexit__(type(e), e, e.__traceback__)
             raise
+        if _watchdog_opts is not None:
+            # Dead-pipe detection (#719): browser alive, every Juggler command hangs
+            # forever with no error. The opt-in background probe converts that silent
+            # freeze into a typed, catchable JugglerPipeTimeout. See watchdog.py.
+            self._watchdog = PipeWatchdog(
+                self.browser, self._loop, _watchdog_opts  # type: ignore[attr-defined]
+            ).start()
         return self.browser
 
     async def __aexit__(self, *args: Any):
         # Run the base teardown even if browser.close() raises (e.g. the browser
         # process already crashed), so the playwright driver/connection is not leaked.
         try:
+            if self._watchdog:
+                self._watchdog.stop()
+                self._watchdog = None
             if self.browser:
                 await self.browser.close()
         finally:

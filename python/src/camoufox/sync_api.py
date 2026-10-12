@@ -22,6 +22,7 @@ from .utils import (
     spoofs_window_dimensions,
     sync_attach_vd,
 )
+from .watchdog import PipeWatchdog, watchdog_from
 
 
 class Camoufox(PlaywrightContextManager):
@@ -34,8 +35,14 @@ class Camoufox(PlaywrightContextManager):
         super().__init__()
         self.launch_options = launch_options
         self.browser: Optional[Union[Browser, BrowserContext]] = None
+        self._watchdog: Optional[PipeWatchdog] = None
 
     def __enter__(self) -> Union[Browser, BrowserContext]:
+        _watchdog_opts = (
+            watchdog_from(self.launch_options.pop("pipe_watchdog"))
+            if "pipe_watchdog" in self.launch_options
+            else None
+        )
         super().__enter__()
         try:
             self.browser = NewBrowser(self._playwright, **self.launch_options)
@@ -47,6 +54,13 @@ class Camoufox(PlaywrightContextManager):
             # the asyncio loop" until the process restarts (#82).
             super().__exit__(type(e), e, e.__traceback__)
             raise
+        if _watchdog_opts is not None:
+            # Dead-pipe detection (#719): browser alive, every Juggler command hangs
+            # forever with no error. The opt-in background probe converts that silent
+            # freeze into a typed, catchable JugglerPipeTimeout. See watchdog.py.
+            self._watchdog = PipeWatchdog(
+                self.browser, self._loop, _watchdog_opts  # type: ignore[attr-defined]
+            ).start()
         return self.browser
 
     def __exit__(self, *args: Any):
@@ -55,6 +69,9 @@ class Camoufox(PlaywrightContextManager):
         # "running" state, so every later sync Camoufox/Playwright start in the same
         # thread fails with "Sync API inside the asyncio loop" until process restart.
         try:
+            if self._watchdog:
+                self._watchdog.stop()
+                self._watchdog = None
             if self.browser:
                 self.browser.close()
         finally:
