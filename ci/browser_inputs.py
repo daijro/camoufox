@@ -23,22 +23,23 @@ it.
   `browser/additions/juggler/` is not all JavaScript. It also holds the
   screencast encoder and the remote-debugging pipe -- 5 .cpp, 5 .h, 2 .idl, 3
   components.conf, 4 moz.build -- which are compiled into libxul. Only the files
-  `jar.mn` actually lists as packaged resources are treated as resources.
+  its moz.build lists in FINAL_TARGET_FILES are treated as resources.
   Everything else, including anything with an extension nobody has thought about
   yet, counts as native and forces a build. Fail closed.
 
-  The source-to-destination mapping is per-file, not a prefix rule. jar.mn maps
-  `TargetRegistry.js` to `content/TargetRegistry.js` (a level added),
-  `content/FrameTree.js` to `content/content/FrameTree.js` (preserved), and
-  `content/JugglerFrameChild.sys.mjs` to `content/JugglerFrameChild.sys.mjs` (a
-  level dropped). Two files in the same source directory land at different
-  depths. Assuming a prefix would write one of them to the wrong path, leave the
-  old copy in place, and run a browser with stale Juggler -- while every suite
-  reported green, because the browser works fine, it is just not the one under
-  review. So the mapping is read from jar.mn, never inferred.
+  The source-to-destination mapping is per-file, not a prefix rule. moz.build
+  installs `content/FrameTree.js` at `modules/juggler/content/FrameTree.js`
+  (depth preserved) but `content/JugglerFrameChild.sys.mjs` at
+  `modules/juggler/JugglerFrameChild.sys.mjs` (a level dropped). Two files in
+  the same source directory land at different depths. Assuming a prefix would
+  write one of them to the wrong path, leave the old copy in place, and run a
+  browser with stale Juggler -- while every suite reported green, because the
+  browser works fine, it is just not the one under review. So the mapping is
+  read from moz.build, never inferred.
 
-  jar.mn itself is native: it decides both the mapping and what is packaged at
-  all, so changing it must force a real build rather than a re-overlay.
+  That moz.build is itself native: it decides both the mapping and what is
+  packaged at all, so changing it must force a real build rather than a
+  re-overlay.
 
 Run:
     python3 -m ci.browser_inputs --digest        # the native-inputs hash
@@ -100,45 +101,34 @@ BUILD_ENTRY_POINTS = (
 )
 
 JUGGLER = Path("browser") / "additions" / "juggler"
-JAR_MN = JUGGLER / "jar.mn"
+MOZ_BUILD = JUGGLER / "moz.build"
 
-# `content/Helper.js (Helper.js)` -- destination first, source in parentheses.
-_ENTRY = re.compile(r"^\s*(\S+)\s+\((\S+)\)\s*$")
-# `% content juggler %content/` -- the chrome package this jar registers.
-_PACKAGE = re.compile(r"^\s*%\s+content\s+(\S+)\s+%")
+# `FINAL_TARGET_FILES.modules.juggler.content += [ "content/main.js", ... ]`: the
+# attribute path is the destination directory, each string a source file.
+_FILES = re.compile(r"^FINAL_TARGET_FILES\.([\w.]+)\s*\+=\s*\[(.*?)\]", re.M | re.S)
+_STRING = re.compile(r'"([^"]+)"')
 
 
-def jar_entries(root: Optional[Path] = None) -> Dict[str, str]:
-    """{repo-relative source: path inside the built dist}, straight from jar.mn.
+def resource_entries(root: Optional[Path] = None) -> Dict[str, str]:
+    """{repo-relative source: path inside the built dist}, straight from moz.build.
 
-    The dist path is `chrome/<package>/<destination>` -- observed directly
-    against a build: `content/Helper.js` in jar.mn is
-    `dist/bin/chrome/juggler/content/Helper.js` on disk.
+    FINAL_TARGET_FILES installs each file under its own name in the directory
+    the attribute path names: `FINAL_TARGET_FILES.modules.juggler.content`
+    puts `content/main.js` at `dist/bin/modules/juggler/content/main.js`.
     """
     root = root or REPO_ROOT
-    text = (root / JAR_MN).read_text(encoding="utf-8")
-    package = "juggler"
-    for line in text.splitlines():
-        found = _PACKAGE.match(line)
-        if found:
-            package = found.group(1)
-            break
-
+    text = (root / MOZ_BUILD).read_text(encoding="utf-8")
     entries: Dict[str, str] = {}
-    for line in text.splitlines():
-        if line.lstrip().startswith("#") or line.lstrip().startswith("%"):
-            continue
-        found = _ENTRY.match(line)
-        if not found:
-            continue
-        destination, source = found.group(1), found.group(2)
-        entries[str(JUGGLER / source)] = f"chrome/{package}/{destination}"
+    for target, body in _FILES.findall(text):
+        directory = target.replace(".", "/")
+        for source in _STRING.findall(body):
+            entries[str(JUGGLER / source)] = f"{directory}/{Path(source).name}"
     return entries
 
 
 def resource_sources(root: Optional[Path] = None) -> set:
     """Repo-relative paths that are packaged as-is and never compiled."""
-    return set(jar_entries(root))
+    return set(resource_entries(root))
 
 
 def native_inputs(root: Optional[Path] = None) -> List[str]:
@@ -212,13 +202,13 @@ def overlay(dist_bin: Path, root: Optional[Path] = None) -> List[str]:
     """Lay the current resources over an already-built dist/bin.
 
     Every entry is written, not just the changed ones: the set is then always
-    exactly what jar.mn says, so a stale file cannot survive. (A resource
-    *removed* from jar.mn is handled by jar.mn being a native input -- that
-    forces a real build rather than an overlay.)
+    exactly what moz.build says, so a stale file cannot survive. (A resource
+    *removed* from moz.build is handled by moz.build being a native input --
+    that forces a real build rather than an overlay.)
     """
     root = root or REPO_ROOT
     written = []
-    for source, destination in sorted(jar_entries(root).items()):
+    for source, destination in sorted(resource_entries(root).items()):
         target = dist_bin / destination
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(root / source, target)
@@ -243,7 +233,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         for rel in native_inputs():
             print(rel)
     if args.resources:
-        for source, destination in sorted(jar_entries().items()):
+        for source, destination in sorted(resource_entries().items()):
             print(f"{source} -> {destination}")
     if args.overlay:
         written = overlay(args.overlay)

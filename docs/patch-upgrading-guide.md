@@ -366,13 +366,17 @@ Port the upstream hunks one by one, keeping the Camoufox changes. Then check:
 
    ```python
    {
-       "esModule": "chrome://juggler/content/components/Juggler.js",
+       "esModule": "resource://gre/modules/juggler/components/Juggler.js",
        "constructor": "JugglerFactory",
    }
    ```
 
-3. Every file upstream added or renamed is listed in `jar.mn`, and every
-   `ChromeUtils.importESModule()` path still exists.
+3. Every file upstream added or renamed is listed in `FINAL_TARGET_FILES` in
+   `juggler/moz.build`, and every `ChromeUtils.importESModule()` path still
+   exists. Upstream registers a `juggler` chrome package in `jar.mn`; Camoufox
+   does not, because a page can detect one (see `juggler/moz.build`), so
+   upstream's `chrome://juggler/content/` paths become
+   `resource://gre/modules/juggler/`.
 
 Then `make dir && make build && make tests`. A wrong `components.conf` shows up
 as one of these:

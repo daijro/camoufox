@@ -2,9 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const {protocol} = ChromeUtils.importESModule("chrome://juggler/content/protocol/Protocol.js");
-const {checkScheme} = ChromeUtils.importESModule("chrome://juggler/content/protocol/PrimitiveTypes.js");
-const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const {protocol} = ChromeUtils.importESModule("resource://gre/modules/juggler/protocol/Protocol.js");
+const {checkScheme} = ChromeUtils.importESModule("resource://gre/modules/juggler/protocol/PrimitiveTypes.js");
+const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 
 const helper = new Helper();
 

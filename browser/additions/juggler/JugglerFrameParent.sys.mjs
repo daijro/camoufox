@@ -1,7 +1,7 @@
 "use strict";
 
-const { TargetRegistry } = ChromeUtils.importESModule('chrome://juggler/content/TargetRegistry.js');
-const { Helper } = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const { TargetRegistry } = ChromeUtils.importESModule('resource://gre/modules/juggler/TargetRegistry.js');
+const { Helper } = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 
 const helper = new Helper();
 

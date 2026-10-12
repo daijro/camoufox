@@ -1,7 +1,7 @@
 "use strict";
 
-const { Helper } = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
-const { initialize } = ChromeUtils.importESModule('chrome://juggler/content/content/main.js');
+const { Helper } = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
+const { initialize } = ChromeUtils.importESModule('resource://gre/modules/juggler/content/main.js');
 
 const Ci = Components.interfaces;
 const helper = new Helper();

@@ -36,6 +36,12 @@ fi
 
 export MOZ_REQUIRE_SIGNING=
 
+# Stock Firefox releases are official builds, and pages can see what that flag
+# changes (e.g. the browser-development-helpers.js file it drops). It also turns
+# telemetry reporting on by default, so that is switched back off.
+export MOZILLA_OFFICIAL=1
+export MOZ_TELEMETRY_REPORTING=
+
 mk_add_options MOZ_CRASHREPORTER=0
 mk_add_options MOZ_DATA_REPORTING=0
 mk_add_options MOZ_SERVICES_HEALTHREPORT=0

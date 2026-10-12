@@ -56,7 +56,11 @@ ADDED_ENGINE_RE = re.compile(r'"#addEngineToStore: Adding engine:" "([^"]*)"')
 
 def launch_and_capture(binary: Path, profile: Path) -> str:
     """Start the browser on a fresh profile with search logging, return output."""
-    (profile / "user.js").write_text('user_pref("browser.search.log", true);\n')
+    # An official build keeps the chrome console off stdout, where the log is read.
+    (profile / "user.js").write_text(
+        'user_pref("browser.search.log", true);\n'
+        'user_pref("devtools.console.stdout.chrome", true);\n'
+    )
     proc = subprocess.Popen(
         [str(binary), "-profile", str(profile), "-headless", "-no-remote", "about:blank"],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace",

@@ -2437,19 +2437,19 @@ def test_excluded_scripts_exist():
         assert (REPO_ROOT / script).is_file(), f"{script} no longer exists"
 
 
-def test_jar_mn_is_read_not_guessed():
+def test_juggler_moz_build_is_read_not_guessed():
     """Two files in one source directory land at different depths.
 
     This is the trap the whole overlay turns on. A prefix rule would write
     JugglerFrameChild.sys.mjs one level too deep, leave the old copy in place,
     and run stale Juggler while every suite went green.
     """
-    from ci.browser_inputs import jar_entries
+    from ci.browser_inputs import resource_entries
 
-    entries = jar_entries()
-    assert entries["browser/additions/juggler/TargetRegistry.js"] == "chrome/juggler/content/TargetRegistry.js"
-    assert entries["browser/additions/juggler/content/FrameTree.js"] == "chrome/juggler/content/content/FrameTree.js"
-    assert entries["browser/additions/juggler/content/JugglerFrameChild.sys.mjs"] == "chrome/juggler/content/JugglerFrameChild.sys.mjs"
+    entries = resource_entries()
+    assert entries["browser/additions/juggler/TargetRegistry.js"] == "modules/juggler/TargetRegistry.js"
+    assert entries["browser/additions/juggler/content/FrameTree.js"] == "modules/juggler/content/FrameTree.js"
+    assert entries["browser/additions/juggler/content/JugglerFrameChild.sys.mjs"] == "modules/juggler/JugglerFrameChild.sys.mjs"
 
 
 def _fake_repo(tmp_path):
@@ -2460,10 +2460,9 @@ def _fake_repo(tmp_path):
     (jug / "Helper.js").write_text("resource\n")
     (jug / "content" / "FrameTree.js").write_text("resource\n")
     (jug / "screencast" / "Encoder.cpp").write_text("native\n")
-    (jug / "jar.mn").write_text(
-        "juggler.jar:\n% content juggler %content/\n"
-        "  content/Helper.js (Helper.js)\n"
-        "  content/content/FrameTree.js (content/FrameTree.js)\n"
+    (jug / "moz.build").write_text(
+        'FINAL_TARGET_FILES.modules.juggler += ["Helper.js"]\n'
+        'FINAL_TARGET_FILES.modules.juggler.content += ["content/FrameTree.js"]\n'
     )
     (tmp_path / "browser" / "upstream.sh").write_text("version=1\n")
     return tmp_path
@@ -2504,23 +2503,23 @@ def test_an_unrecognised_file_counts_as_native(tmp_path):
     assert native_digest(root) != before
 
 
-def test_jar_mn_itself_is_native(tmp_path):
+def test_juggler_moz_build_itself_is_native(tmp_path):
     """It decides the mapping and what is packaged at all.
 
-    If changing it only re-overlaid, a resource removed from jar.mn would keep
-    its stale copy in the dist forever.
+    If changing it only re-overlaid, a resource removed from moz.build would
+    keep its stale copy in the dist forever.
     """
     from ci.browser_inputs import native_digest
 
     root = _fake_repo(tmp_path)
     before = native_digest(root)
-    (root / "browser" / "additions" / "juggler" / "jar.mn").write_text(
-        "juggler.jar:\n% content juggler %content/\n  content/Helper.js (Helper.js)\n"
+    (root / "browser" / "additions" / "juggler" / "moz.build").write_text(
+        'FINAL_TARGET_FILES.modules.juggler += ["Helper.js"]\n'
     )
     assert native_digest(root) != before
 
 
-def test_the_overlay_writes_where_jar_mn_says(tmp_path):
+def test_the_overlay_writes_where_moz_build_says(tmp_path):
     from ci.browser_inputs import overlay
 
     root = _fake_repo(tmp_path)
@@ -2528,10 +2527,10 @@ def test_the_overlay_writes_where_jar_mn_says(tmp_path):
     (root / "browser" / "additions" / "juggler" / "content" / "FrameTree.js").write_text("new js\n")
     written = overlay(dist, root)
     assert sorted(written) == [
-        "chrome/juggler/content/Helper.js",
-        "chrome/juggler/content/content/FrameTree.js",
+        "modules/juggler/Helper.js",
+        "modules/juggler/content/FrameTree.js",
     ]
-    assert (dist / "chrome/juggler/content/content/FrameTree.js").read_text() == "new js\n"
+    assert (dist / "modules/juggler/content/FrameTree.js").read_text() == "new js\n"
 
 
 def test_the_overlay_runs_only_on_a_hit_and_before_the_upload():
@@ -2808,7 +2807,7 @@ def release_repo(tmp_path):
     (repo / "browser" / "upstream.sh").write_text("version=1.0\nrelease=beta.1\n")
     (repo / "browser" / "patches" / "a.patch").write_text("a\n")
     (repo / "browser" / "additions" / "juggler").mkdir(parents=True)
-    (repo / "browser" / "additions" / "juggler" / "jar.mn").write_text("% content juggler %content/\n")
+    (repo / "browser" / "additions" / "juggler" / "moz.build").write_text('FINAL_TARGET_FILES.modules.juggler += []\n')
     (repo / "typescript").mkdir()
     (repo / "typescript" / "x.ts").write_text("x\n")
     _git(repo, "add", "-A")

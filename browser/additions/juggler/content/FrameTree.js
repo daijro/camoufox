@@ -7,7 +7,7 @@ const Ci = Components.interfaces;
 const Cr = Components.results;
 const Cu = Components.utils;
 
-const {Helper} = ChromeUtils.importESModule('chrome://juggler/content/Helper.js');
+const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 
 const helper = new Helper();
 
@@ -849,7 +849,7 @@ class Worker {
     this._workerId = helper.generateId();
     this._workerDebugger = workerDebugger;
 
-    workerDebugger.initialize('chrome://juggler/content/content/WorkerMain.js');
+    workerDebugger.initialize('resource://gre/modules/juggler/content/WorkerMain.js');
 
     this._channel = new SimpleChannel(`content::worker[${this._workerId}]`, 'worker-' + this._workerId);
     this._channel.setTransport({
