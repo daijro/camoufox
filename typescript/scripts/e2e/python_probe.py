@@ -2,7 +2,8 @@
 """Launch the Python camoufox with a fixed identity and run the shared page probe.
 
 Used by tests/e2e.test.ts to compare the TypeScript launcher against Python on
-the same binary and the same identity:
+the same binary and the same identity, and by ci/run_install.py to launch the
+installed package (node_probe.mjs is its Node twin):
 
     echo '{"mode": "headless", "url": "...", "kwargs": {...}}' | \
         .venv/bin/python typescript/scripts/e2e/python_probe.py
@@ -10,8 +11,10 @@ the same binary and the same identity:
 Prints one JSON object: {"probe": <probe result>, "config": <CAMOU_CONFIG>}.
 `mode` is "config-only" (launch_options() alone), "headless" (Camoufox(...) -> new_page),
 "persistent" (Camoufox(persistent_context=True, user_data_dir=...)), "virtual"
-(Camoufox(headless="virtual")) or "context"
-(Camoufox(...) -> NewContext(browser, preset=req["preset"]) -> new_page).
+(Camoufox(headless="virtual")), "context"
+(Camoufox(...) -> NewContext(browser, preset=req["preset"]) -> new_page) or "interact"
+("headless", then click #button and type req["text"] into #input; adds the page's
+"events" and the input's "value").
 
 stdout carries the JSON and nothing else: pythonlib prints to stdout (e.g.
 "Skipping unknown patch" when the binary predates a config key), so everything
@@ -76,7 +79,17 @@ def run(req):
                 else:
                     raise RuntimeError('the headful page never got focus on Xvfb')
             probe = page.evaluate(PROBE)
+            if req['mode'] == 'interact':
+                return {'probe': probe, **interact(page, req['text'])}
     return {'probe': probe, 'config': config}
+
+
+def interact(page, text):
+    """Click ci/run_install.py's button, type into its input, and read back what the page logged."""
+    page.locator('#button').click()
+    page.locator('#input').press_sequentially(text)
+    events = [json.loads(line) for line in page.locator('#events').text_content().splitlines()]
+    return {'events': events, 'value': page.locator('#input').input_value()}
 
 
 if __name__ == '__main__':

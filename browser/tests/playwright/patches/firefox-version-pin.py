@@ -18,7 +18,6 @@ major in both rv: and Firefox/.
 
 import asyncio
 import configparser
-import re
 import sys
 from pathlib import Path
 
@@ -26,9 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 from helpers import launch_kwargs, resolve_binary  # noqa: E402
 
-from ci._util import read_upstream_sh  # noqa: E402
+from ci._util import STOCK_UA, read_upstream_sh  # noqa: E402
 
-STOCK_UA = re.compile(r"^Mozilla/5\.0 \([^)]+; rv:(\d+)\.0\) Gecko/20100101 Firefox/(\d+)\.0$")
 URL = "https://version-pin.test/"
 WORKER_UA = """async () => {
     const src = 'postMessage(navigator.userAgent)';

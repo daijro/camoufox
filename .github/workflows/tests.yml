@@ -31,7 +31,8 @@ name: Tests
 #   1  unit        pythonlib                                  ~1 min
 #   2  browser     BUILD if patches/additions changed,
 #                  otherwise FETCH the released binary        ~70 min / ~1 min
-#   3a smoke       patch guards, skiplist audit, build-tester ~15 min
+#   3a smoke       patch guards, skiplist audit, build-tester,
+#                  installed packages                         ~15 min
 #   3b full        Playwright (6 shards), leaks, stealth      ~40 min
 #   4  gate        the single required status check
 #
@@ -400,12 +401,15 @@ jobs:
   # ---------------------------------------------------------------------------
   install:
     name: Install from the packages
-    # Tier 1. Every other suite runs from the source tree; this one installs
+    # Tier 3a. Every other suite runs from the source tree; this one installs
     # the packed pythonlib and npm package into clean environments and runs the
     # real `camoufox fetch`, with TMPDIR on its own tmpfs so a rename from the
     # temporary directory into the cache fails here as it fails for users
-    # (EXDEV). See ci/run_install.py.
-    needs: [resolve, static]
+    # (EXDEV). Each installed package then launches the browser it fetched and
+    # the browser under test, clicks and types on a local page, and checks
+    # what the page saw, so it waits for the latter. See ci/run_install.py.
+    needs: [resolve, static, build, fetch-browser]
+    if: always() && (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -413,10 +417,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install -r ci/requirements.txt
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: typescript/package.json
@@ -438,7 +441,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         # Pinned like a published package: to the release built from these
         # browser sources when there is one, else the newest release.
-        run: python3 -m ci.run_install --tmpdir /mnt/install-tmp --browser-tag "${{ needs.resolve.outputs.browser_tag }}"
+        run: |
+          python3 -m ci.run_install --tmpdir /mnt/install-tmp \
+            --browser-tag "${{ needs.resolve.outputs.browser_tag }}" --browser "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

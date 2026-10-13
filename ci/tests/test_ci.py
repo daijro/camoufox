@@ -2964,3 +2964,118 @@ def test_every_workflow_step_running_verify_fonts_installs_the_package():
                     assert "pip install -e ../python" in run or "pip install -e python" in run, (
                         f"{workflow.name}:{name} runs verify-fonts.py without installing the camoufox package"
                     )
+
+
+# ---------------------------------------------------------------------------
+# the installed packages launch a browser
+# ---------------------------------------------------------------------------
+
+
+def _probe(ua="Mozilla/5.0 (X11; Linux x86_64; rv:156.0) Gecko/20100101 Firefox/156.0", fonts=None):
+    return {"navigator": {"userAgent": ua},
+            "fonts": fonts if fonts is not None else {"Arial": True, "DejaVu Sans": True, "Menlo": False}}
+
+
+def test_a_coherent_installed_launch_has_no_problems():
+    from ci.run_install import identity_problems
+
+    ua = _probe()["navigator"]["userAgent"]
+    assert identity_problems(_probe(), ua, "156.0.1-beta.32", ["Arial", "DejaVu Sans", "Cantarell"]) == []
+
+
+def test_an_installed_launch_must_claim_the_browser_it_runs():
+    from ci.run_install import identity_problems
+
+    ua = "Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0"
+    problems = identity_problems(_probe(ua), ua, "156.0.1", ["Arial"])
+    assert len(problems) == 1 and "Firefox 156.0.1" in problems[0]
+
+
+def test_an_installed_launch_must_send_the_user_agent_the_page_sees():
+    from ci.run_install import identity_problems
+
+    other = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:156.0) Gecko/20100101 Firefox/156.0"
+    problems = identity_problems(_probe(), other, "156.0.1", ["Arial"])
+    assert len(problems) == 1 and "request's User-Agent" in problems[0]
+
+
+def test_an_installed_launch_must_render_the_fonts_it_claims():
+    """No fonts beside the binary, or a fontconfig that cannot find them, and
+    every family measures as the fallback."""
+    from ci.run_install import identity_problems
+
+    ua = _probe()["navigator"]["userAgent"]
+    missing = identity_problems(_probe(fonts={"Arial": False, "DejaVu Sans": True}), ua, "156.0", ["Arial"])
+    assert len(missing) == 1 and "'Arial'" in missing[0]
+    unmeasured = identity_problems(_probe(fonts={"Menlo": True}), ua, "156.0", ["Arial"])
+    assert len(unmeasured) == 1 and "none of the fonts" in unmeasured[0]
+
+
+_CLICK = {"type": "click", "trusted": True, "target": "button"}
+
+
+def _typed(text, trusted=True, target="input"):
+    return [{"type": t, "trusted": trusted, "target": target} for _ in text for t in ("keydown", "keyup")]
+
+
+def test_a_trusted_click_and_typing_have_no_problems():
+    from ci.run_install import interaction_problems
+
+    assert interaction_problems([_CLICK, *_typed("ab")], "ab", "ab") == []
+
+
+def test_the_click_must_reach_the_button_once_and_trusted():
+    from ci.run_install import interaction_problems
+
+    for clicks in ([], [_CLICK, _CLICK], [{**_CLICK, "trusted": False}], [{**_CLICK, "target": "input"}]):
+        problems = interaction_problems([*clicks, *_typed("ab")], "ab", "ab")
+        assert len(problems) == 1 and "one trusted click" in problems[0], clicks
+
+
+def test_the_typed_text_must_land_in_the_input():
+    from ci.run_install import interaction_problems
+
+    problems = interaction_problems([_CLICK, *_typed("ab")], "a", "ab")
+    assert len(problems) == 1 and "holds 'a'" in problems[0]
+
+
+def test_every_key_must_arrive_trusted_on_the_input():
+    """A dropped key, an untrusted key or one that lands elsewhere is not what
+    a user's typing produces, even when the input ends up holding the text."""
+    from ci.run_install import interaction_problems
+
+    dropped = interaction_problems([_CLICK, *_typed("a")], "ab", "ab")
+    assert len(dropped) == 1 and "typed 2 keys" in dropped[0]
+    untrusted = interaction_problems([_CLICK, *_typed("ab", trusted=False)], "ab", "ab")
+    assert len(untrusted) == 1 and "untrusted" in untrusted[0]
+    elsewhere = interaction_problems([_CLICK, *_typed("ab", target="button")], "ab", "ab")
+    assert len(elsewhere) == 1 and "missed the input" in elsewhere[0]
+
+
+def test_the_install_gate_launches_and_interacts_through_each_installed_package():
+    """`camoufox fetch` alone proved the packages install; nothing launched a
+    browser through them. Each launch goes through the user's import path, the
+    installed package rather than the source tree, also targets the browser
+    under test, and clicks and types the same way from Python and Node."""
+    from ci import run_install
+
+    source = (CI_ROOT / "run_install.py").read_text(encoding="utf-8")
+    assert '"--browser", type=Path, required=True' in source
+    assert '[str(python), "-I", str(PYTHON_PROBE)]' in source
+    assert "shutil.copy(NODE_PROBE, project / NODE_PROBE.name)" in source
+    assert '{"executable_path": str(browser)}' in source
+    python_probe = run_install.PYTHON_PROBE.read_text(encoding="utf-8")
+    node_probe = run_install.NODE_PROBE.read_text(encoding="utf-8")
+    assert "from camoufox.sync_api import Camoufox" in python_probe
+    assert 'import { Camoufox } from "camoufox";' in node_probe
+    for step in ("locator('#button').click()", "locator('#input').press_sequentially(text)"):
+        assert step in python_probe
+    for step in ('locator("#button").click()', 'locator("#input").pressSequentially(req.text)'):
+        assert step in node_probe
+    assert run_install.PROBE.is_file()
+
+    install = _jobs()["install"]
+    assert any(s.get("uses") == "./.github/actions/prepare-browser" for s in install["steps"])
+    assert {"build", "fetch-browser"} <= set(install["needs"])
+    runs = "\n".join(s.get("run") or "" for s in install["steps"])
+    assert '--browser "$CAMOUFOX_BINARY"' in runs
