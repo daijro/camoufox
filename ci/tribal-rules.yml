@@ -490,6 +490,25 @@ rules:
       needs. A real proxy handles CONNECT, as every https:// site needs it to.
       Those tests are skiplisted rather than passed by changing the browser.
 
+  - id: ipv4-only-network-not-disable-ipv6
+    title: geoip without a proxy keeps IPv6 only where it agrees, and never uses network.dns.disableIPv6
+    check: manual
+    evidence:
+      - "issue #849: with geoip=True and an IPv4 address, network.dns.disableIPv6 made IPv6-only sites fail with NS_ERROR_UNKNOWN_HOST"
+      - "netwerk/dns/nsDNSService2.cpp GetAFForLookup and nsHostResolver.cpp's IP-literal path: the pref only stops AAAA lookups, so an IPv6 literal still connects and WebRTC still gathers IPv6"
+      - "browser/tests/playwright/patches/ipv4-only-network.py: with network:ipv4Only, IPv6 literals and AAAA-only names fail at once, dual-stack names use IPv4, and WebRTC offers no IPv6 candidate; with it off, all of them use IPv6"
+    rationale: >-
+      A real browser is on a dual-stack network or an IPv4-only one, and the
+      pref made a third state no network produces: names never resolve to IPv6
+      but IPv6 literals connect, so a page could read the host's IPv6 address
+      and tell the browser apart. Without a proxy, sites see this host's own
+      addresses, and public_ip() prefers IPv4, so the identity comes from the
+      IPv4 address. The launcher keeps IPv6 when the host's IPv6 address
+      geolocates to the same timezone and region, and otherwise sets
+      network:ipv4Only, which makes the browser behave exactly as on an
+      IPv4-only network. A failed IPv6 lookup counts as no IPv6. Behind a proxy
+      the browser reaches sites only through the proxy, so nothing is set.
+
   # -------------------------------------------------------------------------
   # Branding
   # -------------------------------------------------------------------------

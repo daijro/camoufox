@@ -71,6 +71,10 @@ const browser = await Camoufox({
 locale, geolocation and the WebRTC IP from it. Pass an IP string instead to
 skip the lookup.
 
+Without a proxy, sites can reach this machine over IPv6. IPv6 stays on when the
+machine's IPv6 address geolocates where the IPv4 identity does. Otherwise, the
+browser behaves as on an IPv4-only network, and a `LeakWarning` says why.
+
 ### Persistent profile
 
 ```javascript
@@ -197,7 +201,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `os` | `string \| string[]` | fpgen's real-world mix | `"windows"`, `"macos"`, `"linux"`, or a list to pick from. |
 | `headless` | `boolean \| "virtual"` | `false` | See [Headless modes](#headless-modes). |
 | `proxy` | `{ server, username?, password?, bypass? }` | none | Playwright proxy. |
-| `geoip` | `boolean \| string` | none | `true` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. |
+| `geoip` | `boolean \| string` | none | `true` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. Without a proxy, also decides whether IPv6 stays on. |
 | `geoip_db` | `string` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
 | `locale` | `string \| string[]` | from `geoip`, else the drawn identity's | Locale(s), e.g. `"en-US"`. The first is used for `Intl`. |
 | `humanize` | `boolean \| number` | off | Human cursor movement. A number caps one movement at that many seconds (default cap 1.5). |

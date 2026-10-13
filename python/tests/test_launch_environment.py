@@ -227,6 +227,81 @@ class TestToggleSettingsAreWrittenBothWays:
         assert self._prefs(firefox_user_prefs={pref: toggled})[pref] == toggled
 
 
+class TestGeoipIPv6:
+    """Without a proxy, sites reach this host over IPv6 when it has an address.
+
+    network.dns.disableIPv6 used to be set for every IPv4 geoip address, which
+    broke IPv6-only sites (daijro/camoufox#849) while IPv6 literals still
+    connected. IPv6 is now kept when the host's address geolocates where the
+    identity does; otherwise network:ipv4Only makes the browser behave as on an
+    IPv4-only network.
+    """
+
+    UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0"
+    IPV4 = "203.0.113.7"
+    HERE = {"timezone": "America/Chicago", "locale:region": "US"}
+    PLACES = {
+        IPV4: HERE,
+        "2001:db8::1": HERE,
+        "2001:db8::2": {"timezone": "Europe/Berlin", "locale:region": "DE"},
+    }
+
+    def _launch(self, monkeypatch, host_ipv6, **kwargs):
+        class Location:
+            def __init__(self, config):
+                self.config = config
+
+            def as_config(self):
+                return dict(self.config)
+
+        def geolocate(ip, **kwargs):
+            if ip not in self.PLACES:
+                raise utils.UnknownIPLocation(ip)
+            return Location(self.PLACES[ip])
+
+        sent = {}
+        monkeypatch.setattr(utils, "geoip_allowed", lambda: None)
+        monkeypatch.setattr(utils, "get_geolocation", geolocate)
+        monkeypatch.setattr(utils, "public_ipv6", host_ipv6 if callable(host_ipv6) else lambda: host_ipv6)
+        monkeypatch.setattr(utils, "get_env_vars", lambda config, *args, **kwargs: sent.update(config) or {})
+        prefs = utils.launch_options(
+            config={"navigator.userAgent": self.UA}, **kwargs
+        )["firefox_user_prefs"]
+        assert "network.dns.disableIPv6" not in prefs
+        return sent
+
+    def test_ipv6_in_the_same_place_is_kept(self, monkeypatch, isolated_launch_dependencies):
+        sent = self._launch(monkeypatch, "2001:db8::1", geoip=self.IPV4)
+        assert "network:ipv4Only" not in sent
+        assert sent["webrtc:ipv4"] == self.IPV4
+
+    def test_no_ipv6_route_is_an_ipv4_only_network(self, monkeypatch, isolated_launch_dependencies):
+        sent = self._launch(monkeypatch, None, geoip=self.IPV4)
+        assert sent["network:ipv4Only"] is True
+
+    @pytest.mark.parametrize("host_ipv6", ["2001:db8::2", "2001:db8::3"], ids=["elsewhere", "unknown"])
+    def test_ipv6_that_disagrees_is_dropped_with_a_warning(
+        self, monkeypatch, isolated_launch_dependencies, host_ipv6
+    ):
+        with pytest.warns(utils.LeakWarning, match="IPv6 address geolocates somewhere other"):
+            sent = self._launch(monkeypatch, host_ipv6, geoip=self.IPV4)
+        assert sent["network:ipv4Only"] is True
+
+    def test_proxy_leaves_ipv6_alone(self, monkeypatch, isolated_launch_dependencies):
+        def no_lookup():
+            raise AssertionError("the host's IPv6 address is not what a proxied site sees")
+
+        sent = self._launch(
+            monkeypatch, no_lookup, geoip=self.IPV4, proxy={"server": "http://127.0.0.1:3128"}
+        )
+        assert "network:ipv4Only" not in sent
+
+    def test_ipv6_identity_leaves_ipv6_alone(self, monkeypatch, isolated_launch_dependencies):
+        sent = self._launch(monkeypatch, None, geoip="2001:db8::1")
+        assert "network:ipv4Only" not in sent
+        assert sent["webrtc:ipv6"] == "2001:db8::1"
+
+
 class TestPrefsReachStartup:
     """Launcher prefs must be readable by camoufox.cfg at startup.
 

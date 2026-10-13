@@ -155,6 +155,36 @@ const PUBLIC_IP_URLS = [
 // launches through the same proxy don't re-hit the API endpoints.
 const publicIPCache = new Map<string, Promise<string>>();
 
+let publicIPv6Pending: Promise<string | null> | undefined;
+
+/**
+ * This host's public IPv6 address, or null when it has none it can reach the
+ * internet from. The hosts have AAAA records only, so an answer proves the route.
+ */
+export function publicIPv6(): Promise<string | null> {
+	publicIPv6Pending ??= resolvePublicIPv6();
+	return publicIPv6Pending;
+}
+
+async function resolvePublicIPv6(): Promise<string | null> {
+	for (const url of ["https://api6.ipify.org", "https://v6.ident.me"]) {
+		let ip: string;
+		try {
+			const response = await getImpit().fetch(url);
+			if (!response.ok) {
+				continue;
+			}
+			ip = (await response.text()).trim();
+		} catch {
+			continue;
+		}
+		if (validIPv6(ip)) {
+			return ip;
+		}
+	}
+	return null;
+}
+
 /**
  * Sends a request to a public IP api.
  */
