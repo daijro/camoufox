@@ -40,9 +40,10 @@ DECOMPRESSED_FILES = ('fingerprint-network.json', 'values.json', 'values.dat')
 # and CAMOUFOX_FPGEN_DATA may point it at this directory. The pin carries its
 # hash, so a values.dat from the pinned model is kept and any other is dropped.
 
-# 2100-01-01T00:00:00Z. fpgen refetches files whose mtime is older than this
-# window (pkgman.files_are_recent).
-PINNED_MTIME = 4102444800
+# 2038-01-01T00:00:00Z. fpgen refetches files whose mtime is older than this
+# window (pkgman.files_are_recent). It fits in signed 32 bits: AWS Lambda keeps
+# file times that way, and reads a later date back as one in the past.
+PINNED_MTIME = 2145916800
 FPGEN_MAX_AGE_S = 5 * 7 * 24 * 3600
 
 # fpgen fetches a model from this URL instead of GitHub. A caller who set it
@@ -152,16 +153,16 @@ def _drop_foreign_decompressed(data_dir: Path) -> None:
 
 
 def _stamp(data_dir: Path) -> None:
-    """Date the files past fpgen's refresh and write the stamp. Files seeded by
-    another user (a root-built image) may be left as they are while fpgen still
-    considers them current."""
+    """Date the files past fpgen's refresh and write the stamp. Files that
+    cannot be re-dated (seeded by another user, or on a read-only filesystem)
+    may be left as they are while fpgen still considers them current."""
     for name in PIN['file_sha256']:
         path = data_dir / name
         if int(path.stat().st_mtime) == PINNED_MTIME:
             continue
         try:
             os.utime(path, (PINNED_MTIME, PINNED_MTIME))
-        except PermissionError:
+        except OSError:
             if path.stat().st_mtime < time.time() - FPGEN_MAX_AGE_S:
                 raise
     stamp = data_dir / STAMP

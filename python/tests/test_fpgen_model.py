@@ -7,6 +7,7 @@ webgl.py. python/scripts/pin-fpgen-model.py pinned the model for CI only.
 """
 
 import ast
+import errno
 import hashlib
 import io
 import json
@@ -288,6 +289,50 @@ def test_read_only_current_pinned_model_is_used(read_only, pinned):
     ensure_fpgen_model(read_only)
 
     assert pinned == []
+
+
+@pytest.fixture
+def read_only_fs(monkeypatch):
+    """A filesystem that cannot be written, such as AWS Lambda's outside /tmp."""
+
+    def refuse(path, *args, **kwargs):
+        raise OSError(errno.EROFS, os.strerror(errno.EROFS), str(path))
+
+    return lambda: monkeypatch.setattr(os, "utime", refuse)
+
+
+def _as_int32(seconds):
+    return (seconds + 2**31) % 2**32 - 2**31
+
+
+@pytest.mark.parametrize(
+    "mtime",
+    [
+        # Lambda keeps file times as signed 32-bit seconds, so a stamp past
+        # 2038 reads back as a date in the past.
+        pytest.param(_as_int32(PINNED_MTIME), id="pinned-on-32-bit-times"),
+        pytest.param(time.time(), id="current"),
+    ],
+)
+def test_read_only_filesystem_model_fpgen_accepts_is_used(tmp_path, pinned, read_only_fs, mtime):
+    data_dir = tmp_path / "data"
+    _write(data_dir, MEMBERS, mtime=mtime, stamp=fpgen_model.PIN["sha256"])
+    read_only_fs()
+
+    ensure_fpgen_model(data_dir)
+
+    assert pinned == []
+
+
+def test_read_only_filesystem_stale_model_fails_loudly(tmp_path, pinned, read_only_fs):
+    """fpgen would fetch its own model over files this old."""
+    data_dir = tmp_path / "data"
+    _write(data_dir, MEMBERS, mtime=STALE, stamp=fpgen_model.PIN["sha256"])
+    read_only_fs()
+
+    with pytest.raises(OSError) as raised:
+        ensure_fpgen_model(data_dir)
+    assert raised.value.errno == errno.EROFS
 
 
 def test_install_never_stages_in_a_private_temporary_directory(tmp_path, pinned, monkeypatch):
