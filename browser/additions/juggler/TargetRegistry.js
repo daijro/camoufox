@@ -258,6 +258,10 @@ export class TargetRegistry {
       }
       if (!domWindow.isChromeWindow)
         return;
+      // Firefox deactivates a fully occluded or minimized window, which drops its
+      // pages onto a refresh timer that doubles each tick and stops after 600s, so
+      // anything awaiting a frame, such as Playwright's mouse.wheel, hangs (#804).
+      domWindow.browsingContext.forceAppWindowActive = true;
       // In persistent mode, window might be opened long ago and might be
       // already initialized.
       //
