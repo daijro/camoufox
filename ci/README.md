@@ -1,9 +1,9 @@
 # The test pipeline
 
 Everything that runs a suite against Camoufox. The same definition runs on a
-pull request, on a push to `main` (through `release.yml`), and for any caller of
-the `workflow_call` trigger that wants a specific browser version, so there is
-one meaning of "the tests pass". Every job can be run locally
+pull request, on a push to `main`, before every release (through
+`release.yml`), and for any caller of the `workflow_call` trigger that wants a
+specific browser version, so there is one meaning of "the tests pass". Every job can be run locally
 ([Running a piece by hand](#running-a-piece-by-hand)).
 
 ```
@@ -229,16 +229,23 @@ Pushing to a branch cancels its running build (`cancel-in-progress`).
 ## Releases
 
 One workflow, [`release.yml`](../.github/workflows/release.yml), makes every
-release. Every tested merge to `main` is released as a **prerelease**; a
-maintainer promotes one to **stable** by pushing a tag. Each library release is
-paired with exactly one browser build.
+release, on a **train**: on the 1st and 15th of each month the newest
+**prerelease** is promoted to **stable**, and a new prerelease is cut from
+`main`. Merges are tested by `tests.yml` but not released, so users see two
+releases a month rather than one per merge. Each library release is paired with
+exactly one browser build.
 
 ```
-merge to main ─► tests ─► plan ─┬─► build-browser ─► publish-browser ─┐
-               (tests.yml,      │   (only if its      v156.0.1-beta.N  │
-                this commit)    │    sources changed)                  ├─► publish-pypi ─► publish-npm ─► tag-library
-                                └─► build-library ─────────────────────┘   0.5.8bN          0.5.8-beta.N    v0.5.8bN
-                                    (only if what it ships changed)        (pip: --pre)     @next
+1st and 15th ─► plan ─► build-library ─► promote-browser ─► publish-pypi ─► publish-npm ─► tag-library ─► cut
+ (schedule)    (newest prerelease,        paired → stable     0.5.8            0.5.8 @latest   v0.5.8         │
+                no open regression)                                                                         │
+     ┌──────────────────────────────────────────────────────────────────────────────────────────────────────┘
+     ▼
+dispatch on main ─► tests ─► plan ─┬─► build-browser ─► publish-browser ─┐
+                  (tests.yml,      │   (only if its      v156.0.1-beta.N  │
+                   this commit)    │    sources changed)                  ├─► publish-pypi ─► publish-npm ─► tag-library
+                                   └─► build-library ─────────────────────┘   0.5.9bN          0.5.9-beta.N    v0.5.9bN
+                                       (only if what it ships changed)        (pip: --pre)     @next
 
 git tag v0.5.8 <tested main commit> && git push origin v0.5.8
                ─► plan ─► build-library ─► promote-browser ─► publish-pypi ─► publish-npm
@@ -247,12 +254,15 @@ git tag v0.5.8 <tested main commit> && git push origin v0.5.8
 
 | Rule | Detail |
 |---|---|
-| Only a tested commit is released | On a push to `main`, `release.yml` calls `tests.yml` on that commit and continues only if it passes. |
+| The train | The scheduled run promotes the newest library prerelease tag (`v0.5.8bN`) at the commit it was cut from, as `v0.5.8`, then its `cut` job dispatches `release.yml` on `main`. With no prerelease since the last promotion it promotes nothing; a cut with nothing changed publishes nothing. |
+| A regression holds the train | While an issue labelled `regression` is open, the promotion fails and says which issues hold it; the cut still runs. The label must exist, so an empty answer means "none open", not "nobody could mark one". |
+| Out of cycle | Run the Release workflow by hand on `main` (`gh workflow run release.yml --ref main`) to cut a prerelease now. Push a tag to promote by hand. |
+| Only a tested commit is released | A cut calls `tests.yml` on its commit and continues only if it passes. A promotion requires `All tests passed` on its commit. |
 | The browser is built only when its sources changed | `ci.browser_inputs.source_digest()` hashes the browser's sources. Each browser release carries a `manifest.json` with that digest, its commit, and the browser interface it speaks (`CONSTRAINTS.INTERFACE` in `python/src/camoufox/__version__.py`). A matching release is reused; otherwise `plan` takes the next unused `beta.N`. Nothing is committed: `ci.release set-build` writes the number into the build's tree. |
 | Builds are attested | `gh attestation verify <file> --repo daijro/camoufox` |
 | Packages are built once | `publish-pypi` and `publish-npm` upload the files `build-library` made: `0.5.8b2` on PyPI, `0.5.8-beta.2` on npm. `pip install camoufox` skips prereleases without `--pre`; npm installs `latest`, not `next`. |
 | The pairing | `ci.release stamp` writes the paired browser release into `python/src/camoufox/browser-pin.json`, which both launchers read. On `main` the file is `{}`, so a development checkout follows its channel. |
-| Promotion | A `vX.Y.Z` tag is refused unless the commit is on `main`, `All tests passed` succeeded on it, X.Y.Z is newer than every release, and a browser release was built from its sources. The paired browser becomes the stable release without a rebuild. |
+| Promotion | Refused unless the commit is on `main`, `All tests passed` succeeded on it, X.Y.Z is newer than every release, and a browser release was built from its sources. The paired browser becomes the stable release without a rebuild. |
 | Failed publish | Re-run the failed jobs; every version and tag comes from `plan`. |
 | Credentials | None stored. PyPI and npm use trusted publishing (OIDC) from `release.yml`. |
 
@@ -279,6 +289,7 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | `python3 -m ci.run_native --subset growth --binary <bin>` | yes | Memory growth; `--shard 3/7` for one test |
 | `python3 -m ci.run_sundial --binary <bin>` | yes | The stealth grade (needs the credential) |
 | `python3 -m ci.summarize --results-dir .ci-work/results` | | The summary table |
+| `GITHUB_EVENT_NAME=schedule python3 -m ci.release target` | | What the train would promote |
 | `python3 -m ci.release browser-plan` | | Whether a browser would be built or reused |
 | `python3 -m ci.release paired` | | The release built from this tree |
 | `python3 -m ci.release lib-plan --channel prerelease` | | The next library version |

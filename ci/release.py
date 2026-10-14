@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Release plumbing for .github/workflows/release.yml.
 
-Every merge to main that passes the test pipeline publishes a prerelease: a
-browser build if the browser's sources changed (a GitHub prerelease with its own
-release number), then -- if the library changed -- the Python package on PyPI and
-the npm package under the `next` dist-tag. Pushing a `vX.Y.Z` tag on a tested main
-commit promotes it: the browser release built from that commit's sources becomes
-the stable, latest release, and X.Y.Z is published to PyPI and to npm `latest`.
+Releases ride a train, on the 1st and 15th of each month. The scheduled run
+promotes the newest prerelease to stable: the browser release it pairs with is
+marked stable and latest (no rebuild), and its library version without the bN
+suffix goes to PyPI and npm `latest`. A promotion is refused while an issue
+labelled `regression` is open. The run then dispatches a cut: main is tested,
+and a browser prerelease is built if the browser's sources changed (a GitHub
+prerelease with its own release number), then -- if the library changed -- the
+Python package on PyPI and the npm package under the `next` dist-tag. A cut is
+also dispatched by hand for a fix that cannot wait, and pushing a `vX.Y.Z` tag on
+a tested main commit still promotes it by hand.
 
 Each library release is paired with exactly one browser release -- the one built
 from the same sources, found by `ci.browser_inputs.source_digest()` in the
@@ -19,6 +23,7 @@ A browser release's number is not committed anywhere: its tag points at the
 tested main commit, and `set-build` writes the number from the tag name into the
 build's working tree. Rebuilding from the tag with `set-build` reproduces it.
 
+    python3 -m ci.release target                 # the commit (and stable tag) this run releases
     python3 -m ci.release browser-plan           # build a new browser, or reuse one
     python3 -m ci.release set-build --tag TAG     # upstream.sh names TAG's number (working tree only)
     python3 -m ci.release manifest --tag T --digest D --commit C   # the release's manifest.json
@@ -57,6 +62,9 @@ MANIFEST_ASSET = "manifest.json"
 # The one check the test pipeline reports. Run by release.yml it is named
 # "tests / All tests passed"; run on a pull request, "All tests passed".
 GATE_CHECK = "All tests passed"
+
+# An open issue with this label holds the train's promotion.
+REGRESSION_LABEL = "regression"
 
 STABLE_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 # Every published library version is tagged: vX.Y.Z, or vX.Y.ZbN for a
@@ -205,6 +213,19 @@ def library_version_key(tag: str) -> Optional[Tuple[int, int, int, float]]:
 def last_library_tag(tags: Iterable[str]) -> Optional[str]:
     keyed = [(k, t) for t in tags if (k := library_version_key(t))]
     return max(keyed)[1] if keyed else None
+
+
+def train_promotion(tags: Iterable[str]) -> Optional[Tuple[str, str]]:
+    """The library prerelease the train promotes, and the stable tag it becomes.
+
+    None when the newest library tag is already a stable release: nothing was
+    cut since the last promotion.
+    """
+    last = last_library_tag(tags)
+    m = LIBRARY_TAG.match(last or "")
+    if not m or m[4] is None:
+        return None
+    return last, f"v{m[1]}.{m[2]}.{m[3]}"
 
 
 def is_library_source(rel: str) -> bool:
@@ -397,6 +418,59 @@ def repo_name() -> str:
 # ---------------------------------------------------------------------------
 # commands
 # ---------------------------------------------------------------------------
+
+def require_no_regressions() -> None:
+    """No open issue carries the regression label, and the label exists.
+
+    A missing label would make the query come back empty, which reads as "no
+    regressions" when nobody could have marked one.
+    """
+    import urllib.error
+
+    base = f"https://api.github.com/repos/{repo_name()}"
+    try:
+        http_json(f"{base}/labels/{REGRESSION_LABEL}", headers=gh_headers())
+    except urllib.error.HTTPError as err:
+        if err.code == 404:
+            die(f"the '{REGRESSION_LABEL}' label does not exist, so no issue can hold a promotion; create it")
+        raise
+    issues = http_json(f"{base}/issues?labels={REGRESSION_LABEL}&state=open&per_page=100",
+                       headers=gh_headers())
+    if issues:
+        die(f"not promoting while issues labelled '{REGRESSION_LABEL}' are open: "
+            + ", ".join(f"#{i['number']}" for i in issues))
+
+
+def cmd_target(_: argparse.Namespace) -> int:
+    """The commit this run releases and, for a promotion, the stable tag it gets.
+
+    A pushed tag names both. A dispatched cut releases main as it is. The
+    scheduled train promotes the newest library prerelease at the commit it was
+    cut from, or nothing when none was cut since the last promotion.
+    """
+    event = os.environ["GITHUB_EVENT_NAME"]
+    if event == "workflow_dispatch":
+        if os.environ["GITHUB_REF"] != "refs/heads/main":
+            die(f"a prerelease is cut from main only, not {os.environ['GITHUB_REF']}")
+        set_output("sha", os.environ["GITHUB_SHA"])
+        return 0
+    if event == "push":
+        set_output("sha", os.environ["GITHUB_SHA"])
+        set_output("tag", os.environ["GITHUB_REF_NAME"])
+        return 0
+    tags = run(["git", "tag", "-l", "v*"], cwd=REPO_ROOT, check=True).stdout.split()
+    found = train_promotion(tags)
+    if found is None:
+        log("nothing to promote: no library prerelease was cut since the last stable release")
+        return 0
+    prerelease, tag = found
+    require_no_regressions()
+    sha = run(["git", "rev-list", "-n", "1", prerelease], cwd=REPO_ROOT, check=True).stdout.strip()
+    log(f"promoting {prerelease} ({sha[:10]}) as {tag}")
+    set_output("sha", sha)
+    set_output("tag", tag)
+    return 0
+
 
 def cmd_browser_plan(_: argparse.Namespace) -> int:
     digest = source_digest()
@@ -603,6 +677,7 @@ def cmd_promote(_: argparse.Namespace) -> int:
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("target").set_defaults(fn=cmd_target)
     sub.add_parser("browser-plan").set_defaults(fn=cmd_browser_plan)
     p = sub.add_parser("set-build"); p.add_argument("--tag", required=True); p.set_defaults(fn=cmd_set_build)
     p = sub.add_parser("manifest"); p.add_argument("--tag", required=True); p.add_argument("--digest", required=True)
