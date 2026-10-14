@@ -119,6 +119,7 @@ def run(
     check: bool = False,
     capture: bool = True,
     tee: bool = False,
+    input: Optional[str] = None,
 ) -> Result:
     """Run a command. Never raises on a non-zero exit unless check=True."""
     shell = isinstance(cmd, str)
@@ -135,6 +136,7 @@ def run(
             timeout=timeout,
             capture_output=capture and not tee,
             text=True,
+            input=input,
         )
     except subprocess.TimeoutExpired as exc:
         out = exc.stdout or ""
@@ -225,6 +227,10 @@ def parse_version(v: str) -> Tuple[int, int, int]:
 
 def major(v: str) -> int:
     return parse_version(v)[0]
+
+
+# Stock Firefox's User-Agent; the groups are the rv: and Firefox/ majors.
+STOCK_UA = re.compile(r"^Mozilla/5\.0 \([^)]+; rv:(\d+)\.0\) Gecko/20100101 Firefox/(\d+)\.0$")
 
 
 def read_upstream_sh(path: Optional[Path] = None) -> Dict[str, str]:

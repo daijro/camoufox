@@ -9,11 +9,11 @@ one meaning of "the tests pass". Every job can be run locally
 ```
 resolve ── static ─────────────── lint, tribal rules, skiplist, self-tests  (seconds)
              ├─ typescript ────── type check, lint, vitest, golden parity
-             ├─ install ───────── packed packages + a real `camoufox fetch`
              └─ pythonlib ─────── the package's own tests                   (a minute)
                   └─ build or fetch ─┬─ patch guards × 3 + skiplist audit
                                      ├─ build-tester ─────── 8 fingerprint profiles
                                      ├─ typescript-browser ─ the npm launcher end to end
+                                     ├─ install ──────────── packed packages: fetch, launch, click, type
                                      └─ once guards and build-tester pass:
                                           ├─ playwright × 6 shards   (upstream suite + our own)
                                           ├─ native ───────── leaks, contexts, crash recovery
@@ -30,7 +30,7 @@ resolve ── static ─────────────── lint, tribal
 | `static` | `ci.run_native --subset rules`, `pytest ci/tests`, `browser/scripts/check-input-dispatch.py` | Settled decisions still hold, the skiplist is valid, input goes through one chokepoint, the pipeline reports honestly |
 | `pythonlib` | `ci.run_pythonlib` | `python/`'s own tests |
 | `typescript` | `ci.run_typescript` | Type check, lint, vitest, byte-for-byte parity with `python/` |
-| `install` | `ci.run_install` | The packed packages install into clean environments and fetch a real browser |
+| `install` | `ci.run_install` | The packed packages install into clean environments, fetch a real browser, and launch it and the browser under test through the installed package: the User-Agent claims the launched Firefox, the page and the request agree on it, the bundled fonts render, and a click and typed text reach the page as trusted events |
 | `build` / `fetch-browser` | `ci.run_prepare`, `ci.run_build` | The browser under test: compiled from this branch, or the published release built from the same sources |
 | `patch-guards` | `ci.run_patch_guards --group spoofing\|automation\|parity`, `ci.run_skiplist_audit` | One guard per shipped behaviour ([`browser/tests/playwright/`](../browser/tests/playwright/README.md)); every skiplist entry still fails |
 | `build-tester` | `ci.run_build_tester` | The raw binary against the anti-detect checks ([README](../browser/tests/build-tester/README.md)) |
@@ -210,9 +210,9 @@ Each tier gates the next, so a lint failure never reaches the build:
 | Tier | Jobs | Time |
 |---|---|---|
 | 0 static | lint, self-tests, settled decisions | seconds |
-| 1 unit | pythonlib, typescript, install | about a minute |
+| 1 unit | pythonlib, typescript | about a minute |
 | 2 browser | build (browser sources changed) or fetch (they did not) | minutes to hours |
-| 3a smoke | patch guards, skiplist audit, build-tester, typescript-browser | about 15 min |
+| 3a smoke | patch guards, skiplist audit, build-tester, typescript-browser, install | about 15 min |
 | 3b full | Playwright × 6, native, growth × 7, stealth | about 40 min |
 | 4 gate | the required check | seconds |
 
@@ -268,7 +268,7 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | `python3 -m ci.run_pythonlib` | | `python/`'s tests |
 | `python3 -m ci.run_typescript` | | `typescript/`'s tests |
 | `python3 -m ci.run_typescript --browser <bin>` | yes | The npm launcher end to end |
-| `python3 -m ci.run_install --tmpdir /mnt/tmpfs` | | Packed packages and a real fetch; the tmpdir must be its own filesystem |
+| `python3 -m ci.run_install --tmpdir /mnt/tmpfs --browser <bin>` | yes | Packed packages, a real fetch, and a launch, click and typing through each installed package; the tmpdir must be its own filesystem |
 | `python3 -m ci.run_patch_guards --binary <bin>` | yes | Patch guards; `--group spoofing\|automation\|parity`, `--only <name>` |
 | `python3 -m ci.run_patch_guards --binary <bin> --only stock-gpu-parity` | yes | WebGL and WebGPU against stock Firefox of the same version, downloaded into `.ci-work` ([upgrade step](../docs/patch-upgrading-guide.md#browser-owned-gpu-values)) |
 | `python3 -m ci.run_build_tester --binary <bin>` | yes | build-tester |
