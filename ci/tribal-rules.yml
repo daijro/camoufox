@@ -531,3 +531,22 @@ rules:
       with FINAL_TARGET_FILES under modules/juggler/, inside resource://gre,
       which every Firefox registers. contentaccessible-parity.py compares the
       registered names with a stock release and runs the Worker probe.
+
+  # -------------------------------------------------------------------------
+  # Releases
+  # -------------------------------------------------------------------------
+
+  - id: releases-ride-a-twice-monthly-train
+    title: A merge to main is tested, not released; releases ship on the 1st and 15th
+    check: manual   # ci/tests/test_release.py
+    evidence:
+      - "issue #863: seven browser prereleases (v156.0.1-beta.32 to beta.38) shipped between 2026-09-28 and 2026-10-13, one per merge"
+      - "PyPI and npm trusted publishing match the top-level workflow file, so publishing stays in release.yml rather than a reusable workflow"
+    rationale: >-
+      Releasing every merge gave users a new browser every few days, and stable
+      releases waited on a maintainer remembering to tag one. The train
+      promotes the newest prerelease to stable and cuts the next one from main
+      twice a month, so a prerelease has had two weeks of use before it becomes
+      stable. Weekly was considered and rejected as too many updates for users
+      to manage. A fix that cannot wait is cut by dispatching release.yml on
+      main, and an open issue labelled `regression` holds the promotion.

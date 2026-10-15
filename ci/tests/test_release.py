@@ -1,4 +1,4 @@
-"""The release plan: which versions a merge or a tag publishes, and which browser they pair with."""
+"""The release plan: which versions a train or a tag publishes, and which browser they pair with."""
 
 import argparse
 import json
@@ -18,13 +18,14 @@ from ci.release import (
     paired_release,
     plan_prerelease,
     plan_stable,
+    train_promotion,
 )
 
 PYPI = ["0.5.5", "0.5.6", "0.5.6b1"]
 NPM = ["0.5.6"]
 
 
-def test_a_merge_prereleases_the_checked_in_version_when_it_is_unreleased():
+def test_a_cut_prereleases_the_checked_in_version_when_it_is_unreleased():
     plan = plan_prerelease("0.5.7", PYPI, NPM)
     assert (plan.py, plan.npm, plan.dist_tag) == ("0.5.7b1", "0.5.7-beta.1", "next")
 
@@ -90,6 +91,54 @@ def test_library_tags_order_as_versions_and_never_as_browser_tags():
     assert last_library_tag(["v156.0.1-beta.33"]) is None
     # a library prerelease tag must not take a browser release number
     assert next_browser_release("beta.32", ["v0.5.7b40"]) == "beta.32"
+
+
+def test_the_train_promotes_the_newest_prerelease_to_its_own_version():
+    tags = ["v0.5.7", "v0.5.8b1", "v0.5.8b2", "v156.0.1-beta.38"]
+    assert train_promotion(tags) == ("v0.5.8b2", "v0.5.8")
+
+
+@pytest.mark.parametrize("tags", [
+    ["v0.5.7", "v0.5.8b1", "v0.5.8"],  # nothing was cut since the last promotion
+    ["v156.0.1-beta.38"],
+    [],
+])
+def test_the_train_promotes_nothing_without_a_new_prerelease(tags):
+    assert train_promotion(tags) is None
+
+
+def _labels_and_issues(label_exists, issues):
+    import urllib.error
+
+    def fake(url, **_):
+        if "/labels/" in url:
+            if not label_exists:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            return {"name": release.REGRESSION_LABEL}
+        return issues
+    return fake
+
+
+@pytest.mark.parametrize("label_exists, issues", [
+    (False, []),  # a missing label would read as "no regressions"
+    (True, [{"number": 900}]),
+])
+def test_the_train_refuses_to_promote_over_a_regression(monkeypatch, label_exists, issues):
+    monkeypatch.setattr(release, "http_json", _labels_and_issues(label_exists, issues))
+    with pytest.raises(SystemExit):
+        release.require_no_regressions()
+
+
+def test_the_train_promotes_when_no_regression_is_open(monkeypatch):
+    monkeypatch.setattr(release, "http_json", _labels_and_issues(True, []))
+    release.require_no_regressions()
+
+
+def test_a_prerelease_is_cut_from_main_only(monkeypatch):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/topic")
+    with pytest.raises(SystemExit):
+        release.cmd_target(argparse.Namespace())
 
 
 def test_the_gate_check_is_found_when_release_yml_runs_the_tests():
@@ -212,13 +261,17 @@ def test_the_pin_and_the_launchers_agree_on_its_format(tmp_path, monkeypatch):
         ("official", "156.0.1", "beta.33", "v156.0.1-beta.33")
 
 
-# The jobs each channel skips by design, and the jobs it must reach.
+# The jobs each kind of run skips by design, and the jobs it must reach: a cut
+# (workflow_dispatch), a promotion by a pushed tag, and the train's promotion.
 CHANNELS = {
-    "prerelease": ({"promote-browser"},
+    "prerelease": ({"promote-browser", "cut"},
                    {"build-browser", "publish-browser", "build-library", "publish-pypi",
                     "publish-npm", "tag-library"}),
-    "stable": ({"tests", "build-browser", "publish-browser", "tag-library"},
+    "stable": ({"tests", "build-browser", "publish-browser", "tag-library", "cut"},
                {"plan", "build-library", "promote-browser", "publish-pypi", "publish-npm"}),
+    "train": ({"tests", "build-browser", "publish-browser"},
+              {"plan", "build-library", "promote-browser", "publish-pypi", "publish-npm",
+               "tag-library", "cut"}),
 }
 
 
