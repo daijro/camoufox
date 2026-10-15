@@ -18,6 +18,17 @@ def test_ipv6_goes_to_the_ipv6_setter():
     assert "2001:db8::7" not in script.split("setWebRTCIPv6")[0]
 
 
-def test_an_invalid_address_is_refused():
+@pytest.mark.parametrize(
+    "invalid_ip",
+    [
+        "not-an-ip",
+        "999.999.999.999",
+        "256.1.1.1",
+        ":",
+        ":::",
+        "1::2::3",
+    ],
+)
+def test_an_invalid_address_is_refused(invalid_ip: str):
     with pytest.raises(InvalidIP):
-        _build_init_script({"webrtcIP": "not-an-ip"})
+        _build_init_script({"webrtcIP": invalid_ip})
