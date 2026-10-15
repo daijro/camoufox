@@ -156,6 +156,10 @@ def main() -> int:
     if not shutil.which("unshare") or not shutil.which("ip"):
         print("FAIL: this guard needs unshare and ip (util-linux, iproute2)")
         return 1
+    if subprocess.run(["unshare", "-rn", "true"], capture_output=True).returncode:
+        print("FAIL: unprivileged user namespaces are denied here. On Ubuntu, run "
+              "`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.")
+        return 1
     with tempfile.NamedTemporaryFile("w", suffix=".hosts") as hosts:
         hosts.write(HOSTS)
         hosts.flush()
