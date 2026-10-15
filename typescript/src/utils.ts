@@ -18,6 +18,7 @@ import {
 	InvalidOS,
 	InvalidPropertyType,
 	NonFirefoxFingerprint,
+	UnknownIPLocation,
 } from "./exceptions.js";
 import {
 	audioSeedFromIdentity,
@@ -55,6 +56,7 @@ import {
 	type ProxyConfig,
 	ProxyHelper,
 	publicIP,
+	publicIPv6,
 	validIPv4,
 	validIPv6,
 } from "./ip.js";
@@ -237,6 +239,7 @@ export const utilsDeps = {
 		return sampleWebglForScreen(...args);
 	},
 	publicIp: publicIP,
+	publicIpv6: publicIPv6,
 	getGeolocation,
 	validateConfig: (config: Record<string, any>, p?: string | null) =>
 		validateConfig(config, p),
@@ -799,6 +802,38 @@ export function isDomainSet(
 			return true;
 		}
 	}
+	return false;
+}
+
+/**
+ * Whether this host has a public IPv6 address that geolocates where the IPv4
+ * identity does. Warns when it has one that does not.
+ */
+async function keepsIPv6(
+	geoConfig: Record<string, any>,
+	geoipDb: string | undefined,
+	iKnowWhatImDoing: boolean,
+): Promise<boolean> {
+	const ipv6 = await utilsDeps.publicIpv6();
+	if (ipv6 === null) {
+		return false;
+	}
+	let ipv6Config: Record<string, any> = {};
+	try {
+		ipv6Config = (await utilsDeps.getGeolocation(ipv6, geoipDb)).asConfig();
+	} catch (error) {
+		if (!(error instanceof UnknownIPLocation)) {
+			throw error;
+		}
+	}
+	if (
+		["timezone", "locale:region"].every(
+			(key) => ipv6Config[key] === geoConfig[key],
+		)
+	) {
+		return true;
+	}
+	LeakWarning.warn("ipv6_elsewhere", iKnowWhatImDoing);
 	return false;
 }
 
@@ -1655,14 +1690,14 @@ export async function launchOptions({
 		if (!block_webrtc) {
 			if (validIPv4(geoipIp)) {
 				setInto(config, "webrtc:ipv4", geoipIp);
-				firefox_user_prefs["network.dns.disableIPv6"] = true;
 			} else if (validIPv6(geoipIp)) {
 				setInto(config, "webrtc:ipv6", geoipIp);
 			}
 		}
 
 		const geolocation = await utilsDeps.getGeolocation(geoipIp, geoip_db);
-		for (const [key, value] of Object.entries(geolocation.asConfig())) {
+		const geoConfig = geolocation.asConfig();
+		for (const [key, value] of Object.entries(geoConfig)) {
 			if (
 				[
 					"timezone",
@@ -1675,6 +1710,18 @@ export async function launchOptions({
 			} else {
 				config[key] = value;
 			}
+		}
+
+		// Without a proxy, a site that has an IPv6 address sees this host's,
+		// not the IPv4 address the identity was drawn from. Keep IPv6 only when
+		// it places the host where the identity does; otherwise the browser
+		// behaves as on an IPv4-only network.
+		if (
+			!proxy &&
+			validIPv4(geoipIp) &&
+			!(await keepsIPv6(geoConfig, geoip_db, i_know_what_im_doing))
+		) {
+			config["network:ipv4Only"] = true;
 		}
 	}
 

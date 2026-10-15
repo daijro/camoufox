@@ -20,11 +20,12 @@ from .exceptions import (
     InvalidOS,
     InvalidPropertyType,
     NonFirefoxFingerprint,
+    UnknownIPLocation,
 )
 from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_hardware_concurrency, identity_salt, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
 from .geolocation import geoip_allowed, get_geolocation
-from .ip import Proxy, public_ip, valid_ipv4, valid_ipv6
+from .ip import Proxy, public_ip, public_ipv6, valid_ipv4, valid_ipv6
 from .locales import handle_locales
 import warnings
 
@@ -528,6 +529,24 @@ def is_domain_set(
         else:
             if prop in config:
                 return True
+    return False
+
+
+def _keeps_ipv6(
+    geo_config: Dict[str, Any], geoip_db: Optional[str], i_know_what_im_doing: bool
+) -> bool:
+    """Whether this host has a public IPv6 address that geolocates where the
+    IPv4 identity does. Warns when it has one that does not."""
+    ipv6 = public_ipv6()
+    if ipv6 is None:
+        return False
+    try:
+        ipv6_config = get_geolocation(ipv6, geoip_db=geoip_db).as_config()
+    except UnknownIPLocation:
+        ipv6_config = {}
+    if all(ipv6_config.get(key) == geo_config.get(key) for key in ('timezone', 'locale:region')):
+        return True
+    LeakWarning.warn('ipv6_elsewhere', i_know_what_im_doing)
     return False
 
 
@@ -1363,7 +1382,6 @@ def launch_options(
         if not block_webrtc:
             if valid_ipv4(geoip):
                 set_into(config, 'webrtc:ipv4', geoip)
-                firefox_user_prefs['network.dns.disableIPv6'] = True
             elif valid_ipv6(geoip):
                 set_into(config, 'webrtc:ipv6', geoip)
 
@@ -1374,6 +1392,15 @@ def launch_options(
                 config.setdefault(key, value)
             else:
                 config[key] = value
+
+        # Without a proxy, a site that has an IPv6 address sees this host's,
+        # not the IPv4 address the identity was drawn from. Keep IPv6 only when
+        # it places the host where the identity does; otherwise the browser
+        # behaves as on an IPv4-only network.
+        if not proxy and valid_ipv4(geoip) and not _keeps_ipv6(
+            geo_config, geoip_db, i_know_what_im_doing
+        ):
+            config['network:ipv4Only'] = True
 
     # A page that receives a position without a prompt must also see
     # permissions.query({name: 'geolocation'}) report "granted" -- that is

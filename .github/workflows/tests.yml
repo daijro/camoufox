@@ -878,6 +878,10 @@ jobs:
           python3 python/scripts/pin-fpgen-model.py
       # Fonts and properties.json are staged into the artifact by the build job;
       # `make stage-fonts` here would find no source tree and do nothing.
+      # ipv4-only-network.py builds its test network in an unprivileged user
+      # namespace, which Ubuntu's AppArmor denies to programs without a profile.
+      - if: matrix.leg == 'spoofing'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - if: matrix.leg != 'skiplist'
         run: xvfb-run -a python3 -m ci.run_patch_guards --group "${{ matrix.leg }}" --binary "$CAMOUFOX_BINARY"
       - name: Every skiplist entry is still failing

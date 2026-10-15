@@ -27,6 +27,11 @@ custom_fingerprint: >-
 proxy_without_geoip: >-
     When using a proxy, it is heavily recommended that you pass `geoip=True`.
 
+ipv6_elsewhere: >-
+    This machine's IPv6 address geolocates somewhere other than the IPv4 address the identity was drawn from,
+    so the browser behaves as on an IPv4-only network and sites that only have an IPv6 address will not load.
+    A VPN that tunnels only IPv4 is the usual cause. Use a proxy, or route IPv6 through the VPN as well.
+
 ff_version: >-
     Spoofing the Firefox version will likely lead to detection.
     If rotating the Firefox version is absolutely necessary, it would be more advisable to

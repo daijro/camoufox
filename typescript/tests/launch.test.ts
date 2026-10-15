@@ -36,7 +36,9 @@ import {
 
 const { OSError, PyFloat } = await import("../src/pycompat.js");
 const { Version } = await import("../src/pkgman.js");
-const { InvalidPropertyType } = await import("../src/exceptions.js");
+const { InvalidPropertyType, UnknownIPLocation } = await import(
+	"../src/exceptions.js"
+);
 const cpuAffinity = await import("../src/cpu_affinity.js");
 
 // Imported after launch-host, which has to set the cache directory first.
@@ -236,6 +238,97 @@ describe("test_launch_environment: prefs", () => {
 				expect(prefs[pref]).toBe(toggled);
 			});
 		}
+	});
+
+	describe("geoip and IPv6 (test_launch_environment.py)", () => {
+		// network.dns.disableIPv6 broke IPv6-only sites (daijro/camoufox#849)
+		// while IPv6 literals still connected. IPv6 is kept when the host's
+		// address geolocates where the identity does; otherwise
+		// network:ipv4Only makes the browser behave as on an IPv4-only network.
+		const IPV4 = "203.0.113.7";
+		const HERE = { timezone: "America/Chicago", "locale:region": "US" };
+		const PLACES: Record<string, Record<string, string>> = {
+			[IPV4]: HERE,
+			"2001:db8::1": HERE,
+			"2001:db8::2": { timezone: "Europe/Berlin", "locale:region": "DE" },
+		};
+
+		async function launchWith(
+			hostIPv6: string | null | (() => Promise<string | null>),
+			opts: Record<string, any>,
+		) {
+			let sent: Record<string, any> = {};
+			deps.getGeolocation = async (ip: string) => {
+				if (!(ip in PLACES)) {
+					throw new UnknownIPLocation(ip);
+				}
+				return { asConfig: () => ({ ...PLACES[ip] }) } as any;
+			};
+			deps.publicIpv6 =
+				typeof hostIPv6 === "function" ? hostIPv6 : async () => hostIPv6;
+			deps.getEnvVars = (config) => {
+				sent = config;
+				return {};
+			};
+			const {
+				result,
+				error,
+				warnings: caught,
+			} = await warnings.recordWarnings(() =>
+				utils.launchOptions({ env: { HOME }, ...ua(WIN_UA), ...opts }),
+			);
+			if (error) throw error;
+			const prefs = (result as Record<string, any>).firefoxUserPrefs;
+			expect("network.dns.disableIPv6" in prefs).toBe(false);
+			const warned = caught.some(
+				(w) =>
+					w.category === "LeakWarning" &&
+					w.message.includes("IPv6 address geolocates somewhere other"),
+			);
+			return { sent, warned };
+		}
+
+		it("keeps IPv6 in the same place", async () => {
+			const { sent, warned } = await launchWith("2001:db8::1", { geoip: IPV4 });
+			expect("network:ipv4Only" in sent).toBe(false);
+			expect(sent["webrtc:ipv4"]).toBe(IPV4);
+			expect(warned).toBe(false);
+		});
+
+		it("is an IPv4-only network with no IPv6 route", async () => {
+			const { sent, warned } = await launchWith(null, { geoip: IPV4 });
+			expect(sent["network:ipv4Only"]).toBe(true);
+			expect(warned).toBe(false);
+		});
+
+		for (const [name, hostIPv6] of [
+			["elsewhere", "2001:db8::2"],
+			["unknown", "2001:db8::3"],
+		]) {
+			it(`drops IPv6 that disagrees (${name}) with a warning`, async () => {
+				const { sent, warned } = await launchWith(hostIPv6, { geoip: IPV4 });
+				expect(sent["network:ipv4Only"]).toBe(true);
+				expect(warned).toBe(true);
+			});
+		}
+
+		it("leaves IPv6 alone behind a proxy", async () => {
+			const { sent } = await launchWith(
+				async () => {
+					throw new Error(
+						"the host's IPv6 address is not what a proxied site sees",
+					);
+				},
+				{ geoip: IPV4, proxy: { server: "http://127.0.0.1:3128" } },
+			);
+			expect("network:ipv4Only" in sent).toBe(false);
+		});
+
+		it("leaves IPv6 alone for an IPv6 identity", async () => {
+			const { sent } = await launchWith(null, { geoip: "2001:db8::1" });
+			expect("network:ipv4Only" in sent).toBe(false);
+			expect(sent["webrtc:ipv6"]).toBe("2001:db8::1");
+		});
 	});
 
 	describe("UI locale follows the Intl locale", () => {
