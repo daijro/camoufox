@@ -112,6 +112,19 @@ export class VirtualDisplay {
 		return resolved;
 	}
 
+	get setprivPath(): string {
+		try {
+			return execFileSync("which", ["setpriv"], {
+				encoding: "utf-8",
+				stdio: ["ignore", "pipe", "ignore"],
+			}).trim();
+		} catch {
+			throw new CannotFindXvfb(
+				"Please install util-linux (for setpriv) to use headless mode.",
+			);
+		}
+	}
+
 	/**
 	 * Spawn Xvfb (if it isn't already running) and return its ":N" display.
 	 *
@@ -124,7 +137,19 @@ export class VirtualDisplay {
 		VirtualDisplay.assertLinux();
 
 		if (this.proc === null) {
-			const cmd = [this.xvfbPath, "-displayfd", "3", ...this.xvfbArgs];
+			// setpriv's parent-death signal stops Xvfb when this process dies
+			// without reaching kill(), even by SIGKILL; SIGTERM lets Xvfb remove
+			// its own lock and socket. See xvfb-dies-with-its-launcher in
+			// ci/tribal-rules.yml.
+			const cmd = [
+				this.setprivPath,
+				"--pdeathsig",
+				"TERM",
+				this.xvfbPath,
+				"-displayfd",
+				"3",
+				...this.xvfbArgs,
+			];
 			if (this.debug) {
 				console.log("Starting virtual display:", cmd.join(" "));
 			}

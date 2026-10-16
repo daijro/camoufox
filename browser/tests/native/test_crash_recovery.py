@@ -27,6 +27,9 @@ from __future__ import annotations
 
 import asyncio
 import enum
+import os
+import subprocess  # nosec
+import sys
 from pathlib import Path
 
 import pytest
@@ -305,6 +308,79 @@ async def test_browser_crash_under_a_virtual_display_does_not_leak_xvfb(binary, 
         "machine runs out of displays."
     )
     leak_check.assert_clean()
+
+
+def _on_display(psutil_mod, display: str, xvfb: int) -> list:
+    """The display's Xvfb and every process on the machine using it, ours or not.
+
+    Xvfb inherits its launcher's environment, so it is matched by pid.
+    """
+    found = []
+    for proc in psutil_mod.process_iter():
+        try:
+            running_xvfb = proc.pid == xvfb and proc.status() != psutil_mod.STATUS_ZOMBIE
+            if running_xvfb or proc.environ().get("DISPLAY") == display:
+                found.append(f"{proc.name()}({proc.pid})")
+        except (psutil_mod.NoSuchProcess, psutil_mod.AccessDenied, psutil_mod.ZombieProcess):
+            continue
+    return found
+
+
+async def test_launcher_sigkill_leaves_nothing_on_its_display(binary, psutil_mod):
+    """The process that called Camoufox() is killed, so no close path runs (#868).
+
+    Every other test here keeps the launcher alive to tear down. When the
+    launcher itself is SIGKILLed -- by `timeout`, a supervisor, a cancelled CI
+    job -- what it started is reparented away from it, and out of leak_check's
+    sight, which only follows our descendants. So this looks machine-wide: the
+    Xvfb, the browser, and any session helpers they autolaunched must all go.
+    """
+    if not _virtual_display_supported():
+        pytest.fail("Xvfb is not installed")
+
+    import camoufox
+
+    child = subprocess.Popen(  # nosec
+        [
+            sys.executable,
+            "-c",
+            "import time\n"
+            "from camoufox.sync_api import Camoufox\n"
+            f"with Camoufox(executable_path={str(binary)!r}, headless='virtual',\n"
+            "              i_know_what_im_doing=True) as browser:\n"
+            "    browser.new_page().goto('about:blank')\n"
+            "    print('ready', flush=True)\n"
+            "    time.sleep(120)\n",
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(Path(camoufox.__file__).parents[1])},
+    )
+    try:
+        ready = await bounded(
+            asyncio.to_thread(lambda: any(line.strip() == "ready" for line in child.stdout)),
+            60,
+            "launch in the child",
+        )
+        assert ready, "the child exited without launching a browser"
+        started = {p.name(): p for p in psutil_mod.Process(child.pid).children(recursive=True)}
+        display = started[BROWSER].environ()["DISPLAY"]
+        xvfb = started[XVFB].pid
+    finally:
+        child.kill()
+        child.wait()
+
+    survivors = _on_display(psutil_mod, display, xvfb)
+    deadline = asyncio.get_running_loop().time() + 15
+    while survivors and asyncio.get_running_loop().time() < deadline:
+        await asyncio.sleep(0.25)
+        survivors = _on_display(psutil_mod, display, xvfb)
+    assert not survivors, (
+        f"{survivors} outlived the SIGKILLed process that launched them on {display}. "
+        "Every killed scraper strands another set until the host runs out of memory."
+    )
+    for path in x11_artifacts_for(display):
+        assert not Path(path).exists(), f"{path} outlived the launcher that claimed {display}"
 
 
 async def test_a_stale_x11_lock_does_not_block_the_next_display(psutil_mod):

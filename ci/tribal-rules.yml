@@ -131,6 +131,24 @@ rules:
       later display allocation. Both halves matter: SIGKILL then wait() so
       nothing is reaped later, then unlink both files.
 
+  - id: xvfb-dies-with-its-launcher
+    title: Xvfb gets a parent-death signal, so it never outlives its launcher
+    check: automated
+    evidence:
+      - "issue #868: 113 orphaned Xvfb processes after SIGTERMed launchers"
+      - "browser/tests/native/test_crash_recovery.py::test_launcher_sigkill_leaves_nothing_on_its_display"
+      - "dbus-launch(1): --autolaunch implies --exit-with-session, whose babysitter kills the bus when it loses its X connection"
+    rationale: >-
+      kill() runs on the close path, which a launcher killed by a signal never
+      reaches, and start_new_session keeps Xvfb out of a process-group kill. So
+      Xvfb is exec'd through `setpriv --pdeathsig TERM`: the kernel signals it
+      when its launcher dies, even by SIGKILL, and SIGTERM lets Xvfb remove its
+      own lock and socket. The session bus Firefox autolaunches on that display
+      dies with the X connection, taking its helpers with it. setpriv rather
+      than prctl in a preexec_fn: it is the same in both packages, and
+      preexec_fn is unsafe in a threaded parent. The signal fires when the
+      thread that spawned Xvfb exits, which is the thread that owns the browser.
+
   # -------------------------------------------------------------------------
   # Dependencies
   # -------------------------------------------------------------------------

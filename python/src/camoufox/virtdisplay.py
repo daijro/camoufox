@@ -87,6 +87,13 @@ class VirtualDisplay:
             raise CannotExecuteXvfb(f"I do not have permission to execute Xvfb: {path}")
         return path
 
+    @property
+    def setpriv_path(self) -> str:
+        path = which("setpriv")
+        if not path:
+            raise CannotFindXvfb("Please install util-linux (for setpriv) to use headless mode.")
+        return path
+
     def get(self) -> str:
         self._assert_linux()
 
@@ -97,7 +104,14 @@ class VirtualDisplay:
             # the child (unlike Node's `stdio: [..., 'pipe']` which renumbers
             # to 3), so we tell Xvfb that exact number.
             read_fd, write_fd = os.pipe()
-            cmd = [self.xvfb_path, "-displayfd", str(write_fd), *self.xvfb_args]
+            # setpriv's parent-death signal stops Xvfb when this process dies
+            # without reaching kill(), even by SIGKILL; SIGTERM lets Xvfb remove
+            # its own lock and socket. See xvfb-dies-with-its-launcher in
+            # ci/tribal-rules.yml.
+            cmd = [
+                self.setpriv_path, "--pdeathsig", "TERM",
+                self.xvfb_path, "-displayfd", str(write_fd), *self.xvfb_args,
+            ]
             if self.debug:
                 print("Starting virtual display:", " ".join(cmd))
             self.proc = subprocess.Popen(  # nosec
