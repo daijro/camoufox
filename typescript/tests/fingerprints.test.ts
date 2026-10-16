@@ -783,8 +783,15 @@ describe("buildInitScript", () => {
 		expect(script.split("setWebRTCIPv6")[0]).not.toContain("2001:db8::7");
 	});
 
-	it("refuses an invalid WebRTC address", () => {
-		expect(() => buildInitScript({ webrtcIP: "not-an-ip" })).toThrow(InvalidIP);
+	it.each([
+		"not-an-ip",
+		"999.999.999.999",
+		"256.1.1.1",
+		":",
+		":::",
+		"1::2::3",
+	])("refuses an invalid WebRTC address (%s)", (invalidIP) => {
+		expect(() => buildInitScript({ webrtcIP: invalidIP })).toThrow(InvalidIP);
 	});
 });
 

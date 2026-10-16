@@ -3,6 +3,7 @@
  *
  * TypeScript twin of python/src/camoufox/ip.py.
  */
+import { isIPv4, isIPv6 } from "node:net";
 import { Impit } from "impit";
 import { InvalidIP, InvalidProxy } from "./exceptions.js";
 
@@ -58,14 +59,14 @@ export function validIPv4(ip: string | false): boolean {
 	if (!ip) {
 		return false;
 	}
-	return /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip);
+	return isIPv4(ip);
 }
 
 export function validIPv6(ip: string | false): boolean {
 	if (!ip) {
 		return false;
 	}
-	return /^(([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4})$/.test(ip);
+	return isIPv6(ip);
 }
 
 export function validateIP(ip: string): void {

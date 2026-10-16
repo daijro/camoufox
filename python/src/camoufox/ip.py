@@ -1,3 +1,4 @@
+import ipaddress
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -65,12 +66,18 @@ class Proxy:
 
 @lru_cache(128, typed=True)
 def valid_ipv4(ip: str) -> bool:
-    return bool(re.match(r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$', ip))
+    try:
+        return isinstance(ipaddress.ip_address(ip), ipaddress.IPv4Address)
+    except ValueError:
+        return False
 
 
 @lru_cache(128, typed=True)
 def valid_ipv6(ip: str) -> bool:
-    return bool(re.match(r'^(([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4})$', ip))
+    try:
+        return isinstance(ipaddress.ip_address(ip), ipaddress.IPv6Address)
+    except ValueError:
+        return False
 
 
 def validate_ip(ip: str) -> None:
