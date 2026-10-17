@@ -49,6 +49,14 @@ def run_id() -> str:
     )
 
 
+def run_attempt() -> int:
+    """GitHub's attempt number for this run (1 unless a job was re-run)."""
+    try:
+        return max(1, int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")))
+    except ValueError:
+        return 1
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -72,6 +80,7 @@ class GateResult:
     notes: List[str] = field(default_factory=list)
     artifacts: List[str] = field(default_factory=list)
     run_id: str = field(default_factory=run_id)
+    attempt: int = field(default_factory=run_attempt)
     schema: int = SCHEMA
     host: str = field(default_factory=lambda: f"{platform.system()}-{platform.machine()}")
 
@@ -104,18 +113,18 @@ class GateResult:
     def save(self, directory: Optional[Path] = None) -> Path:
         directory = directory or EVIDENCE_DIR
         directory.mkdir(parents=True, exist_ok=True)
-        path = directory / f"{self.gate}.json"
+        # Every attempt's results-* artifacts stay in the run and the summary
+        # merges them into one directory, so a re-run job writes beside the
+        # first attempt's file rather than over it; load_all keeps the latest.
+        name = self.gate if self.attempt == 1 else f"{self.gate}.attempt{self.attempt}"
+        path = directory / f"{name}.json"
         write_json(path, asdict(self))
         log(f"[{self.gate}] evidence -> {path} ({self.status}, {len(self.tests)} tests)")
         return path
 
 
 def load(gate: str, directory: Optional[Path] = None) -> Optional[Dict[str, Any]]:
-    directory = directory or EVIDENCE_DIR
-    path = directory / f"{gate}.json"
-    if not path.exists():
-        return None
-    return read_json(path)
+    return load_all(directory).get(gate)
 
 
 def load_all(directory: Optional[Path] = None) -> Dict[str, Dict[str, Any]]:
@@ -127,6 +136,9 @@ def load_all(directory: Optional[Path] = None) -> Dict[str, Dict[str, Any]]:
         if path.name.startswith("_"):
             continue
         data = read_json(path, default={})
-        if isinstance(data, dict) and data.get("gate"):
+        if not (isinstance(data, dict) and data.get("gate")):
+            continue
+        prior = out.get(data["gate"])
+        if prior is None or data.get("attempt", 1) >= prior.get("attempt", 1):
             out[data["gate"]] = data
     return out
