@@ -1,7 +1,9 @@
 """Which GeoIP source is active, and when its database is refreshed."""
 
 import os
+import sys
 import time
+import types
 import warnings
 
 import pytest
@@ -120,3 +122,53 @@ def test_the_database_takes_its_directory_permissions_not_the_staging_files(cach
     assert mmdb.read_bytes() == b"db"
     assert mmdb.stat().st_mode & 0o777 == 0o666 & ~umask
     assert not list(mmdb.parent.glob(".*.tmp"))
+
+
+class _Reader:
+    def __init__(self, record):
+        self.record = record
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get(self, ip):
+        return self.record
+
+
+def _geolocate(cache, monkeypatch, location):
+    # The AIO record's shape, with the float32 coordinates the databases store.
+    record = {"country": {"iso_code": "SE"}, "location": {"time_zone": "Europe/Stockholm", **location}}
+    path = geolocation.get_mmdb_path("ipv4", geolocation.load_geoip_config())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"")
+    monkeypatch.setattr(geolocation, "needs_update", lambda config=None: False)
+    monkeypatch.setitem(sys.modules, "maxminddb", types.SimpleNamespace(open_database=lambda p: _Reader(record)))
+    return geolocation.get_geolocation("81.230.0.1")
+
+
+def test_ip_position_carries_the_database_precision_and_radius(cache, monkeypatch):
+    geo = _geolocate(cache, monkeypatch, {"latitude": 57.70650100708008, "longitude": 11.966999053955078,
+                                          "accuracy_radius": 20})
+    assert (geo.latitude, geo.longitude) == (57.7065, 11.967)
+    assert geo.as_config()["geolocation:accuracy"] == 20000.0
+
+
+def test_ip_position_without_a_radius_reports_a_city_scale_accuracy(cache, monkeypatch):
+    # Without one the browser derived 6e-10 m from the coordinates' decimals.
+    geo = _geolocate(cache, monkeypatch, {"latitude": 57.70650100708008, "longitude": 11.966999053955078})
+    assert geo.as_config()["geolocation:accuracy"] == geolocation.ip_accuracy("81.230.0.1")
+
+
+def test_ip_accuracy_fallback_is_stable_and_in_range():
+    low, high = geolocation.IP_ACCURACY_RANGE_M
+    a = geolocation.ip_accuracy("81.230.0.1")
+    assert a == geolocation.ip_accuracy("81.230.0.1")
+    assert low <= a <= high
+    assert a == round(a)
+
+
+def test_ip_accuracy_fallback_varies_by_ip():
+    assert len({geolocation.ip_accuracy(f"81.230.0.{i}") for i in range(1, 20)}) > 1

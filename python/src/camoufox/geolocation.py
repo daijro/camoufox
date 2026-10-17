@@ -2,6 +2,7 @@
 Helpers to fetch geolocation, timezone, and locale data given an IP
 """
 
+import hashlib
 import os
 import shutil
 import tempfile
@@ -40,6 +41,17 @@ UPDATE_DAYS = 8
 RECHECK_DAYS = 1
 # A freshly downloaded build older than this means its source is frozen.
 FROZEN_DAYS = 30
+
+# An IP lookup yields a city centroid, and the accuracy a page is handed has to say
+# so. Without one, geolocation-spoofing.patch derived it from the coordinates'
+# decimal places, and the databases store float32 (57.7065 reads back as
+# 57.70650100708008), so pages received 14 decimals and an accuracy of 6e-10 m --
+# a precision no receiver has. When the database carries MaxMind's
+# accuracy_radius (km) that is used; otherwise a per-IP value in the range a
+# network provider reports for an IP-only fix.
+IP_ACCURACY_RANGE_M = (1000.0, 10000.0)
+# Coordinates are published at the precision the databases actually hold.
+COORD_DECIMALS = 4
 
 
 def _find_in(data: Dict, key: str) -> Any:
@@ -324,13 +336,27 @@ def get_geolocation(ip: str, geoip_db: Optional[str] = None) -> Geolocation:
         longitude = _find_in(resp, paths['longitude'])
         latitude = _find_in(resp, paths['latitude'])
         timezone = _find_in(resp, paths['timezone'])
+        radius_km = _find_in(resp, paths['accuracy']) if 'accuracy' in paths else None
 
         iso_code = str(iso_code).upper()
         locale = SELECTOR.from_region(iso_code)
 
         return Geolocation(
             locale=locale,
-            longitude=float(longitude),
-            latitude=float(latitude),
+            longitude=round(float(longitude), COORD_DECIMALS),
+            latitude=round(float(latitude), COORD_DECIMALS),
             timezone=str(timezone),
+            accuracy=ip_accuracy(ip, radius_km),
         )
+
+
+def ip_accuracy(ip: str, radius_km: Optional[float] = None) -> float:
+    """
+    Accuracy in metres for a position derived from an IP address. Stable per IP,
+    so one exit IP always reports the same fix.
+    """
+    if radius_km:
+        return float(radius_km) * 1000.0
+    low, high = IP_ACCURACY_RANGE_M
+    unit = int.from_bytes(hashlib.sha256(ip.encode()).digest()[:8], 'big') / 2**64
+    return float(round(low + unit * (high - low)))

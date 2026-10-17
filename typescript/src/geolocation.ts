@@ -5,6 +5,7 @@
  * (geoip/mmdb/<name>-<ipver>.mmdb and geoip/config.yml under the camoufox
  * cache dir) is the Python package's, so both launchers share one database.
  */
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
@@ -29,6 +30,42 @@ const RECHECK_DAYS = 1;
 const FROZEN_DAYS = 30;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** An IP lookup yields a city centroid, and the accuracy a page is handed has
+ * to say so. Without one, geolocation-spoofing.patch derived it from the
+ * coordinates' decimal places, and the databases store float32 (57.7065 reads
+ * back as 57.70650100708008), so pages received 14 decimals and an accuracy
+ * of 6e-10 m -- a precision no receiver has. When the database carries
+ * MaxMind's accuracy_radius (km) that is used; otherwise a per-IP value in the
+ * range a network provider reports for an IP-only fix. */
+export const IP_ACCURACY_RANGE_M: [number, number] = [1000.0, 10000.0];
+/** Coordinates are published at the precision the databases actually hold. */
+export const COORD_DECIMALS = 4;
+
+/** Python's round-half-even, which toFixed() and Math.round() are not: an
+ * exact tie goes to the even neighbour. Ties are exact only for binary
+ * fractions such as 0.03125, which float32 coordinates can be. */
+function pyRound(x: number, decimals = 0): number {
+	const scale = 10 ** decimals;
+	const doubled = x * scale * 2;
+	if (Number.isInteger(doubled) && doubled % 2 !== 0) {
+		const down = Math.floor(x * scale);
+		return (down % 2 === 0 ? down : down + 1) / scale;
+	}
+	return decimals ? Number(x.toFixed(decimals)) : Math.round(x);
+}
+
+/**
+ * Accuracy in metres for a position derived from an IP address. Stable per
+ * IP, so one exit IP always reports the same fix.
+ */
+export function ipAccuracy(ip: string, radiusKm?: number | null): number {
+	if (radiusKm) return Number(radiusKm) * 1000.0;
+	const [low, high] = IP_ACCURACY_RANGE_M;
+	const digest = createHash("sha256").update(ip).digest();
+	const unit = Number(digest.readBigUInt64BE(0)) / 2 ** 64;
+	return pyRound(low + unit * (high - low));
+}
 
 export interface GeoIPRepo {
 	name: string;
@@ -428,15 +465,17 @@ export async function getGeolocation(
 		const longitude = findIn(resp, paths.longitude);
 		const latitude = findIn(resp, paths.latitude);
 		const timezone = findIn(resp, paths.timezone);
+		const radiusKm = "accuracy" in paths ? findIn(resp, paths.accuracy) : null;
 
 		const iso = String(isoCode ?? "None").toUpperCase();
 		const locale = await SELECTOR.fromRegion(iso);
 
 		return new Geolocation(
 			locale,
-			pyFloat(longitude),
-			pyFloat(latitude),
+			pyRound(pyFloat(longitude), COORD_DECIMALS),
+			pyRound(pyFloat(latitude), COORD_DECIMALS),
 			String(timezone ?? "None"),
+			ipAccuracy(ip, radiusKm),
 		);
 	} finally {
 		reader.close?.();

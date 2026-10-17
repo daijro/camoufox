@@ -135,3 +135,53 @@ it.each([
 it("needs an update when the database is missing", async () => {
 	expect(await g.needsUpdate()).toBe(true);
 });
+
+async function geolocate(location: Record<string, unknown>) {
+	// The AIO record's shape, with the float32 coordinates the databases store.
+	const record = {
+		country: { iso_code: "SE" },
+		location: { time_zone: "Europe/Stockholm", ...location },
+	};
+	const mmdb = g.getMmdbPath("ipv4", g.loadGeoipConfig());
+	fs.mkdirSync(path.dirname(mmdb), { recursive: true });
+	fs.writeFileSync(mmdb, "");
+	g.geoipDeps.openDatabase = async () => ({
+		get: () => record,
+		metadata: { buildEpoch: new Date() },
+	});
+	return g.getGeolocation("81.230.0.1");
+}
+
+it("an IP position carries the database's precision and radius", async () => {
+	const geo = await geolocate({
+		latitude: 57.70650100708008,
+		longitude: 11.966999053955078,
+		accuracy_radius: 20,
+	});
+	expect([geo.latitude, geo.longitude]).toEqual([57.7065, 11.967]);
+	expect(geo.asConfig()["geolocation:accuracy"]).toBe(20000);
+});
+
+it("an IP position without a radius reports a city-scale accuracy", async () => {
+	// Without one the browser derived 6e-10 m from the coordinates' decimals.
+	const geo = await geolocate({
+		latitude: 57.70650100708008,
+		longitude: 11.966999053955078,
+	});
+	expect(geo.asConfig()["geolocation:accuracy"]).toBe(
+		g.ipAccuracy("81.230.0.1"),
+	);
+});
+
+it("the fallback accuracy is stable, in range, and varies by IP", () => {
+	const [low, high] = g.IP_ACCURACY_RANGE_M;
+	const a = g.ipAccuracy("81.230.0.1");
+	// The value python/tests computes for the same IP.
+	expect(a).toBe(6050);
+	expect(a).toBeGreaterThanOrEqual(low);
+	expect(a).toBeLessThanOrEqual(high);
+	const spread = new Set(
+		Array.from({ length: 19 }, (_, i) => g.ipAccuracy(`81.230.0.${i + 1}`)),
+	);
+	expect(spread.size).toBeGreaterThan(1);
+});

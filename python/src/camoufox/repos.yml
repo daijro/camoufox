@@ -61,6 +61,7 @@ geoip:
       longitude: location.longitude
       latitude: location.latitude
       timezone: location.time_zone
+      accuracy: location.accuracy_radius
 
   # GeoLite2 City via sapics/ip-location-db, which publishes to GitHub
   # Releases since 2026-06-18 (URLs from daijro/camoufox#815).
