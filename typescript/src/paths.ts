@@ -113,6 +113,7 @@ export interface LauncherConstants {
 	macEloquenceVoices: string[];
 	baselineTaskbarHeight: Record<"win" | "mac" | "lin", number>;
 	baselineMultiTouchPoints: number;
+	windowsHwCodecs: string[];
 	cachePrefs: Record<string, any>;
 	windowsBehaviourPrefs: Record<string, any>;
 }

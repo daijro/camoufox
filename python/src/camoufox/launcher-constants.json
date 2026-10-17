@@ -33,6 +33,7 @@
   "macEloquenceVoices": ["Eddy", "Flo", "Grandma", "Grandpa", "Reed", "Rocko", "Sandy", "Shelley"],
   "baselineTaskbarHeight": {"win": 48, "mac": 76, "lin": 0},
   "baselineMultiTouchPoints": 5,
+  "windowsHwCodecs": ["video/avc", "video/hevc", "video/vp9"],
   "cachePrefs": {
     "browser.sessionhistory.max_total_viewers": -1,
     "browser.cache.memory.enable": true,
