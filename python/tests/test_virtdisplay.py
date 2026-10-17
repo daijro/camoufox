@@ -14,6 +14,8 @@ takes one X11 socket plus our -displayfd pipe.
 
 import os
 import re
+import signal
+import subprocess  # nosec
 import sys
 import time
 from typing import List, Set
@@ -128,3 +130,47 @@ def test_released_display_numbers_can_be_reused_on_the_next_launch(tracked):
 
     # Sanity: a_display was a valid form too.
     assert DISPLAY_RE.match(a_display), a_display
+
+
+def _alive(pid: int) -> bool:
+    """True while `pid` runs; a zombie waiting for its new parent counts as dead."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except FileNotFoundError:
+        return False
+
+
+def test_xvfb_dies_with_the_process_that_started_it():
+    """A SIGKILLed launcher never runs kill(), so the kernel must stop Xvfb (#868).
+
+    Supervisors, `timeout` and CI cancellation end the Python process with a
+    signal that skips every `finally`. Xvfb then has to go on its own, and
+    remove its lock and socket on the way out.
+    """
+    child = subprocess.Popen(  # nosec
+        [
+            sys.executable,
+            "-c",
+            "import sys, time\n"
+            "from camoufox.virtdisplay import VirtualDisplay\n"
+            "vd = VirtualDisplay()\n"
+            "print(vd.get()[1:], vd.proc.pid, flush=True)\n"
+            "time.sleep(60)\n",
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    display, pid = child.stdout.readline().split()
+    xvfb = int(pid)
+    assert _alive(xvfb)
+
+    child.send_signal(signal.SIGKILL)
+    child.wait()
+
+    deadline = time.monotonic() + 5
+    while _alive(xvfb) and time.monotonic() < deadline:
+        time.sleep(0.025)
+    assert not _alive(xvfb), f"Xvfb {xvfb} outlived the process that started it"
+    assert not os.path.exists(f"/tmp/.X{display}-lock")
+    assert not os.path.exists(f"/tmp/.X11-unix/X{display}")

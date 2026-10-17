@@ -145,14 +145,17 @@ def test_composite_can_still_be_turned_on(monkeypatch):
     )
 
 
-def test_displays_are_claimed_with_displayfd_not_a_lockfile_scan():
+def _xvfb_launch() -> Dict[str, Any]:
+    """The argv and Popen kwargs Xvfb is launched with.
+
+    Asserted against what is actually launched, not against the source text --
+    a first draft of the displayfd test passed on the *comment* above the call,
+    which is exactly the kind of vacuous assertion that makes a rule file worse
+    than nothing.
+    """
     from camoufox import virtdisplay
 
-    # Asserted against the argv Xvfb is actually launched with, not against the
-    # source text -- a first draft of this test passed on the *comment* above
-    # the call, which is exactly the kind of vacuous assertion that makes a rule
-    # file worse than nothing.
-    captured = {}
+    captured: Dict[str, Any] = {}
 
     class FakePopen:
         def __init__(self, cmd, **kwargs):
@@ -167,6 +170,7 @@ def test_displays_are_claimed_with_displayfd_not_a_lockfile_scan():
     monkey = pytest.MonkeyPatch()
     try:
         monkey.setattr(type(display), "xvfb_path", property(lambda self: "/usr/bin/Xvfb"))
+        monkey.setattr(type(display), "setpriv_path", property(lambda self: "/usr/bin/setpriv"))
         monkey.setattr(virtdisplay.subprocess, "Popen", FakePopen)
         # get() blocks reading the display number back from a pipe the fake
         # never writes to; the bounded read is what makes that safe to do here.
@@ -177,7 +181,11 @@ def test_displays_are_claimed_with_displayfd_not_a_lockfile_scan():
             pass
     finally:
         monkey.undo()
+    return captured
 
+
+def test_displays_are_claimed_with_displayfd_not_a_lockfile_scan():
+    captured = _xvfb_launch()
     cmd = captured.get("cmd") or []
     assert "-displayfd" in cmd, (
         "Xvfb is no longer launched with -displayfd, so display allocation has gone back "
@@ -186,6 +194,15 @@ def test_displays_are_claimed_with_displayfd_not_a_lockfile_scan():
     assert captured.get("kwargs", {}).get("pass_fds"), (
         "the displayfd pipe is no longer passed through to the child, so Xvfb cannot "
         "report the number it chose." + explain("displayfd-not-lockfile-scan")
+    )
+
+
+def test_xvfb_carries_a_parent_death_signal():
+    cmd = _xvfb_launch().get("cmd") or []
+    assert cmd[:4] == ["/usr/bin/setpriv", "--pdeathsig", "TERM", "/usr/bin/Xvfb"], (
+        "Xvfb is no longer launched under setpriv --pdeathsig TERM, so a launcher "
+        f"killed by a signal strands it. argv was: {cmd}"
+        + explain("xvfb-dies-with-its-launcher")
     )
 
 
