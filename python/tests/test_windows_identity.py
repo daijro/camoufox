@@ -56,3 +56,25 @@ def test_windows_identity_on_windows_host_is_left_alone(launch, monkeypatch):
 def test_caller_values_win(launch):
     _, prefs = launch(WIN_UA, firefox_user_prefs={"javascript.options.use_ucrt_math": False})
     assert prefs["javascript.options.use_ucrt_math"] is False
+
+
+def test_windows_identity_gets_windows_keyboard(launch):
+    config, _ = launch(WIN_UA)
+    assert config["input:windowsKeyboard"] is True
+
+
+@pytest.mark.parametrize("ua", [MAC_UA, LIN_UA])
+def test_other_identities_keep_host_keyboard(launch, ua):
+    config, _ = launch(ua)
+    assert "input:windowsKeyboard" not in config
+
+
+def test_windows_keyboard_on_windows_host_is_left_alone(launch, monkeypatch):
+    monkeypatch.setattr(utils, "_host_os_key", lambda: "win")
+    config, _ = launch(WIN_UA)
+    assert "input:windowsKeyboard" not in config
+
+
+def test_caller_keyboard_wins(launch):
+    config, _ = launch(WIN_UA, config={"input:windowsKeyboard": False})
+    assert config["input:windowsKeyboard"] is False

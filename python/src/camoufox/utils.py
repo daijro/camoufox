@@ -1299,6 +1299,13 @@ def launch_options(
         # against stock 152.0.4 on Windows, 15,991 of 15,991 results match.
         firefox_user_prefs.setdefault('javascript.options.use_ucrt_math', True)
 
+        # Keyboard: Windows' shortcut tables instead of GTK's text bindings
+        # (Ctrl+Up/Down to line start/end, Alt+Backspace undo, Shift+Delete
+        # with no selection deletes), AltGr as keyCode 18 rather than 225,
+        # and Ctrl+Backspace/Delete in rich text deleting a word from a
+        # selection's start (windows-keyboard.patch).
+        config.setdefault('input:windowsKeyboard', True)
+
     # Per-character font fallback, LINUX ONLY. Gecko's GlobalFontFallback walks
     # the shared font list for a family whose charmap covers the character; in a
     # content process with async fallback on it hits the

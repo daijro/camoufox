@@ -1631,6 +1631,10 @@ export async function launchOptions({
 		// Math.sin/cos/tan/pow as the Windows CRT computes them, to the last bit
 		// (windows-crt-math.patch).
 		setInto(firefox_user_prefs, "javascript.options.use_ucrt_math", true);
+
+		// Keyboard: Windows' shortcut tables instead of GTK's text bindings, and
+		// AltGr as keyCode 18 rather than 225 (windows-keyboard.patch).
+		setInto(config, "input:windowsKeyboard", true);
 	}
 
 	// Per-character font fallback, LINUX ONLY: with async fallback on, the

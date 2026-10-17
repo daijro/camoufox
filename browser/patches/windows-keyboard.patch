@@ -1,0 +1,245 @@
+diff --git a/dom/events/ShortcutKeyDefinitionsWin.cpp b/dom/events/ShortcutKeyDefinitionsWin.cpp
+new file mode 100644
+--- /dev/null
++++ b/dom/events/ShortcutKeyDefinitionsWin.cpp
+@@ -0,0 +1,27 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++// Windows' shortcut key tables, built into the GTK build for identities that
++// claim Windows (config "input:windowsKeyboard"). ShortcutKeyDefinitions.cpp
++// is compiled a second time with the Windows platform macros, so the tables
++// are Windows' own rather than a copy that could drift from them.
++
++#include "ShortcutKeys.h"
++
++#pragma push_macro("MOZ_WIDGET_GTK")
++#undef MOZ_WIDGET_GTK
++#define XP_WIN 1
++#define sInputHandlers sInputHandlersWin
++#define sTextAreaHandlers sTextAreaHandlersWin
++#define sBrowserHandlers sBrowserHandlersWin
++#define sEditorHandlers sEditorHandlersWin
++
++#include "ShortcutKeyDefinitions.cpp"
++
++#undef sInputHandlers
++#undef sTextAreaHandlers
++#undef sBrowserHandlers
++#undef sEditorHandlers
++#undef XP_WIN
++#pragma pop_macro("MOZ_WIDGET_GTK")
+diff --git a/dom/events/ShortcutKeys.cpp b/dom/events/ShortcutKeys.cpp
+--- a/dom/events/ShortcutKeys.cpp
++++ b/dom/events/ShortcutKeys.cpp
+@@ -9,6 +9,10 @@
+ #include "nsAtom.h"
+ #include "nsContentUtils.h"
+ 
++#ifdef MOZ_WIDGET_GTK
++#  include "MaskConfig.hpp"
++#endif
++
+ namespace mozilla {
+ 
+ NS_IMPL_ISUPPORTS(ShortcutKeys, nsIObserver);
+@@ -76,26 +80,33 @@
+   ShortcutKeyData* keyData;
+   KeyEventHandler** cache;
+ 
++#ifdef MOZ_WIDGET_GTK
++  static const bool sWindows = MaskConfig::GetBool("input:windowsKeyboard");
++#  define CAMOU_KEYS(aName) (sWindows ? &aName##Win[0] : &aName[0])
++#else
++#  define CAMOU_KEYS(aName) (&aName[0])
++#endif
+   switch (aType) {
+     case HandlerType::eBrowser:
+-      keyData = &sBrowserHandlers[0];
++      keyData = CAMOU_KEYS(sBrowserHandlers);
+       cache = &mBrowserHandlers;
+       break;
+     case HandlerType::eEditor:
+-      keyData = &sEditorHandlers[0];
++      keyData = CAMOU_KEYS(sEditorHandlers);
+       cache = &mEditorHandlers;
+       break;
+     case HandlerType::eInput:
+-      keyData = &sInputHandlers[0];
++      keyData = CAMOU_KEYS(sInputHandlers);
+       cache = &mInputHandlers;
+       break;
+     case HandlerType::eTextArea:
+-      keyData = &sTextAreaHandlers[0];
++      keyData = CAMOU_KEYS(sTextAreaHandlers);
+       cache = &mTextAreaHandlers;
+       break;
+     default:
+       MOZ_ASSERT(false, "Unknown handler type requested.");
+   }
++#undef CAMOU_KEYS
+ 
+   if (*cache) {
+     return *cache;
+diff --git a/dom/events/ShortcutKeys.h b/dom/events/ShortcutKeys.h
+--- a/dom/events/ShortcutKeys.h
++++ b/dom/events/ShortcutKeys.h
+@@ -57,6 +57,13 @@
+   static ShortcutKeyData sEditorHandlers[];
+   static ShortcutKeyData sInputHandlers[];
+   static ShortcutKeyData sTextAreaHandlers[];
++#ifdef MOZ_WIDGET_GTK
++  // Windows' tables (ShortcutKeyDefinitionsWin.cpp).
++  static ShortcutKeyData sBrowserHandlersWin[];
++  static ShortcutKeyData sEditorHandlersWin[];
++  static ShortcutKeyData sInputHandlersWin[];
++  static ShortcutKeyData sTextAreaHandlersWin[];
++#endif
+ 
+   // Cached event handlers generated from the above data.
+   KeyEventHandler* mBrowserHandlers;
+diff --git a/dom/events/moz.build b/dom/events/moz.build
+--- a/dom/events/moz.build
++++ b/dom/events/moz.build
+@@ -170,6 +170,11 @@
+     "EventStateManager.cpp",
+ ]
+ 
++# Compiles ShortcutKeyDefinitions.cpp again with the Windows platform macros,
++# so it must not share a unified file.
++if CONFIG["MOZ_WIDGET_TOOLKIT"] == "gtk":
++    SOURCES += ["ShortcutKeyDefinitionsWin.cpp"]
++
+ if CONFIG["MOZ_WEBSPEECH"]:
+     UNIFIED_SOURCES += ["SpeechRecognitionError.cpp"]
+ 
+diff --git a/editor/libeditor/EditorBase.cpp b/editor/libeditor/EditorBase.cpp
+--- a/editor/libeditor/EditorBase.cpp
++++ b/editor/libeditor/EditorBase.cpp
+@@ -135,6 +135,7 @@
+ #include "nsTextNode.h"                // for nsTextNode
+ #include "nsThreadUtils.h"             // for nsRunnable
+ #include "prtime.h"                    // for PR_Now
++#include "MaskConfig.hpp"
+ 
+ class nsIOutputStream;
+ class nsITransferable;
+@@ -208,12 +209,17 @@
+       mHidingCaret(false),
+       mSpellCheckerDictionaryUpdated(true),
+       mIsHTMLEditorClass(aEditorType == EditorType::HTML) {
++  // Windows keyboard: also for identities that claim Windows on other builds.
++  static const bool sWindowsKeyboard =
+ #ifdef XP_WIN
+-  if (!mCaretStyle && !IsTextEditor()) {
++      true;
++#else
++      MaskConfig::GetBool("input:windowsKeyboard");
++#endif
++  if (sWindowsKeyboard && !mCaretStyle && !IsTextEditor()) {
+     // Wordpad-like caret behavior.
+     mCaretStyle = 1;
+   }
+-#endif  // #ifdef XP_WIN
+   if (mNewlineHandling < nsIEditor::eNewlinesPasteIntact ||
+       mNewlineHandling > nsIEditor::eNewlinesStripSurroundingWhitespace) {
+     mNewlineHandling = nsIEditor::eNewlinesPasteToFirst;
+diff --git a/editor/libeditor/moz.build b/editor/libeditor/moz.build
+--- a/editor/libeditor/moz.build
++++ b/editor/libeditor/moz.build
+@@ -99,6 +99,9 @@
+     "/layout/xul",
+ ]
+ 
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
++
+ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
+diff --git a/widget/gtk/NativeKeyBindings.cpp b/widget/gtk/NativeKeyBindings.cpp
+--- a/widget/gtk/NativeKeyBindings.cpp
++++ b/widget/gtk/NativeKeyBindings.cpp
+@@ -9,6 +9,7 @@
+ #include <gdk/gdkkeysyms.h>
+ #include <gtk/gtk.h>
+ 
++#include "MaskConfig.hpp"
+ #include "mozilla/MathAlgorithms.h"
+ #include "mozilla/Maybe.h"
+ #include "mozilla/NativeKeyBindingsType.h"
+@@ -295,6 +296,14 @@
+   g_object_unref(mNativeTarget);
+ }
+ 
++// Windows has no native text bindings: its shortcut tables, which ShortcutKeys
++// uses for an identity with "input:windowsKeyboard", are the whole behaviour.
++static bool CamouWindowsKeyboard() {
++  static const bool sWindowsKeyboard =
++      MaskConfig::GetBool("input:windowsKeyboard");
++  return sWindowsKeyboard;
++}
++
+ void NativeKeyBindings::GetEditCommands(const WidgetKeyboardEvent& aEvent,
+                                         const Maybe<WritingMode>& aWritingMode,
+                                         nsTArray<CommandInt>& aCommands) {
+@@ -306,6 +315,10 @@
+     return;
+   }
+ 
++  if (CamouWindowsKeyboard()) {
++    return;
++  }
++
+   guint keyval;
+   if (aEvent.mCharCode) {
+     keyval = gdk_unicode_to_keyval(aEvent.mCharCode);
+@@ -405,7 +418,7 @@
+     const Maybe<WritingMode>& aWritingMode, nsTArray<CommandInt>& aCommands) {
+   MOZ_DIAGNOSTIC_ASSERT(aEvent.IsTrusted());
+ 
+-  if (aEvent.IsAlt() || aEvent.IsMeta()) {
++  if (aEvent.IsAlt() || aEvent.IsMeta() || CamouWindowsKeyboard()) {
+     return;
+   }
+ 
+diff --git a/widget/gtk/moz.build b/widget/gtk/moz.build
+--- a/widget/gtk/moz.build
++++ b/widget/gtk/moz.build
+@@ -173,6 +173,9 @@
+     "/widget/x11",
+ ]
+ 
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
++
+ CXXFLAGS += CONFIG["MOZ_GBM_CFLAGS"]
+ if not CONFIG["MOZ_SYSTEM_GBM"]:
+     LOCAL_INCLUDES += [
+diff --git a/widget/gtk/nsGtkKeyUtils.cpp b/widget/gtk/nsGtkKeyUtils.cpp
+--- a/widget/gtk/nsGtkKeyUtils.cpp
++++ b/widget/gtk/nsGtkKeyUtils.cpp
+@@ -19,6 +19,7 @@
+ #  include "X11UndefineNone.h"
+ #endif
+ #include "IMContextWrapper.h"
++#include "MaskConfig.hpp"
+ #include "WidgetUtils.h"
+ #include "WidgetUtilsGtk.h"
+ #include "mozilla/MouseEvents.h"
+@@ -2553,8 +2554,12 @@
+     case GDK_ISO_Level3_Shift:
+     case GDK_ISO_Level5_Shift:
+     // We assume that Mode_switch is always used for level3 shift.
+-    case GDK_Mode_switch:
+-      return NS_VK_ALTGR;
++    case GDK_Mode_switch: {
++      // Windows reports AltGr as Alt (VK_MENU).
++      static const bool sWindowsKeyboard =
++          MaskConfig::GetBool("input:windowsKeyboard");
++      return sWindowsKeyboard ? NS_VK_ALT : NS_VK_ALTGR;
++    }
+ 
+     case GDK_Pause:
+       return NS_VK_PAUSE;

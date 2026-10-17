@@ -889,6 +889,9 @@ jobs:
       # namespace, which Ubuntu's AppArmor denies to programs without a profile.
       - if: matrix.leg == 'spoofing'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - if: matrix.leg == 'parity'
+        # windows-keyboard sends real X11 key events.
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends xdotool x11-xkb-utils
       - if: matrix.leg != 'skiplist'
         run: xvfb-run -a python3 -m ci.run_patch_guards --group "${{ matrix.leg }}" --binary "$CAMOUFOX_BINARY"
       - name: Every skiplist entry is still failing

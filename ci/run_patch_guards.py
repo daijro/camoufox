@@ -88,6 +88,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "viewport-no-rdm",
         "windows-crt-math",
         "windows-exe-manifest",
+        "windows-keyboard",
     ),
 }
 
