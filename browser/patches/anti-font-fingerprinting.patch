@@ -44,26 +44,36 @@ index a0b8c260c4..2ea46a9810 100644
  
   private:
 diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
-index f2c42a498e..bc887921c8 100644
 --- a/gfx/thebes/gfxTextRun.cpp
 +++ b/gfx/thebes/gfxTextRun.cpp
-@@ -33,6 +33,8 @@
+@@ -33,6 +33,9 @@
  #include "nsStyleConsts.h"
  #include "nsStyleUtil.h"
  #include "nsUnicodeProperties.h"
 +#include "mozilla/dom/Document.h"
 +#include "mozilla/dom/RoverfoxStorageManager.h"
++#include "mozilla/dom/WorkerPrivate.h"
  
  #ifdef XP_WIN
  #  include "gfxWindowsPlatform.h"
-@@ -1871,6 +1873,11 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+@@ -1871,6 +1874,21 @@
        mFontVariantEmoji(aVariantEmoji) {
    // We don't use SetUserFontSet() here, as we want to unconditionally call
    // EnsureFontList() rather than only do UpdateUserFonts() if it changed.
 +
 +  if (mFontVisibilityProvider) {
-+    mUserContextId = mozilla::dom::RoverfoxStorageManager::UserContextId(
-+        mFontVisibilityProvider->GetDocument());
++    mozilla::dom::Document* doc = mFontVisibilityProvider->GetDocument();
++    mUserContextId =
++        mozilla::dom::RoverfoxStorageManager::UserContextId(doc);
++    // An OffscreenCanvas in a worker has no document, so its font group ran
++    // as context 0 -- launch-wide fonts only -- while the page's main thread
++    // used the context's own list, and a page could compare the two
++    // (lang315/camoufox#44). The worker knows its context.
++    if (!doc && !NS_IsMainThread()) {
++      if (auto* worker = mozilla::dom::GetCurrentThreadWorkerPrivate()) {
++        mUserContextId = worker->GetOriginAttributes().mUserContextId;
++      }
++    }
 +  }
  }
  
