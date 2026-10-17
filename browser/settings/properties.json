@@ -70,6 +70,7 @@
   { "property": "mediaDevices:speakerGroups", "type": "array" },
   { "property": "media:spoof_codecs", "type": "bool" },
   { "property": "input:windowsKeyboard", "type": "bool" },
+  { "property": "fonts:metrics", "type": "str" },
   { "property": "allowMainWorld", "type": "bool" },
   { "property": "disableWorldIsolation", "type": "bool" },
   { "property": "allowAddonNewtab", "type": "bool" },

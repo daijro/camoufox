@@ -1,0 +1,168 @@
+diff --git a/gfx/thebes/gfxFT2FontBase.cpp b/gfx/thebes/gfxFT2FontBase.cpp
+--- a/gfx/thebes/gfxFT2FontBase.cpp
++++ b/gfx/thebes/gfxFT2FontBase.cpp
+@@ -13,6 +13,8 @@
+ #include "gfxFontConstants.h"
+ #include "gfxFontUtils.h"
+ #include "gfxHarfBuzzShaper.h"
++#include "gfxPlatformFontList.h"
++#include "MaskConfig.hpp"
+ #include "harfbuzz/hb.h"
+ #include "mozilla/Likely.h"
+ #include "mozilla/StaticPrefs_gfx.h"
+@@ -249,6 +251,92 @@
+   return aFace->available_sizes[bestSize].y_ppem / 64.0;
+ }
+ 
++// Camoufox: whether to lay text out with DirectWrite's metrics (a Windows
++// identity on a FreeType host). CAMOU_CONFIG is fixed for the process.
++static bool UseWindowsMetrics() {
++  static const bool sWindows =
++      MaskConfig::GetString("fonts:metrics").value_or("") == "windows";
++  return sWindows;
++}
++
++// DirectWrite's DWRITE_FONT_METRICS for a face, from the same tables it reads:
++// the OS/2 usWin* extents (sTypo* when fsSelection sets USE_TYPO_METRICS),
++// with the hhea line gap reduced by however far usWin* already exceeds the
++// hhea extents -- GDI's external-leading rule, which DirectWrite follows.
++gfxFT2FontBase::WindowsDesignMetrics gfxFT2FontBase::GetWindowsDesignMetrics()
++    const {
++  WindowsDesignMetrics m;
++  FT_Face face = LockFTFace();
++  if (face && FT_IS_SFNT(face)) {
++    const auto* os2 =
++        static_cast<const TT_OS2*>(FT_Get_Sfnt_Table(face, ft_sfnt_os2));
++    const auto* hhea = static_cast<const TT_HoriHeader*>(
++        FT_Get_Sfnt_Table(face, ft_sfnt_hhea));
++    const auto* head =
++        static_cast<const TT_Header*>(FT_Get_Sfnt_Table(face, ft_sfnt_head));
++    if (os2 && os2->version != 0xFFFF && hhea && head &&
++        head->Units_Per_EM) {
++      const uint16_t kUseTypoMetricsMask = 1 << 7;
++      m.mUnitsPerEm = head->Units_Per_EM;
++      if (os2->fsSelection & kUseTypoMetricsMask) {
++        m.mAscent = os2->sTypoAscender;
++        m.mDescent = -os2->sTypoDescender;
++        m.mLineGap = os2->sTypoLineGap;
++      } else {
++        m.mAscent = os2->usWinAscent;
++        m.mDescent = os2->usWinDescent;
++        m.mLineGap = std::max<int32_t>(
++            0, int32_t(hhea->Ascender) - int32_t(hhea->Descender) +
++                   int32_t(hhea->Line_Gap) - (m.mAscent + m.mDescent));
++      }
++      m.mAdvanceWidthMax = hhea->advance_Width_Max;
++      m.mAvgCharWidth = os2->xAvgCharWidth;
++      m.mValid = m.mAscent + m.mDescent > 0;
++    }
++  }
++  UnlockFTFace();
++  return m;
++}
++
++// gfxDWriteFont::ComputeMetrics, arithmetic included: the conversion factor is
++// a float, ascent and descent are rounded to whole pixels, the em height stays
++// the fractional font size, and the line gap is rounded up. FreeType instead
++// takes pixel-rounded hhea extents and rounds the em height, so the same font
++// file produced other line boxes (Arial 16px: 17/18 px on Windows, 19/19 here).
++void gfxFT2FontBase::ApplyWindowsMetrics(const WindowsDesignMetrics& aDesign) {
++  const float scale = float(mAdjustedSize / aDesign.mUnitsPerEm);
++
++  mMetrics.maxAscent = round(aDesign.mAscent * scale);
++  mMetrics.maxDescent = round(aDesign.mDescent * scale);
++  mMetrics.maxHeight = mMetrics.maxAscent + mMetrics.maxDescent;
++
++  mMetrics.emHeight = mAdjustedSize;
++  mMetrics.emAscent =
++      mMetrics.maxHeight > 0.0
++          ? mMetrics.emHeight * mMetrics.maxAscent / mMetrics.maxHeight
++          : 0.0;
++  mMetrics.emDescent = mMetrics.emHeight - mMetrics.emAscent;
++
++  if (aDesign.mAdvanceWidthMax) {
++    mMetrics.maxAdvance = aDesign.mAdvanceWidthMax * scale;
++  }
++
++  mMetrics.internalLeading =
++      std::max(mMetrics.maxHeight - mMetrics.emHeight, 0.0);
++  mMetrics.externalLeading = ceil(aDesign.mLineGap * scale);
++
++  // Subpixel-positioned text (as on Windows with ClearType): the OS/2 average
++  // width unrounded, falling back to the advance of 'x'. Not maxed with the
++  // zero width as FreeType's path does.
++  mMetrics.aveCharWidth = aDesign.mAvgCharWidth * scale;
++  if (mMetrics.aveCharWidth < 1) {
++    gfxFloat xWidth;
++    if (GetCharExtents('x', &xWidth)) {
++      mMetrics.aveCharWidth = xWidth;
++    }
++  }
++}
++
+ void gfxFT2FontBase::InitMetrics() {
+   mFUnitsConvFactor = 0.0;
+ 
+@@ -591,6 +679,37 @@
+       sum > 0.0 ? mMetrics.emAscent * mMetrics.emHeight / sum : 0.0;
+   mMetrics.emDescent = mMetrics.emHeight - mMetrics.emAscent;
+ 
++  if (aEmHeight > 0.0 && UseWindowsMetrics()) {
++    // gfxDWriteFont::ComputeMetrics substitutes Arial Bold's metrics for the
++    // system Arial Black (weight 900), so it lays out exactly like Arial.
++    WindowsDesignMetrics design = GetWindowsDesignMetrics();
++    if (mFontEntry->Weight().Min() == FontWeight::FromInt(900) &&
++        mFontEntry->Weight().Max() == FontWeight::FromInt(900) &&
++        !mFontEntry->IsUserFont() &&
++        mFontEntry->Name().EqualsLiteral("Arial Black")) {
++      gfxFontStyle style(mStyle);
++      style.weight = FontWeight::FromInt(700);
++      gfxFontEntry* fe =
++          gfxPlatformFontList::PlatformFontList()->FindFontForFamily(
++              nullptr, "Arial"_ns, &style);
++      if (fe && fe != mFontEntry) {
++        RefPtr<gfxFont> arial = fe->FindOrMakeFont(&style);
++        if (arial && arial->GetType() == FONT_TYPE_FT2) {
++          WindowsDesignMetrics arialDesign =
++              static_cast<gfxFT2FontBase*>(arial.get())
++                  ->GetWindowsDesignMetrics();
++          if (arialDesign.mValid) {
++            design = arialDesign;
++          }
++        }
++      }
++    }
++    if (design.mValid) {
++      ApplyWindowsMetrics(design);
++    }
++  }
++
++
+   SanitizeMetrics(false);
+ 
+ #if 0
+diff --git a/gfx/thebes/gfxFT2FontBase.h b/gfx/thebes/gfxFT2FontBase.h
+--- a/gfx/thebes/gfxFT2FontBase.h
++++ b/gfx/thebes/gfxFT2FontBase.h
+@@ -108,6 +108,21 @@
+   void InitMetrics();
+   void InitExtraMetrics(gfxFloat aEmHeight, gfxFloat aLineHeight);
+ 
++  // Camoufox: the vertical metrics DirectWrite derives from this face's tables
++  // (design units). With fonts:metrics set to "windows", text is laid out with
++  // these as stock Firefox on Windows does, instead of FreeType's.
++  struct WindowsDesignMetrics {
++    uint16_t mUnitsPerEm = 0;
++    int32_t mAscent = 0;
++    int32_t mDescent = 0;
++    int32_t mLineGap = 0;
++    uint16_t mAdvanceWidthMax = 0;
++    int16_t mAvgCharWidth = 0;
++    bool mValid = false;
++  };
++  WindowsDesignMetrics GetWindowsDesignMetrics() const;
++  void ApplyWindowsMetrics(const WindowsDesignMetrics& aDesign);
++
+   FT_Vector GetEmboldenStrength(FT_Face aFace) const;
+ 
+   RefPtr<mozilla::gfx::SharedFTFace> mFTFace;
