@@ -129,20 +129,32 @@ class TestCodecs:
 
 
 class TestLookAndFeel:
-    """Glyph positioning of the claimed OS."""
+    """Glyph positioning and system colours of the claimed OS."""
 
-    @pytest.mark.parametrize("ua", [WIN_UA, MAC_UA])
-    def test_identity_gets_subpixel_positioning(self, launch, ua):
-        _, prefs = launch(ua)
+    def test_windows_identity_gets_windows_look_and_feel(self, launch):
+        _, prefs = launch(WIN_UA)
         assert prefs["gfx.text.subpixel-position.force-enabled"] is True
+        assert utils.WINDOWS_UI_COLORS["ui.highlight"] == "#0078d7"
+        for pref, value in utils.WINDOWS_UI_COLORS.items():
+            assert prefs[pref] == value
+
+    def test_macos_identity_gets_subpixel_only(self, launch):
+        _, prefs = launch(MAC_UA)
+        assert prefs["gfx.text.subpixel-position.force-enabled"] is True
+        assert "ui.highlight" not in prefs
 
     def test_host_os_identity_is_left_alone(self, launch, monkeypatch):
         _, prefs = launch(LIN_UA)
         assert "gfx.text.subpixel-position.force-enabled" not in prefs
+        assert "ui.highlight" not in prefs
         monkeypatch.setattr(utils, "_host_os_key", lambda: "win")
         _, prefs = launch(WIN_UA)
         assert "gfx.text.subpixel-position.force-enabled" not in prefs
+        assert "ui.highlight" not in prefs
 
     def test_caller_values_win(self, launch):
-        _, prefs = launch(WIN_UA, firefox_user_prefs={"gfx.text.subpixel-position.force-enabled": False})
+        _, prefs = launch(WIN_UA, firefox_user_prefs={
+            "ui.highlight": "#ff0000", "gfx.text.subpixel-position.force-enabled": False,
+        })
+        assert prefs["ui.highlight"] == "#ff0000"
         assert prefs["gfx.text.subpixel-position.force-enabled"] is False

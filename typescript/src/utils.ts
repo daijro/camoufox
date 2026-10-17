@@ -132,6 +132,11 @@ function physicalScale(
 export const WINDOWS_HW_CODECS: readonly string[] =
 	LAUNCHER_CONSTANTS.windowsHwCodecs;
 
+// System colours stock Firefox reports on Windows 10/11 in the light theme,
+// where they differ from a Linux host's GTK theme.
+export const WINDOWS_UI_COLORS: Readonly<Record<string, string>> =
+	LAUNCHER_CONSTANTS.windowsUiColors;
+
 /** The host OS in fonts.json / target_os terms ('mac', 'win', 'lin'). */
 function hostOsKey(): TargetOS | null {
 	return (
@@ -1821,6 +1826,13 @@ export async function launchOptions({
 			"gfx.text.subpixel-position.force-enabled",
 			true,
 		);
+	}
+
+	// Windows' system colours instead of the host theme's.
+	if (targetOs === "win" && hostOs !== "win") {
+		for (const [pref, value] of Object.entries(WINDOWS_UI_COLORS)) {
+			setInto(firefox_user_prefs, pref, value);
+		}
 	}
 
 	// Storage quota, from the host's own disk (see stockProfileDiskCapacityKb).

@@ -75,6 +75,13 @@ WINDOWS_BEHAVIOUR_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['windowsBehaviourPr
 # Windows: H.264, HEVC and VP9 true; AV1 false even on a GPU that decodes it).
 WINDOWS_HW_CODECS: List[str] = LAUNCHER_CONSTANTS['windowsHwCodecs']
 
+# System colours stock Firefox 152.0.4 reports on Windows 10/11 in the default
+# (light) theme, measured 2026-09-24. Only the ones that differ from what a Linux
+# host's GTK theme produces are listed: the rest are Gecko stand-ins, identical on
+# every OS. AccentColor is Firefox's own default (Photon blue 60), not the Windows
+# accent, unless the user opts into system accent colours.
+WINDOWS_UI_COLORS: Dict[str, str] = LAUNCHER_CONSTANTS['windowsUiColors']
+
 
 def _physical_scale(config: Dict[str, Any], prefs: Optional[Dict[str, Any]] = None) -> float:
     """Monitor pixels per CSS pixel of the window at the scale it renders at.
@@ -1470,6 +1477,12 @@ def launch_options(
     # <select> 92 -> 95 px, as on Windows).
     if target_os in ('win', 'mac') and host_os != target_os:
         firefox_user_prefs.setdefault('gfx.text.subpixel-position.force-enabled', True)
+
+    # Highlight, SelectedItem, AccentColor and the -moz-dialog pair come from
+    # the host's theme otherwise (GTK's Adwaita: 53,132,228 / 246,245,244).
+    if target_os == 'win' and host_os != 'win':
+        for pref, value in WINDOWS_UI_COLORS.items():
+            firefox_user_prefs.setdefault(pref, value)
 
     # Storage quota, from the host's own disk. A page reads the group limit
     # through navigator.storage.estimate().quota; see
