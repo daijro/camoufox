@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..c5f3dd4247
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -0,0 +1,463 @@
+@@ -0,0 +1,431 @@
 +#include "RoverfoxStorageManager.h"
 +#include "mozilla/Preferences.h"
 +#include "nsIPrefBranch.h"
@@ -38,11 +38,6 @@ index 0000000000..c5f3dd4247
 +  return sCache;
 +}
 +
-+/* static */ nsTHashSet<nsCString>& RoverfoxStorageManager::GetMissCache() {
-+  static nsTHashSet<nsCString> sMisses;
-+  return sMisses;
-+}
-+
 +/* static */ mozilla::Mutex&
 +RoverfoxStorageManager::GetLocalCacheMutex() {
 +  static mozilla::Mutex sMutex("RoverfoxStorageCache");
@@ -57,7 +52,7 @@ index 0000000000..c5f3dd4247
 +}
 +
 +// Bumped after every change to what ReadValue can answer: a put, a mirrored
-+// pref, the mirror's snapshot, a value fetched from the parent. A memo taken
++// pref, the mirror's snapshot. A memo taken
 +// under an older generation is read again. Starts at 1 so a zeroed slot never
 +// matches.
 +static std::atomic<uint64_t> sGeneration{1};
@@ -76,8 +71,8 @@ index 0000000000..c5f3dd4247
 +// A memo never answers for another context or for a stale value:
 +// - A slot matches only its own (aPrefix, aId), and the userContextId is part
 +//   of that key, so one context's value cannot answer another's read.
-+// - Every change to what ReadValue reads (the local cache, the miss cache, the
-+//   prefs behind the mirror) bumps sGeneration after the change is made, and
++// - Every change to what ReadValue reads (the local cache and the prefs behind
++//   the mirror) bumps sGeneration after the change is made, and
 +//   a reader loads the generation before it looks the value up. A slot taken
 +//   under generation G is a hit only while the generation is still G, so a
 +//   write that lands before, during or after the lookup leaves the slot stale
@@ -242,7 +237,6 @@ index 0000000000..c5f3dd4247
 +  Preferences::GetCString(PromiseFlatCString(aPrefName).get(), value, kKind);
 +  {
 +    MutexAutoLock lock(GetLocalCacheMutex());
-+    GetMissCache().Remove(aPrefName);
 +    if (value.IsEmpty()) {
 +      GetLocalCache().Remove(aPrefName);
 +    } else {
@@ -295,7 +289,6 @@ index 0000000000..c5f3dd4247
 +  {
 +    MutexAutoLock lock(GetLocalCacheMutex());
 +    GetLocalCache().InsertOrUpdate(prefName, nsCString(value));
-+    GetMissCache().Remove(prefName);
 +  }
 +  BumpGeneration();
 +  // Sync to parent for cross-process availability
@@ -325,38 +318,13 @@ index 0000000000..c5f3dd4247
 +  }
 +  // Then Preferences (values synced from other processes)
 +  Preferences::GetCString(prefName.get(), outValue, kKind);
-+  if (!outValue.IsEmpty() || XRE_IsParentProcess()) {
-+    return;
-+  }
-+  // Sync IPC read from the parent covers a value another process put that has
-+  // not reached this process's prefs yet. Once per key: a sync IPC on every
-+  // read of an unset key (every read in a launch without per-context values)
-+  // made navigator.hardwareConcurrency, screen.* and (color) queries ~20x
-+  // slower than stock, a timing a page can measure. A later put anywhere
-+  // clears the miss (pref callback / SetPrefValue).
-+  {
-+    MutexAutoLock lock(GetLocalCacheMutex());
-+    if (GetMissCache().Contains(prefName)) {
-+      return;
-+    }
-+  }
-+  ContentChild* cc = ContentChild::GetSingleton();
-+  if (!cc) {
-+    return;
-+  }
-+  nsCString fromParent;
-+  cc->SendRoverfoxStorageGet(prefName, &fromParent);
-+  outValue = fromParent;
-+  {
-+    MutexAutoLock lock(GetLocalCacheMutex());
-+    if (fromParent.IsEmpty()) {
-+      GetMissCache().Insert(prefName);
-+      return;
-+    }
-+    GetLocalCache().InsertOrUpdate(prefName, fromParent);
-+  }
-+  // A worker reads the local cache alone, so its answer just changed.
-+  BumpGeneration();
++  // No sync IPC to the parent for a key this process has not seen. It made
++  // the first read of each unset key in a process cost 16-54 ms (stock: under
++  // 1 ms), which a page can time on its first navigator.hardwareConcurrency
++  // or screen.width. A put reaches the parent synchronously, and the parent's
++  // pref update to this process is queued on PContent before any later
++  // message to it, so a document this process starts loading after the put
++  // already finds the value in its prefs.
 +}
 +
 +/* static */ void
@@ -472,7 +440,7 @@ new file mode 100644
 index 0000000000..c7dad0158f
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.h
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,74 @@
 +#ifndef mozilla_dom_RoverfoxStorageManager_h
 +#define mozilla_dom_RoverfoxStorageManager_h
 +
@@ -539,7 +507,6 @@ index 0000000000..c7dad0158f
 +  struct MemoSlot;
 +  static MemoSlot ReadMemoized(const char* aPrefix, uint32_t aId);
 +  static void BumpGeneration();
-+  static nsTHashSet<nsCString>& GetMissCache();
 +  static nsTHashMap<nsCStringHashKey, nsCString>& GetLocalCache();
 +  static mozilla::Mutex& GetLocalCacheMutex();
 +};
@@ -572,7 +539,7 @@ diff --git a/dom/ipc/ContentParent.cpp b/dom/ipc/ContentParent.cpp
 index a3b9fd9ead..fb4011d2c3 100644
 --- a/dom/ipc/ContentParent.cpp
 +++ b/dom/ipc/ContentParent.cpp
-@@ -1276,6 +1276,28 @@ mozilla::ipc::IPCResult ContentParent::RecvCreateGMPService() {
+@@ -1276,6 +1276,18 @@ mozilla::ipc::IPCResult ContentParent::RecvCreateGMPService() {
    return IPC_OK();
  }
  
@@ -588,16 +555,6 @@ index a3b9fd9ead..fb4011d2c3 100644
 +  return IPC_OK();
 +}
 +
-+mozilla::ipc::IPCResult ContentParent::RecvRoverfoxStorageGet(
-+    const nsCString& aPrefName, nsCString* aOutValue) {
-+  if (!StringBeginsWith(aPrefName, "roverfox.s."_ns)) {
-+    *aOutValue = ""_ns;
-+    return IPC_OK();
-+  }
-+  Preferences::GetCString(aPrefName.get(), *aOutValue, PrefValueKind::Default);
-+  return IPC_OK();
-+}
-+
  static mozilla::glean::security::FissionPrincipalsExtra
  GetAndLogPrincipalValidationFailure(nsIPrincipal* aPrincipal,
                                      const char* aMethod) {
@@ -605,14 +562,12 @@ diff --git a/dom/ipc/ContentParent.h b/dom/ipc/ContentParent.h
 index 1f7b097d00..a2f3ca8c04 100644
 --- a/dom/ipc/ContentParent.h
 +++ b/dom/ipc/ContentParent.h
-@@ -367,6 +367,11 @@ class ContentParent final : public PContentParent,
+@@ -367,6 +367,9 @@ class ContentParent final : public PContentParent,
        Endpoint<PClipboardContentAnalysisParent>&& aParentEndpoint);
    mozilla::ipc::IPCResult RecvCreateGMPService();
  
 +  mozilla::ipc::IPCResult RecvRoverfoxStoragePut(
 +      const nsCString& aPrefName, const nsCString& aValue);
-+  mozilla::ipc::IPCResult RecvRoverfoxStorageGet(
-+      const nsCString& aPrefName, nsCString* aOutValue);
 +
    NS_DECL_CYCLE_COLLECTION_CLASS_AMBIGUOUS(ContentParent, nsIObserver)
  
@@ -621,16 +576,13 @@ diff --git a/dom/ipc/PContent.ipdl b/dom/ipc/PContent.ipdl
 index 78edbcaac1..b18ffd969f 100644
 --- a/dom/ipc/PContent.ipdl
 +++ b/dom/ipc/PContent.ipdl
-@@ -1163,6 +1163,13 @@ parent:
+@@ -1163,6 +1163,10 @@ parent:
  
      async CreateGMPService();
  
 +    // Roverfox: set a namespaced pref from content process (sync to ensure
 +    // value is in parent before any worker process starts)
 +    sync RoverfoxStoragePut(nsCString prefName, nsCString value);
-+
-+    // Roverfox: read a namespaced pref from parent (cross-process sync)
-+    sync RoverfoxStorageGet(nsCString prefName) returns (nsCString value);
 +
      async CreateClipboardContentAnalysis(Endpoint<PClipboardContentAnalysisParent> aParentEndpoint);
  
@@ -639,15 +591,12 @@ diff --git a/ipc/ipdl/sync-messages.ini b/ipc/ipdl/sync-messages.ini
 index d562255670..b3dc7070d7 100644
 --- a/ipc/ipdl/sync-messages.ini
 +++ b/ipc/ipdl/sync-messages.ini
-@@ -371,6 +371,12 @@ description = Finds certificates and private keys in the parent process. As this
+@@ -371,6 +371,9 @@ description = Finds certificates and private keys in the parent process. As this is called from PKCS#11, there is no way to make this asynchronous.
  [PIPCClientCerts::Sign]
  description = Performs a signature on given data with a key corresponding to the given identifier. This is called from PKCS#11, so there is no way to make this asynchronous.
  # -
 +[PContent::RoverfoxStoragePut]
 +description = Writes a roverfox-namespaced preference to the parent process. Synchronous so the parent holds the value before a document of the same context reads it from another content process.
-+# -
-+[PContent::RoverfoxStorageGet]
-+description = Reads a roverfox-namespaced preference another content process stored that has not yet reached this process. Sent from the main thread on a local miss, at most once per key and process.
 +# -
  [PRemoteQuotaObject::MaybeUpdateSize]
  description = This must be synchronous until quota file streams become non-blocking. The synchronous message is never used on the main thread or the PBackground thread or a DOM worker threed.

@@ -96,11 +96,14 @@ its own id).
 | Tier | Read path |
 |---|---|
 | 1 | The in-process cache |
-| 2 | Firefox prefs, which Firefox syncs to every content process |
-| 3 | Sync IPC to the parent (`SendRoverfoxStorageGet`), main thread only |
+| 2 | Firefox prefs, which Firefox syncs to every content process (main thread only) |
 
-Off the main thread (HarfBuzz, the compositor) only tiers 1 and 2 are used,
-because sync IPC is main-thread only.
+Off the main thread (workers, HarfBuzz, the compositor) only tier 1 is read;
+the main thread keeps it a mirror of every `roverfox.s.` pref. There is no
+read from the parent: a put reaches the parent synchronously, and the pref
+update it sends each content process is queued ahead of any later document
+load there, so a document never needs it. Asking the parent cost the first
+read of each unset key 16-54 ms, which a page can time.
 
 Getters a page can call in a loop (navigator, screen, timezone, WebGL vendor
 and renderer, audio seed) read through `GetUint`, `GetBool` and `GetString`
@@ -111,9 +114,9 @@ what the stock getter does.
 
 ### Cross-process storage
 
-`cross-process-storage.patch` adds two sync messages to `PContent.ipdl`,
-`RoverfoxStoragePut` and `RoverfoxStorageGet`. The parent accepts only pref
-names starting with `roverfox.s.`. Put is synchronous so the value is in the
+`cross-process-storage.patch` adds a sync message to `PContent.ipdl`,
+`RoverfoxStoragePut`. The parent accepts only pref names starting with
+`roverfox.s.`. Put is synchronous so the value is in the
 parent before any worker process starts. The patch also adds `roverfox.s.` to
 `sDynamicPrefOverrideList` in `Preferences.cpp`, because Firefox otherwise
 strips dynamically created string prefs from content processes.

@@ -109,7 +109,7 @@ diff --git a/dom/base/RoverfoxStorageManager.cpp b/dom/base/RoverfoxStorageManag
 index c5f3dd4247..a4010d0c2c 100644
 --- a/dom/base/RoverfoxStorageManager.cpp
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -444,6 +444,9 @@ static nsString SetterUsedKey(const char* aName, uint32_t aUserContextId) {
+@@ -412,6 +412,9 @@ static nsString SetterUsedKey(const char* aName, uint32_t aUserContextId) {
                                                            const char* aName) {
    nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
    if (!win) return false;
