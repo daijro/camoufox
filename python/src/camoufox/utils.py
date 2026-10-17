@@ -1328,6 +1328,15 @@ def launch_options(
         for pref, value in WINDOWS_BEHAVIOUR_PREFS.items():
             firefox_user_prefs.setdefault(pref, value)
 
+        # The scrollbars pinned above are drawn by the host build's theme: on
+        # a Linux host a Windows 10 identity's classic scrollbars measured
+        # 12 px (GTK's) where stock 152.0.4 on Windows measures 17. Draw
+        # Windows' own (widget.non-native-theme.scrollbar.style: 4 Windows 10,
+        # 5 Windows 11), at Windows' size rather than the host's system metric.
+        overlay = firefox_user_prefs.get('ui.useOverlayScrollbars')
+        firefox_user_prefs.setdefault('widget.non-native-theme.scrollbar.style', 5 if overlay else 4)
+        firefox_user_prefs.setdefault('widget.non-native-theme.win.scrollbar.use-system-size', False)
+
     # Per-character font fallback, LINUX ONLY. Gecko's GlobalFontFallback walks
     # the shared font list for a family whose charmap covers the character; in a
     # content process with async fallback on it hits the

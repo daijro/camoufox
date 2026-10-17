@@ -1645,6 +1645,21 @@ export async function launchOptions({
 		for (const [pref, value] of Object.entries(WINDOWS_BEHAVIOUR_PREFS)) {
 			setInto(firefox_user_prefs, pref, value);
 		}
+
+		// The scrollbars pinned above are drawn by the host build's theme (GTK's
+		// 12 px where Windows 10 draws 17): draw Windows' own, 4 Windows 10 or
+		// 5 Windows 11, at Windows' size rather than the host's system metric.
+		const overlay = firefox_user_prefs["ui.useOverlayScrollbars"];
+		setInto(
+			firefox_user_prefs,
+			"widget.non-native-theme.scrollbar.style",
+			overlay ? 5 : 4,
+		);
+		setInto(
+			firefox_user_prefs,
+			"widget.non-native-theme.win.scrollbar.use-system-size",
+			false,
+		);
 	}
 
 	// Per-character font fallback, LINUX ONLY: with async fallback on, the

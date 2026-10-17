@@ -108,3 +108,36 @@ def test_windows_behaviour_on_windows_host_is_left_alone(launch, monkeypatch):
 def test_caller_behaviour_wins(launch):
     _, prefs = launch(WIN_UA, firefox_user_prefs={"middlemouse.paste": True})
     assert prefs["middlemouse.paste"] is True
+
+
+# Scrollbars are drawn by the host build's theme: GTK's are 12 px where stock
+# Windows measures 17 (classic, ui.useOverlayScrollbars 0), so a Windows 10
+# identity on a Linux host showed a 12 px gutter.
+SCROLLBAR_STYLE = "widget.non-native-theme.scrollbar.style"
+
+
+@pytest.mark.parametrize(
+    "overlay, style",
+    [pytest.param(0, 4, id="windows-10-classic"), pytest.param(1, 5, id="windows-11-overlay")],
+)
+def test_windows_identity_draws_windows_scrollbars(launch, overlay, style):
+    _, prefs = launch(WIN_UA, firefox_user_prefs={"ui.useOverlayScrollbars": overlay})
+    assert prefs[SCROLLBAR_STYLE] == style
+    assert prefs["widget.non-native-theme.win.scrollbar.use-system-size"] is False
+
+
+@pytest.mark.parametrize("ua", [MAC_UA, LIN_UA])
+def test_other_identities_keep_host_scrollbars(launch, ua):
+    _, prefs = launch(ua)
+    assert SCROLLBAR_STYLE not in prefs
+
+
+def test_scrollbars_on_a_windows_host_are_left_alone(launch, monkeypatch):
+    monkeypatch.setattr(utils, "_host_os_key", lambda: "win")
+    _, prefs = launch(WIN_UA)
+    assert SCROLLBAR_STYLE not in prefs
+
+
+def test_caller_scrollbar_style_wins(launch):
+    _, prefs = launch(WIN_UA, firefox_user_prefs={SCROLLBAR_STYLE: 2})
+    assert prefs[SCROLLBAR_STYLE] == 2
