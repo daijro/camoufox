@@ -1,0 +1,379 @@
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -973,6 +973,39 @@ uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
+   // primary pointer. See force-default-pointer.patch for the matching
+   // `any-pointer: coarse` half. Stock Firefox's baseline fingerprinting
+   // protection collapses the spoofed count as it would the real one.
++  // Camoufox: stock's work first, then the spoof (timing parity; see
++  // nsScreen::PixelDepth).
++  const uint32_t stock = [&]() -> uint32_t {
++    nsIDocShell* docshell = GetDocShell();
++    BrowsingContext* bc = docshell ? docshell->GetBrowsingContext() : nullptr;
++
++    // Responsive Design Mode overrides the maxTouchPoints property when
++    // touch simulation is enabled.
++    if (bc && bc->Top()->InRDMPane()) {
++      return bc->Top()->GetMaxTouchPointsOverride();
++    }
++
++    // The maxTouchPoints is going to reveal the detail of users' hardware. So,
++    // we will spoof it into 0 if fingerprinting resistance is on.
++    if (aCallerType != CallerType::System &&
++        nsContentUtils::ShouldResistFingerprinting(GetDocShell(),
++                                                   RFPTarget::MaxTouchPoints)) {
++      return SPOOFED_MAX_TOUCH_POINTS;
++    }
++
++    nsCOMPtr<nsIWidget> widget =
++        widget::WidgetUtils::DOMWindowToWidget(mWindow->GetOuterWindow());
++
++    NS_ENSURE_TRUE(widget, 0);
++    uint32_t maxTouchPoints = widget->GetMaxTouchPoints();
++
++    if (aCallerType != CallerType::System &&
++        nsContentUtils::ShouldResistFingerprinting(
++            GetDocShell(), RFPTarget::MaxTouchPointsCollapse)) {
++      return nsRFPService::CollapseMaxTouchPoints(maxTouchPoints);
++    }
++    return maxTouchPoints;
++  }();
+   if (auto value = MaskConfig::GetUint32("navigator.maxTouchPoints")) {
+     if (aCallerType != CallerType::System &&
+         nsContentUtils::ShouldResistFingerprinting(
+@@ -981,35 +1014,7 @@ uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
+     }
+     return value.value();
+   }
+-  nsIDocShell* docshell = GetDocShell();
+-  BrowsingContext* bc = docshell ? docshell->GetBrowsingContext() : nullptr;
+-
+-  // Responsive Design Mode overrides the maxTouchPoints property when
+-  // touch simulation is enabled.
+-  if (bc && bc->Top()->InRDMPane()) {
+-    return bc->Top()->GetMaxTouchPointsOverride();
+-  }
+-
+-  // The maxTouchPoints is going to reveal the detail of users' hardware. So,
+-  // we will spoof it into 0 if fingerprinting resistance is on.
+-  if (aCallerType != CallerType::System &&
+-      nsContentUtils::ShouldResistFingerprinting(GetDocShell(),
+-                                                 RFPTarget::MaxTouchPoints)) {
+-    return SPOOFED_MAX_TOUCH_POINTS;
+-  }
+-
+-  nsCOMPtr<nsIWidget> widget =
+-      widget::WidgetUtils::DOMWindowToWidget(mWindow->GetOuterWindow());
+-
+-  NS_ENSURE_TRUE(widget, 0);
+-  uint32_t maxTouchPoints = widget->GetMaxTouchPoints();
+-
+-  if (aCallerType != CallerType::System &&
+-      nsContentUtils::ShouldResistFingerprinting(
+-          GetDocShell(), RFPTarget::MaxTouchPointsCollapse)) {
+-    return nsRFPService::CollapseMaxTouchPoints(maxTouchPoints);
+-  }
+-  return maxTouchPoints;
++  return stock;
+ }
+ 
+ //*****************************************************************************
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -3782,14 +3782,36 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
+ 
+ int32_t nsGlobalWindowInner::GetScreenX(CallerType aCallerType,
+                                         ErrorResult& aError) {
+-  if (auto value = MaskConfig::GetInt32("window.screenX")) return value.value();
+-  FORWARD_TO_OUTER_OR_THROW(GetScreenXOuter, (aCallerType, aError), aError, 0);
++  // Camoufox: stock's work first, then the spoof (timing parity; see
++  // nsScreen::PixelDepth).
++  // Stock throws on an inactive window; so does this.
++  const int32_t stock = [&]() -> int32_t {
++    FORWARD_TO_OUTER_OR_THROW(GetScreenXOuter, (aCallerType, aError), aError, 0);
++  }();
++  if (aError.Failed()) {
++    return stock;
++  }
++  if (auto value = MaskConfig::GetInt32("window.screenX")) {
++    return value.value();
++  }
++  return stock;
+ }
+ 
+ int32_t nsGlobalWindowInner::GetScreenY(CallerType aCallerType,
+                                         ErrorResult& aError) {
+-  if (auto value = MaskConfig::GetInt32("window.screenY")) return value.value();
+-  FORWARD_TO_OUTER_OR_THROW(GetScreenYOuter, (aCallerType, aError), aError, 0);
++  // Camoufox: stock's work first, then the spoof (timing parity; see
++  // nsScreen::PixelDepth).
++  // Stock throws on an inactive window; so does this.
++  const int32_t stock = [&]() -> int32_t {
++    FORWARD_TO_OUTER_OR_THROW(GetScreenYOuter, (aCallerType, aError), aError, 0);
++  }();
++  if (aError.Failed()) {
++    return stock;
++  }
++  if (auto value = MaskConfig::GetInt32("window.screenY")) {
++    return value.value();
++  }
++  return stock;
+ }
+ 
+ float nsGlobalWindowInner::GetMozInnerScreenX(CallerType aCallerType,
+diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
+--- a/dom/base/nsScreen.cpp
++++ b/dom/base/nsScreen.cpp
+@@ -50,6 +50,22 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
+                                    mScreenOrientation)
+ 
+ int32_t nsScreen::PixelDepth() {
++  // Camoufox: compute stock's answer first, then substitute the spoofed one.
++  // Returning the spoof before doing stock's work made this getter several
++  // times faster than stock Firefox's (screen.width 18-24 ns vs 107 ns,
++  // screen.colorDepth 10-15 vs 93, maxTouchPoints 18 vs 81), a ratio a page
++  // can time against an untouched getter.
++  const int32_t stock = [&]() -> int32_t {
++    // Return 24 to prevent fingerprinting.
++    if (ShouldResistFingerprinting(RFPTarget::ScreenPixelDepth)) {
++      return 24;
++    }
++    nsDeviceContext* context = GetDeviceContext();
++    if (NS_WARN_IF(!context)) {
++      return 24;
++    }
++    return context->GetDepth();
++  }();
+   // Camoufox: per-context colour depth wins over the global config, so
+   // contexts in one process can differ.
+   if (uint32_t depth = 0; ScreenDimensionManager::GetColorDepth(
+@@ -60,15 +76,7 @@ int32_t nsScreen::PixelDepth() {
+     return value.value();
+   if (auto value = MaskConfig::GetUint32("screen.pixelDepth"))
+     return value.value();
+-  // Return 24 to prevent fingerprinting.
+-  if (ShouldResistFingerprinting(RFPTarget::ScreenPixelDepth)) {
+-    return 24;
+-  }
+-  nsDeviceContext* context = GetDeviceContext();
+-  if (NS_WARN_IF(!context)) {
+-    return 24;
+-  }
+-  return context->GetDepth();
++  return stock;
+ }
+ 
+ nsPIDOMWindowOuter* nsScreen::GetOuter() const {
+@@ -83,6 +91,39 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
+ }
+ 
+ CSSIntRect nsScreen::GetRect() {
++  // Camoufox: stock's work first, then the spoof (timing parity; see
++  // nsScreen::PixelDepth).
++  const CSSIntRect stock = [&]() -> CSSIntRect {
++    // Return window inner rect to prevent fingerprinting.
++    if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
++      return GetTopWindowInnerRectForRFP();
++    }
++
++    // Here we manipulate the value of aRect to represent the screen size,
++    // if there is an override set with WebDriver BiDi or in RDM.
++    if (nsPIDOMWindowInner* owner = GetOwnerWindow()) {
++      if (Document* doc = owner->GetExtantDoc()) {
++        Maybe<CSSIntSize> deviceSize =
++            nsGlobalWindowOuter::GetRDMDeviceSize(*doc);
++        if (deviceSize.isSome()) {
++          const CSSIntSize& size = deviceSize.value();
++          return {0, 0, size.width, size.height};
++        }
++      }
++
++      if (BrowsingContext* bc = owner->GetBrowsingContext()) {
++        if (auto size = bc->GetScreenAreaOverride()) {
++          return {{}, *size};
++        }
++      }
++    }
++
++    nsDeviceContext* context = GetDeviceContext();
++    if (NS_WARN_IF(!context)) {
++      return {};
++    }
++    return CSSIntRect::FromAppUnitsRounded(context->GetRect());
++  }();
+   // Camoufox: per-context size wins over the global config.
+   if (uint32_t w = 0, h = 0; ScreenDimensionManager::GetDimensions(
+           RoverfoxStorageManager::UserContextId(GetOwnerWindow()), w, h)) {
+@@ -94,35 +135,7 @@ CSSIntRect nsScreen::GetRect() {
+       width && height) {
+     return {0, 0, width.value(), height.value()};
+   }
+-  // Return window inner rect to prevent fingerprinting.
+-  if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
+-    return GetTopWindowInnerRectForRFP();
+-  }
+-
+-  // Here we manipulate the value of aRect to represent the screen size,
+-  // if there is an override set with WebDriver BiDi or in RDM.
+-  if (nsPIDOMWindowInner* owner = GetOwnerWindow()) {
+-    if (Document* doc = owner->GetExtantDoc()) {
+-      Maybe<CSSIntSize> deviceSize =
+-          nsGlobalWindowOuter::GetRDMDeviceSize(*doc);
+-      if (deviceSize.isSome()) {
+-        const CSSIntSize& size = deviceSize.value();
+-        return {0, 0, size.width, size.height};
+-      }
+-    }
+-
+-    if (BrowsingContext* bc = owner->GetBrowsingContext()) {
+-      if (auto size = bc->GetScreenAreaOverride()) {
+-        return {{}, *size};
+-      }
+-    }
+-  }
+-
+-  nsDeviceContext* context = GetDeviceContext();
+-  if (NS_WARN_IF(!context)) {
+-    return {};
+-  }
+-  return CSSIntRect::FromAppUnitsRounded(context->GetRect());
++  return stock;
+ }
+ 
+ CSSIntRect nsScreen::GetAvailRect() {
+@@ -131,6 +144,68 @@ CSSIntRect nsScreen::GetAvailRect() {
+   // must not bypass it.
+   const bool availFromResolution =
+       ShouldResistFingerprinting(RFPTarget::ScreenAvailToResolution);
++  // Camoufox: stock's work first, then the spoof (timing parity; see
++  // nsScreen::PixelDepth).
++  const CSSIntRect stock = [&]() -> CSSIntRect {
++    // Return window inner rect to prevent fingerprinting.
++    if (ShouldResistFingerprinting(RFPTarget::ScreenAvailRect)) {
++      return GetTopWindowInnerRectForRFP();
++    }
++
++    // Check for overrides set by WebDriver BiDi or RDM before applying
++    // fingerprinting protection. This allows developer tools to simulate
++    // specific device dimensions for testing purposes.
++    if (nsPIDOMWindowInner* owner = GetOwnerWindow()) {
++      if (Document* doc = owner->GetExtantDoc()) {
++        Maybe<CSSIntSize> deviceSize =
++            nsGlobalWindowOuter::GetRDMDeviceSize(*doc);
++        if (deviceSize.isSome()) {
++          const CSSIntSize& size = deviceSize.value();
++          return {0, 0, size.width, size.height};
++        }
++      }
++
++      if (BrowsingContext* bc = owner->GetBrowsingContext()) {
++        if (auto size = bc->GetScreenAreaOverride()) {
++          return {{}, *size};
++        }
++      }
++    }
++
++    if (availFromResolution) {
++      nsDeviceContext* context = GetDeviceContext();
++      if (NS_WARN_IF(!context)) {
++        return {};
++      }
++
++      if (nsPIDOMWindowInner* owner = GetOwnerWindow()) {
++        if (Document* doc = owner->GetExtantDoc()) {
++          AutoTArray<nsString, 1> params;
++          params.AppendElement(
++              u"https://support.mozilla.org/kb/firefox-protection-against-fingerprinting"_ns);
++          doc->WarnOnceAbout(Document::eScreenFingerprintingProtection, false,
++                             params);
++        }
++      }
++
++      // Camoufox: from the screen the page sees, for the platform it is told.
++      nsAutoString platform;
++      if (nsGlobalWindowInner* owner =
++              nsGlobalWindowInner::Cast(GetOwnerWindow())) {
++        owner->Navigator()->GetPlatform(platform, CallerType::NonSystem,
++                                        IgnoreErrors());
++      }
++      return nsRFPService::GetSpoofedScreenAvailSize(
++          CSSPixel::ToAppUnits(GetRect()), context->GetFullZoom(),
++          IsFullscreen(), platform);
++    }
++
++    nsDeviceContext* context = GetDeviceContext();
++    if (NS_WARN_IF(!context)) {
++      return {};
++    }
++    return CSSIntRect::FromAppUnitsRounded(context->GetClientRect());
++  }();
+   // Camoufox: the per-context API sets one size, so the available rect is the
+   // whole screen. That matches the generated fingerprints, whose availWidth /
+   // availHeight equal width / height, and keeps availWidth <= width true.
+@@ -148,64 +223,7 @@ CSSIntRect nsScreen::GetAvailRect() {
+     auto values = rect.value();
+     return {values[0], values[1], values[2], values[3]};
+   }
+-  // Return window inner rect to prevent fingerprinting.
+-  if (ShouldResistFingerprinting(RFPTarget::ScreenAvailRect)) {
+-    return GetTopWindowInnerRectForRFP();
+-  }
+-
+-  // Check for overrides set by WebDriver BiDi or RDM before applying
+-  // fingerprinting protection. This allows developer tools to simulate
+-  // specific device dimensions for testing purposes.
+-  if (nsPIDOMWindowInner* owner = GetOwnerWindow()) {
+-    if (Document* doc = owner->GetExtantDoc()) {
+-      Maybe<CSSIntSize> deviceSize =
+-          nsGlobalWindowOuter::GetRDMDeviceSize(*doc);
+-      if (deviceSize.isSome()) {
+-        const CSSIntSize& size = deviceSize.value();
+-        return {0, 0, size.width, size.height};
+-      }
+-    }
+-
+-    if (BrowsingContext* bc = owner->GetBrowsingContext()) {
+-      if (auto size = bc->GetScreenAreaOverride()) {
+-        return {{}, *size};
+-      }
+-    }
+-  }
+-
+-  if (availFromResolution) {
+-    nsDeviceContext* context = GetDeviceContext();
+-    if (NS_WARN_IF(!context)) {
+-      return {};
+-    }
+-
+-    if (nsPIDOMWindowInner* owner = GetOwnerWindow()) {
+-      if (Document* doc = owner->GetExtantDoc()) {
+-        AutoTArray<nsString, 1> params;
+-        params.AppendElement(
+-            u"https://support.mozilla.org/kb/firefox-protection-against-fingerprinting"_ns);
+-        doc->WarnOnceAbout(Document::eScreenFingerprintingProtection, false,
+-                           params);
+-      }
+-    }
+-
+-    // Camoufox: from the screen the page sees, for the platform it is told.
+-    nsAutoString platform;
+-    if (nsGlobalWindowInner* owner =
+-            nsGlobalWindowInner::Cast(GetOwnerWindow())) {
+-      owner->Navigator()->GetPlatform(platform, CallerType::NonSystem,
+-                                      IgnoreErrors());
+-    }
+-    return nsRFPService::GetSpoofedScreenAvailSize(
+-        CSSPixel::ToAppUnits(GetRect()), context->GetFullZoom(),
+-        IsFullscreen(), platform);
+-  }
+-
+-  nsDeviceContext* context = GetDeviceContext();
+-  if (NS_WARN_IF(!context)) {
+-    return {};
+-  }
+-  return CSSIntRect::FromAppUnitsRounded(context->GetClientRect());
++  return stock;
+ }
+ 
+ bool nsScreen::IsFullscreen() const {

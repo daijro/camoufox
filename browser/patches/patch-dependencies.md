@@ -52,6 +52,7 @@ be listed there.
 | `voice-spoofing.patch` | `voices`, `voices:blockIfNotDefined` |
 | `webgl-spoofing.patch` | `webGl:*`, `webGl2:*` |
 | `webrtc-ip-spoofing.patch` | `webrtc:ipv4`, `webrtc:ipv6`, `navigator.platform` |
+| `zz-stock-cost-parity.patch` | `navigator.maxTouchPoints`, `screen.*`, `window.screenX`, `window.screenY` (re-orders the getters above so stock's work runs first) |
 
 To regenerate the list: `grep -l 'MaskConfig::' patches/*.patch`.
 
