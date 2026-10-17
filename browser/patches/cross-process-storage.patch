@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..c5f3dd4247
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -0,0 +1,275 @@
+@@ -0,0 +1,463 @@
 +#include "RoverfoxStorageManager.h"
 +#include "mozilla/Preferences.h"
 +#include "nsIPrefBranch.h"
@@ -17,6 +17,9 @@ index 0000000000..c5f3dd4247
 +#include "nsContentUtils.h"
 +#include "nsGlobalWindowInner.h"
 +#include "xpcpublic.h"
++
++#include <atomic>
++#include <cstdint>
 +
 +namespace mozilla {
 +namespace dom {
@@ -53,6 +56,182 @@ index 0000000000..c5f3dd4247
 +  return nsCString(prefName);
 +}
 +
++// Bumped after every change to what ReadValue can answer: a put, a mirrored
++// pref, the mirror's snapshot, a value fetched from the parent. A memo taken
++// under an older generation is read again. Starts at 1 so a zeroed slot never
++// matches.
++static std::atomic<uint64_t> sGeneration{1};
++
++/* static */ void RoverfoxStorageManager::BumpGeneration() {
++  sGeneration.fetch_add(1, std::memory_order_release);
++}
++
++// Per-context getters are page-callable in a loop, and each read built its
++// key with AppendPrintf, converted it to UTF-8 and took the cache lock (plus
++// a pref lookup on a main-thread miss). Measured from script against stock
++// Firefox 152.0.4: navigator.hardwareConcurrency 380-680 ns vs 45 ns,
++// screen.width 820-940 ns vs 130 ns -- a gap a page can time. A hit here is
++// one generation check.
++//
++// A memo never answers for another context or for a stale value:
++// - A slot matches only its own (aPrefix, aId), and the userContextId is part
++//   of that key, so one context's value cannot answer another's read.
++// - Every change to what ReadValue reads (the local cache, the miss cache, the
++//   prefs behind the mirror) bumps sGeneration after the change is made, and
++//   a reader loads the generation before it looks the value up. A slot taken
++//   under generation G is a hit only while the generation is still G, so a
++//   write that lands before, during or after the lookup leaves the slot stale
++//   and the next read looks again.
++// - The memo is per thread, so no slot is shared between threads, and a
++//   worker's slot is invalidated by the same bump as the main thread's.
++struct RoverfoxStorageManager::MemoSlot {
++  const char* prefix;
++  uint32_t id;
++  uint64_t generation;
++  bool present;
++  bool isUint;
++  uint32_t uintValue;
++  bool boolValue;
++};
++
++static constexpr size_t kMemoSlots = 256;
++// Slots probed per key. With one, two keys read alternately (screen width
++// and height, whose prefix literals sit bytes apart) could share a slot and
++// evict each other on every read: per-context screen.width stayed at ~600 ns.
++static constexpr size_t kMemoWays = 4;
++
++static size_t MemoIndex(const char* aPrefix, uint32_t aId) {
++  uint64_t h = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(aPrefix)) *
++                   0x9E3779B97F4A7C15ULL ^
++               static_cast<uint64_t>(aId) * 0xC2B2AE3D27D4EB4FULL;
++  return static_cast<size_t>(h >> 40);
++}
++
++// The slot holding (aPrefix, aId) in this thread's memo. aHit is true when it
++// was filled under aGeneration; otherwise the slot is the one to refill.
++template <typename Slot>
++static Slot& FindMemoSlot(Slot (&aMemo)[kMemoSlots], uint32_t& aNextVictim,
++                          const char* aPrefix, uint32_t aId,
++                          uint64_t aGeneration, bool& aHit) {
++  aHit = false;
++  size_t base = MemoIndex(aPrefix, aId);
++  Slot* victim = nullptr;
++  for (size_t way = 0; way < kMemoWays; ++way) {
++    Slot& candidate = aMemo[(base + way) & (kMemoSlots - 1)];
++    if (candidate.prefix == aPrefix && candidate.id == aId) {
++      aHit = candidate.generation == aGeneration;
++      return candidate;
++    }
++    if (!victim && candidate.generation != aGeneration) {
++      victim = &candidate;
++    }
++  }
++  if (!victim) {
++    victim = &aMemo[(base + aNextVictim++ % kMemoWays) & (kMemoSlots - 1)];
++  }
++  return *victim;
++}
++
++static nsString MemoKey(const char* aPrefix, uint32_t aId) {
++  nsAutoString key;
++  key.AssignASCII(aPrefix);
++  key.AppendInt(aId);
++  return nsString(key);
++}
++
++/* static */ RoverfoxStorageManager::MemoSlot
++RoverfoxStorageManager::ReadMemoized(const char* aPrefix, uint32_t aId) {
++  // Zero-initialized per thread: generation 0 never matches sGeneration.
++  static thread_local MemoSlot tMemo[kMemoSlots];
++  static thread_local uint32_t tNextVictim;
++  uint64_t generation = sGeneration.load(std::memory_order_acquire);
++  bool hit;
++  MemoSlot& slot =
++      FindMemoSlot(tMemo, tNextVictim, aPrefix, aId, generation, hit);
++  if (hit) {
++    return slot;
++  }
++
++  nsAutoCString value;
++  ReadValue(MakePrefName(MemoKey(aPrefix, aId)), value);
++
++  slot.prefix = aPrefix;
++  slot.id = aId;
++  // The generation read before the lookup: a write racing it leaves this
++  // slot stale by one generation, so the next read looks again.
++  slot.generation = generation;
++  slot.present = !value.IsEmpty();
++  nsresult parseRv;
++  int64_t parsed = value.ToInteger64(&parseRv);
++  slot.isUint = slot.present && NS_SUCCEEDED(parseRv) && parsed >= 0;
++  slot.uintValue = slot.isUint ? static_cast<uint32_t>(parsed) : 0;
++  slot.boolValue = value.EqualsLiteral("1");
++  return slot;
++}
++
++/* static */ bool RoverfoxStorageManager::GetUint(const char* aPrefix,
++                                                  uint32_t aId,
++                                                  uint32_t& outValue) {
++  MemoSlot slot = ReadMemoized(aPrefix, aId);
++  if (!slot.isUint) {
++    return false;
++  }
++  outValue = slot.uintValue;
++  return true;
++}
++
++/* static */ bool RoverfoxStorageManager::GetBool(const char* aPrefix,
++                                                  uint32_t aId,
++                                                  bool& outValue) {
++  MemoSlot slot = ReadMemoized(aPrefix, aId);
++  if (!slot.present) {
++    return false;
++  }
++  outValue = slot.boolValue;
++  return true;
++}
++
++// String getters (navigator.platform/userAgent, the timezone, WebGL vendor)
++// get the same memo: each read built a key, took the cache lock and copied the
++// value, and workers reading them in a loop held that lock -- an adaptive
++// pthread mutex, which does not queue waiters -- against the main thread
++// mirroring new contexts' prefs. A hit takes no lock and copies no characters.
++struct StringMemoSlot {
++  const char* prefix = nullptr;
++  uint32_t id = 0;
++  uint64_t generation = 0;
++  bool present = false;
++  // Shares the buffer it was converted into, so a hit copies no characters.
++  nsString value;
++};
++
++/* static */ bool RoverfoxStorageManager::GetString(const char* aPrefix,
++                                                    uint32_t aId,
++                                                    nsAString& outValue) {
++  static thread_local StringMemoSlot tMemo[kMemoSlots];
++  static thread_local uint32_t tNextVictim;
++  uint64_t generation = sGeneration.load(std::memory_order_acquire);
++  bool hit;
++  StringMemoSlot& slot =
++      FindMemoSlot(tMemo, tNextVictim, aPrefix, aId, generation, hit);
++  if (!hit) {
++    nsAutoCString value;
++    ReadValue(MakePrefName(MemoKey(aPrefix, aId)), value);
++
++    slot.prefix = aPrefix;
++    slot.id = aId;
++    // As in ReadMemoized: the generation read before the lookup.
++    slot.generation = generation;
++    slot.present = !value.IsEmpty();
++    CopyUTF8toUTF16(value, slot.value);
++  }
++  if (!slot.present) {
++    return false;
++  }
++  outValue = slot.value;
++  return true;
++}
++
 +static void OnStoragePrefChanged(const char* aPrefName, void*) {
 +  RoverfoxStorageManager::MirrorPref(nsDependentCString(aPrefName));
 +}
@@ -61,13 +240,16 @@ index 0000000000..c5f3dd4247
 +  MOZ_ASSERT(NS_IsMainThread());
 +  nsAutoCString value;
 +  Preferences::GetCString(PromiseFlatCString(aPrefName).get(), value, kKind);
-+  MutexAutoLock lock(GetLocalCacheMutex());
-+  GetMissCache().Remove(aPrefName);
-+  if (value.IsEmpty()) {
-+    GetLocalCache().Remove(aPrefName);
-+  } else {
-+    GetLocalCache().InsertOrUpdate(aPrefName, value);
++  {
++    MutexAutoLock lock(GetLocalCacheMutex());
++    GetMissCache().Remove(aPrefName);
++    if (value.IsEmpty()) {
++      GetLocalCache().Remove(aPrefName);
++    } else {
++      GetLocalCache().InsertOrUpdate(aPrefName, value);
++    }
 +  }
++  BumpGeneration();
 +}
 +
 +// libpref's table is main-thread only: a release build looks it up without a
@@ -102,6 +284,7 @@ index 0000000000..c5f3dd4247
 +      GetLocalCache().InsertOrUpdate(name, nsCString(value));
 +    }
 +  }
++  BumpGeneration();
 +}
 +
 +/* static */ void
@@ -114,6 +297,7 @@ index 0000000000..c5f3dd4247
 +    GetLocalCache().InsertOrUpdate(prefName, nsCString(value));
 +    GetMissCache().Remove(prefName);
 +  }
++  BumpGeneration();
 +  // Sync to parent for cross-process availability
 +  if (XRE_IsParentProcess()) {
 +    Preferences::SetCString(prefName.get(), value, kKind);
@@ -163,12 +347,16 @@ index 0000000000..c5f3dd4247
 +  nsCString fromParent;
 +  cc->SendRoverfoxStorageGet(prefName, &fromParent);
 +  outValue = fromParent;
-+  MutexAutoLock lock(GetLocalCacheMutex());
-+  if (fromParent.IsEmpty()) {
-+    GetMissCache().Insert(prefName);
-+  } else {
++  {
++    MutexAutoLock lock(GetLocalCacheMutex());
++    if (fromParent.IsEmpty()) {
++      GetMissCache().Insert(prefName);
++      return;
++    }
 +    GetLocalCache().InsertOrUpdate(prefName, fromParent);
 +  }
++  // A worker reads the local cache alone, so its answer just changed.
++  BumpGeneration();
 +}
 +
 +/* static */ void
@@ -284,7 +472,7 @@ new file mode 100644
 index 0000000000..c7dad0158f
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.h
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,75 @@
 +#ifndef mozilla_dom_RoverfoxStorageManager_h
 +#define mozilla_dom_RoverfoxStorageManager_h
 +
@@ -314,6 +502,14 @@ index 0000000000..c7dad0158f
 +  static bool GetBool(const nsAString& key, bool& outValue);
 +  static void PutString(const nsAString& key, const nsAString& value);
 +  static bool GetString(const nsAString& key, nsAString& outValue);
++  // The same reads for the value stored under aPrefix followed by aId
++  // ("nav_hwc_", 3 -> "nav_hwc_3"), for getters a page can call in a loop.
++  // Each thread memoizes the answer until any write in this process, so a
++  // repeat read builds no key and takes no lock. aPrefix must be a string
++  // literal: its address is part of the memo key.
++  static bool GetUint(const char* aPrefix, uint32_t aId, uint32_t& outValue);
++  static bool GetBool(const char* aPrefix, uint32_t aId, bool& outValue);
++  static bool GetString(const char* aPrefix, uint32_t aId, nsAString& outValue);
 +  // A put reached this process's prefs: copy it into the local cache (main
 +  // thread only), which is all a worker thread reads.
 +  static void MirrorPref(const nsACString& aPrefName);
@@ -340,6 +536,9 @@ index 0000000000..c7dad0158f
 +  static void SetPrefValue(const nsCString& prefName, const nsCString& value);
 +  static void ReadValue(const nsCString& prefName, nsACString& outValue);
 +  static void EnsureMirror();
++  struct MemoSlot;
++  static MemoSlot ReadMemoized(const char* aPrefix, uint32_t aId);
++  static void BumpGeneration();
 +  static nsTHashSet<nsCString>& GetMissCache();
 +  static nsTHashMap<nsCStringHashKey, nsCString>& GetLocalCache();
 +  static mozilla::Mutex& GetLocalCacheMutex();

@@ -29,7 +29,7 @@ new file mode 100644
 index 0000000000..a36944f3c6
 --- /dev/null
 +++ b/dom/base/ScreenDimensionManager.h
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,75 @@
 +/* Camoufox: Per-context screen dimension manager */
 +#ifndef mozilla_dom_ScreenDimensionManager_h
 +#define mozilla_dom_ScreenDimensionManager_h
@@ -61,16 +61,12 @@ index 0000000000..a36944f3c6
 +  }
 +
 +  static bool GetDimensions(uint32_t aId, uint32_t& aWidth, uint32_t& aHeight) {
-+    nsAutoString wKey;
-+    wKey.AppendPrintf("scr_w_%u", aId);
-+    nsAutoString hKey;
-+    hKey.AppendPrintf("scr_h_%u", aId);
 +    // Both or neither: a half-applied size is a worse lie than no lie at all,
 +    // since screen.width and screen.height would come from different displays.
 +    uint32_t width = 0;
 +    uint32_t height = 0;
-+    if (!RoverfoxStorageManager::GetUint(wKey, width) ||
-+        !RoverfoxStorageManager::GetUint(hKey, height)) {
++    if (!RoverfoxStorageManager::GetUint("scr_w_", aId, width) ||
++        !RoverfoxStorageManager::GetUint("scr_h_", aId, height)) {
 +      return false;
 +    }
 +    if (!width || !height) {
@@ -89,10 +85,8 @@ index 0000000000..a36944f3c6
 +  }
 +
 +  static bool GetColorDepth(uint32_t aId, uint32_t& aDepth) {
-+    nsAutoString key;
-+    key.AppendPrintf("scr_depth_%u", aId);
 +    uint32_t depth = 0;
-+    if (!RoverfoxStorageManager::GetUint(key, depth) || !depth) {
++    if (!RoverfoxStorageManager::GetUint("scr_depth_", aId, depth) || !depth) {
 +      return false;
 +    }
 +    aDepth = depth;

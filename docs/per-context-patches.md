@@ -102,6 +102,13 @@ its own id).
 Off the main thread (HarfBuzz, the compositor) only tiers 1 and 2 are used,
 because sync IPC is main-thread only.
 
+Getters a page can call in a loop (navigator, screen, timezone, WebGL vendor
+and renderer, audio seed) read through `GetUint`, `GetBool` and `GetString`
+taking a prefix literal and the id (`"nav_hwc_", id`). Each thread memoizes
+those answers, keyed by prefix and id, until any write in the process bumps a
+generation counter, so a repeat read builds no key and takes no lock and costs
+what the stock getter does.
+
 ### Cross-process storage
 
 `cross-process-storage.patch` adds two sync messages to `PContent.ipdl`,

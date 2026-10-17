@@ -29,10 +29,10 @@ index 0000000000..5686a6273d
 +
 +/* static */ uint32_t
 +AudioFingerprintManager::GetSeed(uint32_t aUserContextId) {
-+  nsString key;
-+  key.AppendPrintf("audioFingerprintSeed_%u", aUserContextId);
 +  uint32_t seed = 0;
-+  if (RoverfoxStorageManager::GetUint(key, seed) && seed != 0) {
++  if (RoverfoxStorageManager::GetUint("audioFingerprintSeed_", aUserContextId,
++                                      seed) &&
++      seed != 0) {
 +    return seed;
 +  }
 +  // A context that set no seed of its own uses the launch-level one.
