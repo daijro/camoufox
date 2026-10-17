@@ -77,3 +77,25 @@ class TestFontPrefs:
         prefs = utils._stock_font_prefs("win", "lin")
         assert prefs["font.name-list.serif.x-western"] == "Times New Roman"
         assert prefs["font.name-list.sans-serif.ko"] == "Malgun Gothic, Gulim, Noto Sans CJK KR, Noto Sans KR"
+
+
+class TestFontMetrics:
+    """fonts:metrics "windows": DirectWrite's line boxes on a FreeType host."""
+
+    def test_windows_identity_gets_windows_metrics(self, launch):
+        config, _ = launch(WIN_UA)
+        assert config["fonts:metrics"] == "windows"
+
+    @pytest.mark.parametrize("ua", [MAC_UA, LIN_UA])
+    def test_other_identities_keep_freetype_metrics(self, launch, ua):
+        config, _ = launch(ua)
+        assert "fonts:metrics" not in config
+
+    def test_windows_host_is_left_alone(self, launch, monkeypatch):
+        monkeypatch.setattr(utils, "_host_os_key", lambda: "win")
+        config, _ = launch(WIN_UA)
+        assert "fonts:metrics" not in config
+
+    def test_caller_value_wins(self, launch):
+        config, _ = launch(WIN_UA, config={"fonts:metrics": "freetype"})
+        assert config["fonts:metrics"] == "freetype"

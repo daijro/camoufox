@@ -1439,6 +1439,14 @@ def launch_options(
         for pref, value in _stock_font_prefs(target_os, host_os).items():
             firefox_user_prefs.setdefault(pref, value)
 
+    # Line boxes: DirectWrite takes ascent/descent from OS/2 usWin* and keeps
+    # the em height fractional, FreeType takes pixel-rounded hhea values -- the
+    # same font file gives different heights (Arial 16px: 17/18 px on Windows,
+    # 19/19 on a Linux host; all 26 fonts measured differed).
+    # font-metrics-windows.patch lays text out with DirectWrite's metrics.
+    if target_os == 'win' and host_os != 'win':
+        config.setdefault('fonts:metrics', 'windows')
+
     # Storage quota, from the host's own disk. A page reads the group limit
     # through navigator.storage.estimate().quota; see
     # _stock_profile_disk_capacity_kb for how Gecko derives it. Playwright's

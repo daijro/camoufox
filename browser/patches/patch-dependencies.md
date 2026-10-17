@@ -35,6 +35,7 @@ be listed there.
 | `chromeutil.patch` | `debug` |
 | `fallback-fonts-claimed-os.patch` | `navigator.platform` (through `GetSpoofedOS()`) |
 | `fingerprint-injection.patch` | `navigator.*`, `screen.*`, `window.*` |
+| `font-metrics-windows.patch` | `fonts:metrics` |
 | `font-hijacker.patch` | `fonts`, `navigator.platform` |
 | `font-system-fonts-css2.patch` | `navigator.platform`, `window.devicePixelRatio` |
 | `force-default-pointer.patch` | `navigator.maxTouchPoints` |
@@ -65,6 +66,7 @@ already set up, and do not add the include or `LOCAL_INCLUDES` themselves:
 | Patch | Relies on |
 |-------|-----------|
 | `fallback-fonts-claimed-os.patch` | `font-hijacker.patch` for `/camoucfg` in `gfx/thebes/moz.build` |
+| `font-metrics-windows.patch` | `font-hijacker.patch` for `/camoucfg` in `gfx/thebes/moz.build` |
 | `force-default-pointer.patch` | `screen-spoofing.patch` for `MaskConfig.hpp` in `layout/style/nsMediaFeatures.cpp`; `font-hijacker.patch` for `/camoucfg` in `layout/style/moz.build` |
 | `media-device-spoofing.patch` | `audio-context-spoofing.patch` for `/camoucfg` in `dom/media/moz.build` |
 | `system-ui-font-spoofing.patch` | `font-hijacker.patch` for `MaskConfig.hpp` in `gfx/thebes/gfxPlatformFontList.cpp` and `/camoucfg` in `gfx/thebes/moz.build` |

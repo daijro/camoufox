@@ -1793,6 +1793,12 @@ export async function launchOptions({
 		}
 	}
 
+	// Line boxes: DirectWrite's ascent, descent and em height rather than
+	// FreeType's pixel-rounded ones (font-metrics-windows.patch).
+	if (targetOs === "win" && hostOs !== "win") {
+		setInto(config, "fonts:metrics", "windows");
+	}
+
 	// Storage quota, from the host's own disk (see stockProfileDiskCapacityKb).
 	const quotaLimitKb = utilsDeps.stockProfileDiskCapacityKb();
 	if (quotaLimitKb) {

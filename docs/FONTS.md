@@ -253,7 +253,13 @@ widths matched stock Windows). When the claimed OS is not the host's:
   a Firefox bump), and turns async fallback off on any Linux host;
 - `fallback-fonts-claimed-os.patch` makes `gfxPlatformGtk` use stock's
   Windows or macOS per-script fallback table, by the launch's
-  `navigator.platform`.
+  `navigator.platform`;
+- a Windows identity gets `fonts:metrics: "windows"`, and
+  `font-metrics-windows.patch` lays text out with the ascent, descent, line
+  gap and em height DirectWrite derives from the same font tables (OS/2
+  `usWin*`, GDI's external-leading rule, Arial Black measured as Arial Bold)
+  instead of FreeType's pixel-rounded `hhea` values: Arial 16px is 17/18 px
+  as on Windows, not 19/19.
 
 `browser/tests/playwright/patches/font-fallback-windows.py` measures 28
 scripts in three generics against stock Windows (at least 160 of 168 match).
