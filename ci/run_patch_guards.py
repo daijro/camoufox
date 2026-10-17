@@ -48,6 +48,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "media-devices-coherence",
         "spoofed-voice-speaks",
         "startup-prefs",
+        "system-font-alias-stall",
         "system-ui-font-spoofing",
         "timezone-stable",
         "touchscreen-digitizer",
