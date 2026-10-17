@@ -9,7 +9,7 @@ const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys
 const {NetworkObserver, PageNetwork} = ChromeUtils.importESModule('resource://gre/modules/juggler/NetworkObserver.js');
 const {PageTarget} = ChromeUtils.importESModule('resource://gre/modules/juggler/TargetRegistry.js');
 const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
-const {MouseDispatch} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
+const {MouseDispatch, kAckDeadlineMs} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
 const {humanizedSteps} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
 
 const Cc = Components.classes;
@@ -533,7 +533,7 @@ export class PageHandler {
       this._pageTarget._linkedBrowser.scrollRectIntoViewIfNeeded(x, y, 0, 0);
       // 2. Make sure compositor is flushed after scrolling.
       if (win.windowUtils.flushApzRepaints())
-        await helper.awaitTopic('apz-repaints-flushed');
+        await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
       // 3. Get element's bounding box in the browser after the scroll is completed.
       //    MouseDispatch owns every conversion from these relative coordinates to
       //    absolute ones, and every wait for a renderer ack.
@@ -644,8 +644,10 @@ export class PageHandler {
         // 3. [juggler-drag-finalized] - only emitted if dragstart was emitted.
 
         if (watcher.hasEvent('dragstart')) {
-          const eventObject = await watcher.ensureEvent('juggler-drag-finalized');
-          this._isDragging = eventObject.dragSessionStarted;
+          // Bounded like every other input wait: no finalization means no drag
+          // session, rather than a wedged input chain.
+          const eventObject = await watcher.ensureEventWithin('juggler-drag-finalized', kAckDeadlineMs);
+          this._isDragging = !!eventObject && eventObject.dragSessionStarted;
         }
         watcher.dispose();
         return;
@@ -713,7 +715,7 @@ export class PageHandler {
       const win = this._pageTarget._window;
       // 3. Make sure compositor is flushed after scrolling.
       if (win.windowUtils.flushApzRepaints())
-        await helper.awaitTopic('apz-repaints-flushed');
+        await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
       for (let i = 0; i < notchCount; i++) {
         if (i)
           await new Promise(resolve => setTimeout(resolve, 18 + Math.random() * 42));
