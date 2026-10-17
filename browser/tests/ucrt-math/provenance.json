@@ -1,0 +1,9 @@
+{
+  "ucrtbase": "10.0.22621.3593",
+  "ucrtbase_sha256": "d93ce42cd625510b2355de086bcd19e2c11307ccade7bad62b09c7f340a866ba",
+  "windows": "10.0.22621",
+  "fma3": true,
+  "inputs_sha256": "6b0e13f7d0b69726e71a7cb6e78aad08a6d9b6ba24a73df40da8eea2e981a524",
+  "trig_inputs": 33386,
+  "pow_inputs": 27249
+}

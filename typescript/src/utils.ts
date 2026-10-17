@@ -1625,6 +1625,14 @@ export async function launchOptions({
 		setInto(firefox_user_prefs, "ui.useOverlayScrollbars", 1);
 	}
 
+	// A Windows identity on another host: answers that come from the host
+	// build's platform code are set to what stock Windows Firefox gives.
+	if (targetOs === "win" && utilsDeps.hostOsKey() !== "win") {
+		// Math.sin/cos/tan/pow as the Windows CRT computes them, to the last bit
+		// (windows-crt-math.patch).
+		setInto(firefox_user_prefs, "javascript.options.use_ucrt_math", true);
+	}
+
 	// Per-character font fallback, LINUX ONLY: with async fallback on, the
 	// first measurement of a character only one bundled family provides returns
 	// the primary family's .notdef. macOS must NOT get this.

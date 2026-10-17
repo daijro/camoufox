@@ -1289,6 +1289,16 @@ def launch_options(
     else:
         firefox_user_prefs.setdefault('ui.useOverlayScrollbars', 1)
 
+    # A Windows identity on another host: answers that come from the host
+    # build's platform code are set to what stock Windows Firefox gives. A
+    # Windows host already gives them, so nothing is set there.
+    if target_os == 'win' and _host_os_key() != 'win':
+        # Math.sin/cos/tan/pow: the last bit differs between glibc (or
+        # fdlibm) and the Windows CRT, so one call identifies the host OS.
+        # windows-crt-math.patch computes them as the CRT does; measured
+        # against stock 152.0.4 on Windows, 15,991 of 15,991 results match.
+        firefox_user_prefs.setdefault('javascript.options.use_ucrt_math', True)
+
     # Per-character font fallback, LINUX ONLY. Gecko's GlobalFontFallback walks
     # the shared font list for a family whose charmap covers the character; in a
     # content process with async fallback on it hits the

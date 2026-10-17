@@ -261,6 +261,13 @@ jobs:
       - name: Synthesized input goes through one chokepoint
         run: python3 browser/scripts/check-input-dispatch.py
 
+      - name: Windows CRT math port is bit-exact
+        # Builds browser/additions/js/src/builtin/UcrtMath*.c on their own and
+        # compares all ~127,000 results with ucrtbase.dll's, in seconds rather
+        # than after a build. The browser-level check is the windows-crt-math
+        # patch guard.
+        run: python3 browser/tests/ucrt-math/check.py
+
       - name: CI pipeline self-tests
         # These assert that the pipeline reports honestly: skips carry reasons,
         # shards partition exactly, and nothing identifying a sundial vector
