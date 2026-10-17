@@ -70,6 +70,11 @@ CACHE_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['cachePrefs']
 # behind EME, which a Linux build cannot supply.
 WINDOWS_BEHAVIOUR_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['windowsBehaviourPrefs']
 
+# Video codecs a Windows desktop decodes in hardware, so that
+# mediaCapabilities.decodingInfo() reports them powerEfficient (stock 152.0.4 on
+# Windows: H.264, HEVC and VP9 true; AV1 false even on a GPU that decodes it).
+WINDOWS_HW_CODECS: List[str] = LAUNCHER_CONSTANTS['windowsHwCodecs']
+
 
 def _physical_scale(config: Dict[str, Any], prefs: Optional[Dict[str, Any]] = None) -> float:
     """Monitor pixels per CSS pixel of the window at the scale it renders at.
@@ -1446,6 +1451,16 @@ def launch_options(
     # font-metrics-windows.patch lays text out with DirectWrite's metrics.
     if target_os == 'win' and host_os != 'win':
         config.setdefault('fonts:metrics', 'windows')
+
+    # canPlayType()/isTypeSupported() list the host's decoders: a Linux
+    # container answers "" for H.264 and HEVC, where every Windows and macOS
+    # Firefox answers "probably" (#558). The spoof matches Windows exactly on
+    # 58 MIME/codec strings, and decodingInfo() follows it, power-efficient
+    # for the codecs a Windows GPU decodes.
+    if target_os in ('win', 'mac') and host_os != target_os:
+        config.setdefault('media:spoof_codecs', True)
+        if target_os == 'win':
+            config.setdefault('media:hwCodecs', list(WINDOWS_HW_CODECS))
 
     # Storage quota, from the host's own disk. A page reads the group limit
     # through navigator.storage.estimate().quota; see

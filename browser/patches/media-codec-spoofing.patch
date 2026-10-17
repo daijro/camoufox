@@ -72,3 +72,70 @@ index 46749416af..0f58406576 100644
 +
 +# DOM Mask
 +LOCAL_INCLUDES += ["/camoucfg"]
+diff --git a/dom/media/mediacapabilities/MediaCapabilities.cpp b/dom/media/mediacapabilities/MediaCapabilities.cpp
+--- a/dom/media/mediacapabilities/MediaCapabilities.cpp
++++ b/dom/media/mediacapabilities/MediaCapabilities.cpp
+@@ -11,6 +11,7 @@
+ #include "MP4Decoder.h"
+ #include "MediaCapabilitiesValidation.h"
+ #include "MediaInfo.h"
++#include "MaskConfig.hpp"
+ #include "MediaRecorder.h"
+ #include "PDMFactorySupport.h"
+ #include "VPXDecoder.h"
+@@ -1077,6 +1078,45 @@
+     return;
+   }
+ 
++  // Camoufox: with media:spoof_codecs, canPlayType()/isTypeSupported() answer
++  // for the claimed OS rather than the host's decoders (media-codec-spoofing),
++  // so decodingInfo() must agree with them instead of asking the host: a Linux
++  // container claiming Windows otherwise reports H.264, HEVC and AAC
++  // unsupported, and VP9 software-only. Stock Firefox on Windows reports every
++  // supported codec smooth, audio power-efficient, and video power-efficient
++  // where the GPU decodes it (media:hwCodecs) or the frame is small, which is
++  // the same rule CreateVideoDecodingInfo applies.
++  if (MaskConfig::GetBool("media:spoof_codecs")) {
++    const std::vector<std::string> hwCodecs =
++        MaskConfig::GetStringList("media:hwCodecs");
++    bool powerEfficient = true;
++    for (const auto& config : tracks) {
++      if (!config->IsVideo()) {
++        continue;
++      }
++      if (shouldResistFingerprinting) {
++        powerEfficient = false;
++        continue;
++      }
++      const auto& image = config->GetAsVideoInfo()->mImage;
++      const CheckedInt<uint32_t> pixels = CheckedInt<uint32_t>(image.width) *
++                                          CheckedInt<uint32_t>(image.height);
++      const bool lowResolution =
++          pixels.isValid() && pixels.value() <= kLowResolutionPixelCount;
++      const bool hardware =
++          std::find(hwCodecs.begin(), hwCodecs.end(),
++                    std::string(config->mMimeType.get())) != hwCodecs.end();
++      powerEfficient &= hardware || lowResolution;
++    }
++    MediaCapabilitiesDecodingInfo info;
++    info.mSupported = true;
++    info.mSmooth = true;
++    info.mPowerEfficient = powerEfficient;
++    LOG("spoofed {} -> {}", aConfiguration, info);
++    aPromise->MaybeResolve(std::move(info));
++    return;
++  }
++
+   // Step 4: Otherwise, run the following steps:
+   nsTArray<RefPtr<CapabilitiesPromise>> promises;
+ 
+diff --git a/dom/media/mediacapabilities/moz.build b/dom/media/mediacapabilities/moz.build
+--- a/dom/media/mediacapabilities/moz.build
++++ b/dom/media/mediacapabilities/moz.build
+@@ -14,3 +14,6 @@
+ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]

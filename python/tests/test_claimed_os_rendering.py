@@ -99,3 +99,30 @@ class TestFontMetrics:
     def test_caller_value_wins(self, launch):
         config, _ = launch(WIN_UA, config={"fonts:metrics": "freetype"})
         assert config["fonts:metrics"] == "freetype"
+
+
+class TestCodecs:
+    """The codec matrix and decodingInfo() follow the claimed OS (#558)."""
+
+    def test_windows_identity_claims_windows_codecs(self, launch):
+        config, _ = launch(WIN_UA)
+        assert config["media:spoof_codecs"] is True
+        assert config["media:hwCodecs"] == ["video/avc", "video/hevc", "video/vp9"]
+
+    def test_macos_identity_claims_codecs_without_windows_hardware(self, launch):
+        config, _ = launch(MAC_UA)
+        assert config["media:spoof_codecs"] is True
+        assert "media:hwCodecs" not in config
+
+    def test_host_os_identity_is_left_alone(self, launch, monkeypatch):
+        config, _ = launch(LIN_UA)
+        assert "media:spoof_codecs" not in config
+        monkeypatch.setattr(utils, "_host_os_key", lambda: "win")
+        config, _ = launch(WIN_UA)
+        assert "media:spoof_codecs" not in config
+        assert "media:hwCodecs" not in config
+
+    def test_caller_values_win(self, launch):
+        config, _ = launch(WIN_UA, config={"media:spoof_codecs": False, "media:hwCodecs": []})
+        assert config["media:spoof_codecs"] is False
+        assert config["media:hwCodecs"] == []

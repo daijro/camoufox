@@ -127,6 +127,11 @@ function physicalScale(
 	return pref > 0 ? pref : Number(config["window.devicePixelRatio"] || 1);
 }
 
+// Video codecs a Windows desktop decodes in hardware, so that
+// mediaCapabilities.decodingInfo() reports them powerEfficient.
+export const WINDOWS_HW_CODECS: readonly string[] =
+	LAUNCHER_CONSTANTS.windowsHwCodecs;
+
 /** The host OS in fonts.json / target_os terms ('mac', 'win', 'lin'). */
 function hostOsKey(): TargetOS | null {
 	return (
@@ -1797,6 +1802,15 @@ export async function launchOptions({
 	// FreeType's pixel-rounded ones (font-metrics-windows.patch).
 	if (targetOs === "win" && hostOs !== "win") {
 		setInto(config, "fonts:metrics", "windows");
+	}
+
+	// canPlayType()/isTypeSupported() and decodingInfo() answer for the claimed
+	// OS instead of the host's decoders (#558).
+	if ((targetOs === "win" || targetOs === "mac") && hostOs !== targetOs) {
+		setInto(config, "media:spoof_codecs", true);
+		if (targetOs === "win") {
+			setInto(config, "media:hwCodecs", [...WINDOWS_HW_CODECS]);
+		}
 	}
 
 	// Storage quota, from the host's own disk (see stockProfileDiskCapacityKb).

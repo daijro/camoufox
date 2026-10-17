@@ -42,7 +42,7 @@ be listed there.
 | `force-default-pointer.patch` | `navigator.maxTouchPoints` |
 | `geolocation-spoofing.patch` | `geolocation:*` |
 | `locale-spoofing.patch` | `locale:*`, `navigator.language` |
-| `media-codec-spoofing.patch` | `media:spoof_codecs` (bypasses `PDMFactory::Supports()` in `MP4Decoder`/`MatroskaDecoder` so `canPlayType()`/`isTypeSupported()` don't leak system codec libraries) |
+| `media-codec-spoofing.patch` | `media:spoof_codecs` (bypasses `PDMFactory::Supports()` in `MP4Decoder`/`MatroskaDecoder` so `canPlayType()`/`isTypeSupported()` don't leak system codec libraries, and answers `decodingInfo()` to match), `media:hwCodecs` (the video MIME types `decodingInfo()` reports power-efficient) |
 | `media-device-spoofing.patch` | `mediaDevices:*` |
 | `navigator-spoofing.patch` | `navigator.*` |
 | `network-patches.patch` | `headers.*`, `navigator.userAgent` |
