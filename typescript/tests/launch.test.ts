@@ -444,6 +444,77 @@ describe("test_launch_environment: prefs", () => {
 		});
 	});
 
+	// test_windows_identity.py
+	describe("a Windows identity on another host behaves as Windows", () => {
+		const STYLE = "widget.non-native-theme.scrollbar.style";
+		const onHost = async (host: "lin" | "win", u: string, extra = {}) => {
+			deps.hostOsKey = () => host;
+			let config: Record<string, any> = {};
+			deps.getEnvVars = ((c: Record<string, any>) => {
+				config = { ...c };
+				return {};
+			}) as any;
+			const prefs = await prefsFor({ ...ua(u), ...extra });
+			return { config, prefs };
+		};
+
+		it("gets the CRT's math, Windows' keyboard and behaviour", async () => {
+			const { config, prefs } = await onHost("lin", WIN_UA);
+			expect(prefs["javascript.options.use_ucrt_math"]).toBe(true);
+			expect(config["input:windowsKeyboard"]).toBe(true);
+			for (const [pref, value] of Object.entries(
+				utils.WINDOWS_BEHAVIOUR_PREFS,
+			)) {
+				expect(prefs[pref]).toEqual(value);
+			}
+			expect(prefs["media.eme.enabled"]).toBe(true);
+			expect(prefs["middlemouse.paste"]).toBe(false);
+		});
+		it("draws Windows' scrollbars at Windows' size", async () => {
+			const classic = await onHost("lin", WIN_UA, {
+				firefox_user_prefs: { "ui.useOverlayScrollbars": 0 },
+			});
+			expect(classic.prefs[STYLE]).toBe(4);
+			expect(
+				classic.prefs["widget.non-native-theme.win.scrollbar.use-system-size"],
+			).toBe(false);
+			const overlay = await onHost("lin", WIN_UA, {
+				firefox_user_prefs: { "ui.useOverlayScrollbars": 1 },
+			});
+			expect(overlay.prefs[STYLE]).toBe(5);
+		});
+		it("leaves other identities and a Windows host alone", async () => {
+			for (const [host, u] of [
+				["lin", LINUX_UA],
+				["lin", MAC_UA],
+				["win", WIN_UA],
+			] as const) {
+				const { config, prefs } = await onHost(host, u);
+				expect("javascript.options.use_ucrt_math" in prefs).toBe(false);
+				expect("input:windowsKeyboard" in config).toBe(false);
+				expect("middlemouse.paste" in prefs).toBe(false);
+				expect(STYLE in prefs).toBe(false);
+			}
+		});
+		it("caller values win", async () => {
+			const { config, prefs } = await onHost("lin", WIN_UA, {
+				config: {
+					"navigator.userAgent": WIN_UA,
+					"input:windowsKeyboard": false,
+				},
+				firefox_user_prefs: {
+					"javascript.options.use_ucrt_math": false,
+					"middlemouse.paste": true,
+					[STYLE]: 2,
+				},
+			});
+			expect(config["input:windowsKeyboard"]).toBe(false);
+			expect(prefs["javascript.options.use_ucrt_math"]).toBe(false);
+			expect(prefs["middlemouse.paste"]).toBe(true);
+			expect(prefs[STYLE]).toBe(2);
+		});
+	});
+
 	describe("storage quota follows the host disk", () => {
 		const PREF = "dom.quotaManager.temporaryStorage.fixedLimit";
 		/** The real probe (isolateLaunch stubs it), over a stubbed disk. */
