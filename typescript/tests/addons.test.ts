@@ -81,3 +81,20 @@ it("removes the partial directory when a download fails", async () => {
 	);
 	log.mockRestore();
 });
+
+it("downloads once for concurrent launches", async () => {
+	// Two launches in one process share the check-then-extract; unserialized,
+	// both saw no manifest at the await and both downloaded.
+	const calls: string[] = [];
+	addons.addonsDeps.downloadAndExtract = async (_url, extractPath, name) => {
+		calls.push(name);
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		writeManifest(extractPath);
+	};
+
+	const outs: string[][] = [[], []];
+	await Promise.all(outs.map((out) => addons.addDefaultAddons(out)));
+
+	expect(calls).toEqual(["UBO"]);
+	expect(outs).toEqual([[ubo], [ubo]]);
+});

@@ -12,11 +12,13 @@ Run with:
 """
 
 import os
+import threading
+import time
 
 import pytest
 
 from camoufox import addons as addons_mod
-from camoufox.addons import DefaultAddons, maybe_download_addons
+from camoufox.addons import DefaultAddons, add_default_addons, maybe_download_addons
 
 UBO = DefaultAddons.UBO.name
 
@@ -89,3 +91,50 @@ def test_failed_download_removes_partial_dir(addons_dir, monkeypatch):
     # trusting an addon that has no manifest.json.
     assert not path.exists()
     assert out == []
+
+
+def test_concurrent_launches_download_once(addons_dir, monkeypatch):
+    # Two launches in one process share the check-then-extract. A lock created
+    # per call guarded nothing, so both saw no manifest and both downloaded.
+    calls = []
+
+    def slow(url, extract_path, name):
+        calls.append(name)
+        time.sleep(0.2)
+        _write_manifest(url, extract_path, name)
+
+    monkeypatch.setattr(addons_mod, "download_and_extract", slow)
+
+    outs = [[], []]
+    threads = [threading.Thread(target=add_default_addons, args=(out,)) for out in outs]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert calls == [UBO]
+    assert outs == [[str(addons_dir / UBO)]] * 2
+
+
+def test_extraction_appears_complete_or_not_at_all(tmp_path, monkeypatch):
+    # Another process checks for manifest.json without the lock, so the addon
+    # directory must never hold a manifest while its other files are missing.
+    target = tmp_path / UBO
+    target.mkdir()
+    seen = []
+
+    def fake_unzip(buffer, extract_path, desc=None, bar=True):
+        seen.append((target / "manifest.json").exists())
+        _write_manifest(None, extract_path, UBO)
+        with open(os.path.join(extract_path, "background.js"), "w") as f:
+            f.write("")
+        seen.append((target / "manifest.json").exists())
+
+    monkeypatch.setattr(addons_mod, "webdl", lambda *a, **k: b"")
+    monkeypatch.setattr(addons_mod, "unzip", fake_unzip)
+
+    addons_mod.download_and_extract("url", str(target), UBO)
+
+    assert seen == [False, False]
+    assert sorted(os.listdir(target)) == ["background.js", "manifest.json"]
+    assert os.listdir(tmp_path) == [UBO]
