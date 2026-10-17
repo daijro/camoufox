@@ -56,6 +56,7 @@
   { "property": "webGl:shaderPrecisionFormats:blockIfNotDefined", "type": "bool" },
   { "property": "webGl2:shaderPrecisionFormats", "type": "dict" },
   { "property": "webGl2:shaderPrecisionFormats:blockIfNotDefined", "type": "bool" },
+  { "property": "webGpu:limits", "type": "dict" },
   { "property": "voices", "type": "array" },
   { "property": "voices:blockIfNotDefined", "type": "bool" },
   { "property": "mediaDevices:micros", "type": "uint" },

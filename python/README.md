@@ -167,7 +167,9 @@ d3d12 driver, claiming Windows Firefox on an NVIDIA GPU. The launcher reads the
 driver's own renderer string (Firefox reports Mesa's d3d12 as "Generic
 Renderer") and refuses unless it is a hardware GPU from the claimed GPU's
 vendor. The canvas is then left uncovered, and WebGPU hands the page the
-host's adapter. Contexts of such a browser claim the launch's OS and GPU.
+host's adapter; a Windows identity off Windows reports Windows' D3D12 adapter
+limits (`webGpu:limits`) instead of the host backend's. Contexts of such a
+browser claim the launch's OS and GPU.
 
 ### Headless modes
 

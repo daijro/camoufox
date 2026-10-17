@@ -17,6 +17,7 @@ from functools import lru_cache
 from typing import Any, Dict, Mapping, Optional, Tuple
 
 from .fingerprints import is_software_renderer
+from .pkgman import LAUNCHER_CONSTANTS
 
 BASELINE_OVERRIDES_PREF = 'privacy.baselineFingerprintingProtection.overrides'
 
@@ -34,6 +35,13 @@ CANVAS_PLACEHOLDER_TARGETS = (
 WEBGPU_BLOCKLIST_PREF = 'gfx.blacklist.webgpu'
 FEATURE_STATUS_OK = 1
 FEATURE_BLOCKED_DEVICE = 4
+
+# GPUAdapter.limits of stock Firefox 152.0.4 on Windows (wgpu's D3D12 backend),
+# measured 2026-09-24 on an RTX 4090. The same GPU driven from a Linux host
+# reports 14 of them differently (maxBindingsPerBindGroup 1000000,
+# minUniformBufferOffsetAlignment 32, ...), each one property read away;
+# webgpu-limits-spoofing.patch reports these instead (webGpu:limits).
+WINDOWS_WEBGPU_LIMITS: Dict[str, int] = LAUNCHER_CONSTANTS['windowsWebGpuLimits']
 
 # Firefox reports the renderer through SanitizeRenderer.cpp, which keeps a
 # vendor only for strings it recognises: Mesa's d3d12 driver under WSL says

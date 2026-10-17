@@ -112,6 +112,7 @@ export interface LauncherConstants {
 	macEloquenceVoices: string[];
 	baselineTaskbarHeight: Record<"win" | "mac" | "lin", number>;
 	baselineMultiTouchPoints: number;
+	windowsWebGpuLimits: Record<string, number>;
 	cachePrefs: Record<string, any>;
 }
 export const LAUNCHER_CONSTANTS: Readonly<LauncherConstants> = loadDataFile(

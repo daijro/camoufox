@@ -48,6 +48,7 @@ import {
 	addCanvasPlaceholder,
 	type Gpu,
 	gpuFamily,
+	WINDOWS_WEBGPU_LIMITS,
 	hasCanvasPlaceholder,
 	hostGpu,
 	rendersOnHardware,
@@ -1367,7 +1368,8 @@ export interface LaunchOptions {
 	 * throws ValueError unless it is a hardware GPU from the claimed GPU's
 	 * vendor (NVIDIA, AMD, Intel or Apple); with no GPU named, one of that
 	 * vendor's is drawn. The canvas is then left uncovered and WebGPU hands the
-	 * page the host's adapter. Cannot be combined with canvas_noise: true or
+	 * page the host's adapter, with Windows' adapter limits when a Windows
+	 * identity runs elsewhere. Cannot be combined with canvas_noise: true or
 	 * block_webgl. Default: false. */
 	gpu_passthrough?: boolean;
 	/** Additional Firefox launch options, passed straight through to Playwright. */
@@ -2009,6 +2011,22 @@ export async function launchOptions({
 		host,
 		Boolean(gpu_passthrough),
 	);
+	// A passed-through adapter reports the limits of the host's wgpu backend,
+	// not of D3D12 on the Windows Firefox the identity claims, and a release
+	// build off Windows leaves out GPUExternalTexture and navigator.gpu in
+	// service workers, which Windows ships on (StaticPrefList.yaml).
+	if (
+		gpu_passthrough &&
+		targetOs === "win" &&
+		utilsDeps.hostOsKey() !== "win" &&
+		firefox_user_prefs["dom.webgpu.enabled"]
+	) {
+		if (!("webGpu:limits" in config)) {
+			config["webGpu:limits"] = { ...WINDOWS_WEBGPU_LIMITS };
+		}
+		firefox_user_prefs["dom.webgpu.external-texture.enabled"] ??= true;
+		firefox_user_prefs["dom.webgpu.service-workers.enabled"] ??= true;
+	}
 
 	// Cache previous pages, requests, etc (uses more memory)
 	if (enable_cache) {

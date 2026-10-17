@@ -29,6 +29,7 @@ const {
 	hostGpu,
 	setWebgpu,
 	WEBGPU_BLOCKLIST_PREF,
+	WINDOWS_WEBGPU_LIMITS,
 } = await import("../src/host_rendering.js");
 type Gpu = import("../src/host_rendering.js").Gpu;
 // Imported after launch-host, which has to set the cache directory first.
@@ -437,9 +438,12 @@ const WINDOWS_AMD_GPU: Gpu = [
 ];
 
 /** A host whose Firefox renders on `gpu`, read with the renderer unsanitized. */
-function onPassthroughHost(gpu: Gpu | null): boolean[] {
+function onPassthroughHost(
+	gpu: Gpu | null,
+	osKey: "lin" | "win" = "lin",
+): boolean[] {
 	const probes: boolean[] = [];
-	onHost(gpu);
+	onHost(gpu, osKey);
 	deps.hostGpu = async (_executablePath, _headless, _env, raw = false) => {
 		probes.push(raw);
 		return gpu;
@@ -486,14 +490,65 @@ describe.skipIf(!MODEL.ok)("gpu_passthrough", () => {
 
 	it("off, the same launch is covered and blocked", async () => {
 		const probes = onPassthroughHost(WSL_NVIDIA);
-		const { options } = await launch({
+		const { options, config } = await launch({
 			os: "windows",
 			webgl_config: WINDOWS_GPU,
 		});
 
 		expect(placeholder(options)).toBe(true);
 		expect(webgpu(options)).toEqual([true, true]);
+		expect("webGpu:limits" in config).toBe(false);
+		expect(
+			"dom.webgpu.external-texture.enabled" in options.firefoxUserPrefs,
+		).toBe(false);
 		expect(probes).toEqual([]);
+	});
+
+	it("a Windows identity off Windows reports D3D12 adapter limits", async () => {
+		onPassthroughHost(WSL_NVIDIA);
+		const { options, config } = await launch({
+			os: "windows",
+			webgl_config: WINDOWS_GPU,
+			gpu_passthrough: true,
+		});
+
+		expect(config["webGpu:limits"]).toEqual(WINDOWS_WEBGPU_LIMITS);
+		expect(Object.keys(WINDOWS_WEBGPU_LIMITS)).toHaveLength(35);
+		expect(
+			options.firefoxUserPrefs["dom.webgpu.external-texture.enabled"],
+		).toBe(true);
+		expect(options.firefoxUserPrefs["dom.webgpu.service-workers.enabled"]).toBe(
+			true,
+		);
+	});
+
+	it("a Windows host keeps its own adapter limits", async () => {
+		onPassthroughHost(
+			[
+				"Google Inc. (NVIDIA)",
+				"ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+			],
+			"win",
+		);
+		const { config } = await launch({
+			os: "windows",
+			webgl_config: WINDOWS_GPU,
+			gpu_passthrough: true,
+		});
+
+		expect("webGpu:limits" in config).toBe(false);
+	});
+
+	it("caller adapter limits are kept", async () => {
+		onPassthroughHost(WSL_NVIDIA);
+		const { config } = await launch({
+			os: "windows",
+			webgl_config: WINDOWS_GPU,
+			gpu_passthrough: true,
+			config: { "webGpu:limits": { maxBindGroups: 4 } },
+		});
+
+		expect(config["webGpu:limits"]).toEqual({ maxBindGroups: 4 });
 	});
 
 	it("without a named GPU, one of the host's vendor is drawn", async () => {

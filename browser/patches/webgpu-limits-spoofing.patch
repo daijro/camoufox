@@ -1,0 +1,89 @@
+diff --git a/dom/webgpu/Adapter.cpp b/dom/webgpu/Adapter.cpp
+--- a/dom/webgpu/Adapter.cpp
++++ b/dom/webgpu/Adapter.cpp
+@@ -9,6 +9,7 @@
+ 
+ #include "Device.h"
+ #include "Instance.h"
++#include "MaskConfig.hpp"
+ #include "SupportedFeatures.h"
+ #include "SupportedLimits.h"
+ #include "ipc/WebGPUChild.h"
+@@ -257,6 +258,8 @@
+   }
+ };
+ 
++static void ApplyConfiguredLimits(ffi::WGPULimits* aLimits);
++
+ Adapter::Adapter(Instance* const aParent, WebGPUChild* const aChild,
+                  const std::shared_ptr<ffi::WGPUAdapterInformation>& aInfo)
+     : ObjectBase(aChild, aInfo->id, ffi::wgpu_client_drop_adapter),
+@@ -331,6 +334,12 @@
+   // So, we should clamp the limits here too if we should RFP.
+   if (GetParentObject()->ShouldResistFingerprinting(RFPTarget::WebGPULimits)) {
+     ffi::wgpu_client_fill_default_limits(mLimits->mFfi.get());
++  } else {
++    // Camoufox: report the claimed OS's adapter limits (webGpu:limits). wgpu's
++    // backends report different values for the same GPU -- Vulkan on a Linux
++    // host vs D3D12 on Windows differ in 14 of 36 -- and each is one property
++    // read. The real limits stay in mInfoInner for RequestDevice.
++    ApplyConfiguredLimits(mLimits->mFfi.get());
+   }
+ }
+ 
+@@ -420,6 +429,20 @@
+   MOZ_CRASH("Bad Limit");
+ }
+ 
++static bool IsMaxLimit(const Limit limit) {
++  return ToJsKey(limit).substr(0, 3) == "max";
++}
++
++static void ApplyConfiguredLimits(ffi::WGPULimits* const aLimits) {
++  for (const auto limit : MakeInclusiveEnumeratedRange(Limit::_LAST)) {
++    const auto value =
++        MaskConfig::GetNested("webGpu:limits", std::string(ToJsKey(limit)));
++    if (value && value->is_number_unsigned()) {
++      SetLimit(aLimits, limit, value->get<uint64_t>());
++    }
++  }
++}
++
+ uint64_t Adapter::MissingFeatures() const {
+   uint64_t missingFeatures = 0;
+ 
+@@ -608,9 +631,23 @@
+ 
+     RefPtr<SupportedLimits> limits = new SupportedLimits(this, deviceLimits);
+ 
++    // Camoufox: requiredLimits were validated against the reported (possibly
++    // spoofed) adapter limits above, so a page sees exactly the accept/reject
++    // behaviour of the claimed OS, and device.limits keeps what it asked for.
++    // wgpu only knows the real adapter, though, so what it is asked for is
++    // clamped to that; otherwise device creation fails where the claimed OS
++    // would have succeeded.
++    ffi::WGPULimits wgpuLimits = deviceLimits;
++    for (const auto limit : MakeInclusiveEnumeratedRange(Limit::_LAST)) {
++      const uint64_t real = GetLimit(mInfoInner->limits, limit);
++      const uint64_t asked = GetLimit(wgpuLimits, limit);
++      SetLimit(&wgpuLimits, limit,
++               IsMaxLimit(limit) ? std::min(asked, real) : std::max(asked, real));
++    }
++
+     ffi::WGPUFfiDeviceDescriptor ffiDesc = {};
+     ffiDesc.required_features = featureBits;
+-    ffiDesc.required_limits = deviceLimits;
++    ffiDesc.required_limits = wgpuLimits;
+ 
+     ffi::WGPUDeviceQueueId ids =
+         ffi::wgpu_client_request_device(GetClient(), GetId(), &ffiDesc);
+diff --git a/dom/webgpu/moz.build b/dom/webgpu/moz.build
+--- a/dom/webgpu/moz.build
++++ b/dom/webgpu/moz.build
+@@ -119,3 +119,6 @@
+ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]

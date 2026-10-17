@@ -25,6 +25,7 @@ from camoufox.host_rendering import (  # noqa: E402
     FEATURE_BLOCKED_DEVICE,
     FEATURE_STATUS_OK,
     WEBGPU_BLOCKLIST_PREF,
+    WINDOWS_WEBGPU_LIMITS,
     gpu_family,
     has_canvas_placeholder,
     host_gpu,
@@ -365,11 +366,38 @@ class TestGpuPassthrough:
 
     def test_off_the_same_launch_is_covered_and_blocked(self):
         with on_passthrough_host(WSL_NVIDIA) as probes:
-            options, _ = launch(os="windows", webgl_config=WINDOWS_GPU)
+            options, config = launch(os="windows", webgl_config=WINDOWS_GPU)
 
         assert placeholder(options)
         assert webgpu(options) == (True, True)
+        assert "webGpu:limits" not in config
+        assert "dom.webgpu.external-texture.enabled" not in options["firefox_user_prefs"]
         assert probes == []
+
+    def test_a_windows_identity_off_windows_reports_d3d12_adapter_limits(self):
+        with on_passthrough_host(WSL_NVIDIA):
+            options, config = launch(os="windows", webgl_config=WINDOWS_GPU, gpu_passthrough=True)
+
+        assert config["webGpu:limits"] == WINDOWS_WEBGPU_LIMITS
+        assert len(WINDOWS_WEBGPU_LIMITS) == 35
+        prefs = options["firefox_user_prefs"]
+        assert prefs["dom.webgpu.external-texture.enabled"] is True
+        assert prefs["dom.webgpu.service-workers.enabled"] is True
+
+    def test_a_windows_host_keeps_its_own_adapter_limits(self):
+        with on_passthrough_host(("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Direct3D11 vs_5_0 ps_5_0, D3D11)"), "win"):
+            _, config = launch(os="windows", webgl_config=WINDOWS_GPU, gpu_passthrough=True)
+
+        assert "webGpu:limits" not in config
+
+    def test_caller_adapter_limits_are_kept(self):
+        with on_passthrough_host(WSL_NVIDIA):
+            _, config = launch(
+                os="windows", webgl_config=WINDOWS_GPU, gpu_passthrough=True,
+                config={"webGpu:limits": {"maxBindGroups": 4}},
+            )
+
+        assert config["webGpu:limits"] == {"maxBindGroups": 4}
 
     def test_without_a_named_gpu_one_of_the_hosts_vendor_is_drawn(self):
         for _ in range(5):

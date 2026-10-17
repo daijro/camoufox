@@ -51,6 +51,7 @@ be listed there.
 | `touchscreen-fingerprint-spoofing.patch` | `navigator.maxTouchPoints` |
 | `voice-spoofing.patch` | `voices`, `voices:blockIfNotDefined` |
 | `webgl-spoofing.patch` | `webGl:*`, `webGl2:*` |
+| `webgpu-limits-spoofing.patch` | `webGpu:limits` |
 | `webrtc-ip-spoofing.patch` | `webrtc:ipv4`, `webrtc:ipv6`, `navigator.platform` |
 
 To regenerate the list: `grep -l 'MaskConfig::' patches/*.patch`.
