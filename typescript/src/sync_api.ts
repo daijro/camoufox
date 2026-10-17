@@ -104,9 +104,11 @@ export async function NewBrowser(
 	// Options the caller built leave its contexts to the caller
 	// (hostIdentity).
 	let canvasNoise: boolean | undefined = false;
+	let gpuPassthrough = false;
 	try {
 		if (!fromOptions || !Object.keys(fromOptions).length) {
 			canvasNoise = kwargs.canvas_noise ?? undefined;
+			gpuPassthrough = Boolean(kwargs.gpu_passthrough);
 			// Opt-in (2026-09-17). Pinning keeps the identity's core count by
 			// constraining the browser to that many cores; it costs real CPU,
 			// needs a launch lock, and does nothing on macOS. Off, the host's own
@@ -140,6 +142,7 @@ export async function NewBrowser(
 			noViewportDefault,
 			virtualDisplay,
 			canvasNoise,
+			gpuPassthrough,
 		);
 	try {
 		if (!pinTo) {
@@ -169,6 +172,7 @@ async function launchWith(
 	noViewportDefault: boolean,
 	virtualDisplay: VirtualDisplay | null,
 	canvasNoise: boolean | undefined,
+	gpuPassthrough: boolean,
 ): Promise<Browser | BrowserContext> {
 	// Persistent context. Python passes user_data_dir inside the options; the
 	// JS API takes it positionally. A user_data_dir alone also selects it.
@@ -198,7 +202,7 @@ async function launchWith(
 	}
 
 	// Browser
-	const identity = await hostIdentity(fromOptions, canvasNoise);
+	const identity = await hostIdentity(fromOptions, canvasNoise, gpuPassthrough);
 	const browser = await playwright.launch(fromOptions);
 	if (noViewportDefault) {
 		attachNoViewportDefault(browser);
@@ -214,7 +218,8 @@ export interface NewContextOptions extends Record<string, any> {
 	preset?: Record<string, any>;
 	/** Target OS for the drawn identity ("windows", "macos", "linux"). On a
 	 * browser launched without canvas noise, contexts claim the host's OS and
-	 * GPU, and another os or preset throws ValueError. */
+	 * GPU (with gpu_passthrough, the launch's), and another os or preset throws
+	 * ValueError. */
 	os?: string;
 	/** Firefox major version to claim in the UA. Defaults to the browser's own. */
 	ff_version?: string;

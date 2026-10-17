@@ -47,6 +47,7 @@ import { geoipAllowed, getGeolocation } from "./geolocation.js";
 import {
 	addCanvasPlaceholder,
 	type Gpu,
+	gpuFamily,
 	hasCanvasPlaceholder,
 	hostGpu,
 	rendersOnHardware,
@@ -1056,16 +1057,60 @@ export async function planRendering(
 }
 
 /**
+ * The GPU vendor a gpu_passthrough launch claims: the one whose GPU the host
+ * renders on, read from the driver's own renderer string.
+ *
+ * Throws ValueError when the host renders in software or without WebGL, or
+ * when `namedGpu` is another vendor's: either way the pixels contradict the
+ * claim.
+ */
+export async function planPassthrough(
+	namedGpu: [string, string] | null,
+	probe: () => Promise<Gpu | null>,
+): Promise<string> {
+	const host = await probe();
+	if (!rendersOnHardware(host)) {
+		throw new ValueError(
+			`gpu_passthrough claims the GPU this machine renders on, but it renders WebGL with ${JSON.stringify(host)}, ` +
+				"not a hardware GPU. Launch without gpu_passthrough to cover the canvas instead.",
+		);
+	}
+	const family = gpuFamily(host);
+	if (family === null) {
+		throw new ValueError(
+			`gpu_passthrough cannot tell which vendor made this machine's GPU, ${JSON.stringify(host)}.`,
+		);
+	}
+	if (namedGpu && gpuFamily(namedGpu) !== family) {
+		throw new ValueError(
+			`gpu_passthrough renders the canvas on this machine's ${family} GPU (${JSON.stringify(host[1])}), ` +
+				`so the identity cannot claim ${JSON.stringify(namedGpu)}. Claim a ${family} GPU, or launch without gpu_passthrough.`,
+		);
+	}
+	return family;
+}
+
+/**
  * For a launch without the canvas placeholder, the machine its contexts must
  * claim: the host's OS, and the host GPU it claims (planRendering). Only for
  * the default `canvasNoise` (undefined); a caller who chose it, or built the
  * options, keeps their contexts as they ask. Read before the launch, so a
  * failed probe leaves no browser behind.
+ *
+ * A gpu_passthrough launch renders as the machine it claims, so its contexts
+ * claim the launch's own OS and GPU.
  */
 export async function hostIdentity(
 	fromOptions: Record<string, any>,
 	canvasNoise: boolean | undefined,
+	gpuPassthrough = false,
 ): Promise<HostIdentity | null> {
+	if (gpuPassthrough) {
+		const config = JSON.parse(camouConfigBlob(fromOptions) || "{}");
+		const vendor = config["webGl:vendor"];
+		const renderer = config["webGl:renderer"];
+		return [getTargetOs(config), vendor && renderer ? [vendor, renderer] : null];
+	}
 	const prefs = fromOptions.firefoxUserPrefs ?? {};
 	if (canvasNoise != null || hasCanvasPlaceholder(prefs)) return null;
 	// Without the placeholder, the launch claimed the host's OS and no named GPU.
@@ -1316,6 +1361,15 @@ export interface LaunchOptions {
 	 * (webgl_config, a preset's, or a host GPU fpgen never recorded), whose
 	 * canvas would otherwise show the host. */
 	canvas_noise?: boolean | null;
+	/** The host renders on the GPU the identity claims, under another OS: a
+	 * Linux container driving a Windows host's GPU through WSL's d3d12 driver,
+	 * say. The launch reads the host's GPU (a second, short browser launch) and
+	 * throws ValueError unless it is a hardware GPU from the claimed GPU's
+	 * vendor (NVIDIA, AMD, Intel or Apple); with no GPU named, one of that
+	 * vendor's is drawn. The canvas is then left uncovered and WebGPU hands the
+	 * page the host's adapter. Cannot be combined with canvas_noise: true or
+	 * block_webgl. Default: false. */
+	gpu_passthrough?: boolean;
 	/** Additional Firefox launch options, passed straight through to Playwright. */
 	[key: string]: any;
 }
@@ -1362,6 +1416,7 @@ export async function launchOptions({
 	virtual_display,
 	pin_cpu_cores,
 	canvas_noise,
+	gpu_passthrough,
 	...passthrough
 }: LaunchOptions = {}): Promise<Record<string, any>> {
 	utilsDeps.ensureBrowserProfileDir(env);
@@ -1452,6 +1507,17 @@ export async function launchOptions({
 	} else if (pyTruthy(webgl_config)) {
 		// webgl_config requires OS to be set
 		throw new ValueError("OS must be set when using webgl_config");
+	}
+
+	if (gpu_passthrough && canvas_noise) {
+		throw new ValueError(
+			"gpu_passthrough leaves the canvas uncovered; it cannot be combined with canvas_noise: true.",
+		);
+	}
+	if (gpu_passthrough && block_webgl) {
+		throw new ValueError(
+			"gpu_passthrough claims the host's GPU through WebGL; it cannot be combined with block_webgl.",
+		);
 	}
 
 	// Add the default addons
@@ -1844,14 +1910,30 @@ export async function launchOptions({
 		? String(executable_path)
 		: utilsDeps.launchPath();
 
-	const [coverCanvas, host] = await planRendering(
-		targetOs,
-		canvas_noise,
-		pyTruthy(webgl_config) ||
-			(pyTruthy(config["webGl:vendor"]) && pyTruthy(config["webGl:renderer"])),
-		Boolean(block_webgl),
-		() => utilsDeps.hostGpu(resolvedExecutable, headless, env),
-	);
+	let passthroughFamily: string | null = null;
+	let coverCanvas: boolean;
+	let host: Gpu | null;
+	if (gpu_passthrough) {
+		const namedGpu: [string, string] | null = pyTruthy(webgl_config)
+			? (webgl_config as [string, string])
+			: pyTruthy(config["webGl:vendor"]) && pyTruthy(config["webGl:renderer"])
+				? [config["webGl:vendor"], config["webGl:renderer"]]
+				: null;
+		passthroughFamily = await planPassthrough(namedGpu, () =>
+			utilsDeps.hostGpu(resolvedExecutable, headless, env, true),
+		);
+		[coverCanvas, host] = [false, null];
+	} else {
+		[coverCanvas, host] = await planRendering(
+			targetOs,
+			canvas_noise,
+			pyTruthy(webgl_config) ||
+				(pyTruthy(config["webGl:vendor"]) &&
+					pyTruthy(config["webGl:renderer"])),
+			Boolean(block_webgl),
+			() => utilsDeps.hostGpu(resolvedExecutable, headless, env),
+		);
+	}
 	if (coverCanvas) {
 		addCanvasPlaceholder(firefox_user_prefs);
 		LeakWarning.warn("canvas_noise", i_know_what_im_doing);
@@ -1893,6 +1975,7 @@ export async function launchOptions({
 				config["screen.height"],
 				seed(),
 				config["navigator.hardwareConcurrency"],
+				passthroughFamily,
 			);
 		}
 		const enableWebgl2 = webglFp.webGl2Enabled;
@@ -1924,6 +2007,7 @@ export async function launchOptions({
 		targetOs,
 		[config["webGl:vendor"], config["webGl:renderer"]],
 		host,
+		Boolean(gpu_passthrough),
 	);
 
 	// Cache previous pages, requests, etc (uses more memory)

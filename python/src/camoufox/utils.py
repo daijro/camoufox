@@ -45,7 +45,15 @@ from .pkgman import (
 )
 from .virtdisplay import VirtualDisplay
 from ._warnings import FallbackWarning, LeakWarning
-from .host_rendering import Gpu, add_canvas_placeholder, has_canvas_placeholder, host_gpu, renders_on_hardware, set_webgpu
+from .host_rendering import (
+    Gpu,
+    add_canvas_placeholder,
+    gpu_family,
+    has_canvas_placeholder,
+    host_gpu,
+    renders_on_hardware,
+    set_webgpu,
+)
 from .webgl import firefox_gpus, sample_webgl_for_screen, webgl_for_gpu
 
 ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
@@ -764,12 +772,46 @@ def plan_rendering(
     return canvas_noise is None, None
 
 
-def host_identity(from_options: Dict[str, Any], canvas_noise: Optional[bool]) -> Optional[Tuple[str, Optional[Gpu]]]:
+def plan_passthrough(named_gpu: Optional[Gpu], probe: Callable[[], Optional[Gpu]]) -> str:
+    """The GPU vendor a gpu_passthrough launch claims: the one whose GPU the
+    host renders on, read from the driver's own renderer string.
+
+    Raises ValueError when the host renders in software or without WebGL, or
+    when `named_gpu` is another vendor's: either way the pixels contradict the
+    claim.
+    """
+    host = probe()
+    if not renders_on_hardware(host):
+        raise ValueError(
+            f'gpu_passthrough claims the GPU this machine renders on, but it renders WebGL with {host!r}, '
+            'not a hardware GPU. Launch without gpu_passthrough to cover the canvas instead.'
+        )
+    family = gpu_family(host)
+    if family is None:
+        raise ValueError(f'gpu_passthrough cannot tell which vendor made this machine\'s GPU, {host!r}.')
+    if named_gpu and gpu_family(named_gpu) != family:
+        raise ValueError(
+            f'gpu_passthrough renders the canvas on this machine\'s {family} GPU ({host[1]!r}), '
+            f'so the identity cannot claim {named_gpu!r}. Claim a {family} GPU, or launch without gpu_passthrough.'
+        )
+    return family
+
+
+def host_identity(
+    from_options: Dict[str, Any], canvas_noise: Optional[bool], gpu_passthrough: bool = False
+) -> Optional[Tuple[str, Optional[Gpu]]]:
     """For a launch without the canvas placeholder, the machine its contexts must
     claim: the host's OS, and the host GPU it claims (plan_rendering). Only for
     the default canvas_noise=None; a caller who chose it, or built the options,
     keeps their contexts as they ask. Read before the launch, so a failed probe
-    leaves no browser behind."""
+    leaves no browser behind.
+
+    A gpu_passthrough launch renders as the machine it claims, so its contexts
+    claim the launch's own OS and GPU."""
+    if gpu_passthrough:
+        config = orjson.loads(_camou_config_blob(from_options) or '{}')
+        gpu = (config.get('webGl:vendor'), config.get('webGl:renderer'))
+        return get_target_os(config), (gpu if all(gpu) else None)
     prefs = from_options.get('firefox_user_prefs', {})
     if canvas_noise is not None or has_canvas_placeholder(prefs):
         return None
@@ -921,6 +963,7 @@ def launch_options(
     virtual_display: Optional[str] = None,
     pin_cpu_cores: Optional[bool] = None,
     canvas_noise: Optional[bool] = None,
+    gpu_passthrough: bool = False,
     **launch_options: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
@@ -1033,6 +1076,16 @@ def launch_options(
             renders with, uncovered; it is on whenever the identity claims
             another OS or another GPU (webgl_config, a preset's, or a host GPU
             fpgen never recorded), whose canvas would otherwise show the host.
+        gpu_passthrough (bool):
+            The host renders on the GPU the identity claims, under another OS:
+            a Linux container driving a Windows host's GPU through WSL's d3d12
+            driver, say. The launch reads the host's GPU (a second, short
+            browser launch) and raises ValueError unless it is a hardware GPU
+            from the claimed GPU's vendor (NVIDIA, AMD, Intel or Apple); with
+            no GPU named, one of that vendor's is drawn. The canvas is then
+            left uncovered and WebGPU hands the page the host's adapter.
+            Cannot be combined with canvas_noise=True or block_webgl.
+            Default: False.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -1123,6 +1176,11 @@ def launch_options(
     # webgl_config requires OS to be set
     elif webgl_config:
         raise ValueError('OS must be set when using webgl_config')
+
+    if gpu_passthrough and canvas_noise:
+        raise ValueError('gpu_passthrough leaves the canvas uncovered; it cannot be combined with canvas_noise=True.')
+    if gpu_passthrough and block_webgl:
+        raise ValueError('gpu_passthrough claims the host\'s GPU through WebGL; it cannot be combined with block_webgl.')
 
     # Add the default addons
     add_default_addons(addons, exclude_addons)
@@ -1523,13 +1581,23 @@ def launch_options(
     # the screen, which the host core count and the display clamp replace.
     coherence.drop_incoherent_source_values(config, target_os)
 
-    cover_canvas, host = plan_rendering(
-        target_os,
-        canvas_noise,
-        bool(webgl_config or (config.get('webGl:vendor') and config.get('webGl:renderer'))),
-        bool(block_webgl),
-        lambda: host_gpu(browser_binary, headless, env),
-    )
+    passthrough_family: Optional[str] = None
+    if gpu_passthrough:
+        named_gpu = webgl_config or (
+            (config['webGl:vendor'], config['webGl:renderer'])
+            if config.get('webGl:vendor') and config.get('webGl:renderer')
+            else None
+        )
+        passthrough_family = plan_passthrough(named_gpu, lambda: host_gpu(browser_binary, headless, env, True))
+        cover_canvas, host = False, None
+    else:
+        cover_canvas, host = plan_rendering(
+            target_os,
+            canvas_noise,
+            bool(webgl_config or (config.get('webGl:vendor') and config.get('webGl:renderer'))),
+            bool(block_webgl),
+            lambda: host_gpu(browser_binary, headless, env),
+        )
     if cover_canvas:
         add_canvas_placeholder(firefox_user_prefs)
         LeakWarning.warn('canvas_noise', i_know_what_im_doing)
@@ -1560,6 +1628,7 @@ def launch_options(
                 target_os, config.get('screen.width'), config.get('screen.height'),
                 seed=identity_seed(config, _identity_salt),
                 cores=config.get('navigator.hardwareConcurrency'),
+                family=passthrough_family,
             )
         enable_webgl2 = webgl_fp.pop('webGl2Enabled')
 
@@ -1585,7 +1654,9 @@ def launch_options(
         for _violation in _incoherent:
             print(f'Incoherent identity ({_violation.rule}): {_violation.detail}')
 
-    set_webgpu(firefox_user_prefs, target_os, (config.get('webGl:vendor'), config.get('webGl:renderer')), host)
+    set_webgpu(
+        firefox_user_prefs, target_os, (config.get('webGl:vendor'), config.get('webGl:renderer')), host, gpu_passthrough
+    )
 
     # Cache previous pages, requests, etc (uses more memory)
     if enable_cache:

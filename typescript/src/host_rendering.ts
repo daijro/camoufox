@@ -33,6 +33,23 @@ export const WEBGPU_BLOCKLIST_PREF = "gfx.blacklist.webgpu";
 export const FEATURE_STATUS_OK = 1;
 export const FEATURE_BLOCKED_DEVICE = 4;
 
+// Firefox reports the renderer through SanitizeRenderer.cpp, which keeps a
+// vendor only for strings it recognises: Mesa's d3d12 driver under WSL says
+// "D3D12 (NVIDIA GeForce RTX 4090)", and Firefox reports "Generic Renderer"
+// for it. With the pref off it reports the driver's own string.
+export const SANITIZE_RENDERER_PREF = "webgl.sanitize-unmasked-renderer";
+
+// The GPU vendors a renderer or vendor string can name, as Firefox reports them
+// on each OS ("ANGLE (NVIDIA, ...)", "GeForce GTX 980, or similar", "Intel
+// Inc.", "ATI Technologies Inc.") and as drivers do ("D3D12 (AMD Radeon RX
+// 6800)", "Mesa Intel(R) UHD Graphics 620 (KBL GT2)").
+const GPU_FAMILIES: Array<[string, RegExp]> = [
+	["NVIDIA", /NVIDIA|GeForce|Quadro|nouveau/],
+	["AMD", /\bAMD\b|\bATI\b|Radeon|FirePro|Advanced Micro Devices/],
+	["Intel", /Intel/],
+	["Apple", /\bApple\b/],
+];
+
 // What the launcher itself adds to the browser's environment; none of it
 // changes which device Firefox renders on.
 const LAUNCHER_ENV = ["CAMOU_", "FONTCONFIG_FILE"];
@@ -59,7 +76,8 @@ export function hasCanvasPlaceholder(prefs: Record<string, any>): boolean {
 
 /**
  * Expose navigator.gpu where Firefox on the claimed device has it, with the
- * host's adapter only when `gpu` is the host's hardware GPU.
+ * host's adapter only when `gpu` is the host's hardware GPU, or when the
+ * launch passes the host's GPU through (gpu_passthrough).
  *
  * Firefox enables WebGPU on Windows and on Apple Silicon Macs only
  * (dom.webgpu.enabled in StaticPrefList.yaml). Any other adapter would
@@ -73,6 +91,7 @@ export function setWebgpu(
 	targetOs: string,
 	gpu: [string | undefined, string | undefined],
 	host: Gpu | null,
+	passthrough = false,
 ): void {
 	// A key the caller set is kept even when its value is null, as Python's
 	// setdefault keeps it.
@@ -82,7 +101,8 @@ export function setWebgpu(
 	}
 	if (prefs["dom.webgpu.enabled"] && !(WEBGPU_BLOCKLIST_PREF in prefs)) {
 		const ownAdapter =
-			rendersOnHardware(host) && gpu[0] === host[0] && gpu[1] === host[1];
+			passthrough ||
+			(rendersOnHardware(host) && gpu[0] === host[0] && gpu[1] === host[1]);
 		prefs[WEBGPU_BLOCKLIST_PREF] = ownAdapter
 			? FEATURE_STATUS_OK
 			: FEATURE_BLOCKED_DEVICE;
@@ -96,21 +116,23 @@ const probes = new Map<string, Promise<Gpu | null>>();
  *
  * Read from the binary about to launch, with no identity applied, under the
  * same display: headless, Xvfb and a real display can each render on a
- * different device. The strings are the ones Firefox sanitizes itself.
+ * different device. The strings are the ones Firefox sanitizes itself, or
+ * with `raw` the driver's own renderer string (SANITIZE_RENDERER_PREF).
  */
 export function hostGpu(
 	executablePath: string,
 	headless: boolean,
 	env: Record<string, string | number | boolean>,
+	raw = false,
 ): Promise<Gpu | null> {
 	const hostEnv = Object.entries(env)
 		.filter(([key]) => !LAUNCHER_ENV.some((prefix) => key.startsWith(prefix)))
 		.map(([key, value]) => [key, String(value)])
 		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-	const key = JSON.stringify([executablePath, headless, hostEnv]);
+	const key = JSON.stringify([executablePath, headless, hostEnv, raw]);
 	let gpu = probes.get(key);
 	if (!gpu) {
-		gpu = readGpu(executablePath, headless, Object.fromEntries(hostEnv));
+		gpu = readGpu(executablePath, headless, Object.fromEntries(hostEnv), raw);
 		// Remember a reading, not a failure: the next launch tries again.
 		gpu.catch(() => probes.delete(key));
 		probes.set(key, gpu);
@@ -122,13 +144,18 @@ async function readGpu(
 	executablePath: string,
 	headless: boolean,
 	env: Record<string, string>,
+	raw: boolean,
 ): Promise<Gpu | null> {
+	const firefoxUserPrefs: Record<string, boolean> = {
+		"webgl.force-enabled": true,
+	};
+	if (raw) firefoxUserPrefs[SANITIZE_RENDERER_PREF] = false;
 	const browser = await firefox.launch({
 		executablePath,
 		headless,
 		env,
 		// The launch forces WebGL on, which can choose another device.
-		firefoxUserPrefs: { "webgl.force-enabled": true },
+		firefoxUserPrefs,
 	});
 	try {
 		const page = await browser.newPage();
@@ -158,4 +185,28 @@ async function readGpu(
  */
 export function rendersOnHardware(gpu: Gpu | null): gpu is Gpu {
 	return gpu !== null && !isSoftwareRenderer(gpu[1]);
+}
+
+/**
+ * The vendor that made `gpu` (NVIDIA, AMD, Intel or Apple), or null.
+ *
+ * The renderer names the device and is read first: Linux Firefox can report an
+ * NVIDIA or AMD GPU under the "Mesa" vendor, and Mesa's d3d12 driver reports
+ * every GPU under "Microsoft Corporation". The first vendor the renderer names
+ * wins, as in "ANGLE (Intel, Intel(R) HD Graphics ...)".
+ */
+export function gpuFamily(
+	gpu: [string | null | undefined, string | null | undefined],
+): string | null {
+	for (const text of [gpu[1], gpu[0]]) {
+		let first: [number, string] | null = null;
+		for (const [family, pattern] of GPU_FAMILIES) {
+			const match = pattern.exec(text ?? "");
+			if (match && (!first || match.index < first[0])) {
+				first = [match.index, family];
+			}
+		}
+		if (first) return first[1];
+	}
+	return null;
 }

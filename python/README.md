@@ -161,6 +161,14 @@ claimed device has it (Windows and Apple Silicon Macs), and the adapter is the
 host's only when the identity claims the host's GPU. Otherwise
 `requestAdapter()` returns `null`, as Firefox does for a blocked or software GPU.
 
+`gpu_passthrough=`True`` is for a host that renders on the claimed GPU under
+another OS: a Linux container driving a Windows host's NVIDIA card through WSL's
+d3d12 driver, claiming Windows Firefox on an NVIDIA GPU. The launcher reads the
+driver's own renderer string (Firefox reports Mesa's d3d12 as "Generic
+Renderer") and refuses unless it is a hardware GPU from the claimed GPU's
+vendor. The canvas is then left uncovered, and WebGPU hands the page the
+host's adapter. Contexts of such a browser claim the launch's OS and GPU.
+
 ### Headless modes
 
 | `headless=` | What runs | Notes |
@@ -230,6 +238,7 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | `block_webgl` | `bool` | `False` | Disable WebGL. Warns: many WAFs check for it. |
 | `webgl_config` | `(vendor, renderer)` | drawn | Use one GPU fpgen has recorded for Firefox on `os` (see `camoufox.webgl.firefox_gpus`); any other pair raises `ValueError`. Needs `os`. |
 | `canvas_noise` | `bool` | on for another OS or GPU | Random canvas and WebGL readback, as in LibreWolf. Warns. See [The canvas on another OS](#the-canvas-on-another-os). |
+| `gpu_passthrough` | `bool` | `False` | The host renders on the claimed GPU's vendor under another OS (a Linux container on a Windows host's GPU through WSL's d3d12). Checks the host's GPU and raises unless it is hardware from that vendor; leaves the canvas uncovered and WebGPU on. Not with `canvas_noise` on or `block_webgl`. See [The canvas on another OS](#the-canvas-on-another-os). |
 | `disable_coop` | `bool` | `False` | Turn off Cross-Origin-Opener-Policy so elements in cross-origin iframes (such as the Turnstile checkbox) can be clicked. Warns. |
 | `main_world_eval` | `bool` | `False` | Allow `page.evaluate("mw:...")` and `mw:` init scripts to run in the page's own world. |
 | `allow_addon_new_tab` | `bool` | `False` | Let addons open tabs. |

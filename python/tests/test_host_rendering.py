@@ -23,7 +23,9 @@ from camoufox.host_rendering import (  # noqa: E402
     BASELINE_OVERRIDES_PREF,
     CANVAS_PLACEHOLDER_TARGETS,
     FEATURE_BLOCKED_DEVICE,
+    FEATURE_STATUS_OK,
     WEBGPU_BLOCKLIST_PREF,
+    gpu_family,
     has_canvas_placeholder,
     host_gpu,
     set_webgpu,
@@ -313,3 +315,126 @@ class TestHostIdentity:
     @pytest.mark.parametrize("canvas_noise", [False, True])
     def test_a_callers_explicit_choice_records_nothing(self, canvas_noise):
         assert self.attach(False, canvas_noise) is None
+
+
+# Mesa's d3d12 driver under WSL, as Firefox reports it with
+# webgl.sanitize-unmasked-renderer off; sanitized, the renderer is
+# "Generic Renderer" and names no vendor.
+WSL_NVIDIA = ("Microsoft Corporation", "D3D12 (NVIDIA GeForce RTX 4090)")
+WSL_WARP = ("Microsoft Corporation", "D3D12 (Microsoft Basic Render Driver)")
+WINDOWS_AMD_GPU = ("Google Inc. (AMD)", "ANGLE (AMD, Radeon R9 200 Series Direct3D11 vs_5_0 ps_5_0), or similar")
+
+
+@contextmanager
+def on_passthrough_host(gpu, os_key="lin"):
+    """A host whose Firefox renders on `gpu`, read with the renderer unsanitized."""
+    probes = []
+
+    def probe(executable_path, headless, env, raw=False):
+        probes.append(raw)
+        return gpu
+
+    with on_host(gpu, os_key):
+        with mock.patch.object(utils, "host_gpu", probe):
+            yield probes
+
+
+class TestGpuPassthrough:
+    """The host renders on the claimed GPU's vendor under another OS (a Linux
+    container on a Windows host's GPU): the canvas stays uncovered and WebGPU
+    keeps its adapter."""
+
+    def test_the_claimed_gpu_renders_uncovered_without_a_warning(self):
+        with on_passthrough_host(WSL_NVIDIA) as probes, warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            options, config = launch(
+                os="windows", webgl_config=WINDOWS_GPU, gpu_passthrough=True, i_know_what_im_doing=False
+            )
+
+        assert (config["webGl:vendor"], config["webGl:renderer"]) == WINDOWS_GPU
+        assert not placeholder(options)
+        assert not any("canvas_noise" in str(w.message) for w in caught)
+        assert probes == [True]
+
+    def test_webgpu_keeps_the_adapter(self):
+        with on_passthrough_host(WSL_NVIDIA):
+            options, _ = launch(os="windows", webgl_config=WINDOWS_GPU, gpu_passthrough=True)
+
+        assert options["firefox_user_prefs"][WEBGPU_BLOCKLIST_PREF] == FEATURE_STATUS_OK
+        assert webgpu(options) == (True, False)
+
+    def test_off_the_same_launch_is_covered_and_blocked(self):
+        with on_passthrough_host(WSL_NVIDIA) as probes:
+            options, _ = launch(os="windows", webgl_config=WINDOWS_GPU)
+
+        assert placeholder(options)
+        assert webgpu(options) == (True, True)
+        assert probes == []
+
+    def test_without_a_named_gpu_one_of_the_hosts_vendor_is_drawn(self):
+        for _ in range(5):
+            with on_passthrough_host(WSL_NVIDIA):
+                _, config = launch(os="windows", gpu_passthrough=True)
+
+            assert gpu_family((config["webGl:vendor"], config["webGl:renderer"])) == "NVIDIA"
+
+    def test_another_vendors_gpu_raises(self):
+        with on_passthrough_host(WSL_NVIDIA), pytest.raises(ValueError, match="NVIDIA"):
+            launch(os="windows", webgl_config=WINDOWS_AMD_GPU, gpu_passthrough=True)
+
+    @pytest.mark.parametrize("gpu", [WSL_WARP, SOFTWARE_GPU, None])
+    def test_a_software_renderer_or_no_webgl_raises(self, gpu):
+        with on_passthrough_host(gpu), pytest.raises(ValueError, match="not a hardware GPU"):
+            launch(os="windows", webgl_config=WINDOWS_GPU, gpu_passthrough=True)
+
+    def test_canvas_noise_conflicts_before_any_probe(self):
+        with on_passthrough_host(WSL_NVIDIA) as probes, pytest.raises(ValueError, match="canvas_noise"):
+            launch(os="windows", gpu_passthrough=True, canvas_noise=True)
+
+        assert probes == []
+
+    def test_block_webgl_conflicts(self):
+        with on_passthrough_host(WSL_NVIDIA), pytest.raises(ValueError, match="block_webgl"):
+            launch(os="windows", gpu_passthrough=True, block_webgl=True)
+
+    def test_contexts_claim_the_launchs_os_and_gpu(self):
+        with on_passthrough_host(WSL_NVIDIA):
+            options, _ = launch(os="windows", webgl_config=WINDOWS_GPU, gpu_passthrough=True)
+
+        assert utils.host_identity(options, None, True) == ("win", WINDOWS_GPU)
+
+    def test_a_context_of_a_passthrough_browser_claims_the_launch(self):
+        browser = browser_on_host(WINDOWS_GPU)
+        browser._camoufox_host_identity = ("win", WINDOWS_GPU)
+        sync_api.NewContext(browser)
+
+        script = browser.new_context.return_value.add_init_script.call_args.args[0]
+        assert 'setNavigatorPlatform("Win32")' in script
+        assert renderer_of(browser.new_context.return_value) == WINDOWS_GPU[1]
+
+
+@pytest.mark.parametrize(
+    "gpu, family",
+    [
+        (WSL_NVIDIA, "NVIDIA"),
+        (("Microsoft", "D3D12 (AMD Radeon RX 6800 XT)"), "AMD"),
+        (("Microsoft Corporation", "D3D12 (Intel(R) UHD Graphics 630)"), "Intel"),
+        (WSL_WARP, None),
+        (WINDOWS_GPU, "NVIDIA"),
+        (WINDOWS_AMD_GPU, "AMD"),
+        (("Google Inc. (Intel)", "ANGLE (Intel, Intel(R) HD Graphics 400 Direct3D11 vs_5_0 ps_5_0), or similar"), "Intel"),
+        (("ATI Technologies Inc.", "Radeon HD 3200 Graphics, or similar"), "AMD"),
+        (("Apple", "Apple M1, or similar"), "Apple"),
+        (("Intel Inc.", "Intel(R) HD Graphics, or similar"), "Intel"),
+        (("Mesa", "GeForce GTX 480, or similar"), "NVIDIA"),
+        (("Mesa", "Radeon HD 3200 Graphics, or similar"), "AMD"),
+        (("nouveau", "GeForce GTX 980, or similar"), "NVIDIA"),
+        (("NVIDIA Corporation", "NVIDIA GeForce RTX 3080/PCIe/SSE2"), "NVIDIA"),
+        (("Intel", "Mesa Intel(R) UHD Graphics 620 (KBL GT2)"), "Intel"),
+        (("Broadcom", "Generic Renderer"), None),
+        (("Mozilla", "Mozilla"), None),
+    ],
+)
+def test_gpu_family(gpu, family):
+    """Strings fpgen recorded from Firefox, and drivers' own (unsanitized) ones."""
+    assert gpu_family(gpu) == family

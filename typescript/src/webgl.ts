@@ -16,6 +16,7 @@ import {
 	gpuScreenIsPlausible,
 	isSoftwareRenderer,
 } from "./fingerprints.js";
+import { gpuFamily } from "./host_rendering.js";
 import {
 	comparePyStr,
 	KeyError,
@@ -247,7 +248,8 @@ export function webglForGpu(
 
 /**
  * Draw a GPU for a synthetic identity, weighted as fpgen records Firefox on
- * `targetOs`, and its WebGL config.
+ * `targetOs`, and its WebGL config. With `family`, only that vendor's GPUs are
+ * drawn (host_rendering.gpuFamily).
  *
  * Only GPUs the rest of the identity can stand beside are drawn: never a
  * software rasteriser, a GPU the OS cannot report, the resistFingerprinting
@@ -263,6 +265,7 @@ export function sampleWebglForScreen(
 	height?: number | null,
 	seed?: Seed,
 	cores?: number | null,
+	family?: string | null,
 ): WebGLData {
 	const candidates = trace("gpu", targetOs).filter(
 		(result) =>
@@ -270,11 +273,14 @@ export function sampleWebglForScreen(
 			result.value.renderer !== RFP_RENDERER &&
 			gpuFitsOs(result.value.renderer, targetOs) &&
 			gpuFitsMachine(result.value.renderer, targetOs, cores, width, height) &&
-			gpuScreenIsPlausible(result.value.renderer, width, height),
+			gpuScreenIsPlausible(result.value.renderer, width, height) &&
+			(family == null ||
+				gpuFamily([result.value.vendor, result.value.renderer]) === family),
 	);
 	if (!candidates.length) {
+		const vendor = family ? `${family} ` : "";
 		throw new ValueError(
-			`No recorded ${targetOs} GPU fits a ${pyStr(width)}x${pyStr(height)} screen`,
+			`No recorded ${targetOs} ${vendor}GPU fits a ${pyStr(width)}x${pyStr(height)} screen`,
 		);
 	}
 	const rng = new Random(seed);

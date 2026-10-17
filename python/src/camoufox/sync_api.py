@@ -110,8 +110,10 @@ def NewBrowser(
 
     # Options the caller built leave its contexts to the caller (host_identity).
     canvas_noise: Optional[bool] = False
+    gpu_passthrough = False
     if not from_options:
         canvas_noise = kwargs.get('canvas_noise')
+        gpu_passthrough = bool(kwargs.get('gpu_passthrough'))
         # Opt-in (2026-09-17). Pinning keeps the identity's core count by
         # constraining the browser to that many cores; it costs real CPU, needs
         # a launch lock, and does nothing on macOS. What it defends against is a
@@ -141,7 +143,7 @@ def NewBrowser(
             )
             return sync_attach_vd(context, virtual_display)
 
-        identity = host_identity(from_options, canvas_noise)
+        identity = host_identity(from_options, canvas_noise, gpu_passthrough)
         browser = playwright.firefox.launch(**from_options)
         attach_context_defaults(browser, no_viewport_default)
         browser._camoufox_host_identity = identity
@@ -178,8 +180,8 @@ def NewContext(
         browser: A Browser instance from NewBrowser or Camoufox.
         preset: A fingerprint preset dict to use. If None, fpgen draws a new identity.
         os: Target OS for the drawn identity ("windows", "macos", "linux"). On a browser launched
-            without canvas noise, contexts claim the host's OS and GPU, and another os or preset
-            raises ValueError.
+            without canvas noise, contexts claim the host's OS and GPU (with gpu_passthrough, the
+            launch's), and another os or preset raises ValueError.
         ff_version: Firefox major version to claim in the UA. Defaults to the browser's own.
         webrtc_ip: IPv4 or IPv6 address to spoof for WebRTC ICE candidates.
         proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).

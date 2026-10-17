@@ -19,6 +19,7 @@ import orjson
 from .coherence import gpu_fits_machine, gpu_fits_os
 from .fingerprints import _FPGEN_OS, gpu_screen_is_plausible, is_software_renderer
 from .fpgen_model import load_fpgen
+from .host_rendering import gpu_family
 
 # Extensions a release Firefox never exposes (draft extensions behind
 # webgl.enable-draft-extensions, or mobile-only): fpgen's corpus carries some
@@ -189,9 +190,11 @@ def sample_webgl_for_screen(
     height: Optional[int] = None,
     seed: Optional[int] = None,
     cores: Optional[int] = None,
+    family: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Draw a GPU for a synthetic identity, weighted as fpgen records Firefox
-    on `target_os`, and its WebGL config.
+    on `target_os`, and its WebGL config. With `family`, only that vendor's
+    GPUs are drawn (host_rendering.gpu_family).
 
     Only GPUs the rest of the identity can stand beside are drawn: never a
     software rasteriser, a GPU the OS cannot report, the resistFingerprinting
@@ -213,8 +216,10 @@ def sample_webgl_for_screen(
         and gpu_fits_os(result.value['renderer'], target_os)
         and gpu_fits_machine(result.value['renderer'], target_os, cores, width, height)
         and gpu_screen_is_plausible(result.value['renderer'], width, height)
+        and (family is None or gpu_family((result.value['vendor'], result.value['renderer'])) == family)
     )
     if not candidates:
-        raise ValueError(f'No recorded {target_os} GPU fits a {width}x{height} screen')
+        vendor = f'{family} ' if family else ''
+        raise ValueError(f'No recorded {target_os} {vendor}GPU fits a {width}x{height} screen')
     rng = Random(seed)
     return _webgl_config(target_os, _choose(rng, candidates), rng)

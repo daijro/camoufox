@@ -11,6 +11,7 @@ WebGPU hands the page the host's adapter, so the identity gets it only when it
 claims the host's GPU.
 """
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from typing import Any, Dict, Mapping, Optional, Tuple
@@ -33,6 +34,23 @@ CANVAS_PLACEHOLDER_TARGETS = (
 WEBGPU_BLOCKLIST_PREF = 'gfx.blacklist.webgpu'
 FEATURE_STATUS_OK = 1
 FEATURE_BLOCKED_DEVICE = 4
+
+# Firefox reports the renderer through SanitizeRenderer.cpp, which keeps a
+# vendor only for strings it recognises: Mesa's d3d12 driver under WSL says
+# "D3D12 (NVIDIA GeForce RTX 4090)", and Firefox reports "Generic Renderer"
+# for it. With the pref off it reports the driver's own string.
+SANITIZE_RENDERER_PREF = 'webgl.sanitize-unmasked-renderer'
+
+# The GPU vendors a renderer or vendor string can name, as Firefox reports them
+# on each OS ("ANGLE (NVIDIA, ...)", "GeForce GTX 980, or similar", "Intel
+# Inc.", "ATI Technologies Inc.") and as drivers do ("D3D12 (AMD Radeon RX
+# 6800)", "Mesa Intel(R) UHD Graphics 620 (KBL GT2)").
+_GPU_FAMILIES = (
+    ('NVIDIA', re.compile(r'NVIDIA|GeForce|Quadro|nouveau')),
+    ('AMD', re.compile(r'\bAMD\b|\bATI\b|Radeon|FirePro|Advanced Micro Devices')),
+    ('Intel', re.compile(r'Intel')),
+    ('Apple', re.compile(r'\bApple\b')),
+)
 
 # What the launcher itself adds to the browser's environment; none of it
 # changes which device Firefox renders on.
@@ -59,9 +77,12 @@ def has_canvas_placeholder(prefs: Mapping[str, Any]) -> bool:
     return CANVAS_PLACEHOLDER_TARGETS[0] in str(prefs.get(BASELINE_OVERRIDES_PREF) or '')
 
 
-def set_webgpu(prefs: Dict[str, Any], target_os: str, gpu: Gpu, host: Optional[Gpu]) -> None:
+def set_webgpu(
+    prefs: Dict[str, Any], target_os: str, gpu: Gpu, host: Optional[Gpu], passthrough: bool = False
+) -> None:
     """Expose navigator.gpu where Firefox on the claimed device has it, with the
-    host's adapter only when `gpu` is the host's hardware GPU.
+    host's adapter only when `gpu` is the host's hardware GPU, or when the
+    launch passes the host's GPU through (gpu_passthrough).
 
     Firefox enables WebGPU on Windows and on Apple Silicon Macs only
     (dom.webgpu.enabled in StaticPrefList.yaml). Any other adapter would
@@ -72,36 +93,41 @@ def set_webgpu(prefs: Dict[str, Any], target_os: str, gpu: Gpu, host: Optional[G
     """
     enabled = prefs.setdefault('dom.webgpu.enabled', target_os == 'win' or (target_os == 'mac' and gpu[0] == 'Apple'))
     if enabled:
-        own_adapter = renders_on_hardware(host) and gpu == host
+        own_adapter = passthrough or (renders_on_hardware(host) and gpu == host)
         prefs.setdefault(WEBGPU_BLOCKLIST_PREF, FEATURE_STATUS_OK if own_adapter else FEATURE_BLOCKED_DEVICE)
 
 
-def host_gpu(executable_path: str, headless: bool, env: Mapping[str, Any]) -> Optional[Gpu]:
+def host_gpu(executable_path: str, headless: bool, env: Mapping[str, Any], raw: bool = False) -> Optional[Gpu]:
     """The (vendor, renderer) this machine's Firefox reports, or None without WebGL.
 
     Read from the binary about to launch, with no identity applied, under the
     same display: headless, Xvfb and a real display can each render on a
-    different device. The strings are the ones Firefox sanitizes itself.
+    different device. The strings are the ones Firefox sanitizes itself, or
+    with `raw` the driver's own renderer string (SANITIZE_RENDERER_PREF).
     """
     return _host_gpu(
         str(executable_path),
         bool(headless),
         tuple(sorted((k, str(v)) for k, v in env.items() if not k.startswith(_LAUNCHER_ENV))),
+        bool(raw),
     )
 
 
 @lru_cache(maxsize=None)
-def _host_gpu(executable_path: str, headless: bool, env: Tuple[Tuple[str, str], ...]) -> Optional[Gpu]:
+def _host_gpu(executable_path: str, headless: bool, env: Tuple[Tuple[str, str], ...], raw: bool = False) -> Optional[Gpu]:
     def read() -> Optional[Gpu]:
         from playwright.sync_api import sync_playwright
 
+        prefs: Dict[str, Any] = {'webgl.force-enabled': True}
+        if raw:
+            prefs[SANITIZE_RENDERER_PREF] = False
         with sync_playwright() as playwright:
             browser = playwright.firefox.launch(
                 executable_path=executable_path,
                 headless=headless,
                 env=dict(env),
                 # The launch forces WebGL on, which can choose another device.
-                firefox_user_prefs={'webgl.force-enabled': True},
+                firefox_user_prefs=prefs,
             )
             try:
                 gpu = browser.new_page().evaluate(_READ_GPU)
@@ -122,3 +148,18 @@ def renders_on_hardware(gpu: Optional[Gpu]) -> bool:
     a machine whose driver failed to load.
     """
     return gpu is not None and not is_software_renderer(gpu[1])
+
+
+def gpu_family(gpu: Gpu) -> Optional[str]:
+    """The vendor that made `gpu` (NVIDIA, AMD, Intel or Apple), or None.
+
+    The renderer names the device and is read first: Linux Firefox can report
+    an NVIDIA or AMD GPU under the "Mesa" vendor, and Mesa's d3d12 driver
+    reports every GPU under "Microsoft Corporation". The first vendor the
+    renderer names wins, as in "ANGLE (Intel, Intel(R) HD Graphics ...)".
+    """
+    for text in (gpu[1], gpu[0]):
+        named = [(match.start(), family) for family, pattern in _GPU_FAMILIES if (match := pattern.search(text or ''))]
+        if named:
+            return min(named)[1]
+    return None

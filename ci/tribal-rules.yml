@@ -250,6 +250,7 @@ rules:
       - "v156.0.1-beta.32: the three RFP canvas targets in privacy.baselineFingerprintingProtection.overrides give RFP's readback (random, toDataURL ~770 bytes) with hardwareConcurrency untouched"
       - "v156.0.1-beta.32: a Linux host with an RTX 5080 and a Ryzen iGPU reported 'AMD, Radeon HD 3200 Graphics, or similar' to WebGL, headless and headed"
       - "v156.0.1-beta.32: a Linux identity whose config claimed availHeight 1053 on a 1080 screen read 1080 (nsRFPService::GetSpoofedScreenAvailSize, no Linux offset)"
+      - "Mesa d3d12_screen.cpp / d3d12_dxcore_screen.cpp: GL_VENDOR 'Microsoft Corporation', GL_RENDERER 'D3D12 (<adapter description>)'; SanitizeRenderer.cpp (156.0.1) matches no device in 'D3D12' and reports 'Generic Renderer'"
     rationale: >-
       Canvas and WebGL pixels come from the host's OS, driver and GPU. On the
       host's OS the identity claims the GPU Firefox reports there, read from the
@@ -273,7 +274,12 @@ rules:
       followBaselineProtection): the available screen is the screen less 48px
       on Windows, 76px on macOS and nothing on Linux, and more than one touch
       point is 5. A config claiming fpgen's recorded values read differently
-      on the page.
+      on the page. gpu_passthrough (opt-in, off by default) is the one
+      uncovered identity on another OS: a host that renders on the claimed
+      GPU's hardware under another OS, as a Linux container does on a Windows
+      host's GPU through WSL's d3d12 driver. The launchers check it by vendor
+      from the driver's unsanitized renderer (plan_passthrough,
+      planPassthrough), since Firefox sanitizes d3d12's to "Generic Renderer".
 
   - id: webgpu-follows-the-claimed-device
     title: navigator.gpu where Firefox on the claimed device has it; the host's adapter only behind the host's own GPU

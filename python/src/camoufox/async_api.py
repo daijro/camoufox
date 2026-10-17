@@ -108,8 +108,10 @@ async def AsyncNewBrowser(
 
     # Options the caller built leave its contexts to the caller (host_identity).
     canvas_noise: Optional[bool] = False
+    gpu_passthrough = False
     if not from_options:
         canvas_noise = kwargs.get('canvas_noise')
+        gpu_passthrough = bool(kwargs.get('gpu_passthrough'))
         # Opt-in; see the note in sync_api.NewBrowser.
         kwargs.setdefault('pin_cpu_cores', False)
         from_options = await asyncio.get_event_loop().run_in_executor(
@@ -131,7 +133,8 @@ async def AsyncNewBrowser(
     pid = driver_pid(playwright) if pin_to else None
     if not pid:
         return await _launch(
-            playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise
+            playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise,
+            gpu_passthrough,
         )
     # The browser inherits the driver's mask at spawn, so two concurrent launches
     # on one driver must not interleave pin/restore: the second pin would land on
@@ -140,7 +143,8 @@ async def AsyncNewBrowser(
         previous = cpu_affinity.pin(pid, pin_to)
         try:
             return await _launch(
-                playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise
+                playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise,
+                gpu_passthrough,
             )
         finally:
             cpu_affinity.restore(pid, previous)
@@ -164,6 +168,7 @@ async def _launch(
     no_viewport_default: bool,
     virtual_display: Optional[VirtualDisplay],
     canvas_noise: Optional[bool],
+    gpu_passthrough: bool,
 ) -> Union[Browser, BrowserContext]:
     if persistent_context:
         context = await playwright.firefox.launch_persistent_context(
@@ -171,7 +176,9 @@ async def _launch(
         )
         return await async_attach_vd(context, virtual_display)
 
-    identity = await asyncio.get_running_loop().run_in_executor(None, host_identity, from_options, canvas_noise)
+    identity = await asyncio.get_running_loop().run_in_executor(
+        None, host_identity, from_options, canvas_noise, gpu_passthrough
+    )
     browser = await playwright.firefox.launch(**from_options)
     attach_context_defaults(browser, no_viewport_default)
     browser._camoufox_host_identity = identity
@@ -207,8 +214,8 @@ async def AsyncNewContext(
         browser: A Browser instance from AsyncNewBrowser or AsyncCamoufox.
         preset: A fingerprint preset dict to use. If None, fpgen draws a new identity.
         os: Target OS for the drawn identity ("windows", "macos", "linux"). On a browser launched
-            without canvas noise, contexts claim the host's OS and GPU, and another os or preset
-            raises ValueError.
+            without canvas noise, contexts claim the host's OS and GPU (with gpu_passthrough, the
+            launch's), and another os or preset raises ValueError.
         ff_version: Firefox major version to claim in the UA. Defaults to the browser's own.
         webrtc_ip: IPv4 or IPv6 address to spoof for WebRTC ICE candidates.
         proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).

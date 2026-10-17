@@ -23,6 +23,8 @@ const {
 	BASELINE_OVERRIDES_PREF,
 	CANVAS_PLACEHOLDER_TARGETS,
 	FEATURE_BLOCKED_DEVICE,
+	FEATURE_STATUS_OK,
+	gpuFamily,
 	hasCanvasPlaceholder,
 	hostGpu,
 	setWebgpu,
@@ -416,4 +418,183 @@ describe("hostIdentity", () => {
 	])("a caller's explicit choice (%s) records nothing", async (canvasNoise) => {
 		expect(await identity(false, canvasNoise)).toBeNull();
 	});
+});
+
+// Mesa's d3d12 driver under WSL, as Firefox reports it with
+// webgl.sanitize-unmasked-renderer off; sanitized, the renderer is
+// "Generic Renderer" and names no vendor.
+const WSL_NVIDIA: Gpu = [
+	"Microsoft Corporation",
+	"D3D12 (NVIDIA GeForce RTX 4090)",
+];
+const WSL_WARP: Gpu = [
+	"Microsoft Corporation",
+	"D3D12 (Microsoft Basic Render Driver)",
+];
+const WINDOWS_AMD_GPU: Gpu = [
+	"Google Inc. (AMD)",
+	"ANGLE (AMD, Radeon R9 200 Series Direct3D11 vs_5_0 ps_5_0), or similar",
+];
+
+/** A host whose Firefox renders on `gpu`, read with the renderer unsanitized. */
+function onPassthroughHost(gpu: Gpu | null): boolean[] {
+	const probes: boolean[] = [];
+	onHost(gpu);
+	deps.hostGpu = async (_executablePath, _headless, _env, raw = false) => {
+		probes.push(raw);
+		return gpu;
+	};
+	return probes;
+}
+
+describe.skipIf(!MODEL.ok)("gpu_passthrough", () => {
+	it("the claimed GPU renders uncovered without a warning", async () => {
+		const probes = onPassthroughHost(WSL_NVIDIA);
+		const {
+			result,
+			error,
+			warnings: caught,
+		} = await warnings.recordWarnings(() =>
+			utils.launchOptions({
+				env: { HOME },
+				os: "windows",
+				webgl_config: WINDOWS_GPU,
+				gpu_passthrough: true,
+			}),
+		);
+		if (error) throw error;
+
+		expect(gpuOf(configOf(result as any))).toEqual(WINDOWS_GPU);
+		expect(placeholder(result as any)).toBe(false);
+		expect(caught.some((w) => w.message.includes("canvas_noise"))).toBe(false);
+		expect(probes).toEqual([true]);
+	});
+
+	it("WebGPU keeps the adapter", async () => {
+		onPassthroughHost(WSL_NVIDIA);
+		const { options } = await launch({
+			os: "windows",
+			webgl_config: WINDOWS_GPU,
+			gpu_passthrough: true,
+		});
+
+		expect(options.firefoxUserPrefs[WEBGPU_BLOCKLIST_PREF]).toBe(
+			FEATURE_STATUS_OK,
+		);
+		expect(webgpu(options)).toEqual([true, false]);
+	});
+
+	it("off, the same launch is covered and blocked", async () => {
+		const probes = onPassthroughHost(WSL_NVIDIA);
+		const { options } = await launch({
+			os: "windows",
+			webgl_config: WINDOWS_GPU,
+		});
+
+		expect(placeholder(options)).toBe(true);
+		expect(webgpu(options)).toEqual([true, true]);
+		expect(probes).toEqual([]);
+	});
+
+	it("without a named GPU, one of the host's vendor is drawn", async () => {
+		for (let i = 0; i < 5; i++) {
+			onPassthroughHost(WSL_NVIDIA);
+			const { config } = await launch({ os: "windows", gpu_passthrough: true });
+
+			expect(gpuFamily(gpuOf(config) as Gpu)).toBe("NVIDIA");
+		}
+	});
+
+	it("another vendor's GPU throws", async () => {
+		onPassthroughHost(WSL_NVIDIA);
+		await expect(
+			launch({
+				os: "windows",
+				webgl_config: WINDOWS_AMD_GPU,
+				gpu_passthrough: true,
+			}),
+		).rejects.toThrow("NVIDIA");
+	});
+
+	it.each([
+		[WSL_WARP],
+		[SOFTWARE_GPU],
+		[null],
+	])("a software renderer or no WebGL throws (%j)", async (gpu) => {
+		onPassthroughHost(gpu);
+		await expect(
+			launch({
+				os: "windows",
+				webgl_config: WINDOWS_GPU,
+				gpu_passthrough: true,
+			}),
+		).rejects.toThrow("not a hardware GPU");
+	});
+
+	it("canvas_noise conflicts before any probe", async () => {
+		const probes = onPassthroughHost(WSL_NVIDIA);
+		await expect(
+			launch({ os: "windows", gpu_passthrough: true, canvas_noise: true }),
+		).rejects.toThrow("canvas_noise");
+		expect(probes).toEqual([]);
+	});
+
+	it("block_webgl conflicts", async () => {
+		onPassthroughHost(WSL_NVIDIA);
+		await expect(
+			launch({ os: "windows", gpu_passthrough: true, block_webgl: true }),
+		).rejects.toThrow("block_webgl");
+	});
+
+	it("contexts claim the launch's OS and GPU", async () => {
+		onPassthroughHost(WSL_NVIDIA);
+		const { options } = await launch({
+			os: "windows",
+			webgl_config: WINDOWS_GPU,
+			gpu_passthrough: true,
+		});
+
+		expect(await utils.hostIdentity(options, undefined, true)).toEqual([
+			"win",
+			WINDOWS_GPU,
+		]);
+	});
+
+	it("a context of a passthrough browser claims the launch", async () => {
+		const { browser, calls } = browserOnHost(WINDOWS_GPU);
+		browser._camoufoxHostIdentity = ["win", WINDOWS_GPU];
+		await NewContext(browser);
+
+		expect(calls.script).toContain('setNavigatorPlatform("Win32")');
+		expect(rendererOf(calls.script)).toBe(WINDOWS_GPU[1]);
+	});
+});
+
+// Strings fpgen recorded from Firefox, and drivers' own (unsanitized) ones.
+it.each([
+	[WSL_NVIDIA, "NVIDIA"],
+	[["Microsoft", "D3D12 (AMD Radeon RX 6800 XT)"], "AMD"],
+	[["Microsoft Corporation", "D3D12 (Intel(R) UHD Graphics 630)"], "Intel"],
+	[WSL_WARP, null],
+	[WINDOWS_GPU, "NVIDIA"],
+	[WINDOWS_AMD_GPU, "AMD"],
+	[
+		[
+			"Google Inc. (Intel)",
+			"ANGLE (Intel, Intel(R) HD Graphics 400 Direct3D11 vs_5_0 ps_5_0), or similar",
+		],
+		"Intel",
+	],
+	[["ATI Technologies Inc.", "Radeon HD 3200 Graphics, or similar"], "AMD"],
+	[["Apple", "Apple M1, or similar"], "Apple"],
+	[["Intel Inc.", "Intel(R) HD Graphics, or similar"], "Intel"],
+	[["Mesa", "GeForce GTX 480, or similar"], "NVIDIA"],
+	[["Mesa", "Radeon HD 3200 Graphics, or similar"], "AMD"],
+	[["nouveau", "GeForce GTX 980, or similar"], "NVIDIA"],
+	[["NVIDIA Corporation", "NVIDIA GeForce RTX 3080/PCIe/SSE2"], "NVIDIA"],
+	[["Intel", "Mesa Intel(R) UHD Graphics 620 (KBL GT2)"], "Intel"],
+	[["Broadcom", "Generic Renderer"], null],
+	[["Mozilla", "Mozilla"], null],
+] as Array<[Gpu, string | null]>)("gpuFamily(%j) is %s", (gpu, family) => {
+	expect(gpuFamily(gpu)).toBe(family);
 });
