@@ -40,6 +40,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "animation-timing",
         "audio-frequency-noise",
         "baseline-protections",
+        "context-app-version",
         "context-lists-across-processes",
         "context-os-system-font",
         "fingerprint-setter-seal",
