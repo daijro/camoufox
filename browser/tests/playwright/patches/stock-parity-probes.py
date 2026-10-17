@@ -16,6 +16,10 @@ an invariant stock Firefox 152 holds:
                       asked for: one event, deltaMode 0, deltaY 300
   wheel-notches       the same scroll with humanize=True arrives as 3 events
                       with wheelDeltaY a multiple of 120, as a physical wheel
+  wheel-scaled        wheel-default again with the browser rendering at 2x:
+                      still deltaY 300, not 300 / devicePixelRatio
+  wheel-spoofed-dpr   wheel-default again at 1x with an identity claiming
+                      devicePixelRatio 2: still deltaY 300, not 600
   query-cost          matchMedia('(color: 8)') and navigator.hardwareConcurrency
                       cost about what matchMedia('(min-width: 1px)') and
                       navigator.userAgent do (no sync IPC per read)
@@ -200,23 +204,39 @@ def run_probes(binary, port):
         return out
 
 
-def probe_wheel(binary, port, humanize):
+def probe_wheel(binary, port, humanize, scale=None, identity_dpr=None):
     """One scroll of 300px, with humanize on or off.
 
     Off (the default) the caller's delta is delivered verbatim, which is what
     upstream's own suite asserts. On, the scroll is quantised into the notches a
     physical wheel produces. Both are shipped behaviour, so both are checked.
+
+    `scale` pins layout.css.devPixelsPerPx, the scale a HiDPI display also
+    sets. The chrome window renders at that scale too, and a pixel delta sent
+    through it arrived divided by it (300 -> 150 at 2x).
+
+    `identity_dpr` sets window.devicePixelRatio in the config. MaskConfig
+    answers it in the parent process too, so the chrome window's own
+    devicePixelRatio reports it rather than the real scale; a correction scaled
+    by that number would deliver 600 at 1x.
+
+    Returns (events, whether the page really renders at 2dppx). The page's
+    devicePixelRatio cannot tell: it is the identity's. The resolution media
+    query is not spoofed.
     """
     from camoufox.sync_api import Camoufox
 
+    prefs = {"layout.css.devPixelsPerPx": str(scale)} if scale else {}
+    config = {"window.devicePixelRatio": float(identity_dpr)} if identity_dpr else {}
     with Camoufox(headless=True, executable_path=str(binary), humanize=humanize,
-                  i_know_what_im_doing=True) as b:
+                  firefox_user_prefs=prefs, config=config, i_know_what_im_doing=True) as b:
         page = b.new_page()
         page.goto(f"http://localhost:{port}/")
         page.mouse.move(200, 200)
         page.mouse.wheel(0, 300)
         page.wait_for_timeout(1500)
-        return json.loads(page.evaluate("() => document.body.dataset.wheel || '[]'"))
+        events = json.loads(page.evaluate("() => document.body.dataset.wheel || '[]'"))
+        return events, page.evaluate("() => matchMedia('(resolution: 2dppx)').matches")
 
 
 def relaunch_timezones(binary, port):
@@ -247,7 +267,9 @@ def main() -> int:
     server, port = serve()
     try:
         out = run_probes(binary, port)
-        out["wheelHumanized"] = probe_wheel(binary, port, humanize=True)
+        out["wheelHumanized"], _ = probe_wheel(binary, port, humanize=True)
+        out["wheelScaled"], out["wheelScaled2x"] = probe_wheel(binary, port, humanize=False, scale=2)
+        out["wheelSpoofed"], out["wheelSpoofed2x"] = probe_wheel(binary, port, humanize=False, identity_dpr=2)
         relaunch = relaunch_timezones(binary, port)
     finally:
         server.shutdown()
@@ -283,6 +305,16 @@ def main() -> int:
     # Default: the delta the caller asked for, in pixels, as one event.
     if len(wheel) != 1 or wheel[0]["mode"] != 0 or wheel[0]["dy"] != 300:
         failures.append(f"wheel-default: wheel(0, 300) gave {wheel}")
+    scaled = out["wheelScaled"]
+    if not out["wheelScaled2x"]:
+        failures.append("wheel-scaled: the page does not render at 2dppx at devPixelsPerPx 2 -- check is vacuous")
+    if len(scaled) != 1 or scaled[0]["mode"] != 0 or scaled[0]["dy"] != 300:
+        failures.append(f"wheel-scaled: wheel(0, 300) at 2x gave {scaled}")
+    spoofed = out["wheelSpoofed"]
+    if out["wheelSpoofed2x"]:
+        failures.append("wheel-spoofed-dpr: the page renders at 2dppx without devPixelsPerPx -- check is vacuous")
+    if len(spoofed) != 1 or spoofed[0]["mode"] != 0 or spoofed[0]["dy"] != 300:
+        failures.append(f"wheel-spoofed-dpr: wheel(0, 300) at 1x with an identity DPR of 2 gave {spoofed}")
     # humanize=True: notches, each carrying one native tick.
     humanized = out["wheelHumanized"]
     if len(humanized) != 3 or any(e["wd"] % 120 for e in humanized):
