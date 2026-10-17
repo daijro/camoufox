@@ -261,12 +261,21 @@ export class MouseDispatch {
   sendWheel(x, y, {deltaX, deltaY, deltaZ, deltaMode, lineOrPageDeltaX, lineOrPageDeltaY, nativeNotches = false}) {
     const {x: absX, y: absY} = this.toAbsolute(x, y);
     const utils = this._win.windowUtils;
+    // Pixel deltas go to the widget in device pixels, and the page divides
+    // them by its device pixel ratio: at layout.css.devPixelsPerPx 2 (or on a
+    // 2x display), wheel(0, 300) reached the page as deltaY 150. Scale by the
+    // ratio the chrome window really renders at, measured from a CSS pixel's
+    // device size. Not this._win.devicePixelRatio: MaskConfig answers that in
+    // the parent process too, with the identity's ratio.
+    const scale = deltaMode === 0 /* WheelEvent.DOM_DELTA_PIXEL */
+        ? utils.toTopLevelWidgetRect(0, 0, 1, 1).width
+        : 1;
     utils.sendWheelEvent(
       absX,
       absY,
-      deltaX,
-      deltaY,
-      deltaZ,
+      deltaX * scale,
+      deltaY * scale,
+      deltaZ * scale,
       deltaMode,
       this._args.modifiers,
       lineOrPageDeltaX,
