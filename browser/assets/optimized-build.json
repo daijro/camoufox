@@ -1,0 +1,10 @@
+{
+  "firefox": "156.0.1",
+  "rust": "1.95.0",
+  "profile": {
+    "repository": "daijro/camoufox",
+    "tag": null,
+    "asset": "pgo-profile.tar.xz",
+    "sha256": null
+  }
+}

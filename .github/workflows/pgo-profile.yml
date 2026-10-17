@@ -1,0 +1,220 @@
+# Trains the PGO profile every optimized build consumes (ci/pgo.py).
+#
+# Stock Firefox is built with cross-language LTO and a profile from an
+# instrumented build running Mozilla's training pages. Without both, Gecko's
+# C++ ran 1.3-1.8x stock while JIT-compiled script did not -- a ratio a page
+# can time. This workflow is stage one of stock's recipe: build instrumented,
+# train, publish the merged profile as a release asset. Pin its output in
+# browser/assets/optimized-build.json (the job summary prints the JSON to paste).
+#
+# Run once per Firefox version, or with a new revision to retrain.
+name: PGO profile
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: "Profile revision for this Firefox version (bump to retrain)"
+        required: true
+        default: "1"
+      reuse_build_from:
+        description: "Run id whose instrumented browser to train (skips the build; artifacts last 7 days)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  instrumented:
+    name: Instrumented build
+    if: inputs.reuse_build_from == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    env:
+      # browser/scripts/patch.py writes the mozconfig from this and defaults
+      # to macOS arm64 without it.
+      BUILD_TARGET: linux,x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@8831c82abf29b34eb2caac48d5f999ecfc0d8eef # v4.1
+        with:
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+          remove-docker-images: "true"
+          remove-cached-tools: "true"
+          remove-swapfile: "true"
+
+      - name: Remove unwanted tools
+        run: |
+          sudo apt-get remove -y '^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' 'php.*' \
+            '^mongodb-.*' '^mysql-.*' > /dev/null 2>&1 || true
+          sudo apt-get remove -y azure-cli google-chrome-stable firefox mono-devel \
+            libgl1-mesa-dri --fix-missing > /dev/null 2>&1 || true
+          sudo apt-get autoremove -y > /dev/null 2>&1 || true
+          sudo apt-get clean > /dev/null 2>&1 || true
+          df -h /
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install build dependencies
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18
+          sudo apt-get install -y lld-18 clang-18
+          sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-18 100
+          sudo apt-get update
+          sudo apt-get install -y msitools p7zip-full aria2 ccache libsqlite3-dev zstd
+
+      - name: Pin the Rust release the optimized build links with
+        run: python3 -m ci.pgo toolchain
+
+      # restore + save, not actions/cache: its save runs only when the whole job
+      # succeeds, and a failed first run threw away two hours of compilation.
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.ccache
+          # Instrumented objects differ from the optimized build's; own key.
+          key: ccache-pgogen-${{ hashFiles('browser/upstream.sh') }}-${{ hashFiles('browser/patches/**', 'browser/additions/**', 'browser/assets/*.mozconfig', 'browser/assets/optimized-build.json') }}
+          restore-keys: |
+            ccache-pgogen-${{ hashFiles('browser/upstream.sh') }}-
+
+      - name: Create swap
+        run: |
+          sudo fallocate -l 24G /swapfile && sudo chmod 600 /swapfile
+          sudo mkswap /swapfile && sudo swapon /swapfile
+          free -h
+
+      - run: pip install -r ci/requirements.txt
+
+      - name: Prepare the source tree
+        run: |
+          ccache -M 8G && ccache -z
+          echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
+          python3 -m ci.run_prepare
+
+      - name: Check the rustc/clang pairing
+        run: python3 -m ci.pgo check
+
+      - name: Instrumented build
+        env:
+          CARGO_BUILD_JOBS: "1"
+          CAMOUFOX_PGO_GENERATE: "1"
+        run: python3 -m ci.run_build
+
+      - run: ccache -s
+        if: always()
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.ccache
+          key: ccache-pgogen-${{ hashFiles('browser/upstream.sh') }}-${{ hashFiles('browser/patches/**', 'browser/additions/**', 'browser/assets/*.mozconfig', 'browser/assets/optimized-build.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Package the instrumented browser
+        run: |
+          set -euo pipefail
+          . browser/upstream.sh
+          src="browser/camoufox-$version-$release/obj-x86_64-pc-linux-gnu/dist/bin"
+          # The launcher needs the bundled fonts and fontconfig next to the
+          # binary (a first run died on fontconfig/windows/fonts.conf), and
+          # properties.json beside it; mach does not put them there.
+          make -C browser stage-fonts
+          [ -f "$src/properties.json" ] || cp -v browser/settings/properties.json "$src/properties.json"
+          # fonts/ holds the bundle's group directories (browser/bundle/fonts/groups.json).
+          for required in camoufox-bin properties.json fonts/groups.json fonts/LMW fontconfig/windows; do
+            [ -e "$src/$required" ] || { echo "::error::instrumented dist is missing $required"; exit 1; }
+          done
+          # -h: dist/bin is built from symlinks into the source tree, which
+          # dangle on the runner that unpacks this.
+          tar -C "$(dirname "$src")" -chf - bin | zstd -3 -T0 -o pgo-instrumented.tar.zst
+          ls -lh pgo-instrumented.tar.zst
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pgo-instrumented
+          path: pgo-instrumented.tar.zst
+          retention-days: 7
+
+  train:
+    name: Training run
+    needs: instrumented
+    # Runs after a fresh build, or alone against an earlier run's artifact.
+    if: always() && (needs.instrumented.result == 'success' || (needs.instrumented.result == 'skipped' && inputs.reuse_build_from != ''))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      actions: read
+    env:
+      BUILD_TARGET: linux,x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y aria2 xvfb zstd msitools p7zip-full
+
+      - name: Pin the Rust release
+        run: python3 -m ci.pgo toolchain
+
+      - run: |
+          pip install -r ci/requirements.txt -e python
+          # fpgen downloads its model on first import with TLS verification
+          # OFF and no checksum, and its release picker can only ever reach the
+          # April-2025 model. Install the pinned one first: see
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
+
+      # The training run needs the source tree (build/pgo, testing/profiles,
+      # the mach virtualenv) and the bootstrapped llvm-profdata, not a build.
+      - name: Prepare the source tree
+        run: python3 -m ci.run_prepare
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pgo-instrumented
+          run-id: ${{ inputs.reuse_build_from || github.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Unpack the instrumented browser into the objdir
+        run: |
+          set -euo pipefail
+          . browser/upstream.sh
+          dist="browser/camoufox-$version-$release/obj-x86_64-pc-linux-gnu/dist"
+          mkdir -p "$dist"
+          zstd -dc pgo-instrumented.tar.zst | tar -C "$dist" -xf -
+          ls -l "$dist/bin/camoufox-bin"
+
+      - name: Training run
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m ci.pgo generate --out pgo-out
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m ci.pgo publish --dir pgo-out --revision "${{ inputs.revision }}"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pgo-profile
+          path: pgo-out/
+          if-no-files-found: ignore

@@ -50,3 +50,29 @@ mk_add_options MOZ_INSTALLER=0
 mk_add_options MOZ_AUTOMATION_INSTALLER=0
 
 # ac_add_options --enable-lto=cross
+
+# Optimized builds, as stock Firefox ships them: cross-language LTO plus PGO.
+# Without them Gecko's C++ ran 1.3-1.8x stock while JIT-compiled script did
+# not, and a page can time that ratio (JSON.parse over a regexp replace: ~3.3
+# here, ~2.2 in stock). CI sets these; ci/pgo.py has the details. A local
+# build without them is unchanged.
+#
+# The rest of stock's release configuration (about:buildconfig of 152.0.4):
+# Rust SIMD (encoding_rs: TextEncoder ran 1.44x stock without it), and -O3,
+# which configure selects by itself on Linux once PGO is on. Both stages get
+# the same flags, or the profile does not match the code it is applied to.
+if [ -n "$CAMOUFOX_PGO_GENERATE" ] || [ -n "$CAMOUFOX_LTO" ]; then
+  ac_add_options --enable-rust-simd
+fi
+if [ -n "$CAMOUFOX_PGO_GENERATE" ]; then
+  ac_add_options --enable-profile-generate=cross
+elif [ -n "$CAMOUFOX_LTO" ]; then
+  ac_add_options --enable-lto=cross
+  if [ -n "$CAMOUFOX_PGO_PROFILE" ]; then
+    ac_add_options --enable-profile-use=cross
+    ac_add_options --with-pgo-profile-path="$CAMOUFOX_PGO_PROFILE"
+  fi
+  if [ -n "$CAMOUFOX_PGO_JARLOG" ]; then
+    ac_add_options --with-pgo-jarlog="$CAMOUFOX_PGO_JARLOG"
+  fi
+fi
