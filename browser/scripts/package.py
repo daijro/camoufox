@@ -65,6 +65,29 @@ def font_groups_for(groups_file, oses):
     return sorted(out)
 
 
+def ascii_file_names(root):
+    """Rename every file under `root` whose name is not ASCII.
+
+    The release zip is extracted with `unzip`, and unzip 6.0 under a C/POSIX
+    locale (a Docker build, a bare SSH shell) reports each UTF-8 name as a
+    "mismatching local filename" and exits 1, stopping the consumer's install
+    -- though the zip stores the names correctly. The font bundle's Hiragino
+    faces are named in Japanese. Nothing reads a font by its file name
+    (fontconfig and the flat CoreText/DirectWrite directories take family names
+    from the font itself), so the ASCII part of the name is kept and the rest
+    replaced by a short digest of the original: stable across builds, unique.
+    """
+    for dirpath, _, files in os.walk(root):
+        for name in files:
+            if name.isascii():
+                continue
+            stem, ext = os.path.splitext(name)
+            kept = ''.join(c for c in stem if c.isascii() and (c.isalnum() or c in '_-')).rstrip('_-')
+            digest = hashlib.sha256(name.encode('utf-8')).hexdigest()[:12]
+            ascii_name = f"{kept}_u{digest}{ext if ext.isascii() else ''}"
+            os.rename(os.path.join(dirpath, name), os.path.join(dirpath, ascii_name))
+
+
 def add_includes_to_package(package_file, includes, fonts, new_file, target, version, src_dir):
     with tempfile.TemporaryDirectory() as temp_dir:
         # Extract package
@@ -157,6 +180,9 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target, ver
                         continue
                     seen.add(digest)
                     shutil.copy2(file, os.path.join(fonts_dir, os.path.basename(file)))
+
+        if os.path.isdir(fonts_dir):
+            ascii_file_names(fonts_dir)
 
         inject_locales(target_dir, target, version, src_dir)
 
