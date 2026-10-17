@@ -126,3 +126,23 @@ class TestCodecs:
         config, _ = launch(WIN_UA, config={"media:spoof_codecs": False, "media:hwCodecs": []})
         assert config["media:spoof_codecs"] is False
         assert config["media:hwCodecs"] == []
+
+
+class TestLookAndFeel:
+    """Glyph positioning of the claimed OS."""
+
+    @pytest.mark.parametrize("ua", [WIN_UA, MAC_UA])
+    def test_identity_gets_subpixel_positioning(self, launch, ua):
+        _, prefs = launch(ua)
+        assert prefs["gfx.text.subpixel-position.force-enabled"] is True
+
+    def test_host_os_identity_is_left_alone(self, launch, monkeypatch):
+        _, prefs = launch(LIN_UA)
+        assert "gfx.text.subpixel-position.force-enabled" not in prefs
+        monkeypatch.setattr(utils, "_host_os_key", lambda: "win")
+        _, prefs = launch(WIN_UA)
+        assert "gfx.text.subpixel-position.force-enabled" not in prefs
+
+    def test_caller_values_win(self, launch):
+        _, prefs = launch(WIN_UA, firefox_user_prefs={"gfx.text.subpixel-position.force-enabled": False})
+        assert prefs["gfx.text.subpixel-position.force-enabled"] is False
