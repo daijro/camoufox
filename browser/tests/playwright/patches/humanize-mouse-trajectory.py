@@ -35,6 +35,8 @@ What PASS means, for each generator:
     * those events are spread over a plausible human duration, with uneven
       gaps between them rather than a fixed cadence;
     * a humanized click still lands on the target element;
+    * a page's first humanized move enters from just inside the top edge,
+      above its destination, not out of the top-left corner;
     * without humanize, each move emits only its endpoint (pins the other
       direction so accidental always-on humanization is also caught).
 """
@@ -94,6 +96,18 @@ async def _collect_moves(humanize, engine=None):
         return await page.evaluate("moves"), dest
 
 
+async def _first_move_start(engine):
+    """The first mousemove a fresh page sees, and the viewport it was in."""
+    async with AsyncCamoufox(**_launch_kwargs(True, engine)) as browser:
+        page = await browser.new_page()
+        await page.set_content(BODY)
+        await page.evaluate(RECORDER)
+        viewport = await page.evaluate("({w: innerWidth, h: innerHeight})")
+        await page.mouse.move(viewport["w"] * 0.75, viewport["h"] * 0.75)
+        moves = await page.evaluate("moves")
+        return (moves[0][:2] if moves else None), viewport
+
+
 async def _humanized_click_hits_target(engine):
     async with AsyncCamoufox(**_launch_kwargs(True, engine)) as browser:
         page = await browser.new_page()
@@ -149,6 +163,17 @@ async def _check_engine(engine) -> bool:
     else:
         passed = False
         print(f"  FAIL: only {distinct} distinct gaps (spread {spread}ms) across {len(gaps)} -- looks like a fixed cadence")
+
+    # The entry point is within a quarter viewport of the destination's x, so
+    # the first event lands right of 0.4w; one out of the corner lands near 0.
+    first, viewport = await _first_move_start(engine)
+    print(f"\n=== first humanized move, {engine} ===")
+    print(f"  first mousemove: {first}  viewport: {viewport['w']}x{viewport['h']}")
+    if first and first[0] > viewport["w"] * 0.4 and first[1] < viewport["h"] * 0.25:
+        print("  PASS: the cursor entered from the top edge, above its destination")
+    else:
+        passed = False
+        print("  FAIL: the first move did not start inside the top edge above its destination")
 
     moves, clicked = await _humanized_click_hits_target(engine)
     print(f"\n=== humanized click, {engine} ===")
