@@ -71,9 +71,11 @@ to dispatch a point on the pixel the previous dispatch left the cursor on: a
 zero-displacement move produces no `eMouseMove`, so it is never acked, and
 that is the same deadlock reached from inside a curve rather than from
 `Page.dispatchMouseEvent`.
-`activateAndRun()` carries a 30s backstop for the other unbounded waits
-reachable from the same slot (`apz-repaints-flushed`, `TabSwitchDone`, the drag
-path's waits), none of which has failed yet.
+`apz-repaints-flushed` and the drag path's `juggler-drag-finalized` wait at
+most `kAckDeadlineMs` too: a missed flush dispatches anyway, a missed
+finalization means no drag session. `activateAndRun()` carries a 30s backstop
+for the waits still unbounded in the same slot (`TabSwitchDone`, the drag
+path's `dragover` and cross-process sends), none of which has failed yet.
 
 **The static check.** `browser/scripts/check-input-dispatch.py`, wired into the
 `static` job of `.github/workflows/tests.yml`. Two exemptions, both
