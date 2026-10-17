@@ -83,6 +83,12 @@ export function validateIP(ip: string): void {
 const IMPIT_CACHE_MAX = 8;
 const impitCache = new Map<string, Impit>();
 
+// Probing the exit IP through a proxy adds a hop and a TLS handshake behind it;
+// 5 s is not enough for a proxy that routes the long way round, and every URL
+// timing out fails the whole launch. Direct probes keep 5 s.
+export const DIRECT_IP_TIMEOUT_MS = 5000;
+export const PROXIED_IP_TIMEOUT_MS = 15000;
+
 function getImpit(proxy?: string): Impit {
 	const key = proxy ?? "";
 	const cached = impitCache.get(key);
@@ -95,7 +101,7 @@ function getImpit(proxy?: string): Impit {
 	// is what geoip trusts for the whole identity, so a MITM must not pick it.
 	const impit = new Impit({
 		proxyUrl: proxy,
-		timeout: 5000,
+		timeout: proxy ? PROXIED_IP_TIMEOUT_MS : DIRECT_IP_TIMEOUT_MS,
 		ignoreTlsErrors: false,
 	});
 	impitCache.set(key, impit);
