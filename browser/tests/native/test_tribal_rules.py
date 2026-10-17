@@ -604,6 +604,30 @@ def test_no_canvas_seed_is_declared_or_sent():
         )
 
 
+def test_audio_noise_follows_the_identity_unless_the_caller_opts_out():
+    """Seed 0 is stock audio in the browser; the launchers default to noise and
+    take audio_noise=False to send 0, for the launch and its contexts."""
+    from types import SimpleNamespace
+
+    from camoufox import utils
+
+    why = explain("audio-noise-is-opt-out")
+    manager = (BROWSER / "patches" / "audio-fingerprint-manager.patch").read_text(encoding="utf-8")
+    assert "if (seed == 0 || length == 0 || !data) {" in manager, why
+    assert "RoverfoxStorageManager::GetUint(key, seed) && seed != 0" in manager, why
+
+    assert inspect.signature(utils.launch_options).parameters["audio_noise"].default is True, why
+    assert utils.context_audio(SimpleNamespace()) is None, why
+    assert utils.context_audio(SimpleNamespace(_camoufox_audio_noise=False)) == {"audio:seed": 0}, why
+
+    sys.path.insert(0, str(REPO_ROOT))
+    from ci.run_build_tester import _MUST_VARY
+
+    assert "uniqueAudio" in _MUST_VARY, why
+    ts = (REPO_ROOT / "typescript" / "src" / "utils.ts").read_text(encoding="utf-8")
+    assert 'audio_noise === false' in ts and '{ "audio:seed": 0 }' in ts, why
+
+
 def test_cross_os_canvas_is_rfps_placeholder_and_spoofs_feed_baseline_protection():
     """The canvas cover is Firefox's RFP targets, identical in both launchers,
     and spoofed values go through baseline protection with the claimed OS."""

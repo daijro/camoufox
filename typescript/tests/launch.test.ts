@@ -1167,6 +1167,53 @@ describe.skipIf(!MODEL.ok)(
 			expect(config["audio:seed"]).toBe(9);
 		});
 
+		it("audio_noise: false renders stock audio", async () => {
+			expect((await launchConfig({ os: "linux" }))["audio:seed"]).not.toBe(0);
+			expect(
+				(await launchConfig({ os: "linux", audio_noise: false }))["audio:seed"],
+			).toBe(0);
+			const preset = fingerprints.getRandomPreset("windows", "150");
+			expect(
+				(
+					await launchConfig({ fingerprint_preset: preset, audio_noise: false })
+				)["audio:seed"],
+			).toBe(0);
+		});
+
+		it.each([
+			true,
+			false,
+		])("a caller's seed wins over audio_noise: %s", async (audioNoise) => {
+			const config = await launchConfig({
+				os: "linux",
+				config: { "audio:seed": 9 },
+				audio_noise: audioNoise,
+			});
+			expect(config["audio:seed"]).toBe(9);
+		});
+
+		it.each([
+			[undefined, false],
+			[true, false],
+			[false, true],
+		])("a context of a browser with _camoufoxAudioNoise %s has stock audio: %s", async (audioNoise, stock) => {
+			const { NewContext } = await import("../src/sync_api.js");
+			let script = "";
+			const browser: any = {
+				version: () => "150.0.2",
+				newContext: async () => ({
+					addInitScript: async (s: string) => {
+						script = s;
+					},
+				}),
+			};
+			if (audioNoise !== undefined) browser._camoufoxAudioNoise = audioNoise;
+			await NewContext(browser, { os: "linux" });
+
+			const seed = Number(/setAudioFingerprintSeed\((\d+)\)/.exec(script)?.[1]);
+			expect(seed === 0).toBe(stock);
+		});
+
 		it("a Windows fr-FR identity has French voices", async () => {
 			for (let i = 0; i < 5; i++) {
 				const config = await launchConfig({ os: "windows", locale: "fr-FR" });

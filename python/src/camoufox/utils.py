@@ -853,6 +853,14 @@ def context_identity(
     return host_name, gpu
 
 
+def context_audio(browser: Any) -> Optional[Dict[str, Any]]:
+    """Config overrides for a new context's audio: a browser launched with
+    audio_noise=False gives its contexts stock audio, as its own pages have."""
+    if vars(browser).get('_camoufox_audio_noise', True):
+        return None
+    return {'audio:seed': 0}
+
+
 def new_context_options(
     fingerprint: Dict[str, Any],
     context_kwargs: Dict[str, Any],
@@ -965,6 +973,7 @@ def launch_options(
     pin_cpu_cores: Optional[bool] = None,
     canvas_noise: Optional[bool] = None,
     gpu_passthrough: bool = False,
+    audio_noise: bool = True,
     **launch_options: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
@@ -1088,6 +1097,14 @@ def launch_options(
             Windows' adapter limits when a Windows identity runs elsewhere.
             Cannot be combined with canvas_noise=True or block_webgl.
             Default: False.
+        audio_noise (bool):
+            Perturb Web Audio output with a seed that follows the identity, so
+            each identity has its own audio hash (the default). With False the
+            browser renders audio as stock Firefox does: every machine
+            measured renders the standard OfflineAudioContext probe to the
+            same value, so no identity has a unique one. Contexts made with
+            NewContext follow the browser. An audio:seed in `config` wins
+            either way.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -1424,8 +1441,11 @@ def launch_options(
     # canvas seed: the browser adds no canvas noise (#528), and no glyph-spacing
     # noise either (ci/tribal-rules.yml: no-glyph-spacing-noise).
     if not _user_set_audio_seed:
-        _ident = identity_seed(config, _identity_salt)
-        config['audio:seed'] = ((_ident * 2654435761 + 97) & 0xFFFFFFFF) or 1
+        if audio_noise:
+            _ident = identity_seed(config, _identity_salt)
+            config['audio:seed'] = ((_ident * 2654435761 + 97) & 0xFFFFFFFF) or 1
+        else:
+            config['audio:seed'] = 0
 
     # Set geolocation
     if geoip:

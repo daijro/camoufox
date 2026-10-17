@@ -14,6 +14,7 @@ from .fingerprints import generate_context_fingerprint
 from .ip import Proxy, proxy_exit_geo
 from .utils import (
     attach_context_defaults,
+    context_audio,
     context_identity,
     host_identity,
     launch_options,
@@ -111,9 +112,11 @@ def NewBrowser(
     # Options the caller built leave its contexts to the caller (host_identity).
     canvas_noise: Optional[bool] = False
     gpu_passthrough = False
+    audio_noise = True
     if not from_options:
         canvas_noise = kwargs.get('canvas_noise')
         gpu_passthrough = bool(kwargs.get('gpu_passthrough'))
+        audio_noise = kwargs.get('audio_noise', True) is not False
         # Opt-in (2026-09-17). Pinning keeps the identity's core count by
         # constraining the browser to that many cores; it costs real CPU, needs
         # a launch lock, and does nothing on macOS. What it defends against is a
@@ -147,6 +150,7 @@ def NewBrowser(
         browser = playwright.firefox.launch(**from_options)
         attach_context_defaults(browser, no_viewport_default)
         browser._camoufox_host_identity = identity
+        browser._camoufox_audio_noise = audio_noise
         return sync_attach_vd(browser, virtual_display)
     finally:
         if pid:
@@ -173,7 +177,8 @@ def NewContext(
     Creates a new browser context with a unique fingerprint identity.
 
     Each context gets its own identity (navigator, screen, WebGL, fonts, voices),
-    drawn by fpgen unless a preset is given, with its own audio noise seed. All values are applied
+    drawn by fpgen unless a preset is given, with its own audio noise seed (stock audio on a
+    browser launched with audio_noise=False). All values are applied
     via addInitScript so they self-destruct before page scripts can detect them.
 
     Parameters:
@@ -202,7 +207,8 @@ def NewContext(
 
     os, webgl_config = context_identity(browser, os, preset)
     fp = generate_context_fingerprint(
-        preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config
+        preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config,
+        config_overrides=context_audio(browser),
     )
 
     context = browser.new_context(**new_context_options(fp, context_kwargs, proxy, geolocation))

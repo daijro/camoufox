@@ -241,6 +241,22 @@ rules:
       exception is an identity on another OS or GPU than the host's, whose
       canvas cannot agree with it (cross-os-canvas-is-the-rfp-placeholder).
 
+  - id: audio-noise-is-opt-out
+    title: Web Audio noise follows the identity by default; audio_noise=False renders stock audio
+    check: automated
+    evidence:
+      - "audio-fingerprint-manager.patch: seed 0 applies no transformation, and a context with seed 0 uses the launch's"
+      - "stock Firefox 152.0.4 renders the OfflineAudioContext probe to 75.83002272993326 on Windows (RTX 4090) and on Linux alike, measured 2026-09-26"
+    rationale: >-
+      The launchers seed Web Audio noise per identity so a returning identity
+      reproduces its own audio hash (#442/#765), and build-tester requires
+      audio to vary between contexts. A unique audio hash is also something no
+      stock Firefox has: every machine measured renders the standard probe to
+      the same value. audio_noise=False (launch option, default True) sends
+      seed 0 so the browser renders as stock, and NewContext contexts of that
+      browser get seed 0 too; an audio:seed the caller sets wins either way.
+      The default and build-tester's uniqueAudio check stay as they are.
+
   - id: cross-os-canvas-is-the-rfp-placeholder
     title: On the host's OS the identity claims the host's GPU; on another OS or GPU canvas readback is RFP's random placeholder
     check: automated

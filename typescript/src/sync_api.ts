@@ -25,6 +25,7 @@ import {
 	attachNoViewportDefault,
 	attachStockMediaDefaults,
 	attachVirtualDisplay,
+	contextAudio,
 	contextIdentity,
 	driverPid,
 	hostIdentity,
@@ -105,10 +106,12 @@ export async function NewBrowser(
 	// (hostIdentity).
 	let canvasNoise: boolean | undefined = false;
 	let gpuPassthrough = false;
+	let audioNoise = true;
 	try {
 		if (!fromOptions || !Object.keys(fromOptions).length) {
 			canvasNoise = kwargs.canvas_noise ?? undefined;
 			gpuPassthrough = Boolean(kwargs.gpu_passthrough);
+			audioNoise = kwargs.audio_noise !== false;
 			// Opt-in (2026-09-17). Pinning keeps the identity's core count by
 			// constraining the browser to that many cores; it costs real CPU,
 			// needs a launch lock, and does nothing on macOS. Off, the host's own
@@ -143,6 +146,7 @@ export async function NewBrowser(
 			virtualDisplay,
 			canvasNoise,
 			gpuPassthrough,
+			audioNoise,
 		);
 	try {
 		if (!pinTo) {
@@ -173,6 +177,7 @@ async function launchWith(
 	virtualDisplay: VirtualDisplay | null,
 	canvasNoise: boolean | undefined,
 	gpuPassthrough: boolean,
+	audioNoise: boolean,
 ): Promise<Browser | BrowserContext> {
 	// Persistent context. Python passes user_data_dir inside the options; the
 	// JS API takes it positionally. A user_data_dir alone also selects it.
@@ -210,6 +215,7 @@ async function launchWith(
 	attachStockMediaDefaults(browser);
 	attachDesktopOnlyWarning(browser);
 	(browser as any)._camoufoxHostIdentity = identity;
+	(browser as any)._camoufoxAudioNoise = audioNoise;
 	return attachVirtualDisplay(browser, virtualDisplay);
 }
 
@@ -248,8 +254,9 @@ export function camelCase(snake: string): string {
  *
  * Each context gets its own identity (navigator, screen, WebGL, fonts,
  * voices), drawn by fpgen unless a preset is given, with its own audio noise
- * seed. All values are applied via addInitScript so they self-destruct before
- * page scripts can detect them.
+ * seed (stock audio on a browser launched with audio_noise: false). All values
+ * are applied via addInitScript so they self-destruct before page scripts can
+ * detect them.
  */
 export async function NewContext(
 	browser: Browser,
@@ -288,6 +295,7 @@ export async function NewContext(
 		ff_version: ffVersion,
 		webrtc_ip: webrtcIp,
 		webgl_config: webglConfig,
+		config_overrides: contextAudio(browser),
 	});
 
 	// Merge the generated context options with user overrides (user wins). They

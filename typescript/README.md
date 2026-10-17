@@ -231,6 +231,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `main_world_eval` | `boolean` | `false` | Allow `page.evaluate("mw:...")` and `mw:` init scripts to run in the page's own world. |
 | `allow_addon_new_tab` | `boolean` | `false` | Let addons open tabs. |
 | `enable_cache` | `boolean` | `false` | Keep Firefox's page and request caches. Uses more memory. |
+| `audio_noise` | `boolean` | `true` | Noise Web Audio output with a seed that follows the identity. `false` renders audio as stock Firefox does (the same probe value on every machine); `NewContext` contexts follow the browser. |
 | `pin_cpu_cores` | `boolean` | `false` | Linux and Windows: pin the browser to as many cores as `navigator.hardwareConcurrency` claims. Costs CPU and serializes concurrent launches. |
 | `fingerprint` | fpgen fingerprint object | drawn | Use this fpgen fingerprint instead of drawing one. Warns. |
 | `fingerprint_preset` | `boolean \| object` | `undefined` | Opt into a recorded real-device preset instead of fpgen: `true` picks a random bundled one, an object uses that one. |

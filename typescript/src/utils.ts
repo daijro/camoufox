@@ -48,11 +48,11 @@ import {
 	addCanvasPlaceholder,
 	type Gpu,
 	gpuFamily,
-	WINDOWS_WEBGPU_LIMITS,
 	hasCanvasPlaceholder,
 	hostGpu,
 	rendersOnHardware,
 	setWebgpu,
+	WINDOWS_WEBGPU_LIMITS,
 } from "./host_rendering.js";
 import {
 	type ProxyConfig,
@@ -1110,7 +1110,10 @@ export async function hostIdentity(
 		const config = JSON.parse(camouConfigBlob(fromOptions) || "{}");
 		const vendor = config["webGl:vendor"];
 		const renderer = config["webGl:renderer"];
-		return [getTargetOs(config), vendor && renderer ? [vendor, renderer] : null];
+		return [
+			getTargetOs(config),
+			vendor && renderer ? [vendor, renderer] : null,
+		];
 	}
 	const prefs = fromOptions.firefoxUserPrefs ?? {};
 	if (canvasNoise != null || hasCanvasPlaceholder(prefs)) return null;
@@ -1165,6 +1168,14 @@ export function contextIdentity(
 		);
 	}
 	return [hostName, gpu];
+}
+
+/**
+ * Config overrides for a new context's audio: a browser launched with
+ * audio_noise: false gives its contexts stock audio, as its own pages have.
+ */
+export function contextAudio(browser: any): Record<string, any> | null {
+	return browser._camoufoxAudioNoise === false ? { "audio:seed": 0 } : null;
 }
 
 /**
@@ -1372,6 +1383,13 @@ export interface LaunchOptions {
 	 * identity runs elsewhere. Cannot be combined with canvas_noise: true or
 	 * block_webgl. Default: false. */
 	gpu_passthrough?: boolean;
+	/** Perturb Web Audio output with a seed that follows the identity, so each
+	 * identity has its own audio hash (the default). With false the browser
+	 * renders audio as stock Firefox does: every machine measured renders the
+	 * standard OfflineAudioContext probe to the same value, so no identity has
+	 * a unique one. Contexts made with NewContext follow the browser. An
+	 * audio:seed in `config` wins either way. */
+	audio_noise?: boolean;
 	/** Additional Firefox launch options, passed straight through to Playwright. */
 	[key: string]: any;
 }
@@ -1419,6 +1437,7 @@ export async function launchOptions({
 	pin_cpu_cores,
 	canvas_noise,
 	gpu_passthrough,
+	audio_noise,
 	...passthrough
 }: LaunchOptions = {}): Promise<Record<string, any>> {
 	utilsDeps.ensureBrowserProfileDir(env);
@@ -1735,9 +1754,10 @@ export async function launchOptions({
 	// There is no canvas seed: the browser adds no canvas noise (#528), and no
 	// glyph-spacing noise either (ci/tribal-rules.yml: no-glyph-spacing-noise).
 	if (!userSetAudioSeed) {
-		config["audio:seed"] = audioSeedFromIdentity(
-			utilsDeps.identitySeed(config, salt),
-		);
+		config["audio:seed"] =
+			audio_noise === false
+				? 0
+				: audioSeedFromIdentity(utilsDeps.identitySeed(config, salt));
 	}
 
 	// Set geolocation
