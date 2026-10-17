@@ -1207,6 +1207,9 @@ export function resolveVerstr(executablePath?: string | null): string {
 	throw new ValueError(`${ini} names no Version`);
 }
 
+/** The cursor path generators Juggler has (browser/additions/juggler/input/CursorTrajectory.js). */
+export const HUMANIZE_ENGINES = ["cursory", "mousecrack"] as const;
+
 /** A bound on the screen a generated fingerprint may claim. */
 type ScreenConstraint =
 	| Screen
@@ -1257,6 +1260,10 @@ export interface LaunchOptions {
 	geoip_db?: string;
 	/** Humanize the cursor movement: `true`, or the MAX duration in seconds. */
 	humanize?: boolean | number;
+	/** The generator behind `humanize`: "cursory" (the default) replays recorded
+	 * human movements; "mousecrack" synthesizes them with a network trained on
+	 * recordings. See browser/additions/juggler/input/mousecrack/README.md. */
+	humanize_engine?: string;
 	/** Locale(s) to use. The first listed locale is used for the Intl API. */
 	locale?: string | string[];
 	/** List of Firefox addons to use (paths to extracted addons). */
@@ -1337,6 +1344,7 @@ export async function launchOptions({
 	geoip,
 	geoip_db,
 	humanize,
+	humanize_engine,
 	locale,
 	addons,
 	fonts,
@@ -1798,6 +1806,19 @@ export async function launchOptions({
 	setInto(config, "voices:blockIfNotDefined", true);
 
 	// Pass the humanize option
+	if (humanize_engine !== undefined && humanize_engine !== null) {
+		if (!(HUMANIZE_ENGINES as readonly string[]).includes(humanize_engine)) {
+			throw new ValueError(
+				`humanize_engine must be one of ${HUMANIZE_ENGINES.join(", ")}, not '${humanize_engine}'`,
+			);
+		}
+		if (!pyTruthy(humanize)) {
+			throw new ValueError(
+				"humanize_engine chooses how humanize moves the cursor; set humanize too",
+			);
+		}
+		setInto(config, "humanize:engine", humanize_engine);
+	}
 	if (pyTruthy(humanize)) {
 		setInto(config, "humanize", true);
 		// MaskConfig expects maxTime to be a JSON number.

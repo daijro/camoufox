@@ -47,6 +47,14 @@ FINAL_TARGET_FILES.modules.juggler.input.cursory.random += [
     "input/cursory/random/seedSequence.js",
     "input/cursory/random/ziggurat.js",
 ]
+# mousecrack, vendored (MIT); see input/mousecrack/README.md.
+FINAL_TARGET_FILES.modules.juggler.input.mousecrack += [
+    "input/mousecrack/LICENSE",
+    "input/mousecrack/model.bin",
+    "input/mousecrack/model.js",
+    "input/mousecrack/model.json",
+    "input/mousecrack/mousecrack.js",
+]
 FINAL_TARGET_FILES.modules.juggler.protocol += [
     "protocol/BrowserHandler.js",
     "protocol/Dispatcher.js",

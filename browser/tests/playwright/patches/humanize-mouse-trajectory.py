@@ -26,7 +26,10 @@ Against an unpackaged objdir build, run `make -C browser stage-fonts` first: the
 through AsyncCamoufox, which sets FONTCONFIG_FILE, and a build with no bundled
 fonts fails startup in a way that surfaces as a confusing TargetClosedError.
 
-What PASS means:
+Both cursor generators are checked: Cursory (the default) and mousecrack
+(humanize_engine="mousecrack", additions/juggler/input/mousecrack/).
+
+What PASS means, for each generator:
     * humanize=True expands one long mouse.move into many intermediate
       mousemove events, ending exactly on the requested destination;
     * those events are spread over a plausible human duration, with uneven
@@ -70,8 +73,18 @@ async def _dest_within(page):
     )
 
 
-async def _collect_moves(humanize):
-    async with AsyncCamoufox(**launch_kwargs(os="linux", humanize=humanize)) as browser:
+ENGINES = ("cursory", "mousecrack")
+
+
+def _launch_kwargs(humanize, engine=None):
+    kwargs = dict(os="linux", humanize=humanize)
+    if engine:
+        kwargs["humanize_engine"] = engine
+    return launch_kwargs(**kwargs)
+
+
+async def _collect_moves(humanize, engine=None):
+    async with AsyncCamoufox(**_launch_kwargs(humanize, engine)) as browser:
         page = await browser.new_page()
         await page.set_content(BODY)
         await page.evaluate(RECORDER)
@@ -81,8 +94,8 @@ async def _collect_moves(humanize):
         return await page.evaluate("moves"), dest
 
 
-async def _humanized_click_hits_target():
-    async with AsyncCamoufox(**launch_kwargs(os="linux", humanize=True)) as browser:
+async def _humanized_click_hits_target(engine):
+    async with AsyncCamoufox(**_launch_kwargs(True, engine)) as browser:
         page = await browser.new_page()
         await page.set_content(
             '<button id="b" style="position:absolute;left:600px;top:400px">go</button>'
@@ -102,11 +115,10 @@ def _gaps(moves):
     return [round(b - a, 1) for a, b in zip(times, times[1:])]
 
 
-async def main() -> int:
+async def _check_engine(engine) -> bool:
     passed = True
-
-    humanized, dest = await _collect_moves(True)
-    print("\n=== humanize=True ===")
+    humanized, dest = await _collect_moves(True, engine)
+    print(f"\n=== humanize=True, {engine} ===")
     print(f"  mousemove events: {len(humanized)}  (endpoint: {humanized[-1][:2] if humanized else None})")
     if len(humanized) >= 10 and humanized[-1][:2] == list(dest):
         print("  PASS: humanized trajectory emitted, ending on destination")
@@ -138,6 +150,22 @@ async def main() -> int:
         passed = False
         print(f"  FAIL: only {distinct} distinct gaps (spread {spread}ms) across {len(gaps)} -- looks like a fixed cadence")
 
+    moves, clicked = await _humanized_click_hits_target(engine)
+    print(f"\n=== humanized click, {engine} ===")
+    print(f"  intermediate moves: {moves}  clicked: {clicked}")
+    if moves >= 10 and clicked:
+        print("  PASS: humanized click landed on the target")
+    else:
+        passed = False
+        print("  FAIL: humanized click did not humanize or missed the target")
+    return passed
+
+
+async def main() -> int:
+    passed = True
+    for engine in ENGINES:
+        passed &= await _check_engine(engine)
+
     plain, plain_dest = await _collect_moves(False)
     print("\n=== humanize off ===")
     print(f"  mousemove events: {[m[:2] for m in plain]}")
@@ -146,15 +174,6 @@ async def main() -> int:
     else:
         passed = False
         print("  FAIL: expected only the two endpoints")
-
-    moves, clicked = await _humanized_click_hits_target()
-    print("\n=== humanized click ===")
-    print(f"  intermediate moves: {moves}  clicked: {clicked}")
-    if moves >= 10 and clicked:
-        print("  PASS: humanized click landed on the target")
-    else:
-        passed = False
-        print("  FAIL: humanized click did not humanize or missed the target")
 
     print()
     return 0 if passed else 1

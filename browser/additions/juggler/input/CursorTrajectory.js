@@ -18,12 +18,23 @@
  * movements recorded from real people, morphed onto the requested endpoints,
  * and keeps that recording's own timing -- pauses, overshoots and all.
  *
- * This module is the whole boundary between Camoufox and Cursory: it owns the
- * config, the cadence and the pixel grid, and hands MouseDispatch a plain list
- * of steps.
+ * `humanize:engine` = "mousecrack" swaps in a second generator instead
+ * (mousecrack/, vendored): a recurrent network trained on recorded movements
+ * that synthesizes a new path rather than replaying one. Measured against the
+ * same recordings, its medium and long moves are slower and wander more than a
+ * hand's or Cursory's, so Cursory stays the default.
+ *
+ * This module is the whole boundary between Camoufox and both generators: it
+ * owns the config, the cadence and the pixel grid, and hands MouseDispatch a
+ * plain list of steps.
  */
 
 const kCursoryUrl = 'resource://gre/modules/juggler/input/cursory/cursory.js';
+const kMousecrackUrl = 'resource://gre/modules/juggler/input/mousecrack/mousecrack.js';
+
+// A mousecrack path that never gets within 3px of the target would end in a
+// jump onto it. Measured: 2 of 300 moves; a fresh draw almost always arrives.
+const kMousecrackAttempts = 3;
 
 /**
  * Samples per second.
@@ -63,6 +74,22 @@ function loadCursory() {
   return cursory;
 }
 
+let mousecrack = null;
+
+function loadMousecrack() {
+  if (!mousecrack)
+    mousecrack = ChromeUtils.importESModule(kMousecrackUrl);
+  return mousecrack;
+}
+
+function engine() {
+  let name = '';
+  try {
+    name = ChromeUtils.camouGetString('humanize:engine') || '';
+  } catch (e) {}
+  return name === 'mousecrack' ? 'mousecrack' : 'cursory';
+}
+
 /** The configured [min, max] duration of one movement, in milliseconds. */
 function durationBoundsMs() {
   const maxSeconds = ChromeUtils.camouGetDouble('humanize:maxTime', kDefaultMaxTimeSeconds);
@@ -73,26 +100,21 @@ function durationBoundsMs() {
   return {minMs: Math.min(Math.max(0, minSeconds * 1000), maxMs), maxMs};
 }
 
-/**
- * The intermediate points of a humanized move from (fromX, fromY) to (toX, toY).
- *
- * All coordinates are browser-relative, exactly as MouseDispatch wants them.
- *
- * Returns `{steps, trailingDelayMs}`, where each step is `[x, y, delayMs]` --
- * the pause to take *before* dispatching that point -- and `trailingDelayMs` is
- * the pause before the caller's own dispatch of the real destination. The
- * destination is deliberately not a step: the caller has to finish exactly on
- * the requested coordinate whatever happens to the curve, and it is the one
- * point that must not be dropped for being off-screen or off-grid.
- */
-export function humanizedSteps(fromX, fromY, toX, toY) {
-  // parkOffContent() forgets the cursor position (it sets NaN) because the
-  // pointer really did move somewhere untracked. With no start point there is
-  // no path to draw, so this move goes straight to its destination.
-  if (!Number.isFinite(fromX) || !Number.isFinite(fromY))
-    return {steps: [], trailingDelayMs: 0};
-
+/** The scale that puts a path of `naturalMs` inside the configured bounds. */
+function durationScale(naturalMs) {
+  // Scale the whole path's timing into the configured bounds rather than
+  // truncating it. Truncating would drop the end of every long movement, which
+  // is the part that decelerates onto the target -- the most recognizably human
+  // part of it.
   const {minMs, maxMs} = durationBoundsMs();
+  return naturalMs > 0 ? Math.min(Math.max(naturalMs, minMs), maxMs) / naturalMs : 0;
+}
+
+/**
+ * Cursory's path, as `{points, timings, totalMs}` with timings already scaled
+ * into the configured bounds.
+ */
+function cursoryPath(fromX, fromY, toX, toY) {
   const cursory = loadCursory();
 
   // Seeded explicitly so the same path can be asked for twice -- see below.
@@ -100,12 +122,8 @@ export function humanizedSteps(fromX, fromY, toX, toY) {
   let {points, timings} = cursory.generateTrajectory(
       [fromX, fromY], [toX, toY], {frequency: kFrequencyHz, seed});
 
-  // Scale the whole path's timing into the configured bounds rather than
-  // truncating it. Truncating would drop the end of every long movement, which
-  // is the part that decelerates onto the target -- the most recognizably human
-  // part of it.
   const recordedMs = timings[timings.length - 1];
-  const scale = recordedMs > 0 ? Math.min(Math.max(recordedMs, minMs), maxMs) / recordedMs : 0;
+  const scale = durationScale(recordedMs);
 
   // Rescaling the clock without rescaling the sample count would change the
   // rate the events come out at, and the rate is itself a fingerprint. Measured
@@ -124,6 +142,78 @@ export function humanizedSteps(fromX, fromY, toX, toY) {
         [fromX, fromY], [toX, toY],
         {frequency: Math.max(1, kFrequencyHz * scale), seed}));
   }
+  return {
+    points,
+    timings: timings.map(t => t * scale),
+    totalMs: recordedMs * scale,
+  };
+}
+
+/**
+ * mousecrack's path in the same shape as cursoryPath, or null when no draw
+ * reached the target.
+ *
+ * mousecrack steps at its own irregular cadence, ~10ms apart, which is faster
+ * than a page sees a real cursor move (see kFrequencyHz). The path is thinned
+ * rather than resampled: a point is kept once at least a kFrequencyHz interval
+ * of scaled time has passed since the last one kept. Resampling onto an even
+ * clock would make every gap identical, a metronome that the model's own
+ * uneven timing does not have; thinning keeps each gap a sum of real steps.
+ * A path stretched by a minTime floor is not filled in, so it ticks slower.
+ */
+async function mousecrackPath(fromX, fromY, toX, toY) {
+  const mousecrack = loadMousecrack();
+  let path = null;
+  for (let attempt = 0; attempt < kMousecrackAttempts && !path?.converged; attempt++)
+    path = await mousecrack.generateTrajectory([fromX, fromY], [toX, toY]);
+  if (!path.converged)
+    return null;
+
+  const {points, timings} = path;
+  const naturalMs = timings[timings.length - 1];
+  const scale = durationScale(naturalMs);
+  const totalMs = naturalMs * scale;
+  const minGapMs = 1000 / kFrequencyHz;
+  const kept = [points[0]];
+  const keptTimes = [0];
+  for (let i = 1; i < points.length - 1; i++) {
+    const t = timings[i] * scale;
+    if (t - keptTimes[keptTimes.length - 1] >= minGapMs) {
+      kept.push(points[i]);
+      keptTimes.push(t);
+    }
+  }
+  kept.push(points[points.length - 1]);
+  keptTimes.push(totalMs);
+  return {points: kept, timings: keptTimes, totalMs};
+}
+
+/**
+ * The intermediate points of a humanized move from (fromX, fromY) to (toX, toY).
+ *
+ * All coordinates are browser-relative, exactly as MouseDispatch wants them.
+ *
+ * Resolves to `{steps, trailingDelayMs}`, where each step is `[x, y, delayMs]`
+ * -- the pause to take *before* dispatching that point -- and `trailingDelayMs`
+ * is the pause before the caller's own dispatch of the real destination. The
+ * destination is deliberately not a step: the caller has to finish exactly on
+ * the requested coordinate whatever happens to the curve, and it is the one
+ * point that must not be dropped for being off-screen or off-grid.
+ *
+ * Async because mousecrack computes its path in slices on this thread.
+ */
+export async function humanizedSteps(fromX, fromY, toX, toY) {
+  // parkOffContent() forgets the cursor position (it sets NaN) because the
+  // pointer really did move somewhere untracked. With no start point there is
+  // no path to draw, so this move goes straight to its destination.
+  if (!Number.isFinite(fromX) || !Number.isFinite(fromY))
+    return {steps: [], trailingDelayMs: 0};
+
+  // A mousecrack draw that never arrives would end in a jump onto the target,
+  // which no hand makes; Cursory draws that move instead.
+  const {points, timings, totalMs} =
+      (engine() === 'mousecrack' && await mousecrackPath(fromX, fromY, toX, toY)) ||
+      cursoryPath(fromX, fromY, toX, toY);
 
   // A real mouse reports whole pixels, and the widget rounds to a device pixel
   // before hit-testing anyway, so round here and drop points that land on the
@@ -156,13 +246,12 @@ export function humanizedSteps(fromX, fromY, toX, toY) {
     // with nothing to move, and the same unacked wait.
     if (x === destinationX && y === destinationY)
       continue;
-    const elapsedMs = Math.round(timings[i] * scale);
+    const elapsedMs = Math.round(timings[i]);
     steps.push([x, y, Math.max(0, elapsedMs - dispatchedMs)]);
     dispatchedMs = elapsedMs;
     previousX = x;
     previousY = y;
   }
 
-  const totalMs = Math.round(recordedMs * scale);
-  return {steps, trailingDelayMs: Math.max(0, totalMs - dispatchedMs)};
+  return {steps, trailingDelayMs: Math.max(0, Math.round(totalMs) - dispatchedMs)};
 }

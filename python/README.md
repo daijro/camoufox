@@ -219,6 +219,7 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | `geoip_db` | `str` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
 | `locale` | `str` or `list[str]` | from `geoip`, else the drawn identity's | Locale(s), e.g. `"en-US"` or `["fr-FR", "en-US"]`. The first is used for `Intl`. |
 | `humanize` | `bool` or `float` | off | Human cursor movement. A number caps one movement at that many seconds (default cap 1.5). |
+| `humanize_engine` | `str` | `"cursory"` | The generator behind `humanize`: `"cursory"` replays recorded human movements, `"mousecrack"` synthesizes them with a trained network. Needs `humanize`. |
 | `screen` | `camoufox.fingerprints.Screen` | the real display when headed | Bounds the generated screen: `Screen(max_width=1920, max_height=1080)`. |
 | `window` | `(int, int)` | generated | Fixed outer window size. |
 | `fonts` | `list[str]` | none | Extra font families on top of the OS's own. |

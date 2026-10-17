@@ -884,6 +884,10 @@ def resolve_verstr(executable_path: Optional[Path] = None) -> str:
     raise ValueError(f'{ini} names no Version')
 
 
+# The cursor path generators Juggler has (browser/additions/juggler/input/CursorTrajectory.js).
+HUMANIZE_ENGINES = ('cursory', 'mousecrack')
+
+
 def launch_options(
     *,
     config: Optional[Dict[str, Any]] = None,
@@ -896,6 +900,7 @@ def launch_options(
     geoip: Optional[Union[str, bool]] = None,
     geoip_db: Optional[str] = None,
     humanize: Optional[Union[bool, float]] = None,
+    humanize_engine: Optional[str] = None,
     locale: Optional[Union[str, List[str]]] = None,
     addons: Optional[List[str]] = None,
     fonts: Optional[List[str]] = None,
@@ -953,6 +958,10 @@ def launch_options(
             Humanize the cursor movement.
             Takes either `True`, or the MAX duration in seconds of the cursor movement.
             The cursor typically takes up to 1.5 seconds to move across the window.
+        humanize_engine (Optional[str]):
+            The generator behind `humanize`: "cursory" (the default) replays recorded
+            human movements; "mousecrack" synthesizes them with a network trained on
+            recordings. See browser/additions/juggler/input/mousecrack/README.md.
         locale (Optional[Union[str, List[str]]]):
             Locale(s) to use in Camoufox. The first listed locale will be used for the Intl API.
         addons (Optional[List[str]]):
@@ -1488,6 +1497,12 @@ def launch_options(
     set_into(config, 'voices:blockIfNotDefined', True)
 
     # Pass the humanize option
+    if humanize_engine is not None:
+        if humanize_engine not in HUMANIZE_ENGINES:
+            raise ValueError(f'humanize_engine must be one of {HUMANIZE_ENGINES}, not {humanize_engine!r}')
+        if not humanize:
+            raise ValueError('humanize_engine chooses how humanize moves the cursor; set humanize too')
+        set_into(config, 'humanize:engine', humanize_engine)
     if humanize:
         set_into(config, 'humanize', True)
         # bool is a subclass of int, but MaskConfig expects maxTime to be a

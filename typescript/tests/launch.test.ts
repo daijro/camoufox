@@ -643,10 +643,16 @@ describe("test_humanize", () => {
 		};
 	});
 
-	const launchHumanize = (humanize: boolean | number) =>
-		launch({ humanize, block_webgl: true, i_know_what_im_doing: true }).then(
-			() => captured,
-		);
+	const launchHumanize = (
+		humanize: boolean | number | undefined,
+		extra: Record<string, any> = {},
+	) =>
+		launch({
+			humanize,
+			block_webgl: true,
+			i_know_what_im_doing: true,
+			...extra,
+		}).then(() => captured);
 
 	it("humanize: true sets no duration", async () => {
 		const config = await launchHumanize(true);
@@ -665,6 +671,32 @@ describe("test_humanize", () => {
 		expect(utils.configJson({ t: config["humanize:maxTime"] })).toBe(
 			`{"t":${Number.isInteger(duration) ? `${duration}.0` : duration}}`,
 		);
+	});
+
+	it("cursory is the default engine", async () => {
+		const config = await launchHumanize(true);
+		expect("humanize:engine" in config).toBe(false);
+	});
+
+	it.each([
+		"cursory",
+		"mousecrack",
+	])("the %s engine reaches the browser", async (engine) => {
+		const config = await launchHumanize(true, { humanize_engine: engine });
+		expect(config["humanize:engine"]).toBe(engine);
+	});
+
+	it("an unknown engine is refused", async () => {
+		await expect(
+			launchHumanize(true, { humanize_engine: "bezier" }),
+		).rejects.toThrow(/humanize_engine/);
+	});
+
+	it("an engine without humanize is refused", async () => {
+		// Otherwise the choice would be silently ignored: nothing is humanized.
+		await expect(
+			launchHumanize(undefined, { humanize_engine: "mousecrack" }),
+		).rejects.toThrow(/humanize/);
 	});
 });
 

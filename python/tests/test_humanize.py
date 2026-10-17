@@ -38,11 +38,12 @@ def captured_launch_config(monkeypatch):
 
     monkeypatch.setattr(utils, "get_env_vars", capture_env)
 
-    def launch(humanize):
+    def launch(humanize, **kwargs):
         utils.launch_options(
             humanize=humanize,
             block_webgl=True,
             i_know_what_im_doing=True,
+            **kwargs,
         )
         return captured.copy()
 
@@ -65,3 +66,23 @@ def test_humanize_duration_is_encoded_as_double(
     assert config["humanize"] is True
     assert config["humanize:maxTime"] == float(duration)
     assert type(config["humanize:maxTime"]) is float
+
+
+def test_cursory_is_the_default_engine(captured_launch_config) -> None:
+    assert "humanize:engine" not in captured_launch_config(True)
+
+
+@pytest.mark.parametrize("engine", ["cursory", "mousecrack"])
+def test_engine_reaches_the_browser(captured_launch_config, engine) -> None:
+    assert captured_launch_config(True, humanize_engine=engine)["humanize:engine"] == engine
+
+
+def test_unknown_engine_is_refused(captured_launch_config) -> None:
+    with pytest.raises(ValueError, match="humanize_engine"):
+        captured_launch_config(True, humanize_engine="bezier")
+
+
+def test_engine_without_humanize_is_refused(captured_launch_config) -> None:
+    # Otherwise the choice would be silently ignored: nothing is humanized.
+    with pytest.raises(ValueError, match="humanize"):
+        captured_launch_config(None, humanize_engine="mousecrack")

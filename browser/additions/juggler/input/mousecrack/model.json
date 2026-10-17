@@ -1,0 +1,68 @@
+{
+ "source": "https://github.com/puffinsoft/mousecrack 6c704e4 train/model.h5",
+ "source_sha256": "2eac338602a84530a7b1e8e05dd14c54f98b46dfcc796b89f6bdf74f04feca91",
+ "bin_sha256": "385cfeb50ffe991999e08b2a05a6d88fcfb0372b8e53406a90d26e141bcdac1b",
+ "tensors": [
+  {
+   "name": "lstm0.kernel",
+   "shape": [
+    5,
+    512
+   ],
+   "offset": 0
+  },
+  {
+   "name": "lstm0.recurrent_kernel",
+   "shape": [
+    128,
+    512
+   ],
+   "offset": 2560
+  },
+  {
+   "name": "lstm0.bias",
+   "shape": [
+    512
+   ],
+   "offset": 68096
+  },
+  {
+   "name": "lstm1.kernel",
+   "shape": [
+    128,
+    512
+   ],
+   "offset": 68608
+  },
+  {
+   "name": "lstm1.recurrent_kernel",
+   "shape": [
+    128,
+    512
+   ],
+   "offset": 134144
+  },
+  {
+   "name": "lstm1.bias",
+   "shape": [
+    512
+   ],
+   "offset": 199680
+  },
+  {
+   "name": "dense.kernel",
+   "shape": [
+    128,
+    35
+   ],
+   "offset": 200192
+  },
+  {
+   "name": "dense.bias",
+   "shape": [
+    35
+   ],
+   "offset": 204672
+  }
+ ]
+}

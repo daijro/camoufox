@@ -500,6 +500,7 @@ claims the host's OS. Details are in
 | Feature | How to use it | Where |
 |---|---|---|
 | Human cursor movement, replayed from 2356 recordings of real people ([Cursory](https://github.com/Vinyzu/cursory)) | `humanize=True`, or a number of seconds to cap each move | Juggler `input/` |
+| Human cursor movement synthesized by a trained network ([mousecrack](https://github.com/puffinsoft/mousecrack)) | `humanize=True, humanize_engine="mousecrack"` | Juggler `input/mousecrack/` |
 | Run code in the page's own world | `main_world_eval=True`, then `page.evaluate("mw:...")` | Juggler |
 | Finish animations at once so Playwright never waits | `config={"instantAnimations": True}` (detectable; warns) | `no-css-animations` patch |
 | Read closed shadow roots | `config={"forceScopeAccess": True}` | `shadow-root-bypass` patch |
@@ -583,6 +584,14 @@ TypeScript port that reproduces the Python original exactly, at
 `browser/additions/juggler/input/cursory/`. **Cursory is LGPLv3-or-later, not
 MPL-2.0 like the rest of the browser**; see
 [`NOTICE`](browser/additions/juggler/input/cursory/NOTICE).
+
+`humanize_engine="mousecrack"` swaps Cursory for
+[mousecrack](https://github.com/puffinsoft/mousecrack), a recurrent network
+trained on recorded movements that synthesizes each path step by step instead
+of replaying one. Juggler runs the network in plain JavaScript
+(`browser/additions/juggler/input/mousecrack/`, MIT). Its short moves match
+human timing; its medium and long moves are slower and wander more than a
+hand's (measurements in that directory's README), so Cursory stays the default.
 
 # Building the browser
 
@@ -727,6 +736,7 @@ flowchart TD
 |---|---|
 | The browser (`browser/`: patches, additions, settings, build system) | [MPL-2.0](LICENSE), the licence of the Firefox source it modifies |
 | Vendored Cursory trajectories | LGPLv3-or-later ([`NOTICE`](browser/additions/juggler/input/cursory/NOTICE)) |
+| Vendored mousecrack model and its JavaScript port | MIT ([`LICENSE`](browser/additions/juggler/input/mousecrack/LICENSE)) |
 | Python package | MIT ([`python/LICENSE`](python/LICENSE)) |
 | TypeScript package | MIT ([`typescript/LICENSE`](typescript/LICENSE)); includes a port of NumPy's pairwise summation ([notice](typescript/THIRD_PARTY_NOTICES.md)) and depends on [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and [`python-random`](https://www.npmjs.com/package/python-random) |
 
@@ -738,6 +748,7 @@ flowchart TD
 | [BetterFox](https://github.com/yokoffing/BetterFox) | Speed and debloat preferences |
 | [Ghostery](https://github.com/ghostery/user-agent-desktop) | Debloat reference ([disable onboarding](browser/patches/ghostery/Disable-Onboarding-Messages.patch)) |
 | [Vinyzu/cursory](https://github.com/Vinyzu/cursory) | The recorded human mouse movements behind `humanize=True`, vendored via [cursory-js](https://github.com/JWriter20/cursory-js) |
+| [puffinsoft/mousecrack](https://github.com/puffinsoft/mousecrack) | The trained movement model behind `humanize_engine="mousecrack"` (MIT) |
 | [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor) | The Bézier cursor Camoufox used before Cursory |
 | [scrapfly/fingerprint-generator](https://github.com/scrapfly/fingerprint-generator) (fpgen) | The device distribution identities are drawn from |
 | [CreepJS](https://github.com/abrahamjuliot/creepjs), [Browserleaks](https://browserleaks.com), [BrowserScan](https://www.browserscan.net/) | Leak testing |
