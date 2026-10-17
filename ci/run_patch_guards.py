@@ -101,6 +101,27 @@ def guards() -> List[Path]:
     return sorted(p for p in GUARD_DIR.glob("*.py") if p.name != "helpers.py")
 
 
+def leftover_browsers(binary: Path) -> List[str]:
+    """Processes of the binary still running after a guard, with CPU seconds.
+
+    Guards share one runner. A browser a guard failed to close keeps its
+    content processes -- and any spinning workers -- alive into every later
+    guard, which then sees a slower machine than it was written for.
+    """
+    ticks = os.sysconf("SC_CLK_TCK")
+    found = []
+    for proc in Path("/proc").glob("[0-9]*"):
+        try:
+            if os.readlink(proc / "exe") != str(binary.resolve()):
+                continue
+            fields = (proc / "stat").read_text().rsplit(")", 1)[1].split()
+        except OSError:
+            continue
+        cpu = (int(fields[11]) + int(fields[12])) / ticks
+        found.append(f"pid {proc.name} cpu {cpu:.1f}s")
+    return found
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path)
@@ -147,8 +168,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             failed.append(guard.name)
             tail = proc.combined().strip().splitlines()[-6:]
             result.note(f"{guard.name} failed ({proc.code}): " + " | ".join(t.strip() for t in tail))
+            # The note keeps six lines; the job log gets all of it.
+            log(f"  ✗ {guard.name} output:\n{proc.combined().strip()}")
         else:
             log(f"  ✓ {guard.name}")
+        leftovers = leftover_browsers(binary)
+        if leftovers:
+            log(f"  {guard.name} left {len(leftovers)} browser processes running: {', '.join(leftovers)}",
+                level="WARN")
 
     passed = len(selected) - len(failed)
     result.note(f"{passed}/{len(selected)} guards passed")
