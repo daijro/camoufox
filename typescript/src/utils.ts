@@ -1813,6 +1813,16 @@ export async function launchOptions({
 		}
 	}
 
+	// Glyph advances at subpixel offsets, as DirectWrite and CoreText place
+	// them, rather than rounded to whole pixels by the host's hinting.
+	if ((targetOs === "win" || targetOs === "mac") && hostOs !== targetOs) {
+		setInto(
+			firefox_user_prefs,
+			"gfx.text.subpixel-position.force-enabled",
+			true,
+		);
+	}
+
 	// Storage quota, from the host's own disk (see stockProfileDiskCapacityKb).
 	const quotaLimitKb = utilsDeps.stockProfileDiskCapacityKb();
 	if (quotaLimitKb) {

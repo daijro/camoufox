@@ -1462,6 +1462,15 @@ def launch_options(
         if target_os == 'win':
             config.setdefault('media:hwCodecs', list(WINDOWS_HW_CODECS))
 
+    # Glyph advances: DirectWrite and CoreText position glyphs at subpixel
+    # offsets, so text widths are fractional (sans-serif 953.0667 px on
+    # Windows); Linux with hinting rounds every advance to a whole pixel (953).
+    # Forcing subpixel positioning reproduces the Windows widths exactly, and
+    # with them the default widths of form controls (<input> 158 -> 165 px,
+    # <select> 92 -> 95 px, as on Windows).
+    if target_os in ('win', 'mac') and host_os != target_os:
+        firefox_user_prefs.setdefault('gfx.text.subpixel-position.force-enabled', True)
+
     # Storage quota, from the host's own disk. A page reads the group limit
     # through navigator.storage.estimate().quota; see
     # _stock_profile_disk_capacity_kb for how Gecko derives it. Playwright's

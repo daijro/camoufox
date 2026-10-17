@@ -260,6 +260,11 @@ widths matched stock Windows). When the claimed OS is not the host's:
   `usWin*`, GDI's external-leading rule, Arial Black measured as Arial Bold)
   instead of FreeType's pixel-rounded `hhea` values: Arial 16px is 17/18 px
   as on Windows, not 19/19.
+- a Windows or macOS identity gets `gfx.text.subpixel-position.force-enabled`:
+  DirectWrite and CoreText place glyphs at subpixel offsets, so text widths
+  are fractional (`sans-serif` 953.0667 px on Windows), where hinted FreeType
+  rounds each advance to a whole pixel (953). Form controls take their
+  default widths from the same advances.
 
 `browser/tests/playwright/patches/font-fallback-windows.py` measures 28
 scripts in three generics against stock Windows (at least 160 of 168 match).
