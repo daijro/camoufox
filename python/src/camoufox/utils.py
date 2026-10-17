@@ -54,6 +54,21 @@ ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
 # Camoufox preferences to cache previous pages and requests
 CACHE_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['cachePrefs']
 
+# Draws tried for one that fits the monitor at its own display scale.
+MAX_SCALE_FIT_DRAWS = 20
+
+
+def _fits_at_drawn_scale(fingerprint: Dict[str, Any], screen_cons: Any) -> bool:
+    """Whether an fpgen draw's screen, at its devicePixelRatio, fits the monitor."""
+    if not isinstance(fingerprint, dict):
+        return True
+    scale = float((fingerprint.get('window') or {}).get('devicePixelRatio') or 1)
+    scr = fingerprint.get('screen') or {}
+    for axis, cap in (('width', screen_cons.max_width), ('height', screen_cons.max_height)):
+        if cap and scr.get(axis) and scr[axis] * scale > cap:
+            return False
+    return True
+
 
 def _host_os_key() -> Optional[str]:
     """The host OS in fonts.json / target_os terms ('mac', 'win', 'lin')."""
@@ -963,6 +978,7 @@ def launch_options(
     virtual_display: Optional[str] = None,
     pin_cpu_cores: Optional[bool] = None,
     canvas_noise: Optional[bool] = None,
+    display_scale: Optional[bool] = None,
     **launch_options: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
@@ -1076,6 +1092,12 @@ def launch_options(
             renders with, uncovered; it is on whenever the identity claims
             another OS or another GPU (webgl_config, a preset's, or a host GPU
             fpgen never recorded), whose canvas would otherwise show the host.
+        display_scale (Optional[bool]):
+            Render at the identity's display scale (layout.css.devPixelsPerPx)
+            instead of at 1, so devicePixelRatio, the resolution media queries
+            and CSS geometry agree as on the real machine: a 1536x864 screen is
+            a 1920x1080 panel at 125%. Headful on a real monitor, the identity
+            must also fit it physically at that scale. Off by default.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -1212,12 +1234,20 @@ def launch_options(
     screen_cons = screen or (get_screen_cons(headless) if has_display(env) else None)
 
     if not _used_preset and fingerprint is None:
-        # Default: synthetic generation via fpgen (infinite unique fingerprints)
-        fingerprint = generate_fingerprint(
-            screen=screen_cons,
-            window=window,
-            os=os,
-        )
+        # Default: synthetic generation via fpgen (infinite unique fingerprints).
+        # With display_scale, headful on a real monitor, the draw must also fit
+        # it PHYSICALLY at its own display scale: a 1512x982 Mac at 2x needs a
+        # 3024x1964 panel. Redraw until it does; fpgen's conditions are per
+        # field and cannot express screen x scale.
+        on_monitor = headless is False and not virtual_display and screen_cons
+        for _ in range(MAX_SCALE_FIT_DRAWS):
+            fingerprint = generate_fingerprint(
+                screen=screen_cons,
+                window=window,
+                os=os,
+            )
+            if not (display_scale and on_monitor) or _fits_at_drawn_scale(fingerprint, screen_cons):
+                break
 
     if not _used_preset and fingerprint is not None:
         # Inject the generated fingerprint into the config
@@ -1227,6 +1257,34 @@ def launch_options(
         )
 
     target_os = get_target_os(config)
+
+    # Display scaling (display_scale). fpgen draws a screen at a scale --
+    # 1536x864 is a 1920x1080 panel at 125% -- but the browser renders at 1,
+    # so pages read (resolution: 1dppx) next to a 125% screen, a pair no real
+    # machine reports (36% of Windows draws, 74% of macOS ones, measured over
+    # 150 each). Rendering at the drawn scale for real keeps devicePixelRatio,
+    # the resolution media queries and the CSS geometry agreeing, as they do on
+    # the real machine (lang315/camoufox#41). Measured on a 1536x864 identity:
+    # ratio 1.25, (resolution: 1.25dppx), window 1536x731 CSS, input still
+    # lands.
+    device_scale = 1.0
+    if (
+        display_scale
+        and not _used_preset
+        and isinstance(fingerprint, dict)
+        and 'layout.css.devPixelsPerPx' not in firefox_user_prefs
+    ):
+        drawn = (fingerprint.get('window') or {}).get('devicePixelRatio')
+        allowed = coherence.PLAUSIBLE_DPR.get(target_os)
+        if drawn and allowed:
+            device_scale = float(min(allowed, key=lambda v: abs(float(v) - float(drawn))))
+        # A supplied identity too large for this monitor at its scale keeps
+        # rendering at 1 rather than being clamped to a fraction of itself.
+        on_monitor = headless is False and not virtual_display and screen_cons
+        if device_scale != 1.0 and on_monitor and not _fits_at_drawn_scale(fingerprint, screen_cons):
+            device_scale = 1.0
+        if device_scale != 1.0:
+            firefox_user_prefs['layout.css.devPixelsPerPx'] = f'{device_scale:g}'
 
     # A preset whose screen is a phone viewport is not a real desktop device;
     # the floor is normally skipped for presets, on the assumption that a preset
@@ -1256,7 +1314,16 @@ def launch_options(
         # headless='virtual' reaches here as headless=False (see async_api) with
         # a 1x1 Xvfb (virtdisplay.py) that is not a real screen.
         if headless is False and not virtual_display and screen_cons:
-            clamp_screen_to_display(config, screen_cons.max_width, screen_cons.max_height)
+            if device_scale == 1.0:
+                clamp_screen_to_display(config, screen_cons.max_width, screen_cons.max_height)
+            else:
+                # The window is drawn at the identity's scale, so it is the
+                # PHYSICAL size -- CSS size x scale -- that has to fit.
+                clamp_screen_to_display(
+                    config,
+                    screen_cons.max_width and int(screen_cons.max_width / device_scale),
+                    screen_cons.max_height and int(screen_cons.max_height / device_scale),
+                )
         follow_baseline_protection(config, target_os)
         clamp_window_dimensions(config)
         clamp_window_position(config)

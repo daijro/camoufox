@@ -424,6 +424,9 @@ scenario('host_os_claims_host_gpu', {'host_gpu': LIN_GPU}, fingerprint=FP['linux
 scenario('host_os_pinned_gpu', {'host_gpu': LIN_GPU}, fingerprint=FP['linux'], os='linux',
          webgl_config=OTHER_LIN_GPU)
 
+# display_scale: render at the drawn scale
+scenario('display_scale_headless', fingerprint=FP['macos'], os='macos', headless=True, display_scale=True)
+
 # chunking: a config bigger than one env var chunk
 scenario('config_large', fingerprint=FP['linux'], os='linux', i_know_what_im_doing=True,
          config={'fonts': [f'Font Family {i:05d}' for i in range(2600)]})
