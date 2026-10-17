@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..c5f3dd4247
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -0,0 +1,431 @@
+@@ -0,0 +1,450 @@
 +#include "RoverfoxStorageManager.h"
 +#include "mozilla/Preferences.h"
 +#include "nsIPrefBranch.h"
@@ -291,7 +291,26 @@ index 0000000000..c5f3dd4247
 +    GetLocalCache().InsertOrUpdate(prefName, nsCString(value));
 +  }
 +  BumpGeneration();
-+  // Sync to parent for cross-process availability
++  // Sync to parent for cross-process availability. Only from the main thread:
++  // libpref is main-thread only, and a PContent send from any other thread
++  // hits MessageChannel's release assert and kills the content process. Every
++  // put today comes from a window's setter, but a put from a worker (as the
++  // timezone's CAMOU_CONFIG fallback once made) would crash rather than
++  // fail. The local write above already answers that thread.
++  if (!NS_IsMainThread()) {
++    NS_DispatchToMainThread(NS_NewRunnableFunction(
++        "RoverfoxStorageManager::SyncToParent",
++        [prefName = nsCString(prefName), value = nsCString(value)]() {
++          SyncToParent(prefName, value);
++        }));
++    return;
++  }
++  SyncToParent(prefName, value);
++}
++
++/* static */ void RoverfoxStorageManager::SyncToParent(const nsCString& prefName,
++                                                       const nsCString& value) {
++  MOZ_ASSERT(NS_IsMainThread());
 +  if (XRE_IsParentProcess()) {
 +    Preferences::SetCString(prefName.get(), value, kKind);
 +  } else {
@@ -440,7 +459,7 @@ new file mode 100644
 index 0000000000..c7dad0158f
 --- /dev/null
 +++ b/dom/base/RoverfoxStorageManager.h
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,75 @@
 +#ifndef mozilla_dom_RoverfoxStorageManager_h
 +#define mozilla_dom_RoverfoxStorageManager_h
 +
@@ -502,6 +521,7 @@ index 0000000000..c7dad0158f
 + private:
 +  static nsCString MakePrefName(const nsAString& key);
 +  static void SetPrefValue(const nsCString& prefName, const nsCString& value);
++  static void SyncToParent(const nsCString& prefName, const nsCString& value);
 +  static void ReadValue(const nsCString& prefName, nsACString& outValue);
 +  static void EnsureMirror();
 +  struct MemoSlot;
