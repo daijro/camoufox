@@ -1,0 +1,288 @@
+{
+ "canvas": {
+  "ko": {
+   "serif": 384,
+   "sans-serif": 384,
+   "monospace": 384
+  },
+  "ja": {
+   "serif": 480,
+   "sans-serif": 480,
+   "monospace": 480
+  },
+  "zh-CN": {
+   "serif": 384,
+   "sans-serif": 384,
+   "monospace": 384
+  },
+  "zh-TW": {
+   "serif": 384,
+   "sans-serif": 384,
+   "monospace": 384
+  },
+  "th": {
+   "serif": 361.567,
+   "sans-serif": 361.567,
+   "monospace": 361.567
+  },
+  "my": {
+   "serif": 170.3,
+   "sans-serif": 170.3,
+   "monospace": 170.3
+  },
+  "km": {
+   "serif": 182.767,
+   "sans-serif": 182.767,
+   "monospace": 182.767
+  },
+  "lo": {
+   "serif": 186.917,
+   "sans-serif": 186.917,
+   "monospace": 186.917
+  },
+  "am": {
+   "serif": 202.383,
+   "sans-serif": 202.383,
+   "monospace": 202.383
+  },
+  "hi": {
+   "serif": 274.833,
+   "sans-serif": 274.833,
+   "monospace": 274.833
+  },
+  "bn": {
+   "serif": 209.8,
+   "sans-serif": 209.8,
+   "monospace": 209.8
+  },
+  "ta": {
+   "serif": 287.2,
+   "sans-serif": 287.2,
+   "monospace": 287.2
+  },
+  "te": {
+   "serif": 277.317,
+   "sans-serif": 277.317,
+   "monospace": 277.317
+  },
+  "gu": {
+   "serif": 158.633,
+   "sans-serif": 158.633,
+   "monospace": 158.633
+  },
+  "pa": {
+   "serif": 117.133,
+   "sans-serif": 117.133,
+   "monospace": 117.133
+  },
+  "si": {
+   "serif": 148.283,
+   "sans-serif": 148.283,
+   "monospace": 148.283
+  },
+  "ar": {
+   "serif": 175.5,
+   "sans-serif": 175.5,
+   "monospace": 175.5
+  },
+  "he": {
+   "serif": 170.15,
+   "sans-serif": 198.283,
+   "monospace": 230.4
+  },
+  "ka": {
+   "serif": 223.6,
+   "sans-serif": 247.517,
+   "monospace": 247.517
+  },
+  "hy": {
+   "serif": 176.117,
+   "sans-serif": 186.15,
+   "monospace": 184.683
+  },
+  "mn": {
+   "serif": 74.067,
+   "sans-serif": 74.067,
+   "monospace": 74.067
+  },
+  "bo": {
+   "serif": 89.517,
+   "sans-serif": 89.517,
+   "monospace": 89.517
+  },
+  "chr": {
+   "serif": 106.667,
+   "sans-serif": 106.667,
+   "monospace": 106.667
+  },
+  "iu": {
+   "serif": 183.183,
+   "sans-serif": 183.183,
+   "monospace": 183.183
+  },
+  "emoji": {
+   "serif": 263.6,
+   "sans-serif": 263.6,
+   "monospace": 263.6
+  },
+  "math": {
+   "serif": 160.633,
+   "sans-serif": 160.633,
+   "monospace": 158.3
+  },
+  "ru": {
+   "serif": 274.683,
+   "sans-serif": 293.783,
+   "monospace": 316.6
+  },
+  "el": {
+   "serif": 184.067,
+   "sans-serif": 192.55,
+   "monospace": 211.067
+  }
+ },
+ "dom": {
+  "ko": {
+   "serif": 384,
+   "sans-serif": 384,
+   "monospace": 384
+  },
+  "ja": {
+   "serif": 480,
+   "sans-serif": 480,
+   "monospace": 480
+  },
+  "zh-CN": {
+   "serif": 384,
+   "sans-serif": 384,
+   "monospace": 384
+  },
+  "zh-TW": {
+   "serif": 384,
+   "sans-serif": 384,
+   "monospace": 384
+  },
+  "th": {
+   "serif": 361.567,
+   "sans-serif": 361.567,
+   "monospace": 361.567
+  },
+  "my": {
+   "serif": 170.3,
+   "sans-serif": 170.3,
+   "monospace": 170.3
+  },
+  "km": {
+   "serif": 182.767,
+   "sans-serif": 182.767,
+   "monospace": 182.767
+  },
+  "lo": {
+   "serif": 186.917,
+   "sans-serif": 186.917,
+   "monospace": 186.917
+  },
+  "am": {
+   "serif": 202.383,
+   "sans-serif": 202.383,
+   "monospace": 202.383
+  },
+  "hi": {
+   "serif": 274.833,
+   "sans-serif": 274.833,
+   "monospace": 274.833
+  },
+  "bn": {
+   "serif": 209.8,
+   "sans-serif": 209.8,
+   "monospace": 209.8
+  },
+  "ta": {
+   "serif": 287.2,
+   "sans-serif": 287.2,
+   "monospace": 287.2
+  },
+  "te": {
+   "serif": 277.317,
+   "sans-serif": 277.317,
+   "monospace": 277.317
+  },
+  "gu": {
+   "serif": 158.633,
+   "sans-serif": 158.633,
+   "monospace": 158.633
+  },
+  "pa": {
+   "serif": 117.133,
+   "sans-serif": 117.133,
+   "monospace": 117.133
+  },
+  "si": {
+   "serif": 148.283,
+   "sans-serif": 148.283,
+   "monospace": 148.283
+  },
+  "ar": {
+   "serif": 175.5,
+   "sans-serif": 224.433,
+   "monospace": 175.5
+  },
+  "he": {
+   "serif": 198.283,
+   "sans-serif": 198.283,
+   "monospace": 230.4
+  },
+  "ka": {
+   "serif": 223.6,
+   "sans-serif": 247.517,
+   "monospace": 247.517
+  },
+  "hy": {
+   "serif": 181.833,
+   "sans-serif": 186.15,
+   "monospace": 186.15
+  },
+  "mn": {
+   "serif": 74.067,
+   "sans-serif": 74.067,
+   "monospace": 74.067
+  },
+  "bo": {
+   "serif": 89.517,
+   "sans-serif": 89.517,
+   "monospace": 89.517
+  },
+  "chr": {
+   "serif": 106.667,
+   "sans-serif": 106.667,
+   "monospace": 106.667
+  },
+  "iu": {
+   "serif": 183.183,
+   "sans-serif": 183.183,
+   "monospace": 183.183
+  },
+  "emoji": {
+   "serif": 263.6,
+   "sans-serif": 263.6,
+   "monospace": 263.6
+  },
+  "math": {
+   "serif": 160.633,
+   "sans-serif": 160.633,
+   "monospace": 158.3
+  },
+  "ru": {
+   "serif": 274.683,
+   "sans-serif": 293.783,
+   "monospace": 316.6
+  },
+  "el": {
+   "serif": 184.067,
+   "sans-serif": 192.55,
+   "monospace": 211.067
+  }
+ },
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0",
+ "source": "stock Firefox 152.0.4 (win64 en-US, updater removed), Windows 10, headless, devicePixelRatio 1, 2026-09-24"
+}

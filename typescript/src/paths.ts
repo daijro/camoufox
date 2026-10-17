@@ -71,6 +71,7 @@ export const DATA_FILES: readonly string[] = [
 	"fingerprint-presets-v150.json",
 	"font-bases.json",
 	"font-groups.json",
+	"font-prefs.json",
 	"fonts.json",
 	"fpgen.yml",
 	"launcher-constants.json",
