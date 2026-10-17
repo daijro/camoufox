@@ -38,5 +38,21 @@
     "browser.cache.memory.enable": true,
     "browser.cache.disk_cache_ssl": true,
     "browser.cache.disk.smart_size.enabled": true
+  },
+  "windowsBehaviourPrefs": {
+    "media.eme.enabled": true,
+    "layout.word_select.eat_space_to_next_word": true,
+    "general.autoScroll": true,
+    "middlemouse.paste": false,
+    "middlemouse.openNewWindow": false,
+    "middlemouse.scrollbarPosition": false,
+    "browser.tabs.searchclipboardfor.middleclick": false,
+    "clipboard.autocopy": false,
+    "full-screen-api.transition-duration.enter": "200 200",
+    "full-screen-api.transition-duration.leave": "200 200",
+    "dom.forms.select.customstyling": true,
+    "ui.scrollToClick": 0,
+    "slider.snapMultiplier": 6,
+    "layout.scrollbars.click_and_hold_track.continue_to_end": false
   }
 }

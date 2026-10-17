@@ -78,3 +78,33 @@ def test_windows_keyboard_on_windows_host_is_left_alone(launch, monkeypatch):
 def test_caller_keyboard_wins(launch):
     config, _ = launch(WIN_UA, config={"input:windowsKeyboard": False})
     assert config["input:windowsKeyboard"] is False
+
+
+def test_windows_identity_gets_windows_behaviour(launch):
+    _, prefs = launch(WIN_UA)
+    for pref, value in utils.WINDOWS_BEHAVIOUR_PREFS.items():
+        assert prefs[pref] == value
+    # Spot checks against stock Firefox on Windows, so an edit to the table
+    # cannot quietly agree with itself.
+    assert prefs["media.eme.enabled"] is True
+    assert prefs["middlemouse.paste"] is False
+    assert prefs["general.autoScroll"] is True
+    assert prefs["layout.word_select.eat_space_to_next_word"] is True
+    assert prefs["full-screen-api.transition-duration.enter"] == "200 200"
+
+
+@pytest.mark.parametrize("ua", [MAC_UA, LIN_UA])
+def test_other_identities_keep_host_behaviour(launch, ua):
+    _, prefs = launch(ua)
+    assert not set(utils.WINDOWS_BEHAVIOUR_PREFS) & set(prefs)
+
+
+def test_windows_behaviour_on_windows_host_is_left_alone(launch, monkeypatch):
+    monkeypatch.setattr(utils, "_host_os_key", lambda: "win")
+    _, prefs = launch(WIN_UA)
+    assert not set(utils.WINDOWS_BEHAVIOUR_PREFS) & set(prefs)
+
+
+def test_caller_behaviour_wins(launch):
+    _, prefs = launch(WIN_UA, firefox_user_prefs={"middlemouse.paste": True})
+    assert prefs["middlemouse.paste"] is True

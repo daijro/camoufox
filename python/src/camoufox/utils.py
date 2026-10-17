@@ -53,6 +53,25 @@ ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
 # Camoufox preferences to cache previous pages and requests
 CACHE_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['cachePrefs']
 
+# Prefs whose Firefox 156 default differs between the Windows and Linux builds
+# (all.js, firefox.js, StaticPrefList.yaml) and that a page or the user can
+# observe, set to the Windows default:
+#   - media.eme.enabled: Linux ships EME off, so requestMediaKeySystemAccess()
+#     rejects with "EME has been preffed off", a message only Linux gives.
+#   - eat_space_to_next_word: double-click selects the trailing space too.
+#   - general.autoScroll, middlemouse.*, searchclipboardfor.middleclick,
+#     clipboard.autocopy: middle click autoscrolls. Linux instead pastes the
+#     X11 primary selection, firing a paste event no Windows browser sends.
+#   - full-screen-api.transition-duration.*: GTK builds have no transition.
+#   - dom.forms.select.customstyling: <select> dropdowns honour page styling.
+#   - ui.scrollToClick, slider.snapMultiplier, click_and_hold_track: a track
+#     click pages rather than jumps (GTK otherwise reads the desktop setting),
+#     a thumb dragged far off snaps back, and holding on the track stops at
+#     the pointer.
+# Windows-only machinery (DirectComposition, ClearType, WMF) does nothing in a
+# Linux build and is left out.
+WINDOWS_BEHAVIOUR_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['windowsBehaviourPrefs']
+
 
 def _host_os_key() -> Optional[str]:
     """The host OS in fonts.json / target_os terms ('mac', 'win', 'lin')."""
@@ -1305,6 +1324,9 @@ def launch_options(
         # and Ctrl+Backspace/Delete in rich text deleting a word from a
         # selection's start (windows-keyboard.patch).
         config.setdefault('input:windowsKeyboard', True)
+
+        for pref, value in WINDOWS_BEHAVIOUR_PREFS.items():
+            firefox_user_prefs.setdefault(pref, value)
 
     # Per-character font fallback, LINUX ONLY. Gecko's GlobalFontFallback walks
     # the shared font list for a family whose charmap covers the character; in a

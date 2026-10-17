@@ -102,6 +102,12 @@ const OS_NAMES = { win: "windows", mac: "macos", lin: "linux" } as const;
 // Camoufox preferences to cache previous pages and requests
 export const CACHE_PREFS: Record<string, any> = LAUNCHER_CONSTANTS.cachePrefs;
 
+// Prefs whose Firefox default differs between the Windows and Linux builds and
+// that a page or the user can observe, at the Windows default (see
+// WINDOWS_BEHAVIOUR_PREFS in the Python launcher for each one's reason).
+export const WINDOWS_BEHAVIOUR_PREFS: Record<string, any> =
+	LAUNCHER_CONSTANTS.windowsBehaviourPrefs;
+
 /** The host OS in fonts.json / target_os terms ('mac', 'win', 'lin'). */
 function hostOsKey(): TargetOS | null {
 	return (
@@ -1635,6 +1641,10 @@ export async function launchOptions({
 		// Keyboard: Windows' shortcut tables instead of GTK's text bindings, and
 		// AltGr as keyCode 18 rather than 225 (windows-keyboard.patch).
 		setInto(config, "input:windowsKeyboard", true);
+
+		for (const [pref, value] of Object.entries(WINDOWS_BEHAVIOUR_PREFS)) {
+			setInto(firefox_user_prefs, pref, value);
+		}
 	}
 
 	// Per-character font fallback, LINUX ONLY: with async fallback on, the
