@@ -33,6 +33,7 @@ be listed there.
 |-------|-------------|
 | `audio-context-spoofing.patch` | `AudioContext:sampleRate`, `AudioContext:outputLatency`, `AudioContext:maxChannelCount` |
 | `chromeutil.patch` | `debug` |
+| `cmap-unicode-ucs4-fallback.patch` | `navigator.platform` (through `GetSpoofedOS()`) |
 | `fallback-fonts-claimed-os.patch` | `navigator.platform` (through `GetSpoofedOS()`) |
 | `fingerprint-injection.patch` | `navigator.*`, `screen.*`, `window.*` |
 | `font-metrics-windows.patch` | `fonts:metrics` |
@@ -65,6 +66,7 @@ already set up, and do not add the include or `LOCAL_INCLUDES` themselves:
 
 | Patch | Relies on |
 |-------|-----------|
+| `cmap-unicode-ucs4-fallback.patch` | `font-hijacker.patch` for `/camoucfg` in `gfx/thebes/moz.build` |
 | `fallback-fonts-claimed-os.patch` | `font-hijacker.patch` for `/camoucfg` in `gfx/thebes/moz.build` |
 | `font-metrics-windows.patch` | `font-hijacker.patch` for `/camoucfg` in `gfx/thebes/moz.build` |
 | `force-default-pointer.patch` | `screen-spoofing.patch` for `MaskConfig.hpp` in `layout/style/nsMediaFeatures.cpp`; `font-hijacker.patch` for `/camoucfg` in `layout/style/moz.build` |
