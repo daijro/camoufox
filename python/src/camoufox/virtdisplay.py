@@ -13,8 +13,10 @@ from camoufox.exceptions import (
 )
 from camoufox.pkgman import OS_NAME
 
-# Safe timeout for Xvfb writing display num, prevents infinite hang.
-DISPLAYFD_READ_TIMEOUT_S = 10.0
+# Safe timeout for Xvfb writing display num, prevents infinite hang. A cold first
+# Xvfb on a fresh host took 0.6-8.4 s to report (lang315/camoufox#157), so 10 s
+# failed launches that would have succeeded.
+DISPLAYFD_READ_TIMEOUT_S = 30.0
 
 # Xvfb screen geometry for headless="virtual". The root window size is not
 # observable (see virtual-display-default-1x1x24 in ci/tribal-rules.yml);
