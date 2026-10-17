@@ -237,7 +237,26 @@ Tahoma`, the `Sitka` / `Segoe UI Variable` scan-time instance families and the
 alias block above. macOS: Helvetica / Times / Menlo / Apple Chancery / Zapfino.
 `system-ui` is left to Gecko, which resolves it itself. The
 `<dir prefix="cwd">fonts</dir>` line that `utils.py` rewrites is kept in all
-three — `verify-fonts.py` fails if it is missing.
+three — `verify-fonts.py` fails if it is missing. Windows hints `hintslight`
+and macOS not at all: DirectWrite and CoreText keep advances at design units,
+where full hinting rounded every advance to a whole pixel.
+
+## Another OS's identity on a Linux host
+
+A Linux build compiles only Linux's font defaults, so without help a Windows
+identity resolved generics and scripts the Linux way (75 of 168 per-script
+widths matched stock Windows). When the claimed OS is not the host's:
+
+- the launcher sets that OS's `font.*` defaults from
+  `python/src/camoufox/font-prefs.json`, which
+  `browser/scripts/gen-font-prefs.py` reads out of `all.js` (regenerate it on
+  a Firefox bump), and turns async fallback off on any Linux host;
+- `fallback-fonts-claimed-os.patch` makes `gfxPlatformGtk` use stock's
+  Windows or macOS per-script fallback table, by the launch's
+  `navigator.platform`.
+
+`browser/tests/playwright/patches/font-fallback-windows.py` measures 28
+scripts in three generics against stock Windows (at least 160 of 168 match).
 
 ## Verifying
 

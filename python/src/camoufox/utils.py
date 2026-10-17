@@ -139,6 +139,22 @@ def _stock_profile_disk_capacity_kb() -> Optional[int]:
     return None
 
 
+def _stock_font_prefs(target_os: str, build_os: str) -> Dict[str, Any]:
+    """The font.* prefs that make a build for `build_os` resolve fonts the way
+    stock Firefox does on `target_os` (font-prefs.json, from all.js by
+    browser/scripts/gen-font-prefs.py): the target's values where they differ,
+    and an empty list for name-lists only the build's platform sets."""
+    with open(os.path.join(os.path.dirname(__file__), 'font-prefs.json'), 'rb') as f:
+        table = orjson.loads(f.read())
+    target = table[OS_NAMES[target_os]]
+    build = table[OS_NAMES[build_os]]
+    prefs = {k: v for k, v in target.items() if build.get(k) != v}
+    for k, v in build.items():
+        if k not in target and isinstance(v, str):
+            prefs[k] = ''
+    return prefs
+
+
 def _generate_fontconfig(
     fontconfig_path: str, path: Optional[Path] = None, os_dir: Optional[str] = None
 ) -> str:
@@ -1404,8 +1420,24 @@ def launch_options(
     # forcing the synchronous scan changed the face picked for U+1E9E in Futura
     # (21.733 stock -> 27.267) -- measured on a stock Mac mini, 1/14 families
     # regressed. Windows is untested until a Windows build exists.
-    if target_os == 'lin':
+    # The skip belongs to the Linux platform code, not to the claimed OS, so
+    # a Windows or macOS identity on a Linux host needs it off too: with
+    # Windows' font prefs applied (below) and async on, Korean, Tamil and
+    # Myanmar rendered as .notdef (153.9 px for all three) on a Windows identity.
+    if target_os == 'lin' or _host_os_key() == 'lin':
         firefox_user_prefs.setdefault('gfx.font_rendering.fallback.async', False)
+
+    # Per-language and generic fonts: the build only has its own platform's
+    # font.name-list defaults, so a Windows identity drew Thai through
+    # fontconfig's 'serif' where Windows names Tahoma, and emoji with Noto
+    # Color Emoji where Windows names Segoe UI Emoji. With stock Windows'
+    # values (plus fallback-fonts-claimed-os.patch for the per-script table,
+    # and unhinted advances in the bundled fonts.conf), 156 of 168 per-script
+    # widths matched stock 152.0.4 on Windows, against 75.
+    host_os = _host_os_key()
+    if target_os in ('win', 'mac') and host_os in OS_NAMES and target_os != host_os:
+        for pref, value in _stock_font_prefs(target_os, host_os).items():
+            firefox_user_prefs.setdefault(pref, value)
 
     # Storage quota, from the host's own disk. A page reads the group limit
     # through navigator.storage.estimate().quota; see
