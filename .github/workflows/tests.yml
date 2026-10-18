@@ -79,7 +79,7 @@ on:
         default: "6"
         type: string
       ref:
-        description: "Commit to test; defaults to the calling workflow's ref"
+        description: "Commit to test; defaults to the calling workflow's commit"
         required: false
         type: string
     secrets:
@@ -127,7 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -241,7 +241,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           # Full history: config-keys-are-never-deleted checks every key
           # browser/settings/properties.json has ever declared.
           fetch-depth: 0
@@ -304,7 +304,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -351,7 +351,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           # Not PYTHON_VERSION: the golden fixtures are regenerated from this
@@ -418,7 +418,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -478,7 +478,7 @@ jobs:
       # Checkout first, because the cache key below is a hash of the tree.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Hash the inputs that can change compiled output
         id: native
@@ -721,7 +721,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -804,7 +804,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -865,7 +865,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -920,7 +920,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -966,7 +966,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -1033,7 +1033,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -1094,7 +1094,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -1127,7 +1127,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -1179,7 +1179,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
