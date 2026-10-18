@@ -350,13 +350,14 @@ def get_geolocation(ip: str, geoip_db: Optional[str] = None) -> Geolocation:
         )
 
 
-def ip_accuracy(ip: str, radius_km: Optional[float] = None) -> float:
+def ip_accuracy(ip: str, radius_km: Optional[float] = None) -> int:
     """
-    Accuracy in metres for a position derived from an IP address. Stable per IP,
-    so one exit IP always reports the same fix.
+    Accuracy in whole metres for a position derived from an IP address. Stable
+    per IP, so one exit IP always reports the same fix. An int, so the config
+    serializes as the TypeScript launcher's does (5625, not 5625.0).
     """
     if radius_km:
-        return float(radius_km) * 1000.0
+        return round(float(radius_km) * 1000.0)
     low, high = IP_ACCURACY_RANGE_M
     unit = int.from_bytes(hashlib.sha256(ip.encode()).digest()[:8], 'big') / 2**64
-    return float(round(low + unit * (high - low)))
+    return round(low + unit * (high - low))

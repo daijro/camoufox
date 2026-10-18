@@ -60,7 +60,7 @@ function pyRound(x: number, decimals = 0): number {
  * IP, so one exit IP always reports the same fix.
  */
 export function ipAccuracy(ip: string, radiusKm?: number | null): number {
-	if (radiusKm) return Number(radiusKm) * 1000.0;
+	if (radiusKm) return pyRound(Number(radiusKm) * 1000.0);
 	const [low, high] = IP_ACCURACY_RANGE_M;
 	const digest = createHash("sha256").update(ip).digest();
 	const unit = Number(digest.readBigUInt64BE(0)) / 2 ** 64;
