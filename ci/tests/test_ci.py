@@ -241,6 +241,37 @@ def test_gate_result_keeps_the_best_outcome_across_retries():
     assert result.tests["t"] == "pass"
 
 
+def test_a_rerun_job_result_replaces_the_first_attempts(tmp_path, monkeypatch):
+    """"Rerun failed jobs" must be able to turn the summary green.
+
+    Every attempt's `results-*` artifacts stay in the run, and the summary
+    merges them all into one directory. When both attempts wrote
+    native_browser.json, one overwrote the other in no particular order: run
+    36266928260's rerun passed, and the summary still reported attempt 1's
+    failure. A rerun's result must land beside the first and win.
+    """
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    results.GateResult(gate="native_browser").finish(results.FAIL).save(tmp_path)
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    results.GateResult(gate="native_browser").finish(results.PASS).save(tmp_path)
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    results.GateResult(gate="patch_guards").finish(results.PASS).save(tmp_path)
+
+    assert len(list(tmp_path.glob("native_browser*.json"))) == 2
+    merged = results.load_all(tmp_path)
+    assert merged["native_browser"]["status"] == results.PASS
+    assert merged["patch_guards"]["status"] == results.PASS
+    assert results.load("native_browser", tmp_path)["status"] == results.PASS
+
+
+def test_a_later_attempt_wins_whatever_order_the_files_sort_in(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "10")
+    results.GateResult(gate="g").finish(results.PASS).save(tmp_path)
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "9")
+    results.GateResult(gate="g").finish(results.FAIL).save(tmp_path)
+    assert results.load_all(tmp_path)["g"]["status"] == results.PASS
+
+
 
 
 # ---------------------------------------------------------------------------
