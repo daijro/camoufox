@@ -192,17 +192,12 @@ export function jitterTrajectory(points, trajectoryLength, rng, scale = 0.01) {
     const averageGap = ((i > 0 ? gaps[i - 1] : 0) + (i < count - 1 ? gaps[i] : 0)) / 2;
     adaptiveScales[i] = scale * (averageGap / Math.max(averageGap, 1)) * lengthScale;
   }
+  const weights = endpointWeights(points);
+  for (let i = 0; i < count; i += 1) {
+    adaptiveScales[i] *= weights[i];
+  }
 
   // Unit normal at each point, from the local tangent.
-  //
-  // On whole-pixel input the normals are truncated towards zero, leaving only
-  // 0 and +/-1. That is not a simplification: numpy types an array of recorded
-  // integer coordinates as int64, so the original's `np.zeros_like(tangents)`
-  // is an integer array and storing a unit vector in it rounds it off. Most
-  // recordings in the database are whole-pixel, so this shapes most of the
-  // jitter Cursory actually produces, and dropping it would put this port on a
-  // different path from the Python original for the same seed.
-  const quantizeNormals = isWholePixelPath(points);
   const normalX = new Float64Array(count);
   const normalY = new Float64Array(count);
   for (let i = 0; i < count; i += 1) {
@@ -214,10 +209,6 @@ export function jitterTrajectory(points, trajectoryLength, rng, scale = 0.01) {
     if (tangentLength > EPSILON) {
       normalX[i] = -tangentY / tangentLength;
       normalY[i] = tangentX / tangentLength;
-      if (quantizeNormals) {
-        normalX[i] = Math.trunc(normalX[i]);
-        normalY[i] = Math.trunc(normalY[i]);
-      }
     }
   }
 
@@ -261,7 +252,7 @@ export function generateMiddleBiasedPoint(x1, y1, x2, y2, rng, biasFactor = 2.0)
 /**
  * Bend the path towards a few random points, as if the hand had drifted on its
  * way across. Displacements are square-rooted so near points are pulled far less
- * than the raw pull would suggest.
+ * than the raw pull would suggest, and fade out towards both ends of the path.
  */
 export function knotTrajectory(
   points,
@@ -307,15 +298,38 @@ export function knotTrajectory(
     }
   }
 
+  const weights = endpointWeights(points);
   return points.map((point, i) => [
-    point[0] + signedSqrt(offsetX[i]),
-    point[1] + signedSqrt(offsetY[i]),
+    point[0] + signedSqrt(offsetX[i]) * weights[i],
+    point[1] + signedSqrt(offsetY[i]) * weights[i],
   ]);
 }
 
-/** Whether numpy would have typed these coordinates as integers rather than floats. */
-function isWholePixelPath(points) {
-  return points.every((point) => Number.isInteger(point[0]) && Number.isInteger(point[1]));
+/**
+ * How much added displacement each point may take: zero, with zero slope, at
+ * both ends of the path, rising to one halfway along it by distance travelled.
+ * A path that never moves gets no displacement at all.
+ */
+function endpointWeights(points) {
+  const count = points.length;
+  const progress = new Float64Array(count);
+  for (let i = 1; i < count; i += 1) {
+    const dx = points[i][0] - points[i - 1][0];
+    const dy = points[i][1] - points[i - 1][1];
+    progress[i] = progress[i - 1] + Math.sqrt(dx * dx + dy * dy);
+  }
+
+  const weights = new Float64Array(count);
+  const total = count > 0 ? progress[count - 1] : 0;
+  if (total === 0) {
+    return weights;
+  }
+  for (let i = 0; i < count; i += 1) {
+    const fraction = progress[i] / total;
+    const weight = 4 * fraction * (1 - fraction);
+    weights[i] = weight * weight;
+  }
+  return weights;
 }
 
 /** `np.copysign(np.sqrt(np.abs(x)), x)`. */
@@ -325,8 +339,8 @@ function signedSqrt(value) {
 }
 
 /**
- * Select a recording for this movement, then jitter, knot and morph it onto the
- * requested endpoints.
+ * Select a recording for this movement, morph it onto the requested endpoints,
+ * then jitter and knot it there.
  */
 export function findTrajectory(targetStart, targetEnd, rng, directness = 0.65) {
   const { trajectory, dxTarget, dyTarget, lengthTarget } = findClosestTrajectory(
@@ -347,8 +361,17 @@ export function findTrajectory(targetStart, targetEnd, rng, directness = 0.65) {
     timings = timings.map((timing) => startTime + (timing - startTime) * timeScale);
   }
 
-  const jittered = jitterTrajectory(trajectory.points, lengthTarget, rng);
-  const knotted = knotTrajectory(jittered, targetStart, targetEnd, rng);
-  const points = morphTrajectory(knotted, targetStart, targetEnd, dxTarget, dyTarget, lengthTarget);
+  // Add the noise in target coordinates, so where the recording sat on its
+  // original screen cannot change the shape it ends up with.
+  const morphed = morphTrajectory(
+    trajectory.points,
+    targetStart,
+    targetEnd,
+    dxTarget,
+    dyTarget,
+    lengthTarget,
+  );
+  const jittered = jitterTrajectory(morphed, lengthTarget, rng);
+  const points = knotTrajectory(jittered, targetStart, targetEnd, rng);
   return { points, timings };
 }
