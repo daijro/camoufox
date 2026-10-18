@@ -125,7 +125,15 @@ diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
-@@ -50,6 +50,22 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
+@@ -5,6 +5,7 @@
+ #include "nsScreen.h"
+ 
+ #include "MaskConfig.hpp"
++#include "NavigatorManager.h"
+ #include "ScreenDimensionManager.h"
+ 
+ #include "mozilla/GeckoBindings.h"
+@@ -50,6 +51,22 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsScreen, DOMEventTargetHelper,
                                     mScreenOrientation)
  
  int32_t nsScreen::PixelDepth() {
@@ -148,7 +156,7 @@ diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
    // Camoufox: per-context colour depth wins over the global config, so
    // contexts in one process can differ.
    if (uint32_t depth = 0; ScreenDimensionManager::GetColorDepth(
-@@ -60,15 +76,7 @@ int32_t nsScreen::PixelDepth() {
+@@ -60,15 +77,7 @@ int32_t nsScreen::PixelDepth() {
      return value.value();
    if (auto value = MaskConfig::GetUint32("screen.pixelDepth"))
      return value.value();
@@ -165,18 +173,58 @@ diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
  }
  
  nsPIDOMWindowOuter* nsScreen::GetOuter() const {
-@@ -83,6 +91,39 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
+@@ -82,47 +91,61 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
+   return nsLayoutUtils::GetDeviceContextForScreenInfo(GetOuter());
  }
  
- CSSIntRect nsScreen::GetRect() {
+-CSSIntRect nsScreen::GetRect() {
+-  // Camoufox: per-context size wins over the global config.
++// Camoufox: the spoofed screen size, if any: the context's own, else the
++// global config's.
++static Maybe<CSSIntRect> CamouSpoofedScreenRect(nsPIDOMWindowInner* aOwner) {
+   if (uint32_t w = 0, h = 0; ScreenDimensionManager::GetDimensions(
+-          RoverfoxStorageManager::UserContextId(GetOwnerWindow()), w, h)) {
+-    return {0, 0, static_cast<int32_t>(w), static_cast<int32_t>(h)};
++          RoverfoxStorageManager::UserContextId(aOwner), w, h)) {
++    return Some(CSSIntRect(0, 0, static_cast<int32_t>(w),
++                           static_cast<int32_t>(h)));
+   }
+-  // Camoufox: report the spoofed screen size from the injected config.
+   if (auto width = MaskConfig::GetInt32("screen.width"),
+       height = MaskConfig::GetInt32("screen.height");
+       width && height) {
+-    return {0, 0, width.value(), height.value()};
+-  }
+-  // Return window inner rect to prevent fingerprinting.
+-  if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
+-    return GetTopWindowInnerRectForRFP();
++    return Some(CSSIntRect(0, 0, width.value(), height.value()));
+   }
++  return Nothing();
++}
+ 
+-  // Here we manipulate the value of aRect to represent the screen size,
+-  // if there is an override set with WebDriver BiDi or in RDM.
+-  if (nsPIDOMWindowInner* owner = GetOwnerWindow()) {
+-    if (Document* doc = owner->GetExtantDoc()) {
+-      Maybe<CSSIntSize> deviceSize =
+-          nsGlobalWindowOuter::GetRDMDeviceSize(*doc);
+-      if (deviceSize.isSome()) {
+-        const CSSIntSize& size = deviceSize.value();
+-        return {0, 0, size.width, size.height};
+-      }
++CSSIntRect nsScreen::GetRect() {
 +  // Camoufox: stock's work first, then the spoof (timing parity; see
 +  // nsScreen::PixelDepth).
 +  const CSSIntRect stock = [&]() -> CSSIntRect {
 +    // Return window inner rect to prevent fingerprinting.
 +    if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
 +      return GetTopWindowInnerRectForRFP();
-+    }
-+
+     }
+ 
+-    if (BrowsingContext* bc = owner->GetBrowsingContext()) {
+-      if (auto size = bc->GetScreenAreaOverride()) {
+-        return {{}, *size};
 +    // Here we manipulate the value of aRect to represent the screen size,
 +    // if there is an override set with WebDriver BiDi or in RDM.
 +    if (nsPIDOMWindowInner* owner = GetOwnerWindow()) {
@@ -193,56 +241,29 @@ diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
 +        if (auto size = bc->GetScreenAreaOverride()) {
 +          return {{}, *size};
 +        }
-+      }
-+    }
-+
+       }
+     }
+-  }
+ 
+-  nsDeviceContext* context = GetDeviceContext();
+-  if (NS_WARN_IF(!context)) {
+-    return {};
 +    nsDeviceContext* context = GetDeviceContext();
 +    if (NS_WARN_IF(!context)) {
 +      return {};
 +    }
 +    return CSSIntRect::FromAppUnitsRounded(context->GetRect());
 +  }();
-   // Camoufox: per-context size wins over the global config.
-   if (uint32_t w = 0, h = 0; ScreenDimensionManager::GetDimensions(
-           RoverfoxStorageManager::UserContextId(GetOwnerWindow()), w, h)) {
-@@ -94,35 +135,7 @@ CSSIntRect nsScreen::GetRect() {
-       width && height) {
-     return {0, 0, width.value(), height.value()};
++  // Camoufox: per-context size wins over the global config.
++  if (auto spoofed = CamouSpoofedScreenRect(GetOwnerWindow())) {
++    return *spoofed;
    }
--  // Return window inner rect to prevent fingerprinting.
--  if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
--    return GetTopWindowInnerRectForRFP();
--  }
--
--  // Here we manipulate the value of aRect to represent the screen size,
--  // if there is an override set with WebDriver BiDi or in RDM.
--  if (nsPIDOMWindowInner* owner = GetOwnerWindow()) {
--    if (Document* doc = owner->GetExtantDoc()) {
--      Maybe<CSSIntSize> deviceSize =
--          nsGlobalWindowOuter::GetRDMDeviceSize(*doc);
--      if (deviceSize.isSome()) {
--        const CSSIntSize& size = deviceSize.value();
--        return {0, 0, size.width, size.height};
--      }
--    }
--
--    if (BrowsingContext* bc = owner->GetBrowsingContext()) {
--      if (auto size = bc->GetScreenAreaOverride()) {
--        return {{}, *size};
--      }
--    }
--  }
--
--  nsDeviceContext* context = GetDeviceContext();
--  if (NS_WARN_IF(!context)) {
--    return {};
--  }
 -  return CSSIntRect::FromAppUnitsRounded(context->GetRect());
 +  return stock;
  }
  
  CSSIntRect nsScreen::GetAvailRect() {
-@@ -131,6 +144,68 @@ CSSIntRect nsScreen::GetAvailRect() {
+@@ -131,12 +154,105 @@ CSSIntRect nsScreen::GetAvailRect() {
    // must not bypass it.
    const bool availFromResolution =
        ShouldResistFingerprinting(RFPTarget::ScreenAvailToResolution);
@@ -291,15 +312,45 @@ diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
 +      }
 +
 +      // Camoufox: from the screen the page sees, for the platform it is told.
++      // Stock's own work here is context->GetRect(); a spoofed size replaces
++      // its result. Calling GetRect() instead redid stock's whole screen.width
++      // getter on top, and asking Navigator for the platform built and
++      // converted a string, together about twice stock's availWidth (430 ns
++      // vs 176 ns on 156.0.1).
++      nsRect screenRect = context->GetRect();
++      if (auto spoofed = CamouSpoofedScreenRect(GetOwnerWindow())) {
++        screenRect = CSSPixel::ToAppUnits(*spoofed);
++      } else {
++        screenRect = CSSPixel::ToAppUnits(GetRect());
++      }
++      // Only the OS behind navigator.platform matters here, which the
++      // context's stored platform or the launch's answers without building a
++      // string; Navigator::GetPlatform is asked only when neither names one.
 +      nsAutoString platform;
-+      if (nsGlobalWindowInner* owner =
-+              nsGlobalWindowInner::Cast(GetOwnerWindow())) {
-+        owner->Navigator()->GetPlatform(platform, CallerType::NonSystem,
-+                                        IgnoreErrors());
++      if (!NavigatorManager::GetPlatform(
++              RoverfoxStorageManager::UserContextId(GetOwnerWindow()),
++              platform)) {
++        switch (MaskConfig::GetSpoofedOS()) {
++          case MaskConfig::SpoofedOS::Windows:
++            platform.AssignLiteral(u"Win32");
++            break;
++          case MaskConfig::SpoofedOS::MacOS:
++            platform.AssignLiteral(u"MacIntel");
++            break;
++          case MaskConfig::SpoofedOS::Linux:
++            platform.AssignLiteral(u"Linux");
++            break;
++          default:
++            if (nsGlobalWindowInner* owner =
++                    nsGlobalWindowInner::Cast(GetOwnerWindow())) {
++              owner->Navigator()->GetPlatform(platform, CallerType::NonSystem,
++                                              IgnoreErrors());
++            }
++            break;
++        }
 +      }
 +      return nsRFPService::GetSpoofedScreenAvailSize(
-+          CSSPixel::ToAppUnits(GetRect()), context->GetFullZoom(),
-+          IsFullscreen(), platform);
++          screenRect, context->GetFullZoom(), IsFullscreen(), platform);
 +    }
 +
 +    nsDeviceContext* context = GetDeviceContext();
@@ -308,10 +359,25 @@ diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
 +    }
 +    return CSSIntRect::FromAppUnitsRounded(context->GetClientRect());
 +  }();
++  if (availFromResolution) {
++    return stock;
++  }
    // Camoufox: the per-context API sets one size, so the available rect is the
    // whole screen. That matches the generated fingerprints, whose availWidth /
    // availHeight equal width / height, and keeps availWidth <= width true.
-@@ -148,64 +223,7 @@ CSSIntRect nsScreen::GetAvailRect() {
+-  if (uint32_t w = 0, h = 0;
+-      !availFromResolution &&
+-      ScreenDimensionManager::GetDimensions(
++  if (uint32_t w = 0, h = 0; ScreenDimensionManager::GetDimensions(
+           RoverfoxStorageManager::UserContextId(GetOwnerWindow()), w, h)) {
+     return {0, 0, static_cast<int32_t>(w), static_cast<int32_t>(h)};
+   }
+@@ -144,68 +260,11 @@ CSSIntRect nsScreen::GetAvailRect() {
+   // config.
+   auto rect = MaskConfig::GetRect("screen.availLeft", "screen.availTop",
+                                   "screen.availWidth", "screen.availHeight");
+-  if (rect.has_value() && !availFromResolution) {
++  if (rect.has_value()) {
      auto values = rect.value();
      return {values[0], values[1], values[2], values[3]};
    }
