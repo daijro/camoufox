@@ -9,7 +9,7 @@ import asyncio
 
 import pytest
 
-from camoufox import async_api, sync_api
+from camoufox import async_api, sync_api, utils
 
 
 class FakeDisplay:
@@ -37,8 +37,9 @@ def _raise(*args, **kwargs):
 @pytest.fixture(autouse=True)
 def fake_display(monkeypatch):
     FakeDisplay.instances.clear()
-    monkeypatch.setattr(sync_api, "VirtualDisplay", FakeDisplay)
-    monkeypatch.setattr(async_api, "VirtualDisplay", FakeDisplay)
+    # NewBrowser and AsyncNewBrowser start the display through
+    # utils.start_virtual_display.
+    monkeypatch.setattr(utils, "VirtualDisplay", FakeDisplay)
 
 
 def test_sync_kills_display_when_launch_options_fails(monkeypatch):

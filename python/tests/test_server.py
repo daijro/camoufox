@@ -25,7 +25,7 @@ from pathlib import Path
 import orjson
 import pytest
 
-from camoufox import server
+from camoufox import server, utils
 from camoufox.server import get_nodejs
 
 # Anything on the driver's private lib/ path is fair game for Playwright to
@@ -303,7 +303,7 @@ class _ExitedProcess:
 @pytest.fixture
 def fake_virtual_display(monkeypatch):
     _FakeVirtualDisplay.instances = []
-    monkeypatch.setattr(server, "VirtualDisplay", _FakeVirtualDisplay, raising=False)
+    monkeypatch.setattr(utils, "VirtualDisplay", _FakeVirtualDisplay)
     monkeypatch.setattr(server, "get_nodejs", lambda: "/node")
     return _FakeVirtualDisplay.instances
 
@@ -347,3 +347,49 @@ def test_launch_server_kills_virtual_display_when_launch_fails(
 
     assert len(fake_virtual_display) == 1
     assert fake_virtual_display[0].killed
+
+
+def test_a_served_gpu_display_is_proved_on_the_printed_endpoint(monkeypatch, capsys):
+    # The server's browser runs in Node, so the GPU check connects to the
+    # endpoint launchServer.js prints, and the output still reaches the user.
+    import io
+
+    import playwright.sync_api
+
+    connected = []
+
+    class FakePlaywright:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        @property
+        def firefox(self):
+            return self
+
+        def connect(self, endpoint):
+            connected.append(endpoint)
+            return self
+
+        def close(self):
+            connected.append("closed")
+
+    proved = []
+    monkeypatch.setattr(playwright.sync_api, "sync_playwright", FakePlaywright)
+    monkeypatch.setattr(server, "prove_gpu", lambda browser, display: proved.append(display))
+
+    class Process:
+        stdout = io.StringIO(
+            "Launching server...\n"
+            "Websocket endpoint:\x1b[93m ws://localhost:4242/abc \x1b[0m\n"
+            "after\n"
+        )
+
+    display = object()
+    server._prove_served_gpu(Process(), display)
+
+    assert connected == ["ws://localhost:4242/abc", "closed"]
+    assert proved == [display]
+    assert "ws://localhost:4242/abc" in capsys.readouterr().out

@@ -43,6 +43,7 @@ from .pkgman import (
     selected_launch_path,
     warn_if_package_outdated,
 )
+from .gpudisplay import GPU_PREFS, GpuDisplay, async_prove_gpu, prove_gpu, select_gpu
 from .virtdisplay import VirtualDisplay
 from ._warnings import FallbackWarning, LeakWarning
 from .host_rendering import Gpu, add_canvas_placeholder, has_canvas_placeholder, host_gpu, renders_on_hardware, set_webgpu
@@ -777,7 +778,7 @@ def host_identity(from_options: Dict[str, Any], canvas_noise: Optional[bool]) ->
     host_os = _host_os_key()
     covered, gpu = plan_rendering(
         host_os, None, False, bool(prefs.get('webgl.disabled')),
-        lambda: host_gpu(from_options['executable_path'], from_options['headless'], from_options['env']),
+        lambda: host_gpu(from_options['executable_path'], from_options['headless'], from_options['env'], prefs),
     )
     return None if covered else (host_os, gpu)
 
@@ -827,11 +828,37 @@ def new_context_options(
     return opts
 
 
+def start_virtual_display(
+    headless: Any, debug: Optional[bool], kwargs: Dict[str, Any]
+) -> Tuple[Optional[VirtualDisplay], Any]:
+    """Start the display headless='virtual' or 'virtual-gpu' asks for.
+
+    Pops the display's own options from `kwargs` and points the launch at the
+    display. Returns the display, or None, and the headless value to launch with.
+    """
+    gpu = kwargs.pop('gpu', None)
+    require_gpu = kwargs.pop('require_gpu', None)
+    if headless == 'virtual-gpu':
+        display: VirtualDisplay = GpuDisplay(
+            select_gpu(gpu), debug=bool(debug), require_gpu=require_gpu is not False
+        )
+        kwargs['firefox_user_prefs'] = {**GPU_PREFS, **(kwargs.get('firefox_user_prefs') or {})}
+    elif gpu is not None or require_gpu is not None:
+        raise ValueError("gpu and require_gpu apply to headless='virtual-gpu' only")
+    elif headless == 'virtual':
+        display = VirtualDisplay(debug=debug)
+    else:
+        return None, headless
+    kwargs['virtual_display'] = display.get()
+    return display, False
+
+
 async def async_attach_vd(
     browser: Any, virtual_display: Optional[VirtualDisplay] = None
 ) -> Any:  # type: ignore
     """
-    Attaches the virtual display to the async browser cleanup
+    Attaches the virtual display to the async browser cleanup, and on a GPU
+    display checks the browser renders on the GPU.
     """
     if not virtual_display:  # Skip if no virtual display is provided
         return browser
@@ -846,6 +873,13 @@ async def async_attach_vd(
 
     browser.close = new_close
 
+    if isinstance(virtual_display, GpuDisplay):
+        try:
+            await async_prove_gpu(browser, virtual_display)
+        except BaseException:
+            await browser.close()
+            raise
+
     return browser
 
 
@@ -853,7 +887,8 @@ def sync_attach_vd(
     browser: Any, virtual_display: Optional[VirtualDisplay] = None
 ) -> Any:  # type: ignore
     """
-    Attaches the virtual display to the sync browser cleanup
+    Attaches the virtual display to the sync browser cleanup, and on a GPU
+    display checks the browser renders on the GPU.
     """
     if not virtual_display:  # Skip if no virtual display is provided
         return browser
@@ -867,6 +902,13 @@ def sync_attach_vd(
             virtual_display.kill()
 
     browser.close = new_close
+
+    if isinstance(virtual_display, GpuDisplay):
+        try:
+            prove_gpu(browser, virtual_display)
+        except BaseException:
+            browser.close()
+            raise
 
     return browser
 
@@ -983,7 +1025,8 @@ def launch_options(
         headless (Optional[bool]):
             Whether to run the browser in headless mode. Defaults to False.
             Note: If you are running linux, passing headless='virtual' to Camoufox, AsyncCamoufox
-            or launch_server will use Xvfb.
+            or launch_server will use Xvfb, and headless='virtual-gpu' a headless Xorg
+            server bound to one GPU.
         main_world_eval (Optional[bool]):
             Whether to enable running scripts in the main world.
             To use this, prepend "mw:" to the script: page.evaluate("mw:" + script).
@@ -1528,7 +1571,7 @@ def launch_options(
         canvas_noise,
         bool(webgl_config or (config.get('webGl:vendor') and config.get('webGl:renderer'))),
         bool(block_webgl),
-        lambda: host_gpu(browser_binary, headless, env),
+        lambda: host_gpu(browser_binary, headless, env, firefox_user_prefs),
     )
     if cover_canvas:
         add_canvas_placeholder(firefox_user_prefs)

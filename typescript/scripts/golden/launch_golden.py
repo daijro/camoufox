@@ -472,7 +472,7 @@ def run(name, spec):
         restore.append(('get_random_preset', utils.get_random_preset))
         utils.get_random_preset = fake_random_preset
     if 'host_gpu' in special:
-        def fake_host_gpu(executable_path, headless, env):
+        def fake_host_gpu(executable_path, headless, env, prefs):
             calls.append({'fn': 'host_gpu', 'executable_path': executable_path, 'headless': headless})
             return tuple(special['host_gpu'])
 

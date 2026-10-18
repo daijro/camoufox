@@ -14,6 +14,7 @@
  */
 import { firefox } from "playwright-core";
 import { isSoftwareRenderer } from "./fingerprints.js";
+import { GPU_PREFS } from "./gpudisplay.js";
 
 export const BASELINE_OVERRIDES_PREF =
 	"privacy.baselineFingerprintingProtection.overrides";
@@ -95,22 +96,32 @@ const probes = new Map<string, Promise<Gpu | null>>();
  * The [vendor, renderer] this machine's Firefox reports, or null without WebGL.
  *
  * Read from the binary about to launch, with no identity applied, under the
- * same display: headless, Xvfb and a real display can each render on a
- * different device. The strings are the ones Firefox sanitizes itself.
+ * same display and the same rendering prefs: headless, Xvfb, a GPU display and
+ * a real display can each render on a different device. The strings are the
+ * ones Firefox sanitizes itself.
  */
 export function hostGpu(
 	executablePath: string,
 	headless: boolean,
 	env: Record<string, string | number | boolean>,
+	prefs: Record<string, any>,
 ): Promise<Gpu | null> {
 	const hostEnv = Object.entries(env)
 		.filter(([key]) => !LAUNCHER_ENV.some((prefix) => key.startsWith(prefix)))
 		.map(([key, value]) => [key, String(value)])
 		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-	const key = JSON.stringify([executablePath, headless, hostEnv]);
+	const hostPrefs = Object.keys(GPU_PREFS)
+		.filter((key) => key in prefs)
+		.map((key) => [key, prefs[key]]);
+	const key = JSON.stringify([executablePath, headless, hostEnv, hostPrefs]);
 	let gpu = probes.get(key);
 	if (!gpu) {
-		gpu = readGpu(executablePath, headless, Object.fromEntries(hostEnv));
+		gpu = readGpu(
+			executablePath,
+			headless,
+			Object.fromEntries(hostEnv),
+			Object.fromEntries(hostPrefs),
+		);
 		// Remember a reading, not a failure: the next launch tries again.
 		gpu.catch(() => probes.delete(key));
 		probes.set(key, gpu);
@@ -122,13 +133,14 @@ async function readGpu(
 	executablePath: string,
 	headless: boolean,
 	env: Record<string, string>,
+	prefs: Record<string, any>,
 ): Promise<Gpu | null> {
 	const browser = await firefox.launch({
 		executablePath,
 		headless,
 		env,
 		// The launch forces WebGL on, which can choose another device.
-		firefoxUserPrefs: { "webgl.force-enabled": true },
+		firefoxUserPrefs: { ...prefs, "webgl.force-enabled": true },
 	});
 	try {
 		const page = await browser.newPage();
