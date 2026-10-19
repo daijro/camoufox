@@ -112,10 +112,10 @@ index 0000000000..a36944f3c6
 +
 +#endif  // mozilla_dom_ScreenDimensionManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index b0973412be..926cadf3dc 100644
+index 97ea29a739..6dbe3a775f 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -264,6 +264,7 @@ EXPORTS.mozilla.dom += [
+@@ -265,6 +265,7 @@ EXPORTS.mozilla.dom += [
      "ResponsiveImageSelector.h",
      "RoverfoxStorageManager.h",
      "SameProcessMessageQueue.h",
@@ -123,7 +123,7 @@ index b0973412be..926cadf3dc 100644
      "ScreenLuminance.h",
      "ScreenOrientation.h",
      "Selection.h",
-@@ -566,6 +567,9 @@ SOURCES += [
+@@ -567,6 +568,9 @@ SOURCES += [
  # (includes RoverfoxStorageManager.h which can affect compilation units)
  SOURCES += ["NavigatorManager.cpp"]
  
@@ -134,7 +134,7 @@ index b0973412be..926cadf3dc 100644
  SOURCES += ["FontListManager.cpp"]
  
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 1f133b6ed6..25f413db16 100644
+index 23381f7b3c..7c0dc63631 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -5,6 +5,7 @@
@@ -145,7 +145,7 @@ index 1f133b6ed6..25f413db16 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -7841,6 +7842,28 @@ void nsGlobalWindowInner::SetNavigatorUserAgent(const nsAString& ua,
+@@ -7837,6 +7838,28 @@ void nsGlobalWindowInner::SetNavigatorUserAgent(const nsAString& ua,
    RoverfoxStorageManager::RemoveSetter("setNavigatorUserAgent");
  }
  
@@ -175,10 +175,10 @@ index 1f133b6ed6..25f413db16 100644
      bool aGranted) {
    // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index 9616144511..ff8c14d011 100644
+index ac500caabd..ce72137a32 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -704,6 +704,11 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -706,6 +706,11 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
                                         mozilla::ErrorResult& aRv);
    void SetNavigatorUserAgent(const nsAString& ua, mozilla::ErrorResult& aRv);
  
@@ -295,10 +295,10 @@ index 4b989dd48a..db1b834258 100644
  
    nsDeviceContext* context = GetDeviceContext();
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index bfb0332a1c..c4cb127e83 100644
+index e04cc674c7..8c739fc656 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -982,6 +982,18 @@ partial interface Window {
+@@ -986,6 +986,18 @@ partial interface Window {
    undefined setNavigatorUserAgent(DOMString ua);
  };
  
@@ -332,7 +332,7 @@ index 91fd96a691..03adf5d674 100644
      DEFINES["USE_NEON"] = True
      LOCAL_INCLUDES += ["/third_party/xsimd/include"]
 diff --git a/gfx/src/nsDeviceContext.cpp b/gfx/src/nsDeviceContext.cpp
-index 0a628c93d2..cf8de1839e 100644
+index f9fcb084a7..fc6c39473f 100644
 --- a/gfx/src/nsDeviceContext.cpp
 +++ b/gfx/src/nsDeviceContext.cpp
 @@ -3,6 +3,7 @@
@@ -438,7 +438,7 @@ index 1587fcffd8..4b1952bc5d 100644
    // rendered.
    int32_t depth = 24;
 diff --git a/toolkit/components/resistfingerprinting/nsRFPService.cpp b/toolkit/components/resistfingerprinting/nsRFPService.cpp
-index 93a9efd068..5a91649b05 100644
+index 6ce393b112..c48bac2b05 100644
 --- a/toolkit/components/resistfingerprinting/nsRFPService.cpp
 +++ b/toolkit/components/resistfingerprinting/nsRFPService.cpp
 @@ -3209,25 +3209,19 @@ void nsRFPService::GetExemptedDomainsLowercase(nsCString& aExemptedDomains) {
@@ -478,10 +478,10 @@ index 93a9efd068..5a91649b05 100644
        NS_lround(float(spoofedHeightStart) / aScale * AppUnitsPerCSSPixel());
  
 diff --git a/toolkit/components/resistfingerprinting/nsRFPService.h b/toolkit/components/resistfingerprinting/nsRFPService.h
-index 73637fad0d..08f281dc17 100644
+index de2572944f..9a50fdfc2b 100644
 --- a/toolkit/components/resistfingerprinting/nsRFPService.h
 +++ b/toolkit/components/resistfingerprinting/nsRFPService.h
-@@ -603,8 +603,11 @@ class nsRFPService final : public nsIObserver, public nsIRFPService {
+@@ -600,8 +600,11 @@ class nsRFPService final : public nsIObserver, public nsIRFPService {
    // Returns the value of privacy.resistFingerprinting.exemptedDomains pref
    static void GetExemptedDomainsLowercase(nsCString& aExemptedDomains);
  
@@ -492,5 +492,5 @@ index 73637fad0d..08f281dc17 100644
 +                                              bool aIsFullscreen,
 +                                              const nsAString& aPlatform);
  
-   static uint64_t GetSpoofedStorageLimit();
+   static int64_t GetSpoofedStorageLimit();
  

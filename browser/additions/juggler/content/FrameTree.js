@@ -510,7 +510,7 @@ class Frame {
         });
       },
 
-      frameReceived: (webSocketSerialID, frame) => {
+      frameReceived: (webSocketSerialID, httpChannelId, frame) => {
         // Report only text and binary frames.
         if (frame.opCode !== 1 && frame.opCode !== 2)
           return;
@@ -521,7 +521,7 @@ class Frame {
           info.pendingIncomingFrames.push(frame);
       },
 
-      frameSent: (webSocketSerialID, frame) => {
+      frameSent: (webSocketSerialID, httpChannelId, frame) => {
         // Report only text and binary frames.
         if (frame.opCode !== 1 && frame.opCode !== 2)
           return;
