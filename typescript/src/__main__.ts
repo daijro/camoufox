@@ -1313,6 +1313,26 @@ function dirSize(dir: string): string {
 }
 
 program
+	.command("gpu-xorg-config")
+	.description('Print the Xorg config headless="virtual-gpu" needs for GPU')
+	.argument("[gpu]")
+	.action(async (gpu: string | undefined) => {
+		const { selectGpu, xorgConfig } = await import("./gpudisplay.js");
+		process.stdout.write(xorgConfig(selectGpu(gpu)));
+	});
+
+program
+	.command("gpu-setup")
+	.description(
+		'Print a root script that sets this machine up for headless="virtual-gpu" on GPU',
+	)
+	.argument("[gpu]")
+	.action(async (gpu: string | undefined) => {
+		const { selectGpu, setupScript } = await import("./gpudisplay.js");
+		process.stdout.write(setupScript(selectGpu(gpu)));
+	});
+
+program
 	.command("version")
 	.description("Display version, package, browser, and storage info")
 	.action(async () => {

@@ -517,6 +517,28 @@ def test_every_native_test_file_is_actually_run():
     assert not wired - on_disk, f"runner lists files that do not exist: {sorted(wired - on_disk)}"
 
 
+def test_the_gpu_subset_is_never_part_of_all():
+    """No runner has a GPU, and the CI browser job runs `--subset browser`."""
+
+    from ci.run_native import FILES
+
+    assert "test_gpu_display.py" in FILES["gpu"]
+    assert not any("test_gpu_display.py" in group for name, group in FILES.items() if name != "gpu")
+
+
+def test_the_gpu_subset_without_a_card_is_an_error(monkeypatch, tmp_path):
+    """test_gpu_display.py skips itself without CAMOUFOX_GPU; asked for by name,
+    an all-skipped run would read as a pass."""
+
+    from ci import run_native
+
+    monkeypatch.delenv("CAMOUFOX_GPU", raising=False)
+    monkeypatch.setattr(run_native, "run_pytest", lambda **kw: pytest.fail("ran pytest"))
+    assert run_native.main(["--subset", "gpu", "--results-dir", str(tmp_path)]) == 1
+    (record,) = tmp_path.glob("*.json")
+    assert json.loads(record.read_text())["status"] == "error"
+
+
 # ---------------------------------------------------------------------------
 # sundial's score-only payload, with cross-OS split out
 # ---------------------------------------------------------------------------

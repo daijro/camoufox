@@ -13,9 +13,14 @@ half gives fast feedback:
                      proves nothing was left behind; checks that a context and a
                      browser mean what the project says they mean.
 
+  --subset gpu       needs a binary and a GPU (CAMOUFOX_GPU names it), so it is
+                     not part of "all": headless="virtual-gpu" renders on the
+                     card and cleans up after itself.
+
 Run:
     python3 -m ci.run_native --subset rules
     python3 -m ci.run_native --subset browser --binary path/to/camoufox-bin
+    CAMOUFOX_GPU=01:00.0 python3 -m ci.run_native --subset gpu --binary path/to/camoufox-bin
 """
 
 from __future__ import annotations
@@ -45,6 +50,9 @@ FILES = {
     # process. Kept out of "browser" and run with --shard, one test per
     # runner, so a pull request waits minutes for it rather than most of an hour.
     "growth": ["test_memory_growth.py"],
+    # Needs a GPU, which no CI runner has, so "all" leaves it out; run it on a
+    # machine with one, with CAMOUFOX_GPU naming the card.
+    "gpu": ["test_gpu_display.py"],
 }
 
 
@@ -60,7 +68,7 @@ def collect(files: List[str], env: Dict[str, str]) -> List[str]:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--subset", choices=["rules", "browser", "growth", "all"], default="all"
+        "--subset", choices=["rules", "browser", "growth", "gpu", "all"], default="all"
     )
     parser.add_argument("--binary", type=Path)
     parser.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
@@ -78,8 +86,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     result = results.GateResult(gate=name)
     result.metrics["subset"] = args.subset
 
+    if args.subset == "gpu" and not os.environ.get("CAMOUFOX_GPU", "").strip():
+        # test_gpu_display.py skips itself without a card, which would pass.
+        result.note("no CAMOUFOX_GPU; the gpu subset needs the card under test named")
+        result.finish(results.ERROR).save(args.results_dir)
+        return 1
+
     files = (
-        [f for group in FILES.values() for f in group]
+        [f for name, group in FILES.items() if name != "gpu" for f in group]
         if args.subset == "all"
         else FILES[args.subset]
     )
