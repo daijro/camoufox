@@ -1,0 +1,30 @@
+Camoufox: the content-reachable file set must match a stock Firefox release.
+
+Twelve chrome/resource packages are flagged contentaccessible=yes, so any page
+can load their files as subresources and a file Camoufox adds or drops there is
+a one-line build tell.
+
+chrome://global/content/crashes.{html,js,css} were absent, because
+--disable-crashreporter strips them in toolkit/crashreporter/jar.mn. The
+JAR_MANIFESTS entry is outside that moz.build guard, so shipping the three
+content files does not build or enable the crash reporter.
+
+The other tell this patch used to cover, browser-development-helpers.js, is
+gone at the source: Camoufox builds with MOZILLA_OFFICIAL (assets/base.mozconfig),
+which drops it exactly as stock does.
+
+Guard: browser/tests/playwright/patches/contentaccessible-parity.py.
+
+diff --git a/toolkit/crashreporter/jar.mn b/toolkit/crashreporter/jar.mn
+index 641fcaa2fe..0d9f215fd2 100644
+--- a/toolkit/crashreporter/jar.mn
++++ b/toolkit/crashreporter/jar.mn
+@@ -3,8 +3,6 @@
+ # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ 
+ toolkit.jar:
+-#ifdef MOZ_CRASHREPORTER
+   content/global/crashes.html            (content/crashes.html)
+   content/global/crashes.js               (content/crashes.js)
+   content/global/crashes.css              (content/crashes.css)
+-#endif

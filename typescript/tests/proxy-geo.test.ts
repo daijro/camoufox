@@ -1,6 +1,6 @@
 /**
  * NewContext derives the WebRTC IP and timezone from the proxy's exit IP.
- * Twin of pythonlib/tests/test_proxy_geo.py: the lookup must go through the
+ * Twin of python/tests/test_proxy_geo.py: the lookup must go through the
  * proxy as Playwright would reach it (a scheme-less server is http), and a
  * failed lookup must raise rather than leave the context on the host's values.
  * Also the twin of test_new_context_version.py: the context's UA names the

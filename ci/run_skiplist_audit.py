@@ -22,6 +22,12 @@ as a fallback rather than a failure, so "this test cannot pass" has to mean
 "cannot pass in either world" -- auditing under isolation would let an entry
 justify itself with a failure the suite would not have counted.
 
+Each target runs in its own pytest process, without upstream's reruns. Some
+upstream modules share one browser across their tests, and browser state left
+by one test (an HTTPS-First fallback exemption, for one) can decide whether the
+next passes. One process per target gives each entry a fresh browser, so its
+outcome does not depend on which entries ran before it.
+
 Cheap, because a correct skiplist is short -- it runs only what the list names.
 
 Run:
@@ -34,7 +40,7 @@ import argparse
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from . import results
 from ._pytest import parse_junit, require_binary, run_pytest
@@ -101,34 +107,39 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # An empty skiplist, so the plugin still supplies main-world execution and
     # the binary redirection while deselecting nothing.
+    outcomes: Dict[str, str] = {}
     with tempfile.TemporaryDirectory() as tmp:
         empty = Path(tmp) / "skiplist.yml"
         empty.write_text("schema: 1\nskip: []\n", encoding="utf-8")
         junit = WORK_DIR / "junit-skiplist-audit.xml"
         log(f"auditing {len(selectable)} skiplist target(s) with the skiplist disabled")
-        run_pytest(
-            cwd=cwd,
-            python=Path(manifest["python"]),
-            args=["-p", "pw_camoufox_plugin", "--browser", "firefox", *selectable],
-            junit=junit,
-            env={
-                "CAMOUFOX_EXECUTABLE_PATH": str(binary.resolve()),
-                "CI_SKIPLIST": str(empty),
-                # The most permissive world, on purpose -- see the module
-                # docstring. An entry that survives this really is unpassable.
-                "CI_WORLD": MAIN_WORLD,
-            },
-            timeout=args.timeout,
-        )
-        outcomes = parse_junit(junit)
-
-    if not outcomes:
-        result.note(
-            "the audit produced no junit results, so nothing was verified. Treating that "
-            "as a failure: an audit that did not run is not an audit that passed."
-        )
-        result.finish(results.ERROR).save(args.results_dir)
-        return 1
+        for target in selectable:
+            run_pytest(
+                cwd=cwd,
+                python=Path(manifest["python"]),
+                args=["-p", "pw_camoufox_plugin", "--browser", "firefox", target],
+                junit=junit,
+                env={
+                    "CAMOUFOX_EXECUTABLE_PATH": str(binary.resolve()),
+                    "CI_SKIPLIST": str(empty),
+                    # The most permissive world, on purpose -- see the module
+                    # docstring. An entry that survives this really is unpassable.
+                    "CI_WORLD": MAIN_WORLD,
+                    # Upstream's conftest reruns failures under $CI, in the same browser.
+                    "CI": "",
+                },
+                timeout=args.timeout,
+            )
+            found = parse_junit(junit)
+            if not found:
+                result.note(
+                    f"auditing {target} produced no junit results, so it was not verified. "
+                    "Treating that as a failure: an audit that did not run is not an audit "
+                    "that passed."
+                )
+                result.finish(results.ERROR).save(args.results_dir)
+                return 1
+            outcomes.update(found)
 
     stale = sorted(t for t, o in outcomes.items() if o == results.PASS)
     for test in stale:

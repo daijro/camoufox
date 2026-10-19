@@ -1,7 +1,7 @@
 /**
  * Helpers to fetch geolocation, timezone, and locale data given an IP.
  *
- * TypeScript twin of pythonlib/camoufox/geolocation.py. The on-disk layout
+ * TypeScript twin of python/src/camoufox/geolocation.py. The on-disk layout
  * (geoip/mmdb/<name>-<ipver>.mmdb and geoip/config.yml under the camoufox
  * cache dir) is the Python package's, so both launchers share one database.
  */
@@ -12,7 +12,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { NotInstalledGeoIPExtra, UnknownIPLocation } from "./exceptions.js";
 import { validateIP } from "./ip.js";
 import { Geolocation, SELECTOR } from "./locales.js";
-import { INSTALL_DIR, LOCAL_DATA } from "./paths.js";
+import { INSTALL_DIR, loadDataFile } from "./paths.js";
 import { loadWarnings, warn } from "./warnings.js";
 
 export const GEOIP_DIR: string = path.join(INSTALL_DIR, "geoip");
@@ -21,12 +21,12 @@ export const GEOIP_CONFIG: string = path.join(GEOIP_DIR, "config.yml");
 
 /** A database whose data was built longer ago than this is refreshed. The
  * default source publishes weekly, so a week and a day catches every release. */
-export const UPDATE_DAYS = 8;
+const UPDATE_DAYS = 8;
 /** ...but at most once a day, so a source that stops publishing costs one
  * download a day rather than one per launch. */
-export const RECHECK_DAYS = 1;
+const RECHECK_DAYS = 1;
 /** A freshly downloaded build older than this means its source is frozen. */
-export const FROZEN_DAYS = 30;
+const FROZEN_DAYS = 30;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -94,11 +94,8 @@ function findIn(data: any, key: string): any {
 /**
  * Load GeoIP repos and default name from repos.yml.
  */
-function loadGeoipRepos(): [GeoIPRepo[], string] {
-	const data =
-		(parseYaml(
-			fs.readFileSync(path.join(LOCAL_DATA, "repos.yml"), "utf-8"),
-		) as Record<string, any>) ?? {};
+export function loadGeoipRepos(): [GeoIPRepo[], string] {
+	const data = loadDataFile("repos.yml");
 	const geoipRepos: GeoIPRepo[] = data.geoip ?? [];
 	const defaultName: string = data.default?.geoip ?? "GeoIP AIO by daijro";
 	return [geoipRepos, defaultName];

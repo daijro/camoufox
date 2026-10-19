@@ -54,8 +54,10 @@ export function restoreDeps(): void {
 	Object.assign(deps, ORIGINAL);
 }
 
-/** The host every launch test runs against: no display, a fixed disk. */
+/** The host every launch test runs against: no display, a fixed disk, and no
+ * WebGL, so launchOptions never launches the browser to read the host's GPU. */
 export function stubHost(): void {
+	deps.hostGpu = async () => null;
 	deps.hasDisplay = () => false;
 	deps.getScreenCons = () => null;
 	deps.stockProfileDiskCapacityKb = () => 250_000_000;
@@ -66,7 +68,7 @@ export function stubHost(): void {
 }
 
 /**
- * pythonlib/tests' `isolated_launch_dependencies`: launchOptions() reduced to
+ * python/tests' `isolated_launch_dependencies`: launchOptions() reduced to
  * environment assembly -- no fingerprint, fonts, voices, geometry fixes,
  * validation or env generation.
  */
@@ -79,7 +81,7 @@ export function isolateLaunch(): void {
 	deps.generateRandomFontSubset = () => [];
 	deps.generateRandomVoiceSubset = () => [];
 	deps.fixNavigatorArch = () => undefined;
-	deps.fixScreenNoTaskbar = () => undefined;
+	deps.followBaselineProtection = () => undefined;
 	deps.clampWindowDimensions = () => undefined;
 	deps.setMediaDevicesDefaults = () => undefined;
 	deps.validateConfig = () => undefined;

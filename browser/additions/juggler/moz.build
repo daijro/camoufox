@@ -1,0 +1,59 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+DIRS += ["components", "screencast", "pipe"]
+
+# Juggler is served from resource://gre/modules/juggler/, not a chrome package.
+# Content processes learn every registered chrome package, and a page can tell a
+# registered one from an absent one: new Worker("chrome://<name>/...") returns
+# for the first and throws for the second. resource://gre is in every Firefox,
+# and inside it a page cannot tell which files exist.
+FINAL_TARGET_FILES.modules.juggler += [
+    "ChannelEventSink.sys.mjs",
+    "content/JugglerFrameChild.sys.mjs",
+    "Helper.js",
+    "JugglerFrameParent.sys.mjs",
+    "NetworkObserver.js",
+    "SimpleChannel.js",
+    "TargetRegistry.js",
+]
+FINAL_TARGET_FILES.modules.juggler.components += ["components/Juggler.js"]
+FINAL_TARGET_FILES.modules.juggler.content += [
+    "content/FrameTree.js",
+    "content/main.js",
+    "content/PageAgent.js",
+    "content/Runtime.js",
+    "content/WorkerMain.js",
+]
+FINAL_TARGET_FILES.modules.juggler.input += [
+    "input/CursorTrajectory.js",
+    "input/MouseDispatch.js",
+]
+# Cursory, vendored -- LGPLv3-or-later, not MPL-2.0. LICENSE and NOTICE ship
+# alongside the code so every build carries them; see input/cursory/README.md.
+FINAL_TARGET_FILES.modules.juggler.input.cursory += [
+    "input/cursory/cursory.js",
+    "input/cursory/data.js",
+    "input/cursory/LICENSE",
+    "input/cursory/NOTICE",
+    "input/cursory/numeric.js",
+    "input/cursory/trajectories.json",
+    "input/cursory/trajectorySelection.js",
+]
+FINAL_TARGET_FILES.modules.juggler.input.cursory.random += [
+    "input/cursory/random/generator.js",
+    "input/cursory/random/pcg64.js",
+    "input/cursory/random/seedSequence.js",
+    "input/cursory/random/ziggurat.js",
+]
+FINAL_TARGET_FILES.modules.juggler.protocol += [
+    "protocol/BrowserHandler.js",
+    "protocol/Dispatcher.js",
+    "protocol/PageHandler.js",
+    "protocol/PrimitiveTypes.js",
+    "protocol/Protocol.js",
+]
+
+with Files("**"):
+    BUG_COMPONENT = ("Testing", "Juggler")

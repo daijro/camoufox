@@ -1,5 +1,5 @@
 /**
- * TypeScript twin of python/src/exceptions.py.
+ * TypeScript twin of python/src/camoufox/exceptions.py.
  *
  * The Python hierarchy leans on builtin bases (FileNotFoundError, ValueError,
  * ImportError) that have no JS analogue; those become plain Error subclasses
@@ -172,6 +172,64 @@ export class VirtualDisplayNotSupported extends VirtualDisplayError {
 			message ?? "The user tried to use a virtual display on a non-Linux OS.",
 		);
 		this.name = "VirtualDisplayNotSupported";
+	}
+}
+
+export class GpuDisplayError extends VirtualDisplayError {
+	constructor(message?: string) {
+		super(message ?? "The headless='virtual-gpu' display cannot be used.");
+		this.name = "GpuDisplayError";
+	}
+}
+
+export class NoGpuFound extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "No GPU render node with a PCI address was found.");
+		this.name = "NoGpuFound";
+	}
+}
+
+export class AmbiguousGpuSelection extends GpuDisplayError {
+	constructor(message?: string) {
+		super(
+			message ?? "Several GPUs match, or several exist and none was named.",
+		);
+		this.name = "AmbiguousGpuSelection";
+	}
+}
+
+export class GpuNotFound extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "The GPU selector matches no GPU.");
+		this.name = "GpuNotFound";
+	}
+}
+
+export class CannotFindXorg extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "Xorg cannot be found.");
+		this.name = "CannotFindXorg";
+	}
+}
+
+export class CannotExecuteXorg extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "Xorg cannot be started, or exited right after starting.");
+		this.name = "CannotExecuteXorg";
+	}
+}
+
+export class GpuVtTakeover extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "The Xorg server switched the active console VT.");
+		this.name = "GpuVtTakeover";
+	}
+}
+
+export class GpuSoftwareFallback extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "The browser on a GPU display never rendered on the GPU.");
+		this.name = "GpuSoftwareFallback";
 	}
 }
 

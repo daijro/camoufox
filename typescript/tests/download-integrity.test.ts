@@ -1,5 +1,5 @@
 /**
- * Mirrors pythonlib/tests/test_download_integrity.py: a release asset whose
+ * Mirrors python/tests/test_download_integrity.py: a release asset whose
  * bytes do not match the GitHub-published sha256 digest must abort the
  * install before extraction.
  */

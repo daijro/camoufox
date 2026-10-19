@@ -1,8 +1,9 @@
 /**
  * Helpers to find the user's public IP address for geolocation.
  *
- * TypeScript twin of pythonlib/camoufox/ip.py.
+ * TypeScript twin of python/src/camoufox/ip.py.
  */
+import { isIPv4, isIPv6 } from "node:net";
 import { Impit } from "impit";
 import { InvalidIP, InvalidProxy } from "./exceptions.js";
 
@@ -58,14 +59,14 @@ export function validIPv4(ip: string | false): boolean {
 	if (!ip) {
 		return false;
 	}
-	return /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip);
+	return isIPv4(ip);
 }
 
 export function validIPv6(ip: string | false): boolean {
 	if (!ip) {
 		return false;
 	}
-	return /^(([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4})$/.test(ip);
+	return isIPv6(ip);
 }
 
 export function validateIP(ip: string): void {
@@ -82,6 +83,12 @@ export function validateIP(ip: string): void {
 const IMPIT_CACHE_MAX = 8;
 const impitCache = new Map<string, Impit>();
 
+// Probing the exit IP through a proxy adds a hop and a TLS handshake behind it;
+// 5 s is not enough for a proxy that routes the long way round, and every URL
+// timing out fails the whole launch. Direct probes keep 5 s.
+export const DIRECT_IP_TIMEOUT_MS = 5000;
+export const PROXIED_IP_TIMEOUT_MS = 15000;
+
 function getImpit(proxy?: string): Impit {
 	const key = proxy ?? "";
 	const cached = impitCache.get(key);
@@ -94,7 +101,7 @@ function getImpit(proxy?: string): Impit {
 	// is what geoip trusts for the whole identity, so a MITM must not pick it.
 	const impit = new Impit({
 		proxyUrl: proxy,
-		timeout: 5000,
+		timeout: proxy ? PROXIED_IP_TIMEOUT_MS : DIRECT_IP_TIMEOUT_MS,
 		ignoreTlsErrors: false,
 	});
 	impitCache.set(key, impit);
@@ -104,7 +111,7 @@ function getImpit(proxy?: string): Impit {
 	return impit;
 }
 
-export const PROXY_LOOKUP_FAILED =
+const PROXY_LOOKUP_FAILED =
 	"Could not look up the proxy's exit IP and timezone. Pass webrtc_ip and " +
 	"timezone_id explicitly to skip the lookup";
 
@@ -154,6 +161,36 @@ const PUBLIC_IP_URLS = [
 // The Python twin memoizes public_ip() with lru_cache; mirror that so repeated
 // launches through the same proxy don't re-hit the API endpoints.
 const publicIPCache = new Map<string, Promise<string>>();
+
+let publicIPv6Pending: Promise<string | null> | undefined;
+
+/**
+ * This host's public IPv6 address, or null when it has none it can reach the
+ * internet from. The hosts have AAAA records only, so an answer proves the route.
+ */
+export function publicIPv6(): Promise<string | null> {
+	publicIPv6Pending ??= resolvePublicIPv6();
+	return publicIPv6Pending;
+}
+
+async function resolvePublicIPv6(): Promise<string | null> {
+	for (const url of ["https://api6.ipify.org", "https://v6.ident.me"]) {
+		let ip: string;
+		try {
+			const response = await getImpit().fetch(url);
+			if (!response.ok) {
+				continue;
+			}
+			ip = (await response.text()).trim();
+		} catch {
+			continue;
+		}
+		if (validIPv6(ip)) {
+			return ip;
+		}
+	}
+	return null;
+}
 
 /**
  * Sends a request to a public IP api.

@@ -9,7 +9,7 @@ the TypeScript functions and requires the identical result.
 
 Everything recorded is a pure function of its recorded inputs: seeded draws
 take their seed from the case, the unseeded module-level `random` is re-seeded
-per case (the TS side seeds its `pyRandom` the same way), and the host probes
+per case (the TS side seeds python-random's module-level generator the same way), and the host probes
 fix_hardware_concurrency reads are patched. Large outputs (font / voice lists,
 WebGL parameter blobs, preset configs) are recorded as a short hash:
 
@@ -39,7 +39,6 @@ TS_ROOT = HERE.parent.parent
 FIXTURES = TS_ROOT / 'tests' / 'fixtures' / 'identity'
 sys.path.insert(0, str(HERE))
 
-import pyrandom_cases  # noqa: E402
 
 from camoufox import coherence  # noqa: E402
 from camoufox import cpu_affinity  # noqa: E402
@@ -97,12 +96,8 @@ def err(fn):
 
 
 # ---------------------------------------------------------------------------
-# pyrandom + numpy + python-compat primitives
+# numpy + python-compat primitives
 # ---------------------------------------------------------------------------
-
-
-def record_pyrandom():
-    write('pyrandom.json', {'cases': pyrandom_cases.cases()})
 
 
 def record_numpy():
@@ -373,14 +368,16 @@ def record_webgl():
     }
 
     recorded = {
-        'vendor': 'v', 'renderer': 'r', 'contextAttributes': {'alpha': True}, 'params': {'3379': {'value': 1.0}},
+        'vendor': 'v', 'renderer': 'r', 'contextAttributes': {'alpha': True},
+        'params': {'3379': {'value': 1.0}, '33902': {'value': [1, 2048]}},
         'shaderPrecisionFormats': [{'shaderType': 35633, 'precisionType': 36336,
                                     'shaderPrecisionFormat': {'rangeMin': 127, 'rangeMax': 127, 'precision': 23}}],
         'supportedExtensions': ['ANGLE_instanced_arrays', 'WEBGL_multi_draw', 'OVR_multiview2',
                                 'WEBGL_compressed_texture_etc1'],
     }
-    recorded2 = {**recorded, 'supportedExtensions': ['EXT_texture_norm16', 'WEBGL_clip_cull_distance',
-                                                     'OVR_multiview2', 'EXT_color_buffer_float']}
+    recorded2 = {**recorded, 'params': {'3379': {'value': 1.0}, '33902': {'value': [1, 1]}},
+                 'supportedExtensions': ['EXT_texture_norm16', 'WEBGL_clip_cull_distance',
+                                         'OVR_multiview2', 'EXT_color_buffer_float']}
     converted = [{'os': os_key, 'webgl2': w2, 'hash': exact(webgl.to_config(recorded, w2, os_key))}
                  for os_key in OS_KEYS for w2 in (recorded2, [])]
 
@@ -447,7 +444,7 @@ def record_geometry():
         cap_h = rng.choice([None, 768, 1080, 720, 1440, 0])
         out = {}
         for name, fn in (
-            ('fixScreenNoTaskbar', lambda d: fp.fix_screen_no_taskbar(d, target)),
+            ('followBaselineProtection', lambda d: fp.follow_baseline_protection(d, target)),
             ('clampWindowDimensions', fp.clamp_window_dimensions),
             ('clampScreenToDisplay', lambda d: fp.clamp_screen_to_display(d, cap_w, cap_h)),
             ('clampWindowPosition', fp.clamp_window_position),
@@ -465,7 +462,7 @@ def record_geometry():
             fp.raise_screen_to_modern_floor(d)
         fp.raise_screen_to_modern_floor(d)
         fp.clamp_screen_to_display(d, cap_w, cap_h)
-        fp.fix_screen_no_taskbar(d, target)
+        fp.follow_baseline_protection(d, target)
         fp.clamp_window_dimensions(d)
         fp.clamp_window_position(d)
         out['pipeline'] = {'config': d} if i < 15 else {'hash': h(d), 'keys': h(list(d))}
@@ -727,7 +724,6 @@ def record_init_script():
 
 def main():
     record_constants()
-    record_pyrandom()
     record_numpy()
     record_pycompat()
     record_fpgen_salts()

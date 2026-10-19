@@ -1,0 +1,74 @@
+diff --git a/dom/media/CubebUtils.cpp b/dom/media/CubebUtils.cpp
+index 72551b795a..5bbe58e8a3 100644
+--- a/dom/media/CubebUtils.cpp
++++ b/dom/media/CubebUtils.cpp
+@@ -46,6 +46,7 @@
+ #include "audioipc2_client_ffi_generated.h"
+ #include "audioipc2_server_ffi_generated.h"
+ #include "mozilla/StaticPrefs_media.h"
++#include "MaskConfig.hpp"
+ 
+ #if defined(ENABLE_TESTS) || defined(FUZZING)
+ #  define ENABLE_MOCK_CUBEB 1
+@@ -501,6 +502,8 @@ uint32_t PreferredSampleRate(bool aShouldResistFingerprinting) {
+   if (sCubebForcedSampleRate) {
+     return sCubebForcedSampleRate;
+   }
++  if (auto value = MaskConfig::GetUint32("AudioContext:sampleRate"))
++    return value.value();
+   if (aShouldResistFingerprinting) {
+     return 44100;
+   }
+diff --git a/dom/media/moz.build b/dom/media/moz.build
+index af9a8c99f0..caa1eaf516 100644
+--- a/dom/media/moz.build
++++ b/dom/media/moz.build
+@@ -438,5 +438,7 @@ if CONFIG["CC_TYPE"] in ("clang", "gcc"):
+ COMPILE_FLAGS["WARNINGS_CXXFLAGS"] += ["-Werror=switch"]
+ 
+ FINAL_LIBRARY = "xul"
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+ 
+ SPHINX_TREES["/media"] = "docs"
+diff --git a/dom/media/webaudio/AudioContext.cpp b/dom/media/webaudio/AudioContext.cpp
+index 7921349caf..355d9d4c13 100644
+--- a/dom/media/webaudio/AudioContext.cpp
++++ b/dom/media/webaudio/AudioContext.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "AudioContext.h"
+ 
++#include "MaskConfig.hpp"
+ #include "AudioBuffer.h"
+ #include "AudioBufferSourceNode.h"
+ #include "AudioChannelService.h"
+@@ -561,6 +562,8 @@ double AudioContext::OutputLatency() {
+   }
+   // When reduceFingerprinting is enabled, return a latency figure that is
+   // fixed, but plausible for the platform.
++  if (auto value = MaskConfig::GetDouble("AudioContext:outputLatency"))
++    return value.value();
+   double latency_s = 0.0;
+   if (mShouldResistFingerprinting) {
+ #ifdef XP_MACOSX
+@@ -714,6 +717,8 @@ void AudioContext::UnregisterActiveNode(AudioNode* aNode) {
+ }
+ 
+ uint32_t AudioContext::MaxChannelCount() const {
++  if (auto value = MaskConfig::GetUint32("AudioContext:maxChannelCount"))
++    return value.value();
+   if (mShouldResistFingerprinting) {
+     return 2;
+   }
+diff --git a/dom/media/webaudio/moz.build b/dom/media/webaudio/moz.build
+index 7e43523379..3bd802d715 100644
+--- a/dom/media/webaudio/moz.build
++++ b/dom/media/webaudio/moz.build
+@@ -149,3 +149,6 @@ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
+ LOCAL_INCLUDES += [".."]
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]

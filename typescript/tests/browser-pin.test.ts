@@ -1,5 +1,5 @@
 /**
- * Mirrors pythonlib/tests/test_browser_pin.py: a released library runs the
+ * Mirrors python/tests/test_browser_pin.py: a released library runs the
  * browser it was released with, and nothing else by default.
  *
  * INSTALL_DIR is computed at import from XDG_CACHE_HOME, so every test points
@@ -44,7 +44,7 @@ async function setup(opts: {
 	const pkgman = await import("../src/pkgman.js");
 	const multiversion = await import("../src/multiversion.js");
 	const exc = await import("../src/exceptions.js");
-	const root = pkgman.INSTALL_DIR;
+	const root = (await import("../src/paths.js")).INSTALL_DIR;
 	fs.mkdirSync(root, { recursive: true });
 	fs.writeFileSync(path.join(root, ".0.5_FLAG"), "");
 	fs.writeFileSync(path.join(root, "repo_cache.json"), "{}");
@@ -85,7 +85,7 @@ describe("the pin file", () => {
 	it("the checked-in pin is empty: only the release workflow writes one", () => {
 		const file = path.resolve(
 			__dirname,
-			"../../pythonlib/camoufox/browser-pin.json",
+			"../../python/src/camoufox/browser-pin.json",
 		);
 		expect(JSON.parse(fs.readFileSync(file, "utf-8"))).toEqual({});
 	});
@@ -167,6 +167,47 @@ describe("launch", () => {
 		});
 		expect(multiversion.getActivePath()).toBe(
 			path.join(root, "browsers/official/157.0-beta.34"),
+		);
+	});
+});
+
+describe("the browser option", () => {
+	async function selected(versionJson: Record<string, unknown> = {}) {
+		const ctx = await setup({
+			pin: PIN,
+			installed: ["152.0.4-beta.31"],
+			config: {},
+		});
+		const { LAUNCH_FILE, OS_NAME } = await import("../src/paths.js");
+		const dir = path.join(ctx.root, "browsers", "official", "152.0.4-beta.31");
+		const exe =
+			OS_NAME === "mac"
+				? path.resolve(dir, "Camoufox.app/Contents/Resources", LAUNCH_FILE.mac)
+				: path.join(dir, LAUNCH_FILE[OS_NAME]);
+		fs.mkdirSync(path.dirname(exe), { recursive: true });
+		fs.writeFileSync(exe, "");
+		fs.writeFileSync(
+			path.join(dir, "version.json"),
+			JSON.stringify({ version: "152.0.4", build: "beta.31", ...versionJson }),
+		);
+		return { ...ctx, exe };
+	}
+
+	it.each([
+		"152.0.4-beta.31",
+		"official/beta.31",
+		"beta.31",
+	])("resolves %s to the installed build, warning that it is not the paired one", async (spec) => {
+		const { pkgman, exe } = await selected();
+		const emit = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
+		expect(pkgman.selectedLaunchPath(spec)).toBe(exe);
+		expect(String(emit.mock.calls[0]?.[0])).toContain("selected explicitly");
+	});
+
+	it("refuses a build this package cannot drive", async () => {
+		const { pkgman, exc } = await selected({ interface: 1_000 });
+		expect(() => pkgman.selectedLaunchPath("beta.31")).toThrow(
+			exc.UnsupportedVersion,
 		);
 	});
 });

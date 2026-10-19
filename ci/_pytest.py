@@ -16,13 +16,13 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from ._util import REPO_ROOT, Result, read_upstream_sh, run
+from ._util import BROWSER_ROOT, Result, read_upstream_sh, run
 
 
 def source_dir(version: Optional[str] = None, release: Optional[str] = None) -> Path:
-    """The generated Firefox tree, e.g. camoufox-153.0.4-beta.32/."""
+    """The generated Firefox tree, e.g. browser/camoufox-153.0.4-beta.32/."""
     up = read_upstream_sh()
-    return REPO_ROOT / f"camoufox-{version or up['version']}-{release or up['release']}"
+    return BROWSER_ROOT / f"camoufox-{version or up['version']}-{release or up['release']}"
 
 
 def built_binary(version: Optional[str] = None, release: Optional[str] = None) -> Path:
@@ -37,7 +37,7 @@ def require_binary(version: Optional[str] = None, release: Optional[str] = None)
     path = built_binary(version, release)
     if not path.exists():
         raise FileNotFoundError(
-            f"no built binary at {path}. Run `make build` first, or set CAMOUFOX_BINARY."
+            f"no built binary at {path}. Run `make -C browser build` first, or set CAMOUFOX_BINARY."
         )
     return path
 
@@ -140,6 +140,8 @@ def run_pytest(
     is actually importable in that interpreter.
     """
     junit.parent.mkdir(parents=True, exist_ok=True)
+    # A run that dies before writing junit must not leave the last run's.
+    junit.unlink(missing_ok=True)
     cmd = [str(python), "-m", "pytest", f"--junitxml={junit}", "-p", "no:randomly"]
     if per_test_timeout and _has_plugin(python, "pytest_timeout"):
         cmd.append(f"--timeout={per_test_timeout}")

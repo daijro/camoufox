@@ -1,0 +1,14 @@
+diff --git a/browser/moz.configure b/browser/moz.configure
+index 18dc459e78..a54b78906a 100644
+--- a/browser/moz.configure
++++ b/browser/moz.configure
+@@ -17,6 +17,9 @@ imply_option("MOZ_APP_ID", "{ec8030f7-c20a-464f-9b0e-13a3a9e97384}")
+ # Include the DevTools client, not just the server (which is the default)
+ imply_option("MOZ_DEVTOOLS", "all")
+ imply_option("BROWSER_CHROME_URL", "chrome://browser/content/browser.xhtml")
++# The app name ends the User-Agent ("... Gecko/20100101 <name>/<version>"). Left
++# empty it falls back to MOZ_APP_BASENAME, so every request would name Camoufox.
++imply_option("MOZ_APP_UA_NAME", "Firefox")
+ 
+ 
+ with only_when(target_has_linux_kernel & compile_environment):

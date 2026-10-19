@@ -1,12 +1,13 @@
 /**
  * Default Firefox addon download/extraction.
  *
- * TypeScript twin of pythonlib/camoufox/addons.py.
+ * TypeScript twin of python/src/camoufox/addons.py.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { InvalidAddonPath } from "./exceptions.js";
-import { INSTALL_DIR, unzip, webdl } from "./pkgman.js";
+import { INSTALL_DIR } from "./paths.js";
+import { unzip, webdl } from "./pkgman.js";
 
 /**
  * Default addons to be downloaded.
@@ -18,7 +19,7 @@ export const DefaultAddons = {
 export type DefaultAddon = keyof typeof DefaultAddons;
 
 // Addons are stored in a shared folder, not per-browser version
-export const ADDONS_DIR: string = path.join(INSTALL_DIR, "addons");
+const ADDONS_DIR: string = path.join(INSTALL_DIR, "addons");
 
 /**
  * Confirms that the addon paths are valid.

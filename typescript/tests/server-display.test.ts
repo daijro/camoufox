@@ -1,11 +1,11 @@
 /**
- * Ports of pythonlib/tests/test_server.py (the parts that apply: TS calls
+ * Ports of python/tests/test_server.py (the parts that apply: TS calls
  * playwright-core's launchServer in-process, so there is no launchServer.js
  * child to reap) and test_display.py's has_display().
  */
 import { describe, expect, it } from "vitest";
 import { hasDisplay } from "../src/display.js";
-import { OS_NAME } from "../src/pkgman.js";
+import { OS_NAME } from "../src/paths.js";
 import { launchServer, toCamelCaseDict } from "../src/server.js";
 import { camelCase } from "../src/sync_api.js";
 

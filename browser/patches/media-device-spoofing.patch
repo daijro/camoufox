@@ -1,0 +1,249 @@
+diff --git a/dom/media/MediaManager.cpp b/dom/media/MediaManager.cpp
+index 07725888a4..043d67c750 100644
+--- a/dom/media/MediaManager.cpp
++++ b/dom/media/MediaManager.cpp
+@@ -44,6 +44,7 @@
+ #include "mozilla/ipc/PBackgroundChild.h"
+ #include "mozilla/media/CamerasTypes.h"
+ #include "mozilla/media/MediaChild.h"
++#include "MaskConfig.hpp"
+ #include "mozilla/media/MediaTaskUtils.h"
+ #include "nsAppDirectoryServiceDefs.h"
+ #include "nsArray.h"
+@@ -1205,6 +1206,12 @@ LocalMediaDevice::GetMediaSource(nsAString& aMediaSource) {
+   return NS_OK;
+ }
+ 
++bool LocalMediaDevice::IsIdentityDevice() const {
++  // Only MediaEngineFake reports IsFake().
++  return IsFake() && static_cast<MediaEngineFake*>(mRawDevice->mEngine.get())
++                         ->ServesIdentityDevices();
++}
++
+ nsresult LocalMediaDevice::Allocate(const MediaTrackConstraints& aConstraints,
+                                     const MediaEnginePrefs& aPrefs,
+                                     uint64_t aWindowID,
+@@ -2138,7 +2145,11 @@ MediaManager::CreateEnumerationParams(dom::MediaSourceEnum aVideoInputType,
+   MOZ_ASSERT_IF(!MediaEngineSource::IsAudio(aAudioInputType),
+                 aAudioInputType == dom::MediaSourceEnum::Other);
+   const bool forceFakes = aFlags.contains(EnumerationFlag::ForceFakes);
+-  const bool fakeByPref = Preferences::GetBool("media.navigator.streams.fake");
++  // Camoufox: a spoofed device list is served by the fake engine so that
++  // enumerateDevices(), getUserMedia() tracks and their settings all agree.
++  const bool fakeByPref =
++      Preferences::GetBool("media.navigator.streams.fake") ||
++      MaskConfig::GetBool("mediaDevices:enabled");
+   Maybe<VideoDeviceEnumerationParams> videoParams;
+   Maybe<DeviceEnumerationParams> audioParams;
+   nsAutoCString audioDev;
+@@ -2335,7 +2346,10 @@ MediaManager::EnumerateRawDevices(EnumerationParams aParams) {
+   // Only enumerate what's asked for, and only fake cams and mics.
+   RefPtr<MediaEngine> fakeBackend, realBackend;
+   if (aParams.HasFakeCams() || aParams.HasFakeMics()) {
+-    fakeBackend = new MediaEngineFake();
++    // Camoufox: a page's own getUserMedia({fake: true}) gets stock's generic
++    // fake devices, never the identity's.
++    fakeBackend = new MediaEngineFake(
++        !aParams.mFlags.contains(EnumerationFlag::ForceFakes));
+   }
+   if (aParams.RealDeviceRequested()) {
+     MediaManager* manager = MediaManager::GetIfExists();
+@@ -2376,9 +2390,17 @@ MediaManager::EnumerateRawDevices(EnumerationParams aParams) {
+   }
+   if (aParams.mFlags.contains(EnumerationFlag::EnumerateAudioOutputs)) {
+     MediaDeviceSet outputs;
+-    MOZ_ASSERT(realBackend);
+-    realBackend->EnumerateDevices(MediaSourceEnum::Other,
+-                                  MediaSinkEnum::Speaker, &outputs);
++    // Camoufox: the identity's speakers come from the fake engine too.
++    RefPtr<MediaEngine> speakerBackend = realBackend;
++    if (MaskConfig::GetBool("mediaDevices:enabled")) {
++      if (!fakeBackend) {
++        fakeBackend = new MediaEngineFake();
++      }
++      speakerBackend = fakeBackend;
++    }
++    MOZ_ASSERT(speakerBackend);
++    speakerBackend->EnumerateDevices(MediaSourceEnum::Other,
++                                     MediaSinkEnum::Speaker, &outputs);
+     speakers = Some(MediaDeviceSet());
+     speakers->AppendElements(outputs);
+     devices->AppendElements(std::move(outputs));
+@@ -4907,7 +4929,7 @@ bool DeviceListener::CapturingVideo() const {
+   MOZ_ASSERT(NS_IsMainThread());
+   return Activated() && mDeviceState && !mDeviceState->mStopped &&
+          MediaEngineSource::IsVideo(GetDevice()->GetMediaSource()) &&
+-         (!GetDevice()->IsFake() ||
++         (!GetDevice()->IsFake() || GetDevice()->IsIdentityDevice() ||
+           Preferences::GetBool("media.navigator.permission.fake"));
+ }
+ 
+@@ -4915,7 +4937,7 @@ bool DeviceListener::CapturingAudio() const {
+   MOZ_ASSERT(NS_IsMainThread());
+   return Activated() && mDeviceState && !mDeviceState->mStopped &&
+          MediaEngineSource::IsAudio(GetDevice()->GetMediaSource()) &&
+-         (!GetDevice()->IsFake() ||
++         (!GetDevice()->IsFake() || GetDevice()->IsIdentityDevice() ||
+           Preferences::GetBool("media.navigator.permission.fake"));
+ }
+ 
+@@ -4933,7 +4955,7 @@ CaptureState DeviceListener::CapturingSource(MediaSourceEnum aSource) const {
+ 
+   if ((aSource == MediaSourceEnum::Camera ||
+        aSource == MediaSourceEnum::Microphone) &&
+-      GetDevice()->IsFake() &&
++      GetDevice()->IsFake() && !GetDevice()->IsIdentityDevice() &&
+       !Preferences::GetBool("media.navigator.permission.fake")) {
+     // Fake Camera and Microphone only count if there is no fake permission
+     return CaptureState::Off;
+diff --git a/dom/media/MediaManager.h b/dom/media/MediaManager.h
+index 3dac2943b3..8f6b3f363d 100644
+--- a/dom/media/MediaManager.h
++++ b/dom/media/MediaManager.h
+@@ -166,6 +166,8 @@ class LocalMediaDevice final : public nsIMediaDevice {
+   }
+   dom::MediaDeviceKind Kind() const { return mRawDevice->mKind; }
+   bool IsFake() const { return mRawDevice->mIsFake; }
++  // Camoufox: a fake device that stands in for the identity's real hardware.
++  bool IsIdentityDevice() const;
+   const nsString& RawID() { return mRawDevice->mRawID; }
+   const dom::MediaTrackConstraints& Constraints() const;
+ 
+diff --git a/dom/media/webrtc/MediaEngineFake.cpp b/dom/media/webrtc/MediaEngineFake.cpp
+index b87d8c5659..a1a73bfa62 100644
+--- a/dom/media/webrtc/MediaEngineFake.cpp
++++ b/dom/media/webrtc/MediaEngineFake.cpp
+@@ -4,6 +4,9 @@
+ 
+ #include "MediaEngineFake.h"
+ 
++#include "MaskConfig.hpp"
++#include "AudioDeviceInfo.h"
++
+ #include "AudioSegment.h"
+ #include "FakeVideoSource.h"
+ #include "ImageContainer.h"
+@@ -577,7 +580,12 @@ void AudioSourcePullListener::NotifyPull(MediaTrackGraph* aGraph,
+   mTrack->AppendData(&segment);
+ }
+ 
+-MediaEngineFake::MediaEngineFake() = default;
++MediaEngineFake::MediaEngineFake(bool aIdentityDevices)
++    : mIdentityDevices(aIdentityDevices) {}
++
++bool MediaEngineFake::ServesIdentityDevices() const {
++  return mIdentityDevices && MaskConfig::GetBool("mediaDevices:enabled");
++}
+ MediaEngineFake::~MediaEngineFake() = default;
+ 
+ void MediaEngineFake::EnumerateDevices(
+@@ -587,6 +595,70 @@ void MediaEngineFake::EnumerateDevices(
+   using IsScary = MediaDevice::IsScary;
+   using OsPromptable = MediaDevice::OsPromptable;
+ 
++  // Camoufox: the identity's devices. Counts from mediaDevices:{micros,
++  // webcams,speakers}; labels and groups from the aligned *Labels / *Groups
++  // lists (a sound card's microphone and speakers share a group, a webcam
++  // and its microphone share one, as their groupId does on a real machine).
++  // Raw ids are anonymised per origin by MediaManager exactly like real ones.
++  if (ServesIdentityDevices()) {
++    auto pick = [](const std::vector<std::string>& list, uint32_t i,
++                   const nsString& fallback) -> nsString {
++      if (i < list.size()) {
++        return NS_ConvertUTF8toUTF16(list[i].c_str());
++      }
++      return fallback;
++    };
++    auto rawId = [](const char* kind, uint32_t i) -> nsString {
++      nsString id;
++      id.AppendPrintf("camou-%s-%u", kind, i);
++      return id;
++    };
++    if (aMediaSink == MediaSinkEnum::Speaker) {
++      const uint32_t n =
++          MaskConfig::GetUint32("mediaDevices:speakers").value_or(1);
++      const auto labels = MaskConfig::GetStringList("mediaDevices:speakerLabels");
++      const auto groups = MaskConfig::GetStringList("mediaDevices:speakerGroups");
++      for (uint32_t i = 0; i < n; ++i) {
++        RefPtr info = new AudioDeviceInfo(
++            nullptr, pick(labels, i, u""_ns),
++            pick(groups, i, rawId("audio-group", i)), u""_ns,
++            CUBEB_DEVICE_TYPE_OUTPUT, CUBEB_DEVICE_STATE_ENABLED,
++            CUBEB_DEVICE_PREF_ALL, CUBEB_DEVICE_FMT_ALL, CUBEB_DEVICE_FMT_S16NE,
++            2, 44100, 44100, 44100, 128, 128);
++        aDevices->EmplaceBack(new MediaDevice(this, info, rawId("spk", i)));
++      }
++      return;
++    }
++    if (aMediaSource == MediaSourceEnum::Camera) {
++      const uint32_t n =
++          MaskConfig::GetUint32("mediaDevices:webcams").value_or(1);
++      const auto labels = MaskConfig::GetStringList("mediaDevices:webcamLabels");
++      const auto groups = MaskConfig::GetStringList("mediaDevices:webcamGroups");
++      for (uint32_t i = 0; i < n; ++i) {
++        aDevices->EmplaceBack(new MediaDevice(
++            this, aMediaSource, pick(labels, i, FakeVideoName()),
++            rawId("cam", i), pick(groups, i, rawId("video-group", i)),
++            IsScary::No, OsPromptable::No));
++      }
++      return;
++    }
++    if (aMediaSource == MediaSourceEnum::Microphone) {
++      const uint32_t n =
++          MaskConfig::GetUint32("mediaDevices:micros").value_or(1);
++      const auto labels =
++          MaskConfig::GetStringList("mediaDevices:microphoneLabels");
++      const auto groups =
++          MaskConfig::GetStringList("mediaDevices:microphoneGroups");
++      for (uint32_t i = 0; i < n; ++i) {
++        aDevices->EmplaceBack(new MediaDevice(
++            this, aMediaSource, pick(labels, i, u"Default Audio Device"_ns),
++            rawId("mic", i), pick(groups, i, rawId("audio-group", i)),
++            IsScary::No, OsPromptable::No));
++      }
++      return;
++    }
++  }
++
+   if (aMediaSink == MediaSinkEnum::Speaker) {
+     NS_WARNING("No default implementation for MediaSinkEnum::Speaker");
+   }
+diff --git a/dom/media/webrtc/MediaEngineFake.h b/dom/media/webrtc/MediaEngineFake.h
+index cd9c407af5..0bcfe65c0c 100644
+--- a/dom/media/webrtc/MediaEngineFake.h
++++ b/dom/media/webrtc/MediaEngineFake.h
+@@ -16,7 +16,14 @@ namespace mozilla {
+  */
+ class MediaEngineFake : public MediaEngine {
+  public:
+-  MediaEngineFake();
++  // Camoufox: aIdentityDevices -- enumerate the identity's devices
++  // (mediaDevices:*) when they are enabled. False for a page's own
++  // getUserMedia({fake: true}), which gets stock's generic fake devices.
++  explicit MediaEngineFake(bool aIdentityDevices = true);
++
++  // Camoufox: whether this engine serves the identity's devices, which stand in
++  // for real hardware (they prompt, count as capturing and expose labels).
++  bool ServesIdentityDevices() const;
+ 
+   void EnumerateDevices(dom::MediaSourceEnum, MediaSinkEnum,
+                         nsTArray<RefPtr<MediaDevice>>*) override;
+@@ -34,6 +41,7 @@ class MediaEngineFake : public MediaEngine {
+  private:
+   ~MediaEngineFake();
+   MediaEventProducer<void> mDeviceListChangeEvent;
++  const bool mIdentityDevices;
+ };
+ 
+ }  // namespace mozilla
+diff --git a/dom/media/webrtc/moz.build b/dom/media/webrtc/moz.build
+index a40204e475..d0644be504 100644
+--- a/dom/media/webrtc/moz.build
++++ b/dom/media/webrtc/moz.build
+@@ -136,3 +136,6 @@ FINAL_LIBRARY = "xul"
+ 
+ # Add libFuzzer configuration directives
+ include("/tools/fuzzing/libfuzzer-config.mozbuild")
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]

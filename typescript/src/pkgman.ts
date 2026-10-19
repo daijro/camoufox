@@ -2,7 +2,7 @@
  * Browser package management: version resolution, GitHub release discovery,
  * download/extract, and path lookup.
  *
- * TypeScript twin of pythonlib/camoufox/pkgman.py.
+ * TypeScript twin of python/src/camoufox/pkgman.py.
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -15,7 +15,6 @@ import type { Writable } from "node:stream";
 import AdmZip from "adm-zip";
 import cliProgress, { type Options as BarOptions } from "cli-progress";
 import prettyBytes from "pretty-bytes";
-import { parse as parseYaml } from "yaml";
 import { CONSTRAINTS, LIBRARY_VERSION } from "./__version__.js";
 import {
 	effectivePin,
@@ -38,6 +37,7 @@ import {
 // the ESM cycle resolves before any binding is read.
 import {
 	COMPAT_FLAG,
+	findInstalledVersion,
 	getActivePath,
 	getDefaultChannel,
 	installVersioned,
@@ -48,28 +48,14 @@ import {
 	ARCH_MAP,
 	INSTALL_DIR,
 	LAUNCH_FILE,
-	LOCAL_DATA,
+	loadDataFile,
 	OS_ARCH_MATRIX,
 	OS_MAP,
 	OS_NAME,
 	rprint,
 } from "./paths.js";
+import { comparePyStr, ValueError } from "./pycompat.js";
 import { warn } from "./warnings.js";
-
-// Platform constants and install paths live in paths.ts so that the
-// pkgman <-> multiversion cycle never needs them mid-evaluation. Re-exported
-// here so pkgman stays the single public entry point for them.
-export {
-	ARCH_MAP,
-	INSTALL_DIR,
-	LAUNCH_FILE,
-	LOCAL_DATA,
-	OS_ARCH_MATRIX,
-	OS_MAP,
-	OS_NAME,
-	rprint,
-	userCacheDir,
-} from "./paths.js";
 
 /** GITHUB_TOKEN, as the Python twin reads it: once, at import. */
 const GITHUB_TOKEN: string | undefined = process.env.GITHUB_TOKEN;
@@ -310,11 +296,16 @@ export const pkgmanDeps = {
  * The Python twin asks importlib.metadata for `playwright`; the npm package
  * that plays that role here is playwright-core.
  */
-function resolvedPlaywrightVersionRaw(): string | null {
+export function resolvedPlaywrightVersionRaw(): string | null {
+	return installedPackageVersion("playwright-core");
+}
+
+/** An installed npm package's version, or null if it cannot be read. */
+export function installedPackageVersion(name: string): string | null {
 	try {
 		const require = createRequire(import.meta.url);
 		const pkg = JSON.parse(
-			fs.readFileSync(require.resolve("playwright-core/package.json"), "utf-8"),
+			fs.readFileSync(require.resolve(`${name}/package.json`), "utf-8"),
 		);
 		return typeof pkg.version === "string" ? pkg.version : null;
 	} catch {
@@ -379,18 +370,6 @@ export interface BrowserRepoEntry {
 	name: string;
 	pattern?: string;
 	versions?: BrowserVersionConstraint[];
-}
-
-/**
- * Load a bundled YAML data file (repos.yml, warnings.yml, ...).
- */
-export function loadYaml(file: string): Record<string, any> {
-	return (
-		(parseYaml(fs.readFileSync(path.join(LOCAL_DATA, file), "utf-8")) as Record<
-			string,
-			any
-		>) ?? {}
-	);
 }
 
 /**
@@ -473,14 +452,14 @@ export class RepoConfig {
 	}
 
 	static loadRepos(spoofLibraryVersion?: string): RepoConfig[] {
-		const data = loadYaml("repos.yml");
+		const data = loadDataFile("repos.yml");
 		return ((data.browsers ?? []) as BrowserRepoEntry[]).map((r) =>
 			RepoConfig.fromEntry(r, spoofLibraryVersion),
 		);
 	}
 
 	static getDefaultName(): string {
-		return loadYaml("repos.yml").default?.browser ?? "Official";
+		return loadDataFile("repos.yml").default?.browser ?? "Official";
 	}
 
 	static fromEntry(
@@ -584,11 +563,6 @@ export class RepoConfig {
 			version.compare(new Version(buildMax)) <= 0
 		);
 	}
-}
-
-/** Python's str ordering (code points), not localeCompare's collation. */
-export function cmpStr(a: string, b: string): number {
-	return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function escapeRegExp(value: string): string {
@@ -700,76 +674,15 @@ export function resetOutdatedWarning(): void {
 	outdatedWarned = false;
 }
 
-/**
- * Manages fetching GitHub releases with fallback repos.
- */
-export class GitHubDownloader {
-	githubRepos: string[];
-	githubRepo: string;
-	isPrerelease = false;
-
-	constructor(githubRepos: string | string[]) {
-		this.githubRepos =
-			typeof githubRepos === "string" ? [githubRepos] : githubRepos;
-		this.githubRepo = this.githubRepos[0];
-	}
-
-	/** Return truthy data if this is the desired asset, else null. */
-	checkAsset(asset: GitHubAsset, _release?: GitHubRelease): any {
-		return asset.browser_download_url;
-	}
-
-	/**
-	 * Whether a release whose asset checkAsset() matched may be used. The
-	 * Python twin decides this inside check_asset(); reading a manifest is
-	 * async here, so it is a separate step.
-	 */
-	async acceptRelease(_release: GitHubRelease, _data: any): Promise<boolean> {
-		return true;
-	}
-
-	missingAssetError(): never {
-		throw new MissingRelease(
-			`Could not find a release asset in ${this.githubRepo}.`,
-		);
-	}
-
-	protected async getReleases(githubRepo: string): Promise<GitHubRelease[]> {
-		const apiUrl = `https://api.github.com/repos/${githubRepo}/releases`;
-		const response = await request(apiUrl, {
-			headers: githubHeaders(apiUrl),
-			signal: AbortSignal.timeout(20_000),
-		});
-		raiseForStatus(response, apiUrl);
-		return (await response.json()) as GitHubRelease[];
-	}
-
-	/**
-	 * Fetch the first matching release asset, trying fallback repos on failure.
-	 */
-	async getAsset(): Promise<any> {
-		let lastError: unknown;
-		for (const repo of this.githubRepos) {
-			try {
-				const releases = await this.getReleases(repo);
-				for (const release of releases) {
-					for (const asset of release.assets ?? []) {
-						const data = this.checkAsset(asset, release);
-						if (data && (await this.acceptRelease(release, data))) {
-							this.githubRepo = repo;
-							this.isPrerelease = release.prerelease ?? false;
-							return data;
-						}
-					}
-				}
-			} catch (error) {
-				lastError = error;
-			}
-		}
-
-		if (lastError) throw lastError;
-		this.missingAssetError();
-	}
+/** A GitHub repo's releases, newest first. */
+async function githubReleases(repo: string): Promise<GitHubRelease[]> {
+	const apiUrl = `https://api.github.com/repos/${repo}/releases`;
+	const response = await request(apiUrl, {
+		headers: githubHeaders(apiUrl),
+		signal: AbortSignal.timeout(20_000),
+	});
+	raiseForStatus(response, apiUrl);
+	return (await response.json()) as GitHubRelease[];
 }
 
 /**
@@ -831,7 +744,10 @@ export class AvailableVersion {
 /**
  * Handles fetching and installing Camoufox.
  */
-export class CamoufoxFetcher extends GitHubDownloader {
+export class CamoufoxFetcher {
+	githubRepos: string[];
+	githubRepo: string;
+	isPrerelease = false;
 	repoConfig: RepoConfig;
 	arch: string;
 	pattern: RegExp;
@@ -843,9 +759,9 @@ export class CamoufoxFetcher extends GitHubDownloader {
 	_url?: string;
 
 	constructor(repoConfig?: RepoConfig, selectedVersion?: AvailableVersion) {
-		const config = repoConfig ?? RepoConfig.getDefault();
-		super(config.repos);
-		this.repoConfig = config;
+		this.repoConfig = repoConfig ?? RepoConfig.getDefault();
+		this.githubRepos = this.repoConfig.repos;
+		this.githubRepo = this.githubRepos[0];
 		this.arch = this.getPlatformArch();
 		this.pattern = this.repoConfig.buildPattern();
 
@@ -915,6 +831,11 @@ export class CamoufoxFetcher extends GitHubDownloader {
 		return [version, asset.browser_download_url];
 	}
 
+	/**
+	 * Whether a release whose asset checkAsset() matched may be used. The
+	 * Python twin decides this inside check_asset(); reading a manifest is
+	 * async here, so it is a separate step.
+	 */
 	async acceptRelease(
 		release: GitHubRelease,
 		[version]: [Version, string],
@@ -933,6 +854,37 @@ export class CamoufoxFetcher extends GitHubDownloader {
 			`No matching release found for ${OS_NAME} ${this.arch} in the ` +
 				"supported range. Please update the camoufox package.",
 		);
+	}
+
+	protected getReleases(githubRepo: string): Promise<GitHubRelease[]> {
+		return githubReleases(githubRepo);
+	}
+
+	/**
+	 * Fetch the first matching release asset, trying fallback repos on failure.
+	 */
+	async getAsset(): Promise<[Version, string]> {
+		let lastError: unknown;
+		for (const repo of this.githubRepos) {
+			try {
+				const releases = await this.getReleases(repo);
+				for (const release of releases) {
+					for (const asset of release.assets ?? []) {
+						const data = this.checkAsset(asset, release);
+						if (data && (await this.acceptRelease(release, data))) {
+							this.githubRepo = repo;
+							this.isPrerelease = release.prerelease ?? false;
+							return data;
+						}
+					}
+				}
+			} catch (error) {
+				lastError = error;
+			}
+		}
+
+		if (lastError) throw lastError;
+		this.missingAssetError();
 	}
 
 	getPlatformArch(): string {
@@ -970,14 +922,16 @@ export class CamoufoxFetcher extends GitHubDownloader {
 
 	get url(): string {
 		if (!this._url) {
-			throw new Error("Url is not available. Make sure to run init() first.");
+			throw new ValueError(
+				"Url is not available. Make sure to run init() first.",
+			);
 		}
 		return this._url;
 	}
 
 	get version(): string {
 		if (!this._versionObj?.version) {
-			throw new Error(
+			throw new ValueError(
 				"Version is not available. Make sure to run init() first.",
 			);
 		}
@@ -986,7 +940,7 @@ export class CamoufoxFetcher extends GitHubDownloader {
 
 	get build(): string {
 		if (!this._versionObj) {
-			throw new Error(
+			throw new ValueError(
 				"Build information is not available. Make sure to run init() first.",
 			);
 		}
@@ -995,7 +949,7 @@ export class CamoufoxFetcher extends GitHubDownloader {
 
 	get verstr(): string {
 		if (!this._versionObj) {
-			throw new Error(
+			throw new ValueError(
 				"Version is not available. Make sure to run init() first.",
 			);
 		}
@@ -1030,13 +984,7 @@ export async function listAvailableVersions(
 	let lastError: unknown;
 	for (const repo of config.repos) {
 		try {
-			const apiUrl = `https://api.github.com/repos/${repo}/releases`;
-			const resp = await request(apiUrl, {
-				headers: githubHeaders(apiUrl),
-				signal: AbortSignal.timeout(20_000),
-			});
-			raiseForStatus(resp, apiUrl);
-			releases = (await resp.json()) as GitHubRelease[];
+			releases = await githubReleases(repo);
 			break;
 		} catch (error) {
 			lastError = error;
@@ -1088,7 +1036,7 @@ export async function listAvailableVersions(
 	versions.sort((a, b) => {
 		const byVersion = b.version.compare(a.version);
 		if (byVersion !== 0) return byVersion;
-		return cmpStr(b.assetCreatedAt ?? "", a.assetCreatedAt ?? "");
+		return comparePyStr(b.assetCreatedAt ?? "", a.assetCreatedAt ?? "");
 	});
 	return versions;
 }
@@ -1244,21 +1192,18 @@ export async function ensureCamoufoxInstalled(): Promise<string> {
 }
 
 /**
- * Get the path to a file in the camoufox directory.
- *
- * `baseDir` (the directory of an explicit/sandbox executable_path) resolves
- * resources relative to that build instead of the active install, so a sandbox
- * binary doesn't fall back to the cache dir.
+ * A file the build ships, found from its executable: beside it, or in
+ * Contents/Resources when the executable is a macOS app bundle's Contents/MacOS/.
  */
-export function getPath(file: string, baseDir?: string): string {
-	if (baseDir) {
-		// Mac-bundle aware: an executable in Camoufox.app/Contents/MacOS/ keeps
-		// its resources under ../Resources/.
-		if (path.basename(baseDir) === "MacOS") {
-			return path.join(baseDir, "..", "Resources", file);
-		}
-		return path.join(baseDir, file);
-	}
+export function buildFile(executablePath: string, name: string): string {
+	const directory = path.dirname(executablePath);
+	return path.basename(directory) === "MacOS"
+		? path.join(path.dirname(directory), "Resources", name)
+		: path.join(directory, name);
+}
+
+/** Get the path to a file in the camoufox directory. */
+export function getPath(file: string): string {
 	if (OS_NAME === "mac") {
 		return path.resolve(
 			camoufoxPath(),
@@ -1298,6 +1243,31 @@ export function launchPath(browserPath?: string): string {
 		);
 	}
 	return execPath;
+}
+
+/**
+ * The executable of the installed build `specifier` names (the `browser`
+ * launch option). Like `camoufox set`, it overrides the pairing: it never
+ * downloads, and it warns when the build is not the paired one.
+ */
+export function selectedLaunchPath(specifier: string): string {
+	const installPath = findInstalledVersion(specifier);
+	if (installPath === null) {
+		throw new ValueError(
+			`Browser version '${specifier}' not found. Run \`camoufox list\` to see installed versions.`,
+		);
+	}
+	const version = Version.fromPath(installPath);
+	const iface = installedInterface(installPath);
+	if (!interfaceSupported(iface)) {
+		throw new UnsupportedVersion(incompatibleMessage(version, iface));
+	}
+	warnIfUnpaired(
+		path.basename(path.dirname(installPath)),
+		version.version ?? "",
+		version.build,
+	);
+	return launchPath(installPath);
 }
 
 const formatBytes = (v: number, _: BarOptions, type: string) =>

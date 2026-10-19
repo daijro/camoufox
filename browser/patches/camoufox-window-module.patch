@@ -1,0 +1,32 @@
+diff --git a/browser/components/BrowserComponents.manifest b/browser/components/BrowserComponents.manifest
+index 489c64ea19..cddc09c2f0 100644
+--- a/browser/components/BrowserComponents.manifest
++++ b/browser/components/BrowserComponents.manifest
+@@ -14,6 +14,7 @@ category first-startup-new-profile resource:///modules/AboutNewTabResourceMappin
+ # Browser global components initializing before UI startup
+ category browser-before-ui-startup moz-src:///browser/components/sessionstore/SessionStore.sys.mjs SessionStore.init
+ category browser-before-ui-startup resource:///modules/BuiltInThemes.sys.mjs BuiltInThemes.maybeInstallActiveBuiltInTheme
++category browser-before-ui-startup resource:///modules/CamoufoxWindow.sys.mjs CamoufoxWindow.onStartup
+ #ifdef MOZ_NORMANDY
+ category browser-before-ui-startup resource://normandy/Normandy.sys.mjs Normandy.init
+ #endif
+@@ -47,6 +48,7 @@ category browser-window-domcontentloaded chrome://browser/content/browser.js Fir
+ 
+ category browser-window-load-before-sessionstore-init chrome://browser/content/browser-captivePortal.js CaptivePortalWatcher.init
+ category browser-window-load-before-sessionstore-init resource:///modules/ZoomUI.sys.mjs ZoomUI.init
++category browser-window-load-before-sessionstore-init resource:///modules/CamoufoxWindow.sys.mjs CamoufoxWindow.onWindowLoad
+ category browser-window-load-before-sessionstore-init chrome://browser/content/sidebar/browser-sidebar.js SidebarController.init
+ category browser-window-load-before-sessionstore-init chrome://browser/content/downloads/indicator.js DownloadsButton.init
+ 
+diff --git a/browser/modules/moz.build b/browser/modules/moz.build
+index eebf824044..9c5e4f48e1 100644
+--- a/browser/modules/moz.build
++++ b/browser/modules/moz.build
+@@ -117,6 +117,7 @@ EXTRA_JS_MODULES += [
+     "BrowserUIUtils.sys.mjs",
+     "BrowserUsageTelemetry.sys.mjs",
+     "BrowserWindowTracker.sys.mjs",
++    "CamoufoxWindow.sys.mjs",
+     "ContentCrashHandlers.sys.mjs",
+     "Dedupe.sys.mjs",
+     "Discovery.sys.mjs",

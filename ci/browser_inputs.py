@@ -2,9 +2,10 @@
 """Split the browser's inputs into what needs a compiler and what does not.
 
 Juggler is mostly JavaScript, and JavaScript does not need libxul relinked. But
-a full build is what every change to `additions/` used to cost: 24 minutes, of
-which ccache reported 98.63% hits -- so almost none of it was compiling C++. It
-was Rust, linking, and packaging, none of which a `.js` file affects.
+a full build is what every change to `browser/additions/` used to cost: 24
+minutes, of which ccache reported 98.63% hits -- so almost none of it was
+compiling C++. It was Rust, linking, and packaging, none of which a `.js` file
+affects.
 
 The saving is real and the trap is sharp, so this module is deliberately small
 and deliberately paranoid.
@@ -19,25 +20,26 @@ it.
 
 **Two things it would be easy to get wrong, and how they are closed:**
 
-  `additions/juggler/` is not all JavaScript. It also holds the screencast
-  encoder and the remote-debugging pipe -- 5 .cpp, 5 .h, 2 .idl, 3
+  `browser/additions/juggler/` is not all JavaScript. It also holds the
+  screencast encoder and the remote-debugging pipe -- 5 .cpp, 5 .h, 2 .idl, 3
   components.conf, 4 moz.build -- which are compiled into libxul. Only the files
-  `jar.mn` actually lists as packaged resources are treated as resources.
+  its moz.build lists in FINAL_TARGET_FILES are treated as resources.
   Everything else, including anything with an extension nobody has thought about
   yet, counts as native and forces a build. Fail closed.
 
-  The source-to-destination mapping is per-file, not a prefix rule. jar.mn maps
-  `TargetRegistry.js` to `content/TargetRegistry.js` (a level added),
-  `content/FrameTree.js` to `content/content/FrameTree.js` (preserved), and
-  `content/JugglerFrameChild.sys.mjs` to `content/JugglerFrameChild.sys.mjs` (a
-  level dropped). Two files in the same source directory land at different
-  depths. Assuming a prefix would write one of them to the wrong path, leave the
-  old copy in place, and run a browser with stale Juggler -- while every suite
-  reported green, because the browser works fine, it is just not the one under
-  review. So the mapping is read from jar.mn, never inferred.
+  The source-to-destination mapping is per-file, not a prefix rule. moz.build
+  installs `content/FrameTree.js` at `modules/juggler/content/FrameTree.js`
+  (depth preserved) but `content/JugglerFrameChild.sys.mjs` at
+  `modules/juggler/JugglerFrameChild.sys.mjs` (a level dropped). Two files in
+  the same source directory land at different depths. Assuming a prefix would
+  write one of them to the wrong path, leave the old copy in place, and run a
+  browser with stale Juggler -- while every suite reported green, because the
+  browser works fine, it is just not the one under review. So the mapping is
+  read from moz.build, never inferred.
 
-  jar.mn itself is native: it decides both the mapping and what is packaged at
-  all, so changing it must force a real build rather than a re-overlay.
+  That moz.build is itself native: it decides both the mapping and what is
+  packaged at all, so changing it must force a real build rather than a
+  re-overlay.
 
 Run:
     python3 -m ci.browser_inputs --digest        # the native-inputs hash
@@ -60,90 +62,81 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # The same set `resolve` greps to decide whether the browser changed at all.
 # Kept in step by ci/tests/test_ci.py, because a path that can change the binary
-# and is not hashed here would be served a stale browser.
-BROWSER_DIRS = ("patches", "additions", "settings", "assets", "scripts")
-BROWSER_FILES = ("upstream.sh", "Makefile")
+# and is not hashed here would be served a stale browser. The fontconfig files
+# are not compiled, but `make package-*` ships them, so they pair a release.
+BROWSER_DIRS = (
+    "browser/patches",
+    "browser/additions",
+    "browser/settings",
+    "browser/assets",
+    "browser/scripts",
+    "browser/bundle/fontconfig",
+)
+BROWSER_FILES = ("browser/upstream.sh", "browser/Makefile")
 
-# Scripts under scripts/ that cannot change compiled output, and so must not
-# invalidate a 665 MB cached browser.
-#
-# scripts/ holds the build machinery -- patch.py, copy-additions.sh, package.py
-# -- so hashing the directory wholesale is the right default. It also holds
-# tools that operate on the PYTHON package's data files and are never invoked
-# by a build, and those cost an hour each time they are touched: editing
-# clean-fingerprint-data.py, which rewrites pythonlib JSON, forced a full
-# rebuild of a browser whose sources had not moved (measured 2026-09-17).
-#
-# Nothing is excluded on the grounds that it "looks unrelated". An entry here
-# is checked by ci/tests/test_ci.py against the build's own entry points, so a
-# script that IS reachable from a build cannot sit in this list: getting that
-# wrong serves a stale binary to every suite downstream, which is far worse
-# than an unnecessary rebuild.
+# Tools under browser/scripts/ that no build runs, so touching one must not
+# invalidate a cached browser and cost an hour of compiling. ci/tests/test_ci.py
+# checks each entry against BUILD_ENTRY_POINTS: excluding a script a build does
+# run would serve a stale binary to every suite downstream.
 NON_NATIVE_SCRIPTS = frozenset(
     {
-        "scripts/clean-fingerprint-data.py",
-        "scripts/cursor-demo.py",
+        "browser/scripts/_font_bundle.py",
+        "browser/scripts/check-input-dispatch.py",
+        "browser/scripts/cursor-demo.py",
+        "browser/scripts/gen-contentaccessible-manifest.py",
+        "browser/scripts/gen-font-groups.py",
+        "browser/scripts/gen-fonts-json.py",
+        "browser/scripts/verify-fonts.py",
     }
 )
 
 # Where a build can reach a script from. Used by the test above, not here.
 BUILD_ENTRY_POINTS = (
-    "Makefile",
-    "multibuild.py",
-    "scripts/patch.py",
-    "scripts/package.py",
-    "scripts/copy-additions.sh",
-    "scripts/_mixin.py",
+    "browser/Makefile",
+    "browser/multibuild.py",
+    "browser/scripts/patch.py",
+    "browser/scripts/package.py",
+    "browser/scripts/copy-additions.sh",
+    "browser/scripts/_mixin.py",
 )
 
-JUGGLER = Path("additions") / "juggler"
-JAR_MN = JUGGLER / "jar.mn"
+JUGGLER = Path("browser") / "additions" / "juggler"
+MOZ_BUILD = JUGGLER / "moz.build"
 
-# `content/Helper.js (Helper.js)` -- destination first, source in parentheses.
-_ENTRY = re.compile(r"^\s*(\S+)\s+\((\S+)\)\s*$")
-# `% content juggler %content/` -- the chrome package this jar registers.
-_PACKAGE = re.compile(r"^\s*%\s+content\s+(\S+)\s+%")
+# `FINAL_TARGET_FILES.modules.juggler.content += [ "content/main.js", ... ]`: the
+# attribute path is the destination directory, each string a source file.
+_FILES = re.compile(r"^FINAL_TARGET_FILES\.([\w.]+)\s*\+=\s*\[(.*?)\]", re.M | re.S)
+_STRING = re.compile(r'"([^"]+)"')
 
 
-def jar_entries(root: Optional[Path] = None) -> Dict[str, str]:
-    """{repo-relative source: path inside the built dist}, straight from jar.mn.
+def resource_entries(root: Optional[Path] = None) -> Dict[str, str]:
+    """{repo-relative source: path inside the built dist}, straight from moz.build.
 
-    The dist path is `chrome/<package>/<destination>` -- observed directly
-    against a build: `content/Helper.js` in jar.mn is
-    `dist/bin/chrome/juggler/content/Helper.js` on disk.
+    FINAL_TARGET_FILES installs each file under its own name in the directory
+    the attribute path names: `FINAL_TARGET_FILES.modules.juggler.content`
+    puts `content/main.js` at `dist/bin/modules/juggler/content/main.js`.
     """
     root = root or REPO_ROOT
-    text = (root / JAR_MN).read_text(encoding="utf-8")
-    package = "juggler"
-    for line in text.splitlines():
-        found = _PACKAGE.match(line)
-        if found:
-            package = found.group(1)
-            break
-
+    text = (root / MOZ_BUILD).read_text(encoding="utf-8")
     entries: Dict[str, str] = {}
-    for line in text.splitlines():
-        if line.lstrip().startswith("#") or line.lstrip().startswith("%"):
-            continue
-        found = _ENTRY.match(line)
-        if not found:
-            continue
-        destination, source = found.group(1), found.group(2)
-        entries[str(JUGGLER / source)] = f"chrome/{package}/{destination}"
+    for target, body in _FILES.findall(text):
+        directory = target.replace(".", "/")
+        for source in _STRING.findall(body):
+            entries[str(JUGGLER / source)] = f"{directory}/{Path(source).name}"
     return entries
 
 
 def resource_sources(root: Optional[Path] = None) -> set:
     """Repo-relative paths that are packaged as-is and never compiled."""
-    return set(jar_entries(root))
+    return set(resource_entries(root))
 
 
 def native_inputs(root: Optional[Path] = None) -> List[str]:
     """Every browser input that is not a packaged resource, sorted.
 
     Anything unrecognised lands here rather than being skipped: a new file type
-    under additions/ forces a build until somebody decides otherwise, which is
-    the safe direction to be wrong in.
+    under browser/additions/ forces a build until somebody decides otherwise,
+    which is the safe direction to be wrong in.
     """
     root = root or REPO_ROOT
     resources = resource_sources(root)
@@ -155,7 +148,7 @@ def native_inputs(root: Optional[Path] = None) -> List[str]:
         for path in base.rglob("*"):
             if not path.is_file():
                 continue
-            rel = str(path.relative_to(root))
+            rel = path.relative_to(root).as_posix()
             if rel not in resources and rel not in NON_NATIVE_SCRIPTS:
                 found.append(rel)
     for name in BROWSER_FILES:
@@ -195,7 +188,7 @@ def source_digest(root: Optional[Path] = None) -> str:
     digest = hashlib.sha256()
     for rel in source_inputs(root):
         data = (root / rel).read_bytes()
-        if rel == "upstream.sh":
+        if rel == "browser/upstream.sh":
             data = b"\n".join(
                 line for line in data.splitlines() if not line.strip().startswith(b"release=")
             )
@@ -209,13 +202,13 @@ def overlay(dist_bin: Path, root: Optional[Path] = None) -> List[str]:
     """Lay the current resources over an already-built dist/bin.
 
     Every entry is written, not just the changed ones: the set is then always
-    exactly what jar.mn says, so a stale file cannot survive. (A resource
-    *removed* from jar.mn is handled by jar.mn being a native input -- that
-    forces a real build rather than an overlay.)
+    exactly what moz.build says, so a stale file cannot survive. (A resource
+    *removed* from moz.build is handled by moz.build being a native input --
+    that forces a real build rather than an overlay.)
     """
     root = root or REPO_ROOT
     written = []
-    for source, destination in sorted(jar_entries(root).items()):
+    for source, destination in sorted(resource_entries(root).items()):
         target = dist_bin / destination
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(root / source, target)
@@ -240,7 +233,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         for rel in native_inputs():
             print(rel)
     if args.resources:
-        for source, destination in sorted(jar_entries().items()):
+        for source, destination in sorted(resource_entries().items()):
             print(f"{source} -> {destination}")
     if args.overlay:
         written = overlay(args.overlay)

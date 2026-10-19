@@ -1,5 +1,5 @@
 /**
- * multiversion.ts against pythonlib/camoufox/multiversion.py: ordering is
+ * multiversion.ts against python/src/camoufox/multiversion.py: ordering is
  * Python's (code-point string comparison, not locale collation), the install
  * scan and specifier lookup, and removal bookkeeping.
  */
@@ -130,8 +130,7 @@ it("removeVersion prunes empty parents and re-points the active version", () => 
 	vi.restoreAllMocks();
 });
 
-it("classifies catalog items against installs, legacy folders included", async () => {
-	const { AvailableVersion, Version } = await import("../src/pkgman.js");
+it("finds a catalog item's install, legacy folders included", () => {
 	addInstall("official", "152.0.4-beta.30-aaaaaaaa", {
 		version: "152.0.4",
 		build: "beta.30",
@@ -141,21 +140,13 @@ it("classifies catalog items against installs, legacy folders included", async (
 		version: "152.0.4",
 		build: "beta.29",
 	});
-	const av = (build: string, sha?: string) =>
-		new AvailableVersion({
-			version: new Version(build, "152.0.4"),
-			url: "",
-			isPrerelease: false,
-			sha256: sha,
-		});
-	const [rows, extras] = mv.classifyInstalls(
-		[av("beta.30", "aaaaaaaa11"), av("beta.30", "bbbbbbbb22"), av("beta.29")],
-		mv.listInstalled(),
-	);
-	expect(rows.map((r) => r?.folderName ?? null)).toEqual([
+	const installed = mv.listInstalled();
+	const find = (vb: string, sha?: string, count = 1) =>
+		mv.findInstall(vb, sha, installed, count)?.folderName ?? null;
+	expect(find("152.0.4-beta.30", "aaaaaaaa11", 2)).toBe(
 		"152.0.4-beta.30-aaaaaaaa",
-		null,
-		"152.0.4-beta.29",
-	]);
-	expect(extras).toEqual([]);
+	);
+	expect(find("152.0.4-beta.30", "bbbbbbbb22", 2)).toBeNull();
+	expect(find("152.0.4-beta.29")).toBe("152.0.4-beta.29");
+	expect(find("152.0.4-beta.29", undefined, 2)).toBeNull();
 });
