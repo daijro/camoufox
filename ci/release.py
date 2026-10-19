@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Release plumbing for .github/workflows/release.yml.
 
-Every merge to main that passes the test pipeline publishes a prerelease: a
-browser build if the browser's sources changed (a GitHub prerelease with its own
-release number), then -- if the library changed -- the Python package on PyPI and
-the npm package under the `next` dist-tag. Pushing a `vX.Y.Z` tag on a tested main
-commit promotes it: the browser release built from that commit's sources becomes
-the stable, latest release, and X.Y.Z is published to PyPI and to npm `latest`.
+Releases ride a train, on the 1st and 15th of each month. The scheduled run
+promotes the newest prerelease to stable: the browser release it pairs with is
+marked stable and latest (no rebuild), and its library version without the bN
+suffix goes to PyPI and npm `latest`. A promotion is refused while an issue
+labelled `regression` is open. The run then dispatches a cut: main is tested,
+and a browser prerelease is built if the browser's sources changed (a GitHub
+prerelease with its own release number), then -- if the library changed -- the
+Python package on PyPI and the npm package under the `next` dist-tag. A cut is
+also dispatched by hand for a fix that cannot wait, and pushing a `vX.Y.Z` tag on
+a tested main commit still promotes it by hand.
 
 Each library release is paired with exactly one browser release -- the one built
 from the same sources, found by `ci.browser_inputs.source_digest()` in the
 release's manifest.json asset -- and `stamp` writes that pairing into the package
-(pythonlib/camoufox/browser-pin.json, read by both launchers). A library therefore
+(python/src/camoufox/browser-pin.json, read by both launchers). A library therefore
 never runs a browser it was not released with unless its user explicitly chooses
 another.
 
@@ -19,6 +23,7 @@ A browser release's number is not committed anywhere: its tag points at the
 tested main commit, and `set-build` writes the number from the tag name into the
 build's working tree. Rebuilding from the tag with `set-build` reproduces it.
 
+    python3 -m ci.release target                 # the commit (and stable tag) this run releases
     python3 -m ci.release browser-plan           # build a new browser, or reuse one
     python3 -m ci.release set-build --tag TAG     # upstream.sh names TAG's number (working tree only)
     python3 -m ci.release manifest --tag T --digest D --commit C   # the release's manifest.json
@@ -41,13 +46,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-from ._util import REPO_ROOT, die, http_json, log, read_upstream_sh, run, set_output
+from ._util import BROWSER_ROOT, REPO_ROOT, die, gh_headers, http_json, log, read_upstream_sh, run, set_output
 from .browser_inputs import BROWSER_DIRS, BROWSER_FILES, NON_NATIVE_SCRIPTS, source_digest
 
 PYPI_PROJECT = "camoufox"
 NPM_PACKAGE = "camoufox"
-PIN_FILE = REPO_ROOT / "pythonlib" / "camoufox" / "browser-pin.json"
-PYPROJECT = REPO_ROOT / "pythonlib" / "pyproject.toml"
+PIN_FILE = REPO_ROOT / "python" / "src" / "camoufox" / "browser-pin.json"
+PYPROJECT = REPO_ROOT / "python" / "pyproject.toml"
 PACKAGE_JSON = REPO_ROOT / "typescript" / "package.json"
 TS_VERSION = REPO_ROOT / "typescript" / "src" / "__version__.ts"
 
@@ -58,12 +63,15 @@ MANIFEST_ASSET = "manifest.json"
 # "tests / All tests passed"; run on a pull request, "All tests passed".
 GATE_CHECK = "All tests passed"
 
+# An open issue with this label holds the train's promotion.
+REGRESSION_LABEL = "regression"
+
 STABLE_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 # Every published library version is tagged: vX.Y.Z, or vX.Y.ZbN for a
 # prerelease (PEP 440 spelling, so it never reads as a browser tag).
 LIBRARY_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:b(\d+))?$")
 # What a library release ships besides the browser it pairs with.
-LIBRARY_DIRS = ("pythonlib", "typescript")
+LIBRARY_DIRS = ("python", "typescript")
 _BROWSER_TAG = re.compile(r"^v(?P<version>[^-]+)-(?P<prefix>[a-z]+)\.(?P<n>\d+)$")
 
 
@@ -152,10 +160,10 @@ def next_browser_release(upstream_release: str, tags: Iterable[str]) -> str:
 
 def browser_interface(root: Path = REPO_ROOT) -> int:
     """The browser interface this tree declares (CONSTRAINTS.INTERFACE)."""
-    text = (root / "pythonlib" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
+    text = (root / "python" / "src" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
     m = re.search(r"^\s*INTERFACE = (\d+)$", text, re.M)
     if not m:
-        raise ValueError("pythonlib/camoufox/__version__.py declares no INTERFACE")
+        raise ValueError("python/src/camoufox/__version__.py declares no INTERFACE")
     return int(m[1])
 
 
@@ -207,6 +215,19 @@ def last_library_tag(tags: Iterable[str]) -> Optional[str]:
     return max(keyed)[1] if keyed else None
 
 
+def train_promotion(tags: Iterable[str]) -> Optional[Tuple[str, str]]:
+    """The library prerelease the train promotes, and the stable tag it becomes.
+
+    None when the newest library tag is already a stable release: nothing was
+    cut since the last promotion.
+    """
+    last = last_library_tag(tags)
+    m = LIBRARY_TAG.match(last or "")
+    if not m or m[4] is None:
+        return None
+    return last, f"v{m[1]}.{m[2]}.{m[3]}"
+
+
 def is_library_source(rel: str) -> bool:
     """Whether a change to `rel` changes what a library release would ship."""
     return rel.split("/", 1)[0] in LIBRARY_DIRS or is_browser_source(rel)
@@ -216,7 +237,7 @@ def is_browser_source(rel: str) -> bool:
     """Whether a repo-relative path goes into the browser (as source_digest counts it)."""
     if rel in NON_NATIVE_SCRIPTS:
         return False
-    return rel in BROWSER_FILES or rel.split("/", 1)[0] in BROWSER_DIRS
+    return rel in BROWSER_FILES or rel.startswith(tuple(f"{d}/" for d in BROWSER_DIRS))
 
 
 @dataclass(frozen=True)
@@ -242,7 +263,7 @@ def find_paired(releases: Sequence[dict], root: Path = REPO_ROOT) -> Pairing:
     if found:
         return Pairing(found, f"{found['tag_name']} carries source digest {digest}")
 
-    up = read_upstream_sh(root / "upstream.sh")
+    up = read_upstream_sh(root / "browser" / "upstream.sh")
     tag = f"v{up['version']}-{up['release']}"
     rel = next((r for r in releases if r.get("tag_name") == tag), None)
     if rel is None or rel.get("draft"):
@@ -357,16 +378,11 @@ def changed_since_published(built: Path, built_version: str, published: Sequence
 # I/O
 # ---------------------------------------------------------------------------
 
-def _gh_headers() -> dict:
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    return {"Authorization": f"Bearer {token}"} if token else {}
-
-
 def github_releases(repo: str) -> List[dict]:
     out: List[dict] = []
     for page in range(1, 11):
         batch = http_json(f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}",
-                          headers=_gh_headers())
+                          headers=gh_headers())
         out += batch
         if len(batch) < 100:
             break
@@ -391,7 +407,7 @@ def registry_versions() -> Tuple[List[str], List[str]]:
 def checked_in_version() -> str:
     m = re.search(r'^version = "([^"]+)"', PYPROJECT.read_text(), re.M)
     if not m:
-        die("pythonlib/pyproject.toml has no version")
+        die("python/pyproject.toml has no version")
     return m[1]
 
 
@@ -402,6 +418,59 @@ def repo_name() -> str:
 # ---------------------------------------------------------------------------
 # commands
 # ---------------------------------------------------------------------------
+
+def require_no_regressions() -> None:
+    """No open issue carries the regression label, and the label exists.
+
+    A missing label would make the query come back empty, which reads as "no
+    regressions" when nobody could have marked one.
+    """
+    import urllib.error
+
+    base = f"https://api.github.com/repos/{repo_name()}"
+    try:
+        http_json(f"{base}/labels/{REGRESSION_LABEL}", headers=gh_headers())
+    except urllib.error.HTTPError as err:
+        if err.code == 404:
+            die(f"the '{REGRESSION_LABEL}' label does not exist, so no issue can hold a promotion; create it")
+        raise
+    issues = http_json(f"{base}/issues?labels={REGRESSION_LABEL}&state=open&per_page=100",
+                       headers=gh_headers())
+    if issues:
+        die(f"not promoting while issues labelled '{REGRESSION_LABEL}' are open: "
+            + ", ".join(f"#{i['number']}" for i in issues))
+
+
+def cmd_target(_: argparse.Namespace) -> int:
+    """The commit this run releases and, for a promotion, the stable tag it gets.
+
+    A pushed tag names both. A dispatched cut releases main as it is. The
+    scheduled train promotes the newest library prerelease at the commit it was
+    cut from, or nothing when none was cut since the last promotion.
+    """
+    event = os.environ["GITHUB_EVENT_NAME"]
+    if event == "workflow_dispatch":
+        if os.environ["GITHUB_REF"] != "refs/heads/main":
+            die(f"a prerelease is cut from main only, not {os.environ['GITHUB_REF']}")
+        set_output("sha", os.environ["GITHUB_SHA"])
+        return 0
+    if event == "push":
+        set_output("sha", os.environ["GITHUB_SHA"])
+        set_output("tag", os.environ["GITHUB_REF_NAME"])
+        return 0
+    tags = run(["git", "tag", "-l", "v*"], cwd=REPO_ROOT, check=True).stdout.split()
+    found = train_promotion(tags)
+    if found is None:
+        log("nothing to promote: no library prerelease was cut since the last stable release")
+        return 0
+    prerelease, tag = found
+    require_no_regressions()
+    sha = run(["git", "rev-list", "-n", "1", prerelease], cwd=REPO_ROOT, check=True).stdout.strip()
+    log(f"promoting {prerelease} ({sha[:10]}) as {tag}")
+    set_output("sha", sha)
+    set_output("tag", tag)
+    return 0
+
 
 def cmd_browser_plan(_: argparse.Namespace) -> int:
     digest = source_digest()
@@ -436,7 +505,7 @@ def cmd_set_build(args: argparse.Namespace) -> int:
     up = read_upstream_sh()
     if m["version"] != up["version"]:
         die(f"{args.tag} is Firefox {m['version']}, but upstream.sh builds {up['version']}")
-    path = REPO_ROOT / "upstream.sh"
+    path = BROWSER_ROOT / "upstream.sh"
     path.write_text(re.sub(r"^release=.*$", f"release={m['prefix']}.{m['n']}", path.read_text(), flags=re.M))
     log(f"upstream.sh: release={m['prefix']}.{m['n']}")
     return 0
@@ -542,7 +611,7 @@ def _require_tested(sha: str) -> None:
         batch = http_json(
             f"https://api.github.com/repos/{repo_name()}/commits/{sha}/check-runs"
             f"?filter=latest&per_page=100&page={page}",
-            headers=_gh_headers(),
+            headers=gh_headers(),
         ).get("check_runs", [])
         checks += batch
         if len(batch) < 100:
@@ -608,6 +677,7 @@ def cmd_promote(_: argparse.Namespace) -> int:
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("target").set_defaults(fn=cmd_target)
     sub.add_parser("browser-plan").set_defaults(fn=cmd_browser_plan)
     p = sub.add_parser("set-build"); p.add_argument("--tag", required=True); p.set_defaults(fn=cmd_set_build)
     p = sub.add_parser("manifest"); p.add_argument("--tag", required=True); p.add_argument("--digest", required=True)

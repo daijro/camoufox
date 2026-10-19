@@ -1,53 +1,62 @@
 name: Release
 
 # Every release of the browser, the Python package and the npm package, from one
-# workflow. Two ways in:
+# workflow. Merges to main are tested by tests.yml and released by a train:
 #
-#   push to main   (prerelease)  the test pipeline runs on the pushed commit;
-#                  if it passes, a browser prerelease is built when the browser's
-#                  sources changed, and -- when anything a library ships changed
-#                  -- camoufox <next>bN goes to PyPI (pip ignores it without
-#                  --pre) and <next>-beta.N to npm under the `next` dist-tag.
-#                  Each registry gets it only if its own package differs from
-#                  the newest version already there (ci.release lib-diff), so
-#                  a TypeScript-only change publishes nothing to PyPI.
+#   schedule       (train)       the 1st and 15th of each month: the newest
+#                  prerelease is promoted to stable (as by a tag, below), unless
+#                  an issue labelled `regression` is open. However that ends, the
+#                  `cut` job then dispatches this workflow on main.
+#   dispatch       (prerelease)  the test pipeline runs on main; if it passes, a
+#                  browser prerelease is built when the browser's sources
+#                  changed, and -- when anything a library ships changed --
+#                  camoufox <next>bN goes to PyPI (pip ignores it without --pre)
+#                  and <next>-beta.N to npm under the `next` dist-tag. Each
+#                  registry gets it only if its own package differs from the
+#                  newest version already there (ci.release lib-diff), so a
+#                  TypeScript-only change publishes nothing to PyPI. Dispatched
+#                  by hand for a fix that cannot wait for the train.
 #   tag vX.Y.Z     (stable)      on a main commit whose tests passed: the
 #                  browser prerelease built from that commit's sources becomes
 #                  the stable, latest release (no rebuild), and X.Y.Z goes to
-#                  PyPI and to npm `latest`.
+#                  PyPI and to npm `latest`. The train promotes the same way,
+#                  at the commit its prerelease was cut from.
 #
 # Each package is stamped with the browser release built from the same sources
-# (ci/release.py stamp -> pythonlib/camoufox/browser-pin.json), and both
+# (ci/release.py stamp -> python/src/camoufox/browser-pin.json), and both
 # launchers fetch and launch exactly that build by default. A browser release is
 # found by the source digest in its manifest.json asset (ci.browser_inputs).
 #
 # Packages are built once, in build-library, and the publish jobs upload exactly
 # those files. PyPI and npm both use trusted publishing (OIDC): no token is
 # stored, and each registry accepts uploads only from this file in this
-# repository. A failed publish is retried with "Re-run failed jobs": every
-# version and tag comes from `plan`, so a re-run publishes the same release.
+# repository, as the top-level workflow -- so the publish jobs cannot move into
+# a reusable workflow. A failed publish is retried with "Re-run failed jobs":
+# every version and tag comes from `plan`, so a re-run publishes the same release.
 #
 # Branch protection makes main unwritable; nothing here commits to it. A browser
 # release's number lives only in its tag, which points at the tested main commit
 # (see `ci.release set-build`). Every published library version is tagged too
-# (vX.Y.Z by the maintainer, vX.Y.ZbN by tag-library).
+# (vX.Y.Z by the maintainer or the train, vX.Y.ZbN by tag-library).
 
 on:
+  schedule:
+    - cron: "0 6 1,15 * *"
+  workflow_dispatch:
   push:
-    branches: [main]
-    # vX.Y.Z only. Browser tags (v156.0.1-beta.33) and library prerelease tags
-    # (v0.5.8b2) are created by this workflow's token, which starts no run, and
-    # check-promotable refuses anything else a person pushes.
+    # vX.Y.Z only. Browser tags (v156.0.1-beta.33) and library tags are created
+    # by this workflow's token, which starts no run, and check-promotable
+    # refuses anything else a person pushes.
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions: {}
 
 # One run at a time per channel. Browser release numbers are allocated in `plan`,
-# so two prerelease runs must never overlap; GitHub keeps only the newest pending
-# run in a group, so a burst of merges releases the last of them, which contains
-# the others. A promotion never waits on a prerelease.
+# so two cuts must never overlap; GitHub keeps only the newest pending run in a
+# group, and a cut of main contains every cut queued before it. A promotion
+# never waits on a cut.
 concurrency:
-  group: release-${{ github.ref_type }}
+  group: release-${{ github.event_name == 'workflow_dispatch' && 'prerelease' || 'stable' }}
   cancel-in-progress: false
 
 env:
@@ -57,14 +66,14 @@ env:
 
 # A job with no status function in its `if` gets an implicit success(), which is
 # false when ANY job upstream of it -- not just its direct needs -- was skipped.
-# Each channel always skips a job (`tests` on a tag, promote-browser on a push),
+# Each channel always skips a job (`tests` on a promotion, promote-browser on a cut),
 # so every job downstream of one starts its `if` with !cancelled() and checks
 # the results it actually depends on.
 jobs:
   # ---------------------------------------------------------------------------
   tests:
-    # The pushed commit, exactly -- not whatever main is by the time a job checks out.
-    if: github.ref_type == 'branch'
+    # The dispatched commit, exactly -- not whatever main is by the time a job checks out.
+    if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       pull-requests: write # tests.yml's summary job declares it; it comments on pull requests only
@@ -76,16 +85,18 @@ jobs:
   # ---------------------------------------------------------------------------
   plan:
     needs: tests
-    # A tag skips `tests`: check-promotable requires that they passed on its commit.
+    # A promotion skips `tests`: check-promotable requires that they passed on its commit.
     if: >-
       !cancelled() &&
-      (github.ref_type == 'tag' || needs.tests.result == 'success')
+      (github.event_name != 'workflow_dispatch' || needs.tests.result == 'success')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       checks: read # check-promotable: the test gate on the tagged commit
+      issues: read # the train: no open regression holds its promotion
     outputs:
       channel: ${{ steps.channel.outputs.channel }}
+      sha: ${{ steps.target.outputs.sha }}
       build_browser: ${{ steps.browser.outputs.build || 'false' }}
       browser_tag: ${{ steps.browser.outputs.tag || steps.paired.outputs.browser_tag }}
       digest: ${{ steps.browser.outputs.digest }}
@@ -100,17 +111,27 @@ jobs:
           fetch-depth: 0 # every tag: release numbers, the last library release, main
 
       - id: channel
-        run: echo "channel=${{ github.ref_type == 'tag' && 'stable' || 'prerelease' }}" >> "$GITHUB_OUTPUT"
+        run: echo "channel=${{ github.event_name == 'workflow_dispatch' && 'prerelease' || 'stable' }}" >> "$GITHUB_OUTPUT"
 
-      - name: Only a tested main commit is promoted
-        if: steps.channel.outputs.channel == 'stable'
+      - id: target
+        name: The commit this run releases
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 -m ci.release check-promotable --tag "$GITHUB_REF_NAME"
+        run: python3 -m ci.release target
+
+      - name: Check out the commit this run releases
+        if: steps.target.outputs.sha != ''
+        run: git checkout -q --detach "${{ steps.target.outputs.sha }}"
+
+      - name: Only a tested main commit is promoted
+        if: steps.channel.outputs.channel == 'stable' && steps.target.outputs.sha != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -m ci.release check-promotable --tag "${{ steps.target.outputs.tag }}"
 
       - id: paired
         name: The browser release built from these sources
-        if: steps.channel.outputs.channel == 'stable'
+        if: steps.channel.outputs.channel == 'stable' && steps.target.outputs.sha != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 -m ci.release paired
@@ -124,9 +145,10 @@ jobs:
 
       - id: library
         name: The library versions, and whether to publish them
+        if: steps.target.outputs.sha != ''
         run: |
           python3 -m ci.release lib-plan --channel "${{ steps.channel.outputs.channel }}" \
-            ${{ github.ref_type == 'tag' && format('--tag {0}', github.ref_name) || '' }}
+            ${{ steps.target.outputs.tag && format('--tag {0}', steps.target.outputs.tag) || '' }}
 
   # ---------------------------------------------------------------------------
   build-browser:
@@ -186,7 +208,7 @@ jobs:
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.plan.outputs.sha }}
 
       - name: Name this release
         # The tested commit's upstream.sh names the floor its number was taken
@@ -217,25 +239,32 @@ jobs:
           sudo apt-get update
           # ccache: the mozconfig enables --with-ccache, but the runner image no
           # longer ships it, so configure fails with "Cannot find ccache".
-          # fontconfig: scripts/verify-fonts.py resolves every reportable family
+          # fontconfig: browser/scripts/verify-fonts.py resolves every reportable family
           # through fc-list/fc-match, so the bundle is checked with the same tool
           # the browser uses rather than assumed correct.
           sudo apt-get install -y msitools p7zip-full aria2 ccache fontconfig
 
       - name: Fetch the font bundle
         # The bundle is a release asset, not repo content (~2.16 GB extracted,
-        # 843 MB as .tar.xz -- see scripts/fetch-fonts.py). Without this the
-        # package would ship with NO fonts while pythonlib/camoufox/fonts.json
-        # still reports hundreds of families, which is a reverse leak in the
-        # shipped browser. After the dependency install, so the download uses
-        # aria2c's parallel connections rather than the curl fallback.
+        # 843 MB as .tar.xz -- see browser/scripts/fetch-fonts.py). Without this
+        # the package would ship with NO fonts while
+        # python/src/camoufox/fonts.json still reports hundreds of families,
+        # which is a reverse leak in the shipped browser. After the dependency
+        # install, so the download uses aria2c's parallel connections rather
+        # than the curl fallback.
+        working-directory: browser
         run: make fonts-extract
 
       - name: Verify the font bundle matches the manifest
         # Full run, not --quick: this is the release path, and the one invariant
         # that cannot be recovered after publishing is a family fonts.json
         # reports that the packaged fontconfig cannot resolve.
-        run: python3 scripts/verify-fonts.py
+        # It checks the launcher's own font draws, so it needs the camoufox
+        # package and its dependencies.
+        working-directory: browser
+        run: |
+          python3 -m pip install -e ../python
+          python3 scripts/verify-fonts.py
 
       - name: Prepare the source tree
         # setup-minimal (which fetches the tarball) -> dir -> mozbootstrap, with
@@ -258,13 +287,14 @@ jobs:
           # Cap Rust parallelism to lower peak memory (avoids OOM/SIGTERM).
           # Tune to taste: higher = faster but more RAM.
           CARGO_BUILD_JOBS: "1"
+        working-directory: browser
         run: python3 ./multibuild.py --target ${{ matrix.target }} --arch ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: CamoufoxBuilds-${{ matrix.target }}-${{ matrix.arch }}
-          path: dist/*
+          path: browser/dist/*
 
   publish-browser:
     needs: [plan, build-browser]
@@ -276,7 +306,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.plan.outputs.sha }}
 
       - name: Download the builds
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -325,7 +355,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.plan.outputs.sha }}
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -335,15 +365,15 @@ jobs:
         # The npm build copies pythonlib's data files and the pinned fpgen model.
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install vermin build twine -r ci/requirements.txt -e pythonlib
-          .venv/bin/python scripts/pin-fpgen-model.py
+          .venv/bin/pip install vermin build twine -r ci/requirements.txt -e python
+          .venv/bin/python python/scripts/pin-fpgen-model.py
 
       - name: Check Python compatibility
         # The package must run on the floor pyproject.toml declares (python =
         # "^3.10"); `3.10-` means "needs at most 3.10". typing_extensions is a
         # dependency, not a stdlib module for vermin to date.
-        working-directory: pythonlib
-        run: ../.venv/bin/vermin . --eval-annotations --backport typing_extensions --target=3.10- --violations camoufox/
+        working-directory: python
+        run: ../.venv/bin/vermin . --eval-annotations --backport typing_extensions --target=3.10- --violations src/camoufox/
 
       - name: Stamp the version and the paired browser
         run: |
@@ -351,16 +381,16 @@ jobs:
             --browser-tag "${{ needs.plan.outputs.browser_tag }}" \
             --py-version "${{ needs.plan.outputs.py_version }}" \
             --npm-version "${{ needs.plan.outputs.npm_version }}"
-          cat pythonlib/camoufox/browser-pin.json
+          cat python/src/camoufox/browser-pin.json
 
       - name: Build the Python package
-        working-directory: pythonlib
+        working-directory: python
         run: |
           ../.venv/bin/python -m build
           ../.venv/bin/twine check dist/*
 
       - name: The wheel carries its browser pin
-        working-directory: pythonlib
+        working-directory: python
         run: |
           ../.venv/bin/python - <<'EOF'
           import glob, json, zipfile
@@ -400,14 +430,14 @@ jobs:
         # published again under a new number.
         run: |
           .venv/bin/python -m ci.release lib-diff --channel "${{ needs.plan.outputs.channel }}" \
-            --wheel pythonlib/dist/*.whl --tarball npm-dist/*.tgz \
+            --wheel python/dist/*.whl --tarball npm-dist/*.tgz \
             --py-version "${{ needs.plan.outputs.py_version }}" \
             --npm-version "${{ needs.plan.outputs.npm_version }}"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: python-dist
-          path: pythonlib/dist/
+          path: python/dist/
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: npm-dist
@@ -427,7 +457,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.plan.outputs.sha }}
           fetch-depth: 0
       - env:
           GH_TOKEN: ${{ github.token }}
@@ -483,11 +513,12 @@ jobs:
 
   tag-library:
     # Every published library version has a tag, on either registry; the next
-    # merge compares against it to decide whether the library changed. A stable
-    # version's tag is the one that started this run.
+    # cut compares against it to decide whether the library changed, and the
+    # train promotes the newest. A pushed stable tag is the one that started
+    # this run.
     needs: [plan, publish-pypi, publish-npm]
     if: >-
-      !cancelled() && needs.plan.outputs.channel == 'prerelease' &&
+      !cancelled() && github.event_name != 'push' &&
       (needs.publish-pypi.result == 'success' || needs.publish-npm.result == 'success') &&
       needs.publish-pypi.result != 'failure' && needs.publish-npm.result != 'failure'
     runs-on: ubuntu-24.04
@@ -498,4 +529,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/$GITHUB_REPOSITORY/git/refs" \
-            -f ref="refs/tags/v${{ needs.plan.outputs.py_version }}" -f sha="$GITHUB_SHA"
+            -f ref="refs/tags/v${{ needs.plan.outputs.py_version }}" -f sha="${{ needs.plan.outputs.sha }}"
+
+  # ---------------------------------------------------------------------------
+  cut:
+    # The train's second half: once its promotion has finished, however it
+    # ended, cut the next prerelease from main in a run of its own. A dispatch
+    # is the one event this workflow's token may start a run with.
+    needs: [plan, tag-library]
+    if: >-
+      !cancelled() && github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main

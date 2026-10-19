@@ -1,5 +1,5 @@
 /**
- * Mirrors pythonlib/tests/test_browser_interface.py: a browser declares the
+ * Mirrors python/tests/test_browser_interface.py: a browser declares the
  * interface it speaks, and the library refuses one it cannot drive (#835).
  *
  * INSTALL_DIR is computed at import from XDG_CACHE_HOME, so every test points
@@ -124,7 +124,7 @@ describe("launching", () => {
 		const pkgman = await import("../src/pkgman.js");
 		const pin = await import("../src/browser-pin.js");
 		vi.spyOn(pin, "effectivePin").mockReturnValue(null);
-		const root = pkgman.INSTALL_DIR;
+		const root = (await import("../src/paths.js")).INSTALL_DIR;
 		const relative = "browsers/official/156.0.1-beta.40";
 		const dir = path.join(root, relative);
 		fs.mkdirSync(dir, { recursive: true });
@@ -159,7 +159,7 @@ describe("launching", () => {
 describe("upgrade warning", () => {
 	async function synced(incompatible: object[]) {
 		const pkgman = await import("../src/pkgman.js");
-		const root = pkgman.INSTALL_DIR;
+		const root = (await import("../src/paths.js")).INSTALL_DIR;
 		fs.mkdirSync(root, { recursive: true });
 		fs.writeFileSync(
 			path.join(root, "repo_cache.json"),

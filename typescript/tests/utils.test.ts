@@ -3,8 +3,9 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PyFloat } from "../src/pycompat.js";
+import { PyFloat, pyTypeName } from "../src/pycompat.js";
 import {
+	CACHE_PREFS,
 	checkValidOs,
 	configJson,
 	determineUaOs,
@@ -13,7 +14,6 @@ import {
 	isDomainSet,
 	mergeInto,
 	pyJsonDumpsAscii,
-	pyTypeName,
 	setInto,
 	spoofsWindowDimensions,
 	utilsDeps,
@@ -245,5 +245,14 @@ describe("validateConfig with removed keys (#835)", () => {
 		expect(() =>
 			validateConfig({ "navigator.languages": "not-an-array" }, binary),
 		).not.toThrow();
+	});
+});
+
+describe("CACHE_PREFS", () => {
+	it("leaves history length at stock", () => {
+		// history.length is page-readable; stock Firefox keeps 50 entries.
+		expect(CACHE_PREFS).not.toHaveProperty([
+			"browser.sessionhistory.max_entries",
+		]);
 	});
 });

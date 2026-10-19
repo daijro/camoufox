@@ -1,7 +1,7 @@
 /**
  * Whole-identity coherence: the checks that look at more than one field.
  *
- * TypeScript twin of pythonlib/camoufox/coherence.py -- see there for the
+ * TypeScript twin of python/src/camoufox/coherence.py -- see there for the
  * measurements behind each rule. Camoufox assembles an identity from several
  * independently sampled pools, so a combination no machine has ever had can
  * be built out of individually plausible parts; every identity passes through
@@ -9,25 +9,23 @@
  *
  * `validate()` reports what is still broken; `apply()` repairs what it can.
  */
+import { LAUNCHER_CONSTANTS } from "./paths.js";
 import { isPyInt, num, pyRepr, pyStr, pyTruthy } from "./pycompat.js";
 
 type Config = Record<string, any>;
 
 /** Core counts Apple Silicon actually ships. */
-export const APPLE_SILICON_CORES: ReadonlySet<number> = new Set([
-	8, 10, 11, 12, 14, 16, 20, 24, 28, 32,
-]);
+export const APPLE_SILICON_CORES: ReadonlySet<number> = new Set(
+	LAUNCHER_CONSTANTS.appleSiliconCores,
+);
 
 /**
  * devicePixelRatio by platform, ascending as in coherence.py: the
  * nearest-step repair keeps the first of two equally near steps, so a tie
  * goes to the lower one.
  */
-export const PLAUSIBLE_DPR: Readonly<Record<string, readonly number[]>> = {
-	win: [1, 1.25, 1.5, 1.75, 2, 2.5, 3],
-	mac: [1, 2],
-	lin: [1, 1.25, 1.5, 1.75, 2],
-};
+export const PLAUSIBLE_DPR: Readonly<Record<string, readonly number[]>> =
+	LAUNCHER_CONSTANTS.plausibleDpr;
 
 /** colorDepth: Firefox reports 24, or 30 on a deep-colour display. */
 export const PLAUSIBLE_COLOR_DEPTH: ReadonlySet<number> = new Set([24, 30]);
@@ -46,22 +44,21 @@ export const BROWSER_CHROME_HEIGHT = 86;
 const NOT_A_MAC_GPU = ["ANGLE", "llvmpipe"];
 
 /** navigator.hardwareConcurrency on an Intel Mac, physical or logical. */
-export const INTEL_MAC_IGP_CORES: ReadonlySet<number> = new Set([
-	2, 4, 6, 8, 12, 16,
-]);
+export const INTEL_MAC_IGP_CORES: ReadonlySet<number> = new Set(
+	LAUNCHER_CONSTANTS.intelMacIgpCores,
+);
 /** A discrete GPU adds the desktops to those, up to the 2019 Mac Pro. */
 export const INTEL_MAC_DGPU_CORES: ReadonlySet<number> = new Set([
-	2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 56,
+	...LAUNCHER_CONSTANTS.intelMacIgpCores,
+	...LAUNCHER_CONSTANTS.intelMacDgpuExtraCores,
 ]);
 
 /** Screens only Apple Silicon Macs have: the notched MacBooks, the 24" iMac. */
-export const APPLE_SILICON_PANELS: ReadonlySet<string> = new Set([
-	...["1024x665", "1280x832", "1470x956", "1710x1112"], // Air 13.6"
-	...["1280x828", "1440x932", "1710x1107"], // Air 15.3"
-	...["1147x745", "1352x878", "1512x982", "1800x1169"], // Pro 14"
-	...["1312x848", "1496x967", "1728x1117", "2056x1329"], // Pro 16"
-	"2240x1260", // iMac 24"
-]);
+export const APPLE_SILICON_PANELS: ReadonlySet<string> = new Set(
+	Object.values(LAUNCHER_CONSTANTS.appleSiliconPanels).flatMap((panels) =>
+		panels.map(([w, h]) => `${w}x${h}`),
+	),
+);
 
 export interface Violation {
 	rule: string;

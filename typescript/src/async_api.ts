@@ -1,5 +1,5 @@
 /**
- * TypeScript twin of pythonlib/camoufox/async_api.py.
+ * TypeScript twin of python/src/camoufox/async_api.py.
  *
  * playwright-core has a single, promise-based API, so the async entry points
  * are the same functions as sync_api.ts under Python's async names. The

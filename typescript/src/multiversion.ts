@@ -1,7 +1,7 @@
 /**
  * Manager for handling multiple Camoufox versions side by side.
  *
- * TypeScript twin of pythonlib/camoufox/multiversion.py.
+ * TypeScript twin of python/src/camoufox/multiversion.py.
  */
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -15,7 +15,6 @@ import { INSTALL_DIR, OS_NAME, rprint } from "./paths.js";
 import {
 	type AvailableVersion,
 	type CamoufoxFetcher,
-	cmpStr,
 	formatAssetDate,
 	makeExecutable,
 	RepoConfig,
@@ -23,6 +22,7 @@ import {
 	Version,
 	verifySha256,
 } from "./pkgman.js";
+import { comparePyStr } from "./pycompat.js";
 
 export const BROWSERS_DIR: string = path.join(INSTALL_DIR, "browsers");
 export const CONFIG_FILE: string = path.join(INSTALL_DIR, "config.json");
@@ -123,16 +123,16 @@ export function latestPerBuild(versions: CachedVersion[]): CachedVersion[] {
 		}
 	}
 	return [...best.values()].sort((a, b) => {
-		const byVersion = cmpStr(b.version, a.version);
+		const byVersion = comparePyStr(b.version, a.version);
 		if (byVersion !== 0) return byVersion;
-		return cmpStr(b.created_at ?? "", a.created_at ?? "");
+		return comparePyStr(b.created_at ?? "", a.created_at ?? "");
 	});
 }
 
 /**
  * Get the display name for a repo from the repo config, lowercased.
  */
-export function getRepoName(githubRepo: string): string {
+function getRepoName(githubRepo: string): string {
 	for (const repo of RepoConfig.loadRepos()) {
 		if (repo.repos.includes(githubRepo)) {
 			return repo.name.toLowerCase();
@@ -224,7 +224,7 @@ export class InstalledVersion {
 /**
  * Install folder name with an optional sha8 suffix.
  */
-export function versionFolderName(
+function versionFolderName(
 	version: string,
 	build: string,
 	sha8: string = "",
@@ -234,21 +234,22 @@ export function versionFolderName(
 }
 
 /**
- * Get the installed folder for a catalog item. Falls back to version-build/
- * (without the sha8) for backwards compatibility.
+ * The install folder for a catalog item: version-build-sha8/, else a legacy
+ * version-build/ when its sha matches or `count` says the item is unambiguous.
  */
-function matchInstall(
-	full: string,
+export function findInstall(
+	versionBuild: string,
 	sha256: string | undefined,
-	byFolder: Map<string, InstalledVersion>,
-	count: number,
+	installed: InstalledVersion[],
+	count: number = 1,
 ): InstalledVersion | null {
+	const byFolder = new Map(installed.map((iv) => [iv.folderName, iv]));
 	const sha8 = (sha256 ?? "").slice(0, 8);
 	if (sha8) {
-		const exact = byFolder.get(`${full}-${sha8}`);
+		const exact = byFolder.get(`${versionBuild}-${sha8}`);
 		if (exact) return exact;
 	}
-	const legacy = byFolder.get(full);
+	const legacy = byFolder.get(versionBuild);
 	if (!legacy) return null;
 	if (legacy.sha256) {
 		return legacy.sha256 === sha256 ? legacy : null;
@@ -257,61 +258,9 @@ function matchInstall(
 }
 
 /**
- * Match each catalog item to an install folder.
- * Returns the matches and any orphaned leftovers.
- */
-export function classifyInstalls(
-	versions: AvailableVersion[],
-	installed: InstalledVersion[],
-): [Array<InstalledVersion | null>, Array<[InstalledVersion, string]>] {
-	const counts = new Map<string, number>();
-	for (const v of versions) {
-		const key = v.version.fullString;
-		counts.set(key, (counts.get(key) ?? 0) + 1);
-	}
-	const byFolder = new Map(installed.map((iv) => [iv.folderName, iv]));
-
-	const rowInst: Array<InstalledVersion | null> = [];
-	const matched = new Set<string>();
-	for (const v of versions) {
-		const full = v.version.fullString;
-		const inst = matchInstall(full, v.sha256, byFolder, counts.get(full) ?? 0);
-		rowInst.push(inst);
-		if (inst) matched.add(inst.folderName);
-	}
-
-	const extras: Array<[InstalledVersion, string]> = [];
-	for (const iv of installed) {
-		if (matched.has(iv.folderName)) continue;
-		const inCatalog = (counts.get(iv.version.fullString) ?? 0) > 0;
-		const note = inCatalog && !iv.sha256 ? "date unknown" : "unavailable";
-		extras.push([iv, note]);
-	}
-
-	return [rowInst, extras];
-}
-
-/**
- * Installed version for a single version-build and sha; legacy folder allowed.
- */
-export function findInstall(
-	versionBuild: string,
-	sha256: string | undefined,
-	installed: InstalledVersion[],
-	count: number = 1,
-): InstalledVersion | null {
-	return matchInstall(
-		versionBuild,
-		sha256,
-		new Map(installed.map((iv) => [iv.folderName, iv])),
-		count,
-	);
-}
-
-/**
  * Find an installed version by its build string.
  */
-export function findInstalledByBuild(
+function findInstalledByBuild(
 	build: string,
 	repoName?: string,
 ): InstalledVersion | null {
@@ -371,7 +320,7 @@ export function listInstalled(): InstalledVersion[] {
 	}
 
 	installed.sort((a, b) => {
-		const byRepo = cmpStr(b.repoName, a.repoName);
+		const byRepo = comparePyStr(b.repoName, a.repoName);
 		if (byRepo !== 0) return byRepo;
 		return b.version.compare(a.version);
 	});

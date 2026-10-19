@@ -1,5 +1,5 @@
 /**
- * Public API. Mirrors pythonlib/camoufox/__init__.py (Camoufox, NewBrowser,
+ * Public API. Mirrors python/src/camoufox/__init__.py (Camoufox, NewBrowser,
  * NewContext, their Async* twins, DefaultAddons, launch_options), plus the
  * package-management and server helpers the TS port has always exported.
  */
@@ -21,13 +21,8 @@ export {
 	listInstalled,
 	printTree,
 } from "./multiversion.js";
-export {
-	CamoufoxFetcher,
-	INSTALL_DIR,
-	installedVerStr,
-	OS_NAME,
-	RepoConfig,
-} from "./pkgman.js";
+export { INSTALL_DIR, OS_NAME } from "./paths.js";
+export { CamoufoxFetcher, installedVerStr, RepoConfig } from "./pkgman.js";
 export { type LaunchServerOptions, launchServer } from "./server.js";
 export {
 	Camoufox,

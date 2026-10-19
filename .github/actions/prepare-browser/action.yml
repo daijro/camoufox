@@ -34,7 +34,7 @@ runs:
         sudo apt-get update -qq
         # What a Firefox binary needs to actually start on a bare runner. Xvfb
         # because every browser job runs headless-with-a-display rather than
-        # headless-mode: see ci/tribal/rules.yml on why.
+        # headless-mode: see ci/tribal-rules.yml on why.
         sudo apt-get install -y --no-install-recommends \
           xvfb libgtk-3-0 libasound2t64 libdbus-glib-1-2 libx11-xcb1 \
           libxcb-shm0 libxcomposite1 libxcursor1 libxdamage1 libxfixes3 \

@@ -122,10 +122,9 @@ def validate_skiplist(path: Optional[Path] = None) -> List[str]:
     """Every skip needs a reason, and every `replaced-by` has to point at a real
     file. Returns the problems found.
 
-    The second check is what keeps the "upstream expectations that encode a
-    stock-Firefox quirk" section honest. Those entries claim a Camoufox-owned
-    test took over guarding the behaviour; if that file is renamed or deleted the
-    claim silently becomes false and the behaviour stops being tested by anything.
+    A `replaced-by` entry claims a Camoufox-owned test took over guarding the
+    behaviour; if that file is renamed or deleted the claim silently becomes
+    false and the behaviour stops being tested by anything.
     """
     path = path or SKIPLIST_PATH
     if not path.exists():
@@ -232,7 +231,9 @@ def render(merged: Dict[str, dict], required: List[str], problems: List[str], me
     lines += [
         "",
         "<sub>The Playwright suite is upstream playwright-python at the tag above, "
-        "fetched fresh, with [`tests/camoufox/`](tests/camoufox) overlaid. It runs with "
+        "fetched fresh, with "
+        "[`browser/tests/playwright/camoufox/`](browser/tests/playwright/camoufox) "
+        "overlaid. It runs with "
         "world isolation on — the configuration Camoufox ships — and only the failures "
         "are re-run with it off; those count as passes and are reported above as "
         "main-world fallbacks, which is the size of the isolated-world gap. Tests "

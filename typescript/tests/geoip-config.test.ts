@@ -1,5 +1,5 @@
 /**
- * Mirrors pythonlib/tests/test_geoip_config.py: which GeoIP source is active,
+ * Mirrors python/tests/test_geoip_config.py: which GeoIP source is active,
  * and when its database is refreshed.
  */
 import * as fs from "node:fs";

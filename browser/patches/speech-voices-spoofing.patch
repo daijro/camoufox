@@ -1,0 +1,251 @@
+diff --git a/dom/base/SpeechVoicesManager.cpp b/dom/base/SpeechVoicesManager.cpp
+new file mode 100644
+index 0000000000..d4d522e89e
+--- /dev/null
++++ b/dom/base/SpeechVoicesManager.cpp
+@@ -0,0 +1,85 @@
++/* Camoufox: Per-context speech voices manager */
++#include "SpeechVoicesManager.h"
++
++#include "mozilla/Mutex.h"
++
++namespace mozilla {
++namespace dom {
++
++// The list itself lives in RoverfoxStorageManager, which every process reads:
++// a context's documents land in any content process, and only the first one
++// calls the setter. This is each process's parsed copy.
++static mozilla::Mutex sVoicesMutex("SpeechVoicesManager");
++static nsTHashMap<nsUint32HashKey, nsTHashSet<nsString>> sVoicesMap;
++
++static nsString VoiceListKey(uint32_t aId) {
++  nsAutoString key;
++  key.AppendPrintf("spvoices_%u", aId);
++  return key;
++}
++
++static nsTHashSet<nsString> ParseVoices(const nsAString& aVoiceList) {
++  nsTHashSet<nsString> voiceSet;
++  // Parse comma-separated voice names
++  nsAutoString remaining(aVoiceList);
++  while (!remaining.IsEmpty()) {
++    int32_t comma = remaining.FindChar(',');
++    nsAutoString name;
++    if (comma >= 0) {
++      name = Substring(remaining, 0, comma);
++      remaining = Substring(remaining, comma + 1);
++    } else {
++      name = remaining;
++      remaining.Truncate();
++    }
++    name.Trim(" \t");
++    if (!name.IsEmpty()) {
++      voiceSet.Insert(name);
++    }
++  }
++  return voiceSet;
++}
++
++void SpeechVoicesManager::SetVoices(uint32_t aUserContextId,
++                                     const nsAString& aVoiceList) {
++  RoverfoxStorageManager::PutString(VoiceListKey(aUserContextId), aVoiceList);
++  MutexAutoLock lock(sVoicesMutex);
++  sVoicesMap.InsertOrUpdate(aUserContextId, ParseVoices(aVoiceList));
++}
++
++// Parses the context's list into this process's copy the first time it is
++// needed. An absent list is not remembered: another process may set it later.
++static bool EnsureVoices(uint32_t aId) {
++  {
++    MutexAutoLock lock(sVoicesMutex);
++    if (sVoicesMap.Contains(aId)) return true;
++  }
++  nsAutoString list;
++  if (!RoverfoxStorageManager::GetString(VoiceListKey(aId), list)) return false;
++  MutexAutoLock lock(sVoicesMutex);
++  sVoicesMap.InsertOrUpdate(aId, ParseVoices(list));
++  return true;
++}
++
++bool SpeechVoicesManager::HasVoices(uint32_t aUserContextId) {
++  return EnsureVoices(aUserContextId);
++}
++
++bool SpeechVoicesManager::IsVoiceAllowed(uint32_t aUserContextId,
++                                          const nsAString& aVoiceName) {
++  if (!EnsureVoices(aUserContextId)) return true;
++  MutexAutoLock lock(sVoicesMutex);
++  return sVoicesMap.Lookup(aUserContextId).Data().Contains(nsString(aVoiceName));
++}
++
++void SpeechVoicesManager::DisableFunction(uint32_t aId) {
++  RoverfoxStorageManager::MarkSetterUsed("spvoices", aId);
++}
++
++bool SpeechVoicesManager::IsFunctionEnabledForWebIDL(JSContext* aCx,
++                                                      JSObject* aObj) {
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "spvoices");
++}
++
++}  // namespace dom
++}  // namespace mozilla
+diff --git a/dom/base/SpeechVoicesManager.h b/dom/base/SpeechVoicesManager.h
+new file mode 100644
+index 0000000000..90e1ca117c
+--- /dev/null
++++ b/dom/base/SpeechVoicesManager.h
+@@ -0,0 +1,27 @@
++/* Camoufox: Per-context speech voices manager */
++#ifndef mozilla_dom_SpeechVoicesManager_h
++#define mozilla_dom_SpeechVoicesManager_h
++
++#include "nsString.h"
++#include "nsTHashMap.h"
++#include "nsHashKeys.h"
++#include "nsTHashSet.h"
++#include "RoverfoxStorageManager.h"
++
++namespace mozilla {
++namespace dom {
++
++class SpeechVoicesManager {
++ public:
++  static void SetVoices(uint32_t aUserContextId, const nsAString& aVoiceList);
++  static bool HasVoices(uint32_t aUserContextId);
++  static bool IsVoiceAllowed(uint32_t aUserContextId,
++                              const nsAString& aVoiceName);
++  static void DisableFunction(uint32_t aId);
++  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++};
++
++}  // namespace dom
++}  // namespace mozilla
++
++#endif  // mozilla_dom_SpeechVoicesManager_h
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index 926cadf3dc..c1b1fbf7e6 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -577,6 +577,14 @@ EXPORTS.mozilla.dom += [
+     "FontListManager.h",
+ ]
+ 
++# SpeechVoicesManager compiled separately to avoid unified build scope issues
++# (includes RoverfoxStorageManager.h which can affect compilation units)
++SOURCES += ["SpeechVoicesManager.cpp"]
++
++EXPORTS.mozilla.dom += [
++    "SpeechVoicesManager.h",
++]
++
+ # Are we targeting x86-32 or x86-64?  If so, we want to include SSE2 code for
+ # CharacterDataBuffer.cpp
+ if CONFIG["INTEL_ARCHITECTURE"]:
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index 25f413db16..56d4c9500f 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -19,6 +19,7 @@
+ #include "AudioChannelService.h"
+ #include "AutoplayPolicy.h"
+ #include "Crypto.h"
++#include "SpeechVoicesManager.h"
+ #include "MainThreadUtils.h"
+ #include "Navigator.h"
+ #include "PaintWorkletImpl.h"
+@@ -7864,6 +7865,14 @@ void nsGlobalWindowInner::SetScreenColorDepth(uint32_t depth,
+   RoverfoxStorageManager::RemoveSetter("setScreenColorDepth");
+ }
+ 
++void nsGlobalWindowInner::SetSpeechVoices(const nsAString& aVoices,
++                                           ErrorResult& aRv) {
++  const uint32_t userContextId = RoverfoxStorageManager::UserContextId(this);
++  SpeechVoicesManager::SetVoices(userContextId, aVoices);
++  SpeechVoicesManager::DisableFunction(userContextId);
++  RoverfoxStorageManager::RemoveSetter("setSpeechVoices");
++}
++
+ RefPtr<GenericPromise> nsGlobalWindowInner::StorageAccessPermissionChanged(
+     bool aGranted) {
+   // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index ff8c14d011..d6826ed802 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -709,6 +709,9 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+                            mozilla::ErrorResult& aRv);
+   void SetScreenColorDepth(uint32_t depth, mozilla::ErrorResult& aRv);
+ 
++  // Per-context speech voices
++  void SetSpeechVoices(const nsAString& aVoices, mozilla::ErrorResult& aRv);
++
+  public:
+   void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
+   void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
+diff --git a/dom/media/webspeech/synth/SpeechSynthesis.cpp b/dom/media/webspeech/synth/SpeechSynthesis.cpp
+index e6ce729415..0e142e7971 100644
+--- a/dom/media/webspeech/synth/SpeechSynthesis.cpp
++++ b/dom/media/webspeech/synth/SpeechSynthesis.cpp
+@@ -12,6 +12,7 @@
+ #include "mozilla/dom/WindowGlobalChild.h"
+ #include "nsContentUtils.h"
+ #include "nsGlobalWindowInner.h"
++#include "SpeechVoicesManager.h"
+ #include "nsIDocShell.h"
+ #include "nsISupportsPrimitives.h"
+ #include "nsPIDOMWindowInlines.h"
+@@ -236,6 +237,9 @@ void SpeechSynthesis::OnEnd(const nsSpeechTask* aTask) {
+ void SpeechSynthesis::GetVoices(
+     nsTArray<RefPtr<SpeechSynthesisVoice> >& aResult) {
+   aResult.Clear();
++  // Per-context speech voice filtering
++  const uint32_t speechVoiceCtxId =
++      RoverfoxStorageManager::UserContextId(GetOwnerWindow());
+   uint32_t voiceCount = 0;
+   nsCOMPtr<nsPIDOMWindowInner> window = GetOwnerWindow();
+   nsCOMPtr<nsIDocShell> docShell = window ? window->GetDocShell() : nullptr;
+@@ -261,6 +265,16 @@ void SpeechSynthesis::GetVoices(
+       continue;
+     }
+ 
++    // Per-context voice filtering: skip voices not in allowed list
++    if (mozilla::dom::SpeechVoicesManager::HasVoices(speechVoiceCtxId)) {
++      nsAutoString voiceName;
++      nsSynthVoiceRegistry::GetInstance()->GetVoiceName(uri, voiceName);
++      if (!mozilla::dom::SpeechVoicesManager::IsVoiceAllowed(
++              speechVoiceCtxId, voiceName)) {
++        continue;
++      }
++    }
++
+     SpeechSynthesisVoice* voice = mVoiceCache.GetWeak(uri);
+ 
+     if (!voice) {
+diff --git a/dom/media/webspeech/synth/moz.build b/dom/media/webspeech/synth/moz.build
+index e1bf345159..ca6ffacb21 100644
+--- a/dom/media/webspeech/synth/moz.build
++++ b/dom/media/webspeech/synth/moz.build
+@@ -59,5 +59,6 @@ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
+ LOCAL_INCLUDES += [
++    "/dom/base",
+     "ipc",
+ ]
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index c4cb127e83..e4db344794 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -949,6 +949,12 @@ partial interface Window {
+   undefined setFontList(DOMString fontList);
+ };
+ 
++// Per-context speech voices
++partial interface Window {
++  [Throws, Func="mozilla::dom::SpeechVoicesManager::IsFunctionEnabledForWebIDL"]
++  undefined setSpeechVoices(DOMString voices);
++};
++
+ // Used to assign marks to appear on the scrollbar when
+ // finding on a page.
+ partial interface Window {

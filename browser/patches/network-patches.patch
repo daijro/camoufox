@@ -1,0 +1,177 @@
+diff --git a/netwerk/base/nsSocketTransport2.cpp b/netwerk/base/nsSocketTransport2.cpp
+index d617846df3..022d1a5427 100644
+--- a/netwerk/base/nsSocketTransport2.cpp
++++ b/netwerk/base/nsSocketTransport2.cpp
+@@ -1622,7 +1622,13 @@ nsresult nsSocketTransport::InitiateSocket() {
+   }
+ #endif
+ 
+-  status = PR_Connect(fd, &prAddr, NS_SOCKET_CONNECT_TIMEOUT);
++  // Camoufox: fail as the kernel of a host with no IPv6 route does.
++  if (mNetAddr.IsUnreachableOnIPv4OnlyNetwork()) {
++    PR_SetError(PR_NETWORK_UNREACHABLE_ERROR, 0);
++    status = PR_FAILURE;
++  } else {
++    status = PR_Connect(fd, &prAddr, NS_SOCKET_CONNECT_TIMEOUT);
++  }
+   PRErrorCode code = PR_GetError();
+   if (status == PR_SUCCESS) {
+     PR_SetFDInheritable(fd, false);
+diff --git a/netwerk/dns/DNS.cpp b/netwerk/dns/DNS.cpp
+index 6b8b0fea64..4722b6e93b 100644
+--- a/netwerk/dns/DNS.cpp
++++ b/netwerk/dns/DNS.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "mozilla/net/DNS.h"
+ 
++#include "MaskConfig.hpp"
++
+ #include <string.h>
+ 
+ #include "mozilla/Assertions.h"
+@@ -378,6 +380,16 @@ bool NetAddr::IsIPAddrShared() const {
+   return false;
+ }
+ 
++bool NetAddr::IsUnreachableOnIPv4OnlyNetwork() const {
++  if (raw.family != AF_INET6 || !MaskConfig::GetBool("network:ipv4Only")) {
++    return false;
++  }
++  // Loopback, the any address, IPv4-mapped and link-local (fe80::/10)
++  // addresses need no IPv6 route, so they work on an IPv4-only network too.
++  return !IsIPAddrAny() && !IsLoopbackAddr() && !IsIPAddrV4Mapped() &&
++         (ntohs(inet6.ip.u16[0]) & 0xffc0) != 0xfe80;
++}
++
+ nsresult NetAddr::GetPort(uint16_t* aResult) const {
+   uint16_t port;
+   if (this->raw.family == PR_AF_INET) {
+diff --git a/netwerk/dns/DNS.h b/netwerk/dns/DNS.h
+index 4077f003ab..44335fa1d7 100644
+--- a/netwerk/dns/DNS.h
++++ b/netwerk/dns/DNS.h
+@@ -151,6 +151,9 @@ union NetAddr {
+   bool IsIPAddrV4Mapped() const;
+   bool IsIPAddrLocal() const;
+   bool IsIPAddrShared() const;
++  // Camoufox: whether a host on an IPv4-only network has no route to this
++  // address. True only when the network:ipv4Only config key is set.
++  bool IsUnreachableOnIPv4OnlyNetwork() const;
+   nsresult GetPort(uint16_t* aResult) const;
+   bool ToStringBuffer(char* buf, uint32_t bufSize) const;
+   bool ToString(nsACString& aOutput) const;
+diff --git a/netwerk/dns/moz.build b/netwerk/dns/moz.build
+index 2369794f24..8e80ebeaa4 100644
+--- a/netwerk/dns/moz.build
++++ b/netwerk/dns/moz.build
+@@ -107,6 +107,7 @@ GeneratedFile(
+ 
+ # need to include etld_data.inc
+ LOCAL_INCLUDES += [
++    "/camoucfg",
+     "/netwerk/base",
+     "/netwerk/ipc",
+     "/netwerk/protocol/http",
+diff --git a/netwerk/dns/nsDNSService2.cpp b/netwerk/dns/nsDNSService2.cpp
+index 11d0b319d6..5e79cea81d 100644
+--- a/netwerk/dns/nsDNSService2.cpp
++++ b/netwerk/dns/nsDNSService2.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "nsDNSService2.h"
+ 
++#include "MaskConfig.hpp"
++
+ #include "DNSAdditionalInfo.h"
+ #include "TRRService.h"
+ #include "mozilla/ClearOnShutdown.h"
+@@ -1391,7 +1393,8 @@ nsDNSService::Observe(nsISupports* subject, const char* topic,
+ uint16_t nsDNSService::GetAFForLookup(const nsACString& host,
+                                       nsIDNSService::DNSFlags flags) {
+   if (StaticPrefs::network_dns_disableIPv6() ||
+-      (flags & RESOLVE_DISABLE_IPV6)) {
++      (flags & RESOLVE_DISABLE_IPV6) ||
++      MaskConfig::GetBool("network:ipv4Only")) {
+     return PR_AF_INET;
+   }
+ 
+diff --git a/netwerk/protocol/http/HttpConnectionUDP.cpp b/netwerk/protocol/http/HttpConnectionUDP.cpp
+index 63353c402b..9d244330dd 100644
+--- a/netwerk/protocol/http/HttpConnectionUDP.cpp
++++ b/netwerk/protocol/http/HttpConnectionUDP.cpp
+@@ -280,6 +280,11 @@ nsresult HttpConnectionUDP::InitCommon(nsIUDPSocket* aSocket,
+                                        const NetAddr& aPeerAddr,
+                                        nsIInterfaceRequestor* callbacks,
+                                        uint32_t caps, bool isInTunnel) {
++  // Camoufox: a host with no IPv6 route cannot reach an IPv6 peer over QUIC.
++  if (aPeerAddr.IsUnreachableOnIPv4OnlyNetwork()) {
++    return NS_ERROR_CONNECTION_REFUSED;
++  }
++
+   mSocket = aSocket;
+ 
+   if (mConnInfo && mConnInfo->GetIsTrrServiceChannel()) {
+diff --git a/netwerk/protocol/http/moz.build b/netwerk/protocol/http/moz.build
+index 1b8068f235..101ab978e2 100644
+--- a/netwerk/protocol/http/moz.build
++++ b/netwerk/protocol/http/moz.build
+@@ -257,3 +257,6 @@ XPCOM_MANIFESTS += [
+ ]
+ 
+ include("/tools/fuzzing/libfuzzer-config.mozbuild")
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+\ No newline at end of file
+diff --git a/netwerk/protocol/http/nsHttpHandler.cpp b/netwerk/protocol/http/nsHttpHandler.cpp
+index 0192e5f6f2..a43ecf238e 100644
+--- a/netwerk/protocol/http/nsHttpHandler.cpp
++++ b/netwerk/protocol/http/nsHttpHandler.cpp
+@@ -12,6 +12,7 @@
+ #include "EventTokenBucket.h"
+ #include "HttpLog.h"
+ #include "LoadContextInfo.h"
++#include "MaskConfig.hpp"
+ #include "SerializedLoadContext.h"
+ #include "TRRServiceChannel.h"
+ #include "Tickler.h"
+@@ -993,6 +994,15 @@ uint8_t nsHttpHandler::UrgencyFromCoSFlags(uint32_t cos,
+ //-----------------------------------------------------------------------------
+ 
+ const nsCString& nsHttpHandler::UserAgent(bool aShouldResistFingerprinting) {
++  if (auto value = MaskConfig::GetString("headers.User-Agent")) {
++    mUserAgent.Assign(nsCString(value.value().c_str()));
++    return mUserAgent;
++  }
++  if (auto value = MaskConfig::GetString("navigator.userAgent")) {
++    mUserAgent.Assign(nsCString(value.value().c_str()));
++    return mUserAgent;
++  }
++
+   if (aShouldResistFingerprinting && !mSpoofedUserAgent.IsEmpty()) {
+     LOG(("using spoofed userAgent : %s\n", mSpoofedUserAgent.get()));
+     return mSpoofedUserAgent;
+@@ -2107,6 +2117,10 @@ nsresult nsHttpHandler::SetAcceptLanguages() {
+   }
+ 
+   MOZ_ASSERT(NS_IsMainThread());
++  if (auto value = MaskConfig::GetString("headers.Accept-Language")) {
++    mAcceptLanguages.Assign(nsCString(value.value().c_str()));
++    return NS_OK;
++  }
+ 
+   mAcceptLanguagesIsDirty = false;
+ 
+@@ -2123,6 +2137,11 @@ nsresult nsHttpHandler::SetAcceptLanguages() {
+ 
+ nsresult nsHttpHandler::SetAcceptEncodings(const char* aAcceptEncodings,
+                                            bool isSecure, bool isDictionary) {
++  nsCString encodingOverride;
++  if (auto value = MaskConfig::GetString("headers.Accept-Encoding")) {
++    encodingOverride.Assign(nsCString(value.value().c_str()));
++    aAcceptEncodings = encodingOverride.get();
++  }
+   if (isDictionary) {
+     mDictionaryAcceptEncodings = aAcceptEncodings;
+   } else if (isSecure) {

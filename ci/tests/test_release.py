@@ -1,4 +1,4 @@
-"""The release plan: which versions a merge or a tag publishes, and which browser they pair with."""
+"""The release plan: which versions a train or a tag publishes, and which browser they pair with."""
 
 import argparse
 import json
@@ -18,13 +18,14 @@ from ci.release import (
     paired_release,
     plan_prerelease,
     plan_stable,
+    train_promotion,
 )
 
 PYPI = ["0.5.5", "0.5.6", "0.5.6b1"]
 NPM = ["0.5.6"]
 
 
-def test_a_merge_prereleases_the_checked_in_version_when_it_is_unreleased():
+def test_a_cut_prereleases_the_checked_in_version_when_it_is_unreleased():
     plan = plan_prerelease("0.5.7", PYPI, NPM)
     assert (plan.py, plan.npm, plan.dist_tag) == ("0.5.7b1", "0.5.7-beta.1", "next")
 
@@ -92,6 +93,54 @@ def test_library_tags_order_as_versions_and_never_as_browser_tags():
     assert next_browser_release("beta.32", ["v0.5.7b40"]) == "beta.32"
 
 
+def test_the_train_promotes_the_newest_prerelease_to_its_own_version():
+    tags = ["v0.5.7", "v0.5.8b1", "v0.5.8b2", "v156.0.1-beta.38"]
+    assert train_promotion(tags) == ("v0.5.8b2", "v0.5.8")
+
+
+@pytest.mark.parametrize("tags", [
+    ["v0.5.7", "v0.5.8b1", "v0.5.8"],  # nothing was cut since the last promotion
+    ["v156.0.1-beta.38"],
+    [],
+])
+def test_the_train_promotes_nothing_without_a_new_prerelease(tags):
+    assert train_promotion(tags) is None
+
+
+def _labels_and_issues(label_exists, issues):
+    import urllib.error
+
+    def fake(url, **_):
+        if "/labels/" in url:
+            if not label_exists:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            return {"name": release.REGRESSION_LABEL}
+        return issues
+    return fake
+
+
+@pytest.mark.parametrize("label_exists, issues", [
+    (False, []),  # a missing label would read as "no regressions"
+    (True, [{"number": 900}]),
+])
+def test_the_train_refuses_to_promote_over_a_regression(monkeypatch, label_exists, issues):
+    monkeypatch.setattr(release, "http_json", _labels_and_issues(label_exists, issues))
+    with pytest.raises(SystemExit):
+        release.require_no_regressions()
+
+
+def test_the_train_promotes_when_no_regression_is_open(monkeypatch):
+    monkeypatch.setattr(release, "http_json", _labels_and_issues(True, []))
+    release.require_no_regressions()
+
+
+def test_a_prerelease_is_cut_from_main_only(monkeypatch):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/topic")
+    with pytest.raises(SystemExit):
+        release.cmd_target(argparse.Namespace())
+
+
 def test_the_gate_check_is_found_when_release_yml_runs_the_tests():
     assert is_gate_check("All tests passed")
     assert is_gate_check("tests / All tests passed")
@@ -108,7 +157,7 @@ def _git(repo, *args):
 @pytest.fixture
 def library_repo(tmp_path):
     """A repo whose last library release, v0.5.7b1, is tagged on HEAD."""
-    for rel in ("pythonlib/camoufox/a.py", "docs/a.md", "patches/a.patch", "upstream.sh"):
+    for rel in ("python/src/camoufox/a.py", "docs/a.md", "browser/patches/a.patch", "browser/upstream.sh"):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text("a\n")
     _git(tmp_path, "init", "-q", "-b", "main")
@@ -120,8 +169,8 @@ def library_repo(tmp_path):
 
 @pytest.mark.parametrize("changed, publish", [
     ("docs/a.md", False),
-    ("pythonlib/camoufox/a.py", True),
-    ("patches/a.patch", True),  # a new browser means a new pin
+    ("python/src/camoufox/a.py", True),
+    ("browser/patches/a.patch", True),  # a new browser means a new pin
 ])
 def test_a_library_prerelease_is_published_only_when_what_it_ships_changed(library_repo, changed, publish):
     (library_repo / changed).write_text("b\n")
@@ -135,8 +184,8 @@ def test_the_first_library_prerelease_is_always_published(library_repo):
 
 
 def test_set_build_names_the_tags_release_in_the_working_tree_only(tmp_path, monkeypatch):
-    shutil.copy(release.REPO_ROOT / "upstream.sh", tmp_path / "upstream.sh")
-    monkeypatch.setattr(release, "REPO_ROOT", tmp_path)
+    shutil.copy(release.BROWSER_ROOT / "upstream.sh", tmp_path / "upstream.sh")
+    monkeypatch.setattr(release, "BROWSER_ROOT", tmp_path)
     monkeypatch.setattr(release, "read_upstream_sh",
                         lambda: read_upstream_sh(tmp_path / "upstream.sh"))
     version = read_upstream_sh(tmp_path / "upstream.sh")["version"]
@@ -153,6 +202,7 @@ def _copy_browser_inputs(tmp_path):
         if (browser_inputs.REPO_ROOT / name).is_dir():
             shutil.copytree(browser_inputs.REPO_ROOT / name, root / name)
     for name in browser_inputs.BROWSER_FILES:
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(browser_inputs.REPO_ROOT / name, root / name)
     return root
 
@@ -160,11 +210,11 @@ def _copy_browser_inputs(tmp_path):
 def test_the_source_digest_ignores_the_release_number_and_nothing_else(tmp_path):
     root = _copy_browser_inputs(tmp_path)
     before = browser_inputs.source_digest(root)
-    up = root / "upstream.sh"
+    up = root / "browser" / "upstream.sh"
     up.write_text(re.sub(r"^release=.*$", "release=beta.999", up.read_text(), flags=re.M))
     assert browser_inputs.source_digest(root) == before
 
-    juggler = next((root / "additions" / "juggler").rglob("*.js"))
+    juggler = next((root / "browser" / "additions" / "juggler").rglob("*.js"))
     juggler.write_text(juggler.read_text() + "\n")
     assert browser_inputs.source_digest(root) != before, "a packaged resource is a browser source"
 
@@ -196,7 +246,7 @@ def test_the_pin_and_the_launchers_agree_on_its_format(tmp_path, monkeypatch):
     """What stamp writes is what pythonlib's loader reads."""
     import sys
 
-    sys.path.insert(0, str(release.REPO_ROOT / "pythonlib"))
+    sys.path.insert(0, str(release.REPO_ROOT / "python" / "src"))
     from camoufox.browser_pin import load_pin
 
     monkeypatch.setattr(release, "PIN_FILE", tmp_path / "browser-pin.json")
@@ -211,13 +261,17 @@ def test_the_pin_and_the_launchers_agree_on_its_format(tmp_path, monkeypatch):
         ("official", "156.0.1", "beta.33", "v156.0.1-beta.33")
 
 
-# The jobs each channel skips by design, and the jobs it must reach.
+# The jobs each kind of run skips by design, and the jobs it must reach: a cut
+# (workflow_dispatch), a promotion by a pushed tag, and the train's promotion.
 CHANNELS = {
-    "prerelease": ({"promote-browser"},
+    "prerelease": ({"promote-browser", "cut"},
                    {"build-browser", "publish-browser", "build-library", "publish-pypi",
                     "publish-npm", "tag-library"}),
-    "stable": ({"tests", "build-browser", "publish-browser", "tag-library"},
+    "stable": ({"tests", "build-browser", "publish-browser", "tag-library", "cut"},
                {"plan", "build-library", "promote-browser", "publish-pypi", "publish-npm"}),
+    "train": ({"tests", "build-browser", "publish-browser"},
+              {"plan", "build-library", "promote-browser", "publish-pypi", "publish-npm",
+               "tag-library", "cut"}),
 }
 
 
@@ -336,7 +390,7 @@ def test_the_manifest_declares_the_interface_both_libraries_speak():
     assert release.manifest("v1", "d", "0" * 40)["interface"] == interface
     ts = (release.REPO_ROOT / "typescript" / "src" / "__version__.ts").read_text(encoding="utf-8")
     assert re.search(rf"^\s*static readonly INTERFACE: number = {interface};$", ts, re.M), "typescript/src/__version__.ts INTERFACE differs"
-    py = (release.REPO_ROOT / "pythonlib" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
+    py = (release.REPO_ROOT / "python" / "src" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
     ts_min = re.search(r"^\s*static readonly MIN_INTERFACE: number = (\d+);$", ts, re.M)
     py_min = re.search(r"^\s*MIN_INTERFACE = (\d+)$", py, re.M)
     assert ts_min and py_min and ts_min[1] == py_min[1], "MIN_INTERFACE differs between the libraries"

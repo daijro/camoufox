@@ -1,7 +1,7 @@
 # Media devices
 
 How Camoufox presents `navigator.mediaDevices` (`media-device-spoofing.patch`,
-`pythonlib/camoufox/media-devices.json`, `draw_media_devices()`).
+`python/src/camoufox/media-devices.json`, `draw_media_devices()`).
 
 ## What a page can see
 
@@ -47,7 +47,8 @@ PulseAudio/PipeWire descriptions plus v4l2 card names with the USB id, and a
 
 ## Guard
 
-`tests/patches/media-devices-coherence.py` checks the pre-grant shape, that
-capture succeeds exactly for listed kinds, that captured tracks match listed
-devices, that labels are never the fake engine's, and that a camera-only
-identity does not crash the content process (it did, before build12).
+`browser/tests/playwright/patches/media-devices-coherence.py` checks the
+pre-grant shape, that capture succeeds exactly for listed kinds, that captured
+tracks match listed devices, that labels are never the fake engine's, and that a
+camera-only identity does not crash the content process (it did, before
+build12).

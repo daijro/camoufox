@@ -1,6 +1,1 @@
-node_modules/
-yarn.lock
-.yarn
 .npmrc
-dist/
-*.mmdb

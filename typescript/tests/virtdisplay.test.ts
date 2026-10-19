@@ -1,14 +1,15 @@
 /**
- * Mirrors pythonlib/tests/test_virtdisplay.py: the screen-geometry
+ * Mirrors python/tests/test_virtdisplay.py: the screen-geometry
  * resolution and the Xvfb argument vector (no X server needed), plus the real
  * Xvfb lifecycle when Xvfb is installed (Linux only).
  *
  * VIRTDISPLAY_TEST_N controls the concurrent-launch count (default 50).
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	CannotExecuteXvfb,
@@ -109,6 +110,16 @@ function hasXvfb(): boolean {
 	}
 }
 
+/** True while `pid` runs; a zombie waiting for its new parent counts as dead. */
+function alive(pid: number): boolean {
+	try {
+		const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf-8");
+		return stat.slice(stat.lastIndexOf(")") + 2)[0] !== "Z";
+	} catch {
+		return false;
+	}
+}
+
 const DISPLAY_RE = /^:\d+$/;
 const N = Number.parseInt(process.env.VIRTDISPLAY_TEST_N ?? "50", 10);
 
@@ -185,6 +196,44 @@ describe.skipIf(
 		b.kill();
 		expect(aDisplay).toMatch(DISPLAY_RE);
 	});
+
+	it("Xvfb dies with the process that started it (#868)", async () => {
+		// A SIGKILLed launcher never runs kill(), so the kernel must stop Xvfb,
+		// and SIGTERM lets Xvfb remove its own lock and socket. The child loads
+		// the source through Vite's module runner, as vitest does.
+		const src = fileURLToPath(
+			new URL("../src/virtdisplay.ts", import.meta.url),
+		);
+		const child = spawn(
+			process.execPath,
+			[
+				"--input-type=module",
+				"-e",
+				`import { runnerImport } from "vite";
+				const { module: m } = await runnerImport(${JSON.stringify(src)});
+				const vd = new m.VirtualDisplay();
+				console.log((await vd.get()).slice(1), vd.proc.pid);
+				setInterval(() => {}, 60_000);`,
+			],
+			{
+				cwd: path.dirname(path.dirname(src)),
+				stdio: ["ignore", "pipe", "inherit"],
+			},
+		);
+		const [display, pid] = await new Promise<string[]>((resolve) =>
+			child.stdout.once("data", (d) => resolve(String(d).trim().split(" "))),
+		);
+		expect(alive(Number(pid))).toBe(true);
+
+		child.kill("SIGKILL");
+		const deadline = Date.now() + 5000;
+		while (alive(Number(pid)) && Date.now() < deadline) {
+			await new Promise((r) => setTimeout(r, 25));
+		}
+		expect(alive(Number(pid)), `Xvfb ${pid} outlived its launcher`).toBe(false);
+		expect(fs.existsSync(`/tmp/.X${display}-lock`)).toBe(false);
+		expect(fs.existsSync(`/tmp/.X11-unix/X${display}`)).toBe(false);
+	}, 30_000);
 
 	it("kill() removes the lock and socket even when Xvfb already died", async () => {
 		const vd = track(new VirtualDisplay());

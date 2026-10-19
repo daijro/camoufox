@@ -1,5 +1,5 @@
 /**
- * Port of pythonlib/tests/test_cli_list.py: `camoufox list --path` shows
+ * Port of python/tests/test_cli_list.py: `camoufox list --path` shows
  * install paths in both listing modes.
  */
 import * as fs from "node:fs";

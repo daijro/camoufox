@@ -1,10 +1,11 @@
 name: Tests
 
-# The repository's test pipeline. Runs on every pull request, on demand, and --
-# via workflow_call -- from release.yml on every push to main (a release is only
-# built from a commit this pipeline passed) and from any workflow that needs to
-# test a specific browser version, so a contributor's pull request, a release and
-# an automated Firefox bump are judged by exactly the same checks.
+# The repository's test pipeline. Runs on every pull request, every push to
+# main, on demand, and -- via workflow_call -- from release.yml before every
+# prerelease (a release is only built from a commit this pipeline passed) and
+# from any workflow that needs to test a specific browser version, so a
+# contributor's pull request, a release and an automated Firefox bump are judged
+# by exactly the same checks.
 #
 # The browser version comes from upstream.sh unless a caller passes one in,
 # which is what lets one pipeline test both a pull request and a version bump.
@@ -12,7 +13,7 @@ name: Tests
 # ahead of that browser -- Playwright trails Firefox and skips generations, so
 # the suite's own Firefox pin is usually a release or two behind the browser
 # under test, and that is expected rather than a mismatch. ci/run_playwright.py
-# fetches it fresh, applies ci/skiplist.yml, overlays tests/camoufox/ and runs
+# fetches it fresh, applies ci/skiplist.yml, overlays browser/tests/playwright/camoufox/ and runs
 # it with world isolation ON -- the configuration Camoufox ships -- re-running
 # only what fails with isolation off, and counting those as main-world
 # fallbacks. A test that needs the fallback still passes; the size of that set
@@ -31,7 +32,8 @@ name: Tests
 #   1  unit        pythonlib                                  ~1 min
 #   2  browser     BUILD if patches/additions changed,
 #                  otherwise FETCH the released binary        ~70 min / ~1 min
-#   3a smoke       patch guards, skiplist audit, build-tester ~15 min
+#   3a smoke       patch guards, skiplist audit, build-tester,
+#                  installed packages                         ~15 min
 #   3b full        Playwright (6 shards), leaks, stealth      ~40 min
 #   4  gate        the single required status check
 #
@@ -42,7 +44,8 @@ name: Tests
 
 on:
   pull_request:
-  # Pushes to main are tested by release.yml, which calls this workflow.
+  push:
+    branches: [main]
   schedule:
     # Keeps the ccache alive. GitHub evicts a cache after 7 days unused, and a
     # cold Firefox build is over an hour; twice a week keeps pull-request builds
@@ -76,7 +79,7 @@ on:
         default: "6"
         type: string
       ref:
-        description: "Commit to test; defaults to the calling workflow's ref"
+        description: "Commit to test; defaults to the calling workflow's commit"
         required: false
         type: string
     secrets:
@@ -124,7 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -150,7 +153,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         # Only a change that can alter the binary justifies compiling one. A
-        # pull request that touches pythonlib/ or ci/ is a driver change: it
+        # pull request that touches python/ or ci/ is a driver change: it
         # still gets the full browser suite, but against the published build its
         # users are running, which takes a minute instead of seventy -- as long
         # as that build matches this tree's browser sources (see below).
@@ -160,7 +163,7 @@ jobs:
             echo "::notice::Not a pull request -- building, which also refreshes the shared ccache."
             exit 0
           fi
-          sources='^(patches/|additions/|settings/|assets/|upstream\.sh|Makefile|scripts/)'
+          sources='^(browser/patches/|browser/additions/|browser/settings/|browser/assets/|browser/scripts/|browser/bundle/fontconfig/|browser/upstream\.sh|browser/Makefile)'
           base="${{ github.event.pull_request.base.sha }}"
           changed=$(git diff --name-only "$base"...HEAD || echo "")
           echo "changed files:"; echo "$changed" | sed 's/^/  /'
@@ -238,25 +241,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           # Full history: config-keys-are-never-deleted checks every key
-          # settings/properties.json has ever declared.
+          # browser/settings/properties.json has ever declared.
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      # -e pythonlib because the settled-decisions tests import camoufox.* to
+      # -e python because the settled-decisions tests import camoufox.* to
       # assert against it. It is a pure-Python install; no browser involved.
       - run: |
-          pip install -r ci/requirements.txt pytest -e pythonlib
+          pip install -r ci/requirements.txt pytest -e python
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # scripts/pin-fpgen-model.py.
-          python3 scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
 
       - name: Synthesized input goes through one chokepoint
-        run: python3 scripts/check-input-dispatch.py
+        run: python3 browser/scripts/check-input-dispatch.py
 
       - name: CI pipeline self-tests
         # These assert that the pipeline reports honestly: skips carry reasons,
@@ -301,19 +304,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
-          # The geoip extra: tests/test_geoip_sources.py downloads every GeoIP
+          # The geoip extra: python/tests/test_geoip_sources.py downloads every GeoIP
           # source and fails when one stops publishing, which gates releases.
-          pip install -r ci/requirements.txt pytest -e 'pythonlib[geoip]'
+          pip install -r ci/requirements.txt pytest -e 'python[geoip]'
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # scripts/pin-fpgen-model.py.
-          python3 scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       - name: Run
         # pythonlib resolves the published release through the GitHub API
         # (pkgman.py honours GITHUB_TOKEN). Unauthenticated, a runner shares the
@@ -343,12 +346,12 @@ jobs:
       contents: read
     env:
       # The fpgen model the TS port downloads (sha256-pinned by
-      # scripts/data/fpgen-model.json). Kept in the workspace so it can be cached.
+      # python/src/camoufox/fpgen-model.json). Kept in the workspace so it can be cached.
       CAMOUFOX_FPGEN_DATA: ${{ github.workspace }}/.ci-work/fpgen
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           # Not PYTHON_VERSION: the golden fixtures are regenerated from this
@@ -360,12 +363,12 @@ jobs:
           # A venv at the repo root: tests/golden-setup.ts records the golden
           # fixtures from its pythonlib before the suite runs.
           python3 -m venv .venv
-          .venv/bin/pip install -r ci/requirements.txt -e pythonlib
+          .venv/bin/pip install -r ci/requirements.txt -e python
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # scripts/pin-fpgen-model.py.
-          .venv/bin/python scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          .venv/bin/python python/scripts/pin-fpgen-model.py
       - name: Test prerequisites
         # Everything tests/prereq.ts may ask for. In CI a missing prerequisite
         # FAILS its tests rather than skipping them, so this list is the job's
@@ -384,7 +387,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .ci-work/fpgen
-          key: fpgen-model-${{ hashFiles('scripts/data/fpgen-model.json') }}
+          key: fpgen-model-${{ hashFiles('python/src/camoufox/fpgen-model.json') }}
       - name: Run
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -400,23 +403,25 @@ jobs:
   # ---------------------------------------------------------------------------
   install:
     name: Install from the packages
-    # Tier 1. Every other suite runs from the source tree; this one installs
+    # Tier 3a. Every other suite runs from the source tree; this one installs
     # the packed pythonlib and npm package into clean environments and runs the
     # real `camoufox fetch`, with TMPDIR on its own tmpfs so a rename from the
     # temporary directory into the cache fails here as it fails for users
-    # (EXDEV). See ci/run_install.py.
-    needs: [resolve, static]
+    # (EXDEV). Each installed package then launches the browser it fetched and
+    # the browser under test, clicks and types on a local page, and checks
+    # what the page saw, so it waits for the latter. See ci/run_install.py.
+    needs: [resolve, static, build, fetch-browser]
+    if: always() && (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-python@v5
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install -r ci/requirements.txt
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: typescript/package.json
@@ -438,7 +443,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         # Pinned like a published package: to the release built from these
         # browser sources when there is one, else the newest release.
-        run: python3 -m ci.run_install --tmpdir /mnt/install-tmp --browser-tag "${{ needs.resolve.outputs.browser_tag }}"
+        run: |
+          python3 -m ci.run_install --tmpdir /mnt/install-tmp \
+            --browser-tag "${{ needs.resolve.outputs.browser_tag }}" --browser "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -459,7 +466,7 @@ jobs:
     permissions:
       contents: read
     env:
-      # scripts/patch.py writes the mozconfig from BUILD_TARGET and defaults to
+      # browser/scripts/patch.py writes the mozconfig from BUILD_TARGET and defaults to
       # macos,arm64 when it is unset -- sensible for a developer on a Mac,
       # wrong here. Without this, configure goes looking for the macOS SDK and
       # dies with "No such file or directory: MacOSX26.5.sdk/SDKSettings.plist"
@@ -471,12 +478,12 @@ jobs:
       # Checkout first, because the cache key below is a hash of the tree.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Hash the inputs that can change compiled output
         id: native
-        # Not hashFiles(): this has to EXCLUDE the files jar.mn packages as
-        # resources, and hashFiles has no way to say "everything except".
+        # Not hashFiles(): this has to EXCLUDE the files Juggler's moz.build
+        # packages as resources, and hashFiles has no way to say "everything except".
         # ci/browser_inputs.py is stdlib-only on purpose -- it runs here, before
         # the pip install that a cache hit skips.
         run: echo "hash=$(python3 -m ci.browser_inputs --digest)" >> "$GITHUB_OUTPUT"
@@ -487,7 +494,7 @@ jobs:
         with:
           path: camoufox-dist.tar.zst
           # Keyed on the COMPILED inputs only, so a Juggler JavaScript change
-          # still hits: the .js files jar.mn packages are laid over the restored
+          # still hits: the .js files Juggler's moz.build packages are laid over the restored
           # browser below instead of relinking libxul to deliver them.
           #
           # The hash is the classification. There is no "did only JS change?"
@@ -548,8 +555,8 @@ jobs:
         with:
           path: ~/.ccache
           # Keyed on the browser version and the patch set, so a pull request
-          # that does not touch patches/ starts from a fully warm cache.
-          key: ccache-${{ needs.resolve.outputs.browser_version }}-${{ hashFiles('patches/**', 'additions/**', 'assets/*.mozconfig') }}
+          # that does not touch browser/patches/ starts from a fully warm cache.
+          key: ccache-${{ needs.resolve.outputs.browser_version }}-${{ hashFiles('browser/patches/**', 'browser/additions/**', 'browser/assets/*.mozconfig') }}
           restore-keys: |
             ccache-${{ needs.resolve.outputs.browser_version }}-
             ccache-
@@ -596,11 +603,12 @@ jobs:
         if: steps.prebuilt.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          src="camoufox-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}/obj-x86_64-pc-linux-gnu/dist/bin"
+          src="browser/camoufox-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}/obj-x86_64-pc-linux-gnu/dist/bin"
           test -x "$src/camoufox-bin" || { echo "::error::no camoufox-bin at $src"; exit 1; }
 
-          # `mach build` produces an *unpackaged* tree. Two things scripts/package.py
-          # would add are load-bearing for the test jobs and are missing here:
+          # `mach build` produces an *unpackaged* tree. Two things
+          # browser/scripts/package.py would add are load-bearing for the test
+          # jobs and are missing here:
           #
           #   fonts/ + fontconfig/  -- without them every glyph in page content
           #                            renders as tofu, silently, because the
@@ -609,15 +617,13 @@ jobs:
           #                            binary, so AsyncCamoufox dies with
           #                            FileNotFoundError without it. That breaks
           #                            patch-guards, the leak suite and sundial.
-          make stage-fonts
-          for f in properties.json chrome.css; do
-            [ -f "$src/$f" ] || cp -v "settings/$f" "$src/$f"
-          done
+          make -C browser stage-fonts
+          [ -f "$src/properties.json" ] || cp -v browser/settings/properties.json "$src/properties.json"
 
           # Fail here, once, rather than in five browser jobs with five
           # different confusing errors.
           # fonts/ holds the bundle's group directories (L, M, W, LM, ... --
-          # bundle/fonts/groups.json), not a copy per OS; groups.json is what
+          # browser/bundle/fonts/groups.json), not a copy per OS; groups.json is what
           # utils._generate_fontconfig reads to decide which of them an identity
           # may see, so its absence is the failure that matters.
           for required in camoufox-bin properties.json camoufox.cfg fonts/groups.json fonts/LMW fontconfig/linux; do
@@ -649,10 +655,10 @@ jobs:
         # The compiled half is identical by construction -- that is what the key
         # asserts. What can still differ is the JavaScript, and in the
         # unpackaged dist/bin that CI archives there is no omni.ja to rebuild:
-        # Juggler is loose files under chrome/juggler/, so delivering new
+        # Juggler is loose files under modules/juggler/, so delivering new
         # JavaScript is a copy. ci/browser_inputs.py reads the destinations out
-        # of jar.mn rather than assuming a prefix, because two files in the same
-        # source directory land at different depths.
+        # of Juggler's moz.build rather than assuming a prefix, because two files
+        # in the same source directory land at different depths.
         run: |
           set -euo pipefail
           command -v zstd >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y zstd; }
@@ -674,10 +680,10 @@ jobs:
         run: |
           python3 -c "
           from ci import results
-          from ci.browser_inputs import jar_entries
+          from ci.browser_inputs import resource_entries
           r = results.GateResult(gate='build')
           r.metrics['from_cache'] = True
-          r.metrics['resources_overlaid'] = len(jar_entries())
+          r.metrics['resources_overlaid'] = len(resource_entries())
           r.metrics['cache_key'] = '''${{ steps.prebuilt.outputs.cache-primary-key }}'''
           r.note('restored a browser whose compiled half was built from identical '
                  'sources, and laid this branch\\'s resources over it; nothing was compiled')
@@ -715,17 +721,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
-          pip install -r ci/requirements.txt -e pythonlib
+          pip install -r ci/requirements.txt -e python
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # scripts/pin-fpgen-model.py.
-          python3 scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
 
       - name: Download
         # Same GitHub API path as the pythonlib job above, and the same anonymous
@@ -737,7 +743,7 @@ jobs:
           # The release built from this tree's sources, installed the way a
           # released library installs its paired browser: stamp the pin, fetch.
           python3 -m ci.release stamp --browser-tag "${{ needs.resolve.outputs.browser_tag }}" \
-            --py-version "$(sed -n 's/^version = "\(.*\)"/\1/p' pythonlib/pyproject.toml)" \
+            --py-version "$(sed -n 's/^version = "\(.*\)"/\1/p' python/pyproject.toml)" \
             --npm-version "$(python3 -c "import json; print(json.load(open('typescript/package.json'))['version'])")"
           python -m camoufox fetch
           # The ACTIVE build's directory, resolved the way the launcher resolves
@@ -798,7 +804,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -859,26 +865,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
-          pip install -e pythonlib
+          pip install -e python
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # scripts/pin-fpgen-model.py.
-          python3 scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       # Fonts and properties.json are staged into the artifact by the build job;
       # `make stage-fonts` here would find no source tree and do nothing.
+      # ipv4-only-network.py builds its test network in an unprivileged user
+      # namespace, which Ubuntu's AppArmor denies to programs without a profile.
+      - if: matrix.leg == 'spoofing'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - if: matrix.leg != 'skiplist'
         run: xvfb-run -a python3 -m ci.run_patch_guards --group "${{ matrix.leg }}" --binary "$CAMOUFOX_BINARY"
       - name: Every skiplist entry is still failing
         if: matrix.leg == 'skiplist'
-        # Seconds, because a correct skiplist is short. This is what stops
-        # ci/skiplist.yml turning into a list of tests that would now pass --
-        # which is what it was: 193 of the 202 tests it skipped passed.
+        # About two minutes: one fresh browser per entry, and a correct skiplist
+        # is short. This is what stops ci/skiplist.yml turning into a list of
+        # tests that would now pass -- which is what it was: 193 of the 202
+        # tests it skipped passed.
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -909,19 +920,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
-          cd build-tester && npm install && pip install -r requirements.txt
+          cd browser/tests/build-tester && npm install && pip install -r requirements.txt
           # build-tester pulls pythonlib -- and so fpgen -- through its own
-          # requirements.txt (`-e ../pythonlib`) rather than `pip install -e
-          # pythonlib`, so the pin the other jobs get by matching that line has
+          # requirements.txt (`-e ../../../python`) rather than `pip install -e
+          # python`, so the pin the other jobs get by matching that line has
           # to be spelled out here. Without it this job was still downloading
           # fpgen's model itself: TLS verification off, no checksum, and only
           # ever the April-2025 release (observed in run 36050915401).
-          python3 "$GITHUB_WORKSPACE/scripts/pin-fpgen-model.py"
+          python3 "$GITHUB_WORKSPACE/python/scripts/pin-fpgen-model.py"
       - run: xvfb-run -a python3 -m ci.run_build_tester --binary "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -955,17 +966,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
-          pip install -e pythonlib
+          pip install -e python
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # scripts/pin-fpgen-model.py.
-          python3 scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       - name: Run
         # Launches browsers, kills them, and proves nothing survived -- the
         # failure a long-running scraper hits after six hours and no Playwright
@@ -1013,7 +1024,7 @@ jobs:
     env:
       CAMOUFOX_FPGEN_DATA: ${{ github.workspace }}/.ci-work/fpgen
       # The browser under test is the build job's unpackaged dist/bin, which
-      # packages en-US only: scripts/package.py adds the langpacks, and CI never
+      # packages en-US only: browser/scripts/package.py adds the langpacks, and CI never
       # runs it. A de-DE/fr-FR identity therefore presents en-US here though a
       # packaged release presents de-DE. The e2e locale assertions skip on that
       # (named) gap; everything else in the page-vs-config checks still runs.
@@ -1022,17 +1033,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
-          pip install -e pythonlib
+          pip install -e python
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # scripts/pin-fpgen-model.py.
-          python3 scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: typescript/package.json
@@ -1044,7 +1055,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .ci-work/fpgen
-          key: fpgen-model-${{ hashFiles('scripts/data/fpgen-model.json') }}
+          key: fpgen-model-${{ hashFiles('python/src/camoufox/fpgen-model.json') }}
       - name: Run
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -1065,7 +1076,7 @@ jobs:
     # off pull requests. One test per runner (ci.run_native --shard) brings it
     # to the length of a Playwright shard, so it runs on every pull request and
     # is part of the merge gate. Seven shards for the seven tests in
-    # native-tests/test_memory_growth.py; with more tests than shards a shard
+    # browser/tests/native/test_memory_growth.py; with more tests than shards a shard
     # simply runs two.
     needs: [resolve, build, fetch-browser, patch-guards, build-tester]
     if: >-
@@ -1083,17 +1094,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
-          pip install -e pythonlib
+          pip install -e python
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # scripts/pin-fpgen-model.py.
-          python3 scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       - run: xvfb-run -a python3 -m ci.run_native --subset growth --shard "${{ matrix.shard }}" --binary "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -1116,17 +1127,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
-          pip install -e pythonlib
+          pip install -e python
           # fpgen downloads its model on first import with TLS verification
           # OFF and no checksum, and its release picker can only ever reach the
           # April-2025 model. Install the pinned one first: see
-          # scripts/pin-fpgen-model.py.
-          python3 scripts/pin-fpgen-model.py
+          # python/scripts/pin-fpgen-model.py.
+          python3 python/scripts/pin-fpgen-model.py
       - name: Run
         # Exits 0 with a SKIP result if sundial itself is unreachable -- the
         # browser was never measured, so neither a pass nor a failure would be
@@ -1168,7 +1179,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}

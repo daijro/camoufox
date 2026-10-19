@@ -49,29 +49,11 @@ from ._util import CI_DIR, RESULTS_DIR, WORK_DIR, log, opaque_id, run
 
 CONFIG_PATH = CI_DIR / "sundial.yml"
 COOKIE_NAME = "sundial_session"
-# The account CI logs in as. `guest` is the least-privileged role the deployment
-# actually has (sundial 0.5.0): its middleware refuses `guest` the private-vector
-# bundle outright, so the definitions this repository must never see are not
-# served to this session at all.
-#
-# Two guarantees keep a vector out of a public log, and it is worth being precise
-# about which is which, because only one of them is enforced by the server:
-#
-#   server-side  `guest` is answered with an empty stub for vectors-private.js
-#                (_middleware.js gates that path on the role). `admin` and
-#                `private` are not -- so the gate verifies the session's role
-#                against /__auth/me and refuses to scan under either of them,
-#                rather than trusting that the right key was configured.
-#   client-side  this gate only ever requests `/?auto=1&score=1`, and redact()
-#                refuses to process anything that is not a score payload, so a
-#                deployment that ignored `score=1` fails the run instead of
-#                folding a report down and carrying on.
-#
-# The stricter option is sundial's score-only `ci` role, which is refused
-# anything but `/?auto=1&score=1` server-side and so cannot retrieve a report
-# even if this credential leaks. That role is not in sundial's master branch and
-# is therefore not deployed; when it lands, set SUNDIAL_USERNAME=ci and the
-# server-side half of the guarantee gets stronger with no change here.
+# The least-privileged role sundial has: its middleware serves `guest` an empty
+# stub for vectors-private.js, and the gate checks the role against /__auth/me
+# (ROLES_WITHOUT_VECTORS). Client-side, only `/?auto=1&score=1` is requested and
+# redact() refuses anything but a score. Sundial's score-only `ci` role is
+# stricter; once deployed, set SUNDIAL_USERNAME=ci.
 DEFAULT_USERNAME = "guest"
 DEFAULT_URL = "https://sundial.daijro.dev"
 
@@ -81,15 +63,9 @@ _FORBIDDEN_FIELDS = (
     "key", "id", "cat", "elapsedMs", "entropy",
 )
 
-# The complete set of keys allowed to leave this module. A whitelist, checked at
-# runtime, because a blacklist only stops the leaks somebody already thought of:
-# add a field to redact() and forget to think about it, and a blacklist ships it.
-# This fails the run instead.
-#
-# There are deliberately no per-vector rows here, not even opaque ones. An HMAC
-# does not name a vector, but a map of them is still per-vector data: it says how
-# many distinct checks fail and lets a reader follow the same id across releases.
-# The instruction is a score, so this is a score.
+# Every key allowed to leave this module, checked at runtime: an allowlist fails
+# the run on a field nobody thought about, where a denylist ships it. No
+# per-vector rows, not even HMACs: a map of them is still per-vector data.
 _PUBLISHABLE = frozenset({
     "grade",              # a letter
     "checks_total",       # how many in-scope checks were scored
@@ -166,19 +142,9 @@ def _unavailable_reason(exc: BaseException) -> Optional[str]:
     return None
 
 
-# Cloudflare sits in front of sundial and refuses document requests carrying a
-# non-browser User-Agent, before they reach sundial at all. Measured against the
-# live host: `/automated?key=<bogus>` answers **401** with a browser User-Agent
-# and **403** with urllib's default.
-#
-# That matters here because the token route below is exactly such a request, and
-# it is the route this repository's credential actually uses. Sent with the old
-# `User-Agent: camoufox-harness` it would have been refused by the edge, and the
-# 403 would have read like a permissions problem rather than a bot filter.
-#
-# On every request, not just the first: a client that authenticates with browser
-# headers and then fetches with urllib's defaults logs in successfully and gets
-# a confusing 403 on the very next hop.
+# Cloudflare refuses document requests with a non-browser User-Agent before
+# they reach sundial (measured: 401 with a browser UA, 403 with urllib's), which
+# reads like a permissions error. Sent on every request, the token route included.
 _BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0"
@@ -297,16 +263,10 @@ def scrub(text: str, secret: str) -> str:
     return text
 
 
-# Roles sundial will not serve the private-vector bundle to. Everything rests on
-# the session being one of these: `redact()` controls what this repository
-# *publishes*, but only the role controls what the browser is *given*, and a
-# public runner holding the vectors at all is the thing being prevented.
-#
-# `guest` is what an AUTOMATION_GUEST_KEY resolves to. `ci` is sundial's
-# score-only role, for when it lands. `private` and `admin` both load the
-# vectors and must never be what CI ends up as -- which is a live possibility,
-# not a hypothetical: /automated?key= resolves to `private` when handed the
-# private key, and the two keys are indistinguishable by looking at them.
+# Roles sundial does not serve the private vectors to. redact() controls what is
+# published, but only the role controls what the runner is given. `private` and
+# `admin` load the vectors, and /automated?key= resolves to `private` when
+# handed the private key, which looks no different from the guest key.
 ROLES_WITHOUT_VECTORS = frozenset({"guest", "ci"})
 
 
@@ -944,15 +904,10 @@ def gate(argv: Optional[List[str]] = None) -> int:
             )
         )
     except SundialUnavailable as exc:
-        # The service is down, so this browser was never measured. Recording a
-        # failure would block every merge in the repository on somebody else's
-        # outage, and recording a pass would claim a measurement that does not
-        # exist. So: a skip, with the reason attached, which the workflow tells
-        # ci/summarize.py to tolerate for this suite alone (--allow-skip).
-        #
-        # Scrubbed like the failure path below -- an exception raised inside
-        # urllib can carry the URL that produced it, and for the token route
-        # that URL contains the credential.
+        # The service is down, so nothing was measured: a failure would block every
+        # merge on someone else's outage and a pass would be false. A skip, which
+        # the workflow tolerates for this suite alone (--allow-skip). Scrubbed,
+        # because a urllib exception can carry the credential-bearing URL.
         result.note(
             scrub(f"stealth check skipped -- {exc}", password)
             + " No stealth measurement was taken for this run."

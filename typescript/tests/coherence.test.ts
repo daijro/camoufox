@@ -1,5 +1,5 @@
 /**
- * Port of pythonlib/tests/test_coherence.py (the rule-level half; the
+ * Port of python/tests/test_coherence.py (the rule-level half; the
  * launch-level half lives with the launcher tests) and test_shipped_data.py.
  *
  * Every identity Camoufox can produce has to be a machine that could exist:
@@ -11,7 +11,7 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 import * as coherence from "../src/coherence.js";
 import { fromPreset } from "../src/fingerprints.js";
-import { LOCAL_DATA } from "../src/pkgman.js";
+import { LOCAL_DATA } from "../src/paths.js";
 import { firefoxGpus } from "../src/webgl.js";
 import { MODEL } from "./fpgen-setup.js";
 
