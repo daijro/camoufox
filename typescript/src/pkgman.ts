@@ -993,44 +993,16 @@ export async function listAvailableVersions(
 	if (!releases.length && lastError) throw lastError;
 
 	const versions: AvailableVersion[] = [];
-
 	for (const release of releases) {
-		const isPrerelease = release.prerelease ?? false;
-		if (isPrerelease && !includePrerelease) continue;
-
-		for (const asset of release.assets ?? []) {
-			const match = pattern.exec(asset.name);
-			if (!match?.groups) continue;
-
-			const version = new Version(match.groups.build, match.groups.version);
-			const assetPrerelease = isPrerelease || version.isAlpha;
-			if (assetPrerelease && !includePrerelease) continue;
-			if (!config.isVersionSupported(version, assetPrerelease)) continue;
-			const iface = await releaseInterface(release);
-			if (!interfaceSupported(iface) && !includeIncompatible) {
-				rprint(incompatibleMessage(version, iface), "yellow");
-				continue;
-			}
-
-			const digest = asset.digest ?? "";
-			const sha256 = digest.startsWith("sha256:")
-				? digest.slice("sha256:".length)
-				: undefined;
-
-			versions.push(
-				new AvailableVersion({
-					version,
-					url: asset.browser_download_url,
-					isPrerelease: assetPrerelease,
-					assetId: asset.id,
-					assetSize: asset.size,
-					assetUpdatedAt: asset.updated_at,
-					sha256,
-					assetCreatedAt: asset.created_at,
-					interface: iface,
-				}),
-			);
-		}
+		versions.push(
+			...(await releaseVersions(
+				release,
+				config,
+				pattern,
+				includePrerelease,
+				includeIncompatible,
+			)),
+		);
 	}
 
 	versions.sort((a, b) => {
@@ -1038,6 +1010,81 @@ export async function listAvailableVersions(
 		if (byVersion !== 0) return byVersion;
 		return comparePyStr(b.assetCreatedAt ?? "", a.assetCreatedAt ?? "");
 	});
+	return versions;
+}
+
+/**
+ * The supported builds the release tagged `tag` holds for this platform, read
+ * with one API call per repo of the source. Empty when no repo has the tag.
+ */
+export async function taggedVersions(
+	repoConfig: RepoConfig,
+	tag: string,
+): Promise<AvailableVersion[]> {
+	for (const repo of repoConfig.repos) {
+		const apiUrl = `https://api.github.com/repos/${repo}/releases/tags/${tag}`;
+		const response = await request(apiUrl, {
+			headers: githubHeaders(apiUrl),
+			signal: AbortSignal.timeout(20_000),
+		});
+		if (response.status === 404) continue;
+		raiseForStatus(response, apiUrl);
+		return releaseVersions(
+			(await response.json()) as GitHubRelease,
+			repoConfig,
+			repoConfig.buildPattern(),
+		);
+	}
+	return [];
+}
+
+/**
+ * The release's assets that match `pattern` and the source's version range.
+ */
+async function releaseVersions(
+	release: GitHubRelease,
+	config: RepoConfig,
+	pattern: RegExp,
+	includePrerelease = true,
+	includeIncompatible = false,
+): Promise<AvailableVersion[]> {
+	const isPrerelease = release.prerelease ?? false;
+	if (isPrerelease && !includePrerelease) return [];
+
+	const versions: AvailableVersion[] = [];
+	for (const asset of release.assets ?? []) {
+		const match = pattern.exec(asset.name);
+		if (!match?.groups) continue;
+
+		const version = new Version(match.groups.build, match.groups.version);
+		const assetPrerelease = isPrerelease || version.isAlpha;
+		if (assetPrerelease && !includePrerelease) continue;
+		if (!config.isVersionSupported(version, assetPrerelease)) continue;
+		const iface = await releaseInterface(release);
+		if (!interfaceSupported(iface) && !includeIncompatible) {
+			rprint(incompatibleMessage(version, iface), "yellow");
+			continue;
+		}
+
+		const digest = asset.digest ?? "";
+		const sha256 = digest.startsWith("sha256:")
+			? digest.slice("sha256:".length)
+			: undefined;
+
+		versions.push(
+			new AvailableVersion({
+				version,
+				url: asset.browser_download_url,
+				isPrerelease: assetPrerelease,
+				assetId: asset.id,
+				assetSize: asset.size,
+				assetUpdatedAt: asset.updated_at,
+				sha256,
+				assetCreatedAt: asset.created_at,
+				interface: iface,
+			}),
+		);
+	}
 	return versions;
 }
 
