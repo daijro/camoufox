@@ -1,10 +1,10 @@
 diff --git a/browser/components/sessionstore/SessionStore.sys.mjs b/browser/components/sessionstore/SessionStore.sys.mjs
-index 52fc803050..b43bcf0ecb 100644
+index 7dfe2a31ca..67aa9ee0c5 100644
 --- a/browser/components/sessionstore/SessionStore.sys.mjs
 +++ b/browser/components/sessionstore/SessionStore.sys.mjs
-@@ -4346,8 +4346,19 @@ class _SessionStore {
-   }
- 
+@@ -4660,8 +4660,19 @@ class _SessionStore {
+    *        Window reference
+    */
    maybeDontRestoreTabs(aWindow) {
 +    // Camoufox: a window.open() popup created with window features opens as a
 +    // separate chrome window that SessionStore may never have registered (the
