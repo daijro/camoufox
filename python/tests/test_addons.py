@@ -12,13 +12,17 @@ Run with:
 """
 
 import os
+import re
 import threading
 import time
+from io import BytesIO
+from pathlib import Path
 
 import pytest
 
 from camoufox import addons as addons_mod
 from camoufox.addons import DefaultAddons, add_default_addons, maybe_download_addons
+from camoufox.exceptions import CorruptedDownload
 
 UBO = DefaultAddons.UBO.name
 
@@ -131,6 +135,7 @@ def test_extraction_appears_complete_or_not_at_all(tmp_path, monkeypatch):
         seen.append((target / "manifest.json").exists())
 
     monkeypatch.setattr(addons_mod, "webdl", lambda *a, **k: b"")
+    monkeypatch.setattr(addons_mod, "verify_sha256", lambda *a, **k: None)
     monkeypatch.setattr(addons_mod, "unzip", fake_unzip)
 
     addons_mod.download_and_extract("url", str(target), UBO)
@@ -153,6 +158,7 @@ def test_complete_addon_installed_meanwhile_is_kept(tmp_path, monkeypatch):
             f.write("")
 
     monkeypatch.setattr(addons_mod, "webdl", lambda *a, **k: b"")
+    monkeypatch.setattr(addons_mod, "verify_sha256", lambda *a, **k: None)
     monkeypatch.setattr(addons_mod, "unzip", fake_unzip)
 
     addons_mod.download_and_extract("url", str(target), UBO)
@@ -177,3 +183,25 @@ def test_failed_download_keeps_complete_addon(addons_dir, monkeypatch):
 
     assert (path / "manifest.json").exists()
     assert out == [str(path)]
+
+
+def test_default_addons_are_pinned_to_one_file():
+    for addon in DefaultAddons:
+        pin = addons_mod.PINS[addon.name]
+        assert addon.value == pin["url"]
+        assert f"-{pin['version']}.xpi" in pin["url"]
+        assert re.fullmatch(r"[0-9a-f]{64}", pin["sha256"])
+
+
+def test_each_pinned_version_has_its_own_cache_dir():
+    # A cache filled by another release must not stand in for this one's pin.
+    pin = addons_mod.PINS[UBO]
+    assert Path(addons_mod.get_addon_path(UBO)) == addons_mod.ADDONS_DIR / UBO / pin["version"]
+
+
+def test_download_that_does_not_match_the_pin_is_rejected(addons_dir, monkeypatch):
+    monkeypatch.setattr(addons_mod, "webdl", lambda *a, **k: BytesIO(b"not the pinned xpi"))
+
+    with pytest.raises(CorruptedDownload):
+        maybe_download_addons([DefaultAddons.UBO], [])
+    assert not addons_dir.exists() or not any(addons_dir.iterdir())
