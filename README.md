@@ -46,6 +46,7 @@
       <strong>Special codes for Camoufox users:</strong><br>
       • <code>CAMOUFOX35</code> - 35% off to Mobile and Residential Proxies<br>
       • <code>CAMOUFOX40</code> - 40% off to ISP (Static) Proxies<br>
+      Check Nodemaven's new GitHub for more web scraping and automation solutions - https://github.com/nodemaven
     </td>
   </tr>
   <tr>
