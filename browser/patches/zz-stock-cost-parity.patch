@@ -1,8 +1,49 @@
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index 0f7501d239..3181dfefcf 100644
+index 0f7501d239..402c3d9cab 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
-@@ -964,6 +964,39 @@ uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
+@@ -744,6 +744,21 @@ bool Navigator::GlobalPrivacyControl() {
+ }
+ 
+ uint64_t Navigator::HardwareConcurrency() {
++  // Camoufox: stock's work first, then the spoof (timing parity; see
++  // nsScreen::PixelDepth).
++  const uint64_t stock = [&]() -> uint64_t {
++    workerinternals::RuntimeService* rts =
++        workerinternals::RuntimeService::GetOrCreateService();
++    if (!rts) {
++      return 1;
++    }
++
++    return rts->ClampedHardwareConcurrency(
++        nsGlobalWindowInner::Cast(mWindow)->ShouldResistFingerprinting(
++            RFPTarget::NavigatorHWConcurrency),
++        nsGlobalWindowInner::Cast(mWindow)->ShouldResistFingerprinting(
++            RFPTarget::NavigatorHWConcurrencyTiered));
++  }();
+   // Camoufox: per-context hardware concurrency
+   if (mWindow) {
+     const uint32_t userContextId =
+@@ -757,17 +772,7 @@ uint64_t Navigator::HardwareConcurrency() {
+   if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency")) {
+     return value.value();
+   }
+-  workerinternals::RuntimeService* rts =
+-      workerinternals::RuntimeService::GetOrCreateService();
+-  if (!rts) {
+-    return 1;
+-  }
+-
+-  return rts->ClampedHardwareConcurrency(
+-      nsGlobalWindowInner::Cast(mWindow)->ShouldResistFingerprinting(
+-          RFPTarget::NavigatorHWConcurrency),
+-      nsGlobalWindowInner::Cast(mWindow)->ShouldResistFingerprinting(
+-          RFPTarget::NavigatorHWConcurrencyTiered));
++  return stock;
+ }
+ 
+ namespace {
+@@ -964,6 +969,39 @@ uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
    // primary pointer. See force-default-pointer.patch for the matching
    // `any-pointer: coarse` half. Stock Firefox's baseline fingerprinting
    // protection collapses the spoofed count as it would the real one.
@@ -42,7 +83,7 @@ index 0f7501d239..3181dfefcf 100644
    if (auto value = MaskConfig::GetUint32("navigator.maxTouchPoints")) {
      if (aCallerType != CallerType::System &&
          nsContentUtils::ShouldResistFingerprinting(
-@@ -972,35 +1005,7 @@ uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
+@@ -972,35 +1010,7 @@ uint32_t Navigator::MaxTouchPoints(CallerType aCallerType) {
      }
      return value.value();
    }
@@ -428,6 +469,171 @@ index db1b834258..9d54724ebe 100644
  }
  
  bool nsScreen::IsFullscreen() const {
+diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
+index bc5f22a2ae..78f960bc7b 100644
+--- a/dom/workers/WorkerNavigator.cpp
++++ b/dom/workers/WorkerNavigator.cpp
+@@ -139,44 +139,36 @@ void WorkerNavigator::SetLanguages(const nsTArray<nsString>& aLanguages) {
+ void WorkerNavigator::GetAppVersion(nsString& aAppVersion,
+                                     CallerType aCallerType,
+                                     ErrorResult& aRv) const {
+-  if (auto value = MaskConfig::GetString("navigator.appVersion"))
+-    return aAppVersion.Assign(NS_ConvertUTF8toUTF16(value.value()));
+-  WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+-  MOZ_ASSERT(workerPrivate);
++  // Camoufox: stock's work first, then the spoof (timing parity; see
++  // nsScreen::PixelDepth).
++  [&] {
++    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
++    MOZ_ASSERT(workerPrivate);
+ 
+-  if (aCallerType != CallerType::System) {
+-    if (workerPrivate->ShouldResistFingerprinting(
+-            RFPTarget::NavigatorAppVersion)) {
+-      // See nsRFPService.h for spoofed value.
+-      aAppVersion.AssignLiteral(SPOOFED_APPVERSION);
+-      return;
+-    }
++    if (aCallerType != CallerType::System) {
++      if (workerPrivate->ShouldResistFingerprinting(
++              RFPTarget::NavigatorAppVersion)) {
++        // See nsRFPService.h for spoofed value.
++        aAppVersion.AssignLiteral(SPOOFED_APPVERSION);
++        return;
++      }
+ 
+-    if (!mProperties.mAppVersionOverridden.IsEmpty()) {
+-      aAppVersion = mProperties.mAppVersionOverridden;
+-      return;
++      if (!mProperties.mAppVersionOverridden.IsEmpty()) {
++        aAppVersion = mProperties.mAppVersionOverridden;
++        return;
++      }
+     }
+-  }
+ 
+-  aAppVersion = mProperties.mAppVersion;
++    aAppVersion = mProperties.mAppVersion;
++  }();
++  if (auto value = MaskConfig::GetString("navigator.appVersion"))
++    aAppVersion.Assign(NS_ConvertUTF8toUTF16(value.value()));
+ }
+ 
+ void WorkerNavigator::GetPlatform(nsString& aPlatform, CallerType aCallerType,
+                                   ErrorResult& aRv) const {
+-  // Camoufox: per-context navigator platform for workers
+-  {
+-    WorkerPrivate* wp = GetCurrentThreadWorkerPrivate();
+-    if (wp) {
+-      uint32_t ucid = wp->GetOriginAttributes().mUserContextId;
+-      nsAutoString stored;
+-      if (mozilla::dom::NavigatorManager::GetPlatform(ucid, stored)) {
+-        aPlatform = stored;
+-        return;
+-      }
+-    }
+-  }
+-  if (auto value = MaskConfig::GetString("navigator.platform"))
+-    return aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
++  // Camoufox: stock's work first, then the spoof (timing parity; see
++  // nsScreen::PixelDepth).
+   WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+   MOZ_ASSERT(workerPrivate);
+ 
+@@ -191,6 +183,20 @@ void WorkerNavigator::GetPlatform(nsString& aPlatform, CallerType aCallerType,
+     // from "general.platform.override" pref.
+     aPlatform = mProperties.mPlatformOverridden;
+   }
++  // Camoufox: per-context navigator platform for workers
++  {
++    WorkerPrivate* wp = GetCurrentThreadWorkerPrivate();
++    if (wp) {
++      uint32_t ucid = wp->GetOriginAttributes().mUserContextId;
++      nsAutoString stored;
++      if (mozilla::dom::NavigatorManager::GetPlatform(ucid, stored)) {
++        aPlatform = stored;
++        return;
++      }
++    }
++  }
++  if (auto value = MaskConfig::GetString("navigator.platform"))
++    aPlatform.Assign(NS_ConvertUTF8toUTF16(value.value()));
+ }
+ 
+ namespace {
+@@ -238,6 +244,20 @@ class GetUserAgentRunnable final : public WorkerMainThreadRunnable {
+ void WorkerNavigator::GetUserAgent(nsCString& aUserAgent,
+                                    CallerType aCallerType,
+                                    ErrorResult& aRv) const {
++  // Camoufox: stock's work first, then the spoof (timing parity; see
++  // nsScreen::PixelDepth).
++  WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
++  MOZ_ASSERT(workerPrivate);
++
++  RefPtr<GetUserAgentRunnable> runnable = new GetUserAgentRunnable(
++      workerPrivate, aUserAgent,
++      workerPrivate->ShouldResistFingerprinting(RFPTarget::NavigatorUserAgent));
++
++  runnable->Dispatch(workerPrivate, Canceling, aRv);
++  // Stock throws when the worker is shutting down; so does this.
++  if (aRv.Failed()) {
++    return;
++  }
+   // Camoufox: per-context user agent for workers
+   {
+     WorkerPrivate* wp = GetCurrentThreadWorkerPrivate();
+@@ -251,18 +271,24 @@ void WorkerNavigator::GetUserAgent(nsCString& aUserAgent,
+     }
+   }
+   if (auto value = MaskConfig::GetString("navigator.userAgent"))
+-    return aUserAgent.Assign(value.value().c_str());
+-  WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
+-  MOZ_ASSERT(workerPrivate);
+-
+-  RefPtr<GetUserAgentRunnable> runnable = new GetUserAgentRunnable(
+-      workerPrivate, aUserAgent,
+-      workerPrivate->ShouldResistFingerprinting(RFPTarget::NavigatorUserAgent));
+-
+-  runnable->Dispatch(workerPrivate, Canceling, aRv);
++    aUserAgent.Assign(value.value().c_str());
+ }
+ 
+ uint64_t WorkerNavigator::HardwareConcurrency() const {
++  // Camoufox: stock's work first, then the spoof (timing parity; see
++  // nsScreen::PixelDepth).
++  const uint64_t stock = [&]() -> uint64_t {
++    RuntimeService* rts = RuntimeService::GetService();
++    MOZ_ASSERT(rts);
++
++    WorkerPrivate* aWorkerPrivate = GetCurrentThreadWorkerPrivate();
++
++    return rts->ClampedHardwareConcurrency(
++        aWorkerPrivate->ShouldResistFingerprinting(
++            RFPTarget::NavigatorHWConcurrency),
++        aWorkerPrivate->ShouldResistFingerprinting(
++            RFPTarget::NavigatorHWConcurrencyTiered));
++  }();
+   // Camoufox: per-context hardware concurrency for workers
+   {
+     WorkerPrivate* wp = GetCurrentThreadWorkerPrivate();
+@@ -276,16 +302,7 @@ uint64_t WorkerNavigator::HardwareConcurrency() const {
+   }
+   if (auto value = MaskConfig::GetUint64("navigator.hardwareConcurrency"))
+     return value.value();
+-  RuntimeService* rts = RuntimeService::GetService();
+-  MOZ_ASSERT(rts);
+-
+-  WorkerPrivate* aWorkerPrivate = GetCurrentThreadWorkerPrivate();
+-
+-  return rts->ClampedHardwareConcurrency(
+-      aWorkerPrivate->ShouldResistFingerprinting(
+-          RFPTarget::NavigatorHWConcurrency),
+-      aWorkerPrivate->ShouldResistFingerprinting(
+-          RFPTarget::NavigatorHWConcurrencyTiered));
++  return stock;
+ }
+ 
+ StorageManager* WorkerNavigator::Storage() {
 diff --git a/toolkit/components/resistfingerprinting/moz.build b/toolkit/components/resistfingerprinting/moz.build
 index a4bb89bd34..e4e3e161de 100644
 --- a/toolkit/components/resistfingerprinting/moz.build
