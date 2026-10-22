@@ -6,6 +6,8 @@ Writes browser/tests/playwright/patches/assets/windows-crt-math.json, the
 reference the windows-crt-math patch guard compares Camoufox against: a sample
 of inputs.py, and what Firefox's Math.sin/cos/tan/pow and ** gave for them,
 cold, hot and constant-folded. Use the Firefox version browser/upstream.sh pins.
+The file in the repository is from 152.0.4; docs/HOST-PARITY.md says why it
+still holds for the pinned version.
 """
 
 import http.server
