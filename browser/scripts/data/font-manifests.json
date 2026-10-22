@@ -988,7 +988,7 @@
      "黒体-簡",
      "黒体-繁"
     ],
-    "source": "inherited from Holo (captured from Jake's own Mac before it was upgraded to macOS 26). NOT re-verifiable: that machine now runs 26. Six family names were stored mojibaked (Shift-JIS read as UTF-16BE) and were repaired 2026-09-22."
+    "source": "inherited from Holo (captured from Jake's own Mac before it was upgraded to macOS 26). NOT re-verifiable: that machine now runs 26. Six family names were stored mojibaked (Shift-JIS read as UTF-16BE) and were repaired 2026-09-22. The 29 localized names of System Font (Police système, 系統字體 and the rest) were dropped 2026-10-16 (#832) to match the tahoe26 and macos27 captures, which claim it once: CoreText on macOS 27 does not resolve them (CTFontCreateWithName returns Helvetica, as for a name that does not exist)."
    },
    "tahoe26": {
     "weight": 0.65,

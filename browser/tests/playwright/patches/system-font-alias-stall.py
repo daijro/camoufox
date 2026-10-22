@@ -1,5 +1,5 @@
 """
-Verify no OS font base claims a page into a multi-second stall.
+Verify no macOS font base makes font fallback pay for one face many times.
 
 A base in font-bases.json is a list of family names the browser claims. Several
 names can name the same physical face -- macOS exposes its UI font under a
@@ -7,22 +7,23 @@ localized name per language, and all of them live in that font's `name` table --
 and the masked font list hands each one to the browser as a family of its own.
 
 Font fallback walks that list once per codepoint the page's own fonts do not
-cover, so a face reached by N names is loaded and scanned N times per miss. The
-sonoma base named 30 families that all resolve to 42__SFNS.ttf, which is one
-~1 MB face covering no emoji, against one name in tahoe26 and macos27. On an
-emoji-heavy page that cost the content process about 20 s inside one reflow,
-during which the page answered nothing (daijro/camoufox#832). The stall is also
-a tell in itself: no stock Firefox freezes on an emoji page, and a script can
-time it.
+cover, and each name of the system face costs a load and scan of that ~1 MB
+face (42__SFNS.ttf), which covers no emoji. The sonoma base named it 30 times,
+against once in tahoe26 and macos27, so the reflow that follows the background
+cmap load on an emoji page held the content process for about 20 s instead of
+under one (daijro/camoufox#832). The stall is also a tell in itself: no stock
+Firefox freezes on an emoji page, and a script can time it.
 
-The probe asks the page for an aria snapshot twice a second for a bounded
-window and measures the longest UNBROKEN run of slow answers. A single slow
-answer is not the defect and is not enough to fail: a healthy base on a busy
-machine still spikes to a few hundred milliseconds, while the defect is a
-continuous multi-second block during which nothing comes back at all.
+The page lays out a line of emoji and a sentinel in a script that only a claimed
+Noto family covers, then runs a 50 ms timer and keeps its longest interval: the
+time the content process gave the page nothing. The sentinel's width changes
+when fallback reaches its font, which is the end of that reflow, so the page
+reports then. The verdict is a ratio against a control launch that claims the
+system face exactly once, so it reads how many times a base pays for that face
+and not how fast the runner is.
 
-What PASS means: no macOS base leaves the page unresponsive for a continuous
-STALL_S or longer.
+What PASS means: no macOS base blocks the page MAX_RATIO times as long as a
+list that claims the system face once does.
 
     python browser/tests/playwright/patches/system-font-alias-stall.py
 """
@@ -30,7 +31,6 @@ STALL_S or longer.
 import asyncio
 import json
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -38,73 +38,90 @@ from helpers import launch_kwargs  # noqa: E402
 
 CAMOUFOX = Path(__file__).resolve().parents[4] / "python" / "src" / "camoufox"
 
-# Emoji-heavy, so most of its text misses the claimed fonts and falls back.
-URL = "https://badssl.com/"
+ORIGIN = "https://camoufox.test/"
+# The ratio counts the names fallback pays for the system face under. Measured
+# 0.9-1.6 for every healthy base and 27-30 for sonoma before #832, idle or
+# with every core busy, so the threshold sits about 4x from each.
+MAX_RATIO = 6.0
+# Only bounds the wait. A base that stalls past it fails like one that stalls less.
+DEADLINE_MS = 120_000
 
-WINDOW_S = 30.0        # the stall starts ~5 s in and runs ~20 s
-PROBE_EVERY_S = 0.5
-PROBE_TIMEOUT_MS = 6000  # a cap, not the verdict: above it the page gave nothing
-SLOW_MS = 1000           # a healthy base's worst answer measured ~740 ms
-STALL_S = 5.0            # continuous unresponsiveness that no load noise makes
+# The emoji are badssl.com's section headings, the page #832 was found on.
+PAGE = """<!doctype html><meta charset="utf-8"><body>
+<p>&#x1F39B; &#x1F3AB; &#x1F39F; &#x1F5BC; &#x270F;&#xFE0F; &#x1F500; &#x1F511; &#x2194;&#xFE0F;
+&#x1F50D; &#x2B06;&#xFE0F; &#x1F440; &#x274C; &#x2620;&#xFE0F; &#x1F6E0; &#x1F4CB;</p>
+<span id="sentinel">&#x1E900;&#x1E901;</span>
+<span id="system" style="font-family: 'System Font', monospace">mmmmmmmmmmlli10OQ@#</span>
+<span id="mono" style="font-family: monospace">mmmmmmmmmmlli10OQ@#</span>
+<script>
+const width = id => document.getElementById(id).getBoundingClientRect().width;
+const unresolved = width('sentinel');
+const start = performance.now();
+let last = start, longest = 0;
+(function tick() {
+  const now = performance.now();
+  longest = Math.max(longest, now - last);
+  last = now;
+  if (width('sentinel') === unresolved) return setTimeout(tick, 50);
+  document.documentElement.dataset.result = JSON.stringify({
+    longest, resolvedAt: now - start, systemFont: width('system') !== width('mono'),
+  });
+})();
+</script>"""
 
 
-def base_lists(os_key: str = "mac"):
-    """Each base's claimed font list, built the way a launch builds it."""
-    bases = json.loads((CAMOUFOX / "font-bases.json").read_text())[os_key]
-    essential = json.loads((CAMOUFOX / "essential-fonts.json").read_text())[os_key]
-    return [(b["id"], sorted(set(b["fonts"]) | set(essential))) for b in bases]
+def lists():
+    """The control, then each macOS base's claimed list as a launch builds it.
 
-
-async def longest_stall(fonts):
-    """The longest continuous span of slow answers, and where it started.
-
-    Span, not peak: the defect holds the content process inside one reflow, so
-    every probe in that span is slow. Scattered spikes from an unrelated load
-    do not accumulate into a span.
+    The control claims the system face once, next to the essential Noto
+    families: enough families that fallback waits for their cmaps, as it does
+    for a base, and none that names the system face again.
     """
+    bases = json.loads((CAMOUFOX / "font-bases.json").read_text())["mac"]
+    essential = json.loads((CAMOUFOX / "essential-fonts.json").read_text())["mac"]
+    control = ["System Font"] + [f for f in essential if f.startswith("Noto ")]
+    return [("control", control)] + [(b["id"], sorted(set(b["fonts"]) | set(essential))) for b in bases]
+
+
+async def measure(fonts):
+    """The page's longest unresponsive interval while fallback resolves, in ms."""
     from camoufox.async_api import AsyncCamoufox
 
-    longest, longest_at = 0.0, 0.0
-    span_from = None
-    worst = 0.0
-    async with AsyncCamoufox(**launch_kwargs(os="macos", fonts=fonts)) as browser:
-        page = await (await browser.new_context()).new_page()
-        await page.goto(URL, wait_until="domcontentloaded")
-        start = time.monotonic()
-        while time.monotonic() - start < WINDOW_S:
-            at = time.monotonic() - start
-            began = time.monotonic()
-            try:
-                await page.locator("body").aria_snapshot(timeout=PROBE_TIMEOUT_MS)
-            except Exception:
-                pass
-            took = time.monotonic() - began
-            worst = max(worst, took)
-            if took * 1000 >= SLOW_MS:
-                span_from = at if span_from is None else span_from
-                span = (at + took) - span_from
-                if span > longest:
-                    longest, longest_at = span, span_from
-            else:
-                span_from = None
-            await asyncio.sleep(max(0.0, PROBE_EVERY_S - (time.monotonic() - began)))
-    return longest, longest_at, worst
+    async with AsyncCamoufox(**launch_kwargs(os="macos", fonts=fonts, i_know_what_im_doing=True)) as browser:
+        page = await browser.new_page()
+        await page.route(ORIGIN, lambda route: route.fulfill(content_type="text/html", body=PAGE))
+        await page.goto(ORIGIN)
+        handle = await page.wait_for_function(
+            "() => document.documentElement.dataset.result", timeout=DEADLINE_MS, polling=250
+        )
+        result = json.loads(await handle.json_value())
+    if not result["systemFont"]:
+        raise SystemExit("FAIL: 'System Font' is not installed, so nothing here pays for the "
+                         "system face (is the font bundle staged?)")
+    return result
 
 
 async def main():
-    passed = True
-    for base_id, fonts in base_lists():
-        stall, stall_at, worst = await longest_stall(fonts)
-        if stall >= STALL_S:
-            passed = False
-            print(f"  FAIL {base_id}: unresponsive for {stall:.1f}s from {stall_at:.1f}s in "
-                  f"({len(fonts)} fonts claimed)")
-        else:
-            print(f"  ok {base_id}: no stall, worst answer {worst * 1000:.0f}ms "
-                  f"({len(fonts)} fonts claimed)")
-    if passed:
-        print(f"  PASS: no macOS base went unresponsive for {STALL_S:.0f}s")
-    return 0 if passed else 1
+    failures = []
+    control = None
+    for name, fonts in lists():
+        result = await measure(fonts)
+        if control is None:
+            control = result["longest"]
+            print(f"  control: longest block {control:.0f}ms ({len(fonts)} fonts claimed, "
+                  f"resolved at {result['resolvedAt']:.0f}ms)")
+            continue
+        ratio = result["longest"] / control
+        verdict = "FAIL" if ratio >= MAX_RATIO else "ok"
+        print(f"  {verdict} {name}: longest block {result['longest']:.0f}ms, {ratio:.1f}x the control "
+              f"({len(fonts)} fonts claimed, resolved at {result['resolvedAt']:.0f}ms)")
+        if ratio >= MAX_RATIO:
+            failures.append(name)
+    if failures:
+        print(f"  FAIL: {', '.join(failures)} blocked the page {MAX_RATIO:.0f}x as long as the control")
+        return 1
+    print(f"  PASS: no macOS base blocked the page {MAX_RATIO:.0f}x as long as the control")
+    return 0
 
 
 if __name__ == "__main__":
