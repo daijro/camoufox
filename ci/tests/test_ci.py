@@ -2802,6 +2802,71 @@ def test_build_tester_accepts_every_core_count_pythonlib_presents():
 
 
 # ---------------------------------------------------------------------------
+# packaging
+# ---------------------------------------------------------------------------
+
+
+def _package_module():
+    """browser/scripts/package.py, imported the way it runs (its directory on sys.path)."""
+    import importlib.util
+    import sys
+
+    scripts = CI_ROOT.parent / "browser" / "scripts"
+    sys.path.insert(0, str(scripts))
+    try:
+        spec = importlib.util.spec_from_file_location("camoufox_package", scripts / "package.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path.remove(str(scripts))
+
+
+def test_packaged_font_names_are_ascii(tmp_path, monkeypatch):
+    """A plain `unzip` must extract the release zip in any locale.
+
+    The font bundle carries macOS faces named in Japanese (Hiragino). The zip
+    stores those names correctly as UTF-8, but unzip 6.0 under a C/POSIX locale
+    -- a Docker build, a bare SSH shell -- reports every one as a mismatching
+    local filename and exits 1, which stops a consumer's `set -e` install.
+    """
+    import shlex
+
+    package = _package_module()
+    monkeypatch.chdir(tmp_path)
+    group = tmp_path / "bundle" / "fonts" / "M"
+    group.mkdir(parents=True)
+    (group.parent / "groups.json").write_text('{"readBy": {"mac": ["M"]}}')
+    (group / "18__ヒラギノ角ゴシック W9.ttc").write_bytes(b"w9")
+    (group / "21__ヒラギノ角ゴシック W1.ttc").write_bytes(b"w1")
+    (group / "07__Helvetica.ttc").write_bytes(b"h")
+
+    # Stand in for 7z: the extracted package is empty, and what would be
+    # zipped is read back from the staging directory.
+    packaged = []
+
+    def fake_run(cmd, exit_on_fail=True):
+        args = shlex.split(cmd)
+        if args[:2] == ["7z", "u"]:
+            fonts = pathlib.Path(args[3].removesuffix("/*"), "fonts")
+            packaged.append({p.name: p.read_bytes() for p in fonts.iterdir()})
+
+    monkeypatch.setattr(package, "run", fake_run)
+    monkeypatch.setattr(package, "inject_locales", lambda *args: None)
+    for _ in range(2):
+        (tmp_path / "in.zip").write_bytes(b"")
+        package.add_includes_to_package("in.zip", [], ["macos"], "out.zip", "windows", "158.0", "")
+
+    names = sorted(packaged[0])
+    assert all(name.isascii() for name in names), names
+    assert packaged[0].pop("07__Helvetica.ttc") == b"h"
+    assert all(n.startswith(("18__", "21__")) and n.endswith(".ttc") for n in packaged[0]), names
+    assert sorted(packaged[0].values()) == [b"w1", b"w9"]
+    # Deterministic: the same bundle packages to the same names.
+    assert sorted(packaged[1]) == names
+
+
+# ---------------------------------------------------------------------------
 # build-or-fetch: the published release is used only when it matches the tree
 # ---------------------------------------------------------------------------
 
