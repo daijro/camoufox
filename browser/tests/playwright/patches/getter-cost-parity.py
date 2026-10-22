@@ -16,9 +16,13 @@ This guard times the same page in stock Firefox of the version in
 browser/upstream.sh (--stock <firefox binary>, else downloaded and verified as
 stock-gpu-parity does) and in Camoufox with a launch-level and a per-context
 identity, on the same machine, and fails when a getter costs more than
-SLOWER_FACTOR times stock and at least MIN_GAP_NS more. Each figure is the
-fastest of several rounds over two launches, so a busy runner inflates both
-browsers rather than one.
+SLOWER_FACTOR times stock and at least MIN_GAP_NS more. It also fails when a
+getter is at least MIN_GAP_NS cheaper than stock's and, measured against an
+untouched control getter in the same browser, under 1/FASTER_FACTOR of stock's
+cost: one that skips stock's work shows as plainly (screen.width took 18-24 ns
+against stock's 107 ns when it did). Each figure is the fastest of several
+rounds over two launches, so a busy runner inflates both browsers rather than
+one.
 
     python browser/tests/playwright/patches/getter-cost-parity.py
     python browser/tests/playwright/patches/getter-cost-parity.py --stock FIREFOX
@@ -47,6 +51,7 @@ from ci._util import read_upstream_sh  # noqa: E402
 
 LAUNCHES = 2
 SLOWER_FACTOR = 2.0
+FASTER_FACTOR = 2.0
 MIN_GAP_NS = 30.0
 PAGE_TIMEOUT_S = 240
 FIRST_READ_GAP_MS = 5.0
@@ -253,6 +258,14 @@ def main() -> int:
         print(f"\n== Camoufox, {identity} identity")
         print(f"{'':6s} {'expression':44s} {'stock':>8s} {'camoufox':>9s}  ns/op")
         for where in ("window", "worker"):
+            # The first control a scope has; the lower bound is a ratio to it,
+            # so a runner that is slower or faster for one browser cancels out.
+            base = next(e for e in CONTROLS if e in stock[where])
+            stock_base, camou_base = stock[where][base], camou[where].get(base)
+            if not stock_base or not camou_base:
+                failures.append(f"{identity}: control {where} {base} not measurable "
+                                f"({camou_base} vs {stock_base} ns) -- check is vacuous")
+                continue
             for expr, s in stock[where].items():
                 c = camou[where].get(expr)
                 if s is None or c is None:
@@ -260,10 +273,16 @@ def main() -> int:
                     continue
                 control = expr in CONTROLS
                 slow = c > SLOWER_FACTOR * s and c - s >= MIN_GAP_NS
-                mark = "  <- control" if control else ("  <- SLOWER" if slow else "")
+                fast = (FASTER_FACTOR * c / camou_base < s / stock_base
+                        and s - c >= MIN_GAP_NS)
+                mark = ("  <- control" if control else "  <- SLOWER" if slow
+                        else "  <- FASTER" if fast else "")
                 print(f"{where:6s} {expr[:44]:44s} {s:8.0f} {c:9.0f}{mark}")
                 if slow and not control:
                     failures.append(f"{identity}: {where} {expr}: {c:.0f} ns vs stock {s:.0f} ns")
+                if fast and not control:
+                    failures.append(f"{identity}: {where} {expr}: {c:.0f} ns vs stock {s:.0f} ns, "
+                                    f"{c / camou_base:.2f}x {base} vs stock's {s / stock_base:.2f}x")
                 if slow and control:
                     failures.append(f"{identity}: control {where} {expr} differs ({c:.0f} vs {s:.0f} ns): "
                                     f"the two browsers are not comparable here -- check is vacuous")
@@ -281,7 +300,8 @@ def main() -> int:
         for f in failures:
             print(f"FAIL: {f}")
         return 1
-    print(f"PASS: no spoofed getter costs over {SLOWER_FACTOR}x stock Firefox from script.")
+    print(f"PASS: no spoofed getter costs over {SLOWER_FACTOR}x or under 1/{FASTER_FACTOR} of "
+          f"stock Firefox's from script.")
     return 0
 
 
