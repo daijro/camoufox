@@ -479,6 +479,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
 
       - name: Hash the inputs that can change compiled output
         id: native
@@ -505,9 +506,7 @@ jobs:
           # `browser_changed` (see resolve) is a different question and stays as
           # it is: it decides build-versus-fetch against the base, and is true
           # for every push to a branch that touched the browser once.
-          # `opt` marks the LTO+PGO build (ci/pgo.py): a browser cached before it
-          # has the same native inputs but was compiled differently.
-          key: browser-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}-opt-native-${{ steps.native.outputs.hash }}
+          key: browser-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}-native-${{ steps.native.outputs.hash }}
           # No restore-keys, deliberately. A prefix match would serve a browser
           # whose compiled half was built from different sources, and every
           # suite downstream would report on it looking perfectly healthy.
@@ -542,36 +541,26 @@ jobs:
 
       - name: Install build dependencies
         if: steps.prebuilt.outputs.cache-hit != 'true'
+        # No system LLVM: `mach bootstrap` fetches the clang and lld this
+        # Firefox is built with, and the LTO link needs that lld, which reads
+        # the bitcode the same LLVM wrote.
         run: |
-          wget -q https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18
-          sudo apt-get install -y lld-18 clang-18
-          sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-18 100
           sudo apt-get update
           # The mozconfig sets --with-ccache; configure fails hard without it
           # rather than degrading.
           sudo apt-get install -y msitools p7zip-full aria2 ccache libsqlite3-dev
 
-      - name: Pin the Rust release the optimized build links with
-        if: steps.prebuilt.outputs.cache-hit != 'true'
-        # Cross-language LTO hands Rust bitcode to lld, so rustc's LLVM may not
-        # be newer than the bootstrapped clang's. Set before bootstrap so every
-        # rustc the build runs is this one. ci/pgo.py has the pairing.
-        run: python3 -m ci.pgo toolchain
-
-      # restore + save rather than actions/cache, whose save runs only when the
-      # whole job succeeds: a build that failed 80 minutes in kept nothing.
       - name: Restore ccache
         if: steps.prebuilt.outputs.cache-hit != 'true'
-        uses: actions/cache/restore@v4
+        uses: actions/cache@v4
         with:
           path: ~/.ccache
           # Keyed on the browser version and the patch set, so a pull request
           # that does not touch browser/patches/ starts from a fully warm cache.
-          # The PGO profile is an input to every compile, so it is in the key.
-          key: ccache-opt-${{ needs.resolve.outputs.browser_version }}-${{ hashFiles('browser/patches/**', 'browser/additions/**', 'browser/assets/*.mozconfig', 'browser/assets/optimized-build.json') }}
+          key: ccache-${{ needs.resolve.outputs.browser_version }}-${{ hashFiles('browser/patches/**', 'browser/additions/**', 'browser/assets/*.mozconfig') }}
           restore-keys: |
-            ccache-opt-${{ needs.resolve.outputs.browser_version }}-
-            ccache-opt-
+            ccache-${{ needs.resolve.outputs.browser_version }}-
+            ccache-
 
       - name: Create swap
         if: steps.prebuilt.outputs.cache-hit != 'true'
@@ -602,17 +591,6 @@ jobs:
           # sets an identity of its own.
           python3 -m ci.run_prepare
 
-      - name: Optimize as stock does (LTO + PGO)
-        if: steps.prebuilt.outputs.cache-hit != 'true'
-        # Checks the rustc/clang pairing against the clang bootstrap just
-        # fetched, then exports CAMOUFOX_LTO and the pinned profile for the
-        # mozconfig. Without a pinned profile for this Firefox version it
-        # warns and builds with LTO only. `ci.pgo fetch --require` refuses
-        # instead, for a release job that must not ship unoptimized.
-        run: |
-          python3 -m ci.pgo check
-          python3 -m ci.pgo fetch
-
       - name: Build
         if: steps.prebuilt.outputs.cache-hit != 'true'
         env:
@@ -620,16 +598,7 @@ jobs:
         run: python3 -m ci.run_build
 
       - run: ccache -s
-        if: always() && steps.prebuilt.outputs.cache-hit != 'true'
-
-      - name: Save ccache
-        if: always() && steps.prebuilt.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.ccache
-          # Unique per attempt (a cache key cannot be overwritten); the restore
-          # step's prefix keys pick the newest.
-          key: ccache-opt-${{ needs.resolve.outputs.browser_version }}-${{ hashFiles('browser/patches/**', 'browser/additions/**', 'browser/assets/*.mozconfig', 'browser/assets/optimized-build.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+        if: steps.prebuilt.outputs.cache-hit != 'true'
 
       - name: Package the binary for the test jobs
         if: steps.prebuilt.outputs.cache-hit != 'true'

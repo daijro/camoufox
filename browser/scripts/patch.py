@@ -20,6 +20,7 @@ from _mixin import (
     get_moz_target,
     get_options,
     list_patches,
+    mozilla_rust_version,
     run,
     temp_cd,
 )
@@ -46,6 +47,7 @@ class Patcher:
 
     moz_target: str
     target: str
+    rust: str
 
     def camoufox_patches(self):
         """
@@ -153,6 +155,8 @@ class Patcher:
 
         # Add target option
         content += f"\nac_add_options --target={self.moz_target}\n"
+        # configure resolves rustc and cargo through rustup, which honours this.
+        content += f"export RUSTUP_TOOLCHAIN={self.rust}\n"
 
         # Add target-specific mozconfig if it exists
         target_mozconfig = os.path.join("..", "assets", f"{self.target}.mozconfig")
@@ -166,20 +170,17 @@ class Patcher:
             f.write(content)
 
 
-def add_rustup(*targets):
-    """Add rust targets"""
-    for rust_target in targets:
-        run(f'~/.cargo/bin/rustup target add "{rust_target}"')
+RUST_TARGETS = {
+    "linux": ("x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"),
+    "windows": ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc", "i686-pc-windows-msvc"),
+    "macos": ("x86_64-apple-darwin", "aarch64-apple-darwin"),
+}
 
 
-def _update_rustup(target):
-    """Add rust targets for the given target"""
-    if target == "linux":
-        add_rustup("aarch64-unknown-linux-gnu")
-    elif target == "windows":
-        add_rustup("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc", "i686-pc-windows-msvc")
-    elif target == "macos":
-        add_rustup("x86_64-apple-darwin", "aarch64-apple-darwin")
+def install_rust(rust, target):
+    """Install the Rust release Mozilla builds this tree with, and its std for the target"""
+    targets = ' '.join(f'--target {t}' for t in RUST_TARGETS[target])
+    run(f'~/.cargo/bin/rustup toolchain install {rust} --profile minimal {targets}')
 
 
 """
@@ -221,15 +222,17 @@ if __name__ == "__main__":
 
     TARGET, ARCH = extract_build_target()
     MOZ_TARGET = get_moz_target(TARGET, ARCH)
-    _update_rustup(TARGET)
 
     # Check if the folder exists
     if not os.path.exists(f'camoufox-{VERSION}-{RELEASE}/configure.py'):
         sys.stderr.write('error: folder doesn\'t look like a Firefox folder.')
         sys.exit(1)
 
+    RUST = mozilla_rust_version(f'camoufox-{VERSION}-{RELEASE}')
+    install_rust(RUST, TARGET)
+
     # Apply the patches
-    patcher = Patcher(MOZ_TARGET, TARGET)
+    patcher = Patcher(MOZ_TARGET, TARGET, RUST)
     patcher.camoufox_patches()
 
     sys.exit(0)  # ensure 0 exit code

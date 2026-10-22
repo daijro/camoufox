@@ -1,5 +1,4 @@
 ac_add_options --disable-update-agent
-# ac_add_options --disable-alsa
 
 # Bundled fonts.
 #
@@ -17,21 +16,6 @@ ac_add_options --disable-update-agent
 # `defaultPref("gfx.bundled-fonts.activate", 1)`, i.e. the pref side is on --
 # only the build flag was missing.
 ac_add_options --enable-bundled-fonts
-
-# Packaging related
-# #export DSYMUTIL="$MOZBUILD/clang/bin/dsymutil"
-# export DMG_TOOL="$MOZBUILD/dmg/dmg"
-# export HFS_TOOL="$MOZBUILD/dmg/hfsplus"
-
-# Build related
-# CROSS=$MOZBUILD
-# CCTOOLS=$CROSS/cctools
-# mk_add_options "export PATH=$MOZBUILD/clang/bin:$CCTOOLS/bin:$CROSS/binutils/bin:$CROSS/dmg:$PATH"
-# mk_add_options "export LD_LIBRARY_PATH=$MOZBUILD/clang/lib:$CCTOOLS/lib"
-# export CC="$CROSS/clang/bin/clang"
-# export CXX="$CROSS/clang/bin/clang++"
-# export HOST_CC="$CROSS/clang/bin/clang"
-# export HOST_CXX="$CROSS/cla   ng/bin/clang++"
 
 if [ "$(uname -s)" != "Darwin" ]; then
   ac_add_options --with-macos-sdk="$HOME/.mozbuild/MacOSX26.5.sdk"
