@@ -40,7 +40,6 @@
     "browser.cache.disk.smart_size.enabled": true
   },
   "windowsBehaviourPrefs": {
-    "media.eme.enabled": true,
     "layout.word_select.eat_space_to_next_word": true,
     "general.autoScroll": true,
     "middlemouse.paste": false,

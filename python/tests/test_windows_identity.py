@@ -86,11 +86,17 @@ def test_windows_identity_gets_windows_behaviour(launch):
         assert prefs[pref] == value
     # Spot checks against stock Firefox on Windows, so an edit to the table
     # cannot quietly agree with itself.
-    assert prefs["media.eme.enabled"] is True
     assert prefs["middlemouse.paste"] is False
     assert prefs["general.autoScroll"] is True
     assert prefs["layout.word_select.eat_space_to_next_word"] is True
     assert prefs["full-screen-api.transition-duration.enter"] == "200 200"
+
+
+def test_windows_identity_leaves_eme_off(launch):
+    # Windows Firefox has PlayReady behind EME; a Linux build cannot, so EME on
+    # would claim key systems it does not deliver. The build's default stands.
+    _, prefs = launch(WIN_UA)
+    assert "media.eme.enabled" not in prefs
 
 
 @pytest.mark.parametrize("ua", [MAC_UA, LIN_UA])
