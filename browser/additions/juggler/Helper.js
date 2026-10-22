@@ -24,20 +24,10 @@ export class Helper {
     return allBrowsingContexts;
   }
 
-  awaitTopic(topic) {
-    return new Promise(resolve => {
-      const listener = () => {
-        Services.obs.removeObserver(listener, topic);
-        resolve();
-      }
-      Services.obs.addObserver(listener, topic);
-    });
-  }
-
   /**
-   * Like awaitTopic, but resolves false instead of waiting forever when the
-   * topic never fires. Input dispatch runs on activateAndRun()'s process-global
-   * chain, so one missed notification would wedge every later input event.
+   * Resolves true when the observer topic fires, or false after timeoutMs.
+   * Input dispatch runs on activateAndRun()'s process-global chain, so one
+   * missed notification would wedge every later input event.
    */
   awaitTopicWithin(topic, timeoutMs) {
     return new Promise(resolve => {

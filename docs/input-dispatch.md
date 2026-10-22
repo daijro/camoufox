@@ -89,5 +89,5 @@ point is acked *and observed by the page*. Hand-picked coordinate lists are what
 let each of the four bugs through: `humanize-edge-deadlock.py` probed only the
 far edges, and `humanize-mouse-trajectory.py` pins `os="linux"` — the one
 fingerprint immune to `#751`.
-`browser/tests/playwright/patches/input-ack-backstop.py` covers the bounded wait
-itself.
+`browser/tests/playwright/patches/input-ack-backstop.py` covers the bounded waits
+themselves: a late renderer ack, and a drag finalization held behind it.
