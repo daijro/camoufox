@@ -159,3 +159,21 @@ def test_complete_addon_installed_meanwhile_is_kept(tmp_path, monkeypatch):
 
     assert sorted(os.listdir(target)) == ["manifest.json", "theirs.js"]
     assert os.listdir(tmp_path) == [UBO]
+
+
+def test_failed_download_keeps_complete_addon(addons_dir, monkeypatch):
+    # This launch's download fails after another process installed the addon.
+    # That copy may already be loading in a browser, so it must not be deleted.
+    path = addons_dir / UBO
+
+    def fail(url, extract_path, name):
+        _write_manifest(url, str(path), name)
+        raise RuntimeError("network died mid-download")
+
+    monkeypatch.setattr(addons_mod, "download_and_extract", fail)
+
+    out = []
+    maybe_download_addons([DefaultAddons.UBO], out)
+
+    assert (path / "manifest.json").exists()
+    assert out == []

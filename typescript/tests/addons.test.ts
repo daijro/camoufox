@@ -149,3 +149,20 @@ it("keeps a complete addon installed meanwhile", async () => {
 	expect(fs.readdirSync(ubo).sort()).toEqual(["manifest.json", "theirs.js"]);
 	expect(fs.readdirSync(path.dirname(ubo))).toEqual(["UBO"]);
 });
+
+it("keeps a complete addon when a download fails", async () => {
+	// This launch's download fails after another process installed the addon.
+	// That copy may already be loading in a browser, so it must not be deleted.
+	addons.addonsDeps.downloadAndExtract = async () => {
+		writeManifest(ubo);
+		throw new Error("network died mid-download");
+	};
+	const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+	const out: string[] = [];
+	await addons.maybeDownloadAddons({ ...addons.DefaultAddons }, out);
+
+	expect(fs.existsSync(path.join(ubo, "manifest.json"))).toBe(true);
+	expect(out).toEqual([]);
+	log.mockRestore();
+});

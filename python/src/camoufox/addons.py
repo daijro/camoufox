@@ -116,6 +116,8 @@ def maybe_download_addons(
             if addons_list is not None:
                 addons_list.append(addon_path)
         except Exception as e:
-            # Drop the partial directory so the next run re-downloads.
-            shutil.rmtree(addon_path, ignore_errors=True)
+            # Drop the partial directory so the next run re-downloads. A complete
+            # one came from another process and may be loading in its browser.
+            if not os.path.exists(os.path.join(addon_path, 'manifest.json')):
+                shutil.rmtree(addon_path, ignore_errors=True)
             print(f"Failed to download and extract {addon.name}: {e}")

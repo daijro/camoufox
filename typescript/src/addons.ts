@@ -129,8 +129,11 @@ export async function maybeDownloadAddons(
 			await addonsDeps.downloadAndExtract(url, addonPath, addonName);
 			addonsList?.push(addonPath);
 		} catch (e) {
-			// Drop the partial directory so the next run re-downloads.
-			fs.rmSync(addonPath, { recursive: true, force: true });
+			// Drop the partial directory so the next run re-downloads. A complete
+			// one came from another process and may be loading in its browser.
+			if (!fs.existsSync(path.join(addonPath, "manifest.json"))) {
+				fs.rmSync(addonPath, { recursive: true, force: true });
+			}
 			console.log(`Failed to download and extract ${addonName}: ${e}`);
 		}
 	}
