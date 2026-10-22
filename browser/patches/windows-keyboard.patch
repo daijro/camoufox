@@ -1,5 +1,6 @@
 diff --git a/dom/events/ShortcutKeyDefinitionsWin.cpp b/dom/events/ShortcutKeyDefinitionsWin.cpp
 new file mode 100644
+index 0000000..aa0795c
 --- /dev/null
 +++ b/dom/events/ShortcutKeyDefinitionsWin.cpp
 @@ -0,0 +1,27 @@
@@ -31,6 +32,7 @@ new file mode 100644
 +#undef XP_WIN
 +#pragma pop_macro("MOZ_WIDGET_GTK")
 diff --git a/dom/events/ShortcutKeys.cpp b/dom/events/ShortcutKeys.cpp
+index d2d1887..be320a8 100644
 --- a/dom/events/ShortcutKeys.cpp
 +++ b/dom/events/ShortcutKeys.cpp
 @@ -9,6 +9,10 @@
@@ -44,7 +46,7 @@ diff --git a/dom/events/ShortcutKeys.cpp b/dom/events/ShortcutKeys.cpp
  namespace mozilla {
  
  NS_IMPL_ISUPPORTS(ShortcutKeys, nsIObserver);
-@@ -76,26 +80,33 @@
+@@ -76,26 +80,33 @@ KeyEventHandler* ShortcutKeys::EnsureHandlers(HandlerType aType) {
    ShortcutKeyData* keyData;
    KeyEventHandler** cache;
  
@@ -83,9 +85,10 @@ diff --git a/dom/events/ShortcutKeys.cpp b/dom/events/ShortcutKeys.cpp
    if (*cache) {
      return *cache;
 diff --git a/dom/events/ShortcutKeys.h b/dom/events/ShortcutKeys.h
+index 51d844b..365f6ab 100644
 --- a/dom/events/ShortcutKeys.h
 +++ b/dom/events/ShortcutKeys.h
-@@ -57,6 +57,13 @@
+@@ -57,6 +57,13 @@ class ShortcutKeys : public nsIObserver {
    static ShortcutKeyData sEditorHandlers[];
    static ShortcutKeyData sInputHandlers[];
    static ShortcutKeyData sTextAreaHandlers[];
@@ -100,9 +103,10 @@ diff --git a/dom/events/ShortcutKeys.h b/dom/events/ShortcutKeys.h
    // Cached event handlers generated from the above data.
    KeyEventHandler* mBrowserHandlers;
 diff --git a/dom/events/moz.build b/dom/events/moz.build
+index 742228f..853fc3f 100644
 --- a/dom/events/moz.build
 +++ b/dom/events/moz.build
-@@ -170,6 +170,11 @@
+@@ -172,6 +172,11 @@ SOURCES += [
      "EventStateManager.cpp",
  ]
  
@@ -111,13 +115,14 @@ diff --git a/dom/events/moz.build b/dom/events/moz.build
 +if CONFIG["MOZ_WIDGET_TOOLKIT"] == "gtk":
 +    SOURCES += ["ShortcutKeyDefinitionsWin.cpp"]
 +
- if CONFIG["MOZ_WEBSPEECH"]:
-     UNIFIED_SOURCES += ["SpeechRecognitionError.cpp"]
+ if CONFIG["MOZ_WEBSPEECH"] and CONFIG["MOZ_WIDGET_TOOLKIT"] != "android":
+     UNIFIED_SOURCES += ["SpeechRecognitionErrorEvent.cpp"]
  
 diff --git a/editor/libeditor/EditorBase.cpp b/editor/libeditor/EditorBase.cpp
+index 3573aae..496b6f0 100644
 --- a/editor/libeditor/EditorBase.cpp
 +++ b/editor/libeditor/EditorBase.cpp
-@@ -135,6 +135,7 @@
+@@ -136,6 +136,7 @@
  #include "nsTextNode.h"                // for nsTextNode
  #include "nsThreadUtils.h"             // for nsRunnable
  #include "prtime.h"                    // for PR_Now
@@ -125,7 +130,7 @@ diff --git a/editor/libeditor/EditorBase.cpp b/editor/libeditor/EditorBase.cpp
  
  class nsIOutputStream;
  class nsITransferable;
-@@ -208,12 +209,17 @@
+@@ -299,12 +300,17 @@ EditorBase::EditorBase(EditorType aEditorType)
        mHidingCaret(false),
        mSpellCheckerDictionaryUpdated(true),
        mIsHTMLEditorClass(aEditorType == EditorType::HTML) {
@@ -146,9 +151,10 @@ diff --git a/editor/libeditor/EditorBase.cpp b/editor/libeditor/EditorBase.cpp
        mNewlineHandling > nsIEditor::eNewlinesStripSurroundingWhitespace) {
      mNewlineHandling = nsIEditor::eNewlinesPasteToFirst;
 diff --git a/editor/libeditor/moz.build b/editor/libeditor/moz.build
+index f882924..a3f5612 100644
 --- a/editor/libeditor/moz.build
 +++ b/editor/libeditor/moz.build
-@@ -99,6 +99,9 @@
+@@ -99,6 +99,9 @@ LOCAL_INCLUDES += [
      "/layout/xul",
  ]
  
@@ -159,6 +165,7 @@ diff --git a/editor/libeditor/moz.build b/editor/libeditor/moz.build
  
  FINAL_LIBRARY = "xul"
 diff --git a/widget/gtk/NativeKeyBindings.cpp b/widget/gtk/NativeKeyBindings.cpp
+index cd8909e..6db0d58 100644
 --- a/widget/gtk/NativeKeyBindings.cpp
 +++ b/widget/gtk/NativeKeyBindings.cpp
 @@ -9,6 +9,7 @@
@@ -169,7 +176,7 @@ diff --git a/widget/gtk/NativeKeyBindings.cpp b/widget/gtk/NativeKeyBindings.cpp
  #include "mozilla/MathAlgorithms.h"
  #include "mozilla/Maybe.h"
  #include "mozilla/NativeKeyBindingsType.h"
-@@ -295,6 +296,14 @@
+@@ -295,6 +296,14 @@ NativeKeyBindings::~NativeKeyBindings() {
    g_object_unref(mNativeTarget);
  }
  
@@ -184,7 +191,7 @@ diff --git a/widget/gtk/NativeKeyBindings.cpp b/widget/gtk/NativeKeyBindings.cpp
  void NativeKeyBindings::GetEditCommands(const WidgetKeyboardEvent& aEvent,
                                          const Maybe<WritingMode>& aWritingMode,
                                          nsTArray<CommandInt>& aCommands) {
-@@ -306,6 +315,10 @@
+@@ -306,6 +315,10 @@ void NativeKeyBindings::GetEditCommands(const WidgetKeyboardEvent& aEvent,
      return;
    }
  
@@ -195,7 +202,7 @@ diff --git a/widget/gtk/NativeKeyBindings.cpp b/widget/gtk/NativeKeyBindings.cpp
    guint keyval;
    if (aEvent.mCharCode) {
      keyval = gdk_unicode_to_keyval(aEvent.mCharCode);
-@@ -405,7 +418,7 @@
+@@ -405,7 +418,7 @@ void NativeKeyBindings::GetEditCommandsForTests(
      const Maybe<WritingMode>& aWritingMode, nsTArray<CommandInt>& aCommands) {
    MOZ_DIAGNOSTIC_ASSERT(aEvent.IsTrusted());
  
@@ -205,9 +212,10 @@ diff --git a/widget/gtk/NativeKeyBindings.cpp b/widget/gtk/NativeKeyBindings.cpp
    }
  
 diff --git a/widget/gtk/moz.build b/widget/gtk/moz.build
+index f7c7145..7313dc6 100644
 --- a/widget/gtk/moz.build
 +++ b/widget/gtk/moz.build
-@@ -173,6 +173,9 @@
+@@ -172,6 +172,9 @@ LOCAL_INCLUDES += [
      "/widget/x11",
  ]
  
@@ -218,6 +226,7 @@ diff --git a/widget/gtk/moz.build b/widget/gtk/moz.build
  if not CONFIG["MOZ_SYSTEM_GBM"]:
      LOCAL_INCLUDES += [
 diff --git a/widget/gtk/nsGtkKeyUtils.cpp b/widget/gtk/nsGtkKeyUtils.cpp
+index 3510ee8..4d13e80 100644
 --- a/widget/gtk/nsGtkKeyUtils.cpp
 +++ b/widget/gtk/nsGtkKeyUtils.cpp
 @@ -19,6 +19,7 @@
@@ -228,7 +237,7 @@ diff --git a/widget/gtk/nsGtkKeyUtils.cpp b/widget/gtk/nsGtkKeyUtils.cpp
  #include "WidgetUtils.h"
  #include "WidgetUtilsGtk.h"
  #include "mozilla/MouseEvents.h"
-@@ -2553,8 +2554,12 @@
+@@ -2598,8 +2599,12 @@ uint32_t KeymapWrapper::GetDOMKeyCodeFromKeyPairs(guint aGdkKeyval) {
      case GDK_ISO_Level3_Shift:
      case GDK_ISO_Level5_Shift:
      // We assume that Mode_switch is always used for level3 shift.
