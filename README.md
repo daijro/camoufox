@@ -46,6 +46,7 @@
       <strong>Special codes for Camoufox users:</strong><br>
       • <code>CAMOUFOX35</code> - 35% off to Mobile and Residential Proxies<br>
       • <code>CAMOUFOX40</code> - 40% off to ISP (Static) Proxies<br>
+      Check Nodemaven's new GitHub for more web scraping and automation solutions - https://github.com/nodemaven
     </td>
   </tr>
   <tr>
@@ -523,6 +524,7 @@ claims the host's OS. Details are in
 | Timezone, locale, geolocation and WebRTC IP from the proxy's exit IP | `proxy=..., geoip=True` |
 | Locale chosen by the languages spoken in the IP's region | `geoip=True` without `locale` |
 | Headed browser on a private Xvfb display (Linux) | `headless="virtual"` |
+| Headed browser on a private Xorg display that renders on a named GPU (Linux) | `headless="virtual-gpu"` |
 | Remote Playwright server for other languages | `launch_server()`, `camoufox server` |
 | Install, pin and switch browser builds | `camoufox fetch`, `set`, `list`, `remove` |
 | Core count that a page can measure | `pin_cpu_cores=True` |

@@ -45,7 +45,7 @@ def on_host(gpu, os_key="lin"):
     """A host whose Firefox renders on `gpu`; records every probe."""
     probes = []
 
-    def probe(executable_path, headless, env):
+    def probe(executable_path, headless, env, prefs):
         probes.append((executable_path, headless))
         return gpu
 
@@ -234,13 +234,17 @@ class TestWebGpu:
 
 
 def test_the_probe_ignores_what_the_launcher_adds_to_the_environment():
-    """host_identity probes with the launch's env, which carries
-    CAMOU_* and FONTCONFIG_FILE; that must hit launch_options' cached probe."""
+    """host_identity probes with the launch's env and prefs, which carry
+    CAMOU_*, FONTCONFIG_FILE and prefs that choose no device; that must hit
+    launch_options' cached probe."""
     from camoufox import host_rendering
 
     with mock.patch.object(host_rendering, "_host_gpu", return_value=HOST_GPU) as probe:
-        host_gpu("/bin/camoufox", True, {"DISPLAY": ":0"})
-        host_gpu("/bin/camoufox", True, {"DISPLAY": ":0", "CAMOU_CONFIG_1": "{}", "FONTCONFIG_FILE": "/x"})
+        host_gpu("/bin/camoufox", True, {"DISPLAY": ":0"}, {})
+        host_gpu(
+            "/bin/camoufox", True, {"DISPLAY": ":0", "CAMOU_CONFIG_1": "{}", "FONTCONFIG_FILE": "/x"},
+            {"webgl.force-enabled": True},
+        )
 
     assert probe.call_args_list[0] == probe.call_args_list[1]
 

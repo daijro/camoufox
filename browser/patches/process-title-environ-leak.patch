@@ -1,0 +1,18 @@
+diff --git a/ipc/chromium/src/base/set_process_title_linux.cc b/ipc/chromium/src/base/set_process_title_linux.cc
+index 8fdf29e8e5..cef127ca60 100644
+--- a/ipc/chromium/src/base/set_process_title_linux.cc
++++ b/ipc/chromium/src/base/set_process_title_linux.cc
+@@ -181,6 +181,13 @@ void setproctitle(const char* fmt, ...) {
+       environ_size += var_size_copied + 1 /* account for null */;
+     }
+   }
++
++  // The copy above starts right after the title, inside the old argv space,
++  // and can overwrite the marker with an environment string's null. The
++  // kernel then shows the environment as part of the command line.
++  if (!buggy_kernel && size < argv_size) {
++    g_argv_end[-1] = '.';
++  }
+ }
+ 
+ // A version of this built into glibc would not need this function, since

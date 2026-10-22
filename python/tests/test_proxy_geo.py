@@ -107,3 +107,29 @@ def test_no_lookup_when_both_values_are_given(api):
     with mock.patch.object(ip.requests, "get") as get:
         _new_context(api, {"server": "1.2.3.4:8080"}, webrtc_ip="198.51.100.1", timezone_id="UTC")
     get.assert_not_called()
+
+
+def test_lookups_through_a_proxy_get_longer_than_direct_ones(monkeypatch):
+    # A proxied probe adds a hop and a TLS handshake; 5 s failed whole launches
+    # behind proxies that route the long way round.
+    timeouts = []
+
+    def get(url, **kwargs):
+        timeouts.append((url, kwargs["timeout"], bool(kwargs.get("proxies"))))
+        response = mock.MagicMock()
+        response.text = "203.0.113.7"
+        response.json.return_value = EXIT
+        return response
+
+    monkeypatch.setattr(ip.requests, "get", get)
+    ip.public_ip.cache_clear()
+    ip.public_ip()
+    ip.public_ip("http://u:p@proxy.example.com:8080")
+    ip.proxy_exit_geo("http://u:p@proxy.example.com:8080")
+    ip.public_ip.cache_clear()
+    assert [(t, proxied) for _, t, proxied in timeouts] == [
+        (ip.DIRECT_IP_TIMEOUT, False),
+        (ip.PROXIED_IP_TIMEOUT, True),
+        (ip.PROXIED_IP_TIMEOUT, True),
+    ]
+    assert ip.PROXIED_IP_TIMEOUT > ip.DIRECT_IP_TIMEOUT

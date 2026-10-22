@@ -146,10 +146,10 @@ index 0000000000..9b394237c2
 +
 +#endif  // mozilla_dom_FontListManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 88cea77d60..fa277ae122 100644
+index 6f517641d4..8f8c58ed1c 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -561,6 +561,13 @@ SOURCES += [
+@@ -562,6 +562,13 @@ SOURCES += [
      "nsPluginArray.cpp",
  ]
  
@@ -164,7 +164,7 @@ index 88cea77d60..fa277ae122 100644
  # CharacterDataBuffer.cpp
  if CONFIG["INTEL_ARCHITECTURE"]:
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index fe4e23c993..466785f591 100644
+index e55c4d64c9..310550e80d 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -21,6 +21,7 @@
@@ -175,7 +175,7 @@ index fe4e23c993..466785f591 100644
  #include "Units.h"
  #include "VRManagerChild.h"
  #include "WindowDestroyedEvent.h"
-@@ -7801,6 +7802,14 @@ void nsGlobalWindowInner::SetAudioFingerprintSeed(uint32_t seed,
+@@ -7797,6 +7798,14 @@ void nsGlobalWindowInner::SetAudioFingerprintSeed(uint32_t seed,
    RoverfoxStorageManager::RemoveSetter("setAudioFingerprintSeed");
  }
  
@@ -191,10 +191,10 @@ index fe4e23c993..466785f591 100644
      bool aGranted) {
    // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index eec89694f8..e7cf0601f4 100644
+index dd91e816d1..d83ed2d810 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -693,6 +693,9 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -695,6 +695,9 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
  
    void UpdateSharedWorkerTimezoneOverride(const nsAString& aTimezoneOverride);
  
@@ -205,10 +205,10 @@ index eec89694f8..e7cf0601f4 100644
    void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
    void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index ab1c306617..38227acada 100644
+index 1ec0400749..2a0a98685a 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -943,6 +943,12 @@ partial interface Window {
+@@ -947,6 +947,12 @@ partial interface Window {
    undefined setAudioFingerprintSeed(unsigned long seed);
  };
  
@@ -222,7 +222,7 @@ index ab1c306617..38227acada 100644
  // finding on a page.
  partial interface Window {
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
-index 039316b8d6..42b2b42650 100644
+index 164c33448d..c2181d76c7 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
 +++ b/gfx/thebes/gfxPlatformFontList.cpp
 @@ -29,6 +29,7 @@
@@ -233,7 +233,7 @@ index 039316b8d6..42b2b42650 100644
  #include "mozilla/gfx/2D.h"
  #include "mozilla/gfx/Logging.h"
  #include "mozilla/glean/GfxMetrics.h"
-@@ -1789,6 +1790,16 @@ bool gfxPlatformFontList::FindAndAddFamiliesLocked(
+@@ -1786,6 +1787,16 @@ bool gfxPlatformFontList::FindAndAddFamiliesLocked(
    nsAutoCString key;
    GenerateFontListKey(aFamily, key);
  
@@ -251,7 +251,7 @@ index 039316b8d6..42b2b42650 100644
    FontVisibility visibilityLevel =
        aFontVisibilityProvider ? aFontVisibilityProvider->GetFontVisibility()
 diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
-index bc887921c8..a1d299e650 100644
+index 77699420a4..41e4bb973f 100644
 --- a/gfx/thebes/gfxTextRun.cpp
 +++ b/gfx/thebes/gfxTextRun.cpp
 @@ -33,6 +33,7 @@
@@ -261,8 +261,8 @@ index bc887921c8..a1d299e650 100644
 +#include "mozilla/dom/FontListManager.h"
  #include "mozilla/dom/Document.h"
  #include "mozilla/dom/RoverfoxStorageManager.h"
- 
-@@ -1922,6 +1923,8 @@ class DeferredClearResolvedFonts final : public nsIRunnable {
+ #include "mozilla/dom/WorkerPrivate.h"
+@@ -1933,6 +1934,8 @@ class DeferredClearResolvedFonts final : public nsIRunnable {
  NS_IMPL_ISUPPORTS(DeferredClearResolvedFonts, nsIRunnable)
  
  void gfxFontGroup::EnsureFontList() {

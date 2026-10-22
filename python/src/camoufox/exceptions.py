@@ -172,6 +172,70 @@ class VirtualDisplayNotSupported(VirtualDisplayError):
     ...
 
 
+class GpuDisplayError(VirtualDisplayError):
+    """
+    Raised when the headless='virtual-gpu' display cannot be used.
+    """
+
+    ...
+
+
+class NoGpuFound(GpuDisplayError):
+    """
+    Raised when no GPU render node with a PCI address is found.
+    """
+
+    ...
+
+
+class AmbiguousGpuSelection(GpuDisplayError):
+    """
+    Raised when several GPUs match, or several exist and none was named.
+    """
+
+    ...
+
+
+class GpuNotFound(GpuDisplayError):
+    """
+    Raised when the GPU selector matches no GPU.
+    """
+
+    ...
+
+
+class CannotFindXorg(GpuDisplayError):
+    """
+    Raised when Xorg cannot be found.
+    """
+
+    ...
+
+
+class CannotExecuteXorg(GpuDisplayError):
+    """
+    Raised when Xorg cannot be started, or exits right after starting.
+    """
+
+    ...
+
+
+class GpuVtTakeover(GpuDisplayError):
+    """
+    Raised when the Xorg server switched the active console VT.
+    """
+
+    ...
+
+
+class GpuSoftwareFallback(GpuDisplayError):
+    """
+    Raised when the browser on a GPU display never rendered on the GPU.
+    """
+
+    ...
+
+
 class CamoufoxNotInstalled(FileNotFoundError):
     """
     Raised when camoufox is not installed.

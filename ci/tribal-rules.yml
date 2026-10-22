@@ -76,16 +76,19 @@ rules:
       equals: CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE
 
   - id: displayfd-not-lockfile-scan
-    title: Displays are claimed atomically with Xvfb -displayfd
+    title: Displays are claimed atomically with -displayfd, by Xvfb and by Xorg
     check: automated
     evidence:
       - "issue #597 / commit 8f9ff07"
+      - "2026-10-12, Ubuntu's setuid Xorg.wrap: `Xorg -displayfd N -config <name> ...` run unprivileged wrote its display number (:6, past live and stale sockets) down the pipe once the server was up"
     rationale: >-
       The old userspace lock-file scan plus random-jitter retry raced: many
       camoufox processes starting at once all saw the same free display numbers
-      before any of them bound. -displayfd lets Xvfb scan up from :0 and bind
-      the first free socket itself -- kernel-mediated, no userspace race -- then
-      writes the number back down an inherited pipe.
+      before any of them bound. -displayfd lets the server scan up from :0 and
+      bind the first free socket itself -- kernel-mediated, no userspace race --
+      then writes the number back down an inherited pipe. The GPU display's
+      Xorg takes it through the setuid wrapper too, so it does not use the
+      random display number and lock-file wait it was ported from.
     expect:
       module: camoufox.virtdisplay
       xvfb_args_contain: "-displayfd"
@@ -97,7 +100,9 @@ rules:
       - "commit 8f9ff07: 'so a hung Xvfb fails fast instead of blocking forever'"
     rationale: >-
       A hung Xvfb with no timeout blocks the launch forever, at 0% CPU, with no
-      diagnostic. Ten seconds is the agreed bound.
+      diagnostic. Thirty seconds is the bound: a cold first Xvfb on a fresh
+      host took up to 8.4 s to report, so ten failed launches that would have
+      succeeded.
     expect:
       module: camoufox.virtdisplay
       attribute: DISPLAYFD_READ_TIMEOUT_S
@@ -148,6 +153,85 @@ rules:
       than prctl in a preexec_fn: it is the same in both packages, and
       preexec_fn is unsafe in a threaded parent. The signal fires when the
       thread that spawned Xvfb exits, which is the thread that owns the browser.
+  - id: gpu-display-shares-the-vt
+    title: The GPU display's Xorg always runs with -sharevts and -novtswitch
+    check: automated
+    evidence:
+      - "Holo's headless='virtual-gpu' (the port's source): without -sharevts Xorg took a new VT and moved the monitor to the offscreen server, blanking the live desktop"
+      - "2026-10-12: with both flags, Xorg on the RTX 5080 and on the RX 7900 XTX left the active VT on tty2 throughout"
+    rationale: >-
+      A headless Xorg that allocates its own VT switches the console to it, and
+      the user's desktop goes black. -sharevts shares the current VT instead,
+      and -novtswitch blocks the switch at start and exit; the config adds
+      DontVTSwitch, and UseDisplayDevice "None" on NVIDIA. The launcher also
+      watches /sys/class/tty/tty0/active while the server starts and, if it
+      moves, switches back, kills the server and raises GpuVtTakeover. That
+      guard is insurance, not a reason to drop either flag.
+    expect:
+      module: camoufox.gpudisplay
+      attribute: SERVER_FLAGS
+      contains: ["-sharevts", "-novtswitch"]
+
+  - id: gpu-display-terminates-with-its-last-client
+    title: The GPU display's Xorg runs with -terminate, never -noreset, and the launcher holds one client
+    check: automated
+    evidence:
+      - "Holo: with -noreset, root-owned servers outlived their launchers and used up VRAM; a server no client ever reached never terminates, and 20 such servers once held ~1 GB of RSS on one machine"
+      - "2026-10-12: an Xorg started through Xorg.wrap exited on its own about 2s after a raw X11 client connected and disconnected"
+    rationale: >-
+      Through the setuid wrapper Xorg runs as root, and a launcher killed with
+      SIGKILL runs no teardown at all, so the server must end itself.
+      -terminate exits it after its last client disconnects; -noreset keeps it
+      forever. A server no client reached has no last client, so the launcher
+      connects one raw X11 client as soon as the display is up and holds it
+      for the display's lifetime: closed by kill(), or by the kernel when the
+      launcher dies.
+    expect:
+      module: camoufox.gpudisplay
+      attribute: SERVER_FLAGS
+      contains: ["-terminate"]
+      excludes: ["-noreset"]
+
+  - id: gpu-display-sigterm-before-sigkill
+    title: The GPU display's Xorg is asked to exit before it is killed
+    check: manual   # browser/tests/native/test_gpu_display.py
+    evidence:
+      - "2026-10-12: a SIGKILLed Xorg left a root-owned /tmp/.X11-unix/X6 that the unprivileged launcher could not remove"
+    rationale: >-
+      Unlike Xvfb (xvfb-sigkill-and-socket-cleanup), the GPU display's server
+      is root's, so its socket is too, and only the server can remove it.
+      kill() drops the held client, sweeps the processes on the display, sends
+      SIGTERM and waits; SIGKILL is the last resort for a server that did not
+      exit.
+
+  - id: gpu-selected-by-pci-address
+    title: The GPU is named by the caller and bound by PCI address, never by render node number
+    check: automated
+    evidence:
+      - "2026-10-12, this machine: renderD128 is the RX 7900 XTX, though a config generated earlier on it recorded renderD128 as the RTX 5080"
+      - "Holo: NVIDIA and AMD renders of the same scenes differed on 31 of 42 and on MAX_VERTEX_UNIFORM_VECTORS"
+    rationale: >-
+      Render nodes are numbered in the order the drivers loaded, which changes
+      between boots. The PCI address does not, so the GPUs are listed in PCI
+      address order, the config binds the card with its BusID and is named
+      after its address, and the selector accepts an address. Several GPUs
+      with no selector is an error, not a guess: the identity claims the GPU
+      that renders, so the card must be the one the caller meant.
+
+  - id: gpu-use-is-read-from-the-kernel
+    title: The GPU display proves rendering by the GPU the kernel accounts, not the renderer string or an open render node
+    check: automated
+    evidence:
+      - "2026-10-12, v156.0.1-beta.32: forced onto Mesa's software path on the RTX 5080, Firefox still held /dev/dri/renderD129 (for DMABuf) and not /dev/nvidia0; on hardware it held /dev/nvidia0"
+      - "2026-10-12: on the RX 7900 XTX, Firefox's render node showed drm-engine-gfx growing on hardware and was not opened in software"
+    rationale: >-
+      The renderer string is what the identity claims, so it proves nothing.
+      An open render node proves nothing either: Firefox opens the card's DRM
+      nodes for DMABuf whatever renders. The check is the NVIDIA driver's
+      /dev/nvidia<minor> held open, or time on a GPU engine in the render
+      node's fdinfo (the kernel's DRM usage stats), while a probe page draws.
+      A browser that fails it is closed and the launch raises
+      GpuSoftwareFallback; there is no fallback to Xvfb.
 
   # -------------------------------------------------------------------------
   # Dependencies

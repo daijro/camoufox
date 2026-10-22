@@ -167,7 +167,59 @@ host's only when the identity claims the host's GPU. Otherwise
 |---|---|---|
 | `False` (default) | A normal window | Needs a display. |
 | `True` | Firefox headless | Camoufox patches the headless tells it knows about. |
-| `"virtual"` | A headed browser on a private Xvfb display | Linux only, needs `Xvfb` and `setpriv` (util-linux). Handled by `Camoufox`, `AsyncCamoufox`, `NewBrowser` and `launch_server`. The display is 1x1 unless `CAMOUFOX_VIRTUAL_DISPLAY_SIZE` (e.g. `1920x1080x24`) says otherwise. |
+| `"virtual"` | A headed browser on a private Xvfb display | Linux only, needs `Xvfb` and `setpriv` (util-linux). Handled by `Camoufox`, `AsyncCamoufox`, `NewBrowser` and `launch_server`. The display is 1x1 unless `CAMOUFOX_VIRTUAL_DISPLAY_SIZE` (e.g. `1920x1080x24`) says otherwise. Xvfb has no GPU: canvas and WebGL render in software. |
+| `"virtual-gpu"` | A headed browser on a private, headless Xorg server bound to one GPU | Linux only, needs Xorg and the card's driver. Canvas and WebGL render on the card. Handled like `"virtual"`. See [The GPU display](#the-gpu-display). |
+
+#### The GPU display
+
+```python
+from camoufox.sync_api import Camoufox
+
+with Camoufox(headless="virtual-gpu", gpu="0000:01:00.0", os="linux") as browser:
+    page = browser.new_page()
+```
+
+- **The card is named, never guessed.** `gpu=` (or `CAMOUFOX_GPU`) takes a PCI
+  address, which is the stable choice, or an index in PCI address order, a
+  render or card node (`renderD128`, `/dev/dri/card1`), `vendor:device` ids
+  (`10de:2c02`) or a vendor name (`nvidia`). With several GPUs and no selector
+  the launch raises `AmbiguousGpuSelection`; `GpuNotFound` and `NoGpuFound`
+  mean what they say. `python -m camoufox gpu-xorg-config` lists the GPUs when
+  the choice is ambiguous.
+- **Without root, set the machine up once per card.** Xorg then runs through
+  the setuid `Xorg.wrap`, which takes a config only from `/etc/X11` and needs
+  `allowed_users=anybody` and `needs_root_rights=yes` in
+  `/etc/X11/Xwrapper.config`. Stock Debian and Ubuntu ship
+  `allowed_users=console`, which refuses a launch from ssh, systemd or a
+  container. One command installs Xorg and the wrapper (with `apt-get`;
+  elsewhere it says what to install), sets those two lines and installs the
+  card's config. It is safe to run again:
+  ```bash
+  python -m camoufox gpu-setup 0000:01:00.0 | sudo sh
+  ```
+  A launch that fails for want of any of this ends its error with that
+  command. The settings let any local user start a root X server.
+  `gpu-xorg-config` prints just the card's config. As root, nothing is
+  installed: a temporary config is used instead.
+- **It leaves your desktop alone.** The server drives no monitor, shares the
+  current VT and exits when the browser closes. If the active VT changes while
+  it starts, the launch switches back, stops the server and raises
+  `GpuVtTakeover`.
+- **The launch checks the browser renders on the card.** A page draws WebGL
+  and the launch waits up to 30 s (`CAMOUFOX_GPU_WAIT_S`) for the kernel to
+  account GPU work to the browser. If it never does, the browser is closed and
+  `GpuSoftwareFallback` is raised; `require_gpu=False` warns instead. There is
+  no fallback to Xvfb.
+- **The identity claims that card.** On the host's OS the identity claims the
+  GPU Firefox reports, read on this display, so it is the card's and not the
+  desktop's (see [The canvas on another OS](#the-canvas-on-another-os)).
+- The browser gets `DISPLAY` and the X11 backend, and nothing that chooses a
+  GL driver. These prefs default on, and `firefox_user_prefs` wins:
+  `gfx.webrender.all`, `layers.acceleration.force-enabled`,
+  `gfx.x11-egl.enabled`, `gfx.canvas.accelerated` and
+  `gfx.canvas.accelerated.force-enabled`.
+
+Every error here is a `VirtualDisplayError`.
 
 ### Remote server
 
@@ -213,7 +265,9 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | Option | Type | Default | Effect |
 |---|---|---|---|
 | `os` | `str` or `list[str]` | fpgen's real-world mix | `"windows"`, `"macos"`, `"linux"`, or a list to pick from. |
-| `headless` | `bool` or `"virtual"` | `False` | See [Headless modes](#headless-modes). |
+| `headless` | `bool`, `"virtual"` or `"virtual-gpu"` | `False` | See [Headless modes](#headless-modes). |
+| `gpu` | `str` or `int` | `CAMOUFOX_GPU`, or the only GPU | The card for `headless="virtual-gpu"`. See [The GPU display](#the-gpu-display). Not taken by `launch_options`. |
+| `require_gpu` | `bool` | `True` | With `headless="virtual-gpu"`, fail the launch when the browser does not render on the card; `False` warns. Not taken by `launch_options`. |
 | `proxy` | `dict` | none | Playwright proxy: `server`, `username`, `password`, `bypass`. |
 | `geoip` | `bool` or `str` | none | `True` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. Without a proxy, also decides whether IPv6 stays on. Needs the `geoip` extra. |
 | `geoip_db` | `str` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
@@ -267,6 +321,8 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | `path` | | Print the data directory (`~/.cache/camoufox` on Linux). |
 | `test [URL]` | `--executable-path PATH` | Open a headed browser with the Playwright inspector. |
 | `server` | | Start a Playwright server with default options and print its websocket endpoint. |
+| `gpu-setup [GPU]` | | Print the root script that sets this machine up for `headless="virtual-gpu"` on the card `GPU` names (or `CAMOUFOX_GPU`). Run it with `\| sudo sh`. |
+| `gpu-xorg-config [GPU]` | | Print the Xorg config `headless="virtual-gpu"` needs for the card `GPU` names (or `CAMOUFOX_GPU`). |
 
 `set` and `fetch` read builds from these repositories (`repos.yml`):
 

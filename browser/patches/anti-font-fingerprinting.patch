@@ -1,8 +1,8 @@
 diff --git a/dom/canvas/OffscreenCanvas.cpp b/dom/canvas/OffscreenCanvas.cpp
-index 345455c14e..f46f13ebf6 100644
+index 8250ac8f6d..eb153b69f7 100644
 --- a/dom/canvas/OffscreenCanvas.cpp
 +++ b/dom/canvas/OffscreenCanvas.cpp
-@@ -655,6 +655,15 @@ void OffscreenCanvas::ReportBlockedFontFamily(const nsCString& aMsg) const {
+@@ -660,6 +660,15 @@ void OffscreenCanvas::ReportBlockedFontFamily(const nsCString& aMsg) const {
    }
  }
  
@@ -19,10 +19,10 @@ index 345455c14e..f46f13ebf6 100644
    if (NS_IsMainThread()) {
      nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(GetRelevantGlobal());
 diff --git a/dom/workers/WorkerPrivate.h b/dom/workers/WorkerPrivate.h
-index b38f31f547..2321f5acd5 100644
+index 4a2be53538..57f89b7fc3 100644
 --- a/dom/workers/WorkerPrivate.h
 +++ b/dom/workers/WorkerPrivate.h
-@@ -1161,8 +1161,6 @@ class WorkerPrivate final
+@@ -1162,8 +1162,6 @@ class WorkerPrivate final
  
    void WorkerScriptLoaded();
  
@@ -32,10 +32,10 @@ index b38f31f547..2321f5acd5 100644
  
    void UpdateContextOptions(const JS::ContextOptions& aContextOptions);
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
-index a0b8c260c4..2ea46a9810 100644
+index cabecffc5c..849b3af462 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
 +++ b/gfx/thebes/gfxPlatformFontList.cpp
-@@ -455,6 +455,7 @@ class ListFontsVisibilityProvider final : public FontVisibilityProvider {
+@@ -454,6 +454,7 @@ class ListFontsVisibilityProvider final : public FontVisibilityProvider {
      return mozilla::Nothing();
    }
    void UserFontSetUpdated(gfxUserFontEntry*) override {}
@@ -44,35 +44,46 @@ index a0b8c260c4..2ea46a9810 100644
  
   private:
 diff --git a/gfx/thebes/gfxTextRun.cpp b/gfx/thebes/gfxTextRun.cpp
-index f2c42a498e..bc887921c8 100644
+index 39153aa9bd..77699420a4 100644
 --- a/gfx/thebes/gfxTextRun.cpp
 +++ b/gfx/thebes/gfxTextRun.cpp
-@@ -33,6 +33,8 @@
+@@ -33,6 +33,9 @@
  #include "nsStyleConsts.h"
  #include "nsStyleUtil.h"
  #include "nsUnicodeProperties.h"
 +#include "mozilla/dom/Document.h"
 +#include "mozilla/dom/RoverfoxStorageManager.h"
++#include "mozilla/dom/WorkerPrivate.h"
  
  #ifdef XP_WIN
  #  include "gfxWindowsPlatform.h"
-@@ -1871,6 +1873,11 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
+@@ -1871,6 +1874,21 @@ gfxFontGroup::gfxFontGroup(FontVisibilityProvider* aFontVisibilityProvider,
        mFontVariantEmoji(aVariantEmoji) {
    // We don't use SetUserFontSet() here, as we want to unconditionally call
    // EnsureFontList() rather than only do UpdateUserFonts() if it changed.
 +
 +  if (mFontVisibilityProvider) {
-+    mUserContextId = mozilla::dom::RoverfoxStorageManager::UserContextId(
-+        mFontVisibilityProvider->GetDocument());
++    mozilla::dom::Document* doc = mFontVisibilityProvider->GetDocument();
++    mUserContextId =
++        mozilla::dom::RoverfoxStorageManager::UserContextId(doc);
++    // An OffscreenCanvas in a worker has no document, so its font group ran
++    // as context 0 -- launch-wide fonts only -- while the page's main thread
++    // used the context's own list, and a page could compare the two
++    // (lang315/camoufox#44). The worker knows its context.
++    if (!doc && !NS_IsMainThread()) {
++      if (auto* worker = mozilla::dom::GetCurrentThreadWorkerPrivate()) {
++        mUserContextId = worker->GetOriginAttributes().mUserContextId;
++      }
++    }
 +  }
  }
  
  gfxFontGroup::~gfxFontGroup() {
 diff --git a/gfx/thebes/gfxTextRun.h b/gfx/thebes/gfxTextRun.h
-index f04c835506..10ddd68fc1 100644
+index 75f380ce26..b3d6fb4cda 100644
 --- a/gfx/thebes/gfxTextRun.h
 +++ b/gfx/thebes/gfxTextRun.h
-@@ -1433,6 +1433,8 @@ class gfxFontGroup final : public gfxTextRunFactory {
+@@ -1434,6 +1434,8 @@ class gfxFontGroup final : public gfxTextRunFactory {
    uint32_t mFontListGeneration = 0;  // platform font list generation for this
                                       // fontgroup
  
@@ -82,10 +93,10 @@ index f04c835506..10ddd68fc1 100644
     * Textrun creation short-cuts for special cases where we don't need to
     * call a font shaper to generate glyphs.
 diff --git a/layout/base/nsPresContext.cpp b/layout/base/nsPresContext.cpp
-index 02a771ca93..8d6bbebed3 100644
+index 2419d4eace..ee075c09d3 100644
 --- a/layout/base/nsPresContext.cpp
 +++ b/layout/base/nsPresContext.cpp
-@@ -426,6 +426,10 @@ bool nsPresContext::IsChrome() const {
+@@ -427,6 +427,10 @@ bool nsPresContext::IsChrome() const {
    return Document()->IsInChromeDocShell();
  }
  

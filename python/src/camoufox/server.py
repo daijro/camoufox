@@ -1,13 +1,19 @@
+import re
+import shutil
 import subprocess
+import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, NoReturn, Tuple, Union
+from typing import Any, Dict, NoReturn, Optional, Tuple, Union
 
 import base64
 import orjson
 from playwright._impl._driver import compute_driver_executable
 
 from camoufox.pkgman import LOCAL_DATA
-from camoufox.utils import launch_options
+from camoufox.gpudisplay import GpuDisplay, prove_gpu
+from camoufox.utils import launch_options, start_virtual_display
 from camoufox.virtdisplay import VirtualDisplay
 
 LAUNCH_SCRIPT: Path = LOCAL_DATA / "launchServer.js"
@@ -61,21 +67,46 @@ def launch_server(**kwargs) -> NoReturn:
             )
         kwargs.pop(unsupported, None)
 
-    virtual_display = None
-    if kwargs.get('headless') == 'virtual':
-        virtual_display = VirtualDisplay(debug=kwargs.get('debug'))
-        kwargs['virtual_display'] = virtual_display.get()
-        kwargs['headless'] = False
+    virtual_display, kwargs['headless'] = start_virtual_display(
+        kwargs.get('headless'), kwargs.get('debug'), kwargs
+    )
     try:
-        _serve(launch_options(**kwargs))
+        _serve(launch_options(**kwargs), virtual_display)
     finally:
         if virtual_display:
             virtual_display.kill()
 
 
-def _serve(config: Dict[str, Any]) -> NoReturn:
+def _prove_served_gpu(process: subprocess.Popen, display: GpuDisplay) -> None:
+    """Pass the server's output through, and once it prints its endpoint, check
+    that its browser renders on the GPU."""
+    from playwright.sync_api import sync_playwright
+
+    def prove(endpoint: str) -> None:
+        with sync_playwright() as playwright:
+            browser = playwright.firefox.connect(endpoint)
+            try:
+                prove_gpu(browser, display)
+            finally:
+                browser.close()
+
+    assert process.stdout is not None
+    for line in process.stdout:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        endpoint = re.search(r'ws://\S+', line)
+        if endpoint:
+            # The sync API refuses to start inside a running asyncio loop.
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(prove, endpoint.group(0)).result()
+            break
+    threading.Thread(target=shutil.copyfileobj, args=(process.stdout, sys.stdout), daemon=True).start()
+
+
+def _serve(config: Dict[str, Any], virtual_display: Optional[VirtualDisplay] = None) -> NoReturn:
     """Run launchServer.js with `config` until the Node process exits."""
     nodejs = get_nodejs()
+    gpu_display = virtual_display if isinstance(virtual_display, GpuDisplay) else None
 
     data = orjson.dumps(to_camel_case_dict(config))
 
@@ -90,6 +121,7 @@ def _serve(config: Dict[str, Any]) -> NoReturn:
         ],
         cwd=driver_package,
         stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE if gpu_display else None,
         text=True,
     )
     # Send one newline-delimited configuration frame, then keep the pipe open.
@@ -126,6 +158,8 @@ def _serve(config: Dict[str, Any]) -> NoReturn:
     try:
         stdin.write(encoded_config)
         stdin.flush()
+        if gpu_display:
+            _prove_served_gpu(process, gpu_display)
         process.wait()
     except OSError as error:
         # If Node failed before reading the frame, preserve its exit status
