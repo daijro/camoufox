@@ -540,7 +540,8 @@ The full option list is in the [Python README](python/README.md#launch-options).
 | Telemetry and data reporting removed at compile time | `librewolf/` patches |
 | Onboarding messages disabled | `ghostery/` patch |
 | No bundled search engines | `no-search-engines` patch |
-| Optional Mozilla services and background traffic turned off; signed Remote Settings remains available for certificate revocations | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
+| Mozilla services and background traffic turned off | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
+| Firefox's bundled certificate revocations (OneCRL) enforced in every profile, with no network fetch | `remote-security-settings` patch |
 | Stock browser UI: no theme, toolbar or dialog changes | |
 
 > [!NOTE]

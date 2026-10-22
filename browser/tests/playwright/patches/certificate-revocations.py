@@ -1,26 +1,21 @@
 """Bundled OneCRL revocations must reach a fresh profile without a network fetch.
 
-The eMudhra issuer and serials are from Mozilla's test_onecrl_loads_bundle.js.
-Check certificate storage itself: a configured endpoint or a completed load
-notification does not prove that a revoked certificate will be rejected.
+camoufox.cfg turns Remote Settings off, so the dump that
+remote-security-settings.patch imports at startup is the only source. The
+eMudhra issuer and serials are from Mozilla's test_onecrl_loads_bundle.js.
+Check certificate storage itself: a completed load notification does not prove
+that a revoked certificate will be rejected.
 """
 
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from urllib.parse import urlparse
 
 from helpers import Marionette, free_port, marionette_args, resolve_binary
 
 
 PROBE = """
-const { Utils } = ChromeUtils.importESModule(
-  "resource://services-settings/Utils.sys.mjs"
-);
-const { AppConstants } = ChromeUtils.importESModule(
-  "resource://gre/modules/AppConstants.sys.mjs"
-);
 const storage = Cc["@mozilla.org/security/certstorage;1"].getService(Ci.nsICertStorage);
 const issuer = Array.from(atob(
   "MFYxCzAJBgNVBAYTAklOMSUwIwYDVQQKDBxlTXVkaHJhIFRlY2hub2xvZ2llcyBMaW1pdGVkMSAwHgYDVQQDDBdlbVNpZ24gUm9vdCBUTFMgQ0EgLSBHMw=="
@@ -44,9 +39,6 @@ function check() {
     revoked,
     controlNotRevoked: storage.getRevocationState(issuer, [1], [], [])
       === Ci.nsICertStorage.STATE_UNSET,
-    server: Utils.SERVER_URL,
-    defaultServer: AppConstants.REMOTE_SETTINGS_SERVER_URLS[0],
-    skipsUpdates: Utils.shouldSkipRemoteActivity,
   });
 }
 check();
@@ -58,8 +50,8 @@ def main() -> int:
     port = free_port()
     with tempfile.TemporaryDirectory(prefix="camoufox-onecrl-") as tmp:
         profile = Path(tmp)
-        # All external connections hit a closed local port. The bundled list
-        # must work even when the update service cannot be reached.
+        # All external connections hit a closed local port, so nothing can
+        # reach certificate storage except the bundled list.
         (profile / "user.js").write_text(
             f'user_pref("marionette.port", {port});\n'
             'user_pref("network.proxy.type", 1);\n'
@@ -100,18 +92,12 @@ def main() -> int:
         failures.append("eMudhra revocations missing from fresh-profile certificate storage")
     if not result["controlNotRevoked"]:
         failures.append("unlisted control serial was revoked")
-    server = urlparse(result["server"])
-    if (result["server"] != result["defaultServer"] or server.scheme != "https"
-            or server.hostname != "firefox.settings.services.mozilla.com"):
-        failures.append("the default signed Remote Settings service is unavailable")
-    if result["skipsUpdates"]:
-        failures.append("Remote Settings activity is suppressed")
     for failure in failures:
         print(f"FAIL: {failure}")
     if failures:
         print(output)
         return 1
-    print("PASS: bundled revocations work without network access and updates are permitted.")
+    print("PASS: bundled revocations are enforced without network access.")
     return 0
 
 

@@ -3,8 +3,8 @@ Verify the search service still initializes (no-search-engines.patch).
 
 Camoufox ships no search engines: no-search-engines.patch short-circuits
 SearchEngineSelector.#getConfiguration() with a hardcoded stub instead of
-fetching search configuration from Remote Settings. Remote Settings remains
-available for certificate-revocation updates.
+fetching from Remote Settings, which is dead anyway because camoufox.cfg sets
+services.settings.server to "".
 
 The stub's *shape* is load-bearing, and that is what this guards. The selector
 is the Rust SearchEngineSelector, which deserializes search-config **v2**:

@@ -1,11 +1,11 @@
 diff --git a/security/manager/ssl/RemoteSecuritySettings.sys.mjs b/security/manager/ssl/RemoteSecuritySettings.sys.mjs
-index 0c896c8..6f7cc67 100644
+index 0c896c8..3e5f9f3 100644
 --- a/security/manager/ssl/RemoteSecuritySettings.sys.mjs
 +++ b/security/manager/ssl/RemoteSecuritySettings.sys.mjs
-@@ -260,6 +260,29 @@ export var RemoteSecuritySettings = {
+@@ -259,6 +259,28 @@ export var RemoteSecuritySettings = {
+       signerName: SECURITY_STATE_SIGNER,
      });
      this.OneCRLBlocklistClient.on("sync", updateCertBlocklist);
- 
 +    // Ensure the bundled list of revocations is loaded.
 +    this.OneCRLBlocklistClient.get()
 +      .then(records => {
@@ -28,33 +28,9 @@ index 0c896c8..6f7cc67 100644
 +          "remote-security-settings:onecrl-bundle-loaded"
 +        );
 +      });
-+
+ 
      this.IntermediatePreloadsClient = new IntermediatePreloads();
  
-     this.CRLiteFiltersClient = new CRLiteFilters();
-diff --git a/services/settings/Utils.sys.mjs b/services/settings/Utils.sys.mjs
-index e11bad0..70f77c9 100644
---- a/services/settings/Utils.sys.mjs
-+++ b/services/settings/Utils.sys.mjs
-@@ -105,7 +105,7 @@ function _isUndefined(value) {
- 
- export var Utils = {
-   get SERVER_URL() {
--    return true || lazy.allowServerURL
-+    return lazy.allowServerURL
-       ? // eslint-disable-next-line mozilla/valid-lazy
-         lazy.gServerURL
-       : AppConstants.REMOTE_SETTINGS_SERVER_URLS[0];
-@@ -119,9 +119,6 @@ export var Utils = {
-   log,
- 
-   get shouldSkipRemoteActivity() {
--    // Playwright does not set Cu.isInAutomation, hence we just return true
--    // here in order to disable the remote activity.
--    return true;
-     if (
-       (lazy.isRunningTests || Cu.isInAutomation) &&
-       this.SERVER_URL == "data:,#remote-settings-dummy/v1"
 diff --git a/services/settings/dumps/security-state/onecrl.json b/services/settings/dumps/security-state/onecrl.json
 index 38b7921..a3fe465 100644
 --- a/services/settings/dumps/security-state/onecrl.json
@@ -192,19 +168,3 @@ index 38b7921..a3fe465 100644
 -  "timestamp": 1791233394201
 +  "timestamp": 1792274405312
  }
-diff --git a/toolkit/components/search/SearchEngineSelector.sys.mjs b/toolkit/components/search/SearchEngineSelector.sys.mjs
-index 0a528ea..790c4f6 100644
---- a/toolkit/components/search/SearchEngineSelector.sys.mjs
-+++ b/toolkit/components/search/SearchEngineSelector.sys.mjs
-@@ -329,9 +329,8 @@ export class SearchEngineSelector {
-    */
-   async #getConfiguration(firstTime = true) {
-     if (true) {
--      // Camoufox ships no search engines. This stub stands in for the Remote
--      // Settings fetch, which is dead anyway: camoufox.cfg sets
--      // services.settings.server to "", so nothing is ever fetched.
-+      // Camoufox ships no search engines, so do not fetch search configuration.
-+      // Remote Settings remains available for certificate revocations.
-       //
-       // The shape matters. This used to return a search-config **v1** record
-       // (`appliesTo`/`webExtension`, no `recordType`), but the selector is the
