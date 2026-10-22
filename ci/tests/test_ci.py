@@ -2769,7 +2769,7 @@ def _package_module():
         sys.path.remove(str(scripts))
 
 
-def test_packaged_font_names_are_ascii(tmp_path):
+def test_packaged_font_names_are_ascii(tmp_path, monkeypatch):
     """A plain `unzip` must extract the release zip in any locale.
 
     The font bundle carries macOS faces named in Japanese (Hiragino). The zip
@@ -2777,29 +2777,40 @@ def test_packaged_font_names_are_ascii(tmp_path):
     -- a Docker build, a bare SSH shell -- reports every one as a mismatching
     local filename and exits 1, which stops a consumer's `set -e` install.
     """
+    import shlex
+
     package = _package_module()
-    fonts = tmp_path / "fonts" / "M"
-    fonts.mkdir(parents=True)
-    (fonts / "18__ヒラギノ角ゴシック W9.ttc").write_bytes(b"w9")
-    (fonts / "21__ヒラギノ角ゴシック W1.ttc").write_bytes(b"w1")
-    (fonts / "07__Helvetica.ttc").write_bytes(b"h")
+    monkeypatch.chdir(tmp_path)
+    group = tmp_path / "bundle" / "fonts" / "M"
+    group.mkdir(parents=True)
+    (group.parent / "groups.json").write_text('{"readBy": {"mac": ["M"]}}')
+    (group / "18__ヒラギノ角ゴシック W9.ttc").write_bytes(b"w9")
+    (group / "21__ヒラギノ角ゴシック W1.ttc").write_bytes(b"w1")
+    (group / "07__Helvetica.ttc").write_bytes(b"h")
 
-    package.ascii_file_names(tmp_path / "fonts")
-    names = sorted(p.name for p in fonts.iterdir())
+    # Stand in for 7z: the extracted package is empty, and what would be
+    # zipped is read back from the staging directory.
+    packaged = []
 
+    def fake_run(cmd, exit_on_fail=True):
+        args = shlex.split(cmd)
+        if args[:2] == ["7z", "u"]:
+            fonts = pathlib.Path(args[3].removesuffix("/*"), "fonts")
+            packaged.append({p.name: p.read_bytes() for p in fonts.iterdir()})
+
+    monkeypatch.setattr(package, "run", fake_run)
+    monkeypatch.setattr(package, "inject_locales", lambda *args: None)
+    for _ in range(2):
+        (tmp_path / "in.zip").write_bytes(b"")
+        package.add_includes_to_package("in.zip", [], ["macos"], "out.zip", "windows", "158.0", "")
+
+    names = sorted(packaged[0])
     assert all(name.isascii() for name in names), names
-    assert "07__Helvetica.ttc" in names
-    assert len(names) == 3
-    renamed = [n for n in names if n != "07__Helvetica.ttc"]
-    assert all(n.startswith(("18__", "21__")) and n.endswith(".ttc") for n in renamed), renamed
-    assert sorted((fonts / n).read_bytes() for n in renamed) == [b"w1", b"w9"]
-
+    assert packaged[0].pop("07__Helvetica.ttc") == b"h"
+    assert all(n.startswith(("18__", "21__")) and n.endswith(".ttc") for n in packaged[0]), names
+    assert sorted(packaged[0].values()) == [b"w1", b"w9"]
     # Deterministic: the same bundle packages to the same names.
-    again = tmp_path / "again" / "M"
-    again.mkdir(parents=True)
-    (again / "18__ヒラギノ角ゴシック W9.ttc").write_bytes(b"w9")
-    package.ascii_file_names(tmp_path / "again")
-    assert (again / [n for n in renamed if n.startswith("18__")][0]).exists()
+    assert sorted(packaged[1]) == names
 
 
 # ---------------------------------------------------------------------------

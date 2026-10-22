@@ -84,7 +84,7 @@ def ascii_file_names(root):
             stem, ext = os.path.splitext(name)
             kept = ''.join(c for c in stem if c.isascii() and (c.isalnum() or c in '_-')).rstrip('_-')
             digest = hashlib.sha256(name.encode('utf-8')).hexdigest()[:12]
-            ascii_name = f"{kept}_u{digest}{ext if ext.isascii() else ''}"
+            ascii_name = f"{kept}_u{digest}{ext}"
             os.rename(os.path.join(dirpath, name), os.path.join(dirpath, ascii_name))
 
 
