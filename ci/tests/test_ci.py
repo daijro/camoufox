@@ -2925,6 +2925,26 @@ def test_the_patch_guard_matrix_runs_every_group():
     assert legs == set(GROUPS) | {"skiplist"}
 
 
+def test_leftover_browsers_sees_content_processes(tmp_path):
+    """Firefox's Linux content processes run plugin-container, beside the binary."""
+    import shutil
+    import subprocess
+
+    from ci.run_patch_guards import leftover_browsers
+
+    # A shell blocked on its builtin read: coreutils may be one binary that
+    # picks its command from argv[0], which a copy named plugin-container loses.
+    child = tmp_path / "plugin-container"
+    shutil.copy2(shutil.which("sh"), child)
+    proc = subprocess.Popen([child, "-c", "read line"], stdin=subprocess.PIPE)
+    try:
+        found = leftover_browsers(tmp_path / "camoufox-bin")
+    finally:
+        proc.kill()
+        proc.wait()
+    assert [f.split()[1] for f in found] == [str(proc.pid)]
+
+
 # ---------------------------------------------------------------------------
 # memory growth: sharded onto pull requests, and gated
 # ---------------------------------------------------------------------------

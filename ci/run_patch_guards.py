@@ -102,17 +102,20 @@ def guards() -> List[Path]:
 
 
 def leftover_browsers(binary: Path) -> List[str]:
-    """Processes of the binary still running after a guard, with CPU seconds.
+    """Processes of the browser still running after a guard, with CPU seconds.
 
     Guards share one runner. A browser a guard failed to close keeps its
     content processes -- and any spinning workers -- alive into every later
-    guard, which then sees a slower machine than it was written for.
+    guard, which then sees a slower machine than it was written for. On Linux
+    those content processes run plugin-container, which sits beside the binary.
     """
+    binary = binary.resolve()
+    exes = {str(binary), str(binary.parent / "plugin-container")}
     ticks = os.sysconf("SC_CLK_TCK")
     found = []
     for proc in Path("/proc").glob("[0-9]*"):
         try:
-            if os.readlink(proc / "exe") != str(binary.resolve()):
+            if os.readlink(proc / "exe") not in exes:
                 continue
             fields = (proc / "stat").read_text().rsplit(")", 1)[1].split()
         except OSError:
