@@ -7,15 +7,18 @@ setter marks it used for the whole context, in storage every process shares,
 so later documents in the context never call it again. The lists themselves
 were kept in a per-process static map, so a document of the same context that
 landed in another content process found no list and showed the launch-level
-fonts and voices instead.
+fonts and voices instead. An OffscreenCanvas in a worker has no document, so
+its text was measured with the launch-level fonts, and once a worker had
+measured, so was the text on its page's main thread.
 
 The probe gives one context its own short lists through an init script, then
 opens it on several loopback addresses. Each address is its own site, so the
 pages spread across content processes, and each reports which of the
-launch-level fonts and voices it can see.
+launch-level fonts and voices it can see, measuring fonts on an OffscreenCanvas
+in a worker first and then on one on its main thread.
 
-What PASS means: every page of the context sees the same fonts and voices as
-the first, and fewer than the launch level does.
+What PASS means: every page of the context, and a worker on each, sees the
+same fonts and voices as the first, and fewer than the launch level does.
 
     python browser/tests/playwright/patches/context-lists-across-processes.py
 """
@@ -39,17 +42,24 @@ PROBE = """async (fonts) => {
   // document.fonts.check() is true for any font that needs no download,
   // installed or not, so measure: a font is there if it changes the width of
   // the text against both fallbacks.
-  const ctx = document.createElement('canvas').getContext('2d');
-  const width = font => { ctx.font = font; return ctx.measureText('mmmmmmmmmmlli10OQ@#').width; };
-  const base = ['monospace', 'serif'].map(g => [g, width(`72px ${g}`)]);
-  const visible = fonts.filter(f => base.some(([g, w]) => width(`72px "${f}", ${g}`) !== w));
+  const visible = fonts => {
+    const ctx = new OffscreenCanvas(1, 1).getContext('2d');
+    const width = font => { ctx.font = font; return ctx.measureText('mmmmmmmmmmlli10OQ@#').width; };
+    const base = ['monospace', 'serif'].map(g => [g, width(`72px ${g}`)]);
+    return fonts.filter(f => base.some(([g, w]) => width(`72px "${f}", ${g}`) !== w));
+  };
+  const code = 'onmessage = e => postMessage((' + visible.toString() + ')(e.data))';
+  const w = new Worker(URL.createObjectURL(new Blob([code])));
+  w.postMessage(fonts);
+  // The worker measures first: its lookups are what leaked into the main thread's.
+  const workerFonts = await new Promise(r => { w.onmessage = e => r(e.data); });
   let voices = speechSynthesis.getVoices();
   if (!voices.length)
     voices = await new Promise(r => {
       speechSynthesis.onvoiceschanged = () => r(speechSynthesis.getVoices());
       setTimeout(() => r(speechSynthesis.getVoices()), 2000);
     });
-  return {fonts: visible, voices: voices.map(v => v.name).sort()};
+  return {fonts: visible(fonts), workerFonts, voices: voices.map(v => v.name).sort()};
 }"""
 
 
@@ -109,9 +119,15 @@ async def main() -> int:
                 extra = sorted(set(seen[host][kind]) - set(first[kind]))
                 print(f"  FAIL {kind} on {host}: {len(seen[host][kind])} visible, "
                       f"{len(first[kind])} on {HOSTS[0]}; extra: {extra[:5]}")
+    for host in HOSTS:
+        if seen[host]["workerFonts"] != seen[host]["fonts"]:
+            passed = False
+            extra = sorted(set(seen[host]["workerFonts"]) - set(seen[host]["fonts"]))
+            print(f"  FAIL fonts in a worker on {host}: {len(seen[host]['workerFonts'])} visible, "
+                  f"{len(seen[host]['fonts'])} on its main thread; extra: {extra[:5]}")
     if passed:
-        print(f"  PASS: {len(HOSTS)} sites all see the context's {len(first['fonts'])} fonts "
-              f"and {len(first['voices'])} voice, of {len(launch['fonts'])} and "
+        print(f"  PASS: {len(HOSTS)} sites, and a worker on each, all see the context's "
+              f"{len(first['fonts'])} fonts and {len(first['voices'])} voice, of {len(launch['fonts'])} and "
               f"{len(launch['voices'])}")
     return 0 if passed else 1
 
