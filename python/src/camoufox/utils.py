@@ -811,6 +811,14 @@ def context_identity(
     return host_name, gpu
 
 
+def context_audio(browser: Any) -> Optional[Dict[str, Any]]:
+    """Config overrides for a new context's audio: a browser launched with
+    audio_noise=False gives its contexts stock audio, as its own pages have."""
+    if vars(browser).get('_camoufox_audio_noise', True):
+        return None
+    return {'audio:seed': 0}
+
+
 def new_context_options(
     fingerprint: Dict[str, Any],
     context_kwargs: Dict[str, Any],
@@ -963,6 +971,7 @@ def launch_options(
     virtual_display: Optional[str] = None,
     pin_cpu_cores: Optional[bool] = None,
     canvas_noise: Optional[bool] = None,
+    audio_noise: bool = True,
     **launch_options: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
@@ -1076,6 +1085,12 @@ def launch_options(
             renders with, uncovered; it is on whenever the identity claims
             another OS or another GPU (webgl_config, a preset's, or a host GPU
             fpgen never recorded), whose canvas would otherwise show the host.
+        audio_noise (bool):
+            Perturb Web Audio output with a seed that follows the identity, so
+            each identity has its own audio hash (the default). With False the
+            browser leaves Web Audio output as stock Firefox renders it.
+            Contexts made with NewContext follow the browser. An audio:seed in `config` wins
+            either way.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -1401,14 +1416,18 @@ def launch_options(
         config.pop('headers.Accept-Encoding', None)
 
     # The audio noise seed follows the identity: a returning "same device" must
-    # reproduce its audio hash (#442/#765). Never 0 (0 disables the noise). A
-    # preset draws its own random seed; it is replaced here too so a pinned
-    # preset reproduces it, but a seed the caller set is kept. There is no
-    # canvas seed: the browser adds no canvas noise (#528), and no glyph-spacing
-    # noise either (ci/tribal-rules.yml: no-glyph-spacing-noise).
+    # reproduce its audio hash (#442/#765). It is 0, which disables the noise,
+    # only with audio_noise=False. A preset draws its own random seed; it is
+    # replaced here too so a pinned preset reproduces it, but a seed the caller
+    # set is kept. There is no canvas seed: the browser adds no canvas noise
+    # (#528), and no glyph-spacing noise either (ci/tribal-rules.yml:
+    # no-glyph-spacing-noise).
     if not _user_set_audio_seed:
-        _ident = identity_seed(config, _identity_salt)
-        config['audio:seed'] = ((_ident * 2654435761 + 97) & 0xFFFFFFFF) or 1
+        if audio_noise is not False:
+            _ident = identity_seed(config, _identity_salt)
+            config['audio:seed'] = ((_ident * 2654435761 + 97) & 0xFFFFFFFF) or 1
+        else:
+            config['audio:seed'] = 0
 
     # Set geolocation
     if geoip:

@@ -343,6 +343,7 @@ scenario('flags', fingerprint=FP['macos'], os='macos', main_world_eval=True, all
                                                                           'intl.locale.requested': 'de-DE'})
 scenario('ff_version', fingerprint=FP['windows'], os='windows', ff_version=140)
 scenario('pin_cpu_cores', fingerprint=FP['linux'], os='linux', pin_cpu_cores=True)
+scenario('audio_noise_false', fingerprint=FP['linux'], os='linux', audio_noise=False)
 
 # addons
 scenario('addons_custom', fingerprint=FP['linux'], os='linux', addons=['<ADDON>'])

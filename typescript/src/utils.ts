@@ -1125,6 +1125,14 @@ export function contextIdentity(
 }
 
 /**
+ * Config overrides for a new context's audio: a browser launched with
+ * audio_noise: false gives its contexts stock audio, as its own pages have.
+ */
+export function contextAudio(browser: any): Record<string, any> | null {
+	return browser._camoufoxAudioNoise === false ? { "audio:seed": 0 } : null;
+}
+
+/**
  * Normalise a context-options object onto the JS API's `viewport: null`,
  * defaulting to it when the caller expressed no preference. Playwright-Python
  * takes `no_viewport=True`; a caller-supplied `noViewport` is accepted and
@@ -1381,6 +1389,12 @@ export interface LaunchOptions {
 	 * (webgl_config, a preset's, or a host GPU fpgen never recorded), whose
 	 * canvas would otherwise show the host. */
 	canvas_noise?: boolean | null;
+	/** Perturb Web Audio output with a seed that follows the identity, so each
+	 * identity has its own audio hash (the default). With false the browser
+	 * leaves Web Audio output as stock Firefox renders it. Contexts made with
+	 * NewContext follow the browser. An audio:seed in `config` wins either
+	 * way. */
+	audio_noise?: boolean;
 	/** Additional Firefox launch options, passed straight through to Playwright. */
 	[key: string]: any;
 }
@@ -1427,6 +1441,7 @@ export async function launchOptions({
 	virtual_display,
 	pin_cpu_cores,
 	canvas_noise,
+	audio_noise,
 	...passthrough
 }: LaunchOptions = {}): Promise<Record<string, any>> {
 	utilsDeps.ensureBrowserProfileDir(env);
@@ -1728,13 +1743,15 @@ export async function launchOptions({
 	}
 
 	// The audio noise seed follows the identity: a returning "same device" must
-	// reproduce its audio hash (#442/#765). Never 0 (0 disables the noise).
+	// reproduce its audio hash (#442/#765). It is 0, which disables the noise,
+	// only with audio_noise: false.
 	// There is no canvas seed: the browser adds no canvas noise (#528), and no
 	// glyph-spacing noise either (ci/tribal-rules.yml: no-glyph-spacing-noise).
 	if (!userSetAudioSeed) {
-		config["audio:seed"] = audioSeedFromIdentity(
-			utilsDeps.identitySeed(config, salt),
-		);
+		config["audio:seed"] =
+			audio_noise === false
+				? 0
+				: audioSeedFromIdentity(utilsDeps.identitySeed(config, salt));
 	}
 
 	// Set geolocation

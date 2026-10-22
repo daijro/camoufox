@@ -17,6 +17,7 @@ from .ip import Proxy, proxy_exit_geo
 from .utils import (
     async_attach_vd,
     attach_context_defaults,
+    context_audio,
     context_identity,
     host_identity,
     launch_options,
@@ -133,8 +134,10 @@ async def _new_browser(
 ) -> Union[Browser, BrowserContext]:
     # Options the caller built leave its contexts to the caller (host_identity).
     canvas_noise: Optional[bool] = False
+    audio_noise = True
     if not from_options:
         canvas_noise = kwargs.get('canvas_noise')
+        audio_noise = kwargs.get('audio_noise', True) is not False
         # Opt-in; see the note in sync_api.NewBrowser.
         kwargs.setdefault('pin_cpu_cores', False)
         from_options = await asyncio.get_event_loop().run_in_executor(
@@ -156,7 +159,8 @@ async def _new_browser(
     pid = driver_pid(playwright) if pin_to else None
     if not pid:
         return await _launch(
-            playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise
+            playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise,
+            audio_noise,
         )
     # The browser inherits the driver's mask at spawn, so two concurrent launches
     # on one driver must not interleave pin/restore: the second pin would land on
@@ -165,7 +169,8 @@ async def _new_browser(
         previous = cpu_affinity.pin(pid, pin_to)
         try:
             return await _launch(
-                playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise
+                playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise,
+                audio_noise,
             )
         finally:
             cpu_affinity.restore(pid, previous)
@@ -189,6 +194,7 @@ async def _launch(
     no_viewport_default: bool,
     virtual_display: Optional[VirtualDisplay],
     canvas_noise: Optional[bool],
+    audio_noise: bool,
 ) -> Union[Browser, BrowserContext]:
     if persistent_context:
         context = await playwright.firefox.launch_persistent_context(
@@ -200,6 +206,7 @@ async def _launch(
     browser = await playwright.firefox.launch(**from_options)
     attach_context_defaults(browser, no_viewport_default)
     browser._camoufox_host_identity = identity
+    browser._camoufox_audio_noise = audio_noise
     return await async_attach_vd(browser, virtual_display)
 
 
@@ -225,7 +232,8 @@ async def AsyncNewContext(
     Creates a new browser context with a unique fingerprint identity.
 
     Each context gets its own identity (navigator, screen, WebGL, fonts, voices),
-    drawn by fpgen unless a preset is given, with its own audio noise seed. All values are applied
+    drawn by fpgen unless a preset is given, with its own audio noise seed (stock audio on a
+    browser launched with audio_noise=False). All values are applied
     via addInitScript so they self-destruct before page scripts can detect them.
 
     Parameters:
@@ -256,7 +264,8 @@ async def AsyncNewContext(
     fp = await asyncio.get_event_loop().run_in_executor(
         None,
         lambda: generate_context_fingerprint(
-            preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config
+            preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config,
+            config_overrides=context_audio(browser),
         ),
     )
 
