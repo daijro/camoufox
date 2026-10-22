@@ -175,6 +175,64 @@ export class VirtualDisplayNotSupported extends VirtualDisplayError {
 	}
 }
 
+export class GpuDisplayError extends VirtualDisplayError {
+	constructor(message?: string) {
+		super(message ?? "The headless='virtual-gpu' display cannot be used.");
+		this.name = "GpuDisplayError";
+	}
+}
+
+export class NoGpuFound extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "No GPU render node with a PCI address was found.");
+		this.name = "NoGpuFound";
+	}
+}
+
+export class AmbiguousGpuSelection extends GpuDisplayError {
+	constructor(message?: string) {
+		super(
+			message ?? "Several GPUs match, or several exist and none was named.",
+		);
+		this.name = "AmbiguousGpuSelection";
+	}
+}
+
+export class GpuNotFound extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "The GPU selector matches no GPU.");
+		this.name = "GpuNotFound";
+	}
+}
+
+export class CannotFindXorg extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "Xorg cannot be found.");
+		this.name = "CannotFindXorg";
+	}
+}
+
+export class CannotExecuteXorg extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "Xorg cannot be started, or exited right after starting.");
+		this.name = "CannotExecuteXorg";
+	}
+}
+
+export class GpuVtTakeover extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "The Xorg server switched the active console VT.");
+		this.name = "GpuVtTakeover";
+	}
+}
+
+export class GpuSoftwareFallback extends GpuDisplayError {
+	constructor(message?: string) {
+		super(message ?? "The browser on a GPU display never rendered on the GPU.");
+		this.name = "GpuSoftwareFallback";
+	}
+}
+
 export class CamoufoxNotInstalled extends FileNotFoundError {
 	constructor(message?: string) {
 		super(message ?? "Camoufox is not installed.");

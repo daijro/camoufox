@@ -142,6 +142,7 @@ authority on what fails; a local run is a hypothesis.
 | Crashes | Killing the browser, the X server, a content process or the driver mid-run leaves nothing behind, and the next launch works (`test_crash_recovery.py`) |
 | Memory growth | One mechanism (iframes, canvas readback, WebGL contexts, workers, script compilation, font measurement) driven N and 4N times grows by a bounded amount (`test_memory_growth.py`, the `growth` job) |
 | Settled decisions | Every mechanically checkable rule in [`ci/tribal-rules.yml`](tribal-rules.yml) (`test_tribal_rules.py`) |
+| GPU display | `headless="virtual-gpu"` renders on the card `CAMOUFOX_GPU` names, the identity claims that card, and the Xorg server exits with the browser (`test_gpu_display.py`). No runner has a GPU, so the `gpu` subset is run by hand and is not part of `all` |
 
 ## Stealth grade
 
@@ -287,6 +288,7 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | `python3 -m ci.run_native --subset rules` | | Settled decisions |
 | `python3 -m ci.run_native --subset browser --binary <bin>` | yes | Leaks, contexts, crashes |
 | `python3 -m ci.run_native --subset growth --binary <bin>` | yes | Memory growth; `--shard 3/7` for one test |
+| `CAMOUFOX_GPU=<pci> python3 -m ci.run_native --subset gpu --binary <bin>` | yes | `headless="virtual-gpu"` on a real GPU |
 | `python3 -m ci.run_sundial --binary <bin>` | yes | The stealth grade (needs the credential) |
 | `python3 -m ci.summarize --results-dir .ci-work/results` | | The summary table |
 | `GITHUB_EVENT_NAME=schedule python3 -m ci.release target` | | What the train would promote |

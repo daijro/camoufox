@@ -12,8 +12,12 @@ import {
 } from "./exceptions.js";
 import { OS_NAME } from "./paths.js";
 
-/** Safe timeout for Xvfb writing the display num; prevents an infinite hang. */
-const DISPLAYFD_READ_TIMEOUT_MS = 10_000;
+/**
+ * Safe timeout for Xvfb writing the display num; prevents an infinite hang. A
+ * cold first Xvfb on a fresh host took 0.6-8.4 s to report, so 10 s failed
+ * launches that would have succeeded.
+ */
+const DISPLAYFD_READ_TIMEOUT_MS = 30_000;
 
 /**
  * Xvfb root geometry for headless="virtual". It is not observable (screen.* is
@@ -52,7 +56,9 @@ export class VirtualDisplay {
 	screen: string;
 	composite: boolean;
 	proc: ChildProcess | null = null;
-	private _display: number | null = null;
+	protected _display: number | null = null;
+	/** What get() calls the server in its errors. */
+	protected serverName = "Xvfb";
 
 	constructor(debug: boolean = false, screen?: string, composite?: boolean) {
 		this.debug = debug;
@@ -125,31 +131,53 @@ export class VirtualDisplay {
 		}
 	}
 
+	/** The error get() raises when the server fails. */
+	protected error(message: string): Error {
+		return new CannotExecuteXvfb(message);
+	}
+
 	/**
-	 * Spawn Xvfb (if it isn't already running) and return its ":N" display.
+	 * What execs the server. setpriv's parent-death signal stops Xvfb when this
+	 * process dies without reaching kill(), even by SIGKILL; SIGTERM lets Xvfb
+	 * remove its own lock and socket. See xvfb-dies-with-its-launcher in
+	 * ci/tribal-rules.yml.
+	 */
+	protected wrapper(): string[] {
+		return [this.setprivPath, "--pdeathsig", "TERM"];
+	}
+
+	/** The server's argv, less -displayfd, which get() adds. */
+	protected command(): string[] {
+		return [this.xvfbPath, ...this.xvfbArgs];
+	}
+
+	protected serverEnv(): NodeJS.ProcessEnv {
+		return {
+			...process.env,
+			// Force Mesa software GLX; we don't use the GPU anyway.
+			__GLX_VENDOR_LIBRARY_NAME: "mesa",
+			LIBGL_ALWAYS_SOFTWARE: "1",
+		};
+	}
+
+	/** Called once the server has reported its display. */
+	protected async ready(): Promise<void> {}
+
+	/**
+	 * Spawn the server (if it isn't already running) and return its ":N" display.
 	 *
-	 * Uses `-displayfd` so Xvfb itself picks a free display number atomically
-	 * and reports it back, avoiding userspace races. Python's `pass_fds` keeps
-	 * the fd at its parent number; Node's `stdio` array renumbers extra pipes
-	 * from 3 upward, so we hand Xvfb fd 3 and read the pipe at index 3.
+	 * Uses `-displayfd` so the server itself picks a free display number
+	 * atomically and reports it back, avoiding userspace races. Python's
+	 * `pass_fds` keeps the fd at its parent number; Node's `stdio` array
+	 * renumbers extra pipes from 3 upward, so we hand the server fd 3 and read
+	 * the pipe at index 3.
 	 */
 	async get(): Promise<string> {
 		VirtualDisplay.assertLinux();
 
 		if (this.proc === null) {
-			// setpriv's parent-death signal stops Xvfb when this process dies
-			// without reaching kill(), even by SIGKILL; SIGTERM lets Xvfb remove
-			// its own lock and socket. See xvfb-dies-with-its-launcher in
-			// ci/tribal-rules.yml.
-			const cmd = [
-				this.setprivPath,
-				"--pdeathsig",
-				"TERM",
-				this.xvfbPath,
-				"-displayfd",
-				"3",
-				...this.xvfbArgs,
-			];
+			const [program, ...args] = this.command();
+			const cmd = [...this.wrapper(), program, "-displayfd", "3", ...args];
 			if (this.debug) {
 				console.log("Starting virtual display:", cmd.join(" "));
 			}
@@ -161,33 +189,31 @@ export class VirtualDisplay {
 					"pipe",
 				],
 				detached: true,
-				env: {
-					...process.env,
-					// Force Mesa software GLX; we don't use the GPU anyway.
-					__GLX_VENDOR_LIBRARY_NAME: "mesa",
-					LIBGL_ALWAYS_SOFTWARE: "1",
-				},
+				env: this.serverEnv(),
 			});
 
 			// A spawn that fails after spawn() returns (EACCES, ENOEXEC, a noexec
 			// mount) is an 'error' event on the child; with no listener Node
 			// treats it as uncaught and exits. readDisplayNumber() turns it into
-			// CannotExecuteXvfb; this keeps any later one from killing the process.
+			// this.error(); this keeps any later one from killing the process.
 			this.proc.on("error", () => {});
 
 			const displayFd = this.proc.stdio[3] as NodeJS.ReadableStream | null;
 			if (!displayFd) {
 				this.kill();
-				throw new CannotExecuteXvfb("Could not open Xvfb's -displayfd pipe");
+				throw this.error(`Could not open ${this.serverName}'s -displayfd pipe`);
 			}
 
 			const raw = await this.readDisplayNumber(displayFd);
 			const parsed = Number.parseInt(raw.trim(), 10);
 			if (Number.isNaN(parsed)) {
 				this.kill();
-				throw new CannotExecuteXvfb(`Xvfb wrote non-integer display: '${raw}'`);
+				throw this.error(
+					`${this.serverName} wrote non-integer display: '${raw}'`,
+				);
 			}
 			this._display = parsed;
+			await this.ready();
 		} else if (this.debug) {
 			console.log(`Using virtual display: ${this._display}`);
 		}
@@ -216,7 +242,7 @@ export class VirtualDisplay {
 			const onSpawnError = (error: Error) =>
 				finish(() => {
 					this.kill();
-					reject(new CannotExecuteXvfb(`Could not start Xvfb: ${error}`));
+					reject(this.error(`Could not start ${this.serverName}: ${error}`));
 				});
 			proc?.once("error", onSpawnError);
 
@@ -224,8 +250,8 @@ export class VirtualDisplay {
 				finish(() => {
 					this.kill();
 					reject(
-						new CannotExecuteXvfb(
-							`Xvfb did not report a display within ${DISPLAYFD_READ_TIMEOUT_MS}ms`,
+						this.error(
+							`${this.serverName} did not report a display within ${DISPLAYFD_READ_TIMEOUT_MS}ms`,
 						),
 					);
 				});
@@ -246,8 +272,8 @@ export class VirtualDisplay {
 					const exit = this.proc?.exitCode;
 					this.kill();
 					reject(
-						new CannotExecuteXvfb(
-							`Xvfb did not report a display (got '${buf}', exit=${exit})`,
+						this.error(
+							`${this.serverName} did not report a display (got '${buf}', exit=${exit})`,
 						),
 					);
 				});
@@ -256,7 +282,7 @@ export class VirtualDisplay {
 				finish(() => {
 					this.kill();
 					reject(
-						new CannotExecuteXvfb(`Failed to read Xvfb's display: ${error}`),
+						this.error(`Failed to read ${this.serverName}'s display: ${error}`),
 					);
 				});
 			});

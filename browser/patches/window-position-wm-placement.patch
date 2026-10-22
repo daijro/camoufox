@@ -1,0 +1,32 @@
+diff --git a/xpfe/appshell/AppWindow.cpp b/xpfe/appshell/AppWindow.cpp
+index ff293fde9f..54fec820cb 100644
+--- a/xpfe/appshell/AppWindow.cpp
++++ b/xpfe/appshell/AppWindow.cpp
+@@ -2441,8 +2441,25 @@ void AppWindow::SizeShell() {
+   // on the resolution of the screen we're on. But positioning needs to
+   // know the size so that it can constrain to screen bounds.... as an
+   // initial guess here, we'll use the specified size (if any).
+-  bool positionSet =
+-      !mIgnoreXULPosition && LoadPositionFromXUL(specWidth, specHeight);
++  bool positionSet = !mIgnoreXULPosition;
++
++#if defined(XP_UNIX) && !defined(XP_MACOSX)
++  // Camoufox: leave independent top-level windows where the window manager
++  // puts them, which is what Firefox did here until bug 2070008 (157). Nobody
++  // places an automation browser's window by hand, so honouring the persisted
++  // XUL position makes window.screenX/screenY a function of leftover profile
++  // state: the same identity reports one position from a throwaway profile and
++  // another from a persistent one, which correlates the two sessions. It also
++  // moves the browser rect that MouseDispatch.js measures (docs/input-dispatch.md).
++  // Dependent windows still get placed relative to their parent.
++  if (!parentWindow) {
++    positionSet = false;
++  }
++#endif
++
++  if (positionSet) {
++    positionSet = LoadPositionFromXUL(specWidth, specHeight);
++  }
+ 
+   if (gotSize) {
+     SetSpecifiedSize(specWidth, specHeight);

@@ -81,12 +81,12 @@ index 170552ab61..b5f1efa0a8 100644
 +# Camoufox: include path for MaskConfig.hpp
 +LOCAL_INCLUDES += ["/camoucfg"]
 diff --git a/dom/system/NetworkGeolocationProvider.sys.mjs b/dom/system/NetworkGeolocationProvider.sys.mjs
-index 29455e42de..49fd07ac19 100644
+index 2dc54dc968..5bf84686ce 100644
 --- a/dom/system/NetworkGeolocationProvider.sys.mjs
 +++ b/dom/system/NetworkGeolocationProvider.sys.mjs
-@@ -399,17 +399,52 @@ NetworkGeolocationProvider.prototype = {
-       `Sending IP-address-based geolocation request${logStr} to network service: ${url}`
-     );
+@@ -483,28 +483,63 @@ NetworkGeolocationProvider.prototype = {
+     // From here on, do a network geolocation request //
+     let url = Services.urlFormatter.formatURLPref("geo.provider.network.url");
  
 +    // Use CAMOU_CONFIG geolocation if configured
 +    let DEFAULT_DEG = -180;
@@ -102,15 +102,9 @@ index 29455e42de..49fd07ac19 100644
 +
      let result;
      try {
--      result = await this.fetchLocation(url, wifiData);
--      lazy.log.info(
--        `geo provider reported: ${result.location.lng}:${result.location.lat}`
--      );
--      let newLocation = new NetworkGeoPositionObject(
--        result.location.lat,
--        result.location.lng,
--        result.accuracy
--      );
+-      // formatURLPref() returns about:blank for a pref without a value.
+-      if (!url || url == "about:blank") {
+-        throw new Error("No network geolocation service URL is configured");
 +      let newLocation;
 +      if (latitude != DEFAULT_DEG && longitude != DEFAULT_DEG) {
 +        // Use the latitude and longitude from CAMOU_CONFIG
@@ -133,6 +127,16 @@ index 29455e42de..49fd07ac19 100644
 +        );
 +      } else {
 +        // No CAMOU_CONFIG override, use real geolocation
++        // formatURLPref() returns about:blank for a pref without a value.
++        if (!url || url == "about:blank") {
++          throw new Error("No network geolocation service URL is configured");
++        }
++
++        let logStr = data.wifiAccessPoints ? " with wifi APs" : "";
++        lazy.log.info(
++          `Sending IP-address-based geolocation request${logStr} to network service: ${url}`
++        );
++
 +        result = await this.fetchLocation(url, wifiData);
 +        lazy.log.info(
 +          `geo provider reported: ${result.location.lng}:${result.location.lat}`
@@ -142,7 +146,23 @@ index 29455e42de..49fd07ac19 100644
 +          result.location.lng,
 +          accuracy || result.accuracy
 +        );
-+      }
+       }
  
+-      let logStr = data.wifiAccessPoints ? " with wifi APs" : "";
+-      lazy.log.info(
+-        `Sending IP-address-based geolocation request${logStr} to network service: ${url}`
+-      );
+-
+-      result = await this.fetchLocation(url, wifiData);
+-      lazy.log.info(
+-        `geo provider reported: ${result.location.lng}:${result.location.lat}`
+-      );
+-      let newLocation = new NetworkGeoPositionObject(
+-        result.location.lat,
+-        result.location.lng,
+-        result.accuracy
+-      );
+-
        if (this.listener) {
          this.listener.update(newLocation);
+       }

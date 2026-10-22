@@ -51,6 +51,13 @@ _HOST_DEPENDENT_EXTENSIONS = frozenset({'OVR_multiview2'})
 # unconditionally on D3D11 (renderer11_utils.cpp); 146's ANGLE did not.
 _BACKEND_EXTENSIONS = {'win': ('EXT_depth_clamp',)}
 
+# Firefox 158 (bug 1854003) exposes EXT_polygon_offset_clamp wherever the GL
+# backend clamps polygon offsets: ANGLE's D3D11 backend from feature level 10_0,
+# which WebGL2 needs, and Linux desktop GL drivers (ARB_polygon_offset_clamp,
+# core in GL 4.6), whose recordings have EXT_depth_clamp. macOS release builds
+# run WebGL on CGL's GL 4.1, which lacks it.
+_POLYGON_OFFSET_CLAMP = 'EXT_polygon_offset_clamp'
+
 _ALIASED_LINE_WIDTH_RANGE = '33902'
 
 # What Firefox reports under privacy.resistFingerprinting. A Camoufox identity
@@ -111,10 +118,22 @@ def firefox_gpus(target_os: str) -> FrozenSet[Tuple[str, str]]:
     )
 
 
-def _context_config(prefix: str, webgl: Dict[str, Any], target_os: str) -> Dict[str, Any]:
+def _backend_extensions(target_os: str, webgl: Dict[str, Any], webgl2: Any) -> Tuple[str, ...]:
+    """The extensions the shipped Firefox adds on this device's backend."""
+    extensions = _BACKEND_EXTENSIONS.get(target_os, ())
+    if (target_os == 'win' and webgl2) or (
+        target_os == 'lin' and 'EXT_depth_clamp' in webgl['supportedExtensions']
+    ):
+        extensions += (_POLYGON_OFFSET_CLAMP,)
+    return extensions
+
+
+def _context_config(
+    prefix: str, webgl: Dict[str, Any], target_os: str, backend: Tuple[str, ...]
+) -> Dict[str, Any]:
     blocked = _filtered_extensions(target_os)
     extensions = [extension for extension in webgl['supportedExtensions'] if extension not in blocked]
-    for extension in _BACKEND_EXTENSIONS.get(target_os, ()):
+    for extension in backend:
         if extension not in extensions:
             # Firefox lists them in WebGLExtensionID order: alphabetical, ignoring case.
             at = next((i for i, other in enumerate(extensions) if other.casefold() > extension.casefold()), None)
@@ -134,14 +153,15 @@ def to_config(webgl: Dict[str, Any], webgl2: Any, target_os: str) -> Dict[str, A
 
     `webgl2` is `[]` for a device without WebGL2.
     """
+    backend = _backend_extensions(target_os, webgl, webgl2)
     config = {
         'webGl:vendor': webgl['vendor'],
         'webGl:renderer': webgl['renderer'],
-        **_context_config('webGl', webgl, target_os),
+        **_context_config('webGl', webgl, target_os, backend),
         'webGl2Enabled': bool(webgl2),
     }
     if webgl2:
-        config.update(_context_config('webGl2', webgl2, target_os))
+        config.update(_context_config('webGl2', webgl2, target_os, backend))
         # Firefox 156 creates WebGL1 on the same GL profile as WebGL2, so both
         # report one line width range. 146 forced WebGL1 onto a compatibility
         # profile, and fpgen recorded that profile's driver range.

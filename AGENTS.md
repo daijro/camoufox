@@ -231,7 +231,8 @@ this section in step with the launcher options.
 - **Leave the viewport alone.** When the window size is spoofed, new pages default to `no_viewport=True`; forcing a `viewport` asks the window to resize to something the identity does not claim.
 - **`is_mobile` is ignored** (with a warning). Camoufox has desktop identities only.
 - **Persistent contexts** need `persistent_context=True` and `user_data_dir`, and cannot be served by `launch_server`.
-- **`headless="virtual"`** needs Linux, `Xvfb` and `setpriv` from util-linux (`CannotFindXvfb`, `VirtualDisplayNotSupported` otherwise).
+- **`headless="virtual"`** needs Linux, `Xvfb` and `setpriv` from util-linux (`CannotFindXvfb`, `VirtualDisplayNotSupported` otherwise). Xvfb has no GPU, so canvas and WebGL render in software.
+- **`headless="virtual-gpu"`** renders on one GPU, named by `gpu=` or `CAMOUFOX_GPU` (a PCI address is the stable choice); several GPUs and no selector raise `AmbiguousGpuSelection`. Without root it needs Xorg.wrap allowed to start Xorg as root for any user, and the card's config in `/etc/X11`; `python -m camoufox gpu-setup <gpu> | sudo sh` does both, and every failure that setup would fix ends with that command. A browser that does not render on the card raises `GpuSoftwareFallback` (`require_gpu=False` warns). Every error is a `VirtualDisplayError`. `gpu` and `require_gpu` are not `launch_options()` arguments.
 - **`os` values are lowercase** `windows`, `macos`, `linux`; anything else raises `InvalidOS`.
 - **`geoip` in Python needs the extra**: `pip install "camoufox[geoip]"`, else `NotInstalledGeoIPExtra`.
 - **`InvalidIP`** is raised when the public-IP or proxy exit-IP lookup fails, or when `webrtc_ip` is not a valid IPv4/IPv6 address. Pass `webrtc_ip` and `timezone_id` to `NewContext` to skip the lookup.

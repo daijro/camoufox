@@ -416,7 +416,10 @@ The launchers build WebGL from fpgen's recordings, which an older Firefox made.
 Some values are the browser's rather than the GPU's, and an upgrade can change
 them on every device: Firefox 156 added `EXT_depth_clamp` on Windows and fixed
 WebGL1's `ALIASED_LINE_WIDTH_RANGE` at `[1, 1]` on Linux
-([`webgl-browser-owned-values-follow-firefox`](../ci/tribal-rules.yml)). The
+([`webgl-browser-owned-values-follow-firefox`](../ci/tribal-rules.yml)).
+Firefox 158 added `EXT_polygon_offset_clamp` on Windows devices with WebGL2
+(ANGLE's D3D11 backend at feature level 10_0 and above) and on Linux desktop GL,
+but not on macOS, where release builds use CGL's GL 4.1. The
 `stock-gpu-parity` guard finds them. It runs stock Firefox of the new version,
 stock Firefox of the release fpgen's model recorded, and Camoufox claiming the
 machine's GPU, and fails where the two stock releases differ and Camoufox does

@@ -1,7 +1,8 @@
 import os
 import shutil
+import tempfile
 from enum import Enum
-from multiprocessing import Lock
+from threading import Lock
 from typing import List, Optional
 
 from .exceptions import InvalidAddonPath
@@ -9,6 +10,11 @@ from .pkgman import INSTALL_DIR, unzip, webdl
 
 # Addons are stored in a shared folder, not per-browser version
 ADDONS_DIR = INSTALL_DIR / "addons"
+
+# One lock for the module: `with Lock():` on a fresh multiprocessing.Lock per call
+# guarded nothing, so concurrent launches in one process raced the same
+# check-then-extract.
+_EXTRACT_LOCK = Lock()
 
 
 class DefaultAddons(Enum):
@@ -44,17 +50,35 @@ def add_default_addons(
 
     addons = [addon for addon in DefaultAddons if addon not in exclude_list]
 
-    with Lock():
+    with _EXTRACT_LOCK:
         maybe_download_addons(addons, addons_list)
 
 
 def download_and_extract(url: str, extract_path: str, name: str) -> None:
     """
-    Downloads and extracts an addon from a given URL to a specified path
+    Downloads and extracts an addon from a given URL to a specified path.
+
+    Extracts into a sibling temp dir and renames it into place last, so a
+    concurrent launch (another process, which the lock cannot see) never finds
+    a manifest.json in a directory whose other files are still being written.
     """
-    # Create a temporary file to store the downloaded zip
     buffer = webdl(url, desc=f"Downloading addon ({name})", bar=False)
-    unzip(buffer, extract_path, f"Extracting addon ({name})", bar=False)
+    parent = os.path.dirname(extract_path)
+    tmp_dir = tempfile.mkdtemp(prefix=f".{name}.tmp-", dir=parent)
+    try:
+        unzip(buffer, tmp_dir, f"Extracting addon ({name})", bar=False)
+        try:
+            os.replace(tmp_dir, extract_path)
+        except OSError:
+            # The target is not empty (or exists at all, on Windows). A complete
+            # copy came from another process and may be loading in its browser,
+            # so keep it; only an incomplete one is replaced.
+            if os.path.exists(os.path.join(extract_path, 'manifest.json')):
+                return
+            shutil.rmtree(extract_path)
+            os.replace(tmp_dir, extract_path)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def get_addon_path(addon_name: str) -> str:
@@ -92,6 +116,8 @@ def maybe_download_addons(
             if addons_list is not None:
                 addons_list.append(addon_path)
         except Exception as e:
-            # Drop the partial directory so the next run re-downloads.
-            shutil.rmtree(addon_path, ignore_errors=True)
+            # Drop the partial directory so the next run re-downloads. A complete
+            # one came from another process and may be loading in its browser.
+            if not os.path.exists(os.path.join(addon_path, 'manifest.json')):
+                shutil.rmtree(addon_path, ignore_errors=True)
             print(f"Failed to download and extract {addon.name}: {e}")
