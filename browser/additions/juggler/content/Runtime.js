@@ -543,7 +543,9 @@ class Runtime {
       resolve = a;
       reject = b;
     });
-    this._pendingPromises.set(obj.promiseID, {resolve, reject, executionContext, exceptionDetails, promiseObj: obj});
+    // Keyed by the Debugger.Object, which is unique per promise: Firefox 158
+    // removed Debugger.Object.promiseID (bug 2044184).
+    this._pendingPromises.set(obj, {resolve, reject, executionContext, exceptionDetails});
     // Firefox 156 removed Debugger.onPromiseSettled (bug 2044167). As upstream
     // Juggler does, attach reactions inside the debuggee that hit a `debugger;`
     // statement when the promise settles, and sweep the pending promises from
@@ -556,11 +558,10 @@ class Runtime {
   }
 
   _onDebuggerStatement() {
-    for (const [promiseID, pendingPromise] of this._pendingPromises) {
-      const obj = pendingPromise.promiseObj;
+    for (const [obj, pendingPromise] of this._pendingPromises) {
       if (obj.promiseState === 'pending')
         continue;
-      this._pendingPromises.delete(promiseID);
+      this._pendingPromises.delete(obj);
       if (obj.promiseState === 'fulfilled') {
         pendingPromise.resolve({success: true, obj: obj.promiseValue});
         continue;
@@ -597,10 +598,10 @@ class Runtime {
   // destroyed event -- announcing the death of a context the client never saw
   // would be worse than saying nothing.
   _destroyMainWorldContext(context) {
-    for (const [promiseID, {reject, executionContext}] of this._pendingPromises) {
+    for (const [obj, {reject, executionContext}] of this._pendingPromises) {
       if (executionContext === context) {
         reject(new Error('Execution context was destroyed!'));
-        this._pendingPromises.delete(promiseID);
+        this._pendingPromises.delete(obj);
       }
     }
     if (!this._pendingPromises.size)
@@ -613,10 +614,10 @@ class Runtime {
       this._destroyMainWorldContext(destroyedContext._mainWorldContext);
       destroyedContext._mainWorldContext = null;
     }
-    for (const [promiseID, {reject, executionContext}] of this._pendingPromises) {
+    for (const [obj, {reject, executionContext}] of this._pendingPromises) {
       if (executionContext === destroyedContext) {
         reject(new Error('Execution context was destroyed!'));
-        this._pendingPromises.delete(promiseID);
+        this._pendingPromises.delete(obj);
       }
     }
     if (!this._pendingPromises.size)

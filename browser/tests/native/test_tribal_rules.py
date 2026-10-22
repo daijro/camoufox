@@ -272,6 +272,90 @@ def test_kill_sigkills_reaps_and_unlinks():
     )
 
 
+def _gpu_display(monkeypatch, tmp_path):
+    """A GPU display whose config is installed, run as an unprivileged user."""
+    from camoufox import gpudisplay
+
+    gpu = gpudisplay.GpuDevice("0000:01:00.0", "/dev/dri/renderD129", None, "0x10de", "0x2c02", "nvidia")
+    monkeypatch.setattr(gpudisplay, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(gpudisplay, "SYSTEM_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(gpudisplay.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(gpudisplay, "ACTIVE_VT", tmp_path / "no-vt")
+    (tmp_path / gpudisplay.config_name(gpu)).write_text(gpudisplay.xorg_config(gpu))
+    return gpudisplay.GpuDisplay(gpu)
+
+
+def test_the_gpu_display_claims_its_display_with_displayfd(monkeypatch, tmp_path):
+    from camoufox import virtdisplay
+
+    captured = {}
+
+    class FakePopen:
+        def __init__(self, cmd, **kwargs):
+            captured["cmd"] = list(cmd)
+            self.pid = 424242
+
+        def poll(self):
+            return None
+
+    display = _gpu_display(monkeypatch, tmp_path)
+    monkeypatch.setattr(virtdisplay.subprocess, "Popen", FakePopen)
+    # The fake never reports a display; the bounded read makes that safe.
+    monkeypatch.setattr(virtdisplay, "DISPLAYFD_READ_TIMEOUT_S", 0.2)
+    with pytest.raises(Exception):
+        display.get()
+
+    assert "-displayfd" in captured.get("cmd", []), (
+        f"the GPU display's Xorg is no longer launched with -displayfd: {captured.get('cmd')}"
+        + explain("displayfd-not-lockfile-scan")
+    )
+
+
+def test_the_gpu_display_shares_the_vt(monkeypatch, tmp_path):
+    argv = _gpu_display(monkeypatch, tmp_path)._command()
+    for flag in ("-sharevts", "-novtswitch"):
+        assert flag in argv, (
+            f"the GPU display's Xorg runs without {flag}, so it can switch the console "
+            "away from the user's desktop." + explain("gpu-display-shares-the-vt")
+        )
+
+
+def test_the_gpu_display_terminates_with_its_last_client(monkeypatch, tmp_path):
+    from camoufox import gpudisplay
+
+    argv = _gpu_display(monkeypatch, tmp_path)._command()
+    assert "-terminate" in argv and "-noreset" not in argv, (
+        f"the GPU display's Xorg no longer exits on its own: {argv}"
+        + explain("gpu-display-terminates-with-its-last-client")
+    )
+    assert "X11_SETUP" in inspect.getsource(gpudisplay.GpuDisplay._ready), (
+        "the launcher no longer holds a client on the GPU display, so a server no "
+        "client reached never terminates." + explain("gpu-display-terminates-with-its-last-client")
+    )
+
+
+def test_the_gpu_is_bound_by_pci_address():
+    from camoufox import gpudisplay
+
+    gpu = gpudisplay.GpuDevice("0000:6f:00.0", "/dev/dri/renderD128", None, "0x1002", "0x744c", "amdgpu")
+    config = gpudisplay.xorg_config(gpu)
+    assert 'BusID       "PCI:111:0:0"' in config and "renderD" not in config, (
+        "the GPU display's config no longer binds the card by PCI address."
+        + explain("gpu-selected-by-pci-address")
+    )
+    assert "0000_6f_00_0" in gpudisplay.config_name(gpu), explain("gpu-selected-by-pci-address")
+
+
+def test_an_open_render_node_is_not_gpu_use():
+    from camoufox import gpudisplay
+
+    assert not gpudisplay.drew_on_gpu("drm-driver:\tamdgpu\ndrm-engine-gfx:\t0 ns\ndrm-engine-capacity-gfx:\t1\n"), (
+        "an idle render node now counts as rendering, and Firefox holds one in software too."
+        + explain("gpu-use-is-read-from-the-kernel")
+    )
+    assert gpudisplay.drew_on_gpu("drm-engine-gfx:\t39907610 ns\n"), explain("gpu-use-is-read-from-the-kernel")
+
+
 # ---------------------------------------------------------------------------
 # dependencies
 # ---------------------------------------------------------------------------

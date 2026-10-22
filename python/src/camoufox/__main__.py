@@ -880,6 +880,36 @@ def server():
     launch_server()
 
 
+@cli.command(name="gpu-xorg-config")
+@click.argument("gpu", required=False)
+def gpu_xorg_config(gpu: Optional[str] = None) -> None:
+    """
+    Print the Xorg config headless="virtual-gpu" needs for GPU
+    """
+    from .exceptions import GpuDisplayError
+    from .gpudisplay import select_gpu, xorg_config
+
+    try:
+        click.echo(xorg_config(select_gpu(gpu)), nl=False)
+    except GpuDisplayError as e:
+        raise click.ClickException(str(e)) from e
+
+
+@cli.command(name="gpu-setup")
+@click.argument("gpu", required=False)
+def gpu_setup(gpu: Optional[str] = None) -> None:
+    """
+    Print a root script that sets this machine up for headless="virtual-gpu" on GPU
+    """
+    from .exceptions import GpuDisplayError
+    from .gpudisplay import select_gpu, setup_script
+
+    try:
+        click.echo(setup_script(select_gpu(gpu)), nl=False)
+    except GpuDisplayError as e:
+        raise click.ClickException(str(e)) from e
+
+
 class VersionInfo:
     def __init__(self):
         from rich.table import Table

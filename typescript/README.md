@@ -154,7 +154,27 @@ host's only when the identity claims the host's GPU. Otherwise
 |---|---|---|
 | `false` (default) | A normal window | Needs a display. |
 | `true` | Firefox headless | Camoufox patches the headless tells it knows about. |
-| `"virtual"` | A headed browser on a private Xvfb display | Linux only, needs `Xvfb` and `setpriv` (util-linux). Handled by `Camoufox()`, `NewBrowser()` and `launchServer()`. The display is 1x1 unless `CAMOUFOX_VIRTUAL_DISPLAY_SIZE` (e.g. `1920x1080x24`) says otherwise. |
+| `"virtual"` | A headed browser on a private Xvfb display | Linux only, needs `Xvfb` and `setpriv` (util-linux). Handled by `Camoufox()`, `NewBrowser()` and `launchServer()`. The display is 1x1 unless `CAMOUFOX_VIRTUAL_DISPLAY_SIZE` (e.g. `1920x1080x24`) says otherwise. Xvfb has no GPU: canvas and WebGL render in software. |
+| `"virtual-gpu"` | A headed browser on a private, headless Xorg server bound to one GPU | Linux only, needs Xorg and the card's driver. Canvas and WebGL render on the card. Handled like `"virtual"`. |
+
+```javascript
+import { Camoufox } from "camoufox";
+
+const browser = await Camoufox({ headless: "virtual-gpu", gpu: "0000:01:00.0", os: "linux" });
+```
+
+The card is named by `gpu` or `CAMOUFOX_GPU`, never guessed. Without root,
+set the machine up once per card. This installs Xorg and its setuid wrapper,
+lets the wrapper start Xorg for any user and installs the card's config. A
+launch that fails for want of it ends its error with this command:
+
+```bash
+npx camoufox gpu-setup 0000:01:00.0 | sudo sh
+```
+
+The launch checks that the browser renders on the card, and the identity claims
+that card. The Python README explains the selectors, the checks and the
+errors: [The GPU display](https://github.com/daijro/camoufox/blob/main/python/README.md#the-gpu-display).
 
 ### Remote server
 
@@ -187,7 +207,7 @@ await plain.close();
 Prefer `NewBrowser()`: it also defaults new pages to no viewport when the
 window size is spoofed, and to the host's own color scheme and motion settings.
 `launchOptions()` returns Playwright's camelCase keys (`executablePath`,
-`firefoxUserPrefs`), and does not handle `headless: "virtual"`.
+`firefoxUserPrefs`), and does not handle `headless: "virtual"` or `"virtual-gpu"`.
 
 ## Launch options
 
@@ -199,7 +219,9 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | Option | Type | Default | Effect |
 |---|---|---|---|
 | `os` | `string \| string[]` | fpgen's real-world mix | `"windows"`, `"macos"`, `"linux"`, or a list to pick from. |
-| `headless` | `boolean \| "virtual"` | `false` | See [Headless modes](#headless-modes). |
+| `headless` | `boolean \| "virtual" \| "virtual-gpu"` | `false` | See [Headless modes](#headless-modes). |
+| `gpu` | `string \| number` | `CAMOUFOX_GPU`, or the only GPU | The card for `headless: "virtual-gpu"`. Not taken by `launchOptions()`. |
+| `require_gpu` | `boolean` | `true` | With `headless: "virtual-gpu"`, fail the launch when the browser does not render on the card; `false` warns. Not taken by `launchOptions()`. |
 | `proxy` | `{ server, username?, password?, bypass? }` | none | Playwright proxy. |
 | `geoip` | `boolean \| string` | none | `true` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. Without a proxy, also decides whether IPv6 stays on. |
 | `geoip_db` | `string` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
@@ -254,6 +276,8 @@ and `from_options` (an object from `launchOptions()` to use as is).
 | `path` | | Print the data directory (`~/.cache/camoufox` on Linux). |
 | `test [url]` | `--executable-path <path>` | Open a headed browser with the Playwright inspector. |
 | `server` | | Start a Playwright server and print its websocket endpoint. |
+| `gpu-setup [gpu]` | | Print the root script that sets this machine up for `headless: "virtual-gpu"` on the card `gpu` names (or `CAMOUFOX_GPU`). Run it with `\| sudo sh`. |
+| `gpu-xorg-config [gpu]` | | Print the Xorg config `headless: "virtual-gpu"` needs for the card `gpu` names (or `CAMOUFOX_GPU`). |
 
 Each release is paired with the one browser build it was built and tested with,
 the same build as the Python release of the same version, and every launch uses

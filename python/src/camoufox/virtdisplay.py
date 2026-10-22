@@ -4,7 +4,7 @@ import select
 import subprocess  # nosec
 import time
 from shutil import which
-from typing import Optional
+from typing import Dict, List, Optional
 
 from camoufox.exceptions import (
     CannotExecuteXvfb,
@@ -13,8 +13,10 @@ from camoufox.exceptions import (
 )
 from camoufox.pkgman import OS_NAME
 
-# Safe timeout for Xvfb writing display num, prevents infinite hang.
-DISPLAYFD_READ_TIMEOUT_S = 10.0
+# Safe timeout for Xvfb writing display num, prevents infinite hang. A cold first
+# Xvfb on a fresh host took 0.6-8.4 s to report (lang315/camoufox#157), so 10 s
+# failed launches that would have succeeded.
+DISPLAYFD_READ_TIMEOUT_S = 30.0
 
 # Xvfb screen geometry for headless="virtual". The root window size is not
 # observable (see virtual-display-default-1x1x24 in ci/tribal-rules.yml);
@@ -94,24 +96,43 @@ class VirtualDisplay:
             raise CannotFindXvfb("Please install util-linux (for setpriv) to use headless mode.")
         return path
 
+    # What get() calls the server in its errors, and what it raises.
+    _name = "Xvfb"
+    _error = CannotExecuteXvfb
+
+    def _wrapper(self) -> List[str]:
+        """What execs the server. setpriv's parent-death signal stops Xvfb when
+        this process dies without reaching kill(), even by SIGKILL; SIGTERM lets
+        Xvfb remove its own lock and socket. See xvfb-dies-with-its-launcher in
+        ci/tribal-rules.yml."""
+        return [self.setpriv_path, "--pdeathsig", "TERM"]
+
+    def _command(self) -> List[str]:
+        """The server's argv, less -displayfd, which get() adds."""
+        return [self.xvfb_path, *self.xvfb_args]
+
+    def _server_env(self) -> Optional[Dict[str, str]]:
+        # Force Mesa software GLX; we don't use the GPU anyway.
+        return {**os.environ, "__GLX_VENDOR_LIBRARY_NAME": "mesa", "LIBGL_ALWAYS_SOFTWARE": "1"}
+
+    def _starting(self) -> None:
+        """Called about every 100ms while the server has not reported a display."""
+
+    def _ready(self) -> None:
+        """Called once the server has reported its display."""
+
     def get(self) -> str:
         self._assert_linux()
 
         if self.proc is None:
-            # Launch Xvfb with -displayfd so Xvfb itself picks a free display
+            # Launch the server with -displayfd so it picks a free display
             # number atomically and reports it back. Avoids userspace races.
             # subprocess.Popen's pass_fds keeps an fd at its parent number in
             # the child (unlike Node's `stdio: [..., 'pipe']` which renumbers
-            # to 3), so we tell Xvfb that exact number.
+            # to 3), so we tell the server that exact number.
+            program, *args = self._command()
             read_fd, write_fd = os.pipe()
-            # setpriv's parent-death signal stops Xvfb when this process dies
-            # without reaching kill(), even by SIGKILL; SIGTERM lets Xvfb remove
-            # its own lock and socket. See xvfb-dies-with-its-launcher in
-            # ci/tribal-rules.yml.
-            cmd = [
-                self.setpriv_path, "--pdeathsig", "TERM",
-                self.xvfb_path, "-displayfd", str(write_fd), *self.xvfb_args,
-            ]
+            cmd = [*self._wrapper(), program, "-displayfd", str(write_fd), *args]
             if self.debug:
                 print("Starting virtual display:", " ".join(cmd))
             self.proc = subprocess.Popen(  # nosec
@@ -121,31 +142,29 @@ class VirtualDisplay:
                 stderr=None if self.debug else subprocess.DEVNULL,
                 start_new_session=True,
                 pass_fds=(write_fd,),
-                env={
-                    **os.environ,
-                    # Force Mesa software GLX; we don't use the GPU anyway.
-                    "__GLX_VENDOR_LIBRARY_NAME": "mesa",
-                    "LIBGL_ALWAYS_SOFTWARE": "1",
-                },
+                env=self._server_env(),
             )
-            os.close(write_fd)  # so the read end EOFs when Xvfb closes its end
+            os.close(write_fd)  # so the read end EOFs when the server closes its end
 
             buf = b""
             deadline = time.monotonic() + DISPLAYFD_READ_TIMEOUT_S
             try:
                 while b"\n" not in buf:
                     remaining = deadline - time.monotonic()
-                    if remaining <= 0 or not select.select([read_fd], [], [], remaining)[0]:
+                    if remaining <= 0:
                         self.kill()
-                        raise CannotExecuteXvfb(
-                            f"Xvfb did not report a display within "
+                        raise self._error(
+                            f"{self._name} did not report a display within "
                             f"{int(DISPLAYFD_READ_TIMEOUT_S * 1000)}ms"
                         )
+                    if not select.select([read_fd], [], [], min(remaining, 0.1))[0]:
+                        self._starting()
+                        continue
                     chunk = os.read(read_fd, 64)
                     if not chunk:
                         self.kill()
-                        raise CannotExecuteXvfb(
-                            f"Xvfb did not report a display "
+                        raise self._error(
+                            f"{self._name} did not report a display "
                             f"(got {buf!r}, exit={self.proc.poll()})"
                         )
                     buf += chunk
@@ -156,7 +175,8 @@ class VirtualDisplay:
                 self._display = int(buf.strip())
             except ValueError:
                 self.kill()
-                raise CannotExecuteXvfb(f"Xvfb wrote non-integer display: {buf!r}")
+                raise self._error(f"{self._name} wrote non-integer display: {buf!r}")
+            self._ready()
         elif self.debug:
             print(f"Using virtual display: {self._display}")
 

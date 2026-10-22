@@ -42,7 +42,9 @@ def test_converter_reproduces_the_recorded_device():
     value, less the UNMASKED_* strings, which the browser takes from
     webGl:vendor/renderer rather than the table. Keys since marked removed
     (contextAttributes) are no longer sent. WebGL1's line width range is
-    WebGL2's since Firefox 156 (test_webgl1_line_width_range_is_webgl2s)."""
+    WebGL2's since Firefox 156 (test_webgl1_line_width_range_is_webgl2s), and
+    Firefox 158 adds EXT_polygon_offset_clamp on this desktop GL device
+    (test_polygon_offset_clamp_follows_the_backend)."""
     removed = {
         entry["property"]
         for entry in json.loads(PROPERTIES.read_text())
@@ -51,6 +53,8 @@ def test_converter_reproduces_the_recorded_device():
     old = json.loads((Path(__file__).parent / "data" / "webgl-gtx980-linux.json").read_text())
     old = {key: value for key, value in old.items() if key not in removed}
     old["webGl:parameters"]["33902"] = old["webGl2:parameters"]["33902"]
+    for key in ("webGl:supportedExtensions", "webGl2:supportedExtensions"):
+        old[key] = sorted([*old[key], "EXT_polygon_offset_clamp"], key=str.casefold)
     new = webgl_for_gpu("lin", *_GTX_980_LINUX, seed=0)
 
     assert new.keys() == old.keys()
@@ -196,7 +200,9 @@ def test_draft_extensions_filtered_on_every_os():
     webgl2 = {**recorded, "supportedExtensions": ["EXT_texture_norm16", "WEBGL_clip_cull_distance", "OVR_multiview2"]}
     for target_os in OSES:
         config = webgl.to_config(recorded, webgl2, target_os)
-        backend = ["EXT_depth_clamp"] if target_os == "win" else []
+        # A device with WebGL2 is D3D11 feature level 10_0 or above, where ANGLE
+        # also clamps polygon offsets; the recording carries no desktop GL mark.
+        backend = ["EXT_depth_clamp", "EXT_polygon_offset_clamp"] if target_os == "win" else []
         assert config["webGl:supportedExtensions"] == ["ANGLE_instanced_arrays", *backend]
         assert config["webGl2:supportedExtensions"] == (backend + ["OVR_multiview2"] if target_os == "win" else [])
 
@@ -206,6 +212,21 @@ def test_windows_exposes_ext_depth_clamp_on_every_device():
     fpgen's Windows records come from Firefox 146, which did not."""
     for key in ("webGl:supportedExtensions", "webGl2:supportedExtensions"):
         assert all("EXT_depth_clamp" in exts for exts in _extensions("win", key) if exts), key
+
+
+def test_polygon_offset_clamp_follows_the_backend():
+    """Firefox 158 exposes EXT_polygon_offset_clamp on ANGLE's D3D11 backend
+    from feature level 10_0 (every device with WebGL2) and on Linux desktop GL
+    (the recordings with EXT_depth_clamp), never on macOS's GL 4.1; fpgen's
+    Firefox 146 records predate it."""
+    for target_os in OSES:
+        for s in range(100):
+            config = sample_webgl_for_screen(target_os, 1920, 1080, s)
+            desktop_gl = "EXT_depth_clamp" in config["webGl:supportedExtensions"]
+            want = {"win": config["webGl2Enabled"], "lin": desktop_gl, "mac": False}[target_os]
+            for key in ("webGl:supportedExtensions", "webGl2:supportedExtensions"):
+                if key in config:
+                    assert ("EXT_polygon_offset_clamp" in config[key]) == want, (target_os, s, key)
 
 
 def test_extensions_are_in_firefoxs_order():

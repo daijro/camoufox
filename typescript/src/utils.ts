@@ -44,6 +44,7 @@ import {
 	WINDOWS_11_MARKER_FONTS,
 } from "./fingerprints.js";
 import { geoipAllowed, getGeolocation } from "./geolocation.js";
+import { GPU_PREFS, GpuDisplay, proveGpu, selectGpu } from "./gpudisplay.js";
 import {
 	addCanvasPlaceholder,
 	type Gpu,
@@ -88,7 +89,7 @@ import {
 	pyTypeName,
 	ValueError,
 } from "./pycompat.js";
-import type { VirtualDisplay } from "./virtdisplay.js";
+import { VirtualDisplay } from "./virtdisplay.js";
 import { FallbackWarning, LeakWarning, warn } from "./warnings.js";
 import { firefoxGpus, sampleWebglForScreen, webglForGpu } from "./webgl.js";
 
@@ -223,6 +224,7 @@ export const utilsDeps = {
 	generateRandomVoiceSubset,
 	setMediaDevicesDefaults,
 	hostGpu,
+	selectGpu,
 	// The WebGL draws read fpgen's model, fetched on first use like Python's.
 	firefoxGpus: async (targetOs: string) => {
 		await ensureModel();
@@ -1080,6 +1082,7 @@ export async function hostIdentity(
 				fromOptions.executablePath,
 				fromOptions.headless,
 				fromOptions.env,
+				prefs,
 			),
 	);
 	return covered ? null : [hostOs, gpu];
@@ -1161,14 +1164,68 @@ export function attachNoViewportDefault<T>(target: T): T {
 	return target;
 }
 
+/** The headless modes NewBrowser and launchServer accept. */
+export type Headless = boolean | "virtual" | "virtual-gpu";
+
+/** The options of the display headless="virtual-gpu" starts. */
+export interface GpuDisplayOptions {
+	/** The GPU for headless="virtual-gpu": an index, a render or card node, a
+	 * PCI address, vendor:device ids or a vendor name. Defaults to
+	 * $CAMOUFOX_GPU, or the host's only GPU. */
+	gpu?: string | number;
+	/** Fail the launch (the default) when the browser on the GPU display does
+	 * not render on the GPU; false warns instead. */
+	require_gpu?: boolean;
+}
+
 /**
- * Attaches the virtual display to the browser's cleanup. (Python has an async
- * and a sync variant; playwright-core has one API.)
+ * Start the display headless="virtual" or "virtual-gpu" asks for.
+ *
+ * Takes the display's own options out of `options` and points the launch at
+ * the display. Returns the display, or null, and the headless value to launch
+ * with.
  */
-export function attachVirtualDisplay<T>(
+export async function startVirtualDisplay(
+	headless: Headless | undefined,
+	debug: boolean | undefined,
+	options: LaunchOptions & GpuDisplayOptions,
+): Promise<[VirtualDisplay | null, boolean | undefined]> {
+	const { gpu, require_gpu } = options;
+	delete options.gpu;
+	delete options.require_gpu;
+	let display: VirtualDisplay;
+	if (headless === "virtual-gpu") {
+		display = new GpuDisplay(
+			utilsDeps.selectGpu(gpu),
+			debug ?? false,
+			require_gpu !== false,
+		);
+		options.firefox_user_prefs = {
+			...GPU_PREFS,
+			...options.firefox_user_prefs,
+		};
+	} else if (gpu !== undefined || require_gpu !== undefined) {
+		throw new ValueError(
+			"gpu and require_gpu apply to headless='virtual-gpu' only",
+		);
+	} else if (headless === "virtual") {
+		display = new VirtualDisplay(debug ?? false);
+	} else {
+		return [null, headless];
+	}
+	options.virtual_display = await display.get();
+	return [display, false];
+}
+
+/**
+ * Attaches the virtual display to the browser's cleanup, and on a GPU display
+ * checks the browser renders on the GPU. (Python has an async and a sync
+ * variant; playwright-core has one API.)
+ */
+export async function attachVirtualDisplay<T>(
 	browser: T,
 	virtualDisplay?: VirtualDisplay | null,
-): T {
+): Promise<T> {
 	if (!virtualDisplay) return browser; // Skip if no virtual display is provided
 
 	const target = browser as any;
@@ -1188,6 +1245,14 @@ export function attachVirtualDisplay<T>(
 	);
 	target._virtualDisplay = virtualDisplay;
 
+	if (virtualDisplay instanceof GpuDisplay) {
+		try {
+			await proveGpu(target, virtualDisplay);
+		} catch (error) {
+			await target.close();
+			throw error;
+		}
+	}
 	return browser;
 }
 
@@ -1850,7 +1915,8 @@ export async function launchOptions({
 		pyTruthy(webgl_config) ||
 			(pyTruthy(config["webGl:vendor"]) && pyTruthy(config["webGl:renderer"])),
 		Boolean(block_webgl),
-		() => utilsDeps.hostGpu(resolvedExecutable, headless, env),
+		() =>
+			utilsDeps.hostGpu(resolvedExecutable, headless, env, firefox_user_prefs),
 	);
 	if (coverCanvas) {
 		addCanvasPlaceholder(firefox_user_prefs);
