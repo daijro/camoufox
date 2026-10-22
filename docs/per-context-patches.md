@@ -22,7 +22,8 @@ for the calling window's context, and is gone before any page script runs
 | `setNavigatorPlatform(platform)` | `navigator-spoofing.patch` | `navigator.platform` |
 | `setNavigatorOscpu(oscpu)` | `navigator-spoofing.patch` | `navigator.oscpu` |
 | `setNavigatorHardwareConcurrency(cores)` | `navigator-spoofing.patch` | `navigator.hardwareConcurrency` |
-| `setNavigatorUserAgent(ua)` | `navigator-spoofing.patch` | `navigator.userAgent`, in workers too; `navigator.appVersion` is derived from it |
+| `setNavigatorAppVersion(appVersion)` | `navigator-spoofing.patch` | `navigator.appVersion`, in workers too |
+| `setNavigatorUserAgent(ua)` | `navigator-spoofing.patch` | `navigator.userAgent`, in workers too |
 | `setWebRTCIPv4(ip)` | `webrtc-ip-spoofing.patch` | ICE candidates, SDP, `getStats()` |
 | `setWebRTCIPv6(ip)` | `webrtc-ip-spoofing.patch` | The same, for IPv6 |
 | `setWebGLVendor(vendor)` | `webgl-spoofing.patch` | `UNMASKED_VENDOR_WEBGL` |
@@ -158,7 +159,7 @@ real value.
 | `audio-fingerprint-manager.patch` | `AudioBuffer.getChannelData`, `copyFromChannel`; `AnalyserNode.getFloatFrequencyData`, `getByteFrequencyData`, `getFloatTimeDomainData`, `getByteTimeDomainData` | A small deterministic transform of the samples, seeded per context. All six read paths are covered, because covering only `getChannelData` is bypassable. Falls back to `audio:seed` in `CAMOU_CONFIG`. |
 | `timezone-spoofing.patch` | SpiderMonkey `DateTimeInfo` per realm (`JS::SetRealmTimeZoneOverride`), `nsGlobalWindowOuter::SetNewDocument`, `WorkerPrivate::GetOrCreateGlobalScope` | The only patch inside SpiderMonkey. Re-applied on navigation and in dedicated, shared and service workers; also sets a process-wide override. Invalid IDs throw `TypeError`. |
 | `screen-spoofing.patch` | `nsScreen::GetRect`, `nsDeviceContext`, `nsMediaFeatures.cpp` | CSS `device-width` and `color` agree with `screen.*`. |
-| `navigator-spoofing.patch` | `Navigator::GetPlatform`, `GetOscpu`, `HardwareConcurrency`, `GetUserAgent`, `GetAppVersion` (from the context's user agent); the `WorkerNavigator` versions of platform, cores, UA and appVersion | Falls back to `navigator.*` in `CAMOU_CONFIG`. |
+| `navigator-spoofing.patch` | `Navigator::GetPlatform`, `GetOscpu`, `HardwareConcurrency`, `GetUserAgent`, `GetAppVersion`; the `WorkerNavigator` versions of platform, cores, UA and appVersion | Falls back to `navigator.*` in `CAMOU_CONFIG`. |
 | `webrtc-ip-spoofing.patch` | `SanitizeSDPForIPLeak`, `CandidateReady`, candidate `.address`/`.relatedAddress`, `getStats()`, `UpdateDefaultCandidate`, `NrSocketBase::CreateSocket` | Forces `default_address_only` while spoofing; loopback, link-local and private addresses are left alone. UDP candidate ports come from the ephemeral range of the identity's OS (`MaskConfig::SpoofedEphemeralPorts()`), so a Windows identity on Linux never shows a Linux port. |
 | `webgl-spoofing.patch` | `ClientWebGLContext::GetParameter` | Per context: vendor and renderer. Global only (`CAMOU_CONFIG`): parameters, extensions, shader precision. Works from `OffscreenCanvas` in workers. |
 | `font-list-spoofing.patch` | `gfxPlatformFontList::FindAndAddFamiliesLocked` | A thread-local context id, set by an RAII guard in `FontFaceSet::Check/Load` and `gfxFontGroup::EnsureFontList`, avoids changing ~50 signatures. The list is in the shared store, so it holds in every content process. An `OffscreenCanvas` in a worker takes the worker's context (`anti-font-fingerprinting.patch`); other worker lookups are not filtered. |
@@ -200,6 +201,7 @@ The User-Agent's version is rewritten to the running browser's.
 | Value | Source |
 |---|---|
 | UA, platform, cores, oscpu | fpgen or the preset; UA version set to the browser's |
+| appVersion | Derived from the UA (`_app_version_from_user_agent()`), as Firefox derives it |
 | Screen, color depth | fpgen or the preset |
 | WebGL | One GPU fpgen recorded for Firefox on that OS, weighted by its share and checked against the machine (`coherence.gpu_fits_machine()`); `webgl_for_gpu()` adds its parameters, extensions and shader precisions |
 | Fonts | `_generate_random_font_subset()`: one OS-version base plus measured additions ([FONTS.md](FONTS.md)); never from presets |

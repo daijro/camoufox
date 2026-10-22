@@ -3,10 +3,10 @@ A NewContext() identity's navigator.appVersion follows its own user agent.
 
 navigator.appVersion came only from the launch config, so a macOS context in
 a Windows launch reported "5.0 (Windows)" beside a Macintosh user agent, in the
-page and in its workers -- a mismatch a page reads in one line.
-NavigatorManager::GetAppVersion derives it from the context's user agent, as
-Firefox derives it from its own platform. The version the context's user agent
-claims is firefox-version-pin's.
+page and in its workers -- a mismatch a page reads in one line. The launcher
+now hands each context the appVersion it derives from that context's user
+agent (setNavigatorAppVersion), so the expected value is the launcher's own
+rule applied to the user agent the page sees.
 
 The launch identity is Windows; contexts claim macOS and Linux, so the
 per-context answer cannot be the launch one by accident. The launch has
@@ -21,11 +21,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import launch_kwargs  # noqa: E402
 
-# Stock Firefox builds appVersion as "5.0 (" + nsHttpHandler's platform + ")":
-# "Windows", "Macintosh", or "X11" -- plus "; Ubuntu" under the Ubuntu snap,
-# whose user agent carries the same token (nsHttpHandler.cpp, InitUserAgentComponents).
-PLATFORM = {"macos": "Macintosh", "linux": "X11", "windows": "Windows"}
-
 READ = """async () => {
   const src = 'postMessage([navigator.appVersion, navigator.userAgent])';
   const w = new Worker(URL.createObjectURL(new Blob([src])));
@@ -34,14 +29,8 @@ READ = """async () => {
 }"""
 
 
-def expected_app_version(os_name: str, user_agent: str) -> str:
-    platform = PLATFORM[os_name]
-    if os_name == "linux" and "; Ubuntu;" in user_agent:
-        platform += "; Ubuntu"
-    return f"5.0 ({platform})"
-
-
 def main() -> int:
+    from camoufox.fingerprints import _app_version_from_user_agent
     from camoufox.sync_api import Camoufox, NewContext
 
     failures = []
@@ -60,7 +49,7 @@ def main() -> int:
 
             for where in ("window", "worker"):
                 app_version, user_agent = seen[where]
-                expected = expected_app_version(os_name, user_agent)
+                expected = _app_version_from_user_agent(user_agent)
                 if app_version != expected:
                     failures.append(
                         f"{os_name} {where}: appVersion {app_version!r}, expected {expected!r} for UA {user_agent!r}"
