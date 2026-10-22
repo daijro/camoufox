@@ -54,9 +54,9 @@ ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
 # Camoufox preferences to cache previous pages and requests
 CACHE_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['cachePrefs']
 
-# Prefs whose Firefox 156 default differs between the Windows and Linux builds
-# (all.js, firefox.js, StaticPrefList.yaml) and that a page or the user can
-# observe, set to the Windows default:
+# Prefs whose default differs between Firefox's Windows and Linux builds (all.js,
+# firefox.js and StaticPrefList.yaml, checked on 158) and that a page or the
+# user can observe, set to the Windows default:
 #   - eat_space_to_next_word: double-click selects the trailing space too.
 #   - general.autoScroll, middlemouse.*, searchclipboardfor.middleclick,
 #     clipboard.autocopy: middle click autoscrolls. Linux instead pastes the
@@ -1356,8 +1356,8 @@ def launch_options(
     if target_os == 'win' and _host_os_key() != 'win':
         # Math.sin/cos/tan/pow: the last bit differs between glibc (or
         # fdlibm) and the Windows CRT, so one call identifies the host OS.
-        # windows-crt-math.patch computes them as the CRT does; measured
-        # against stock 152.0.4 on Windows, 15,991 of 15,991 results match.
+        # windows-crt-math.patch computes them as the CRT does, and its
+        # guard compares them with stock Firefox on Windows.
         firefox_user_prefs.setdefault('javascript.options.use_ucrt_math', True)
 
         # Keyboard: Windows' shortcut tables instead of GTK's text bindings
@@ -1372,9 +1372,9 @@ def launch_options(
 
         # The scrollbars pinned above are drawn by the host build's theme: on
         # a Linux host a Windows 10 identity's classic scrollbars measured
-        # 12 px (GTK's) where stock 152.0.4 on Windows measures 17. Draw
-        # Windows' own (widget.non-native-theme.scrollbar.style: 4 Windows 10,
-        # 5 Windows 11), at Windows' size rather than the host's system metric.
+        # 12 px (GTK's) where stock Firefox on Windows draws 17. Draw Windows'
+        # own (widget.non-native-theme.scrollbar.style: 4 Windows 10, 5
+        # Windows 11), at Windows' 17 px rather than the host's system metric.
         overlay = firefox_user_prefs.get('ui.useOverlayScrollbars')
         firefox_user_prefs.setdefault('widget.non-native-theme.scrollbar.style', 5 if overlay else 4)
         firefox_user_prefs.setdefault('widget.non-native-theme.win.scrollbar.use-system-size', False)
