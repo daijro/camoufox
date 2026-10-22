@@ -540,7 +540,7 @@ The full option list is in the [Python README](python/README.md#launch-options).
 | Telemetry and data reporting removed at compile time | `librewolf/` patches |
 | Onboarding messages disabled | `ghostery/` patch |
 | No bundled search engines | `no-search-engines` patch |
-| Mozilla services and background traffic turned off | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
+| Optional Mozilla services and background traffic turned off; signed Remote Settings remains available for certificate revocations | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
 | Stock browser UI: no theme, toolbar or dialog changes | |
 
 > [!NOTE]
