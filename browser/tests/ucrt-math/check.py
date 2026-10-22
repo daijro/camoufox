@@ -2,10 +2,12 @@
 
     python3 browser/tests/ucrt-math/check.py
 
-Builds the two C files on their own (no Firefox needed), the way js/src does:
--ffp-contract=off, so each operation rounds exactly once, as the CRT's
-instructions do. Then compares every result with expected.u64.xz, recorded from
-ucrtbase.dll by record.py. Any difference fails.
+First checks that the tables in UcrtMath*Tables.h are what
+browser/scripts/gen-ucrt-math-tables.py generates. Then builds the two C files
+on their own (no Firefox needed), the way js/src does: -ffp-contract=off, so
+each operation rounds exactly once, as the CRT's instructions do. Then compares
+every result with expected.u64.xz, recorded from ucrtbase.dll by record.py. Any
+difference fails.
 """
 
 import ctypes
@@ -24,6 +26,7 @@ from inputs import dbl, pow_inputs, trig_inputs  # noqa: E402
 from record import inputs_digest  # noqa: E402
 
 SRC = HERE.parents[1] / "additions" / "js" / "src" / "builtin"
+GENERATOR = HERE.parents[1] / "scripts" / "gen-ucrt-math-tables.py"
 CFLAGS = ["-O2", "-fPIC", "-shared", "-ffp-contract=off", "-Wall", "-Wextra", "-Werror"]
 
 
@@ -36,6 +39,7 @@ def build(tmp):
 
 
 def main():
+    subprocess.run([sys.executable, str(GENERATOR), "--check"], check=True)
     provenance = json.loads((HERE / "provenance.json").read_text())
     trig, pw = trig_inputs(), pow_inputs()
     if inputs_digest(trig, pw) != provenance["inputs_sha256"]:

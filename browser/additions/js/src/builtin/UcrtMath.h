@@ -9,8 +9,10 @@
  * (ucrtbase.dll, x64, FMA3 code path), for builds that present as Windows on
  * another OS. Math.sin/cos/tan/pow are a cheap, well-known fingerprint: the
  * last bit of their results differs between the platform math libraries, so a
- * page can tell glibc or fdlibm apart from the CRT. These are ports of the
- * CRT's own algorithms, checked bit for bit against ucrtbase.dll by
+ * page can tell glibc or fdlibm apart from the CRT. These implement the
+ * algorithms the CRT uses (Tang's table-driven log and exp for pow; Cody-Waite
+ * and Payne-Hanek reduction with AMD LibM's kernels for the rest; see each
+ * file), checked bit for bit against outputs recorded from ucrtbase.dll by
  * browser/tests/ucrt-math/check.py and against Windows Firefox by the
  * windows-crt-math patch guard.
  *
