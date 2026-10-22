@@ -13,7 +13,7 @@ ADDONS_DIR = INSTALL_DIR / "addons"
 
 # One lock for the module: `with Lock():` on a fresh multiprocessing.Lock per call
 # guarded nothing, so concurrent launches in one process raced the same
-# check-then-extract (rubenvereecken/camoufox ec08bf9).
+# check-then-extract.
 _EXTRACT_LOCK = Lock()
 
 
@@ -67,8 +67,16 @@ def download_and_extract(url: str, extract_path: str, name: str) -> None:
     tmp_dir = tempfile.mkdtemp(prefix=f".{name}.tmp-", dir=parent)
     try:
         unzip(buffer, tmp_dir, f"Extracting addon ({name})", bar=False)
-        shutil.rmtree(extract_path, ignore_errors=True)
-        os.replace(tmp_dir, extract_path)
+        try:
+            os.replace(tmp_dir, extract_path)
+        except OSError:
+            # The target is not empty (or exists at all, on Windows). A complete
+            # copy came from another process and may be loading in its browser,
+            # so keep it; only an incomplete one is replaced.
+            if os.path.exists(os.path.join(extract_path, 'manifest.json')):
+                return
+            shutil.rmtree(extract_path)
+            os.replace(tmp_dir, extract_path)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 

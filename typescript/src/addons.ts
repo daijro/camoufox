@@ -77,8 +77,16 @@ export async function downloadAndExtract(
 	);
 	try {
 		unzip(buffer, tmpDir, `Extracting addon (${name})`, false);
-		fs.rmSync(extractPath, { recursive: true, force: true });
-		fs.renameSync(tmpDir, extractPath);
+		try {
+			fs.renameSync(tmpDir, extractPath);
+		} catch {
+			// The target is not empty (or exists at all, on Windows). A complete
+			// copy came from another process and may be loading in its browser,
+			// so keep it; only an incomplete one is replaced.
+			if (fs.existsSync(path.join(extractPath, "manifest.json"))) return;
+			fs.rmSync(extractPath, { recursive: true });
+			fs.renameSync(tmpDir, extractPath);
+		}
 	} finally {
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	}

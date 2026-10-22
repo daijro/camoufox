@@ -138,3 +138,24 @@ def test_extraction_appears_complete_or_not_at_all(tmp_path, monkeypatch):
     assert seen == [False, False]
     assert sorted(os.listdir(target)) == ["background.js", "manifest.json"]
     assert os.listdir(tmp_path) == [UBO]
+
+
+def test_complete_addon_installed_meanwhile_is_kept(tmp_path, monkeypatch):
+    # Another process can finish installing the addon while this one extracts.
+    # Its copy may already be loading in a browser, so it must not be deleted.
+    target = tmp_path / UBO
+    target.mkdir()
+
+    def fake_unzip(buffer, extract_path, desc=None, bar=True):
+        _write_manifest(None, extract_path, UBO)
+        _write_manifest(None, str(target), UBO)
+        with open(target / "theirs.js", "w") as f:
+            f.write("")
+
+    monkeypatch.setattr(addons_mod, "webdl", lambda *a, **k: b"")
+    monkeypatch.setattr(addons_mod, "unzip", fake_unzip)
+
+    addons_mod.download_and_extract("url", str(target), UBO)
+
+    assert sorted(os.listdir(target)) == ["manifest.json", "theirs.js"]
+    assert os.listdir(tmp_path) == [UBO]

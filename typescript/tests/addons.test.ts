@@ -98,3 +98,54 @@ it("downloads once for concurrent launches", async () => {
 	expect(calls).toEqual(["UBO"]);
 	expect(outs).toEqual([[ubo], [ubo]]);
 });
+
+/** Re-imports addons with webdl stubbed and unzip replaced by `fakeUnzip`. */
+async function withUnzip(fakeUnzip: (extractPath: string) => void) {
+	vi.resetModules();
+	vi.doMock("../src/pkgman.js", async (importOriginal) => ({
+		...(await importOriginal<typeof import("../src/pkgman.js")>()),
+		webdl: async () => Buffer.alloc(0),
+		unzip: (_buffer: Buffer, extractPath: string) => fakeUnzip(extractPath),
+	}));
+	const mod: Addons = await import("../src/addons.js");
+	vi.doUnmock("../src/pkgman.js");
+	return mod;
+}
+
+it("extracts so the addon appears complete or not at all", async () => {
+	// Another process checks for manifest.json without the chain, so the addon
+	// directory must never hold a manifest while its other files are missing.
+	fs.mkdirSync(ubo, { recursive: true });
+	const seen: boolean[] = [];
+	const mod = await withUnzip((extractPath) => {
+		seen.push(fs.existsSync(path.join(ubo, "manifest.json")));
+		writeManifest(extractPath);
+		fs.writeFileSync(path.join(extractPath, "background.js"), "");
+		seen.push(fs.existsSync(path.join(ubo, "manifest.json")));
+	});
+
+	await mod.downloadAndExtract("url", ubo, "UBO");
+
+	expect(seen).toEqual([false, false]);
+	expect(fs.readdirSync(ubo).sort()).toEqual([
+		"background.js",
+		"manifest.json",
+	]);
+	expect(fs.readdirSync(path.dirname(ubo))).toEqual(["UBO"]);
+});
+
+it("keeps a complete addon installed meanwhile", async () => {
+	// Another process can finish installing the addon while this one extracts.
+	// Its copy may already be loading in a browser, so it must not be deleted.
+	fs.mkdirSync(ubo, { recursive: true });
+	const mod = await withUnzip((extractPath) => {
+		writeManifest(extractPath);
+		writeManifest(ubo);
+		fs.writeFileSync(path.join(ubo, "theirs.js"), "");
+	});
+
+	await mod.downloadAndExtract("url", ubo, "UBO");
+
+	expect(fs.readdirSync(ubo).sort()).toEqual(["manifest.json", "theirs.js"]);
+	expect(fs.readdirSync(path.dirname(ubo))).toEqual(["UBO"]);
+});
