@@ -433,9 +433,6 @@ function setPinned(
 	}
 }
 
-/**
- * Checks & updates Camoufox.
- */
 /** A command's failure, printed as its message, with exit code 1. */
 class CommandFailed extends Error {}
 
@@ -542,6 +539,9 @@ async function syncedBuild(
 	return [RepoConfig.findByName(repo.name), selected];
 }
 
+/**
+ * Checks & updates Camoufox.
+ */
 class CamoufoxUpdate extends CamoufoxFetcher {
 	currentVerStr: string | null = null;
 
