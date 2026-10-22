@@ -21,6 +21,10 @@ export type DefaultAddon = keyof typeof DefaultAddons;
 // Addons are stored in a shared folder, not per-browser version
 const ADDONS_DIR: string = path.join(INSTALL_DIR, "addons");
 
+// One chain for the module: concurrent launches in one process would otherwise
+// interleave the same check-then-extract at its awaits.
+let extractChain: Promise<unknown> = Promise.resolve();
+
 /**
  * Confirms that the addon paths are valid.
  */
@@ -50,11 +54,17 @@ export async function addDefaultAddons(
 			addons[name] = url;
 		}
 	}
-	await maybeDownloadAddons(addons, addonsList);
+	const run = extractChain.then(() => maybeDownloadAddons(addons, addonsList));
+	extractChain = run.catch(() => undefined);
+	await run;
 }
 
 /**
  * Downloads and extracts an addon from a given URL to a specified path.
+ *
+ * Extracts into a sibling temp dir and renames it into place last, so a
+ * concurrent launch (another process, which the chain cannot see) never finds
+ * a manifest.json in a directory whose other files are still being written.
  */
 export async function downloadAndExtract(
 	url: string,
@@ -62,7 +72,24 @@ export async function downloadAndExtract(
 	name: string,
 ): Promise<void> {
 	const buffer = await webdl(url, `Downloading addon (${name})`, false);
-	unzip(buffer, extractPath, `Extracting addon (${name})`, false);
+	const tmpDir = fs.mkdtempSync(
+		path.join(path.dirname(extractPath), `.${name}.tmp-`),
+	);
+	try {
+		unzip(buffer, tmpDir, `Extracting addon (${name})`, false);
+		try {
+			fs.renameSync(tmpDir, extractPath);
+		} catch {
+			// The target is not empty (or exists at all, on Windows). A complete
+			// copy came from another process and may be loading in its browser,
+			// so keep it; only an incomplete one is replaced.
+			if (fs.existsSync(path.join(extractPath, "manifest.json"))) return;
+			fs.rmSync(extractPath, { recursive: true });
+			fs.renameSync(tmpDir, extractPath);
+		}
+	} finally {
+		fs.rmSync(tmpDir, { recursive: true, force: true });
+	}
 }
 
 /**
@@ -102,8 +129,11 @@ export async function maybeDownloadAddons(
 			await addonsDeps.downloadAndExtract(url, addonPath, addonName);
 			addonsList?.push(addonPath);
 		} catch (e) {
-			// Drop the partial directory so the next run re-downloads.
-			fs.rmSync(addonPath, { recursive: true, force: true });
+			// Drop the partial directory so the next run re-downloads. A complete
+			// one came from another process and may be loading in its browser.
+			if (!fs.existsSync(path.join(addonPath, "manifest.json"))) {
+				fs.rmSync(addonPath, { recursive: true, force: true });
+			}
 			console.log(`Failed to download and extract ${addonName}: ${e}`);
 		}
 	}

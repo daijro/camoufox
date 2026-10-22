@@ -12,11 +12,13 @@ Run with:
 """
 
 import os
+import threading
+import time
 
 import pytest
 
 from camoufox import addons as addons_mod
-from camoufox.addons import DefaultAddons, maybe_download_addons
+from camoufox.addons import DefaultAddons, add_default_addons, maybe_download_addons
 
 UBO = DefaultAddons.UBO.name
 
@@ -88,4 +90,90 @@ def test_failed_download_removes_partial_dir(addons_dir, monkeypatch):
     # The partial dir must be gone so the next run re-downloads instead of
     # trusting an addon that has no manifest.json.
     assert not path.exists()
+    assert out == []
+
+
+def test_concurrent_launches_download_once(addons_dir, monkeypatch):
+    # Two launches in one process share the check-then-extract. A lock created
+    # per call guarded nothing, so both saw no manifest and both downloaded.
+    calls = []
+
+    def slow(url, extract_path, name):
+        calls.append(name)
+        time.sleep(0.2)
+        _write_manifest(url, extract_path, name)
+
+    monkeypatch.setattr(addons_mod, "download_and_extract", slow)
+
+    outs = [[], []]
+    threads = [threading.Thread(target=add_default_addons, args=(out,)) for out in outs]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert calls == [UBO]
+    assert outs == [[str(addons_dir / UBO)]] * 2
+
+
+def test_extraction_appears_complete_or_not_at_all(tmp_path, monkeypatch):
+    # Another process checks for manifest.json without the lock, so the addon
+    # directory must never hold a manifest while its other files are missing.
+    target = tmp_path / UBO
+    target.mkdir()
+    seen = []
+
+    def fake_unzip(buffer, extract_path, desc=None, bar=True):
+        seen.append((target / "manifest.json").exists())
+        _write_manifest(None, extract_path, UBO)
+        with open(os.path.join(extract_path, "background.js"), "w") as f:
+            f.write("")
+        seen.append((target / "manifest.json").exists())
+
+    monkeypatch.setattr(addons_mod, "webdl", lambda *a, **k: b"")
+    monkeypatch.setattr(addons_mod, "unzip", fake_unzip)
+
+    addons_mod.download_and_extract("url", str(target), UBO)
+
+    assert seen == [False, False]
+    assert sorted(os.listdir(target)) == ["background.js", "manifest.json"]
+    assert os.listdir(tmp_path) == [UBO]
+
+
+def test_complete_addon_installed_meanwhile_is_kept(tmp_path, monkeypatch):
+    # Another process can finish installing the addon while this one extracts.
+    # Its copy may already be loading in a browser, so it must not be deleted.
+    target = tmp_path / UBO
+    target.mkdir()
+
+    def fake_unzip(buffer, extract_path, desc=None, bar=True):
+        _write_manifest(None, extract_path, UBO)
+        _write_manifest(None, str(target), UBO)
+        with open(target / "theirs.js", "w") as f:
+            f.write("")
+
+    monkeypatch.setattr(addons_mod, "webdl", lambda *a, **k: b"")
+    monkeypatch.setattr(addons_mod, "unzip", fake_unzip)
+
+    addons_mod.download_and_extract("url", str(target), UBO)
+
+    assert sorted(os.listdir(target)) == ["manifest.json", "theirs.js"]
+    assert os.listdir(tmp_path) == [UBO]
+
+
+def test_failed_download_keeps_complete_addon(addons_dir, monkeypatch):
+    # This launch's download fails after another process installed the addon.
+    # That copy may already be loading in a browser, so it must not be deleted.
+    path = addons_dir / UBO
+
+    def fail(url, extract_path, name):
+        _write_manifest(url, str(path), name)
+        raise RuntimeError("network died mid-download")
+
+    monkeypatch.setattr(addons_mod, "download_and_extract", fail)
+
+    out = []
+    maybe_download_addons([DefaultAddons.UBO], out)
+
+    assert (path / "manifest.json").exists()
     assert out == []

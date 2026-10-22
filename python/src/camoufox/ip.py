@@ -85,6 +85,13 @@ def validate_ip(ip: str) -> None:
         raise InvalidIP(f"Invalid IP address: {ip}")
 
 
+# Probing the exit IP through a proxy adds a hop and a TLS handshake behind it; 5 s
+# is not enough for a proxy that routes the long way round, and every URL timing out
+# fails the whole launch. Direct probes keep 5 s.
+DIRECT_IP_TIMEOUT = 5
+PROXIED_IP_TIMEOUT = 15
+
+
 def proxy_exit_geo(proxy: str) -> Tuple[str, str]:
     """
     The exit IP of `proxy` and that IP's timezone, looked up through the proxy.
@@ -95,7 +102,7 @@ def proxy_exit_geo(proxy: str) -> Tuple[str, str]:
         resp = requests.get(
             "http://ip-api.com/json?fields=status,message,query,timezone",
             proxies=Proxy.as_requests_proxy(proxy),
-            timeout=10,
+            timeout=PROXIED_IP_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -121,7 +128,7 @@ def public_ipv6() -> Optional[str]:
     """
     for url in ("https://api6.ipify.org", "https://v6.ident.me"):
         try:
-            resp = requests.get(url, timeout=5, verify=True)
+            resp = requests.get(url, timeout=DIRECT_IP_TIMEOUT, verify=True)
             resp.raise_for_status()
         except requests.RequestException:
             continue
@@ -153,7 +160,7 @@ def public_ip(proxy: Optional[str] = None) -> str:
             resp = requests.get(
                 url,
                 proxies=Proxy.as_requests_proxy(proxy) if proxy else None,
-                timeout=5,
+                timeout=PROXIED_IP_TIMEOUT if proxy else DIRECT_IP_TIMEOUT,
                 verify=True,
             )
             resp.raise_for_status()

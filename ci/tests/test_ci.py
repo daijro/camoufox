@@ -241,6 +241,37 @@ def test_gate_result_keeps_the_best_outcome_across_retries():
     assert result.tests["t"] == "pass"
 
 
+def test_a_rerun_job_result_replaces_the_first_attempts(tmp_path, monkeypatch):
+    """"Rerun failed jobs" must be able to turn the summary green.
+
+    Every attempt's `results-*` artifacts stay in the run, and the summary
+    merges them all into one directory. When both attempts wrote
+    native_browser.json, one overwrote the other in no particular order: run
+    36266928260's rerun passed, and the summary still reported attempt 1's
+    failure. A rerun's result must land beside the first and win.
+    """
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    results.GateResult(gate="native_browser").finish(results.FAIL).save(tmp_path)
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    results.GateResult(gate="native_browser").finish(results.PASS).save(tmp_path)
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    results.GateResult(gate="patch_guards").finish(results.PASS).save(tmp_path)
+
+    assert len(list(tmp_path.glob("native_browser*.json"))) == 2
+    merged = results.load_all(tmp_path)
+    assert merged["native_browser"]["status"] == results.PASS
+    assert merged["patch_guards"]["status"] == results.PASS
+    assert results.load("native_browser", tmp_path)["status"] == results.PASS
+
+
+def test_a_later_attempt_wins_whatever_order_the_files_sort_in(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "10")
+    results.GateResult(gate="g").finish(results.PASS).save(tmp_path)
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "9")
+    results.GateResult(gate="g").finish(results.FAIL).save(tmp_path)
+    assert results.load_all(tmp_path)["g"]["status"] == results.PASS
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +515,28 @@ def test_every_native_test_file_is_actually_run():
     missing = on_disk - wired
     assert not missing, f"browser/tests/native files that no subset runs: {sorted(missing)}"
     assert not wired - on_disk, f"runner lists files that do not exist: {sorted(wired - on_disk)}"
+
+
+def test_the_gpu_subset_is_never_part_of_all():
+    """No runner has a GPU, and the CI browser job runs `--subset browser`."""
+
+    from ci.run_native import FILES
+
+    assert "test_gpu_display.py" in FILES["gpu"]
+    assert not any("test_gpu_display.py" in group for name, group in FILES.items() if name != "gpu")
+
+
+def test_the_gpu_subset_without_a_card_is_an_error(monkeypatch, tmp_path):
+    """test_gpu_display.py skips itself without CAMOUFOX_GPU; asked for by name,
+    an all-skipped run would read as a pass."""
+
+    from ci import run_native
+
+    monkeypatch.delenv("CAMOUFOX_GPU", raising=False)
+    monkeypatch.setattr(run_native, "run_pytest", lambda **kw: pytest.fail("ran pytest"))
+    assert run_native.main(["--subset", "gpu", "--results-dir", str(tmp_path)]) == 1
+    (record,) = tmp_path.glob("*.json")
+    assert json.loads(record.read_text())["status"] == "error"
 
 
 # ---------------------------------------------------------------------------
@@ -2749,6 +2802,71 @@ def test_build_tester_accepts_every_core_count_pythonlib_presents():
 
 
 # ---------------------------------------------------------------------------
+# packaging
+# ---------------------------------------------------------------------------
+
+
+def _package_module():
+    """browser/scripts/package.py, imported the way it runs (its directory on sys.path)."""
+    import importlib.util
+    import sys
+
+    scripts = CI_ROOT.parent / "browser" / "scripts"
+    sys.path.insert(0, str(scripts))
+    try:
+        spec = importlib.util.spec_from_file_location("camoufox_package", scripts / "package.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path.remove(str(scripts))
+
+
+def test_packaged_font_names_are_ascii(tmp_path, monkeypatch):
+    """A plain `unzip` must extract the release zip in any locale.
+
+    The font bundle carries macOS faces named in Japanese (Hiragino). The zip
+    stores those names correctly as UTF-8, but unzip 6.0 under a C/POSIX locale
+    -- a Docker build, a bare SSH shell -- reports every one as a mismatching
+    local filename and exits 1, which stops a consumer's `set -e` install.
+    """
+    import shlex
+
+    package = _package_module()
+    monkeypatch.chdir(tmp_path)
+    group = tmp_path / "bundle" / "fonts" / "M"
+    group.mkdir(parents=True)
+    (group.parent / "groups.json").write_text('{"readBy": {"mac": ["M"]}}')
+    (group / "18__ヒラギノ角ゴシック W9.ttc").write_bytes(b"w9")
+    (group / "21__ヒラギノ角ゴシック W1.ttc").write_bytes(b"w1")
+    (group / "07__Helvetica.ttc").write_bytes(b"h")
+
+    # Stand in for 7z: the extracted package is empty, and what would be
+    # zipped is read back from the staging directory.
+    packaged = []
+
+    def fake_run(cmd, exit_on_fail=True):
+        args = shlex.split(cmd)
+        if args[:2] == ["7z", "u"]:
+            fonts = pathlib.Path(args[3].removesuffix("/*"), "fonts")
+            packaged.append({p.name: p.read_bytes() for p in fonts.iterdir()})
+
+    monkeypatch.setattr(package, "run", fake_run)
+    monkeypatch.setattr(package, "inject_locales", lambda *args: None)
+    for _ in range(2):
+        (tmp_path / "in.zip").write_bytes(b"")
+        package.add_includes_to_package("in.zip", [], ["macos"], "out.zip", "windows", "158.0", "")
+
+    names = sorted(packaged[0])
+    assert all(name.isascii() for name in names), names
+    assert packaged[0].pop("07__Helvetica.ttc") == b"h"
+    assert all(n.startswith(("18__", "21__")) and n.endswith(".ttc") for n in packaged[0]), names
+    assert sorted(packaged[0].values()) == [b"w1", b"w9"]
+    # Deterministic: the same bundle packages to the same names.
+    assert sorted(packaged[1]) == names
+
+
+# ---------------------------------------------------------------------------
 # build-or-fetch: the published release is used only when it matches the tree
 # ---------------------------------------------------------------------------
 
@@ -2923,6 +3041,26 @@ def test_the_patch_guard_matrix_runs_every_group():
 
     legs = {leg["leg"] for leg in _jobs()["patch-guards"]["strategy"]["matrix"]["include"]}
     assert legs == set(GROUPS) | {"skiplist"}
+
+
+def test_leftover_browsers_sees_content_processes(tmp_path):
+    """Firefox's Linux content processes run plugin-container, beside the binary."""
+    import shutil
+    import subprocess
+
+    from ci.run_patch_guards import leftover_browsers
+
+    # A shell blocked on its builtin read: coreutils may be one binary that
+    # picks its command from argv[0], which a copy named plugin-container loses.
+    child = tmp_path / "plugin-container"
+    shutil.copy2(shutil.which("sh"), child)
+    proc = subprocess.Popen([child, "-c", "read line"], stdin=subprocess.PIPE)
+    try:
+        found = leftover_browsers(tmp_path / "camoufox-bin")
+    finally:
+        proc.kill()
+        proc.wait()
+    assert [f.split()[1] for f in found] == [str(proc.pid)]
 
 
 # ---------------------------------------------------------------------------

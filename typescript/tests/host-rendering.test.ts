@@ -298,17 +298,23 @@ describe.skipIf(!MODEL.ok)("WebGPU", () => {
 });
 
 it("the probe ignores what the launcher adds to the environment", () => {
-	// hostIdentity probes with the launch's env, which carries CAMOU_* and
-	// FONTCONFIG_FILE; that must hit launchOptions' cached probe.
+	// hostIdentity probes with the launch's env and prefs, which carry CAMOU_*,
+	// FONTCONFIG_FILE and prefs that choose no device; that must hit
+	// launchOptions' cached probe.
 	const launch = vi
 		.spyOn(firefox, "launch")
 		.mockImplementation(() => new Promise(() => undefined));
-	const first = hostGpu("/nonexistent/camoufox", true, { DISPLAY: ":0" });
-	const second = hostGpu("/nonexistent/camoufox", true, {
-		DISPLAY: ":0",
-		CAMOU_CONFIG_1: "{}",
-		FONTCONFIG_FILE: "/x",
-	});
+	const first = hostGpu("/nonexistent/camoufox", true, { DISPLAY: ":0" }, {});
+	const second = hostGpu(
+		"/nonexistent/camoufox",
+		true,
+		{
+			DISPLAY: ":0",
+			CAMOU_CONFIG_1: "{}",
+			FONTCONFIG_FILE: "/x",
+		},
+		{ "webgl.force-enabled": true },
+	);
 
 	expect(second).toBe(first);
 	expect(launch).toHaveBeenCalledTimes(1);

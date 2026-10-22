@@ -63,6 +63,11 @@ canvas_noise: >-
     the identity claims another OS or GPU than this machine's, whose canvas would
     show the real one. Pass `canvas_noise=False` to keep stock canvas behaviour.
 
+gpu_software_rendering: >-
+    The browser on the headless="virtual-gpu" display never rendered on the GPU, so it
+    renders canvas and WebGL in software, which a page can tell from the GPU the
+    identity claims. Pass `require_gpu=True` (the default) to fail the launch instead.
+
 block_images: >-
     Blocking image requests has been reported to cause detection issues on major WAFs.
 
