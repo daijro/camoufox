@@ -1713,17 +1713,12 @@ export async function launchOptions({
 
 		// The scrollbars pinned above are drawn by the host build's theme (GTK's
 		// 12 px where Windows 10 draws 17): draw Windows' own, 4 Windows 10 or
-		// 5 Windows 11, at Windows' size rather than the host's system metric.
+		// 5 Windows 11 (17 px: only Windows' build reads a system metric).
 		const overlay = firefox_user_prefs["ui.useOverlayScrollbars"];
 		setInto(
 			firefox_user_prefs,
 			"widget.non-native-theme.scrollbar.style",
 			overlay ? 5 : 4,
-		);
-		setInto(
-			firefox_user_prefs,
-			"widget.non-native-theme.win.scrollbar.use-system-size",
-			false,
 		);
 	}
 

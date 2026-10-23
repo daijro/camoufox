@@ -475,9 +475,6 @@ describe("test_launch_environment: prefs", () => {
 				firefox_user_prefs: { "ui.useOverlayScrollbars": 0 },
 			});
 			expect(classic.prefs[STYLE]).toBe(4);
-			expect(
-				classic.prefs["widget.non-native-theme.win.scrollbar.use-system-size"],
-			).toBe(false);
 			const overlay = await onHost("lin", WIN_UA, {
 				firefox_user_prefs: { "ui.useOverlayScrollbars": 1 },
 			});

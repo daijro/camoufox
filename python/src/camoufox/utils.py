@@ -58,11 +58,9 @@ CACHE_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['cachePrefs']
 # firefox.js and StaticPrefList.yaml, checked on 158) and that a page or the
 # user can observe, set to the Windows default:
 #   - eat_space_to_next_word: double-click selects the trailing space too.
-#   - general.autoScroll, middlemouse.*, searchclipboardfor.middleclick,
-#     clipboard.autocopy: middle click autoscrolls. Linux instead pastes the
+#   - general.autoScroll, middlemouse.*: middle click autoscrolls. Linux instead pastes the
 #     X11 primary selection, firing a paste event no Windows browser sends.
 #   - full-screen-api.transition-duration.*: GTK builds have no transition.
-#   - dom.forms.select.customstyling: <select> dropdowns honour page styling.
 #   - ui.scrollToClick, slider.snapMultiplier, click_and_hold_track: a track
 #     click pages rather than jumps (GTK otherwise reads the desktop setting),
 #     a thumb dragged far off snaps back, and holding on the track stops at
@@ -1374,10 +1372,9 @@ def launch_options(
         # a Linux host a Windows 10 identity's classic scrollbars measured
         # 12 px (GTK's) where stock Firefox on Windows draws 17. Draw Windows'
         # own (widget.non-native-theme.scrollbar.style: 4 Windows 10, 5
-        # Windows 11), at Windows' 17 px rather than the host's system metric.
+        # Windows 11), 17 px: only Windows' build reads a system metric.
         overlay = firefox_user_prefs.get('ui.useOverlayScrollbars')
         firefox_user_prefs.setdefault('widget.non-native-theme.scrollbar.style', 5 if overlay else 4)
-        firefox_user_prefs.setdefault('widget.non-native-theme.win.scrollbar.use-system-size', False)
 
     # Per-character font fallback, LINUX ONLY. Gecko's GlobalFontFallback walks
     # the shared font list for a family whose charmap covers the character; in a

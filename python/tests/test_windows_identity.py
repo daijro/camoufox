@@ -129,7 +129,6 @@ SCROLLBAR_STYLE = "widget.non-native-theme.scrollbar.style"
 def test_windows_identity_draws_windows_scrollbars(launch, overlay, style):
     _, prefs = launch(WIN_UA, firefox_user_prefs={"ui.useOverlayScrollbars": overlay})
     assert prefs[SCROLLBAR_STYLE] == style
-    assert prefs["widget.non-native-theme.win.scrollbar.use-system-size"] is False
 
 
 @pytest.mark.parametrize("ua", [MAC_UA, LIN_UA])
