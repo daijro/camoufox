@@ -10,7 +10,11 @@ neither works.
 
 The guard runs in its own network namespace (unshare -rnm), on a dummy
 interface with 10.77.0.1 and fd77::1 and default routes for both families, and
-its own /etc/hosts naming v6only.test (fd77::1) and dual.test (both). A
+its own /etc/hosts naming v6only.test (fd77::1) and dual.test (both). It brings
+its own resolver too: one on loopback with nothing listening, so a name the
+hosts file lacks fails at once, as on a network whose DNS answers. The host's
+resolver may be unreachable from the namespace, and every lookup then waits
+out its timeouts; the guard runs as on such a host to prove it never does. A
 dual-stack HTTP server answers with the family each request arrived on. With
 the key off, every IPv6 path must work, or the check would be vacuous. With it
 on, the IPv6 literal and v6only.test must fail at once, as an unreachable
@@ -37,7 +41,20 @@ from helpers import resolve_binary  # noqa: E402
 
 INSIDE = "CAMOUFOX_IPV4_ONLY_GUARD_NETNS"
 V4, V6 = "10.77.0.1", "fd77::1"
-HOSTS = f"127.0.0.1 localhost\n::1 localhost\n{V4} dual.test\n{V6} dual.test\n{V6} v6only.test\n"
+FILES = {
+    "hosts": f"127.0.0.1 localhost\n::1 localhost\n{V4} dual.test\n{V6} dual.test\n{V6} v6only.test\n",
+    "nsswitch.conf": "hosts: files dns\n",
+    "resolv.conf": "nameserver 127.0.0.1\n",
+    # 192.0.2.0/24 is TEST-NET-1: the dummy interface swallows what is sent there.
+    "unreachable-resolv.conf": "nameserver 192.0.2.53\n",
+}
+# A host whose /etc/resolv.conf names a resolver the namespace cannot reach, as
+# some GitHub runners' does: there v6only.test waited out two lookups' timeouts
+# (#931).
+UNREACHABLE_RESOLVER = """set -e
+mount --bind "$NET_FILES/unreachable-resolv.conf" /etc/resolv.conf
+exec "$@"
+"""
 SETUP = f"""set -e
 ip link set lo up
 ip link add d0 type dummy
@@ -46,7 +63,9 @@ ip addr add {V4}/24 dev d0
 ip addr add {V6}/64 dev d0 nodad
 ip route add default dev d0
 ip -6 route add default dev d0
-mount --bind "$HOSTS_FILE" /etc/hosts
+for file in hosts nsswitch.conf resolv.conf; do
+  mount --bind "$NET_FILES/$file" /etc/$file
+done
 exec "$@"
 """
 
@@ -160,11 +179,12 @@ def main() -> int:
         print("FAIL: unprivileged user namespaces are denied here. On Ubuntu, run "
               "`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.")
         return 1
-    with tempfile.NamedTemporaryFile("w", suffix=".hosts") as hosts:
-        hosts.write(HOSTS)
-        hosts.flush()
-        env = {**os.environ, INSIDE: "1", "HOSTS_FILE": hosts.name}
-        cmd = ["unshare", "-rnm", "sh", "-c", SETUP, "sh", sys.executable, *sys.argv]
+    with tempfile.TemporaryDirectory() as files:
+        for name, text in FILES.items():
+            Path(files, name).write_text(text)
+        env = {**os.environ, INSIDE: "1", "NET_FILES": files}
+        cmd = ["unshare", "-rm", "sh", "-c", UNREACHABLE_RESOLVER, "sh",
+               "unshare", "-rnm", "sh", "-c", SETUP, "sh", sys.executable, *sys.argv]
         return subprocess.run(cmd, env=env).returncode
 
 
