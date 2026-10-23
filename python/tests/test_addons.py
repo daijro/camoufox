@@ -75,7 +75,7 @@ def test_extracted_addon_is_not_redownloaded(addons_dir, monkeypatch):
     assert out == [str(path)]
 
 
-def test_failed_download_removes_partial_dir(addons_dir, monkeypatch):
+def test_failed_download_raises_and_removes_partial_dir(addons_dir, monkeypatch):
     path = addons_dir / UBO
 
     def fail(url, extract_path, name):
@@ -84,13 +84,13 @@ def test_failed_download_removes_partial_dir(addons_dir, monkeypatch):
 
     monkeypatch.setattr(addons_mod, "download_and_extract", fail)
 
-    out = []
-    maybe_download_addons([DefaultAddons.UBO], out)
+    # Launching without the addon would be a different browser than asked for.
+    with pytest.raises(RuntimeError, match="network died"):
+        maybe_download_addons([DefaultAddons.UBO], [])
 
     # The partial dir must be gone so the next run re-downloads instead of
     # trusting an addon that has no manifest.json.
     assert not path.exists()
-    assert out == []
 
 
 def test_concurrent_launches_download_once(addons_dir, monkeypatch):
@@ -176,4 +176,4 @@ def test_failed_download_keeps_complete_addon(addons_dir, monkeypatch):
     maybe_download_addons([DefaultAddons.UBO], out)
 
     assert (path / "manifest.json").exists()
-    assert out == []
+    assert out == [str(path)]

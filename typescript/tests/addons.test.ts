@@ -64,22 +64,17 @@ it("does not re-download an extracted addon", async () => {
 	expect(out).toEqual([ubo]);
 });
 
-it("removes the partial directory when a download fails", async () => {
+it("raises and removes the partial directory when a download fails", async () => {
 	addons.addonsDeps.downloadAndExtract = async (_url, extractPath) => {
 		fs.mkdirSync(extractPath, { recursive: true }); // partial write, then die
 		throw new Error("network died mid-download");
 	};
-	const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
-	const out: string[] = [];
-	await addons.maybeDownloadAddons({ ...addons.DefaultAddons }, out);
-
+	// Launching without the addon would be a different browser than asked for.
+	await expect(
+		addons.maybeDownloadAddons({ ...addons.DefaultAddons }, []),
+	).rejects.toThrow("network died mid-download");
 	expect(fs.existsSync(ubo)).toBe(false);
-	expect(out).toEqual([]);
-	expect(log).toHaveBeenCalledWith(
-		"Failed to download and extract UBO: Error: network died mid-download",
-	);
-	log.mockRestore();
 });
 
 it("downloads once for concurrent launches", async () => {
@@ -157,12 +152,9 @@ it("keeps a complete addon when a download fails", async () => {
 		writeManifest(ubo);
 		throw new Error("network died mid-download");
 	};
-	const log = vi.spyOn(console, "log").mockImplementation(() => {});
-
 	const out: string[] = [];
 	await addons.maybeDownloadAddons({ ...addons.DefaultAddons }, out);
 
 	expect(fs.existsSync(path.join(ubo, "manifest.json"))).toBe(true);
-	expect(out).toEqual([]);
-	log.mockRestore();
+	expect(out).toEqual([ubo]);
 });
