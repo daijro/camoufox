@@ -54,6 +54,22 @@ ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
 # Camoufox preferences to cache previous pages and requests
 CACHE_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['cachePrefs']
 
+# Prefs whose default differs between Firefox's Windows and Linux builds (all.js,
+# firefox.js and StaticPrefList.yaml, checked on 158) and that a page or the
+# user can observe, set to the Windows default:
+#   - eat_space_to_next_word: double-click selects the trailing space too.
+#   - general.autoScroll, middlemouse.*: middle click autoscrolls. Linux instead pastes the
+#     X11 primary selection, firing a paste event no Windows browser sends.
+#   - full-screen-api.transition-duration.*: GTK builds have no transition.
+#   - ui.scrollToClick, slider.snapMultiplier, click_and_hold_track: a track
+#     click pages rather than jumps (GTK otherwise reads the desktop setting),
+#     a thumb dragged far off snaps back, and holding on the track stops at
+#     the pointer.
+# Windows-only machinery (DirectComposition, ClearType, WMF) does nothing in a
+# Linux build and is left out, as is media.eme.enabled: Windows has PlayReady
+# behind EME, which a Linux build cannot supply.
+WINDOWS_BEHAVIOUR_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['windowsBehaviourPrefs']
+
 
 def _host_os_key() -> Optional[str]:
     """The host OS in fonts.json / target_os terms ('mac', 'win', 'lin')."""
@@ -1331,6 +1347,34 @@ def launch_options(
         firefox_user_prefs.setdefault('ui.useOverlayScrollbars', 1 if windows_11 else 0)
     else:
         firefox_user_prefs.setdefault('ui.useOverlayScrollbars', 1)
+
+    # A Windows identity on another host: answers that come from the host
+    # build's platform code are set to what stock Windows Firefox gives. A
+    # Windows host already gives them, so nothing is set there.
+    if target_os == 'win' and _host_os_key() != 'win':
+        # Math.sin/cos/tan/pow: the last bit differs between glibc (or
+        # fdlibm) and the Windows CRT, so one call identifies the host OS.
+        # windows-crt-math.patch computes them as the CRT does, and its
+        # guard compares them with stock Firefox on Windows.
+        firefox_user_prefs.setdefault('javascript.options.use_ucrt_math', True)
+
+        # Keyboard: Windows' shortcut tables instead of GTK's text bindings
+        # (Ctrl+Up/Down to line start/end, Alt+Backspace undo, Shift+Delete
+        # with no selection deletes), AltGr as keyCode 18 rather than 225,
+        # and Ctrl+Backspace/Delete in rich text deleting a word from a
+        # selection's start (windows-keyboard.patch).
+        config.setdefault('input:windowsKeyboard', True)
+
+        for pref, value in WINDOWS_BEHAVIOUR_PREFS.items():
+            firefox_user_prefs.setdefault(pref, value)
+
+        # The scrollbars pinned above are drawn by the host build's theme: on
+        # a Linux host a Windows 10 identity's classic scrollbars measured
+        # 12 px (GTK's) where stock Firefox on Windows draws 17. Draw Windows'
+        # own (widget.non-native-theme.scrollbar.style: 4 Windows 10, 5
+        # Windows 11), 17 px: only Windows' build reads a system metric.
+        overlay = firefox_user_prefs.get('ui.useOverlayScrollbars')
+        firefox_user_prefs.setdefault('widget.non-native-theme.scrollbar.style', 5 if overlay else 4)
 
     # Per-character font fallback, LINUX ONLY. Gecko's GlobalFontFallback walks
     # the shared font list for a family whose charmap covers the character; in a

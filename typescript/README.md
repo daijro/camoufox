@@ -124,6 +124,16 @@ Canvas noise belongs to the browser, not the context (see
 every context claims the host's OS and GPU too, since its canvas renders there.
 Contexts with other OSes, like the ones above, need `canvas_noise: true`.
 
+The browser's own OS also decides some things for all its contexts. A browser
+launched as Windows on a Linux or macOS host (`os: "windows"`, or drawn so)
+computes `Math` as the Windows CRT does and uses Windows' keyboard shortcuts
+(on a Linux host; on macOS only the editor caret style), middle-click and
+scrollbars ([docs/HOST-PARITY.md](../docs/HOST-PARITY.md)).
+Those are browser settings, so a macOS context on it has them too, and a
+Windows context on a browser launched as another OS has the host's. `NewContext`
+does not refuse the mix. Pass `os` at launch for the OS whose behaviour matters,
+or use one browser per OS.
+
 ### The canvas on another OS
 
 A page can draw a canvas or a WebGL scene and read the pixels back. Those pixels

@@ -16,7 +16,11 @@ identities, so the launchers warn about is_mobile instead. The guard pins
 classic scrollbars and measures the scrollbar gutter three ways:
 
   - a launch-level page, the control: it must be non-zero, or the check is
-    vacuous;
+    vacuous, and it must be what the claimed OS's stock Firefox draws. The
+    guard runs for a Linux and a Windows identity: the Linux one on this
+    Linux host draws the host theme's scrollbars (GTK's 12 px), the Windows
+    one must draw stock Windows' 17 px, which also checks the launcher draws
+    the claimed OS's scrollbars on a foreign host rather than the host's;
   - a context with a viewport, which must match the control;
   - a context with a viewport and is_mobile=True, which must match it too.
 
@@ -37,6 +41,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
 VIEWPORT = {"width": 1000, "height": 600}
+
+# Classic scrollbar width by claimed OS (ui.useOverlayScrollbars 0). None: the
+# host's own theme, which only has to be non-zero.
+CLASSIC_PX = {"linux": None, "windows": 17}
 
 PAGE = """<!doctype html><style>body{margin:0;height:3000px}
 #b{width:200px;height:100px;overflow:scroll}</style><div id=b></div>"""
@@ -69,21 +77,11 @@ def click_events(page) -> str:
     return page.get_attribute("#t", "data-ev") or ""
 
 
-def main() -> int:
-    from importlib.metadata import version
-
+def check(os_name: str, binary) -> list:
     from camoufox._warnings import LeakWarning
     from camoufox.sync_api import Camoufox
 
-    # Playwright's own Firefox driver rejected isMobile before 1.61, so an older
-    # client fails before the browser is reached.
-    installed = version("playwright")
-    if tuple(int(p) for p in installed.split(".")[:2]) < (1, 61):
-        print(f"FAIL: Playwright {installed} rejects is_mobile for Firefox; this guard needs 1.61 or newer")
-        return 1
-
-    binary = resolve_binary()
-    with Camoufox(os="linux", headless=True, executable_path=str(binary),
+    with Camoufox(os=os_name, headless=True, executable_path=str(binary),
                   firefox_user_prefs={"ui.useOverlayScrollbars": 0},
                   i_know_what_im_doing=True) as browser:
         control = measure(browser.new_page(no_viewport=True))
@@ -94,6 +92,7 @@ def main() -> int:
         control_click = click_events(browser.new_page(no_viewport=True))
         touch_click = click_events(browser.new_context(viewport=VIEWPORT, has_touch=True).new_page())
 
+    print(f"{os_name} identity:")
     print(f"  launch page:      {control}")
     print(f"  viewport context: {emulated}")
     print(f"  is_mobile:        {mobile}")
@@ -101,8 +100,12 @@ def main() -> int:
     print(f"  click, viewport + has_touch:  {touch_click}")
 
     failures = []
+    stock_px = CLASSIC_PX[os_name]
     if control["page"] <= 0 or control["box"] <= 0:
         failures.append(f"launch page shows no classic scrollbar ({control}): the check is vacuous")
+    elif stock_px and (control["page"], control["box"]) != (stock_px, stock_px):
+        failures.append(f"launch page scrollbar {control['page']}/{control['box']} px, stock {os_name} "
+                        f"classic is {stock_px} (the host theme's, not the claimed OS's)")
     if emulated["viewport"] != [VIEWPORT["width"], VIEWPORT["height"]]:
         failures.append(f"viewport {VIEWPORT} not applied: page reports {emulated['viewport']}")
     if (emulated["page"], emulated["box"]) != (control["page"], control["box"]):
@@ -119,6 +122,23 @@ def main() -> int:
         failures.append(
             f"a click with has_touch fired {touch_click!r}, not {control_click!r} "
             "(Responsive Design Mode drops a mouse click's pointer events)")
+    return [f"{os_name} identity: {f}" for f in failures]
+
+
+def main() -> int:
+    from importlib.metadata import version
+
+    # Playwright's own Firefox driver rejected isMobile before 1.61, so an older
+    # client fails before the browser is reached.
+    installed = version("playwright")
+    if tuple(int(p) for p in installed.split(".")[:2]) < (1, 61):
+        print(f"FAIL: Playwright {installed} rejects is_mobile for Firefox; this guard needs 1.61 or newer")
+        return 1
+
+    binary = resolve_binary()
+    failures = []
+    for os_name in CLASSIC_PX:
+        failures += check(os_name, binary)
 
     for f in failures:
         print(f"FAIL: {f}")
