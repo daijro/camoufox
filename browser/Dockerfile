@@ -7,6 +7,10 @@ COPY . /app
 
 # Install necessary packages
 RUN apt-get update && apt-get install -y \
+    # Building Camoufox for Windows requires Wine,
+    # which requires /lib/ld-linux.so.2,
+    # which is provided by libc6-i386.
+    libc6-i386 \
     # Mach build tools
     build-essential make msitools wget unzip rustc \
     # Python
