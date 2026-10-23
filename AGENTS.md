@@ -152,8 +152,12 @@ make package-linux arch=x86_64 # or package-macos / package-windows
 python3 multibuild.py --target linux windows macos --arch x86_64 arm64
 ```
 
-Install `ccache`. A cold build takes about 40 minutes, and an incremental one
-about 5.
+Every build, a local one included, is configured like the shipped binaries:
+cross-language ThinLTO and Rust SIMD from `browser/assets/base.mozconfig`
+([`builds-are-optimized-like-stock`](ci/tribal-rules.yml)), with the Rust
+release Mozilla builds the tree with, which `make dir` installs. Install
+`ccache`. It caches compiles but not the LTO link, so an incremental build
+still relinks libxul across C++ and Rust.
 
 ## Changing a patch
 

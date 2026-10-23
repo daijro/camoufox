@@ -65,10 +65,9 @@ def get_moz_target(target, arch):
 
 def mozilla_rust_version(src_dir):
     """The Rust release Mozilla builds this Firefox with: the toolchain its
-    taskcluster aliases as linux64-rust. Its LLVM is the one the clang that
-    `mach bootstrap` fetches for the same tree is built from, and
-    cross-language LTO needs that: lld cannot read Rust bitcode from a newer
-    LLVM than its own."""
+    taskcluster aliases as linux64-rust. Its LLVM is the major version of the
+    clang `mach bootstrap` fetches for the same tree, which cross-language LTO
+    needs: lld cannot read Rust bitcode from a newer LLVM than its own."""
     path = os.path.join(src_dir, 'taskcluster', 'kinds', 'toolchain', 'rust.yml')
     with open(path, encoding='utf-8') as f:
         text = f.read()
