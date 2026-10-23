@@ -112,12 +112,14 @@ def maybe_download_addons(
         try:
             os.makedirs(addon_path, exist_ok=True)
             download_and_extract(addon.value, addon_path, addon.name)
-            # Add the new addon directory path to addons_list
-            if addons_list is not None:
-                addons_list.append(addon_path)
-        except Exception as e:
-            # Drop the partial directory so the next run re-downloads. A complete
-            # one came from another process and may be loading in its browser.
+        except Exception:
+            # A complete copy came from another process and may be loading in
+            # its browser, so use it. Otherwise drop the partial directory so
+            # the next run re-downloads, and fail: launching without the addon
+            # would be a different browser than asked for.
             if not os.path.exists(os.path.join(addon_path, 'manifest.json')):
                 shutil.rmtree(addon_path, ignore_errors=True)
-            print(f"Failed to download and extract {addon.name}: {e}")
+                raise
+        # Add the addon directory path to addons_list
+        if addons_list is not None:
+            addons_list.append(addon_path)
