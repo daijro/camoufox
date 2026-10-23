@@ -1,5 +1,5 @@
 diff --git a/dom/base/ChromeUtils.cpp b/dom/base/ChromeUtils.cpp
-index c921614484..516a13d7c7 100644
+index 4370b4c895..0fff670936 100644
 --- a/dom/base/ChromeUtils.cpp
 +++ b/dom/base/ChromeUtils.cpp
 @@ -5,6 +5,10 @@
@@ -13,7 +13,7 @@ index c921614484..516a13d7c7 100644
  #include "JSOracleParent.h"
  #include "NonSharedGlobalSyncModuleLoaderScope.h"
  #include "ThirdPartyUtil.h"
-@@ -2814,6 +2818,74 @@ void ChromeUtils::CamouGetStringList(GlobalObject& aGlobal,
+@@ -2827,6 +2831,75 @@ void ChromeUtils::CamouGetStringList(GlobalObject& aGlobal,
    }
  }
  
@@ -22,7 +22,8 @@ index c921614484..516a13d7c7 100644
 +// manager otherwise knows only its own.
 +static const char* const kCamouFingerprintSetters[] = {
 +    "setNavigatorPlatform", "setNavigatorOscpu",
-+    "setNavigatorHardwareConcurrency", "setNavigatorUserAgent",
++    "setNavigatorHardwareConcurrency", "setNavigatorAppVersion",
++    "setNavigatorUserAgent",
 +    "setScreenDimensions", "setScreenColorDepth",
 +    "setWebGLVendor", "setWebGLRenderer",
 +    "setWebRTCIPv4", "setWebRTCIPv6",
@@ -89,10 +90,10 @@ index c921614484..516a13d7c7 100644
  bool ChromeUtils::ShouldResistFingerprinting(
      GlobalObject& aGlobal, JSRFPTarget aTarget,
 diff --git a/dom/base/ChromeUtils.h b/dom/base/ChromeUtils.h
-index 11b1a5dcdc..677194cf17 100644
+index 11b12ac412..620f3cd6cd 100644
 --- a/dom/base/ChromeUtils.h
 +++ b/dom/base/ChromeUtils.h
-@@ -369,6 +369,12 @@ class ChromeUtils {
+@@ -371,6 +371,12 @@ class ChromeUtils {
    static void CamouGetStringList(GlobalObject& aGlobal, const nsAString& aVarName,
                                   nsTArray<nsString>& aRetVal);
  
@@ -120,10 +121,10 @@ index c5f3dd4247..a4010d0c2c 100644
    GetBool(SetterUsedKey(aName, UserContextId(win)), used);
    return !used;
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index 2b581e729a..f33dda3f8d 100644
+index 5e3219a323..bf1cd2c30a 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -687,6 +687,17 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -689,6 +689,17 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
  
    void SetTimezone(const nsAString& timezone, mozilla::ErrorResult& aRv);
  
@@ -142,10 +143,10 @@ index 2b581e729a..f33dda3f8d 100644
    void SetWebRTCIPv4(const nsAString& ipv4, mozilla::ErrorResult& aRv);
    void SetWebRTCIPv6(const nsAString& ipv6, mozilla::ErrorResult& aRv);
 diff --git a/dom/chrome-webidl/ChromeUtils.webidl b/dom/chrome-webidl/ChromeUtils.webidl
-index abe36d4451..86eb9c77f1 100644
+index 48bad2e7c6..5a6d49fb78 100644
 --- a/dom/chrome-webidl/ChromeUtils.webidl
 +++ b/dom/chrome-webidl/ChromeUtils.webidl
-@@ -969,6 +969,13 @@ partial namespace ChromeUtils {
+@@ -977,6 +977,13 @@ partial namespace ChromeUtils {
     */
    sequence<DOMString> camouGetStringList(DOMString varName);
  

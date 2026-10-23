@@ -67,9 +67,9 @@ export function allowGeoip(): boolean {
  */
 export const geoipDeps = {
 	async openDatabase(mmdbPath: string): Promise<MmdbReader> {
-		const maxmind = (await import("maxmind")).default;
+		const { Reader } = await import("maxmind");
 		const buffer = fs.readFileSync(mmdbPath);
-		return new maxmind.Reader<any>(buffer);
+		return new Reader(buffer);
 	},
 	downloadMmdb: (source?: string) =>
 		downloadMmdb(source, undefined, source === undefined),

@@ -40,6 +40,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "animation-timing",
         "audio-frequency-noise",
         "baseline-protections",
+        "context-app-version",
         "context-lists-across-processes",
         "context-os-system-font",
         "fingerprint-setter-seal",
@@ -48,6 +49,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "media-devices-coherence",
         "spoofed-voice-speaks",
         "startup-prefs",
+        "system-font-alias-stall",
         "system-ui-font-spoofing",
         "timezone-stable",
         "touchscreen-digitizer",
@@ -76,6 +78,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "visible-automation-cues",
     ),
     "parity": (
+        "certificate-revocations",
         "contentaccessible-parity",
         "firefox-version-pin",
         "getter-cost-parity",
