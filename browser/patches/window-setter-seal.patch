@@ -1,5 +1,5 @@
 diff --git a/dom/base/ChromeUtils.cpp b/dom/base/ChromeUtils.cpp
-index 4370b4c895..0fff670936 100644
+index 4370b4c895..a341020bed 100644
 --- a/dom/base/ChromeUtils.cpp
 +++ b/dom/base/ChromeUtils.cpp
 @@ -5,6 +5,10 @@
@@ -13,7 +13,7 @@ index 4370b4c895..0fff670936 100644
  #include "JSOracleParent.h"
  #include "NonSharedGlobalSyncModuleLoaderScope.h"
  #include "ThirdPartyUtil.h"
-@@ -2827,6 +2831,75 @@ void ChromeUtils::CamouGetStringList(GlobalObject& aGlobal,
+@@ -2827,6 +2831,76 @@ void ChromeUtils::CamouGetStringList(GlobalObject& aGlobal,
    }
  }
  
@@ -28,7 +28,8 @@ index 4370b4c895..0fff670936 100644
 +    "setWebGLVendor", "setWebGLRenderer",
 +    "setWebRTCIPv4", "setWebRTCIPv6",
 +    "setFontList",
-+    "setAudioFingerprintSeed", "setSpeechVoices",
++    "setAudioFingerprintNoise", "setAudioFingerprintSeed",
++    "setSpeechVoices",
 +    "setTimezone",
 +};
 +
@@ -121,10 +122,10 @@ index c5f3dd4247..a4010d0c2c 100644
    GetBool(SetterUsedKey(aName, UserContextId(win)), used);
    return !used;
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index 5e3219a323..bf1cd2c30a 100644
+index 76159c344e..ecdb9e2525 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -689,6 +689,17 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -690,6 +690,17 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
  
    void SetTimezone(const nsAString& timezone, mozilla::ErrorResult& aRv);
  

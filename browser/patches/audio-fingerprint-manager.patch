@@ -1,9 +1,9 @@
 diff --git a/dom/base/AudioFingerprintManager.cpp b/dom/base/AudioFingerprintManager.cpp
 new file mode 100644
-index 0000000000..5686a6273d
+index 0000000000..2a714023f7
 --- /dev/null
 +++ b/dom/base/AudioFingerprintManager.cpp
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,91 @@
 +#include "AudioFingerprintManager.h"
 +#include "nsTHashMap.h"  // Must come before RoverfoxStorageManager.h for template defs
 +#include "nsHashKeys.h"  // For nsStringHashKey
@@ -27,8 +27,24 @@ index 0000000000..5686a6273d
 +  DisableFunction(aUserContextId);
 +}
 +
++/* static */ void
++AudioFingerprintManager::SetNoise(uint32_t aUserContextId, bool aEnabled) {
++  nsString key;
++  key.AppendPrintf("audioFingerprintNoise_%u", aUserContextId);
++  RoverfoxStorageManager::PutBool(key, aEnabled);
++  RoverfoxStorageManager::MarkSetterUsed("audioNoise", aUserContextId);
++}
++
 +/* static */ uint32_t
 +AudioFingerprintManager::GetSeed(uint32_t aUserContextId) {
++  // A context that turned its noise off renders stock audio, whatever seed the
++  // launch set: a seed of 0 cannot say this, since 0 means "no seed of its own".
++  nsString noiseKey;
++  noiseKey.AppendPrintf("audioFingerprintNoise_%u", aUserContextId);
++  bool noise = true;
++  if (RoverfoxStorageManager::GetBool(noiseKey, noise) && !noise) {
++    return 0;
++  }
 +  nsString key;
 +  key.AppendPrintf("audioFingerprintSeed_%u", aUserContextId);
 +  uint32_t seed = 0;
@@ -72,14 +88,19 @@ index 0000000000..5686a6273d
 +  return RoverfoxStorageManager::IsSetterOffered(aObj, "audio");
 +}
 +
++/* static */ bool
++AudioFingerprintManager::IsNoiseFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj) {
++  return RoverfoxStorageManager::IsSetterOffered(aObj, "audioNoise");
++}
++
 +}  // namespace dom
 +}  // namespace mozilla
 diff --git a/dom/base/AudioFingerprintManager.h b/dom/base/AudioFingerprintManager.h
 new file mode 100644
-index 0000000000..33dc5e4a46
+index 0000000000..48c7e2a1de
 --- /dev/null
 +++ b/dom/base/AudioFingerprintManager.h
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,33 @@
 +#ifndef mozilla_dom_AudioFingerprintManager_h
 +#define mozilla_dom_AudioFingerprintManager_h
 +
@@ -96,6 +117,8 @@ index 0000000000..33dc5e4a46
 +class AudioFingerprintManager {
 + public:
 +  static void SetSeed(uint32_t aUserContextId, uint32_t aSeed);
++  // Whether the context's audio is noised at all; off wins over any seed.
++  static void SetNoise(uint32_t aUserContextId, bool aEnabled);
 +  static uint32_t GetSeed(uint32_t aUserContextId);
 +  // The seed for the context a window belongs to.
 +  static uint32_t GetSeed(nsPIDOMWindowInner* aWindow);
@@ -104,6 +127,7 @@ index 0000000000..33dc5e4a46
 +
 +  static void DisableFunction(uint32_t userContextId);
 +  static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++  static bool IsNoiseFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
 +};
 +
 +}  // namespace dom
@@ -111,7 +135,7 @@ index 0000000000..33dc5e4a46
 +
 +#endif  // mozilla_dom_AudioFingerprintManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 4cab12c55e..ad24dc91a2 100644
+index 8d363383a9..0d21460245 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
 @@ -143,6 +143,7 @@ EXPORTS.mozilla.dom += [
@@ -122,7 +146,7 @@ index 4cab12c55e..ad24dc91a2 100644
      "AutoPrintEventDispatcher.h",
      "AutoSuppressEventHandlingAndSuspend.h",
      "BarProps.h",
-@@ -301,6 +302,11 @@ EXPORTS.mozilla.dom += [
+@@ -302,6 +303,11 @@ EXPORTS.mozilla.dom += [
      "WindowProxyHolder.h",
  ]
  
@@ -135,7 +159,7 @@ index 4cab12c55e..ad24dc91a2 100644
      EXPORTS.mozilla.dom += [
          "FuzzingFunctions.h",
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index f6307312b3..8fd79e9868 100644
+index 49a25262ca..de03742126 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -87,6 +87,8 @@
@@ -147,10 +171,17 @@ index f6307312b3..8fd79e9868 100644
  #include "mozilla/dom/AutoEntryScript.h"
  #include "mozilla/dom/BarProps.h"
  #include "mozilla/dom/BindingDeclarations.h"
-@@ -7776,6 +7778,14 @@ void nsGlobalWindowInner::UpdateSharedWorkerTimezoneOverride(
+@@ -7772,6 +7774,21 @@ void nsGlobalWindowInner::UpdateSharedWorkerTimezoneOverride(
    }
  }
  
++void nsGlobalWindowInner::SetAudioFingerprintNoise(bool aEnabled,
++                                                     ErrorResult& aRv) {
++  AudioFingerprintManager::SetNoise(RoverfoxStorageManager::UserContextId(this),
++                                    aEnabled);
++  RoverfoxStorageManager::RemoveSetter("setAudioFingerprintNoise");
++}
++
 +void nsGlobalWindowInner::SetAudioFingerprintSeed(uint32_t seed,
 +                                                    ErrorResult& aRv) {
 +  const uint32_t userContextId = RoverfoxStorageManager::UserContextId(this);
@@ -163,14 +194,15 @@ index f6307312b3..8fd79e9868 100644
      bool aGranted) {
    // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index a1162b29e3..eec89694f8 100644
+index 3ce6fd2234..1e3e46bb6e 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -678,6 +678,9 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -680,6 +680,10 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
  
    mozilla::dom::Worklet* GetPaintWorklet(mozilla::ErrorResult& aRv);
  
 +  // Audio fingerprint seed for per-context audio fingerprinting
++  void SetAudioFingerprintNoise(bool aEnabled, mozilla::ErrorResult& aRv);
 +  void SetAudioFingerprintSeed(uint32_t seed, mozilla::ErrorResult& aRv);
 +
    void GetWebExposedLocales(nsTArray<nsString>& aLocales);
@@ -348,15 +380,17 @@ index 3bd802d715..f09eb63946 100644
 +# AudioFingerprintManager in dom/base
 +LOCAL_INCLUDES += ["/dom/base"]
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index a25ad800a0..ab1c306617 100644
+index a736c1d37a..10db4aa926 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -937,6 +937,12 @@ partial interface Window {
+@@ -941,6 +941,14 @@ partial interface Window {
    readonly attribute VisualViewport visualViewport;
  };
  
 +// Audio fingerprint seed for per-context audio fingerprinting
 +partial interface Window {
++  [Throws, Func="mozilla::dom::AudioFingerprintManager::IsNoiseFunctionEnabledForWebIDL"]
++  undefined setAudioFingerprintNoise(boolean enabled);
 +  [Throws, Func="mozilla::dom::AudioFingerprintManager::IsFunctionEnabledForWebIDL"]
 +  undefined setAudioFingerprintSeed(unsigned long seed);
 +};
