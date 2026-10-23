@@ -88,6 +88,16 @@ at hand. A browsing context is not used, because a document created by
 shares its creator's principal. A value is stored only under its own context;
 nothing writes a fallback copy under context 0.
 
+## Backports
+
+These patches carry upstream Firefox changes that `browser/upstream.sh`'s
+version does not have yet. Drop each one when the Firefox it moves to ships
+the change.
+
+| Patch | Upstream change |
+|-------|-----------------|
+| `remote-security-settings.patch` | The startup import of the bundled OneCRL list into certificate storage, from mozilla-firefox's `release` branch ([Bug 2084311](https://bugzilla.mozilla.org/show_bug.cgi?id=2084311)), and the `security-state/onecrl.json` dump of Firefox 158.0.1. Camoufox turns Remote Settings off, so without the import a fresh profile has no revocations. |
+
 ## Playwright
 
 Everything else is written against a tree that already has
