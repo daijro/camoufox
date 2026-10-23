@@ -1009,16 +1009,44 @@ describe.skipIf(!MODEL.ok)(
 			}
 		});
 
-		it("refuses an audio seed", async () => {
-			await expect(
-				launchConfig({ os: "linux", config: { "audio:seed": 9 } }),
-			).rejects.toThrow(/audio-is-not-noised/);
-			expect(() =>
+		it("warns once and drops an audio seed", async () => {
+			const removed = (ws: { category: string; message: string }[]) =>
+				ws.filter(
+					(w) =>
+						w.category === "FutureWarning" && w.message.includes("audio:seed"),
+				);
+			const launched = await warnings.recordWarnings(() =>
+				utils.launchOptions({
+					env: { HOME },
+					os: "linux",
+					i_know_what_im_doing: true,
+					executable_path: BUNDLE_EXE,
+					config: { "audio:seed": 9 },
+				}),
+			);
+			expect(launched.error).toBeUndefined();
+			const config = configOf(launched.result as Record<string, any>);
+			expect("audio:seed" in config).toBe(false);
+			expect(config.fonts.length).toBeGreaterThan(0);
+			expect(removed(launched.warnings)).toHaveLength(1);
+			expect(removed(launched.warnings)[0].message).toContain(
+				"rendered exactly as stock Firefox",
+			);
+
+			const overrides = { "audio:seed": 7, timezone: "Pacific/Chatham" };
+			const context = await warnings.recordWarnings(() =>
 				fingerprints.generateContextFingerprint({
 					os: "linux",
-					config_overrides: { "audio:seed": 7 },
+					config_overrides: overrides,
 				}),
-			).toThrow(/audio-is-not-noised/);
+			);
+			expect(removed(context.warnings)).toHaveLength(1);
+			expect("audio:seed" in (context.result?.config ?? {})).toBe(false);
+			expect(context.result?.config.timezone).toBe("Pacific/Chatham");
+			expect(overrides).toEqual({
+				"audio:seed": 7,
+				timezone: "Pacific/Chatham",
+			});
 		});
 
 		it.each([

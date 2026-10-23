@@ -19,7 +19,6 @@ import {
 	supported as cpuAffinitySupported,
 	hostCoreCount,
 } from "./cpu_affinity.js";
-import { InvalidPropertyType } from "./exceptions.js";
 import { validateIP, validIPv4 } from "./ip.js";
 import { normalizeLocale } from "./locales.js";
 import { LAUNCHER_CONSTANTS, LOCAL_DATA, loadDataFile } from "./paths.js";
@@ -37,7 +36,7 @@ import {
 	pyTruthy,
 	ValueError,
 } from "./pycompat.js";
-import { FallbackWarning } from "./warnings.js";
+import { FallbackWarning, loadWarnings, warn } from "./warnings.js";
 import { sampleWebglForScreen, type TargetOS, webglForGpu } from "./webgl.js";
 
 export type { TargetOS } from "./webgl.js";
@@ -251,18 +250,15 @@ export function identitySeed(
 }
 
 /**
- * audio:seed is gone: the browser renders audio as stock Firefox does. Stock
- * gives one value per CPU architecture, so a noised value is a tell, and a
- * seed that does nothing must not look like it does.
+ * audio:seed is gone: the browser renders audio as stock Firefox does. A
+ * caller's seed is dropped with a warning rather than sent to a browser that
+ * would noise with it (a released one) or ignore it (this one).
  */
-export function rejectAudioSeed(config: Record<string, unknown>): void {
-	if ("audio:seed" in config)
-		throw new InvalidPropertyType(
-			"audio:seed was removed: Camoufox renders audio as stock Firefox does. " +
-				"Stock Firefox gives one audio fingerprint per CPU architecture, so noise " +
-				"is a tell, not a disguise (ci/tribal-rules.yml: audio-is-not-noised). " +
-				"Drop the key.",
-		);
+export function dropAudioSeed(config: Record<string, unknown>): void {
+	if ("audio:seed" in config) {
+		delete config["audio:seed"];
+		warn(loadWarnings().audio_seed_removed, "FutureWarning");
+	}
 }
 
 /** A seeded generator for a draw, or a fresh OS-seeded one when unseeded. */
@@ -1750,8 +1746,9 @@ export function generateContextFingerprint({
 	}
 
 	if (config_overrides) {
-		rejectAudioSeed(config_overrides);
-		Object.assign(config, config_overrides);
+		const overrides = { ...config_overrides };
+		dropAudioSeed(overrides);
+		Object.assign(config, overrides);
 	}
 
 	const initValues: InitValues = {

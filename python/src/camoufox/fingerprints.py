@@ -9,8 +9,7 @@ from pathlib import Path
 from random import Random, choice, randrange
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
-from camoufox._warnings import FallbackWarning
-from camoufox.exceptions import InvalidPropertyType
+from camoufox._warnings import WARNINGS_DATA, FallbackWarning, _warn_from_caller
 from camoufox.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
@@ -146,19 +145,15 @@ _ESSENTIAL_FONTS_LINUX: List[str] = _ESSENTIAL['lin']
 WINDOWS_11_MARKER_FONTS = frozenset(LAUNCHER_CONSTANTS['windows11MarkerFonts'])
 
 
-def reject_audio_seed(config: Dict[str, Any]) -> None:
+def drop_audio_seed(config: Dict[str, Any]) -> None:
     """
-    audio:seed is gone: the browser renders audio as stock Firefox does. Stock
-    gives one value per CPU architecture, so a noised value is a tell, and a
-    seed that does nothing must not look like it does.
+    audio:seed is gone: the browser renders audio as stock Firefox does. A
+    caller's seed is dropped with a warning rather than sent to a browser that
+    would noise with it (a released one) or ignore it (this one).
     """
     if 'audio:seed' in config:
-        raise InvalidPropertyType(
-            "audio:seed was removed: Camoufox renders audio as stock Firefox does. "
-            "Stock Firefox gives one audio fingerprint per CPU architecture, so noise "
-            "is a tell, not a disguise (ci/tribal-rules.yml: audio-is-not-noised). "
-            "Drop the key."
-        )
+        del config['audio:seed']
+        _warn_from_caller(WARNINGS_DATA['audio_seed_removed'], FutureWarning)
 
 
 def identity_salt(pinned: Any = None) -> int:
@@ -1561,7 +1556,8 @@ def generate_context_fingerprint(
 
     # Apply caller overrides before rendering init_script
     if config_overrides:
-        reject_audio_seed(config_overrides)
+        config_overrides = dict(config_overrides)
+        drop_audio_seed(config_overrides)
         config.update(config_overrides)
 
     # Build the values dict for the init script (works for both paths)

@@ -100,15 +100,30 @@ def test_no_audio_seed_is_generated():
         assert "setAudioFingerprintSeed" not in context["init_script"]
 
 
-def test_an_audio_seed_is_refused():
-    """A caller's seed would do nothing on a browser without the noise, and
-    noise on one with it; either way it must not pass silently."""
-    from camoufox.exceptions import InvalidPropertyType
+def _removed_audio_warnings(record):
+    return [w for w in record if w.category is FutureWarning and "audio:seed" in str(w.message)]
 
-    with pytest.raises(InvalidPropertyType, match="audio-is-not-noised"):
-        launch(config={"audio:seed": 9})
-    with pytest.raises(InvalidPropertyType, match="audio-is-not-noised"):
-        fp.generate_context_fingerprint(os="linux", config_overrides={"audio:seed": 7})
+
+def test_an_audio_seed_warns_once_and_is_dropped():
+    """A caller's seed would do nothing on this browser and noise a released
+    one, so it is dropped, with one warning saying audio is rendered as stock."""
+    import warnings
+
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        config = launch(config={"audio:seed": 9})
+    assert "audio:seed" not in config and config["fonts"]
+    [warning] = _removed_audio_warnings(record)
+    assert "rendered exactly as stock Firefox" in str(warning.message)
+
+    overrides = {"audio:seed": 7, "timezone": "Pacific/Chatham"}
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        context = fp.generate_context_fingerprint(os="linux", config_overrides=overrides)
+    assert len(_removed_audio_warnings(record)) == 1
+    assert "audio:seed" not in context["config"]
+    assert context["config"]["timezone"] == "Pacific/Chatham"
+    assert overrides == {"audio:seed": 7, "timezone": "Pacific/Chatham"}, "the caller's dict was changed"
 
 
 def test_no_canvas_seed_is_generated():

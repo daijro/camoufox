@@ -24,6 +24,7 @@ import {
 	clampScreenToDisplay,
 	clampWindowDimensions,
 	clampWindowPosition,
+	dropAudioSeed,
 	fixHardwareConcurrency,
 	fixNavigatorArch,
 	followBaselineProtection,
@@ -37,7 +38,6 @@ import {
 	identitySeed,
 	loadOsFonts,
 	raiseScreenToModernFloor,
-	rejectAudioSeed,
 	Screen,
 	setMediaDevicesDefaults,
 	targetOsFromPlatform,
@@ -1494,7 +1494,7 @@ export async function launchOptions({
 	const userSetDnt = "navigator.doNotTrack" in config;
 	const userSetGpc = "navigator.globalPrivacyControl" in config;
 	const userSetAcceptEncoding = "headers.Accept-Encoding" in config;
-	rejectAudioSeed(config);
+	dropAudioSeed(config);
 
 	// The salt that makes every seeded draw belong to this identity (see
 	// fingerprints.identitySalt): stable when the caller pinned the identity --

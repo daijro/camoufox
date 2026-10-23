@@ -385,6 +385,7 @@ scenario('config_touch', fingerprint=FP['windows'], os='windows', config={'navig
 scenario('config_dnt_gpc', fingerprint=FP['windows'], os='windows',
          config={'navigator.doNotTrack': '1', 'navigator.globalPrivacyControl': True})
 scenario('config_accept_encoding', fingerprint=FP['linux'], os='linux', config={'headers.Accept-Encoding': 'gzip'})
+scenario('config_removed_audio_seed', fingerprint=FP['linux'], os='linux', config={'audio:seed': 42})
 scenario('config_instant_animations', fingerprint=FP['linux'], os='linux', config={'instantAnimations': True})
 scenario('config_media_devices', fingerprint=FP['linux'], os='linux', config={'mediaDevices:micros': 0})
 scenario('config_webgl_pair', fingerprint=FP['linux'], os='linux',
@@ -402,7 +403,6 @@ scenario('config_non_ascii', fingerprint=FP['linux'], os='linux', config={'timez
 # errors / validation
 scenario('invalid_os_case', fingerprint=FP['linux'], os='Linux')
 scenario('invalid_os_name', fingerprint=FP['linux'], os='beos')
-scenario('removed_audio_seed', fingerprint=FP['linux'], os='linux', config={'audio:seed': 42})
 scenario('non_firefox_fingerprint', fingerprint={**FP['linux'], 'navigator': {
     **FP['linux']['navigator'], 'userAgent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'}})
 
