@@ -106,7 +106,7 @@ fonts, voices, audio seed, timezone, WebRTC IP), applied through
 ```python
 from camoufox.sync_api import Camoufox, NewContext
 
-with Camoufox(headless=True, canvas_noise=True) as browser:
+with Camoufox(headless=True, fingerprint_options={"canvas": {"randomize": True}}) as browser:
     alice = NewContext(browser, os="windows")
     bob = NewContext(
         browser,
@@ -125,6 +125,7 @@ with Camoufox(headless=True, canvas_noise=True) as browser:
 | `webrtc_ip` | IPv4 or IPv6 address WebRTC reports. |
 | `proxy` | Per-context proxy, in Playwright's format. Unless `webrtc_ip` and `timezone_id` are both given, they are looked up from the proxy's exit IP, and `InvalidIP` is raised if the lookup fails. |
 | `geolocation` | `{"latitude": ..., "longitude": ...}`; also grants the `geolocation` permission. |
+| `fingerprint_options` | This context's audio: `{"audio": {"noise": False}}` or `{"audio": {"seed": N}}`. Without it the context follows the browser: no noise if the browser has none, otherwise a seed of its own, never the browser's. `"canvas"` raises. Turning the noise off in one context of a noised browser needs a build with `setAudioFingerprintNoise`; an older one raises `RuntimeError`. |
 | anything else | Passed to Playwright's `new_context()`, overriding the generated value. |
 
 `AsyncNewContext()` is the async twin.
@@ -132,7 +133,8 @@ with Camoufox(headless=True, canvas_noise=True) as browser:
 Canvas noise belongs to the browser, not the context (see
 [The canvas on another OS](#the-canvas-on-another-os)). On a browser without it,
 every context claims the host's OS and GPU too, since its canvas renders there.
-Contexts with other OSes, like the ones above, need `canvas_noise=True`.
+Contexts with other OSes, like the ones above, need
+`fingerprint_options={"canvas": {"randomize": True}}`.
 
 ### The canvas on another OS
 
@@ -153,8 +155,8 @@ come from the real OS, driver and GPU, whatever the identity claims.
   `LeakWarning`; the browser reads as a privacy-hardened Firefox rather than a
   stock one.
 
-`canvas_noise=True` turns the protection on for any OS, `canvas_noise=False`
-never.
+`fingerprint_options={"canvas": {"randomize": True}}` turns the protection on for
+any OS, `False` never.
 
 WebGPU follows the same rule. `navigator.gpu` exists only where Firefox on the
 claimed device has it (Windows and Apple Silicon Macs), and the adapter is the
@@ -283,17 +285,17 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | `block_webrtc` | `bool` | `False` | Disable WebRTC entirely. |
 | `block_webgl` | `bool` | `False` | Disable WebGL. Warns: many WAFs check for it. |
 | `webgl_config` | `(vendor, renderer)` | drawn | Use one GPU fpgen has recorded for Firefox on `os` (see `camoufox.webgl.firefox_gpus`); any other pair raises `ValueError`. Needs `os`. |
-| `canvas_noise` | `bool` | on for another OS or GPU | Random canvas and WebGL readback, as in LibreWolf. Warns. See [The canvas on another OS](#the-canvas-on-another-os). |
+| `canvas_noise` | `bool` | on for another OS or GPU | The older form of `fingerprint_options={"canvas": {"randomize": ...}}`. Warns. |
 | `disable_coop` | `bool` | `False` | Turn off Cross-Origin-Opener-Policy so elements in cross-origin iframes (such as the Turnstile checkbox) can be clicked. Warns. |
 | `main_world_eval` | `bool` | `False` | Allow `page.evaluate("mw:...")` and `mw:` init scripts to run in the page's own world. |
 | `allow_addon_new_tab` | `bool` | `False` | Let addons open tabs. |
 | `enable_cache` | `bool` | `False` | Keep Firefox's page and request caches. Uses more memory. |
-| `audio_noise` | `bool` | `True` | Noise Web Audio output with a seed that follows the identity. `False` leaves Web Audio output as stock Firefox renders it; `NewContext` contexts follow the browser. |
 | `pin_cpu_cores` | `bool` | `False` | Linux and Windows: pin the browser to as many cores as `navigator.hardwareConcurrency` claims, so a page timing parallel workers measures the same number. Costs CPU and serializes concurrent launches. |
-| `fingerprint` | fpgen fingerprint `dict` | drawn | Use this fpgen fingerprint instead of drawing one. Warns. |
+| `fingerprint` | fpgen fingerprint `dict` | drawn | Use this fpgen fingerprint instead of drawing one. Warns. The noise added on top of it: see `fingerprint_options`. |
+| `fingerprint_options` | `FingerprintOptions` | none | The noise Camoufox adds on top of the identity; every key is optional. `"audio"`: `{"noise": False}` for stock Web Audio output, or `{"seed": N}` (1 to 2³²−1) for a fixed seed; without it the seed follows the identity. `"canvas"`: `{"randomize": bool}`, random canvas and WebGL readback as in LibreWolf (warns), on by default for another OS or GPU; see [The canvas on another OS](#the-canvas-on-another-os). Other surfaces are not noised and raise. |
 | `fingerprint_preset` | `bool` or `dict` | `None` | Opt into a recorded real-device preset instead of fpgen: `True` picks a random bundled one, a dict uses that one. |
 | `ff_version` | `int` | the browser's own | Firefox version to claim. Warns: a mismatch with the engine is detectable. |
-| `config` | `dict` | none | Raw Camoufox properties ([`properties.json`](https://github.com/daijro/camoufox/blob/main/browser/settings/properties.json)). Overrides the generated identity; manual identity keys warn. |
+| `config` | `dict` | none | Raw Camoufox properties ([`properties.json`](https://github.com/daijro/camoufox/blob/main/browser/settings/properties.json)). Overrides the generated identity; manual identity keys warn. `audio:seed` here is the older form of `fingerprint_options["audio"]` and warns. |
 | `firefox_user_prefs` | `dict` | none | Extra Firefox prefs. |
 | `args` | `list[str]` | none | Extra browser command-line arguments. |
 | `env` | `dict` | a copy of the environment | Environment variables for the browser. |

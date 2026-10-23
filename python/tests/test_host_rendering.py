@@ -101,11 +101,11 @@ class TestHostOs:
 
         assert (config["webGl:vendor"], config["webGl:renderer"]) != UNRECORDED_GPU
         assert placeholder(options)
-        assert any(issubclass(w.category, LeakWarning) and "canvas_noise=False" in str(w.message) for w in caught)
+        assert any(issubclass(w.category, LeakWarning) and '"randomize": False' in str(w.message) for w in caught)
 
     def test_an_unrecorded_host_gpu_stays_uncovered_on_request(self):
         with on_host(UNRECORDED_GPU):
-            options, _ = launch(os="linux", canvas_noise=False)
+            options, _ = launch(os="linux", fingerprint_options={"canvas": {"randomize": False}})
 
         assert not placeholder(options)
 
@@ -129,13 +129,13 @@ class TestHostOs:
 
     def test_a_pinned_gpu_stays_uncovered_on_request(self):
         with on_host(HOST_GPU):
-            options, _ = launch(os="linux", webgl_config=OTHER_GPU, canvas_noise=False)
+            options, _ = launch(os="linux", webgl_config=OTHER_GPU, fingerprint_options={"canvas": {"randomize": False}})
 
         assert not placeholder(options)
 
     def test_noise_on_request_needs_no_probe(self):
         with on_host(HOST_GPU) as probes:
-            options, _ = launch(os="linux", canvas_noise=True)
+            options, _ = launch(os="linux", fingerprint_options={"canvas": {"randomize": True}})
 
         assert placeholder(options)
         assert probes == []
@@ -155,12 +155,12 @@ class TestAnotherOs:
             launch(os="windows", i_know_what_im_doing=False)
 
         assert any(
-            issubclass(w.category, LeakWarning) and "canvas_noise=False" in str(w.message) for w in caught
+            issubclass(w.category, LeakWarning) and '"randomize": False' in str(w.message) for w in caught
         )
 
     def test_it_can_be_turned_off(self):
         with on_host(HOST_GPU):
-            options, _ = launch(os="windows", canvas_noise=False)
+            options, _ = launch(os="windows", fingerprint_options={"canvas": {"randomize": False}})
 
         assert not placeholder(options)
 
@@ -277,7 +277,7 @@ class TestContextsOfAHostBrowser:
         assert "llvmpipe" not in renderer_of(browser.new_context.return_value)
 
     def test_another_os_raises(self):
-        with pytest.raises(ValueError, match="canvas_noise=True"):
+        with pytest.raises(ValueError, match="randomize"):
             sync_api.NewContext(browser_on_host(HOST_GPU), os="windows")
 
     def test_a_preset_with_another_gpu_raises(self):
@@ -285,7 +285,7 @@ class TestContextsOfAHostBrowser:
             "navigator": {"platform": "Linux x86_64"},
             "webgl": {"unmaskedVendor": OTHER_GPU[0], "unmaskedRenderer": OTHER_GPU[1]},
         }
-        with pytest.raises(ValueError, match="canvas_noise=True"):
+        with pytest.raises(ValueError, match="randomize"):
             sync_api.NewContext(browser_on_host(HOST_GPU), preset=preset)
 
 

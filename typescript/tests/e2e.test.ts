@@ -463,7 +463,10 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 					identity === "fpgen_linux_de"
 						? INPUTS.presets.windows
 						: INPUTS.presets.macos;
-				const kwargs = { ...kwargsFor(identity), canvas_noise: true };
+				const kwargs = {
+					...kwargsFor(identity),
+					fingerprint_options: { canvas: { randomize: true } },
+				};
 				const { result: browser } = await mods.warnings.recordWarnings(() =>
 					mods.sync.Camoufox(kwargs),
 				);

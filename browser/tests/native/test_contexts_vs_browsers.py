@@ -106,7 +106,7 @@ async def test_injected_contexts_each_get_their_own_fingerprint(binary):
     from camoufox.async_api import AsyncCamoufox, AsyncNewContext
 
     # Contexts on another OS need the canvas covered (cross-os-canvas-is-the-rfp-placeholder).
-    async with AsyncCamoufox(executable_path=str(binary), headless=True, canvas_noise=True,
+    async with AsyncCamoufox(executable_path=str(binary), headless=True, fingerprint_options={"canvas": {"randomize": True}},
                              i_know_what_im_doing=True) as browser:
         ctx_a = await AsyncNewContext(browser, os="macos")
         ctx_b = await AsyncNewContext(browser, os="linux")
@@ -133,7 +133,7 @@ async def test_an_injected_context_does_not_leak_into_a_plain_one(binary):
     from camoufox.async_api import AsyncCamoufox, AsyncNewContext
 
     # Contexts on another OS need the canvas covered (cross-os-canvas-is-the-rfp-placeholder).
-    async with AsyncCamoufox(executable_path=str(binary), headless=True, canvas_noise=True,
+    async with AsyncCamoufox(executable_path=str(binary), headless=True, fingerprint_options={"canvas": {"randomize": True}},
                              i_know_what_im_doing=True) as browser:
         plain_ctx, plain_page = await open_page(browser)
         before = await probe(plain_page)

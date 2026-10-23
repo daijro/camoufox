@@ -1,7 +1,7 @@
 from .addons import DefaultAddons
 from .async_api import AsyncCamoufox, AsyncNewBrowser, AsyncNewContext
 from .sync_api import Camoufox, NewBrowser, NewContext
-from .utils import launch_options
+from .utils import FingerprintOptions, launch_options
 
 __all__ = [
     "Camoufox",
@@ -11,5 +11,6 @@ __all__ = [
     "AsyncNewBrowser",
     "AsyncNewContext",
     "DefaultAddons",
+    "FingerprintOptions",
     "launch_options",
 ]

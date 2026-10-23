@@ -5,7 +5,7 @@ A context's system fonts follow the OS that context presents.
 resolve to the claimed OS's interface font (system-ui-font-spoofing.patch,
 font-system-fonts-css2.patch). They asked the launch's navigator.platform, once
 for the whole browser, so a context drawn for another OS -- possible on a
-browser launched with canvas_noise=True -- reported its own navigator.platform
+browser launched with canvas randomization -- reported its own navigator.platform
 next to the launch OS's interface font:
 
     AsyncNewContext(browser, os="macos") on a browser launched os="windows":
@@ -52,7 +52,7 @@ async def run(binary):
     from camoufox.async_api import AsyncCamoufox, AsyncNewContext
 
     results = []
-    async with AsyncCamoufox(headless=True, os="windows", canvas_noise=True,
+    async with AsyncCamoufox(headless=True, os="windows", fingerprint_options={"canvas": {"randomize": True}},
                              executable_path=str(binary), i_know_what_im_doing=True) as browser:
         launch_page = await browser.new_page()
         await launch_page.set_content("<body></body>")

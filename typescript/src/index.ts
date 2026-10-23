@@ -33,6 +33,7 @@ export {
 	type NewContextOptions,
 } from "./sync_api.js";
 export {
+	type FingerprintOptions,
 	type LaunchOptions,
 	launchOptions,
 	launchOptions as launch_options,

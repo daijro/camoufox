@@ -91,7 +91,7 @@ class TestPinnedIdentityIsStable:
             assert config.get("webGl:parameters"), (os_name, i)
 
     def test_caller_seed_is_kept(self):
-        assert launch(config={"audio:seed": 9})["audio:seed"] == 9
+        assert launch(fingerprint_options={"audio": {"seed": 9}})["audio:seed"] == 9
 
     def test_salt_of_equal_objects_is_equal(self):
         a = fp.generate_fingerprint(os="windows")

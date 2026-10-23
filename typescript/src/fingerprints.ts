@@ -1472,8 +1472,21 @@ export interface InitValues {
 export function buildInitScript(values: InitValues): string {
 	const lines = ["(function(v) {", "  var w = window;"];
 
+	// Seed 0 is the browser's "no audio noise", but a context's own seed of 0
+	// means "the launch's seed", so a context turns its noise off with a setter
+	// of its own.
+	const seed = values.audioFingerprintSeed;
+	if (seed === 0) {
+		lines.push(
+			'  if (typeof w.setAudioFingerprintNoise === "function") w.setAudioFingerprintNoise(false);',
+		);
+	} else if (!isNone(seed)) {
+		lines.push(
+			`  if (typeof w.setAudioFingerprintSeed === "function") w.setAudioFingerprintSeed(${pyJsonDumps(seed)});`,
+		);
+	}
+
 	const setters: Array<[keyof InitValues, string]> = [
-		["audioFingerprintSeed", "setAudioFingerprintSeed"],
 		["navigatorPlatform", "setNavigatorPlatform"],
 		["navigatorOscpu", "setNavigatorOscpu"],
 		["navigatorUserAgent", "setNavigatorUserAgent"],

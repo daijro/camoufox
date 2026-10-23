@@ -718,6 +718,7 @@ def record_init_script():
          'speechVoices': [], 'timezone': ''},
         {'navigatorUserAgent': 'emoji 😀   \x7f tab\t', 'hardwareConcurrency': None},
         {'webrtcIP': '2001:db8::7'},
+        {'audioFingerprintSeed': 0, 'navigatorPlatform': 'Linux x86_64'},
     ]
     out = [{'values': v, 'script': fp._build_init_script(v)} for v in cases]
     write('init-script.json', {'cases': out}, compress=False)

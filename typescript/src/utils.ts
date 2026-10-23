@@ -15,6 +15,7 @@ import * as coherence from "./coherence.js";
 import * as cpuAffinity from "./cpu_affinity.js";
 import { hasDisplay, largestDisplay } from "./display.js";
 import {
+	InvalidFingerprintOptions,
 	InvalidOS,
 	InvalidPropertyType,
 	NonFirefoxFingerprint,
@@ -90,7 +91,12 @@ import {
 	ValueError,
 } from "./pycompat.js";
 import { VirtualDisplay } from "./virtdisplay.js";
-import { FallbackWarning, LeakWarning, warn } from "./warnings.js";
+import {
+	FallbackWarning,
+	LeakWarning,
+	loadWarnings,
+	warn,
+} from "./warnings.js";
 import { firefoxGpus, sampleWebglForScreen, webglForGpu } from "./webgl.js";
 
 type ListOrString = string | string[];
@@ -1117,19 +1123,186 @@ export function contextIdentity(
 	) {
 		throw new ValueError(
 			`This browser renders its canvas as this ${hostName} machine, so its contexts claim it` +
-				`${gpu ? ` and its GPU ${JSON.stringify(gpu)}` : ""}. Launch it with canvas_noise: true ` +
-				"to give a context another OS or GPU.",
+				`${gpu ? ` and its GPU ${JSON.stringify(gpu)}` : ""}. Launch it with ` +
+				'fingerprint_options: {"canvas": {"randomize": true}} to give a context another OS or GPU.',
 		);
 	}
 	return [hostName, gpu];
 }
 
+export interface AudioOptions {
+	noise?: boolean;
+	seed?: number;
+}
+
+export interface CanvasOptions {
+	randomize?: boolean;
+}
+
+/** The noise Camoufox adds on top of an identity (`fingerprint` is the
+ * identity itself). Only the surfaces Camoufox noises are here. */
+export interface FingerprintOptions {
+	audio?: AudioOptions;
+	canvas?: CanvasOptions;
+}
+
+const FINGERPRINT_OPTION_KEYS: Record<string, string[]> = {
+	audio: ["noise", "seed"],
+	canvas: ["randomize"],
+};
+
+/** The audio entry and the canvas choice of a fingerprint_options value;
+ * anything else in it throws. */
+export function checkFingerprintOptions(
+	options: FingerprintOptions | null | undefined,
+	context = false,
+): [AudioOptions | undefined, boolean | undefined] {
+	if (options == null) return [undefined, undefined];
+	if (!isPlainObject(options)) {
+		throw new InvalidFingerprintOptions(
+			`fingerprint_options must be an object, not ${JSON.stringify(options)}.`,
+		);
+	}
+	for (const [surface, value] of Object.entries(options)) {
+		const keys = FINGERPRINT_OPTION_KEYS[surface];
+		if (!keys) {
+			throw new InvalidFingerprintOptions(
+				`fingerprint_options has no '${surface}': Camoufox adds noise only to audio and to ` +
+					"canvas readback. Nothing else is noised, since noise no real device produces is " +
+					"itself a tell (ci/tribal-rules.yml: canvas-is-not-noised, no-glyph-spacing-noise).",
+			);
+		}
+		if (
+			!isPlainObject(value) ||
+			Object.keys(value).some((k) => !keys.includes(k))
+		) {
+			throw new InvalidFingerprintOptions(
+				`fingerprint_options['${surface}'] takes an object with ` +
+					`${[...keys].sort().join(" or ")}, not ${JSON.stringify(value)}.`,
+			);
+		}
+		for (const key of ["noise", "randomize"]) {
+			if (key in value && typeof value[key] !== "boolean") {
+				throw new InvalidFingerprintOptions(
+					`fingerprint_options['${surface}']['${key}'] is a boolean, not ${JSON.stringify(value[key])}.`,
+				);
+			}
+		}
+	}
+	const audio = options.audio;
+	if (audio !== undefined && "seed" in audio) {
+		const seed = audio.seed;
+		if (
+			typeof seed !== "number" ||
+			!Number.isInteger(seed) ||
+			seed < 1 ||
+			seed > 0xffffffff
+		) {
+			throw new InvalidFingerprintOptions(
+				`fingerprint_options["audio"]["seed"] is an int from 1 to 4294967295, not ${JSON.stringify(seed)}. ` +
+					'Pass {"noise": false} for stock Web Audio output.',
+			);
+		}
+		if (audio.noise === false) {
+			throw new InvalidFingerprintOptions(
+				'fingerprint_options["audio"] has both "noise": false and a "seed": with the noise off, ' +
+					"there is no seed. Pass one of them.",
+			);
+		}
+	}
+	const canvas = options.canvas;
+	if (canvas !== undefined && context) {
+		throw new InvalidFingerprintOptions(
+			"Canvas randomization belongs to the browser, not the context: launch the browser with " +
+				'fingerprint_options: {"canvas": {"randomize": ...}}.',
+		);
+	}
+	return [audio, canvas?.randomize];
+}
+
+/** The audio:seed an audio entry asks for: 0 (the browser's "no noise") with
+ * the noise off, its seed, or undefined for the default draw. */
+export function audioSeed(audio: AudioOptions): number | undefined {
+	return audio.noise === false ? 0 : audio.seed;
+}
+
+/** Whether a launch randomizes canvas readback (undefined: on when the
+ * identity claims another OS or GPU), from fingerprint_options or the older
+ * canvas_noise. */
+export function launchCanvasNoise(
+	fingerprintOptions: FingerprintOptions | null | undefined,
+	canvasNoise: boolean | null | undefined,
+): boolean | undefined {
+	const [, randomize] = checkFingerprintOptions(fingerprintOptions);
+	if (canvasNoise == null) return randomize;
+	if (fingerprintOptions && "canvas" in fingerprintOptions) {
+		throw new InvalidFingerprintOptions(
+			'canvas_noise and fingerprint_options["canvas"] both set canvas randomization. ' +
+				'Pass only fingerprint_options: {"canvas": {"randomize": ...}}.',
+		);
+	}
+	return canvasNoise;
+}
+
+/** The audio:seed a launch sent in its CAMOU_CONFIG, if any. */
+export function launchAudioSeed(
+	fromOptions: Record<string, any>,
+): number | undefined {
+	return JSON.parse(camouConfigBlob(fromOptions) || "{}")["audio:seed"];
+}
+
 /**
- * Config overrides for a new context's audio: a browser launched with
- * audio_noise: false gives its contexts stock audio, as its own pages have.
+ * Config overrides for the audio of a new context on `browser` (null: a fresh
+ * seed of its own).
+ *
+ * A context that sets no audio follows the browser: stock audio when the
+ * launch sent seed 0, otherwise a seed of its own. It never takes the
+ * browser's seed, fixed or not: each context is another device, and two
+ * devices sharing an audio hash are linked. A context reproduces its audio
+ * across runs with a seed of its own.
  */
-export function contextAudio(browser: any): Record<string, any> | null {
-	return browser._camoufoxAudioNoise === false ? { "audio:seed": 0 } : null;
+export function contextAudio(
+	browser: any,
+	fingerprintOptions: FingerprintOptions | null | undefined,
+): Record<string, any> | null {
+	const [audio] = checkFingerprintOptions(fingerprintOptions, true);
+	const seed =
+		audio && Object.keys(audio).length
+			? audioSeed(audio)
+			: browser._camoufoxAudioSeed === 0
+				? 0
+				: undefined;
+	return seed === undefined ? null : { "audio:seed": seed };
+}
+
+/** Whether a context with these audio overrides needs the browser to turn the
+ * noise off in that context alone (setAudioFingerprintNoise): it asks for
+ * stock audio while the launch may have noise on. With the noise off at
+ * launch, a context without a seed of its own already has none. */
+export function needsContextAudioOff(
+	browser: any,
+	overrides: Record<string, any> | null,
+): boolean {
+	return overrides?.["audio:seed"] === 0 && browser._camoufoxAudioSeed !== 0;
+}
+
+/** Records, in a throwaway context, whether this browser has the setter that
+ * turns audio noise off in one context. The setters are gone before page
+ * script runs, so only an init script can see them. */
+export const AUDIO_OFF_PROBE =
+	'document.documentElement.setAttribute("data-camoufox-audio-off", ' +
+	'typeof window.setAudioFingerprintNoise === "function")';
+export const AUDIO_OFF_PROBE_READ =
+	'document.documentElement.getAttribute("data-camoufox-audio-off") === "true"';
+
+export function requireContextAudioOff(supported: boolean): void {
+	if (!supported) {
+		throw new Error(
+			"This Camoufox build cannot turn Web Audio noise off in one context: it predates " +
+				"setAudioFingerprintNoise. Update the browser, or launch it with " +
+				'fingerprint_options: {"audio": {"noise": false}} to turn the noise off in every context.',
+		);
+	}
 }
 
 /**
@@ -1344,8 +1517,18 @@ export interface LaunchOptions {
 	screen?: ScreenConstraint;
 	/** Set a fixed window size instead of generating a random one. */
 	window?: [number, number];
-	/** Use a custom fpgen fingerprint. */
+	/** Use a custom fpgen fingerprint. The noise Camoufox adds on top of it is
+	 * set by fingerprint_options. */
 	fingerprint?: Record<string, any>;
+	/** The noise Camoufox adds on top of the identity; every key is optional.
+	 * `{audio: {noise: false}}` leaves Web Audio output as stock Firefox renders
+	 * it, and `{audio: {seed: N}}` (1 to 2**32-1) fixes the audio noise seed.
+	 * Without an audio entry the seed follows the identity, so a returning
+	 * identity reproduces its audio hash. NewContext contexts follow a browser
+	 * whose audio noise is off. `{canvas: {randomize: boolean}}` sets canvas
+	 * randomization (see canvas_noise); without it, it is on whenever the
+	 * identity claims another OS or GPU. */
+	fingerprint_options?: FingerprintOptions;
 	/** Opt into real fingerprint presets: `true` for a random bundled preset,
 	 * or a preset object. */
 	fingerprint_preset?: boolean | Record<string, any>;
@@ -1381,7 +1564,8 @@ export interface LaunchOptions {
 	/** Pin the browser to navigator.hardwareConcurrency cores (Linux/Windows).
 	 * OFF by default -- it costs real CPU and serializes concurrent launches. */
 	pin_cpu_cores?: boolean;
-	/** Replace canvas and WebGL readback with random data, as
+	/** The older form of `fingerprint_options: {canvas: {randomize}}`; warns.
+	 * Replace canvas and WebGL readback with random data, as
 	 * privacy.resistFingerprinting does in LibreWolf, Tor Browser and Mullvad
 	 * Browser. Stock Firefox does not, so it warns. By default (undefined) the
 	 * identity on the host's OS claims the GPU the host renders with, uncovered;
@@ -1389,12 +1573,6 @@ export interface LaunchOptions {
 	 * (webgl_config, a preset's, or a host GPU fpgen never recorded), whose
 	 * canvas would otherwise show the host. */
 	canvas_noise?: boolean | null;
-	/** Perturb Web Audio output with a seed that follows the identity, so each
-	 * identity has its own audio hash (the default). With false the browser
-	 * leaves Web Audio output as stock Firefox renders it. Contexts made with
-	 * NewContext follow the browser. An audio:seed in `config` wins either
-	 * way. */
-	audio_noise?: boolean;
 	/** Additional Firefox launch options, passed straight through to Playwright. */
 	[key: string]: any;
 }
@@ -1424,6 +1602,7 @@ export async function launchOptions({
 	screen,
 	window,
 	fingerprint,
+	fingerprint_options,
 	fingerprint_preset,
 	ff_version,
 	headless,
@@ -1441,7 +1620,6 @@ export async function launchOptions({
 	virtual_display,
 	pin_cpu_cores,
 	canvas_noise,
-	audio_noise,
 	...passthrough
 }: LaunchOptions = {}): Promise<Record<string, any>> {
 	utilsDeps.ensureBrowserProfileDir(env);
@@ -1509,7 +1687,21 @@ export async function launchOptions({
 	const userSetDnt = "navigator.doNotTrack" in config;
 	const userSetGpc = "navigator.globalPrivacyControl" in config;
 	const userSetAcceptEncoding = "headers.Accept-Encoding" in config;
+	const [audio] = checkFingerprintOptions(fingerprint_options);
+	if (canvas_noise != null) {
+		warn(loadWarnings().canvas_noise_kwarg, "FutureWarning");
+	}
+	const canvasNoise = launchCanvasNoise(fingerprint_options, canvas_noise);
 	const userSetAudioSeed = "audio:seed" in config;
+	if (userSetAudioSeed) {
+		if (audio !== undefined) {
+			throw new InvalidFingerprintOptions(
+				'config["audio:seed"] and fingerprint_options["audio"] both set the audio noise. ' +
+					'Pass only fingerprint_options: {"audio": ...}.',
+			);
+		}
+		warn(loadWarnings().audio_seed_config, "FutureWarning");
+	}
 
 	// The salt that makes every seeded draw belong to this identity (see
 	// fingerprints.identitySalt): stable when the caller pinned the identity --
@@ -1743,15 +1935,14 @@ export async function launchOptions({
 	}
 
 	// The audio noise seed follows the identity: a returning "same device" must
-	// reproduce its audio hash (#442/#765). It is 0, which disables the noise,
-	// only with audio_noise: false.
+	// reproduce its audio hash (#442/#765). Never 0, which the browser reads as
+	// no noise, unless fingerprint_options turns the noise off.
 	// There is no canvas seed: the browser adds no canvas noise (#528), and no
 	// glyph-spacing noise either (ci/tribal-rules.yml: no-glyph-spacing-noise).
 	if (!userSetAudioSeed) {
 		config["audio:seed"] =
-			audio_noise === false
-				? 0
-				: audioSeedFromIdentity(utilsDeps.identitySeed(config, salt));
+			audioSeed(audio ?? {}) ??
+			audioSeedFromIdentity(utilsDeps.identitySeed(config, salt));
 	}
 
 	// Set geolocation
@@ -1928,7 +2119,7 @@ export async function launchOptions({
 
 	const [coverCanvas, host] = await planRendering(
 		targetOs,
-		canvas_noise,
+		canvasNoise,
 		pyTruthy(webgl_config) ||
 			(pyTruthy(config["webGl:vendor"]) && pyTruthy(config["webGl:renderer"])),
 		Boolean(block_webgl),

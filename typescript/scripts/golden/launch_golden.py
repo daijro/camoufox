@@ -343,7 +343,9 @@ scenario('flags', fingerprint=FP['macos'], os='macos', main_world_eval=True, all
                                                                           'intl.locale.requested': 'de-DE'})
 scenario('ff_version', fingerprint=FP['windows'], os='windows', ff_version=140)
 scenario('pin_cpu_cores', fingerprint=FP['linux'], os='linux', pin_cpu_cores=True)
-scenario('audio_noise_false', fingerprint=FP['linux'], os='linux', audio_noise=False)
+scenario('audio_noise_off', fingerprint=FP['linux'], os='linux', fingerprint_options={'audio': {'noise': False}})
+scenario('audio_noise_on', fingerprint=FP['linux'], os='linux', fingerprint_options={'audio': {'noise': True}})
+scenario('audio_seed', fingerprint=FP['linux'], os='linux', fingerprint_options={'audio': {'seed': 1000433}})
 
 # addons
 scenario('addons_custom', fingerprint=FP['linux'], os='linux', addons=['<ADDON>'])
@@ -421,6 +423,10 @@ LIN_GPU, OTHER_LIN_GPU = INPUTS['webgl_pairs']['lin']
 scenario('canvas_noise_other_os', {'host_gpu': LIN_GPU}, fingerprint=FP['windows'], os='windows')
 scenario('canvas_noise_false', {'host_gpu': LIN_GPU}, fingerprint=FP['windows'], os='windows', canvas_noise=False)
 scenario('canvas_noise_true_host_os', {'host_gpu': LIN_GPU}, fingerprint=FP['linux'], os='linux', canvas_noise=True)
+scenario('canvas_randomize_false', {'host_gpu': LIN_GPU}, fingerprint=FP['windows'], os='windows',
+         fingerprint_options={'canvas': {'randomize': False}})
+scenario('canvas_randomize_true_host_os', {'host_gpu': LIN_GPU}, fingerprint=FP['linux'], os='linux',
+         fingerprint_options={'canvas': {'randomize': True}})
 scenario('host_os_claims_host_gpu', {'host_gpu': LIN_GPU}, fingerprint=FP['linux'], os='linux', headless=True)
 scenario('host_os_pinned_gpu', {'host_gpu': LIN_GPU}, fingerprint=FP['linux'], os='linux',
          webgl_config=OTHER_LIN_GPU)

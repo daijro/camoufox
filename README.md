@@ -473,11 +473,11 @@ That is the default. These options override it:
 
 | Override | Result |
 |---|---|
-| `canvas_noise=False` on another OS | 🔴 Stock Firefox, but the pixels show the real OS |
-| `canvas_noise=True` on the host's OS | 🟡 Looks like LibreWolf with no need to |
-| `webgl_config` naming a GPU other than the host's | 🟡 Canvas noise is turned on, as on another OS; with `canvas_noise=False`, 🔴 WebGL reports one GPU while the pixels come from another |
+| `fingerprint_options={"canvas": {"randomize": False}}` on another OS | 🔴 Stock Firefox, but the pixels show the real OS |
+| `fingerprint_options={"canvas": {"randomize": True}}` on the host's OS | 🟡 Looks like LibreWolf with no need to |
+| `webgl_config` naming a GPU other than the host's | 🟡 Canvas noise is turned on, as on another OS; with `"randomize": False`, 🔴 WebGL reports one GPU while the pixels come from another |
 
-Noise is set per browser, not per context. Without it, every `NewContext()`
+Canvas randomization is set per browser, not per context. Without it, every `NewContext()`
 claims the host's OS. Details are in
 [the canvas on another OS](python/README.md#the-canvas-on-another-os).
 
@@ -529,7 +529,8 @@ claims the host's OS. Details are in
 | Install, pin and switch browser builds | `camoufox fetch`, `set`, `list`, `remove` |
 | Core count that a page can measure | `pin_cpu_cores=True` |
 | Block images, WebRTC or WebGL | `block_images`, `block_webrtc`, `block_webgl` |
-| The host's GPU on the host's OS; random canvas readback, as in LibreWolf, on another OS | default; `canvas_noise=True` or `False` to choose |
+| The host's GPU on the host's OS; random canvas readback, as in LibreWolf, on another OS | default; `fingerprint_options={"canvas": {"randomize": True}}` or `False` to choose |
+| Stock Web Audio output, or a fixed audio seed | `fingerprint_options={"audio": {"noise": False}}`, `{"audio": {"seed": N}}` |
 
 The full option list is in the [Python README](python/README.md#launch-options).
 

@@ -14,12 +14,19 @@ from .fingerprints import generate_context_fingerprint
 from .ip import Proxy, proxy_exit_geo
 from .utils import (
     attach_context_defaults,
+    AUDIO_OFF_PROBE,
+    AUDIO_OFF_PROBE_READ,
     context_audio,
     context_identity,
+    FingerprintOptions,
     host_identity,
+    launch_audio_seed,
+    launch_canvas_noise,
     launch_options,
+    needs_context_audio_off,
     new_context_options,
     persistent_context_options,
+    require_context_audio_off,
     spoofs_window_dimensions,
     start_virtual_display,
     sync_attach_vd,
@@ -132,10 +139,8 @@ def _launch(
 ) -> Union[Browser, BrowserContext]:
     # Options the caller built leave its contexts to the caller (host_identity).
     canvas_noise: Optional[bool] = False
-    audio_noise = True
     if not from_options:
-        canvas_noise = kwargs.get('canvas_noise')
-        audio_noise = kwargs.get('audio_noise', True) is not False
+        canvas_noise = launch_canvas_noise(kwargs.get('fingerprint_options'), kwargs.get('canvas_noise'))
         # Opt-in (2026-09-17). Pinning keeps the identity's core count by
         # constraining the browser to that many cores; it costs real CPU, needs
         # a launch lock, and does nothing on macOS. What it defends against is a
@@ -169,11 +174,26 @@ def _launch(
         browser = playwright.firefox.launch(**from_options)
         attach_context_defaults(browser, no_viewport_default)
         browser._camoufox_host_identity = identity
-        browser._camoufox_audio_noise = audio_noise
+        browser._camoufox_audio_seed = launch_audio_seed(from_options)
         return sync_attach_vd(browser, virtual_display)
     finally:
         if pid:
             cpu_affinity.restore(pid, previous)
+
+
+def _context_audio_off_supported(browser: Browser) -> bool:
+    """Whether `browser` can turn audio noise off in one context (utils.AUDIO_OFF_PROBE);
+    asked once per browser."""
+    supported = vars(browser).get('_camoufox_context_audio_off')
+    if supported is None:
+        probe = browser.new_context()
+        try:
+            probe.add_init_script(AUDIO_OFF_PROBE)
+            supported = probe.new_page().evaluate(AUDIO_OFF_PROBE_READ)
+        finally:
+            probe.close()
+        browser._camoufox_context_audio_off = supported
+    return supported
 
 
 def _resolve_proxy_geo(proxy: Dict[str, str]) -> Tuple[str, str]:
@@ -190,14 +210,14 @@ def NewContext(
     webrtc_ip: Optional[str] = None,
     proxy: Optional[Dict[str, str]] = None,
     geolocation: Optional[Dict[str, float]] = None,
+    fingerprint_options: Optional[FingerprintOptions] = None,
     **context_kwargs: Any,
 ) -> BrowserContext:
     """
     Creates a new browser context with a unique fingerprint identity.
 
     Each context gets its own identity (navigator, screen, WebGL, fonts, voices),
-    drawn by fpgen unless a preset is given, with its own audio noise seed (stock audio on a
-    browser launched with audio_noise=False). All values are applied
+    drawn by fpgen unless a preset is given, with its own audio noise seed. All values are applied
     via addInitScript so they self-destruct before page scripts can detect them.
 
     Parameters:
@@ -212,8 +232,17 @@ def NewContext(
             Unless webrtc_ip and timezone_id are both given, they are looked up from the
             proxy's exit IP; InvalidIP is raised if that lookup fails.
         geolocation: Per-context geolocation ({"latitude": float, "longitude": float}).
+        fingerprint_options: This context's audio noise, as in launch_options:
+            {"audio": {"noise": False}} or {"audio": {"seed": N}}. Without it the
+            context follows the browser: no noise if the browser has none,
+            otherwise a seed of its own, never the browser's. "canvas" raises:
+            canvas randomization belongs to the browser.
         **context_kwargs: Additional Playwright new_context() options.
     """
+    audio = context_audio(browser, fingerprint_options)
+    if needs_context_audio_off(browser, audio):
+        require_context_audio_off(_context_audio_off_supported(browser))
+
     # The drawn UA carries fpgen's Firefox version, which must not disagree with
     # the browser the page is actually talking to.
     ff_version = ff_version or browser.version.split('.', 1)[0]
@@ -227,7 +256,7 @@ def NewContext(
     os, webgl_config = context_identity(browser, os, preset)
     fp = generate_context_fingerprint(
         preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config,
-        config_overrides=context_audio(browser),
+        config_overrides=audio,
     )
 
     context = browser.new_context(**new_context_options(fp, context_kwargs, proxy, geolocation))

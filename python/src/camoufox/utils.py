@@ -11,12 +11,13 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import orjson
-from typing_extensions import TypeAlias
+from typing_extensions import TypeAlias, TypedDict
 from ua_parser import user_agent_parser
 
 from .addons import DefaultAddons, add_default_addons, confirm_paths
 from .display import has_display, largest_display
 from .exceptions import (
+    InvalidFingerprintOptions,
     InvalidOS,
     InvalidPropertyType,
     NonFirefoxFingerprint,
@@ -45,7 +46,7 @@ from .pkgman import (
 )
 from .gpudisplay import GPU_PREFS, GpuDisplay, async_prove_gpu, prove_gpu, select_gpu
 from .virtdisplay import VirtualDisplay
-from ._warnings import FallbackWarning, LeakWarning
+from ._warnings import WARNINGS_DATA, FallbackWarning, LeakWarning, _warn_from_caller
 from .host_rendering import Gpu, add_canvas_placeholder, has_canvas_placeholder, host_gpu, renders_on_hardware, set_webgpu
 from .webgl import firefox_gpus, sample_webgl_for_screen, webgl_for_gpu
 
@@ -805,18 +806,146 @@ def context_identity(
     ):
         raise ValueError(
             f'This browser renders its canvas as this {host_name} machine, so its contexts claim it'
-            f'{" and its GPU " + repr(gpu) if gpu else ""}. Launch it with canvas_noise=True to give '
+            f'{" and its GPU " + repr(gpu) if gpu else ""}. Launch it with '
+            'fingerprint_options={"canvas": {"randomize": True}} to give '
             'a context another OS or GPU.'
         )
     return host_name, gpu
 
 
-def context_audio(browser: Any) -> Optional[Dict[str, Any]]:
-    """Config overrides for a new context's audio: a browser launched with
-    audio_noise=False gives its contexts stock audio, as its own pages have."""
-    if vars(browser).get('_camoufox_audio_noise', True):
-        return None
-    return {'audio:seed': 0}
+class AudioOptions(TypedDict, total=False):
+    noise: bool
+    seed: int
+
+
+class CanvasOptions(TypedDict, total=False):
+    randomize: bool
+
+
+class FingerprintOptions(TypedDict, total=False):
+    """The noise Camoufox adds on top of an identity (`fingerprint` is the
+    identity itself). Only the surfaces Camoufox noises are here."""
+
+    audio: AudioOptions
+    canvas: CanvasOptions
+
+
+_FINGERPRINT_OPTION_KEYS = {'audio': {'noise', 'seed'}, 'canvas': {'randomize'}}
+
+
+def check_fingerprint_options(
+    options: Optional[FingerprintOptions], context: bool = False
+) -> Tuple[Optional[AudioOptions], Optional[bool]]:
+    """The audio entry and the canvas choice of a fingerprint_options value;
+    anything else in it raises."""
+    if options is None:
+        return None, None
+    if not isinstance(options, dict):
+        raise InvalidFingerprintOptions(f'fingerprint_options must be a dict, not {options!r}.')
+    for surface, value in options.items():
+        if surface not in _FINGERPRINT_OPTION_KEYS:
+            raise InvalidFingerprintOptions(
+                f'fingerprint_options has no {surface!r}: Camoufox adds noise only to audio and to '
+                'canvas readback. Nothing else is noised, since noise no real device produces is '
+                'itself a tell (ci/tribal-rules.yml: canvas-is-not-noised, no-glyph-spacing-noise).'
+            )
+        if not isinstance(value, dict) or not set(value) <= _FINGERPRINT_OPTION_KEYS[surface]:
+            raise InvalidFingerprintOptions(
+                f'fingerprint_options[{surface!r}] takes a dict with '
+                f'{" or ".join(sorted(_FINGERPRINT_OPTION_KEYS[surface]))}, not {value!r}.'
+            )
+        for key in ('noise', 'randomize'):
+            if key in value and not isinstance(value[key], bool):
+                raise InvalidFingerprintOptions(f'fingerprint_options[{surface!r}][{key!r}] is a bool, not {value[key]!r}.')
+    audio = options.get('audio')
+    if audio is not None and 'seed' in audio:
+        seed = audio['seed']
+        if isinstance(seed, bool) or not isinstance(seed, int) or not 1 <= seed <= 0xFFFFFFFF:
+            raise InvalidFingerprintOptions(
+                f'fingerprint_options["audio"]["seed"] is an int from 1 to 4294967295, not {seed!r}. '
+                'Pass {"noise": False} for stock Web Audio output.'
+            )
+        if audio.get('noise') is False:
+            raise InvalidFingerprintOptions(
+                'fingerprint_options["audio"] has both "noise": False and a "seed": with the noise off, '
+                'there is no seed. Pass one of them.'
+            )
+    canvas = options.get('canvas')
+    if canvas is not None and context:
+        raise InvalidFingerprintOptions(
+            'Canvas randomization belongs to the browser, not the context: launch the browser with '
+            'fingerprint_options={"canvas": {"randomize": ...}}.'
+        )
+    return audio, None if canvas is None else canvas.get('randomize')
+
+
+def audio_seed(audio: AudioOptions) -> Optional[int]:
+    """The audio:seed an audio entry asks for: 0 (the browser's "no noise") with
+    the noise off, its seed, or None for the default draw."""
+    return 0 if audio.get('noise') is False else audio.get('seed')
+
+
+def launch_canvas_noise(
+    fingerprint_options: Optional[FingerprintOptions], canvas_noise: Optional[bool]
+) -> Optional[bool]:
+    """Whether a launch randomizes canvas readback (None: on when the identity
+    claims another OS or GPU), from fingerprint_options or the older canvas_noise."""
+    _, randomize = check_fingerprint_options(fingerprint_options)
+    if canvas_noise is None:
+        return randomize
+    if fingerprint_options and 'canvas' in fingerprint_options:
+        raise InvalidFingerprintOptions(
+            'canvas_noise and fingerprint_options["canvas"] both set canvas randomization. '
+            'Pass only fingerprint_options={"canvas": {"randomize": ...}}.'
+        )
+    return canvas_noise
+
+
+def launch_audio_seed(from_options: Dict[str, Any]) -> Optional[int]:
+    """The audio:seed a launch sent in its CAMOU_CONFIG, if any."""
+    return orjson.loads(_camou_config_blob(from_options) or '{}').get('audio:seed')
+
+
+def context_audio(browser: Any, fingerprint_options: Optional[FingerprintOptions]) -> Optional[Dict[str, Any]]:
+    """Config overrides for the audio of a new context on `browser` (None: a
+    fresh seed of its own).
+
+    A context that sets no audio follows the browser: stock audio when the
+    launch sent seed 0, otherwise a seed of its own. It never takes the
+    browser's seed, fixed or not: each context is another device, and two
+    devices sharing an audio hash are linked. A context reproduces its audio
+    across runs with a seed of its own.
+    """
+    audio, _ = check_fingerprint_options(fingerprint_options, context=True)
+    seed = audio_seed(audio) if audio else 0 if vars(browser).get('_camoufox_audio_seed') == 0 else None
+    return None if seed is None else {'audio:seed': seed}
+
+
+def needs_context_audio_off(browser: Any, overrides: Optional[Dict[str, Any]]) -> bool:
+    """Whether a context with these audio overrides needs the browser to turn the
+    noise off in that context alone (setAudioFingerprintNoise): it asks for stock
+    audio while the launch may have noise on. With the noise off at launch, a
+    context without a seed of its own already has none."""
+    return overrides == {'audio:seed': 0} and vars(browser).get('_camoufox_audio_seed') != 0
+
+
+# Records, in a throwaway context, whether this browser has the setter that
+# turns audio noise off in one context. The setters are gone before page script
+# runs, so only an init script can see them.
+AUDIO_OFF_PROBE = (
+    'document.documentElement.setAttribute("data-camoufox-audio-off", '
+    'typeof window.setAudioFingerprintNoise === "function")'
+)
+AUDIO_OFF_PROBE_READ = 'document.documentElement.getAttribute("data-camoufox-audio-off") === "true"'
+
+
+def require_context_audio_off(supported: bool) -> None:
+    if not supported:
+        raise RuntimeError(
+            'This Camoufox build cannot turn Web Audio noise off in one context: it predates '
+            'setAudioFingerprintNoise. Update the browser, or launch it with '
+            'fingerprint_options={"audio": {"noise": False}} to turn the noise off in every context.'
+        )
 
 
 def new_context_options(
@@ -954,6 +1083,7 @@ def launch_options(
     screen: Optional[Screen] = None,
     window: Optional[Tuple[int, int]] = None,
     fingerprint: Optional[Dict[str, Any]] = None,
+    fingerprint_options: Optional[FingerprintOptions] = None,
     fingerprint_preset: Optional[Union[bool, Dict[str, Any]]] = None,
     ff_version: Optional[int] = None,
     headless: Optional[bool] = None,
@@ -971,7 +1101,6 @@ def launch_options(
     virtual_display: Optional[str] = None,
     pin_cpu_cores: Optional[bool] = None,
     canvas_noise: Optional[bool] = None,
-    audio_noise: bool = True,
     **launch_options: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
@@ -1023,7 +1152,18 @@ def launch_options(
         fingerprint (Optional[Fingerprint]):
             Use a custom fpgen fingerprint. Note: Not all values will be implemented.
             If not provided, a random fingerprint will be generated based on the provided
-            `os` & `screen` constraints.
+            `os` & `screen` constraints. The noise Camoufox adds on top of it is
+            set by fingerprint_options.
+        fingerprint_options (Optional[FingerprintOptions]):
+            The noise Camoufox adds on top of the identity; every key is optional.
+            {"audio": {"noise": False}} leaves Web Audio output as stock Firefox
+            renders it, and {"audio": {"seed": N}} (1 to 2**32-1) fixes the audio
+            noise seed. Without an audio entry the seed follows the identity, so
+            a returning identity reproduces its audio hash. NewContext contexts
+            follow a browser whose audio noise is off.
+            {"canvas": {"randomize": bool}} sets canvas randomization (see
+            canvas_noise); without it, it is on whenever the identity claims
+            another OS or GPU.
         fingerprint_preset (Optional[Union[bool, Dict[str, Any]]]):
             Opt into using real fingerprint presets instead of fpgen.
             Pass `True` to use a random bundled preset, or pass a preset dict directly.
@@ -1078,6 +1218,7 @@ def launch_options(
             The pair must be one fpgen has recorded from Firefox on `os`
             (camoufox.webgl.firefox_gpus); any other raises ValueError.
         canvas_noise (Optional[bool]):
+            The older form of fingerprint_options={"canvas": {"randomize": ...}}; warns.
             Replace canvas and WebGL readback with random data, as
             privacy.resistFingerprinting does in LibreWolf, Tor Browser and
             Mullvad Browser. Stock Firefox does not, so it warns. By default
@@ -1085,12 +1226,6 @@ def launch_options(
             renders with, uncovered; it is on whenever the identity claims
             another OS or another GPU (webgl_config, a preset's, or a host GPU
             fpgen never recorded), whose canvas would otherwise show the host.
-        audio_noise (bool):
-            Perturb Web Audio output with a seed that follows the identity, so
-            each identity has its own audio hash (the default). With False the
-            browser leaves Web Audio output as stock Firefox renders it.
-            Contexts made with NewContext follow the browser. An audio:seed in `config` wins
-            either way.
         **launch_options (Dict[str, Any]):
             Additional Firefox launch options.
     """
@@ -1159,7 +1294,18 @@ def launch_options(
     _user_set_dnt = 'navigator.doNotTrack' in config
     _user_set_gpc = 'navigator.globalPrivacyControl' in config
     _user_set_accept_encoding = 'headers.Accept-Encoding' in config
+    audio, _ = check_fingerprint_options(fingerprint_options)
+    if canvas_noise is not None:
+        _warn_from_caller(WARNINGS_DATA['canvas_noise_kwarg'], FutureWarning)
+    canvas_noise = launch_canvas_noise(fingerprint_options, canvas_noise)
     _user_set_audio_seed = 'audio:seed' in config
+    if _user_set_audio_seed:
+        if audio is not None:
+            raise InvalidFingerprintOptions(
+                'config["audio:seed"] and fingerprint_options["audio"] both set the audio noise. '
+                'Pass only fingerprint_options={"audio": ...}.'
+            )
+        _warn_from_caller(WARNINGS_DATA['audio_seed_config'], FutureWarning)
 
     # The salt that makes every seeded draw belong to this identity (see
     # fingerprints.identity_salt): stable when the caller pinned the identity
@@ -1416,18 +1562,18 @@ def launch_options(
         config.pop('headers.Accept-Encoding', None)
 
     # The audio noise seed follows the identity: a returning "same device" must
-    # reproduce its audio hash (#442/#765). It is 0, which disables the noise,
-    # only with audio_noise=False. A preset draws its own random seed; it is
-    # replaced here too so a pinned preset reproduces it, but a seed the caller
-    # set is kept. There is no canvas seed: the browser adds no canvas noise
-    # (#528), and no glyph-spacing noise either (ci/tribal-rules.yml:
-    # no-glyph-spacing-noise).
+    # reproduce its audio hash (#442/#765). Never 0, which the browser reads as
+    # no noise, unless fingerprint_options turns the noise off. A preset draws
+    # its own random seed; it is replaced here too so a pinned preset reproduces
+    # it, but a seed the caller set is kept. There is no canvas seed: the browser
+    # adds no canvas noise (#528), and no glyph-spacing noise either
+    # (ci/tribal-rules.yml: no-glyph-spacing-noise).
     if not _user_set_audio_seed:
-        if audio_noise is not False:
+        seed = audio_seed(audio or {})
+        if seed is None:
             _ident = identity_seed(config, _identity_salt)
-            config['audio:seed'] = ((_ident * 2654435761 + 97) & 0xFFFFFFFF) or 1
-        else:
-            config['audio:seed'] = 0
+            seed = ((_ident * 2654435761 + 97) & 0xFFFFFFFF) or 1
+        config['audio:seed'] = seed
 
     # Set geolocation
     if geoip:

@@ -34,7 +34,7 @@ def main() -> int:
     from camoufox.sync_api import Camoufox, NewContext
 
     failures = []
-    with Camoufox(**launch_kwargs(os="windows", canvas_noise=True, i_know_what_im_doing=True)) as browser:
+    with Camoufox(**launch_kwargs(os="windows", fingerprint_options={"canvas": {"randomize": True}}, i_know_what_im_doing=True)) as browser:
         for os_name in ("macos", "linux"):
             context = NewContext(browser, os=os_name)
             page = context.new_page()

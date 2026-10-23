@@ -1345,8 +1345,16 @@ def _build_init_script(values: Dict[str, Any]) -> str:
 
     lines = ['(function(v) {', '  var w = window;']
 
+    # Seed 0 is the browser's "no audio noise", but a context's own seed of 0
+    # means "the launch's seed", so a context turns its noise off with a setter
+    # of its own.
+    seed = values.get('audioFingerprintSeed')
+    if seed == 0:
+        lines.append('  if (typeof w.setAudioFingerprintNoise === "function") w.setAudioFingerprintNoise(false);')
+    elif seed is not None:
+        lines.append(f'  if (typeof w.setAudioFingerprintSeed === "function") w.setAudioFingerprintSeed({seed});')
+
     setters = [
-        ('audioFingerprintSeed', 'setAudioFingerprintSeed', '{val}'),
         ('navigatorPlatform', 'setNavigatorPlatform', '{val}'),
         ('navigatorOscpu', 'setNavigatorOscpu', '{val}'),
         ('navigatorUserAgent', 'setNavigatorUserAgent', '{val}'),

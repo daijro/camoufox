@@ -61,7 +61,8 @@ canvas_noise: >-
     does in LibreWolf, Tor Browser and Mullvad Browser. Stock Firefox does not
     do this, so the browser reads as a privacy-hardened Firefox. It is on because
     the identity claims another OS or GPU than this machine's, whose canvas would
-    show the real one. Pass `canvas_noise=False` to keep stock canvas behaviour.
+    show the real one. Pass `fingerprint_options={"canvas": {"randomize": False}}` to keep stock
+    canvas behaviour.
 
 gpu_software_rendering: >-
     The browser on the headless="virtual-gpu" display never rendered on the GPU, so it
@@ -102,3 +103,11 @@ geoip_frozen: >-
     The newest "{name}" GeoIP database was built {days} days ago, so its source may have
     stopped publishing and locations may be out of date. Please report this at
     https://github.com/daijro/camoufox/issues.
+
+canvas_noise_kwarg: >-
+    canvas_noise is the older form of fingerprint_options={"canvas": {"randomize": ...}}.
+    Pass that instead.
+
+audio_seed_config: >-
+    Setting audio:seed in config is the older form of fingerprint_options={"audio": {"seed": N}},
+    or {"audio": {"noise": False}} for seed 0. Pass that instead.
