@@ -707,8 +707,7 @@ def record_constants():
 def record_init_script():
     cases = [
         {},
-        {'audioFingerprintSeed': 123,
-         'navigatorPlatform': 'Win32', 'navigatorOscpu': 'Windows NT 10.0; Win64; x64',
+        {'navigatorPlatform': 'Win32', 'navigatorOscpu': 'Windows NT 10.0; Win64; x64',
          'navigatorUserAgent': UAS[3], 'navigatorAppVersion': '5.0 (Windows)', 'hardwareConcurrency': 8,
          'webglVendor': 'Google Inc. (Intel)',
          'webglRenderer': 'ANGLE (Intel, "quoted" é)', 'screenWidth': 1920, 'screenHeight': 1080,
@@ -718,7 +717,6 @@ def record_init_script():
          'speechVoices': [], 'timezone': ''},
         {'navigatorUserAgent': 'emoji 😀   \x7f tab\t', 'hardwareConcurrency': None},
         {'webrtcIP': '2001:db8::7'},
-        {'audioFingerprintSeed': 0, 'navigatorPlatform': 'Linux x86_64'},
     ]
     out = [{'values': v, 'script': fp._build_init_script(v)} for v in cases]
     write('init-script.json', {'cases': out}, compress=False)

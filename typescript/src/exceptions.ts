@@ -62,13 +62,6 @@ export class InvalidPropertyType extends Error {
 	}
 }
 
-export class InvalidFingerprintOptions extends Error {
-	constructor(message?: string) {
-		super(message ?? "The fingerprint options are invalid.");
-		this.name = "InvalidFingerprintOptions";
-	}
-}
-
 export class InvalidAddonPath extends FileNotFoundError {
 	constructor(message?: string) {
 		super(message ?? "The addon path is invalid.");

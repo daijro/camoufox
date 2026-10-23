@@ -343,9 +343,6 @@ scenario('flags', fingerprint=FP['macos'], os='macos', main_world_eval=True, all
                                                                           'intl.locale.requested': 'de-DE'})
 scenario('ff_version', fingerprint=FP['windows'], os='windows', ff_version=140)
 scenario('pin_cpu_cores', fingerprint=FP['linux'], os='linux', pin_cpu_cores=True)
-scenario('audio_noise_off', fingerprint=FP['linux'], os='linux', fingerprint_options={'audio': {'noise': False}})
-scenario('audio_noise_on', fingerprint=FP['linux'], os='linux', fingerprint_options={'audio': {'noise': True}})
-scenario('audio_seed', fingerprint=FP['linux'], os='linux', fingerprint_options={'audio': {'seed': 1000433}})
 
 # addons
 scenario('addons_custom', fingerprint=FP['linux'], os='linux', addons=['<ADDON>'])
@@ -388,7 +385,6 @@ scenario('config_touch', fingerprint=FP['windows'], os='windows', config={'navig
 scenario('config_dnt_gpc', fingerprint=FP['windows'], os='windows',
          config={'navigator.doNotTrack': '1', 'navigator.globalPrivacyControl': True})
 scenario('config_accept_encoding', fingerprint=FP['linux'], os='linux', config={'headers.Accept-Encoding': 'gzip'})
-scenario('config_seeds', fingerprint=FP['linux'], os='linux', config={'audio:seed': 42})
 scenario('config_instant_animations', fingerprint=FP['linux'], os='linux', config={'instantAnimations': True})
 scenario('config_media_devices', fingerprint=FP['linux'], os='linux', config={'mediaDevices:micros': 0})
 scenario('config_webgl_pair', fingerprint=FP['linux'], os='linux',
@@ -406,6 +402,7 @@ scenario('config_non_ascii', fingerprint=FP['linux'], os='linux', config={'timez
 # errors / validation
 scenario('invalid_os_case', fingerprint=FP['linux'], os='Linux')
 scenario('invalid_os_name', fingerprint=FP['linux'], os='beos')
+scenario('removed_audio_seed', fingerprint=FP['linux'], os='linux', config={'audio:seed': 42})
 scenario('non_firefox_fingerprint', fingerprint={**FP['linux'], 'navigator': {
     **FP['linux']['navigator'], 'userAgent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'}})
 
@@ -423,10 +420,6 @@ LIN_GPU, OTHER_LIN_GPU = INPUTS['webgl_pairs']['lin']
 scenario('canvas_noise_other_os', {'host_gpu': LIN_GPU}, fingerprint=FP['windows'], os='windows')
 scenario('canvas_noise_false', {'host_gpu': LIN_GPU}, fingerprint=FP['windows'], os='windows', canvas_noise=False)
 scenario('canvas_noise_true_host_os', {'host_gpu': LIN_GPU}, fingerprint=FP['linux'], os='linux', canvas_noise=True)
-scenario('canvas_randomize_false', {'host_gpu': LIN_GPU}, fingerprint=FP['windows'], os='windows',
-         fingerprint_options={'canvas': {'randomize': False}})
-scenario('canvas_randomize_true_host_os', {'host_gpu': LIN_GPU}, fingerprint=FP['linux'], os='linux',
-         fingerprint_options={'canvas': {'randomize': True}})
 scenario('host_os_claims_host_gpu', {'host_gpu': LIN_GPU}, fingerprint=FP['linux'], os='linux', headless=True)
 scenario('host_os_pinned_gpu', {'host_gpu': LIN_GPU}, fingerprint=FP['linux'], os='linux',
          webgl_config=OTHER_LIN_GPU)

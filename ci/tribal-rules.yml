@@ -325,6 +325,32 @@ rules:
       exception is an identity on another OS or GPU than the host's, whose
       canvas cannot agree with it (cross-os-canvas-is-the-rfp-placeholder).
 
+  - id: audio-is-not-noised
+    title: The audio render is stock Firefox's, one value per CPU architecture, and there is no audio seed
+    check: automated
+    evidence:
+      - "issue #926 / PR #927: the audio noise made every Camoufox identity render a value no real Firefox renders"
+      - "2026-10 study, 103 runs of stock Firefox 152-158 on 12 CPUs (GitHub macos-14/15/15-intel/26, ubuntu-22.04/22.04-arm/24.04-arm/latest, windows-2022/latest/11-arm runners; Ryzen 7 9850X3D Linux, i9-11900H Windows, Apple M4, Apple M5 Ultra): exactly two values of the fingerprintjs audio sum, 35.749972093850374 on all 61 x86-64 runs and 35.74996626004577 on all 42 ARM64 runs, the full-buffer, AnalyserNode and biquad hashes splitting the same way"
+      - "same study: Linux, macOS and Windows on one architecture give the same value; so do Firefox 152, 153, 156 and 158"
+      - "same study, device swap on the Ryzen host: default, Edifier USB, Samson USB, Radeon HDMI and null sinks, no sound server, and private PipeWire graphs at 22050-96000 Hz with 1-8 channels all gave 35.749972093850374"
+      - "fpgen audio_hash_by_platform (Firefox, its own metric) over 27 platform keys: 7.139525353908539 is 74.3%, 7.139525029808283 20.7%, 7.139524441212416 3.2%, ten other values 0.25% each"
+      - "v158.0-beta.40, 2026-10-23, Ryzen 7 9850X3D: audio:seed 424242 rendered 35.74635897387998, outside both classes, and moved the AnalyserNode, biquad and plain-sine hashes too; audio:seed 0 rendered stock x86-64 to the bit (browser/tests/playwright/patches/audio-matches-stock.py)"
+    rationale: >-
+      An OfflineAudioContext render depends on the CPU's floating-point path and
+      nothing else a page can see: not the OS, the sound card, the sample rate
+      or the Firefox version. Real Firefox therefore has one audio fingerprint
+      per architecture, and a site that has seen a few million visitors knows
+      both. Noise did not hide the device; it put every identity on a value no
+      real machine produces, and gave each context of one browser a different
+      one, which no real browser does either. The render is left as stock
+      renders it, so it is the host's architecture's value, the same in every
+      context and every launch, and a returning identity reproduces it
+      trivially (#442, #765). The audio-fingerprint-manager patch, its
+      per-context setter and the audio:seed key are gone; a caller passing
+      audio:seed gets an error rather than a silent no-op. build-tester counts
+      the audio hash with the values that must match across contexts, and the
+      audio-matches-stock guard checks the build against the recorded values.
+
   - id: cross-os-canvas-is-the-rfp-placeholder
     title: On the host's OS the identity claims the host's GPU; on another OS or GPU canvas readback is RFP's random placeholder
     check: automated

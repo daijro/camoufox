@@ -20,27 +20,19 @@ import * as cpuAffinity from "./cpu_affinity.js";
 import { generateContextFingerprint } from "./fingerprints.js";
 import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "./ip.js";
 import {
-	AUDIO_OFF_PROBE,
-	AUDIO_OFF_PROBE_READ,
 	applyNoViewport,
 	attachDesktopOnlyWarning,
 	attachNoViewportDefault,
 	attachStockMediaDefaults,
 	attachVirtualDisplay,
-	contextAudio,
 	contextIdentity,
 	driverPid,
-	type FingerprintOptions,
 	type GpuDisplayOptions,
 	type Headless,
 	hostIdentity,
 	type LaunchOptions,
-	launchAudioSeed,
-	launchCanvasNoise,
 	launchOptions,
-	needsContextAudioOff,
 	pinnedCoreCount,
-	requireContextAudioOff,
 	STOCK_MEDIA_DEFAULTS,
 	spoofsWindowDimensions,
 	startVirtualDisplay,
@@ -116,10 +108,7 @@ export async function NewBrowser(
 	let canvasNoise: boolean | undefined = false;
 	try {
 		if (!fromOptions || !Object.keys(fromOptions).length) {
-			canvasNoise = launchCanvasNoise(
-				kwargs.fingerprint_options,
-				kwargs.canvas_noise,
-			);
+			canvasNoise = kwargs.canvas_noise ?? undefined;
 			// Opt-in (2026-09-17). Pinning keeps the identity's core count by
 			// constraining the browser to that many cores; it costs real CPU,
 			// needs a launch lock, and does nothing on macOS. Off, the host's own
@@ -219,7 +208,6 @@ async function launchWith(
 	attachStockMediaDefaults(browser);
 	attachDesktopOnlyWarning(browser);
 	(browser as any)._camoufoxHostIdentity = identity;
-	(browser as any)._camoufoxAudioSeed = launchAudioSeed(fromOptions);
 	return attachVirtualDisplay(browser, virtualDisplay);
 }
 
@@ -238,12 +226,6 @@ export interface NewContextOptions extends Record<string, any> {
 	proxy?: ProxyConfig;
 	/** Per-context geolocation. */
 	geolocation?: { latitude: number; longitude: number; accuracy?: number };
-	/** This context's audio noise, as in launchOptions: `{audio: {noise:
-	 * false}}` or `{audio: {seed: N}}`. Without it the context follows the
-	 * browser: no noise if the browser has none, otherwise a seed of its own,
-	 * never the browser's. `canvas` throws: canvas randomization belongs to the
-	 * browser. */
-	fingerprint_options?: FingerprintOptions;
 }
 
 /** snake_case -> camelCase, as camoufox.server.camel_case does. */
@@ -275,15 +257,9 @@ export async function NewContext(
 		webrtc_ip,
 		proxy,
 		geolocation,
-		fingerprint_options,
 		...contextOptions
 	}: NewContextOptions = {},
 ): Promise<BrowserContext> {
-	const audio = contextAudio(browser, fingerprint_options);
-	if (needsContextAudioOff(browser, audio)) {
-		requireContextAudioOff(await contextAudioOffSupported(browser));
-	}
-
 	// Python's fpgen loads its model on import; here it is fetched on first use.
 	// launchOptions() awaits it, but a browser from connect() or a custom
 	// executable never went through launchOptions().
@@ -309,7 +285,6 @@ export async function NewContext(
 		ff_version: ffVersion,
 		webrtc_ip: webrtcIp,
 		webgl_config: webglConfig,
-		config_overrides: audio,
 	});
 
 	// Merge the generated context options with user overrides (user wins). They
@@ -329,21 +304,4 @@ export async function NewContext(
 	const context = await browser.newContext(opts);
 	await context.addInitScript(fp.init_script);
 	return context;
-}
-
-/** Whether `browser` can turn audio noise off in one context (AUDIO_OFF_PROBE);
- * asked once per browser. */
-async function contextAudioOffSupported(browser: any): Promise<boolean> {
-	if (browser._camoufoxContextAudioOff === undefined) {
-		const probe = await browser.newContext();
-		try {
-			await probe.addInitScript(AUDIO_OFF_PROBE);
-			browser._camoufoxContextAudioOff = await (await probe.newPage()).evaluate(
-				AUDIO_OFF_PROBE_READ,
-			);
-		} finally {
-			await probe.close();
-		}
-	}
-	return browser._camoufoxContextAudioOff;
 }

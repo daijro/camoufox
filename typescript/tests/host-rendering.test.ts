@@ -123,17 +123,14 @@ describe.skipIf(!MODEL.ok)("the host's OS", () => {
 			caught.some(
 				(w) =>
 					w.category === "LeakWarning" &&
-					w.message.includes('"randomize": False'),
+					w.message.includes("canvas_noise=False"),
 			),
 		).toBe(true);
 	});
 
 	it("an unrecorded host GPU stays uncovered on request", async () => {
 		onHost(UNRECORDED_GPU);
-		const { options } = await launch({
-			os: "linux",
-			fingerprint_options: { canvas: { randomize: false } },
-		});
+		const { options } = await launch({ os: "linux", canvas_noise: false });
 
 		expect(placeholder(options)).toBe(false);
 	});
@@ -167,7 +164,7 @@ describe.skipIf(!MODEL.ok)("the host's OS", () => {
 		const { options } = await launch({
 			os: "linux",
 			webgl_config: OTHER_GPU,
-			fingerprint_options: { canvas: { randomize: false } },
+			canvas_noise: false,
 		});
 
 		expect(placeholder(options)).toBe(false);
@@ -175,10 +172,7 @@ describe.skipIf(!MODEL.ok)("the host's OS", () => {
 
 	it("noise on request needs no probe", async () => {
 		const probes = onHost(HOST_GPU);
-		const { options } = await launch({
-			os: "linux",
-			fingerprint_options: { canvas: { randomize: true } },
-		});
+		const { options } = await launch({ os: "linux", canvas_noise: true });
 
 		expect(placeholder(options)).toBe(true);
 		expect(probes).toEqual([]);
@@ -205,17 +199,14 @@ describe.skipIf(!MODEL.ok)("another OS", () => {
 			caught.some(
 				(w) =>
 					w.category === "LeakWarning" &&
-					w.message.includes('"randomize": False'),
+					w.message.includes("canvas_noise=False"),
 			),
 		).toBe(true);
 	});
 
 	it("it can be turned off", async () => {
 		onHost(HOST_GPU);
-		const { options } = await launch({
-			os: "windows",
-			fingerprint_options: { canvas: { randomize: false } },
-		});
+		const { options } = await launch({ os: "windows", canvas_noise: false });
 
 		expect(placeholder(options)).toBe(false);
 	});
@@ -365,7 +356,7 @@ describe.skipIf(!MODEL.ok)("contexts of a browser on the host", () => {
 	it("another OS throws", async () => {
 		const { browser } = browserOnHost(HOST_GPU);
 		await expect(NewContext(browser, { os: "windows" })).rejects.toThrow(
-			"randomize",
+			"canvas_noise: true",
 		);
 	});
 
@@ -375,7 +366,9 @@ describe.skipIf(!MODEL.ok)("contexts of a browser on the host", () => {
 			navigator: { platform: "Linux x86_64" },
 			webgl: { unmaskedVendor: OTHER_GPU[0], unmaskedRenderer: OTHER_GPU[1] },
 		};
-		await expect(NewContext(browser, { preset })).rejects.toThrow("randomize");
+		await expect(NewContext(browser, { preset })).rejects.toThrow(
+			"canvas_noise: true",
+		);
 	});
 });
 

@@ -38,10 +38,9 @@ GUARD_DIR = REPO_ROOT / "browser" / "tests" / "playwright" / "patches"
 GROUPS: Dict[str, Tuple[str, ...]] = {
     "spoofing": (
         "animation-timing",
-        "audio-frequency-noise",
+        "audio-matches-stock",
         "baseline-protections",
         "context-app-version",
-        "context-audio-off",
         "context-lists-across-processes",
         "context-os-system-font",
         "fingerprint-setter-seal",

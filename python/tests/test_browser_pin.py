@@ -203,7 +203,7 @@ def test_the_browser_option_launches_the_selected_build(selected_build, specifie
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         options = utils.launch_options(
-            browser=specifier, os="linux", fingerprint_options={"canvas": {"randomize": False}}, block_webgl=True,
+            browser=specifier, os="linux", canvas_noise=False, block_webgl=True,
             headless=True, i_know_what_im_doing=True,
         )
 

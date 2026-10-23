@@ -171,10 +171,10 @@ index 0000000000..a134ba615a
 +
 +#endif // mozilla_dom_WebRTCIPManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 72da1d5ab4..8b48e3e554 100644
+index ea530fb4a0..1d64f2922d 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -303,10 +303,15 @@ EXPORTS.mozilla.dom += [
+@@ -302,10 +302,15 @@ EXPORTS.mozilla.dom += [
      "VideoFrameProvider.h",
      "ViewportMetaData.h",
      "VisualViewport.h",
@@ -187,14 +187,14 @@ index 72da1d5ab4..8b48e3e554 100644
 +# (it includes RoverfoxStorageManager.h which causes template issues)
 +SOURCES += ["WebRTCIPManager.cpp"]
 +
- # AudioFingerprintManager compiled separately to avoid namespace pollution
- # in unified builds (it includes RoverfoxStorageManager.h which can affect
- # alphabetically-later files like BarProps.cpp)
+ if CONFIG["FUZZING"]:
+     EXPORTS.mozilla.dom += [
+         "FuzzingFunctions.h",
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 0e5ba4c899..5806442359 100644
+index 8db6ee29f8..9a81697c6f 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -332,6 +332,8 @@
+@@ -330,6 +330,8 @@
  #include "xpcprivate.h"
  #include "xpcpublic.h"
  
@@ -203,7 +203,7 @@ index 0e5ba4c899..5806442359 100644
  #ifdef MOZ_WEBSPEECH
  #  include "mozilla/dom/SpeechSynthesis.h"
  #endif
-@@ -7785,6 +7787,18 @@ void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aR
+@@ -7783,6 +7785,18 @@ void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aR
    RoverfoxStorageManager::RemoveSetter("setTimezone");
  }
  
@@ -223,10 +223,10 @@ index 0e5ba4c899..5806442359 100644
    MOZ_ASSERT(aSharedWorker);
    MOZ_ASSERT(!mSharedWorkers.Contains(aSharedWorker));
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index fc1d7b4ee5..b18ebe1d54 100644
+index 4090206bfb..3749987acf 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -689,6 +689,10 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -686,6 +686,10 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
  
    void SetTimezone(const nsAString& timezone, mozilla::ErrorResult& aRv);
  
@@ -1118,7 +1118,7 @@ index f15df437c8..824c40de63 100644
  
    _status = 0;
 diff --git a/dom/media/webrtc/transport/nricectx.cpp b/dom/media/webrtc/transport/nricectx.cpp
-index 0288b6fc29..1ec530940e 100644
+index 9a3aa1311a..e564905a2e 100644
 --- a/dom/media/webrtc/transport/nricectx.cpp
 +++ b/dom/media/webrtc/transport/nricectx.cpp
 @@ -75,6 +75,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
@@ -1129,7 +1129,7 @@ index 0288b6fc29..1ec530940e 100644
  #include "nr_socket_prsock.h"
  #include "nricectx.h"
  #include "nricemediastream.h"
-@@ -679,6 +680,16 @@ nsTArray<NrIceStunAddr> NrIceCtx::GetStunAddrs() {
+@@ -675,6 +676,16 @@ nsTArray<NrIceStunAddr> NrIceCtx::GetStunAddrs() {
      MOZ_MTLOG(ML_INFO, "Error finding local stun addresses");
    } else {
      for (int i = 0; i < addr_ct; ++i) {
@@ -1147,10 +1147,10 @@ index 0288b6fc29..1ec530940e 100644
        addrs.AppendElement(addr);
      }
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index ad03fa0ef4..a21f529eae 100644
+index d6bf3c6b30..52a8264e2e 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -965,6 +965,17 @@ partial interface Window {
+@@ -959,6 +959,17 @@ partial interface Window {
    undefined setTimezone(DOMString timezone);
  };
  

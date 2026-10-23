@@ -438,7 +438,7 @@ right.
 | Screen and window sizes, color depth, CSS media features | The drawn device's display, the same in JS and CSS | Screen size is among the most identifying values, and CSS media queries read it without script | `screen-spoofing`, `fingerprint-injection` patches |
 | WebGL and WebGL2: vendor, renderer, parameters, extensions, shader precision, context attributes | One GPU fpgen recorded for Firefox on that OS. Values Firefox decides rather than the GPU follow the shipped Firefox ([`webgl-browser-owned-values-follow-firefox`](ci/tribal-rules.yml)) | The renderer string names the host's GPU, and its limits must agree with it | `webgl-spoofing` patch, `webgl.py` |
 | WebGPU: `navigator.gpu` and its adapter | `navigator.gpu` only where Firefox on the claimed device has it: Windows and Apple Silicon Macs. The adapter is the host's only when the identity claims the host's GPU; otherwise `requestAdapter()` returns `null`, as for a blocked or software GPU | The adapter's limits and features come from the real GPU | launcher, `host_rendering.py` |
-| Audio: sample rate, output latency, max channels, and the audio fingerprint | The identity's values, seeded per identity | Audio output varies with hardware and drivers, so identities sharing one could be linked | `audio-context-spoofing`, `audio-fingerprint-manager` patches |
+| Audio: sample rate, output latency, max channels | The identity's values | They follow the claimed device's audio hardware | `audio-context-spoofing` patch |
 | Fonts: installed list, `system-ui`, CSS2 system fonts | The claimed OS's fonts, from a bundled set; see [docs/FONTS.md](docs/FONTS.md) | Installed fonts reveal the OS and the software on it | `font-list-spoofing`, `font-hijacker`, `system-ui-font-spoofing` patches |
 | Speech voices | The claimed OS's voices, which actually speak | The voice list is specific to each OS, and a voice that cannot speak is a tell | `voice-spoofing`, `speech-voices-spoofing` patches |
 | Microphones, cameras, speakers | OS-style labels and groups; see [docs/MEDIA-DEVICES.md](docs/MEDIA-DEVICES.md) | Device count and labels differ per machine and per OS | `media-device-spoofing` patch |
@@ -454,6 +454,7 @@ Left as stock Firefox has it, on purpose:
 |---|---|---|
 | Canvas pixels | What the GPU and fonts produce. As in stock Firefox, each context's PNG exports (`toDataURL`, `toBlob`) carry a per-session `deBG` chunk; the pixels themselves are untouched. On the host's OS the identity claims the host's GPU, so the pixels agree with it; on another OS readback returns random data, as `privacy.resistFingerprinting` does in LibreWolf ([the canvas on another OS](python/README.md#the-canvas-on-another-os)) | Stock Firefox does not perturb pixels in its default configuration, so noise would only mark the browser as a spoofer ([`canvas-is-not-noised`](ci/tribal-rules.yml)) |
 | Text widths | What the font really measures | The same font on the same OS measures the same everywhere; widths no real machine produces are a fingerprint ([`no-glyph-spacing-noise`](ci/tribal-rules.yml)) |
+| Audio render (`OfflineAudioContext`, `AnalyserNode`) | What the host CPU computes, the same in every context and every launch | Stock Firefox renders one value per CPU architecture, whatever the OS, sound card or sample rate, so a noised value is one no real machine produces ([`audio-is-not-noised`](ci/tribal-rules.yml)) |
 
 Each context of one browser can carry its own identity:
 [docs/per-context-patches.md](docs/per-context-patches.md).
@@ -473,11 +474,11 @@ That is the default. These options override it:
 
 | Override | Result |
 |---|---|
-| `fingerprint_options={"canvas": {"randomize": False}}` on another OS | 🔴 Stock Firefox, but the pixels show the real OS |
-| `fingerprint_options={"canvas": {"randomize": True}}` on the host's OS | 🟡 Looks like LibreWolf with no need to |
-| `webgl_config` naming a GPU other than the host's | 🟡 Canvas noise is turned on, as on another OS; with `"randomize": False`, 🔴 WebGL reports one GPU while the pixels come from another |
+| `canvas_noise=False` on another OS | 🔴 Stock Firefox, but the pixels show the real OS |
+| `canvas_noise=True` on the host's OS | 🟡 Looks like LibreWolf with no need to |
+| `webgl_config` naming a GPU other than the host's | 🟡 Canvas noise is turned on, as on another OS; with `canvas_noise=False`, 🔴 WebGL reports one GPU while the pixels come from another |
 
-Canvas randomization is set per browser, not per context. Without it, every `NewContext()`
+Noise is set per browser, not per context. Without it, every `NewContext()`
 claims the host's OS. Details are in
 [the canvas on another OS](python/README.md#the-canvas-on-another-os).
 
@@ -529,8 +530,7 @@ claims the host's OS. Details are in
 | Install, pin and switch browser builds | `camoufox fetch`, `set`, `list`, `remove` |
 | Core count that a page can measure | `pin_cpu_cores=True` |
 | Block images, WebRTC or WebGL | `block_images`, `block_webrtc`, `block_webgl` |
-| The host's GPU on the host's OS; random canvas readback, as in LibreWolf, on another OS | default; `fingerprint_options={"canvas": {"randomize": True}}` or `False` to choose |
-| Stock Web Audio output, or a fixed audio seed | `fingerprint_options={"audio": {"noise": False}}`, `{"audio": {"seed": N}}` |
+| The host's GPU on the host's OS; random canvas readback, as in LibreWolf, on another OS | default; `canvas_noise=True` or `False` to choose |
 
 The full option list is in the [Python README](python/README.md#launch-options).
 

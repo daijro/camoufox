@@ -15,8 +15,6 @@ for the calling window's context, and is gone before any page script runs
 
 | Function | Patch | What a page sees |
 |---|---|---|
-| `setAudioFingerprintSeed(seed)` | `audio-fingerprint-manager.patch` | `AudioBuffer` and `AnalyserNode` output |
-| `setAudioFingerprintNoise(enabled)` | `audio-fingerprint-manager.patch` | With `false`, stock `AudioBuffer` and `AnalyserNode` output, whatever the seed. A seed of 0 cannot say this: it means the launch-level seed |
 | `setTimezone(tz)` | `timezone-spoofing.patch` | `Date`, `Intl.DateTimeFormat` and every other time API |
 | `setScreenDimensions(w, h)` | `screen-spoofing.patch` | `screen.width`, `screen.height`, matching CSS media features |
 | `setScreenColorDepth(depth)` | `screen-spoofing.patch` | `screen.colorDepth` |
@@ -39,9 +37,9 @@ Supporting patches, with no setter of their own:
 | `anti-font-fingerprinting.patch` | The context id on each font group |
 | `cross-process-storage.patch` | `RoverfoxStorageManager`, the per-context store, with the IPC that makes a value set in one process readable in every other, and the guard and removal every setter uses |
 
-There is no canvas pixel noise and no glyph-spacing noise: both produce output
-no real machine does ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml)). A
-browser launched with `fingerprint_options={"canvas": {"randomize": True}}` returns random canvas readback, as
+There is no canvas pixel noise, no audio noise and no glyph-spacing noise: each
+produces output no real machine does ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml)). A
+browser launched with `canvas_noise=True` returns random canvas readback, as
 `privacy.resistFingerprinting` does, for every context.
 
 ## Using the setters
@@ -58,13 +56,11 @@ const context = await browser.newContext();
 await context.addInitScript((v) => {
   const w = window;
   if (typeof w.setTimezone === "function") w.setTimezone(v.timezone);
-  if (typeof w.setAudioFingerprintSeed === "function") w.setAudioFingerprintSeed(v.audioSeed);
   if (typeof w.setScreenDimensions === "function") w.setScreenDimensions(v.width, v.height);
   if (typeof w.setNavigatorPlatform === "function") w.setNavigatorPlatform(v.platform);
   if (typeof w.setWebRTCIPv4 === "function") w.setWebRTCIPv4(v.webrtcIp);
 }, {
   timezone: "America/New_York",
-  audioSeed: 87654321,
   width: 1920,
   height: 1080,
   platform: "Win32",
@@ -157,7 +153,6 @@ real value.
 
 | Patch | Hooks | Notes |
 |---|---|---|
-| `audio-fingerprint-manager.patch` | `AudioBuffer.getChannelData`, `copyFromChannel`; `AnalyserNode.getFloatFrequencyData`, `getByteFrequencyData`, `getFloatTimeDomainData`, `getByteTimeDomainData` | A small deterministic transform of the samples, seeded per context. All six read paths are covered, because covering only `getChannelData` is bypassable. A context without a seed of its own falls back to `audio:seed` in `CAMOU_CONFIG`; one that turned its noise off gets none. |
 | `timezone-spoofing.patch` | SpiderMonkey `DateTimeInfo` per realm (`JS::SetRealmTimeZoneOverride`), `nsGlobalWindowOuter::SetNewDocument`, `WorkerPrivate::GetOrCreateGlobalScope` | The only patch inside SpiderMonkey. Re-applied on navigation and in dedicated, shared and service workers; also sets a process-wide override. Invalid IDs throw `TypeError`. |
 | `screen-spoofing.patch` | `nsScreen::GetRect`, `nsDeviceContext`, `nsMediaFeatures.cpp` | CSS `device-width` and `color` agree with `screen.*`. |
 | `navigator-spoofing.patch` | `Navigator::GetPlatform`, `GetOscpu`, `HardwareConcurrency`, `GetUserAgent`, `GetAppVersion`; the `WorkerNavigator` versions of platform, cores, UA and appVersion | Falls back to `navigator.*` in `CAMOU_CONFIG`. |
@@ -206,7 +201,6 @@ The User-Agent's version is rewritten to the running browser's.
 | WebGL | One GPU fpgen recorded for Firefox on that OS, weighted by its share and checked against the machine (`coherence.gpu_fits_machine()`); `webgl_for_gpu()` adds its parameters, extensions and shader precisions |
 | Fonts | `_generate_random_font_subset()`: one OS-version base plus measured additions ([FONTS.md](FONTS.md)); never from presets |
 | Voices | `_generate_random_voice_subset()`, from `voice-manifests.json`, seeded by the identity; never from presets |
-| Audio seed | Derived from the identity (`NewBrowser`) or random (`NewContext`), never 0 |
 | Timezone | The preset, or `timezone` in `CAMOU_CONFIG` (from geoip); with a proxy, `NewContext` looks it up from the exit IP |
 | WebRTC IP | `NewContext`'s `webrtc_ip` or the proxy's exit IP, to the IPv4 or IPv6 setter; an invalid address raises `InvalidIP` |
 | Geolocation | The `geolocation` argument, via Playwright |
@@ -225,7 +219,7 @@ renders, so some signals still show the real OS:
 
 Run each identity on the OS it claims. The per-context patches make each
 context a different person on the same OS, not a different OS. Where that is
-not possible, launch with `fingerprint_options={"canvas": {"randomize": True}}`: canvas and WebGL readback then
+not possible, launch with `canvas_noise=True`: canvas and WebGL readback then
 return random data, which covers the two rasterization rows above. A browser
 launched without it gives its contexts the host's OS and GPU, and `NewContext`
 raises for another OS or GPU.

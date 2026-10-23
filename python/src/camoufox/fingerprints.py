@@ -6,10 +6,11 @@ import secrets
 import unicodedata
 from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
-from random import Random, choice, randint, randrange
+from random import Random, choice, randrange
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from camoufox._warnings import FallbackWarning
+from camoufox.exceptions import InvalidPropertyType
 from camoufox.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
@@ -143,6 +144,21 @@ _ESSENTIAL_FONTS_LINUX: List[str] = _ESSENTIAL['lin']
 # 26200.9457). Every drawn Windows identity is Windows 11 and has them; the rest
 # of the identity (overlay scrollbars in utils.launch_options) must agree.
 WINDOWS_11_MARKER_FONTS = frozenset(LAUNCHER_CONSTANTS['windows11MarkerFonts'])
+
+
+def reject_audio_seed(config: Dict[str, Any]) -> None:
+    """
+    audio:seed is gone: the browser renders audio as stock Firefox does. Stock
+    gives one value per CPU architecture, so a noised value is a tell, and a
+    seed that does nothing must not look like it does.
+    """
+    if 'audio:seed' in config:
+        raise InvalidPropertyType(
+            "audio:seed was removed: Camoufox renders audio as stock Firefox does. "
+            "Stock Firefox gives one audio fingerprint per CPU architecture, so noise "
+            "is a tell, not a disguise (ci/tribal-rules.yml: audio-is-not-noised). "
+            "Drop the key."
+        )
 
 
 def identity_salt(pinned: Any = None) -> int:
@@ -1284,9 +1300,6 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None, salt: Optional[i
     if webgl.get('unmaskedRenderer'):
         config['webGl:renderer'] = webgl['unmaskedRenderer']
 
-    # Generate a unique audio seed per launch (1 to 2^32-1, excluding 0 which is a no-op in C++)
-    config['audio:seed'] = randint(1, 4_294_967_295)  # nosec
-
     if preset.get('timezone'):
         config['timezone'] = preset['timezone']
 
@@ -1344,15 +1357,6 @@ def _build_init_script(values: Dict[str, Any]) -> str:
     import json as _json
 
     lines = ['(function(v) {', '  var w = window;']
-
-    # Seed 0 is the browser's "no audio noise", but a context's own seed of 0
-    # means "the launch's seed", so a context turns its noise off with a setter
-    # of its own.
-    seed = values.get('audioFingerprintSeed')
-    if seed == 0:
-        lines.append('  if (typeof w.setAudioFingerprintNoise === "function") w.setAudioFingerprintNoise(false);')
-    elif seed is not None:
-        lines.append(f'  if (typeof w.setAudioFingerprintSeed === "function") w.setAudioFingerprintSeed({seed});')
 
     setters = [
         ('navigatorPlatform', 'setNavigatorPlatform', '{val}'),
@@ -1458,7 +1462,7 @@ def generate_context_fingerprint(
             normalize_locale() and injected into config. Also sets
             context_options['locale'] for Playwright.
         config_overrides: Dict of CAMOU_CONFIG keys to override after config
-            is built but before init_script is rendered (e.g. {'audio:seed': 7}).
+            is built but before init_script is rendered (e.g. {'timezone': 'UTC'}).
         webgl_config: The (vendor, renderer) a drawn identity claims, instead of
             drawing one.
     """
@@ -1481,9 +1485,6 @@ def generate_context_fingerprint(
 
         # A fresh identity: every seeded draw below gets its own salt.
         _salt = identity_salt()
-
-        # Add seeds (the generator doesn't produce these)
-        config.setdefault('audio:seed', randint(1, 4_294_967_295))  # nosec
 
         os_name = platform_to_os(config.get('navigator.platform', ''))
 
@@ -1560,11 +1561,11 @@ def generate_context_fingerprint(
 
     # Apply caller overrides before rendering init_script
     if config_overrides:
+        reject_audio_seed(config_overrides)
         config.update(config_overrides)
 
     # Build the values dict for the init script (works for both paths)
     init_values: Dict[str, Any] = {
-        'audioFingerprintSeed': config.get('audio:seed'),
         'navigatorPlatform': nav.get('platform'),
         'navigatorOscpu': config.get('navigator.oscpu'),
         'navigatorUserAgent': config.get('navigator.userAgent'),

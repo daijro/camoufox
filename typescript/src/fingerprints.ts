@@ -19,6 +19,7 @@ import {
 	supported as cpuAffinitySupported,
 	hostCoreCount,
 } from "./cpu_affinity.js";
+import { InvalidPropertyType } from "./exceptions.js";
 import { validateIP, validIPv4 } from "./ip.js";
 import { normalizeLocale } from "./locales.js";
 import { LAUNCHER_CONSTANTS, LOCAL_DATA, loadDataFile } from "./paths.js";
@@ -250,12 +251,18 @@ export function identitySeed(
 }
 
 /**
- * The audio noise seed launchOptions derives from identitySeed() (utils.py:
- * `(ident * 2654435761 + 97) & 0xFFFFFFFF or 1`), computed without losing
- * precision past 2**53.
+ * audio:seed is gone: the browser renders audio as stock Firefox does. Stock
+ * gives one value per CPU architecture, so a noised value is a tell, and a
+ * seed that does nothing must not look like it does.
  */
-export function audioSeedFromIdentity(ident: number): number {
-	return Number((BigInt(ident) * 2654435761n + 97n) & 0xffffffffn) || 1;
+export function rejectAudioSeed(config: Record<string, unknown>): void {
+	if ("audio:seed" in config)
+		throw new InvalidPropertyType(
+			"audio:seed was removed: Camoufox renders audio as stock Firefox does. " +
+				"Stock Firefox gives one audio fingerprint per CPU architecture, so noise " +
+				"is a tell, not a disguise (ci/tribal-rules.yml: audio-is-not-noised). " +
+				"Drop the key.",
+		);
 }
 
 /** A seeded generator for a draw, or a fresh OS-seeded one when unseeded. */
@@ -1378,9 +1385,6 @@ export function fromPreset(
 	if (pyTruthy(webgl.unmaskedRenderer))
 		config["webGl:renderer"] = webgl.unmaskedRenderer;
 
-	// A unique audio seed per launch.
-	config["audio:seed"] = random.randint(1, 4_294_967_295);
-
 	if (pyTruthy(preset.timezone)) config.timezone = preset.timezone;
 
 	const plat: string = nav.platform ?? "";
@@ -1447,7 +1451,6 @@ export function fromPreset(
 // ---------------------------------------------------------------------------
 
 export interface InitValues {
-	audioFingerprintSeed?: number;
 	navigatorPlatform?: string;
 	navigatorOscpu?: string;
 	navigatorUserAgent?: string;
@@ -1471,20 +1474,6 @@ export interface InitValues {
  */
 export function buildInitScript(values: InitValues): string {
 	const lines = ["(function(v) {", "  var w = window;"];
-
-	// Seed 0 is the browser's "no audio noise", but a context's own seed of 0
-	// means "the launch's seed", so a context turns its noise off with a setter
-	// of its own.
-	const seed = values.audioFingerprintSeed;
-	if (seed === 0) {
-		lines.push(
-			'  if (typeof w.setAudioFingerprintNoise === "function") w.setAudioFingerprintNoise(false);',
-		);
-	} else if (!isNone(seed)) {
-		lines.push(
-			`  if (typeof w.setAudioFingerprintSeed === "function") w.setAudioFingerprintSeed(${pyJsonDumps(seed)});`,
-		);
-	}
 
 	const setters: Array<[keyof InitValues, string]> = [
 		["navigatorPlatform", "setNavigatorPlatform"],
@@ -1655,9 +1644,6 @@ export function generateContextFingerprint({
 		// A fresh identity: every seeded draw below gets its own salt.
 		const salt = identitySalt();
 
-		if (!("audio:seed" in config))
-			config["audio:seed"] = random.randint(1, 4_294_967_295);
-
 		const osName = targetOsFromPlatform(
 			pyStr(get(config, "navigator.platform", "")),
 		);
@@ -1763,10 +1749,12 @@ export function generateContextFingerprint({
 		if (parsed.script) config["locale:script"] = parsed.script;
 	}
 
-	if (config_overrides) Object.assign(config, config_overrides);
+	if (config_overrides) {
+		rejectAudioSeed(config_overrides);
+		Object.assign(config, config_overrides);
+	}
 
 	const initValues: InitValues = {
-		audioFingerprintSeed: config["audio:seed"],
 		navigatorPlatform: nav.platform,
 		navigatorOscpu: config["navigator.oscpu"],
 		navigatorUserAgent: config["navigator.userAgent"],

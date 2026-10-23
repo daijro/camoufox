@@ -32,7 +32,6 @@ be listed there.
 | Patch | Config keys |
 |-------|-------------|
 | `audio-context-spoofing.patch` | `AudioContext:sampleRate`, `AudioContext:outputLatency`, `AudioContext:maxChannelCount` |
-| `audio-fingerprint-manager.patch` | `audio:seed` |
 | `chromeutil.patch` | `debug` |
 | `fingerprint-injection.patch` | `navigator.*`, `screen.*`, `window.*` |
 | `font-hijacker.patch` | `fonts`, `navigator.platform` |
@@ -72,7 +71,7 @@ already set up, and do not add the include or `LOCAL_INCLUDES` themselves:
 
 ## RoverfoxStorageManager
 
-Per-context values set from Playwright (audio seed, WebRTC IP, timezone,
+Per-context values set from Playwright (WebRTC IP, timezone,
 screen, navigator, WebGL, font list, voices, ...) are kept in
 `RoverfoxStorageManager`, which `cross-process-storage.patch` adds under
 `dom/base/` with its cross-process put/get IPC. Every content process reads it:

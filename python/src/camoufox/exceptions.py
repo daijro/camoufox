@@ -46,15 +46,6 @@ class InvalidPropertyType(Exception):
     ...
 
 
-class InvalidFingerprintOptions(ValueError):
-    """
-    Raised when fingerprint_options names a surface or key it does not have, or
-    a value it cannot take.
-    """
-
-    ...
-
-
 class InvalidAddonPath(FileNotFoundError):
     """
     Raised when the addon path is invalid.
