@@ -15,6 +15,34 @@ These apply only when the identity claims Windows and the host is not Windows;
 on a Windows host the build already behaves this way. Every default yields to a
 value the caller sets.
 
+They are the browser's, not a context's: prefs and launch config set from the
+OS the browser was launched with. On a browser launched as Windows, a context
+created with `NewContext(os="macos")` still has Windows' math, keyboard and
+behaviour; on a browser launched as Linux, a Windows context has Linux's.
+`NewContext` does not refuse that, because a launch without `os` draws its OS
+from fpgen's mix, and a refusal would then come and go with the draw. Launch
+with the `os` whose behaviour the contexts need, or one browser per OS.
+
+## AltGr: what is left
+
+On Windows, AltGr is Ctrl+Alt to the OS. Pressing it sends a ControlLeft
+`WM_KEYDOWN` before the AltRight one (Firefox's `widget/windows/KeyboardLayout.cpp`
+says so), so stock Firefox on Windows fires a `keydown` with `code`
+`ControlLeft`, `key` `Control` and `ctrlKey` true, then one with `code`
+`AltRight`, `key` `AltGraph` and `keyCode` 18. While AltGr is down on a layout
+that has it, Firefox's `ModifierKeyState` sets only the AltGraph modifier, so
+the AltGraph events and the characters typed with it carry `ctrlKey` and
+`altKey` false, as they do here. (Chromium on Windows reports them true; Firefox
+does not.)
+
+This build fires the AltRight event with Windows' `keyCode` (18) but not the
+ControlLeft events before and after it. Adding them means dispatching extra key
+events from GTK's `KeymapWrapper`, which `GetDOMKeyCodeFromKeyPairs` cannot do,
+and their order on release (ControlLeft before or after AltRight) has to be
+recorded on Windows first. So a page that listens for the ControlLeft keydown
+around AltGr can still tell. Pages see this only from a keyboard layout with
+AltGr; a US layout has none.
+
 ## Reference data for the math
 
 Both references were recorded on Windows; neither can be produced on Linux.
@@ -36,5 +64,5 @@ Both references were recorded on Windows; neither can be produced on Linux.
   results keep their sign as before: 152's `Value::setDouble` stored a NaN as
   the CRT returned it, and 158's Math natives and `**` store their results with
   the `AssumeCanonicalNaN` setters, which do the same, so the 399 pow results
-  recorded as `fff8000000000000` still read back so. Re-record on the pinned version when an update touches
-  any of these.
+  recorded as `fff8000000000000` still read back so. Re-record on the pinned
+  version when an update touches any of these.
