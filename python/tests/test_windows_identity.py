@@ -1,8 +1,13 @@
 """A Windows identity on another host behaves as stock Windows Firefox does.
 
-Each value the launcher sets here was measured on stock Firefox on Windows
-against this build on a Linux host claiming Windows. On a Windows host the
-build already behaves that way, and a macOS or Linux identity is left as it is.
+What was measured on stock Firefox on Windows against this build on a Linux
+host claiming Windows: the math (browser/tests/ucrt-math), the keyboard (the
+windows-keyboard guard), the scrollbar width, and four behaviour prefs
+(middlemouse.paste, general.autoScroll, eat_space_to_next_word and the
+fullscreen transition, the spot checks below). The other behaviour prefs are
+Firefox 158's Windows defaults, read from all.js, firefox.js and
+StaticPrefList.yaml, not measured. On a Windows host the build already behaves
+that way, and a macOS or Linux identity is left as it is.
 """
 
 import pytest
@@ -11,9 +16,9 @@ from camoufox import utils
 
 from test_launch_environment import isolated_launch_dependencies  # noqa: F401
 
-WIN_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:156.0) Gecko/20100101 Firefox/156.0"
-MAC_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0"
-LIN_UA = "Mozilla/5.0 (X11; Linux x86_64; rv:156.0) Gecko/20100101 Firefox/156.0"
+WIN_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0"
+MAC_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:158.0) Gecko/20100101 Firefox/158.0"
+LIN_UA = "Mozilla/5.0 (X11; Linux x86_64; rv:158.0) Gecko/20100101 Firefox/158.0"
 
 
 @pytest.fixture
