@@ -20,6 +20,7 @@ The generated (fpgen) path already emits a coherent pair, which is why
 this only shows up on the preset path.
 """
 
+import json
 
 import pytest
 
@@ -155,3 +156,16 @@ def test_a_drawn_app_version_follows_the_drawn_user_agent():
     config = from_fpgen(fingerprint, "156")
 
     assert config["navigator.appVersion"] == "5.0 (X11)"
+
+
+@pytest.mark.parametrize("os_name", ["macos", "linux", "windows"])
+def test_a_context_is_given_its_own_app_version(os_name):
+    """A NewContext() identity on another OS than the launch must not report the
+    launch's appVersion, so its init script sets the one its user agent implies."""
+    from camoufox.fingerprints import generate_context_fingerprint
+
+    fp = generate_context_fingerprint(os=os_name)
+    app_version = _app_version_from_user_agent(fp["config"]["navigator.userAgent"])
+
+    assert app_version
+    assert f"setNavigatorAppVersion({json.dumps(app_version)})" in fp["init_script"]

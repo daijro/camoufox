@@ -14,6 +14,7 @@ const SELF_DESTRUCT_FUNCTIONS = [
   "setNavigatorPlatform",
   "setNavigatorOscpu",
   "setNavigatorHardwareConcurrency",
+  "setNavigatorAppVersion",
   "setNavigatorUserAgent",
   "setWebGLVendor",
   "setWebGLRenderer",

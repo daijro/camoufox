@@ -55,6 +55,7 @@ SETTERS = [
     "setNavigatorPlatform",
     "setNavigatorOscpu",
     "setNavigatorHardwareConcurrency",
+    "setNavigatorAppVersion",
     "setNavigatorUserAgent",
     "setScreenDimensions",
     "setScreenColorDepth",

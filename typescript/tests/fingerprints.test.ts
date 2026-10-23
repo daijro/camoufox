@@ -910,6 +910,9 @@ describe.skipIf(!MODEL.ok)("fpgen generation (needs the model)", () => {
 		expect(gen.config.fonts.length).toBeGreaterThan(0);
 		expect(gen.context_options.locale).toBe("de-DE");
 		expect(gen.init_script).toContain("setNavigatorUserAgent");
+		expect(gen.init_script).toContain(
+			'setNavigatorAppVersion("5.0 (Windows)")',
+		);
 		const preset = getRandomPreset("macos", "150");
 		const fromP = generateContextFingerprint({
 			preset,

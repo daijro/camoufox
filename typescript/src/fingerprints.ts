@@ -1451,6 +1451,7 @@ export interface InitValues {
 	navigatorPlatform?: string;
 	navigatorOscpu?: string;
 	navigatorUserAgent?: string;
+	navigatorAppVersion?: string;
 	hardwareConcurrency?: number;
 	webglVendor?: string;
 	webglRenderer?: string;
@@ -1476,6 +1477,7 @@ export function buildInitScript(values: InitValues): string {
 		["navigatorPlatform", "setNavigatorPlatform"],
 		["navigatorOscpu", "setNavigatorOscpu"],
 		["navigatorUserAgent", "setNavigatorUserAgent"],
+		["navigatorAppVersion", "setNavigatorAppVersion"],
 		["hardwareConcurrency", "setNavigatorHardwareConcurrency"],
 		["webglVendor", "setWebGLVendor"],
 		["webglRenderer", "setWebGLRenderer"],
@@ -1755,6 +1757,7 @@ export function generateContextFingerprint({
 		navigatorPlatform: nav.platform,
 		navigatorOscpu: config["navigator.oscpu"],
 		navigatorUserAgent: config["navigator.userAgent"],
+		navigatorAppVersion: config["navigator.appVersion"],
 		hardwareConcurrency: pyTruthy(nav.hardwareConcurrency)
 			? nav.hardwareConcurrency
 			: config["navigator.hardwareConcurrency"],
