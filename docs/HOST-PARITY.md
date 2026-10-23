@@ -62,7 +62,7 @@ i9-11900H, which has FMA3, so the CRT takes its FMA3 paths.
 
 Every other `Math` function (exp, log and their variants, the inverse and
 hyperbolic trig functions, cbrt, sqrt, atan2, hypot) uses fdlibm on Windows as
-it does here; on a million random inputs each, and on all three paths, they
+it does here; on 200,000 random inputs each, and on all three paths, they
 matched stock Windows Firefox 158 bit for bit without any change.
 
 Windows 10 and Windows 11 before 24H2 ship an older `ucrtbase.dll` (10.0.22621
