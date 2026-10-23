@@ -50,6 +50,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "media-devices-coherence",
         "spoofed-voice-speaks",
         "startup-prefs",
+        "system-font-alias-stall",
         "system-ui-font-spoofing",
         "timezone-stable",
         "touchscreen-digitizer",
@@ -78,6 +79,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "visible-automation-cues",
     ),
     "parity": (
+        "certificate-revocations",
         "contentaccessible-parity",
         "firefox-version-pin",
         "gfx-probes-packaged",

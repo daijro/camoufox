@@ -6,8 +6,9 @@ from collections import Counter
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from os import environ
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, NoReturn, Optional, Tuple
 
+import requests
 import rich_click as click
 
 from .addons import DefaultAddons, maybe_download_addons
@@ -39,7 +40,7 @@ from .multiversion import (
     save_config,
     save_repo_cache,
 )
-from .browser_pin import effective_pin, load_pin
+from .browser_pin import BrowserPin, effective_pin, load_pin
 from .pkgman import (
     INSTALL_DIR,
     AvailableVersion,
@@ -52,6 +53,7 @@ from .pkgman import (
     interface_supported,
     list_available_versions,
     rprint,
+    tagged_versions,
     upgrade_message,
 )
 
@@ -227,9 +229,12 @@ class CamoufoxUpdate(CamoufoxFetcher):
 
         if self.is_prerelease and not i_know_what_im_doing:
             rprint(f"Warning: v{self.verstr} is a prerelease version!", fg="yellow")
-            if not click.confirm("Continue with prerelease installation?"):
-                rprint("Installation cancelled.", fg="red")
-                return
+            try:
+                confirmed = click.confirm("Continue with prerelease installation?")
+            except click.Abort:
+                confirmed = False
+            if not confirmed:
+                _fail("Installation cancelled.")
 
         action = "Installing" if self.current_verstr else "Fetching"
         rprint(f"{action} Camoufox v{self.verstr}...", fg="yellow")
@@ -275,15 +280,10 @@ def fetch(version):
       camoufox fetch official/135.0-beta.25  # install specific version
     """
     remove_incompatible_data()
-    _do_sync()
-
-    cache = load_repo_cache()
     config = load_config()
+    pin = None if version else effective_pin(config)
 
-    repo_name = None
-    repo_data = None
-    ver_data = None
-    paired = False
+    repo_name = spec = tag = None
     if version:
         parts = version.lower().split("/")
         if len(parts) == 1:
@@ -291,28 +291,89 @@ def fetch(version):
         elif len(parts) in (2, 3):
             repo_name, spec = parts[0], parts[-1]
         else:
-            rprint("Format: version-build, repo/version-build, or repo/channel/version-build", fg="red")
-            return
+            _fail("Format: version-build, repo/version-build, or repo/channel/version-build")
+        spec = spec.lstrip("v")
+        tag = f"v{spec}"
+    elif pin:
+        # This library release pairs with exactly one browser build.
+        repo_name, spec, tag = pin.repo_name, pin.spec, pin.tag
+
+    repo_config, selected = (tag and _tagged_build(repo_name, tag, spec)) or _synced_build(
+        config, repo_name, spec, pin
+    )
+    try:
+        # The paired build is what this release was tested with; installing it
+        # needs no "this is a prerelease" confirmation even when it is one.
+        CamoufoxUpdate(repo_config=repo_config, selected_version=selected).update(
+            i_know_what_im_doing=pin is not None
+        )
+    except Exception as e:
+        msg = str(e)
+        if "404" in msg or "Not Found" in msg:
+            rprint("Release not found (404). Asset may have been removed.", fg="red")
+            _fail("Run 'camoufox sync' to refresh available versions.")
+        _fail(f"Error: {msg}")
+    if ALLOW_GEOIP:
+        download_mmdb()
+    maybe_download_addons(list(DefaultAddons))
+    ensure_fpgen_model()
+
+
+def _fail(message: str) -> NoReturn:
+    """
+    Print an error and exit non-zero, so a script or CI step stops here
+    """
+    rprint(message, fg="red")
+    raise SystemExit(1)
+
+
+def _tagged_build(
+    repo_name: str, tag: str, spec: str
+) -> Optional[Tuple[RepoConfig, AvailableVersion]]:
+    """
+    The build `spec` names, read from its own release with one API call. None
+    when the source has no such tag: early builds were published under others.
+    """
+    repo_config = RepoConfig.find_by_name(repo_name)
+    if repo_config is None:
+        return None
+    try:
+        versions = tagged_versions(repo_config, tag)
+    except requests.RequestException as e:
+        _fail(f"Error: {e}")
+    match = next((v for v in versions if v.version.full_string == spec), None)
+    return (repo_config, match) if match else None
+
+
+def _synced_build(
+    config: dict, repo_name: Optional[str], spec: Optional[str], pin: Optional[BrowserPin]
+) -> Tuple[Optional[RepoConfig], AvailableVersion]:
+    """
+    Sync every source, then resolve against the cache the build fetch was
+    asked for: `spec`, the release's pin, or the user's pin or channel
+    """
+    _do_sync()
+    cache = load_repo_cache()
+
+    repo_data = None
+    ver_data = None
+    if pin:
         repo_data = _repo_data(cache, repo_name)
         if repo_data is not None:
-            ver_data, _ = _resolve_spec(repo_data, spec.lstrip("v"))
+            ver_data = _pin_target(repo_data, spec, None)
+        if ver_data is None:
+            _fail(f"{pin.tag}, the browser this camoufox release pairs with, is not in "
+                  f"{repo_name}'s releases. Run 'camoufox sync' and try again.")
+    elif spec:
+        repo_data = _repo_data(cache, repo_name)
+        if repo_data is not None:
+            ver_data, _ = _resolve_spec(repo_data, spec)
     elif config.get("pinned"):
         channel = config.get("channel", "")
         repo_name = channel.split("/")[0] if "/" in channel else channel
         repo_data = _repo_data(cache, repo_name)
         if repo_data is not None:
             ver_data = _pin_target(repo_data, config["pinned"], config.get("pinned_sha"))
-    elif pin := effective_pin(config):
-        # This library release pairs with exactly one browser build.
-        repo_name = pin.repo_name
-        repo_data = _repo_data(cache, repo_name)
-        if repo_data is not None:
-            ver_data = _pin_target(repo_data, pin.spec, None)
-        if ver_data is None:
-            rprint(f"{pin.tag}, the browser this camoufox release pairs with, is not in "
-                   f"{repo_name}'s releases. Run 'camoufox sync' and try again.", fg="red")
-            return
-        paired = True
     else:
         channel = config.get("channel") or get_default_channel()
         repo_name, ctype = (channel.split("/", 1) + ["stable"])[:2]
@@ -327,14 +388,12 @@ def fetch(version):
             ver_data = latest[0] if latest else None
 
     if ver_data is None:
-        if version:
+        if spec:
             for v in cache.get("incompatible", []):
                 if v["repo"].lower() == (repo_name or "").lower() and \
-                        f"{v['version']}-{v['build']}" == spec.lstrip("v"):
-                    rprint(incompatible_message(Version(v["build"], v["version"]), v["interface"]), fg="red")
-                    return
-        rprint(f"Version '{version or repo_name}' not found in cache. Run 'camoufox sync'.", fg="red")
-        return
+                        f"{v['version']}-{v['build']}" == spec:
+                    _fail(incompatible_message(Version(v["build"], v["version"]), v["interface"]))
+        _fail(f"Version '{spec or repo_name}' not found in cache. Run 'camoufox sync'.")
 
     selected = AvailableVersion(
         version=Version(ver_data["build"], ver_data["version"]),
@@ -344,25 +403,7 @@ def fetch(version):
         asset_created_at=ver_data.get("created_at"),
         interface=ver_data.get("interface", 1),
     )
-    repo_config = RepoConfig.find_by_name(repo_data["name"])
-    try:
-        # The paired build is what this release was tested with; installing it
-        # needs no "this is a prerelease" confirmation even when it is one.
-        CamoufoxUpdate(repo_config=repo_config, selected_version=selected).update(
-            i_know_what_im_doing=paired
-        )
-    except Exception as e:
-        msg = str(e)
-        if "404" in msg or "Not Found" in msg:
-            rprint("Release not found (404). Asset may have been removed.", fg="red")
-            rprint("Run 'camoufox sync' to refresh available versions.", fg="yellow")
-        else:
-            rprint(f"Error: {msg}", fg="red")
-        return
-    if ALLOW_GEOIP:
-        download_mmdb()
-    maybe_download_addons(list(DefaultAddons))
-    ensure_fpgen_model()
+    return RepoConfig.find_by_name(repo_data["name"]), selected
 
 
 def _set_channel(repo_name: str, channel_type: str):

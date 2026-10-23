@@ -489,6 +489,7 @@ grep -r "class Navigator" . --include="*.h"
 ## Checklist
 
 - [ ] Bump `browser/upstream.sh` and run `make dir` to list the failing patches
+- [ ] Delete the [backports](../browser/patches/patch-dependencies.md#backports) the new Firefox ships
 - [ ] For each: `make clean`, apply its dependencies, `make first-checkpoint`, `make patch` it
 - [ ] Port each reject to the new Firefox code
 - [ ] Remove `.rej` and `.orig` files, `git add -N` new files
