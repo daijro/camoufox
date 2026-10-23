@@ -58,15 +58,22 @@ def main():
     ver.VerQueryValueW(buf, "\\", ctypes.byref(ptr), ctypes.byref(length))
     ms, ls = struct.unpack_from("<II", ctypes.string_at(ptr.value + 8, 8))
     version = f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion") as key:
+        release = winreg.QueryValueEx(key, "DisplayVersion")[0]
+        build = f"{winreg.QueryValueEx(key, 'CurrentBuild')[0]}.{winreg.QueryValueEx(key, 'UBR')[0]}"
     json.dump({
         "ucrtbase": version,
         "ucrtbase_sha256": hashlib.sha256(dll_path.read_bytes()).hexdigest(),
         "windows": platform.version(),
+        "windows_release": release,
+        "windows_build": build,
+        "cpu": platform.processor(),
         "fma3": True,
         "inputs_sha256": inputs_digest(trig, pw),
         "trig_inputs": len(trig),
         "pow_inputs": len(pw),
-    }, open(HERE / "provenance.json", "w"), indent=2)
+    }, open(HERE / "provenance.json", "w", newline="\n"), indent=2)
     print(f"{len(trig)} trig and {len(pw)} pow inputs recorded from ucrtbase {version}")
 
 

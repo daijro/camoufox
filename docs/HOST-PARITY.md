@@ -1,12 +1,12 @@
 # Host parity: a Windows identity on a Linux host
 
 The Linux build is meant to pass for Firefox on the OS it claims. Measured
-against stock Firefox on Windows 10 and on Linux, some answers still came from
+against stock Firefox on Windows 10, Windows 11 and Linux, some answers still came from
 the host. This lists each one, what a page reads, and how it is closed.
 
 | Tell (before) | What the page read | Fix | Where |
 |---|---|---|---|
-| Math from the host's libm | `Math.sin/cos/tan/pow` differ from Windows in the last bit (sin 22, cos 26, tan 30 of 1,670 inputs; pow 45 of 1,410) | the algorithms the Windows CRT uses (`javascript.options.use_ucrt_math`): Tang's table-driven log and exp for pow, Cody-Waite and Payne-Hanek reduction with AMD LibM's kernels for sin/cos/tan, tables generated from their definitions (`browser/scripts/gen-ucrt-math-tables.py`); checked bit for bit against outputs recorded from `ucrtbase.dll` (`browser/tests/ucrt-math/`) and from Windows Firefox | `windows-crt-math.patch`, launcher |
+| Math from the host's libm | `Math.sin/cos/tan/pow` differ from Windows 11 in the last bit (beta.40 against stock Firefox 158 on Windows 11 25H2: sin 345, cos 458, tan 753 of 33,386 inputs, about 1% of a million random ones; pow 10 of 27,249 and 398 of a million random) | the algorithms the Windows CRT uses (`javascript.options.use_ucrt_math`): for pow, Arm's optimized-routines pow (128-entry log table, 256-entry exp table, FMA in the log step), which Windows 11 24H2 and later ship; for sin/cos/tan, Cody-Waite and Payne-Hanek reduction with AMD LibM's kernels, and the CRT's NaN for an infinite argument. Tables generated from their definitions (`browser/scripts/gen-ucrt-math-tables.py`); checked bit for bit against outputs recorded from `ucrtbase.dll` (`browser/tests/ucrt-math/`) and from Windows Firefox | `windows-crt-math.patch`, launcher |
 | GTK keyboard | Ctrl+Up in `<textarea>` moved up a line (Windows: line start); Alt+Backspace no undo; Shift+Delete with nothing selected did nothing; Ctrl+/ selected all; AltGr `keyCode` 225 (Windows: 18); Ctrl+Backspace on a rich-text selection deleted only the selection | `input:windowsKeyboard`: Windows' shortcut tables replace GTK's text bindings (native and the ones synthesized events get), AltGr reports Alt, Windows' caret style in HTML editors. Launch-wide; set it `false` to keep Linux behaviour. The tables, text bindings and AltGr are GTK code, so on a macOS host only the caret style changes | `windows-keyboard.patch`, launcher |
 | Linux behaviour defaults | middle click pastes the primary selection, double-click selects no trailing space, instant fullscreen, GTK scrollbar clicks | Windows' defaults (`windowsBehaviourPrefs` in `launcher-constants.json`). Measured on stock Windows: `middlemouse.paste`, `general.autoScroll`, `eat_space_to_next_word`, the fullscreen transition. From Firefox 158's `all.js`, `firefox.js` and `StaticPrefList.yaml` only: `middlemouse.scrollbarPosition`, `ui.scrollToClick`, `slider.snapMultiplier`, `click_and_hold_track` | launcher |
 | Scrollbars from the host theme | a Windows 10 identity's classic scrollbars 12 px (GTK's); stock Windows 17 px | Windows' non-native scrollbars (`widget.non-native-theme.scrollbar.style` 4 or 5, following `ui.useOverlayScrollbars`) at Windows' size | launcher |
@@ -46,23 +46,31 @@ AltGr; a US layout has none.
 ## Reference data for the math
 
 Both references were recorded on Windows; neither can be produced on Linux.
+They come from one machine: Windows 11 25H2 (build 26200.9711) on an Intel
+i9-11900H, which has FMA3, so the CRT takes its FMA3 paths.
 
 - `browser/tests/ucrt-math/expected.u64.xz` is what `ucrtbase.dll`
-  10.0.22621.3593 (Windows 10.0.22621, FMA3 path) returns for every input in
-  `inputs.py`, written by `record.py` with its provenance in `provenance.json`.
-  It depends only on the CRT, not on Firefox.
+  10.0.26100.9711 returns for every input in `inputs.py`, written by
+  `record.py` with its provenance in `provenance.json`. It depends only on the
+  CRT, not on Firefox.
 - `browser/tests/playwright/patches/assets/windows-crt-math.json` is what stock
-  Firefox 152.0.4 on Windows returned for a sample of those inputs, cold,
-  JIT-hot and constant-folded, written by `record_firefox.py`. Upstream is now
-  158.0, and the file was not re-recorded, because nothing that decides these
-  results changed between 152.0.4 and 158.0: SpiderMonkey's sin, cos, tan and
-  `ecmaPow` (158 sends the libm call through `pow_libm_or_fdlibm`, which is
-  `std::pow` everywhere but ARM Android at API 28 and below), the JIT's paths
-  to them (the CacheIR emitters, Ion's code generation and folding for
-  `MathFunction`, `Pow` and `PowHalf`), constant folding, and the Windows
-  default of `javascript.options.use_fdlibm_for_sin_cos_tan` (false). NaN
-  results keep their sign as before: 152's `Value::setDouble` stored a NaN as
-  the CRT returned it, and 158's Math natives and `**` store their results with
-  the `AssumeCanonicalNaN` setters, which do the same, so the 399 pow results
-  recorded as `fff8000000000000` still read back so. Re-record on the pinned
-  version when an update touches any of these.
+  Firefox 158.0 (the release build from archive.mozilla.org) returned on that
+  machine for a sample of those inputs, cold, JIT-hot and constant-folded,
+  written by `record_firefox.py`. The three paths agreed on every input;
+  `check.py` checks that the sample is the one `record_firefox.py` draws and
+  that each result there that comes from the CRT equals `expected.u64.xz`'s.
+
+Every other `Math` function (exp, log and their variants, the inverse and
+hyperbolic trig functions, cbrt, sqrt, atan2, hypot) uses fdlibm on Windows as
+it does here; on a million random inputs each, and on all three paths, they
+matched stock Windows Firefox 158 bit for bit without any change.
+
+Windows 10 and Windows 11 before 24H2 ship an older `ucrtbase.dll` (10.0.22621
+and earlier) whose pow is AMD LibM's, not Arm's. Its results differ from the
+24H2 pow in about 0.2% of the inputs in `inputs.py` (52 of 27,249). This build
+returns the 24H2 results, so against a Windows 10 identity those pow results
+are the newer Windows'. sin, cos and tan are the same in both.
+
+Re-record on the pinned Firefox version when an update touches SpiderMonkey's
+sin, cos, tan or `ecmaPow`, the JIT's paths to them, or constant folding, and
+on a new Windows build when its `ucrtbase.dll` changes.

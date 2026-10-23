@@ -92,7 +92,14 @@ def trig_inputs():
         _around(out, hard, 10)
     for e in range(-1074, 1024, 3):
         _around(out, p2(e), 1)
+    # Infinities and NaNs: the CRT returns its default NaN for an infinity and
+    # the argument quieted for a NaN, and Math.sin hands those bits to the page.
+    out += TRIG_SPECIAL
     return out
+
+
+TRIG_SPECIAL = [0x7FF0000000000000, 0xFFF0000000000000, 0x7FF8000000000000, 0xFFF8000000000000,
+                0x7FF4000000000000, 0x7FF8000000000123, 0xFFFFFFFFFFFFFFFF]
 
 
 def _log2_rough(x):

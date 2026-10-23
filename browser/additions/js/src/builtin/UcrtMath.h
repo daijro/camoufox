@@ -6,12 +6,13 @@
 
 /*
  * sin, cos, tan and pow exactly as the Windows Universal CRT computes them
- * (ucrtbase.dll, x64, FMA3 code path), for builds that present as Windows on
- * another OS. Math.sin/cos/tan/pow are a cheap, well-known fingerprint: the
+ * (ucrtbase.dll 10.0.26100, Windows 11 24H2 and later, x64, FMA3 code
+ * path), for builds that present as Windows on another OS.
+ * Math.sin/cos/tan/pow are a cheap, well-known fingerprint: the
  * last bit of their results differs between the platform math libraries, so a
  * page can tell glibc or fdlibm apart from the CRT. These implement the
- * algorithms the CRT uses (Tang's table-driven log and exp for pow; Cody-Waite
- * and Payne-Hanek reduction with AMD LibM's kernels for the rest; see each
+ * algorithms the CRT uses (Arm optimized-routines' pow; Cody-Waite and
+ * Payne-Hanek reduction with AMD LibM's kernels for the rest; see each
  * file), checked bit for bit against outputs recorded from ucrtbase.dll by
  * browser/tests/ucrt-math/check.py and against Windows Firefox by the
  * windows-crt-math patch guard.

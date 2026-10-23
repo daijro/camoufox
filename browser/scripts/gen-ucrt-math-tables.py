@@ -5,13 +5,21 @@ Generate the tables and constants of UcrtMathPow.c and UcrtMathTrig.c.
     python3 scripts/gen-ucrt-math-tables.py           # write the two headers
     python3 scripts/gen-ucrt-math-tables.py --check   # fail if they are stale
 
-Every value is computed here from its definition (1/F, ln(2F), 2^(j/64), the
-bits of 2/pi, splits of ln 2 and pi/2) at a few hundred digits, then rounded to
-a double by the rule that table uses. The rules reproduce AMD LibM's tables
-(aocl-libm-ose, src/isa/avx/gas/pow.S and remainder_piby2_new.S) bit for bit:
-a head is the value truncated to a short significand, and its tail is the
-rest, truncated or rounded to nearest as AMD's are. The minimax polynomial
-coefficients are not derivable this way; they stay in the C files, cited.
+Every value is computed here from its definition at a few hundred digits,
+then rounded to a double by the rule that table uses:
+
+- pow: the tables of Arm's optimized-routines pow (math/pow_log_data.c and
+  math/exp_data.c, MIT OR Apache-2.0 WITH LLVM-exception), by the rules those
+  files state: for log, 1/c at each of 128 subintervals' centers with few bits,
+  log(c) rounded to a multiple of 2^-43 and the rest; for exp, 2^(k/256) as a
+  double and a relative correction.
+- sin/cos/tan: the bits of 2/pi and the splits of pi/2 and pi/4 in AMD LibM
+  (aocl-libm-ose, remainder_piby2_new.S): a head is the value truncated to a
+  short significand, and its tail is the rest, truncated or rounded to nearest
+  as AMD's are.
+
+The minimax polynomial coefficients are not derivable this way; they stay in
+the C files, cited.
 
 Standard library only. Each value is computed at two precisions, and a result
 that depends on the precision fails rather than being written.
@@ -21,7 +29,6 @@ import argparse
 import sys
 from decimal import Decimal, getcontext, localcontext
 from fractions import Fraction
-from math import factorial
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "additions" / "js" / "src" / "builtin"
@@ -96,41 +103,55 @@ def split(v, head_bits, tail_mode):
     return head, to_double(v - value(head), 53, tail_mode)
 
 
+POW_LOG_BITS = 7            # 128 subintervals for log
+POW_LOG_OFF = 0x3FE6955500000000
+EXP_BITS = 8                # 256 entries for exp
+
+
+def rint(q):
+    """q rounded to the nearest integer, ties to even."""
+    n, r = divmod(q.numerator, q.denominator)
+    return n + (2 * r > q.denominator or (2 * r == q.denominator and n & 1))
+
+
 def pow_tables(c):
+    """Arm's optimized-routines pow: log with 128 subintervals, exp with 256.
+    The rules are the ones its pow_log_data.c and exp_data.c state."""
     ln2 = c["ln"](Fraction(2))
-    # ln 2: a 24-bit head and a truncated tail.
-    ln2_head, ln2_tail = split(ln2, 24, "truncate")
-    t = {"LN2_HEAD": ln2_head, "LN2_TAIL": ln2_tail}
+    t = {}
+    # log(x) = k ln2 + log(c) + log1p(z/c - 1), z in [OFF, 2 OFF) split into N
+    # subintervals. 1/c has few bits, so z/c - 1 is exact: 1/c is the
+    # subinterval's center rounded to a multiple of 1/N (1/2N above 1). log(c)
+    # is rounded to a multiple of 2^-43, as ln2hi is, so k ln2hi + logc is
+    # exact; logctail is the rest.
+    n = 1 << POW_LOG_BITS
+    invc, logc, logctail = [], [], []
+    for i in range(n):
+        center = value(POW_LOG_OFF + (i << (52 - POW_LOG_BITS)) + (1 << (51 - POW_LOG_BITS)))
+        ic = Fraction(rint(n / center), n) if center < 1 else Fraction(rint(2 * n / center), 2 * n)
+        lc = -c["ln"](ic)
+        lc_head = Fraction(rint(lc * 2**43), 2**43)
+        invc.append(to_double(ic))
+        logc.append(to_double(lc_head))
+        logctail.append(to_double(lc - lc_head))
+    t["POW_LOG_INVC"], t["POW_LOG_LOGC"], t["POW_LOG_LOGCTAIL"] = invc, logc, logctail
+    ln2hi = Fraction(rint(ln2 * 2**43), 2**43)
+    t["LN2HI"], t["LN2LO"] = to_double(ln2hi), to_double(ln2 - ln2hi)
 
-    # log(x) = e*ln2 + ln(2F) + ln(1 - r), F = (256 + i)/512, r = (F - Y)/F.
-    # 1/F's head has 9 bits so that (F - Y) * head, at most 44 + 9 bits, is
-    # exact; its tail is rounded to nearest. ln(2F) is truncated to 25 bits
-    # and its tail truncated; the last entry, ln 2, is the ln 2 pair above.
-    inv = [split(Fraction(512, 256 + i), 9, "nearest") for i in range(257)]
-    log = [split(c["ln"](Fraction(256 + i, 256)), 25, "truncate") for i in range(256)]
-    log.append((ln2_head, ln2_tail))
-    t["INV_HEAD"], t["INV_TAIL"] = zip(*inv)
-    t["LOG_HEAD"], t["LOG_TAIL"] = zip(*log)
-
-    # exp(w) = 2^m * 2^(j/64) * exp(rr), n = 64m + j = round(w * 64/ln2), and
-    # rr = w - n*ln2/64. ln2/64's tail is stored negated, since rr adds it.
-    head, tail = split(ln2 / 64, 25, "truncate")
-    t["SIXTY4_BY_LN2"] = to_double(64 / ln2)
-    t["LN2_BY_64_HEAD"], t["LN2_BY_64_TAIL"] = head, tail ^ 1 << 63
-    exp = [split(c["exp"](Fraction(j, 64) * ln2), 25, "truncate") for j in range(64)]
-    t["EXP_HEAD"], t["EXP_TAIL"] = zip(*exp)
-
-    # Below this w = y*ln(x) the result is under 1.5 * 2^-1074, so it rounds to
-    # the smallest subnormal.
-    t["DENORM_W_LIM"] = to_double(c["ln"](Fraction(3, 2)) - 1074 * ln2)
-
-    # ln(1 - r) = -(r + r^2/2 + ... + r^7/7) and exp(rr) - 1 = rr + ... + rr^6/6!.
-    # AMD's 1/7 is two units in the last place above the nearest double; it is
-    # kept as published (the recorded outputs agree with either).
-    log_c = [to_double(Fraction(1, k)) for k in range(2, 8)]
-    log_c[-1] += 2
-    t["LOG_C"] = log_c
-    t["EXP_C"] = [to_double(Fraction(1, factorial(k))) for k in range(6, 0, -1)]
+    # exp(x) = 2^(k/N) exp(r): 2^(k/N) ~= H[k] (1 + T[k]), stored as T[k] and
+    # H[k] with k/N taken out of its exponent. ln2/N is a 35-bit head and the
+    # rest, both negated; N/ln2 is rounded once.
+    ne = 1 << EXP_BITS
+    tab = []
+    for k in range(ne):
+        v = c["exp"](Fraction(k, ne) * ln2)
+        h = to_double(v)
+        tab += [to_double((v - value(h)) / value(h)), (h - (k << 52) // ne) % (1 << 64)]
+    t["EXP_TAB"] = tab
+    hi = to_double(ln2 / ne, 35, "nearest")
+    t["INVLN2N"] = to_double(ne / ln2)
+    t["NEGLN2HIN"] = hi ^ 1 << 63
+    t["NEGLN2LON"] = to_double(-(ln2 / ne - value(hi)))
     return t
 
 
@@ -185,12 +206,14 @@ HEADER = """/* This Source Code Form is subject to the terms of the Mozilla Publ
 
 def render_pow(t):
     out = HEADER.format(guard="builtin_UcrtMathPowTables_h")
-    for name in ("LN2_HEAD", "LN2_TAIL", "SIXTY4_BY_LN2", "LN2_BY_64_HEAD", "LN2_BY_64_TAIL", "DENORM_W_LIM"):
+    out += f"#define POW_LOG_TABLE_BITS {POW_LOG_BITS}\n#define EXP_TABLE_BITS {EXP_BITS}\n\n"
+    for name in ("LN2HI", "LN2LO", "INVLN2N", "NEGLN2HIN", "NEGLN2LON"):
         out += f"static const uint64_t {name} = 0x{t[name]:016x}ULL;\n"
-    out += "\n/* 1/2 ... 1/7 */\n" + array("LOG_C", t["LOG_C"], per_line=3)
-    out += "/* 1/6! ... 1/1! */\n" + array("EXP_C", t["EXP_C"], per_line=3)
-    for name in ("INV_HEAD", "INV_TAIL", "LOG_HEAD", "LOG_TAIL", "EXP_HEAD", "EXP_TAIL"):
-        out += array(name, list(t[name]))
+    out += "\n/* log: 1/c, log(c) to a multiple of 2^-43, and the rest of log(c). */\n"
+    for name in ("POW_LOG_INVC", "POW_LOG_LOGC", "POW_LOG_LOGCTAIL"):
+        out += array(name, t[name])
+    out += "/* exp: T[k], then H[k] - (k << 52)/N, for 2^(k/N) ~= H[k] (1 + T[k]). */\n"
+    out += array("EXP_TAB", t["EXP_TAB"])
     return out + "\n#endif /* builtin_UcrtMathPowTables_h */\n"
 
 

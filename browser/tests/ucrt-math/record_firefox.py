@@ -5,9 +5,9 @@
 Writes browser/tests/playwright/patches/assets/windows-crt-math.json, the
 reference the windows-crt-math patch guard compares Camoufox against: a sample
 of inputs.py, and what Firefox's Math.sin/cos/tan/pow and ** gave for them,
-cold, hot and constant-folded. Use the Firefox version browser/upstream.sh pins.
-The file in the repository is from 152.0.4; docs/HOST-PARITY.md says why it
-still holds for the pinned version.
+cold, hot and constant-folded. Windows gives the same results cold and hot, and
+this fails if it does not. Use the Firefox version browser/upstream.sh pins;
+docs/HOST-PARITY.md says what the file in the repository was recorded on.
 """
 
 import http.server
@@ -20,23 +20,35 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from inputs import pow_inputs, trig_inputs  # noqa: E402
+from inputs import TRIG_SPECIAL, pow_inputs, trig_inputs  # noqa: E402
 
 OUT = HERE.parent / "playwright" / "patches" / "assets" / "windows-crt-math.json"
 STRIDE = 20
 
-# pow_inputs() indices where glibc's pow (2.36) and ucrtbase's differ in the
-# last bit. pow is accurate enough on both that a stride sample alone almost
-# never lands on one, and then the guard could not catch a broken pow.
-POW_DISAGREE = [15, 1756, 2711, 3081, 3717, 5118, 5136, 5619, 6102, 8348, 9586, 9598, 9756, 10017, 10074, 10629, 10688, 10689, 10691, 11675, 12521, 12985, 13126, 13181, 13356, 13683, 13890, 14171, 15257, 15792, 16065, 16066, 16694, 17079, 17647, 17932, 18078, 18768, 18786, 19056, 20004, 21668, 21734, 21963, 22786, 23530, 23681]
+# pow_inputs() indices, among those Math.pow sends to the CRT, where Windows
+# 11's pow differs in the last bit from glibc 2.43's (the first eight) or from
+# the pow of Windows 10 and Windows 11 before 24H2 (ucrtbase 10.0.22621). pow
+# is accurate enough that a stride sample alone almost never lands on one, and
+# then the guard could not catch a wrong pow.
+POW_DISAGREE = [1125, 4158, 5136, 5439, 5619, 13356, 20004, 21668,
+                15, 1756, 2711, 3081, 3717, 5118, 6102, 8348, 9598, 10629, 10688, 10689, 10691,
+                12985, 13181, 13890, 15257, 16065, 16066, 16694, 17647, 18786, 19056, 21963, 23530]
 
 
 def sample():
     return {
-        "trig": [format(b, "x") for b in trig_inputs()[::STRIDE]],
+        "trig": [format(b, "x") for b in trig_inputs()[::STRIDE] + TRIG_SPECIAL],
         "pow": [[format(a, "x"), format(b, "x")]
                 for a, b in pow_inputs()[::STRIDE] + [pow_inputs()[i] for i in POW_DISAGREE]],
     }
+
+
+def reference(got):
+    """What the windows-crt-math guard compares against: one set of results,
+    since Windows gives the same cold and hot, and the constant-folded ones."""
+    if got["cold"] != got["hot"]:
+        sys.exit("Windows Firefox gave different results cold and hot; the guard assumes it does not")
+    return {"results": got["cold"], "constants": got["constants"]}
 
 
 def main():
@@ -82,7 +94,8 @@ def main():
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
             proc.wait()
     version = subprocess.run([firefox, "--version"], capture_output=True, text=True).stdout.strip()
-    OUT.write_text(json.dumps({"firefox": version, "stride": STRIDE, "input": data, "expected": got}))
+    OUT.write_text(json.dumps({"firefox": version, "stride": STRIDE, "input": data,
+                               "expected": reference(got)}))
     print(f"{len(data['trig'])} trig and {len(data['pow'])} pow inputs from {version} -> {OUT}")
 
 
