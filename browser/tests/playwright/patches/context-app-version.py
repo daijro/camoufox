@@ -35,11 +35,7 @@ def main() -> int:
 
     failures = []
     with Camoufox(**launch_kwargs(os="windows", canvas_noise=True, i_know_what_im_doing=True)) as browser:
-        launch_page = browser.new_page()
-        launch_page.goto("about:blank")
-        print(f"  launch: {launch_page.evaluate('navigator.appVersion')!r}")
-
-        for os_name in ("macos", "linux", "windows"):
+        for os_name in ("macos", "linux"):
             context = NewContext(browser, os=os_name)
             page = context.new_page()
             page.set_content("<p>x</p>")

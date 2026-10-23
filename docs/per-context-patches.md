@@ -201,7 +201,6 @@ The User-Agent's version is rewritten to the running browser's.
 | Value | Source |
 |---|---|
 | UA, platform, cores, oscpu | fpgen or the preset; UA version set to the browser's |
-| appVersion | Derived from the UA (`_app_version_from_user_agent()`), as Firefox derives it |
 | Screen, color depth | fpgen or the preset |
 | WebGL | One GPU fpgen recorded for Firefox on that OS, weighted by its share and checked against the machine (`coherence.gpu_fits_machine()`); `webgl_for_gpu()` adds its parameters, extensions and shader precisions |
 | Fonts | `_generate_random_font_subset()`: one OS-version base plus measured additions ([FONTS.md](FONTS.md)); never from presets |
