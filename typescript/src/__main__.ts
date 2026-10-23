@@ -14,7 +14,12 @@ import { Argument, Command, Option } from "commander";
 import { ensureModel } from "fpgen-js";
 import { LIBRARY_VERSION } from "./__version__.js";
 import { DefaultAddons, maybeDownloadAddons } from "./addons.js";
-import { effectivePin, loadPin, pinSpec } from "./browser-pin.js";
+import {
+	type BrowserPin,
+	effectivePin,
+	loadPin,
+	pinSpec,
+} from "./browser-pin.js";
 import { FileNotFoundError } from "./exceptions.js";
 import {
 	allowGeoip,
@@ -60,6 +65,7 @@ import {
 	listAvailableVersions,
 	RepoConfig,
 	resolvedPlaywrightVersionRaw,
+	taggedVersions,
 	upgradeMessage,
 	Version,
 } from "./pkgman.js";
@@ -427,6 +433,112 @@ function setPinned(
 	}
 }
 
+/** A command's failure, printed as its message, with exit code 1. */
+class CommandFailed extends Error {}
+
+/** Stop the command with an error, so a script or CI step stops here. */
+function fail(message: string): never {
+	throw new CommandFailed(message);
+}
+
+/**
+ * The build `spec` names, read from its own release with one API call. Null
+ * when the source has no such tag: early builds were published under others.
+ */
+async function taggedBuild(
+	repoName: string,
+	tag: string,
+	spec: string,
+): Promise<[RepoConfig, AvailableVersion] | null> {
+	const repoConfig = RepoConfig.findByName(repoName);
+	if (!repoConfig) return null;
+	const match = (await taggedVersions(repoConfig, tag)).find(
+		(v) => v.version.fullString === spec,
+	);
+	return match ? [repoConfig, match] : null;
+}
+
+/**
+ * Sync every source, then resolve against the cache the build fetch was asked
+ * for: `spec`, the release's pin, or the user's pin or channel.
+ */
+async function syncedBuild(
+	config: ReturnType<typeof loadConfig>,
+	repoName: string | null,
+	spec: string | null,
+	pin: BrowserPin | null,
+): Promise<[RepoConfig | undefined, AvailableVersion]> {
+	await doSync();
+	const cache = loadRepoCache();
+
+	let repo: RepoBlock | null = null;
+	let verData: CachedVersion | null = null;
+	if (pin && repoName && spec) {
+		repo = repoData(cache, repoName);
+		if (repo) verData = pinTarget(repo, spec, undefined);
+		if (!verData) {
+			fail(
+				`${pin.tag}, the browser this camoufox release pairs with, is not in ` +
+					`${repoName}'s releases. Run 'camoufox sync' and try again.`,
+			);
+		}
+	} else if (repoName && spec) {
+		repo = repoData(cache, repoName);
+		if (repo) [verData] = resolveSpec(repo, spec);
+	} else if (config.pinned) {
+		const channel = config.channel ?? "";
+		repoName = channel.includes("/") ? channel.split("/")[0] : channel;
+		repo = repoData(cache, repoName);
+		if (repo) verData = pinTarget(repo, config.pinned, config.pinned_sha);
+	} else {
+		const channel = config.channel || getDefaultChannel();
+		const slash = channel.indexOf("/");
+		const name = slash === -1 ? channel : channel.slice(0, slash);
+		const ctype = slash === -1 ? "stable" : channel.slice(slash + 1);
+		repoName = name;
+		repo = repoData(cache, repoName);
+		if (repo) {
+			const isPre = ctype === "prerelease";
+			const latest = latestPerBuild(repo.versions ?? []).filter(
+				(v) => (v.is_prerelease ?? false) === isPre,
+			);
+			verData = latest[0] ?? null;
+		}
+	}
+
+	if (!verData || !repo) {
+		const incompatible = (
+			(cache.incompatible ?? []) as IncompatibleBuild[]
+		).find(
+			(v) =>
+				spec &&
+				v.repo.toLowerCase() === (repoName ?? "").toLowerCase() &&
+				`${v.version}-${v.build}` === spec,
+		);
+		if (incompatible) {
+			fail(
+				incompatibleMessage(
+					new Version(incompatible.build, incompatible.version),
+					incompatible.interface,
+				),
+			);
+		}
+		fail(
+			`Version '${spec || repoName}' not found in cache. Run 'camoufox sync'.`,
+		);
+	}
+
+	const selected = new AvailableVersion({
+		version: new Version(verData.build, verData.version),
+		url: verData.url,
+		isPrerelease: verData.is_prerelease ?? false,
+		sha256: verData.sha256 ?? undefined,
+		assetCreatedAt: verData.created_at ?? undefined,
+		interface: verData.interface ?? 1,
+	});
+	return [RepoConfig.findByName(repo.name), selected];
+}
+
 /**
  * Checks & updates Camoufox.
  */
@@ -458,8 +570,7 @@ class CamoufoxUpdate extends CamoufoxFetcher {
 		if (this.isPrerelease && !iKnowWhatImDoing) {
 			rprint(`Warning: v${this.verstr} is a prerelease version!`, "yellow");
 			if (!(await confirm("Continue with prerelease installation?"))) {
-				rprint("Installation cancelled.", "red");
-				return;
+				fail("Installation cancelled.");
 			}
 		}
 
@@ -515,18 +626,12 @@ program
 			fs.rmSync(INSTALL_DIR, { recursive: true, force: true });
 		}
 
-		await doSync();
-
-		const cache = loadRepoCache();
 		const config = loadConfig();
+		const pin = version ? null : effectivePin(config);
 
 		let repoName: string | null = null;
-		let repo: RepoBlock | null = null;
-		let verData: CachedVersion | null = null;
-		let paired = false;
-		const pin = effectivePin(config);
-
-		let spec = "";
+		let spec: string | null = null;
+		let tag: string | null = null;
 		if (version) {
 			const parts = version.toLowerCase().split("/");
 			if (parts.length === 1) {
@@ -536,99 +641,35 @@ program
 				repoName = parts[0];
 				spec = parts[parts.length - 1];
 			} else {
-				rprint(
+				fail(
 					"Format: version-build, repo/version-build, or repo/channel/version-build",
-					"red",
 				);
-				return;
 			}
-			repo = repoData(cache, repoName);
-			if (repo) [verData] = resolveSpec(repo, spec.replace(/^v+/, ""));
-		} else if (config.pinned) {
-			const channel = config.channel ?? "";
-			repoName = channel.includes("/") ? channel.split("/")[0] : channel;
-			repo = repoData(cache, repoName);
-			if (repo) verData = pinTarget(repo, config.pinned, config.pinned_sha);
+			spec = spec.replace(/^v+/, "");
+			tag = `v${spec}`;
 		} else if (pin) {
 			// This library release pairs with exactly one browser build.
 			repoName = pin.repoName;
-			repo = repoData(cache, repoName);
-			if (repo) verData = pinTarget(repo, pinSpec(pin), undefined);
-			if (!verData) {
-				rprint(
-					`${pin.tag}, the browser this camoufox release pairs with, is not in ` +
-						`${repoName}'s releases. Run 'camoufox sync' and try again.`,
-					"red",
-				);
-				return;
-			}
-			paired = true;
-		} else {
-			const channel = config.channel || getDefaultChannel();
-			const slash = channel.indexOf("/");
-			const name = slash === -1 ? channel : channel.slice(0, slash);
-			const ctype = slash === -1 ? "stable" : channel.slice(slash + 1);
-			repoName = name;
-			repo = repoData(cache, repoName);
-			if (repo) {
-				const isPre = ctype === "prerelease";
-				const latest = latestPerBuild(repo.versions ?? []).filter(
-					(v) => (v.is_prerelease ?? false) === isPre,
-				);
-				verData = latest[0] ?? null;
-			}
+			spec = pinSpec(pin);
+			tag = pin.tag;
 		}
 
-		if (!verData || !repo) {
-			const wanted = spec.replace(/^v+/, "");
-			const incompatible = (
-				(cache.incompatible ?? []) as IncompatibleBuild[]
-			).find(
-				(v) =>
-					version &&
-					v.repo.toLowerCase() === (repoName ?? "").toLowerCase() &&
-					`${v.version}-${v.build}` === wanted,
-			);
-			if (incompatible) {
-				rprint(
-					incompatibleMessage(
-						new Version(incompatible.build, incompatible.version),
-						incompatible.interface,
-					),
-					"red",
-				);
-				return;
-			}
-			rprint(
-				`Version '${version || repoName}' not found in cache. Run 'camoufox sync'.`,
-				"red",
-			);
-			return;
-		}
-
-		const selected = new AvailableVersion({
-			version: new Version(verData.build, verData.version),
-			url: verData.url,
-			isPrerelease: verData.is_prerelease ?? false,
-			sha256: verData.sha256 ?? undefined,
-			assetCreatedAt: verData.created_at ?? undefined,
-			interface: verData.interface ?? 1,
-		});
-		const repoConfig = RepoConfig.findByName(repo.name);
+		const [repoConfig, selected] =
+			(repoName && spec && tag && (await taggedBuild(repoName, tag, spec))) ||
+			(await syncedBuild(config, repoName, spec, pin));
 		try {
 			const updater = await new CamoufoxUpdate(repoConfig, selected).init();
 			// The paired build is what this release was tested with; installing
 			// it needs no "this is a prerelease" confirmation even when it is one.
-			await updater.update(false, paired);
+			await updater.update(false, pin !== null);
 		} catch (e) {
+			if (e instanceof CommandFailed) throw e;
 			const msg = errorMessage(e);
 			if (msg.includes("404") || msg.includes("Not Found")) {
 				rprint("Release not found (404). Asset may have been removed.", "red");
-				rprint("Run 'camoufox sync' to refresh available versions.", "yellow");
-			} else {
-				rprint(`Error: ${msg}`, "red");
+				fail("Run 'camoufox sync' to refresh available versions.");
 			}
-			return;
+			fail(`Error: ${msg}`);
 		}
 		if (allowGeoip()) {
 			await downloadMmdb();
@@ -1402,7 +1443,12 @@ program
 program
 	.parseAsync(process.argv)
 	.catch((error) => {
-		rprint(`Error: ${errorMessage(error)}`, "red");
+		rprint(
+			error instanceof CommandFailed
+				? error.message
+				: `Error: ${errorMessage(error)}`,
+			"red",
+		);
 		process.exitCode = 1;
 	})
 	.finally(closePrompts);

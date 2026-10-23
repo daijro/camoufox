@@ -35,6 +35,9 @@ npx camoufox fetch
 
 `camoufox fetch` installs the browser build this release is paired with.
 Without it, the first launch downloads it.
+It reads the build's release with one GitHub API call and exits non-zero
+when it installs nothing. On a shared CI runner, set `GITHUB_TOKEN` to raise
+GitHub's API rate limit.
 
 ## Usage
 
@@ -266,7 +269,7 @@ and `from_options` (an object from `launchOptions()` to use as is).
 
 | Command | Options | What it does |
 |---|---|---|
-| `fetch [version]` | | Install the paired build (or, after `set`, the latest in the chosen channel), or `version` without making it active. Syncs first. |
+| `fetch [version]` | | Install the paired build (or, after `set`, the latest in the chosen channel), or `version` without making it active. A named or paired build is read from its own release; anything else syncs first. Exits non-zero when nothing is installed. |
 | `sync` | `--spoof-os auto\|mac\|win\|lin`, `--spoof-arch auto\|x86_64\|i686\|arm64` | Refresh the list of available builds. |
 | `set [specifier]` | `--geoip`, `--release` | Pin a build (`official/stable/134.0.2-beta.20`) or follow a channel (`official/stable`). No specifier opens a picker. `--geoip` picks the GeoIP database instead; `--release` goes back to the paired build. |
 | `active` | | Print the active build. A build that is chosen but not downloaded is marked `(not fetched)`. |
