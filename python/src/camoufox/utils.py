@@ -1278,13 +1278,18 @@ def launch_options(
         allowed = coherence.PLAUSIBLE_DPR.get(target_os)
         if drawn and allowed:
             device_scale = float(min(allowed, key=lambda v: abs(float(v) - float(drawn))))
-        # A supplied identity too large for this monitor at its scale keeps
-        # rendering at 1 rather than being clamped to a fraction of itself.
+        # An identity too large for this monitor at its scale (a supplied one,
+        # or the last of MAX_SCALE_FIT_DRAWS fresh draws) renders at 1 rather
+        # than being clamped to a fraction of itself, and says so even with
+        # i_know_what_im_doing, which a supplied fingerprint requires.
         on_monitor = headless is False and not virtual_display and screen_cons
         if device_scale != 1.0 and on_monitor and not _fits_at_drawn_scale(fingerprint, screen_cons):
             device_scale = 1.0
+            LeakWarning.warn('display_scale_unfit')
         if device_scale != 1.0:
             firefox_user_prefs['layout.css.devPixelsPerPx'] = f'{device_scale:g}'
+    elif display_scale and _used_preset:
+        LeakWarning.warn('display_scale_preset')
 
     # A preset whose screen is a phone viewport is not a real desktop device;
     # the floor is normally skipped for presets, on the assumption that a preset

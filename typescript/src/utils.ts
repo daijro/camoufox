@@ -104,7 +104,7 @@ const OS_NAMES = { win: "windows", mac: "macos", lin: "linux" } as const;
 export const CACHE_PREFS: Record<string, any> = LAUNCHER_CONSTANTS.cachePrefs;
 
 // Draws tried for one that fits the monitor at its own display scale.
-const MAX_SCALE_FIT_DRAWS = 20;
+export const MAX_SCALE_FIT_DRAWS = 20;
 
 /** Whether an fpgen draw's screen fits the monitor at its devicePixelRatio. */
 function fitsAtDrawnScale(fingerprint: any, screenCons: Screen): boolean {
@@ -1645,8 +1645,10 @@ export async function launchOptions({
 			}
 			deviceScale = best;
 		}
-		// A supplied identity too large for this monitor at its scale keeps
-		// rendering at 1 rather than being clamped to a fraction of itself.
+		// An identity too large for this monitor at its scale (a supplied one,
+		// or the last of MAX_SCALE_FIT_DRAWS fresh draws) renders at 1 rather
+		// than being clamped to a fraction of itself, and says so even with
+		// i_know_what_im_doing, which a supplied fingerprint requires.
 		const onMonitor = headless === false && !virtual_display && screenCons;
 		if (
 			deviceScale !== 1.0 &&
@@ -1654,10 +1656,13 @@ export async function launchOptions({
 			!fitsAtDrawnScale(fingerprint, screenCons as Screen)
 		) {
 			deviceScale = 1.0;
+			LeakWarning.warn("display_scale_unfit");
 		}
 		if (deviceScale !== 1.0) {
 			firefox_user_prefs["layout.css.devPixelsPerPx"] = String(deviceScale);
 		}
+	} else if (display_scale && usedPreset) {
+		LeakWarning.warn("display_scale_preset");
 	}
 
 	// A preset whose screen is a phone viewport is not a real desktop device.

@@ -8,6 +8,7 @@ screen. layout.css.devPixelsPerPx makes the scale real, so every value agrees.
 import pytest
 
 from camoufox import utils
+from camoufox._warnings import LeakWarning
 from camoufox.fingerprints import Screen
 
 from test_launch_environment import isolated_launch_dependencies  # noqa: F401
@@ -23,10 +24,10 @@ def draw(width, height, dpr):
 
 def prefs(ua, fingerprint, **kwargs):
     kwargs.setdefault("display_scale", True)
+    kwargs.setdefault("i_know_what_im_doing", True)
     return utils.launch_options(
         config={"navigator.userAgent": ua},
         fingerprint=fingerprint,
-        i_know_what_im_doing=True,
         **kwargs,
     )["firefox_user_prefs"]
 
@@ -61,6 +62,41 @@ def test_headful_scale_that_does_not_fit_stays_at_1(isolated_launch_dependencies
     # A 1512x982 Mac at 2x needs 3024x1964 physical pixels.
     p = prefs(MAC_UA, draw(1512, 982, 2), headless=False,
               screen=Screen(max_width=1920, max_height=1080))
+    assert PREF not in p
+
+
+def test_scale_that_does_not_fit_warns(isolated_launch_dependencies):  # noqa: F811
+    with pytest.warns(LeakWarning, match="does not fit this monitor"):
+        p = prefs(MAC_UA, draw(1512, 982, 2), headless=False,
+                  screen=Screen(max_width=1920, max_height=1080))
+    assert PREF not in p
+
+
+def test_twenty_fresh_draws_that_do_not_fit_warn(monkeypatch, isolated_launch_dependencies):  # noqa: F811
+    calls = []
+    monkeypatch.setattr(utils, "generate_fingerprint", lambda **kw: calls.append(1) or draw(1512, 982, 2))
+    with pytest.warns(LeakWarning, match="does not fit this monitor"):
+        p = utils.launch_options(
+            config={"navigator.userAgent": MAC_UA},
+            headless=False,
+            screen=Screen(max_width=1920, max_height=1080),
+            display_scale=True,
+            i_know_what_im_doing=True,
+        )["firefox_user_prefs"]
+    assert len(calls) == utils.MAX_SCALE_FIT_DRAWS
+    assert PREF not in p
+
+
+def test_a_scale_that_fits_does_not_warn(isolated_launch_dependencies, recwarn):  # noqa: F811
+    prefs(WIN_UA, draw(1536, 864, 1.25), headless=False,
+          screen=Screen(max_width=1920, max_height=1080))
+    assert not [w for w in recwarn if "display_scale" in str(w.message)]
+
+
+def test_a_preset_warns_that_it_is_not_scaled(isolated_launch_dependencies):  # noqa: F811
+    with pytest.warns(LeakWarning, match="no effect on a fingerprint preset"):
+        p = utils.launch_options(os="windows", fingerprint_preset=True, display_scale=True,
+                                 headless=True, i_know_what_im_doing=True)["firefox_user_prefs"]
     assert PREF not in p
 
 

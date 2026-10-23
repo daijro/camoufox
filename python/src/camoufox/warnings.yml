@@ -53,6 +53,16 @@ is_mobile: >-
     than put the page in Responsive Design Mode, which a page can read too.
     Use has_touch, device_scale_factor and viewport for the parts you need.
 
+display_scale_unfit: >-
+    display_scale=True, but the identity does not fit this monitor at its display scale, so the
+    browser renders at 1: devicePixelRatio and the (resolution) media query then disagree with the
+    screen, as they do without display_scale. Use a larger monitor, run headless, or pass a
+    `screen` the monitor can show at the identity's scale.
+
+display_scale_preset: >-
+    display_scale=True has no effect on a fingerprint preset: the browser renders at 1, and the
+    preset's devicePixelRatio disagrees with the (resolution) media query.
+
 block_webgl: >-
     Disabling WebGL is not recommended. Many WAFs will check if WebGL is enabled.
 
