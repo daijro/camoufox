@@ -265,6 +265,7 @@ git tag v0.5.8 <tested main commit> && git push origin v0.5.8
 | The pairing | `ci.release stamp` writes the paired browser release into `python/src/camoufox/browser-pin.json`, which both launchers read. On `main` the file is `{}`, so a development checkout follows its channel. |
 | Promotion | Refused unless the commit is on `main`, `All tests passed` succeeded on it, X.Y.Z is newer than every release, and a browser release was built from its sources. The paired browser becomes the stable release without a rebuild. |
 | Failed publish | Re-run the failed jobs; every version and tag comes from `plan`. |
+| uBlock Origin | A week before each train, [`ubo-bump.yml`](../.github/workflows/ubo-bump.yml) runs `ci.ubo_pin`, which moves `python/src/camoufox/addons.json` to AMO's current uBlock Origin. When it changed, the workflow opens a pull request from `bump/ubo` and dispatches `tests.yml` on it, since a pull request opened by `GITHUB_TOKEN` starts no workflow. That needs "Allow GitHub Actions to create and approve pull requests" in the repository settings. |
 | Credentials | None stored. PyPI and npm use trusted publishing (OIDC) from `release.yml`. |
 
 Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
@@ -295,6 +296,7 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | `python3 -m ci.release browser-plan` | | Whether a browser would be built or reused |
 | `python3 -m ci.release paired` | | The release built from this tree |
 | `python3 -m ci.release lib-plan --channel prerelease` | | The next library version |
+| `python3 -m ci.ubo_pin` | | Moves the uBlock Origin pin to AMO's current release |
 | `python3 -m pytest ci/tests -q` | | The pipeline's own tests |
 
 `<bin>` is a `camoufox-bin`; `make -C browser path` prints the one in your

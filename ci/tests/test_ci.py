@@ -20,6 +20,7 @@ import json
 import os
 import pathlib
 import re
+import shutil
 import tempfile
 import urllib.error
 import urllib.parse
@@ -3228,3 +3229,53 @@ def test_the_install_gate_launches_and_interacts_through_each_installed_package(
     assert {"build", "fetch-browser"} <= set(install["needs"])
     runs = "\n".join(s.get("run") or "" for s in install["steps"])
     assert '--browser "$CAMOUFOX_BINARY"' in runs
+
+
+# ---------------------------------------------------------------------------
+# the uBlock Origin pin follows AMO through a pull request
+# ---------------------------------------------------------------------------
+
+
+def _amo_addon(version="1.76.0", file_hash="sha256:" + "a" * 64, guid="uBlock0@raymondhill.net"):
+    url = f"https://addons.mozilla.org/firefox/downloads/file/1/ublock_origin-{version}.xpi"
+    return {"guid": guid, "current_version": {"version": version, "file": {"url": url, "hash": file_hash}}}
+
+
+def _bump(monkeypatch, tmp_path, addon):
+    from ci import ubo_pin
+
+    pin_file = tmp_path / "addons.json"
+    shutil.copy(ubo_pin.PIN_FILE, pin_file)
+    monkeypatch.setattr(ubo_pin, "PIN_FILE", pin_file)
+    monkeypatch.setattr(ubo_pin, "http_json", lambda url: addon)
+    ubo_pin.main()
+    return pin_file
+
+
+def test_a_new_ubo_release_rewrites_only_the_ubo_pin(monkeypatch, tmp_path):
+    from ci import ubo_pin
+
+    before = json.loads(ubo_pin.PIN_FILE.read_text(encoding="utf-8"))
+    after = json.loads(_bump(monkeypatch, tmp_path, _amo_addon()).read_text(encoding="utf-8"))
+    assert after.pop("UBO") == {
+        "version": "1.76.0",
+        "url": "https://addons.mozilla.org/firefox/downloads/file/1/ublock_origin-1.76.0.xpi",
+        "sha256": "a" * 64,
+    }
+    before.pop("UBO")
+    assert after == before
+
+
+def test_the_pinned_ubo_release_leaves_addons_json_byte_for_byte(monkeypatch, tmp_path):
+    from ci import ubo_pin
+
+    pinned = json.loads(ubo_pin.PIN_FILE.read_text(encoding="utf-8"))["UBO"]
+    addon = _amo_addon(pinned["version"], "sha256:" + pinned["sha256"])
+    addon["current_version"]["file"]["url"] = pinned["url"]
+    assert _bump(monkeypatch, tmp_path, addon).read_bytes() == ubo_pin.PIN_FILE.read_bytes()
+
+
+@pytest.mark.parametrize("addon", [_amo_addon(file_hash="sha512:" + "a" * 128), _amo_addon(guid="other@example.com")])
+def test_a_ubo_release_that_cannot_be_pinned_fails(monkeypatch, tmp_path, addon):
+    with pytest.raises(SystemExit):
+        _bump(monkeypatch, tmp_path, addon)

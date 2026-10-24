@@ -1,0 +1,54 @@
+name: uBlock Origin bump
+
+# A week before each release train (release.yml, the 1st and 15th), opens a pull
+# request that moves the default uBlock Origin in python/src/camoufox/addons.json
+# to AMO's current release (ci/ubo_pin.py). A new uBO, and the filter lists it
+# packages, then reaches users only through a tested, reviewed change.
+#
+# A pull request opened with GITHUB_TOKEN starts no workflow, so this dispatches
+# tests.yml on the branch, and its `All tests passed` lands on the pull
+# request's commit. Opening the pull request needs "Allow GitHub Actions to
+# create and approve pull requests" in the repository's Actions settings.
+
+on:
+  schedule:
+    - cron: "0 6 8,22 * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ubo-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # push the bump branch
+      pull-requests: write # open its pull request
+      actions: write # dispatch tests.yml on it
+    env:
+      BRANCH: bump/ubo
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pin
+        run: python3 -m ci.ubo_pin
+      - if: steps.pin.outputs.version
+        env:
+          VERSION: ${{ steps.pin.outputs.version }}
+        run: |
+          title="Pin uBlock Origin $VERSION"
+          body="Moves the default uBlock Origin to $VERSION, AMO's current release ([release notes](https://github.com/gorhill/uBlock/releases/tag/$VERSION)). The file URL and sha256 in \`python/src/camoufox/addons.json\` are AMO's. Camoufox blocks with the filter lists this release packages. Opened by \`.github/workflows/ubo-bump.yml\`."
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$BRANCH"
+          git commit -qam "$title"
+          git push --force origin "$BRANCH"
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr edit "$BRANCH" --title "$title" --body "$body"
+          else
+            gh pr create --base main --head "$BRANCH" --title "$title" --body "$body"
+          fi
+          gh workflow run tests.yml --ref "$BRANCH"
