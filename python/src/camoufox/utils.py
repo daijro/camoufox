@@ -1195,19 +1195,19 @@ def launch_options(
     elif webgl_config:
         raise ValueError('OS must be set when using webgl_config')
 
-    # Add the default addons
-    add_default_addons(addons, exclude_addons)
-
-    # Confirm all addon paths are valid
-    if addons:
-        confirm_paths(addons)
-        config['addons'] = addons
-
     # Resolve the binary that will launch before reading its version:
     # launch_path() downloads the browser when none is installed, and the
     # identity has to match the Firefox that actually runs.
     browser_binary = str(executable_path) if executable_path else launch_path()
     warn_if_package_outdated()
+
+    # The default addons are the ones that build bundles, beside its binary
+    add_default_addons(addons, exclude_addons, browser_binary)
+
+    # Confirm all addon paths are valid
+    if addons:
+        confirm_paths(addons)
+        config['addons'] = addons
 
     # Get the Firefox version
     if ff_version:

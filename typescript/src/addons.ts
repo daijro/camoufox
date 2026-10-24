@@ -1,37 +1,23 @@
 /**
- * Default Firefox addon download/extraction.
+ * Default Firefox addons: the ones each browser release bundles.
  *
  * TypeScript twin of python/src/camoufox/addons.py.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { InvalidAddonPath } from "./exceptions.js";
-import { INSTALL_DIR, loadDataFile } from "./paths.js";
-import { unzip, verifySha256, webdl } from "./pkgman.js";
-
-interface AddonPin {
-	version: string;
-	url: string;
-	sha256: string;
-}
-
-const PINS: Record<string, AddonPin> = loadDataFile("addons.json");
+import { buildFile } from "./pkgman.js";
+import { loadWarnings, warn } from "./warnings.js";
 
 /**
- * Default addons to be downloaded.
+ * Default addons. Each browser release bundles them, extracted, under
+ * addons/<name>/ beside its binary (browser/scripts/fetch-ubo.py).
  */
 export const DefaultAddons = {
-	UBO: PINS.UBO.url,
+	UBO: "UBO",
 } as const;
 
 export type DefaultAddon = keyof typeof DefaultAddons;
-
-// Addons are stored in a shared folder, not per-browser version
-const ADDONS_DIR: string = path.join(INSTALL_DIR, "addons");
-
-// One chain for the module: concurrent launches in one process would otherwise
-// interleave the same check-then-extract at its awaits.
-let extractChain: Promise<unknown> = Promise.resolve();
 
 /**
  * Confirms that the addon paths are valid.
@@ -50,102 +36,37 @@ export function confirmPaths(paths: string[]): void {
 }
 
 /**
- * Adds default addons, minus any specified in excludeList, to addonsList.
+ * Returns the path to the addon the build at executablePath bundles.
  */
-export async function addDefaultAddons(
+export function getAddonPath(
+	addonName: string,
+	executablePath: string,
+): string {
+	return buildFile(executablePath, path.join("addons", addonName));
+}
+
+/**
+ * Adds the default addons the build at executablePath bundles, minus any
+ * specified in excludeList, to addonsList.
+ */
+export function addDefaultAddons(
 	addonsList: string[],
-	excludeList: DefaultAddon[] = [],
-): Promise<void> {
-	const addons: Record<string, string> = {};
-	for (const [name, url] of Object.entries(DefaultAddons)) {
-		if (!excludeList.includes(name as DefaultAddon)) {
-			addons[name] = url;
-		}
-	}
-	const run = extractChain.then(() => maybeDownloadAddons(addons, addonsList));
-	extractChain = run.catch(() => undefined);
-	await run;
-}
-
-/**
- * Downloads and extracts an addon from a given URL to a specified path.
- *
- * Extracts into a sibling temp dir and renames it into place last, so a
- * concurrent launch (another process, which the chain cannot see) never finds
- * a manifest.json in a directory whose other files are still being written.
- */
-export async function downloadAndExtract(
-	url: string,
-	extractPath: string,
-	name: string,
-): Promise<void> {
-	const buffer = await webdl(url, `Downloading addon (${name})`, false);
-	verifySha256(buffer, PINS[name].sha256, `addon (${name})`);
-	const tmpDir = fs.mkdtempSync(
-		path.join(path.dirname(extractPath), `.${name}.tmp-`),
-	);
-	try {
-		unzip(buffer, tmpDir, `Extracting addon (${name})`, false);
-		try {
-			fs.renameSync(tmpDir, extractPath);
-		} catch {
-			// The target is not empty (or exists at all, on Windows). A complete
-			// copy came from another process and may be loading in its browser,
-			// so keep it; only an incomplete one is replaced.
-			if (fs.existsSync(path.join(extractPath, "manifest.json"))) return;
-			fs.rmSync(extractPath, { recursive: true });
-			fs.renameSync(tmpDir, extractPath);
-		}
-	} finally {
-		fs.rmSync(tmpDir, { recursive: true, force: true });
-	}
-}
-
-/**
- * Returns a path to the pinned version of the addon in the shared addons folder.
- */
-export function getAddonPath(addonName: string): string {
-	return path.join(ADDONS_DIR, addonName, PINS[addonName].version);
-}
-
-/** Seams the Python tests reach with monkeypatch. */
-export const addonsDeps = {
-	downloadAndExtract: (url: string, extractPath: string, name: string) =>
-		downloadAndExtract(url, extractPath, name),
-};
-
-/**
- * Downloads and extracts addons from a given map into the given list.
- * Skips downloading if the addon is already downloaded.
- */
-export async function maybeDownloadAddons(
-	addons: Record<string, string>,
-	addonsList?: string[],
-): Promise<void> {
-	for (const [addonName, url] of Object.entries(addons)) {
-		const addonPath = getAddonPath(addonName);
-
-		// Check if the addon is already extracted. A bare directory is not
-		// enough: a failed download leaves an empty dir behind, so require the
-		// manifest that confirmPaths() looks for.
-		if (fs.existsSync(path.join(addonPath, "manifest.json"))) {
-			addonsList?.push(addonPath);
+	excludeList: DefaultAddon[] | undefined,
+	executablePath: string,
+): void {
+	for (const name of Object.keys(DefaultAddons) as DefaultAddon[]) {
+		if (excludeList?.includes(name)) continue;
+		const addonPath = getAddonPath(name, executablePath);
+		// A build released before the addons were bundled, or an unpackaged
+		// one, has none. It still launches, but not as the browser asked for.
+		if (!fs.existsSync(path.join(addonPath, "manifest.json"))) {
+			warn(
+				loadWarnings()
+					.addon_not_bundled.replaceAll("{addon}", name)
+					.replace("{path}", addonPath),
+			);
 			continue;
 		}
-
-		try {
-			fs.mkdirSync(addonPath, { recursive: true });
-			await addonsDeps.downloadAndExtract(url, addonPath, addonName);
-		} catch (e) {
-			// A complete copy came from another process and may be loading in
-			// its browser, so use it. Otherwise drop the partial directory so
-			// the next run re-downloads, and fail: launching without the addon
-			// would be a different browser than asked for.
-			if (!fs.existsSync(path.join(addonPath, "manifest.json"))) {
-				fs.rmSync(addonPath, { recursive: true, force: true });
-				throw e;
-			}
-		}
-		addonsList?.push(addonPath);
+		addonsList.push(addonPath);
 	}
 }

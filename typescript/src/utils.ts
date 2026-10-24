@@ -1538,21 +1538,25 @@ export async function launchOptions({
 		throw new ValueError("OS must be set when using webgl_config");
 	}
 
-	// Add the default addons
-	await utilsDeps.addDefaultAddons(addons, exclude_addons);
-
-	// Confirm all addon paths are valid
-	if (addons.length) {
-		utilsDeps.confirmPaths(addons);
-		config.addons = addons;
-	}
-
 	// The managed install is resolved lazily in Python (camoufox_path() may
 	// download); here that download is async, so do it before any sync lookup.
 	if (!executable_path) {
 		await utilsDeps.ensureCamoufoxInstalled();
 	}
 	warnIfPackageOutdated();
+
+	// The default addons are the ones that build bundles, beside its binary
+	await utilsDeps.addDefaultAddons(
+		addons,
+		exclude_addons,
+		executable_path ? String(executable_path) : utilsDeps.launchPath(),
+	);
+
+	// Confirm all addon paths are valid
+	if (addons.length) {
+		utilsDeps.confirmPaths(addons);
+		config.addons = addons;
+	}
 
 	// Get the Firefox version
 	let ffVersionStr: string;

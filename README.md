@@ -512,7 +512,7 @@ claims the host's OS. Details are in
 | Feature | Where |
 |---|---|
 | Load extracted addons without a debug server: `addons=["/path/to/addon"]` | launcher, `camoufox-window-module` patch |
-| uBlock Origin installed by default, one pinned release per package (`python/src/camoufox/addons.json`), blocking with the default filter lists packaged in that release, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | launcher, `policies.json` |
+| uBlock Origin installed by default: each browser release bundles the newest uBO release on AMO when it is built (`browser/scripts/fetch-ubo.py`), blocking with the default filter lists packaged in it, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | packaging, launcher, `policies.json` |
 | Addons cannot open tabs unless `allow_addon_new_tab=True` | `disable-extension-newtab` patch |
 | Addons run in private browsing | `all-addons-private-mode` patch |
 

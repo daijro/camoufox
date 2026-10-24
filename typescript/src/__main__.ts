@@ -13,7 +13,6 @@ import * as readline from "node:readline";
 import { Argument, Command, Option } from "commander";
 import { ensureModel } from "fpgen-js";
 import { LIBRARY_VERSION } from "./__version__.js";
-import { DefaultAddons, maybeDownloadAddons } from "./addons.js";
 import {
 	type BrowserPin,
 	effectivePin,
@@ -674,7 +673,6 @@ program
 		if (allowGeoip()) {
 			await downloadMmdb();
 		}
-		await maybeDownloadAddons({ ...DefaultAddons });
 		// Fetch the pinned fpgen model now rather than on the first launch.
 		await ensureModel();
 	});

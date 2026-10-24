@@ -70,10 +70,6 @@ beforeEach(() => {
 		...(await load<typeof import("../src/browser-pin.js")>()),
 		effectivePin: () => pin,
 	}));
-	vi.doMock("../src/addons.js", async (load) => ({
-		...(await load<typeof import("../src/addons.js")>()),
-		maybeDownloadAddons: async () => {},
-	}));
 	vi.doMock("../src/geolocation.js", async (load) => ({
 		...(await load<typeof import("../src/geolocation.js")>()),
 		allowGeoip: () => false,

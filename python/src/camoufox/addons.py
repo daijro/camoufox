@@ -1,32 +1,20 @@
-import json
 import os
-import shutil
-import tempfile
 from enum import Enum
 from pathlib import Path
-from threading import Lock
-from typing import List, Optional
+from typing import List, Optional, Union
 
+from ._warnings import WARNINGS_DATA, _warn_from_caller
 from .exceptions import InvalidAddonPath
-from .pkgman import INSTALL_DIR, unzip, verify_sha256, webdl
-
-# Addons are stored in a shared folder, not per-browser version
-ADDONS_DIR = INSTALL_DIR / "addons"
-
-PINS = json.loads((Path(__file__).parent / 'addons.json').read_text(encoding='utf-8'))
-
-# One lock for the module: `with Lock():` on a fresh multiprocessing.Lock per call
-# guarded nothing, so concurrent launches in one process raced the same
-# check-then-extract.
-_EXTRACT_LOCK = Lock()
+from .pkgman import build_file
 
 
 class DefaultAddons(Enum):
     """
-    Default addons to be downloaded
+    Default addons. Each browser release bundles them, extracted, under
+    addons/<name>/ beside its binary (browser/scripts/fetch-ubo.py).
     """
 
-    UBO = PINS['UBO']['url']
+    UBO = 'UBO'
 
 
 def confirm_paths(paths: List[str]) -> None:
@@ -42,89 +30,32 @@ def confirm_paths(paths: List[str]) -> None:
             )
 
 
+def get_addon_path(addon_name: str, executable_path: Union[str, Path]) -> str:
+    """
+    Returns the path to the addon the build at executable_path bundles.
+    """
+    return str(build_file(executable_path, os.path.join('addons', addon_name)))
+
+
 def add_default_addons(
-    addons_list: List[str], exclude_list: Optional[List[DefaultAddons]] = None
+    addons_list: List[str],
+    exclude_list: Optional[List[DefaultAddons]],
+    executable_path: Union[str, Path],
 ) -> None:
     """
-    Adds default addons, minus any specified in exclude_list, to addons_list
+    Adds the default addons the build at executable_path bundles, minus any
+    specified in exclude_list, to addons_list
     """
-    # Build a dictionary from DefaultAddons, excluding keys found in exclude_list
-    if exclude_list is None:
-        exclude_list = []
-
-    addons = [addon for addon in DefaultAddons if addon not in exclude_list]
-
-    with _EXTRACT_LOCK:
-        maybe_download_addons(addons, addons_list)
-
-
-def download_and_extract(url: str, extract_path: str, name: str) -> None:
-    """
-    Downloads and extracts an addon from a given URL to a specified path.
-
-    Extracts into a sibling temp dir and renames it into place last, so a
-    concurrent launch (another process, which the lock cannot see) never finds
-    a manifest.json in a directory whose other files are still being written.
-    """
-    buffer = webdl(url, desc=f"Downloading addon ({name})", bar=False)
-    verify_sha256(buffer, PINS[name]['sha256'], f"addon ({name})")
-    parent = os.path.dirname(extract_path)
-    tmp_dir = tempfile.mkdtemp(prefix=f".{name}.tmp-", dir=parent)
-    try:
-        unzip(buffer, tmp_dir, f"Extracting addon ({name})", bar=False)
-        try:
-            os.replace(tmp_dir, extract_path)
-        except OSError:
-            # The target is not empty (or exists at all, on Windows). A complete
-            # copy came from another process and may be loading in its browser,
-            # so keep it; only an incomplete one is replaced.
-            if os.path.exists(os.path.join(extract_path, 'manifest.json')):
-                return
-            shutil.rmtree(extract_path)
-            os.replace(tmp_dir, extract_path)
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-
-
-def get_addon_path(addon_name: str) -> str:
-    """
-    Returns a path to the pinned version of the addon in the shared addons folder.
-    """
-    return str(ADDONS_DIR / addon_name / PINS[addon_name]['version'])
-
-
-def maybe_download_addons(
-    addons: List[DefaultAddons], addons_list: Optional[List[str]] = None
-) -> None:
-    """
-    Downloads and extracts addons from a given dictionary to a specified list
-    Skips downloading if the addon is already downloaded
-    """
-    for addon in addons:
-        # Get the addon path
-        addon_path = get_addon_path(addon.name)
-
-        # Check if the addon is already extracted. A bare directory is not
-        # enough: a failed download leaves an empty dir behind, so require the
-        # manifest that confirm_paths() looks for.
-        if os.path.exists(os.path.join(addon_path, 'manifest.json')):
-            # Add the existing addon path to addons_list
-            if addons_list is not None:
-                addons_list.append(addon_path)
+    for addon in DefaultAddons:
+        if addon in (exclude_list or []):
             continue
-
-        # Addon isn't extracted, create directory and download
-        try:
-            os.makedirs(addon_path, exist_ok=True)
-            download_and_extract(addon.value, addon_path, addon.name)
-        except Exception:
-            # A complete copy came from another process and may be loading in
-            # its browser, so use it. Otherwise drop the partial directory so
-            # the next run re-downloads, and fail: launching without the addon
-            # would be a different browser than asked for.
-            if not os.path.exists(os.path.join(addon_path, 'manifest.json')):
-                shutil.rmtree(addon_path, ignore_errors=True)
-                raise
-        # Add the addon directory path to addons_list
-        if addons_list is not None:
-            addons_list.append(addon_path)
+        path = get_addon_path(addon.name, executable_path)
+        # A build released before the addons were bundled, or an unpackaged
+        # one, has none. It still launches, but not as the browser asked for.
+        if not os.path.exists(os.path.join(path, 'manifest.json')):
+            _warn_from_caller(
+                WARNINGS_DATA['addon_not_bundled'].format(addon=addon.name, path=path),
+                RuntimeWarning,
+            )
+            continue
+        addons_list.append(path)

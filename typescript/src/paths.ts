@@ -65,7 +65,6 @@ export const INSTALL_DIR: string = userCacheDir("camoufox");
  * tarball, so one seed draws one identity in either launcher.
  */
 export const DATA_FILES: readonly string[] = [
-	"addons.json",
 	"browser-pin.json",
 	"essential-fonts.json",
 	"fingerprint-presets.json",
@@ -120,7 +119,7 @@ export const LAUNCHER_CONSTANTS: Readonly<LauncherConstants> = loadDataFile(
 	"launcher-constants.json",
 );
 
-// Camoufox keeps the fpgen model in its cache, beside the browsers and addons.
+// Camoufox keeps the fpgen model in its cache, beside the browsers.
 setModelDir(process.env.CAMOUFOX_FPGEN_DATA || path.join(INSTALL_DIR, "fpgen"));
 
 export const OS_ARCH_MATRIX: Record<string, string[]> = {

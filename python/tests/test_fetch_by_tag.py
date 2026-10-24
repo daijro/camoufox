@@ -63,7 +63,7 @@ def installs(tmp_path, monkeypatch):
             installed.append((self.repo_config.name, self.selected.version.full_string, i_know_what_im_doing))
 
     monkeypatch.setattr(cli, "CamoufoxUpdate", Update)
-    for name in ("remove_incompatible_data", "maybe_download_addons", "ensure_fpgen_model", "download_mmdb"):
+    for name in ("remove_incompatible_data", "ensure_fpgen_model", "download_mmdb"):
         monkeypatch.setattr(cli, name, lambda *a, **k: None)
     monkeypatch.setattr(multiversion, "REPO_CACHE_FILE", tmp_path / "repo_cache.json")
     monkeypatch.setattr(multiversion, "CONFIG_FILE", tmp_path / "config.json")
