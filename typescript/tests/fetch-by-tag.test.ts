@@ -5,6 +5,10 @@
  * The CLI runs on import, so each test points XDG_CACHE_HOME at a fresh
  * directory, mocks the network and the install, imports __main__, and waits
  * for the command to install or set an exit code.
+ *
+ * A test changes what a mock returns through the variables below, never by
+ * mocking the module again: vitest registers the mocks queued before an import
+ * in the order they resolve, so a second vi.doMock sometimes loses to the first.
  */
 import { EventEmitter } from "node:events";
 import * as fs from "node:fs";
@@ -12,6 +16,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CONSTRAINTS } from "../src/__version__.js";
+import type { BrowserPin } from "../src/browser-pin.js";
 
 const API = "https://api.github.com/repos/daijro/camoufox/releases";
 
@@ -24,6 +29,18 @@ let installs: Array<[string, boolean]>;
 let output: string;
 let finished: boolean;
 let answers: string[];
+/** The browser this camoufox release pairs with, as `camoufox fetch` sees it. */
+let pin: BrowserPin | null;
+let doMock: ReturnType<typeof vi.spyOn>;
+
+/** The modules beforeEach mocks, which a test must not mock again. */
+const MOCKED = [
+	"../src/browser-pin.js",
+	"../src/addons.js",
+	"../src/geolocation.js",
+	"fpgen-js",
+	"node:readline",
+];
 
 beforeEach(() => {
 	tmp = fs.mkdtempSync(path.join(os.tmpdir(), "camoufox-fetch-"));
@@ -38,6 +55,7 @@ beforeEach(() => {
 	output = "";
 	finished = false;
 	answers = [];
+	pin = null;
 	vi.stubGlobal("fetch", async (url: string) => {
 		requested.push(url);
 		return served.has(url)
@@ -50,7 +68,7 @@ beforeEach(() => {
 	});
 	vi.doMock("../src/browser-pin.js", async (load) => ({
 		...(await load<typeof import("../src/browser-pin.js")>()),
-		effectivePin: () => null,
+		effectivePin: () => pin,
 	}));
 	vi.doMock("../src/addons.js", async (load) => ({
 		...(await load<typeof import("../src/addons.js")>()),
@@ -78,24 +96,23 @@ beforeEach(() => {
 			return rl;
 		},
 	}));
+	doMock = vi.spyOn(vi, "doMock");
 });
 
 afterEach(() => {
+	// Read before restoreAllMocks below forgets the calls.
+	const remocked = doMock.mock.calls
+		.map(([module]) => String(module))
+		.filter((module) => MOCKED.includes(module));
 	if (savedXdg === undefined) delete process.env.XDG_CACHE_HOME;
 	else process.env.XDG_CACHE_HOME = savedXdg;
 	process.argv = savedArgv;
 	process.exitCode = undefined;
-	for (const module of [
-		"../src/browser-pin.js",
-		"../src/addons.js",
-		"../src/geolocation.js",
-		"fpgen-js",
-		"node:readline",
-	])
-		vi.doUnmock(module);
+	for (const module of MOCKED) vi.doUnmock(module);
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 	fs.rmSync(tmp, { recursive: true, force: true });
+	expect(remocked, "mocked again; set what its mock reads").toEqual([]);
 });
 
 async function release(
@@ -160,16 +177,13 @@ it("fetches a named build with one API call", async () => {
 });
 
 it("fetches the paired build with one API call", async () => {
-	vi.doMock("../src/browser-pin.js", async (load) => ({
-		...(await load<typeof import("../src/browser-pin.js")>()),
-		effectivePin: () => ({
-			tag: "v156.0.1-beta.33",
-			repo: "daijro/camoufox",
-			repoName: "official",
-			version: "156.0.1",
-			build: "beta.33",
-		}),
-	}));
+	pin = {
+		tag: "v156.0.1-beta.33",
+		repo: "daijro/camoufox",
+		repoName: "official",
+		version: "156.0.1",
+		build: "beta.33",
+	};
 	served.set(
 		`${API}/tags/v156.0.1-beta.33`,
 		await release("v156.0.1-beta.33", "beta.33", { prerelease: true }),
