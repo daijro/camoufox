@@ -487,6 +487,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
 
       - name: Hash the inputs that can change compiled output
         id: native
@@ -548,10 +549,10 @@ jobs:
 
       - name: Install build dependencies
         if: steps.prebuilt.outputs.cache-hit != 'true'
+        # No system LLVM: `mach bootstrap` fetches the clang and lld this
+        # Firefox is built with, and the LTO link needs that lld, which reads
+        # the bitcode the same LLVM wrote.
         run: |
-          wget -q https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 18
-          sudo apt-get install -y lld-18 clang-18
-          sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-18 100
           sudo apt-get update
           # The mozconfig sets --with-ccache; configure fails hard without it
           # rather than degrading.

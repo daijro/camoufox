@@ -5,22 +5,16 @@ ac_add_options --disable-crashreporter
 ac_add_options --disable-backgroundtasks
 ac_add_options --disable-debug
 # --disable-debug only turns off DEBUG code; it does NOT drop -g. Without this,
-# the gkrust fat-LTO staticlib and the libxul link carry full debug info, which
+# the gkrust staticlib and the libxul link carry full debug info, which
 # is what pushes linux/arm64 container builds into the OOM killer (#698).
 # Nothing in scripts/package.py consumes symbol files, so they are pure cost.
 ac_add_options --disable-debug-symbols
 ac_add_options --disable-default-browser-agent
 ac_add_options --disable-tests
 ac_add_options --disable-updater
-# ac_add_options --enable-hardening
-# ac_add_options --enable-jxl
-# ac_add_options --enable-optimize
 ac_add_options --enable-release
-# ac_add_options --enable-rust-simd
 
 ac_add_options --disable-system-policies
-# ac_add_options --disable-accessibility
-# ac_add_options --disable-webspeech
 
 ac_add_options --with-app-name=camoufox
 ac_add_options --with-branding=browser/branding/camoufox
@@ -49,4 +43,9 @@ mk_add_options MOZ_TELEMETRY_REPORTING=0
 mk_add_options MOZ_INSTALLER=0
 mk_add_options MOZ_AUTOMATION_INSTALLER=0
 
-# ac_add_options --enable-lto=cross
+# Optimized as stock ships every desktop build (ci/tribal-rules.yml:
+# builds-are-optimized-like-stock). Without them Gecko's C++ runs slower than
+# stock while JIT-compiled script does not, and a page can time that ratio.
+# Without PGO, configure makes this ThinLTO across C++ and Rust.
+ac_add_options --enable-lto=cross
+ac_add_options --enable-rust-simd

@@ -40,13 +40,8 @@ install_rust() {
     fi
   fi
 
-  # `mach configure` aborts with "Cannot compile for <target>" without the std
-  # target, and scripts/patch.py adds only the aarch64 Linux one.
-  if have rustup; then
-    log "Ensuring Rust Linux cross-compile targets (x86_64/aarch64)..."
-    rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu \
-      || warn "Could not add Rust Linux targets; if cross-compiling to Linux, run: rustup target add x86_64-unknown-linux-gnu"
-  fi
+  # The build needs rustup, not this toolchain: scripts/patch.py installs the
+  # Rust release Mozilla builds the tree with, and its std for the target.
 }
 
 # ---------------------------------------------------------------------------
