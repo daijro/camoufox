@@ -261,6 +261,14 @@ jobs:
       - name: Synthesized input goes through one chokepoint
         run: python3 browser/scripts/check-input-dispatch.py
 
+      - name: Windows CRT math is bit-exact
+        # Checks that the tables are what gen-ucrt-math-tables.py generates,
+        # builds browser/additions/js/src/builtin/UcrtMath*.c on their own and
+        # compares all ~127,000 results with ucrtbase.dll's, in seconds rather
+        # than after a build. The browser-level check is the windows-crt-math
+        # patch guard.
+        run: python3 browser/tests/ucrt-math/check.py
+
       - name: CI pipeline self-tests
         # These assert that the pipeline reports honestly: skips carry reasons,
         # shards partition exactly, and nothing identifying a sundial vector
@@ -882,6 +890,9 @@ jobs:
       # namespace, which Ubuntu's AppArmor denies to programs without a profile.
       - if: matrix.leg == 'spoofing'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - if: matrix.leg == 'parity'
+        # windows-keyboard sends real X11 key events.
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends xdotool x11-xkb-utils
       - if: matrix.leg != 'skiplist'
         run: xvfb-run -a python3 -m ci.run_patch_guards --group "${{ matrix.leg }}" --binary "$CAMOUFOX_BINARY"
       - name: Every skiplist entry is still failing

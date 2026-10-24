@@ -52,6 +52,7 @@ be listed there.
 | `voice-spoofing.patch` | `voices`, `voices:blockIfNotDefined` |
 | `webgl-spoofing.patch` | `webGl:*`, `webGl2:*` |
 | `webrtc-ip-spoofing.patch` | `webrtc:ipv4`, `webrtc:ipv6`, `navigator.platform` |
+| `windows-keyboard.patch` | `input:windowsKeyboard` (launch-wide: the shortcut tables and GTK's key handling are process-level) |
 
 To regenerate the list: `grep -l 'MaskConfig::' patches/*.patch`.
 
@@ -69,6 +70,7 @@ already set up, and do not add the include or `LOCAL_INCLUDES` themselves:
 | `font-list-spoofing.patch` | `anti-font-fingerprinting.patch` for `gfxFontGroup::mUserContextId` |
 | `timezone-spoofing.patch`, `webrtc-ip-spoofing.patch` | `audio-fingerprint-manager.patch` for `RoverfoxStorageManager.h` in `dom/base/nsGlobalWindowInner.cpp` |
 | `font-system-fonts-css2.patch`, `system-ui-font-spoofing.patch`, `webrtc-ip-spoofing.patch` | `navigator-spoofing.patch` for `NavigatorManager::GetSpoofedOS()` |
+| `windows-keyboard.patch` | `touchscreen-fingerprint-spoofing.patch` for `/camoucfg` in `dom/events/moz.build` |
 
 ## RoverfoxStorageManager
 
@@ -87,6 +89,16 @@ at hand. A browsing context is not used, because a document created by
 `document.implementation.createHTMLDocument()` or `DOMParser` has none, while it
 shares its creator's principal. A value is stored only under its own context;
 nothing writes a fallback copy under context 0.
+
+## Backports
+
+These patches carry upstream Firefox changes that `browser/upstream.sh`'s
+version does not have yet. Drop each one when the Firefox it moves to ships
+the change.
+
+| Patch | Upstream change |
+|-------|-----------------|
+| `remote-security-settings.patch` | The startup import of the bundled OneCRL list into certificate storage, from mozilla-firefox's `release` branch ([Bug 2084311](https://bugzilla.mozilla.org/show_bug.cgi?id=2084311)), and the `security-state/onecrl.json` dump of Firefox 158.0.1. Camoufox turns Remote Settings off, so without the import a fresh profile has no revocations. |
 
 ## Playwright
 

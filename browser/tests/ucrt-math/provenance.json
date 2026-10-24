@@ -1,0 +1,12 @@
+{
+  "ucrtbase": "10.0.26100.9711",
+  "ucrtbase_sha256": "dedb7611e1abc1ff3852dcac3d4c93a048d729e25b061973b9969f22698f14ca",
+  "windows": "10.0.26200",
+  "windows_release": "25H2",
+  "windows_build": "26200.9711",
+  "cpu": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
+  "fma3": true,
+  "inputs_sha256": "6be45dcb981e23c3d5fe9d73467cd33e0928e88a9376af602f53fcf79f6d00ea",
+  "trig_inputs": 33393,
+  "pow_inputs": 27249
+}

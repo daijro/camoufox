@@ -22,6 +22,7 @@ for the calling window's context, and is gone before any page script runs
 | `setNavigatorPlatform(platform)` | `navigator-spoofing.patch` | `navigator.platform` |
 | `setNavigatorOscpu(oscpu)` | `navigator-spoofing.patch` | `navigator.oscpu` |
 | `setNavigatorHardwareConcurrency(cores)` | `navigator-spoofing.patch` | `navigator.hardwareConcurrency` |
+| `setNavigatorAppVersion(appVersion)` | `navigator-spoofing.patch` | `navigator.appVersion`, in workers too |
 | `setNavigatorUserAgent(ua)` | `navigator-spoofing.patch` | `navigator.userAgent`, in workers too |
 | `setWebRTCIPv4(ip)` | `webrtc-ip-spoofing.patch` | ICE candidates, SDP, `getStats()` |
 | `setWebRTCIPv6(ip)` | `webrtc-ip-spoofing.patch` | The same, for IPv6 |
@@ -158,7 +159,7 @@ real value.
 | `audio-fingerprint-manager.patch` | `AudioBuffer.getChannelData`, `copyFromChannel`; `AnalyserNode.getFloatFrequencyData`, `getByteFrequencyData`, `getFloatTimeDomainData`, `getByteTimeDomainData` | A small deterministic transform of the samples, seeded per context. All six read paths are covered, because covering only `getChannelData` is bypassable. Falls back to `audio:seed` in `CAMOU_CONFIG`. |
 | `timezone-spoofing.patch` | SpiderMonkey `DateTimeInfo` per realm (`JS::SetRealmTimeZoneOverride`), `nsGlobalWindowOuter::SetNewDocument`, `WorkerPrivate::GetOrCreateGlobalScope` | The only patch inside SpiderMonkey. Re-applied on navigation and in dedicated, shared and service workers; also sets a process-wide override. Invalid IDs throw `TypeError`. |
 | `screen-spoofing.patch` | `nsScreen::GetRect`, `nsDeviceContext`, `nsMediaFeatures.cpp` | CSS `device-width` and `color` agree with `screen.*`. |
-| `navigator-spoofing.patch` | `Navigator::GetPlatform`, `GetOscpu`, `HardwareConcurrency`, `GetUserAgent`, `GetAppVersion` (global only); the `WorkerNavigator` versions of platform, cores and UA | Falls back to `navigator.*` in `CAMOU_CONFIG`. |
+| `navigator-spoofing.patch` | `Navigator::GetPlatform`, `GetOscpu`, `HardwareConcurrency`, `GetUserAgent`, `GetAppVersion`; the `WorkerNavigator` versions of platform, cores, UA and appVersion | Falls back to `navigator.*` in `CAMOU_CONFIG`. |
 | `webrtc-ip-spoofing.patch` | `SanitizeSDPForIPLeak`, `CandidateReady`, candidate `.address`/`.relatedAddress`, `getStats()`, `UpdateDefaultCandidate`, `NrSocketBase::CreateSocket` | Forces `default_address_only` while spoofing; loopback, link-local and private addresses are left alone. UDP candidate ports come from the ephemeral range of the identity's OS (`MaskConfig::SpoofedEphemeralPorts()`), so a Windows identity on Linux never shows a Linux port. |
 | `webgl-spoofing.patch` | `ClientWebGLContext::GetParameter` | Per context: vendor and renderer. Global only (`CAMOU_CONFIG`): parameters, extensions, shader precision. Works from `OffscreenCanvas` in workers. |
 | `font-list-spoofing.patch` | `gfxPlatformFontList::FindAndAddFamiliesLocked` | A thread-local context id, set by an RAII guard in `FontFaceSet::Check/Load` and `gfxFontGroup::EnsureFontList`, avoids changing ~50 signatures. The list is in the shared store, so it holds in every content process. An `OffscreenCanvas` in a worker takes the worker's context (`anti-font-fingerprinting.patch`); other worker lookups are not filtered. |
@@ -227,3 +228,11 @@ not possible, launch with `canvas_noise=True`: canvas and WebGL readback then
 return random data, which covers the two rasterization rows above. A browser
 launched without it gives its contexts the host's OS and GPU, and `NewContext`
 raises for another OS or GPU.
+
+The settings that make a Windows identity on another host behave as Windows
+([HOST-PARITY.md](HOST-PARITY.md): CRT math, keyboard, behaviour prefs,
+scrollbars) are prefs and launch config, not per-context setters. They follow
+the OS the browser was launched with: every context on a browser launched as
+Windows gets them, and no context on a browser launched as another OS does.
+`NewContext` does not refuse the mix, since a launch without `os` draws its OS
+and the refusal would depend on the draw.
