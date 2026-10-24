@@ -71,8 +71,28 @@ env:
 # the results it actually depends on.
 jobs:
   # ---------------------------------------------------------------------------
+  ubo:
+    # The uBlock Origin release every package bundles: AMO's newest, resolved
+    # once, so the tests below and every build in the matrix use the same one
+    # even when uBO publishes a release mid-run.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      pin: ${{ steps.resolve.outputs.pin }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: resolve
+        run: python3 browser/scripts/fetch-ubo.py resolve
+
+  # ---------------------------------------------------------------------------
   tests:
     # The dispatched commit, exactly -- not whatever main is by the time a job checks out.
+    needs: ubo
     if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
@@ -80,6 +100,7 @@ jobs:
     uses: ./.github/workflows/tests.yml
     with:
       ref: ${{ github.sha }}
+      ubo: ${{ needs.ubo.outputs.pin }}
     secrets: inherit
 
   # ---------------------------------------------------------------------------
@@ -152,7 +173,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   build-browser:
-    needs: plan
+    needs: [plan, ubo]
     if: needs.plan.outputs.build_browser == 'true'
     runs-on: ubuntu-24.04
     permissions:
@@ -162,6 +183,8 @@ jobs:
       # targets from BUILD_TARGET, defaulting to macos,arm64 when it is unset.
       # multibuild.py sets the same value again before building.
       BUILD_TARGET: ${{ matrix.target }},${{ matrix.arch }}
+      # The uBlock Origin release the tests ran with; scripts/package.py bundles it.
+      CAMOUFOX_UBO: ${{ needs.ubo.outputs.pin }}
     strategy:
       matrix:
         target: [linux, windows, macos]
@@ -297,7 +320,7 @@ jobs:
           path: browser/dist/*
 
   publish-browser:
-    needs: [plan, build-browser]
+    needs: [plan, ubo, build-browser]
     runs-on: ubuntu-24.04
     permissions:
       contents: write # the release and its tag
@@ -328,12 +351,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.browser_tag }}
+          UBO: ${{ needs.ubo.outputs.pin }}
         run: |
           python3 -m ci.release manifest --tag "$TAG" \
-            --digest "${{ needs.plan.outputs.digest }}" --commit "$GITHUB_SHA" > manifest.json
+            --digest "${{ needs.plan.outputs.digest }}" --commit "$GITHUB_SHA" \
+            --ubo "$UBO" > manifest.json
           cat manifest.json
+          ubo_version="$(python3 -c 'import json, os; print(json.loads(os.environ["UBO"])["version"])')"
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --prerelease --latest=false --title "$TAG" --generate-notes \
+            --prerelease --latest=false --title "$TAG" \
+            --notes "Bundles uBlock Origin $ubo_version." --generate-notes \
             $(find artifacts -type f) manifest.json
 
   # ---------------------------------------------------------------------------

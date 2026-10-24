@@ -3,8 +3,8 @@
 
 Packs pythonlib and the npm package exactly as they would be published, installs
 each into a clean environment with an empty cache, and runs the real
-`camoufox fetch`: the browser, the addons, the GeoIP database and the fpgen
-model, downloaded and put in place.
+`camoufox fetch`: the browser, the GeoIP database and the fpgen model,
+downloaded and put in place.
 
 Then each installed package launches a browser the way a user's code does
 (`from camoufox.sync_api import Camoufox`, `import { Camoufox } from
@@ -60,7 +60,6 @@ NODE_PROBE = TYPESCRIPT / "scripts" / "e2e" / "node_probe.mjs"
 # Every Linux identity reports these (pythonlib's base set), so each must
 # render from the bundle rather than fall back.
 ESSENTIAL_FONTS = PYTHONLIB / "src" / "camoufox" / "essential-fonts.json"
-ADDON_PINS = PYTHONLIB / "src" / "camoufox" / "addons.json"
 LAUNCH = {"os": "linux", "headless": True}
 # Lowercase, so each character is one keydown: a capital adds Shift's.
 TYPED = "camoufox"
@@ -119,12 +118,6 @@ def installed(cache: Path, tag: str) -> List[str]:
     leftovers = [p.name for p in cache.glob("camoufox/geoip/.download-*")]
     if leftovers:
         missing.append(f"no staging directories left in camoufox/geoip/ (found {leftovers})")
-    ubo = json.loads(ADDON_PINS.read_text(encoding="utf-8"))["UBO"]["version"]
-    if not (cache / "camoufox" / "addons" / "UBO" / ubo / "manifest.json").is_file():
-        missing.append(f"the pinned uBlock Origin {ubo} under camoufox/addons/UBO/")
-    leftovers = [p.name for p in cache.glob("camoufox/addons/*/.*.tmp-*")]
-    if leftovers:
-        missing.append(f"no staging directories left in camoufox/addons/ (found {leftovers})")
     return missing
 
 

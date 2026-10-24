@@ -7,7 +7,7 @@ ff_source_tarball := firefox-$(version).source.tar.xz
 .PHONY: help fetch setup-minimal setup ff-dbg revert fetch-fonts fonts-extract fonts-check \
         fonts-clean dir set-target mozbootstrap setup-macos-sdk bootstrap diff first-checkpoint \
         checkpoint clean distclean build package-linux package-macos package-windows run edit-cfg \
-        check-arg grep patch unpatch workspace tests stage-fonts unbusy path \
+        check-arg grep patch unpatch workspace tests stage-fonts stage-ubo unbusy path \
         generate-assets-car
 
 help:
@@ -29,6 +29,7 @@ help:
 	@echo "  fonts-check         - Verify the font bundle against its pin"
 	@echo "  fonts-clean         - Remove the downloaded and extracted font bundle"
 	@echo "  stage-fonts         - Stage the font bundle into an unpackaged build"
+	@echo "  stage-ubo           - Bundle the newest uBlock Origin into an unpackaged build"
 	@echo "  package-linux       - Package Camoufox for Linux"
 	@echo "  package-macos       - Package Camoufox for macOS"
 	@echo "  package-windows     - Package Camoufox for Windows"
@@ -247,6 +248,11 @@ tests:
 # checkout has no bundle/fonts/, and fonts-extract is a no-op once it does.
 stage-fonts: fonts-extract
 	bash scripts/stage-fonts.sh $(version) $(release)
+
+# The launchers load uBlock Origin from addons/UBO/ beside the binary, which only
+# scripts/package.py fills; this does the same for an unpackaged build.
+stage-ubo:
+	python3 scripts/fetch-ubo.py stage $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin
 
 unbusy:
 	rm -rf $(cf_source_dir)/obj-x86_64-pc-linux-gnu/dist/bin/camoufox-bin \

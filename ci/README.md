@@ -242,11 +242,11 @@ exactly one browser build.
                 no open regression)                                                                         │
      ┌──────────────────────────────────────────────────────────────────────────────────────────────────────┘
      ▼
-dispatch on main ─► tests ─► plan ─┬─► build-browser ─► publish-browser ─┐
-                  (tests.yml,      │   (only if its      v156.0.1-beta.N  │
-                   this commit)    │    sources changed)                  ├─► publish-pypi ─► publish-npm ─► tag-library
-                                   └─► build-library ─────────────────────┘   0.5.9bN          0.5.9-beta.N    v0.5.9bN
-                                       (only if what it ships changed)        (pip: --pre)     @next
+dispatch on main ─► ubo ─► tests ─► plan ─┬─► build-browser ─► publish-browser ─┐
+                  (AMO's  (tests.yml,     │   (only if its      v156.0.1-beta.N  │
+                   newest) this commit)   │    sources changed)                  ├─► publish-pypi ─► publish-npm ─► tag-library
+                                          └─► build-library ─────────────────────┘   0.5.9bN          0.5.9-beta.N    v0.5.9bN
+                                              (only if what it ships changed)        (pip: --pre)     @next
 
 git tag v0.5.8 <tested main commit> && git push origin v0.5.8
                ─► plan ─► build-library ─► promote-browser ─► publish-pypi ─► publish-npm
@@ -260,6 +260,7 @@ git tag v0.5.8 <tested main commit> && git push origin v0.5.8
 | Out of cycle | Run the Release workflow by hand on `main` (`gh workflow run release.yml --ref main`) to cut a prerelease now. Push a tag to promote by hand. |
 | Only a tested commit is released | A cut calls `tests.yml` on its commit and continues only if it passes. A promotion requires `All tests passed` on its commit. |
 | The browser is built only when its sources changed | `ci.browser_inputs.source_digest()` hashes the browser's sources. Each browser release carries a `manifest.json` with that digest, its commit, and the browser interface it speaks (`CONSTRAINTS.INTERFACE` in `python/src/camoufox/__version__.py`). A matching release is reused; otherwise `plan` takes the next unused `beta.N`. Nothing is committed: `ci.release set-build` writes the number into the build's tree. |
+| uBlock Origin | Every browser package bundles AMO's newest uBO release under `addons/UBO/` ([`browser/scripts/fetch-ubo.py`](../browser/scripts/fetch-ubo.py)), and both launchers load it from there. A cut resolves the release once, in the `ubo` job before `tests`, and hands it to the tests and every build, so the browser ships the uBO it was tested with. Its `manifest.json` (`ubo`) and release notes name it. A reused browser keeps the uBO it was built with. |
 | Builds are attested | `gh attestation verify <file> --repo daijro/camoufox` |
 | Packages are built once | `publish-pypi` and `publish-npm` upload the files `build-library` made: `0.5.8b2` on PyPI, `0.5.8-beta.2` on npm. `pip install camoufox` skips prereleases without `--pre`; npm installs `latest`, not `next`. |
 | The pairing | `ci.release stamp` writes the paired browser release into `python/src/camoufox/browser-pin.json`, which both launchers read. On `main` the file is `{}`, so a development checkout follows its channel. |
@@ -295,6 +296,8 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | `python3 -m ci.release browser-plan` | | Whether a browser would be built or reused |
 | `python3 -m ci.release paired` | | The release built from this tree |
 | `python3 -m ci.release lib-plan --channel prerelease` | | The next library version |
+| `python3 browser/scripts/fetch-ubo.py resolve` | | The uBlock Origin release a cut would bundle |
+| `make -C browser stage-ubo` | | Bundle it into your build tree's `dist/bin`, as packaging does |
 | `python3 -m pytest ci/tests -q` | | The pipeline's own tests |
 
 `<bin>` is a `camoufox-bin`; `make -C browser path` prints the one in your
