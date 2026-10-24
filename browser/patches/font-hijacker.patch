@@ -1,5 +1,5 @@
 diff --git a/gfx/thebes/CoreTextFontList.cpp b/gfx/thebes/CoreTextFontList.cpp
-index b6696c70c4..4727cae871 100644
+index b6696c70c4..57ce1586db 100644
 --- a/gfx/thebes/CoreTextFontList.cpp
 +++ b/gfx/thebes/CoreTextFontList.cpp
 @@ -6,6 +6,7 @@
@@ -24,7 +24,55 @@ index b6696c70c4..4727cae871 100644
      auto timerId = glean::fontlist::bundledfonts_activate.Start();
      ActivateBundledFonts();
      glean::fontlist::bundledfonts_activate.StopAndAccumulate(
-@@ -1545,6 +1551,11 @@ already_AddRefed<gfxFontEntry> CoreTextFontList::LookupLocalFont(
+@@ -1136,6 +1142,26 @@ void CoreTextFontList::AddFamily(CFStringRef aFamily) {
+   AddFamily(nameUtf8, GetVisibilityForFamily(nameUtf8));
+ }
+ 
++// Camoufox: a face whose PostScript name starts with "." is a hidden macOS
++// system font. WebRender loads those by name in the GPU process and gets the
++// host's copy, while the parent shaped the text with the bundled one, so every
++// glyph id points at a different glyph (daijro/camoufox#918). Pages never see
++// hidden faces and the host always has its own. Fonts register per file, so a
++// collection holding one is skipped whole; all of those are macOS fonts.
++static bool HasHiddenSystemFace(CFArrayRef aDescriptors) {
++  const CFIndex count = aDescriptors ? CFArrayGetCount(aDescriptors) : 0;
++  for (CFIndex i = 0; i < count; ++i) {
++    AutoCFTypeRef<CFStringRef> name(
++        (CFStringRef)CTFontDescriptorCopyAttribute(
++            (CTFontDescriptorRef)CFArrayGetValueAtIndex(aDescriptors, i),
++            kCTFontNameAttribute));
++    if (name && CFStringHasPrefix(name, CFSTR("."))) {
++      return true;
++    }
++  }
++  return false;
++}
++
+ /* static */
+ void CoreTextFontList::ActivateFontsFromDir(
+     const nsACString& aDir, nsTHashSet<nsCStringHashKey>* aLoadedFamilies) {
+@@ -1165,14 +1191,14 @@ void CoreTextFontList::ActivateFontsFromDir(
+     if (result != kCFURLEnumeratorSuccess) {
+       continue;
+     }
+-    CFArrayAppendValue(urls, url);
+-
+-    if (!aLoadedFamilies) {
+-      continue;
+-    }
+     AutoCFTypeRef<CFArrayRef> descriptors(
+         CTFontManagerCreateFontDescriptorsFromURL(url));
+-    if (!descriptors || !CFArrayGetCount(descriptors)) {
++    if (HasHiddenSystemFace(descriptors)) {
++      continue;
++    }
++    CFArrayAppendValue(urls, url);
++
++    if (!aLoadedFamilies || !descriptors || !CFArrayGetCount(descriptors)) {
+       continue;
+     }
+     CTFontDescriptorRef desc =
+@@ -1545,6 +1571,11 @@ already_AddRefed<gfxFontEntry> CoreTextFontList::LookupLocalFont(
    // Reset our string length to match the actual C string we got, which will
    // usually be much shorter than the maximal buffer we allocated.
    key.Truncate(strlen(key.get()));
@@ -36,7 +84,7 @@ index b6696c70c4..4727cae871 100644
    ToLowerCase(key);
    // If the family can't be looked up, this font is not available for use.
    FontFamily family = FindFamily(aFontVisibilityProvider, key);
-@@ -1552,9 +1563,11 @@ already_AddRefed<gfxFontEntry> CoreTextFontList::LookupLocalFont(
+@@ -1552,9 +1583,11 @@ already_AddRefed<gfxFontEntry> CoreTextFontList::LookupLocalFont(
      return nullptr;
    }
  
