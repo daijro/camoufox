@@ -77,12 +77,10 @@ fonts actually available. What differs is how they are gated:
   is no directory gate on those hosts; the allowlist in
   `browser/patches/font-hijacker.patch` is what restricts a lookup. Basenames therefore
   must not collide within a package's group set, which `verify-fonts.py` checks.
-- **On a macOS host, a file holding a hidden system face is never activated.**
-  WebRender loads a face whose PostScript name starts with `.` (`.SFNS-Regular`
-  is the UI font) by name in the GPU process, so it gets the host's copy while
-  the parent shaped the text with the bundled one, and the browser's own UI drew
-  the wrong glyphs (#918). Every such file is in `M`, which only a macOS identity
-  reads, and the host has its own.
+- **On a macOS host, a file holding a hidden system face (a PostScript name
+  starting with `.`) is never activated.** WebRender loads those by name and gets
+  the host's copy, so the UI drew wrong glyphs (#918). Check it on a Mac with
+  `browser/scripts/check-macos-hidden-fonts.py`.
 
 This replaced the 455 `<glob>` duplicate-face rejects the Windows fontconfig used
 to carry. They were redundant under grouping and also unsound: 114 bundled
