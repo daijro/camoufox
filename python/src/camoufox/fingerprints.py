@@ -6,10 +6,10 @@ import secrets
 import unicodedata
 from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
-from random import Random, choice, randint, randrange
+from random import Random, choice, randrange
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
-from camoufox._warnings import FallbackWarning
+from camoufox._warnings import WARNINGS_DATA, FallbackWarning, _warn_from_caller
 from camoufox.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
@@ -143,6 +143,17 @@ _ESSENTIAL_FONTS_LINUX: List[str] = _ESSENTIAL['lin']
 # 26200.9457). Every drawn Windows identity is Windows 11 and has them; the rest
 # of the identity (overlay scrollbars in utils.launch_options) must agree.
 WINDOWS_11_MARKER_FONTS = frozenset(LAUNCHER_CONSTANTS['windows11MarkerFonts'])
+
+
+def drop_audio_seed(config: Dict[str, Any]) -> None:
+    """
+    audio:seed is gone: the browser renders audio as stock Firefox does. A
+    caller's seed is dropped with a warning rather than sent to a browser that
+    would noise with it (a released one) or ignore it (this one).
+    """
+    if 'audio:seed' in config:
+        del config['audio:seed']
+        _warn_from_caller(WARNINGS_DATA['audio_seed_removed'], FutureWarning)
 
 
 def identity_salt(pinned: Any = None) -> int:
@@ -1284,9 +1295,6 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None, salt: Optional[i
     if webgl.get('unmaskedRenderer'):
         config['webGl:renderer'] = webgl['unmaskedRenderer']
 
-    # Generate a unique audio seed per launch (1 to 2^32-1, excluding 0 which is a no-op in C++)
-    config['audio:seed'] = randint(1, 4_294_967_295)  # nosec
-
     if preset.get('timezone'):
         config['timezone'] = preset['timezone']
 
@@ -1346,7 +1354,6 @@ def _build_init_script(values: Dict[str, Any]) -> str:
     lines = ['(function(v) {', '  var w = window;']
 
     setters = [
-        ('audioFingerprintSeed', 'setAudioFingerprintSeed', '{val}'),
         ('navigatorPlatform', 'setNavigatorPlatform', '{val}'),
         ('navigatorOscpu', 'setNavigatorOscpu', '{val}'),
         ('navigatorUserAgent', 'setNavigatorUserAgent', '{val}'),
@@ -1450,7 +1457,7 @@ def generate_context_fingerprint(
             normalize_locale() and injected into config. Also sets
             context_options['locale'] for Playwright.
         config_overrides: Dict of CAMOU_CONFIG keys to override after config
-            is built but before init_script is rendered (e.g. {'audio:seed': 7}).
+            is built but before init_script is rendered (e.g. {'timezone': 'UTC'}).
         webgl_config: The (vendor, renderer) a drawn identity claims, instead of
             drawing one.
     """
@@ -1473,9 +1480,6 @@ def generate_context_fingerprint(
 
         # A fresh identity: every seeded draw below gets its own salt.
         _salt = identity_salt()
-
-        # Add seeds (the generator doesn't produce these)
-        config.setdefault('audio:seed', randint(1, 4_294_967_295))  # nosec
 
         os_name = platform_to_os(config.get('navigator.platform', ''))
 
@@ -1552,11 +1556,12 @@ def generate_context_fingerprint(
 
     # Apply caller overrides before rendering init_script
     if config_overrides:
+        config_overrides = dict(config_overrides)
+        drop_audio_seed(config_overrides)
         config.update(config_overrides)
 
     # Build the values dict for the init script (works for both paths)
     init_values: Dict[str, Any] = {
-        'audioFingerprintSeed': config.get('audio:seed'),
         'navigatorPlatform': nav.get('platform'),
         'navigatorOscpu': config.get('navigator.oscpu'),
         'navigatorUserAgent': config.get('navigator.userAgent'),

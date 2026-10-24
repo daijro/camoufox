@@ -103,7 +103,7 @@ not a `Browser`.
 ### One browser, many identities
 
 `NewContext()` gives each context its own identity (navigator, screen, WebGL,
-fonts, voices, audio seed, timezone, WebRTC IP), applied through
+fonts, voices, timezone, WebRTC IP), applied through
 `add_init_script` before any page script runs.
 
 ```python

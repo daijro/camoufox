@@ -11,7 +11,6 @@ import { describe, expect, it, vi } from "vitest";
 import { InvalidIP } from "../src/exceptions.js";
 import {
 	appVersionFromUserAgent,
-	audioSeedFromIdentity,
 	buildInitScript,
 	clampScreenToDisplay,
 	clampWindowDimensions,
@@ -735,12 +734,6 @@ describe("identity salt and seed (test_identity_salt.py)", () => {
 		);
 	});
 
-	it("derives the audio seed without losing precision", () => {
-		// (ident * 2654435761 + 97) & 0xFFFFFFFF, checked with Python ints
-		expect(audioSeedFromIdentity(4294967295)).toBe(1640531632);
-		expect(audioSeedFromIdentity(0)).toBe(97);
-	});
-
 	it("a pinned preset reproduces its draws", () => {
 		const preset = getRandomPreset("windows", "150") as Preset;
 		expect(preset).not.toBeNull();
@@ -917,7 +910,7 @@ describe.skipIf(!MODEL.ok)("fpgen generation (needs the model)", () => {
 		const fromP = generateContextFingerprint({
 			preset,
 			timezone: "Europe/Paris",
-			config_overrides: { "audio:seed": 7 },
+			config_overrides: { "screen.colorDepth": 30 },
 		});
 		expect(fromP.context_options.timezoneId).toBe("Europe/Paris");
 		expect(fromP.config["navigator.platform"]).toBe("MacIntel");
