@@ -103,6 +103,12 @@ const OS_NAMES = { win: "windows", mac: "macos", lin: "linux" } as const;
 // Camoufox preferences to cache previous pages and requests
 export const CACHE_PREFS: Record<string, any> = LAUNCHER_CONSTANTS.cachePrefs;
 
+// Prefs whose Firefox default differs between the Windows and Linux builds and
+// that a page or the user can observe, at the Windows default (see
+// WINDOWS_BEHAVIOUR_PREFS in the Python launcher for each one's reason).
+export const WINDOWS_BEHAVIOUR_PREFS: Record<string, any> =
+	LAUNCHER_CONSTANTS.windowsBehaviourPrefs;
+
 // Draws tried for one that fits the monitor at its own display scale.
 export const MAX_SCALE_FIT_DRAWS = 20;
 
@@ -1775,6 +1781,32 @@ export async function launchOptions({
 		setInto(firefox_user_prefs, "ui.useOverlayScrollbars", windows11 ? 1 : 0);
 	} else {
 		setInto(firefox_user_prefs, "ui.useOverlayScrollbars", 1);
+	}
+
+	// A Windows identity on another host: answers that come from the host
+	// build's platform code are set to what stock Windows Firefox gives.
+	if (targetOs === "win" && utilsDeps.hostOsKey() !== "win") {
+		// Math.sin/cos/tan/pow as the Windows CRT computes them, to the last bit
+		// (windows-crt-math.patch).
+		setInto(firefox_user_prefs, "javascript.options.use_ucrt_math", true);
+
+		// Keyboard: Windows' shortcut tables instead of GTK's text bindings, and
+		// AltGr as keyCode 18 rather than 225 (windows-keyboard.patch).
+		setInto(config, "input:windowsKeyboard", true);
+
+		for (const [pref, value] of Object.entries(WINDOWS_BEHAVIOUR_PREFS)) {
+			setInto(firefox_user_prefs, pref, value);
+		}
+
+		// The scrollbars pinned above are drawn by the host build's theme (GTK's
+		// 12 px where Windows 10 draws 17): draw Windows' own, 4 Windows 10 or
+		// 5 Windows 11 (17 px: only Windows' build reads a system metric).
+		const overlay = firefox_user_prefs["ui.useOverlayScrollbars"];
+		setInto(
+			firefox_user_prefs,
+			"widget.non-native-theme.scrollbar.style",
+			overlay ? 5 : 4,
+		);
 	}
 
 	// Per-character font fallback, LINUX ONLY: with async fallback on, the
