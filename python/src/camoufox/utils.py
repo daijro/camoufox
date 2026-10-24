@@ -70,6 +70,18 @@ CACHE_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['cachePrefs']
 # behind EME, which a Linux build cannot supply.
 WINDOWS_BEHAVIOUR_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['windowsBehaviourPrefs']
 
+# Video codecs a Windows desktop decodes in hardware, so that
+# mediaCapabilities.decodingInfo() reports them powerEfficient (stock 152.0.4 on
+# Windows: H.264, HEVC and VP9 true; AV1 false even on a GPU that decodes it).
+WINDOWS_HW_CODECS: List[str] = LAUNCHER_CONSTANTS['windowsHwCodecs']
+
+# System colours stock Firefox 152.0.4 reports on Windows 10/11 in the default
+# (light) theme, measured 2026-09-24. Only the ones that differ from what a Linux
+# host's GTK theme produces are listed: the rest are Gecko stand-ins, identical on
+# every OS. AccentColor is Firefox's own default (Photon blue 60), not the Windows
+# accent, unless the user opts into system accent colours.
+WINDOWS_UI_COLORS: Dict[str, str] = LAUNCHER_CONSTANTS['windowsUiColors']
+
 
 def _physical_scale(config: Dict[str, Any], prefs: Optional[Dict[str, Any]] = None) -> float:
     """Monitor pixels per CSS pixel of the window at the scale it renders at.
@@ -137,6 +149,22 @@ def _stock_profile_disk_capacity_kb() -> Optional[int]:
         if total > 0:
             return min(total // 2 // 1024, _INT32_MAX)
     return None
+
+
+def _stock_font_prefs(target_os: str, build_os: str) -> Dict[str, Any]:
+    """The font.* prefs that make a build for `build_os` resolve fonts the way
+    stock Firefox does on `target_os` (font-prefs.json, from all.js by
+    browser/scripts/gen-font-prefs.py): the target's values where they differ,
+    and an empty list for name-lists only the build's platform sets."""
+    with open(os.path.join(os.path.dirname(__file__), 'font-prefs.json'), 'rb') as f:
+        table = orjson.loads(f.read())
+    target = table[OS_NAMES[target_os]]
+    build = table[OS_NAMES[build_os]]
+    prefs = {k: v for k, v in target.items() if build.get(k) != v}
+    for k, v in build.items():
+        if k not in target and isinstance(v, str):
+            prefs[k] = ''
+    return prefs
 
 
 def _generate_fontconfig(
@@ -1404,8 +1432,57 @@ def launch_options(
     # forcing the synchronous scan changed the face picked for U+1E9E in Futura
     # (21.733 stock -> 27.267) -- measured on a stock Mac mini, 1/14 families
     # regressed. Windows is untested until a Windows build exists.
-    if target_os == 'lin':
+    # The skip belongs to the Linux platform code, not to the claimed OS, so
+    # a Windows or macOS identity on a Linux host needs it off too: with
+    # Windows' font prefs applied (below) and async on, Korean, Tamil and
+    # Myanmar rendered as .notdef (153.9 px for all three) on a Windows identity.
+    if target_os == 'lin' or _host_os_key() == 'lin':
         firefox_user_prefs.setdefault('gfx.font_rendering.fallback.async', False)
+
+    # Per-language and generic fonts: the build only has its own platform's
+    # font.name-list defaults, so a Windows identity drew Thai through
+    # fontconfig's 'serif' where Windows names Tahoma, and emoji with Noto
+    # Color Emoji where Windows names Segoe UI Emoji. With stock Windows'
+    # values (plus fallback-fonts-claimed-os.patch for the per-script table,
+    # and unhinted advances in the bundled fonts.conf), 156 of 168 per-script
+    # widths matched stock 152.0.4 on Windows, against 75.
+    host_os = _host_os_key()
+    if target_os in ('win', 'mac') and host_os in OS_NAMES and target_os != host_os:
+        for pref, value in _stock_font_prefs(target_os, host_os).items():
+            firefox_user_prefs.setdefault(pref, value)
+
+    # Line boxes: DirectWrite takes ascent/descent from OS/2 usWin* and keeps
+    # the em height fractional, FreeType takes pixel-rounded hhea values -- the
+    # same font file gives different heights (Arial 16px: 17/18 px on Windows,
+    # 19/19 on a Linux host; all 26 fonts measured differed).
+    # font-metrics-windows.patch lays text out with DirectWrite's metrics.
+    if target_os == 'win' and host_os != 'win':
+        config.setdefault('fonts:metrics', 'windows')
+
+    # canPlayType()/isTypeSupported() list the host's decoders: a Linux
+    # container answers "" for H.264 and HEVC, where every Windows and macOS
+    # Firefox answers "probably" (#558). The spoof matches Windows exactly on
+    # 58 MIME/codec strings, and decodingInfo() follows it, power-efficient
+    # for the codecs a Windows GPU decodes.
+    if target_os in ('win', 'mac') and host_os != target_os:
+        config.setdefault('media:spoof_codecs', True)
+        if target_os == 'win':
+            config.setdefault('media:hwCodecs', list(WINDOWS_HW_CODECS))
+
+    # Glyph advances: DirectWrite and CoreText position glyphs at subpixel
+    # offsets, so text widths are fractional (sans-serif 953.0667 px on
+    # Windows); Linux with hinting rounds every advance to a whole pixel (953).
+    # Forcing subpixel positioning reproduces the Windows widths exactly, and
+    # with them the default widths of form controls (<input> 158 -> 165 px,
+    # <select> 92 -> 95 px, as on Windows).
+    if target_os in ('win', 'mac') and host_os != target_os:
+        firefox_user_prefs.setdefault('gfx.text.subpixel-position.force-enabled', True)
+
+    # Highlight, SelectedItem, AccentColor and the -moz-dialog pair come from
+    # the host's theme otherwise (GTK's Adwaita: 53,132,228 / 246,245,244).
+    if target_os == 'win' and host_os != 'win':
+        for pref, value in WINDOWS_UI_COLORS.items():
+            firefox_user_prefs.setdefault(pref, value)
 
     # Storage quota, from the host's own disk. A page reads the group limit
     # through navigator.storage.estimate().quota; see

@@ -71,6 +71,7 @@ export const DATA_FILES: readonly string[] = [
 	"fingerprint-presets-v150.json",
 	"font-bases.json",
 	"font-groups.json",
+	"font-prefs.json",
 	"fonts.json",
 	"fpgen.yml",
 	"launcher-constants.json",
@@ -112,6 +113,8 @@ export interface LauncherConstants {
 	macEloquenceVoices: string[];
 	baselineTaskbarHeight: Record<"win" | "mac" | "lin", number>;
 	baselineMultiTouchPoints: number;
+	windowsHwCodecs: string[];
+	windowsUiColors: Record<string, string>;
 	cachePrefs: Record<string, any>;
 	windowsBehaviourPrefs: Record<string, any>;
 }

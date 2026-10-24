@@ -62,7 +62,12 @@ import {
 	validIPv6,
 } from "./ip.js";
 import { handleLocales } from "./locales.js";
-import { INSTALL_DIR, LAUNCHER_CONSTANTS, OS_NAME } from "./paths.js";
+import {
+	INSTALL_DIR,
+	LAUNCHER_CONSTANTS,
+	loadDataFile,
+	OS_NAME,
+} from "./paths.js";
 import {
 	buildFile,
 	effectiveVersionMin,
@@ -121,6 +126,16 @@ function physicalScale(
 	const pref = Number(prefs["layout.css.devPixelsPerPx"] ?? -1);
 	return pref > 0 ? pref : Number(config["window.devicePixelRatio"] || 1);
 }
+
+// Video codecs a Windows desktop decodes in hardware, so that
+// mediaCapabilities.decodingInfo() reports them powerEfficient.
+export const WINDOWS_HW_CODECS: readonly string[] =
+	LAUNCHER_CONSTANTS.windowsHwCodecs;
+
+// System colours stock Firefox reports on Windows 10/11 in the light theme,
+// where they differ from a Linux host's GTK theme.
+export const WINDOWS_UI_COLORS: Readonly<Record<string, string>> =
+	LAUNCHER_CONSTANTS.windowsUiColors;
 
 /** The host OS in fonts.json / target_os terms ('mac', 'win', 'lin'). */
 function hostOsKey(): TargetOS | null {
@@ -192,6 +207,31 @@ function stockProfileDiskCapacityKb(): number | null {
 		}
 	}
 	return null;
+}
+
+/**
+ * The font.* prefs that make a build for `buildOs` resolve fonts the way stock
+ * Firefox does on `targetOs` (font-prefs.json, from all.js by
+ * browser/scripts/gen-font-prefs.py): the target's values where they differ,
+ * and an empty list for name-lists only the build's platform sets.
+ */
+function stockFontPrefs(
+	targetOs: TargetOS,
+	buildOs: TargetOS,
+): Record<string, any> {
+	const table: Record<string, Record<string, any>> = loadDataFile(
+		"font-prefs.json",
+	);
+	const target = table[OS_NAMES[targetOs]];
+	const build = table[OS_NAMES[buildOs]];
+	const prefs: Record<string, any> = {};
+	for (const [k, v] of Object.entries(target)) {
+		if (build[k] !== v) prefs[k] = v;
+	}
+	for (const [k, v] of Object.entries(build)) {
+		if (!(k in target) && typeof v === "string") prefs[k] = "";
+	}
+	return prefs;
 }
 
 /**
@@ -1740,9 +1780,59 @@ export async function launchOptions({
 
 	// Per-character font fallback, LINUX ONLY: with async fallback on, the
 	// first measurement of a character only one bundled family provides returns
-	// the primary family's .notdef. macOS must NOT get this.
-	if (targetOs === "lin") {
+	// the primary family's .notdef. macOS must NOT get this. The skip belongs to
+	// the Linux platform code, so another OS's identity on a Linux host needs it
+	// too.
+	const hostOs = utilsDeps.hostOsKey();
+	if (targetOs === "lin" || hostOs === "lin") {
 		setInto(firefox_user_prefs, "gfx.font_rendering.fallback.async", false);
+	}
+
+	// Per-language and generic fonts: the build only has its own platform's
+	// font.name-list defaults, so another OS's identity takes that OS's stock
+	// values (with fallback-fonts-claimed-os.patch for the per-script table).
+	if (
+		(targetOs === "win" || targetOs === "mac") &&
+		hostOs !== null &&
+		targetOs !== hostOs
+	) {
+		for (const [pref, value] of Object.entries(
+			stockFontPrefs(targetOs, hostOs),
+		)) {
+			setInto(firefox_user_prefs, pref, value);
+		}
+	}
+
+	// Line boxes: DirectWrite's ascent, descent and em height rather than
+	// FreeType's pixel-rounded ones (font-metrics-windows.patch).
+	if (targetOs === "win" && hostOs !== "win") {
+		setInto(config, "fonts:metrics", "windows");
+	}
+
+	// canPlayType()/isTypeSupported() and decodingInfo() answer for the claimed
+	// OS instead of the host's decoders (#558).
+	if ((targetOs === "win" || targetOs === "mac") && hostOs !== targetOs) {
+		setInto(config, "media:spoof_codecs", true);
+		if (targetOs === "win") {
+			setInto(config, "media:hwCodecs", [...WINDOWS_HW_CODECS]);
+		}
+	}
+
+	// Glyph advances at subpixel offsets, as DirectWrite and CoreText place
+	// them, rather than rounded to whole pixels by the host's hinting.
+	if ((targetOs === "win" || targetOs === "mac") && hostOs !== targetOs) {
+		setInto(
+			firefox_user_prefs,
+			"gfx.text.subpixel-position.force-enabled",
+			true,
+		);
+	}
+
+	// Windows' system colours instead of the host theme's.
+	if (targetOs === "win" && hostOs !== "win") {
+		for (const [pref, value] of Object.entries(WINDOWS_UI_COLORS)) {
+			setInto(firefox_user_prefs, pref, value);
+		}
 	}
 
 	// Storage quota, from the host's own disk (see stockProfileDiskCapacityKb).

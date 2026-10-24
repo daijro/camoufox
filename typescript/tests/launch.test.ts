@@ -193,11 +193,28 @@ describe("test_launch_environment: prefs", () => {
 		it("linux disables it", async () => {
 			expect((await prefsFor(ua(LINUX_UA)))[PREF]).toBe(false);
 		});
+		// On its own host; on a Linux host the Linux platform code needs it off
+		// whatever the identity claims.
+		const onHost = async (
+			host: "mac" | "win" | "lin",
+			opts: Record<string, any>,
+		) => {
+			const before = deps.hostOsKey;
+			deps.hostOsKey = () => host;
+			try {
+				return await prefsFor(opts);
+			} finally {
+				deps.hostOsKey = before;
+			}
+		};
 		it("macOS keeps it", async () => {
-			expect(PREF in (await prefsFor(ua(MAC_UA)))).toBe(false);
+			expect(PREF in (await onHost("mac", ua(MAC_UA)))).toBe(false);
 		});
 		it("windows keeps it", async () => {
-			expect(PREF in (await prefsFor(ua(WIN_UA)))).toBe(false);
+			expect(PREF in (await onHost("win", ua(WIN_UA)))).toBe(false);
+		});
+		it("another OS's identity on a Linux host disables it", async () => {
+			expect((await onHost("lin", ua(WIN_UA)))[PREF]).toBe(false);
 		});
 		it("the caller's pref wins", async () => {
 			const prefs = await prefsFor({
