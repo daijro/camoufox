@@ -71,6 +71,18 @@ CACHE_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['cachePrefs']
 WINDOWS_BEHAVIOUR_PREFS: Dict[str, Any] = LAUNCHER_CONSTANTS['windowsBehaviourPrefs']
 
 
+def _physical_scale(config: Dict[str, Any], prefs: Optional[Dict[str, Any]] = None) -> float:
+    """Monitor pixels per CSS pixel of the window at the scale it renders at.
+
+    Linux reports the monitor in pixels at scale 1. On Windows and macOS the
+    host's own scaling is already in the bounds and is not known here, so 1.
+    """
+    if OS_NAME != 'lin':
+        return 1.0
+    pref = float((prefs or {}).get('layout.css.devPixelsPerPx') or -1)  # -1 is Firefox's "the system's"
+    return pref if pref > 0 else float(config.get('window.devicePixelRatio') or 1)
+
+
 def _host_os_key() -> Optional[str]:
     """The host OS in fonts.json / target_os terms ('mac', 'win', 'lin')."""
     return {'Darwin': 'mac', 'Windows': 'win', 'Linux': 'lin'}.get(platform.system())
@@ -1272,7 +1284,9 @@ def launch_options(
         # headless='virtual' reaches here as headless=False (see async_api) with
         # a 1x1 Xvfb (virtdisplay.py) that is not a real screen.
         if headless is False and not virtual_display and screen_cons:
-            clamp_screen_to_display(config, screen_cons.max_width, screen_cons.max_height)
+            fit = _physical_scale(config)
+            clamp_screen_to_display(config, screen_cons.max_width and int(screen_cons.max_width / fit),
+                                    screen_cons.max_height and int(screen_cons.max_height / fit))
         follow_baseline_protection(config, target_os)
         clamp_window_dimensions(config)
         clamp_window_position(config)
@@ -1661,6 +1675,20 @@ def launch_options(
     if _incoherent and debug:
         for _violation in _incoherent:
             print(f'Incoherent identity ({_violation.rule}): {_violation.detail}')
+
+    # Render at the claimed display scale, so (resolution) and the CSS geometry
+    # agree with devicePixelRatio as on the real machine (#933).
+    if float(config.get('window.devicePixelRatio') or 1) != 1:
+        firefox_user_prefs.setdefault('layout.css.devPixelsPerPx', f"{float(config['window.devicePixelRatio']):g}")
+    if headless is False and not virtual_display and screen_cons:
+        fit = _physical_scale(config, firefox_user_prefs)
+        for axis, cap in (('Width', screen_cons.max_width), ('Height', screen_cons.max_height)):
+            size = config.get(f'window.outer{axis}')
+            if cap and size and size * fit > cap:
+                raise ValueError(
+                    f'window.outer{axis} {size} at display scale {fit:g} needs {size * fit:g} pixels, '
+                    f'but this monitor has {cap}. Pass a smaller screen and window, or run headless.'
+                )
 
     set_webgpu(firefox_user_prefs, target_os, (config.get('webGl:vendor'), config.get('webGl:renderer')), host)
 

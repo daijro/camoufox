@@ -430,6 +430,38 @@ describe("test_launch_environment: prefs", () => {
 		});
 	});
 
+	describe("renders at the claimed devicePixelRatio (test_display_scale.py)", () => {
+		const PREF = "layout.css.devPixelsPerPx";
+		const win = (dpr: number, opts: Record<string, any> = {}) =>
+			prefsFor({
+				...ua(WIN_UA, {
+					"screen.width": 1382,
+					"screen.height": 864,
+					"window.outerWidth": 1280,
+					"window.outerHeight": 900,
+					"window.devicePixelRatio": dpr,
+				}),
+				headless: true,
+				...opts,
+			});
+		it("sets the scale, and a caller's pref wins", async () => {
+			expect((await win(2.5))[PREF]).toBe("2.5");
+			expect(PREF in (await win(1))).toBe(false);
+			expect(
+				(await win(2.5, { firefox_user_prefs: { [PREF]: "1.0" } }))[PREF],
+			).toBe("1.0");
+		});
+		it("refuses a window too large for the monitor", async () => {
+			deps.osName = () => "lin";
+			await expect(
+				win(2.5, {
+					headless: false,
+					screen: new fingerprints.Screen({ maxWidth: 1920, maxHeight: 1080 }),
+				}),
+			).rejects.toThrow("needs 3200 pixels, but this monitor has 1920");
+		});
+	});
+
 	describe("Windows scrollbars follow the version the fonts present", () => {
 		const PREF = "ui.useOverlayScrollbars";
 		const prefs = (fonts: string[], u = WIN_UA) => prefsFor(ua(u, { fonts }));
