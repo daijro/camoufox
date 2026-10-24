@@ -91,7 +91,7 @@ import orjson  # noqa: E402
 
 import camoufox.fingerprints as fingerprints  # noqa: E402
 from camoufox import geolocation, locales, utils  # noqa: E402
-from camoufox.addons import DefaultAddons  # noqa: E402
+from camoufox.addons import DefaultAddons, get_addon_path  # noqa: E402
 from camoufox.fingerprints import Screen  # noqa: E402
 from camoufox.utils import launch_options  # noqa: E402
 
@@ -104,8 +104,8 @@ for name in ('geoip aio by daijro-combined.mmdb', 'maxmind geolite2-ipv4.mmdb', 
     p.write_bytes(b'')
 
 # The default addon, already "downloaded", so nothing is fetched.
-(CACHE / 'addons' / 'UBO').mkdir(parents=True)
-(CACHE / 'addons' / 'UBO' / 'manifest.json').write_text('{}')
+Path(get_addon_path('UBO')).mkdir(parents=True)
+(Path(get_addon_path('UBO')) / 'manifest.json').write_text('{}')
 
 # ------------------------------------------------------------ host probes
 HOST = {

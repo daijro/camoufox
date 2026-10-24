@@ -1,15 +1,19 @@
+import json
 import os
 import shutil
 import tempfile
 from enum import Enum
+from pathlib import Path
 from threading import Lock
 from typing import List, Optional
 
 from .exceptions import InvalidAddonPath
-from .pkgman import INSTALL_DIR, unzip, webdl
+from .pkgman import INSTALL_DIR, unzip, verify_sha256, webdl
 
 # Addons are stored in a shared folder, not per-browser version
 ADDONS_DIR = INSTALL_DIR / "addons"
+
+PINS = json.loads((Path(__file__).parent / 'addons.json').read_text(encoding='utf-8'))
 
 # One lock for the module: `with Lock():` on a fresh multiprocessing.Lock per call
 # guarded nothing, so concurrent launches in one process raced the same
@@ -22,7 +26,7 @@ class DefaultAddons(Enum):
     Default addons to be downloaded
     """
 
-    UBO = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
+    UBO = PINS['UBO']['url']
 
 
 def confirm_paths(paths: List[str]) -> None:
@@ -63,6 +67,7 @@ def download_and_extract(url: str, extract_path: str, name: str) -> None:
     a manifest.json in a directory whose other files are still being written.
     """
     buffer = webdl(url, desc=f"Downloading addon ({name})", bar=False)
+    verify_sha256(buffer, PINS[name]['sha256'], f"addon ({name})")
     parent = os.path.dirname(extract_path)
     tmp_dir = tempfile.mkdtemp(prefix=f".{name}.tmp-", dir=parent)
     try:
@@ -83,9 +88,9 @@ def download_and_extract(url: str, extract_path: str, name: str) -> None:
 
 def get_addon_path(addon_name: str) -> str:
     """
-    Returns a path to the addon in the shared addons folder.
+    Returns a path to the pinned version of the addon in the shared addons folder.
     """
-    return str(ADDONS_DIR / addon_name)
+    return str(ADDONS_DIR / addon_name / PINS[addon_name]['version'])
 
 
 def maybe_download_addons(
