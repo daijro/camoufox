@@ -94,7 +94,6 @@ export interface ProfileConfig {
   timezone: string;
   webglVendor: string;
   webglRenderer: string;
-  audioSeed: number;
   fontList: string[];
   speechVoices?: string[];
 }

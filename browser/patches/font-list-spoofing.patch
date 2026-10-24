@@ -146,10 +146,10 @@ index 0000000000..9b394237c2
 +
 +#endif  // mozilla_dom_FontListManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 6f517641d4..8f8c58ed1c 100644
+index f9f88078bd..1d3de7cd82 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -562,6 +562,13 @@ SOURCES += [
+@@ -556,6 +556,13 @@ SOURCES += [
      "nsPluginArray.cpp",
  ]
  
@@ -164,7 +164,7 @@ index 6f517641d4..8f8c58ed1c 100644
  # CharacterDataBuffer.cpp
  if CONFIG["INTEL_ARCHITECTURE"]:
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index e55c4d64c9..310550e80d 100644
+index 8f00bd4abc..8ef1612ffc 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -21,6 +21,7 @@
@@ -175,8 +175,8 @@ index e55c4d64c9..310550e80d 100644
  #include "Units.h"
  #include "VRManagerChild.h"
  #include "WindowDestroyedEvent.h"
-@@ -7797,6 +7798,14 @@ void nsGlobalWindowInner::SetAudioFingerprintSeed(uint32_t seed,
-   RoverfoxStorageManager::RemoveSetter("setAudioFingerprintSeed");
+@@ -7787,6 +7788,14 @@ void nsGlobalWindowInner::UpdateSharedWorkerTimezoneOverride(
+   }
  }
  
 +void nsGlobalWindowInner::SetFontList(const nsAString& aFontList,
@@ -191,10 +191,10 @@ index e55c4d64c9..310550e80d 100644
      bool aGranted) {
    // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index dd91e816d1..d83ed2d810 100644
+index 3ce6fd2234..53f6621968 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -695,6 +695,9 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -692,6 +692,9 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
  
    void UpdateSharedWorkerTimezoneOverride(const nsAString& aTimezoneOverride);
  
@@ -205,11 +205,11 @@ index dd91e816d1..d83ed2d810 100644
    void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
    void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index 1ec0400749..2a0a98685a 100644
+index a736c1d37a..9eb18c86ec 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -947,6 +947,12 @@ partial interface Window {
-   undefined setAudioFingerprintSeed(unsigned long seed);
+@@ -941,6 +941,12 @@ partial interface Window {
+   readonly attribute VisualViewport visualViewport;
  };
  
 +// Per-context font list

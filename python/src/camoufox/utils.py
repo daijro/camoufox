@@ -22,7 +22,7 @@ from .exceptions import (
     NonFirefoxFingerprint,
     UnknownIPLocation,
 )
-from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_hardware_concurrency, identity_salt, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
+from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_hardware_concurrency, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import Proxy, public_ip, public_ipv6, valid_ipv4, valid_ipv6
@@ -1172,7 +1172,7 @@ def launch_options(
     _user_set_dnt = 'navigator.doNotTrack' in config
     _user_set_gpc = 'navigator.globalPrivacyControl' in config
     _user_set_accept_encoding = 'headers.Accept-Encoding' in config
-    _user_set_audio_seed = 'audio:seed' in config
+    drop_audio_seed(config)
 
     # The salt that makes every seeded draw belong to this identity (see
     # fingerprints.identity_salt): stable when the caller pinned the identity
@@ -1457,16 +1457,6 @@ def launch_options(
     # is dropped unless the caller set it.
     if not _user_set_accept_encoding:
         config.pop('headers.Accept-Encoding', None)
-
-    # The audio noise seed follows the identity: a returning "same device" must
-    # reproduce its audio hash (#442/#765). Never 0 (0 disables the noise). A
-    # preset draws its own random seed; it is replaced here too so a pinned
-    # preset reproduces it, but a seed the caller set is kept. There is no
-    # canvas seed: the browser adds no canvas noise (#528), and no glyph-spacing
-    # noise either (ci/tribal-rules.yml: no-glyph-spacing-noise).
-    if not _user_set_audio_seed:
-        _ident = identity_seed(config, _identity_salt)
-        config['audio:seed'] = ((_ident * 2654435761 + 97) & 0xFFFFFFFF) or 1
 
     # Set geolocation
     if geoip:

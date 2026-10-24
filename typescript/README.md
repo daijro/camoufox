@@ -92,7 +92,7 @@ await context.close();
 ### One browser, many identities
 
 `NewContext()` gives each context its own identity (navigator, screen, WebGL,
-fonts, voices, audio seed, timezone, WebRTC IP), applied through
+fonts, voices, timezone, WebRTC IP), applied through
 `addInitScript` before any page script runs.
 
 ```javascript

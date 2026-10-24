@@ -102,3 +102,8 @@ geoip_frozen: >-
     The newest "{name}" GeoIP database was built {days} days ago, so its source may have
     stopped publishing and locations may be out of date. Please report this at
     https://github.com/daijro/camoufox/issues.
+
+audio_seed_removed: >-
+    `audio:seed` has been removed and is ignored. Audio is now rendered exactly as
+    stock Firefox renders it: stock gives one value per CPU architecture, so noise
+    was a tell, not a disguise (ci/tribal-rules.yml: audio-is-not-noised).

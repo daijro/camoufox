@@ -28,7 +28,7 @@ CONFIG_PATH = CI_DIR / "build-tester.yml"
 # contexts all reporting "MacIntel" is correct, not a collision.
 #
 # Values Camoufox derives per context, where one collision is the leak itself.
-_MUST_VARY = ("uniqueAudio", "uniqueTimezones")
+_MUST_VARY = ("uniqueTimezones",)
 
 # Values that follow the device rather than the context. fonts, screens, voices
 # and WebGL are drawn from a pool of real devices, and three draws from a pool
@@ -37,11 +37,13 @@ _MUST_VARY = ("uniqueAudio", "uniqueTimezones")
 # follows the fonts and GPU the same way. Counted and reported, never fatal.
 _MAY_COLLIDE = ("uniqueCanvas", "uniqueFonts", "uniqueScreens", "uniqueVoices", "uniqueWebGL")
 
-# Properties of the operating system. Every macOS context reports MacIntel and
-# every Linux one reports Linux x86_64, because that is what those systems
-# report. Here a collision is the correct outcome and *variation* would be the
-# bug, so it is asserted in the opposite direction.
-_MUST_MATCH = ("uniquePlatforms",)
+# Properties of the operating system and the host. Every macOS context reports
+# MacIntel and every Linux one reports Linux x86_64, because that is what those
+# systems report; the audio render is the host CPU's, one value per
+# architecture as on stock (ci/tribal-rules.yml: audio-is-not-noised). Here a
+# collision is the correct outcome and *variation* would be the bug, so it is
+# asserted in the opposite direction.
+_MUST_MATCH = ("uniquePlatforms", "uniqueAudio")
 
 
 # A renderer string that names a software rasteriser. The page-side
@@ -279,9 +281,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             status = evidence.FAIL
 
     if slots["not_constant"]:
-        result.note("OS-constant value varied between contexts: " + ", ".join(slots["not_constant"]))
+        result.note("OS- or host-constant value varied between contexts: " + ", ".join(slots["not_constant"]))
         violations.append(
-            "a value that is a property of the operating system differed between contexts of "
+            "a value that is a property of the operating system or the host differed between contexts of "
             "the same OS: " + ", ".join(slots["not_constant"])
         )
         status = evidence.FAIL

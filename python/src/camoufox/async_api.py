@@ -225,7 +225,7 @@ async def AsyncNewContext(
     Creates a new browser context with a unique fingerprint identity.
 
     Each context gets its own identity (navigator, screen, WebGL, fonts, voices),
-    drawn by fpgen unless a preset is given, with its own audio noise seed. All values are applied
+    drawn by fpgen unless a preset is given. All values are applied
     via addInitScript so they self-destruct before page scripts can detect them.
 
     Parameters:

@@ -1078,33 +1078,75 @@ describe.skipIf(!MODEL.ok)(
 			}
 		});
 
-		it("unpinned launches never share noise seeds", async () => {
-			const seeds = new Set<number>();
-			for (let i = 0; i < 40; i++) {
-				seeds.add(
-					(await launchConfig({ os: "linux", headless: true }))["audio:seed"],
-				);
-			}
-			expect(seeds.size).toBe(40);
-		});
-
 		it("a fixed fingerprint reproduces every draw", async () => {
 			const fp = fingerprints.generateFingerprint({ os: "linux" });
 			const drawn = (c: Record<string, any>) =>
-				JSON.stringify(
-					["audio:seed", "fonts", "voices", "webGl:renderer"].map((k) => c[k]),
-				);
+				JSON.stringify(["fonts", "voices", "webGl:renderer"].map((k) => c[k]));
 			const first = await launchConfig({ os: "linux", fingerprint: fp });
 			const second = await launchConfig({ os: "linux", fingerprint: fp });
 			expect(drawn(first)).toBe(drawn(second));
 		});
 
-		it("a fixed preset reproduces the noise seeds and fonts", async () => {
+		it("a fixed preset reproduces its fonts", async () => {
 			const preset = fingerprints.getRandomPreset("windows", "150");
 			const first = await launchConfig({ fingerprint_preset: preset });
 			const second = await launchConfig({ fingerprint_preset: preset });
-			expect(first["audio:seed"]).toBe(second["audio:seed"]);
 			expect(first.fonts).toEqual(second.fonts);
+		});
+
+		it("generates no audio seed", async () => {
+			// Audio renders as stock: one value per CPU architecture
+			// (ci/tribal-rules.yml: audio-is-not-noised).
+			expect("audio:seed" in (await launchConfig({}))).toBe(false);
+			const preset = fingerprints.getRandomPreset("windows", "150");
+			for (const p of [undefined, preset]) {
+				const context = fingerprints.generateContextFingerprint({
+					os: "windows",
+					preset: p,
+				});
+				expect("audio:seed" in context.config).toBe(false);
+				expect(context.init_script).not.toContain("setAudioFingerprintSeed");
+			}
+		});
+
+		it("warns once and drops an audio seed", async () => {
+			const removed = (ws: { category: string; message: string }[]) =>
+				ws.filter(
+					(w) =>
+						w.category === "FutureWarning" && w.message.includes("audio:seed"),
+				);
+			const launched = await warnings.recordWarnings(() =>
+				utils.launchOptions({
+					env: { HOME },
+					os: "linux",
+					i_know_what_im_doing: true,
+					executable_path: BUNDLE_EXE,
+					config: { "audio:seed": 9 },
+				}),
+			);
+			expect(launched.error).toBeUndefined();
+			const config = configOf(launched.result as Record<string, any>);
+			expect("audio:seed" in config).toBe(false);
+			expect(config.fonts.length).toBeGreaterThan(0);
+			expect(removed(launched.warnings)).toHaveLength(1);
+			expect(removed(launched.warnings)[0].message).toContain(
+				"rendered exactly as stock Firefox",
+			);
+
+			const overrides = { "audio:seed": 7, timezone: "Pacific/Chatham" };
+			const context = await warnings.recordWarnings(() =>
+				fingerprints.generateContextFingerprint({
+					os: "linux",
+					config_overrides: overrides,
+				}),
+			);
+			expect(removed(context.warnings)).toHaveLength(1);
+			expect("audio:seed" in (context.result?.config ?? {})).toBe(false);
+			expect(context.result?.config.timezone).toBe("Pacific/Chatham");
+			expect(overrides).toEqual({
+				"audio:seed": 7,
+				timezone: "Pacific/Chatham",
+			});
 		});
 
 		it.each([
@@ -1129,10 +1171,10 @@ describe.skipIf(!MODEL.ok)(
 		it("config_overrides reach the config and the init script", () => {
 			const context = fingerprints.generateContextFingerprint({
 				os: "linux",
-				config_overrides: { "audio:seed": 7 },
+				config_overrides: { timezone: "Pacific/Chatham" },
 			});
-			expect(context.config["audio:seed"]).toBe(7);
-			expect(context.init_script).toContain("setAudioFingerprintSeed(7)");
+			expect(context.config.timezone).toBe("Pacific/Chatham");
+			expect(context.init_script).toContain("Pacific/Chatham");
 		});
 
 		it("a failed font draw warns and uses the OS's font list", async () => {
@@ -1257,14 +1299,6 @@ describe.skipIf(!MODEL.ok)(
 				"built for desktops",
 			);
 			expect(warned).toBe(true);
-		});
-
-		it("keeps the caller's seeds", async () => {
-			const config = await launchConfig({
-				os: "linux",
-				config: { "audio:seed": 9 },
-			});
-			expect(config["audio:seed"]).toBe(9);
 		});
 
 		it("a Windows fr-FR identity has French voices", async () => {
