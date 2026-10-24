@@ -11,7 +11,6 @@ from typing import Any, List, NoReturn, Optional, Tuple
 import requests
 import rich_click as click
 
-from .addons import DefaultAddons, maybe_download_addons
 from .fpgen_model import ensure_fpgen_model
 from .geolocation import (
     ALLOW_GEOIP,
@@ -315,7 +314,6 @@ def fetch(version):
         _fail(f"Error: {msg}")
     if ALLOW_GEOIP:
         download_mmdb()
-    maybe_download_addons(list(DefaultAddons))
     ensure_fpgen_model()
 
 

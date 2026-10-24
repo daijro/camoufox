@@ -1,8 +1,0 @@
-{
- "UBO": {
-  "version": "1.75.0",
-  "url": "https://addons.mozilla.org/firefox/downloads/file/5034826/ublock_origin-1.75.0.xpi",
-  "sha256": "5b74415860456370644bd80f16125e865b0e6c356bb5dfcfb84069967eaa5287"
- },
- "note": "The default addons, pinned so a package release always installs the same build. To bump uBlock Origin, take file.url and file.hash from https://addons.mozilla.org/api/v5/addons/addon/ublock-origin/versions/<version>/ (the hash is prefixed sha256:). Each version is cached in its own directory, addons/<name>/<version>/."
-}

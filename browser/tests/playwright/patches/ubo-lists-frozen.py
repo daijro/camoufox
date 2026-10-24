@@ -1,6 +1,6 @@
 """
-Verify uBlock Origin blocks with the filter lists packaged in its pinned
-release, and never downloads them at launch (the `3rdparty` policy in
+Verify uBlock Origin blocks with the filter lists packaged in the release the
+build bundles, and never downloads them at launch (the `3rdparty` policy in
 browser/settings/distribution/policies.json sets its autoUpdate to false).
 
 uBO's own default updates every list from its CDNs shortly after launch: two
@@ -92,12 +92,15 @@ def recording_proxy(hosts: list) -> socket.socket:
 
 
 def main() -> int:
-    from camoufox.addons import DefaultAddons, get_addon_path, maybe_download_addons
+    from camoufox.addons import DefaultAddons, get_addon_path
     from camoufox.sync_api import Camoufox
 
     binary = resolve_binary()
-    maybe_download_addons([DefaultAddons.UBO])
-    ubo_hosts = list_hosts(get_addon_path(DefaultAddons.UBO.name))
+    ubo = get_addon_path(DefaultAddons.UBO.name, binary)
+    if not Path(ubo, "manifest.json").is_file():
+        print(f"FAIL: the build bundles no uBlock Origin at {ubo} -- check is vacuous")
+        return 1
+    ubo_hosts = list_hosts(ubo)
 
     site = tempfile.mkdtemp()
     Path(site, "ad.html").write_text(AD_PAGE)
