@@ -42,6 +42,13 @@
         "updates_disabled": true
       }
     },
+    "3rdparty": {
+      "Extensions": {
+        "uBlock0@raymondhill.net": {
+          "userSettings": [["autoUpdate", "false"]]
+        }
+      }
+    },
     "SearchEngines": {
       "PreventInstalls": true,
       "Remove": [
