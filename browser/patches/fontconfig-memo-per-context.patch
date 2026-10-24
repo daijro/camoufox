@@ -1,0 +1,163 @@
+diff --git a/dom/base/FontListManager.cpp b/dom/base/FontListManager.cpp
+--- a/dom/base/FontListManager.cpp
++++ b/dom/base/FontListManager.cpp
+@@ -1,6 +1,7 @@
+ /* Camoufox: Per-context font list manager */
+ #include "FontListManager.h"
+ 
++#include "mozilla/Atomics.h"
+ #include "mozilla/Mutex.h"
+ 
+ namespace mozilla {
+@@ -12,6 +13,7 @@ namespace dom {
+ static Mutex sFontListMutex("FontListManager");
+ static nsTHashMap<nsUint32HashKey, nsTHashSet<nsCString>> sFontLists;
+ static thread_local uint32_t sCurrentContextId = 0;
++static Atomic<uint32_t> sListGeneration(0);
+ 
+ static nsString FontListKey(uint32_t aId) {
+   nsAutoString key;
+@@ -44,8 +46,11 @@ static nsTHashSet<nsCString> ParseFontList(const nsAString& aFontList) {
+ 
+ void FontListManager::SetFontList(uint32_t aId, const nsAString& aFontList) {
+   RoverfoxStorageManager::PutString(FontListKey(aId), aFontList);
+-  MutexAutoLock lock(sFontListMutex);
+-  sFontLists.InsertOrUpdate(aId, ParseFontList(aFontList));
++  {
++    MutexAutoLock lock(sFontListMutex);
++    sFontLists.InsertOrUpdate(aId, ParseFontList(aFontList));
++  }
++  ++sListGeneration;
+ }
+ 
+ // Parses the context's list into this process's copy the first time it is
+@@ -57,8 +62,11 @@ static bool EnsureFontList(uint32_t aId) {
+   }
+   nsAutoString list;
+   if (!RoverfoxStorageManager::GetString(FontListKey(aId), list)) return false;
+-  MutexAutoLock lock(sFontListMutex);
+-  sFontLists.InsertOrUpdate(aId, ParseFontList(list));
++  {
++    MutexAutoLock lock(sFontListMutex);
++    sFontLists.InsertOrUpdate(aId, ParseFontList(list));
++  }
++  ++sListGeneration;
+   return true;
+ }
+ 
+@@ -79,6 +87,8 @@ uint32_t FontListManager::GetCurrentContext() {
+   return sCurrentContextId;
+ }
+ 
++uint32_t FontListManager::ListGeneration() { return sListGeneration; }
++
+ void FontListManager::DisableFunction(uint32_t aId) {
+   RoverfoxStorageManager::MarkSetterUsed("fontlist", aId);
+ }
+diff --git a/dom/base/FontListManager.h b/dom/base/FontListManager.h
+--- a/dom/base/FontListManager.h
++++ b/dom/base/FontListManager.h
+@@ -19,6 +19,10 @@ class FontListManager {
+                              const nsACString& aFontName);
+   static void SetCurrentContext(uint32_t aUserContextId);
+   static uint32_t GetCurrentContext();
++  // Bumped whenever a context's list is installed in this process, by its
++  // setter or by first use here. A cache of answers the gate filtered is
++  // stale once this moves (see gfxFcPlatformFontList).
++  static uint32_t ListGeneration();
+   static void DisableFunction(uint32_t aId);
+   static bool IsFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
+ };
+diff --git a/gfx/thebes/gfxFcPlatformFontList.cpp b/gfx/thebes/gfxFcPlatformFontList.cpp
+--- a/gfx/thebes/gfxFcPlatformFontList.cpp
++++ b/gfx/thebes/gfxFcPlatformFontList.cpp
+@@ -17,6 +17,7 @@
+ #include "mozilla/StaticPrefs_mathml.h"
+ #include "mozilla/dom/ContentChild.h"
+ #include "mozilla/dom/ContentParent.h"
++#include "mozilla/dom/FontListManager.h"
+ #include "mozilla/glean/GfxMetrics.h"
+ #include "nsCharSeparatedTokenizer.h"
+ #include "nsDirectoryServiceDefs.h"
+@@ -2439,6 +2440,8 @@ bool gfxFcPlatformFontList::FindAndAddFamiliesLocked(
+   nsAutoCString familyName(aFamily);
+   ToLowerCase(familyName);
+ 
++  DropFontNameCachesIfListsChangedLocked();
++
+   if (!(aFlags & FindFamiliesFlags::eQuotedFamilyName)) {
+     // deprecated generic names are explicitly converted to standard generics
+     bool isDeprecatedGeneric = false;
+@@ -2519,6 +2522,13 @@ bool gfxFcPlatformFontList::FindAndAddFamiliesLocked(
+                  : FontVisibility::User;
+   cacheKey.Append(':');
+   cacheKey.AppendInt(int(vis));
++  // Camoufox (lang315/camoufox#83): the per-context font gate lives in the
++  // base FindAndAddFamiliesLocked, which this memo short-circuits. Keyed by
++  // name alone, the first context to resolve a family answered for every
++  // context sharing the process: measured, a context whose list refuses
++  // Georgia rendered it once another context in its process had.
++  cacheKey.Append(':');
++  cacheKey.AppendInt(mozilla::dom::FontListManager::GetCurrentContext());
+   if (const auto& cached = mFcSubstituteCache.Lookup(cacheKey)) {
+     if (cached->IsEmpty()) {
+       return false;
+@@ -2758,6 +2768,20 @@ void gfxFcPlatformFontList::ClearLangGroupPrefFontsLocked() {
+   mAlwaysUseFontconfigGenerics = PrefFontListsUseOnlyGenerics();
+ }
+ 
++// Called only where no entry handle into either memo is held: at the top of
++// FindAndAddFamiliesLocked and of FindGenericFamilies, never from inside the
++// WithEntryHandle callback below (which calls the base class's lookup, not
++// these).
++void gfxFcPlatformFontList::DropFontNameCachesIfListsChangedLocked() {
++  uint32_t generation = mozilla::dom::FontListManager::ListGeneration();
++  if (generation == mFontListGeneration) {
++    return;
++  }
++  mFontListGeneration = generation;
++  mFcSubstituteCache.Clear();
++  ClearGenericMappingsLocked();
++}
++
+ gfxPlatformFontList::PrefFontList* gfxFcPlatformFontList::FindGenericFamilies(
+     FontVisibilityProvider* aFontVisibilityProvider, const nsCString& aGeneric,
+     nsAtom* aLanguage) {
+@@ -2789,6 +2813,11 @@ gfxPlatformFontList::PrefFontList* gfxFcPlatformFontList::FindGenericFamilies(
+     }
+   }
+ 
++  // Camoufox: same short-circuit as mFcSubstituteCache, for generics.
++  DropFontNameCachesIfListsChangedLocked();
++  cacheKey.Append(':');
++  cacheKey.AppendInt(mozilla::dom::FontListManager::GetCurrentContext());
++
+   // try to get the family from the cache
+   return mGenericMappings.WithEntryHandle(
+       cacheKey, [&](auto&& entry) -> PrefFontList* {
+diff --git a/gfx/thebes/gfxFcPlatformFontList.h b/gfx/thebes/gfxFcPlatformFontList.h
+--- a/gfx/thebes/gfxFcPlatformFontList.h
++++ b/gfx/thebes/gfxFcPlatformFontList.h
+@@ -313,6 +313,12 @@ class gfxFcPlatformFontList final : public gfxPlatformFontList {
+     mGenericMappings.Clear();
+   }
+ 
++  // Camoufox: both family-name memos are keyed by context (see
++  // FindAndAddFamiliesLocked), but an entry a context took before its font
++  // list reached this process was taken with the gate open. Drops both memos
++  // once any list has been installed since they were filled.
++  void DropFontNameCachesIfListsChangedLocked() MOZ_REQUIRES(mLock);
++
+   // map lang group ==> lang string
+   void GetSampleLangForGroup(nsAtom* aLanguage, nsACString& aLangStr);
+ 
+@@ -386,6 +392,9 @@ class gfxFcPlatformFontList final : public gfxPlatformFontList {
+   // in this case.
+   nsTHashMap<nsCStringHashKey, nsTArray<FamilyAndGeneric>> mFcSubstituteCache;
+ 
++  // FontListManager::ListGeneration() when the memos above were last valid.
++  uint32_t mFontListGeneration MOZ_GUARDED_BY(mLock) = 0;
++
+   nsCOMPtr<nsITimer> mCheckFontUpdatesTimer;
+   RefPtr<FcConfig> mLastConfig;
+ 
