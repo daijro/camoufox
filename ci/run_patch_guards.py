@@ -43,6 +43,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "context-app-version",
         "context-lists-across-processes",
         "context-os-system-font",
+        "display-scale-resolution",
         "fingerprint-setter-seal",
         "ipv4-only-network",
         "locale-explicit-names",

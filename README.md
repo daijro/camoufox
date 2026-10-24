@@ -528,7 +528,6 @@ claims the host's OS. Details are in
 | Remote Playwright server for other languages | `launch_server()`, `camoufox server` |
 | Install, pin and switch browser builds | `camoufox fetch`, `set`, `list`, `remove` |
 | Core count that a page can measure | `pin_cpu_cores=True` |
-| `devicePixelRatio` rendered for real, at the identity's display scale | `display_scale=True` |
 | Block images, WebRTC or WebGL | `block_images`, `block_webrtc`, `block_webgl` |
 | The host's GPU on the host's OS; random canvas readback, as in LibreWolf, on another OS | default; `canvas_noise=True` or `False` to choose |
 

@@ -251,7 +251,6 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `block_webgl` | `boolean` | `false` | Disable WebGL. Warns: many WAFs check for it. |
 | `webgl_config` | `[vendor, renderer]` | drawn | Use one GPU fpgen has recorded for Firefox on `os`; any other pair throws. Needs `os`. |
 | `canvas_noise` | `boolean` | on for another OS or GPU | Random canvas and WebGL readback, as in LibreWolf. Warns. See [The canvas on another OS](#the-canvas-on-another-os). |
-| `display_scale` | `boolean` | `false` | Render at the identity's display scale (a 1536x864 screen is a 1920x1080 panel at 125%), so `devicePixelRatio`, `(resolution)` and CSS geometry agree. Headful, the identity must also fit the monitor at that scale; one that does not (or a preset) renders at 1 with a `LeakWarning`. |
 | `disable_coop` | `boolean` | `false` | Turn off Cross-Origin-Opener-Policy so elements in cross-origin iframes (such as the Turnstile checkbox) can be clicked. Warns. |
 | `main_world_eval` | `boolean` | `false` | Allow `page.evaluate("mw:...")` and `mw:` init scripts to run in the page's own world. |
 | `allow_addon_new_tab` | `boolean` | `false` | Let addons open tabs. |

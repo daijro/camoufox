@@ -430,69 +430,35 @@ describe("test_launch_environment: prefs", () => {
 		});
 	});
 
-	describe("display_scale says when it renders at 1 (test_display_scale.py)", () => {
+	describe("renders at the claimed devicePixelRatio (test_display_scale.py)", () => {
 		const PREF = "layout.css.devPixelsPerPx";
-		const draw = (width: number, height: number, dpr: number) => ({
-			screen: { width, height },
-			window: { devicePixelRatio: dpr },
-		});
-		const monitor = () =>
-			new fingerprints.Screen({ maxWidth: 1920, maxHeight: 1080 });
-		const scaled = async (opts: Record<string, any>) => {
-			const {
-				result,
-				error,
-				warnings: caught,
-			} = await warnings.recordWarnings(() =>
-				utils.launchOptions({
-					env: { HOME },
-					display_scale: true,
-					i_know_what_im_doing: true,
-					...ua(MAC_UA),
-					...opts,
+		const win = (dpr: number, opts: Record<string, any> = {}) =>
+			prefsFor({
+				...ua(WIN_UA, {
+					"screen.width": 1382,
+					"screen.height": 864,
+					"window.outerWidth": 1280,
+					"window.outerHeight": 900,
+					"window.devicePixelRatio": dpr,
 				}),
-			);
-			if (error) throw error;
-			return {
-				prefs: (result as Record<string, any>).firefoxUserPrefs,
-				warned: (text: string) =>
-					caught.some(
-						(w) => w.category === "LeakWarning" && w.message.includes(text),
-					),
-			};
-		};
-		it("warns when a supplied identity does not fit", async () => {
-			const { prefs, warned } = await scaled({
-				fingerprint: draw(1512, 982, 2),
-				headless: false,
-				screen: monitor(),
+				headless: true,
+				...opts,
 			});
-			expect(PREF in prefs).toBe(false);
-			expect(warned("does not fit this monitor")).toBe(true);
+		it("sets the scale, and a caller's pref wins", async () => {
+			expect((await win(2.5))[PREF]).toBe("2.5");
+			expect(PREF in (await win(1))).toBe(false);
+			expect(
+				(await win(2.5, { firefox_user_prefs: { [PREF]: "1.0" } }))[PREF],
+			).toBe("1.0");
 		});
-		it("warns after the last fresh draw that does not fit", async () => {
-			let calls = 0;
-			deps.generateFingerprint = async () => {
-				calls += 1;
-				return draw(1512, 982, 2);
-			};
-			const { prefs, warned } = await scaled({
-				headless: false,
-				screen: monitor(),
-			});
-			expect(calls).toBe(utils.MAX_SCALE_FIT_DRAWS);
-			expect(PREF in prefs).toBe(false);
-			expect(warned("does not fit this monitor")).toBe(true);
-		});
-		it("does not warn for a scale that fits", async () => {
-			const { prefs, warned } = await scaled({
-				...ua(WIN_UA),
-				fingerprint: draw(1536, 864, 1.25),
-				headless: false,
-				screen: monitor(),
-			});
-			expect(prefs[PREF]).toBe("1.25");
-			expect(warned("display_scale")).toBe(false);
+		it("refuses a window too large for the monitor", async () => {
+			deps.osName = () => "lin";
+			await expect(
+				win(2.5, {
+					headless: false,
+					screen: new fingerprints.Screen({ maxWidth: 1920, maxHeight: 1080 }),
+				}),
+			).rejects.toThrow("needs 3200 pixels, but this monitor has 1920");
 		});
 	});
 
