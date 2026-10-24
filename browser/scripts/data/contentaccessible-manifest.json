@@ -1,5 +1,5 @@
 {
- "firefox_version": "158.0",
+ "firefox_version": "158.0.1",
  "packages": {
   "browser/omni.ja|content|activity-stream": {
    "files": {
@@ -692,8 +692,8 @@
     "chrome/browser/content/browser/passwordmgr/login-doorhanger-username-field.mjs": "e8d8c9045eea877cbc79cea127ce89bc985b214406dca47c15863571881a560b",
     "chrome/browser/content/browser/places/bookmarkProperties.js": "d3abfc5c5b8c5bee50b62084212f1fb36316e2b88a4a4ec4b48aa598936abfd4",
     "chrome/browser/content/browser/places/bookmarkProperties.xhtml": "6a6435f7d60b1d431d0443501642e4d8d2d19d9eedec0632ed6b76a0ea15880d",
-    "chrome/browser/content/browser/places/bookmarksSidebar.js": "188ea580346d73c13742ba83a2d1efe0c6cab0d00811d7a9b40a49ce4418d33d",
-    "chrome/browser/content/browser/places/bookmarksSidebar.xhtml": "650a9e13676271e75ac00de43d1894a84c0398bba51656b458ca34b70fd0fda0",
+    "chrome/browser/content/browser/places/bookmarksSidebar.js": "cb46f15eff2b54916cd44da3a2eb529aa64c49328e0f9ac30898242f87475078",
+    "chrome/browser/content/browser/places/bookmarksSidebar.xhtml": "546d266325e9bde27202815875f354d3e39bcd944ba55648f8ea861ad57de900",
     "chrome/browser/content/browser/places/browserPlacesViews.js": "cb1b847efa2568393c76b8bc22b6b73cd7fb59118dd23a973d685588303620f4",
     "chrome/browser/content/browser/places/clearDataForSite.css": "5629e82977e8a942a1aef62cb60063751c470f4159d7de9b13dc6a529a8801d2",
     "chrome/browser/content/browser/places/clearDataForSite.js": "3fdaa159e30490b22a3ffb8e882e7ccb3c2798dc6a14536e961b9078f15a4e53",
@@ -2312,7 +2312,7 @@
     "chrome/toolkit/content/global/bindings/timekeeper.js": "fdccc112a17084dd6881027d5bd4a899a4403892b79c422d04c126385264fd29",
     "chrome/toolkit/content/global/bindings/timepicker.js": "8b63f5cbdd80b4739fab5a7bd1675c520f98a4a1c316c3c7496bf155ae5f941d",
     "chrome/toolkit/content/global/buildconfig.css": "e9cd781bbc7ee82f28a71520352a4b2c7ade454a87c51ca6c882ba69720a2330",
-    "chrome/toolkit/content/global/buildconfig.html": "fda2315f9ccf97cccff6620b092b02da11d751abcbe09447dd8e474bd0c09bb1",
+    "chrome/toolkit/content/global/buildconfig.html": "83892284d803e45f0166bd17d3aff0d3a2f981c1f2536b2e63cf975253549864",
     "chrome/toolkit/content/global/certviewer/certDecoder.mjs": "03ba917df792554ed07ff559b30a846ca7e3315f838d0f2931cb527a86ad4fa5",
     "chrome/toolkit/content/global/certviewer/certviewer.css": "66defee9ba236bfb58d0e0283ec9abfe3509648bd6704a831edf7b69537213f1",
     "chrome/toolkit/content/global/certviewer/certviewer.html": "4b1478b882e97771965bfe39403455349f1a7a02a1ca7e716a6f711e1432cdaa",
