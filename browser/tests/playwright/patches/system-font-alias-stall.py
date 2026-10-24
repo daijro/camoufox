@@ -16,11 +16,15 @@ Firefox freezes on an emoji page, and a script can time it.
 
 The page lays out a line of emoji and a sentinel in a script that only a claimed
 Noto family covers, then runs a 50 ms timer and keeps its longest interval: the
-time the content process gave the page nothing. The sentinel's width changes
-when fallback reaches its font, which is the end of that reflow, so the page
-reports then. The verdict is a ratio against a control launch that claims the
-system face exactly once, so it reads how many times a base pays for that face
-and not how fast the runner is.
+time the content process gave the page nothing. The sentinel is resolved once
+it stops measuring as .notdef, against a reference span of unassigned
+codepoints with as many hex digits, so the same missing-glyph boxes. Fallback
+can resolve it in the first layout instead of a later reflow -- a claimed OS's
+own per-script fallback table names the sentinel's font directly -- so the
+first forced layout is timed as one interval too: a stall lands there when
+fallback runs synchronously. The verdict is a ratio against a control launch
+that claims the system face exactly once, so it reads how many times a base
+pays for that face and not how fast the runner is.
 
 What PASS means: no macOS base blocks the page MAX_RATIO times as long as a
 list that claims the system face once does.
@@ -41,7 +45,9 @@ CAMOUFOX = Path(__file__).resolve().parents[4] / "python" / "src" / "camoufox"
 ORIGIN = "https://camoufox.test/"
 # The ratio counts the names fallback pays for the system face under. Measured
 # 0.9-1.6 for every healthy base and 27-30 for sonoma before #832, idle or
-# with every core busy, so the threshold sits about 4x from each.
+# with every core busy, so the threshold sits about 4x from each. Where the
+# claimed OS's fallback table resolves in the first layout, the cost grows with
+# the claimed list instead: 2.7-3.5 healthy, 19 for the pre-#832 sonoma list.
 MAX_RATIO = 6.0
 # Only bounds the wait. A base that stalls past it fails like one that stalls less.
 DEADLINE_MS = 120_000
@@ -51,20 +57,22 @@ PAGE = """<!doctype html><meta charset="utf-8"><body>
 <p>&#x1F39B; &#x1F3AB; &#x1F39F; &#x1F5BC; &#x270F;&#xFE0F; &#x1F500; &#x1F511; &#x2194;&#xFE0F;
 &#x1F50D; &#x2B06;&#xFE0F; &#x1F440; &#x274C; &#x2620;&#xFE0F; &#x1F6E0; &#x1F4CB;</p>
 <span id="sentinel">&#x1E900;&#x1E901;</span>
+<span id="notdef">&#x1E8FE;&#x1E8FF;</span>
 <span id="system" style="font-family: 'System Font', monospace">mmmmmmmmmmlli10OQ@#</span>
 <span id="mono" style="font-family: monospace">mmmmmmmmmmlli10OQ@#</span>
 <script>
 const width = id => document.getElementById(id).getBoundingClientRect().width;
-const unresolved = width('sentinel');
 const start = performance.now();
-let last = start, longest = 0;
+const notdef = width('notdef');
+let last = performance.now(), longest = last - start;
 (function tick() {
   const now = performance.now();
   longest = Math.max(longest, now - last);
   last = now;
-  if (width('sentinel') === unresolved) return setTimeout(tick, 50);
+  if (width('sentinel') === notdef) return setTimeout(tick, 50);
   document.documentElement.dataset.result = JSON.stringify({
     longest, resolvedAt: now - start, systemFont: width('system') !== width('mono'),
+    sentinel: width('sentinel'), notdef,
   });
 })();
 </script>"""
