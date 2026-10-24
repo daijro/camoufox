@@ -135,3 +135,27 @@ it.each([
 it("needs an update when the database is missing", async () => {
 	expect(await g.needsUpdate()).toBe(true);
 });
+
+it("opens a database with the installed maxmind", async () => {
+	// Every other test fakes openDatabase, so this is the one that constructs
+	// maxmind's Reader as imported. The database is empty: the data section
+	// separator, then the metadata marker and the three fields Reader needs.
+	const str = (s: string) => Buffer.from([0x40 | s.length, ...Buffer.from(s)]);
+	const mmdb = path.join(tmp, "empty.mmdb");
+	fs.writeFileSync(
+		mmdb,
+		Buffer.concat([
+			Buffer.alloc(16),
+			Buffer.from("abcdef4d61784d696e642e636f6d", "hex"),
+			Buffer.from([0xe3]),
+			str("record_size"),
+			Buffer.from([0xa1, 24]),
+			str("ip_version"),
+			Buffer.from([0xa1, 4]),
+			str("node_count"),
+			Buffer.from([0xc0]),
+		]),
+	);
+	const reader = await g.geoipDeps.openDatabase(mmdb);
+	expect(reader.get("1.2.3.4")).toBeNull();
+});

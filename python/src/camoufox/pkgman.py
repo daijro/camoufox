@@ -642,11 +642,7 @@ class CamoufoxFetcher:
         """
         Fetch releases from a single GitHub repo
         """
-        headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
-        api_url = f"https://api.github.com/repos/{github_repo}/releases"
-        resp = requests.get(api_url, timeout=20, headers=headers)
-        resp.raise_for_status()
-        return resp.json()
+        return github_api(f"repos/{github_repo}/releases")
 
     def get_asset(self) -> Tuple[Version, str]:
         """
@@ -732,6 +728,16 @@ class CamoufoxFetcher:
         return self._version_obj.full_string
 
 
+def github_api(path: str) -> Any:
+    """
+    GET a GitHub REST API path, authenticated with GITHUB_TOKEN when it is set
+    """
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
+    resp = requests.get(f"https://api.github.com/{path}", timeout=20, headers=headers)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def list_available_versions(
     repo_config: Optional[RepoConfig] = None,
     include_prerelease: bool = True,
@@ -752,15 +758,11 @@ def list_available_versions(
     if arch not in OS_ARCH_MATRIX.get(os_name, []):
         raise UnsupportedArchitecture(f"Architecture {arch} is not supported for {os_name}")
 
-    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
     releases = []
     last_error = None
     for repo in config.repos:
         try:
-            api_url = f"https://api.github.com/repos/{repo}/releases"
-            resp = requests.get(api_url, timeout=20, headers=headers)
-            resp.raise_for_status()
-            releases = resp.json()
+            releases = github_api(f"repos/{repo}/releases")
             break
         except Exception as e:
             last_error = e
@@ -768,48 +770,78 @@ def list_available_versions(
     if not releases and last_error:
         raise last_error
 
+    versions = [
+        v
+        for release in releases
+        for v in release_versions(release, config, pattern, include_prerelease, include_incompatible)
+    ]
+    versions.sort(key=lambda x: (x.version, x.asset_created_at or ""), reverse=True)
+    return versions
+
+
+def tagged_versions(repo_config: RepoConfig, tag: str) -> List[AvailableVersion]:
+    """
+    The supported builds the release tagged `tag` holds for this platform, read
+    with one API call per repo of the source. Empty when no repo has the tag.
+    """
+    for repo in repo_config.repos:
+        try:
+            release = github_api(f"repos/{repo}/releases/tags/{tag}")
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                continue
+            raise
+        return release_versions(release, repo_config, repo_config.build_pattern())
+    return []
+
+
+def release_versions(
+    release: Dict,
+    config: RepoConfig,
+    pattern: re.Pattern,
+    include_prerelease: bool = True,
+    include_incompatible: bool = False,
+) -> List[AvailableVersion]:
+    """
+    The release's assets that match `pattern` and the source's version range
+    """
+    is_prerelease = release.get('prerelease', False)
+    if is_prerelease and not include_prerelease:
+        return []
+
     versions: List[AvailableVersion] = []
-
-    for release in releases:
-        is_prerelease = release.get('prerelease', False)
-
-        if is_prerelease and not include_prerelease:
+    for asset in release['assets']:
+        match = pattern.match(asset['name'])
+        if not match:
             continue
 
-        for asset in release['assets']:
-            match = pattern.match(asset['name'])
-            if not match:
-                continue
+        version = Version(build=match['build'], version=match['version'])
+        asset_prerelease = is_prerelease or version.is_alpha
+        if asset_prerelease and not include_prerelease:
+            continue
+        if not config.is_version_supported(version, asset_prerelease):
+            continue
+        interface = release_interface(release)
+        if not interface_supported(interface) and not include_incompatible:
+            rprint(incompatible_message(version, interface), fg="yellow")
+            continue
 
-            version = Version(build=match['build'], version=match['version'])
-            asset_prerelease = is_prerelease or version.is_alpha
-            if asset_prerelease and not include_prerelease:
-                continue
-            if not config.is_version_supported(version, asset_prerelease):
-                continue
-            interface = release_interface(release)
-            if not interface_supported(interface) and not include_incompatible:
-                rprint(incompatible_message(version, interface), fg="yellow")
-                continue
+        digest = asset.get('digest') or ''
+        sha256 = digest.split(':', 1)[1] if digest.startswith('sha256:') else None
 
-            digest = asset.get('digest') or ''
-            sha256 = digest.split(':', 1)[1] if digest.startswith('sha256:') else None
-
-            versions.append(
-                AvailableVersion(
-                    version=version,
-                    url=asset['browser_download_url'],
-                    is_prerelease=asset_prerelease,
-                    asset_id=asset.get('id'),
-                    asset_size=asset.get('size'),
-                    asset_updated_at=asset.get('updated_at'),
-                    sha256=sha256,
-                    asset_created_at=asset.get('created_at'),
-                    interface=interface,
-                )
+        versions.append(
+            AvailableVersion(
+                version=version,
+                url=asset['browser_download_url'],
+                is_prerelease=asset_prerelease,
+                asset_id=asset.get('id'),
+                asset_size=asset.get('size'),
+                asset_updated_at=asset.get('updated_at'),
+                sha256=sha256,
+                asset_created_at=asset.get('created_at'),
+                interface=interface,
             )
-
-    versions.sort(key=lambda x: (x.version, x.asset_created_at or ""), reverse=True)
+        )
     return versions
 
 
