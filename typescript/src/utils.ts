@@ -21,10 +21,10 @@ import {
 	UnknownIPLocation,
 } from "./exceptions.js";
 import {
-	audioSeedFromIdentity,
 	clampScreenToDisplay,
 	clampWindowDimensions,
 	clampWindowPosition,
+	dropAudioSeed,
 	fixHardwareConcurrency,
 	fixNavigatorArch,
 	followBaselineProtection,
@@ -1500,7 +1500,7 @@ export async function launchOptions({
 	const userSetDnt = "navigator.doNotTrack" in config;
 	const userSetGpc = "navigator.globalPrivacyControl" in config;
 	const userSetAcceptEncoding = "headers.Accept-Encoding" in config;
-	const userSetAudioSeed = "audio:seed" in config;
+	dropAudioSeed(config);
 
 	// The salt that makes every seeded draw belong to this identity (see
 	// fingerprints.identitySalt): stable when the caller pinned the identity --
@@ -1757,16 +1757,6 @@ export async function launchOptions({
 	// so the generated header is dropped unless the caller set it.
 	if (!userSetAcceptEncoding) {
 		delete config["headers.Accept-Encoding"];
-	}
-
-	// The audio noise seed follows the identity: a returning "same device" must
-	// reproduce its audio hash (#442/#765). Never 0 (0 disables the noise).
-	// There is no canvas seed: the browser adds no canvas noise (#528), and no
-	// glyph-spacing noise either (ci/tribal-rules.yml: no-glyph-spacing-noise).
-	if (!userSetAudioSeed) {
-		config["audio:seed"] = audioSeedFromIdentity(
-			utilsDeps.identitySeed(config, salt),
-		);
 	}
 
 	// Set geolocation

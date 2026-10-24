@@ -30,7 +30,6 @@ def convert_preset(ctx: dict) -> dict:
         },
         "camouConfig": config,
         "profileConfig": {
-            "audioSeed": config.get("audio:seed", 0),
             "screenWidth": screen.get("width", 1920),
             "screenHeight": screen.get("height", 1080),
             "screenColorDepth": screen.get("colorDepth", 24),

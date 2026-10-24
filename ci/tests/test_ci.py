@@ -634,7 +634,7 @@ def test_a_deployment_without_score_mode_is_flagged_not_silent():
 
 
 def _cross(**kw):
-    base = {"total": 3, "uniqueAudio": 3, "uniqueCanvas": 3, "uniqueFonts": 3,
+    base = {"total": 3, "uniqueAudio": 1, "uniqueCanvas": 3, "uniqueFonts": 3,
             "uniqueTimezones": 3, "uniqueScreens": 3, "uniqueVoices": 3,
             "uniqueWebGL": 3, "uniquePlatforms": 1}
     base.update(kw)
@@ -642,16 +642,27 @@ def _cross(**kw):
 
 
 def test_a_shared_per_context_value_is_a_leak():
-    """audio and timezone are derived per context.
+    """The timezone is derived per context.
 
     Two contexts sharing one is the failure this whole suite exists to catch.
     """
     from ci.run_build_tester import uniqueness
 
-    for slot in ("uniqueAudio", "uniqueTimezones"):
-        out = uniqueness(_cross(**{slot: 1}))
-        assert out["leaks"] == [f"macPerContext.{slot} (1/3 distinct)"], slot
-        assert not out["noise"]
+    out = uniqueness(_cross(uniqueTimezones=1))
+    assert out["leaks"] == ["macPerContext.uniqueTimezones (1/3 distinct)"]
+    assert not out["noise"]
+
+
+def test_audio_that_varies_between_contexts_is_noise_on_the_render():
+    """Stock renders one audio value per CPU architecture, so contexts on one
+    host must agree (ci/tribal-rules.yml: audio-is-not-noised). Agreement is
+    correct; a second value means something noised the render."""
+    from ci.run_build_tester import uniqueness
+
+    assert not uniqueness(_cross())["not_constant"]
+    out = uniqueness(_cross(uniqueAudio=3))
+    assert out["not_constant"] == ["macPerContext.uniqueAudio (3/3 distinct)"]
+    assert not out["leaks"]
 
 
 def test_a_shared_canvas_is_noise_not_a_leak():

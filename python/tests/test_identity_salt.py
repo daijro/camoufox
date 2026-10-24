@@ -42,7 +42,7 @@ def launch(**kwargs):
         return config_of(utils.launch_options(**kwargs))
 
 
-DRAWN = ("audio:seed", "fonts", "voices", "webGl:renderer")
+DRAWN = ("fonts", "voices", "webGl:renderer")
 
 
 def drawn(config):
@@ -50,14 +50,9 @@ def drawn(config):
 
 
 class TestUnpinnedLaunchesAreDistinct:
-    def test_noise_seeds_do_not_collide(self):
-        seeds = [launch()["audio:seed"] for _ in range(40)]
-        # 40 draws from 2**32: any collision means the seed space collapsed.
-        assert len(set(seeds)) == len(seeds)
-
     def test_same_presented_values_still_differ(self):
         # The same UA/platform/screen/cores, i.e. what two users on the same
-        # common machine present, must not yield the same noise seeds.
+        # common machine present, must not yield the same draws.
         config = {"navigator.userAgent": "x", "navigator.platform": "Win32",
                   "screen.width": 1920, "screen.height": 1080, "navigator.hardwareConcurrency": 8}
         seeds = {fp.identity_seed(config, fp.identity_salt()) for _ in range(200)}
@@ -71,13 +66,12 @@ class TestPinnedIdentityIsStable:
         second = launch(fingerprint=fingerprint)
         assert drawn(first) == drawn(second)
 
-    def test_fixed_preset_reproduces_noise_seeds(self):
+    def test_fixed_preset_reproduces_every_draw(self):
         preset = fp.get_random_preset(os="windows", ff_version="150")
         assert preset, "no Windows presets bundled"
         first = launch(os="windows", fingerprint_preset=preset)
         second = launch(os="windows", fingerprint_preset=preset)
-        assert first["audio:seed"] == second["audio:seed"]
-        assert first["fonts"] == second["fonts"]
+        assert drawn(first) == drawn(second)
 
     @pytest.mark.parametrize("os_name", ["windows", "macos", "linux"])
     def test_every_bundled_preset_launches(self, os_name):
@@ -90,13 +84,46 @@ class TestPinnedIdentityIsStable:
             assert config["webGl:renderer"] == preset["webgl"]["unmaskedRenderer"], (os_name, i)
             assert config.get("webGl:parameters"), (os_name, i)
 
-    def test_caller_seed_is_kept(self):
-        assert launch(config={"audio:seed": 9})["audio:seed"] == 9
-
     def test_salt_of_equal_objects_is_equal(self):
         a = fp.generate_fingerprint(os="windows")
         assert fp.identity_salt(a) == fp.identity_salt(a)
         assert fp.identity_salt({"a": 1, "b": 2}) == fp.identity_salt({"b": 2, "a": 1})
+
+
+def test_no_audio_seed_is_generated():
+    """The browser renders audio as stock does: one value per CPU architecture
+    (ci/tribal-rules.yml: audio-is-not-noised). There is no seed to send."""
+    assert "audio:seed" not in launch()
+    for preset in (None, fp.get_random_preset(os="windows", ff_version="150")):
+        context = fp.generate_context_fingerprint(os="windows", preset=preset)
+        assert "audio:seed" not in context["config"]
+        assert "setAudioFingerprintSeed" not in context["init_script"]
+
+
+def _removed_audio_warnings(record):
+    return [w for w in record if w.category is FutureWarning and "audio:seed" in str(w.message)]
+
+
+def test_an_audio_seed_warns_once_and_is_dropped():
+    """A caller's seed would do nothing on this browser and noise a released
+    one, so it is dropped, with one warning saying audio is rendered as stock."""
+    import warnings
+
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        config = launch(config={"audio:seed": 9})
+    assert "audio:seed" not in config and config["fonts"]
+    [warning] = _removed_audio_warnings(record)
+    assert "rendered exactly as stock Firefox" in str(warning.message)
+
+    overrides = {"audio:seed": 7, "timezone": "Pacific/Chatham"}
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        context = fp.generate_context_fingerprint(os="linux", config_overrides=overrides)
+    assert len(_removed_audio_warnings(record)) == 1
+    assert "audio:seed" not in context["config"]
+    assert context["config"]["timezone"] == "Pacific/Chatham"
+    assert overrides == {"audio:seed": 7, "timezone": "Pacific/Chatham"}, "the caller's dict was changed"
 
 
 def test_no_canvas_seed_is_generated():
@@ -180,9 +207,11 @@ def test_no_glyph_spacing_seed_is_generated():
 
 
 def test_config_overrides_reach_the_config_and_the_init_script():
-    context = fp.generate_context_fingerprint(os="linux", config_overrides={"audio:seed": 7})
-    assert context["config"]["audio:seed"] == 7
-    assert "setAudioFingerprintSeed(7)" in context["init_script"]
+    context = fp.generate_context_fingerprint(
+        os="linux", config_overrides={"timezone": "Pacific/Chatham"}
+    )
+    assert context["config"]["timezone"] == "Pacific/Chatham"
+    assert "Pacific/Chatham" in context["init_script"]
 
 
 def test_instant_animations_warn_that_they_are_detectable():

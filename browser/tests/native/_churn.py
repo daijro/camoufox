@@ -6,7 +6,7 @@ drive one mechanism thousands of times and watch whether the content process's
 memory scales with the count.
 
 The theory this is built to test is that Camoufox adds per-something state that
-stock Firefox does not have -- an isolated world, an audio noise seed, a font
+stock Firefox does not have -- an isolated world, a per-context font
 list -- and that something churning fast enough (an ad stack creating and
 destroying iframes, compiling scripts, drawing to canvases) accumulates it.
 

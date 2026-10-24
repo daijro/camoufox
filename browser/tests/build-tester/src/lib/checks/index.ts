@@ -7,7 +7,6 @@ export interface PhaseResult {
 }
 
 const SELF_DESTRUCT_FUNCTIONS = [
-  "setAudioFingerprintSeed",
   "setTimezone",
   "setScreenDimensions",
   "setScreenColorDepth",
