@@ -90,7 +90,9 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "stock-gpu-parity",
         "stock-parity-probes",
         "viewport-no-rdm",
+        "windows-crt-math",
         "windows-exe-manifest",
+        "windows-keyboard",
     ),
 }
 

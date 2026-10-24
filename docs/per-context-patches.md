@@ -238,3 +238,11 @@ not possible, launch with `canvas_noise=True`: canvas and WebGL readback then
 return random data, which covers the two rasterization rows above. A browser
 launched without it gives its contexts the host's OS and GPU, and `NewContext`
 raises for another OS or GPU.
+
+The settings that make a Windows identity on another host behave as Windows
+([HOST-PARITY.md](HOST-PARITY.md): CRT math, keyboard, behaviour prefs,
+scrollbars) are prefs and launch config, not per-context setters. They follow
+the OS the browser was launched with: every context on a browser launched as
+Windows gets them, and no context on a browser launched as another OS does.
+`NewContext` does not refuse the mix, since a launch without `os` draws its OS
+and the refusal would depend on the draw.
