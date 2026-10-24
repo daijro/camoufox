@@ -24,13 +24,25 @@ export class Helper {
     return allBrowsingContexts;
   }
 
-  awaitTopic(topic) {
+  /**
+   * Resolves true when the observer topic fires, or false after timeoutMs. A
+   * listener that timed out is removed, so a later notification cannot resume
+   * a dispatch the chain has moved past.
+   */
+  awaitTopicWithin(topic, timeoutMs) {
     return new Promise(resolve => {
+      let timer;
       const listener = () => {
+        clearTimeout(timer);
         Services.obs.removeObserver(listener, topic);
-        resolve();
-      }
+        resolve(true);
+      };
       Services.obs.addObserver(listener, topic);
+      timer = setTimeout(() => {
+        Services.obs.removeObserver(listener, topic);
+        dump(`[juggler] WARN ${topic} did not fire within ${timeoutMs}ms; continuing\n`);
+        resolve(false);
+      }, timeoutMs);
     });
   }
 

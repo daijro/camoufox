@@ -71,9 +71,13 @@ to dispatch a point on the pixel the previous dispatch left the cursor on: a
 zero-displacement move produces no `eMouseMove`, so it is never acked, and
 that is the same deadlock reached from inside a curve rather than from
 `Page.dispatchMouseEvent`.
-`activateAndRun()` carries a 30s backstop for the other unbounded waits
-reachable from the same slot (`apz-repaints-flushed`, `TabSwitchDone`, the drag
-path's waits), none of which has failed yet.
+`apz-repaints-flushed` waits at most `kAckDeadlineMs` too: a flush sent to a
+GPU process that dies never comes back, and stalled every such dispatch until
+the backstop. So does the drag path's `juggler-drag-finalized`, per input
+event: an answer a busy page gives later still decides the next event, so the
+drag drops, and mouseup ends the wait. `activateAndRun()` carries a 30s
+backstop for the waits still unbounded in the same slot (`TabSwitchDone`, the
+drag path's `dragover` and cross-process sends), none of which has failed yet.
 
 **The static check.** `browser/scripts/check-input-dispatch.py`, wired into the
 `static` job of `.github/workflows/tests.yml`. Two exemptions, both
@@ -87,5 +91,5 @@ point is acked *and observed by the page*. Hand-picked coordinate lists are what
 let each of the four bugs through: `humanize-edge-deadlock.py` probed only the
 far edges, and `humanize-mouse-trajectory.py` pins `os="linux"` — the one
 fingerprint immune to `#751`.
-`browser/tests/playwright/patches/input-ack-backstop.py` covers the bounded wait
-itself.
+`browser/tests/playwright/patches/input-ack-backstop.py` covers the bounded waits
+themselves: a late renderer ack, and a drag whose page answers late.

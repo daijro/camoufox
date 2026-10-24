@@ -9,7 +9,7 @@ const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys
 const {NetworkObserver, PageNetwork} = ChromeUtils.importESModule('resource://gre/modules/juggler/NetworkObserver.js');
 const {PageTarget} = ChromeUtils.importESModule('resource://gre/modules/juggler/TargetRegistry.js');
 const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
-const {MouseDispatch} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
+const {MouseDispatch, kAckDeadlineMs} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
 const {humanizedSteps} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
 
 const Cc = Components.classes;
@@ -82,6 +82,7 @@ export class PageHandler {
     }
 
     this._isDragging = false;
+    this._dragWatcher = null;
     this._lastMousePosition = { x: 0, y: 0 };
     // Camoufox: last position an actual mousemove landed on. Used as the
     // start point for the humanized cursor trajectory (humanize=True).
@@ -533,7 +534,7 @@ export class PageHandler {
       this._pageTarget._linkedBrowser.scrollRectIntoViewIfNeeded(x, y, 0, 0);
       // 2. Make sure compositor is flushed after scrolling.
       if (win.windowUtils.flushApzRepaints())
-        await helper.awaitTopic('apz-repaints-flushed');
+        await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
       // 3. Get element's bounding box in the browser after the scroll is completed.
       //    MouseDispatch owns every conversion from these relative coordinates to
       //    absolute ones, and every wait for a renderer ack.
@@ -609,6 +610,7 @@ export class PageHandler {
 
       if (type === 'mousemove') {
         this._lastMousePosition = { x, y };
+        await this._settleDrag(false);
         if (this._isDragging) {
           const watcher = new EventWatcher(this._pageEventSink, ['dragover'], this._pendingEventWatchers);
           await this._contentPage.send('dispatchDragEvent', {type:'dragover', x, y, modifiers});
@@ -643,14 +645,16 @@ export class PageHandler {
         // 3. [juggler-drag-finalized] - only emitted if dragstart was emitted.
 
         if (watcher.hasEvent('dragstart')) {
-          const eventObject = await watcher.ensureEvent('juggler-drag-finalized');
-          this._isDragging = eventObject.dragSessionStarted;
+          this._dragWatcher = watcher;
+          await this._settleDrag(false);
+        } else {
+          watcher.dispose();
         }
-        watcher.dispose();
         return;
       }
 
       if (type === 'mouseup') {
+        await this._settleDrag(true);
         if (this._isDragging) {
           const watcher = new EventWatcher(this._pageEventSink, ['dragover'], this._pendingEventWatchers);
           await this._contentPage.send('dispatchDragEvent', {type: 'dragover', x, y, modifiers});
@@ -669,6 +673,22 @@ export class PageHandler {
         return;
       }
     }, { muteNotificationsPopup: true });
+  }
+
+  // Whether the drag a mousemove started has a drag session. Waited for a
+  // deadline per input event, not the whole slot; an answer that arrives later
+  // still decides the next event, so a busy page's drag still drops. Mouseup
+  // ends the gesture: no answer by then means no drag session.
+  async _settleDrag(final) {
+    const watcher = this._dragWatcher;
+    if (!watcher)
+      return;
+    const finalized = await watcher.ensureEventWithin('juggler-drag-finalized', kAckDeadlineMs);
+    if (!finalized && !final)
+      return;
+    this._dragWatcher = null;
+    watcher.dispose();
+    this._isDragging = !!finalized?.dragSessionStarted;
   }
 
   _contextMenuOnMouseUp() {
@@ -712,7 +732,7 @@ export class PageHandler {
       const win = this._pageTarget._window;
       // 3. Make sure compositor is flushed after scrolling.
       if (win.windowUtils.flushApzRepaints())
-        await helper.awaitTopic('apz-repaints-flushed');
+        await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
       for (let i = 0; i < notchCount; i++) {
         if (i)
           await new Promise(resolve => setTimeout(resolve, 18 + Math.random() * 42));
