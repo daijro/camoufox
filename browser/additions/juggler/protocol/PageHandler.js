@@ -82,6 +82,7 @@ export class PageHandler {
     }
 
     this._isDragging = false;
+    this._dragWatcher = null;
     this._lastMousePosition = { x: 0, y: 0 };
     // Camoufox: last position an actual mousemove landed on. Used as the
     // start point for the humanized cursor trajectory (humanize=True).
@@ -609,6 +610,7 @@ export class PageHandler {
 
       if (type === 'mousemove') {
         this._lastMousePosition = { x, y };
+        await this._settleDrag(false);
         if (this._isDragging) {
           const watcher = new EventWatcher(this._pageEventSink, ['dragover'], this._pendingEventWatchers);
           await this._contentPage.send('dispatchDragEvent', {type:'dragover', x, y, modifiers});
@@ -643,16 +645,16 @@ export class PageHandler {
         // 3. [juggler-drag-finalized] - only emitted if dragstart was emitted.
 
         if (watcher.hasEvent('dragstart')) {
-          // Bounded like every other input wait: no finalization means no drag
-          // session, rather than a wedged input chain.
-          const eventObject = await watcher.ensureEventWithin('juggler-drag-finalized', kAckDeadlineMs);
-          this._isDragging = !!eventObject && eventObject.dragSessionStarted;
+          this._dragWatcher = watcher;
+          await this._settleDrag(false);
+        } else {
+          watcher.dispose();
         }
-        watcher.dispose();
         return;
       }
 
       if (type === 'mouseup') {
+        await this._settleDrag(true);
         if (this._isDragging) {
           const watcher = new EventWatcher(this._pageEventSink, ['dragover'], this._pendingEventWatchers);
           await this._contentPage.send('dispatchDragEvent', {type: 'dragover', x, y, modifiers});
@@ -671,6 +673,22 @@ export class PageHandler {
         return;
       }
     }, { muteNotificationsPopup: true });
+  }
+
+  // Whether the drag a mousemove started has a drag session. Waited for a
+  // deadline per input event, not the whole slot; an answer that arrives later
+  // still decides the next event, so a busy page's drag still drops. Mouseup
+  // ends the gesture: no answer by then means no drag session.
+  async _settleDrag(final) {
+    const watcher = this._dragWatcher;
+    if (!watcher)
+      return;
+    const finalized = await watcher.ensureEventWithin('juggler-drag-finalized', kAckDeadlineMs);
+    if (!finalized && !final)
+      return;
+    this._dragWatcher = null;
+    watcher.dispose();
+    this._isDragging = !!finalized?.dragSessionStarted;
   }
 
   _contextMenuOnMouseUp() {

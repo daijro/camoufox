@@ -25,9 +25,9 @@ export class Helper {
   }
 
   /**
-   * Resolves true when the observer topic fires, or false after timeoutMs.
-   * Input dispatch runs on activateAndRun()'s process-global chain, so one
-   * missed notification would wedge every later input event.
+   * Resolves true when the observer topic fires, or false after timeoutMs. A
+   * listener that timed out is removed, so a later notification cannot resume
+   * a dispatch the chain has moved past.
    */
   awaitTopicWithin(topic, timeoutMs) {
     return new Promise(resolve => {
