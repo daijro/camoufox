@@ -187,10 +187,10 @@ index 0000000000..b9f1dab9fa
 +}  // namespace mozilla
 diff --git a/dom/base/NavigatorManager.h b/dom/base/NavigatorManager.h
 new file mode 100644
-index 0000000000..3df7f14e9e
+index 0000000000..d46baea18b
 --- /dev/null
 +++ b/dom/base/NavigatorManager.h
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,104 @@
 +/* Camoufox: Per-context navigator property manager */
 +#ifndef mozilla_dom_NavigatorManager_h
 +#define mozilla_dom_NavigatorManager_h
@@ -216,9 +216,7 @@ index 0000000000..3df7f14e9e
 +  }
 +
 +  static bool GetPlatform(uint32_t aId, nsAString& aOut) {
-+    nsAutoString key;
-+    key.AppendPrintf("nav_plat_%u", aId);
-+    return RoverfoxStorageManager::GetString(key, aOut);
++    return RoverfoxStorageManager::GetString("nav_plat_", aId, aOut);
 +  }
 +
 +  static bool IsPlatformFunctionEnabledForWebIDL(JSContext* aCx,
@@ -237,9 +235,7 @@ index 0000000000..3df7f14e9e
 +  }
 +
 +  static bool GetOscpu(uint32_t aId, nsAString& aOut) {
-+    nsAutoString key;
-+    key.AppendPrintf("nav_oscpu_%u", aId);
-+    return RoverfoxStorageManager::GetString(key, aOut);
++    return RoverfoxStorageManager::GetString("nav_oscpu_", aId, aOut);
 +  }
 +
 +  static bool IsOscpuFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
@@ -253,10 +249,8 @@ index 0000000000..3df7f14e9e
 +  }
 +
 +  static uint32_t GetHardwareConcurrency(uint32_t aId) {
-+    nsAutoString key;
-+    key.AppendPrintf("nav_hwc_%u", aId);
 +    uint32_t value = 0;
-+    if (RoverfoxStorageManager::GetUint(key, value)) {
++    if (RoverfoxStorageManager::GetUint("nav_hwc_", aId, value)) {
 +      return value;
 +    }
 +    return 0;
@@ -273,9 +267,7 @@ index 0000000000..3df7f14e9e
 +  }
 +
 +  static bool GetUserAgent(uint32_t aId, nsAString& aOut) {
-+    nsAutoString key;
-+    key.AppendPrintf("nav_ua_%u", aId);
-+    return RoverfoxStorageManager::GetString(key, aOut);
++    return RoverfoxStorageManager::GetString("nav_ua_", aId, aOut);
 +  }
 +
 +  static bool IsUaFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);

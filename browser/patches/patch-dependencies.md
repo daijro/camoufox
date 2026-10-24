@@ -52,6 +52,7 @@ be listed there.
 | `webgl-spoofing.patch` | `webGl:*`, `webGl2:*` |
 | `webrtc-ip-spoofing.patch` | `webrtc:ipv4`, `webrtc:ipv6`, `navigator.platform` |
 | `windows-keyboard.patch` | `input:windowsKeyboard` (launch-wide: the shortcut tables and GTK's key handling are process-level) |
+| `zz-stock-cost-parity.patch` | `navigator.hardwareConcurrency`, `navigator.maxTouchPoints`, `screen.*`, `window.screenX`, `window.screenY` (re-orders the getters above so stock's work runs first) |
 
 To regenerate the list: `grep -l 'MaskConfig::' patches/*.patch`.
 
@@ -68,7 +69,7 @@ already set up, and do not add the include or `LOCAL_INCLUDES` themselves:
 | `touchscreen-fingerprint-spoofing.patch` | `navigator-spoofing.patch` for `MaskConfig.hpp` in `dom/base/Navigator.cpp` |
 | `font-list-spoofing.patch` | `anti-font-fingerprinting.patch` for `gfxFontGroup::mUserContextId` |
 | `timezone-spoofing.patch`, `webrtc-ip-spoofing.patch` | `audio-fingerprint-manager.patch` for `RoverfoxStorageManager.h` in `dom/base/nsGlobalWindowInner.cpp` |
-| `font-system-fonts-css2.patch`, `system-ui-font-spoofing.patch`, `webrtc-ip-spoofing.patch` | `navigator-spoofing.patch` for `NavigatorManager::GetSpoofedOS()` |
+| `font-system-fonts-css2.patch`, `system-ui-font-spoofing.patch`, `webrtc-ip-spoofing.patch`, `zz-stock-cost-parity.patch` | `navigator-spoofing.patch` for `NavigatorManager::GetSpoofedOS()` |
 | `windows-keyboard.patch` | `touchscreen-fingerprint-spoofing.patch` for `/camoucfg` in `dom/events/moz.build` |
 
 ## RoverfoxStorageManager

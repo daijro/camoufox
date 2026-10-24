@@ -107,10 +107,10 @@ index 11b12ac412..620f3cd6cd 100644
        GlobalObject& aGlobal, JSRFPTarget aTarget,
        nsIRFPTargetSetIDL* aOverriddenFingerprintingSettings,
 diff --git a/dom/base/RoverfoxStorageManager.cpp b/dom/base/RoverfoxStorageManager.cpp
-index c5f3dd4247..a4010d0c2c 100644
+index 7ab283e3ea..eee0c0a0e8 100644
 --- a/dom/base/RoverfoxStorageManager.cpp
 +++ b/dom/base/RoverfoxStorageManager.cpp
-@@ -256,6 +256,9 @@ static nsString SetterUsedKey(const char* aName, uint32_t aUserContextId) {
+@@ -412,6 +412,9 @@ static nsString SetterUsedKey(const char* aName, uint32_t aUserContextId) {
                                                            const char* aName) {
    nsGlobalWindowInner* win = xpc::WindowOrNull(aObj);
    if (!win) return false;
