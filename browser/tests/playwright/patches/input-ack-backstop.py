@@ -59,7 +59,9 @@ import asyncio
 import os
 import signal
 import sys
+import tempfile
 import time
+from pathlib import Path
 
 from camoufox.async_api import AsyncCamoufox
 from helpers import hidden_display, launch_kwargs
@@ -196,12 +198,17 @@ def gpu_process(binary):
 
 async def gpu_process_killed() -> int:
     print("\n=== scrolling while the GPU process dies ===")
-    prefs = {"layers.gpu-process.enabled": True, "layers.gpu-process.force-enabled": True}
-    with hidden_display():
-        kwargs = launch_kwargs(headless=False, os="linux", humanize=False, firefox_user_prefs=prefs)
+    # In the profile's user.js: firefox_user_prefs reach CI's unpackaged build
+    # after gfx has read these startup-only prefs, so it starts no GPU process.
+    with tempfile.TemporaryDirectory() as profile, hidden_display():
+        Path(profile, "user.js").write_text(
+            'user_pref("layers.gpu-process.enabled", true);\n'
+            'user_pref("layers.gpu-process.force-enabled", true);\n')
+        kwargs = launch_kwargs(headless=False, os="linux", humanize=False,
+                               persistent_context=True, user_data_dir=profile)
         binary = kwargs["executable_path"]
-        async with AsyncCamoufox(**kwargs) as browser:
-            page = await browser.new_page()
+        async with AsyncCamoufox(**kwargs) as context:
+            page = await context.new_page()
             await page.set_content('<body style="margin:0;height:200000px"></body>')
             await page.evaluate(
                 "window.__clicks=[];addEventListener('click',e=>__clicks.push([e.clientX,e.clientY]))")
