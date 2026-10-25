@@ -1,0 +1,13 @@
+diff --git a/remote/shared/WindowManager.sys.mjs b/remote/shared/WindowManager.sys.mjs
+index 6d1add9..9eb25a6 100644
+--- a/remote/shared/WindowManager.sys.mjs
++++ b/remote/shared/WindowManager.sys.mjs
+@@ -409,6 +409,8 @@ class WindowManager {
+     } = options;
+ 
+     switch (lazy.AppInfo.name) {
++      // Camoufox is Firefox under another application name.
++      case "Camoufox":
+       case "Firefox": {
+         if (openerWindow === null) {
+           // If no opener was provided, fallback to the topmost window.
