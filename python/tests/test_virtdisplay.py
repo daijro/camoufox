@@ -137,7 +137,9 @@ def _alive(pid: int) -> bool:
     try:
         with open(f"/proc/{pid}/stat") as f:
             return f.read().rsplit(")", 1)[1].split()[0] != "Z"
-    except FileNotFoundError:
+    # ProcessLookupError: reaped between open() and read(), which is how a
+    # zombie's /proc entry goes away under a reader.
+    except (FileNotFoundError, ProcessLookupError):
         return False
 
 
@@ -169,8 +171,10 @@ def test_xvfb_dies_with_the_process_that_started_it():
     child.wait()
 
     deadline = time.monotonic() + 5
-    while _alive(xvfb) and time.monotonic() < deadline:
+    # Judged on the loop's last reading: once it sees a zombie, its new parent
+    # is about to reap it, and a second /proc read lands in that reap.
+    while (alive := _alive(xvfb)) and time.monotonic() < deadline:
         time.sleep(0.025)
-    assert not _alive(xvfb), f"Xvfb {xvfb} outlived the process that started it"
+    assert not alive, f"Xvfb {xvfb} outlived the process that started it"
     assert not os.path.exists(f"/tmp/.X{display}-lock")
     assert not os.path.exists(f"/tmp/.X11-unix/X{display}")
