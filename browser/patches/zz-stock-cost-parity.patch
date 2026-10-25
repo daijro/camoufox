@@ -120,6 +120,50 @@ index 0f7501d239..402c3d9cab 100644
  }
  
  //*****************************************************************************
+diff --git a/dom/base/NavigatorManager.cpp b/dom/base/NavigatorManager.cpp
+index b9f1dab..879a3ba 100644
+--- a/dom/base/NavigatorManager.cpp
++++ b/dom/base/NavigatorManager.cpp
+@@ -9,7 +9,8 @@ namespace dom {
+ MaskConfig::SpoofedOS NavigatorManager::GetSpoofedOS(uint32_t aId) {
+   nsAutoString platform;
+   if (GetPlatform(aId, platform)) {
+-    return MaskConfig::SpoofedOSFor(NS_ConvertUTF16toUTF8(platform).get());
++    return MaskConfig::SpoofedOSFor(
++        std::u16string_view(platform.BeginReading(), platform.Length()));
+   }
+   return MaskConfig::GetSpoofedOS();
+ }
+diff --git a/dom/base/RoverfoxStorageManager.cpp b/dom/base/RoverfoxStorageManager.cpp
+index eee0c0a..1d34211 100644
+--- a/dom/base/RoverfoxStorageManager.cpp
++++ b/dom/base/RoverfoxStorageManager.cpp
+@@ -55,6 +55,10 @@ static std::atomic<uint64_t> sGeneration{1};
+   sGeneration.fetch_add(1, std::memory_order_release);
+ }
+ 
++/* static */ uint64_t RoverfoxStorageManager::Generation() {
++  return sGeneration.load(std::memory_order_acquire);
++}
++
+ // Per-context getters are page-callable in a loop, and each read built its
+ // key with AppendPrintf, converted it to UTF-8 and took the cache lock (plus
+ // a pref lookup on a main-thread miss). Measured from script against stock
+diff --git a/dom/base/RoverfoxStorageManager.h b/dom/base/RoverfoxStorageManager.h
+index 715019b..468760a 100644
+--- a/dom/base/RoverfoxStorageManager.h
++++ b/dom/base/RoverfoxStorageManager.h
+@@ -56,6 +56,10 @@ class RoverfoxStorageManager {
+   // deleted name reachable on ARM64.
+   static void RemoveSetter(const char* aName);
+ 
++  // Bumped after every change to what the getters can answer. A value cached
++  // under an older generation must be read again; none is ever 0.
++  static uint64_t Generation();
++
+  private:
+   static nsCString MakePrefName(const nsAString& key);
+   static void SetPrefValue(const nsCString& prefName, const nsCString& value);
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
 index 5806442359..3e300fe17c 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
@@ -166,7 +210,7 @@ index 5806442359..3e300fe17c 100644
  
  float nsGlobalWindowInner::GetMozInnerScreenX(CallerType aCallerType,
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index db1b834258..9d54724ebe 100644
+index db1b834..38b14ff 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
 @@ -5,6 +5,7 @@
@@ -225,19 +269,20 @@ index db1b834258..9d54724ebe 100644
  }
  
  nsPIDOMWindowOuter* nsScreen::GetOuter() const {
-@@ -82,47 +90,61 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
+@@ -82,47 +90,78 @@ nsDeviceContext* nsScreen::GetDeviceContext() const {
    return nsLayoutUtils::GetDeviceContextForScreenInfo(GetOuter());
  }
  
 -CSSIntRect nsScreen::GetRect() {
 -  // Camoufox: per-context size wins over the global config.
-+// Camoufox: the spoofed screen size, if any: the context's own, else the
-+// global config's.
-+static Maybe<CSSIntRect> CamouSpoofedScreenRect(nsPIDOMWindowInner* aOwner) {
-   if (uint32_t w = 0, h = 0; ScreenDimensionManager::GetDimensions(
+-  if (uint32_t w = 0, h = 0; ScreenDimensionManager::GetDimensions(
 -          RoverfoxStorageManager::UserContextId(GetOwnerWindow()), w, h)) {
 -    return {0, 0, static_cast<int32_t>(w), static_cast<int32_t>(h)};
-+          RoverfoxStorageManager::UserContextId(aOwner), w, h)) {
++// Camoufox: the spoofed screen size, if any: the context's own, else the
++// global config's.
++static Maybe<CSSIntRect> CamouSpoofedScreenRect(uint32_t aUserContextId) {
++  if (uint32_t w = 0, h = 0;
++      ScreenDimensionManager::GetDimensions(aUserContextId, w, h)) {
 +    return Some(CSSIntRect(0, 0, static_cast<int32_t>(w),
 +                           static_cast<int32_t>(h)));
    }
@@ -246,13 +291,29 @@ index db1b834258..9d54724ebe 100644
        height = MaskConfig::GetInt32("screen.height");
        width && height) {
 -    return {0, 0, width.value(), height.value()};
--  }
++    return Some(CSSIntRect(0, 0, width.value(), height.value()));
+   }
 -  // Return window inner rect to prevent fingerprinting.
 -  if (ShouldResistFingerprinting(RFPTarget::ScreenRect)) {
 -    return GetTopWindowInnerRectForRFP();
-+    return Some(CSSIntRect(0, 0, width.value(), height.value()));
-   }
 +  return Nothing();
++}
++
++const nsScreen::CamouSpoof& nsScreen::CamouSpoofed() {
++  // The generation is read before the values, as RoverfoxStorageManager's own
++  // memo does: a write racing the reads leaves this stale by one generation,
++  // so the next call reads again.
++  const uint64_t generation = RoverfoxStorageManager::Generation();
++  const uint32_t userContextId =
++      RoverfoxStorageManager::UserContextId(GetOwnerWindow());
++  if (mCamouSpoof.mGeneration != generation ||
++      mCamouSpoof.mUserContextId != userContextId) {
++    mCamouSpoof.mRect = CamouSpoofedScreenRect(userContextId);
++    mCamouSpoof.mOS = NavigatorManager::GetSpoofedOS(userContextId);
++    mCamouSpoof.mUserContextId = userContextId;
++    mCamouSpoof.mGeneration = generation;
+   }
++  return mCamouSpoof;
 +}
  
 -  // Here we manipulate the value of aRect to represent the screen size,
@@ -307,7 +368,7 @@ index db1b834258..9d54724ebe 100644
 +    return CSSIntRect::FromAppUnitsRounded(context->GetRect());
 +  }();
 +  // Camoufox: per-context size wins over the global config.
-+  if (auto spoofed = CamouSpoofedScreenRect(GetOwnerWindow())) {
++  if (const auto& spoofed = CamouSpoofed().mRect) {
 +    return *spoofed;
    }
 -  return CSSIntRect::FromAppUnitsRounded(context->GetRect());
@@ -315,7 +376,7 @@ index db1b834258..9d54724ebe 100644
  }
  
  CSSIntRect nsScreen::GetAvailRect() {
-@@ -131,81 +153,91 @@ CSSIntRect nsScreen::GetAvailRect() {
+@@ -131,81 +170,92 @@ CSSIntRect nsScreen::GetAvailRect() {
    // must not bypass it.
    const bool availFromResolution =
        ShouldResistFingerprinting(RFPTarget::ScreenAvailToResolution);
@@ -409,22 +470,23 @@ index db1b834258..9d54724ebe 100644
 +          doc->WarnOnceAbout(Document::eScreenFingerprintingProtection, false,
 +                             params);
 +        }
-+      }
+       }
 +
 +      // Camoufox: from the screen the page sees, for the OS it is told.
 +      // Stock's own work here is context->GetRect(); a spoofed size replaces
 +      // its result. Calling GetRect() instead redid stock's whole screen.width
 +      // getter on top, and asking Navigator for the platform built and
 +      // converted a string, together about twice stock's availWidth (430 ns
-+      // vs 176 ns on 156.0.1).
++      // vs 176 ns on 156.0.1). Reading the size and the OS from the store on
++      // every call still cost enough for a slow CI runner to see about 2x
++      // (361 ns vs 178 ns on 158.0), so they come from CamouSpoofed().
++      const CamouSpoof& spoof = CamouSpoofed();
 +      nsRect screenRect = context->GetRect();
-+      if (auto spoofed = CamouSpoofedScreenRect(GetOwnerWindow())) {
-+        screenRect = CSSPixel::ToAppUnits(*spoofed);
-       }
++      if (spoof.mRect) {
++        screenRect = CSSPixel::ToAppUnits(*spoof.mRect);
++      }
 +      return nsRFPService::GetSpoofedScreenAvailSize(
-+          screenRect, context->GetFullZoom(), IsFullscreen(),
-+          NavigatorManager::GetSpoofedOS(
-+              RoverfoxStorageManager::UserContextId(GetOwnerWindow())));
++          screenRect, context->GetFullZoom(), IsFullscreen(), spoof.mOS);
      }
  
 -    // Camoufox: from the screen the page sees, for the platform it is told.
@@ -469,6 +531,41 @@ index db1b834258..9d54724ebe 100644
  }
  
  bool nsScreen::IsFullscreen() const {
+diff --git a/dom/base/nsScreen.h b/dom/base/nsScreen.h
+index 4614516..173d604 100644
+--- a/dom/base/nsScreen.h
++++ b/dom/base/nsScreen.h
+@@ -17,6 +17,10 @@ namespace mozilla {
+ enum class RFPTarget : uint64_t;
+ }
+ 
++namespace MaskConfig {
++enum class SpoofedOS;
++}
++
+ // Script "screen" object
+ class nsScreen : public mozilla::DOMEventTargetHelper {
+  private:
+@@ -101,7 +105,19 @@ class nsScreen : public mozilla::DOMEventTargetHelper {
+ 
+   mozilla::dom::Document* TopContentDocumentInRDMPane() const;
+ 
++  // Camoufox: the spoofed screen size and OS of this screen's context, read
++  // once per RoverfoxStorageManager generation instead of on every getter call
++  // (timing parity; see nsScreen::GetAvailRect).
++  struct CamouSpoof {
++    uint64_t mGeneration = 0;
++    uint32_t mUserContextId = 0;
++    mozilla::Maybe<mozilla::CSSIntRect> mRect;
++    MaskConfig::SpoofedOS mOS{};
++  };
++  const CamouSpoof& CamouSpoofed();
++
+   RefPtr<mozilla::dom::ScreenOrientation> mScreenOrientation;
++  CamouSpoof mCamouSpoof;
+ };
+ 
+ namespace mozilla::dom {
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
 index bc5f22a2ae..050f59b61f 100644
 --- a/dom/workers/WorkerNavigator.cpp

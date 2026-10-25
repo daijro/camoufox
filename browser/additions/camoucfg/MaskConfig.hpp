@@ -395,11 +395,33 @@ inline bool GetBool(std::string_view key) {
 // platform is configured; Other, one no identity uses.
 enum class SpoofedOS { None, Windows, MacOS, Linux, Other };
 
-inline SpoofedOS SpoofedOSFor(std::string_view platform) {
-  if (platform == "Win32") return SpoofedOS::Windows;
-  if (platform == "MacIntel") return SpoofedOS::MacOS;
-  if (platform.rfind("Linux", 0) == 0) return SpoofedOS::Linux;
+// Narrow or UTF-16: a context's navigator.platform is stored as UTF-16, and
+// the getters that ask for its OS are page-callable, so it is matched without
+// a conversion.
+template <typename CharT>
+inline SpoofedOS SpoofedOSForImpl(std::basic_string_view<CharT> platform) {
+  const auto startsWith = [&](std::string_view prefix) {
+    if (platform.size() < prefix.size()) return false;
+    for (size_t i = 0; i < prefix.size(); i++) {
+      if (platform[i] != static_cast<CharT>(prefix[i])) return false;
+    }
+    return true;
+  };
+  const auto equals = [&](std::string_view literal) {
+    return platform.size() == literal.size() && startsWith(literal);
+  };
+  if (equals("Win32")) return SpoofedOS::Windows;
+  if (equals("MacIntel")) return SpoofedOS::MacOS;
+  if (startsWith("Linux")) return SpoofedOS::Linux;
   return SpoofedOS::Other;
+}
+
+inline SpoofedOS SpoofedOSFor(std::string_view platform) {
+  return SpoofedOSForImpl(platform);
+}
+
+inline SpoofedOS SpoofedOSFor(std::u16string_view platform) {
+  return SpoofedOSForImpl(platform);
 }
 
 // The launch's OS. Only process-wide decisions use it; anything a page of one
