@@ -2,7 +2,7 @@ import ipaddress
 import re
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Dict, Optional, Tuple
+from typing import Dict, NamedTuple, Optional, Tuple
 from urllib.parse import quote
 
 import requests
@@ -92,15 +92,25 @@ DIRECT_IP_TIMEOUT = 5
 PROXIED_IP_TIMEOUT = 15
 
 
-def proxy_exit_geo(proxy: str) -> Tuple[str, str]:
+class ExitGeo(NamedTuple):
+    """Where a proxy exits: its IP and that IP's timezone, country and position."""
+
+    ip: str
+    timezone: str
+    country: str
+    latitude: float
+    longitude: float
+
+
+def proxy_exit_geo(proxy: str) -> ExitGeo:
     """
-    The exit IP of `proxy` and that IP's timezone, looked up through the proxy.
-    Raises InvalidIP when the lookup fails: a context that silently kept the
-    host's WebRTC IP and timezone behind a proxy would be a leak.
+    Where `proxy` exits, looked up through the proxy. Raises InvalidIP when the
+    lookup fails: a context that silently kept the host's WebRTC IP and
+    timezone behind a proxy would be a leak.
     """
     try:
         resp = requests.get(
-            "http://ip-api.com/json?fields=status,message,query,timezone",
+            "http://ip-api.com/json?fields=status,message,query,timezone,countryCode,lat,lon",
             proxies=Proxy.as_requests_proxy(proxy),
             timeout=PROXIED_IP_TIMEOUT,
         )
@@ -108,15 +118,24 @@ def proxy_exit_geo(proxy: str) -> Tuple[str, str]:
         data = resp.json()
     except requests.RequestException as exception:
         raise InvalidIP(f"{PROXY_LOOKUP_FAILED}: {exception}") from exception
-    if data.get("status") != "success" or not data.get("timezone"):
+    if data.get("status") != "success" or not all(
+        data.get(key) is not None
+        for key in ("query", "timezone", "countryCode", "lat", "lon")
+    ):
         raise InvalidIP(f"{PROXY_LOOKUP_FAILED}: {data.get('message') or data}")
     validate_ip(data["query"])
-    return data["query"], data["timezone"]
+    return ExitGeo(
+        data["query"],
+        data["timezone"],
+        data["countryCode"],
+        float(data["lat"]),
+        float(data["lon"]),
+    )
 
 
 PROXY_LOOKUP_FAILED = (
-    "Could not look up the proxy's exit IP and timezone. Pass webrtc_ip and "
-    "timezone_id explicitly to skip the lookup"
+    "Could not look up where the proxy exits. Pass webrtc_ip, timezone_id, "
+    "locale and geolocation explicitly to skip the lookup"
 )
 
 
