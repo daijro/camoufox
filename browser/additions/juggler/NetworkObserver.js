@@ -150,8 +150,13 @@ class NetworkRequest {
     this._sentOnResponse = false;
     this._fulfilled = false;
 
+    // Firefox's own header order for this request, before anything of ours runs: at
+    // http-on-modify-request the channel already holds every header it will send except the ones
+    // necko adds in OnBeforeConnect. Resuming an intercepted request rebuilds the channel and
+    // loses this order, so it is put back from here.
+    this._originalHeaderOrder = requestHeaders(httpChannel).map(header => header.name.toLowerCase());
     if (this._overriddenHeadersForRedirect)
-      overrideRequestHeaders(httpChannel, this._overriddenHeadersForRedirect);
+      overrideRequestHeaders(httpChannel, this._overriddenHeadersForRedirect, this._originalHeaderOrder);
     else if (this._pageNetwork)
       appendExtraHTTPHeaders(httpChannel, this._pageNetwork.combinedExtraHTTPHeaders());
 
@@ -241,10 +246,10 @@ class NetworkRequest {
 
     const extraHTTPHeaders = this._pageNetwork ? this._pageNetwork.combinedExtraHTTPHeaders() : [];
     if (headers) {
-      overrideRequestHeaders(this.httpChannel, headers);
+      overrideRequestHeaders(this.httpChannel, headers, this._originalHeaderOrder);
     } else {
       appendExtraHTTPHeaders(this.httpChannel, extraHTTPHeaders);
-      restoreInterceptedHeaderOrder(this.httpChannel, extraHTTPHeaders);
+      restoreInterceptedHeaderOrder(this.httpChannel, extraHTTPHeaders, this._originalHeaderOrder);
     }
     if (method)
       this.httpChannel.requestMethod = method;
@@ -808,9 +813,37 @@ function clearRequestHeaders(httpChannel) {
   }
 }
 
-function overrideRequestHeaders(httpChannel, headers) {
+// route.continue({headers}) replaces the whole header list. Writing the caller's list in its own
+// order (a dict, usually) put "cookie" -- the one header the clear keeps -- first and everything
+// else after it, so the resumed request left with Firefox's order scrambled. Keep each header in
+// the slot Firefox gave it, update its value, drop the ones the caller left out, and put the
+// caller's new headers where necko puts headers added from http-on-modify-request.
+function overrideRequestHeaders(httpChannel, headers, originalOrder) {
+  const nameOf = header => header.name.toLowerCase();
+  const wanted = new Map();
+  for (const header of headers)
+    wanted.set(nameOf(header), header);
+
+  const merged = [];
+  for (const header of requestHeaders(httpChannel)) {
+    const name = nameOf(header);
+    if (name === 'host')
+      continue;
+    if (wanted.has(name)) {
+      merged.push(wanted.get(name));
+      wanted.delete(name);
+    } else if (name === 'cookie') {
+      // Keep the "cookie" header. If there is an override, it will be set anyway.
+      // Otherwise, we may delete a cookie that was set for a redirect.
+      merged.push(header);
+    }
+  }
+  const ordered = orderRequestHeaders([...merged, ...wanted.values()], originalOrder);
+
   clearRequestHeaders(httpChannel);
-  appendExtraHTTPHeaders(httpChannel, headers);
+  for (const header of ordered)
+    httpChannel.setRequestHeader(header.name, '', false /* merge */);
+  appendExtraHTTPHeaders(httpChannel, ordered);
 }
 
 // Headers necko adds in HttpBaseChannel::Init, before anything else touches the channel.
@@ -825,49 +858,63 @@ const ON_BEFORE_CONNECT_HEADERS = ['upgrade-insecure-requests', 'sec-fetch-dest'
 // end up appended after every header that was copied over, rather than in the slot they occupy
 // on a channel that was never intercepted:
 //
-//   never intercepted: ... accept-encoding, connection, referer, cookie, sec-fetch-*
-//   after a resume:    ... accept-encoding, referer, sec-fetch-*, connection, cookie
+//   never intercepted: ... accept-encoding, [referer,] connection, [referer,] cookie, sec-fetch-*
+//   after a resume:    ... accept-encoding, [referer,] sec-fetch-*, connection, cookie
 //
 // Request header order is part of a browser's fingerprint, so the second layout tells a server the
-// request came from an automated browser. Put the two headers back in the order necko fills them
-// in: the defaults, "connection", whatever the channel was set up with, "cookie", and finally
-// everything added from http-on-modify-request onwards. Order on the wire follows
-// nsHttpHeaderArray, and setting a header that is already present updates it in place, so moving
-// one means deleting it and adding it back.
-function restoreInterceptedHeaderOrder(httpChannel, extraHTTPHeaders) {
+// request came from an automated browser. Where "referer" goes depends on the request type (a
+// fetch() sets it before "connection", an <img> after), so no fixed rule reproduces it: the order
+// is taken from the original channel. Order on the wire follows nsHttpHeaderArray, and setting a
+// header that is already present updates it in place, so moving one means deleting it and adding
+// it back.
+function restoreInterceptedHeaderOrder(httpChannel, extraHTTPHeaders, originalOrder) {
   const headers = requestHeaders(httpChannel);
-  const nameOf = header => header.name.toLowerCase();
-
-  const displaced = [];
-  for (const name of ['connection', 'cookie']) {
-    const index = headers.findIndex(header => nameOf(header) === name);
-    if (index !== -1)
-      displaced.push(headers.splice(index, 1)[0]);
-  }
-  if (!displaced.length)
+  const ordered = orderRequestHeaders(headers, originalOrder, extraHTTPHeaders.map(header => header.name.toLowerCase()));
+  if (ordered.every((header, i) => header === headers[i]))
     return;
-
-  const lateHeaders = new Set([
-    ...ON_BEFORE_CONNECT_HEADERS,
-    ...extraHTTPHeaders.map(header => header.name.toLowerCase()),
-  ]);
-  const firstIndex = predicate => {
-    const index = headers.findIndex(predicate);
-    return index === -1 ? headers.length : index;
-  };
-
-  for (const header of displaced) {
-    const boundary = nameOf(header) === 'connection' ?
-        firstIndex(h => !DEFAULT_REQUEST_HEADERS.includes(nameOf(h))) :
-        firstIndex(h => lateHeaders.has(nameOf(h)));
-    headers.splice(boundary, 0, header);
-  }
-
   // The host header cannot be removed, and it sorts first either way.
-  const movable = headers.filter(header => nameOf(header) !== 'host');
+  const movable = ordered.filter(header => header.name.toLowerCase() !== 'host');
   for (const header of movable)
     httpChannel.setRequestHeader(header.name, '', false /* merge */);
   appendExtraHTTPHeaders(httpChannel, movable);
+}
+
+// `headers` sorted into the order a channel that was never intercepted sends them:
+//   1. every header the original channel had, in its order (`originalOrder`, read at
+//      http-on-modify-request, before we add anything);
+//   2. headers added from http-on-modify-request onwards (Juggler's extra headers, a route's new
+//      ones), in the order given;
+//   3. the ones necko adds in OnBeforeConnect.
+// Without an original order (it is recorded for every request we see), fall back to placing
+// "connection" after the defaults and "cookie" before the late headers.
+function orderRequestHeaders(headers, originalOrder, lateNames = []) {
+  const nameOf = header => header.name.toLowerCase();
+  if (!originalOrder) {
+    const rest = headers.filter(h => !['connection', 'cookie'].includes(nameOf(h)));
+    const pick = name => headers.filter(h => nameOf(h) === name);
+    const late = new Set([...ON_BEFORE_CONNECT_HEADERS, ...lateNames]);
+    const firstIndex = predicate => {
+      const index = rest.findIndex(predicate);
+      return index === -1 ? rest.length : index;
+    };
+    rest.splice(firstIndex(h => !DEFAULT_REQUEST_HEADERS.includes(nameOf(h))), 0, ...pick('connection'));
+    rest.splice(firstIndex(h => late.has(nameOf(h))), 0, ...pick('cookie'));
+    return rest;
+  }
+  const rank = header => {
+    const name = nameOf(header);
+    const original = originalOrder.indexOf(name);
+    if (original !== -1)
+      return original;
+    const late = ON_BEFORE_CONNECT_HEADERS.indexOf(name);
+    if (late !== -1)
+      return originalOrder.length + 1 + late;
+    return originalOrder.length;
+  };
+  return headers
+      .map((header, index) => ({header, index, rank: rank(header)}))
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .map(entry => entry.header);
 }
 
 const redirectStatus = [301, 302, 303, 307, 308];
