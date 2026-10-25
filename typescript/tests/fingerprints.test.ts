@@ -33,6 +33,7 @@ import {
 	type Preset,
 	Screen,
 	setMediaDevicesDefaults,
+	versionlessUa,
 	WINDOWS_11_MARKER_FONTS,
 } from "../src/fingerprints.js";
 import { LOCAL_DATA } from "../src/paths.js";
@@ -724,6 +725,32 @@ describe("identity salt and seed (test_identity_salt.py)", () => {
 			Array.from({ length: 200 }, () => identitySeed(config, identitySalt())),
 		);
 		expect(seeds.size).toBe(200);
+	});
+
+	it("a browser upgrade does not move the seed", () => {
+		// A saved identity on a newer browser claims the new engine version and
+		// nothing else; the seed hashes the UA without it (Python: versionless_ua).
+		const at = (version: string) => ({
+			"navigator.userAgent": `Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:${version}) Gecko/20100101 Firefox/${version}`,
+			"navigator.platform": "Win32",
+			"screen.width": 1920,
+			"screen.height": 1080,
+			"navigator.hardwareConcurrency": 8,
+		});
+		const salt = identitySalt({ pinned: "identity" });
+		expect(versionlessUa(at("150.0.2")["navigator.userAgent"])).toBe(
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:) Gecko/20100101 Firefox/",
+		);
+		expect(identitySeed(at("158.0"), salt)).toBe(
+			identitySeed(at("150.0.2"), salt),
+		);
+		// The OS tokens still tell identities apart.
+		const mac = {
+			...at("158.0"),
+			"navigator.userAgent":
+				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:158.0) Gecko/20100101 Firefox/158.0",
+		};
+		expect(identitySeed(mac, salt)).not.toBe(identitySeed(at("158.0"), salt));
 	});
 
 	it("the salt of equal objects is equal", () => {

@@ -178,6 +178,23 @@ def identity_salt(pinned: Any = None) -> int:
     return int.from_bytes(hashlib.sha256(blob).digest()[:8], 'big')
 
 
+# The browser's version in a UA: "rv:158.0" and "Firefox/158.0".
+_UA_VERSION = re.compile(r'(rv:|Firefox/)[0-9][0-9.]*')
+
+
+def versionless_ua(user_agent: str) -> str:
+    """The UA with the browser's version taken out, for identity_seed().
+
+    Launching a saved identity on a newer browser rewrites its UA to the new
+    engine version and changes nothing else about the machine. Hashing the
+    version moved the seed with every Firefox release, so a pinned identity
+    drew other fonts, voices, a different GPU and other media devices after
+    each browser upgrade -- the change #442/#765 guard against within one
+    version. The OS tokens stay: they tell identities apart.
+    """
+    return _UA_VERSION.sub(r'\1', user_agent)
+
+
 def identity_seed(config: Dict[str, Any], salt: int = 0) -> int:
     """A seed for the per-identity draws (fonts, voices, GPU, media devices,
     noise seeds): a pure function of the presented identity and its salt.
@@ -191,7 +208,7 @@ def identity_seed(config: Dict[str, Any], salt: int = 0) -> int:
     """
     import zlib
     parts = [
-        str(config.get('navigator.userAgent', '')),
+        versionless_ua(str(config.get('navigator.userAgent', ''))),
         str(config.get('navigator.platform', '')),
         str(config.get('screen.width', '')),
         str(config.get('screen.height', '')),

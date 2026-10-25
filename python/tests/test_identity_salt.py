@@ -17,10 +17,10 @@ from camoufox import fingerprints as fp
 
 
 @contextmanager
-def host():
+def host(browser_version="150.0.2"):
     with mock.patch.object(utils, "get_screen_cons", lambda headless: None), (
         mock.patch.object(utils, "has_display", lambda env: False)
-    ), mock.patch.object(utils, "installed_verstr", lambda: "150.0.2"), (
+    ), mock.patch.object(utils, "installed_verstr", lambda: browser_version), (
         mock.patch.object(utils, "launch_path", lambda **kwargs: "/nonexistent/camoufox")
     ):
         yield
@@ -34,11 +34,11 @@ def config_of(options):
     return orjson.loads("".join(chunk for _, chunk in chunks))
 
 
-def launch(**kwargs):
+def launch(browser_version="150.0.2", **kwargs):
     kwargs.setdefault("os", "linux")
     kwargs.setdefault("headless", True)
     kwargs.setdefault("i_know_what_im_doing", True)
-    with host():
+    with host(browser_version):
         return config_of(utils.launch_options(**kwargs))
 
 
@@ -65,6 +65,21 @@ class TestPinnedIdentityIsStable:
         first = launch(fingerprint=fingerprint)
         second = launch(fingerprint=fingerprint)
         assert drawn(first) == drawn(second)
+
+    @pytest.mark.parametrize("os_name", ["windows", "macos", "linux"])
+    def test_a_browser_upgrade_keeps_every_draw(self, os_name):
+        # A saved identity relaunched on a newer browser: the UA claims the new
+        # engine version, and nothing else about the machine may change. The
+        # seed used to hash the whole UA, so every Firefox release redrew a
+        # pinned identity's fonts, voices, GPU and media devices.
+        fingerprint = fp.generate_fingerprint(os=os_name)
+        old = launch("150.0.2", os=os_name, fingerprint=fingerprint)
+        new = launch("158.0", os=os_name, fingerprint=fingerprint)
+        assert "Firefox/150.0" in old["navigator.userAgent"]
+        assert "Firefox/158.0" in new["navigator.userAgent"]
+        devices = lambda c: {k: v for k, v in c.items() if k.startswith("mediaDevices:")}
+        assert drawn(old) == drawn(new)
+        assert devices(old) and devices(old) == devices(new)
 
     def test_fixed_preset_reproduces_every_draw(self):
         preset = fp.get_random_preset(os="windows", ff_version="150")
