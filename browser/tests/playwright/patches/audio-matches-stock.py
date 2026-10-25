@@ -165,7 +165,12 @@ def released_library_options() -> dict:
     chunks = sorted((int(k.rsplit("_", 1)[1]), k) for k in env if k.startswith("CAMOU_CONFIG_"))
     config = orjson.loads("".join(env.pop(k) for _, k in chunks))
     config["audio:seed"] = OLD_SEED
-    env.update({k: v for k, v in get_env_vars(config, "lin").items() if k.startswith("CAMOU_CONFIG_")})
+    # The binary under test's bundle, as launch_options passes it. Without a
+    # path, get_env_vars finds its fontconfig in the installed release, and on
+    # a runner with none it fetched one from the GitHub API (rate-limited, 403).
+    binary = Path(options["executable_path"])
+    env.update({k: v for k, v in get_env_vars(config, "lin", path=binary).items()
+                if k.startswith("CAMOU_CONFIG_")})
     return options
 
 
