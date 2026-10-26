@@ -657,6 +657,7 @@ Artifacts are written to `browser/dist/`.
 cd browser
 docker build -t camoufox-builder .
 docker run -v "$(pwd)/dist:/app/dist" camoufox-builder --target linux --arch x86_64
+docker run -v "$(pwd)/dist:/app/dist" camoufox-builder --target windows --arch x86_64
 ```
 
 The container takes the `multibuild.py` flags. Add
