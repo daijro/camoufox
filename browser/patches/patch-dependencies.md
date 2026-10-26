@@ -99,7 +99,7 @@ the change.
 
 | Patch | Upstream change |
 |-------|-----------------|
-| `remote-security-settings.patch` | The startup import of the bundled OneCRL list into certificate storage, from mozilla-firefox's `release` branch ([Bug 2084311](https://bugzilla.mozilla.org/show_bug.cgi?id=2084311)), and the `security-state/onecrl.json` dump of Firefox 158.0.1. Camoufox turns Remote Settings off, so without the import a fresh profile has no revocations. |
+| `remote-security-settings.patch` | The startup import of the bundled OneCRL list into certificate storage, from mozilla-firefox's `release` branch ([Bug 2084311](https://bugzilla.mozilla.org/show_bug.cgi?id=2084311)). Firefox 158.0.1 ships the matching `security-state/onecrl.json` dump. Camoufox turns Remote Settings off, so without the import a fresh profile has no revocations. |
 
 ## Playwright
 
