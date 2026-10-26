@@ -430,6 +430,38 @@ describe("test_launch_environment: prefs", () => {
 		});
 	});
 
+	describe("renders at the claimed devicePixelRatio (test_display_scale.py)", () => {
+		const PREF = "layout.css.devPixelsPerPx";
+		const win = (dpr: number, opts: Record<string, any> = {}) =>
+			prefsFor({
+				...ua(WIN_UA, {
+					"screen.width": 1382,
+					"screen.height": 864,
+					"window.outerWidth": 1280,
+					"window.outerHeight": 900,
+					"window.devicePixelRatio": dpr,
+				}),
+				headless: true,
+				...opts,
+			});
+		it("sets the scale, and a caller's pref wins", async () => {
+			expect((await win(2.5))[PREF]).toBe("2.5");
+			expect(PREF in (await win(1))).toBe(false);
+			expect(
+				(await win(2.5, { firefox_user_prefs: { [PREF]: "1.0" } }))[PREF],
+			).toBe("1.0");
+		});
+		it("refuses a window too large for the monitor", async () => {
+			deps.osName = () => "lin";
+			await expect(
+				win(2.5, {
+					headless: false,
+					screen: new fingerprints.Screen({ maxWidth: 1920, maxHeight: 1080 }),
+				}),
+			).rejects.toThrow("needs 3200 pixels, but this monitor has 1920");
+		});
+	});
+
 	describe("Windows scrollbars follow the version the fonts present", () => {
 		const PREF = "ui.useOverlayScrollbars";
 		const prefs = (fonts: string[], u = WIN_UA) => prefsFor(ua(u, { fonts }));
@@ -441,6 +473,74 @@ describe("test_launch_environment: prefs", () => {
 		});
 		it("other OSes get overlay", async () => {
 			expect((await prefs(["DejaVu Sans"], LINUX_UA))[PREF]).toBe(1);
+		});
+	});
+
+	// test_windows_identity.py
+	describe("a Windows identity on another host behaves as Windows", () => {
+		const STYLE = "widget.non-native-theme.scrollbar.style";
+		const onHost = async (host: "lin" | "win", u: string, extra = {}) => {
+			deps.hostOsKey = () => host;
+			let config: Record<string, any> = {};
+			deps.getEnvVars = ((c: Record<string, any>) => {
+				config = { ...c };
+				return {};
+			}) as any;
+			const prefs = await prefsFor({ ...ua(u), ...extra });
+			return { config, prefs };
+		};
+
+		it("gets the CRT's math, Windows' keyboard and behaviour", async () => {
+			const { config, prefs } = await onHost("lin", WIN_UA);
+			expect(prefs["javascript.options.use_ucrt_math"]).toBe(true);
+			expect(config["input:windowsKeyboard"]).toBe(true);
+			for (const [pref, value] of Object.entries(
+				utils.WINDOWS_BEHAVIOUR_PREFS,
+			)) {
+				expect(prefs[pref]).toEqual(value);
+			}
+			expect("media.eme.enabled" in prefs).toBe(false);
+			expect(prefs["middlemouse.paste"]).toBe(false);
+		});
+		it("draws Windows' scrollbars at Windows' size", async () => {
+			const classic = await onHost("lin", WIN_UA, {
+				firefox_user_prefs: { "ui.useOverlayScrollbars": 0 },
+			});
+			expect(classic.prefs[STYLE]).toBe(4);
+			const overlay = await onHost("lin", WIN_UA, {
+				firefox_user_prefs: { "ui.useOverlayScrollbars": 1 },
+			});
+			expect(overlay.prefs[STYLE]).toBe(5);
+		});
+		it("leaves other identities and a Windows host alone", async () => {
+			for (const [host, u] of [
+				["lin", LINUX_UA],
+				["lin", MAC_UA],
+				["win", WIN_UA],
+			] as const) {
+				const { config, prefs } = await onHost(host, u);
+				expect("javascript.options.use_ucrt_math" in prefs).toBe(false);
+				expect("input:windowsKeyboard" in config).toBe(false);
+				expect("middlemouse.paste" in prefs).toBe(false);
+				expect(STYLE in prefs).toBe(false);
+			}
+		});
+		it("caller values win", async () => {
+			const { config, prefs } = await onHost("lin", WIN_UA, {
+				config: {
+					"navigator.userAgent": WIN_UA,
+					"input:windowsKeyboard": false,
+				},
+				firefox_user_prefs: {
+					"javascript.options.use_ucrt_math": false,
+					"middlemouse.paste": true,
+					[STYLE]: 2,
+				},
+			});
+			expect(config["input:windowsKeyboard"]).toBe(false);
+			expect(prefs["javascript.options.use_ucrt_math"]).toBe(false);
+			expect(prefs["middlemouse.paste"]).toBe(true);
+			expect(prefs[STYLE]).toBe(2);
 		});
 	});
 
@@ -978,33 +1078,75 @@ describe.skipIf(!MODEL.ok)(
 			}
 		});
 
-		it("unpinned launches never share noise seeds", async () => {
-			const seeds = new Set<number>();
-			for (let i = 0; i < 40; i++) {
-				seeds.add(
-					(await launchConfig({ os: "linux", headless: true }))["audio:seed"],
-				);
-			}
-			expect(seeds.size).toBe(40);
-		});
-
 		it("a fixed fingerprint reproduces every draw", async () => {
 			const fp = fingerprints.generateFingerprint({ os: "linux" });
 			const drawn = (c: Record<string, any>) =>
-				JSON.stringify(
-					["audio:seed", "fonts", "voices", "webGl:renderer"].map((k) => c[k]),
-				);
+				JSON.stringify(["fonts", "voices", "webGl:renderer"].map((k) => c[k]));
 			const first = await launchConfig({ os: "linux", fingerprint: fp });
 			const second = await launchConfig({ os: "linux", fingerprint: fp });
 			expect(drawn(first)).toBe(drawn(second));
 		});
 
-		it("a fixed preset reproduces the noise seeds and fonts", async () => {
+		it("a fixed preset reproduces its fonts", async () => {
 			const preset = fingerprints.getRandomPreset("windows", "150");
 			const first = await launchConfig({ fingerprint_preset: preset });
 			const second = await launchConfig({ fingerprint_preset: preset });
-			expect(first["audio:seed"]).toBe(second["audio:seed"]);
 			expect(first.fonts).toEqual(second.fonts);
+		});
+
+		it("generates no audio seed", async () => {
+			// Audio renders as stock: one value per CPU architecture
+			// (ci/tribal-rules.yml: audio-is-not-noised).
+			expect("audio:seed" in (await launchConfig({}))).toBe(false);
+			const preset = fingerprints.getRandomPreset("windows", "150");
+			for (const p of [undefined, preset]) {
+				const context = fingerprints.generateContextFingerprint({
+					os: "windows",
+					preset: p,
+				});
+				expect("audio:seed" in context.config).toBe(false);
+				expect(context.init_script).not.toContain("setAudioFingerprintSeed");
+			}
+		});
+
+		it("warns once and drops an audio seed", async () => {
+			const removed = (ws: { category: string; message: string }[]) =>
+				ws.filter(
+					(w) =>
+						w.category === "FutureWarning" && w.message.includes("audio:seed"),
+				);
+			const launched = await warnings.recordWarnings(() =>
+				utils.launchOptions({
+					env: { HOME },
+					os: "linux",
+					i_know_what_im_doing: true,
+					executable_path: BUNDLE_EXE,
+					config: { "audio:seed": 9 },
+				}),
+			);
+			expect(launched.error).toBeUndefined();
+			const config = configOf(launched.result as Record<string, any>);
+			expect("audio:seed" in config).toBe(false);
+			expect(config.fonts.length).toBeGreaterThan(0);
+			expect(removed(launched.warnings)).toHaveLength(1);
+			expect(removed(launched.warnings)[0].message).toContain(
+				"rendered exactly as stock Firefox",
+			);
+
+			const overrides = { "audio:seed": 7, timezone: "Pacific/Chatham" };
+			const context = await warnings.recordWarnings(() =>
+				fingerprints.generateContextFingerprint({
+					os: "linux",
+					config_overrides: overrides,
+				}),
+			);
+			expect(removed(context.warnings)).toHaveLength(1);
+			expect("audio:seed" in (context.result?.config ?? {})).toBe(false);
+			expect(context.result?.config.timezone).toBe("Pacific/Chatham");
+			expect(overrides).toEqual({
+				"audio:seed": 7,
+				timezone: "Pacific/Chatham",
+			});
 		});
 
 		it.each([
@@ -1029,10 +1171,10 @@ describe.skipIf(!MODEL.ok)(
 		it("config_overrides reach the config and the init script", () => {
 			const context = fingerprints.generateContextFingerprint({
 				os: "linux",
-				config_overrides: { "audio:seed": 7 },
+				config_overrides: { timezone: "Pacific/Chatham" },
 			});
-			expect(context.config["audio:seed"]).toBe(7);
-			expect(context.init_script).toContain("setAudioFingerprintSeed(7)");
+			expect(context.config.timezone).toBe("Pacific/Chatham");
+			expect(context.init_script).toContain("Pacific/Chatham");
 		});
 
 		it("a failed font draw warns and uses the OS's font list", async () => {
@@ -1157,14 +1299,6 @@ describe.skipIf(!MODEL.ok)(
 				"built for desktops",
 			);
 			expect(warned).toBe(true);
-		});
-
-		it("keeps the caller's seeds", async () => {
-			const config = await launchConfig({
-				os: "linux",
-				config: { "audio:seed": 9 },
-			});
-			expect(config["audio:seed"]).toBe(9);
 		});
 
 		it("a Windows fr-FR identity has French voices", async () => {

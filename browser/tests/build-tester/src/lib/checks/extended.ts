@@ -680,9 +680,9 @@ export async function runExtendedChecks(): Promise<
     };
   }
 
-  // Audio noise trap -- write known values to a buffer, read back, check if modified
-  // Note: Camoufox applies per-profile audio transformations via getChannelData() hook,
-  // so user-written data IS modified. This is expected -- report as informational, not failure.
+  // Audio noise trap -- write known values to a buffer, read back, check if modified.
+  // Stock Firefox returns what was written; a modified read-back is noise, and
+  // noise is a tell (ci/tribal-rules.yml: audio-is-not-noised).
   try {
     const trapCtx = new AudioContext();
     const trapBuf = trapCtx.createBuffer(1, 128, 44100);
@@ -704,12 +704,12 @@ export async function runExtendedChecks(): Promise<
       }
     }
     result.audioIntegrity.noiseTrap = {
-      passed: true,
+      passed: !trapModified,
       detail: trapModified
         ? "Audio buffer modified on read-back (max delta: " +
           maxDiff.toExponential(2) +
-          ") - Camoufox audio transform active"
-        : "Audio buffer unchanged after write-back (no audio transform applied)",
+          ") - audio is noised, which stock Firefox never does"
+        : "Audio buffer unchanged after write-back, as on stock",
     };
   } catch (e: any) {
     result.audioIntegrity.noiseTrap = {

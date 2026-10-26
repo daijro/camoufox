@@ -261,12 +261,17 @@ export class MouseDispatch {
   sendWheel(x, y, {deltaX, deltaY, deltaZ, deltaMode, lineOrPageDeltaX, lineOrPageDeltaY, nativeNotches = false}) {
     const {x: absX, y: absY} = this.toAbsolute(x, y);
     const utils = this._win.windowUtils;
+    // The widget reads pixel deltas as device pixels. Scale by the chrome
+    // window's real ratio, not this._win.devicePixelRatio (MaskConfig spoofs it).
+    const scale = deltaMode === 0 /* WheelEvent.DOM_DELTA_PIXEL */
+        ? utils.toTopLevelWidgetRect(0, 0, 1, 1).width
+        : 1;
     utils.sendWheelEvent(
       absX,
       absY,
-      deltaX,
-      deltaY,
-      deltaZ,
+      deltaX * scale,
+      deltaY * scale,
+      deltaZ * scale,
       deltaMode,
       this._args.modifiers,
       lineOrPageDeltaX,

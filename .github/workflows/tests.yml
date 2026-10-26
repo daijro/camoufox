@@ -82,6 +82,10 @@ on:
         description: "Commit to test; defaults to the calling workflow's commit"
         required: false
         type: string
+      ubo:
+        description: "The uBlock Origin release to bundle, as browser/scripts/fetch-ubo.py resolves it; default AMO's newest"
+        required: false
+        type: string
     secrets:
       SUNDIAL_USERNAME:
         required: false
@@ -124,6 +128,7 @@ jobs:
       browser_tag: ${{ steps.scope.outputs.browser_tag }}
       has_sundial: ${{ steps.sundial.outputs.has_sundial }}
       shard_matrix: ${{ steps.shards.outputs.matrix }}
+      ubo: ${{ steps.ubo.outputs.pin }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -147,6 +152,19 @@ jobs:
           python3 -m ci.versions --check-upstream \
             ${{ inputs.browser_version && format('--browser-version {0}', inputs.browser_version) || '' }} \
             ${{ inputs.playwright_tag && format('--playwright-tag {0}', inputs.playwright_tag) || '' }}
+
+      - name: The uBlock Origin release to bundle
+        id: ubo
+        # Once per run, so every job tests the same one. A release resolves it
+        # itself and passes it in, so the browser it ships bundles what was tested.
+        env:
+          CAMOUFOX_UBO: ${{ inputs.ubo }}
+        run: |
+          if [ -n "$CAMOUFOX_UBO" ]; then
+            echo "pin=$CAMOUFOX_UBO" >> "$GITHUB_OUTPUT"
+          else
+            python3 browser/scripts/fetch-ubo.py resolve
+          fi
 
       - name: Does this change the browser?
         id: scope
@@ -260,6 +278,14 @@ jobs:
 
       - name: Synthesized input goes through one chokepoint
         run: python3 browser/scripts/check-input-dispatch.py
+
+      - name: Windows CRT math is bit-exact
+        # Checks that the tables are what gen-ucrt-math-tables.py generates,
+        # builds browser/additions/js/src/builtin/UcrtMath*.c on their own and
+        # compares all ~127,000 results with ucrtbase.dll's, in seconds rather
+        # than after a build. The browser-level check is the windows-crt-math
+        # patch guard.
+        run: python3 browser/tests/ucrt-math/check.py
 
       - name: CI pipeline self-tests
         # These assert that the pipeline reports honestly: skips carry reasons,
@@ -601,6 +627,8 @@ jobs:
 
       - name: Package the binary for the test jobs
         if: steps.prebuilt.outputs.cache-hit != 'true'
+        env:
+          CAMOUFOX_UBO: ${{ needs.resolve.outputs.ubo }}
         run: |
           set -euo pipefail
           src="browser/camoufox-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}/obj-x86_64-pc-linux-gnu/dist/bin"
@@ -617,8 +645,12 @@ jobs:
           #                            binary, so AsyncCamoufox dies with
           #                            FileNotFoundError without it. That breaks
           #                            patch-guards, the leak suite and sundial.
+          #   addons/UBO/           -- the uBlock Origin the launchers load by
+          #                            default; without it every suite runs a
+          #                            browser no user runs.
           make -C browser stage-fonts
           [ -f "$src/properties.json" ] || cp -v browser/settings/properties.json "$src/properties.json"
+          python3 browser/scripts/fetch-ubo.py stage "$src"
 
           # Fail here, once, rather than in five browser jobs with five
           # different confusing errors.
@@ -626,7 +658,7 @@ jobs:
           # browser/bundle/fonts/groups.json), not a copy per OS; groups.json is what
           # utils._generate_fontconfig reads to decide which of them an identity
           # may see, so its absence is the failure that matters.
-          for required in camoufox-bin properties.json camoufox.cfg fonts/groups.json fonts/LMW fontconfig/linux; do
+          for required in camoufox-bin properties.json camoufox.cfg fonts/groups.json fonts/LMW fontconfig/linux addons/UBO/manifest.json; do
             [ -e "$src/$required" ] || { echo "::error::artifact is missing $required"; exit 1; }
           done
 
@@ -652,6 +684,8 @@ jobs:
       # the evidence rather than an absence in it.
       - name: Lay this branch's resources over the restored browser
         if: steps.prebuilt.outputs.cache-hit == 'true'
+        env:
+          CAMOUFOX_UBO: ${{ needs.resolve.outputs.ubo }}
         # The compiled half is identical by construction -- that is what the key
         # asserts. What can still differ is the JavaScript, and in the
         # unpackaged dist/bin that CI archives there is no omni.ja to rebuild:
@@ -665,6 +699,9 @@ jobs:
           mkdir -p restored
           zstd -d -c camoufox-dist.tar.zst | tar -C restored -xf -
           python3 -m ci.browser_inputs --overlay restored/bin
+          # The cached browser bundles the uBO of the run that built it; this
+          # run's replaces it.
+          python3 browser/scripts/fetch-ubo.py stage restored/bin
           test -f restored/bin/camoufox-bin || { echo "::error::restored artifact has no camoufox-bin"; exit 1; }
           # Via a temporary name, not over the input. `zstd -o` refuses an
           # existing destination ("already exists; stdin is an input - not
@@ -738,6 +775,7 @@ jobs:
         # rate limit if the token is missing.
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          CAMOUFOX_UBO: ${{ needs.resolve.outputs.ubo }}
         run: |
           set -euo pipefail
           # The release built from this tree's sources, installed the way a
@@ -772,6 +810,10 @@ jobs:
           done
           mkdir -p pack/bin
           cp -a "$install_dir/." pack/bin/
+          # Releases from before uBlock Origin was bundled have none; give such
+          # a build this run's, as the build path does. A release that bundles
+          # one is tested with its own.
+          [ -e pack/bin/addons/UBO/manifest.json ] || python3 browser/scripts/fetch-ubo.py stage pack/bin
           tar -C pack -cf - bin | zstd -3 -T0 -o camoufox-dist.tar.zst
           ls -lh camoufox-dist.tar.zst
 
@@ -882,6 +924,9 @@ jobs:
       # namespace, which Ubuntu's AppArmor denies to programs without a profile.
       - if: matrix.leg == 'spoofing'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - if: matrix.leg == 'parity'
+        # windows-keyboard sends real X11 key events.
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends xdotool x11-xkb-utils
       - if: matrix.leg != 'skiplist'
         run: xvfb-run -a python3 -m ci.run_patch_guards --group "${{ matrix.leg }}" --binary "$CAMOUFOX_BINARY"
       - name: Every skiplist entry is still failing

@@ -55,6 +55,7 @@ SETTERS = [
     "setNavigatorPlatform",
     "setNavigatorOscpu",
     "setNavigatorHardwareConcurrency",
+    "setNavigatorAppVersion",
     "setNavigatorUserAgent",
     "setScreenDimensions",
     "setScreenColorDepth",
@@ -63,7 +64,6 @@ SETTERS = [
     "setWebRTCIPv4",
     "setWebRTCIPv6",
     "setFontList",
-    "setAudioFingerprintSeed",
     "setSpeechVoices",
     "setTimezone",
 ]

@@ -24,14 +24,16 @@ required_categories:
 # Cross-profile uniqueness is judged by what each slot actually promises, not by
 # one count across all of them (see ci/run_build_tester.py):
 #
-#   must vary    audio, canvas, timezone -- derived per context. Two contexts
-#                sharing one is the leak this suite exists to catch, so the
-#                tolerance below is 0.
-#   may collide  fonts, screens, voices, WebGL -- drawn from the preset pool.
+#   must vary    timezone -- derived per context. Two contexts sharing one is
+#                the leak this suite exists to catch, so the tolerance below
+#                is 0.
+#   may collide  canvas, fonts, screens, voices, WebGL -- drawn from the
+#                preset pool, and the canvas follows the fonts and GPU.
 #                Three draws from a pool of a dozen collide regularly; that is
 #                the birthday paradox, and the pools are small on purpose
 #                because they hold real devices. Reported, never fatal.
-#   must match   platform -- every macOS context reports MacIntel. A collision
+#   must match   platform, audio -- every macOS context reports MacIntel, and
+#                the audio render is the host CPU's, as on stock. A collision
 #                is the correct answer here and variation is the bug.
 #
 # The earlier flat count failed a run that scored 1054/1054, by reading three

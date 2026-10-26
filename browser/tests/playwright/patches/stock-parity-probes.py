@@ -16,6 +16,8 @@ an invariant stock Firefox 152 holds:
                       asked for: one event, deltaMode 0, deltaY 300
   wheel-notches       the same scroll with humanize=True arrives as 3 events
                       with wheelDeltaY a multiple of 120, as a physical wheel
+  wheel-scaled        wheel-default again at layout.css.devPixelsPerPx 2:
+                      still deltaY 300, not 150
   query-cost          matchMedia('(color: 8)') and navigator.hardwareConcurrency
                       cost about what matchMedia('(min-width: 1px)') and
                       navigator.userAgent do (no sync IPC per read)
@@ -200,7 +202,7 @@ def run_probes(binary, port):
         return out
 
 
-def probe_wheel(binary, port, humanize):
+def probe_wheel(binary, port, humanize, prefs=None):
     """One scroll of 300px, with humanize on or off.
 
     Off (the default) the caller's delta is delivered verbatim, which is what
@@ -210,7 +212,7 @@ def probe_wheel(binary, port, humanize):
     from camoufox.sync_api import Camoufox
 
     with Camoufox(headless=True, executable_path=str(binary), humanize=humanize,
-                  i_know_what_im_doing=True) as b:
+                  firefox_user_prefs=prefs or {}, i_know_what_im_doing=True) as b:
         page = b.new_page()
         page.goto(f"http://localhost:{port}/")
         page.mouse.move(200, 200)
@@ -248,6 +250,8 @@ def main() -> int:
     try:
         out = run_probes(binary, port)
         out["wheelHumanized"] = probe_wheel(binary, port, humanize=True)
+        out["wheelScaled"] = probe_wheel(binary, port, humanize=False,
+                                         prefs={"layout.css.devPixelsPerPx": "2"})
         relaunch = relaunch_timezones(binary, port)
     finally:
         server.shutdown()
@@ -283,6 +287,8 @@ def main() -> int:
     # Default: the delta the caller asked for, in pixels, as one event.
     if len(wheel) != 1 or wheel[0]["mode"] != 0 or wheel[0]["dy"] != 300:
         failures.append(f"wheel-default: wheel(0, 300) gave {wheel}")
+    if [e["dy"] for e in out["wheelScaled"]] != [300]:
+        failures.append(f"wheel-scaled: wheel(0, 300) at 2x gave {out['wheelScaled']}")
     # humanize=True: notches, each carrying one native tick.
     humanized = out["wheelHumanized"]
     if len(humanized) != 3 or any(e["wd"] % 120 for e in humanized):

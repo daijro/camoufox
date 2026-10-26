@@ -707,9 +707,9 @@ def record_constants():
 def record_init_script():
     cases = [
         {},
-        {'audioFingerprintSeed': 123,
-         'navigatorPlatform': 'Win32', 'navigatorOscpu': 'Windows NT 10.0; Win64; x64',
-         'navigatorUserAgent': UAS[3], 'hardwareConcurrency': 8, 'webglVendor': 'Google Inc. (Intel)',
+        {'navigatorPlatform': 'Win32', 'navigatorOscpu': 'Windows NT 10.0; Win64; x64',
+         'navigatorUserAgent': UAS[3], 'navigatorAppVersion': '5.0 (Windows)', 'hardwareConcurrency': 8,
+         'webglVendor': 'Google Inc. (Intel)',
          'webglRenderer': 'ANGLE (Intel, "quoted" é)', 'screenWidth': 1920, 'screenHeight': 1080,
          'screenColorDepth': 24, 'timezone': 'Europe/Paris', 'fontList': ['Arial', '微软雅黑', 'Segoe UI'],
          'speechVoices': [{'name': 'Microsoft David'}, 'Plain Name'], 'webrtcIP': '1.2.3.4'},

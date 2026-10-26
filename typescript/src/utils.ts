@@ -21,10 +21,10 @@ import {
 	UnknownIPLocation,
 } from "./exceptions.js";
 import {
-	audioSeedFromIdentity,
 	clampScreenToDisplay,
 	clampWindowDimensions,
 	clampWindowPosition,
+	dropAudioSeed,
 	fixHardwareConcurrency,
 	fixNavigatorArch,
 	followBaselineProtection,
@@ -102,6 +102,25 @@ const OS_NAMES = { win: "windows", mac: "macos", lin: "linux" } as const;
 
 // Camoufox preferences to cache previous pages and requests
 export const CACHE_PREFS: Record<string, any> = LAUNCHER_CONSTANTS.cachePrefs;
+
+// Prefs whose Firefox default differs between the Windows and Linux builds and
+// that a page or the user can observe, at the Windows default (see
+// WINDOWS_BEHAVIOUR_PREFS in the Python launcher for each one's reason).
+export const WINDOWS_BEHAVIOUR_PREFS: Record<string, any> =
+	LAUNCHER_CONSTANTS.windowsBehaviourPrefs;
+
+/** Monitor pixels per CSS pixel of the window at the scale it renders at.
+ * Linux reports the monitor in pixels at scale 1. On Windows and macOS the
+ * host's own scaling is already in the bounds and is not known here, so 1. */
+function physicalScale(
+	config: Record<string, any>,
+	prefs: Record<string, any> = {},
+): number {
+	if (utilsDeps.osName() !== "lin") return 1;
+	// -1 is Firefox's "the system's".
+	const pref = Number(prefs["layout.css.devPixelsPerPx"] ?? -1);
+	return pref > 0 ? pref : Number(config["window.devicePixelRatio"] || 1);
+}
 
 /** The host OS in fonts.json / target_os terms ('mac', 'win', 'lin'). */
 function hostOsKey(): TargetOS | null {
@@ -1494,7 +1513,7 @@ export async function launchOptions({
 	const userSetDnt = "navigator.doNotTrack" in config;
 	const userSetGpc = "navigator.globalPrivacyControl" in config;
 	const userSetAcceptEncoding = "headers.Accept-Encoding" in config;
-	const userSetAudioSeed = "audio:seed" in config;
+	dropAudioSeed(config);
 
 	// The salt that makes every seeded draw belong to this identity (see
 	// fingerprints.identitySalt): stable when the caller pinned the identity --
@@ -1519,21 +1538,25 @@ export async function launchOptions({
 		throw new ValueError("OS must be set when using webgl_config");
 	}
 
-	// Add the default addons
-	await utilsDeps.addDefaultAddons(addons, exclude_addons);
-
-	// Confirm all addon paths are valid
-	if (addons.length) {
-		utilsDeps.confirmPaths(addons);
-		config.addons = addons;
-	}
-
 	// The managed install is resolved lazily in Python (camoufox_path() may
 	// download); here that download is async, so do it before any sync lookup.
 	if (!executable_path) {
 		await utilsDeps.ensureCamoufoxInstalled();
 	}
 	warnIfPackageOutdated();
+
+	// The default addons are the ones that build bundles, beside its binary
+	await utilsDeps.addDefaultAddons(
+		addons,
+		exclude_addons,
+		executable_path ? String(executable_path) : utilsDeps.launchPath(),
+	);
+
+	// Confirm all addon paths are valid
+	if (addons.length) {
+		utilsDeps.confirmPaths(addons);
+		config.addons = addons;
+	}
 
 	// Get the Firefox version
 	let ffVersionStr: string;
@@ -1613,10 +1636,13 @@ export async function launchOptions({
 		// the screen it is drawn on. headless has no window to overflow, and
 		// headless="virtual" reaches here as headless=false with a 1x1 Xvfb.
 		if (headless === false && !virtual_display && screenCons) {
+			const fit = physicalScale(config);
 			utilsDeps.clampScreenToDisplay(
 				config,
-				screenCons.maxWidth as number,
-				screenCons.maxHeight as number,
+				(screenCons.maxWidth &&
+					Math.trunc(screenCons.maxWidth / fit)) as number,
+				(screenCons.maxHeight &&
+					Math.trunc(screenCons.maxHeight / fit)) as number,
 			);
 		}
 		utilsDeps.followBaselineProtection(config, targetOs);
@@ -1690,6 +1716,32 @@ export async function launchOptions({
 		setInto(firefox_user_prefs, "ui.useOverlayScrollbars", 1);
 	}
 
+	// A Windows identity on another host: answers that come from the host
+	// build's platform code are set to what stock Windows Firefox gives.
+	if (targetOs === "win" && utilsDeps.hostOsKey() !== "win") {
+		// Math.sin/cos/tan/pow as the Windows CRT computes them, to the last bit
+		// (windows-crt-math.patch).
+		setInto(firefox_user_prefs, "javascript.options.use_ucrt_math", true);
+
+		// Keyboard: Windows' shortcut tables instead of GTK's text bindings, and
+		// AltGr as keyCode 18 rather than 225 (windows-keyboard.patch).
+		setInto(config, "input:windowsKeyboard", true);
+
+		for (const [pref, value] of Object.entries(WINDOWS_BEHAVIOUR_PREFS)) {
+			setInto(firefox_user_prefs, pref, value);
+		}
+
+		// The scrollbars pinned above are drawn by the host build's theme (GTK's
+		// 12 px where Windows 10 draws 17): draw Windows' own, 4 Windows 10 or
+		// 5 Windows 11 (17 px: only Windows' build reads a system metric).
+		const overlay = firefox_user_prefs["ui.useOverlayScrollbars"];
+		setInto(
+			firefox_user_prefs,
+			"widget.non-native-theme.scrollbar.style",
+			overlay ? 5 : 4,
+		);
+	}
+
 	// Per-character font fallback, LINUX ONLY: with async fallback on, the
 	// first measurement of a character only one bundled family provides returns
 	// the primary family's .notdef. macOS must NOT get this.
@@ -1725,16 +1777,6 @@ export async function launchOptions({
 	// so the generated header is dropped unless the caller set it.
 	if (!userSetAcceptEncoding) {
 		delete config["headers.Accept-Encoding"];
-	}
-
-	// The audio noise seed follows the identity: a returning "same device" must
-	// reproduce its audio hash (#442/#765). Never 0 (0 disables the noise).
-	// There is no canvas seed: the browser adds no canvas noise (#528), and no
-	// glyph-spacing noise either (ci/tribal-rules.yml: no-glyph-spacing-noise).
-	if (!userSetAudioSeed) {
-		config["audio:seed"] = audioSeedFromIdentity(
-			utilsDeps.identitySeed(config, salt),
-		);
 	}
 
 	// Set geolocation
@@ -1982,6 +2024,28 @@ export async function launchOptions({
 			console.log(
 				`Incoherent identity (${violation.rule}): ${violation.detail}`,
 			);
+		}
+	}
+
+	// Render at the claimed display scale, so (resolution) and the CSS geometry
+	// agree with devicePixelRatio as on the real machine (#933).
+	const dpr = Number(config["window.devicePixelRatio"] || 1);
+	if (dpr !== 1 && !("layout.css.devPixelsPerPx" in firefox_user_prefs)) {
+		firefox_user_prefs["layout.css.devPixelsPerPx"] = String(dpr);
+	}
+	if (headless === false && !virtual_display && screenCons) {
+		const fit = physicalScale(config, firefox_user_prefs);
+		for (const [axis, cap] of [
+			["Width", screenCons.maxWidth],
+			["Height", screenCons.maxHeight],
+		] as const) {
+			const size = config[`window.outer${axis}`];
+			if (cap && size && size * fit > cap) {
+				throw new Error(
+					`window.outer${axis} ${size} at display scale ${fit} needs ${size * fit} pixels, ` +
+						`but this monitor has ${cap}. Pass a smaller screen and window, or run headless.`,
+				);
+			}
 		}
 	}
 

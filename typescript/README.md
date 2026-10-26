@@ -35,6 +35,9 @@ npx camoufox fetch
 
 `camoufox fetch` installs the browser build this release is paired with.
 Without it, the first launch downloads it.
+It reads the build's release with one GitHub API call and exits non-zero
+when it installs nothing. On a shared CI runner, set `GITHUB_TOKEN` to raise
+GitHub's API rate limit.
 
 ## Usage
 
@@ -89,7 +92,7 @@ await context.close();
 ### One browser, many identities
 
 `NewContext()` gives each context its own identity (navigator, screen, WebGL,
-fonts, voices, audio seed, timezone, WebRTC IP), applied through
+fonts, voices, timezone, WebRTC IP), applied through
 `addInitScript` before any page script runs.
 
 ```javascript
@@ -120,6 +123,16 @@ Canvas noise belongs to the browser, not the context (see
 [The canvas on another OS](#the-canvas-on-another-os)). On a browser without it,
 every context claims the host's OS and GPU too, since its canvas renders there.
 Contexts with other OSes, like the ones above, need `canvas_noise: true`.
+
+The browser's own OS also decides some things for all its contexts. A browser
+launched as Windows on a Linux or macOS host (`os: "windows"`, or drawn so)
+computes `Math` as the Windows CRT does and uses Windows' keyboard shortcuts
+(on a Linux host; on macOS only the editor caret style), middle-click and
+scrollbars ([docs/HOST-PARITY.md](../docs/HOST-PARITY.md)).
+Those are browser settings, so a macOS context on it has them too, and a
+Windows context on a browser launched as another OS has the host's. `NewContext`
+does not refuse the mix. Pass `os` at launch for the OS whose behaviour matters,
+or use one browser per OS.
 
 ### The canvas on another OS
 
@@ -266,7 +279,7 @@ and `from_options` (an object from `launchOptions()` to use as is).
 
 | Command | Options | What it does |
 |---|---|---|
-| `fetch [version]` | | Install the paired build (or, after `set`, the latest in the chosen channel), or `version` without making it active. Syncs first. |
+| `fetch [version]` | | Install the paired build (or, after `set`, the latest in the chosen channel), or `version` without making it active. A named or paired build is read from its own release; anything else syncs first. Exits non-zero when nothing is installed. |
 | `sync` | `--spoof-os auto\|mac\|win\|lin`, `--spoof-arch auto\|x86_64\|i686\|arm64` | Refresh the list of available builds. |
 | `set [specifier]` | `--geoip`, `--release` | Pin a build (`official/stable/134.0.2-beta.20`) or follow a channel (`official/stable`). No specifier opens a picker. `--geoip` picks the GeoIP database instead; `--release` goes back to the paired build. |
 | `active` | | Print the active build. A build that is chosen but not downloaded is marked `(not fetched)`. |

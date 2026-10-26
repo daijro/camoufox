@@ -325,6 +325,34 @@ rules:
       exception is an identity on another OS or GPU than the host's, whose
       canvas cannot agree with it (cross-os-canvas-is-the-rfp-placeholder).
 
+  - id: audio-is-not-noised
+    title: The audio render is stock Firefox's, one value per CPU architecture, and there is no audio seed
+    check: automated
+    evidence:
+      - "issue #926 / PR #927. Study 2026-10-23: 106 runs of stock Firefox, probe = fingerprintjs (OfflineAudioContext 1x5000@44100, triangle 10 kHz into a compressor, sum of |samples| 4500..5000, and SHA-256 of the whole buffer), CreepJS AnalyserNode frequency/time-domain reads, a biquad lowpass and a plain sine. Data: audio-study/summary_all.txt and audio-study/results/ (kept outside the repo); the guard browser/tests/playwright/patches/audio-matches-stock.py carries the probe and the expected values"
+      - "ARM64, all 45 runs FPJS 35.74996626004577, buffer sha 8e127fb8b39c...: Raspberry Pi 4 Model B (Cortex-A72, ARMv8.0, Debian 12 arm64), Firefox 158.0.1 and 152.0.3, headless and headed; Mac Studio, Apple M5 Ultra, macOS 27.0.1; Mac mini, Apple M4, macOS 27.0; GitHub macos-14/15/26 (Apple M1), ubuntu-24.04-arm (Neoverse-N2), windows-11-arm (Cobalt 100/200)"
+      - "x86-64, all 61 runs FPJS 35.749972093850374, buffer sha dea0ebd60642...: Ryzen 7 9850X3D (Zen 5, AVX-512), Ubuntu 26.04, Firefox 152.0.3, 153.0, 156.0.1 and 158.0.1; i9-11900H, Windows 11 26200, Firefox 158.0.1 and 152.0.3; GitHub ubuntu-latest/22.04 on EPYC 7763 (Zen 3, AVX2) and 9V45/9V74 (AVX-512); GitHub windows-latest/2022 on EPYC; GitHub macos-15-intel on i7-8700B"
+      - "every run of an architecture also gave the same AnalyserNode, biquad and sine hashes; Linux, macOS and Windows on one architecture agree, and so do Firefox 152 to 158"
+      - "device swap on the Ryzen box: EDIFIER R19BT USB, Samson Q2U, Radeon HDMI, null sinks at 6ch/96k and 1ch/22.05k, private PipeWire servers at 22050, 44100, 48000 and 96000 Hz, and no audio server all gave bit-identical offline output; only sampleRate, maxChannelCount and outputLatency followed the device"
+      - "fpgen audio_hash_by_platform (Firefox records, its own metric): the x86 value is about 74% of records, and macOS records carry the ARM value"
+      - "Camoufox's per-identity noise gave 35.734-35.743, which no real Firefox produced; v158.0-beta.40 with audio:seed 424242 renders 35.74635897387998 and moves the AnalyserNode, biquad and sine hashes too, and with audio:seed 0 renders stock x86-64 to the bit (audio-matches-stock.py)"
+    rationale: >-
+      An OfflineAudioContext render depends on the CPU's floating-point path and
+      nothing else a page can see: not the OS, the sound card, the sample rate
+      or the Firefox version. Real Firefox therefore has one audio fingerprint
+      per architecture, and a site that has seen a few million visitors knows
+      both. Noise did not hide the device; it put every identity on a value no
+      real machine produces, and gave each context of one browser a different
+      one, which no real browser does either. The render is left as stock
+      renders it, so it is the host's architecture's value, the same in every
+      context and every launch, and a returning identity reproduces it
+      trivially (#442, #765). The audio-fingerprint-manager patch, its
+      per-context setter and the audio:seed key are gone; a caller passing
+      audio:seed gets a warning that it was removed, and the key is dropped
+      before it reaches the browser. build-tester counts
+      the audio hash with the values that must match across contexts, and the
+      audio-matches-stock guard checks the build against the recorded values.
+
   - id: cross-os-canvas-is-the-rfp-placeholder
     title: On the host's OS the identity claims the host's GPU; on another OS or GPU canvas readback is RFP's random placeholder
     check: automated

@@ -1,0 +1,126 @@
+diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
+--- a/js/src/builtin/Math.cpp
++++ b/js/src/builtin/Math.cpp
+@@ -24,6 +24,7 @@
+ #  include <android/api-level.h>
+ #endif
+ 
++#include "builtin/UcrtMath.h"
+ #include "jit/InlinableNatives.h"
+ #include "js/Class.h"
+ #include "js/ForOfIterator.h"
+@@ -54,8 +55,22 @@
+ using mozilla::PositiveInfinity;
+ using mozilla::WrappingMultiply;
+ 
++// Math.sin/cos/tan/pow computed as the Windows CRT does, so a non-Windows
++// build that presents as Windows gives Windows results to the last bit (see
++// builtin/UcrtMath.h). It replaces the platform libm only: SpiderMonkey's own
++// fast paths (powi, the sqrt cases in ecmaPow) are the same on every platform
++// and stay. It takes precedence over use_fdlibm_for_sin_cos_tan, but not over
++// a realm that always uses fdlibm (resistFingerprinting).
++static inline bool UseUcrtMath() {
++#ifdef JS_UCRT_MATH
++  return JS::Prefs::use_ucrt_math();
++#else
++  return false;
++#endif
++}
++
+ bool js::math_use_fdlibm_for_sin_cos_tan() {
+-  return JS::Prefs::use_fdlibm_for_sin_cos_tan();
++  return JS::Prefs::use_fdlibm_for_sin_cos_tan() && !UseUcrtMath();
+ }
+ 
+ static inline bool UseFdlibmForSinCosTan(const CallArgs& args) {
+@@ -78,6 +93,11 @@
+     return fdlibm_pow(x, y);
+   }
+ #endif
++#ifdef JS_UCRT_MATH
++  if (UseUcrtMath()) {
++    return ucrt_pow(x, y);
++  }
++#endif
+   // Every other platform's libm pow already produces the consensus value
+   // for the inputs the math fingerprint samples, so we keep the faster
+   // platform path.
+@@ -237,6 +257,11 @@
+ double js::math_cos_native_impl(double x) {
+   MOZ_ASSERT(!math_use_fdlibm_for_sin_cos_tan());
+   AutoUnsafeCallWithABI unsafe;
++#ifdef JS_UCRT_MATH
++  if (UseUcrtMath()) {
++    return ucrt_cos(x);
++  }
++#endif
+   return std::cos(x);
+ }
+ 
+@@ -632,6 +657,11 @@
+ double js::math_sin_native_impl(double x) {
+   MOZ_ASSERT(!math_use_fdlibm_for_sin_cos_tan());
+   AutoUnsafeCallWithABI unsafe;
++#ifdef JS_UCRT_MATH
++  if (UseUcrtMath()) {
++    return ucrt_sin(x);
++  }
++#endif
+   return std::sin(x);
+ }
+ 
+@@ -661,6 +691,11 @@
+ double js::math_tan_native_impl(double x) {
+   MOZ_ASSERT(!math_use_fdlibm_for_sin_cos_tan());
+   AutoUnsafeCallWithABI unsafe;
++#ifdef JS_UCRT_MATH
++  if (UseUcrtMath()) {
++    return ucrt_tan(x);
++  }
++#endif
+   return std::tan(x);
+ }
+ 
+diff --git a/js/src/builtin/moz.build b/js/src/builtin/moz.build
+--- a/js/src/builtin/moz.build
++++ b/js/src/builtin/moz.build
+@@ -50,6 +50,19 @@
+     "RegExp.cpp",
+ ]
+ 
++# The Windows CRT's sin/cos/tan/pow for builds that present as Windows on
++# another OS (UcrtMath.h). Each operation must round exactly once, as the CRT's
++# instruction does, so no FP contraction; and the argument reduction needs a
++# 128-bit integer multiply, so 64-bit only. Windows itself uses the real CRT.
++if CONFIG["OS_ARCH"] != "WINNT" and CONFIG["HAVE_64BIT_BUILD"]:
++    DEFINES["JS_UCRT_MATH"] = True
++    SOURCES += [
++        "UcrtMathPow.c",
++        "UcrtMathTrig.c",
++    ]
++    SOURCES["UcrtMathPow.c"].flags += ["-ffp-contract=off"]
++    SOURCES["UcrtMathTrig.c"].flags += ["-ffp-contract=off"]
++
+ selfhosted_inputs = [
+     "../../public/friend/ErrorNumbers.msg",
+     # ProfilingCategoryList.h is being indirectly included, and it must be passed
+diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/StaticPrefList.yaml
+--- a/modules/libpref/init/StaticPrefList.yaml
++++ b/modules/libpref/init/StaticPrefList.yaml
+@@ -10251,6 +10251,16 @@
+   mirror: always
+   set_spidermonkey_pref: always
+ 
++# Whether Math.sin, Math.cos, Math.tan and Math.pow compute what the Windows
++# Universal CRT computes (its FMA3 code path), to the last bit, instead of
++# using this platform's libm. Overrides use_fdlibm_for_sin_cos_tan. Has no
++# effect on Windows, which already uses the CRT, or on 32-bit builds.
++- name: javascript.options.use_ucrt_math
++  type: bool
++  value: false
++  mirror: always
++  set_spidermonkey_pref: always
++
+ # Attempt to dispatch multiple microtasks without doing a full
+ # setup and teardown between each task.
+ - name: javascript.options.batch_microtask_execution

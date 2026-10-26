@@ -15,13 +15,13 @@ for the calling window's context, and is gone before any page script runs
 
 | Function | Patch | What a page sees |
 |---|---|---|
-| `setAudioFingerprintSeed(seed)` | `audio-fingerprint-manager.patch` | `AudioBuffer` and `AnalyserNode` output |
 | `setTimezone(tz)` | `timezone-spoofing.patch` | `Date`, `Intl.DateTimeFormat` and every other time API |
 | `setScreenDimensions(w, h)` | `screen-spoofing.patch` | `screen.width`, `screen.height`, matching CSS media features |
 | `setScreenColorDepth(depth)` | `screen-spoofing.patch` | `screen.colorDepth` |
 | `setNavigatorPlatform(platform)` | `navigator-spoofing.patch` | `navigator.platform` |
 | `setNavigatorOscpu(oscpu)` | `navigator-spoofing.patch` | `navigator.oscpu` |
 | `setNavigatorHardwareConcurrency(cores)` | `navigator-spoofing.patch` | `navigator.hardwareConcurrency` |
+| `setNavigatorAppVersion(appVersion)` | `navigator-spoofing.patch` | `navigator.appVersion`, in workers too |
 | `setNavigatorUserAgent(ua)` | `navigator-spoofing.patch` | `navigator.userAgent`, in workers too |
 | `setWebRTCIPv4(ip)` | `webrtc-ip-spoofing.patch` | ICE candidates, SDP, `getStats()` |
 | `setWebRTCIPv6(ip)` | `webrtc-ip-spoofing.patch` | The same, for IPv6 |
@@ -37,8 +37,8 @@ Supporting patches, with no setter of their own:
 | `anti-font-fingerprinting.patch` | The context id on each font group |
 | `cross-process-storage.patch` | `RoverfoxStorageManager`, the per-context store, with the IPC that makes a value set in one process readable in every other, and the guard and removal every setter uses |
 
-There is no canvas pixel noise and no glyph-spacing noise: both produce output
-no real machine does ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml)). A
+There is no canvas pixel noise, no audio noise and no glyph-spacing noise: each
+produces output no real machine does ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml)). A
 browser launched with `canvas_noise=True` returns random canvas readback, as
 `privacy.resistFingerprinting` does, for every context.
 
@@ -56,13 +56,11 @@ const context = await browser.newContext();
 await context.addInitScript((v) => {
   const w = window;
   if (typeof w.setTimezone === "function") w.setTimezone(v.timezone);
-  if (typeof w.setAudioFingerprintSeed === "function") w.setAudioFingerprintSeed(v.audioSeed);
   if (typeof w.setScreenDimensions === "function") w.setScreenDimensions(v.width, v.height);
   if (typeof w.setNavigatorPlatform === "function") w.setNavigatorPlatform(v.platform);
   if (typeof w.setWebRTCIPv4 === "function") w.setWebRTCIPv4(v.webrtcIp);
 }, {
   timezone: "America/New_York",
-  audioSeed: 87654321,
   width: 1920,
   height: 1080,
   platform: "Win32",
@@ -91,22 +89,32 @@ its own id).
 | 2 | The value goes into the in-process cache. |
 | 3 | It is also written as a pref with the `roverfox.s.` prefix (every type serialized as a string). |
 | 4 | In a content process, it is sent to the parent with sync IPC (`SendRoverfoxStoragePut`). |
-| 5 | Audio, navigator, screen, timezone and WebGL also store it under id 0, for workers that cannot resolve their context. Fonts, voices and WebRTC do not. |
+| 5 | Navigator, screen, timezone and WebGL also store it under id 0, for workers that cannot resolve their context. Fonts, voices and WebRTC do not. |
 
 | Tier | Read path |
 |---|---|
 | 1 | The in-process cache |
-| 2 | Firefox prefs, which Firefox syncs to every content process |
-| 3 | Sync IPC to the parent (`SendRoverfoxStorageGet`), main thread only |
+| 2 | Firefox prefs, which Firefox syncs to every content process (main thread only) |
 
-Off the main thread (HarfBuzz, the compositor) only tiers 1 and 2 are used,
-because sync IPC is main-thread only.
+Off the main thread (workers, HarfBuzz, the compositor) only tier 1 is read;
+the main thread keeps it a mirror of every `roverfox.s.` pref. There is no
+read from the parent: a put reaches the parent synchronously, and the pref
+update it sends each content process is queued ahead of any later document
+load there, so a document never needs it. Asking the parent cost the first
+read of each unset key 16-54 ms, which a page can time.
+
+Getters a page can call in a loop (navigator, screen, timezone, WebGL vendor
+and renderer) read through `GetUint`, `GetBool` and `GetString`
+taking a prefix literal and the id (`"nav_hwc_", id`). Each thread memoizes
+those answers, keyed by prefix and id, until any write in the process bumps a
+generation counter, so a repeat read builds no key and takes no lock and costs
+what the stock getter does.
 
 ### Cross-process storage
 
-`cross-process-storage.patch` adds two sync messages to `PContent.ipdl`,
-`RoverfoxStoragePut` and `RoverfoxStorageGet`. The parent accepts only pref
-names starting with `roverfox.s.`. Put is synchronous so the value is in the
+`cross-process-storage.patch` adds a sync message to `PContent.ipdl`,
+`RoverfoxStoragePut`. The parent accepts only pref names starting with
+`roverfox.s.`. Put is synchronous so the value is in the
 parent before any worker process starts. The patch also adds `roverfox.s.` to
 `sDynamicPrefOverrideList` in `Preferences.cpp`, because Firefox otherwise
 strips dynamically created string prefs from content processes.
@@ -155,10 +163,9 @@ real value.
 
 | Patch | Hooks | Notes |
 |---|---|---|
-| `audio-fingerprint-manager.patch` | `AudioBuffer.getChannelData`, `copyFromChannel`; `AnalyserNode.getFloatFrequencyData`, `getByteFrequencyData`, `getFloatTimeDomainData`, `getByteTimeDomainData` | A small deterministic transform of the samples, seeded per context. All six read paths are covered, because covering only `getChannelData` is bypassable. Falls back to `audio:seed` in `CAMOU_CONFIG`. |
 | `timezone-spoofing.patch` | SpiderMonkey `DateTimeInfo` per realm (`JS::SetRealmTimeZoneOverride`), `nsGlobalWindowOuter::SetNewDocument`, `WorkerPrivate::GetOrCreateGlobalScope` | The only patch inside SpiderMonkey. Re-applied on navigation and in dedicated, shared and service workers; also sets a process-wide override. Invalid IDs throw `TypeError`. |
 | `screen-spoofing.patch` | `nsScreen::GetRect`, `nsDeviceContext`, `nsMediaFeatures.cpp` | CSS `device-width` and `color` agree with `screen.*`. |
-| `navigator-spoofing.patch` | `Navigator::GetPlatform`, `GetOscpu`, `HardwareConcurrency`, `GetUserAgent`, `GetAppVersion` (global only); the `WorkerNavigator` versions of platform, cores and UA | Falls back to `navigator.*` in `CAMOU_CONFIG`. |
+| `navigator-spoofing.patch` | `Navigator::GetPlatform`, `GetOscpu`, `HardwareConcurrency`, `GetUserAgent`, `GetAppVersion`; the `WorkerNavigator` versions of platform, cores, UA and appVersion | Falls back to `navigator.*` in `CAMOU_CONFIG`. |
 | `webrtc-ip-spoofing.patch` | `SanitizeSDPForIPLeak`, `CandidateReady`, candidate `.address`/`.relatedAddress`, `getStats()`, `UpdateDefaultCandidate`, `NrSocketBase::CreateSocket` | Forces `default_address_only` while spoofing; loopback, link-local and private addresses are left alone. UDP candidate ports come from the ephemeral range of the identity's OS (`MaskConfig::SpoofedEphemeralPorts()`), so a Windows identity on Linux never shows a Linux port. |
 | `webgl-spoofing.patch` | `ClientWebGLContext::GetParameter` | Per context: vendor and renderer. Global only (`CAMOU_CONFIG`): parameters, extensions, shader precision. Works from `OffscreenCanvas` in workers. |
 | `font-list-spoofing.patch` | `gfxPlatformFontList::FindAndAddFamiliesLocked` | A thread-local context id, set by an RAII guard in `FontFaceSet::Check/Load` and `gfxFontGroup::EnsureFontList`, avoids changing ~50 signatures. The list is in the shared store, so it holds in every content process. An `OffscreenCanvas` in a worker takes the worker's context (`anti-font-fingerprinting.patch`); other worker lookups are not filtered. |
@@ -204,7 +211,6 @@ The User-Agent's version is rewritten to the running browser's.
 | WebGL | One GPU fpgen recorded for Firefox on that OS, weighted by its share and checked against the machine (`coherence.gpu_fits_machine()`); `webgl_for_gpu()` adds its parameters, extensions and shader precisions |
 | Fonts | `_generate_random_font_subset()`: one OS-version base plus measured additions ([FONTS.md](FONTS.md)); never from presets |
 | Voices | `_generate_random_voice_subset()`, from `voice-manifests.json`, seeded by the identity; never from presets |
-| Audio seed | Derived from the identity (`NewBrowser`) or random (`NewContext`), never 0 |
 | Timezone | The preset, or `timezone` in `CAMOU_CONFIG` (from geoip); with a proxy, `NewContext` looks it up from the exit IP |
 | WebRTC IP | `NewContext`'s `webrtc_ip` or the proxy's exit IP, to the IPv4 or IPv6 setter; an invalid address raises `InvalidIP` |
 | Geolocation | The `geolocation` argument, via Playwright |
@@ -227,3 +233,11 @@ not possible, launch with `canvas_noise=True`: canvas and WebGL readback then
 return random data, which covers the two rasterization rows above. A browser
 launched without it gives its contexts the host's OS and GPU, and `NewContext`
 raises for another OS or GPU.
+
+The settings that make a Windows identity on another host behave as Windows
+([HOST-PARITY.md](HOST-PARITY.md): CRT math, keyboard, behaviour prefs,
+scrollbars) are prefs and launch config, not per-context setters. They follow
+the OS the browser was launched with: every context on a browser launched as
+Windows gets them, and no context on a browser launched as another OS does.
+`NewContext` does not refuse the mix, since a launch without `os` draws its OS
+and the refusal would depend on the draw.

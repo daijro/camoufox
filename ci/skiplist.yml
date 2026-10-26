@@ -244,7 +244,9 @@ skip:
   # guard browser/tests/playwright/patches/viewport-no-rdm.py). The suite
   # launches the bare binary headless on Linux, which draws classic 12 px
   # scrollbars, so a 500 px wide grid.html page lays out 488 px of content, as
-  # stock Firefox does.
+  # stock Firefox does. The bare binary claims no OS, so the host's theme
+  # draws them; through the launcher a Windows identity on this host gets
+  # Windows' 17 px instead (viewport-no-rdm.py checks both).
 
   - test: tests/async/test_element_handle.py::test_bounding_box
     reason: >-

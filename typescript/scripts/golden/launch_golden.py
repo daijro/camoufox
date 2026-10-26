@@ -103,10 +103,6 @@ for name in ('geoip aio by daijro-combined.mmdb', 'maxmind geolite2-ipv4.mmdb', 
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_bytes(b'')
 
-# The default addon, already "downloaded", so nothing is fetched.
-(CACHE / 'addons' / 'UBO').mkdir(parents=True)
-(CACHE / 'addons' / 'UBO' / 'manifest.json').write_text('{}')
-
 # ------------------------------------------------------------ host probes
 HOST = {
     'cpu_count': 16,
@@ -385,7 +381,7 @@ scenario('config_touch', fingerprint=FP['windows'], os='windows', config={'navig
 scenario('config_dnt_gpc', fingerprint=FP['windows'], os='windows',
          config={'navigator.doNotTrack': '1', 'navigator.globalPrivacyControl': True})
 scenario('config_accept_encoding', fingerprint=FP['linux'], os='linux', config={'headers.Accept-Encoding': 'gzip'})
-scenario('config_seeds', fingerprint=FP['linux'], os='linux', config={'audio:seed': 42})
+scenario('config_removed_audio_seed', fingerprint=FP['linux'], os='linux', config={'audio:seed': 42})
 scenario('config_instant_animations', fingerprint=FP['linux'], os='linux', config={'instantAnimations': True})
 scenario('config_media_devices', fingerprint=FP['linux'], os='linux', config={'mediaDevices:micros': 0})
 scenario('config_webgl_pair', fingerprint=FP['linux'], os='linux',

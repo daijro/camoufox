@@ -38,5 +38,16 @@
     "browser.cache.memory.enable": true,
     "browser.cache.disk_cache_ssl": true,
     "browser.cache.disk.smart_size.enabled": true
+  },
+  "windowsBehaviourPrefs": {
+    "layout.word_select.eat_space_to_next_word": true,
+    "general.autoScroll": true,
+    "middlemouse.paste": false,
+    "middlemouse.scrollbarPosition": false,
+    "full-screen-api.transition-duration.enter": "200 200",
+    "full-screen-api.transition-duration.leave": "200 200",
+    "ui.scrollToClick": 0,
+    "slider.snapMultiplier": 6,
+    "layout.scrollbars.click_and_hold_track.continue_to_end": false
   }
 }

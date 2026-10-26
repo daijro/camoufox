@@ -30,7 +30,6 @@
   { "property": "webrtc:ipv6", "type": "str" },
   { "property": "network:ipv4Only", "type": "bool" },
   { "property": "fonts", "type": "array" },
-  { "property": "audio:seed", "type": "uint" },
   { "property": "geolocation:latitude", "type": "double" },
   { "property": "geolocation:longitude", "type": "double" },
   { "property": "geolocation:accuracy", "type": "double" },
@@ -69,6 +68,7 @@
   { "property": "mediaDevices:speakerLabels", "type": "array" },
   { "property": "mediaDevices:speakerGroups", "type": "array" },
   { "property": "media:spoof_codecs", "type": "bool" },
+  { "property": "input:windowsKeyboard", "type": "bool" },
   { "property": "allowMainWorld", "type": "bool" },
   { "property": "disableWorldIsolation", "type": "bool" },
   { "property": "allowAddonNewtab", "type": "bool" },
@@ -132,5 +132,6 @@
   { "property": "window.scrollMinY", "type": "int", "removed": "156.0.1-beta.32" },
   { "property": "disableTheming", "type": "bool", "removed": "156.0.1-beta.37" },
   { "property": "webGl:contextAttributes", "type": "dict", "removed": "156.0.1-beta.37" },
-  { "property": "webGl2:contextAttributes", "type": "dict", "removed": "156.0.1-beta.37" }
+  { "property": "webGl2:contextAttributes", "type": "dict", "removed": "156.0.1-beta.37" },
+  { "property": "audio:seed", "type": "uint", "removed": "158.0-beta.41" }
 ]

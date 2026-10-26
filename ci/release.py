@@ -26,7 +26,7 @@ build's working tree. Rebuilding from the tag with `set-build` reproduces it.
     python3 -m ci.release target                 # the commit (and stable tag) this run releases
     python3 -m ci.release browser-plan           # build a new browser, or reuse one
     python3 -m ci.release set-build --tag TAG     # upstream.sh names TAG's number (working tree only)
-    python3 -m ci.release manifest --tag T --digest D --commit C   # the release's manifest.json
+    python3 -m ci.release manifest --tag T --digest D --commit C [--ubo PIN]   # the release's manifest.json
     python3 -m ci.release paired [--root DIR] [--releases JSON]  # the browser release for this tree
     python3 -m ci.release lib-plan --channel prerelease|stable [--tag vX.Y.Z]
     python3 -m ci.release stamp --browser-tag T --py-version V --npm-version V
@@ -167,13 +167,19 @@ def browser_interface(root: Path = REPO_ROOT) -> int:
     return int(m[1])
 
 
-def manifest(tag: str, digest: str, commit: str) -> dict:
+def manifest(tag: str, digest: str, commit: str, ubo: Optional[dict] = None) -> dict:
     """What every browser release carries as its manifest.json asset.
 
     The libraries read `interface` to refuse a browser they cannot drive.
+    `ubo` records the uBlock Origin release the builds bundle (its version, AMO
+    url and sha256), which is in no commit: browser/scripts/fetch-ubo.py
+    resolves AMO's newest for each release.
     """
-    return {"schema": 1, "tag": tag, "source_digest": digest, "commit": commit,
-            "interface": browser_interface()}
+    out = {"schema": 1, "tag": tag, "source_digest": digest, "commit": commit,
+           "interface": browser_interface()}
+    if ubo:
+        out["ubo"] = ubo
+    return out
 
 
 def release_manifest(rel: dict) -> Optional[dict]:
@@ -512,7 +518,8 @@ def cmd_set_build(args: argparse.Namespace) -> int:
 
 
 def cmd_manifest(args: argparse.Namespace) -> int:
-    print(json.dumps(manifest(args.tag, args.digest, args.commit), indent=2))
+    ubo = json.loads(args.ubo) if args.ubo else None
+    print(json.dumps(manifest(args.tag, args.digest, args.commit, ubo), indent=2))
     return 0
 
 
@@ -681,7 +688,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub.add_parser("browser-plan").set_defaults(fn=cmd_browser_plan)
     p = sub.add_parser("set-build"); p.add_argument("--tag", required=True); p.set_defaults(fn=cmd_set_build)
     p = sub.add_parser("manifest"); p.add_argument("--tag", required=True); p.add_argument("--digest", required=True)
-    p.add_argument("--commit", required=True); p.set_defaults(fn=cmd_manifest)
+    p.add_argument("--commit", required=True)
+    p.add_argument("--ubo", help="the bundled uBlock Origin release, as browser/scripts/fetch-ubo.py resolves it")
+    p.set_defaults(fn=cmd_manifest)
     p = sub.add_parser("paired")
     p.add_argument("--root", default=str(REPO_ROOT), help="the checkout to pair (default: this one)")
     p.add_argument("--releases", metavar="JSON",
