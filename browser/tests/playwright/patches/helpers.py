@@ -144,12 +144,18 @@ class Marionette:
         self.call("Marionette:SetContext", {"value": "chrome"})
 
     def _recv(self):
+        def recv(n):
+            chunk = self.sock.recv(n)
+            if not chunk:  # the browser is gone; recv would return b"" forever
+                raise ConnectionError("Marionette closed the connection")
+            return chunk
+
         buf = b""
         while b":" not in buf:
-            buf += self.sock.recv(1)
+            buf += recv(1)
         size, rest = buf.split(b":", 1)
         while len(rest) < int(size):
-            rest += self.sock.recv(int(size) - len(rest))
+            rest += recv(int(size) - len(rest))
         return json.loads(rest)
 
     def call(self, command: str, params: dict):

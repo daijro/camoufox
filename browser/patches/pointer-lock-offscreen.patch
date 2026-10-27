@@ -1,0 +1,45 @@
+diff --git a/widget/gtk/nsWindowX11.cpp b/widget/gtk/nsWindowX11.cpp
+--- a/widget/gtk/nsWindowX11.cpp
++++ b/widget/gtk/nsWindowX11.cpp
+@@ -269,21 +269,27 @@ void nsWindowX11::UpdateNativePointerBarriers() {
+ 
+   if (mIsNativePointerLocked) {
+     Window window = GetX11Window();
++    // The X server refuses a barrier whose fixed coordinate is negative
++    // (BadValue), and GDK aborts on that error if it reads it inside one of
++    // its own traps. A window partly off the top or left of the screen has
++    // such an edge; the screen edge already stops the pointer there, so clamp
++    // to it, and trap whatever the server still refuses.
++    const int left = std::max(0, mClientArea.X());
++    const int top = std::max(0, mClientArea.Y());
++    const int right = std::max(0, mClientArea.XMost());
++    const int bottom = std::max(0, mClientArea.YMost());
++    GdkDisplay* gdkDisplay = gdk_window_get_display(mGdkWindow);
++    gdk_x11_display_error_trap_push(gdkDisplay);
+     mNativePointerBarriers.emplace(
+-        XFixesCreatePointerBarrier(
+-            display, window, mClientArea.X(), mClientArea.Y(), mClientArea.X(),
+-            mClientArea.YMost(), BarrierPositiveX, 0, nullptr),
+-        XFixesCreatePointerBarrier(display, window, mClientArea.XMost(),
+-                                   mClientArea.Y(), mClientArea.XMost(),
+-                                   mClientArea.YMost(), BarrierNegativeX, 0,
+-                                   nullptr),
+-        XFixesCreatePointerBarrier(
+-            display, window, mClientArea.X(), mClientArea.Y(),
+-            mClientArea.XMost(), mClientArea.Y(), BarrierPositiveY, 0, nullptr),
+-        XFixesCreatePointerBarrier(display, window, mClientArea.X(),
+-                                   mClientArea.YMost(), mClientArea.XMost(),
+-                                   mClientArea.YMost(), BarrierNegativeY, 0,
+-                                   nullptr));
++        XFixesCreatePointerBarrier(display, window, left, top, left, bottom,
++                                   BarrierPositiveX, 0, nullptr),
++        XFixesCreatePointerBarrier(display, window, right, top, right, bottom,
++                                   BarrierNegativeX, 0, nullptr),
++        XFixesCreatePointerBarrier(display, window, left, top, right, top,
++                                   BarrierPositiveY, 0, nullptr),
++        XFixesCreatePointerBarrier(display, window, left, bottom, right,
++                                   bottom, BarrierNegativeY, 0, nullptr));
++    gdk_x11_display_error_trap_pop_ignored(gdkDisplay);
+   }
+ }
+ 
