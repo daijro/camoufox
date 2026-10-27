@@ -64,19 +64,32 @@ def connect(proc, port):
     raise SystemExit("Marionette never answered")
 
 
+def barriers(log_path):
+    """(x1, y1, x2, y2) of every barrier the shim has seen made so far."""
+    marker = "barrier-trap-shim-call "
+    return [tuple(int(v) for v in line[len(marker):].split())
+            for line in Path(log_path).read_text(errors="replace").splitlines()
+            if line.startswith(marker)]
+
+
 def run(binary, shim, x, y):
-    """Lock the pointer, then move the window to (x, y). Returns (locked, still answering)."""
+    """Lock the pointer, then move the window to (x, y).
+
+    Returns (locked, still answering, barriers made before the move, barriers made after it).
+    """
     port = free_port()
     with tempfile.TemporaryDirectory() as profile:
         Path(profile, "user.js").write_text(f'user_pref("marionette.port", {port});\n')
         env = {**os.environ, "LD_PRELOAD": str(shim), "MOZ_CRASHREPORTER_DISABLE": "1"}
-        log = open(Path(profile, "stderr.log"), "wb")
+        log_path = Path(profile, "stderr.log")
+        log = open(log_path, "wb")
         proc = subprocess.Popen([str(binary), "-no-remote", "-profile", profile, *marionette_args()],
                                 stdout=subprocess.DEVNULL, stderr=log, env=env)
+        before = None
         try:
             m = connect(proc, port)
             if m is None:
-                return False, False
+                return False, False, [], []
             m.sock.settimeout(20)
             locked = answered = False
             try:
@@ -88,6 +101,7 @@ def run(binary, shim, x, y):
                 locked = m.call("WebDriver:ExecuteScript",
                                 {"script": "return !!document.pointerLockElement", "args": []}).get("value")
                 m.call("Marionette:SetContext", {"value": "chrome"})
+                before = len(barriers(log_path))
                 m.js(f"window.moveTo({x}, {y});")
                 time.sleep(3)
                 # A process that still exists is not enough: GDK's fatal path can leave it hung.
@@ -96,14 +110,17 @@ def run(binary, shim, x, y):
                 pass
             finally:
                 m.close()
-            return locked, answered and proc.poll() is None
+            alive = answered and proc.poll() is None
         finally:
             proc.kill()
             proc.wait()
             log.close()
-            said = Path(profile, "stderr.log").read_text(errors="replace")
+            said = log_path.read_text(errors="replace")
             if "barrier-trap-shim:" in said:
                 raise SystemExit(said[said.index("barrier-trap-shim:"):].splitlines()[0])
+        made = barriers(log_path)
+        split = len(made) if before is None else before
+        return locked, alive, made[:split], made[split:]
 
 
 def main() -> int:
@@ -111,19 +128,28 @@ def main() -> int:
     failures = []
     with tempfile.TemporaryDirectory() as tmp, hidden_display("1920x1080"):
         shim = build_shim(tmp)
-        locked, alive = run(binary, shim, 60, 60)
-        print(f"control, moved on screen: locked={locked} alive={alive}")
+        locked, alive, made, _ = run(binary, shim, 60, 60)
+        print(f"control, moved on screen: locked={locked} alive={alive} barriers={len(made)}")
         if not (locked and alive):
             failures.append("the pointer did not lock, or the browser died, with the window on screen,"
                             " so the check proves nothing")
+        elif not made:
+            # document.pointerLockElement is set even when Firefox never takes the native
+            # lock, and without it there are no barriers for the move to break.
+            failures.append("pointer lock made no X barriers, so the check proves nothing")
         else:
             for x, y in [(-30, 60), (60, -30)]:
-                locked, alive = run(binary, shim, x, y)
-                print(f"moved to ({x},{y}): locked={locked} alive={alive}")
+                locked, alive, _, after = run(binary, shim, x, y)
+                # The edge that moved off screen: the left one when x < 0, else the top one.
+                edge = [min(b[0], b[2]) if x < 0 else min(b[1], b[3]) for b in after]
+                print(f"moved to ({x},{y}): locked={locked} alive={alive} off-screen edge at {sorted(set(edge))}")
                 if not alive:
                     failures.append(f"the browser died when the locked window moved to ({x},{y})")
                 elif not locked:
                     failures.append(f"the pointer did not lock before the move to ({x},{y})")
+                elif not any(e <= 0 for e in edge):
+                    failures.append(f"the move to ({x},{y}) did not rebuild the barriers at the screen edge,"
+                                    " so the check proves nothing")
     for failure in failures:
         print(f"FAIL: {failure}")
     if failures:

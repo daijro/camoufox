@@ -2,7 +2,8 @@
  * it opens a GDK error trap and syncs inside it, so the request's error, if any,
  * is read by GDK's handler under a trap that started after the request: the
  * order in which the window manager's startup activity made an X error from a
- * barrier fatal, forced on every call. */
+ * barrier fatal, forced on every call. Each barrier's line goes to stderr, so the
+ * guard can tell that the barriers were made at all. */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <stdio.h>
@@ -26,6 +27,7 @@ XID XFixesCreatePointerBarrier(void* d, unsigned long w, int x1, int y1, int x2,
   static create_fn real;
   if (!real) real = (create_fn)dlsym(RTLD_NEXT, "XFixesCreatePointerBarrier");
   XID barrier = real(d, w, x1, y1, x2, y2, dirs, n, devs);
+  fprintf(stderr, "barrier-trap-shim-call %d %d %d %d\n", x1, y1, x2, y2);
   void* (*get_display)(void) = sym("libgdk-3.so.0", "gdk_display_get_default");
   void (*push)(void*) = sym("libgdk-3.so.0", "gdk_x11_display_error_trap_push");
   int (*pop)(void*) = sym("libgdk-3.so.0", "gdk_x11_display_error_trap_pop");
