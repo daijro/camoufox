@@ -494,6 +494,7 @@ claims the host's OS. Details are in
 | Juggler's debugger leaves no side effects content can observe | `debugger-invisible-to-content` patch |
 | Per-context fingerprint setters are gone before page script runs | `window-setter-seal` patch |
 | Popup blocker on, as in stock Firefox | `popup-blocker-parity` patch |
+| On X11, a pointer-locked window partly off the top or left of the screen keeps running (stock Firefox can crash: the X server refuses the cursor barrier and GDK aborts) | `pointer-lock-offscreen` patch |
 | Content-accessible chrome files match stock Firefox | `contentaccessible-parity` patch |
 | Viewports never enter Responsive Design Mode; containers show no automation label | Juggler |
 
