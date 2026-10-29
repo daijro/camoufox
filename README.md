@@ -117,8 +117,8 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
       • 🎯 Precise geo-targeting<br>
       • HTTP, HTTPS & SOCKS5 Support<br>
       Built for scraping, automation, and high-stealth workflows.<br>
-      <b>🔥 Exclusive Offer</b> - Use code <b>Camoufox30</b><br>
-      Get <b>30% recurring discount</b> (not just first month). Upgrade your proxies. Reduce bans. Scale properly
+      <b>🔥 Exclusive Offer</b> - Use code <b>Camoufox50</b><br>
+      Get <b>50% recurring discount</b> (not just first month). Upgrade your proxies. Reduce bans. Scale properly
     </td>
   </tr>
 </table>
