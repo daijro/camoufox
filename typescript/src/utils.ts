@@ -2028,9 +2028,10 @@ export async function launchOptions({
 	}
 
 	// Render at the claimed display scale, so (resolution) and the CSS geometry
-	// agree with devicePixelRatio as on the real machine (#933).
-	const dpr = Number(config["window.devicePixelRatio"] || 1);
-	if (dpr !== 1 && !("layout.css.devPixelsPerPx" in firefox_user_prefs)) {
+	// agree with devicePixelRatio as on the real machine (#933). That includes 1:
+	// on a HiDPI host the host's own scale would otherwise reach (resolution).
+	const dpr = Number(config["window.devicePixelRatio"]);
+	if (dpr && !("layout.css.devPixelsPerPx" in firefox_user_prefs)) {
 		firefox_user_prefs["layout.css.devPixelsPerPx"] = String(dpr);
 	}
 	if (headless === false && !virtual_display && screenCons) {

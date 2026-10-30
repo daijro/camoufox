@@ -1677,8 +1677,9 @@ def launch_options(
             print(f'Incoherent identity ({_violation.rule}): {_violation.detail}')
 
     # Render at the claimed display scale, so (resolution) and the CSS geometry
-    # agree with devicePixelRatio as on the real machine (#933).
-    if float(config.get('window.devicePixelRatio') or 1) != 1:
+    # agree with devicePixelRatio as on the real machine (#933). That includes 1:
+    # on a HiDPI host the host's own scale would otherwise reach (resolution).
+    if config.get('window.devicePixelRatio'):
         firefox_user_prefs.setdefault('layout.css.devPixelsPerPx', f"{float(config['window.devicePixelRatio']):g}")
     if headless is False and not virtual_display and screen_cons:
         fit = _physical_scale(config, firefox_user_prefs)

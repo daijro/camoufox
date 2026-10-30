@@ -19,7 +19,7 @@ def prefs(dpr, **kwargs):
 
 def test_renders_at_the_claimed_scale(isolated_launch_dependencies):  # noqa: F811
     assert prefs(2.5)[PREF] == "2.5"
-    assert PREF not in prefs(1)
+    assert prefs(1)[PREF] == "1"
 
 
 def test_caller_pref_wins(isolated_launch_dependencies):  # noqa: F811
