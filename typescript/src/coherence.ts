@@ -27,7 +27,10 @@ export const APPLE_SILICON_CORES: ReadonlySet<number> = new Set(
 export const PLAUSIBLE_DPR: Readonly<Record<string, readonly number[]>> =
 	LAUNCHER_CONSTANTS.plausibleDpr;
 
-/** colorDepth: Firefox reports 24, or 30 on a deep-colour display. */
+/**
+ * colorDepth: Firefox reports 24, or 30 on a deep-colour display. macOS
+ * defaults to deep colour, so a Mac reports 30, Intel or Apple Silicon.
+ */
 export const PLAUSIBLE_COLOR_DEPTH: ReadonlySet<number> = new Set([24, 30]);
 
 /** maxTouchPoints: consumer digitisers top out at 10 contacts. */
@@ -63,6 +66,11 @@ export const APPLE_SILICON_PANELS: ReadonlySet<string> = new Set(
 export interface Violation {
 	rule: string;
 	detail: string;
+	/**
+	 * The caller's own keys that the repair would have changed, and which were
+	 * kept as passed instead. Absent when nothing of the caller's is involved.
+	 */
+	kept?: string[];
 }
 
 export interface Rule {
@@ -204,22 +212,31 @@ function checkColorDepth(config: Config, targetOs: string): string | null {
 	if (isNone(depth)) return null;
 	if (!inColorDepths(depth))
 		return `screen.colorDepth ${pyStr(depth)}; Firefox reports 24 or 30`;
-	if (targetOs === "mac" && isAppleSilicon(config) && num(depth) !== 30) {
-		return `Apple Silicon Mac with colorDepth ${pyStr(depth)}; deep colour is the macOS default`;
+	if (targetOs === "mac" && num(depth) !== 30) {
+		return `macOS identity with colorDepth ${pyStr(depth)}; deep colour is the macOS default`;
 	}
 	return null;
 }
 
 function repairColorDepth(config: Config, targetOs: string): void {
-	const depth = config["screen.colorDepth"];
-	if (!isNone(depth) && !inColorDepths(depth)) config["screen.colorDepth"] = 24;
-	if (targetOs === "mac" && isAppleSilicon(config))
-		config["screen.colorDepth"] = 30;
+	if (targetOs === "mac") config["screen.colorDepth"] = 30;
+	else if (!inColorDepths(config["screen.colorDepth"]))
+		config["screen.colorDepth"] = 24;
+	if (!("screen.pixelDepth" in config))
+		config["screen.pixelDepth"] = config["screen.colorDepth"];
+}
+
+function checkPixelDepth(config: Config, _targetOs: string): string | null {
 	// pixelDepth is the same number in every browser that reports both.
-	if ("screen.pixelDepth" in config || "screen.colorDepth" in config) {
-		config["screen.pixelDepth"] =
-			"screen.colorDepth" in config ? config["screen.colorDepth"] : 24;
-	}
+	const pixel = config["screen.pixelDepth"];
+	const color = config["screen.colorDepth"] ?? 24;
+	if (!isNone(pixel) && num(pixel) !== num(color))
+		return `screen.pixelDepth ${pyStr(pixel)} differs from colorDepth ${pyStr(color)}`;
+	return null;
+}
+
+function repairPixelDepth(config: Config, _targetOs: string): void {
+	config["screen.pixelDepth"] = config["screen.colorDepth"] ?? 24;
 }
 
 function checkTouchPoints(config: Config, targetOs: string): string | null {
@@ -371,6 +388,7 @@ export const RULES: readonly Rule[] = [
 	{ name: "gpu-matches-os", check: checkGpuMatchesOs, repair: null },
 	{ name: "intel-mac-hardware", check: checkIntelMacHardware, repair: null },
 	{ name: "color-depth", check: checkColorDepth, repair: repairColorDepth },
+	{ name: "pixel-depth", check: checkPixelDepth, repair: repairPixelDepth },
 	{ name: "touch-points", check: checkTouchPoints, repair: repairTouchPoints },
 	{
 		name: "device-pixel-ratio",
@@ -412,15 +430,32 @@ export function repairScreenOrientation(config: Config): boolean {
 	return true;
 }
 
+function changed(
+	before: Config,
+	after: Config,
+	keys: ReadonlySet<string>,
+): string[] {
+	return [...keys]
+		.filter(
+			(k) =>
+				k in before !== k in after ||
+				JSON.stringify(before[k]) !== JSON.stringify(after[k]),
+		)
+		.sort();
+}
+
 /**
  * Discard values a source supplied that this identity cannot keep (a preset's
  * GPU pair its OS, or its final core count and screen, rule out), so the
  * normal WebGL sampling draws a coherent one instead. Run after the core count
  * and the screen are final. Only values another pool can replace are dropped.
+ * A GPU the caller passed (a key in `keep`) is never dropped: it is reported,
+ * with the keys it kept, instead.
  */
 export function dropIncoherentSourceValues(
 	config: Config,
 	targetOs: string,
+	keep: ReadonlySet<string> = new Set(),
 ): Violation[] {
 	const r = renderer(config);
 	if (!r) return [];
@@ -428,6 +463,20 @@ export function dropIncoherentSourceValues(
 	if (!gpuFitsOs(r, targetOs)) rule = "gpu-matches-os";
 	else if (checkIntelMacHardware(config, targetOs)) rule = "intel-mac-hardware";
 	else return [];
+	const kept = changed(
+		config,
+		{},
+		new Set(["webGl:renderer", "webGl:vendor"].filter((k) => keep.has(k))),
+	);
+	if (kept.length) {
+		return [
+			{
+				rule,
+				detail: `${pyRepr(r)} does not fit this ${targetOs} identity`,
+				kept,
+			},
+		];
+	}
 	delete config["webGl:renderer"];
 	delete config["webGl:vendor"];
 	return [{ rule, detail: `dropped ${pyRepr(r)} for a ${targetOs} identity` }];
@@ -447,11 +496,32 @@ export function validate(config: Config, targetOs: string): Violation[] {
  * Repair what is determined, and report what is left. A rule with no repair
  * cannot be corrected without inventing a machine, so it is returned for the
  * caller to decide about.
+ *
+ * `keep` names the keys the caller set. A repair that would change one of
+ * them is not made: the caller's value stands, and the violation comes back
+ * with those keys in `kept` so the launcher can warn about it (#956). A repair
+ * that only touches other keys still runs.
  */
-export function apply(config: Config, targetOs: string): Violation[] {
+export function apply(
+	config: Config,
+	targetOs: string,
+	keep: ReadonlySet<string> = new Set(),
+): Violation[] {
+	const kept = new Map<string, string[]>();
 	for (const rule of RULES) {
-		if (rule.repair && rule.check(config, targetOs))
-			rule.repair(config, targetOs);
+		if (!rule.repair || !rule.check(config, targetOs)) continue;
+		const repaired: Config = { ...config };
+		rule.repair(repaired, targetOs);
+		const blocked = changed(config, repaired, keep);
+		if (blocked.length) {
+			kept.set(rule.name, blocked);
+		} else {
+			for (const key of Object.keys(config))
+				if (!(key in repaired)) delete config[key];
+			Object.assign(config, repaired);
+		}
 	}
-	return validate(config, targetOs);
+	return validate(config, targetOs).map((v) =>
+		kept.has(v.rule) ? { ...v, kept: kept.get(v.rule) } : v,
+	);
 }
