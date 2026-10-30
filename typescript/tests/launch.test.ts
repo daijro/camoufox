@@ -446,7 +446,7 @@ describe("test_launch_environment: prefs", () => {
 			});
 		it("sets the scale, and a caller's pref wins", async () => {
 			expect((await win(2.5))[PREF]).toBe("2.5");
-			expect(PREF in (await win(1))).toBe(false);
+			expect((await win(1))[PREF]).toBe("1");
 			expect(
 				(await win(2.5, { firefox_user_prefs: { [PREF]: "1.0" } }))[PREF],
 			).toBe("1.0");
