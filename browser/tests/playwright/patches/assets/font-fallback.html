@@ -1,0 +1,25 @@
+<!doctype html><meta charset=utf-8><body><script>
+const S = {
+  ko: "한국어텍스트샘플", ja: "日本語のテキストです", "zh-CN": "中文文本示例简体", "zh-TW": "中文文本示例繁體",
+  th: "ข้อความภาษาไทย", my: "မြန်မာစာ", km: "អក្សរខ្មែរ", lo: "ພາສາລາວ", am: "ግዕዝጽሑፍ", hi: "हिन्दीपाठनमूना",
+  bn: "বাংলালেখা", ta: "தமிழ்உரை", te: "తెలుగుపాఠం", gu: "ગુજરાતી", pa: "ਪੰਜਾਬੀ", si: "සිංහල", ar: "النصالعربي",
+  he: "טקסטעברי", ka: "ქართული", hy: "Հայերեն", mn: "ᠮᠣᠩᠭᠣᠯ", bo: "བོད་ཡིག", chr: "ᏣᎳᎩ", iu: "ᐃᓄᒃᑎᑐᑦ",
+  emoji: "😀🎉👍🏽❤️", math: "∑∫√∞≈≠", ru: "Русскийтекст", el: "Ελληνικά",
+};
+const G = ["serif", "sans-serif", "monospace"];
+const c = document.createElement('canvas').getContext('2d');
+const out = {canvas: {}, dom: {}};
+for (const [k, s] of Object.entries(S)) {
+  out.canvas[k] = {}; out.dom[k] = {};
+  for (const g of G) {
+    c.font = '48px ' + g; out.canvas[k][g] = +c.measureText(s).width.toFixed(3);
+    const sp = document.createElement('span'); sp.lang = k === 'emoji' || k === 'math' ? 'en' : k;
+    sp.style.cssText = 'font: 48px ' + g + '; white-space: nowrap; position: absolute';
+    sp.textContent = s; document.body.appendChild(sp);
+    out.dom[k][g] = +sp.getBoundingClientRect().width.toFixed(3); sp.remove();
+  }
+}
+out.ua = navigator.userAgent; out.dpr = devicePixelRatio;
+document.body.dataset.r = JSON.stringify(out);
+fetch('/result', {method: 'POST', body: JSON.stringify(out)}).catch(() => {});
+</script></body>
