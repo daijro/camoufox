@@ -45,7 +45,7 @@ from .pkgman import (
 )
 from .gpudisplay import GPU_PREFS, GpuDisplay, async_prove_gpu, prove_gpu, select_gpu
 from .virtdisplay import VirtualDisplay
-from ._warnings import FallbackWarning, LeakWarning
+from ._warnings import WARNINGS_DATA, FallbackWarning, LeakWarning, _warn_from_caller
 from .host_rendering import Gpu, add_canvas_placeholder, has_canvas_placeholder, host_gpu, renders_on_hardware, set_webgpu
 from .webgl import firefox_gpus, sample_webgl_for_screen, webgl_for_gpu
 
@@ -577,6 +577,21 @@ def _keeps_ipv6(
         return True
     LeakWarning.warn('ipv6_elsewhere', i_know_what_im_doing)
     return False
+
+
+def warn_kept_incoherent(violations: List[coherence.Violation]) -> None:
+    """
+    Warns for each coherence violation the launch left in place because the
+    caller set the values involved. Camoufox does not overwrite what the caller
+    passed, but an identity no real machine presents is detectable, and a
+    caller that records its identities needs to know that it holds one (#956).
+    """
+    for violation in violations:
+        if violation.kept:
+            _warn_from_caller(
+                WARNINGS_DATA['caller_value_incoherent'].format(keys=', '.join(violation.kept), detail=violation.detail),
+                LeakWarning,
+            )
 
 
 def warn_manual_config(config: Dict[str, Any]) -> None:
@@ -1160,6 +1175,7 @@ def launch_options(
     # Warn the user for manual config settings
     if not i_know_what_im_doing:
         warn_manual_config(config)
+    _caller_keys = frozenset(config)
 
     # Snapshot which domains the USER set before fingerprint generation fills in
     # the rest. The post-generation fix-ups below must
@@ -1612,7 +1628,7 @@ def launch_options(
     # WebGL pool below defers to them (a preset's own GPU pair wins over
     # sampling). Here, not earlier, because the check reads the core count and
     # the screen, which the host core count and the display clamp replace.
-    coherence.drop_incoherent_source_values(config, target_os)
+    warn_kept_incoherent(coherence.drop_incoherent_source_values(config, target_os, _caller_keys))
 
     cover_canvas, host = plan_rendering(
         target_os,
@@ -1671,7 +1687,8 @@ def launch_options(
     # generator, GPU from fpgen's WebGL records, fonts and voices from their own
     # catalogues -- so a machine that never existed can be assembled from parts
     # that are each fine on their own. See coherence.py.
-    _incoherent = coherence.apply(config, target_os)
+    _incoherent = coherence.apply(config, target_os, _caller_keys)
+    warn_kept_incoherent(_incoherent)
     if _incoherent and debug:
         for _violation in _incoherent:
             print(f'Incoherent identity ({_violation.rule}): {_violation.detail}')

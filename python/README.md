@@ -305,7 +305,7 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | `fingerprint` | fpgen fingerprint `dict` | drawn | Use this fpgen fingerprint instead of drawing one. Warns. |
 | `fingerprint_preset` | `bool` or `dict` | `None` | Opt into a recorded real-device preset instead of fpgen: `True` picks a random bundled one, a dict uses that one. |
 | `ff_version` | `int` | the browser's own | Firefox version to claim. Warns: a mismatch with the engine is detectable. |
-| `config` | `dict` | none | Raw Camoufox properties ([`properties.json`](https://github.com/daijro/camoufox/blob/main/browser/settings/properties.json)). Overrides the generated identity; manual identity keys warn. |
+| `config` | `dict` | none | Raw Camoufox properties ([`properties.json`](https://github.com/daijro/camoufox/blob/main/browser/settings/properties.json)). Overrides the generated identity; manual identity keys warn. A value you set is always used; one no real machine with the rest of the identity reports prints a `LeakWarning` naming it, which `i_know_what_im_doing` does not silence. |
 | `firefox_user_prefs` | `dict` | none | Extra Firefox prefs. |
 | `args` | `list[str]` | none | Extra browser command-line arguments. |
 | `env` | `dict` | a copy of the environment | Environment variables for the browser. |
