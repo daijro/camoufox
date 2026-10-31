@@ -9,6 +9,7 @@ import contextlib
 import fnmatch
 import optparse
 import os
+import re
 import sys
 import time
 
@@ -62,6 +63,26 @@ def get_moz_target(target, arch):
     raise ValueError(f"Unsupported target: {target}")
 
 
+def mozilla_rust_version(src_dir):
+    """The Rust release Mozilla builds this Firefox with: the toolchain its
+    taskcluster aliases as linux64-rust. Its LLVM is the major version of the
+    clang `mach bootstrap` fetches for the same tree, which cross-language LTO
+    needs: lld cannot read Rust bitcode from a newer LLVM than its own."""
+    path = os.path.join(src_dir, 'taskcluster', 'kinds', 'toolchain', 'rust.yml')
+    with open(path, encoding='utf-8') as f:
+        text = f.read()
+    versions = set()
+    # One top-level entry per toolchain; the alias is either a plain value or
+    # a by-project mapping whose default is the alias.
+    for entry in re.split(r'^(?=\S)', text, flags=re.MULTILINE):
+        if re.search(r'^\s+(?:toolchain-alias|default): linux64-rust$', entry, re.MULTILINE):
+            versions.update(re.findall(r"'--channel', '(\d+\.\d+\.\d+)'", entry))
+    if len(versions) != 1:
+        raise ValueError(f'{path}: expected one Rust release aliased linux64-rust, '
+                         f'found {sorted(versions) or "none"}')
+    return versions.pop()
+
+
 def list_files(root_dir, suffix):
     """List files in a directory"""
     for root, _, files in os.walk(root_dir):
@@ -105,6 +126,7 @@ def run(cmd, exit_on_fail=True, do_print=True):
 __all__ = [
     'get_moz_target',
     'list_patches',
+    'mozilla_rust_version',
     'run',
     'script_exit',
     'temp_cd',

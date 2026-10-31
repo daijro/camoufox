@@ -635,8 +635,10 @@ make run                        # run the build
 make package-linux arch=x86_64  # or package-macos / package-windows
 ```
 
-`make help` lists every target. Install `ccache`: a cold build takes about 40
-minutes and an incremental one about 5.
+`make help` lists every target. Install `ccache`. Every build is optimized as
+stock Firefox's releases are, with Mozilla's PGO profile for the same Firefox
+and cross-language LTO, and ccache cannot cache the LTO link, so an incremental
+build still relinks libxul.
 
 To build and package several targets in one go:
 
