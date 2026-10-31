@@ -21,6 +21,7 @@ async def launch_camoufox(os: str = "macos", headless: bool = True):
         fingerprint_preset=fp["preset"],
         headless=headless,
         os=os,
+        executable_path=str(resolve_binary()),
     ) as browser:
         context = await browser.new_context(**fp["context_options"])
         await context.add_init_script(fp["init_script"])
@@ -67,6 +68,27 @@ def resolve_binary() -> Path:
 def launch_kwargs(**overrides: Any) -> Dict[str, Any]:
     """Camoufox() kwargs for a guard: headless, on the binary under test."""
     return {"headless": True, "executable_path": str(resolve_binary()), **overrides}
+
+
+def _forbid_installed_release() -> None:
+    """A guard tests the binary under test, so anything that resolves the
+    installed release instead fails here. Otherwise it passes against the
+    release cached on a dev box and, on a runner with none, downloads one
+    through the GitHub API, where an anonymous rate limit fails it (403)."""
+    try:
+        from camoufox import pkgman
+    except ImportError:
+        return
+
+    def camoufox_path(*_args: Any, **_kwargs: Any) -> Path:
+        raise RuntimeError(
+            "a guard resolved the installed Camoufox release, not the binary "
+            "under test: pass executable_path (launch_kwargs) or path=")
+
+    pkgman.camoufox_path = camoufox_path
+
+
+_forbid_installed_release()
 
 
 @contextlib.contextmanager
@@ -122,12 +144,18 @@ class Marionette:
         self.call("Marionette:SetContext", {"value": "chrome"})
 
     def _recv(self):
+        def recv(n):
+            chunk = self.sock.recv(n)
+            if not chunk:  # the browser is gone; recv would return b"" forever
+                raise ConnectionError("Marionette closed the connection")
+            return chunk
+
         buf = b""
         while b":" not in buf:
-            buf += self.sock.recv(1)
+            buf += recv(1)
         size, rest = buf.split(b":", 1)
         while len(rest) < int(size):
-            rest += self.sock.recv(int(size) - len(rest))
+            rest += recv(int(size) - len(rest))
         return json.loads(rest)
 
     def call(self, command: str, params: dict):

@@ -143,10 +143,6 @@ beforeAll(async () => {
 	]) {
 		fs.writeFileSync(path.join(mods.geolocation.MMDB_DIR, name), "");
 	}
-	// The default addon, already "downloaded", so nothing is fetched.
-	fs.mkdirSync(path.join(CACHE, "addons", "UBO"), { recursive: true });
-	fs.writeFileSync(path.join(CACHE, "addons", "UBO", "manifest.json"), "{}");
-
 	const deps = mods.utils.utilsDeps;
 	const realFix = mods.fingerprints.fixHardwareConcurrency;
 	deps.fixHardwareConcurrency = (config, canPin) =>

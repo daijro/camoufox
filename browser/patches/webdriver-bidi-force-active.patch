@@ -1,0 +1,18 @@
+diff --git a/remote/webdriver-bidi/modules/windowglobal/browsingContext.sys.mjs b/remote/webdriver-bidi/modules/windowglobal/browsingContext.sys.mjs
+index 21fc7bf..a773454 100644
+--- a/remote/webdriver-bidi/modules/windowglobal/browsingContext.sys.mjs
++++ b/remote/webdriver-bidi/modules/windowglobal/browsingContext.sys.mjs
+@@ -529,6 +529,13 @@ class BrowsingContextModule extends WindowGlobalBiDiModule {
+       return;
+     }
+ 
++    if (value === "hidden" && win.docShell?.forceActiveState) {
++      // Camoufox: Juggler forces the docShell active, so this document stays
++      // "visible" while in the background and no visibilitychange will come.
++      // Do not wait for it; the page-visible state is left unchanged.
++      return;
++    }
++
+     try {
+       // Otherwise, wait for the next visibilitychange event.
+       await new lazy.EventPromise(win, "visibilitychange", { timeout });

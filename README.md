@@ -100,6 +100,27 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
       Check your IPs: <a href="https://layer3intel.com/?utm_source=github&utm_medium=sponsoring&utm_campaign=camoufox">https://layer3intel.com</a>
     </td>
   </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://proxyempire.io/?ref=camoufox&utm_source=github&utm_medium=paid_referral&utm_campaign=open_source_sponsorship&utm_content=camoufox" target="_blank">
+        <img width="380" alt="proxyempire" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f"/>
+      </a>
+    </td>
+    <td valign="middle">
+      <b>🚀 Camoufox × ProxyEmpire</b><br>
+      Running Camoufox? Your proxy layer decides whether you scale — or get blocked.<br>
+      <a href="https://proxyempire.io/?ref=camoufox&utm_source=github&utm_medium=paid_referral&utm_campaign=open_source_sponsorship&utm_content=camoufox">ProxyEmpire</a> delivers:<br>
+      • 🌍 30M+ Residential IPs (170+ countries)<br>
+      • 📱 4G/5G Mobile Proxies<br>
+      • 🔄 Rotating & Sticky Sessions<br>
+      • ⚡ Unlimited Concurrent Sessions<br>
+      • 🎯 Precise geo-targeting<br>
+      • HTTP, HTTPS & SOCKS5 Support<br>
+      Built for scraping, automation, and high-stealth workflows.<br>
+      <b>🔥 Exclusive Offer</b> - Use code <b>Camoufox50</b><br>
+      Get <b>50% recurring discount</b> (not just first month). Upgrade your proxies. Reduce bans. Scale properly
+    </td>
+  </tr>
 </table>
 
 ## Tools & Services
@@ -175,27 +196,6 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
 Camoufox is intended to be used with rotating proxies (preferably residential IPs). Check out these providers:
 
 <table>
-  <tr>
-    <td width="25%" align="center" valign="middle">
-      <a href="https://proxyempire.io/?ref=camoufox&utm_source=github&utm_medium=paid_referral&utm_campaign=open_source_sponsorship&utm_content=camoufox" target="_blank">
-        <img width="380" alt="proxyempire" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f"/>
-      </a>
-    </td>
-    <td valign="middle">
-      <b>🚀 Camoufox × ProxyEmpire</b><br>
-      Running Camoufox? Your proxy layer decides whether you scale — or get blocked.<br>
-      <a href="https://proxyempire.io/?ref=camoufox&utm_source=github&utm_medium=paid_referral&utm_campaign=open_source_sponsorship&utm_content=camoufox">ProxyEmpire</a> delivers:<br>
-      • 🌍 30M+ Residential IPs (170+ countries)<br>
-      • 📱 4G/5G Mobile Proxies<br>
-      • 🔄 Rotating & Sticky Sessions<br>
-      • ⚡ Unlimited Concurrent Sessions<br>
-      • 🎯 Precise geo-targeting<br>
-      • HTTP, HTTPS & SOCKS5 Support<br>
-      Built for scraping, automation, and high-stealth workflows.<br>
-      <b>🔥 Exclusive Offer</b> - Use code <b>Camoufox30</b><br>
-      Get <b>30% recurring discount</b> (not just first month). Upgrade your proxies. Reduce bans. Scale properly
-    </td>
-  </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
       <a href="https://www.rapidproxy.io/?ref=daijro" target="_blank">
@@ -275,16 +275,17 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
       </a>
     </td>
     <td valign="middle">
-      <b>🔍 Camoufox × Thordata</b><br>
-      <b>Real Residential IPs for Smarter AI Agents & Automation</b><br>
-      With <strong>100M+ residential IPs</strong>, Thordata helps your scraper access the web through real user IPs across <strong>195+ countries</strong>.<br>
-      Target specific locations with precision — including <strong>city, ISP, and ASN-level targeting</strong> — so your Camoufox automation runs with a more authentic network identity.<br>
-      • 🔄 <strong>Rotating & Sticky Sessions</strong> (up to 90 minutes)<br>
-      • ⚡ <strong>99.99% uptime</strong> with unlimited concurrent sessions<br>
-      • 🌍 <strong>Global residential coverage</strong> for AI agents, scraping, and automation workflows<br>
-      🎁 <strong>Exclusive for Camoufox users:</strong><br>
-      Get free trial traffic after signup + use code <strong>Camoufox</strong> for <strong>10% OFF</strong>.<br>
-      <a href="https://www.thordata.com/?ls=dcx&lk=dcx" target="_blank">Start your free trial with Thordata</a>
+      <b>Camoufox × Thordata</b><br>
+      <b>Real Residential IPs and Web Data APIs for AI Agents and Automation</b><br>
+      Power your Camoufox workflows with <strong>100M+ residential IPs across 190+ countries</strong>. Use precise geo and network targeting to run scraping, testing, and browser automation from the locations you need.<br>
+      • 🔄 <strong>Rotating and sticky sessions</strong><br>
+      • ⚡ <strong>Unlimited concurrent sessions</strong> for large-scale crawling<br>
+      • 🌍 <strong>Location and network targeting</strong> for reliable regional access<br>
+      • 🖥️ <strong>Web Data APIs:</strong> Use Webpage for rendered page access, Web Scraper API for structured extraction, or SERP API for real-time search results<br>
+      <b>Exclusive offer for Camoufox users<br>
+      Get free trial traffic after signup and use code <strong><code>CAMOUFOX</code></strong> for <strong>10% off</strong>.<br>
+      <strong><a href="https://www.thordata.com/?ls=dcx&lk=dcx" target="_blank">Start your free trial with Thordata →</a></strong>
+    </td>
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
@@ -438,7 +439,7 @@ right.
 | Screen and window sizes, color depth, CSS media features | The drawn device's display, the same in JS and CSS | Screen size is among the most identifying values, and CSS media queries read it without script | `screen-spoofing`, `fingerprint-injection` patches |
 | WebGL and WebGL2: vendor, renderer, parameters, extensions, shader precision, context attributes | One GPU fpgen recorded for Firefox on that OS. Values Firefox decides rather than the GPU follow the shipped Firefox ([`webgl-browser-owned-values-follow-firefox`](ci/tribal-rules.yml)) | The renderer string names the host's GPU, and its limits must agree with it | `webgl-spoofing` patch, `webgl.py` |
 | WebGPU: `navigator.gpu` and its adapter | `navigator.gpu` only where Firefox on the claimed device has it: Windows and Apple Silicon Macs. The adapter is the host's only when the identity claims the host's GPU; otherwise `requestAdapter()` returns `null`, as for a blocked or software GPU | The adapter's limits and features come from the real GPU | launcher, `host_rendering.py` |
-| Audio: sample rate, output latency, max channels, and the audio fingerprint | The identity's values, seeded per identity | Audio output varies with hardware and drivers, so identities sharing one could be linked | `audio-context-spoofing`, `audio-fingerprint-manager` patches |
+| Audio: sample rate, output latency, max channels | The identity's values | They follow the claimed device's audio hardware | `audio-context-spoofing` patch |
 | Fonts: installed list, `system-ui`, CSS2 system fonts | The claimed OS's fonts, from a bundled set; see [docs/FONTS.md](docs/FONTS.md) | Installed fonts reveal the OS and the software on it | `font-list-spoofing`, `font-hijacker`, `system-ui-font-spoofing` patches |
 | Speech voices | The claimed OS's voices, which actually speak | The voice list is specific to each OS, and a voice that cannot speak is a tell | `voice-spoofing`, `speech-voices-spoofing` patches |
 | Microphones, cameras, speakers | OS-style labels and groups; see [docs/MEDIA-DEVICES.md](docs/MEDIA-DEVICES.md) | Device count and labels differ per machine and per OS | `media-device-spoofing` patch |
@@ -454,6 +455,7 @@ Left as stock Firefox has it, on purpose:
 |---|---|---|
 | Canvas pixels | What the GPU and fonts produce. As in stock Firefox, each context's PNG exports (`toDataURL`, `toBlob`) carry a per-session `deBG` chunk; the pixels themselves are untouched. On the host's OS the identity claims the host's GPU, so the pixels agree with it; on another OS readback returns random data, as `privacy.resistFingerprinting` does in LibreWolf ([the canvas on another OS](python/README.md#the-canvas-on-another-os)) | Stock Firefox does not perturb pixels in its default configuration, so noise would only mark the browser as a spoofer ([`canvas-is-not-noised`](ci/tribal-rules.yml)) |
 | Text widths | What the font really measures | The same font on the same OS measures the same everywhere; widths no real machine produces are a fingerprint ([`no-glyph-spacing-noise`](ci/tribal-rules.yml)) |
+| Audio render (`OfflineAudioContext`, `AnalyserNode`) | What the host CPU computes, the same in every context and every launch | Stock Firefox renders one value per CPU architecture, whatever the OS, sound card or sample rate, so a noised value is one no real machine produces ([`audio-is-not-noised`](ci/tribal-rules.yml)) |
 
 Each context of one browser can carry its own identity:
 [docs/per-context-patches.md](docs/per-context-patches.md).
@@ -493,6 +495,7 @@ claims the host's OS. Details are in
 | Juggler's debugger leaves no side effects content can observe | `debugger-invisible-to-content` patch |
 | Per-context fingerprint setters are gone before page script runs | `window-setter-seal` patch |
 | Popup blocker on, as in stock Firefox | `popup-blocker-parity` patch |
+| On X11, a pointer-locked window partly off the top or left of the screen keeps running (stock Firefox can crash: the X server refuses the cursor barrier and GDK aborts) | `pointer-lock-offscreen` patch |
 | Content-accessible chrome files match stock Firefox | `contentaccessible-parity` patch |
 | Viewports never enter Responsive Design Mode; containers show no automation label | Juggler |
 
@@ -511,7 +514,7 @@ claims the host's OS. Details are in
 | Feature | Where |
 |---|---|
 | Load extracted addons without a debug server: `addons=["/path/to/addon"]` | launcher, `camoufox-window-module` patch |
-| uBlock Origin installed by default, with its own default filter lists (`exclude_addons=[DefaultAddons.UBO]` to drop it) | launcher |
+| uBlock Origin installed by default: each browser release bundles the newest uBO release on AMO when it is built (`browser/scripts/fetch-ubo.py`), blocking with the default filter lists packaged in it, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | packaging, launcher, `policies.json` |
 | Addons cannot open tabs unless `allow_addon_new_tab=True` | `disable-extension-newtab` patch |
 | Addons run in private browsing | `all-addons-private-mode` patch |
 
@@ -541,6 +544,7 @@ The full option list is in the [Python README](python/README.md#launch-options).
 | Onboarding messages disabled | `ghostery/` patch |
 | No bundled search engines | `no-search-engines` patch |
 | Mozilla services and background traffic turned off | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
+| Firefox's bundled certificate revocations (OneCRL) enforced in every profile, with no network fetch | `remote-security-settings` patch |
 | Stock browser UI: no theme, toolbar or dialog changes | |
 
 > [!NOTE]
@@ -656,6 +660,7 @@ Artifacts are written to `browser/dist/`.
 cd browser
 docker build -t camoufox-builder .
 docker run -v "$(pwd)/dist:/app/dist" camoufox-builder --target linux --arch x86_64
+docker run -v "$(pwd)/dist:/app/dist" camoufox-builder --target windows --arch x86_64
 ```
 
 The container takes the `multibuild.py` flags. Add

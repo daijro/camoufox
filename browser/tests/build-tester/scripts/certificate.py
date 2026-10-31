@@ -153,7 +153,7 @@ def generate_certificate(full_result: dict, secret: str) -> dict:
 
     if mac.get("total", 0) > 0:
         mac_unique = (
-            (1 if mac.get("uniqueAudio") == mac["total"] else 0)
+            (1 if mac.get("uniqueAudio") == 1 else 0)
             + (1 if mac.get("uniqueCanvas") == mac["total"] else 0)
             + (1 if mac.get("uniqueTimezones") == mac["total"] else 0)
             + (1 if mac.get("uniqueScreens") == mac["total"] else 0)
@@ -162,7 +162,7 @@ def generate_certificate(full_result: dict, secret: str) -> dict:
 
     if linux.get("total", 0) > 0:
         linux_unique = (
-            (1 if linux.get("uniqueAudio") == linux["total"] else 0)
+            (1 if linux.get("uniqueAudio") == 1 else 0)
             + (1 if linux.get("uniqueCanvas") == linux["total"] else 0)
             + (1 if linux.get("uniqueTimezones") == linux["total"] else 0)
             + (1 if linux.get("uniqueScreens") == linux["total"] else 0)

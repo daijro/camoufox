@@ -11,7 +11,6 @@ import { describe, expect, it, vi } from "vitest";
 import { InvalidIP } from "../src/exceptions.js";
 import {
 	appVersionFromUserAgent,
-	audioSeedFromIdentity,
 	buildInitScript,
 	clampScreenToDisplay,
 	clampWindowDimensions,
@@ -34,6 +33,7 @@ import {
 	type Preset,
 	Screen,
 	setMediaDevicesDefaults,
+	versionlessUa,
 	WINDOWS_11_MARKER_FONTS,
 } from "../src/fingerprints.js";
 import { LOCAL_DATA } from "../src/paths.js";
@@ -727,18 +727,38 @@ describe("identity salt and seed (test_identity_salt.py)", () => {
 		expect(seeds.size).toBe(200);
 	});
 
+	it("a browser upgrade does not move the seed", () => {
+		// A saved identity on a newer browser claims the new engine version and
+		// nothing else; the seed hashes the UA without it (Python: versionless_ua).
+		const at = (version: string) => ({
+			"navigator.userAgent": `Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:${version}) Gecko/20100101 Firefox/${version}`,
+			"navigator.platform": "Win32",
+			"screen.width": 1920,
+			"screen.height": 1080,
+			"navigator.hardwareConcurrency": 8,
+		});
+		const salt = identitySalt({ pinned: "identity" });
+		expect(versionlessUa(at("150.0.2")["navigator.userAgent"])).toBe(
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:) Gecko/20100101 Firefox/",
+		);
+		expect(identitySeed(at("158.0"), salt)).toBe(
+			identitySeed(at("150.0.2"), salt),
+		);
+		// The OS tokens still tell identities apart.
+		const mac = {
+			...at("158.0"),
+			"navigator.userAgent":
+				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:158.0) Gecko/20100101 Firefox/158.0",
+		};
+		expect(identitySeed(mac, salt)).not.toBe(identitySeed(at("158.0"), salt));
+	});
+
 	it("the salt of equal objects is equal", () => {
 		expect(identitySalt({ a: 1, b: 2 })).toBe(identitySalt({ b: 2, a: 1 }));
 		const s = new Screen({ maxWidth: 1920, maxHeight: 1080 });
 		expect(identitySalt(s)).toBe(
 			identitySalt(new Screen({ maxWidth: 1920, maxHeight: 1080 })),
 		);
-	});
-
-	it("derives the audio seed without losing precision", () => {
-		// (ident * 2654435761 + 97) & 0xFFFFFFFF, checked with Python ints
-		expect(audioSeedFromIdentity(4294967295)).toBe(1640531632);
-		expect(audioSeedFromIdentity(0)).toBe(97);
 	});
 
 	it("a pinned preset reproduces its draws", () => {
@@ -910,11 +930,14 @@ describe.skipIf(!MODEL.ok)("fpgen generation (needs the model)", () => {
 		expect(gen.config.fonts.length).toBeGreaterThan(0);
 		expect(gen.context_options.locale).toBe("de-DE");
 		expect(gen.init_script).toContain("setNavigatorUserAgent");
+		expect(gen.init_script).toContain(
+			'setNavigatorAppVersion("5.0 (Windows)")',
+		);
 		const preset = getRandomPreset("macos", "150");
 		const fromP = generateContextFingerprint({
 			preset,
 			timezone: "Europe/Paris",
-			config_overrides: { "audio:seed": 7 },
+			config_overrides: { "screen.colorDepth": 30 },
 		});
 		expect(fromP.context_options.timezoneId).toBe("Europe/Paris");
 		expect(fromP.config["navigator.platform"]).toBe("MacIntel");

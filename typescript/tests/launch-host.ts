@@ -32,10 +32,6 @@ export const CACHE = path.join(SCRATCH, "xdg-cache", "camoufox");
 export const HOME = path.join(SCRATCH, "home");
 fs.mkdirSync(HOME, { recursive: true });
 
-// The default addon, already "downloaded", so nothing is fetched.
-fs.mkdirSync(path.join(CACHE, "addons", "UBO"), { recursive: true });
-fs.writeFileSync(path.join(CACHE, "addons", "UBO", "manifest.json"), "{}");
-
 export const utils = await import("../src/utils.js");
 export const fingerprints = await import("../src/fingerprints.js");
 export const warnings = await import("../src/warnings.js");

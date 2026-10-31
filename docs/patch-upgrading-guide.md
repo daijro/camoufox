@@ -38,7 +38,7 @@ are listed in [`browser/patches/patch-dependencies.md`](../browser/patches/patch
 ### Key Infrastructure Files
 
 - **RoverfoxStorageManager.cpp/h**: Thread-safe key-value storage for per-context data
-- **Manager Classes**: AudioFingerprintManager, WebRTCIPManager, etc.
+- **Manager Classes**: FontListManager, WebRTCIPManager, etc.
 - **Window.webidl**: Exposes the per-context setters to Playwright
 
 ---
@@ -308,14 +308,14 @@ Simply apply the patch manually at the correct line number. The code hasn't chan
 Most spoofing patches carry per-context support. When porting one, expect these
 pieces:
 
-1. **Manager classes** (e.g., AudioFingerprintManager, WebRTCIPManager):
+1. **Manager classes** (e.g., FontListManager, WebRTCIPManager):
    - Store per-context settings using RoverfoxStorageManager
    - Gate their setter with `RoverfoxStorageManager::IsSetterOffered` and
      `MarkSetterUsed`
 
 2. **Window.webidl functions**:
    - JavaScript APIs exposed to Playwright
-   - Examples: `setAudioFingerprintSeed()`, `setWebRTCIPv4()`
+   - Examples: `setFontList()`, `setWebRTCIPv4()`
 
 3. **nsGlobalWindowInner.cpp implementations**:
    - Extract userContextId from window/document/docshell
@@ -489,6 +489,7 @@ grep -r "class Navigator" . --include="*.h"
 ## Checklist
 
 - [ ] Bump `browser/upstream.sh` and run `make dir` to list the failing patches
+- [ ] Delete the [backports](../browser/patches/patch-dependencies.md#backports) the new Firefox ships
 - [ ] For each: `make clean`, apply its dependencies, `make first-checkpoint`, `make patch` it
 - [ ] Port each reject to the new Firefox code
 - [ ] Remove `.rej` and `.orig` files, `git add -N` new files

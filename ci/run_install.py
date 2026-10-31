@@ -3,8 +3,8 @@
 
 Packs pythonlib and the npm package exactly as they would be published, installs
 each into a clean environment with an empty cache, and runs the real
-`camoufox fetch`: the browser, the addons, the GeoIP database and the fpgen
-model, downloaded and put in place.
+`camoufox fetch`: the browser, the GeoIP database and the fpgen model,
+downloaded and put in place.
 
 Then each installed package launches a browser the way a user's code does
 (`from camoufox.sync_api import Camoufox`, `import { Camoufox } from

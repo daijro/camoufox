@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000000..6e63ce3bb6
 --- /dev/null
 +++ b/dom/base/TimezoneManager.cpp
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,60 @@
 +#include "TimezoneManager.h"
 +#include "RoverfoxStorageManager.h"
 +#include "MaskConfig.hpp"
@@ -22,9 +22,8 @@ index 0000000000..6e63ce3bb6
 +
 +/* static */ bool
 +TimezoneManager::GetTimezone(uint32_t userContextId, nsAString& outTimezone) {
-+  nsAutoString key;
-+  key.AppendPrintf("timezone_%u", userContextId);
-+  if (RoverfoxStorageManager::GetString(key, outTimezone)) {
++  if (RoverfoxStorageManager::GetString("timezone_", userContextId,
++                                        outTimezone)) {
 +    return true;
 +  }
 +  // A context that set no timezone of its own uses the launch-level one.

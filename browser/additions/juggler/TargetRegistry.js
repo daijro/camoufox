@@ -16,12 +16,12 @@ const {setTimeout, clearTimeout} = ChromeUtils.importESModule("resource://gre/mo
 // returns wedges every later input event in every tab, permanently.
 //
 // The per-ack deadline in MouseDispatch.js covers the await that has actually
-// caused all four shipped deadlocks, but it is one of several unbounded waits
-// reachable from a single slot -- apz-repaints-flushed, TabSwitchDone below,
-// the drag path's juggler-drag-finalized and dragover waits, and the
-// cross-process dispatchDragEvent sends all have the same shape. None of them
-// has failed yet. Bounding only the wait that has already bitten us is the
-// posture that produced those four fixes, so bound the slot itself too.
+// caused all four shipped deadlocks, and apz-repaints-flushed and
+// juggler-drag-finalized share it, but other unbounded waits are reachable
+// from a single slot -- TabSwitchDone below, the drag path's dragover waits,
+// and the cross-process dispatchDragEvent sends all have the same shape. None
+// of them has failed yet. Bounding only the wait that has already bitten us
+// is the posture that produced those four fixes, so bound the slot itself too.
 //
 // Sized as a backstop, not a tuning knob: with a 5s ack deadline a legitimate
 // worst-case input slot approaches 10s, so this must sit well clear of that.

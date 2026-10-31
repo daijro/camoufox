@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -676,6 +677,35 @@ def test_no_glyph_spacing_seed_anywhere():
             f"{source.relative_to(REPO_ROOT)} still carries the spacing seed"
             + explain("no-glyph-spacing-noise")
         )
+
+
+def test_no_audio_noise_anywhere():
+    """No live config key, no patch hooking the render, no setter, no seed sent,
+    and a guard holding the build to stock's recorded values."""
+    rule_id = "audio-is-not-noised"
+    assert "audio:seed" not in _live_properties(), explain(rule_id)
+    patches = BROWSER / "patches"
+    assert not (patches / "audio-fingerprint-manager.patch").exists(), explain(rule_id)
+    for source in sorted(patches.rglob("*.patch")):
+        text = source.read_text(encoding="utf-8", errors="ignore")
+        for marker in ("AudioFingerprintManager", "SetAudioFingerprintSeed", "audio:seed"):
+            assert marker not in text, (
+                f"{source.relative_to(REPO_ROOT)} still carries {marker}" + explain(rule_id)
+            )
+    for launcher in ("python/src/camoufox/fingerprints.py", "typescript/src/fingerprints.ts",
+                     "python/src/camoufox/utils.py", "typescript/src/utils.ts"):
+        text = (REPO_ROOT / launcher).read_text(encoding="utf-8")
+        assert "setAudioFingerprintSeed" not in text, (
+            f"{launcher} still calls setAudioFingerprintSeed" + explain(rule_id)
+        )
+        assert not re.search(r"""config\[["']audio:seed["']\]\s*=""", text), (
+            f"{launcher} still generates audio:seed" + explain(rule_id)
+        )
+    guard = BROWSER / "tests" / "playwright" / "patches" / "audio-matches-stock.py"
+    assert guard.exists(), explain(rule_id)
+    assert '"audio-matches-stock"' in (REPO_ROOT / "ci" / "run_patch_guards.py").read_text(), (
+        "the audio-matches-stock guard is not registered" + explain(rule_id)
+    )
 
 
 def test_no_canvas_seed_is_declared_or_sent():

@@ -6,10 +6,10 @@ import secrets
 import unicodedata
 from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
-from random import Random, choice, randint, randrange
+from random import Random, choice, randrange
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
-from camoufox._warnings import FallbackWarning
+from camoufox._warnings import WARNINGS_DATA, FallbackWarning, _warn_from_caller
 from camoufox.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
@@ -145,6 +145,17 @@ _ESSENTIAL_FONTS_LINUX: List[str] = _ESSENTIAL['lin']
 WINDOWS_11_MARKER_FONTS = frozenset(LAUNCHER_CONSTANTS['windows11MarkerFonts'])
 
 
+def drop_audio_seed(config: Dict[str, Any]) -> None:
+    """
+    audio:seed is gone: the browser renders audio as stock Firefox does. A
+    caller's seed is dropped with a warning rather than sent to a browser that
+    would noise with it (a released one) or ignore it (this one).
+    """
+    if 'audio:seed' in config:
+        del config['audio:seed']
+        _warn_from_caller(WARNINGS_DATA['audio_seed_removed'], FutureWarning)
+
+
 def identity_salt(pinned: Any = None) -> int:
     """The entropy that makes identity_seed() belong to ONE identity.
 
@@ -167,6 +178,23 @@ def identity_salt(pinned: Any = None) -> int:
     return int.from_bytes(hashlib.sha256(blob).digest()[:8], 'big')
 
 
+# The browser's version in a UA: "rv:158.0" and "Firefox/158.0".
+_UA_VERSION = re.compile(r'(rv:|Firefox/)[0-9][0-9.]*')
+
+
+def versionless_ua(user_agent: str) -> str:
+    """The UA with the browser's version taken out, for identity_seed().
+
+    Launching a saved identity on a newer browser rewrites its UA to the new
+    engine version and changes nothing else about the machine. Hashing the
+    version moved the seed with every Firefox release, so a pinned identity
+    drew other fonts, voices, a different GPU and other media devices after
+    each browser upgrade -- the change #442/#765 guard against within one
+    version. The OS tokens stay: they tell identities apart.
+    """
+    return _UA_VERSION.sub(r'\1', user_agent)
+
+
 def identity_seed(config: Dict[str, Any], salt: int = 0) -> int:
     """A seed for the per-identity draws (fonts, voices, GPU, media devices,
     noise seeds): a pure function of the presented identity and its salt.
@@ -180,7 +208,7 @@ def identity_seed(config: Dict[str, Any], salt: int = 0) -> int:
     """
     import zlib
     parts = [
-        str(config.get('navigator.userAgent', '')),
+        versionless_ua(str(config.get('navigator.userAgent', ''))),
         str(config.get('navigator.platform', '')),
         str(config.get('screen.width', '')),
         str(config.get('screen.height', '')),
@@ -1284,9 +1312,6 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None, salt: Optional[i
     if webgl.get('unmaskedRenderer'):
         config['webGl:renderer'] = webgl['unmaskedRenderer']
 
-    # Generate a unique audio seed per launch (1 to 2^32-1, excluding 0 which is a no-op in C++)
-    config['audio:seed'] = randint(1, 4_294_967_295)  # nosec
-
     if preset.get('timezone'):
         config['timezone'] = preset['timezone']
 
@@ -1346,10 +1371,10 @@ def _build_init_script(values: Dict[str, Any]) -> str:
     lines = ['(function(v) {', '  var w = window;']
 
     setters = [
-        ('audioFingerprintSeed', 'setAudioFingerprintSeed', '{val}'),
         ('navigatorPlatform', 'setNavigatorPlatform', '{val}'),
         ('navigatorOscpu', 'setNavigatorOscpu', '{val}'),
         ('navigatorUserAgent', 'setNavigatorUserAgent', '{val}'),
+        ('navigatorAppVersion', 'setNavigatorAppVersion', '{val}'),
         ('hardwareConcurrency', 'setNavigatorHardwareConcurrency', '{val}'),
         ('webglVendor', 'setWebGLVendor', '{val}'),
         ('webglRenderer', 'setWebGLRenderer', '{val}'),
@@ -1449,7 +1474,7 @@ def generate_context_fingerprint(
             normalize_locale() and injected into config. Also sets
             context_options['locale'] for Playwright.
         config_overrides: Dict of CAMOU_CONFIG keys to override after config
-            is built but before init_script is rendered (e.g. {'audio:seed': 7}).
+            is built but before init_script is rendered (e.g. {'timezone': 'UTC'}).
         webgl_config: The (vendor, renderer) a drawn identity claims, instead of
             drawing one.
     """
@@ -1472,9 +1497,6 @@ def generate_context_fingerprint(
 
         # A fresh identity: every seeded draw below gets its own salt.
         _salt = identity_salt()
-
-        # Add seeds (the generator doesn't produce these)
-        config.setdefault('audio:seed', randint(1, 4_294_967_295))  # nosec
 
         os_name = platform_to_os(config.get('navigator.platform', ''))
 
@@ -1551,14 +1573,16 @@ def generate_context_fingerprint(
 
     # Apply caller overrides before rendering init_script
     if config_overrides:
+        config_overrides = dict(config_overrides)
+        drop_audio_seed(config_overrides)
         config.update(config_overrides)
 
     # Build the values dict for the init script (works for both paths)
     init_values: Dict[str, Any] = {
-        'audioFingerprintSeed': config.get('audio:seed'),
         'navigatorPlatform': nav.get('platform'),
         'navigatorOscpu': config.get('navigator.oscpu'),
         'navigatorUserAgent': config.get('navigator.userAgent'),
+        'navigatorAppVersion': config.get('navigator.appVersion'),
         'hardwareConcurrency': nav.get('hardwareConcurrency') or config.get('navigator.hardwareConcurrency'),
         'webglVendor': webgl.get('unmaskedVendor'),
         'webglRenderer': webgl.get('unmaskedRenderer'),
