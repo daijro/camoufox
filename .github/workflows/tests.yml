@@ -581,9 +581,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          # Keyed on the browser version and the patch set, so a pull request
-          # that does not touch browser/patches/ starts from a fully warm cache.
-          key: ccache-${{ needs.resolve.outputs.browser_version }}-${{ hashFiles('browser/patches/**', 'browser/additions/**', 'browser/assets/*.mozconfig') }}
+          # Keyed on the browser version, the patch set and the PGO profile, so a
+          # pull request that does not touch them starts from a fully warm cache.
+          key: ccache-${{ needs.resolve.outputs.browser_version }}-${{ hashFiles('browser/patches/**', 'browser/additions/**', 'browser/assets/*.mozconfig', 'browser/scripts/data/pgo-profiles.json') }}
           restore-keys: |
             ccache-${{ needs.resolve.outputs.browser_version }}-
             ccache-

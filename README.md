@@ -635,9 +635,10 @@ make run                        # run the build
 make package-linux arch=x86_64  # or package-macos / package-windows
 ```
 
-`make help` lists every target. Install `ccache`. Every build links with
-cross-language LTO, as the released binaries do, and ccache cannot cache that
-link, so an incremental build still relinks libxul.
+`make help` lists every target. Install `ccache`. Every build is optimized as
+stock Firefox's releases are, with Mozilla's PGO profile for the same Firefox
+and cross-language LTO, and ccache cannot cache the LTO link, so an incremental
+build still relinks libxul.
 
 To build and package several targets in one go:
 

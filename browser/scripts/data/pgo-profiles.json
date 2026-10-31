@@ -1,0 +1,26 @@
+{
+  "firefox": "158.0.1",
+  "commit": "9378fbc58660847fbc02c3486a0ecd6049978e25",
+  "profiles": {
+    "linux64": {
+      "task": "ExMRLOtySd6x2mCJ0dFSrA",
+      "sha256": "22fc904a1b86a7b981c922b97e3e4e719f16e4c63901ad5286aca0a4c5365ec3"
+    },
+    "macosx64": {
+      "task": "PAtHq7PDT7We3_VHS_SkPg",
+      "sha256": "98129051c0e38e7f218a4f391be74873477602709008159754bcd6b301f43f7e"
+    },
+    "macosx64-aarch64": {
+      "task": "MaUM1UktRxeRtlH3UZoK3g",
+      "sha256": "0836ea31caf511df38e3dbdd18dd7d3aa76133a38add4c8c1619c863091aa89e"
+    },
+    "win32": {
+      "task": "QSntDpnkQGWsKZjEgZ17Tg",
+      "sha256": "e748890dc3252db129cdc81f92e7c728eb26c932c4fe2c73fa2bbe47753cd5ff"
+    },
+    "win64": {
+      "task": "D8ydi11GQbapw9bLMoeVMA",
+      "sha256": "0cf72fa0b3ccc647e8220d4bd0222795dd88cba221acf8e09fc6b114a1ec800b"
+    }
+  }
+}

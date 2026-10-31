@@ -223,7 +223,7 @@ Each tier gates the next, so a lint failure never reaches the build:
 | **Compiled-input cache** | The build cache is keyed on a hash of the compiled inputs only (`ci/browser_inputs.py`). On a hit the browser is restored and this branch's Juggler JavaScript and other resources, the files Juggler's `moz.build` lists in `FINAL_TARGET_FILES`, are laid over it. Everything else, including any new file type, counts as native and forces a build. |
 | **No partial restore** | That cache has no `restore-keys`: a partial match would hand the tests a browser built from different sources. A self-test checks the key covers every browser-affecting path. |
 | **Warm ccache** | Pushes to `main` and a twice-weekly schedule keep the ccache from being evicted; pull requests restore it. |
-| **LTO link** | Every build links libxul with cross-language ThinLTO, as a release does ([`builds-are-optimized-like-stock`](tribal-rules.yml)). ccache caches the compiles, not that link, so a warm build still pays for it. |
+| **PGO and LTO** | Every build uses Mozilla's PGO profile for the same Firefox and links libxul with cross-language LTO, as a release does ([`builds-are-optimized-like-stock`](tribal-rules.yml)). ccache caches the compiles, not that link, so a warm build still pays for it. |
 | **Network retries only** | `ci.run_prepare` (`setup-minimal`, `dir`, `mozbootstrap`) retries only failures that read as transient network errors. A failed hunk or compile error fails at once. |
 
 Pushing to a branch cancels its running build (`cancel-in-progress`).

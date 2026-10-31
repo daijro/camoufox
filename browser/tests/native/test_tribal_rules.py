@@ -909,14 +909,22 @@ def test_pages_see_an_official_firefox_build():
 def test_every_build_is_optimized_like_stock():
     """Rule: builds-are-optimized-like-stock."""
     base = (BROWSER / "assets" / "base.mozconfig").read_text(encoding="utf-8").splitlines()
-    for option in ("ac_add_options --enable-lto=cross", "ac_add_options --enable-rust-simd"):
+    for option in (
+        "  x86_64-pc-linux-gnu|x86_64-pc-windows-msvc) ac_add_options --enable-lto=cross,full ;;",
+        "  *) ac_add_options --enable-lto=cross ;;",
+        "ac_add_options --enable-profile-use=cross",
+        'ac_add_options --with-pgo-profile-path="$CAMOUFOX_PGO_PROFILE/merged.profdata"',
+        'ac_add_options --with-pgo-jarlog="$CAMOUFOX_PGO_PROFILE/en-US.log"',
+        "ac_add_options --enable-rust-simd",
+    ):
         assert option in base, explain("builds-are-optimized-like-stock")
     # Only base.mozconfig decides it, so no target or workflow builds differently.
     others = [*(BROWSER / "assets").glob("*.mozconfig"), *(REPO_ROOT / ".github" / "workflows").glob("*.yml")]
     for path in others:
         if path.name != "base.mozconfig":
             text = path.read_text(encoding="utf-8")
-            assert "-lto" not in text and "MOZ_LTO" not in text, f"{path.name}" + explain("builds-are-optimized-like-stock")
+            for marker in ("-lto", "MOZ_LTO", "profile-use", "profile-generate", "MOZ_PGO"):
+                assert marker not in text, f"{path.name}" + explain("builds-are-optimized-like-stock")
 
 
 # ---------------------------------------------------------------------------

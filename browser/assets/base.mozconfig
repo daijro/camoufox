@@ -43,9 +43,14 @@ mk_add_options MOZ_TELEMETRY_REPORTING=0
 mk_add_options MOZ_INSTALLER=0
 mk_add_options MOZ_AUTOMATION_INSTALLER=0
 
-# Optimized as stock ships every desktop build (ci/tribal-rules.yml:
-# builds-are-optimized-like-stock). Without them Gecko's C++ runs slower than
-# stock while JIT-compiled script does not, and a page can time that ratio.
-# Without PGO, configure makes this ThinLTO across C++ and Rust.
-ac_add_options --enable-lto=cross
+# Optimized as stock builds every desktop release (ci/tribal-rules.yml:
+# builds-are-optimized-like-stock): Mozilla's PGO profile for the same Firefox
+# (scripts/pgo.py), and full LTO where stock's configure picks it.
+case "$CAMOUFOX_TARGET" in
+  x86_64-pc-linux-gnu|x86_64-pc-windows-msvc) ac_add_options --enable-lto=cross,full ;;
+  *) ac_add_options --enable-lto=cross ;;
+esac
+ac_add_options --enable-profile-use=cross
+ac_add_options --with-pgo-profile-path="$CAMOUFOX_PGO_PROFILE/merged.profdata"
+ac_add_options --with-pgo-jarlog="$CAMOUFOX_PGO_PROFILE/en-US.log"
 ac_add_options --enable-rust-simd
