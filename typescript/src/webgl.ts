@@ -39,6 +39,8 @@ export interface WebGLData {
 // Extensions a release Firefox never exposes (draft extensions behind
 // webgl.enable-draft-extensions, or mobile-only): fpgen's corpus carries some
 // of them, and a spoofed list that names one is a tell on its own.
+// EXT_texture_norm16 left draft in Firefox 159; where it is exposed,
+// TEXTURE_NORM16 adds it back.
 const NEVER_EXPOSED_EXTENSIONS: ReadonlySet<string> = new Set([
 	"WEBGL_multi_draw",
 	"WEBGL_clip_cull_distance",
@@ -66,6 +68,14 @@ const BACKEND_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
 // core in GL 4.6), whose recordings have EXT_depth_clamp. macOS release builds
 // run WebGL on CGL's GL 4.1, which lacks it.
 const POLYGON_OFFSET_CLAMP = "EXT_polygon_offset_clamp";
+
+// Firefox 159 (bug 1735401) exposes EXT_texture_norm16 on WebGL2 wherever the
+// GL has 16-bit normalized textures, core in desktop GL 3.1: every WebGL2
+// context on macOS (CGL's GL 4.1) and x86_64 Linux (desktop GL). On Windows,
+// ANGLE decides per device from its D3D11 format support, which no recording
+// carries, so it stays filtered there.
+const TEXTURE_NORM16 = "EXT_texture_norm16";
+const TEXTURE_NORM16_OSES: ReadonlySet<string> = new Set(["mac", "lin"]);
 
 const ALIASED_LINE_WIDTH_RANGE = "33902";
 
@@ -216,7 +226,13 @@ export function toConfig(
 		webGl2Enabled: hasWebgl2,
 	};
 	if (hasWebgl2) {
-		Object.assign(config, contextConfig("webGl2", webgl2, targetOs, backend));
+		const webgl2Backend = TEXTURE_NORM16_OSES.has(targetOs)
+			? [...backend, TEXTURE_NORM16]
+			: backend;
+		Object.assign(
+			config,
+			contextConfig("webGl2", webgl2, targetOs, webgl2Backend),
+		);
 		// Firefox 156 creates WebGL1 on the same GL profile as WebGL2, so both
 		// report one line width range. 146 forced WebGL1 onto a compatibility
 		// profile, and fpgen recorded that profile's driver range.

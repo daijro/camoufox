@@ -42,9 +42,10 @@ def test_converter_reproduces_the_recorded_device():
     value, less the UNMASKED_* strings, which the browser takes from
     webGl:vendor/renderer rather than the table. Keys since marked removed
     (contextAttributes) are no longer sent. WebGL1's line width range is
-    WebGL2's since Firefox 156 (test_webgl1_line_width_range_is_webgl2s), and
+    WebGL2's since Firefox 156 (test_webgl1_line_width_range_is_webgl2s),
     Firefox 158 adds EXT_polygon_offset_clamp on this desktop GL device
-    (test_polygon_offset_clamp_follows_the_backend)."""
+    (test_polygon_offset_clamp_follows_the_backend), and Firefox 159 adds
+    EXT_texture_norm16 to its WebGL2 (test_texture_norm16_follows_the_backend)."""
     removed = {
         entry["property"]
         for entry in json.loads(PROPERTIES.read_text())
@@ -55,6 +56,9 @@ def test_converter_reproduces_the_recorded_device():
     old["webGl:parameters"]["33902"] = old["webGl2:parameters"]["33902"]
     for key in ("webGl:supportedExtensions", "webGl2:supportedExtensions"):
         old[key] = sorted([*old[key], "EXT_polygon_offset_clamp"], key=str.casefold)
+    old["webGl2:supportedExtensions"] = sorted(
+        [*old["webGl2:supportedExtensions"], "EXT_texture_norm16"], key=str.casefold
+    )
     new = webgl_for_gpu("lin", *_GTX_980_LINUX, seed=0)
 
     assert new.keys() == old.keys()
@@ -204,7 +208,10 @@ def test_draft_extensions_filtered_on_every_os():
         # also clamps polygon offsets; the recording carries no desktop GL mark.
         backend = ["EXT_depth_clamp", "EXT_polygon_offset_clamp"] if target_os == "win" else []
         assert config["webGl:supportedExtensions"] == ["ANGLE_instanced_arrays", *backend]
-        assert config["webGl2:supportedExtensions"] == (backend + ["OVR_multiview2"] if target_os == "win" else [])
+        # The recorded EXT_texture_norm16 is dropped; Firefox 159 exposes it on
+        # every macOS and Linux WebGL2 context (test_texture_norm16_follows_the_backend).
+        webgl2_exts = backend + ["OVR_multiview2"] if target_os == "win" else ["EXT_texture_norm16"]
+        assert config["webGl2:supportedExtensions"] == webgl2_exts
 
 
 def test_windows_exposes_ext_depth_clamp_on_every_device():
@@ -227,6 +234,20 @@ def test_polygon_offset_clamp_follows_the_backend():
             for key in ("webGl:supportedExtensions", "webGl2:supportedExtensions"):
                 if key in config:
                     assert ("EXT_polygon_offset_clamp" in config[key]) == want, (target_os, s, key)
+
+
+def test_texture_norm16_follows_the_backend():
+    """Firefox 159 exposes EXT_texture_norm16 on WebGL2 wherever the GL has
+    16-bit normalized textures (core in desktop GL 3.1): every macOS and Linux
+    device with WebGL2, never WebGL1. Measured on stock 159.0 on macOS (Apple
+    M1) and Linux (llvmpipe); 158.0.1 and fpgen's Firefox 146 records lack it."""
+    for target_os in OSES:
+        for s in range(100):
+            config = sample_webgl_for_screen(target_os, 1920, 1080, s)
+            assert "EXT_texture_norm16" not in config["webGl:supportedExtensions"], (target_os, s)
+            if config["webGl2Enabled"]:
+                want = target_os in ("mac", "lin")
+                assert ("EXT_texture_norm16" in config["webGl2:supportedExtensions"]) == want, (target_os, s)
 
 
 def test_extensions_are_in_firefoxs_order():

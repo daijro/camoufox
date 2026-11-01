@@ -25,7 +25,8 @@ from .fpgen_model import load_fpgen
 # of them, and a spoofed list that names one is a tell on its own. Measured on
 # stock Firefox 152.0.4 on real Windows 11 (ANGLE D3D11) 2026-09-16: none of
 # these four are exposed. WEBGL_provoking_vertex is NOT in this set: stock
-# Firefox on Apple GPUs and on Windows does expose it.
+# Firefox on Apple GPUs and on Windows does expose it. EXT_texture_norm16 left
+# draft in Firefox 159; where it is exposed, _TEXTURE_NORM16 adds it back.
 _NEVER_EXPOSED_EXTENSIONS = frozenset(
     {
         'WEBGL_multi_draw',
@@ -57,6 +58,14 @@ _BACKEND_EXTENSIONS = {'win': ('EXT_depth_clamp',)}
 # core in GL 4.6), whose recordings have EXT_depth_clamp. macOS release builds
 # run WebGL on CGL's GL 4.1, which lacks it.
 _POLYGON_OFFSET_CLAMP = 'EXT_polygon_offset_clamp'
+
+# Firefox 159 (bug 1735401) exposes EXT_texture_norm16 on WebGL2 wherever the
+# GL has 16-bit normalized textures, core in desktop GL 3.1: every WebGL2
+# context on macOS (CGL's GL 4.1) and x86_64 Linux (desktop GL). On Windows,
+# ANGLE decides per device from its D3D11 format support, which no recording
+# carries, so it stays filtered there.
+_TEXTURE_NORM16 = 'EXT_texture_norm16'
+_TEXTURE_NORM16_OSES = ('mac', 'lin')
 
 _ALIASED_LINE_WIDTH_RANGE = '33902'
 
@@ -161,6 +170,8 @@ def to_config(webgl: Dict[str, Any], webgl2: Any, target_os: str) -> Dict[str, A
         'webGl2Enabled': bool(webgl2),
     }
     if webgl2:
+        if target_os in _TEXTURE_NORM16_OSES:
+            backend += (_TEXTURE_NORM16,)
         config.update(_context_config('webGl2', webgl2, target_os, backend))
         # Firefox 156 creates WebGL1 on the same GL profile as WebGL2, so both
         # report one line width range. 146 forced WebGL1 onto a compatibility
