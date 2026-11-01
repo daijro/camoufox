@@ -12,7 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from helpers import Marionette, free_port, marionette_args, resolve_binary
+from helpers import Marionette, free_port, marionette_args, marionette_env, resolve_binary
 
 
 PROBE = """
@@ -66,7 +66,7 @@ def main() -> int:
             proc = subprocess.Popen(
                 [str(binary), "--headless", "--no-remote", "--profile", tmp,
                  *marionette_args(), "about:blank"],
-                stdout=log, stderr=subprocess.STDOUT,
+                stdout=log, stderr=subprocess.STDOUT, env=marionette_env(),
             )
             client = None
             try:
