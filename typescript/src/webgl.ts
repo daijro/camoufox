@@ -77,6 +77,15 @@ const POLYGON_OFFSET_CLAMP = "EXT_polygon_offset_clamp";
 const TEXTURE_NORM16 = "EXT_texture_norm16";
 const TEXTURE_NORM16_OSES: ReadonlySet<string> = new Set(["mac", "lin"]);
 
+// Firefox 159 adds EXT_clip_control (core in GL 4.5) and
+// EXT_texture_mirror_clamp_to_edge (core in GL 4.4) to WebGL1 and WebGL2. ANGLE's
+// D3D11 backend sets clipControlEXT from feature level 10_0, which WebGL2 needs,
+// and textureMirrorClampToEdgeEXT on every device (renderer11_utils.cpp). Linux
+// desktop GL drivers, whose recordings have EXT_depth_clamp, expose both. CGL's
+// GL 4.1 on macOS has neither.
+const CLIP_CONTROL = "EXT_clip_control";
+const TEXTURE_MIRROR_CLAMP_TO_EDGE = "EXT_texture_mirror_clamp_to_edge";
+
 const ALIASED_LINE_WIDTH_RANGE = "33902";
 
 // What Firefox reports under privacy.resistFingerprinting, which a Camoufox
@@ -156,13 +165,15 @@ function backendExtensions(
 	webgl: Record<string, any>,
 	hasWebgl2: boolean,
 ): readonly string[] {
-	const extensions = BACKEND_EXTENSIONS[targetOs] ?? [];
-	if (
-		(targetOs === "win" && hasWebgl2) ||
-		(targetOs === "lin" &&
-			(webgl.supportedExtensions as string[]).includes("EXT_depth_clamp"))
-	) {
-		return [...extensions, POLYGON_OFFSET_CLAMP];
+	const extensions = [...(BACKEND_EXTENSIONS[targetOs] ?? [])];
+	const desktopGl =
+		targetOs === "lin" &&
+		(webgl.supportedExtensions as string[]).includes("EXT_depth_clamp");
+	if ((targetOs === "win" && hasWebgl2) || desktopGl) {
+		extensions.push(POLYGON_OFFSET_CLAMP, CLIP_CONTROL);
+	}
+	if (targetOs === "win" || desktopGl) {
+		extensions.push(TEXTURE_MIRROR_CLAMP_TO_EDGE);
 	}
 	return extensions;
 }

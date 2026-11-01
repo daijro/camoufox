@@ -83,15 +83,19 @@ describe.skipIf(!MODEL.ok)("webgl (test_webgl.py)", () => {
 		);
 		// WebGL1's line width range is WebGL2's since Firefox 156, Firefox 158
 		// adds EXT_polygon_offset_clamp on this desktop GL device, and Firefox
-		// 159 adds EXT_texture_norm16 to its WebGL2.
+		// 159 adds EXT_clip_control and EXT_texture_mirror_clamp_to_edge to both
+		// contexts and EXT_texture_norm16 to its WebGL2.
 		old["webGl:parameters"]["33902"] = old["webGl2:parameters"]["33902"];
 		for (const key of [
 			"webGl:supportedExtensions",
 			"webGl2:supportedExtensions",
 		]) {
-			old[key] = [...old[key], "EXT_polygon_offset_clamp"].sort((a, b) =>
-				a.toLowerCase() < b.toLowerCase() ? -1 : 1,
-			);
+			old[key] = [
+				...old[key],
+				"EXT_clip_control",
+				"EXT_polygon_offset_clamp",
+				"EXT_texture_mirror_clamp_to_edge",
+			].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : 1));
 		}
 		old["webGl2:supportedExtensions"] = [
 			...old["webGl2:supportedExtensions"],
@@ -297,6 +301,42 @@ describe.skipIf(!MODEL.ok)("webgl (test_webgl.py)", () => {
 		}
 	});
 
+	it("EXT_clip_control and EXT_texture_mirror_clamp_to_edge follow the backend", () => {
+		// Firefox 159 adds both to WebGL1 and WebGL2. Linux desktop GL (the
+		// recordings with EXT_depth_clamp) has both: measured on stock 159.0 on
+		// llvmpipe, x86_64 and aarch64, where 158.0.1 has neither. ANGLE's D3D11
+		// backend has mirror clamp on every device and clip control from feature
+		// level 10_0 (every device with WebGL2). macOS's GL 4.1 has neither,
+		// measured on stock 159.0 on Apple M1.
+		for (const os of OSES) {
+			for (let s = 0; s < 100; s++) {
+				const config = sampleWebglForScreen(os, 1920, 1080, s);
+				const desktopGl = (
+					config["webGl:supportedExtensions"] as string[]
+				).includes("EXT_depth_clamp");
+				const clip = { win: config.webGl2Enabled, lin: desktopGl, mac: false }[
+					os
+				];
+				const mirror = { win: true, lin: desktopGl, mac: false }[os];
+				for (const key of [
+					"webGl:supportedExtensions",
+					"webGl2:supportedExtensions",
+				]) {
+					if (key in config) {
+						const exts = config[key] as string[];
+						expect(exts.includes("EXT_clip_control"), `${os} ${s} ${key}`).toBe(
+							clip,
+						);
+						expect(
+							exts.includes("EXT_texture_mirror_clamp_to_edge"),
+							`${os} ${s} ${key}`,
+						).toBe(mirror);
+					}
+				}
+			}
+		}
+	});
+
 	it("EXT_texture_norm16 follows the backend", () => {
 		// Firefox 159 exposes it on WebGL2 wherever the GL has 16-bit normalized
 		// textures (core in desktop GL 3.1): every macOS and Linux device with
@@ -374,6 +414,7 @@ it("an extension the backend adds takes Firefox's position", () => {
 		"EXT_color_buffer_half_float",
 		"EXT_depth_clamp",
 		"EXT_disjoint_timer_query",
+		"EXT_texture_mirror_clamp_to_edge",
 	]);
 });
 
@@ -401,9 +442,17 @@ it("draft extensions are filtered on every OS", () => {
 	for (const os of OSES) {
 		const config = toConfig(recorded, webgl2, os);
 		// A device with WebGL2 is D3D11 feature level 10_0 or above, where ANGLE
-		// also clamps polygon offsets; the recording carries no desktop GL mark.
+		// also clamps polygon offsets and has clip control; the recording
+		// carries no desktop GL mark.
 		const backend =
-			os === "win" ? ["EXT_depth_clamp", "EXT_polygon_offset_clamp"] : [];
+			os === "win"
+				? [
+						"EXT_clip_control",
+						"EXT_depth_clamp",
+						"EXT_polygon_offset_clamp",
+						"EXT_texture_mirror_clamp_to_edge",
+					]
+				: [];
 		expect(config["webGl:supportedExtensions"]).toEqual([
 			"ANGLE_instanced_arrays",
 			...backend,

@@ -45,6 +45,8 @@ def test_converter_reproduces_the_recorded_device():
     WebGL2's since Firefox 156 (test_webgl1_line_width_range_is_webgl2s),
     Firefox 158 adds EXT_polygon_offset_clamp on this desktop GL device
     (test_polygon_offset_clamp_follows_the_backend), and Firefox 159 adds
+    EXT_clip_control and EXT_texture_mirror_clamp_to_edge to both contexts
+    (test_clip_control_and_mirror_clamp_follow_the_backend) and
     EXT_texture_norm16 to its WebGL2 (test_texture_norm16_follows_the_backend)."""
     removed = {
         entry["property"]
@@ -55,7 +57,10 @@ def test_converter_reproduces_the_recorded_device():
     old = {key: value for key, value in old.items() if key not in removed}
     old["webGl:parameters"]["33902"] = old["webGl2:parameters"]["33902"]
     for key in ("webGl:supportedExtensions", "webGl2:supportedExtensions"):
-        old[key] = sorted([*old[key], "EXT_polygon_offset_clamp"], key=str.casefold)
+        old[key] = sorted(
+            [*old[key], "EXT_clip_control", "EXT_polygon_offset_clamp", "EXT_texture_mirror_clamp_to_edge"],
+            key=str.casefold,
+        )
     old["webGl2:supportedExtensions"] = sorted(
         [*old["webGl2:supportedExtensions"], "EXT_texture_norm16"], key=str.casefold
     )
@@ -205,8 +210,13 @@ def test_draft_extensions_filtered_on_every_os():
     for target_os in OSES:
         config = webgl.to_config(recorded, webgl2, target_os)
         # A device with WebGL2 is D3D11 feature level 10_0 or above, where ANGLE
-        # also clamps polygon offsets; the recording carries no desktop GL mark.
-        backend = ["EXT_depth_clamp", "EXT_polygon_offset_clamp"] if target_os == "win" else []
+        # also clamps polygon offsets and has clip control; the recording
+        # carries no desktop GL mark.
+        backend = (
+            ["EXT_clip_control", "EXT_depth_clamp", "EXT_polygon_offset_clamp", "EXT_texture_mirror_clamp_to_edge"]
+            if target_os == "win"
+            else []
+        )
         assert config["webGl:supportedExtensions"] == ["ANGLE_instanced_arrays", *backend]
         # The recorded EXT_texture_norm16 is dropped; Firefox 159 exposes it on
         # every macOS and Linux WebGL2 context (test_texture_norm16_follows_the_backend).
@@ -250,6 +260,26 @@ def test_texture_norm16_follows_the_backend():
                 assert ("EXT_texture_norm16" in config["webGl2:supportedExtensions"]) == want, (target_os, s)
 
 
+def test_clip_control_and_mirror_clamp_follow_the_backend():
+    """Firefox 159 adds EXT_clip_control (GL 4.5) and
+    EXT_texture_mirror_clamp_to_edge (GL 4.4) to WebGL1 and WebGL2. Linux
+    desktop GL (the recordings with EXT_depth_clamp) has both: measured on stock
+    159.0 on llvmpipe, x86_64 and aarch64, where 158.0.1 has neither. ANGLE's
+    D3D11 backend has mirror clamp on every device and clip control from
+    feature level 10_0 (every device with WebGL2). macOS's GL 4.1 has neither,
+    measured on stock 159.0 on Apple M1."""
+    for target_os in OSES:
+        for s in range(100):
+            config = sample_webgl_for_screen(target_os, 1920, 1080, s)
+            desktop_gl = "EXT_depth_clamp" in config["webGl:supportedExtensions"]
+            clip = {"win": config["webGl2Enabled"], "lin": desktop_gl, "mac": False}[target_os]
+            mirror = {"win": True, "lin": desktop_gl, "mac": False}[target_os]
+            for key in ("webGl:supportedExtensions", "webGl2:supportedExtensions"):
+                if key in config:
+                    assert ("EXT_clip_control" in config[key]) == clip, (target_os, s, key)
+                    assert ("EXT_texture_mirror_clamp_to_edge" in config[key]) == mirror, (target_os, s, key)
+
+
 def test_extensions_are_in_firefoxs_order():
     """getSupportedExtensions lists in WebGLExtensionID order: alphabetical,
     ignoring case. An extension the backend adds takes its place there."""
@@ -265,6 +295,7 @@ def test_extensions_are_in_firefoxs_order():
         "EXT_color_buffer_half_float",
         "EXT_depth_clamp",
         "EXT_disjoint_timer_query",
+        "EXT_texture_mirror_clamp_to_edge",
     ]
     for target_os in OSES:
         for s in range(100):

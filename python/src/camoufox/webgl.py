@@ -67,6 +67,15 @@ _POLYGON_OFFSET_CLAMP = 'EXT_polygon_offset_clamp'
 _TEXTURE_NORM16 = 'EXT_texture_norm16'
 _TEXTURE_NORM16_OSES = ('mac', 'lin')
 
+# Firefox 159 adds EXT_clip_control (core in GL 4.5) and
+# EXT_texture_mirror_clamp_to_edge (core in GL 4.4) to WebGL1 and WebGL2. ANGLE's
+# D3D11 backend sets clipControlEXT from feature level 10_0, which WebGL2 needs,
+# and textureMirrorClampToEdgeEXT on every device (renderer11_utils.cpp). Linux
+# desktop GL drivers, whose recordings have EXT_depth_clamp, expose both. CGL's
+# GL 4.1 on macOS has neither.
+_CLIP_CONTROL = 'EXT_clip_control'
+_TEXTURE_MIRROR_CLAMP_TO_EDGE = 'EXT_texture_mirror_clamp_to_edge'
+
 _ALIASED_LINE_WIDTH_RANGE = '33902'
 
 # What Firefox reports under privacy.resistFingerprinting. A Camoufox identity
@@ -130,10 +139,11 @@ def firefox_gpus(target_os: str) -> FrozenSet[Tuple[str, str]]:
 def _backend_extensions(target_os: str, webgl: Dict[str, Any], webgl2: Any) -> Tuple[str, ...]:
     """The extensions the shipped Firefox adds on this device's backend."""
     extensions = _BACKEND_EXTENSIONS.get(target_os, ())
-    if (target_os == 'win' and webgl2) or (
-        target_os == 'lin' and 'EXT_depth_clamp' in webgl['supportedExtensions']
-    ):
-        extensions += (_POLYGON_OFFSET_CLAMP,)
+    desktop_gl = target_os == 'lin' and 'EXT_depth_clamp' in webgl['supportedExtensions']
+    if (target_os == 'win' and webgl2) or desktop_gl:
+        extensions += (_POLYGON_OFFSET_CLAMP, _CLIP_CONTROL)
+    if target_os == 'win' or desktop_gl:
+        extensions += (_TEXTURE_MIRROR_CLAMP_TO_EDGE,)
     return extensions
 
 
