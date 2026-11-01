@@ -15,6 +15,13 @@ the launcher, async fallback off on a Linux host, slight hinting in the bundled
 Windows fonts.conf, and fallback-fonts-claimed-os.patch for the per-script
 table.
 
+The identity has every font a Windows identity can draw (fonts.json), not a
+random draw. Fallback order decides which of several covering faces a script
+gets, and a drawn list holds DejaVu Sans only sometimes: with it, Lao and
+Canadian syllabics fell to DejaVu Sans (fontconfig's coverage sort) where
+Windows draws Leelawadee UI and Gadugi, so a random draw failed about one run
+in five. The full list is the hard case, every run.
+
 The scale is pinned to 1: at devicePixelRatio 1.25 every canvas width moves by
 ~0.26% (FreeType's fixed-point advances at another pixel size), as Windows'
 would at 125% too -- a different reference, not a mismatch.
@@ -53,6 +60,7 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
 
 
 def main() -> int:
+    import camoufox
     from camoufox.sync_api import Camoufox
 
     binary = resolve_binary()
@@ -64,6 +72,8 @@ def main() -> int:
     url = f"http://127.0.0.1:{srv.server_address[1]}/fb.html"
     try:
         with Camoufox(os="windows", headless=True, executable_path=str(binary),
+                      config={"fonts": json.loads((Path(camoufox.__file__).parent / "fonts.json")
+                                                  .read_text(encoding="utf-8"))["win"]},
                       firefox_user_prefs={"layout.css.devPixelsPerPx": "1"},
                       i_know_what_im_doing=True) as browser:
             page = browser.new_page()

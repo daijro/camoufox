@@ -1,4 +1,5 @@
 diff --git a/gfx/thebes/gfxPlatformGtk.cpp b/gfx/thebes/gfxPlatformGtk.cpp
+index de866d03d3..b28bbfa7d6 100644
 --- a/gfx/thebes/gfxPlatformGtk.cpp
 +++ b/gfx/thebes/gfxPlatformGtk.cpp
 @@ -6,6 +6,7 @@
@@ -9,7 +10,7 @@ diff --git a/gfx/thebes/gfxPlatformGtk.cpp b/gfx/thebes/gfxPlatformGtk.cpp
  
  #include <fontconfig/fontconfig.h>
  #include <gtk/gtk.h>
-@@ -425,9 +426,1100 @@
+@@ -425,9 +426,1111 @@ static const char kFontSymbola[] = "Symbola";
  static const char kFontNotoSansSymbols[] = "Noto Sans Symbols";
  static const char kFontNotoSansSymbols2[] = "Noto Sans Symbols2";
  
@@ -27,6 +28,13 @@ diff --git a/gfx/thebes/gfxPlatformGtk.cpp b/gfx/thebes/gfxPlatformGtk.cpp
 +// typedef; free functions need it spelled out.
 +using Script = mozilla::intl::Script;
 +
++// Camoufox: two of the table's faces, Lao UI and Euphemia,
++// are not on Windows 10 or 11. There the miss falls through to DirectWrite's
++// system fallback, which draws Lao with Leelawadee UI and Canadian syllabics
++// with Gadugi whatever else is installed (stock 152.0.4 on Windows 10: Lao
++// 186.92, Inuktitut 183.18 at 48px). This build's next step is fontconfig's
++// coverage sort, which drew any covering face the identity had (DejaVu Sans:
++// 205.87, 184.23), so those faces follow the stock entries here.
 +static void CamouWindowsCommonFallbackFonts(uint32_t aCh, Script aRunScript,
 +                                            FontPresentation aPresentation,
 +                                            nsTArray<const char*>& aFontList) {
@@ -182,6 +190,8 @@ diff --git a/gfx/thebes/gfxPlatformGtk.cpp b/gfx/thebes/gfxPlatformGtk.cpp
 +      break;
 +    case Script::LAO:
 +      aFontList.AppendElement("Lao UI");
++      // Camoufox: not on Windows 10+; see the note above this function.
++      aFontList.AppendElement("Leelawadee UI");
 +      break;
 +    case Script::THAI:
 +      aFontList.AppendElement("Tahoma");
@@ -221,6 +231,8 @@ diff --git a/gfx/thebes/gfxPlatformGtk.cpp b/gfx/thebes/gfxPlatformGtk.cpp
 +
 +    case Script::CANADIAN_ABORIGINAL:
 +      aFontList.AppendElement("Euphemia");
++      // Camoufox: not on Windows 10+; see the note above this function.
++      aFontList.AppendElement("Gadugi");
 +      break;
 +
 +    case Script::CHEROKEE:
