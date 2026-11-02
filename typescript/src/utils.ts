@@ -90,7 +90,12 @@ import {
 	ValueError,
 } from "./pycompat.js";
 import { VirtualDisplay } from "./virtdisplay.js";
-import { FallbackWarning, LeakWarning, warn } from "./warnings.js";
+import {
+	FallbackWarning,
+	LeakWarning,
+	loadWarnings,
+	warn,
+} from "./warnings.js";
 import { firefoxGpus, sampleWebglForScreen, webglForGpu } from "./webgl.js";
 
 type ListOrString = string | string[];
@@ -859,6 +864,25 @@ async function keepsIPv6(
 }
 
 /**
+ * Warns for each coherence violation the launch left in place because the
+ * caller set the values involved. Camoufox does not overwrite what the caller
+ * passed, but an identity no real machine presents is detectable, and a caller
+ * that records its identities needs to know that it holds one (#956).
+ */
+function warnKeptIncoherent(violations: coherence.Violation[]): void {
+	for (const violation of violations) {
+		if (!violation.kept?.length) continue;
+		const keys = violation.kept.join(", ");
+		warn(
+			loadWarnings()
+				.caller_value_incoherent.replaceAll("{keys}", keys)
+				.replace("{detail}", () => violation.detail),
+			"LeakWarning",
+		);
+	}
+}
+
+/**
  * Warns the user if they are manually setting properties that Camoufox already
  * sets internally.
  */
@@ -1501,11 +1525,17 @@ export async function launchOptions({
 	if (!i_know_what_im_doing) {
 		warnManualConfig(config);
 	}
+	const callerKeys: ReadonlySet<string> = new Set(Object.keys(config));
 
 	// Snapshot which domains the USER set before fingerprint generation fills in
 	// the rest. The post-generation corrections below must only touch generated
 	// values, never override what the user passed.
 	const userSetNavigator = isDomainSet(config, "navigator.");
+	const userSetArch = isDomainSet(
+		config,
+		"navigator.platform",
+		"navigator.oscpu",
+	);
 	const userSetScreenWindow = isDomainSet(config, "screen.", "window.");
 	const userSetMediaDevices = isDomainSet(config, "mediaDevices:");
 	const userSetFonts = Boolean(fonts?.length) || isDomainSet(config, "fonts");
@@ -1621,10 +1651,9 @@ export async function launchOptions({
 
 	// Correct fingerprint inconsistencies that leak as headless /
 	// impossible-geometry tells, unless the user is driving these themselves.
-	if (!userSetNavigator) {
-		utilsDeps.fixNavigatorArch(config, targetOs);
+	if (!userSetArch) utilsDeps.fixNavigatorArch(config, targetOs);
+	if (!userSetNavigator)
 		utilsDeps.fixHardwareConcurrency(config, Boolean(pin_cpu_cores));
-	}
 	if (!userSetScreenWindow) {
 		// Lift netbook-era geometry to something current hardware reports,
 		// before the display clamp below so a genuinely small real monitor still
@@ -1945,7 +1974,9 @@ export async function launchOptions({
 	// Drop values the source supplied that this identity cannot keep, before the
 	// WebGL pool below defers to them. Here, not earlier, because the check
 	// reads the core count and the screen, which the launch replaces above.
-	coherence.dropIncoherentSourceValues(config, targetOs);
+	warnKeptIncoherent(
+		coherence.dropIncoherentSourceValues(config, targetOs, callerKeys),
+	);
 
 	const resolvedExecutable = executable_path
 		? String(executable_path)
@@ -2018,7 +2049,8 @@ export async function launchOptions({
 	// Every identity passes the whole-identity checks, whatever built it. The
 	// pools are sampled independently, so a machine that never existed can be
 	// assembled from parts that are each fine on their own. See coherence.ts.
-	const incoherent = coherence.apply(config, targetOs);
+	const incoherent = coherence.apply(config, targetOs, callerKeys);
+	warnKeptIncoherent(incoherent);
 	if (incoherent.length && debug) {
 		for (const violation of incoherent) {
 			console.log(

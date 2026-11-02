@@ -421,8 +421,13 @@ WebGL1's `ALIASED_LINE_WIDTH_RANGE` at `[1, 1]` on Linux
 ([`webgl-browser-owned-values-follow-firefox`](../ci/tribal-rules.yml)).
 Firefox 158 added `EXT_polygon_offset_clamp` on Windows devices with WebGL2
 (ANGLE's D3D11 backend at feature level 10_0 and above) and on Linux desktop GL,
-but not on macOS, where release builds use CGL's GL 4.1. The
-`stock-gpu-parity` guard finds them. It runs stock Firefox of the new version,
+but not on macOS, where release builds use CGL's GL 4.1. Firefox 159 exposes
+`EXT_texture_norm16` on WebGL2 wherever the GL has 16-bit normalized textures,
+which is every macOS and x86_64 Linux WebGL2 context; on Windows, ANGLE decides
+per device. It also adds `EXT_clip_control` and `EXT_texture_mirror_clamp_to_edge`
+to both contexts on Linux desktop GL and on Windows (clip control from feature
+level 10_0), but not on macOS.
+The `stock-gpu-parity` guard finds them. It runs stock Firefox of the new version,
 stock Firefox of the release fpgen's model recorded, and Camoufox claiming the
 machine's GPU, and fails where the two stock releases differ and Camoufox does
 not follow the new one. From the repository root:

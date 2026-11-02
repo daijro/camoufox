@@ -26,7 +26,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import Marionette, free_port, hidden_display, marionette_args, resolve_binary  # noqa: E402
+from helpers import Marionette, free_port, hidden_display, marionette_args, marionette_env, resolve_binary  # noqa: E402
 
 BROWSER_ROOT = Path(__file__).resolve().parents[3]
 
@@ -54,7 +54,7 @@ def main() -> int:
         Path(profile, "user.js").write_text(f'user_pref("marionette.port", {port});\n')
         proc = subprocess.Popen(
             [str(binary), "-no-remote", "-profile", profile, *marionette_args(), "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=marionette_env(),
         )
         try:
             m = Marionette(port)
