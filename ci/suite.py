@@ -87,7 +87,11 @@ def make_venv(checkout: Path, tag: str, *, reuse: bool = True) -> Path:
         return python
 
     run([sys.executable, "-m", "venv", str(venv)], check=True)
-    run([str(python), "-m", "pip", "install", "--quiet", "--upgrade", "pip"], check=True)
+    # pip 26.3 refuses any PyPI distribution whose metadata declares a direct
+    # URL dependency, even under an extra nobody installs. autobahn 23.1.2,
+    # which playwright-python's local-requirements.txt pins, has one in its
+    # "all" extra, so 26.3 fails the suite install before a test runs.
+    run([str(python), "-m", "pip", "install", "--quiet", "--upgrade", "pip<26.3"], check=True)
 
     # Install the suite's own pins. Hand-picked ones once paired pytest-asyncio
     # 0.21 with a suite needing 1.4, and every test errored at setup with
