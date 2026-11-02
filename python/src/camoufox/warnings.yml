@@ -113,3 +113,9 @@ addon_not_bundled: >-
     Browser releases bundle their default addons; an older release or an unpackaged build does not.
     Install a current release with `camoufox fetch` (for a local build, `make stage-ubo`),
     or list {addon} in exclude_addons to leave it out on purpose.
+
+caller_value_incoherent: >-
+    LEAK: config sets {keys}, which no real machine presents together with the rest of this identity
+    ({detail}). Camoufox launches with the value you passed, but a page that checks these values against each other
+    can tell this browser is not the machine it claims to be. Leave {keys} out of config to have a coherent value drawn.
+    i_know_what_im_doing does not silence this warning.

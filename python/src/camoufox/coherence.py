@@ -28,7 +28,7 @@ dpr 2, "Apple M1, or similar" -- the machine is an M4, and Firefox generalises
 the renderer string itself).
 """
 
-from typing import Any, Callable, Dict, List, NamedTuple, Optional
+from typing import AbstractSet, Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 
 from .pkgman import LAUNCHER_CONSTANTS
 
@@ -53,8 +53,9 @@ APPLE_SILICON_CORES = frozenset(LAUNCHER_CONSTANTS['appleSiliconCores'])
 PLAUSIBLE_DPR = {os_key: tuple(steps) for os_key, steps in LAUNCHER_CONSTANTS['plausibleDpr'].items()}
 
 # colorDepth: Firefox reports 24, or 30 on a deep-colour display. macOS defaults
-# to deep colour, so an Apple Silicon Mac reports 30 (measured). 32 appears in
-# scraped data and is not a value Firefox emits.
+# to deep colour, so a Mac reports 30: measured on an M4 Mac mini and an M1 Pro
+# MacBook, and 30 in every Apple Silicon preset and all but one Intel Mac one.
+# 32 appears in scraped data and is not a value Firefox emits.
 PLAUSIBLE_COLOR_DEPTH = frozenset({24, 30})
 
 # maxTouchPoints: 0 with no digitiser, otherwise the panel's maximum simultaneous
@@ -111,6 +112,9 @@ APPLE_SILICON_PANELS = frozenset(
 class Violation(NamedTuple):
     rule: str
     detail: str
+    #: The caller's own keys that the repair would have changed, and which were
+    #: kept as passed instead. Empty when nothing of the caller's is involved.
+    kept: Tuple[str, ...] = ()
 
 
 class Rule(NamedTuple):
@@ -219,20 +223,30 @@ def _check_color_depth(config: Dict[str, Any], target_os: str) -> Optional[str]:
         return None
     if depth not in PLAUSIBLE_COLOR_DEPTH:
         return f'screen.colorDepth {depth}; Firefox reports 24 or 30'
-    if target_os == 'mac' and _is_apple_silicon(config) and depth != 30:
-        return f'Apple Silicon Mac with colorDepth {depth}; deep colour is the macOS default'
+    if target_os == 'mac' and depth != 30:
+        return f'macOS identity with colorDepth {depth}; deep colour is the macOS default'
     return None
 
 
 def _repair_color_depth(config: Dict[str, Any], target_os: str) -> None:
-    depth = config.get('screen.colorDepth')
-    if depth is not None and depth not in PLAUSIBLE_COLOR_DEPTH:
-        config['screen.colorDepth'] = 24
-    if target_os == 'mac' and _is_apple_silicon(config):
+    if target_os == 'mac':
         config['screen.colorDepth'] = 30
+    elif config.get('screen.colorDepth') not in PLAUSIBLE_COLOR_DEPTH:
+        config['screen.colorDepth'] = 24
+    config.setdefault('screen.pixelDepth', config['screen.colorDepth'])
+
+
+def _check_pixel_depth(config: Dict[str, Any], target_os: str) -> Optional[str]:
     # pixelDepth is the same number in every browser that reports both.
-    if 'screen.pixelDepth' in config or 'screen.colorDepth' in config:
-        config['screen.pixelDepth'] = config.get('screen.colorDepth', 24)
+    pixel = config.get('screen.pixelDepth')
+    color = config.get('screen.colorDepth', 24)
+    if pixel is not None and pixel != color:
+        return f'screen.pixelDepth {pixel} differs from colorDepth {color}'
+    return None
+
+
+def _repair_pixel_depth(config: Dict[str, Any], target_os: str) -> None:
+    config['screen.pixelDepth'] = config.get('screen.colorDepth', 24)
 
 
 def _check_touch_points(config: Dict[str, Any], target_os: str) -> Optional[str]:
@@ -346,6 +360,7 @@ RULES: List[Rule] = [
     Rule('gpu-matches-os', _check_gpu_matches_os, None),
     Rule('intel-mac-hardware', _check_intel_mac_hardware, None),
     Rule('color-depth', _check_color_depth, _repair_color_depth),
+    Rule('pixel-depth', _check_pixel_depth, _repair_pixel_depth),
     Rule('touch-points', _check_touch_points, _repair_touch_points),
     Rule('device-pixel-ratio', _check_device_pixel_ratio, _repair_device_pixel_ratio),
     Rule('window-chrome', _check_window_chrome, _repair_window_chrome),
@@ -379,7 +394,13 @@ def repair_screen_orientation(config: Dict[str, Any]) -> bool:
     return True
 
 
-def drop_incoherent_source_values(config: Dict[str, Any], target_os: str) -> List[Violation]:
+def _changed(before: Dict[str, Any], after: Dict[str, Any], keys: AbstractSet[str]) -> Tuple[str, ...]:
+    return tuple(sorted(k for k in keys if (k in before) != (k in after) or before.get(k) != after.get(k)))
+
+
+def drop_incoherent_source_values(
+    config: Dict[str, Any], target_os: str, keep: AbstractSet[str] = frozenset()
+) -> List[Violation]:
     """Discard values a source supplied that this identity cannot keep.
 
     Run after the core count and the screen are final, and before the pools
@@ -390,7 +411,8 @@ def drop_incoherent_source_values(config: Dict[str, Any], target_os: str) -> Lis
     WebGL sampling draws a coherent one instead.
 
     Only values that another pool can replace are dropped. Everything else is
-    left for `apply()` to repair or report.
+    left for `apply()` to repair or report. A GPU the caller passed (a key in
+    `keep`) is never dropped: it is reported, with the keys it kept, instead.
     """
     renderer = _renderer(config)
     if not renderer:
@@ -401,6 +423,9 @@ def drop_incoherent_source_values(config: Dict[str, Any], target_os: str) -> Lis
         rule = 'intel-mac-hardware'
     else:
         return []
+    kept = _changed(config, {}, keep & {'webGl:renderer', 'webGl:vendor'})
+    if kept:
+        return [Violation(rule, f'{renderer!r} does not fit this {target_os} identity', kept)]
     config.pop('webGl:renderer', None)
     config.pop('webGl:vendor', None)
     return [Violation(rule, f'dropped {renderer!r} for a {target_os} identity')]
@@ -416,15 +441,30 @@ def validate(config: Dict[str, Any], target_os: str) -> List[Violation]:
     return violations
 
 
-def apply(config: Dict[str, Any], target_os: str) -> List[Violation]:
+def apply(config: Dict[str, Any], target_os: str, keep: AbstractSet[str] = frozenset()) -> List[Violation]:
     """Repair what is determined, and report what is left.
 
     A rule with no repair -- a Windows GPU on a macOS identity, a portrait
     screen -- cannot be corrected without inventing a machine, so it is
     returned for the caller to decide about. The caller that draws the identity
     can simply draw again.
+
+    `keep` names the keys the caller set. A repair that would change one of
+    them is not made: the caller's value stands, and the violation comes back
+    with those keys in `kept` so the launcher can warn about it (#956). A
+    repair that only touches other keys (growing outerHeight to fit a caller's
+    innerHeight) still runs.
     """
+    kept: Dict[str, Tuple[str, ...]] = {}
     for rule in RULES:
-        if rule.repair and rule.check(config, target_os):
-            rule.repair(config, target_os)
-    return validate(config, target_os)
+        if not rule.repair or not rule.check(config, target_os):
+            continue
+        repaired = dict(config)
+        rule.repair(repaired, target_os)
+        blocked = _changed(config, repaired, keep)
+        if blocked:
+            kept[rule.name] = blocked
+        else:
+            config.clear()
+            config.update(repaired)
+    return [v._replace(kept=kept.get(v.rule, ())) for v in validate(config, target_os)]

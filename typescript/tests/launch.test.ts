@@ -1432,3 +1432,72 @@ describe("cpu_affinity", () => {
 		]);
 	});
 });
+
+describe("test_caller_config_kept", () => {
+	beforeEach(() => stubHost());
+	const MAC = {
+		"navigator.userAgent": MAC_UA,
+		"navigator.platform": "MacIntel",
+		"webGl:vendor": "Apple",
+		"webGl:renderer": "Apple M1, or similar",
+		"screen.width": 1512,
+		"screen.height": 982,
+	};
+	const launchMac = (config: Record<string, any>, key: string) =>
+		launchWarning(
+			{
+				headless: true,
+				i_know_what_im_doing: true,
+				executable_path: BUNDLE_EXE,
+				os: "macos",
+				config,
+			},
+			"LeakWarning",
+			`LEAK: config sets ${key}`,
+		);
+
+	it("keeps an incoherent caller value and warns", async () => {
+		const depth = await launchMac(
+			{ ...MAC, "screen.colorDepth": 24 },
+			"screen.colorDepth",
+		);
+		expect(depth.config["screen.colorDepth"]).toBe(24);
+		expect(depth.config["screen.pixelDepth"] ?? 24).toBe(24);
+		expect(depth.warned).toBe(true);
+		const dpr = await launchMac(
+			{ ...MAC, "window.devicePixelRatio": 1.5 },
+			"window.devicePixelRatio",
+		);
+		expect(dpr.config["window.devicePixelRatio"]).toBe(1.5);
+		expect(dpr.warned).toBe(true);
+		// An Intel Mac GPU behind a notched panel only Apple Silicon Macs have.
+		const intel = "Intel(R) HD Graphics 400, or similar";
+		const gpu = await launchMac(
+			{ ...MAC, "webGl:vendor": "Intel Inc.", "webGl:renderer": intel },
+			"webGl:renderer",
+		);
+		expect(gpu.config["webGl:renderer"]).toBe(intel);
+		expect(gpu.warned).toBe(true);
+	});
+
+	it("is silent when the caller's values are coherent", async () => {
+		const kept = await launchMac(
+			{
+				...MAC,
+				"screen.colorDepth": 30,
+				"screen.pixelDepth": 30,
+				"window.devicePixelRatio": 2,
+			},
+			"",
+		);
+		expect(kept.config["screen.colorDepth"]).toBe(30);
+		expect(kept.warned).toBe(false);
+	});
+
+	it("draws colorDepth 30 for every macOS identity", async () => {
+		const drawn = await launchMac({ "navigator.userAgent": MAC_UA }, "");
+		expect(drawn.config["screen.colorDepth"]).toBe(30);
+		expect(drawn.config["screen.pixelDepth"]).toBe(30);
+		expect(drawn.warned).toBe(false);
+	});
+});

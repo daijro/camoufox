@@ -232,7 +232,7 @@ this section in step with the launcher options.
 
 ## Pitfalls
 
-- **Do not set identity values by hand.** Do not pass Playwright's `user_agent`, or `navigator.*`, `headers.User-Agent`, `screen.*`, `window.*`, `timezone` or `geolocation:*` in `config`. The identity is drawn as a whole; overriding one value leaves the rest describing a different machine. Use `os`, `screen`, `window`, `locale` and `geoip` instead. Manual config keys print a `LeakWarning`.
+- **Do not set identity values by hand.** Do not pass Playwright's `user_agent`, or `navigator.*`, `headers.User-Agent`, `screen.*`, `window.*`, `timezone` or `geolocation:*` in `config`. The identity is drawn as a whole; overriding one value leaves the rest describing a different machine. Use `os`, `screen`, `window`, `locale` and `geoip` instead. Manual config keys print a `LeakWarning`. The coherence checks never replace a key the caller set: one that contradicts the rest of the identity (a Mac at colorDepth 24, a macOS devicePixelRatio of 1.5) is kept, with a second `LeakWarning` that `i_know_what_im_doing` does not silence. Drawn values are repaired; every macOS identity reports colorDepth 30.
 - **Use `geoip=True` with a proxy.** Without it the timezone and locale are the identity's, not the proxy's, and a warning is printed.
 - **`page.evaluate` is isolated.** It cannot read globals the page defined. Use `main_world_eval=True` and prefix the script with `mw:`. Without the option, a `mw:` evaluate fails with "Main world evaluation is disabled". `mw:` cannot return a handle (`evaluate_handle`).
 - **Leave the viewport alone.** When the window size is spoofed, new pages default to `no_viewport=True`; forcing a `viewport` asks the window to resize to something the identity does not claim.
