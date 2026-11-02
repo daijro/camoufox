@@ -32,6 +32,9 @@ What PASS means:
     * those events are spread over a plausible human duration, with uneven
       gaps between them rather than a fixed cadence;
     * a humanized click still lands on the target element;
+    * a curve that strays outside the viewport leaves the document as a real
+      cursor does (mouseout with no relatedTarget), and comes back with a
+      mouseover before its next mousemove;
     * without humanize, each move emits only its endpoint (pins the other
       direction so accidental always-on humanization is also caught).
 """
@@ -79,6 +82,46 @@ async def _collect_moves(humanize):
         await page.mouse.move(20, 20)
         await page.mouse.move(*dest)
         return await page.evaluate("moves"), dest
+
+
+# Moves that run along the top edge, so that curves stray above it. Recorded
+# paths wander off the line between their endpoints (by up to 184px in 69% of
+# moves), so a run of these sends at least one curve out of the page.
+EDGE_Y = 2
+EDGE_SWEEPS = 10
+EDGE_RECORDER = """
+    window.edge = [];
+    addEventListener("mousemove", e => edge.push(["move", e.clientX, e.clientY]));
+    document.addEventListener("mouseout", e => { if (!e.relatedTarget) edge.push(["out", e.clientX, e.clientY]); });
+    document.addEventListener("mouseover", e => { if (!e.relatedTarget) edge.push(["over", e.clientX, e.clientY]); });
+"""
+
+
+async def _edge_sweeps():
+    """Events of humanized moves back and forth just inside the top edge."""
+    async with AsyncCamoufox(**launch_kwargs(os="linux", humanize=True)) as browser:
+        page = await browser.new_page()
+        await page.set_content(BODY)
+        await page.evaluate(EDGE_RECORDER)
+        viewport = await page.evaluate("({w: innerWidth, h: innerHeight})")
+        left, right = 40, viewport["w"] - 40
+        for i in range(EDGE_SWEEPS):
+            await page.mouse.move(right if i % 2 else left, EDGE_Y)
+        return await page.evaluate("edge")
+
+
+def _unannounced_moves(events):
+    """mousemoves the page got while it had last been told the cursor left."""
+    outside = False
+    bad = []
+    for kind, x, y in events:
+        if kind == "out":
+            outside = True
+        elif kind == "over":
+            outside = False
+        elif outside:
+            bad.append([x, y])
+    return bad
 
 
 async def _humanized_click_hits_target():
@@ -146,6 +189,24 @@ async def main() -> int:
     else:
         passed = False
         print("  FAIL: expected only the two endpoints")
+
+    # A curve leaving the viewport used to send nothing until it came back, so
+    # the page saw the cursor stop at the edge and reappear elsewhere with no
+    # mouseout or mouseover, which a real pointer crossing into the toolbar
+    # always produces.
+    events = await _edge_sweeps()
+    exits = sum(1 for e in events if e[0] == "out")
+    unannounced = _unannounced_moves(events)
+    print("\n=== curves leaving the viewport ===")
+    print(f"  {EDGE_SWEEPS} moves along y={EDGE_Y}: {len(events)} events, {exits} document exits")
+    if exits and not unannounced:
+        print("  PASS: the cursor left the document and re-entered it as a real one does")
+    else:
+        passed = False
+        if not exits:
+            print("  FAIL: no curve along the top edge left the document (no mouseout)")
+        else:
+            print(f"  FAIL: mousemoves after an exit with no mouseover first: {unannounced[:5]}")
 
     moves, clicked = await _humanized_click_hits_target()
     print("\n=== humanized click ===")

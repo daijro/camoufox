@@ -191,9 +191,13 @@ export class MouseDispatch {
    * humanize-pacing.py). A late point is dispatched as soon as it can be; the
    * ones after it are still due on the original clock.
    *
-   * Points outside the viewport are skipped, and a curve leaves the viewport
-   * more often than it sounds: measured over 400 random moves, 69% of Cursory
-   * paths stray outside the box spanned by their own endpoints, by up to 184px.
+   * A curve leaves the viewport more often than it sounds: measured over 400
+   * random moves, 69% of Cursory paths stray outside the box spanned by their
+   * own endpoints, by up to 184px. A real pointer that leaves the page fires
+   * mouseout/mouseleave and comes back with mouseover, so the first point
+   * outside moves the pointer off the content (leaveContent), and the next
+   * point inside re-enters it. Skipping those points instead left the cursor
+   * frozen at the edge with no exit, then reappearing elsewhere.
    *
    * Bounding each ack individually is not enough to bound the work: a curve is
    * dispatched inside a SINGLE activation-chain slot, and holds up to ~90
@@ -223,6 +227,7 @@ export class MouseDispatch {
     // dispatched is the only place that check is reliable.
     let lastX = NaN;
     let lastY = NaN;
+    let offContent = false;
     const startMs = ChromeUtils.now();
     let dueMs = 0;
     const untilDue = () => {
@@ -232,8 +237,16 @@ export class MouseDispatch {
     for (const [x, y, delayMs] of steps) {
       dueMs += delayMs;
       await untilDue();
-      if (!this.isInViewport(x, y))
+      if (!this.isInViewport(x, y)) {
+        if (!offContent) {
+          this.leaveContent(x, y);
+          offContent = true;
+          lastX = NaN;
+          lastY = NaN;
+        }
         continue;
+      }
+      offContent = false;
       if (Math.round(x) === lastX && Math.round(y) === lastY)
         continue;
       if (!await this.sendAcked(watcher, eventType, x, y))
@@ -255,6 +268,26 @@ export class MouseDispatch {
    */
   parkOffContent() {
     this._sendAbsolute('mousemove', 0, 0);
+  }
+
+  /**
+   * Move the pointer off the content toward a relative point outside the
+   * viewport, as a curve straying off the page does. Above the content, within
+   * its width, is the toolbar, where a cursor leaving through the top edge
+   * really is, so the pointer goes there; anywhere else it parks as
+   * parkOffContent() does. Unacked for the same reason: it never reaches the
+   * renderer, which sees only the exit.
+   */
+  leaveContent(x, y) {
+    // The last row wholly above the content: the row the content's fractional
+    // top falls in is partly content (see the constructor).
+    const absY = Math.floor(this._box.top + y);
+    if (y < 0 && absY >= 0 && absY < Math.floor(this._box.top)) {
+      const absX = Math.min(Math.max(x, 0), this._box.width - 1) + this._box.left;
+      this._sendAbsolute('mousemove', absX, absY);
+      return;
+    }
+    this.parkOffContent();
   }
 
   /** Wheel events take the same conversion; they are not acked. */
