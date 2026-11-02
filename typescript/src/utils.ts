@@ -1531,6 +1531,11 @@ export async function launchOptions({
 	// the rest. The post-generation corrections below must only touch generated
 	// values, never override what the user passed.
 	const userSetNavigator = isDomainSet(config, "navigator.");
+	const userSetArch = isDomainSet(
+		config,
+		"navigator.platform",
+		"navigator.oscpu",
+	);
 	const userSetScreenWindow = isDomainSet(config, "screen.", "window.");
 	const userSetMediaDevices = isDomainSet(config, "mediaDevices:");
 	const userSetFonts = Boolean(fonts?.length) || isDomainSet(config, "fonts");
@@ -1646,10 +1651,9 @@ export async function launchOptions({
 
 	// Correct fingerprint inconsistencies that leak as headless /
 	// impossible-geometry tells, unless the user is driving these themselves.
-	if (!userSetNavigator) {
-		utilsDeps.fixNavigatorArch(config, targetOs);
+	if (!userSetArch) utilsDeps.fixNavigatorArch(config, targetOs);
+	if (!userSetNavigator)
 		utilsDeps.fixHardwareConcurrency(config, Boolean(pin_cpu_cores));
-	}
 	if (!userSetScreenWindow) {
 		// Lift netbook-era geometry to something current hardware reports,
 		// before the display clamp below so a genuinely small real monitor still

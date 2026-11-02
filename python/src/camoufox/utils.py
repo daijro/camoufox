@@ -1181,6 +1181,7 @@ def launch_options(
     # the rest. The post-generation fix-ups below must
     # only touch generated values, never override what the user passed.
     _user_set_navigator = is_domain_set(config, 'navigator.')
+    _user_set_arch = is_domain_set(config, 'navigator.platform', 'navigator.oscpu')
     _user_set_screen_window = is_domain_set(config, 'screen.', 'window.')
     _user_set_media_devices = is_domain_set(config, 'mediaDevices:')
     _user_set_fonts = bool(fonts) or is_domain_set(config, 'fonts')
@@ -1281,8 +1282,9 @@ def launch_options(
 
     # Correct fingerprint inconsistencies that leak as headless /
     # impossible-geometry tells, unless the user is driving these themselves.
-    if not _user_set_navigator:
+    if not _user_set_arch:
         fix_navigator_arch(config, target_os)
+    if not _user_set_navigator:
         fix_hardware_concurrency(config, can_pin=bool(pin_cpu_cores))
     if not _user_set_screen_window:
         # Lift netbook-era geometry to something current hardware reports,
