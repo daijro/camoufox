@@ -25,7 +25,8 @@ from .fpgen_model import load_fpgen
 # of them, and a spoofed list that names one is a tell on its own. Measured on
 # stock Firefox 152.0.4 on real Windows 11 (ANGLE D3D11) 2026-09-16: none of
 # these four are exposed. WEBGL_provoking_vertex is NOT in this set: stock
-# Firefox on Apple GPUs and on Windows does expose it.
+# Firefox on Apple GPUs and on Windows does expose it. EXT_texture_norm16 left
+# draft in Firefox 159; where it is exposed, _TEXTURE_NORM16 adds it back.
 _NEVER_EXPOSED_EXTENSIONS = frozenset(
     {
         'WEBGL_multi_draw',
@@ -57,6 +58,23 @@ _BACKEND_EXTENSIONS = {'win': ('EXT_depth_clamp',)}
 # core in GL 4.6), whose recordings have EXT_depth_clamp. macOS release builds
 # run WebGL on CGL's GL 4.1, which lacks it.
 _POLYGON_OFFSET_CLAMP = 'EXT_polygon_offset_clamp'
+
+# Firefox 159 (bug 1735401) exposes EXT_texture_norm16 on WebGL2 wherever the
+# GL has 16-bit normalized textures, core in desktop GL 3.1: every WebGL2
+# context on macOS (CGL's GL 4.1) and x86_64 Linux (desktop GL). On Windows,
+# ANGLE decides per device from its D3D11 format support, which no recording
+# carries, so it stays filtered there.
+_TEXTURE_NORM16 = 'EXT_texture_norm16'
+_TEXTURE_NORM16_OSES = ('mac', 'lin')
+
+# Firefox 159 adds EXT_clip_control (core in GL 4.5) and
+# EXT_texture_mirror_clamp_to_edge (core in GL 4.4) to WebGL1 and WebGL2. ANGLE's
+# D3D11 backend sets clipControlEXT from feature level 10_0, which WebGL2 needs,
+# and textureMirrorClampToEdgeEXT on every device (renderer11_utils.cpp). Linux
+# desktop GL drivers, whose recordings have EXT_depth_clamp, expose both. CGL's
+# GL 4.1 on macOS has neither.
+_CLIP_CONTROL = 'EXT_clip_control'
+_TEXTURE_MIRROR_CLAMP_TO_EDGE = 'EXT_texture_mirror_clamp_to_edge'
 
 _ALIASED_LINE_WIDTH_RANGE = '33902'
 
@@ -121,10 +139,11 @@ def firefox_gpus(target_os: str) -> FrozenSet[Tuple[str, str]]:
 def _backend_extensions(target_os: str, webgl: Dict[str, Any], webgl2: Any) -> Tuple[str, ...]:
     """The extensions the shipped Firefox adds on this device's backend."""
     extensions = _BACKEND_EXTENSIONS.get(target_os, ())
-    if (target_os == 'win' and webgl2) or (
-        target_os == 'lin' and 'EXT_depth_clamp' in webgl['supportedExtensions']
-    ):
-        extensions += (_POLYGON_OFFSET_CLAMP,)
+    desktop_gl = target_os == 'lin' and 'EXT_depth_clamp' in webgl['supportedExtensions']
+    if (target_os == 'win' and webgl2) or desktop_gl:
+        extensions += (_POLYGON_OFFSET_CLAMP, _CLIP_CONTROL)
+    if target_os == 'win' or desktop_gl:
+        extensions += (_TEXTURE_MIRROR_CLAMP_TO_EDGE,)
     return extensions
 
 
@@ -161,6 +180,8 @@ def to_config(webgl: Dict[str, Any], webgl2: Any, target_os: str) -> Dict[str, A
         'webGl2Enabled': bool(webgl2),
     }
     if webgl2:
+        if target_os in _TEXTURE_NORM16_OSES:
+            backend += (_TEXTURE_NORM16,)
         config.update(_context_config('webGl2', webgl2, target_os, backend))
         # Firefox 156 creates WebGL1 on the same GL profile as WebGL2, so both
         # report one line width range. 146 forced WebGL1 onto a compatibility

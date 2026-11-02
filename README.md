@@ -544,7 +544,7 @@ The full option list is in the [Python README](python/README.md#launch-options).
 | Onboarding messages disabled | `ghostery/` patch |
 | No bundled search engines | `no-search-engines` patch |
 | Mozilla services and background traffic turned off | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
-| Firefox's bundled certificate revocations (OneCRL) enforced in every profile, with no network fetch | `remote-security-settings` patch |
+| Firefox's bundled certificate revocations (OneCRL) enforced in every profile, with no network fetch | Stock Firefox since 159 |
 | Stock browser UI: no theme, toolbar or dialog changes | |
 
 > [!NOTE]

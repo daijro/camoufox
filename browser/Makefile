@@ -148,7 +148,7 @@ checkpoint:
 
 clean:
 	@if [ -e "$(cf_source_dir)/.git" ]; then \
-		cd "$(cf_source_dir)" && ./mach clobber && git clean -fdx; \
+		(cd "$(cf_source_dir)" && ./mach clobber && git clean -fdx); \
 		$(MAKE) revert; \
 	else \
 		echo "No git repo found in $(cf_source_dir); re-extracting Firefox source..."; \

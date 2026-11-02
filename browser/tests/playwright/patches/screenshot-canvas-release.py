@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import Marionette, free_port, launch_kwargs, marionette_args  # noqa: E402
+from helpers import Marionette, free_port, launch_kwargs, marionette_args, marionette_env  # noqa: E402
 
 SHOTS = 20
 WIDTH, HEIGHT = 1920, 1080
@@ -31,7 +31,7 @@ def main() -> int:
     from camoufox.sync_api import Camoufox
 
     port = free_port()
-    with Camoufox(**launch_kwargs(args=marionette_args(), firefox_user_prefs={"marionette.port": port},
+    with Camoufox(**launch_kwargs(args=marionette_args(), env=marionette_env(), firefox_user_prefs={"marionette.port": port},
                                   i_know_what_im_doing=True)) as browser:
         page = browser.new_page(viewport={"width": WIDTH, "height": HEIGHT})
         page.set_content('<body style="margin:0;background:#234">x</body>')
