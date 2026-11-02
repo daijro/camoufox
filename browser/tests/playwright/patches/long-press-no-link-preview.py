@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import Marionette, free_port, hidden_display, marionette_args, resolve_binary  # noqa: E402
+from helpers import Marionette, free_port, hidden_display, marionette_args, marionette_env, resolve_binary  # noqa: E402
 
 PAGE = b'<!DOCTYPE html><html><body><a id="a" href="/article" style="font-size:40px">A link</a></body></html>'
 PANEL = 'return document.getElementById("link-preview-panel")?.state ?? null;'
@@ -51,7 +51,7 @@ def panel_after_long_press(binary: Path, url: str, prefs: dict):
     from camoufox.sync_api import Camoufox
 
     port = free_port()
-    with Camoufox(headless=False, executable_path=str(binary), args=marionette_args(),
+    with Camoufox(headless=False, executable_path=str(binary), args=marionette_args(), env=marionette_env(),
                   firefox_user_prefs={"marionette.port": port, **prefs}, i_know_what_im_doing=True) as browser:
         page = browser.new_page()
         page.goto(url)
