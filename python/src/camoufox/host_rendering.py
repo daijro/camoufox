@@ -11,10 +11,13 @@ WebGPU hands the page the host's adapter, so the identity gets it only when it
 claims the host's GPU.
 """
 
-import queue
-import threading
+import json
+import os
+import subprocess
+import sys
 from functools import lru_cache
-from typing import Any, Dict, Mapping, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from .fingerprints import is_software_renderer
 from .gpudisplay import GPU_PREFS
@@ -107,21 +110,32 @@ def _host_gpu(
     env: Tuple[Tuple[str, str], ...],
     prefs: Tuple[Tuple[str, Any], ...],
 ) -> Optional[Gpu]:
-    # The sync API refuses to start inside a running asyncio loop, which is
-    # where AsyncCamoufox calls launch_options from. A daemon thread also lets
-    # the process exit after a timeout when the browser cannot be cancelled.
-    outcome: queue.Queue[Tuple[bool, Any]] = queue.Queue(maxsize=1)
-
-    def read() -> None:
-        try:
-            outcome.put((True, _read_host_gpu(executable_path, headless, env, prefs)))
-        except BaseException as error:
-            outcome.put((False, error))
-
-    threading.Thread(target=read, name='camoufox-host-gpu-probe', daemon=True).start()
+    # The probe runs in its own interpreter: the sync API refuses to start
+    # inside a running asyncio loop, which is where AsyncCamoufox calls
+    # launch_options from, and a hung probe has to be stoppable, which a thread
+    # is not. Terminating the child closes its pipe to the Playwright driver,
+    # which then shuts the browser down. PYTHONPATH makes the child import this
+    # same package.
+    child_env = dict(os.environ)
+    child_env['PYTHONPATH'] = os.pathsep.join(
+        filter(None, (str(Path(__file__).resolve().parent.parent), child_env.get('PYTHONPATH')))
+    )
+    child = subprocess.Popen(
+        [sys.executable, '-m', 'camoufox.host_rendering'],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=child_env,
+        text=True,
+    )
+    request = json.dumps(
+        {'executable_path': executable_path, 'headless': headless, 'env': dict(env), 'prefs': dict(prefs)}
+    )
     try:
-        ok, value = outcome.get(timeout=HOST_GPU_PROBE_TIMEOUT_S)
-    except queue.Empty:
+        out, err = child.communicate(request, timeout=HOST_GPU_PROBE_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        child.terminate()
+        child.communicate()
         display = dict(env).get('DISPLAY')
         context = f' (DISPLAY={display})' if display else ''
         raise TimeoutError(
@@ -129,17 +143,18 @@ def _host_gpu(
             f'while launching {executable_path}{context}. The browser did not '
             'answer the WebGL probe; check that the display accepts X connections.'
         ) from None
-    if not ok:
-        raise value
-    return value
+    if child.returncode != 0:
+        raise RuntimeError(f'Host GPU probe failed while launching {executable_path}:\n{err.strip()}')
+    gpu = json.loads(out)
+    return (gpu[0], gpu[1]) if gpu else None
 
 
 def _read_host_gpu(
     executable_path: str,
     headless: bool,
-    env: Tuple[Tuple[str, str], ...],
-    prefs: Tuple[Tuple[str, Any], ...],
-) -> Optional[Gpu]:
+    env: Dict[str, str],
+    prefs: Dict[str, Any],
+) -> Optional[List[str]]:
     """Launch the binary once and read its WebGL vendor and renderer."""
     from playwright.sync_api import sync_playwright
 
@@ -147,20 +162,14 @@ def _read_host_gpu(
         browser = playwright.firefox.launch(
             executable_path=executable_path,
             headless=headless,
-            env=dict(env),
+            env=env,
             # The launch forces WebGL on, which can choose another device.
-            firefox_user_prefs={**dict(prefs), 'webgl.force-enabled': True},
+            firefox_user_prefs={**prefs, 'webgl.force-enabled': True},
         )
         try:
-            gpu = browser.new_page().evaluate(_READ_GPU)
-        except BaseException:
-            try:
-                browser.close()
-            except BaseException:
-                pass
-            raise
-        browser.close()
-    return (gpu[0], gpu[1]) if gpu else None
+            return browser.new_page().evaluate(_READ_GPU)
+        finally:
+            browser.close()
 
 
 def renders_on_hardware(gpu: Optional[Gpu]) -> bool:
@@ -170,3 +179,9 @@ def renders_on_hardware(gpu: Optional[Gpu]) -> bool:
     a machine whose driver failed to load.
     """
     return gpu is not None and not is_software_renderer(gpu[1])
+
+
+if __name__ == '__main__':
+    # _host_gpu's child: reads its request from stdin, writes the GPU as JSON.
+    request = json.load(sys.stdin)
+    json.dump(_read_host_gpu(**request), sys.stdout)

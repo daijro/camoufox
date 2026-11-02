@@ -8,7 +8,7 @@ Run with:
 import os
 import re
 import sys
-import threading
+import time
 import warnings
 from contextlib import contextmanager
 from unittest import mock
@@ -250,61 +250,43 @@ def test_the_probe_ignores_what_the_launcher_adds_to_the_environment():
     assert probe.call_args_list[0] == probe.call_args_list[1]
 
 
-def run_probe_in_thread(seconds):
-    """host_gpu's outcome, or None if it is still running after `seconds`."""
-    outcome = []
-
-    def probe():
-        try:
-            outcome.append(host_gpu("/bin/camoufox", True, {"DISPLAY": ":99"}, {}))
-        except BaseException as error:
-            outcome.append(error)
-
-    thread = threading.Thread(target=probe, daemon=True)
-    thread.start()
-    thread.join(seconds)
-    return outcome[0] if outcome else None
-
-
-def test_the_host_gpu_probe_times_out_and_says_so(monkeypatch):
+def test_a_timed_out_host_gpu_probe_takes_its_browser_down(tmp_path, monkeypatch):
     """A display that accepts connections but never answers the X handshake
-    leaves Firefox inside getContext() forever; the launch must not wait on it."""
-    release = threading.Event()
-
-    class HangingPlaywright:
-        def __enter__(self):
-            release.wait(10)
-            raise RuntimeError("released")
-
-        def __exit__(self, *exc):
-            return False
-
-    monkeypatch.setattr("playwright.sync_api.sync_playwright", HangingPlaywright)
-    monkeypatch.setattr(host_rendering, "HOST_GPU_PROBE_TIMEOUT_S", 0.05, raising=False)
+    leaves Firefox hung. The launch fails, naming the display, and the hung
+    browser does not outlive the probe."""
+    pid_file = tmp_path / "browser.pid"
+    browser = tmp_path / "firefox"
+    browser.write_text(f"#!/bin/sh\necho $$ > {pid_file}\nexec sleep 600\n")
+    browser.chmod(0o755)
+    monkeypatch.setattr(host_rendering, "HOST_GPU_PROBE_TIMEOUT_S", 5)
     host_rendering._host_gpu.cache_clear()
     try:
-        outcome = run_probe_in_thread(2)
-        assert isinstance(outcome, TimeoutError), f"the probe did not time out: {outcome!r}"
-        assert "Host GPU probe timed out after 0.05 s" in str(outcome)
-        assert "DISPLAY=:99" in str(outcome)
+        with pytest.raises(TimeoutError, match=r"timed out after 5 s .*\(DISPLAY=:99\)"):
+            host_gpu(str(browser), True, {"DISPLAY": ":99"}, {})
     finally:
-        release.set()
         host_rendering._host_gpu.cache_clear()
+    pid = int(pid_file.read_text())
+    # The Playwright driver stops the browser once the probe's pipe closes.
+    deadline = time.monotonic() + 10
+    while process_is_running(pid):
+        assert time.monotonic() < deadline, f"the probe's browser (pid {pid}) is still running"
+        time.sleep(0.1)
 
 
-def test_the_host_gpu_probe_propagates_a_read_error(monkeypatch):
-    class FailingPlaywright:
-        def __enter__(self):
-            raise RuntimeError("browser died")
+def process_is_running(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
 
-        def __exit__(self, *exc):
-            return False
 
-    monkeypatch.setattr("playwright.sync_api.sync_playwright", FailingPlaywright)
+def test_the_host_gpu_probe_reports_why_the_browser_did_not_start():
     host_rendering._host_gpu.cache_clear()
     try:
-        outcome = run_probe_in_thread(2)
-        assert isinstance(outcome, RuntimeError) and "browser died" in str(outcome)
+        failed = r"(?s)Host GPU probe failed while launching /nonexistent/firefox.*Failed to launch"
+        with pytest.raises(RuntimeError, match=failed):
+            host_gpu("/nonexistent/firefox", True, {}, {})
     finally:
         host_rendering._host_gpu.cache_clear()
 
