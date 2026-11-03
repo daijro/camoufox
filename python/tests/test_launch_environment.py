@@ -126,13 +126,15 @@ class TestFontFallbackAsyncPref:
         prefs = self._prefs_for("Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0", None)
         assert prefs[self.PREF] is False
 
-    def test_macos_keeps_async_font_fallback(self, isolated_launch_dependencies):
+    def test_macos_keeps_async_font_fallback(self, isolated_launch_dependencies, monkeypatch):
+        monkeypatch.setattr(utils, "_host_os_key", lambda: "mac")
         prefs = self._prefs_for(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:152.0) Gecko/20100101 Firefox/152.0", None
         )
         assert self.PREF not in prefs
 
-    def test_windows_keeps_async_font_fallback(self, isolated_launch_dependencies):
+    def test_windows_keeps_async_font_fallback(self, isolated_launch_dependencies, monkeypatch):
+        monkeypatch.setattr(utils, "_host_os_key", lambda: "win")
         prefs = self._prefs_for(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0", None
         )

@@ -1,0 +1,53 @@
+diff --git a/gfx/thebes/gfxFontUtils.cpp b/gfx/thebes/gfxFontUtils.cpp
+--- a/gfx/thebes/gfxFontUtils.cpp
++++ b/gfx/thebes/gfxFontUtils.cpp
+@@ -7,6 +7,7 @@
+ #include "gfxFontEntry.h"
+ #include "gfxFontVariations.h"
+ #include "gfxUtils.h"
++#include "MaskConfig.hpp"
+ #include "mozilla/Base64.h"
+ #include "mozilla/BinarySearch.h"
+ #include "mozilla/Encoding.h"
+@@ -420,8 +421,39 @@
+     (((p) == PLATFORM_ID_MICROSOFT && (e) == EncodingIDMicrosoft) || \
+      ((p) == PLATFORM_ID_UNICODE))
+ 
+-#  define acceptableUCS4Encoding(p, e, k) \
+-    ((p) == PLATFORM_ID_MICROSOFT && (e) == EncodingIDUCS4ForMicrosoftPlatform)
++// Camoufox: a Unicode-platform UCS4 subtable is accepted as a LAST RESORT.
++// Upstream's non-macOS branch takes format 10/12 only at (3, 10), so a face
++// whose only subtable is a non-UVS Unicode-platform one -- in this bundle
++// (0, 3) and (0, 4): Geneva, Apple Symbols, Heiti TC/SC, all shipped for
++// macOS identities -- gets keepFormat 0, ReadCMAP returns NS_ERROR_FAILURE,
++// and the font entry is given an EMPTY character map: listed in the font
++// list, never selected for any text run. The XP_MACOSX branch above has
++// accepted platform-0 UCS4 for years, so this is not a new code path in
++// Gecko, only a newly reachable one on non-macOS builds -- which is why real
++// macOS renders Geneva and a spoofed macOS profile on Linux or Windows does
++// not, a fingerprinting tell. See #95. Full-repertoire (0, 6) subtables stay
++// with the format 13 branch below, as on macOS. Only a launch claiming macOS
++// takes it: every other identity keeps this platform's stock selection.
++//
++// The `!(k)` term bounds this to when nothing else has been accepted yet:
++// no face in the font bundle changes which subtable it resolves through
++// (574 simulated against 152.0.4's selection, 0 changed). That bound relies
++// on OpenType's requirement that encoding records be sorted by platformID
++// then encodingID: within platform 0 the UCS4 record precedes any UVS record
++// (encoding 5), so accepting it here does not trip the break below
++// (platformID > PLATFORM_ID_UNICODE || !aUVSTableOffset ||
++// *aUVSTableOffset) on a UVS subtable that has not been seen yet -- dead
++// state for this path while only platform 3 could match here.
++static inline bool CamouAcceptUnicodeUCS4() {
++  return MaskConfig::GetSpoofedOS() == MaskConfig::SpoofedOS::MacOS;
++}
++
++#  define acceptableUCS4Encoding(p, e, k)                                     \
++    (((p) == PLATFORM_ID_MICROSOFT &&                                         \
++      (e) == EncodingIDUCS4ForMicrosoftPlatform) ||                           \
++     ((p) == PLATFORM_ID_UNICODE && (e) != EncodingIDUVSForUnicodePlatform && \
++      (e) != EncodingIDFullRepertoireForUnicodePlatform && !(k) &&            \
++      CamouAcceptUnicodeUCS4()))
+ #endif
+ 
+ #ifndef MOZ_ENABLE_FREETYPE
