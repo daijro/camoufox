@@ -292,7 +292,18 @@ CSS_GEOMETRY_KEYS = (
 )
 
 
-def _repair_device_pixel_ratio(config: Dict[str, Any], target_os: str) -> None:
+def is_zoomed_ratio(dpr: Any, target_os: str) -> bool:
+    """A devicePixelRatio no display mode of the OS offers: a browser zoom
+    folded into the ratio, which scaled every CSS size with it."""
+    allowed = PLAUSIBLE_DPR.get(target_os)
+    if not allowed or isinstance(dpr, bool) or not isinstance(dpr, (int, float)) or dpr <= 0:
+        return False
+    return float(dpr) not in {float(v) for v in allowed}
+
+
+def repair_device_pixel_ratio(config: Dict[str, Any], target_os: str) -> None:
+    """Move the ratio to the nearest display mode, rescaling the CSS geometry
+    so the screen stays the display behind it."""
     dpr = config.get('window.devicePixelRatio')
     allowed = PLAUSIBLE_DPR.get(target_os)
     if dpr is None or not allowed:
@@ -385,7 +396,7 @@ RULES: List[Rule] = [
     Rule('color-depth', _check_color_depth, _repair_color_depth),
     Rule('pixel-depth', _check_pixel_depth, _repair_pixel_depth),
     Rule('touch-points', _check_touch_points, _repair_touch_points),
-    Rule('device-pixel-ratio', _check_device_pixel_ratio, _repair_device_pixel_ratio, CSS_GEOMETRY_KEYS),
+    Rule('device-pixel-ratio', _check_device_pixel_ratio, repair_device_pixel_ratio, CSS_GEOMETRY_KEYS),
     Rule('window-chrome', _check_window_chrome, _repair_window_chrome),
     Rule('screen-shape', _check_screen_shape, None),
     Rule('avail-bounds', _check_avail_bounds, _repair_avail_bounds),

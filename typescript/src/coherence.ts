@@ -304,7 +304,21 @@ function roundHalfEven(v: number): number {
 	return Math.abs(v % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
 }
 
-function repairDevicePixelRatio(config: Config, targetOs: string): void {
+/**
+ * A devicePixelRatio no display mode of the OS offers: a browser zoom folded
+ * into the ratio, which scaled every CSS size with it.
+ */
+export function isZoomedRatio(dpr: unknown, targetOs: string): boolean {
+	const allowed = PLAUSIBLE_DPR[targetOs];
+	if (!allowed?.length || typeof dpr !== "number" || !(dpr > 0)) return false;
+	return !allowed.some((v) => v === dpr);
+}
+
+/**
+ * Move the ratio to the nearest display mode, rescaling the CSS geometry so
+ * the screen stays the display behind it.
+ */
+export function repairDevicePixelRatio(config: Config, targetOs: string): void {
 	const dpr = config["window.devicePixelRatio"];
 	const allowed = PLAUSIBLE_DPR[targetOs];
 	if (isNone(dpr) || !allowed?.length) return;
