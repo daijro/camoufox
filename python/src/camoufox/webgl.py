@@ -62,10 +62,12 @@ _POLYGON_OFFSET_CLAMP = 'EXT_polygon_offset_clamp'
 # Firefox 159 (bug 1735401) exposes EXT_texture_norm16 on WebGL2 wherever the
 # GL has 16-bit normalized textures, core in desktop GL 3.1: every WebGL2
 # context on macOS (CGL's GL 4.1) and x86_64 Linux (desktop GL). On Windows,
-# ANGLE decides per device from its D3D11 format support, which no recording
-# carries, so it stays filtered there.
+# ANGLE derives it from 16-bit normalized format support (Caps.cpp
+# DetermineTextureNorm16Support), which D3D11 feature level 10_0, the minimum
+# for WebGL2, requires: stock 159.0 on a GeForce GTX 980 (ANGLE D3D11) lists it
+# on WebGL2 and not WebGL1.
 _TEXTURE_NORM16 = 'EXT_texture_norm16'
-_TEXTURE_NORM16_OSES = ('mac', 'lin')
+_TEXTURE_NORM16_OSES = ('mac', 'lin', 'win')
 
 # Firefox 159 adds EXT_clip_control (core in GL 4.5) and
 # EXT_texture_mirror_clamp_to_edge (core in GL 4.4) to WebGL1 and WebGL2. ANGLE's
