@@ -123,6 +123,10 @@ class Rule(NamedTuple):
     check: Callable[[Dict[str, Any], str], Optional[str]]
     #: Repairs the identity in place. None where no correct value is determined.
     repair: Optional[Callable[[Dict[str, Any], str], None]]
+    #: Keys the repair only adjusts to stay consistent with what it repairs. A
+    #: caller who set any of them keeps all of them as they were, the repair
+    #: itself still runs, and they never block it.
+    adjusts: Tuple[str, ...] = ()
 
 
 def _renderer(config: Dict[str, Any]) -> str:
@@ -381,7 +385,7 @@ RULES: List[Rule] = [
     Rule('color-depth', _check_color_depth, _repair_color_depth),
     Rule('pixel-depth', _check_pixel_depth, _repair_pixel_depth),
     Rule('touch-points', _check_touch_points, _repair_touch_points),
-    Rule('device-pixel-ratio', _check_device_pixel_ratio, _repair_device_pixel_ratio),
+    Rule('device-pixel-ratio', _check_device_pixel_ratio, _repair_device_pixel_ratio, CSS_GEOMETRY_KEYS),
     Rule('window-chrome', _check_window_chrome, _repair_window_chrome),
     Rule('screen-shape', _check_screen_shape, None),
     Rule('avail-bounds', _check_avail_bounds, _repair_avail_bounds),
@@ -480,6 +484,12 @@ def apply(config: Dict[str, Any], target_os: str, keep: AbstractSet[str] = froze
             continue
         repaired = dict(config)
         rule.repair(repaired, target_os)
+        if rule.adjusts and keep.intersection(rule.adjusts):
+            for key in rule.adjusts:
+                if key in config:
+                    repaired[key] = config[key]
+                else:
+                    repaired.pop(key, None)
         blocked = _changed(config, repaired, keep)
         if blocked:
             kept[rule.name] = blocked

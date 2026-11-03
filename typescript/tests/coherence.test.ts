@@ -280,17 +280,38 @@ describe("rules", () => {
 		expect([config["window.screenX"], config["window.screenY"]]).toEqual([
 			-8, -8,
 		]);
-		// A screen the caller set is the caller's: the ratio stays, and is reported.
+		// A screen the caller set is the caller's display: the ratio still moves
+		// to a real step, and no CSS size is rescaled, the caller's or another.
+		const screenSet: Record<string, unknown> = {
+			"window.devicePixelRatio": 1.0909090909090908,
+			"screen.width": 1760,
+			"screen.height": 990,
+			"window.outerWidth": 1760,
+		};
+		expect(
+			coherence.apply(screenSet, "win", new Set(["screen.width"])),
+		).toEqual([]);
+		expect(screenSet["window.devicePixelRatio"]).toBe(1);
+		expect([
+			screenSet["screen.width"],
+			screenSet["screen.height"],
+			screenSet["window.outerWidth"],
+		]).toEqual([1760, 990, 1760]);
+		// A ratio the caller set stays, reported by that key alone.
 		const kept: Record<string, unknown> = {
 			"window.devicePixelRatio": 1.0909090909090908,
 			"screen.width": 1760,
 			"screen.height": 990,
 		};
-		const left = coherence.apply(kept, "win", new Set(["screen.width"]));
+		const left = coherence.apply(
+			kept,
+			"win",
+			new Set(["window.devicePixelRatio", "screen.width"]),
+		);
 		expect(kept["window.devicePixelRatio"]).toBe(1.0909090909090908);
 		expect(kept["screen.width"]).toBe(1760);
 		expect(left.map((v) => [v.rule, v.kept])).toEqual([
-			["device-pixel-ratio", ["screen.width"]],
+			["device-pixel-ratio", ["window.devicePixelRatio"]],
 		]);
 	});
 

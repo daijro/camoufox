@@ -79,6 +79,12 @@ export interface Rule {
 	check: (config: Config, targetOs: string) => string | null;
 	/** Repairs the identity in place. null where no correct value is determined. */
 	repair: ((config: Config, targetOs: string) => void) | null;
+	/**
+	 * Keys the repair only adjusts to stay consistent with what it repairs. A
+	 * caller who set any of them keeps all of them as they were, the repair
+	 * itself still runs, and they never block it.
+	 */
+	adjusts?: readonly string[];
 }
 
 function isNone(value: unknown): boolean {
@@ -427,6 +433,7 @@ export const RULES: readonly Rule[] = [
 		name: "device-pixel-ratio",
 		check: checkDevicePixelRatio,
 		repair: repairDevicePixelRatio,
+		adjusts: CSS_GEOMETRY_KEYS,
 	},
 	{
 		name: "window-chrome",
@@ -545,6 +552,12 @@ export function apply(
 		if (!rule.repair || !rule.check(config, targetOs)) continue;
 		const repaired: Config = { ...config };
 		rule.repair(repaired, targetOs);
+		if (rule.adjusts?.some((key) => keep.has(key))) {
+			for (const key of rule.adjusts) {
+				if (key in config) repaired[key] = config[key];
+				else delete repaired[key];
+			}
+		}
 		const blocked = changed(config, repaired, keep);
 		if (blocked.length) {
 			kept.set(rule.name, blocked);
