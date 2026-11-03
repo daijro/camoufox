@@ -121,6 +121,22 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
       Get <b>50% recurring discount</b> (not just first month). Upgrade your proxies. Reduce bans. Scale properly
     </td>
   </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://niuproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox" target="_blank">
+        <img width="380" alt="NiuProxy" src="https://github.com/user-attachments/assets/85dc8020-af1b-4c5d-82a0-6024ce54903b"/>
+      </a>
+    </td>
+    <td valign="middle">
+      🚀 <strong>NiuProxy — Exclusive Camoufox Offer | 20% OFF</strong><br>
+      🔥 Special Prices with Code camoufox80:<br>
+      • Static Native ISP — $4.80/IP<br>
+      • Residential 1TB — $0.44/GB<br>
+      • Residential 10TB — $0.30/GB<br>
+      🎁 <strong>Use camoufox80 for 20% OFF all recharges!</strong><br>
+      👉 <a href="https://niuproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">Visit NiuProxy<a>
+    </td>
+  </tr>
 </table>
 
 ## Tools & Services
@@ -196,26 +212,6 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
 Camoufox is intended to be used with rotating proxies (preferably residential IPs). Check out these providers:
 
 <table>
-  <tr>
-    <td width="25%" align="center" valign="middle">
-      <a href="https://www.rapidproxy.io/?ref=daijro" target="_blank">
-        <img width="380" alt="rapidproxy" src="https://github.com/user-attachments/assets/140337e0-50d5-452d-8a31-86c6b1761e47"/>
-      </a>
-    </td>
-    <td valign="middle">
-      <a href="https://www.rapidproxy.io/?ref=daijro">RapidProxy</a> - Power Your Data with Premium Proxies.<br>
-      🎁 Try proxies for free  + Use code <strong>RAPID10</strong> for <strong>10% OFF</strong>
-      <br>
-      <strong>Why Choose RapidProxy?</strong><br>
-      • 🌍 90M+ IPs in 200+ countries & regions<br>
-      • ♾️ No expiration on traffic — use anytime, no pressure<br>
-      • 🔥 Unlimited concurrency for maximum performance<br>
-      • 💰 Starting from just &#36;0.65/GB — built for scale<br>
-      • 📍 City-level targeting for precise geo access<br>
-      • 🔄 Flexible session control tailored to your needs<br>
-      Don’t miss out — start your free trial today and experience fast, stable, and scalable proxy performance with <a href="https://www.rapidproxy.io/?ref=daijro">RapidProxy</a>.
-    </td>
-  </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
       <a href="https://www.swiftproxy.net/?ref=daijro" target="_blank">
@@ -299,12 +295,20 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://roamproxy.com" target="_blank">
-        <img width="380" alt="Roamproxy" src="https://roamproxy.com/assets/camoufox-banner.png"/>
+      <a href="https://okkproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox" target="_blank">
+        <img width="380" alt="OkkProxy" src="https://github.com/user-attachments/assets/15df1ca6-bd84-4eee-9ed3-963bf343a021"/>
       </a>
     </td>
     <td valign="middle">
-      <strong><a href="https://roamproxy.com">Roam</a></strong> — Residential & static residential proxies, pay-as-you-go per GB. Use code CAMOUFOX15 for 15% extra credit on your first top-up.
+      👉 <strong><a href="https://okkproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">Get Started with OkkProxy</a></strong><br>
+      🚀 <strong>🔥 Static ISP Proxy Deals</strong><br>
+      • Broadcast IP — from $1.50/IP<br>
+      • Premium Native IP — from $4.50/IP<br>
+      🔥 <strong>Unlimited Residential Proxies — from $58/day</strong><br>
+      <strong>🎁 Use PAY2 for 10% OFF all recharges!</strong><br>
+      Also available: Rotating Residential and Mobile Proxies.<br>
+      👉 <a href="https://okkproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">Visit NiuProxy<a>
+    </td>
   </tr>
 </table>
 </details>
