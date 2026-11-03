@@ -15,11 +15,20 @@
 
 from typing import Dict, List, Tuple
 
-from playwright.async_api import BrowserContext
+from playwright.async_api import BrowserContext, Route
 from tests.server import Server, TestServerRequest
 
 
-async def _request_headers(context: BrowserContext, server: Server, intercept: bool) -> List[Tuple[str, str]]:
+async def _continue_route(route: Route, forward_headers: bool) -> None:
+    if forward_headers:
+        await route.continue_(headers=await route.request.all_headers())
+    else:
+        await route.continue_()
+
+
+async def _request_headers(
+    context: BrowserContext, server: Server, intercept: bool, forward_headers: bool = False
+) -> List[Tuple[str, str]]:
     """Load a page and return the document request's headers, in the order they arrived."""
     seen: List[Tuple[str, str]] = []
 
@@ -36,7 +45,7 @@ async def _request_headers(context: BrowserContext, server: Server, intercept: b
 
     page = await context.new_page()
     if intercept:
-        await page.route("**/*", lambda route: route.continue_())
+        await page.route("**/*", lambda route: _continue_route(route, forward_headers))
     await page.goto(server.PREFIX + "/fingerprint.html")
     await page.close()
     return seen
@@ -81,3 +90,58 @@ async def test_page_route_should_not_reorder_connection_and_cookie(context: Brow
     # Both are added before necko appends the sec-fetch-* headers.
     assert names.index("connection") < names.index("sec-fetch-mode")
     assert names.index("cookie") < names.index("sec-fetch-mode")
+
+
+async def test_page_route_should_preserve_order_when_continuing_with_headers(
+    context: BrowserContext, server: Server
+) -> None:
+    await context.add_cookies([{"name": "sid", "value": "x", "url": server.PREFIX}])
+
+    without_route = await _request_headers(context, server, intercept=False)
+    with_route = await _request_headers(
+        context, server, intercept=True, forward_headers=True
+    )
+
+    assert with_route == without_route
+
+
+async def test_page_route_should_preserve_fetch_header_order_when_continuing_with_headers(
+    context: BrowserContext, server: Server
+) -> None:
+    async def _fetch_headers(intercept: bool) -> List[Tuple[str, str]]:
+        seen: List[Tuple[str, str]] = []
+
+        def _page(request: TestServerRequest) -> None:
+            request.setHeader("content-type", "text/html")
+            request.write(
+                b"<script>fetch('/fingerprint-fetch').then(() => "
+                b"document.documentElement.dataset.fetched = 'true')</script>"
+            )
+            request.finish()
+
+        def _fetch(request: TestServerRequest) -> None:
+            for name, values in request.requestHeaders.getAllRawHeaders():
+                for value in values:
+                    seen.append((name.decode().lower(), value.decode()))
+            request.write(b"ok")
+            request.finish()
+
+        server.set_route("/fingerprint-fetch.html", _page)
+        server.set_route("/fingerprint-fetch", _fetch)
+        page = await context.new_page()
+        if intercept:
+            await page.route(
+                "**/*", lambda route: _continue_route(route, forward_headers=True)
+            )
+        await page.goto(server.PREFIX + "/fingerprint-fetch.html")
+        await page.wait_for_function(
+            "document.documentElement.dataset.fetched === 'true'"
+        )
+        await page.close()
+        return seen
+
+    await context.add_cookies([{"name": "sid", "value": "x", "url": server.PREFIX}])
+    without_route = await _fetch_headers(intercept=False)
+    with_route = await _fetch_headers(intercept=True)
+
+    assert with_route == without_route
