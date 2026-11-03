@@ -276,6 +276,28 @@ function checkDevicePixelRatio(
 	return null;
 }
 
+// The CSS geometry a ratio scales: device pixels / devicePixelRatio.
+const CSS_GEOMETRY_KEYS = [
+	"screen.width",
+	"screen.height",
+	"screen.availWidth",
+	"screen.availHeight",
+	"screen.availLeft",
+	"screen.availTop",
+	"window.outerWidth",
+	"window.outerHeight",
+	"window.innerWidth",
+	"window.innerHeight",
+	"window.screenX",
+	"window.screenY",
+] as const;
+
+/** Python's round(): half to even, so both launchers draw the same geometry. */
+function roundHalfEven(v: number): number {
+	const r = Math.round(v);
+	return Math.abs(v % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+}
+
 function repairDevicePixelRatio(config: Config, targetOs: string): void {
 	const dpr = config["window.devicePixelRatio"];
 	const allowed = PLAUSIBLE_DPR[targetOs];
@@ -287,6 +309,17 @@ function repairDevicePixelRatio(config: Config, targetOs: string): void {
 		if (Math.abs(v - x) < Math.abs(best - x)) best = v;
 	}
 	config["window.devicePixelRatio"] = best;
+	// The scraped ratio has a browser zoom folded in, which shrank every CSS
+	// size by it; the display behind it keeps its device pixels. Rescale to the
+	// step so the screen is still that display: 1760x990 at 1.0909 is a
+	// 1920x1080 monitor, so 1920x1080 at 1. Firefox rounds device / ratio.
+	const scale = x / best;
+	for (const key of CSS_GEOMETRY_KEYS) {
+		const value = config[key];
+		if (typeof value === "number") {
+			config[key] = roundHalfEven(value * scale);
+		}
+	}
 }
 
 function checkWindowChrome(config: Config, _targetOs: string): string | null {

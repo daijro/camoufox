@@ -279,13 +279,32 @@ def _check_device_pixel_ratio(config: Dict[str, Any], target_os: str) -> Optiona
     return None
 
 
+# The CSS geometry a ratio scales: device pixels / devicePixelRatio.
+CSS_GEOMETRY_KEYS = (
+    'screen.width', 'screen.height', 'screen.availWidth', 'screen.availHeight',
+    'screen.availLeft', 'screen.availTop',
+    'window.outerWidth', 'window.outerHeight', 'window.innerWidth', 'window.innerHeight',
+    'window.screenX', 'window.screenY',
+)
+
+
 def _repair_device_pixel_ratio(config: Dict[str, Any], target_os: str) -> None:
     dpr = config.get('window.devicePixelRatio')
     allowed = PLAUSIBLE_DPR.get(target_os)
     if dpr is None or not allowed:
         return
     # Nearest real scaling step: 1.818 becomes 1.75 on Windows, 2 on macOS.
-    config['window.devicePixelRatio'] = min(allowed, key=lambda v: abs(float(v) - float(dpr)))
+    step = min(allowed, key=lambda v: abs(float(v) - float(dpr)))
+    config['window.devicePixelRatio'] = step
+    # The scraped ratio has a browser zoom folded in, which shrank every CSS
+    # size by it; the display behind it keeps its device pixels. Rescale to the
+    # step so the screen is still that display: 1760x990 at 1.0909 is a
+    # 1920x1080 monitor, so 1920x1080 at 1. Firefox rounds device / ratio.
+    scale = float(dpr) / float(step)
+    for key in CSS_GEOMETRY_KEYS:
+        value = config.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            config[key] = int(round(value * scale))
 
 
 def _check_window_chrome(config: Dict[str, Any], target_os: str) -> Optional[str]:
