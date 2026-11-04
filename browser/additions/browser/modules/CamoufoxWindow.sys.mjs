@@ -128,11 +128,16 @@ function applyWindowSize(win) {
     // covering >= 80% of the work area, and GTK adds its decoration margins to
     // the outer size only once the window is mapped, which left a page reading
     // the identity's size plus 10px. After the deadline a change is the user's.
+    // An X11 window manager's frame (_NET_FRAME_EXTENTS) can arrive after the
+    // window maps. It changes only the margins Firefox adds to the outer size,
+    // and with the content area unchanged no resize event fires, so the hold
+    // also checks on a timer.
     const deadline = Date.now() + 5000;
     const holdStartupSize = () => {
       if (Date.now() > deadline) {
         win.removeEventListener("sizemodechange", holdStartupSize);
         win.removeEventListener("resize", holdStartupSize);
+        win.clearInterval(holdTimer);
         return;
       }
       if (win.windowState === win.STATE_MAXIMIZED) {
@@ -146,6 +151,7 @@ function applyWindowSize(win) {
     };
     win.addEventListener("sizemodechange", holdStartupSize);
     win.addEventListener("resize", holdStartupSize);
+    const holdTimer = win.setInterval(holdStartupSize, 100);
   }
 
   const innerWidth = ChromeUtils.camouGetInt("window.innerWidth");
