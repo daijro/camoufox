@@ -590,6 +590,13 @@ export class PageAgent {
     const session = this._getCurrentDragSession();
     const dropEffect = session.dataTransfer.dropEffect;
 
+    if (type === 'drag') {
+      const win = this._frameTree.mainFrame().domWindow();
+      win.windowUtils.jugglerSendMouseEvent(
+        'drag', x, y, 0, 0, modifiers, false, 0.0, win.MouseEvent.MOZ_SOURCE_MOUSE,
+        true, false, 0, win.windowUtils.DEFAULT_MOUSE_POINTER_ID, false);
+      return;
+    }
     if ((type === 'drop' && dropEffect !== 'none') || type ===  'dragover') {
       const win = this._frameTree.mainFrame().domWindow();
       win.windowUtils.jugglerSendMouseEvent(
@@ -604,7 +611,7 @@ export class PageAgent {
         win.MouseEvent.MOZ_SOURCE_MOUSE /*inputSource*/,
         true /*isDOMEventSynthesized*/,
         false /*isWidgetEventSynthesized*/,
-        0 /*buttons*/,
+        type === 'dragover' ? 1 : 0 /*buttons: the held button; released for drop*/,
         win.windowUtils.DEFAULT_MOUSE_POINTER_ID /* pointerIdentifier */,
         false /*disablePointerEvent*/,
       );
@@ -613,8 +620,20 @@ export class PageAgent {
     if (type === 'dragend') {
       const session = this._getCurrentDragSession();
       session?.endDragSession(true);
+      await this._afterFrame();
       return;
     }
+  }
+
+  // A frame after the drag session ends, by when the page has its pointer back:
+  // the session's end moves the pointer on the next refresh. Bounded, since a
+  // throttled page may not paint.
+  _afterFrame() {
+    const win = this._frameTree.mainFrame().domWindow();
+    return new Promise(resolve => {
+      win.requestAnimationFrame(() => resolve());
+      setTimeout(resolve, 100);
+    });
   }
 
   async _insertText({text}) {

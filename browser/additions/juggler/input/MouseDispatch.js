@@ -62,48 +62,34 @@ export class MouseDispatch {
    * @param {Window} win chrome window owning the browser element.
    * @param {DOMRect} boundingBox the browser element's rect, already measured.
    * @param {object} eventArgs button / clickCount / modifiers / buttons.
+   * @param {Element} [browser] measured again before each dispatch when given.
    */
-  constructor(win, boundingBox, {button = 0, clickCount = 0, modifiers = 0, buttons = 0} = {}) {
+  constructor(win, boundingBox, {button = 0, clickCount = 0, modifiers = 0, buttons = 0} = {}, browser = null) {
     this._win = win;
-    this._box = boundingBox;
     this._args = {button, clickCount, modifiers, buttons};
+    this._browser = browser;
+    this._measured(boundingBox);
+  }
 
-    // The first whole pixel inside the browser element on each axis.
-    //
-    // The element's origin is not pixel-aligned: the chrome above the content is
-    // a fractional number of CSS pixels tall, and how many depends on the spoofed
-    // OS (measured: windows 51.4, macos 53.1, linux 56.5). A relative coordinate
-    // of 0 therefore dispatches at absolute y == boundingBox.top exactly -- the
-    // content area's first, only partly covered row. The widget rounds that to a
-    // whole device row before hit-testing it, and wherever round(top) < top the
-    // rounded row still belongs to chrome, so the event fires as an exit event
-    // rather than eMouseMove and no ack is ever produced (#751, #752).
-    //
-    // Snapping onto ceil() keeps the point inside content pixel 0 while landing
-    // clear of the boundary. It is a sub-pixel shift and only ever affects the
-    // first row/column; boundingBox.left is normally a whole 0 and unaffected.
+  _measured(boundingBox) {
+    this._box = boundingBox;
+
+    // Snap onto whole pixels fully inside the browser element. Its origin and
+    // size can be fractional, and a rounded point on either boundary belongs
+    // to chrome rather than content, so no renderer ack arrives (#751, #752).
     this._originX = Math.ceil(boundingBox.left);
     this._originY = Math.ceil(boundingBox.top);
-
-    // The far edge has the same problem, and the bounds check below cannot see
-    // it either. The element's height is fractional too -- measured, it is
-    // consistently 0.5 CSS px less than the innerHeight the page reports, so
-    // the page's last row is only half covered. A point in it dispatches at an
-    // absolute coordinate that rounds onto the row *past* the content, and is
-    // dropped exactly like the top-edge case. Deterministic: with the box at
-    // 1920x977.5 +0+56.5, relative y == 977 (innerHeight - 1, well inside the
-    // viewport as far as the page is concerned) dispatches at 1033.5, rounds to
-    // 1034, and the content ends at 1034.
-    //
-    // So clamp to the last whole pixel fully inside the element as well. Found
-    // by tests/playwright/patches/mouse-boundary-sweep.py, not by a report -- it predates
-    // this module and deadlocks a stock build.
     this._limitX = Math.ceil(boundingBox.left + boundingBox.width) - 1;
     this._limitY = Math.ceil(boundingBox.top + boundingBox.height) - 1;
   }
 
   static forBrowser(win, linkedBrowser, eventArgs) {
-    return new MouseDispatch(win, linkedBrowser.getBoundingClientRect(), eventArgs);
+    return new MouseDispatch(win, linkedBrowser.getBoundingClientRect(), eventArgs, linkedBrowser);
+  }
+
+  _remeasure() {
+    if (this._browser)
+      this._measured(this._browser.getBoundingClientRect());
   }
 
   get boundingBox() {
@@ -154,23 +140,85 @@ export class MouseDispatch {
   }
 
   /**
+   * The open chrome popup over an absolute point, if there is one.
+   *
+   * The parent hands a mouse event at a point inside a visible popup (the date
+   * picker, a permission doorhanger) to that popup, not to the browser under
+   * it (PresShell::EventHandler::ComputeRootFrameToHandleEventWithPopup), as
+   * an OS click there lands on the popup. The renderer never sees it, so there
+   * is no ack to wait for. Waiting cost 5s per event (kAckDeadlineMs): a
+   * click under the picker showPicker() opened took 15s and timed out
+   * Playwright, where stock's click went to the picker at once (2026-11-03,
+   * tests/playwright/patches/popup-covered-click.py). Mirrors
+   * nsXULPopupManager::GetVisiblePopups: open, and not transparent to the mouse.
+   */
+  _popupAt(absX, absY) {
+    const doc = this._win.document;
+    let point = null;
+    for (const popup of doc.querySelectorAll('panel, menupopup, tooltip')) {
+      if (popup.state !== 'open' || this._win.getComputedStyle(popup).pointerEvents === 'none')
+        continue;
+      point ??= this._win.windowUtils.toScreenRectInCSSUnits(absX, absY, 0, 0);
+      const r = popup.getOuterScreenRect();
+      if (point.x >= r.left && point.x < r.right && point.y >= r.top && point.y < r.bottom)
+        return popup;
+    }
+    return null;
+  }
+
+  /**
    * Dispatch one event and wait for the renderer to ack it, under a deadline.
    *
    * Returns the ack event object, or null if none arrived in time -- in which
-   * case the event is dropped and a warning is logged. Never rejects and never
+   * case the event is dropped and a warning is logged -- or {popup} at once
+   * when an open popup over the point took the event (_popupAt). Never rejects and never
    * waits forever: input dispatch is serialized on activateAndRun()'s
    * process-global chain, so an unbounded wait here wedges every later input
    * event in the process, in every tab, for the life of the browser.
    */
   async sendAcked(watcher, eventType, x, y, deadlineMs = kAckDeadlineMs) {
     const {x: absX, y: absY} = this.toAbsolute(x, y);
+    const popup = this._popupAt(absX, absY);
     // This dispatches to the renderer synchronously.
     const jugglerEventId = this._sendAbsolute(eventType, absX, absY);
+    if (popup)
+      return {jugglerEventId, popup};
+    // A move reaches the page at the next refresh tick; the renderer acks it
+    // on arrival as "mousequeued" (BrowserChild::RecvRealMouseMoveEvent).
+    const arrival = eventType === 'mousemove' ? 'mousequeued' : eventType;
     const ack = await watcher.ensureEventWithin(
-      eventType, deadlineMs, eventObject => eventObject.jugglerEventId === jugglerEventId);
+      arrival, deadlineMs, eventObject => eventObject.jugglerEventId === jugglerEventId);
     if (!ack)
       warnUndelivered(eventType, x, y, this._box, deadlineMs);
     return ack;
+  }
+
+  /**
+   * Dispatch a move and wait until the renderer has queued it. The page gets
+   * it at the next refresh tick, coalesced with the moves queued since the
+   * last one; the returned handle's delivered() waits for that, under the
+   * same deadline (deliveryWatcher must listen for 'mousemove' from before
+   * the dispatch). Returns null when the move was not queued in time.
+   */
+  async sendQueuedMove(watcher, deliveryWatcher, x, y) {
+    const queued = await this.sendAcked(watcher, 'mousemove', x, y);
+    // A move a popup took never reaches the page either.
+    if (!queued || queued.popup) {
+      deliveryWatcher.dispose();
+      return null;
+    }
+    return {
+      // A newer move disposes this watcher: that move is then the one to wait for.
+      delivered: async () => {
+        const ack = await deliveryWatcher.ensureEventWithin(
+          'mousemove', kAckDeadlineMs, eventObject => eventObject.jugglerEventId === queued.jugglerEventId)
+          .catch(() => true);
+        if (!ack)
+          dump(`[juggler] WARN a queued mousemove at (${x}, ${y}) had not reached the page after ${kAckDeadlineMs}ms; going on\n`);
+        return ack;
+      },
+      dispose: () => deliveryWatcher.dispose(),
+    };
   }
 
   /**
@@ -232,6 +280,7 @@ export class MouseDispatch {
     for (const [x, y, delayMs] of steps) {
       dueMs += delayMs;
       await untilDue();
+      this._remeasure();
       if (!this.isInViewport(x, y))
         continue;
       if (Math.round(x) === lastX && Math.round(y) === lastY)
@@ -257,25 +306,39 @@ export class MouseDispatch {
     this._sendAbsolute('mousemove', 0, 0);
   }
 
-  /** Wheel events take the same conversion; they are not acked. */
-  sendWheel(x, y, {deltaX, deltaY, deltaZ, deltaMode, lineOrPageDeltaX, lineOrPageDeltaY, nativeNotches = false}) {
+  /**
+   * The pointer leaves the window, or comes back to it at a relative point, as
+   * when a GTK drag session takes the pointer and gives it back. A widget exit
+   * and enter, sent to the chrome window so the parent's hover state leaves as
+   * well as the page's. Unacked: neither is a mouse event the renderer acks.
+   */
+  leaveWindow(x, y) {
+    const {x: absX, y: absY} = this.toAbsolute(x, y);
+    this._sendAbsolute('mousecancel', absX, absY);
+  }
+
+  enterWindow(x, y) {
+    const {x: absX, y: absY} = this.toAbsolute(x, y);
+    this._sendAbsolute('mouseover', absX, absY);
+  }
+
+  /**
+   * One wheel notch of `linesX`/`linesY` lines, as a mouse wheel's native tick.
+   * Same conversion as mouse events; not acked.
+   */
+  sendWheel(x, y, linesX, linesY) {
     const {x: absX, y: absY} = this.toAbsolute(x, y);
     const utils = this._win.windowUtils;
-    // The widget reads pixel deltas as device pixels. Scale by the chrome
-    // window's real ratio, not this._win.devicePixelRatio (MaskConfig spoofs it).
-    const scale = deltaMode === 0 /* WheelEvent.DOM_DELTA_PIXEL */
-        ? utils.toTopLevelWidgetRect(0, 0, 1, 1).width
-        : 1;
     utils.sendWheelEvent(
       absX,
       absY,
-      deltaX * scale,
-      deltaY * scale,
-      deltaZ * scale,
-      deltaMode,
+      linesX,
+      linesY,
+      0,
+      1 /* WheelEvent.DOM_DELTA_LINE */,
       this._args.modifiers,
-      lineOrPageDeltaX,
-      lineOrPageDeltaY,
-      nativeNotches ? utils.WHEEL_EVENT_NATIVE_NOTCHES : 0);
+      linesX,
+      linesY,
+      utils.WHEEL_EVENT_NATIVE_NOTCHES);
   }
 }
