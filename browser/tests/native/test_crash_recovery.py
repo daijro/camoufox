@@ -761,9 +761,14 @@ async def test_the_parent_stays_flat_across_content_crashes(binary, psutil_mod, 
             await _context_cycle(psutil_mod, browser, cycle)
         return (rss() - before) / (1024 * 1024)
 
-    await phase(Cycle.CONTROL, WARMUP_CYCLES)
-    control_mb = await phase(Cycle.CONTROL, PHASE_CYCLES)
-    crash_mb = await phase(Cycle.CRASH, PHASE_CYCLES)
+    # Torn down whatever the measurement says: a browser left running would be
+    # the first camoufox-bin the next test finds, and it would kill that one.
+    try:
+        await phase(Cycle.CONTROL, WARMUP_CYCLES)
+        control_mb = await phase(Cycle.CONTROL, PHASE_CYCLES)
+        crash_mb = await phase(Cycle.CRASH, PHASE_CYCLES)
+    finally:
+        await teardown(manager, "teardown after measuring parent growth")
     excess_mb = crash_mb - control_mb
 
     # On every run, not just a failing one, so CI logs carry the distribution
@@ -781,8 +786,6 @@ async def test_the_parent_stays_flat_across_content_crashes(binary, psutil_mod, 
         f"{excess_mb:.0f} MB the crashes alone left behind. A crashing child should "
         "not drag the parent up with it."
     )
-
-    await teardown(manager, "teardown after measuring parent growth")
     leak_check.assert_clean()
 
 

@@ -35,6 +35,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import AdmZip from "adm-zip";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { speechdVoices } from "../src/fingerprints.js";
 import { PYTHON as GOLDEN_PYTHON } from "./golden-setup.js";
 import { prerequisite } from "./prereq.js";
 
@@ -311,9 +312,13 @@ function expectMatchesConfig(
 	for (const [family, present] of Object.entries(probe.fonts)) {
 		if (!claimed.has(family)) expect(present, `${family} leaked`).toBe(false);
 	}
-	// Voices: exactly the identity's list, never the host's.
+	// Voices: exactly the identity's list, never the host's. A Linux identity
+	// carries its speech-dispatcher voices as a grid (`voices:speechd`).
+	const claimedVoices: string[] = config["voices:speechd"]
+		? speechdVoices(config["voices:speechd"]).map(([name]) => name)
+		: config.voices.map((v: any) => v.name);
 	expect(probe.voices.map((v: string) => v.split("|")[0]).sort()).toEqual(
-		config.voices.map((v: any) => v.name).sort(),
+		claimedVoices.sort(),
 	);
 	if (probe.webgl) {
 		expect(probe.webgl.vendor).toBe(config["webGl:vendor"]);
