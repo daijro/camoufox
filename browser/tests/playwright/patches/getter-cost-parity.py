@@ -60,6 +60,22 @@ FIRST_READ_GAP_MS = 5.0
 FIRST_READS = ["navigator.hardwareConcurrency", "screen.width", "screen.colorDepth",
                "devicePixelRatio", "navigator.globalPrivacyControl"]
 
+# WebGL, on a canvas in the page and an OffscreenCanvas in the worker. 37446 is
+# WEBGL_debug_renderer_info's UNMASKED_RENDERER_WEBGL; the renderer strings are
+# a synchronous round trip to the GPU process in stock, which a spoofed string
+# must not skip.
+WEBGL = [
+    "G.getParameter(G.MAX_TEXTURE_SIZE)", "G.getParameter(G.MAX_VERTEX_ATTRIBS)",
+    "G.getParameter(G.VENDOR)", "G.getParameter(G.RENDERER)", "G.getParameter(37446)",
+    "G.getExtension('OES_texture_float')", "G.getSupportedExtensions().length",
+]
+GL_SETUP = "G.getExtension('WEBGL_debug_renderer_info');"
+# In a worker the renderer strings cost ~23 us in one browser session and
+# ~60 us in another, in stock and Camoufox alike (measured 2026-10-26: stock
+# 62.5 us in every launch of one guard run and 22.5-24.4 us in three others,
+# Camoufox 22.5-26.3 us and then 51.9 us), so the worker times only the rest.
+WORKER_WEBGL = [e for e in WEBGL if e not in ("G.getParameter(G.RENDERER)", "G.getParameter(37446)")]
+
 # Spoofed getters, and controls Camoufox does not touch (a sanity check that
 # the two browsers are comparable on this machine). innerWidth, innerHeight and
 # outerWidth are not listed: fingerprint-injection.patch forwards them to stock's
@@ -72,13 +88,13 @@ WINDOW = [
     "screen.colorDepth", "screen.pixelDepth", "devicePixelRatio",
     "screenX", "history.length",
     "navigator.hardwareConcurrency", "navigator.globalPrivacyControl",
-    "navigator.maxTouchPoints", "G.getParameter(G.MAX_TEXTURE_SIZE)",
+    "navigator.maxTouchPoints", *WEBGL,
     "C.measureText('mmmmmmmmmmlli').width",
     "matchMedia('(color: 8)').matches", "matchMedia('(resolution: 1dppx)').matches",
 ]
 WORKER = [
     "navigator.hardwareConcurrency", "navigator.globalPrivacyControl",
-    "new Date(1e12).getTimezoneOffset()",
+    "new Date(1e12).getTimezoneOffset()", *WORKER_WEBGL,
 ]
 CONTROLS = ["screen.orientation.type", "navigator.onLine"]
 
@@ -109,11 +125,12 @@ function bench(exprs, setup) {
     f();
     first[e] = performance.now() - t;
   }
-  const src = 'const bench = ' + bench.toString() + '; onmessage = e => postMessage(bench(e.data, ""));';
+  const src = 'const bench = ' + bench.toString() + '; onmessage = e => postMessage(bench(e.data, ' +
+    JSON.stringify("var C = new OffscreenCanvas(16, 16).getContext('2d'); var G = new OffscreenCanvas(16, 16).getContext('webgl');" + spec.gl) + '));';
   const w = new Worker(URL.createObjectURL(new Blob([src])));
   const worker = await new Promise(r => { w.onmessage = e => r(e.data); w.postMessage(spec.worker); });
   const win = bench(spec.window,
-    "var C = document.createElement('canvas').getContext('2d'); var G = document.createElement('canvas').getContext('webgl');");
+    "var C = document.createElement('canvas').getContext('2d'); var G = document.createElement('canvas').getContext('webgl');" + spec.gl);
   const res = {window: win, worker, first};
   document.body.dataset.result = JSON.stringify(res);
   fetch('/result', {method: 'POST', body: JSON.stringify(res)});
@@ -234,7 +251,7 @@ def main() -> int:
     server = Server(("127.0.0.1", 0), Handler)
     server.results = []
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    spec = json.dumps({"window": WINDOW + CONTROLS, "worker": WORKER + CONTROLS[1:], "first": FIRST_READS})
+    spec = json.dumps({"window": WINDOW + CONTROLS, "worker": WORKER + CONTROLS[1:], "first": FIRST_READS, "gl": GL_SETUP})
     url = f"http://127.0.0.1:{server.server_address[1]}/#" + urllib.request.quote(spec)
 
     stock_runs = []
