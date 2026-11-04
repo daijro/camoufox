@@ -12,12 +12,11 @@ an invariant stock Firefox 152 holds:
   gum-fake            getUserMedia({audio: true, fake: true}) resolves without a
                       prompt
   storage-partition   a cross-site iframe's document.hasStorageAccess() is false
-  wheel-default       page.mouse.wheel(0, 300) delivers the delta the caller
-                      asked for: one event, deltaMode 0, deltaY 300
-  wheel-notches       the same scroll with humanize=True arrives as 3 events
-                      with wheelDeltaY a multiple of 120, as a physical wheel
-  wheel-scaled        wheel-default again at layout.css.devPixelsPerPx 2:
-                      still deltaY 300, not 150
+  wheel-notches       page.mouse.wheel(0, 300) arrives as 3 notches, each
+                      with wheelDeltaY -120, as a physical wheel
+                      (driven-wheel-notches.py compares the whole shape)
+  wheel-scaled        the same at layout.css.devPixelsPerPx 2: lines do not
+                      scale with the display
   query-cost          matchMedia('(color: 8)') and navigator.hardwareConcurrency
                       cost about what matchMedia('(min-width: 1px)') and
                       navigator.userAgent do (no sync IPC per read)
@@ -25,9 +24,7 @@ an invariant stock Firefox 152 holds:
                       about what UTC getters do
   timezone-relaunch   a persistent profile relaunched with another timezone
                       reports the new one, in the page and in a worker
-  web-serial          navigator.serial exists on a secure page. Any enterprise
-                      policy turns Web Serial off unless DefaultSerialGuardSetting
-                      turns it back on
+  web-serial          navigator.serial exists on a secure page, as in stock
 
     python browser/tests/playwright/patches/stock-parity-probes.py
 """
@@ -202,17 +199,12 @@ def run_probes(binary, port):
         return out
 
 
-def probe_wheel(binary, port, humanize, prefs=None):
-    """One scroll of 300px, with humanize on or off.
-
-    Off (the default) the caller's delta is delivered verbatim, which is what
-    upstream's own suite asserts. On, the scroll is quantised into the notches a
-    physical wheel produces. Both are shipped behaviour, so both are checked.
-    """
+def probe_wheel(binary, port, prefs):
+    """One scroll of 300px with these prefs."""
     from camoufox.sync_api import Camoufox
 
-    with Camoufox(headless=True, executable_path=str(binary), humanize=humanize,
-                  firefox_user_prefs=prefs or {}, i_know_what_im_doing=True) as b:
+    with Camoufox(headless=True, executable_path=str(binary),
+                  firefox_user_prefs=prefs, i_know_what_im_doing=True) as b:
         page = b.new_page()
         page.goto(f"http://localhost:{port}/")
         page.mouse.move(200, 200)
@@ -249,9 +241,7 @@ def main() -> int:
     server, port = serve()
     try:
         out = run_probes(binary, port)
-        out["wheelHumanized"] = probe_wheel(binary, port, humanize=True)
-        out["wheelScaled"] = probe_wheel(binary, port, humanize=False,
-                                         prefs={"layout.css.devPixelsPerPx": "2"})
+        out["wheelScaled"] = probe_wheel(binary, port, {"layout.css.devPixelsPerPx": "2"})
         relaunch = relaunch_timezones(binary, port)
     finally:
         server.shutdown()
@@ -283,16 +273,12 @@ def main() -> int:
         failures.append(f"gum-fake: getUserMedia({{fake: true}}) {out['gumFake']}")
     if out["storageAccess"] is not False:
         failures.append(f"storage-partition: cross-site iframe hasStorageAccess() = {out['storageAccess']}")
-    wheel = out["wheel"]
-    # Default: the delta the caller asked for, in pixels, as one event.
-    if len(wheel) != 1 or wheel[0]["mode"] != 0 or wheel[0]["dy"] != 300:
-        failures.append(f"wheel-default: wheel(0, 300) gave {wheel}")
-    if [e["dy"] for e in out["wheelScaled"]] != [300]:
-        failures.append(f"wheel-scaled: wheel(0, 300) at 2x gave {out['wheelScaled']}")
-    # humanize=True: notches, each carrying one native tick.
-    humanized = out["wheelHumanized"]
-    if len(humanized) != 3 or any(e["wd"] % 120 for e in humanized):
-        failures.append(f"wheel-notches: humanized wheel(0, 300) gave {humanized}")
+    # Notches, each carrying one native tick. deltaMode is not compared: the
+    # probe reads deltaY first, and Gecko then reports lines as pixels, as for
+    # any page that does (dom.event.wheel-deltaMode-lines.disabled).
+    for check, wheel in (("wheel-notches", out["wheel"]), ("wheel-scaled", out["wheelScaled"])):
+        if [e["wd"] for e in wheel] != [-120] * 3:
+            failures.append(f"{check}: wheel(0, 300) gave {wheel}")
     # 20000 reads of a value that lives in the config cost ~20 ms here, i.e.
     # ~1 us each: a hash lookup, no IPC. The state this guards against is a sync
     # IPC per read, measured at ~12 us each when it regressed -- 240 ms over the
@@ -315,7 +301,7 @@ def main() -> int:
     if not out["secureContext"]:
         failures.append("web-serial: the probe page is not a secure context -- check is vacuous")
     elif not out["serial"]:
-        failures.append("web-serial: navigator.serial is missing (policies.json needs DefaultSerialGuardSetting: 3)")
+        failures.append("web-serial: navigator.serial is missing")
 
     print()
     if failures:

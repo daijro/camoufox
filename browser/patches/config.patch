@@ -1,31 +1,26 @@
 diff --git a/browser/installer/package-manifest.in b/browser/installer/package-manifest.in
-index ae503c243c..1349e3b20a 100644
+index ae503c243c..c9396afe0a 100644
 --- a/browser/installer/package-manifest.in
 +++ b/browser/installer/package-manifest.in
-@@ -264,6 +264,11 @@
+@@ -264,6 +264,10 @@
  @RESPATH@/browser/components/shell/assets/kit.gif
  #endif
  
 +; Camoufox specific files
 +@RESPATH@/defaults/pref/local-settings.js
-+@RESPATH@/distribution/policies.json
 +@RESPATH@/camoufox.cfg
 +
  ; [Default Preferences]
  ; All the pref files must be part of base to prevent migration bugs
  @RESPATH@/browser/@PREF_DIR@/firefox.js
 diff --git a/lw/moz.build b/lw/moz.build
-index e69de29bb2..484d7bf134 100644
+index e69de29bb2..8b4e45fb64 100644
 --- a/lw/moz.build
 +++ b/lw/moz.build
-@@ -0,0 +1,12 @@
+@@ -0,0 +1,8 @@
 +FINAL_TARGET_FILES += [
 +  "camoufox.cfg",
 +  "properties.json"
-+]
-+
-+FINAL_TARGET_FILES.distribution += [
-+  "policies.json",
 +]
 +
 +FINAL_TARGET_FILES.defaults.pref += [

@@ -1,7 +1,8 @@
 """
 Verify uBlock Origin blocks with the filter lists packaged in the release the
-build bundles, and never downloads them at launch (the `3rdparty` policy in
-browser/settings/distribution/policies.json sets its autoUpdate to false).
+build bundles, and never downloads them at launch (scripts/fetch-ubo.py
+freeze_lists makes the bundled uBO's autoUpdate default false; a policy would
+put Firefox in enterprise mode).
 
 uBO's own default updates every list from its CDNs shortly after launch: two
 seconds after it is ready when a packaged list is past twice its expiry, 37
