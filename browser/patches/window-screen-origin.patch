@@ -1,0 +1,200 @@
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index 9a81697c6f..762118bb63 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -3788,12 +3788,54 @@ int32_t nsGlobalWindowInner::GetScreenY(CallerType aCallerType,
+ 
+ float nsGlobalWindowInner::GetMozInnerScreenX(CallerType aCallerType,
+                                               ErrorResult& aError) {
+-  FORWARD_TO_OUTER_OR_THROW(GetMozInnerScreenXOuter, (aCallerType), aError, 0);
++  const float stock = [&]() -> float {
++    FORWARD_TO_OUTER_OR_THROW(GetMozInnerScreenXOuter, (aCallerType), aError,
++                              0);
++  }();
++  // Camoufox: a page sees the content area where the spoofed window.screenX/Y
++  // put the window, not where the window really is. Browser code (popup
++  // placement, drag feedback) still gets the real position.
++  if (aError.Failed() || aCallerType == CallerType::System ||
++      nsIGlobalObject::ShouldResistFingerprinting(
++          aCallerType, RFPTarget::WindowInnerScreenXY)) {
++    return stock;
++  }
++  return stock + SpoofedScreenShift(this).x.value;
+ }
+ 
+ float nsGlobalWindowInner::GetMozInnerScreenY(CallerType aCallerType,
+                                               ErrorResult& aError) {
+-  FORWARD_TO_OUTER_OR_THROW(GetMozInnerScreenYOuter, (aCallerType), aError, 0);
++  const float stock = [&]() -> float {
++    FORWARD_TO_OUTER_OR_THROW(GetMozInnerScreenYOuter, (aCallerType), aError,
++                              0);
++  }();
++  if (aError.Failed() || aCallerType == CallerType::System ||
++      nsIGlobalObject::ShouldResistFingerprinting(
++          aCallerType, RFPTarget::WindowInnerScreenXY)) {
++    return stock;
++  }
++  return stock + SpoofedScreenShift(this).y.value;
++}
++
++/* static */
++CSSIntPoint nsGlobalWindowInner::SpoofedScreenShift(nsIGlobalObject* aGlobal) {
++  const auto x = MaskConfig::GetInt32("window.screenX");
++  const auto y = MaskConfig::GetInt32("window.screenY");
++  if (!x && !y) {
++    return {};
++  }
++  nsPIDOMWindowInner* inner = aGlobal ? aGlobal->GetAsInnerWindow() : nullptr;
++  nsGlobalWindowOuter* outer =
++      inner ? Cast(inner)->GetOuterWindowInternal() : nullptr;
++  if (!outer) {
++    return {};
++  }
++  IgnoredErrorResult rv;
++  const CSSIntPoint real = outer->GetScreenXY(CallerType::System, rv);
++  if (rv.Failed()) {
++    return {};
++  }
++  return CSSIntPoint(x ? *x - real.x : 0, y ? *y - real.y : 0);
+ }
+ 
+ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index 3749987acf..cd559ee93c 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -897,6 +897,11 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+                            mozilla::ErrorResult& aError);
+   float GetMozInnerScreenY(mozilla::dom::CallerType aCallerType,
+                            mozilla::ErrorResult& aError);
++  // Camoufox: the spoofed window.screenX/Y minus where the window really is,
++  // in CSS pixels, and zero without a spoofed position. Every screen
++  // coordinate a page reads moves by it, so all of them agree with
++  // window.screenX/Y.
++  static mozilla::CSSIntPoint SpoofedScreenShift(nsIGlobalObject* aGlobal);
+   double GetDevicePixelRatio(mozilla::dom::CallerType aCallerType,
+                              mozilla::ErrorResult& aError);
+   double GetDesktopToDeviceScale(mozilla::ErrorResult& aError);
+diff --git a/dom/events/Event.cpp b/dom/events/Event.cpp
+index 0a1d501537..fe6415f093 100644
+--- a/dom/events/Event.cpp
++++ b/dom/events/Event.cpp
+@@ -711,6 +711,26 @@ Maybe<CSSDoublePoint> Event::GetScreenCoords(
+   return Some(CSSDoublePoint(pt.x, pt.y));
+ }
+ 
++// static
++CSSIntPoint Event::SpoofedScreenShift(nsPresContext* aPresContext,
++                                      WidgetEvent* aEvent) {
++  // The cases where GetScreenCoords() measures the real window: pointer lock,
++  // or an event that came from a widget.
++  if (!aPresContext) {
++    return {};
++  }
++  if (!PointerLockManager::IsLocked()) {
++    const WidgetGUIEvent* guiEvent =
++        aEvent && aEvent->DOMEventSupportsCoords() ? aEvent->AsGUIEvent()
++                                                   : nullptr;
++    if (!guiEvent || !guiEvent->mWidget) {
++      return {};
++    }
++  }
++  return nsGlobalWindowInner::SpoofedScreenShift(
++      aPresContext->Document()->GetScopeObject());
++}
++
+ // static
+ CSSDoublePoint Event::GetPageCoords(
+     nsPresContext* aPresContext, WidgetEvent* aEvent,
+diff --git a/dom/events/Event.h b/dom/events/Event.h
+index 74bae11e2b..21b17617e0 100644
+--- a/dom/events/Event.h
++++ b/dom/events/Event.h
+@@ -244,6 +244,11 @@ class Event : public nsISupports, public nsWrapperCache {
+   static Maybe<CSSDoublePoint> GetScreenCoords(
+       nsPresContext* aPresContext, WidgetEvent* aEvent,
+       const LayoutDeviceDoublePoint& aWidgetOrScreenRelativePoint);
++  // Camoufox: what a page adds to GetScreenCoords() so the point agrees with
++  // the spoofed window.screenX/Y (nsGlobalWindowInner::SpoofedScreenShift).
++  // Zero for a point GetScreenCoords() returns as given.
++  static CSSIntPoint SpoofedScreenShift(nsPresContext* aPresContext,
++                                        WidgetEvent* aEvent);
+ 
+   /**
+    * Return offsetX and offsetY values for aEvent fired at
+diff --git a/dom/events/MouseEvent.cpp b/dom/events/MouseEvent.cpp
+index f310ed7cb1..e5862a766f 100644
+--- a/dom/events/MouseEvent.cpp
++++ b/dom/events/MouseEvent.cpp
+@@ -324,9 +324,15 @@ CSSDoublePoint MouseEvent::ScreenPoint(CallerType aCallerType) const {
+     return mUseFractionalCoords ? clientPoint : RoundedToInt(clientPoint);
+   }
+ 
+-  const CSSDoublePoint screenPoint =
++  CSSDoublePoint screenPoint =
+       Event::GetScreenCoords(mPresContext, mEvent, mWidgetOrScreenRelativePoint)
+           .extract();
++  // Camoufox: a page reads the point relative to the spoofed window position;
++  // browser code keeps the real one.
++  if (aCallerType != CallerType::System) {
++    const CSSIntPoint shift = Event::SpoofedScreenShift(mPresContext, mEvent);
++    screenPoint += CSSDoublePoint(shift.x.value, shift.y.value);
++  }
+   return mUseFractionalCoords ? screenPoint : RoundedToInt(screenPoint);
+ }
+ 
+diff --git a/dom/events/Touch.cpp b/dom/events/Touch.cpp
+index 6a62bd704f..91f1564db4 100644
+--- a/dom/events/Touch.cpp
++++ b/dom/events/Touch.cpp
+@@ -84,6 +84,7 @@ Touch::Touch(const Touch& aOther)
+       mPagePoint(aOther.mPagePoint),
+       mClientPoint(aOther.mClientPoint),
+       mScreenPoint(aOther.mScreenPoint),
++      mScreenShift(aOther.mScreenShift),
+       mRadius(aOther.mRadius),
+       mRotationAngle(aOther.mRotationAngle),
+       mForce(aOther.mForce),
+@@ -133,6 +134,10 @@ int32_t Touch::ScreenX(CallerType aCallerType) const {
+     return ClientX();
+   }
+ 
++  // Camoufox: a page reads the point relative to the spoofed window position.
++  if (aCallerType != CallerType::System) {
++    return mScreenPoint.x + mScreenShift.x;
++  }
+   return mScreenPoint.x;
+ }
+ 
+@@ -142,6 +147,10 @@ int32_t Touch::ScreenY(CallerType aCallerType) const {
+     return ClientY();
+   }
+ 
++  // Camoufox: a page reads the point relative to the spoofed window position.
++  if (aCallerType != CallerType::System) {
++    return mScreenPoint.y + mScreenShift.y;
++  }
+   return mScreenPoint.y;
+ }
+ 
+@@ -191,6 +200,7 @@ void Touch::InitializePoints(nsPresContext* aPresContext, WidgetEvent* aEvent) {
+       Event::GetPageCoords(aPresContext, aEvent, mRefPoint, mClientPoint));
+   mScreenPoint = RoundedToInt(
+       Event::GetScreenCoords(aPresContext, aEvent, mRefPoint).extract());
++  mScreenShift = Event::SpoofedScreenShift(aPresContext, aEvent);
+   mPointsInitialized = true;
+ }
+ 
+diff --git a/dom/events/Touch.h b/dom/events/Touch.h
+index 707dfe569b..3a2ae55669 100644
+--- a/dom/events/Touch.h
++++ b/dom/events/Touch.h
+@@ -87,6 +87,8 @@ class Touch final : public nsISupports,
+   CSSIntPoint mPagePoint;
+   CSSIntPoint mClientPoint;
+   CSSIntPoint mScreenPoint;
++  // Camoufox: Event::SpoofedScreenShift() when mScreenPoint was measured.
++  CSSIntPoint mScreenShift;
+   LayoutDeviceIntPoint mRadius;
+   float mRotationAngle;
+   float mForce;
