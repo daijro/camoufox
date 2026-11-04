@@ -493,7 +493,7 @@ class Frame {
         // We don't use this event.
       },
 
-      webSocketClosed: (webSocketSerialID, wasClean, code, reason) => {
+      webSocketClosed: (webSocketSerialID, httpChannelId, wasClean, code, reason) => {
         this._webSocketInfos.delete(webSocketSerialID);
         let error = '';
         if (!wasClean) {

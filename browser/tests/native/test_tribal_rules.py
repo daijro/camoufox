@@ -627,6 +627,23 @@ def test_per_frame_state_reset_on_navigation_is_also_released_on_dispose():
     )
 
 
+def test_juggler_reads_current_websocket_event_signatures():
+    source = (BROWSER / "additions" / "juggler" / "content" / "FrameTree.js").read_text(
+        encoding="utf-8"
+    )
+    expected = {
+        "webSocketClosed": "webSocketSerialID, httpChannelId, wasClean, code, reason",
+        "frameReceived": "webSocketSerialID, httpChannelId, frame",
+        "frameSent": "webSocketSerialID, httpChannelId, frame",
+    }
+    for callback, arguments in expected.items():
+        match = re.search(rf"\b{callback}:\s*\(([^)]*)\)\s*=>", source)
+        assert match, f"{callback} listener is missing from FrameTree.js"
+        assert match.group(1) == arguments, (
+            f"{callback} must read Firefox's current argument order; got ({match.group(1)})"
+        )
+
+
 def test_a_sandbox_held_over_a_page_window_is_nuked_not_just_dropped():
     """Dropping the reference leaves the compartment to the cycle collector.
 
