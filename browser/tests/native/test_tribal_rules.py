@@ -627,6 +627,14 @@ def test_per_frame_state_reset_on_navigation_is_also_released_on_dispose():
     )
 
 
+def test_network_patch_reads_the_spoofed_user_agent_once():
+    patch = (BROWSER / "patches" / "network-patches.patch").read_text(encoding="utf-8")
+    assert "static const nsCString* MaskedUserAgent()" in patch
+    assert "mUserAgent.Assign(nsCString(value.value().c_str()));" not in patch, (
+        "UserAgent() runs off the main thread; it must not rewrite the shared mUserAgent per call."
+    )
+
+
 def test_a_sandbox_held_over_a_page_window_is_nuked_not_just_dropped():
     """Dropping the reference leaves the compartment to the cycle collector.
 

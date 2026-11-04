@@ -136,17 +136,28 @@ index 0192e5f6f2..a43ecf238e 100644
  #include "SerializedLoadContext.h"
  #include "TRRServiceChannel.h"
  #include "Tickler.h"
-@@ -993,6 +994,15 @@ uint8_t nsHttpHandler::UrgencyFromCoSFlags(uint32_t cos,
+@@ -993,6 +994,26 @@ uint8_t nsHttpHandler::UrgencyFromCoSFlags(uint32_t cos,
  //-----------------------------------------------------------------------------
  
++// Camoufox: the spoofed User-Agent, or null without one. CAMOU_CONFIG never
++// changes, so it is read once into a string that is never written again.
++// UserAgent() runs off the main thread too (proxy CONNECT requests), and
++// re-assigning the shared mUserAgent there on every call was a data race.
++static const nsCString* MaskedUserAgent() {
++  static const nsCString* const sMasked = []() -> const nsCString* {
++    for (const char* key : {"headers.User-Agent", "navigator.userAgent"}) {
++      if (auto value = MaskConfig::GetString(key)) {
++        return new nsCString(value.value().c_str());  // intentionally leaked
++      }
++    }
++    return nullptr;
++  }();
++  return sMasked;
++}
++
  const nsCString& nsHttpHandler::UserAgent(bool aShouldResistFingerprinting) {
-+  if (auto value = MaskConfig::GetString("headers.User-Agent")) {
-+    mUserAgent.Assign(nsCString(value.value().c_str()));
-+    return mUserAgent;
-+  }
-+  if (auto value = MaskConfig::GetString("navigator.userAgent")) {
-+    mUserAgent.Assign(nsCString(value.value().c_str()));
-+    return mUserAgent;
++  if (const nsCString* masked = MaskedUserAgent()) {
++    return *masked;
 +  }
 +
    if (aShouldResistFingerprinting && !mSpoofedUserAgent.IsEmpty()) {
