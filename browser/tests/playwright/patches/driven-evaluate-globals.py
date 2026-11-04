@@ -8,10 +8,9 @@ world, but the DOM objects they touch belong to the page: if wrapping one for
 the isolated world defines its interface on the page's window, a page that
 lists its globals after a driver read its DOM sees interfaces it never used.
 
-The guard loads the same page twice under Playwright, once with only the
-input fill() causes (a click on the field and a key) and once after typical
-driver work (evaluate, query, locator reads, fill, a screenshot), and has the
-page list its globals when told to. The lists must
+The guard loads the same page twice under Playwright, once with only a
+fill() and once after typical driver work (evaluate, query, locator reads,
+the same fill, a screenshot), and has the page list its globals when told to. The lists must
 match, and every interface the driver used must still work for the page.
 
     python browser/tests/playwright/patches/driven-evaluate-globals.py
@@ -28,7 +27,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
 PAGE_TIMEOUT_S = 60
-INPUT_CENTER = (250, 110)  # the input's box on PAGE, where fill() clicks it
 # The page lists its globals when the driver changes the URL's fragment, so the
 # driver never calls into the page to start it, and the page itself does
 # nothing before then: no timers, no requests. It lists before it sends.
@@ -87,15 +85,14 @@ def work(page):
 
 
 def same_input(page):
-    """The input fill() and the screenshot cause, without a driver's reads.
+    """The input work() gives the page, without the driver's other reads.
 
-    fill() clicks the field and types, so the page gets mouse, pointer, focus
-    and key events, and Firefox's own actors wrap them in the page's window as
-    they do for a person's input. The run left alone gets the same input, so
-    the comparison sees only what the driver's reads add.
+    fill() focuses the field and inserts the text; it neither clicks nor
+    presses a key. Input the page receives defines the interfaces of its
+    events on the page's window as a person's does, so the run left alone gets
+    the same fill(), and the comparison sees only what the other reads add.
     """
-    page.mouse.click(*INPUT_CENTER)
-    page.keyboard.type("x")
+    page.locator("#in").fill("x")
 
 
 def globals_of(binary, server, url, driven):

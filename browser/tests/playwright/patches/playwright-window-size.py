@@ -72,14 +72,16 @@ def probe(binary, display):
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     out = {}
-    env = {**os.environ, "DISPLAY": display} if display else None
+    # The launcher checks the window against the monitor of its own DISPLAY,
+    # so the process takes this display rather than handing it to the browser.
+    outer = {k: os.environ.pop(k, None) for k in ("DISPLAY", "WAYLAND_DISPLAY")}
+    if display:
+        os.environ["DISPLAY"] = display
     try:
         for persistent in (False, True):
             prof = tempfile.mkdtemp(prefix="cf-window-size-")
             kw = dict(executable_path=str(binary), headless=display is None, os="linux", config=GEOMETRY,
                       i_know_what_im_doing=True)
-            if env:
-                kw["env"] = env
             if persistent:
                 kw.update(persistent_context=True, user_data_dir=prof)
             try:
@@ -92,6 +94,8 @@ def probe(binary, display):
                 shutil.rmtree(prof, ignore_errors=True)
     finally:
         srv.shutdown()
+        os.environ.pop("DISPLAY", None)
+        os.environ.update({k: v for k, v in outer.items() if v is not None})
     return out
 
 
