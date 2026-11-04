@@ -179,7 +179,7 @@ host's only when the identity claims the host's GPU. Otherwise
 | `headless=` | What runs | Notes |
 |---|---|---|
 | `False` (default) | A normal window | Needs a display. |
-| `True` | Firefox headless | Camoufox patches the headless tells it knows about. |
+| `True` | A headed browser on private Xvfb when available | On Linux, uses `"virtual"` when `Xvfb` and `setpriv` are installed; otherwise Firefox headless with a `LeakWarning`. `launch_options()` alone starts no display. |
 | `"virtual"` | A headed browser on a private Xvfb display | Linux only, needs `Xvfb` and `setpriv` (util-linux). Handled by `Camoufox`, `AsyncCamoufox`, `NewBrowser` and `launch_server`. The display is 1x1 unless `CAMOUFOX_VIRTUAL_DISPLAY_SIZE` (e.g. `1920x1080x24`) says otherwise. Xvfb has no GPU: canvas and WebGL render in software. |
 | `"virtual-gpu"` | A headed browser on a private, headless Xorg server bound to one GPU | Linux only, needs Xorg and the card's driver. Canvas and WebGL render on the card. Handled like `"virtual"`. See [The GPU display](#the-gpu-display). |
 
@@ -281,7 +281,7 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | `headless` | `bool`, `"virtual"` or `"virtual-gpu"` | `False` | See [Headless modes](#headless-modes). |
 | `gpu` | `str` or `int` | `CAMOUFOX_GPU`, or the only GPU | The card for `headless="virtual-gpu"`. See [The GPU display](#the-gpu-display). Not taken by `launch_options`. |
 | `require_gpu` | `bool` | `True` | With `headless="virtual-gpu"`, fail the launch when the browser does not render on the card; `False` warns. Not taken by `launch_options`. |
-| `proxy` | `dict` | none | Playwright proxy: `server`, `username`, `password`, `bypass`. |
+| `proxy` | `dict` | none | Playwright proxy: `server`, `username`, `password`, `bypass`. A `socks5://` proxy can have a username and password too (RFC 1929), which Playwright alone refuses; the same holds for `NewContext()` and `new_context()`. |
 | `geoip` | `bool` or `str` | none | `True` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. Without a proxy, also decides whether IPv6 stays on. Needs the `geoip` extra. |
 | `geoip_db` | `str` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
 | `locale` | `str` or `list[str]` | from `geoip`, else the drawn identity's | Locale(s), e.g. `"en-US"` or `["fr-FR", "en-US"]`. The first is used for `Intl`. |

@@ -75,7 +75,7 @@ export function isolateLaunch(): void {
 	deps.fromFpgen = () => ({});
 	deps.getScreenCons = () => null;
 	deps.generateRandomFontSubset = () => [];
-	deps.generateRandomVoiceSubset = () => [];
+	deps.drawVoiceConfig = () => ({ voices: [] });
 	deps.fixNavigatorArch = () => undefined;
 	deps.followBaselineProtection = () => undefined;
 	deps.clampWindowDimensions = () => undefined;
