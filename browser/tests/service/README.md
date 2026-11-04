@@ -39,7 +39,7 @@ options are the ones below in PowerShell form (`-BrowserVersion`,
 
 ## Proxies
 
-Tests require real proxies. Each context gets its own proxy, and `AsyncNewContext` derives its WebRTC IP and timezone from the proxy's exit IP.
+Tests require real proxies. Each context gets its own proxy, and `AsyncNewContext` takes its WebRTC IP, timezone, locale and geolocation from the proxy's exit IP.
 
 Create `proxies.txt` in this directory with one proxy per line:
 

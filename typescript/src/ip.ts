@@ -112,24 +112,36 @@ function getImpit(proxy?: string): Impit {
 }
 
 const PROXY_LOOKUP_FAILED =
-	"Could not look up the proxy's exit IP and timezone. Pass webrtc_ip and " +
-	"timezone_id explicitly to skip the lookup";
+	"Could not look up where the proxy exits. Pass webrtc_ip, timezone_id, " +
+	"locale and geolocation explicitly to skip the lookup";
+
+/** Where a proxy exits: its IP and that IP's timezone, country and position. */
+export interface ExitGeo {
+	ip: string;
+	timezone: string;
+	country: string;
+	latitude: number;
+	longitude: number;
+}
 
 /**
- * The exit IP of `proxy` and that IP's timezone, looked up through the proxy.
- * Throws InvalidIP when the lookup fails: a context that silently kept the
- * host's WebRTC IP and timezone behind a proxy would be a leak.
+ * Where `proxy` exits, looked up through the proxy. Throws InvalidIP when the
+ * lookup fails: a context that silently kept the host's WebRTC IP and timezone
+ * behind a proxy would be a leak.
  */
-export async function proxyExitGeo(proxy: string): Promise<[string, string]> {
+export async function proxyExitGeo(proxy: string): Promise<ExitGeo> {
 	let data: {
 		status?: string;
 		message?: string;
 		query?: string;
 		timezone?: string;
+		countryCode?: string;
+		lat?: number;
+		lon?: number;
 	};
 	try {
 		const response = await getImpit(proxy).fetch(
-			"http://ip-api.com/json?fields=status,message,query,timezone",
+			"http://ip-api.com/json?fields=status,message,query,timezone,countryCode,lat,lon",
 		);
 		if (!response.ok) {
 			throw new Error(`${response.status} Error: ${response.statusText}`);
@@ -138,13 +150,26 @@ export async function proxyExitGeo(proxy: string): Promise<[string, string]> {
 	} catch (error) {
 		throw new InvalidIP(`${PROXY_LOOKUP_FAILED}: ${error}`);
 	}
-	if (data.status !== "success" || !data.query || !data.timezone) {
+	if (
+		data.status !== "success" ||
+		!data.query ||
+		!data.timezone ||
+		!data.countryCode ||
+		data.lat == null ||
+		data.lon == null
+	) {
 		throw new InvalidIP(
 			`${PROXY_LOOKUP_FAILED}: ${data.message ?? JSON.stringify(data)}`,
 		);
 	}
 	validateIP(data.query);
-	return [data.query, data.timezone];
+	return {
+		ip: data.query,
+		timezone: data.timezone,
+		country: data.countryCode,
+		latitude: data.lat,
+		longitude: data.lon,
+	};
 }
 
 const PUBLIC_IP_URLS = [
