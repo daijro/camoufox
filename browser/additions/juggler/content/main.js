@@ -82,10 +82,7 @@ export function initialize(browsingContext, docShell) {
   // So the document keeps the window's real focus and activeness, as in stock.
   // Input that must reach a page in the background goes through
   // activateAndRun (TargetRegistry.js), which raises its window and selects
-  // its tab first, as a user would. Kept assignable (not removed) so the
-  // docShell flags stay at stock's default explicitly.
-  docShell.overrideHasFocus = false;
-  docShell.forceActiveState = false;
+  // its tab first, as a user would.
   // A page reads this back: after a scripted same-origin `location.href = ...`
   // and `history.back()` -- no gesture, no permission -- stock Firefox 152.0.4
   // fires pageshow with persisted=true and does not re-run the document's
@@ -106,6 +103,7 @@ export function initialize(browsingContext, docShell) {
   for (const { worldName, name, script } of [...contextCrossProcessCookie.bindings, ...pageCrossProcessCookie.bindings])
     data.frameTree.addBinding(worldName, name, script);
   data.frameTree.setInitScripts([...contextCrossProcessCookie.initScripts, ...pageCrossProcessCookie.initScripts]);
+  data.frameTree.runInitScriptsOnInitialDocuments();
   data.channel = new SimpleChannel('', 'process-' + Services.appinfo.processID);
   data.pageAgent = new PageAgent(data.channel, data.frameTree);
   docShell.fileInputInterceptionEnabled = !!pageCrossProcessCookie.interceptFileChooserDialog;

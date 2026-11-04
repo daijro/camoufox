@@ -146,6 +146,7 @@ export class PageAgent {
         adoptNode: this._adoptNode.bind(this),
         crash: this._crash.bind(this),
         describeNode: this._describeNode.bind(this),
+        awaitUserInputGate: this._awaitUserInputGate.bind(this),
         dispatchKeyEvent: this._dispatchKeyEvent.bind(this),
         dispatchDragEvent: this._dispatchDragEvent.bind(this),
         dispatchTouchEvent: this._dispatchTouchEvent.bind(this),
@@ -479,6 +480,32 @@ export class PageAgent {
   // 2026-09-14: keydown.which never 16, location never 1).
   _needsShift(text) {
     return typeof text === 'string' && text.length === 1 && /[A-Z~!@#$%^&*()_+{}|:"<>?]/.test(text);
+  }
+
+  // Camoufox: resolves once this process's top document accepts user input
+  // (PageHandler._awaitUserInputGate): minTimeElapsedInMS after readyState
+  // became "loading" (performance.timing.domLoading, the same moment as
+  // Document::mLoadingOrRestoredFromBFCacheTimeStamp), then a refresh tick.
+  // The initial about:blank is exempt, as in nsPresContext.
+  async _awaitUserInputGate() {
+    const win = this._frameTree.mainFrame().domWindow();
+    if (!win || win.document.isInitialDocument)
+      return;
+    const timing = win.performance.timing;
+    if (!timing.domLoading)
+      return;
+    const gateMs = Services.prefs.getIntPref('dom.input_events.security.minTimeElapsedInMS', 100);
+    // +2: performance.now() is clamped to the timer precision.
+    const waitMs = gateMs + 2 - (win.performance.now() - (timing.domLoading - timing.navigationStart));
+    if (waitMs <= 0)
+      return;
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+    // minNumTicks: a tick after the time has passed; a hidden page's refresh
+    // driver is throttled, and the gate is open for it anyway.
+    await new Promise(resolve => {
+      win.requestAnimationFrame(() => resolve());
+      setTimeout(resolve, 100);
+    });
   }
 
   async _dispatchKeyEvent({type, keyCode, code, key, repeat, location, text}) {

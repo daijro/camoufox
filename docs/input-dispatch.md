@@ -94,6 +94,17 @@ fingerprint immune to `#751`.
 `browser/tests/playwright/patches/input-ack-backstop.py` covers the bounded waits
 themselves: a late renderer ack, and a drag whose page answers late.
 
+## The input gate
+
+Firefox's content process drops user input that reaches a document before its
+input gate opens: `dom.input_events.security.minTimeElapsedInMS` (100 ms) after
+`readyState` became `"loading"`, then `minNumTicks` refresh ticks
+(`PresShell::CanHandleUserInputEvents`). Juggler's mouse and key events are
+synthesized for tests, which the gate exempts, so they reached a page earlier
+than any person's could; its wheel is not exempt, so a wheel straight after
+`goto` lost notches. Every input command now waits for the gate once per
+document (`PageHandler._awaitUserInputGate`). Guard: `juggler-input-gate.py`.
+
 ## Move coalescing
 
 A real mouse reports moves faster than the refresh driver ticks. The content

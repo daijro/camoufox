@@ -134,6 +134,19 @@ export class FrameTree {
     }
   }
 
+  // Camoufox: a page's initial about:blank exists before this FrameTree, so
+  // _createFrame() gave it execution contexts while no init script was set,
+  // and it never ran the context's. A driver that set_content()s it, without
+  // navigating, read the launch identity (navigator.platform, appVersion) next
+  // to the context's user agent. Run them there once the scripts are known.
+  runInitScriptsOnInitialDocuments() {
+    for (const frame of this.frames()) {
+      const document = frame.domWindow()?.document;
+      if (document && (document.isInitialDocument || document.documentURI === 'about:blank'))
+        frame._runInitScriptsOnCurrentDocument();
+    }
+  }
+
   _ensureWorld(worldName) {
     worldName = worldName || '';
     let world = this._isolatedWorlds.get(worldName);
@@ -759,6 +772,25 @@ class Frame {
     }
 
     this._updateJavaScriptDisabled();
+  }
+
+  // Camoufox: the init-script half of _onGlobalObjectCleared(), for a document
+  // that already has its execution contexts. The setters open and close
+  // around it in this one turn, so no page script sees them.
+  _runInitScriptsOnCurrentDocument() {
+    const camouInnerWindowId = this.domWindow().windowGlobalChild.innerWindowId;
+    ChromeUtils.camouUnsealFingerprintSetters(camouInnerWindowId);
+    try {
+      for (const [name, world] of this._frameTree._isolatedWorlds) {
+        const executionContext = this._worldNameToContext.get(name);
+        if (!executionContext)
+          continue;
+        for (const script of world._scriptsToEvaluateOnNewDocument)
+          this._evaluateInitScript(executionContext, script);
+      }
+    } finally {
+      ChromeUtils.camouSealFingerprintSetters(camouInnerWindowId);
+    }
   }
 
   // Camoufox: run an init script in the world it asked for.

@@ -93,6 +93,10 @@ export class PageHandler {
     // start point for the humanized cursor trajectory (humanize=True).
     this._lastTrackedPos = { x: 0, y: 0 };
 
+    // Camoufox: documents whose content process accepts user input (see
+    // _awaitUserInputGate), keyed by WindowGlobalParent.
+    this._userInputGateOpen = new WeakSet();
+
     this._reportedFrameIds = new Set();
     this._networkEventsForUnreportedFrameIds = new Map();
 
@@ -549,7 +553,47 @@ export class PageHandler {
     return await this._pageTarget.setInitScripts(scripts);
   }
 
+  // Camoufox: Firefox's content process drops user input that reaches a
+  // document before its input gate opens: dom.input_events.security.
+  // minTimeElapsedInMS (100) after readyState became "loading" and
+  // minNumTicks (3) refresh ticks (PresShell::CanHandleUserInputEvents,
+  // nsPresContext::UserInputEventsAllowed). A wheel turned right after goto
+  // lost its first notches there, while mouse and key events, flagged
+  // synthesized-for-tests, got through early: trusted input no person's
+  // Firefox delivers. Input waits for the gate instead, so it lands, and lands
+  // when a person's could.
+  async _awaitUserInputGate() {
+    const windowGlobal = this._pageTarget.linkedBrowser()?.browsingContext?.currentWindowGlobal;
+    if (windowGlobal && this._userInputGateOpen.has(windowGlobal))
+      return;
+    try {
+      await this._contentPage.send('awaitUserInputGate');
+    } catch (e) {
+      return;
+    }
+    if (windowGlobal)
+      this._userInputGateOpen.add(windowGlobal);
+  }
+
+  _isFrontPage() {
+    const browser = this._pageTarget.linkedBrowser();
+    const win = browser?.documentGlobal || browser?.ownerGlobal;
+    return !!win && Services.focus.activeWindow === win && win.gBrowser?.selectedBrowser === browser;
+  }
+
+  async _focusFrontPage() {
+    const browser = this._pageTarget.linkedBrowser();
+    browser.focus();
+    const deadline = Date.now() + 1000;
+    while (!this._isFrontPage() && Date.now() < deadline)
+      await new Promise(resolve => setTimeout(resolve, 10));
+    // A late window activation can move focus to the chrome; put it back.
+    if (this._isFrontPage() && Services.focus.focusedElement !== browser)
+      browser.focus();
+  }
+
   async ['Page.dispatchKeyEvent']({type, keyCode, code, key, repeat, location, text}) {
+    await this._awaitUserInputGate();
     // key events don't fire if we are dragging.
     if (this._isDragging) {
       if (type === 'keydown' && key === 'Escape') {
@@ -568,10 +612,12 @@ export class PageHandler {
   }
 
   async ['Page.dispatchTouchEvent'](options) {
+    await this._awaitUserInputGate();
     return await this._contentPage.send('dispatchTouchEvent', options);
   }
 
   async ['Page.dispatchTapEvent'](options) {
+    await this._awaitUserInputGate();
     return await this._contentPage.send('dispatchTapEvent', options);
   }
 
@@ -616,6 +662,7 @@ export class PageHandler {
   }
 
   async ['Page.dispatchMouseEvent']({type, x, y, button, clickCount, modifiers, buttons}) {
+    await this._awaitUserInputGate();
     const win = this._pageTarget._window;
     const eventArgs = {button, clickCount, modifiers, buttons};
     const sendEvents = async (types) => {
@@ -827,6 +874,7 @@ export class PageHandler {
   }
 
   async ['Page.dispatchWheelEvent']({x, y, button, deltaX, deltaY, deltaZ, modifiers }) {
+    await this._awaitUserInputGate();
     // Camoufox: scroll the way a mouse wheel does, in notches (docs/input-dispatch.md).
     // Each notch is its own event of 3 lines carrying one native tick, so the
     // page sees what stock Firefox gets from a wheel: on GTK deltaMode 1,
@@ -865,7 +913,7 @@ export class PageHandler {
   }
 
   async ['Page.insertText'](options) {
-    await this._activateForKeyboard();
+    await this._awaitUserInputGate();
     return await this._contentPage.send('insertText', options);
   }
 
