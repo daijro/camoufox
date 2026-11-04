@@ -311,6 +311,16 @@ jobs:
           print(f'skiplist OK: {len(load_skiplist())} entries, every one with a reason')
           "
 
+      # Every other job runs 3.12 or newer, whose grammar (PEP 701 f-strings)
+      # accepts code that 3.10, the oldest Python python/pyproject.toml allows,
+      # cannot import.
+      - uses: actions/setup-python@v5
+        id: oldest-python
+        with:
+          python-version: "3.10"
+      - name: pythonlib compiles on its oldest Python
+        run: ${{ steps.oldest-python.outputs.python-path }} -m compileall -q python/src
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

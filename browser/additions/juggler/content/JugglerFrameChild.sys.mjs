@@ -31,7 +31,6 @@ export class JugglerFrameChild extends JSWindowActorChild {
     }
     if (aEvent.target === this.document) {
       agents.pageAgent.onWindowEvent(aEvent);
-      agents.frameTree.onWindowEvent(aEvent);
     }
   }
 
@@ -79,6 +78,9 @@ export class JugglerFrameChild extends JSWindowActorChild {
     agents.pageAgent.dispose();
     agents.frameTree.dispose();
   }
+
+  // The observer topic only creates the actor (components/Juggler.js).
+  observe() { }
 
   receiveMessage() { }
 }

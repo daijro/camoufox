@@ -9,6 +9,9 @@
     "DisableSystemAddonUpdate": true,
     "DisableProfileImport": true,
     "DisableFirefoxStudies": true,
+    "UserMessaging": {
+      "FirefoxLabs": false
+    },
     "DisableTelemetry": true,
     "DisableFeedbackCommands": true,
     "DisablePocket": true,

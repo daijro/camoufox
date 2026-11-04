@@ -38,11 +38,74 @@ def test_entries_are_full_objects(target_os):
         assert _REQUIRED_FIELDS <= set(v.keys())
 
 
-@pytest.mark.parametrize("target_os", ["macos", "windows", "linux"])
+@pytest.mark.parametrize("target_os", ["windows", "linux"])
 def test_no_default_voice(target_os):
-    # Stock Firefox 152 marks no SpeechSynthesisVoice.default on any OS.
+    # Stock Firefox marks no SpeechSynthesisVoice.default with SAPI or
+    # speech-dispatcher.
     voices = _generate_random_voice_subset(target_os, "en-US")
     assert voices and not any(v["isDefault"] for v in voices)
+
+
+def test_macos_system_voice_is_default():
+    # Stock Firefox on macOS 14, 15, 26 and 27 marks the system voice default:
+    # Samantha on an English system.
+    voices = _generate_random_voice_subset("macos", "en-US", seed=1)
+    assert [v["name"] for v in voices if v["isDefault"]] == ["Samantha"]
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_linux_voices_follow_the_font_release(seed):
+    # One machine runs one Ubuntu release: its voices and its fonts are that
+    # release's, never a mix. 24.04 lists 13362 speech-dispatcher voices and
+    # 26.04 lists 14805 (measured on each release's default install).
+    import camoufox.fingerprints as fp
+
+    release = fp._pick_release("lin", fp._rng(seed))["id"]
+    base = next(b for b in fp._load_font_bases()["lin"] if b["id"] == release)
+    assert set(base["fonts"]) <= set(fp._generate_random_font_subset("linux", seed=seed))
+    count = len(_generate_random_voice_subset("linux", seed=seed))
+    assert count == {"ubuntu2404": 13362, "ubuntu2604": 14805}[release]
+
+
+def test_linux_voices_are_speech_dispatchers_order():
+    # Each espeak-ng language alone, then with each variant, as
+    # spd_list_synthesis_voices() returns them.
+    names = [v["name"] for v in _generate_random_voice_subset("linux", seed=1)[:3]]
+    assert names == ["Afrikaans", "Afrikaans+Adam", "Afrikaans+Alex"]
+
+
+def test_linux_launch_carries_the_grid():
+    # ~15000 voice objects do not fit in the environment; the grid does.
+    cfg = _launch_config(os="linux")
+    grid = cfg["voices:speechd"]
+    assert "voices" not in cfg
+    assert len(grid["languages"]) in (131, 141)
+    assert cfg["voices:blockIfNotDefined"] is True
+
+
+def test_a_given_speechd_grid_is_kept():
+    # A caller's grid is the identity's voices,
+    # not something to draw over.
+    grid = {"languages": [["English (America)", "en-US"]], "variants": ["Adam"]}
+    cfg = _launch_config(os="linux", config={"voices:speechd": grid})
+    assert cfg["voices:speechd"] == grid
+    assert "voices" not in cfg
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"languages": [["Afrikaans", "af"]]},  # no variants
+        {"languages": [["Afrikaans"]], "variants": []},  # language without a code
+        {"languages": [["Afrikaans", "af"]], "variants": [1]},
+        [["Afrikaans", "af"]],  # not an object
+    ],
+)
+def test_validate_speechd_voices_rejects_unusable_shapes(value):
+    from camoufox.utils import validate_speechd_voices
+
+    with pytest.raises(InvalidPropertyType):
+        validate_speechd_voices(value)
 
 
 def test_windows_display_language_pack():
@@ -75,8 +138,11 @@ class TestLinuxSpeechdUris:
         gb = next(v for v in self.lin if v["name"] == "English (Great Britain)")
         assert gb["voiceUri"] == "urn:moz-tts:speechd:English%20(Great%20Britain)?en-GB"
 
-    def test_all_local_service(self):
-        assert all(v["isLocalService"] for v in self.lin)
+    def test_none_local_service(self):
+        # Stock reports localService false for every speech-dispatcher voice
+        # (measured on Ubuntu 26.04: SpeechDispatcherService passes
+        # name == "default" as aLocalService).
+        assert not any(v["isLocalService"] for v in self.lin)
 
 
 def test_normalize_preset_voices_converts_strings():
@@ -152,7 +218,7 @@ def test_voice_generation_failure_fails_closed(monkeypatch):
     def boom(*_args, **_kwargs):
         raise OSError("voice-manifests.json unreadable")
 
-    monkeypatch.setattr(utils, "_generate_random_voice_subset", boom)
+    monkeypatch.setattr(utils, "draw_voice_config", boom)
     with pytest.warns(FallbackWarning, match="github.com/daijro/camoufox/issues/new"):
         cfg = _launch_config(os="macos")
     # An empty list plus the block flag means "no voices" -- never "all of the

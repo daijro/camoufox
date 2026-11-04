@@ -34,9 +34,14 @@ rules:
       1280, innerHeight 984, fullpage 1280x5367 either way, with only
       fingerprint-rotation noise in the colour count. Second, it costs
       throughput: past 30-40 concurrent browsers the framebuffer becomes the
-      bottleneck on a machine that handles 70-80 at 1x1. The root window is not
-      a fingerprint -- screen.* comes from the generated fingerprint, applied
-      per context in the browser.
+      bottleneck on a machine that handles 70-80 at 1x1. The root's size is
+      not itself a fingerprint -- screen.* comes from the generated fingerprint,
+      applied per context in the browser -- but a window lying outside the root
+      is observable as occluded and can leave media-device enumeration pending.
+      Firefox also fits windows into the X screen. The 1x1 default therefore
+      depends on virtual-display-off-root-not-occluded.patch and
+      virtual-display-claimed-screen.patch; virtual-display-window-visible,
+      popup-window-size and popup-covered-click guard that combination.
     expect:
       module: camoufox.virtdisplay
       attribute: DEFAULT_SCREEN

@@ -9,6 +9,7 @@
  * behaviours the Python suite names, with the same stubs.
  */
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import {
 	afterAll,
@@ -208,9 +209,8 @@ describe("test_launch_environment: prefs", () => {
 		});
 	});
 
-	describe("toggle settings are written both ways (test_launch_environment.py)", () => {
-		// A persistent profile keeps a user.js pref in prefs.js, so a toggle that
-		// only wrote when on stayed on after the flag was removed.
+	describe("toggle settings (test_launch_environment.py)", () => {
+		// Fresh profiles omit off toggles; persistent profiles clear old values.
 		const TOGGLES: [string, string, unknown, unknown][] = [
 			["block_webrtc", "media.peerconnection.enabled", true, false],
 			["block_images", "permissions.default.image", 1, 2],
@@ -222,8 +222,29 @@ describe("test_launch_environment: prefs", () => {
 			],
 		];
 		for (const [flag, pref, stock, toggled] of TOGGLES) {
-			it(`${flag} off writes the stock ${pref}`, async () => {
-				expect((await prefsFor(ua(LINUX_UA)))[pref]).toBe(stock);
+			it(`${flag} off writes no ${pref}, as stock writes none`, async () => {
+				expect(await prefsFor(ua(LINUX_UA))).not.toHaveProperty([pref]);
+			});
+			it(`${flag} off clears a ${pref} an earlier launch left in prefs.js`, () => {
+				const dir = fs.mkdtempSync(path.join(os.tmpdir(), "camoufox-toggle-"));
+				try {
+					fs.writeFileSync(
+						path.join(dir, "prefs.js"),
+						`user_pref("${pref}", ${JSON.stringify(toggled)});\n`,
+					);
+					const prefs: Record<string, unknown> = {};
+					utils.setTogglePref(prefs, pref, false, stock, toggled, dir);
+					expect(prefs).toEqual({ [pref]: stock });
+					fs.writeFileSync(
+						path.join(dir, "prefs.js"),
+						`user_pref("${pref}", ${JSON.stringify(stock)});\n`,
+					);
+					const clean: Record<string, unknown> = {};
+					utils.setTogglePref(clean, pref, false, stock, toggled, dir);
+					expect(clean).toEqual({});
+				} finally {
+					fs.rmSync(dir, { recursive: true, force: true });
+				}
 			});
 			it(`${flag} on writes the toggled ${pref}`, async () => {
 				expect((await prefsFor({ ...ua(LINUX_UA), [flag]: true }))[pref]).toBe(
@@ -662,6 +683,54 @@ describe("test_launch_environment: stock media defaults", () => {
 	});
 });
 
+describe("test_launch_environment: screenshot caret", () => {
+	class Connection {
+		sent: Array<[string, Record<string, any>]> = [];
+		sendMessageToServer(_object: any, method: string, params: any) {
+			this.sent.push([method, params]);
+			return Promise.resolve();
+		}
+	}
+	const owner = (parent: any, connection: Connection) => ({
+		_parent: parent,
+		_connection: connection,
+	});
+
+	it("pages under a Camoufox launch keep the caret", async () => {
+		const connection = new Connection();
+		const browser = utils.attachScreenshotDefaults(
+			owner(undefined, connection),
+		);
+		// handle, frame, page, context
+		const handle = owner(
+			owner(owner(owner(browser, connection), connection), connection),
+			connection,
+		);
+		await connection.sendMessageToServer(handle, "screenshot", {});
+		await connection.sendMessageToServer(handle, "screenshot", {
+			caret: "hide",
+		});
+		await connection.sendMessageToServer(handle, "click", {});
+		expect(connection.sent).toEqual([
+			["screenshot", { caret: "initial" }],
+			["screenshot", { caret: "hide" }],
+			["click", {}],
+		]);
+	});
+
+	it("other browsers on the same connection are left alone", async () => {
+		const connection = new Connection();
+		utils.attachScreenshotDefaults(owner(undefined, connection));
+		utils.attachScreenshotDefaults(owner(undefined, connection));
+		await connection.sendMessageToServer(
+			owner(owner(undefined, connection), connection),
+			"screenshot",
+			{},
+		);
+		expect(connection.sent).toEqual([["screenshot", {}]]);
+	});
+});
+
 describe("test_viewport_default", () => {
 	const opts = (blob: string) => {
 		const chunks: string[] = [];
@@ -951,8 +1020,22 @@ describe("test_voices (launch half)", () => {
 		).toBe(false);
 	});
 
+	it("keeps a caller's speech-dispatcher grid", async () => {
+		const grid = {
+			languages: [["English (America)", "en-US"]],
+			variants: ["Adam"],
+		};
+		const c = await cfg({
+			os: "linux",
+			fingerprint_preset: undefined,
+			config: { "voices:speechd": grid },
+		});
+		expect(c["voices:speechd"]).toEqual(grid);
+		expect(c.voices).toBeUndefined();
+	});
+
 	it("fails closed when voice generation fails", async () => {
-		deps.generateRandomVoiceSubset = () => {
+		deps.drawVoiceConfig = () => {
 			throw new OSError("voice-manifests.json unreadable");
 		};
 		const { config, warned } = await launchWarning(

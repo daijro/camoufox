@@ -494,8 +494,13 @@ claims the host's OS. Details are in
 | Playwright's `evaluate`, selectors and init scripts run in an isolated world the page cannot see | Juggler |
 | `navigator.webdriver` is `false` | `playwright/1-leak-fixes` patch |
 | `select_option`, `fill` on date and colour inputs, and `set_input_files` fire trusted events | `trusted-automation-events` patch |
+| Driver calls define no interfaces on the page's window | `isolated-world-global-order` patch |
+| Mouse moves coalesce per frame as a real mouse's do, spaced as a 125 Hz mouse's | Juggler, `input-coalescing-parity` patch |
+| A drag fires `drag` at its source with each motion, as GTK does | Juggler, `drag-source-events` patch |
+| Screenshots leave the page's DOM alone (no caret-hiding style writes) | Launcher |
+| A SOCKS5 proxy with a username and password works, for the launch and per context: the launcher hands the credentials to Juggler, which Playwright alone refuses | Launcher, Juggler |
 | Headless reports a fine pointer, like a desktop | `force-default-pointer` patch |
-| Wheel events carry native ticks, like a physical wheel | `wheel-native-ticks` patch |
+| `mouse.wheel()` turns notches, as a physical wheel does: 100 px is one notch, each its own event with a native tick | Juggler, `wheel-native-ticks` patch |
 | Juggler's debugger leaves no side effects content can observe | `debugger-invisible-to-content` patch |
 | Per-context fingerprint setters are gone before page script runs | `window-setter-seal` patch |
 | Popup blocker on, as in stock Firefox | `popup-blocker-parity` patch |
@@ -518,7 +523,7 @@ claims the host's OS. Details are in
 | Feature | Where |
 |---|---|
 | Load extracted addons without a debug server: `addons=["/path/to/addon"]` | launcher, `camoufox-window-module` patch |
-| uBlock Origin installed by default: each browser release bundles the newest uBO release on AMO when it is built (`browser/scripts/fetch-ubo.py`), blocking with the default filter lists packaged in it, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | packaging, launcher, `policies.json` |
+| uBlock Origin installed by default: each browser release bundles the newest uBO release on AMO when it is built (`browser/scripts/fetch-ubo.py`), blocking with the default filter lists packaged in it, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | packaging (`fetch-ubo.py` freeze_lists), launcher |
 | Addons cannot open tabs unless `allow_addon_new_tab=True` | `disable-extension-newtab` patch |
 | Addons run in private browsing | `all-addons-private-mode` patch |
 
@@ -546,7 +551,6 @@ The full option list is in the [Python README](python/README.md#launch-options).
 |---|---|
 | Telemetry and data reporting removed at compile time | `librewolf/` patches |
 | Onboarding messages disabled | `ghostery/` patch |
-| No bundled search engines | `no-search-engines` patch |
 | Mozilla services and background traffic turned off | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
 | Firefox's bundled certificate revocations (OneCRL) enforced in every profile, with no network fetch | Stock Firefox since 159 |
 | Stock browser UI: no theme, toolbar or dialog changes | |
