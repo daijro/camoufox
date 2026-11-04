@@ -82,6 +82,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "ubo-lists-frozen",
         "visible-automation-cues",
         "webdriver-bidi-tabs",
+        "worker-terminate-mid-compile",
     ),
     "parity": (
         "certificate-revocations",
