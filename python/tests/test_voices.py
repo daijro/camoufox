@@ -98,6 +98,7 @@ def test_a_given_speechd_grid_is_kept():
         {"languages": [["Afrikaans", "af"]]},  # no variants
         {"languages": [["Afrikaans"]], "variants": []},  # language without a code
         {"languages": [["Afrikaans", "af"]], "variants": [1]},
+        [["Afrikaans", "af"]],  # not an object
     ],
 )
 def test_validate_speechd_voices_rejects_unusable_shapes(value):

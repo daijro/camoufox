@@ -1497,7 +1497,7 @@ def _build_init_script(values: Dict[str, Any]) -> str:
     voices = values.get('speechVoices')
     if isinstance(voices, dict):
         lines.append(
-            f'  if (typeof w.setSpeechVoices === "function") w.setSpeechVoices({_json.dumps(_json.dumps(voices, separators=(',', ':')))});'
+            f'  if (typeof w.setSpeechVoices === "function") w.setSpeechVoices({_json.dumps(_json.dumps(voices, separators=(",", ":")))});'
         )
     elif voices and len(voices) > 0:
         names = [v['name'] if isinstance(v, dict) else v for v in voices]

@@ -1630,15 +1630,15 @@ export function buildInitScript(values: InitValues): string {
 	return lines.join("\n");
 }
 
-/** json.dumps() with its defaults (ASCII-escaped, ", " / ": " separators) for scalars. */
 /** Python's json.dumps(value, separators=(",", ":")) for plain JSON data. */
 function asciiJson(value: unknown): string {
 	return JSON.stringify(value).replace(
-		/[\u0080-\uffff]/g,
+		/[\u007f-\uffff]/g,
 		(c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
 	);
 }
 
+/** json.dumps() with its defaults (ASCII-escaped, ", " / ": " separators) for scalars. */
 function pyJsonDumps(value: unknown): string {
 	if (typeof value === "string") {
 		return JSON.stringify(value).replace(

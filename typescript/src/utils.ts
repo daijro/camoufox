@@ -3,7 +3,6 @@
  * launch_options() does (tests/launch-golden.test.ts). `utilsDeps` holds what the
  * Python tests monkeypatch.
  */
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";

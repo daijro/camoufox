@@ -445,8 +445,8 @@ def validate_speechd_voices(grid: Any) -> None:
     Validates a `voices:speechd` grid: {"languages": [[name, lang], ...],
     "variants": [name, ...]}, the shape MaskConfig::MSpeechdVoices() expands.
     """
-    languages = grid.get('languages')
-    variants = grid.get('variants')
+    languages = grid.get('languages') if isinstance(grid, dict) else None
+    variants = grid.get('variants') if isinstance(grid, dict) else None
     if not (
         isinstance(languages, list)
         and all(
