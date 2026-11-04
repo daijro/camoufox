@@ -48,11 +48,11 @@ be listed there.
 | `system-ui-font-spoofing.patch` | `navigator.platform` |
 | `timezone-spoofing.patch` | `timezone` |
 | `touchscreen-fingerprint-spoofing.patch` | `navigator.maxTouchPoints` |
-| `voice-spoofing.patch` | `voices`, `voices:blockIfNotDefined` |
+| `voice-spoofing.patch` | `voices`, `voices:speechd`, `voices:blockIfNotDefined` |
 | `webgl-spoofing.patch` | `webGl:*`, `webGl2:*` |
 | `webrtc-ip-spoofing.patch` | `webrtc:ipv4`, `webrtc:ipv6`, `navigator.platform` |
 | `windows-keyboard.patch` | `input:windowsKeyboard` (launch-wide: the shortcut tables and GTK's key handling are process-level) |
-| `zz-stock-cost-parity.patch` | `navigator.hardwareConcurrency`, `navigator.maxTouchPoints`, `screen.*`, `window.screenX`, `window.screenY` (re-orders the getters above so stock's work runs first) |
+| `zz-stock-cost-parity.patch` | `navigator.hardwareConcurrency`, `navigator.maxTouchPoints`, `screen.*` (re-orders the getters above so stock's work runs first) |
 
 To regenerate the list: `grep -l 'MaskConfig::' patches/*.patch`.
 
@@ -71,6 +71,7 @@ already set up, and do not add the include or `LOCAL_INCLUDES` themselves:
 | `timezone-spoofing.patch`, `webrtc-ip-spoofing.patch` | `audio-fingerprint-manager.patch` for `RoverfoxStorageManager.h` in `dom/base/nsGlobalWindowInner.cpp` |
 | `font-system-fonts-css2.patch`, `system-ui-font-spoofing.patch`, `webrtc-ip-spoofing.patch`, `zz-stock-cost-parity.patch` | `navigator-spoofing.patch` for `NavigatorManager::GetSpoofedOS()` |
 | `windows-keyboard.patch` | `touchscreen-fingerprint-spoofing.patch` for `/camoucfg` in `dom/events/moz.build` |
+| `per-context-http-user-agent.patch` | `navigator-spoofing.patch` for `NavigatorManager::GetUserAgent()`; `cross-process-storage.patch` for reading the context's value in the parent and worker processes |
 | `zz-stock-cost-parity.patch` | `cross-process-storage.patch` for `RoverfoxStorageManager::Generation()`; `screen-spoofing.patch` for `ScreenDimensionManager` in `dom/base/nsScreen.cpp` |
 
 ## RoverfoxStorageManager
@@ -91,6 +92,48 @@ at hand. A browsing context is not used, because a document created by
 shares its creator's principal. A value is stored only under its own context;
 nothing writes a fallback copy under context 0.
 
+## WebRTC behind a proxy
+
+`webrtc-socks5-udp.patch` builds on two earlier patches and uses their lines as
+context:
+
+- `webrtc-proxy-local-network.patch` keeps UDP host sockets behind a proxy and
+  limits them to the local network (`NrSocketBase::RefusesDestination`). The
+  new patch adds `NrUdpRelaySocket`, which sends the rest through a SOCKS5 UDP
+  ASSOCIATE relay on the tab's proxy, and makes a refused destination fail at
+  once instead of being dropped silently.
+- `webrtc-ip-spoofing.patch` rewrites candidate, SDP and `getStats()` addresses
+  to `webrtc:ipv4`/`ipv6` and fabricates a srflx when ICE found none. The new
+  patch keeps a srflx or relay address gathered through the proxy as it is,
+  because a page's own STUN server already saw that address. The fabricated
+  srflx is still made for an HTTP proxy and for a SOCKS5 proxy that refuses
+  UDP.
+
+ICE sockets live in the socket process, and proxies are resolved in the
+parent. The patch adds an optional `LoadInfoArgs` to the existing
+`PProxyConfigLookup` constructor (`netwerk/ipc`), so the parent resolves the
+proxy with the tab's load info, as it does for the tab's own loads. Juggler's
+per-context proxy filter then picks that context's proxy. The SOCKS5 control
+connection (`WebrtcUdpAssociation`) runs in the socket process, so the relay
+sees the control connection and the datagrams come from the same address.
+
+## Driver input and the page's globals
+
+- `input-coalescing-parity.patch` uses `mJugglerEventId` and the
+  `juggler-mouse-event-hit-renderer` ack from `playwright/0-playwright.patch`.
+  Its JS half is in `additions/juggler` (`MouseDispatch.sendQueuedMove`,
+  `PageHandler.beforeDispatch`), and either half without the other wedges
+  every move until the ack deadline.
+- `drag-source-events.patch` extends the drag branch that
+  `playwright/0-playwright.patch` adds to `nsContentUtils::SynthesizeMouseEvent`.
+
+`isolated-world-global-order.patch` stands alone. It recognises Juggler as the
+scripted caller (its `resource://gre/modules/juggler/` modules, and the
+sandboxes those modules create, whose location names them) and leaves the
+interfaces it creates undefined on the page's window until the page uses them.
+It edits `Codegen.py` (the window Xray's resolve on the window), so every
+generated binding rebuilds, and `BindingUtils.h`
+(`DoGetOrCreateDOMReflector`), which most of `dom/` includes.
 ## Backports
 
 These patches carry upstream Firefox changes that `browser/upstream.sh`'s

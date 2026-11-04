@@ -34,9 +34,14 @@ rules:
       1280, innerHeight 984, fullpage 1280x5367 either way, with only
       fingerprint-rotation noise in the colour count. Second, it costs
       throughput: past 30-40 concurrent browsers the framebuffer becomes the
-      bottleneck on a machine that handles 70-80 at 1x1. The root window is not
-      a fingerprint -- screen.* comes from the generated fingerprint, applied
-      per context in the browser.
+      bottleneck on a machine that handles 70-80 at 1x1. The root's size is
+      not itself a fingerprint -- screen.* comes from the generated fingerprint,
+      applied per context in the browser -- but a window lying outside the root
+      is observable as occluded and can leave media-device enumeration pending.
+      Firefox also fits windows into the X screen. The 1x1 default therefore
+      depends on virtual-display-off-root-not-occluded.patch and
+      virtual-display-claimed-screen.patch; virtual-display-window-visible,
+      popup-window-size and popup-covered-click guard that combination.
     expect:
       module: camoufox.virtdisplay
       attribute: DEFAULT_SCREEN
@@ -621,6 +626,20 @@ rules:
       which answers plain GETs and cannot open the CONNECT tunnel the upgrade
       needs. A real proxy handles CONNECT, as every https:// site needs it to.
       Those tests are skiplisted rather than passed by changing the browser.
+
+  - id: no-enterprise-policies
+    title: Camoufox ships no policies.json; what a policy did lives in camoufox.cfg or the bundled uBO
+    check: manual   # browser/tests/playwright/patches/enterprise-policies.py
+    evidence:
+      - "measured 2026-10-26 on 158.0.1-beta.34: with policies.json, DoHHeuristics enterprisePolicy() returned policy_without_doh and DoH stood down; without it, no_policy_set"
+      - "the same file's SearchEngines policy and no-search-engines.patch left one inert engine where stock 158.0.1 adds Google, Bing, DuckDuckGo, Perplexity, Wikipedia (en), eBay (search-service-init.py)"
+    rationale: >-
+      Any policy file puts Firefox in enterprise mode, whatever it holds, and
+      enterprise mode is visible from outside: DNS over HTTPS stands down, and
+      the policies' own effects (no search engines, system addons removed)
+      differ from stock. Updates, studies and the first-run page stay off
+      through prefs in camoufox.cfg; uBO keeps its packaged lists through its
+      own default (scripts/fetch-ubo.py freeze_lists).
 
   - id: ipv4-only-network-not-disable-ipv6
     title: geoip without a proxy keeps IPv6 only where it agrees, and never uses network.dns.disableIPv6
