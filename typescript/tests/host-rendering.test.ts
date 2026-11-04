@@ -24,6 +24,7 @@ const {
 	CANVAS_PLACEHOLDER_TARGETS,
 	FEATURE_BLOCKED_DEVICE,
 	hasCanvasPlaceholder,
+	HOST_GPU_PROBE_TIMEOUT_MS,
 	hostGpu,
 	setWebgpu,
 	WEBGPU_BLOCKLIST_PREF,
@@ -297,13 +298,17 @@ describe.skipIf(!MODEL.ok)("WebGPU", () => {
 	});
 });
 
-it("the probe ignores what the launcher adds to the environment", () => {
+it("the probe ignores what the launcher adds to the environment", async () => {
 	// hostIdentity probes with the launch's env and prefs, which carry CAMOU_*,
 	// FONTCONFIG_FILE and prefs that choose no device; that must hit
 	// launchOptions' cached probe.
-	const launch = vi
-		.spyOn(firefox, "launch")
-		.mockImplementation(() => new Promise(() => undefined));
+	let resolveLaunch: ((browser: any) => void) | undefined;
+	const launch = vi.spyOn(firefox, "launch").mockImplementation(
+		() =>
+			new Promise((resolve) => {
+				resolveLaunch = resolve;
+			}),
+	);
 	const first = hostGpu("/nonexistent/camoufox", true, { DISPLAY: ":0" }, {});
 	const second = hostGpu(
 		"/nonexistent/camoufox",
@@ -318,6 +323,57 @@ it("the probe ignores what the launcher adds to the environment", () => {
 
 	expect(second).toBe(first);
 	expect(launch).toHaveBeenCalledTimes(1);
+	resolveLaunch?.({
+		newPage: async () => ({ evaluate: async () => null }),
+		close: async () => undefined,
+	});
+	await expect(second).resolves.toBeNull();
+});
+
+it("a host GPU probe that never answers times out and says so", async () => {
+	expect(HOST_GPU_PROBE_TIMEOUT_MS).toBe(30_000);
+	vi.useFakeTimers();
+	try {
+		vi.spyOn(firefox, "launch").mockImplementation(
+			() => new Promise(() => undefined),
+		);
+		const pending = hostGpu(
+			"/nonexistent/timed-out-camoufox",
+			true,
+			{ DISPLAY: ":99" },
+			{},
+		);
+		const rejected = expect(pending).rejects.toThrow(
+			"Host GPU probe timed out after 30000 ms",
+		);
+
+		await vi.advanceTimersByTimeAsync(HOST_GPU_PROBE_TIMEOUT_MS);
+		await rejected;
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+it("a timed-out page read closes its browser", async () => {
+	expect(HOST_GPU_PROBE_TIMEOUT_MS).toBe(30_000);
+	vi.useFakeTimers();
+	try {
+		const close = vi.fn(async () => undefined);
+		vi.spyOn(firefox, "launch").mockResolvedValue({
+			newPage: async () => ({ evaluate: () => new Promise(() => undefined) }),
+			close,
+		} as any);
+		const pending = hostGpu("/nonexistent/hung-page-camoufox", true, {}, {});
+		const rejected = expect(pending).rejects.toThrow(
+			"Host GPU probe timed out after 30000 ms",
+		);
+
+		await vi.advanceTimersByTimeAsync(HOST_GPU_PROBE_TIMEOUT_MS);
+		await rejected;
+		expect(close).toHaveBeenCalledOnce();
+	} finally {
+		vi.useRealTimers();
+	}
 });
 
 function browserOnHost(gpu: Gpu | null) {
