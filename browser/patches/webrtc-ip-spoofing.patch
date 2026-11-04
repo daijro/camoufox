@@ -191,7 +191,7 @@ index ea530fb4a0..1d64f2922d 100644
      EXPORTS.mozilla.dom += [
          "FuzzingFunctions.h",
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 8db6ee29f8..9a81697c6f 100644
+index 556666e7fe..7baea2bb5a 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -330,6 +330,8 @@
@@ -203,7 +203,7 @@ index 8db6ee29f8..9a81697c6f 100644
  #ifdef MOZ_WEBSPEECH
  #  include "mozilla/dom/SpeechSynthesis.h"
  #endif
-@@ -7783,6 +7785,18 @@ void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aR
+@@ -7792,6 +7794,18 @@ void nsGlobalWindowInner::SetTimezone(const nsAString& timezone, ErrorResult& aR
    RoverfoxStorageManager::RemoveSetter("setTimezone");
  }
  
@@ -238,7 +238,7 @@ index 4090206bfb..3749987acf 100644
  
    void ForgetSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-index 74ec5d7959..dc9641ec6f 100644
+index 74ec5d7959..9d96cd819a 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 @@ -100,6 +100,12 @@
@@ -926,7 +926,50 @@ index 74ec5d7959..dc9641ec6f 100644
          transportId);
    }
  }
-@@ -4595,8 +5187,10 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
+@@ -4313,14 +4905,35 @@ bool PeerConnectionImpl::ShouldForceProxy() const {
+   // Ok, we're supposed to be proxy_only, but only if a proxy is configured.
+   // Let's just see if the document was loaded via a proxy.
+ 
+-  nsCOMPtr<nsIHttpChannelInternal> httpChannelInternal = GetChannel();
+-  if (!httpChannelInternal) {
+-    return false;
++  // Camoufox: about:blank, srcdoc, blob: and data: documents have no HTTP
++  // channel, so stock gathers in them as if no proxy were set, and STUN
++  // leaves around the proxy from the real address. They run for the document
++  // that made them: ask the nearest one loaded over HTTP.
++  for (Document* doc = mWindow ? mWindow->GetExtantDoc() : nullptr; doc;) {
++    nsCOMPtr<nsIHttpChannelInternal> http = do_QueryInterface(doc->GetChannel());
++    if (http) {
++      bool proxyUsed = false;
++      (void)http->GetIsProxyUsed(&proxyUsed);
++      return proxyUsed;
++    }
++    if (doc->GetDocumentURI() && doc->GetDocumentURI()->SchemeIs("file")) {
++      return false;
++    }
++    Document* next = doc->GetInProcessParentDocument();
++    if (!next && doc->GetBrowsingContext()) {
++      if (RefPtr<BrowsingContext> opener =
++              doc->GetBrowsingContext()->GetOpener()) {
++        if (nsPIDOMWindowOuter* outer = opener->GetDOMWindow()) {
++          next = outer->GetExtantDoc();
++        }
++      }
++    }
++    doc = next;
+   }
+-
+-  bool proxyUsed = false;
+-  (void)httpChannelInternal->GetIsProxyUsed(&proxyUsed);
+-  return proxyUsed;
++  // None reachable from this process (an out-of-process parent, a top-level
++  // blob:): go by whether the browser sends its traffic through a proxy.
++  const int32_t proxyType = Preferences::GetInt("network.proxy.type", 5);
++  return proxyType == 1 || proxyType == 2 || proxyType == 4;
+ }
+ 
+ void PeerConnectionImpl::EnsureTransports(const JsepSession& aSession) {
+@@ -4595,8 +5208,10 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
  
    uint64_t winId = mWindow->WindowID();
  
