@@ -255,7 +255,6 @@ export const utilsDeps = {
 	hasDisplay,
 	largestDisplay,
 	getScreenCons: (headless?: boolean) => getScreenCons(headless),
-	xvfbMissing: (): string | undefined => xvfbMissing(),
 	print: (line: string): void => {
 		process.stdout.write(`${line}\n`);
 	},
@@ -1370,52 +1369,18 @@ export interface GpuDisplayOptions {
 	require_gpu?: boolean;
 }
 
-/** What headless="virtual" needs and this host lacks. */
-export function xvfbMissing(): string | undefined {
-	if (utilsDeps.osName() !== "lin") return "Linux";
-	for (const [tool, pkg] of [
-		["Xvfb", "Xvfb (xvfb)"],
-		["setpriv", "setpriv (util-linux)"],
-	]) {
-		try {
-			const found = execFileSync("which", [tool], { encoding: "utf-8" }).trim();
-			fs.accessSync(found, fs.constants.X_OK);
-		} catch {
-			return pkg;
-		}
-	}
-	return undefined;
-}
-
-/** Run Linux headless: true on a private Xvfb when its tools are installed. */
-export function headlessMode(
-	headless: Headless | undefined,
-	options?: { virtual_display?: string; i_know_what_im_doing?: boolean },
-): Headless | undefined {
-	if (
-		headless !== true ||
-		utilsDeps.osName() !== "lin" ||
-		options?.virtual_display
-	)
-		return headless;
-	const missing = utilsDeps.xvfbMissing();
-	if (missing === undefined) return "virtual";
-	LeakWarning.warn("headless_without_xvfb", options?.i_know_what_im_doing, {
-		missing,
-	});
-	return true;
-}
-
 /**
- * Start the requested virtual display, including one headless: true needs.
- * Takes the display's own options out of `options` and points the launch at it.
+ * Start the display headless="virtual" or "virtual-gpu" asks for.
+ *
+ * Takes the display's own options out of `options` and points the launch at
+ * the display. Returns the display, or null, and the headless value to launch
+ * with.
  */
 export async function startVirtualDisplay(
 	headless: Headless | undefined,
 	debug: boolean | undefined,
 	options: LaunchOptions & GpuDisplayOptions,
 ): Promise<[VirtualDisplay | null, boolean | undefined]> {
-	headless = headlessMode(headless, options);
 	const { gpu, require_gpu } = options;
 	delete options.gpu;
 	delete options.require_gpu;

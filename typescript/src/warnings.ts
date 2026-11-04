@@ -73,19 +73,11 @@ export class LeakWarning extends Error {
 	/**
 	 * Warns the caller if a passed parameter can cause leaks.
 	 */
-	static warn(
-		warningKey: string,
-		iKnowWhatImDoing?: boolean,
-		values: Record<string, string> = {},
-	): void {
+	static warn(warningKey: string, iKnowWhatImDoing?: boolean): void {
 		let warning = loadWarnings()[warningKey];
 		if (iKnowWhatImDoing) {
 			return;
 		}
-		warning = warning.replace(
-			/\{(\w+)\}/g,
-			(match, key: string) => values[key] ?? match,
-		);
 		if (iKnowWhatImDoing !== undefined) {
 			warning += "\nIf this is intentional, pass `i_know_what_im_doing=True`.";
 		}

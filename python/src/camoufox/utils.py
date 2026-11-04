@@ -957,42 +957,14 @@ def new_context_options(
     return opts
 
 
-def xvfb_missing() -> Optional[str]:
-    """What headless='virtual' needs and this host lacks (None when it has it all)."""
-    if OS_NAME != 'lin':
-        return 'Linux'
-    for tool, package in (('Xvfb', 'Xvfb (xvfb)'), ('setpriv', 'setpriv (util-linux)')):
-        path = shutil.which(tool)
-        if not path or not os.access(path, os.X_OK):
-            return package
-    return None
-
-
-def headless_mode(headless: Any, kwargs: Optional[Dict[str, Any]] = None) -> Any:
-    """Run Linux headless=True on a private Xvfb when its tools are installed.
-
-    Firefox's own headless mode has no window system and exposes built-in
-    stand-in colors, fonts and window geometry. A caller's own virtual_display
-    keeps headless=True unchanged. Missing tools fall back with a LeakWarning.
-    """
-    if headless is not True or OS_NAME != 'lin' or (kwargs or {}).get('virtual_display'):
-        return headless
-    missing = xvfb_missing()
-    if missing is None:
-        return 'virtual'
-    LeakWarning.warn('headless_without_xvfb', (kwargs or {}).get('i_know_what_im_doing'), missing=missing)
-    return True
-
-
 def start_virtual_display(
     headless: Any, debug: Optional[bool], kwargs: Dict[str, Any]
 ) -> Tuple[Optional[VirtualDisplay], Any]:
-    """Start the requested virtual display, including one headless=True needs.
+    """Start the display headless='virtual' or 'virtual-gpu' asks for.
 
     Pops the display's own options from `kwargs` and points the launch at the
     display. Returns the display, or None, and the headless value to launch with.
     """
-    headless = headless_mode(headless, kwargs)
     gpu = kwargs.pop('gpu', None)
     require_gpu = kwargs.pop('require_gpu', None)
     if headless == 'virtual-gpu':
@@ -1183,9 +1155,7 @@ def launch_options(
             Whether to run the browser in headless mode. Defaults to False.
             Note: If you are running linux, passing headless='virtual' to Camoufox, AsyncCamoufox
             or launch_server will use Xvfb, and headless='virtual-gpu' a headless Xorg
-            server bound to one GPU. There headless=True also uses Xvfb when it is
-            installed (see headless_mode()); launch_options() alone starts no display,
-            so a caller of it runs Firefox headless unless it passes virtual_display.
+            server bound to one GPU.
         main_world_eval (Optional[bool]):
             Whether to enable running scripts in the main world.
             To use this, prepend "mw:" to the script: page.evaluate("mw:" + script).

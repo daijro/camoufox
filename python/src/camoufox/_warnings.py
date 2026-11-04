@@ -38,11 +38,11 @@ class LeakWarning(RuntimeWarning):
     """
 
     @staticmethod
-    def warn(warning_key: str, i_know_what_im_doing: Optional[bool] = None, **values) -> None:
+    def warn(warning_key: str, i_know_what_im_doing: Optional[bool] = None) -> None:
         """
         Warns the user if a passed parameter can cause leaks.
         """
-        warning = WARNINGS_DATA[warning_key].format(**values)
+        warning = WARNINGS_DATA[warning_key]
         if i_know_what_im_doing:
             return
         if i_know_what_im_doing is not None:

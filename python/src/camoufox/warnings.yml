@@ -68,12 +68,6 @@ gpu_software_rendering: >-
     renders canvas and WebGL in software, which a page can tell from the GPU the
     identity claims. Pass `require_gpu=True` (the default) to fail the launch instead.
 
-headless_without_xvfb: >-
-    headless=True runs Firefox's own headless mode because this machine has no {missing}.
-    Headless Firefox shows built-in stand-in system colors and fonts and a window with no
-    frame, which pages read and no headed Firefox shows. Install {missing} so headless=True
-    runs headed on a private Xvfb display, as it does when Xvfb is present.
-
 block_images: >-
     Blocking image requests has been reported to cause detection issues on major WAFs.
 
