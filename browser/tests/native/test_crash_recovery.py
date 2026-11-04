@@ -709,6 +709,14 @@ class Cycle(enum.Enum):
 # The parent's first context costs it 150-200 MB with no crash at all, and the
 # second still 10-40 MB. A baseline taken before them counts that as growth.
 WARMUP_CYCLES = 2
+# On Firefox 159 uBlock Origin also finishes its first-run setup during the
+# second or third context: the parent holds ~190 MB for one cycle and frees it
+# at the next (measured with main's build and this one alike; gone with uBlock
+# excluded). A baseline read at that peak reports the control phase as shrinking
+# by as much. Warm-up therefore goes on until one cycle moves the parent by less
+# than WARMUP_SETTLED_MB, up to WARMUP_MAX_CYCLES.
+WARMUP_SETTLED_MB = 50
+WARMUP_MAX_CYCLES = 6
 # Per phase. Long enough for a per-crash leak to outgrow the +-50 MB a phase
 # wanders by on its own.
 PHASE_CYCLES = 8
@@ -764,7 +772,14 @@ async def test_the_parent_stays_flat_across_content_crashes(binary, psutil_mod, 
     # Torn down whatever the measurement says: a browser left running would be
     # the first camoufox-bin the next test finds, and it would kill that one.
     try:
-        await phase(Cycle.CONTROL, WARMUP_CYCLES)
+        last = rss()
+        for done in range(1, WARMUP_MAX_CYCLES + 1):
+            await _context_cycle(psutil_mod, browser, Cycle.CONTROL)
+            now = rss()
+            settled = abs(now - last) < WARMUP_SETTLED_MB * 1024 * 1024
+            last = now
+            if done >= WARMUP_CYCLES and settled:
+                break
         control_mb = await phase(Cycle.CONTROL, PHASE_CYCLES)
         crash_mb = await phase(Cycle.CRASH, PHASE_CYCLES)
     finally:
