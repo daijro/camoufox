@@ -70,7 +70,9 @@ humanize ceiling at 60Hz — cannot add up to an unbounded slot. It also refuses
 to dispatch a point on the pixel the previous dispatch left the cursor on: a
 zero-displacement move produces no `eMouseMove`, so it is never acked, and
 that is the same deadlock reached from inside a curve rather than from
-`Page.dispatchMouseEvent`.
+`Page.dispatchMouseEvent`. Each point of a curve waits for the window's next
+refresh (below), and that wait is bounded too: `kFrameDeadlineMs` (100ms), since
+a hidden or minimized window may stop refreshing.
 `apz-repaints-flushed` waits at most `kAckDeadlineMs` too: a flush sent to a
 GPU process that dies never comes back, and stalled every such dispatch until
 the backstop. So does the drag path's `juggler-drag-finalized`, per input
@@ -78,6 +80,19 @@ event: an answer a busy page gives later still decides the next event, so the
 drag drops, and mouseup ends the wait. `activateAndRun()` carries a 30s
 backstop for the waits still unbounded in the same slot (`TabSwitchDone`, the
 drag path's `dragover` and cross-process sends), none of which has failed yet.
+
+**Refresh-paced curves.** Firefox coalesces a real mouse's motion and gives a
+page at most one `mousemove` per refresh tick. Stock 158 on Xvfb, driven by
+XTest motion every 3-15ms, delivered gaps of 16-18ms against a 17.1ms
+`requestAnimationFrame`, with 90-91% of moves within 2.5ms of a rAF callback.
+Juggler's synthesized moves skip that coalescing (`0-playwright.patch`, so their
+acks stay prompt), and played on the generator's own clock they reached pages
+5-13ms apart (Cursory) or on a steady ~22ms beat (mousecrack), only 30-38% of
+them near a tick. `sendTrajectoryAcked()` therefore waits for the window's
+refresh before each point and sends the newest one already due, so a page sees
+one move per frame at its own refresh rate, whatever that is.
+`humanize-mouse-trajectory.py` checks the share of moves at a tick and the
+median gap against the page's own rAF.
 
 **The static check.** `browser/scripts/check-input-dispatch.py`, wired into the
 `static` job of `.github/workflows/tests.yml`. Two exemptions, both

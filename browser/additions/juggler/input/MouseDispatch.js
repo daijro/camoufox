@@ -25,7 +25,7 @@
  * the build if it does. See docs/input-dispatch.md.
  */
 
-const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
+const {clearTimeout, setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
 
 /**
  * How long to wait for a juggler-mouse-event-hit-renderer ack before giving up.
@@ -48,6 +48,15 @@ const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sy
  * diagnose. So: well above the slowest legitimate ack, not near the typical one.
  */
 export const kAckDeadlineMs = 5000;
+
+/**
+ * How long a trajectory waits for the window's next refresh before it moves on
+ * anyway. A visible window refreshes every 4-17ms (240-60Hz); one that is
+ * hidden or minimized may not refresh at all. Six 60Hz frames: no visible
+ * window misses it, and where refreshes stop a curve still ends within this
+ * long of its plan.
+ */
+const kFrameDeadlineMs = 100;
 
 function warnUndelivered(eventType, x, y, box, deadlineMs) {
   dump(
@@ -188,12 +197,14 @@ export class MouseDispatch {
    * full gap after the ack added each ack's latency to the curve, so a move ran
    * as long as its plan plus one round trip per point: on a page busy 19ms in
    * every 20, moves planned at 0.5s took 0.54-0.71s (tests/playwright/patches/
-   * humanize-pacing.py). A late point is dispatched as soon as it can be; the
-   * ones after it are still due on the original clock.
+   * humanize-pacing.py). A point goes out on the first refresh after its due
+   * time, and a refresh that finds several due sends only the newest, as
+   * Firefox's own coalescing of a real mouse would.
    *
-   * Points outside the viewport are skipped, and a curve leaves the viewport
-   * more often than it sounds: measured over 400 random moves, 69% of Cursory
-   * paths stray outside the box spanned by their own endpoints, by up to 184px.
+   * A refresh whose newest due point is outside the viewport sends nothing,
+   * and a curve leaves the viewport more often than it sounds: measured over
+   * 400 random moves, 69% of Cursory paths stray outside the box spanned by
+   * their own endpoints, by up to 184px.
    *
    * Bounding each ack individually is not enough to bound the work: a curve is
    * dispatched inside a SINGLE activation-chain slot, and holds up to ~90
@@ -224,14 +235,32 @@ export class MouseDispatch {
     let lastX = NaN;
     let lastY = NaN;
     const startMs = ChromeUtils.now();
-    let dueMs = 0;
-    const untilDue = () => {
-      const waitMs = startMs + dueMs - ChromeUtils.now();
-      return waitMs > 0 ? new Promise(resolve => setTimeout(resolve, waitMs)) : null;
-    };
-    for (const [x, y, delayMs] of steps) {
-      dueMs += delayMs;
-      await untilDue();
+    const dueMs = [];
+    let totalMs = 0;
+    for (const [, , delayMs] of steps) {
+      totalMs += delayMs;
+      dueMs.push(totalMs);
+    }
+    totalMs += trailingDelayMs;
+
+    // A real mouse reports every few milliseconds, but Firefox coalesces its
+    // motion and a page gets at most one mousemove per refresh tick (stock 158:
+    // gaps of 16-18ms against a 17.1ms rAF, docs/input-dispatch.md). A
+    // synthesized event is dispatched at once, so playing the generator's clock
+    // directly gave pages gaps no real mouse produces. So each point waits for
+    // the window's next refresh, and a frame dispatches only the newest point
+    // already due: the ones it passed are what coalescing would have dropped,
+    // and a frame with nothing due sends nothing, like a hand at rest.
+    let next = 0;
+    while (next < steps.length) {
+      await this._nextFrame();
+      const elapsedMs = ChromeUtils.now() - startMs;
+      let newest = -1;
+      for (; next < steps.length && dueMs[next] <= elapsedMs; next++)
+        newest = next;
+      if (newest < 0)
+        continue;
+      const [x, y] = steps[newest];
       if (!this.isInViewport(x, y))
         continue;
       if (Math.round(x) === lastX && Math.round(y) === lastY)
@@ -241,9 +270,27 @@ export class MouseDispatch {
       lastX = Math.round(x);
       lastY = Math.round(y);
     }
-    dueMs += trailingDelayMs;
-    await untilDue();
+    // The caller dispatches the destination as soon as this returns, so the
+    // move also ends on a refresh, once its planned time is up.
+    do {
+      await this._nextFrame();
+    } while (ChromeUtils.now() - startMs < totalMs);
     return true;
+  }
+
+  /**
+   * The window's next refresh, or kFrameDeadlineMs if none comes: a hidden or
+   * minimized window stops refreshing, and a wait with no bound would wedge
+   * the activation chain (docs/input-dispatch.md).
+   */
+  _nextFrame() {
+    return new Promise(resolve => {
+      const timer = setTimeout(resolve, kFrameDeadlineMs);
+      this._win.requestAnimationFrame(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 
   /**
