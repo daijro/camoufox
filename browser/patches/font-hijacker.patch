@@ -175,6 +175,57 @@ index a804e7154b..ec81e42dc7 100644
      }
    }
    *aHasCurrentFile = hasMore;
+diff --git a/gfx/thebes/gfxFcPlatformFontList.cpp b/gfx/thebes/gfxFcPlatformFontList.cpp
+index 4b4d7b7382..cf4fa5077f 100644
+--- a/gfx/thebes/gfxFcPlatformFontList.cpp
++++ b/gfx/thebes/gfxFcPlatformFontList.cpp
+@@ -37,10 +37,12 @@
+ #include "StandardFonts-linux.inc"
+ #undef StandardFonts
+ #include <cairo-ft.h>
++#include <dirent.h>
+ #include <dlfcn.h>
+ #include <fontconfig/fcfreetype.h>
+ #include <fontconfig/fontconfig.h>
+ #include <harfbuzz/hb.h>
++#include <sys/stat.h>
+ #include <unistd.h>
+ 
+ #include "mozilla/intl/Locale.h"
+@@ -3139,9 +3141,31 @@ void gfxFcPlatformFontList::ActivateBundledFonts() {
+       return;
+     }
+   }
+-  if (!mBundledFontsPath.IsEmpty()) {
+-    FcConfigAppFontAddDir(nullptr, ToFcChar8Ptr(mBundledFontsPath.get()));
++  if (mBundledFontsPath.IsEmpty()) {
++    return;
++  }
++  // Camoufox: fonts/ holds Firefox's own bundled font (Twemoji Mozilla) and,
++  // in subdirectories, the font sets camoufox ships for each OS. The launcher's
++  // fonts.conf scans exactly the subdirectories the identity's OS reads, but
++  // FcConfigAppFontAddDir is recursive, so it added every OS's set to every
++  // launch: a Windows identity's "Arial" family held macOS's regular Arial
++  // faces, which have no Armenian, beside Windows' own, so its default font
++  // passed lang="hy" text on to another face. Add the directory's own files
++  // only, as a stock build's fonts/ holds no more than that.
++  DIR* dir = opendir(mBundledFontsPath.get());
++  if (!dir) {
++    return;
++  }
++  while (const struct dirent* entry = readdir(dir)) {
++    nsAutoCString path(mBundledFontsPath);
++    path.Append('/');
++    path.Append(entry->d_name);
++    struct stat st;
++    if (stat(path.get(), &st) == 0 && S_ISREG(st.st_mode)) {
++      FcConfigAppFontAddFile(nullptr, ToFcChar8Ptr(path.get()));
++    }
+   }
++  closedir(dir);
+ }
+ #endif
+ 
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
 index 849b3af462..164c33448d 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp

@@ -57,6 +57,7 @@
   { "property": "webGl2:shaderPrecisionFormats:blockIfNotDefined", "type": "bool" },
   { "property": "voices", "type": "array" },
   { "property": "voices:blockIfNotDefined", "type": "bool" },
+  { "property": "voices:speechd", "type": "dict" },
   { "property": "mediaDevices:micros", "type": "uint" },
   { "property": "mediaDevices:webcams", "type": "uint" },
   { "property": "mediaDevices:speakers", "type": "uint" },
