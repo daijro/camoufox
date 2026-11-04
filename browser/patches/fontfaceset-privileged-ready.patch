@@ -1,5 +1,5 @@
 diff --git a/layout/style/FontFaceSet.cpp b/layout/style/FontFaceSet.cpp
-index aa8b0d72a0..10a5246b44 100644
+index aa8b0d72..b3bc50a3 100644
 --- a/layout/style/FontFaceSet.cpp
 +++ b/layout/style/FontFaceSet.cpp
 @@ -12,6 +12,8 @@
@@ -68,19 +68,19 @@ index aa8b0d72a0..10a5246b44 100644
    if (!mReady) {
      nsCOMPtr<nsIGlobalObject> global = GetParentObject();
      mReady = Promise::Create(global, aRv);
-@@ -401,6 +436,10 @@ void FontFaceSet::DispatchLoadingEventAndReplaceReadyPromise() {
-     // Let's recreate the Promise if GetReady() is called.
-     mReady = nullptr;
+@@ -469,6 +504,10 @@ void FontFaceSet::MaybeResolve() {
+   } else {
+     mResolveLazilyCreatedReadyPromise = true;
    }
 +  for (const RefPtr<Promise>& promise : mPrivilegedReady.Clone()) {
 +    promise->MaybeResolve(this);
 +  }
 +  mPrivilegedReady.Clear();
- 
-   // We may previously have been in a state where all fonts had finished
-   // loading and we'd set mResolveLazilyCreatedReadyPromise to make sure that
+   DispatchEvent(*loadingdone);
+   if (loadingerror) {
+     DispatchEvent(*loadingerror);
 diff --git a/layout/style/FontFaceSet.h b/layout/style/FontFaceSet.h
-index 4fe3cabe18..5ce78f9f46 100644
+index 4fe3cabe..5ce78f9f 100644
 --- a/layout/style/FontFaceSet.h
 +++ b/layout/style/FontFaceSet.h
 @@ -150,6 +150,15 @@ class FontFaceSet final : public DOMEventTargetHelper {

@@ -1,8 +1,8 @@
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index c62b3b0424..f9f88078bd 100644
+index 82a49c2d..ac1d2ddb 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -659,3 +659,6 @@ GeneratedFile(
+@@ -667,3 +667,6 @@ GeneratedFile(
          "/servo/components/style/properties/counted_unknown_properties.py",
      ],
  )
@@ -11,7 +11,7 @@ index c62b3b0424..f9f88078bd 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 49a25262ca..3489102917 100644
+index 095b2f6f..bb0c62cd 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -3,6 +3,7 @@
@@ -22,7 +22,7 @@ index 49a25262ca..3489102917 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -3736,6 +3737,10 @@ nsresult nsGlobalWindowInner::GetInnerHeight(CallerType aCallerType,
+@@ -3753,6 +3754,10 @@ nsresult nsGlobalWindowInner::GetInnerHeight(CallerType aCallerType,
  
  int32_t nsGlobalWindowInner::GetOuterWidth(CallerType aCallerType,
                                             ErrorResult& aError) {
@@ -33,7 +33,7 @@ index 49a25262ca..3489102917 100644
    FORWARD_TO_OUTER_OR_THROW(GetOuterWidthOuter, (aCallerType, aError), aError,
                              0);
  }
-@@ -3756,11 +3761,17 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
+@@ -3773,11 +3778,17 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
  
  int32_t nsGlobalWindowInner::GetScreenX(CallerType aCallerType,
                                          ErrorResult& aError) {
@@ -51,7 +51,7 @@ index 49a25262ca..3489102917 100644
    FORWARD_TO_OUTER_OR_THROW(GetScreenYOuter, (aCallerType, aError), aError, 0);
  }
  
-@@ -3791,6 +3802,15 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
+@@ -3808,6 +3819,15 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
    return nullptr;
  }
  
@@ -67,15 +67,7 @@ index 49a25262ca..3489102917 100644
  double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
                                                  ErrorResult& aError) {
    ENSURE_ACTIVE_DOCUMENT(aError, 0.0);
-@@ -3798,6 +3818,7 @@ double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
-   RefPtr<nsPresContext> presContext = GetPresContextForRatio(mDoc);
-   if (NS_WARN_IF(!presContext)) {
-     // Still nothing, oh well.
-+    if (const auto& value = SpoofedDevicePixelRatio()) return *value;
-     return 1.0;
-   }
- 
-@@ -3813,6 +3834,17 @@ double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
+@@ -3830,6 +3850,17 @@ double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
      }
    }
  
@@ -94,7 +86,7 @@ index 49a25262ca..3489102917 100644
           double(presContext->AppUnitsPerDevPixel());
  }
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index 3b48a7f1e2..4b989dd48a 100644
+index 3b48a7f1..4b989dd4 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
 @@ -4,6 +4,8 @@
@@ -131,7 +123,7 @@ index 3b48a7f1e2..4b989dd48a 100644
    if (ShouldResistFingerprinting(RFPTarget::ScreenAvailRect)) {
      return GetTopWindowInnerRectForRFP();
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
-index 50dbb0847d..567e832a35 100644
+index 50dbb084..567e832a 100644
 --- a/dom/workers/WorkerNavigator.cpp
 +++ b/dom/workers/WorkerNavigator.cpp
 @@ -3,6 +3,7 @@
@@ -189,7 +181,7 @@ index 50dbb0847d..567e832a35 100644
    MOZ_ASSERT(rts);
  
 diff --git a/dom/workers/moz.build b/dom/workers/moz.build
-index f5ec1301a7..294a1c7a03 100644
+index f5ec1301..294a1c7a 100644
 --- a/dom/workers/moz.build
 +++ b/dom/workers/moz.build
 @@ -110,3 +110,6 @@ MARIONETTE_MANIFESTS += ["test/marionette/manifest.toml"]

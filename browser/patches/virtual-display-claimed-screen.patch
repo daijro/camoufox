@@ -1,7 +1,12 @@
 diff --git a/widget/gtk/ScreenHelperGTK.cpp b/widget/gtk/ScreenHelperGTK.cpp
+index 7139efb9..6d55ea71 100644
 --- a/widget/gtk/ScreenHelperGTK.cpp
 +++ b/widget/gtk/ScreenHelperGTK.cpp
-@@ -19,6 +19,7 @@
+@@ -16,9 +16,11 @@
+ #include <dlfcn.h>
+ #include <gtk/gtk.h>
+ 
++#include "MaskConfig.hpp"
  #include "gfxPlatformGtk.h"
  #include "mozilla/Logging.h"
  #include "mozilla/ScopeExit.h"
@@ -9,7 +14,7 @@ diff --git a/widget/gtk/ScreenHelperGTK.cpp b/widget/gtk/ScreenHelperGTK.cpp
  #include "mozilla/StaticPrefs_widget.h"
  #include "mozilla/StaticPtr.h"
  #include "mozilla/ToString.h"
-@@ -149,6 +150,40 @@
+@@ -149,6 +151,40 @@ static already_AddRefed<Screen> MakeScreenGtk(unsigned int aMonitor,
      rect = availRect;
    }
  
