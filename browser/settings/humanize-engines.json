@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "mouse": ["raw", "cursory"],
+  "keyboard": ["raw"],
+  "scroll": ["raw", "notches"],
+  "auto": {
+    "mouse": ["cursory"],
+    "keyboard": ["raw"],
+    "scroll": ["notches"]
+  },
+  "engines": {
+    "cursory": {
+      "module": "resource://gre/modules/juggler/input/CursorTrajectory.js",
+      "options": {
+        "maxTime": {"key": "humanize:maxTime", "min": 0},
+        "minTime": {"key": "humanize:minTime", "min": 0}
+      }
+    },
+    "notches": {
+      "module": "resource://gre/modules/juggler/input/WheelNotches.js"
+    }
+  }
+}

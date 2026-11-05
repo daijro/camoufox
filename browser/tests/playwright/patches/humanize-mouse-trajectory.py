@@ -2,8 +2,9 @@
 Verify humanize=True produces a human cursor trajectory (daijro/camoufox#677).
 
 Camoufox's cursor humanization has a single call site: the `mousemove` branch of
-`sendEvents()` in additions/juggler/protocol/PageHandler.js, which calls
-`humanizedSteps()` (additions/juggler/input/CursorTrajectory.js) and dispatches
+`sendEvents()` in browser/additions/juggler/protocol/PageHandler.js, which asks the
+humanize seam (browser/additions/juggler/input/HumanizeSeam.js) for a plan from the
+`cursory` engine (browser/additions/juggler/input/CursorTrajectory.js) and dispatches
 the intermediate points. The Firefox 146 Juggler migration (commit 03c1230)
 rewrote that helper and silently dropped the branch, so from FF146 through v152
 `humanize=True` emitted only the endpoint mousemove -- no trajectory at all.
