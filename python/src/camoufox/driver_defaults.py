@@ -99,7 +99,7 @@ def _handle_fill_clicks_first(original: Any) -> Any:
 
 def _install() -> None:
     # Locator.screenshot goes through ElementHandle.screenshot; Page, Locator
-    # and Frame fill (and Locator.clear) through Frame._fill.
+    # and Frame fill (and Locator.clear) through Frame._fill, or Frame.fill.
     from playwright._impl._element_handle import ElementHandle
     from playwright._impl._frame import Frame
     from playwright._impl._page import Page
@@ -107,7 +107,9 @@ def _install() -> None:
     for cls in (Page, ElementHandle):
         if not getattr(cls.screenshot, _MARK, False):
             cls.screenshot = _with_caret_default(cls.screenshot)
-    if not getattr(Frame._fill, _MARK, False):
-        Frame._fill = _frame_fill_clicks_first(Frame._fill)
+    # Playwright before 1.54 has no Frame._fill: every fill goes through Frame.fill.
+    name = '_fill' if hasattr(Frame, '_fill') else 'fill'
+    if not getattr(getattr(Frame, name), _MARK, False):
+        setattr(Frame, name, _frame_fill_clicks_first(getattr(Frame, name)))
     if not getattr(ElementHandle.fill, _MARK, False):
         ElementHandle.fill = _handle_fill_clicks_first(ElementHandle.fill)

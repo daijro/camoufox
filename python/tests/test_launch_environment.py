@@ -601,6 +601,21 @@ class TestScreenshotCaret:
             assert getattr(cls.screenshot, "_camoufox_driver_defaults", False)
             assert not getattr(cls.screenshot.__wrapped__, "_camoufox_driver_defaults", False)
 
+    def test_fill_wraps_frame_fill_on_playwright_without_frame__fill(self, monkeypatch):
+        # Playwright before 1.54 has no Frame._fill; launching must not fail there.
+        from playwright._impl import _frame
+
+        from camoufox import driver_defaults
+
+        class OldFrame:
+            async def fill(self, selector, value, **kwargs):
+                return value
+
+        monkeypatch.setattr(_frame, "Frame", OldFrame)
+        driver_defaults.mark(self.Owner())
+        assert getattr(OldFrame.fill, "_camoufox_driver_defaults", False)
+        assert not hasattr(OldFrame, "_fill")
+
 
 class TestDesktopOnlyWarning:
     """Camoufox has only desktop identities and Juggler never enters Responsive
