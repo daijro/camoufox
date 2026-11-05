@@ -1,6 +1,6 @@
 diff --git a/dom/base/WebGLParamsManager.cpp b/dom/base/WebGLParamsManager.cpp
 new file mode 100644
-index 00000000..1183efa0
+index 0000000000..1183efa077
 --- /dev/null
 +++ b/dom/base/WebGLParamsManager.cpp
 @@ -0,0 +1,46 @@
@@ -52,7 +52,7 @@ index 00000000..1183efa0
 +}  // namespace mozilla
 diff --git a/dom/base/WebGLParamsManager.h b/dom/base/WebGLParamsManager.h
 new file mode 100644
-index 00000000..06de6922
+index 0000000000..06de6922f3
 --- /dev/null
 +++ b/dom/base/WebGLParamsManager.h
 @@ -0,0 +1,27 @@
@@ -84,7 +84,7 @@ index 00000000..06de6922
 +
 +#endif  // mozilla_dom_WebGLParamsManager_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 22a5bd52..dfb97acf 100644
+index 22a5bd52bc..dfb97acfea 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
 @@ -584,6 +584,14 @@ EXPORTS.mozilla.dom += [
@@ -103,7 +103,7 @@ index 22a5bd52..dfb97acf 100644
  # CharacterDataBuffer.cpp
  if CONFIG["INTEL_ARCHITECTURE"]:
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index c69198c5..b02f5648 100644
+index 8b5f5a2234..2d9af5c12c 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -27,6 +27,7 @@
@@ -114,7 +114,7 @@ index c69198c5..b02f5648 100644
  #include "WindowDestroyedEvent.h"
  #include "WindowNamedPropertiesHandler.h"
  #include "js/ComparisonOperators.h"
-@@ -7938,6 +7939,23 @@ void nsGlobalWindowInner::SetSpeechVoices(const nsAString& aVoices,
+@@ -7937,6 +7938,23 @@ void nsGlobalWindowInner::SetSpeechVoices(const nsAString& aVoices,
    RoverfoxStorageManager::RemoveSetter("setSpeechVoices");
  }
  
@@ -139,7 +139,7 @@ index c69198c5..b02f5648 100644
      bool aGranted) {
    // Invalidate cached StorageAllowed field so that calls to GetLocalStorage
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index 3ac9010b..b83c6d69 100644
+index 3ac9010ba3..b83c6d69da 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
 @@ -723,6 +723,10 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
@@ -154,7 +154,7 @@ index 3ac9010b..b83c6d69 100644
    void Alert(nsIPrincipal& aSubjectPrincipal, mozilla::ErrorResult& aError);
    void Alert(const nsAString& aMessage, nsIPrincipal& aSubjectPrincipal,
 diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
-index 097d2022..7c5f00b1 100644
+index 097d202297..7c5f00b1e5 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
 +++ b/dom/canvas/ClientWebGLContext.cpp
 @@ -3,6 +3,12 @@
@@ -550,7 +550,7 @@ index 097d2022..7c5f00b1 100644
      if (!IsSupported(i, callerType)) continue;
  
 diff --git a/dom/canvas/ClientWebGLContext.h b/dom/canvas/ClientWebGLContext.h
-index 6996d252..006631d0 100644
+index 6996d25296..006631d0a9 100644
 --- a/dom/canvas/ClientWebGLContext.h
 +++ b/dom/canvas/ClientWebGLContext.h
 @@ -1089,6 +1089,22 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
@@ -577,7 +577,7 @@ index 6996d252..006631d0 100644
        WebGLFramebufferJS* fb, bool webvr,
        const webgl::SwapChainOptions& options = webgl::SwapChainOptions());
 diff --git a/dom/canvas/moz.build b/dom/canvas/moz.build
-index b5809a1f..8d36d592 100644
+index b5809a1fca..8d36d592b2 100644
 --- a/dom/canvas/moz.build
 +++ b/dom/canvas/moz.build
 @@ -180,6 +180,10 @@ TEST_DIRS += [
@@ -592,7 +592,7 @@ index b5809a1f..8d36d592 100644
      "/js/xpconnect/wrappers",
  ]
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index ab57be9b..2e64ce85 100644
+index ab57be9ba9..2e64ce85f6 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
 @@ -1010,6 +1010,18 @@ partial interface Window {

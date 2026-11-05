@@ -1,7 +1,8 @@
 """
 Verify uBlock Origin blocks with the filter lists packaged in the release the
-build bundles, and never downloads them at launch (the `3rdparty` policy in
-browser/settings/distribution/policies.json sets its autoUpdate to false).
+build bundles, and never downloads them at launch (scripts/fetch-ubo.py
+freeze_lists makes the bundled uBO's autoUpdate default false; a policy would
+put Firefox in enterprise mode).
 
 uBO's own default updates every list from its CDNs shortly after launch: two
 seconds after it is ready when a packaged list is past twice its expiry, 37
@@ -111,7 +112,9 @@ def main() -> int:
     hosts: list = []
     proxy = recording_proxy(hosts)
     try:
-        with Camoufox(headless=True, executable_path=str(binary), i_know_what_im_doing=True,
+        # geoip=False: the recording proxy refuses every CONNECT, so the exit
+        # lookup a proxied launch makes would fail, and location is not tested here.
+        with Camoufox(headless=True, executable_path=str(binary), i_know_what_im_doing=True, geoip=False,
                       proxy={"server": f"http://127.0.0.1:{proxy.getsockname()[1]}"}) as browser:
             page = browser.new_page()
             deadline = time.monotonic() + READY_S

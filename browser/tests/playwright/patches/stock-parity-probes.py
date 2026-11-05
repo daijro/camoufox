@@ -24,9 +24,7 @@ an invariant stock Firefox 152 holds:
                       about what UTC getters do
   timezone-relaunch   a persistent profile relaunched with another timezone
                       reports the new one, in the page and in a worker
-  web-serial          navigator.serial exists on a secure page. Any enterprise
-                      policy turns Web Serial off unless DefaultSerialGuardSetting
-                      turns it back on
+  web-serial          navigator.serial exists on a secure page, as in stock
 
     python browser/tests/playwright/patches/stock-parity-probes.py
 """
@@ -213,6 +211,12 @@ def probe_wheel(binary, port, humanize, prefs=None):
                   firefox_user_prefs=prefs or {}, i_know_what_im_doing=True) as b:
         page = b.new_page()
         page.goto(f"http://localhost:{port}/")
+        # The notches come 18-60 ms apart, and a content process still busy with the
+        # load when they arrive gets two in its queue at once and fires them as one
+        # wheel event (BrowserChild::RecvMouseWheelEvent coalescing): stock Linux
+        # 158.0.1 does the same with XTest notches 30 ms apart and a 150 ms busy page
+        # (deltaY [6, 12]). The page is idle first, so the notches are what is compared.
+        page.evaluate("() => new Promise((r) => requestIdleCallback(() => r(), {timeout: 2000}))")
         page.mouse.move(200, 200)
         page.mouse.wheel(0, 300)
         page.wait_for_timeout(1500)
@@ -308,7 +312,7 @@ def main() -> int:
     if not out["secureContext"]:
         failures.append("web-serial: the probe page is not a secure context -- check is vacuous")
     elif not out["serial"]:
-        failures.append("web-serial: navigator.serial is missing (policies.json needs DefaultSerialGuardSetting: 3)")
+        failures.append("web-serial: navigator.serial is missing")
 
     print()
     if failures:
