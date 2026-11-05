@@ -58,6 +58,16 @@ content: the event reached the renderer as an exit event at client `y == -1`,
 produced no ack, and the page saw no mousemove (~1 in 25 runs of
 `near-edge-mouse-deadlock.py`). Both dispatch sites (`Page.dispatchMouseEvent`,
 `Page.dispatchWheelEvent`) measure synchronously before dispatching.
+`MouseDispatch.sendAcked()` measures again before every event it sends, so each
+step of a humanized move, dispatched over hundreds of ms, goes out against
+where the browser is then; a step in a band of the viewport the window does
+not show is skipped, and a destination there is scrolled into view first.
+Measured 2026-10-31: in a window too small for the chrome plus the viewport
+(a 1366x768 screen draw), Juggler's `.browserStack` scrolled the browser on a
+wheel turn, and a move that kept its starting rect landed every later point,
+the destination included, 13-84 px off (`humanize-seam.py`, run d). The stack
+is `overflow: hidden` since, so only Juggler's own `scrollRectIntoViewIfNeeded`
+scrolls it.
 
 **Bounded waits.** `sendAcked()` waits at most `kAckDeadlineMs` (5s) and then
 drops the event with a warning naming the type, coordinate and browser rect. The
@@ -65,8 +75,11 @@ deadline is sized above the slowest *legitimate* ack, not near the typical one:
 acks are p99 1ms on an idle page, but they are delivered from the content main
 thread and inherit any block on it — a 3s synchronous script delayed one by
 2849ms. `sendTrajectoryAcked()` abandons the rest of a curve after the first
-undelivered point, so the ~90 bounded waits a curve can hold — the 1.5s default
-humanize ceiling at 60Hz — cannot add up to an unbounded slot. It also refuses
+undelivered point and goes straight to the destination, so the ~90 bounded waits
+a curve can hold — the 1.5s default humanize ceiling at 60Hz — cannot add up to
+an unbounded slot. The humanize seam (`input/HumanizeSeam.js`) paces every plan
+on its own schedule (`input/Pacer.js`) and fast-forwards one that runs past 1.5x
+its time budget. It also refuses
 to dispatch a point on the pixel the previous dispatch left the cursor on: a
 zero-displacement move produces no `eMouseMove`, so it is never acked, and
 that is the same deadlock reached from inside a curve rather than from
@@ -167,44 +180,49 @@ notches: 100 px is one notch, rounded to the nearest, at least one on an axis
 that moves. The notches of one call are 18 to 60 ms apart, drawn per notch;
 no recording of a person's wheel backs that range yet. The page therefore scrolls a
 notch's distance (120 px here), not the exact pixels asked for, and
-`mouse.wheel(0, 0)` sends nothing. Humanize does not change this.
+`mouse.wheel(0, 0)` sends nothing. Humanize does not change this: `raw()`
+and a `custom()` scroll engine's wheel steps are rounded the same way, each
+step at least one notch, so a custom engine should plan in notches (100 px)
+to land where it means to.
 `browser/tests/playwright/patches/driven-wheel-notches.py` compares the result
 with stock's.
 
-## The page's globals
+## Typed text
 
-A window defines a WebIDL interface's name on itself the first time anything
-needs the interface, so `Object.getOwnPropertyNames(window)` lists the
-interfaces in the order they were first used, followed by the unused ones.
-A driver's work used to show up in that list. Wrapping the page's nodes for
-an isolated world, a locator's reads and an `evaluate` all create interfaces
-in the page's window, and creating one defined its name there.
+Playwright's `fill()` and `keyboard.insert_text()` send `Page.insertText`.
+Typing cannot put text in a field without key events, so Juggler types it: in
+stock Firefox 158.0.1 each character arrives as `keydown`, `keypress`,
+`beforeinput` and `input` (`insertText`, that one character) and `keyup`,
+with Shift pressed around a capital (measured with XTest keys). A character
+with a key on the US layout is pressed through the same path as
+`keyboard.type()`, so its `key`, `code` and `keyCode` are that layout's; a line
+break is Enter in a textarea or an editable element. A character the layout
+has no key for (é, 嗨) is inserted as before, with `beforeinput`/`input` and no
+key events.
 
-`isolated-world-global-order.patch` creates an interface Juggler needs
-without defining its name, and marks it and its prototype in the window's
-`ProtoAndIfaceCache`. The page defines it, with its legacy aliases and factory
-functions in creation order, when it first uses it, as stock does:
+The pace is a person's, drawn per call from Dhakal et al., "Observations on
+Typing from 136 Million Keystrokes" (CHI 2018): the typist's mean interval
+between key presses from the population's (238.66 ms, SD 111.6, at least
+60 ms), keys held 116.25 ms (SD 23.88). A key goes up after the next one goes
+down when the interval is shorter than the hold; that rollover is rarer here
+than the quarter of keystrokes the paper reports, which an interval model
+cannot produce without the per-key data. How far one typist's
+intervals spread around their own mean is not in the paper; it is taken as
+35%. A fill takes about a quarter of a second per character, so a long one
+needs a longer `timeout`.
 
-- by name (`WebIDLGlobalNameHash::DefineIfEnabled`);
-- by creating an object of it or of an interface that inherits from it
-  (`GetPerInterfaceObjectHandle`);
-- by getting an object Juggler had already wrapped
-  (`MaybeDefineForCachedReflector`).
-
-An Xray of a window first resolves a name on the window itself, which defines
-it there. For Juggler that resolve now only creates the interface, and the Xray
-resolve that follows hands it over.
-
-Juggler is the caller when the innermost script is one of its
-`resource://gre/modules/juggler/` modules, described from the module's own
-realm because the page's principal does not see system frames, or runs in a
-sandbox one of them created. A callback hides the caller; its incumbent global
-decides then, so a listener in one of Juggler's isolated worlds is Juggler's,
-and a page's or a browser actor's is not.
-
-`browser/tests/playwright/patches/driven-evaluate-globals.py` lists a page's
-globals after driver work and after only the input that work causes, and
-compares the two.
+A person clicks a field before typing into it, while Playwright's `fill()`
+focuses it from script: the page would get `focus` with no pointer or mouse
+event before it. The launchers click a text field that does not have focus
+before the fill (`camoufox/driver_defaults.py`, `attachDriverDefaults` in
+`utils.ts`). The click is Playwright's own, so the mouse moves there and
+presses through the OS-path dispatch. A field that has focus is typed into as
+it is. Fields `fill()` sets without typing (date, color, range and the like)
+are not clicked. A field the click cannot reach, such as one covered by
+another element, now fails the way `click()` does, unless `force` is passed.
+`fill()` still selects the field's text with `select()` first.
+`browser/tests/playwright/patches/driven-fill-keys.py` compares the result
+with stock's.
 
 ## Screenshots
 
@@ -221,7 +239,7 @@ Juggler captures with `drawSnapshot`, which never paints the caret, so hiding
 it changes no pixel. The launchers therefore default screenshots of pages they
 launched to `caret: "initial"`. Page, element and locator screenshots all get
 it. Python wraps the client's `Page.screenshot` and `ElementHandle.screenshot`
-(`camoufox/screenshots.py`). TypeScript fills the option in where the client
+(`camoufox/driver_defaults.py`). TypeScript fills the option in where the client
 sends the request (`attachScreenshotDefaults` in `utils.ts`). Each checks that
 the page belongs to a Camoufox launch, so other browsers in the same process
 keep Playwright's behaviour. A caller who passes `caret` gets what they ask
@@ -234,3 +252,50 @@ The guard `screenshot-leaves-page` takes page, element and locator screenshots
 with a focused caret. It checks that the page observes no change and is left
 with no new attribute, and that each capture is byte-identical to one taken
 with `caret: "hide"`.
+
+## The page's globals
+
+A window defines a WebIDL interface's name on itself the first time anything
+needs the interface, so `Object.getOwnPropertyNames(window)` lists the
+interfaces in the order they were first used, followed by the unused ones.
+A driver's work used to show up in that list. Wrapping the page's nodes for
+an isolated world, a locator's reads and an `evaluate` all create interfaces
+in the page's window, and creating one defined its name there:
+HTMLDivElement, CSSStyleDeclaration, DOMRect, MutationObserver, AbortSignal
+and some 30 others moved up the list of a page that had never used them.
+
+`isolated-world-global-order.patch` creates an interface Juggler needs
+without defining its name, and marks it and its prototype in the window's
+`ProtoAndIfaceCache`. The window keeps listing it as unused. The page defines
+it, with its legacy aliases and factory functions in creation order, when it
+first uses it, as stock does:
+
+- by name (`WebIDLGlobalNameHash::DefineIfEnabled`);
+- by creating an object of it or of an interface that inherits from it
+  (`GetPerInterfaceObjectHandle`);
+- by getting an object Juggler had already wrapped, such as an input a
+  browser actor reads on focus (`MaybeDefineForCachedReflector`). The check
+  costs one array read per cached reflector handed out
+  (`DoGetOrCreateDOMReflector`): a count, per interface prototype, of the
+  windows holding it created for Juggler and not yet defined, so a
+  reflector of any other interface costs what it does in stock. An object the page creates is
+  checked against its own interface's mark the same way.
+
+An Xray of a window first resolves a name on the window itself (the
+generated `ResolveOwnPropertyViaResolve`), which defines it there. For
+Juggler that resolve now only creates the interface, and the Xray resolve
+that follows hands it over: Playwright's utility script reads `AbortSignal`
+this way.
+
+Juggler is the caller when the innermost script is one of its
+`resource://gre/modules/juggler/` modules, described from the module's own
+realm because the page's principal does not see system frames, or runs in a
+sandbox one of them created. A callback hides the caller; its incumbent global
+decides then, so a listener in one of Juggler's isolated worlds (Playwright's
+hit target check) is Juggler's, and a page's or a browser actor's is not. The
+entry global is no guide: Juggler's actor messages enter the page's window.
+
+`browser/tests/playwright/patches/driven-evaluate-globals.py` lists a page's
+globals after driver work and after only the input that work causes (a click
+on a field and a key, which Firefox's own actors wrap in the page's window as
+they do for a person's input), and compares the two.
