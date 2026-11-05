@@ -10,7 +10,6 @@ import {JUGGLER, load} from './gecko.mjs';
 const {HumanizeSeam} = await load('input/HumanizeSeam.js');
 const modules = {
   'resource://gre/modules/juggler/input/CursorTrajectory.js': await load('input/CursorTrajectory.js'),
-  'resource://gre/modules/juggler/input/WheelNotches.js': await load('input/WheelNotches.js'),
 };
 const BASE_MANIFEST = JSON.parse(fs.readFileSync(path.join(JUGGLER, '../../settings/humanize-engines.json'), 'utf-8'));
 
@@ -79,11 +78,11 @@ const digest = value => createHash('sha256').update(JSON.stringify(value)).diges
 
 test('resolution: channel keys, the legacy humanize flag, and auto', () => {
   const legacyOn = seam({humanize: true});
-  assert.deepEqual(['mouse', 'keyboard', 'scroll'].map(c => legacyOn.resolve(c)), ['cursory', 'raw', 'notches']);
+  assert.deepEqual(['mouse', 'keyboard', 'scroll'].map(c => legacyOn.resolve(c)), ['cursory', 'raw', 'cursory']);
   const legacyOff = seam({});
   assert.deepEqual(['mouse', 'keyboard', 'scroll'].map(c => legacyOff.resolve(c)), ['raw', 'raw', 'raw']);
-  const perChannel = seam({'humanize': true, 'humanize:mouse': 'raw', 'humanize:keyboard': 'auto', 'humanize:scroll': 'notches'});
-  assert.deepEqual(['mouse', 'keyboard', 'scroll'].map(c => perChannel.resolve(c)), ['raw', 'raw', 'notches']);
+  const perChannel = seam({'humanize': true, 'humanize:mouse': 'raw', 'humanize:keyboard': 'auto', 'humanize:scroll': 'cursory'});
+  assert.deepEqual(['mouse', 'keyboard', 'scroll'].map(c => perChannel.resolve(c)), ['raw', 'raw', 'cursory']);
 });
 
 test('humanize off never reads the manifest; humanize on requires it', () => {
@@ -106,7 +105,7 @@ test('mouse:internal defaults to the resolved mouse engine', () => {
 test('an engine that is not available warns once and runs the last auto choice', () => {
   const s = seam({'humanize:mouse': 'fancy', 'humanize:scroll': 'fancy'}, {manifest: withFancy({available: () => false})});
   assert.equal(s.resolve('mouse'), 'cursory');
-  assert.equal(s.resolve('scroll'), 'notches');
+  assert.equal(s.resolve('scroll'), 'cursory');
   assert.equal(s.warnings.length, 1);
   assert.match(s.warnings[0], /^humanize_engine_unavailable/);
 });
@@ -128,7 +127,7 @@ test('availability is per channel: an engine can be ready on one channel only', 
   assert.equal(s.resolve('keyboard'), 'fancy');
   assert.equal(s.resolve('mouse'), 'cursory');
   assert.equal(s.resolve('mouse:internal'), 'cursory');
-  assert.equal(s.resolve('scroll'), 'notches');
+  assert.equal(s.resolve('scroll'), 'cursory');
   assert.deepEqual([...new Set(asked)].sort(), ['keyboard', 'mouse', 'scroll']);
   assert.equal(s.active('keyboard'), true);
   assert.equal(seam({'humanize:keyboard': 'raw'}).active('keyboard'), false);
@@ -147,7 +146,7 @@ test('ctx.now is the seam clock at planning time, and absent without one', () =>
 });
 
 test('raw and engines without the command leave the stock dispatch in charge', () => {
-  const s = seam({'humanize:mouse': 'raw', 'humanize:keyboard': 'raw', 'humanize:scroll': 'notches'});
+  const s = seam({'humanize:mouse': 'raw', 'humanize:keyboard': 'raw', 'humanize:scroll': 'cursory'});
   assert.equal(s.plan('mouse', 'planMove', page, {x: 5, y: 5}), null);
   assert.equal(s.plan('keyboard', 'planKey', {keyboardState: {}}, {type: 'keydown', key: 'a'}), null);
   assert.equal(s.plan('keyboard', 'planInsert', {keyboardState: {}}, 'hello'), null);
@@ -156,14 +155,14 @@ test('raw and engines without the command leave the stock dispatch in charge', (
 test('handles: whether the resolved engine plans a command, so a site can skip its probe', () => {
   assert.equal(seam({humanize: false}).handles('scroll', 'planIntoView'), false);
   assert.equal(seam({humanize: true}).handles('scroll', 'planWheel'), true);
-  assert.equal(seam({humanize: true}).handles('scroll', 'planIntoView'), false, 'notches does not plan into-view');
+  assert.equal(seam({humanize: true}).handles('scroll', 'planIntoView'), false, 'cursory wheels do not plan into-view');
   const manifest = withFancy({planIntoView: () => null});
   assert.equal(seam({'humanize': true, 'humanize:scroll': 'fancy'}, {manifest}).handles('scroll', 'planIntoView'), true);
   assert.equal(seam({'humanize': true, 'humanize:scroll': 'raw'}, {manifest}).handles('scroll', 'planIntoView'), false);
 });
 
 test('same seed, same plans; a different seed, different plans', () => {
-  const values = {'humanize': true, 'humanize:mouse': 'cursory', 'humanize:scroll': 'notches', 'humanize:seed': '1234'};
+  const values = {'humanize': true, 'humanize:mouse': 'cursory', 'humanize:scroll': 'cursory', 'humanize:seed': '1234'};
   const first = session(seam(values));
   assert.deepEqual(session(seam(values)), first);
   assert.notDeepEqual(session(seam({...values, 'humanize:seed': '1235'})), first);
@@ -172,13 +171,13 @@ test('same seed, same plans; a different seed, different plans', () => {
 });
 
 test('each channel has its own stream: scrolling does not change the mouse paths', () => {
-  const values = {'humanize:mouse': 'cursory', 'humanize:scroll': 'notches', 'humanize:seed': '99'};
+  const values = {'humanize:mouse': 'cursory', 'humanize:scroll': 'cursory', 'humanize:seed': '99'};
   const moves = plans => plans.filter(steps => steps[0].kind === 'move');
   assert.deepEqual(moves(session(seam(values), {wheels: true})), moves(session(seam(values), {wheels: false})));
 });
 
 test('an unseeded launch draws a random seed, as before', () => {
-  const values = {'humanize:mouse': 'cursory', 'humanize:scroll': 'notches'};
+  const values = {'humanize:mouse': 'cursory', 'humanize:scroll': 'cursory'};
   assert.notDeepEqual(session(seam(values)), session(seam(values)));
 });
 
@@ -186,7 +185,7 @@ test('planners use no randomness but the channel stream', () => {
   const random = Math.random;
   Math.random = () => { throw new Error('Math.random called by a planner'); };
   try {
-    session(seam({'humanize:mouse': 'cursory', 'humanize:scroll': 'notches', 'humanize:seed': '7'}));
+    session(seam({'humanize:mouse': 'cursory', 'humanize:scroll': 'cursory', 'humanize:seed': '7'}));
   } finally {
     Math.random = random;
   }
@@ -214,7 +213,7 @@ test('an untracked cursor moves straight to the target', () => {
 });
 
 test('notches carry the whole requested distance, one essential step per notch', () => {
-  const s = seam({'humanize:scroll': 'notches', 'humanize:seed': '3'});
+  const s = seam({'humanize:scroll': 'cursory', 'humanize:seed': '3'});
   for (const [deltaX, deltaY, count] of [[0, 100, 1], [0, 449, 4], [0, -250, 3], [120, 0, 1], [0, 30, 1], [300, -500, 5]]) {
     const {plan} = s.plan('scroll', 'planWheel', {}, {x: 1, y: 2}, {deltaX, deltaY, deltaZ: 0});
     assert.equal(plan.steps.length, count);

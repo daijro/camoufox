@@ -12,7 +12,7 @@ const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sy
 const {MouseDispatch, kAckDeadlineMs} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
 const kMoveIntervalMs = 8; // a 125 Hz mouse
 const {humanizeSeam} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanizeSeam.js');
-const {notches} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/WheelNotches.js');
+const {cursory} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
 
 // Probe rounds for a humanized scrollIntoViewIfNeeded (see
 // _humanizedScrollIntoView) before the stock scroll takes over.
@@ -1185,7 +1185,7 @@ export class PageHandler {
 
       // 1. Scroll element to the desired location first; the coordinates are relative to the element.
       this._pageTarget._linkedBrowser.scrollRectIntoViewIfNeeded(x, y, 0, 0);
-      // Camoufox: a scroll engine (input/HumanizeSeam.js; `notches` by
+      // Camoufox: a scroll engine (input/HumanizeSeam.js; `cursory` by
       // default with humanize on) turns one wheel call into the events a
       // physical wheel produces.
       const planned = humanizeSeam().plan('scroll', 'planWheel', {}, {x, y}, {deltaX, deltaY, deltaZ});
@@ -1200,9 +1200,9 @@ export class PageHandler {
         await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
       // Camoufox: without a scroll engine a wheel still turns in notches, as a
       // mouse wheel does (docs/input-dispatch.md): no wheel produces a pixel
-      // delta. The plan is the `notches` engine's, paced here instead of by
+      // delta. The plan is the `cursory` engine's, paced here instead of by
       // the seam.
-      const {steps} = notches.planWheel({rng: Math.random}, {x, y}, {deltaX, deltaY, deltaZ});
+      const {steps} = cursory.planWheel({rng: Math.random}, {x, y}, {deltaX, deltaY, deltaZ});
       const start = ChromeUtils.now();
       for (const step of steps) {
         const waitMs = start + step.t - ChromeUtils.now();

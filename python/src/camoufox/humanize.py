@@ -43,8 +43,8 @@ LEGACY_MANIFEST: Dict[str, Any] = {
     'version': 0,
     'mouse': ['raw', 'cursory'],
     'keyboard': ['raw'],
-    'scroll': ['raw', 'notches'],
-    'auto': {'mouse': ['cursory'], 'keyboard': ['raw'], 'scroll': ['notches']},
+    'scroll': ['raw', 'cursory'],
+    'auto': {'mouse': ['cursory'], 'keyboard': ['raw'], 'scroll': ['cursory']},
     'engines': {
         'cursory': {
             'options': {
@@ -52,7 +52,6 @@ LEGACY_MANIFEST: Dict[str, Any] = {
                 'minTime': {'key': 'humanize:minTime', 'min': 0},
             }
         },
-        'notches': {},
     },
 }
 
@@ -78,14 +77,10 @@ def raw() -> Engine:
 
 def cursory(max_time: Optional[float] = None, min_time: Optional[float] = None) -> Engine:
     """Mouse: replayed human cursor paths (Cursory), scaled into
-    [min_time, max_time] seconds. Defaults: 0 and 1.5."""
+    [min_time, max_time] seconds. Scroll: native wheel notches, tens of ms apart.
+    Mouse duration defaults: 0 and 1.5."""
     options = {'maxTime': max_time, 'minTime': min_time}
     return engine('cursory', **{k: v for k, v in options.items() if v is not None})
-
-
-def notches() -> Engine:
-    """Scroll: a wheel call arrives as native notches of 3 lines, tens of ms apart."""
-    return engine('notches')
 
 
 def custom(fn: Callable[..., Any]) -> Engine:

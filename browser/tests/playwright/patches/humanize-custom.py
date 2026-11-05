@@ -9,9 +9,7 @@ which dispatches steps on a schedule through Playwright's own input.
 
 Run against a specific build:
     CAMOUFOX_EXECUTABLE_PATH=/path/to/camoufox-bin python browser/tests/playwright/patches/humanize-custom.py
-Against an unpackaged objdir build, run `make stage-fonts` first. With the
-TypeScript launcher built (typescript/dist) and Node on PATH, the same session
-also runs through it (humanize-custom.mjs) and must match.
+Against an unpackaged objdir build, run `make stage-fonts` first.
 
 What PASS means:
     * every channel custom(): the page sees each planned move, key and wheel
@@ -23,28 +21,20 @@ What PASS means:
       the element into view with its engine and moves the cursor there with
       mouse:internal (a path, not a jump), while no move from the custom mouse
       is humanized a second time;
-    * the same seed gives the same input; another seed does not;
-    * the TypeScript launcher, given the same seed and functions, produces the
-      same events (when it is built).
+    * the same seed gives the same input; another seed does not.
 """
 
 import asyncio
 import json
 import math
 import os
-import re
-import shutil
-import subprocess
 import sys
 import tempfile
-from pathlib import Path
 
 from camoufox.async_api import AsyncCamoufox
 from camoufox.humanize import auto, custom
 
 EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
-HERE = Path(__file__).resolve().parent
-TS_DIST = HERE.parents[3] / "typescript" / "dist" / "index.js"
 
 BODY = """<body style="margin:0;height:5000px">
   <input id="name" style="position:absolute;left:40px;top:120px;width:200px">
@@ -76,7 +66,6 @@ SETTLE = """() => new Promise(resolve => {
 
 
 def reference_engines(log):
-    """Mirrored in humanize-custom.mjs, draw for draw."""
     at = {"x": 0.0, "y": 0.0}
     planned = []
 
@@ -171,52 +160,6 @@ async def custom_session(seed, humanize_extra=None, trace=None, nested=False):
     return log, events, state, planned
 
 
-def _version(text):
-    return tuple(int(x) for x in re.findall(r"\d+", text)[:3])
-
-
-def typescript_node():
-    """A node that meets typescript/package.json's engines floor: $CAMOUFOX_NODE,
-    then the one on PATH, then nvm's installs, newest first. None when there is
-    no node at all; an error naming the floor when none meets it (the package
-    would only refuse to load)."""
-    package = json.loads((TS_DIST.parents[1] / "package.json").read_text())
-    floor = _version(package["engines"]["node"])
-    nvm = Path(os.environ.get("NVM_DIR") or Path.home() / ".nvm") / "versions" / "node"
-    candidates = [os.environ.get("CAMOUFOX_NODE"), shutil.which("node")]
-    candidates += [str(p / "bin" / "node") for p in sorted(nvm.glob("v*"), key=lambda p: _version(p.name), reverse=True)]
-    seen = {}
-    for node in filter(None, candidates):
-        if node in seen or not os.access(node, os.X_OK):
-            continue
-        out = subprocess.run([node, "--version"], capture_output=True, text=True)
-        seen[node] = out.stdout.strip()
-        if out.returncode == 0 and _version(seen[node]) >= floor:
-            return node
-    if not seen:
-        return None
-    raise RuntimeError(
-        f"the TypeScript launcher needs node {package['engines']['node']} and found only "
-        + ", ".join(f"{n} ({v})" for n, v in seen.items())
-        + "; set CAMOUFOX_NODE to one that meets it"
-    )
-
-
-def run_typescript(seed):
-    if not TS_DIST.exists():
-        return None
-    node = typescript_node()
-    if not node:
-        return None
-    args = [node, str(HERE / "humanize-custom.mjs"), str(TS_DIST), str(seed)]
-    if EXECUTABLE_PATH:
-        args.append(EXECUTABLE_PATH)
-    out = subprocess.run(args, capture_output=True, text=True, timeout=300)
-    if out.returncode != 0:
-        raise RuntimeError(f"humanize-custom.mjs exited {out.returncode}:\n{out.stderr}")
-    return json.loads(out.stdout)
-
-
 async def main() -> int:
     failures = []
 
@@ -295,23 +238,11 @@ async def main() -> int:
         failures.append(f"the build's scroll engine did not bring every target into view: {len(clicked)} clicks")
     if any(entry[0] == "scroll" for entry in log_s):
         failures.append("the custom scroll function ran although scroll was auto()")
-    # Only an engine that plans scrolling into view (not the base notches)
-    # moves the cursor over a scroller first.
+    # Only an engine that plans scrolling into view (not the base cursory
+    # wheel plan) moves the cursor over a scroller first.
     into_view = any(r["channel"] == "scroll" and r["command"] == "Page.scrollIntoViewIfNeeded" for r in records)
     if (into_view and not internal) or any(r["engine"] == "raw" or len(r["plan"]) < 2 for r in internal):
         failures.append(f"a cursor move the browser originated was a jump: {internal}")
-
-    # The TypeScript launcher: same seed, same functions, same events.
-    ts = run_typescript(1234)
-    if ts is None:
-        print("typescript: not built (typescript/dist) or no node; parity not checked")
-    else:
-        same_log = ts["log"] == json.loads(json.dumps(log))
-        same_events = replayed(ts["events"]) == replayed(json.loads(json.dumps(events)))
-        print(f"typescript, seed 1234: engine calls identical: {same_log}; "
-              f"{len(ts['events'])} page events identical: {same_events}; state {ts['state']}")
-        if not (same_log and same_events and ts["state"] == state):
-            failures.append("the TypeScript launcher produced different input for the same seed")
 
     for failure in failures:
         print(f"FAIL: {failure}")

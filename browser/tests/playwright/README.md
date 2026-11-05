@@ -28,9 +28,9 @@ python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin --only isolated-ev
 ### `juggler/` — unit tests for Juggler's input planners
 
 The humanize seam (`browser/additions/juggler/input/HumanizeSeam.js`), its seeded
-streams and pacer, and the base `cursory` and `notches` engines are plain ES
-modules with no Gecko imports at load time, so they run under Node without a
-build. `gecko.mjs` supplies the two Gecko globals they reach for lazily.
+streams and pacer, and the base `cursory` engine are plain ES modules with no
+Gecko imports at load time, so they run under Node without a build. `gecko.mjs`
+supplies the two Gecko globals they reach for lazily.
 
 ```bash
 node --test browser/tests/juggler/*.test.mjs

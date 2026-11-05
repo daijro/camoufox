@@ -19,9 +19,10 @@
  * and keeps that recording's own timing -- pauses, overshoots and all.
  *
  * This module is the whole boundary between Camoufox and Cursory: it owns the
- * cadence and the pixel grid, and is the base `cursory` mouse engine behind the
- * humanize seam (HumanizeSeam.js), which hands it the options and the seeded
- * stream and plays the plan it returns.
+ * cadence and the pixel grid. The base `cursory` engine also paces wheel
+ * notches here, so the public engines are cursory, raw and custom. The
+ * humanize seam (HumanizeSeam.js) supplies the options and seeded stream and
+ * plays each plan.
  */
 
 const kCursoryUrl = 'resource://gre/modules/juggler/input/cursory/cursory.js';
@@ -70,6 +71,13 @@ function durationBoundsMs({maxTime = kDefaultMaxTimeSeconds, minTime = 0}) {
   // A min above the max would make the clamp below non-monotonic; the max wins,
   // as it did in C++ (std::min of the two point counts).
   return {minMs: Math.min(Math.max(0, minTime * 1000), maxMs), maxMs};
+}
+
+const kPxPerNotch = 100;
+const kLinesPerNotch = 3;
+
+function toNotches(delta) {
+  return delta === 0 ? 0 : Math.sign(delta) * Math.max(1, Math.round(Math.abs(delta) / kPxPerNotch));
 }
 
 /**
@@ -172,5 +180,26 @@ export const cursory = {
 
     steps.push({...destination, t: Math.max(t, Math.round(recordedMs * scale))});
     return {steps, endState: {cursor: to}};
+  },
+
+  planWheel(ctx, at, {deltaX, deltaY, deltaZ}) {
+    const notchesX = toNotches(deltaX);
+    const notchesY = toNotches(deltaY);
+    const count = Math.max(1, Math.abs(notchesX), Math.abs(notchesY));
+    const steps = [];
+    let t = 0;
+    for (let i = 0; i < count; i++) {
+      if (i)
+        t += 18 + ctx.rng() * 42;
+      const lines = n => (i < Math.abs(n) ? Math.sign(n) * kLinesPerNotch : 0);
+      steps.push({
+        kind: 'wheel', t, x: at.x, y: at.y,
+        dx: lines(notchesX), dy: lines(notchesY), dz: i ? 0 : deltaZ,
+        mode: 1,
+        ticks: {x: lines(notchesX), y: lines(notchesY)},
+        essential: true,
+      });
+    }
+    return {steps, endState: {}};
   },
 };

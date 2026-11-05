@@ -14,7 +14,7 @@ Run against a specific build:
 Against an unpackaged objdir build, run `make stage-fonts` first.
 
 What PASS means:
-    * mouse raw() with scroll notches(): a long move is one mousemove, and a
+    * mouse raw() with scroll cursory(): a long move is one mousemove, and a
       wheel turn of 300px arrives as 3 line-mode notches;
     * mouse cursory() with scroll raw(): a long move is a trajectory, and a
       wheel turn still arrives in line-mode notches: no wheel produces a pixel
@@ -37,7 +37,7 @@ import sys
 import tempfile
 
 from camoufox.async_api import AsyncCamoufox
-from camoufox.humanize import cursory, notches, raw
+from camoufox.humanize import cursory, raw
 
 EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
 
@@ -85,13 +85,13 @@ def planned(trace):
 async def main() -> int:
     failures = []
 
-    moves, wheels = await session({"mouse": raw(), "scroll": notches()})
+    moves, wheels = await session({"mouse": raw(), "scroll": cursory()})
     if any(len(m) != 1 for m in moves):
         failures.append(f"mouse raw(): expected one mousemove per move, got {[len(m) for m in moves]}")
     # A notch is 3 lines; how many lines the page reports per notch is the
     # platform's wheel multiplier, so only the shape is checked.
     if len(wheels) != 3 * len(TARGETS) or len({tuple(w) for w in wheels}) != 1 or wheels[0][0] != 1:
-        failures.append(f"scroll notches(): expected 3 equal line-mode notches per turn, got {wheels}")
+        failures.append(f"scroll cursory(): expected 3 equal line-mode notches per turn, got {wheels}")
 
     moves, wheels = await session({"mouse": cursory(), "scroll": raw()})
     if any(len(m) < 5 for m in moves):
@@ -105,7 +105,7 @@ async def main() -> int:
         for name, seed, window in (("a", 1234, None), ("b", 1234, None), ("c", 1235, None),
                                    ("d", 1234, (1366, 720))):
             trace = os.path.join(tmp, f"{name}.jsonl")
-            moves, wheels = await session({"mouse": cursory(), "scroll": notches(), "seed": seed}, trace, window)
+            moves, wheels = await session({"mouse": cursory(), "scroll": cursory(), "seed": seed}, trace, window)
             runs[name] = (planned(trace), moves, wheels)
         plans_a, moves_a, _ = runs["a"]
         plans_b, moves_b, _ = runs["b"]
@@ -114,7 +114,7 @@ async def main() -> int:
         print(f"seed 1234: {len(plans_a)} planned actions {channels}; "
               f"{sum(len(p) for *_, p in plans_a)} planned steps; "
               f"{sum(len(m) for m in moves_a)} mousemoves seen by the page")
-        if channels != [("mouse", "cursory"), ("scroll", "notches")] or len(plans_a) != 2 * len(TARGETS) + 1:
+        if channels != [("mouse", "cursory"), ("scroll", "cursory")] or len(plans_a) != 2 * len(TARGETS) + 1:
             failures.append(f"trace: expected {2 * len(TARGETS) + 1} mouse and scroll plans, got {len(plans_a)} {channels}")
         if plans_a != plans_b:
             failures.append("same seed: the planned input differs between launches")

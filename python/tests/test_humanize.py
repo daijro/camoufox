@@ -9,7 +9,7 @@ import pytest
 
 from camoufox import utils
 from camoufox.exceptions import HumanizeEngineUnavailable
-from camoufox.humanize import auto, cursory, engine, humanize_config, normalize, notches, raw
+from camoufox.humanize import auto, cursory, engine, humanize_config, normalize, raw
 
 REPO = Path(__file__).resolve().parents[2]
 BASE_MANIFEST = json.loads((REPO / "browser" / "settings" / "humanize-engines.json").read_text())
@@ -166,8 +166,8 @@ def test_a_build_without_the_manifest_refuses_what_it_cannot_do(humanize, channe
             },
         ),
         (
-            {"mouse": raw(), "scroll": notches()},
-            {"humanize": True, "humanize:mouse": "raw", "humanize:keyboard": "auto", "humanize:scroll": "notches"},
+            {"mouse": raw(), "scroll": cursory()},
+            {"humanize": True, "humanize:mouse": "raw", "humanize:keyboard": "auto", "humanize:scroll": "cursory"},
         ),
         (
             {},
@@ -216,7 +216,7 @@ def test_one_option_key_cannot_take_two_values() -> None:
         ({"keyboard": engine("fancy", speed=0.1)}, r"speed must be in \[0.5, 2\]"),
         ({"keyboard": engine("fancy", wpm=60)}, "has no option 'wpm'"),
         ({"mouse": cursory(max_time=-1)}, "maxTime must be at least 0"),
-        ({"scroll": engine("notches", speed=2)}, "has no option 'speed'"),
+        ({"scroll": engine("cursory", speed=2)}, "has no option 'speed'"),
     ],
 )
 def test_engine_options_are_checked_against_the_manifest(humanize, message) -> None:
@@ -227,7 +227,7 @@ def test_engine_options_are_checked_against_the_manifest(humanize, message) -> N
 @pytest.mark.parametrize(
     "humanize, message",
     [
-        ({"mouse": notches()}, "mouse: notches is not available"),
+        ({"mouse": engine("notches")}, "mouse: notches is not available"),
         ({"keyboard": cursory()}, "keyboard: cursory is not available"),
         ({"mouse": "fast"}, "mouse: fast is not available"),
     ],
