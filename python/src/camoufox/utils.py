@@ -328,7 +328,8 @@ def get_env_vars(
                 return str(path.parent.joinpath(*parts))
             return get_path(os.path.join(*parts))
 
-        fontconfig_path = _bundle_path("fontconfig", os_dir)
+        fontconfig_dir = os.environ.get("CAMOUFOX_FONTCONFIG_DIR") or "fontconfig"
+        fontconfig_path = _bundle_path(fontconfig_dir, os_dir)
         if not os.path.exists(os.path.join(fontconfig_path, "fonts.conf")):
             fontconfig_path = _bundle_path("fontconfigs", os_dir)
 
@@ -348,7 +349,7 @@ def _load_properties(path: Optional[Path] = None) -> Dict[str, Dict[str, str]]:
     "removed" field is a key the browser no longer reads; it stays declared so
     that older libraries, which reject undeclared keys, still launch.
     """
-    prop_file = build_file(path, "properties.json") if path else get_path("properties.json")
+    prop_file = os.environ.get("CAMOUFOX_PROPERTIES_JSON") or (build_file(path, "properties.json") if path else get_path("properties.json"))
     with open(prop_file, "rb") as f:
         prop_dict = orjson.loads(f.read())
 

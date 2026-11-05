@@ -381,6 +381,14 @@ class Version:
         """
         Get the version from version.json at the given path
         """
+        env_version = os.environ.get("CAMOUFOX_BROWSER_VERSION")
+        if env_version:
+            env_build = os.environ.get("CAMOUFOX_BROWSER_BUILD")
+            if env_build:
+                return Version(
+                    build=env_build,
+                    version=env_version,
+                )
         version_path = (path or INSTALL_DIR) / 'version.json'
         if not os.path.exists(version_path):
             raise FileNotFoundError(
@@ -589,7 +597,14 @@ class CamoufoxFetcher:
             self.installed_created_at = selected_version.asset_created_at
             self.installed_interface = selected_version.interface
         else:
-            self.fetch_latest()
+            env_path = env_browser_path()
+            if env_path is not None:
+                # Env manages the browser installation. Never fetch a release.
+                # This assumes env provides a version.json file in env_path
+                self._version_obj = Version.from_path(env_path)
+                self._url = None
+            else:
+                self.fetch_latest()
 
     @property
     def installed_sha8(self) -> str:
@@ -694,6 +709,11 @@ class CamoufoxFetcher:
         """
         Download and install camoufox to a versioned subdirectory
         """
+        if env_browser_path() is not None:
+            rprint("Camoufox is managed by env; skipping installation.", fg="green")
+            ensure_browser_profile_dir()
+            return
+
         from .multiversion import install_versioned
 
         install_versioned(self, replace=replace)
@@ -865,6 +885,18 @@ def installed_verstr() -> str:
     """
     Get the full version string of the active install
     """
+    env_path = env_browser_path()
+    if env_path is not None:
+        version = Version.from_path(env_path)
+        r'''
+        try:
+            version = Version.from_path(env_path)
+        except FileNotFoundError as exc:
+            # no version.json file
+            return None
+        '''
+        return version.full_string
+
     from .multiversion import get_active_path
 
     active = get_active_path()
@@ -898,6 +930,11 @@ def camoufox_path(download_if_missing: bool = True) -> Path:
     """
     Full path to the active camoufox folder
     """
+    env_path = env_browser_path()
+    if env_path is not None:
+        ensure_browser_profile_dir()
+        return env_path
+
     from .multiversion import get_active_path, remove_incompatible_data
 
     remove_incompatible_data()
@@ -1172,3 +1209,27 @@ def format_asset_date(iso: Optional[str], now: Optional[Any] = None) -> str:
     if dt.year == current_year:
         return f"{month} {dt.day}"
     return f"{month} {dt.day}, {dt.year}"
+
+
+def env_browser_path() -> Optional[Path]:
+    """
+    Return the env-provided browser directory, if configured.
+    """
+    configured_path = os.environ.get("CAMOUFOX_BROWSER_PATH")
+    if not configured_path:
+        return None
+
+    path = Path(configured_path)
+
+    if not path.is_dir():
+        raise CamoufoxNotInstalled(
+            f"CAMOUFOX_BROWSER_PATH does not point to a directory: {path}"
+        )
+
+    executable = path / LAUNCH_FILE[OS_NAME]
+    if not executable.is_file():
+        raise CamoufoxNotInstalled(
+            f"Camoufox executable not found in env browser directory: {executable}"
+        )
+
+    return path
