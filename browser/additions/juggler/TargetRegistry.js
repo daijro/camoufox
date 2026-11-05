@@ -839,8 +839,17 @@ export class PageTarget {
 
       const stackRect = this._linkedBrowser.closest('.browserStack').getBoundingClientRect();
       const toolbarTop = stackRect.y;
+      // Camoufox: the window is the viewport in the chrome the claimed OS
+      // records, not this build's own chrome, and the identity's startup size
+      // (CamoufoxWindow.sys.mjs) gives way to it. That held the window at the
+      // identity's outer size for its first 5 s, so a context's viewport larger
+      // than the launch window overflowed it: a page read innerHeight 700 in an
+      // outerHeight 699 window, which no real window can (viewport-fits-screen.py).
+      const thisChrome = [this._window.outerWidth - this._window.innerWidth,
+                          this._window.outerHeight - this._window.innerHeight + toolbarTop];
+      const [chromeWidth, chromeHeight] = claimedWindowChrome(thisChrome);
       this._window.dispatchEvent(new this._window.CustomEvent('CamoufoxViewportSized'));
-      this._window.resizeBy(width - this._window.innerWidth, height + toolbarTop - this._window.innerHeight);
+      this._window.resizeTo(width + chromeWidth, height + chromeHeight);
 
       await this._channel.connect('').send('awaitViewportDimensions', { width: width / this._zoom, height: height / this._zoom });
     } else {
@@ -1673,6 +1682,22 @@ class Dialog {
 
 function dirPath(path) {
   return path.substring(0, path.lastIndexOf('/') + 1);
+}
+
+// Camoufox: what a real browser window adds around its page, [width, height]
+// in CSS px, for the OS the identity claims (navigator.platform). Kept equal to
+// recordedWindowChrome in python/src/camoufox/launcher-constants.json, which the
+// launcher draws a screen around a viewport with; viewport-fits-screen.py
+// checks the two agree. This build's own chrome is used where it is larger, so
+// the page is never cut off by the window, and where nothing is claimed.
+const RECORDED_WINDOW_CHROME = {win: [18, 130], mac: [0, 86], lin: [2, 86]};
+
+function claimedWindowChrome(thisChrome) {
+  const platform = ChromeUtils.camouGetString('navigator.platform') || '';
+  const os = /^Win/.test(platform) ? 'win' : /^Mac/.test(platform) ? 'mac' : /^Linux/.test(platform) ? 'lin' : null;
+  if (!os)
+    return thisChrome;
+  return RECORDED_WINDOW_CHROME[os].map((recorded, axis) => Math.max(recorded, Math.round(thisChrome[axis])));
 }
 
 async function waitForWindowReady(window) {

@@ -3047,6 +3047,21 @@ def test_every_patch_guard_is_in_exactly_one_group():
     assert not doubled, f"guards in more than one group: {doubled}"
 
 
+def test_patch_guard_native_clicks_stay_inside_the_window():
+    """A guard's native click at fixed page coordinates can fall outside the window.
+
+    The window follows the drawn screen: a 1280x720 draw gives a 712 px window, so the
+    focus click at a fixed (1100, 700) landed below it in some launches; the pointer sat
+    on the X root window and every later key went there (context-menu-key-claimed-os
+    saw no events, claiming either OS, in the launches with a short draw).
+    """
+    from ci.run_patch_guards import guards
+
+    fixed = re.compile(r"inp\.move\(1100, 700\)\n\s+inp\.button\(")
+    bad = sorted(g.name for g in guards() if fixed.search(g.read_text(encoding="utf-8")))
+    assert not bad, f"guards clicking at a fixed (1100, 700), outside a short window: {bad}"
+
+
 def test_the_patch_guard_matrix_runs_every_group():
     from ci.run_patch_guards import GROUPS
 

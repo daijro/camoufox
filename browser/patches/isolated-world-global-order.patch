@@ -1,5 +1,5 @@
 diff --git a/dom/bindings/BindingUtils.cpp b/dom/bindings/BindingUtils.cpp
-index 6cbfbceb53..49a996f0e9 100644
+index 6cbfbceb53..35430db044 100644
 --- a/dom/bindings/BindingUtils.cpp
 +++ b/dom/bindings/BindingUtils.cpp
 @@ -27,6 +27,7 @@
@@ -32,7 +32,7 @@ index 6cbfbceb53..49a996f0e9 100644
      for (; *legacyWindowAliases; ++legacyWindowAliases) {
        if (!DefineConstructor(cx, global, *legacyWindowAliases, constructor)) {
          return nullptr;
-@@ -4059,6 +4066,109 @@ JSObject* UnprivilegedJunkScopeOrWorkerGlobal(const fallible_t&) {
+@@ -4059,6 +4066,122 @@ JSObject* UnprivilegedJunkScopeOrWorkerGlobal(const fallible_t&) {
  }
  }  // namespace binding_detail
  
@@ -135,14 +135,27 @@ index 6cbfbceb53..49a996f0e9 100644
 +  // principal does not subsume (Juggler's system modules) are not visible.
 +  JSAutoRealm ar(aCx, callerGlobal);
 +  JS::AutoFilename filename;
-+  return JS::DescribeScriptedCaller(&filename, aCx) && filename.get() &&
-+         StringBeginsWith(nsDependentCString(filename.get()), kJuggler);
++  if (!JS::DescribeScriptedCaller(&filename, aCx) || !filename.get()) {
++    return false;
++  }
++  nsDependentCString caller(filename.get());
++  // A driver's main-world evaluate (Juggler's `mw:` path, and its own helpers
++  // in the main-world context) runs in the page's realm as Debugger code,
++  // which keeps the Debugger's default name, and the script the `mw:` wrapper
++  // evals is named after it ("debugger eval code line N > eval"). No script a
++  // page loads or evals is called that (//# sourceURL changes only the display
++  // name). What it creates is Juggler's, as from an isolated world: a
++  // scraper's document.querySelectorAll() there must not define NodeList on
++  // the window before the page uses it (surface/globalOrder, cf-pw-main).
++  constexpr auto kDebuggerEval = "debugger eval code"_ns;
++  return StringBeginsWith(caller, kJuggler) ||
++         StringBeginsWith(caller, kDebuggerEval);
 +}
 +
  JS::Handle<JSObject*> GetPerInterfaceObjectHandle(
      JSContext* aCx, size_t aSlotId, CreateInterfaceObjectsMethod aCreator,
      DefineInterfaceProperty aDefineOnGlobal) {
-@@ -4072,7 +4182,57 @@ JS::Handle<JSObject*> GetPerInterfaceObjectHandle(
+@@ -4072,7 +4195,57 @@ JS::Handle<JSObject*> GetPerInterfaceObjectHandle(
    ProtoAndIfaceCache& protoAndIfaceCache = *GetProtoAndIfaceCache(global);
    if (!protoAndIfaceCache.HasEntryInSlot(aSlotId)) {
      JS::Rooted<JSObject*> rootedGlobal(aCx, global);

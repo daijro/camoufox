@@ -1,0 +1,3 @@
+# The patch guards (ci/run_patch_guards.py), on top of `pip install -e python`.
+# The claimed-OS input guards drive Xvfb through XTest (from Xlib.ext import xtest).
+python-xlib>=0.33

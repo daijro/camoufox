@@ -1,5 +1,5 @@
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 82a49c2d..ac1d2ddb 100644
+index 82a49c2d26..ac1d2ddbf4 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
 @@ -667,3 +667,6 @@ GeneratedFile(
@@ -11,7 +11,7 @@ index 82a49c2d..ac1d2ddb 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 095b2f6f..bb0c62cd 100644
+index 095b2f6fd4..bb0c62cd48 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -3,6 +3,7 @@
@@ -86,7 +86,7 @@ index 095b2f6f..bb0c62cd 100644
           double(presContext->AppUnitsPerDevPixel());
  }
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index 3b48a7f1..4b989dd4 100644
+index 3b48a7f1e2..4b989dd48a 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
 @@ -4,6 +4,8 @@
@@ -123,7 +123,7 @@ index 3b48a7f1..4b989dd4 100644
    if (ShouldResistFingerprinting(RFPTarget::ScreenAvailRect)) {
      return GetTopWindowInnerRectForRFP();
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
-index 50dbb084..567e832a 100644
+index 50dbb0847d..567e832a35 100644
 --- a/dom/workers/WorkerNavigator.cpp
 +++ b/dom/workers/WorkerNavigator.cpp
 @@ -3,6 +3,7 @@
@@ -181,7 +181,7 @@ index 50dbb084..567e832a 100644
    MOZ_ASSERT(rts);
  
 diff --git a/dom/workers/moz.build b/dom/workers/moz.build
-index f5ec1301..294a1c7a 100644
+index f5ec1301a7..294a1c7a03 100644
 --- a/dom/workers/moz.build
 +++ b/dom/workers/moz.build
 @@ -110,3 +110,6 @@ MARIONETTE_MANIFESTS += ["test/marionette/manifest.toml"]

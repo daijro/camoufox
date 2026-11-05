@@ -17,7 +17,7 @@ browser/upstream.sh (--stock <firefox binary>, else downloaded and verified as
 stock-gpu-parity does) and in Camoufox with a launch-level and a per-context
 identity, on the same machine, and fails when a getter costs more than
 SLOWER_FACTOR times stock and at least MIN_GAP_NS more. It also fails when a
-getter is at least MIN_GAP_NS cheaper than stock's and, measured against an
+getter is at least FASTER_MIN_GAP_NS cheaper than stock's and, measured against an
 untouched control getter in the same browser, under 1/FASTER_FACTOR of stock's
 cost: one that skips stock's work shows as plainly (screen.width took 18-24 ns
 against stock's 107 ns when it did). Each figure is the fastest of several
@@ -43,7 +43,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from helpers import resolve_binary  # noqa: E402
+from helpers import hidden_display, resolve_binary  # noqa: E402
 
 REPO_ROOT = HERE.parents[3]
 sys.path.insert(0, str(REPO_ROOT))
@@ -53,6 +53,10 @@ LAUNCHES = 2
 SLOWER_FACTOR = 2.0
 FASTER_FACTOR = 2.0
 MIN_GAP_NS = 30.0
+# A getter cheaper than stock's needs a smaller gap: what it skipped is real work, and the fastest of several
+# runs is steady to a few ns. VENDOR and VERSION took 14 ns against stock's 35-36 (0.4x, a 21 ns gap, on
+# 159.0-beta.35 without --enable-stdcxx-compat), which a 30 ns floor let through.
+FASTER_MIN_GAP_NS = 12.0
 PAGE_TIMEOUT_S = 240
 FIRST_READ_GAP_MS = 5.0
 
@@ -63,10 +67,14 @@ FIRST_READS = ["navigator.hardwareConcurrency", "screen.width", "screen.colorDep
 # WebGL, on a canvas in the page and an OffscreenCanvas in the worker. 37446 is
 # WEBGL_debug_renderer_info's UNMASKED_RENDERER_WEBGL; the renderer strings are
 # a synchronous round trip to the GPU process in stock, which a spoofed string
-# must not skip.
+# must not skip. VENDOR, VERSION and SHADING_LANGUAGE_VERSION build a std::string
+# per call: stock Linux is built with --enable-stdcxx-compat (the old libstdc++
+# ABI, no small-string buffer), so each one allocates there, and a build without
+# it answered them at 0.47x stock's cost (LEAKS 637).
 WEBGL = [
     "G.getParameter(G.MAX_TEXTURE_SIZE)", "G.getParameter(G.MAX_VERTEX_ATTRIBS)",
-    "G.getParameter(G.VENDOR)", "G.getParameter(G.RENDERER)", "G.getParameter(37446)",
+    "G.getParameter(G.VENDOR)", "G.getParameter(G.VERSION)", "G.getParameter(G.SHADING_LANGUAGE_VERSION)",
+    "G.getParameter(G.RENDERER)", "G.getParameter(37446)",
     "G.getExtension('OES_texture_float')", "G.getSupportedExtensions().length",
 ]
 GL_SETUP = "G.getExtension('WEBGL_debug_renderer_info');"
@@ -134,7 +142,13 @@ function bench(exprs, setup) {
   const res = {window: win, worker, first};
   document.body.dataset.result = JSON.stringify(res);
   fetch('/result', {method: 'POST', body: JSON.stringify(res)});
-})();
+})().catch(e => {
+  // Reported, not left to the timeout: without a WebGL context (a browser on
+  // no display has none) the GL setup throws and nothing would be sent.
+  const res = {error: String(e)};
+  document.body.dataset.result = JSON.stringify(res);
+  fetch('/result', {method: 'POST', body: JSON.stringify(res)});
+});
 </script></body>"""
 
 
@@ -231,7 +245,10 @@ def run_camoufox(binary, url, identity):
             page = browser.new_page()
         page.goto(url)
         page.wait_for_function("document.body.dataset.result", timeout=PAGE_TIMEOUT_S * 1000)
-        return json.loads(page.evaluate("document.body.dataset.result"))
+        result = json.loads(page.evaluate("document.body.dataset.result"))
+        if "error" in result:
+            raise SystemExit(f"FAIL: Camoufox's page failed ({identity} identity): {result['error']}")
+        return result
 
 
 def fastest(runs):
@@ -245,6 +262,14 @@ def fastest(runs):
 
 
 def main() -> int:
+    # Both browsers on a private X display: WebGL is part of the bench, and a
+    # browser started with no display at all (the guard runner unsets DISPLAY)
+    # gets no GL context, so stock's page threw before it reported.
+    with hidden_display():
+        return measure()
+
+
+def measure() -> int:
     camoufox_bin = resolve_binary()
     stock_bin = stock_firefox()
 
@@ -266,6 +291,9 @@ def main() -> int:
             stop_stock(profile, proc)
             if not server.results:
                 print("FAIL: stock Firefox never reported -- check is vacuous")
+                return 1
+            if "error" in server.results[0]:
+                print(f"FAIL: stock Firefox's page failed: {server.results[0]['error']}")
                 return 1
             stock_runs.append(server.results[0])
             for identity, runs in camou_runs.items():
@@ -296,7 +324,7 @@ def main() -> int:
                 control = expr in CONTROLS
                 slow = c > SLOWER_FACTOR * s and c - s >= MIN_GAP_NS
                 fast = (FASTER_FACTOR * c / camou_base < s / stock_base
-                        and s - c >= MIN_GAP_NS)
+                        and s - c >= FASTER_MIN_GAP_NS)
                 mark = ("  <- control" if control else "  <- SLOWER" if slow
                         else "  <- FASTER" if fast else "")
                 print(f"{where:6s} {expr[:44]:44s} {s:8.0f} {c:9.0f}{mark}")

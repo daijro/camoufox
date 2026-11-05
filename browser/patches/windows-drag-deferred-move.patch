@@ -1,0 +1,81 @@
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -402,6 +402,9 @@
+   long movementY;
+   // Juggler event identifier for tracking events across processes.
+   unsigned long jugglerEventId = 0;
++  // Camoufox: how long ago, in ms, the event was made: a move delivered late
++  // keeps the timestamp it was made at, as a queued native message does.
++  double jugglerAgeMs = 0;
+ };
+ 
+ // Mozilla-specific stuff
+diff --git a/dom/interfaces/base/nsIDOMWindowUtils.idl b/dom/interfaces/base/nsIDOMWindowUtils.idl
+--- a/dom/interfaces/base/nsIDOMWindowUtils.idl
++++ b/dom/interfaces/base/nsIDOMWindowUtils.idl
+@@ -345,6 +345,13 @@
+                          in unsigned long aIdentifier,
+                          in boolean aDisablePointerEvent);
+ 
++  /**
++   * Camoufox: the next jugglerSendMouseEvent's event was made aAgeMs ago, and
++   * keeps that time stamp (a move Windows held back during a drag). One event
++   * only. A setter, not an argument: XPConnect takes at most 15 of those.
++   */
++  void jugglerSetNextMouseEventAge(in double aAgeMs);
++
+   /** Synthesize a wheel event for a window. The event types supported is only
+    *  wheel.
+    *
+diff --git a/dom/base/nsDOMWindowUtils.cpp b/dom/base/nsDOMWindowUtils.cpp
+--- a/dom/base/nsDOMWindowUtils.cpp
++++ b/dom/base/nsDOMWindowUtils.cpp
+@@ -708,6 +708,13 @@
+ }
+ 
+ static uint32_t sJugglerEventId = 1000;
++static double sJugglerNextAgeMs = 0;
++
++NS_IMETHODIMP
++nsDOMWindowUtils::JugglerSetNextMouseEventAge(double aAgeMs) {
++  sJugglerNextAgeMs = aAgeMs > 0 ? aAgeMs : 0;
++  return NS_OK;
++}
+ 
+ NS_IMETHODIMP
+ nsDOMWindowUtils::JugglerSendMouseEvent(
+@@ -718,6 +725,8 @@
+     int32_t aButtons, uint32_t aIdentifier, bool aDisablePointerEvent,
+     uint32_t* aJugglerEventId) {
+   *aJugglerEventId = ++sJugglerEventId;
++  const double ageMs = sJugglerNextAgeMs;
++  sJugglerNextAgeMs = 0;
+ 
+   RefPtr<PresShell> presShell = GetPresShell();
+   if (!presShell) {
+@@ -742,6 +751,7 @@
+   mouseEventData.mInputSource = aInputSourceArg;
+   mouseEventData.mModifiers = aModifiers;
+   mouseEventData.mJugglerEventId = *aJugglerEventId;
++  mouseEventData.mJugglerAgeMs = ageMs;
+ 
+   SynthesizeMouseEventOptions options;
+   options.mIgnoreRootScrollFrame = aIgnoreRootScrollFrame;
+diff --git a/dom/base/nsContentUtils.cpp b/dom/base/nsContentUtils.cpp
+--- a/dom/base/nsContentUtils.cpp
++++ b/dom/base/nsContentUtils.cpp
+@@ -10551,6 +10551,13 @@
+       aOptions.mIsDOMEventSynthesized;
+   mouseOrPointerEvent.mExitFrom = std::move(exitFrom);
+   mouseOrPointerEvent.mJugglerEventId = aMouseEventData.mJugglerEventId;
++  // Camoufox: a move Juggler delivers late (a Windows drag's deferred motion,
++  // PageHandler) is stamped when it was made, as Windows stamps a queued
++  // WM_MOUSEMOVE with its message time.
++  if (aMouseEventData.mJugglerAgeMs > 0) {
++    mouseOrPointerEvent.mTimeStamp -=
++        TimeDuration::FromMilliseconds(aMouseEventData.mJugglerAgeMs);
++  }
+   mouseOrPointerEvent.convertToPointer = aOptions.mConvertToPointer;
+   mouseOrPointerEvent.mCallbackId = notifier.SaveCallback();
+ 

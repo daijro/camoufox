@@ -11,13 +11,46 @@ const {PageTarget} = ChromeUtils.importESModule('resource://gre/modules/juggler/
 const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
 const {MouseDispatch, kAckDeadlineMs} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
 const kMoveIntervalMs = 8; // a 125 Hz mouse
-const {humanizedSteps} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
+const {humanizeSeam} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanizeSeam.js');
+const {cursory} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
+
+// Probe rounds for a humanized scrollIntoViewIfNeeded (see
+// _humanizedScrollIntoView) before the stock scroll takes over.
+const kScrollIntoViewRounds = 4;
 
 const Cc = Components.classes;
 const Ci = Components.interfaces;
 const Cu = Components.utils;
 const XUL_NS = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
 const helper = new Helper();
+
+// How long a person holds a mouse button for a click: about 110 ms (SD 30),
+// the human click durations reported in arXiv 2607.26935 (100-120 ms, sigma
+// ~30 ms; a secondary figure, no recorded corpus yet), kept within 50-250 ms
+// as key holds are (content/PageAgent.js TypingPace).
+function clickHold() {
+  const n = Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+  return Math.min(250, Math.max(50, 110 + 30 * n));
+}
+
+// How long a person's button stays up between the clicks of a double click:
+// about 110 ms (SD 25; an estimate, no published or recorded figure found),
+// kept within 70-180 ms, so press to press stays well
+// inside the OS double-click time with clickHold() before it.
+function clickGap() {
+  const n = Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+  return Math.min(180, Math.max(70, 110 + 25 * n));
+}
+
+// How long a person's pointer rests on a target before pressing it: about
+// 130 ms (SD 40; an estimate, no published or recorded figure found), kept
+// within 60-240 ms. Stock's OS input reads under 250 ms from arrival to press
+// (cfparity driven.dblclick timing/overDown); Playwright pressed under 10 ms
+// after the move that brought the pointer there.
+function hoverDwell() {
+  const n = Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+  return Math.min(240, Math.max(60, 130 + 40 * n));
+}
 
 function hashConsoleMessage(params) {
   return params.location.lineNumber + ':' + params.location.columnNumber + ':' + params.location.url;
@@ -88,11 +121,13 @@ export class PageHandler {
     // taken the pointer from the window yet (_dragMotion).
     this._dragMoves = 0;
     this._dragHasPointer = false;
+    // Windows: the move after the one that started the drag, held until the
+    // drag is over (_deliverDeferredDragMove).
+    this._deferredDragMove = null;
     this._lastMousePosition = { x: 0, y: 0 };
     // Camoufox: last position an actual mousemove landed on. Used as the
     // start point for the humanized cursor trajectory (humanize=True).
     this._lastTrackedPos = { x: 0, y: 0 };
-
     // Camoufox: documents whose content process accepts user input (see
     // _awaitUserInputGate), keyed by WindowGlobalParent.
     this._userInputGateOpen = new WeakSet();
@@ -115,7 +150,14 @@ export class PageHandler {
 
     this._pendingEventWatchers = new Set();
     this._moveDelivery = null;
+    // Arrival order of mouse commands (beforeDispatch).
+    this._mouseTurn = Promise.resolve();
+    this._mouseTurns = new Map();
     this._lastMoveAt = 0;
+    this._humanizeAbort = new AbortController();
+    // Per-page typing state a keyboard engine plans against (held keys, the
+    // time of the previous keydown).
+    this._keyboardState = {};
     this._eventListeners = [
       helper.on(this._pageTarget, PageTarget.Events.DialogOpened, this._onDialogOpened.bind(this)),
       helper.on(this._pageTarget, PageTarget.Events.DialogClosed, this._onDialogClosed.bind(this)),
@@ -170,6 +212,9 @@ export class PageHandler {
   }
 
   async dispose() {
+    // Stop any humanized plan still playing; nothing more dispatches to a page
+    // that is going away.
+    this._humanizeAbort.abort();
     this._contentPage.dispose();
     for (const watcher of this._pendingEventWatchers)
       watcher.dispose();
@@ -331,6 +376,8 @@ export class PageHandler {
     // Camoufox: and the page takes the focus, as when a user clicks into it.
     // Raising the window alone left focus on nothing once another window had
     // been open, and the page never learnt it was the active tab again.
+    // Waits (bounded) for the window manager to activate the window, so the
+    // page reads as focused once the call returns, as it does for a user.
     await this._pageTarget.activateAndRun(() => this._focusFrontPage());
   }
 
@@ -546,11 +593,135 @@ export class PageHandler {
   }
 
   async ['Page.scrollIntoViewIfNeeded'](options) {
+    // Camoufox: a scroll engine that plans this (planIntoView,
+    // input/HumanizeSeam.js) brings the element into view with wheel input
+    // first. The stock scroll still runs last: it does nothing once the element
+    // is in view, finishes the job if the wheel fell short, and raises the
+    // stock errors (detached, no layout object) either way.
+    if (!this._isDragging && humanizeSeam().handles('scroll', 'planIntoView'))
+      await this._humanizedScrollIntoView(options);
     return await this._contentPage.send('scrollIntoViewIfNeeded', options);
+  }
+
+  // Probe, plan, wheel, and probe again, up to kScrollIntoViewRounds times:
+  // fixed headers, lazy content and scroll anchoring move targets while they
+  // scroll. The engine declines once the target is in view, and a plan that
+  // does not end in a `probe` step is the last round.
+  async _humanizedScrollIntoView(options) {
+    await this._awaitUserInputGate();
+    for (let round = 0; round < kScrollIntoViewRounds; round++) {
+      let probe;
+      try {
+        probe = await this._contentPage.send('humanizeScrollProbe', {...options, from: this._lastTrackedPos});
+      } catch (e) {
+        return;
+      }
+      if (!probe.targetRect)
+        return;
+      const planned = humanizeSeam().plan('scroll', 'planIntoView',
+          {cursor: this._lastTrackedPos, viewport: probe.viewport, round}, probe);
+      if (!planned)
+        return;
+      const firstWheel = planned.plan.steps.find(step => step.kind === 'wheel');
+      await this._pageTarget.activateAndRun(async () => {
+        this._pageTarget.ensureContextMenuClosed();
+        // A wheel scrolls what is under the cursor, so the cursor goes there
+        // first, moved by the engine for moves the browser originates.
+        if (firstWheel)
+          await this._moveCursorForScroll(firstWheel.x, firstWheel.y);
+        await this._playWheelPlan(planned, 'Page.scrollIntoViewIfNeeded', 0);
+      }, { muteNotificationsPopup: true });
+      if (planned.plan.steps.at(-1)?.kind !== 'probe')
+        return;
+    }
+  }
+
+  // Inside activateAndRun. The mouse:internal engine plans the move; with a
+  // raw mouse it is a single mousemove.
+  async _moveCursorForScroll(x, y) {
+    const from = this._lastTrackedPos;
+    if (Math.round(x) === Math.round(from.x) && Math.round(y) === Math.round(from.y))
+      return;
+    const win = this._pageTarget._window;
+    if (win.windowUtils.flushApzRepaints())
+      await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
+    const dispatch = MouseDispatch.forBrowser(win, this._pageTarget._linkedBrowser, {button: 0, clickCount: 0, modifiers: 0, buttons: 0});
+    // A move is acked when the renderer queues it (MouseDispatch.sendAcked).
+    const watcher = new EventWatcher(this._pageEventSink, ['mousequeued'], this._pendingEventWatchers);
+    const planned = Number.isFinite(from.x) && humanizeSeam().plan('mouse:internal', 'planMove', {
+      cursor: from,
+      viewport: {width: dispatch.boundingBox.width, height: dispatch.boundingBox.height},
+    }, {x, y});
+    if (planned) {
+      await dispatch.sendTrajectoryAcked(watcher, 'mousemove', planned.plan,
+          (plan, dispatchStep) => this._playHumanized(planned, 'Page.scrollIntoViewIfNeeded', dispatchStep));
+    } else {
+      await dispatch.sendAcked(watcher, 'mousemove', x, y);
+    }
+    await watcher.dispose();
+    this._lastTrackedPos = { x, y };
+    this._lastMousePosition = { x, y };
+    this._movedAt = ChromeUtils.now();
+  }
+
+  // Inside activateAndRun: play a scroll engine's plan. Wheel steps are
+  // dispatched; a `probe` step only marks when the plan is done.
+  async _playWheelPlan(planned, command, modifiers) {
+    const win = this._pageTarget._window;
+    if (win.windowUtils.flushApzRepaints())
+      await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
+    await this._playHumanized(planned, command, step => {
+      if (step.kind === 'wheel')
+        this._sendWheelStep(win, modifiers, step);
+    });
+  }
+
+  // Camoufox: measure at each dispatch, after any await, like
+  // Page.dispatchMouseEvent does. Same conversion as a mouse event: a wheel at
+  // relative y == 0 would otherwise land on the chrome/content boundary and
+  // scroll the tab strip.
+  _sendWheelStep(win, modifiers, step) {
+    MouseDispatch.forBrowser(win, this._pageTarget._linkedBrowser, {modifiers}).sendWheel(step.x, step.y, {
+      deltaX: step.dx,
+      deltaY: step.dy,
+      deltaZ: step.dz,
+      deltaMode: step.mode,
+      lineOrPageDeltaX: step.ticks?.x ?? 0,
+      lineOrPageDeltaY: step.ticks?.y ?? 0,
+      nativeNotches: Boolean(step.ticks),
+    });
   }
 
   async ['Page.setInitScripts']({ scripts }) {
     return await this._pageTarget.setInitScripts(scripts);
+  }
+
+  _playHumanized(planned, command, dispatchStep) {
+    return humanizeSeam().play(planned, dispatchStep, {
+      command,
+      page: this._pageTarget.id(),
+      signal: this._humanizeAbort.signal,
+    });
+  }
+
+  // Key and text steps of a keyboard plan go through the stock content
+  // dispatch, one step at a time.
+  _dispatchPlannedKeyStep(step) {
+    if (step.kind === 'text')
+      return this._contentPage.send('insertText', {text: step.text});
+    const {type, key, code, keyCode, location, text} = step;
+    return this._contentPage.send('dispatchKeyEvent', {type, key, code, keyCode, location, repeat: false, text});
+  }
+
+  // What a keyboard engine plans against: the page's typing state, and what
+  // has focus (it only injects a slip it can correct into an editable text
+  // control). Focus is asked of the content process only when an engine will
+  // use it.
+  async _keyboardContext(needsFocus) {
+    const context = {keyboardState: this._keyboardState};
+    if (needsFocus && humanizeSeam().active('keyboard'))
+      context.focus = await this._contentPage.send('humanizeFocus');
+    return context;
   }
 
   // Camoufox: Firefox's content process drops user input that reaches a
@@ -575,10 +746,23 @@ export class PageHandler {
       this._userInputGateOpen.add(windowGlobal);
   }
 
+  // Camoufox: the OS delivers keys only to the active window's selected tab,
+  // and since Juggler no longer forces every page focused (content/main.js),
+  // a page typed into from behind another window or tab would get trusted
+  // keydowns with document.hasFocus() false, which no person's Firefox
+  // delivers. So keyboard input first brings its page to the front, as the
+  // mouse does through activateAndRun, and waits (bounded) for the window
+  // manager to make its window active.
   _isFrontPage() {
     const browser = this._pageTarget.linkedBrowser();
     const win = browser?.documentGlobal || browser?.ownerGlobal;
     return !!win && Services.focus.activeWindow === win && win.gBrowser?.selectedBrowser === browser;
+  }
+
+  async _activateForKeyboard() {
+    if (this._isFrontPage())
+      return;
+    await this._pageTarget.activateAndRun(() => this._focusFrontPage());
   }
 
   async _focusFrontPage() {
@@ -594,6 +778,7 @@ export class PageHandler {
 
   async ['Page.dispatchKeyEvent']({type, keyCode, code, key, repeat, location, text}) {
     await this._awaitUserInputGate();
+    await this._activateForKeyboard();
     // key events don't fire if we are dragging.
     if (this._isDragging) {
       if (type === 'keydown' && key === 'Escape') {
@@ -608,7 +793,11 @@ export class PageHandler {
       }
       return;
     }
-    return await this._contentPage.send('dispatchKeyEvent', {type, keyCode, code, key, repeat, location, text});
+    const keyEvent = {type, keyCode, code, key, repeat, location, text};
+    const planned = humanizeSeam().plan('keyboard', 'planKey', await this._keyboardContext(type === 'keydown'), keyEvent);
+    if (!planned)
+      return await this._contentPage.send('dispatchKeyEvent', keyEvent);
+    await this._playHumanized(planned, 'Page.dispatchKeyEvent', step => this._dispatchPlannedKeyStep(step));
   }
 
   async ['Page.dispatchTouchEvent'](options) {
@@ -655,13 +844,44 @@ export class PageHandler {
   // Called by the protocol session before each command of this page. Any
   // command but another move waits until the page has the last move, so what
   // a caller does after page.mouse.move() sees the move.
+  //
+  // Mouse commands also join the input chain in the order they arrived. Each
+  // one has waits of its own before it gets there (the move's delivery, the
+  // input gate), and a release that cleared them first was dispatched before
+  // its press: the page saw mouseup, then mousedown, and no click
+  // (near-edge-mouse-deadlock.py cold pages, ~1 in 3 runs once mousedown
+  // waited a dwell). A command takes its turn here, synchronously on arrival,
+  // and hands it on once it is queued on the chain (_mouseTurnTaken).
   async beforeDispatch(method, params) {
-    if (method === 'Page.dispatchMouseEvent' && params.type === 'mousemove')
-      return;
+    if (method === 'Page.dispatchMouseEvent') {
+      const previous = this._mouseTurn;
+      let handOn;
+      this._mouseTurn = new Promise(resolve => handOn = resolve);
+      this._mouseTurns.set(params, handOn);
+      await previous;
+      if (params.type === 'mousemove')
+        return;
+    }
     await this._moveDelivered();
   }
 
-  async ['Page.dispatchMouseEvent']({type, x, y, button, clickCount, modifiers, buttons}) {
+  // The command's turn is over: the next mouse command may join the chain.
+  _mouseTurnTaken(params) {
+    const handOn = this._mouseTurns.get(params);
+    this._mouseTurns.delete(params);
+    handOn?.();
+  }
+
+  async ['Page.dispatchMouseEvent'](params) {
+    try {
+      return await this._dispatchMouseEvent(params);
+    } finally {
+      this._mouseTurnTaken(params);
+    }
+  }
+
+  async _dispatchMouseEvent(params) {
+    const {type, x, y, button, clickCount, modifiers, buttons} = params;
     await this._awaitUserInputGate();
     const win = this._pageTarget._window;
     const eventArgs = {button, clickCount, modifiers, buttons};
@@ -690,17 +910,17 @@ export class PageHandler {
       const watcher = new EventWatcher(this._pageEventSink, acks, this._pendingEventWatchers);
       const promises = [];
       for (const eventType of types) {
-        // Camoufox: when humanize is enabled, expand a direct mousemove into a
-        // human-like trajectory of intermediate mousemoves, replayed from a
-        // recording of a real hand (input/CursorTrajectory.js -> Cursory).
-        if (eventType === 'mousemove' && ChromeUtils.camouGetBool('humanize', false)) {
-          // The endpoints are excluded: the cursor is already on the first, and
-          // the last is the destination dispatched explicitly below.
-          const {steps, trailingDelayMs} =
-              humanizedSteps(this._lastTrackedPos.x, this._lastTrackedPos.y, x, y);
-          await dispatch.sendTrajectoryAcked(watcher, 'mousemove', steps, trailingDelayMs);
-          // Always finish exactly on the requested destination.
-          promises.push(this._sendMove(dispatch, watcher, x, y));
+        // Camoufox: with a mouse engine on (input/HumanizeSeam.js), a direct
+        // mousemove becomes a human-like trajectory of intermediate mousemoves
+        // that ends exactly on the requested destination.
+        const planned = eventType === 'mousemove' && humanizeSeam().plan('mouse', 'planMove', {
+          cursor: this._lastTrackedPos,
+          viewport: {width: dispatch.boundingBox.width, height: dispatch.boundingBox.height},
+        }, {x, y});
+        if (planned) {
+          await dispatch.sendTrajectoryAcked(watcher, 'mousemove', planned.plan,
+              (plan, dispatchStep) => this._playHumanized(planned, 'Page.dispatchMouseEvent', dispatchStep),
+              (destX, destY) => this._sendMove(dispatch, watcher, destX, destY));
         } else if (eventType === 'mousemove') {
           promises.push(this._sendMove(dispatch, watcher, x, y));
         } else {
@@ -714,7 +934,7 @@ export class PageHandler {
     // We must switch to proper tab in the tabbed browser so that
     // 1. Event is dispatched to a proper renderer.
     // 2. We receive an ack from the renderer for the dispatched event.
-    await this._pageTarget.activateAndRun(async () => {
+    const dispatched = this._pageTarget.activateAndRun(async () => {
       this._pageTarget.ensureContextMenuClosed();
       // If someone asks us to dispatch mouse event outside of viewport, then we normally would drop it.
       const dispatch = MouseDispatch.forBrowser(win, this._pageTarget._linkedBrowser, eventArgs);
@@ -745,13 +965,45 @@ export class PageHandler {
         // fire it on press. Follow the claimed OS (measured 2026-09-14: stock
         // Windows contextmenu.buttons=0, camoufox 2).
         const eventNames = (button === 2 && !this._contextMenuOnMouseUp()) ? ['mousedown', 'contextmenu'] : ['mousedown'];
+        // Camoufox: the second press of a double click comes a person's gap
+        // after the release, not right behind it (Playwright pipelines the
+        // clicks; driven-dblclick-gap.py). A script's own longer pause stands.
+        const upAt = this._buttonUpAt;
+        this._buttonUpAt = undefined;
+        if (clickCount > 1 && upAt !== undefined) {
+          const wait = upAt + clickGap() - ChromeUtils.now();
+          if (wait > 0)
+            await new Promise(resolve => setTimeout(resolve, wait));
+        }
+        // Camoufox: a press that follows the move bringing the pointer to its
+        // target comes a person's dwell after that move, not right behind it
+        // (Playwright pipelines move and press; cfparity driven.dblclick
+        // timing/overDown read under 10 ms where stock reads under 250). A
+        // script's own longer pause stands; the second press of a double
+        // click follows its gap above, with no move before it.
+        const movedAt = this._movedAt;
+        this._movedAt = undefined;
+        if (clickCount <= 1 && movedAt !== undefined) {
+          const wait = movedAt + hoverDwell() - ChromeUtils.now();
+          if (wait > 0)
+            await new Promise(resolve => setTimeout(resolve, wait));
+        }
         await sendEvents(eventNames);
+        this._buttonDownAt = ChromeUtils.now();
         return;
       }
 
       if (type === 'mousemove') {
         this._lastMousePosition = { x, y };
         await this._settleDrag(false);
+        if (this._isDragging && this._windowsDrag() && this._dragMoves++ === 0) {
+          // Windows: the move queued behind the one that started the drag
+          // stays in the window's queue while OLE's DoDragDrop loop runs, and
+          // is dispatched once the drag is over (_deliverDeferredDragMove);
+          // the drag's first motion is the move after it.
+          this._deferredDragMove = {x, y, at: ChromeUtils.now()};
+          return;
+        }
         if (this._isDragging && !this._dragSkipsMove()) {
           this._dragMotion(dispatch, x, y);
           const watcher = new EventWatcher(this._pageEventSink, ['dragover'], this._pendingEventWatchers);
@@ -784,6 +1036,8 @@ export class PageHandler {
         // Camoufox: remember where the cursor landed so the next humanized
         // move starts its trajectory from the real previous position.
         this._lastTrackedPos = { x, y };
+        if (!buttons)
+          this._movedAt = ChromeUtils.now();
         // A move with a button held may start a drag, which the page decides
         // when the move reaches it, at the refresh tick.
         if (buttons)
@@ -804,6 +1058,8 @@ export class PageHandler {
       }
 
       if (type === 'mouseup') {
+        const downAt = this._buttonDownAt;
+        this._buttonDownAt = undefined;
         await this._settleDrag(true);
         if (this._isDragging) {
           this._dragMotion(dispatch, x, y);
@@ -820,13 +1076,31 @@ export class PageHandler {
           //   during drag. However, it'll be dispatched synchronously in the renderer.
           await watcher.ensureEventsAndDispose(['dragover']);
           this._isDragging = false;
+          await this._deliverDeferredDragMove(win, modifiers, x, y);
         } else {
+          // Camoufox: a person holds a mouse button down for a while before
+          // letting go; Playwright's click() sends mouseup right behind
+          // mousedown (pipelined), so the page saw every press released under
+          // 10 ms (cfparity driven.click timing/downUp). Release no sooner than
+          // a person's hold after the press went in; a script's own longer
+          // `delay` stands as it is (driven-click-hold.py). Here, on the input
+          // chain, so the press has been dispatched before the hold is timed.
+          if (downAt !== undefined) {
+            const wait = downAt + clickHold() - ChromeUtils.now();
+            if (wait > 0)
+              await new Promise(resolve => setTimeout(resolve, wait));
+          }
           const eventNames = (button === 2 && this._contextMenuOnMouseUp()) ? ['mouseup', 'contextmenu'] : ['mouseup'];
           await sendEvents(eventNames);
+          this._buttonUpAt = ChromeUtils.now();
         }
         return;
       }
     }, { muteNotificationsPopup: true });
+    // activateAndRun() queued the slot synchronously: the next command's slot
+    // now comes after this one.
+    this._mouseTurnTaken(params);
+    await dispatched;
   }
 
   // Whether the drag a mousemove started has a drag session. Waited for a
@@ -845,6 +1119,37 @@ export class PageHandler {
     this._isDragging = !!finalized?.dragSessionStarted;
     this._dragMoves = 0;
     this._dragHasPointer = false;
+    this._deferredDragMove = null;
+  }
+
+  // Windows Firefox after a drag (stock 158.0.1 on win-i9, SendInput, three
+  // runs): after dragend the page gets the move that waited
+  // out the drag, with the button still held and the timestamp it was made at
+  // (~470 ms before dragend), then a move at the drop point with the button
+  // released; the next move's movement counts from the drop point. No widget
+  // exit or enter happens around the drag.
+  async _deliverDeferredDragMove(win, modifiers, x, y) {
+    const deferred = this._deferredDragMove;
+    this._deferredDragMove = null;
+    if (!deferred)
+      return;
+    const browser = this._pageTarget._linkedBrowser;
+    const watcher = new EventWatcher(this._pageEventSink, ['mousequeued'], this._pendingEventWatchers);
+    try {
+      const held = MouseDispatch.forBrowser(win, browser,
+          {button: 0, clickCount: 0, modifiers, buttons: 1, ageMs: ChromeUtils.now() - deferred.at});
+      await this._sendMove(held, watcher, deferred.x, deferred.y);
+      const released = MouseDispatch.forBrowser(win, browser, {button: 0, clickCount: 0, modifiers, buttons: 0});
+      await this._sendMove(released, watcher, x, y);
+      this._lastTrackedPos = {x, y};
+    } finally {
+      watcher.dispose();
+    }
+  }
+
+  // Whether drags follow Windows' order: the claimed navigator.platform.
+  _windowsDrag() {
+    return this._contextMenuOnMouseUp();
   }
 
   // GTK hands the pointer to a new drag session one move late: the move after
@@ -852,14 +1157,14 @@ export class PageHandler {
   // button held (measured on X11 against stock 158.0.1). Windows and macOS are
   // not measured, so they keep dragging from the first move.
   _dragSkipsMove() {
-    return Services.appinfo.widgetToolkit === 'gtk' && this._dragMoves++ === 0;
+    return Services.appinfo.widgetToolkit === 'gtk' && !this._windowsDrag() && this._dragMoves++ === 0;
   }
 
   // The first drag motion takes the pointer from the window, as a GTK drag
   // session's grab does: a widget exit, so the drag starts with nothing hovered
   // and the next move after the drop reports no movement.
   _dragMotion(dispatch, x, y) {
-    if (this._dragHasPointer || Services.appinfo.widgetToolkit !== 'gtk')
+    if (this._dragHasPointer || Services.appinfo.widgetToolkit !== 'gtk' || this._windowsDrag())
       return;
     this._dragHasPointer = true;
     dispatch.leaveWindow(x, y);
@@ -875,46 +1180,46 @@ export class PageHandler {
 
   async ['Page.dispatchWheelEvent']({x, y, button, deltaX, deltaY, deltaZ, modifiers }) {
     await this._awaitUserInputGate();
-    // Camoufox: scroll the way a mouse wheel does, in notches (docs/input-dispatch.md).
-    // Each notch is its own event of 3 lines carrying one native tick, so the
-    // page sees what stock Firefox gets from a wheel: on GTK deltaMode 1,
-    // deltaY 6, wheelDelta -120, DOMMouseScroll.detail 3 (measured against
-    // XTest input). A longer scroll arrives as several such events tens of ms
-    // apart. 100 px is one notch, rounded, at least one per axis that moves.
-    const PX_PER_NOTCH = 100;
-    const LINES_PER_NOTCH = 3;
-    const toNotches = (d) => (d === 0 ? 0 : Math.sign(d) * Math.max(1, Math.round(Math.abs(d) / PX_PER_NOTCH)));
-    const notchesX = toNotches(deltaX);
-    const notchesY = toNotches(deltaY);
-    const notchCount = Math.max(Math.abs(notchesX), Math.abs(notchesY));
-
     await this._pageTarget.activateAndRun(async () => {
       this._pageTarget.ensureContextMenuClosed();
 
       // 1. Scroll element to the desired location first; the coordinates are relative to the element.
       this._pageTarget._linkedBrowser.scrollRectIntoViewIfNeeded(x, y, 0, 0);
+      // Camoufox: a scroll engine (input/HumanizeSeam.js; `cursory` by
+      // default with humanize on) turns one wheel call into the events a
+      // physical wheel produces.
+      const planned = humanizeSeam().plan('scroll', 'planWheel', {}, {x, y}, {deltaX, deltaY, deltaZ});
+      if (planned) {
+        await this._playWheelPlan(planned, 'Page.dispatchWheelEvent', modifiers);
+        return;
+      }
       // 2. Get element's bounding box in the browser after the scroll is completed.
       const win = this._pageTarget._window;
       // 3. Make sure compositor is flushed after scrolling.
       if (win.windowUtils.flushApzRepaints())
         await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
-      for (let i = 0; i < notchCount; i++) {
-        if (i)
-          await new Promise(resolve => setTimeout(resolve, 18 + Math.random() * 42));
-        const stepX = i < Math.abs(notchesX) ? Math.sign(notchesX) * LINES_PER_NOTCH : 0;
-        const stepY = i < Math.abs(notchesY) ? Math.sign(notchesY) * LINES_PER_NOTCH : 0;
-        // Camoufox: measure after the await, like Page.dispatchMouseEvent does.
-        const dispatch = MouseDispatch.forBrowser(win, this._pageTarget._linkedBrowser, {modifiers});
-        // Same conversion as a mouse event: a wheel at relative y == 0 would
-        // otherwise land on the chrome/content boundary and scroll the tab strip.
-        dispatch.sendWheel(x, y, stepX, stepY);
+      // Camoufox: without a scroll engine a wheel still turns in notches, as a
+      // mouse wheel does (docs/input-dispatch.md): no wheel produces a pixel
+      // delta. The plan is the `cursory` engine's, paced here instead of by
+      // the seam.
+      const {steps} = cursory.planWheel({rng: Math.random}, {x, y}, {deltaX, deltaY, deltaZ});
+      const start = ChromeUtils.now();
+      for (const step of steps) {
+        const waitMs = start + step.t - ChromeUtils.now();
+        if (waitMs > 0)
+          await new Promise(resolve => setTimeout(resolve, waitMs));
+        this._sendWheelStep(win, modifiers, step);
       }
     }, { muteNotificationsPopup: true });
   }
 
   async ['Page.insertText'](options) {
     await this._awaitUserInputGate();
-    return await this._contentPage.send('insertText', options);
+    await this._activateForKeyboard();
+    const planned = humanizeSeam().plan('keyboard', 'planInsert', await this._keyboardContext(true), options.text);
+    if (!planned)
+      return await this._contentPage.send('insertText', options);
+    await this._playHumanized(planned, 'Page.insertText', step => this._dispatchPlannedKeyStep(step));
   }
 
   async ['Page.crash'](options) {
