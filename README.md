@@ -495,7 +495,7 @@ claims the host's OS. Details are in
 | Playwright's `evaluate`, selectors and init scripts run in an isolated world the page cannot see | Juggler |
 | `navigator.webdriver` is `false` | `playwright/1-leak-fixes` patch |
 | `select_option`, `fill` on date and colour inputs, and `set_input_files` fire trusted events | `trusted-automation-events` patch |
-| `fill` and `keyboard.insert_text` type the text, key by key at a person's pace | Juggler |
+| `fill` and `keyboard.insert_text` paste the text as a person does: the paste shortcut and Firefox's own paste, without the system clipboard | Juggler |
 | Screenshots leave the page's DOM alone (no caret-hiding style writes) | Launcher |
 | Mouse moves coalesce per frame as a real mouse's do, spaced as a 125 Hz mouse's | Juggler, `input-coalescing-parity` patch |
 | A drag fires `drag` at its source with each motion, as GTK does | Juggler, `drag-source-events` patch |
@@ -647,7 +647,7 @@ async with AsyncCamoufox(humanize={"mouse": custom(my_move), "scroll": auto(), "
 
 - `original()` runs Playwright's own behaviour for the call. Calling it is how a function declines.
 - `rng()` returns a float in [0, 1) from the channel's seeded stream. It is the same stream the browser's engines would draw from for that seed, number for number.
-- `play(steps)` dispatches steps at their times, in ms from the start of the call: `("move", x, y, t)`, `("down" | "up", button, t)`, `("wheel", dx, dy, t)`, `("key", key, "down" | "up", t)`, `("text", text, t)`. It waits until each step is due on a monotonic clock rather than sleeping between steps, so a slow round trip delays one step and never adds up. Bad steps raise `ValueError` before anything is sent.
+- `play(steps)` dispatches steps at their times, in ms from the start of the call: `("move", x, y, t)`, `("down" | "up", button, t)`, `("wheel", dx, dy, t)`, `("key", key, "down" | "up", t)`, `("text", text, t)` (pasted, as `keyboard.insert_text` is). It waits until each step is due on a monotonic clock rather than sleeping between steps, so a slow round trip delays one step and never adds up. Bad steps raise `ValueError` before anything is sent.
 - Playwright's actions run inside its own server, so the wrappers act first: they scroll the element into view and move to the click point, and Playwright's own move then has no distance left. A `fill` selects the field's text first, so your keys replace it.
 - With the sync API the functions are plain functions; with the async API they may be `async`. Exceptions reach the caller unchanged.
 - A custom mouse leaves the moves the browser makes itself (the cursor move before a scroll engine wheels) to the build's own mouse engine, so they are paths, not jumps.

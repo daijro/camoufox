@@ -12,6 +12,7 @@ const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sy
 const {MouseDispatch, kAckDeadlineMs} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
 const kMoveIntervalMs = 8; // a 125 Hz mouse
 const {humanizeSeam} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanizeSeam.js');
+const {normalDelay} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanDelay.js');
 const {cursory} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
 
 // Probe rounds for a humanized scrollIntoViewIfNeeded (see
@@ -24,32 +25,22 @@ const Cu = Components.utils;
 const XUL_NS = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
 const helper = new Helper();
 
-// How long a person holds a mouse button for a click: about 110 ms (SD 30),
-// the human click durations reported in arXiv 2607.26935 (100-120 ms, sigma
-// ~30 ms; a secondary figure, no recorded corpus yet), kept within 50-250 ms
-// as key holds are (content/PageAgent.js TypingPace).
-function clickHold() {
-  const n = Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
-  return Math.min(250, Math.max(50, 110 + 30 * n));
-}
+// How long a person holds a mouse button for a click: normal around 110 ms
+// (SD 30), the human click durations reported in arXiv 2607.26935 (centred on
+// 100-120 ms, sigma ~30 ms), and never shorter than 50 ms.
+const clickHold = () => normalDelay(110, 30, 50);
 
 // How long a person's button stays up between the clicks of a double click:
 // about 110 ms (SD 25; an estimate, no published or recorded figure found),
-// kept within 70-180 ms, so press to press stays well
-// inside the OS double-click time with clickHold() before it.
-function clickGap() {
-  const n = Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
-  return Math.min(180, Math.max(70, 110 + 25 * n));
-}
+// kept within 70-180 ms, so press to press stays well inside the OS
+// double-click time with clickHold() before it.
+const clickGap = () => normalDelay(110, 25, 70, 180);
 
 // How long a person's pointer rests on a target before pressing it: about
 // 130 ms (SD 40; an estimate, no published or recorded figure found), kept
 // within 60-240 ms. Stock's OS input reads under 250 ms from arrival to press;
 // Playwright pressed under 10 ms after the move that brought the pointer there.
-function hoverDwell() {
-  const n = Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
-  return Math.min(240, Math.max(60, 130 + 40 * n));
-}
+const hoverDwell = () => normalDelay(130, 40, 60, 240);
 
 function hashConsoleMessage(params) {
   return params.location.lineNumber + ':' + params.location.columnNumber + ':' + params.location.url;

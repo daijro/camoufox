@@ -14,11 +14,11 @@ nothing in the image. A screenshot of a page Camoufox launched defaults to
 caret="initial"; a caller who passes caret= still gets what they ask for.
 
 fill() clicks the field first. Playwright focuses the field by script and
-types the text (Page.insertText, which Juggler types key by key): the page gets
-focus with no pointer or mouse event before it, where a person clicks the
-field first. A text field that is not focused is clicked (Playwright's click:
-the mouse moves there and presses, through the OS-path dispatch) before the
-fill; a focused one is typed into as it is. Fields fill() sets without typing
+inserts the text (Page.insertText, which Juggler pastes): the page gets focus
+with no pointer or mouse event before it, where a person clicks the field
+first. A text field that is not focused is clicked (Playwright's click: the
+mouse moves there and presses, through the OS-path dispatch) before the fill;
+a focused one is pasted into as it is. Fields fill() sets without pasting
 (date, color, range, ...) are left alone.
 """
 

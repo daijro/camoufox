@@ -187,42 +187,40 @@ to land where it means to.
 `browser/tests/playwright/patches/driven-wheel-notches.py` compares the result
 with stock's.
 
-## Typed text
+## Pasted text
 
-Playwright's `fill()` and `keyboard.insert_text()` send `Page.insertText`.
-Typing cannot put text in a field without key events, so Juggler types it: in
-stock Firefox 158.0.1 each character arrives as `keydown`, `keypress`,
-`beforeinput` and `input` (`insertText`, that one character) and `keyup`,
-with Shift pressed around a capital (measured with XTest keys). A character
-with a key on the US layout is pressed through the same path as
-`keyboard.type()`, so its `key`, `code` and `keyCode` are that layout's; a line
-break is Enter in a textarea or an editable element. A character the layout
-has no key for (é, 嗨) is inserted as before, with `beforeinput`/`input` and no
-key events.
+Playwright's `fill()` and `keyboard.insert_text()` send `Page.insertText`. A
+person enters a whole string by pasting it, so Juggler pastes: the paste
+shortcut goes down (Ctrl+V, or Cmd+V when the page's `navigator.platform` is
+a Mac), Firefox's own paste runs with the text (`nsIEditor.pasteTransferable`:
+a trusted `paste` event whose `clipboardData` holds the text as `text/plain`,
+then `beforeinput` and `input` with `insertFromPaste`), and the shortcut comes
+up. The shortcut's `keypress`, where Firefox would paste from the system
+clipboard, is cancelled in the system group; content never receives a
+`keypress` for a shortcut, so that is not observable. The text never goes
+through the system clipboard. The modifier leads V by about 60 ms and trails
+it by about 40 ms, as Shift does a key, and V is held 116.25 ms (SD 23.88;
+Dhakal et al., "Observations on Typing from 136 Million Keystrokes", CHI 2018).
+Every delay between a person's input events is a normal draw from
+`input/HumanDelay.js` (`normalDelay(mean, sd, min, max)`), with the figures its
+caller cites.
 
-The pace is a person's, drawn per call from Dhakal et al., "Observations on
-Typing from 136 Million Keystrokes" (CHI 2018): the typist's mean interval
-between key presses from the population's (238.66 ms, SD 111.6, at least
-60 ms), keys held 116.25 ms (SD 23.88). A key goes up after the next one goes
-down when the interval is shorter than the hold; that rollover is rarer here
-than the quarter of keystrokes the paper reports, which an interval model
-cannot produce without the per-key data. How far one typist's
-intervals spread around their own mean is not in the paper; it is taken as
-35%. A fill takes about a quarter of a second per character, so a long one
-needs a longer `timeout`.
+A page that cancels the paste, or the shortcut's `keydown`, gets nothing
+pasted, as for a person, and `fill()` fails saying so. Nothing focused that
+takes text gets the shortcut and no paste. Playwright documents
+`insert_text()` as sending no key events; here it sends the shortcut's.
 
-A person clicks a field before typing into it, while Playwright's `fill()`
+A person clicks a field before pasting into it, while Playwright's `fill()`
 focuses it from script: the page would get `focus` with no pointer or mouse
 event before it. The Python launcher clicks a text field that does not have
 focus before the fill (`camoufox/driver_defaults.py`); the TypeScript launcher
 does not yet, so its `fill()` still focuses from script. The click is Playwright's own, so the mouse moves there and
-presses through the OS-path dispatch. A field that has focus is typed into as
-it is. Fields `fill()` sets without typing (date, color, range and the like)
+presses through the OS-path dispatch. A field that has focus is pasted into as
+it is. Fields `fill()` sets without pasting (date, color, range and the like)
 are not clicked. A field the click cannot reach, such as one covered by
 another element, now fails the way `click()` does, unless `force` is passed.
 `fill()` still selects the field's text with `select()` first.
-`browser/tests/playwright/patches/driven-fill-keys.py` compares the result
-with stock's.
+`browser/tests/playwright/patches/driven-fill-paste.py` checks the events.
 
 ## Screenshots
 

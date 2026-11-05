@@ -73,17 +73,16 @@ skip:
   - test: tests/async/test_keyboard.py::test_should_only_emit_input_event
     reason: >-
       Asserts keyboard.insert_text("hello world") fires one `input` event and
-      no key events. Typing cannot put text in a field that way: stock Firefox
-      gets keydown, keypress, beforeinput, input and keyup per character.
-      Camoufox types inserted text key by key (docs/input-dispatch.md), which
-      is also how fill() reaches the page.
+      no key events, which no person's input does. Camoufox pastes inserted
+      text with the paste shortcut (docs/input-dispatch.md), which is also how
+      fill() reaches the page.
 
   - test: tests/async/test_keyboard.py::test_should_send_a_character_with_send_character
     reason: >-
       Asserts insert_text("a") still inserts after the page cancels every
-      keydown. A typed key whose keydown is cancelled types nothing, in stock
-      Firefox as here; Camoufox types inserted text, so the page's cancel
-      applies. "嗨", which has no key on the US layout, still inserts.
+      keydown. Camoufox pastes inserted text with the paste shortcut, and a
+      shortcut whose keydown is cancelled pastes nothing, in stock Firefox as
+      here; insert_text() then fails saying so.
 
   - test: tests/async/test_input.py::test_wheel_should_work
     reason: >-

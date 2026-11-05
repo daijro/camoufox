@@ -11,6 +11,7 @@ const Cu = Components.utils;
 const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
 const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
+const {normalDelay} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanDelay.js');
 
 const dragService = Cc["@mozilla.org/widget/dragservice;1"].getService(
   Ci.nsIDragService
@@ -522,7 +523,7 @@ export class PageAgent {
       this._autoShiftKey = key;
       // A person presses Shift tens of ms before the key it modifies; 0 ms
       // between the two keydowns is a scripted-typing tell.
-      await new Promise(resolve => setTimeout(resolve, 35 + Math.random() * 55));
+      await pause(modifierLead());
     }
     const shiftKey = this._realShiftDown || !!this._autoShiftKey;
     let keyEvent = new KeyboardEvent("", {
@@ -556,7 +557,7 @@ export class PageAgent {
       tip.keyup(keyEvent, flags);
       if (this._autoShiftKey === key) {
         this._autoShiftKey = null;
-        await new Promise(resolve => setTimeout(resolve, 20 + Math.random() * 45));
+        await pause(modifierTrail());
         tip.keyup(new KeyboardEvent("", { key: 'Shift', code: 'ShiftLeft', location: 1, keyCode: 16 }), 0);
       }
     } else {
@@ -960,71 +961,65 @@ export class PageAgent {
     return {viewport, targetRect: target, clip, region, hitTestable: !!region && !occluder, occluder, scrollers};
   }
 
-  // Camoufox: text a driver inserts (fill, keyboard.insertText) arrives typed,
-  // as a person enters it (docs/input-dispatch.md). A character with a key on
-  // the US layout is pressed through _dispatchKeyEvent, so its key fields and
-  // Shift are keyboard.type's; one without (é, 嗨) is inserted as before.
+  // Camoufox: text a driver inserts (fill, keyboard.insertText) is pasted, as a
+  // person enters a whole string: the paste shortcut goes down, Firefox's own
+  // paste runs with the text (a trusted paste event whose clipboardData holds
+  // it, then beforeinput/input insertFromPaste), and the shortcut comes up
+  // (docs/input-dispatch.md). The text never goes through the system clipboard.
   async _insertText({text}) {
-    const frame = this._frameTree.mainFrame();
-    const tip = frame.textInputProcessor();
-    const pace = new TypingPace();
-    let held = null;
-    let nextDownAt = ChromeUtils.now();
-    const release = async () => {
-      if (!held)
-        return;
-      await until(held.upAt);
-      await this._dispatchKeyEvent({type: 'keyup', ...held.key});
-      held = null;
-    };
-    for (const ch of text) {
-      const key = this._usKey(tip, frame, ch);
-      if (!key) {
-        await release();
-        this._insertWithoutKey(frame, ch);
-        continue;
-      }
-      const shifted = this._needsShift(ch);
-      // Rollover (the next key down before this one is up) only between
-      // unshifted keys: Shift is pressed and released around its own key.
-      if (held && (shifted || held.shifted || held.upAt <= nextDownAt))
-        await release();
-      await until(nextDownAt);
-      await this._dispatchKeyEvent({type: 'keydown', ...key, text: key.key.length === 1 ? ch : undefined});
-      const downAt = ChromeUtils.now();
-      await release();
-      held = {key, shifted, upAt: downAt + pace.hold()};
-      nextDownAt = downAt + pace.interval();
-    }
-    await release();
-  }
-
-  // The key that types `ch` on a US layout, or null. A line break is Enter
-  // where Enter types one (a textarea, an editable element).
-  _usKey(tip, frame, ch) {
-    if (ch === '\n') {
-      const el = frame.domWindow().document.activeElement;
-      const multiline = el && (el.localName === 'textarea' || el.isContentEditable);
-      return multiline ? {key: 'Enter', code: 'Enter', keyCode: 13, location: 0, repeat: false} : null;
-    }
-    const code = tip.guessCodeValueOfPrintableKeyInUSEnglishKeyboardLayout(ch);
-    if (!code)
-      return null;
-    const keyCode = tip.guessKeyCodeValueOfPrintableKeyInUSEnglishKeyboardLayout(ch);
-    return {key: ch, code, keyCode, location: 0, repeat: false};
-  }
-
-  _insertWithoutKey(frame, text) {
-    // A focused text control inserts through its own editor: one
-    // beforeinput/input pair, maxlength applies, and the value counts as
-    // user-edited so blur fires `change`. nsITextInputProcessor would fire
-    // `input` twice there (compositionupdate and compositionend).
-    const editor = frame.domWindow().document.activeElement?.editor;
-    if (editor) {
-      editor.insertText(text);
+    if (!text)
       return;
+    const win = this._frameTree.mainFrame().domWindow();
+    const mac = win.navigator.platform.startsWith('Mac');
+    const modifier = mac
+      ? {key: 'Meta', code: 'MetaLeft', keyCode: 224, location: 1, repeat: false}
+      : {key: 'Control', code: 'ControlLeft', keyCode: 17, location: 1, repeat: false};
+    const v = {key: 'v', code: 'KeyV', keyCode: 86, location: 0, repeat: false};
+    const editor = focusedEditor();
+    let shortcutRan = false;
+    let cancelled = false;
+    let error = null;
+    // The shortcut's keypress is where Firefox runs its own clipboard paste
+    // (GTK's key bindings, the global key handler). Content never gets a
+    // keypress for a shortcut, so cancelling it in the system group is
+    // invisible; the paste with the text runs in its place, at that moment.
+    const onKeypress = event => {
+      if (!event.isTrusted || event.key !== 'v' || !(mac ? event.metaKey : event.ctrlKey))
+        return;
+      event.preventDefault();
+      shortcutRan = true;
+      if (!editor)
+        return;
+      try {
+        editor.pasteTransferable(textTransferable(win, text));
+      } catch (e) {
+        error = e;
+      }
+    };
+    const onPaste = event => { cancelled = event.defaultPrevented; };
+    Services.els.addSystemEventListener(win, 'keypress', onKeypress, true);
+    Services.els.addSystemEventListener(win, 'paste', onPaste, false);
+    try {
+      // The modifier leads and trails V as Shift does a key (_dispatchKeyEvent).
+      await this._dispatchKeyEvent({type: 'keydown', ...modifier});
+      await pause(modifierLead());
+      await this._dispatchKeyEvent({type: 'keydown', ...v});
+      await pause(keyHold());
+      await this._dispatchKeyEvent({type: 'keyup', ...v});
+      await pause(modifierTrail());
+      await this._dispatchKeyEvent({type: 'keyup', ...modifier});
+    } finally {
+      Services.els.removeSystemEventListener(win, 'keypress', onKeypress, true);
+      Services.els.removeSystemEventListener(win, 'paste', onPaste, false);
     }
-    frame.textInputProcessor().commitCompositionWith(text);
+    if (error)
+      throw error;
+    if (!editor)
+      return;
+    if (!shortcutRan)
+      throw new Error('Cannot insert text: the page cancelled the paste shortcut\'s keydown');
+    if (cancelled)
+      throw new Error('Cannot insert text: the page cancelled the paste');
   }
 
   async _crash() {
@@ -1167,31 +1162,40 @@ export class PageAgent {
   }
 }
 
-function until(time) {
-  const ms = time - ChromeUtils.now();
-  return ms > 0 ? new Promise(resolve => setTimeout(resolve, ms)) : null;
+function pause(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function normal() {
-  return Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+// How long a person holds a key: 116.25 ms (SD 23.88; Dhakal et al.,
+// "Observations on Typing from 136 Million Keystrokes", CHI 2018), never under
+// 50 ms.
+const keyHold = () => normalDelay(116.25, 23.88, 50);
+// How far a modifier leads the key it modifies, and trails its release: tens
+// of ms. No recorded figure; these keep the mean and spread of the uniform
+// 35-90 ms and 20-65 ms draws they replaced, with those floors.
+const modifierLead = () => normalDelay(62.5, 16, 35);
+const modifierTrail = () => normalDelay(42.5, 13, 20);
+
+// The editor of the focused text control or editable document, or null.
+function focusedEditor() {
+  const element = Services.focus.focusedElement;
+  if (!element)
+    return null;
+  if (element.editor)
+    return element.editor;
+  const doc = element.ownerDocument;
+  if (!element.isContentEditable && doc.designMode !== 'on')
+    return null;
+  return doc.defaultView.docShell.editingSession.getEditorForWindow(doc.defaultView);
 }
 
-// A typist's pace, drawn per call from Dhakal et al., "Observations on Typing
-// from 136 Million Keystrokes" (CHI 2018, 168,000 typists): the typist's mean
-// inter-key interval from the population's (238.66 ms, SD 111.6, lognormal,
-// floor 60 ms), keys held 116.25 ms (SD 23.88). The spread of one typist's
-// intervals around their own mean is not in the paper; it is taken as 35%.
-class TypingPace {
-  constructor() {
-    const sigma = Math.sqrt(Math.log(1 + (111.6 / 238.66) ** 2));
-    this._mean = Math.max(60, 238.66 * Math.exp(sigma * normal() - sigma * sigma / 2));
-  }
-
-  interval() {
-    return Math.max(60, this._mean * Math.exp(0.35 * normal() - 0.35 * 0.35 / 2));
-  }
-
-  hold() {
-    return Math.min(250, Math.max(50, 116.25 + 23.88 * normal()));
-  }
+// Plain text to paste, as a text source puts it on the clipboard.
+function textTransferable(win, text) {
+  const transferable = Cc['@mozilla.org/widget/transferable;1'].createInstance(Ci.nsITransferable);
+  transferable.init(win.docShell.QueryInterface(Ci.nsILoadContext));
+  transferable.addDataFlavor('text/plain');
+  const data = Cc['@mozilla.org/supports-string;1'].createInstance(Ci.nsISupportsString);
+  data.data = text;
+  transferable.setTransferData('text/plain', data);
+  return transferable;
 }

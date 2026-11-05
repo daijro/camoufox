@@ -1,0 +1,34 @@
+// HumanDelay: the normal draw, its mean and spread, and its bounds.
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {load} from './gecko.mjs';
+
+const {normalDelay} = await load('input/HumanDelay.js');
+const {mulberry32} = await load('input/HumanizeRng.js');
+
+function draws(n, mean, sd, min = 0, max = Infinity) {
+  const random = mulberry32(1234);
+  return Array.from({length: n}, () => normalDelay(mean, sd, min, max, random));
+}
+
+test('draws centre on the mean with the given spread', () => {
+  const xs = draws(20000, 110, 30, -Infinity, Infinity);
+  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length);
+  assert.ok(Math.abs(mean - 110) < 1, `mean ${mean}`);
+  assert.ok(Math.abs(sd - 30) < 1, `sd ${sd}`);
+});
+
+test('a draw never falls under the minimum nor over the maximum', () => {
+  const xs = draws(20000, 110, 30, 50, 180);
+  assert.equal(Math.min(...xs), 50);
+  assert.equal(Math.max(...xs), 180);
+});
+
+test('without a maximum the upper tail is kept', () => {
+  assert.ok(Math.max(...draws(20000, 110, 30, 50)) > 200);
+});
+
+test('the same stream gives the same delays', () => {
+  assert.deepEqual(draws(5, 110, 30, 50), draws(5, 110, 30, 50));
+});
