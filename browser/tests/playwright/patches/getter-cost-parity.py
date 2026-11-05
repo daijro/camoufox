@@ -136,7 +136,12 @@ function bench(exprs, setup) {
   const src = 'const bench = ' + bench.toString() + '; onmessage = e => postMessage(bench(e.data, ' +
     JSON.stringify("var C = new OffscreenCanvas(16, 16).getContext('2d'); var G = new OffscreenCanvas(16, 16).getContext('webgl');" + spec.gl) + '));';
   const w = new Worker(URL.createObjectURL(new Blob([src])));
-  const worker = await new Promise(r => { w.onmessage = e => r(e.data); w.postMessage(spec.worker); });
+  const worker = await new Promise(r => {
+    w.onmessage = e => r(e.data);
+    w.onerror = () => r({error: 'worker died before it reported'});
+    w.postMessage(spec.worker);
+  });
+  if (worker && worker.error) throw new Error(worker.error);
   const win = bench(spec.window,
     "var C = document.createElement('canvas').getContext('2d'); var G = document.createElement('canvas').getContext('webgl');" + spec.gl);
   const res = {window: win, worker, first};

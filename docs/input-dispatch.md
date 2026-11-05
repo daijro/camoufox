@@ -131,8 +131,11 @@ many `pointermove`s as `pointerrawupdate`s.
 `input-coalescing-parity.patch` queues juggler moves the way real ones are
 queued, and `BrowserChild::RecvRealMouseMoveEvent` acks each one with
 `mousequeued <id>` when the renderer has it. A move returns at that ack
-(`MouseDispatch.sendQueuedMove`). Moves are spaced at least 8 ms apart, the
-reports of a 125 Hz mouse, the common rate. A path given as steps
+(`MouseDispatch.sendQueuedMove`). Sends are spaced at least 8 ms apart, the
+reports of a 125 Hz mouse, the common rate. The clock starts when the move is
+sent, not when its ack returns: the next move cannot start until this one
+returns, so counting the ack into the gap stretched a 125 Hz path out to about
+one move per frame. A path given as steps
 (`page.mouse.move(x, y, steps=n)`, which Playwright sends as n moves) then
 reaches the page as a real mouse's motion does. Measured with a 125 Hz XTest
 sweep on Xvfb against stock 158.0.1: one

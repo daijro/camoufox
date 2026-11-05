@@ -33,8 +33,9 @@ What PASS means:
     * those events are spread over a plausible human duration, with uneven
       gaps between them rather than a fixed cadence;
     * a humanized click still lands on the target element;
-    * without humanize, each move emits only its endpoint (pins the other
-      direction so accidental always-on humanization is also caught).
+    * without humanize, a move emits only its endpoint (pins the other
+      direction so accidental always-on humanization is also caught). Two
+      moves close together may share one event, coalesced, as a real mouse's do.
 """
 
 import asyncio
@@ -142,7 +143,13 @@ async def main() -> int:
     plain, plain_dest = await _collect_moves(False)
     print("\n=== humanize off ===")
     print(f"  mousemove events: {[m[:2] for m in plain]}")
-    if [m[:2] for m in plain] == [[20, 20], list(plain_dest)]:
+    # Two awaited moves 8 ms apart can share a refresh tick. The page then sees
+    # one mousemove, at the destination, with the start in getCoalescedEvents()
+    # — the same coalescing a 125 Hz mouse gets. A trajectory is many points
+    # that are neither endpoint.
+    endpoints = [[20, 20], list(plain_dest)]
+    points = [m[:2] for m in plain]
+    if points and points[-1] == list(plain_dest) and len(points) <= 2 and all(p in endpoints for p in points):
         print("  PASS: only endpoints emitted")
     else:
         passed = False

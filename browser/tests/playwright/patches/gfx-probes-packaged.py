@@ -21,7 +21,7 @@ That 09-18 stock measurement had the session's WAYLAND_DISPLAY in its
 environment, which runs the probe through EGL. With no display at all, stock
 -headless gets the same refusal (measured on 158.0.1, 2026-11-03): the X11 probe
 cannot connect. headless-software-webgl.patch probes through EGL with Mesa's
-software GL when headless, so Camoufox -headless with no display has llvmpipe
+software GL when headless and there is no display, so that launch has llvmpipe
 WebGL, as a headed browser on Xvfb does. The launch below therefore runs with
 no DISPLAY / WAYLAND_DISPLAY: whatever session the guard runs in, it checks
 that display-less fallback, and a missing gfxtest still shows as the refusal.

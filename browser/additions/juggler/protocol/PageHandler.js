@@ -808,10 +808,14 @@ export class PageHandler {
     const wait = this._lastMoveAt + kMoveIntervalMs - Date.now();
     if (wait > 0)
       await new Promise(resolve => setTimeout(resolve, wait));
+    // Stamp at send, not after the queue ack. The next move cannot start until
+    // this command returns, and that return waits for the ack: stamping after
+    // it spaces sends by 8 ms plus the ack, about one move per frame instead
+    // of a 125 Hz mouse's two.
+    this._lastMoveAt = Date.now();
     // Listen before dispatching, so the tick cannot come first.
     const delivery = new EventWatcher(this._pageEventSink, ['mousemove'], this._pendingEventWatchers);
     const pending = await dispatch.sendQueuedMove(watcher, delivery, x, y);
-    this._lastMoveAt = Date.now();
     // The newest move is the one the coalesced dispatch acks.
     this._moveDelivery?.dispose();
     this._moveDelivery = pending;
