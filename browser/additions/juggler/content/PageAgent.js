@@ -146,6 +146,7 @@ export class PageAgent {
         adoptNode: this._adoptNode.bind(this),
         crash: this._crash.bind(this),
         describeNode: this._describeNode.bind(this),
+        awaitUserInputGate: this._awaitUserInputGate.bind(this),
         dispatchKeyEvent: this._dispatchKeyEvent.bind(this),
         dispatchDragEvent: this._dispatchDragEvent.bind(this),
         dispatchTouchEvent: this._dispatchTouchEvent.bind(this),
@@ -153,6 +154,8 @@ export class PageAgent {
         getContentQuads: this._getContentQuads.bind(this),
         getFullAXTree: this._getFullAXTree.bind(this),
         insertText: this._insertText.bind(this),
+        humanizeFocus: this._humanizeFocus.bind(this),
+        humanizeScrollProbe: this._humanizeScrollProbe.bind(this),
         scrollIntoViewIfNeeded: this._scrollIntoViewIfNeeded.bind(this),
         setFileInputFiles: this._setFileInputFiles.bind(this),
         evaluate: this._runtime.evaluate.bind(this._runtime),
@@ -481,6 +484,32 @@ export class PageAgent {
     return typeof text === 'string' && text.length === 1 && /[A-Z~!@#$%^&*()_+{}|:"<>?]/.test(text);
   }
 
+  // Camoufox: resolves once this process's top document accepts user input
+  // (PageHandler._awaitUserInputGate): minTimeElapsedInMS after readyState
+  // became "loading" (performance.timing.domLoading, the same moment as
+  // Document::mLoadingOrRestoredFromBFCacheTimeStamp), then a refresh tick.
+  // The initial about:blank is exempt, as in nsPresContext.
+  async _awaitUserInputGate() {
+    const win = this._frameTree.mainFrame().domWindow();
+    if (!win || win.document.isInitialDocument)
+      return;
+    const timing = win.performance.timing;
+    if (!timing.domLoading)
+      return;
+    const gateMs = Services.prefs.getIntPref('dom.input_events.security.minTimeElapsedInMS', 100);
+    // +2: performance.now() is clamped to the timer precision.
+    const waitMs = gateMs + 2 - (win.performance.now() - (timing.domLoading - timing.navigationStart));
+    if (waitMs <= 0)
+      return;
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+    // minNumTicks: a tick after the time has passed; a hidden page's refresh
+    // driver is throttled, and the gate is open for it anyway.
+    await new Promise(resolve => {
+      win.requestAnimationFrame(() => resolve());
+      setTimeout(resolve, 100);
+    });
+  }
+
   async _dispatchKeyEvent({type, keyCode, code, key, repeat, location, text}) {
     const frame = this._frameTree.mainFrame();
     const tip = frame.textInputProcessor();
@@ -590,6 +619,13 @@ export class PageAgent {
     const session = this._getCurrentDragSession();
     const dropEffect = session.dataTransfer.dropEffect;
 
+    if (type === 'drag') {
+      const win = this._frameTree.mainFrame().domWindow();
+      win.windowUtils.jugglerSendMouseEvent(
+        'drag', x, y, 0, 0, modifiers, false, 0.0, win.MouseEvent.MOZ_SOURCE_MOUSE,
+        true, false, 0, win.windowUtils.DEFAULT_MOUSE_POINTER_ID, false);
+      return;
+    }
     if ((type === 'drop' && dropEffect !== 'none') || type ===  'dragover') {
       const win = this._frameTree.mainFrame().domWindow();
       win.windowUtils.jugglerSendMouseEvent(
@@ -604,7 +640,7 @@ export class PageAgent {
         win.MouseEvent.MOZ_SOURCE_MOUSE /*inputSource*/,
         true /*isDOMEventSynthesized*/,
         false /*isWidgetEventSynthesized*/,
-        0 /*buttons*/,
+        type === 'dragover' ? 1 : 0 /*buttons: the held button; released for drop*/,
         win.windowUtils.DEFAULT_MOUSE_POINTER_ID /* pointerIdentifier */,
         false /*disablePointerEvent*/,
       );
@@ -613,15 +649,375 @@ export class PageAgent {
     if (type === 'dragend') {
       const session = this._getCurrentDragSession();
       session?.endDragSession(true);
+      await this._afterFrame();
       return;
     }
   }
 
+  // A frame after the drag session ends, by when the page has its pointer back:
+  // the session's end moves the pointer on the next refresh. Bounded, since a
+  // throttled page may not paint.
+  _afterFrame() {
+    const win = this._frameTree.mainFrame().domWindow();
+    return new Promise(resolve => {
+      win.requestAnimationFrame(() => resolve());
+      setTimeout(resolve, 100);
+    });
+  }
+
+  // Camoufox: what a keyboard engine needs to know about the focused element
+  // (input/HumanizeSeam.js): whether typed text lands in an editable text
+  // control, whether Enter there is a line break, and any length limit.
+  _humanizeFocus() {
+    let active = this._frameTree.mainFrame().domWindow().document.activeElement;
+    // Descend into same-process frames; an out-of-process one reads as not
+    // editable, so an engine only paces keys into it.
+    while (active && (active.tagName === 'IFRAME' || active.tagName === 'FRAME') && active.contentDocument)
+      active = active.contentDocument.activeElement;
+    if (!active)
+      return {editable: false, multiline: false, type: '', maxLength: -1};
+    const isInput = active.tagName === 'INPUT' && /^(text|search|url|tel|email|password|number|)$/i.test(active.type || '');
+    const isTextArea = active.tagName === 'TEXTAREA';
+    const editable = ((isInput || isTextArea) && !active.readOnly && !active.disabled) || !!active.isContentEditable;
+    return {
+      editable,
+      multiline: editable && !isInput,
+      type: isInput ? (active.type || 'text').toLowerCase() : isTextArea ? 'textarea' : (active.isContentEditable ? 'contenteditable' : ''),
+      maxLength: (isInput || isTextArea) ? active.maxLength : -1,
+    };
+  }
+
+  // Camoufox: what a scroll engine needs to plan Page.scrollIntoViewIfNeeded
+  // as wheel input (input/HumanizeSeam.js, planIntoView). Coordinates are
+  // top-level viewport CSS pixels, the space Page.dispatchMouseEvent uses.
+  //
+  //   targetRect  the target (or `rect` within it), or null when it cannot be
+  //               scrolled to (detached, no layout box, cross-process frame);
+  //               the stock scroll then reports the error.
+  //   clip        the band the target is visible in: the viewport inset by a
+  //               margin, minus pinned (fixed/sticky) bars at the target's
+  //               column, intersected with every scrollable ancestor.
+  //   region      the target's visible part of `clip`, or null.
+  //   hitTestable the region is not covered by a pinned element (hit-tested at
+  //               its centre and four interior points); `occluder` is it.
+  //   scrollers   the ancestors that can move the target, innermost first,
+  //               ending with the page when it can: each with its `rect`
+  //               (null for the page), its visible `band`, `scrollTop`,
+  //               `maxScroll`, and `wheelPoint.down/up`,
+  //               the point nearest `from` (the cursor) where a wheel in that
+  //               direction reaches this scroller rather than one inside it.
+  _humanizeScrollProbe({objectId, frameId, rect, from}) {
+    const kMargin = 20;
+    const kEdge = 10;
+    const frame = this._frameTree.frame(frameId);
+    if (!frame)
+      throw new Error('Failed to find frame with id = ' + frameId);
+    const el = frame.unsafeObject(objectId);
+    const topWin = this._frameTree.mainFrame().domWindow();
+    const topDoc = topWin.document;
+    const vw = topWin.innerWidth;
+    const vh = topWin.innerHeight;
+    const viewport = {width: vw, height: vh};
+    if (!el.isConnected || !el.getBoundingClientRect)
+      return {viewport, targetRect: null};
+
+    const styleOf = node => node.ownerDocument.defaultView.getComputedStyle(node);
+    const isFrameDocRoot = node => node === node.ownerDocument.documentElement && node.ownerDocument.defaultView !== topWin;
+    // Up through shadow hosts and same-process frame boundaries.
+    const stepUp = node => {
+      if (node.parentElement)
+        return node.parentElement;
+      const root = node.getRootNode();
+      if (root.host)
+        return root.host;
+      return root.defaultView?.frameElement ?? null;
+    };
+    const frameOffset = node => {
+      let x = 0;
+      let y = 0;
+      let win = node.ownerDocument.defaultView;
+      while (win && win !== topWin) {
+        const fe = win.frameElement;
+        if (!fe)
+          return null;
+        const fr = fe.getBoundingClientRect();
+        x += fr.x + fe.clientLeft;
+        y += fr.y + fe.clientTop;
+        win = fe.ownerDocument.defaultView;
+      }
+      return {x, y};
+    };
+    const rectOf = node => {
+      const r = node.getBoundingClientRect();
+      const o = frameOffset(node) ?? {x: 0, y: 0};
+      return {x: r.x + o.x, y: r.y + o.y, width: r.width, height: r.height,
+        top: r.top + o.y, bottom: r.bottom + o.y, left: r.left + o.x, right: r.right + o.x};
+    };
+    const scrollerRectOf = node => (isFrameDocRoot(node) ? rectOf(node.ownerDocument.defaultView.frameElement) : rectOf(node));
+    if (!frameOffset(el))
+      return {viewport, targetRect: null};
+    let target = rectOf(el);
+    if (rect && rect.width >= 0 && rect.height >= 0) {
+      const left = target.left + rect.x;
+      const top = target.top + rect.y;
+      target = {x: left, y: top, width: rect.width, height: rect.height, left, top, right: left + rect.width, bottom: top + rect.height};
+    }
+    if (!target.width && !target.height && !el.getClientRects().length)
+      return {viewport, targetRect: null};
+
+    // Scrollable ancestors, innermost first. A top-document position:fixed
+    // ancestor pins the target: nothing above it, the page included, moves it.
+    const chain = [];
+    let pageCanMove = true;
+    for (let cur = stepUp(el), depth = 0; cur && depth < 60 && cur !== topDoc.documentElement; depth++) {
+      if (isFrameDocRoot(cur)) {
+        if (cur.scrollHeight > cur.ownerDocument.defaultView.innerHeight + 1)
+          chain.push(cur);
+        cur = stepUp(cur);
+        continue;
+      }
+      const st = styleOf(cur);
+      const scrollable = cur.scrollHeight > cur.clientHeight + 1 && (st.overflowY === 'scroll' || st.overflowY === 'auto');
+      if (cur === cur.ownerDocument.body) {
+        // The body scrolls only when its document does not.
+        if (scrollable && !(cur.ownerDocument.documentElement.scrollHeight > cur.ownerDocument.defaultView.innerHeight + 10))
+          chain.push(cur);
+        if (cur === topDoc.body)
+          break;
+        cur = stepUp(cur);
+        continue;
+      }
+      if (scrollable)
+        chain.push(cur);
+      if (st.position === 'fixed') {
+        if (cur.ownerDocument === topDoc) {
+          pageCanMove = false;
+          break;
+        }
+        cur = cur.ownerDocument.defaultView.frameElement;
+        continue;
+      }
+      cur = stepUp(cur);
+    }
+
+    // elementFromPoint, descending into same-process frames.
+    const hitAt = (x, y) => {
+      let hit = topDoc.elementFromPoint(x, y);
+      while (hit && (hit.tagName === 'IFRAME' || hit.tagName === 'FRAME') && hit.contentDocument) {
+        const fr = hit.getBoundingClientRect();
+        x -= fr.x + hit.clientLeft;
+        y -= fr.y + hit.clientTop;
+        const next = hit.contentDocument.elementFromPoint(x, y);
+        if (!next)
+          break;
+        hit = next;
+      }
+      return hit;
+    };
+    const containsDeep = (ancestor, node) => {
+      for (let n = node; n; n = stepUp(n)) {
+        if (n === ancestor)
+          return true;
+      }
+      return false;
+    };
+    // The pinned element covering a point, if any: the nearest fixed/sticky
+    // ancestor of what is hit there, unless it is the target, inside it, or
+    // one of its ancestors. Only pinned elements count: anything that scrolls
+    // with the target cannot be scrolled out from over it.
+    const pinnedAt = (x, y) => {
+      const hit = hitAt(x, y);
+      if (!hit || containsDeep(el, hit) || containsDeep(hit, el))
+        return null;
+      for (let n = hit; n && n !== topDoc.body && n !== topDoc.documentElement; n = stepUp(n)) {
+        if (isFrameDocRoot(n) || n === n.ownerDocument.body)
+          continue;
+        const position = styleOf(n).position;
+        if (position === 'fixed' || position === 'sticky')
+          return containsDeep(n, el) ? null : rectOf(n);
+      }
+      return null;
+    };
+
+    // The band left clear by pinned bars at the target's column, stacked bars included.
+    let clearTop = kMargin;
+    let clearBottom = vh - kMargin;
+    const columnX = Math.min(Math.max(target.left + target.width / 2, 5), vw - 5);
+    for (let i = 0; i < 4; i++) {
+      const bar = pinnedAt(columnX, clearTop + 1);
+      if (!bar || bar.bottom <= clearTop)
+        break;
+      clearTop = Math.min(bar.bottom + 2, vh);
+    }
+    for (let i = 0; i < 4; i++) {
+      const bar = pinnedAt(columnX, clearBottom - 1);
+      if (!bar || bar.top >= clearBottom)
+        break;
+      clearBottom = Math.max(bar.top - 2, 0);
+    }
+    if (clearBottom - clearTop < 40) {
+      // A full-screen overlay: keep the plain band; hit-testing still reports it.
+      clearTop = kMargin;
+      clearBottom = vh - kMargin;
+    }
+
+    const clip = {top: clearTop, bottom: clearBottom, left: kEdge, right: vw - kEdge};
+    for (const c of chain) {
+      const r = scrollerRectOf(c);
+      clip.top = Math.max(clip.top, r.top);
+      clip.bottom = Math.min(clip.bottom, r.bottom);
+      clip.left = Math.max(clip.left, r.left);
+      clip.right = Math.min(clip.right, r.right);
+    }
+    const regionLeft = Math.max(target.left, clip.left);
+    const regionTop = Math.max(target.top, clip.top);
+    const regionRight = Math.min(target.right, clip.right);
+    const regionBottom = Math.min(target.bottom, clip.bottom);
+    const region = regionRight - regionLeft >= 6 && regionBottom - regionTop >= 6
+      ? {x: regionLeft, y: regionTop, width: regionRight - regionLeft, height: regionBottom - regionTop}
+      : null;
+    let occluder = null;
+    if (region) {
+      const cx = region.x + region.width / 2;
+      const cy = region.y + region.height / 2;
+      for (const [px, py] of [[cx, cy], [cx - region.width * 0.3, cy], [cx + region.width * 0.3, cy],
+                              [cx, cy - region.height * 0.3], [cx, cy + region.height * 0.3]]) {
+        const bar = pinnedAt(Math.round(px), Math.round(py));
+        if (bar) {
+          occluder = {rect: bar};
+          break;
+        }
+      }
+    }
+
+    const fromX = Number.isFinite(from?.x) ? from.x : vw / 2;
+    const fromY = Number.isFinite(from?.y) ? from.y : vh / 2;
+    const scrollers = [];
+    const nodes = pageCanMove ? [...chain, null] : chain;
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const isPage = node === null;
+      const band = {top: clearTop, bottom: clearBottom, left: 5, right: vw - 5};
+      if (!isPage) {
+        for (const c of chain.slice(i)) {
+          const r = scrollerRectOf(c);
+          band.top = Math.max(band.top, r.top);
+          band.bottom = Math.min(band.bottom, r.bottom);
+          band.left = Math.max(band.left, r.left);
+          band.right = Math.min(band.right, r.right);
+        }
+      }
+      const frameWin = !isPage && isFrameDocRoot(node) ? node.ownerDocument.defaultView : null;
+      const scrollTop = isPage ? topWin.scrollY : frameWin ? frameWin.scrollY : node.scrollTop;
+      const maxScroll = isPage ? Math.max(0, topDoc.documentElement.scrollHeight - vh)
+        : frameWin ? Math.max(0, node.scrollHeight - frameWin.innerHeight)
+        : Math.max(0, node.scrollHeight - node.clientHeight);
+
+      // A wheel is consumed by the nearest ancestor of what it lands on that can
+      // still move in its direction.
+      const consumes = (n, down) => {
+        if (isFrameDocRoot(n)) {
+          const w = n.ownerDocument.defaultView;
+          return down ? w.scrollY + w.innerHeight < n.scrollHeight - 1 : w.scrollY > 1;
+        }
+        const st = styleOf(n);
+        if ((st.overflowY !== 'auto' && st.overflowY !== 'scroll') || n.scrollHeight <= n.clientHeight + 1)
+          return false;
+        return down ? n.scrollTop + n.clientHeight < n.scrollHeight - 1 : n.scrollTop > 1;
+      };
+      const reaches = (x, y, down) => {
+        let n = hitAt(x, y);
+        if (!n)
+          return isPage;
+        for (; n && n !== topDoc.documentElement && n !== topDoc.body; n = stepUp(n)) {
+          if (n === node)
+            return true;
+          if (consumes(n, down))
+            return false;
+        }
+        return isPage;
+      };
+      const clampX = x => Math.min(Math.max(x, Math.max(band.left + 5, 5)), Math.min(band.right - 5, vw - 5));
+      const clampY = y => Math.min(Math.max(y, Math.max(band.top + 5, 5)), Math.min(band.bottom - 5, vh - 5));
+      // Nearest first: sideways toward the roomier gutter, then up and down.
+      const roomLeft = fromX - Math.max(band.left + 5, 5);
+      const roomRight = Math.min(band.right - 5, vw - 5) - fromX;
+      const lateral = roomRight > roomLeft ? [0, 60, -60, 120, -120, 200, -200] : [0, -60, 60, -120, 120, -200, 200];
+      const pointFor = down => {
+        for (const dy of [0, -40, 40, -90, 90]) {
+          for (const dx of lateral) {
+            const point = {x: clampX(fromX + dx), y: clampY(fromY + dy)};
+            if (reaches(point.x, point.y, down))
+              return point;
+          }
+        }
+        return {x: clampX(fromX), y: clampY(fromY)};
+      };
+      scrollers.push({isPage, rect: isPage ? null : scrollerRectOf(node), band, scrollTop, maxScroll,
+        wheelPoint: {down: pointFor(true), up: pointFor(false)}});
+    }
+
+    return {viewport, targetRect: target, clip, region, hitTestable: !!region && !occluder, occluder, scrollers};
+  }
+
+  // Camoufox: text a driver inserts (fill, keyboard.insertText) arrives typed,
+  // as a person enters it (docs/input-dispatch.md). A character with a key on
+  // the US layout is pressed through _dispatchKeyEvent, so its key fields and
+  // Shift are keyboard.type's; one without (é, 嗨) is inserted as before.
   async _insertText({text}) {
     const frame = this._frameTree.mainFrame();
-    // A focused text control inserts through its own editor, as a keystroke
-    // does: one beforeinput/input pair, maxlength applies, and the value counts
-    // as user-edited so blur fires `change`. nsITextInputProcessor would fire
+    const tip = frame.textInputProcessor();
+    const pace = new TypingPace();
+    let held = null;
+    let nextDownAt = ChromeUtils.now();
+    const release = async () => {
+      if (!held)
+        return;
+      await until(held.upAt);
+      await this._dispatchKeyEvent({type: 'keyup', ...held.key});
+      held = null;
+    };
+    for (const ch of text) {
+      const key = this._usKey(tip, frame, ch);
+      if (!key) {
+        await release();
+        this._insertWithoutKey(frame, ch);
+        continue;
+      }
+      const shifted = this._needsShift(ch);
+      // Rollover (the next key down before this one is up) only between
+      // unshifted keys: Shift is pressed and released around its own key.
+      if (held && (shifted || held.shifted || held.upAt <= nextDownAt))
+        await release();
+      await until(nextDownAt);
+      await this._dispatchKeyEvent({type: 'keydown', ...key, text: key.key.length === 1 ? ch : undefined});
+      const downAt = ChromeUtils.now();
+      await release();
+      held = {key, shifted, upAt: downAt + pace.hold()};
+      nextDownAt = downAt + pace.interval();
+    }
+    await release();
+  }
+
+  // The key that types `ch` on a US layout, or null. A line break is Enter
+  // where Enter types one (a textarea, an editable element).
+  _usKey(tip, frame, ch) {
+    if (ch === '\n') {
+      const el = frame.domWindow().document.activeElement;
+      const multiline = el && (el.localName === 'textarea' || el.isContentEditable);
+      return multiline ? {key: 'Enter', code: 'Enter', keyCode: 13, location: 0, repeat: false} : null;
+    }
+    const code = tip.guessCodeValueOfPrintableKeyInUSEnglishKeyboardLayout(ch);
+    if (!code)
+      return null;
+    const keyCode = tip.guessKeyCodeValueOfPrintableKeyInUSEnglishKeyboardLayout(ch);
+    return {key: ch, code, keyCode, location: 0, repeat: false};
+  }
+
+  _insertWithoutKey(frame, text) {
+    // A focused text control inserts through its own editor: one
+    // beforeinput/input pair, maxlength applies, and the value counts as
+    // user-edited so blur fires `change`. nsITextInputProcessor would fire
     // `input` twice there (compositionupdate and compositionend).
     const editor = frame.domWindow().document.activeElement?.editor;
     if (editor) {
@@ -771,3 +1167,31 @@ export class PageAgent {
   }
 }
 
+function until(time) {
+  const ms = time - ChromeUtils.now();
+  return ms > 0 ? new Promise(resolve => setTimeout(resolve, ms)) : null;
+}
+
+function normal() {
+  return Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+}
+
+// A typist's pace, drawn per call from Dhakal et al., "Observations on Typing
+// from 136 Million Keystrokes" (CHI 2018, 168,000 typists): the typist's mean
+// inter-key interval from the population's (238.66 ms, SD 111.6, lognormal,
+// floor 60 ms), keys held 116.25 ms (SD 23.88). The spread of one typist's
+// intervals around their own mean is not in the paper; it is taken as 35%.
+class TypingPace {
+  constructor() {
+    const sigma = Math.sqrt(Math.log(1 + (111.6 / 238.66) ** 2));
+    this._mean = Math.max(60, 238.66 * Math.exp(sigma * normal() - sigma * sigma / 2));
+  }
+
+  interval() {
+    return Math.max(60, this._mean * Math.exp(0.35 * normal() - 0.35 * 0.35 / 2));
+  }
+
+  hold() {
+    return Math.min(250, Math.max(50, 116.25 + 23.88 * normal()));
+  }
+}

@@ -12,11 +12,13 @@ from typing_extensions import Literal
 
 from camoufox.virtdisplay import VirtualDisplay
 
+from . import _humanize_custom, driver_defaults
 from .fingerprints import generate_context_fingerprint
 from .ip import Proxy, proxy_exit_geo
 from .utils import (
     async_attach_vd,
     attach_context_defaults,
+    attach_socks5_auth,
     context_identity,
     host_identity,
     launch_options,
@@ -105,6 +107,9 @@ async def AsyncNewBrowser(
         **kwargs:
             All other keyword arguments passed to `launch_options()`.
     """
+    # custom() humanize engines run in this process: checked before the launch,
+    # attached to the browser after it (also with from_options).
+    _humanize_custom.check(kwargs.get('humanize'), is_async=True)
     virtual_display, headless = await asyncio.get_running_loop().run_in_executor(
         None, start_virtual_display, headless, debug, kwargs
     )
@@ -113,8 +118,11 @@ async def AsyncNewBrowser(
     # close, which used to strand one Xvfb and its /tmp/.X<n> lock per failed
     # launch.
     try:
-        return await _new_browser(
+        browser = await _new_browser(
             playwright, virtual_display, headless, from_options, persistent_context, debug, kwargs
+        )
+        return _humanize_custom.attach(
+            browser, kwargs.get('humanize'), i_know_what_im_doing=kwargs.get('i_know_what_im_doing')
         )
     except BaseException:
         if virtual_display:
@@ -194,6 +202,7 @@ async def _launch(
         context = await playwright.firefox.launch_persistent_context(
             **persistent_context_options(from_options, no_viewport_default)
         )
+        driver_defaults.mark(context)
         return await async_attach_vd(context, virtual_display)
 
     identity = await asyncio.get_running_loop().run_in_executor(None, host_identity, from_options, canvas_noise)
@@ -260,6 +269,8 @@ async def AsyncNewContext(
         ),
     )
 
+    # A browser launched elsewhere takes SOCKS5 credentials too.
+    attach_socks5_auth(browser)
     context = await browser.new_context(**new_context_options(fp, context_kwargs, proxy, geolocation))
     await context.add_init_script(fp['init_script'])
     return context

@@ -10,10 +10,12 @@ from typing_extensions import Literal
 
 from camoufox.virtdisplay import VirtualDisplay
 
+from . import _humanize_custom, driver_defaults
 from .fingerprints import generate_context_fingerprint
 from .ip import Proxy, proxy_exit_geo
 from .utils import (
     attach_context_defaults,
+    attach_socks5_auth,
     context_identity,
     host_identity,
     launch_options,
@@ -107,13 +109,19 @@ def NewBrowser(
         **kwargs:
             All other keyword arguments passed to `launch_options()`.
     """
+    # custom() humanize engines run in this process: checked before the launch,
+    # attached to the browser after it (also with from_options).
+    _humanize_custom.check(kwargs.get('humanize'), is_async=False)
     virtual_display, headless = start_virtual_display(headless, debug, kwargs)
     # Everything after the display exists can fail (bad proxy, missing binary,
     # unsatisfiable constraints) before sync/async_attach_vd wires kill() into
     # close, which used to strand one Xvfb and its /tmp/.X<n> lock per failed
     # launch.
     try:
-        return _launch(playwright, virtual_display, headless, from_options, persistent_context, debug, kwargs)
+        browser = _launch(playwright, virtual_display, headless, from_options, persistent_context, debug, kwargs)
+        return _humanize_custom.attach(
+            browser, kwargs.get('humanize'), i_know_what_im_doing=kwargs.get('i_know_what_im_doing')
+        )
     except BaseException:
         if virtual_display:
             virtual_display.kill()
@@ -160,6 +168,7 @@ def _launch(
             context = playwright.firefox.launch_persistent_context(
                 **persistent_context_options(from_options, no_viewport_default)
             )
+            driver_defaults.mark(context)
             return sync_attach_vd(context, virtual_display)
 
         identity = host_identity(from_options, canvas_noise)
@@ -224,6 +233,8 @@ def NewContext(
         preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config
     )
 
+    # A browser launched elsewhere takes SOCKS5 credentials too.
+    attach_socks5_auth(browser)
     context = browser.new_context(**new_context_options(fp, context_kwargs, proxy, geolocation))
     context.add_init_script(fp['init_script'])
     return context

@@ -70,6 +70,40 @@ skip:
       type(). Listed separately because dropping auto-Shift would have to unskip
       both.
 
+  - test: tests/async/test_keyboard.py::test_should_only_emit_input_event
+    reason: >-
+      Asserts keyboard.insert_text("hello world") fires one `input` event and
+      no key events. Typing cannot put text in a field that way: stock Firefox
+      gets keydown, keypress, beforeinput, input and keyup per character.
+      Camoufox types inserted text key by key (docs/input-dispatch.md), which
+      is also how fill() reaches the page.
+
+  - test: tests/async/test_keyboard.py::test_should_send_a_character_with_send_character
+    reason: >-
+      Asserts insert_text("a") still inserts after the page cancels every
+      keydown. A typed key whose keydown is cancelled types nothing, in stock
+      Firefox as here; Camoufox types inserted text, so the page's cancel
+      applies. "嗨", which has no key on the US layout, still inserts.
+
+  - test: tests/async/test_input.py::test_wheel_should_work
+    reason: >-
+      Asserts mouse.wheel(0, 100) arrives as one wheel event of deltaY 100 in
+      deltaMode 0 and scrolls exactly 100 px. A mouse wheel cannot produce
+      that: stock Firefox on Linux gets one event per notch, deltaMode 1,
+      deltaY 6, wheelDeltaY -120, and scrolls 120 px. Camoufox turns each
+      100 px into one such notch (docs/input-dispatch.md), so the page sees a
+      wheel, and upstream's exact pixel delta is gone.
+
+  - test: tests/async/test_click.py::test_click_with_tweened_mouse_movement
+    reason: >-
+      Asserts click(steps=5) gives the page five mousemoves, one per step. A
+      real mouse's moves are coalesced per refresh tick: stock Firefox on
+      Linux under a 125 Hz mouse dispatches one mousemove per frame carrying
+      2 to 4 moves in getCoalescedEvents(). Camoufox queues driven moves the
+      same way and spaces them as a 125 Hz mouse's (docs/input-dispatch.md,
+      "Move coalescing"), so two steps can share a mousemove and the page
+      sees four.
+
   # --- client certificates the BROWSER has to present ------------------------
   #
   # Not the whole module. Playwright offers client certs two ways, and only one
@@ -231,6 +265,32 @@ skip:
       browser/patches/popup-blocker-parity.patch). page.click() still works -- it
       synthesizes a real click, which grants a real activation -- and so does
       page.evaluate(() => window.open(...)).
+
+  # --- focus emulation -------------------------------------------------------
+  #
+  # Upstream Playwright's Juggler forced every top-level document focused and
+  # active (docShell.overrideHasFocus / forceActiveState), so every page of a
+  # driven browser read as the focused, visible page. A page reads that: behind
+  # another window stock Firefox gives hasFocus() false and a window blur, and a
+  # background tab goes "hidden" with rAF and timers throttled. Camoufox keeps
+  # the real focus (browser/additions/juggler/content/main.js); keyboard input
+  # and bring_to_front() bring their page to the front first, as the mouse
+  # already did (protocol/PageHandler.js), so typing into several pages still
+  # lands in each (test_should_provide_target_for_keyboard_events passes).
+  # browser/tests/playwright/patches/driven-page-real-focus.py checks the stock
+  # behaviour.
+
+  - test: tests/async/test_emulation_focus.py::test_should_think_that_all_pages_are_focused
+    reason: >-
+      Asserts both pages of a context have document.hasFocus() true. The first
+      page sits behind the second page's window, and stock Firefox 158.0.1 reads
+      false there (and fires blur on its window); only one window is active.
+
+  - test: tests/async/test_emulation_focus.py::test_should_focus_popups_by_default
+    reason: >-
+      Asserts the opener still has document.hasFocus() true after window.open()
+      put a popup tab in front of it. In stock Firefox the opener is then a
+      background tab: hasFocus() false and visibilityState "hidden".
 
   # --- scrollbars in an emulated viewport --------------------------------------
   #
