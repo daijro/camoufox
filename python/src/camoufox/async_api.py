@@ -12,7 +12,7 @@ from typing_extensions import Literal
 
 from camoufox.virtdisplay import VirtualDisplay
 
-from . import _humanize_custom, screenshots
+from . import _humanize_custom, driver_defaults
 from .fingerprints import generate_context_fingerprint
 from .ip import Proxy, proxy_exit_geo
 from .utils import (
@@ -202,7 +202,7 @@ async def _launch(
         context = await playwright.firefox.launch_persistent_context(
             **persistent_context_options(from_options, no_viewport_default)
         )
-        screenshots.mark(context)
+        driver_defaults.mark(context)
         return await async_attach_vd(context, virtual_display)
 
     identity = await asyncio.get_running_loop().run_in_executor(None, host_identity, from_options, canvas_noise)

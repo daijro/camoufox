@@ -49,7 +49,7 @@ rules:
       focused at its first VisibilityNotify, as any desktop does)
       and virtual-display-claimed-screen.patch (an X screen smaller than the
       claimed one reports the claimed one). Guards: virtual-display-window-visible,
-      popup-window-size, popup-covered-click, frame-inner-screen-position,
+      popup-window-size, popup-covered-click,
       startup-size-hold-yields, all at this default.
     expect:
       module: camoufox.virtdisplay
