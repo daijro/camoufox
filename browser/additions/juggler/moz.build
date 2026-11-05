@@ -28,7 +28,11 @@ FINAL_TARGET_FILES.modules.juggler.content += [
 ]
 FINAL_TARGET_FILES.modules.juggler.input += [
     "input/CursorTrajectory.js",
+    "input/HumanizeRng.js",
+    "input/HumanizeSeam.js",
     "input/MouseDispatch.js",
+    "input/Pacer.js",
+    "input/WheelNotches.js",
 ]
 # Cursory, vendored -- LGPLv3-or-later, not MPL-2.0. LICENSE and NOTICE ship
 # alongside the code so every build carries them; see input/cursory/README.md.

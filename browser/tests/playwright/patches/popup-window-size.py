@@ -1,6 +1,7 @@
 r"""
 A window a page opens gets the size and position its window.open() features
-ask for, and every window reports its own content size.
+ask for, and every window reports its own content size; the window automation
+opens reports the identity's position.
 
 CamoufoxWindow.sys.mjs resizes a new browser window to the identity's outer
 size and holds that size through startup. It did that to every window,
@@ -39,6 +40,8 @@ REQUESTED = [400, 300]
 FRAME = [300, 150]
 PLACED = [37, 41]
 CLAIMED = [123, 45]
+# A screen and window the claimed position fits in: the launcher clamps a
+# position that would put the window off the screen.
 CONFIG = {
     "window.screenX": CLAIMED[0],
     "window.screenY": CLAIMED[1],

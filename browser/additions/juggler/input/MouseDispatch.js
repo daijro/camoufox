@@ -25,8 +25,6 @@
  * the build if it does. See docs/input-dispatch.md.
  */
 
-const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
-
 /**
  * How long to wait for a juggler-mouse-event-hit-renderer ack before giving up.
  *
@@ -49,6 +47,9 @@ const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sy
  */
 export const kAckDeadlineMs = 5000;
 
+const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
+const helper = new Helper();
+
 function warnUndelivered(eventType, x, y, box, deadlineMs) {
   dump(
     `[juggler] WARN ${eventType} at (${x}, ${y}) was not delivered to the ` +
@@ -61,12 +62,14 @@ export class MouseDispatch {
   /**
    * @param {Window} win chrome window owning the browser element.
    * @param {DOMRect} boundingBox the browser element's rect, already measured.
-   * @param {object} eventArgs button / clickCount / modifiers / buttons.
-   * @param {Element} [browser] measured again before each dispatch when given.
+   * @param {object} eventArgs button / clickCount / modifiers / buttons, and
+   *     ageMs: how long ago the input was made (its events keep that time).
+   * @param {Element} [browser] the browser element, when the rect is to be
+   *     measured again before each dispatch (forBrowser).
    */
-  constructor(win, boundingBox, {button = 0, clickCount = 0, modifiers = 0, buttons = 0} = {}, browser = null) {
+  constructor(win, boundingBox, {button = 0, clickCount = 0, modifiers = 0, buttons = 0, ageMs = 0} = {}, browser = null) {
     this._win = win;
-    this._args = {button, clickCount, modifiers, buttons};
+    this._args = {button, clickCount, modifiers, buttons, ageMs};
     this._browser = browser;
     this._measured(boundingBox);
   }
@@ -87,9 +90,57 @@ export class MouseDispatch {
     return new MouseDispatch(win, linkedBrowser.getBoundingClientRect(), eventArgs, linkedBrowser);
   }
 
+  /**
+   * Measure the browser rect again. Every dispatch does this synchronously
+   * before converting its point (docs/input-dispatch.md, "A fresh rect"): one
+   * MouseDispatch serves a whole humanized move, whose steps are dispatched
+   * over hundreds of ms, and the browser can move in the window meanwhile.
+   *
+   * Measured 2026-10-31 (humanize-seam.py, ~1 in 4 runs): a window smaller
+   * than the chrome plus the viewport, as a 1366x768 screen draw gives a
+   * 1000x700 viewport, leaves Juggler's .browserStack scrolling the browser,
+   * and while it was overflow: auto a wheel turn scrolled it by the overflow
+   * over ~130ms (TargetRegistry.updateViewportSize). A move that started
+   * meanwhile kept the rect from its start, so every later point, the
+   * destination included, reached the page shifted by the scroll (13-84 px):
+   * moves the engine never planned, a move that missed its target, and the
+   * next click's mousedown away from the last mousemove, which a real mouse
+   * never does. The chrome can still move the browser mid-move (a toolbar
+   * changing height, the fullscreen toolbox sliding away).
+   */
   _remeasure() {
     if (this._browser)
       this._measured(this._browser.getBoundingClientRect());
+  }
+
+  /**
+   * Is this relative point in the part of the browser the window shows? The
+   * browser is clipped by its .browserStack, which scrolls when the window is
+   * too small for the viewport (TargetRegistry.updateViewportSize); a point
+   * in the clipped band lands on chrome and is never acked.
+   */
+  _isShown(x, y) {
+    const stack = this._browser?.closest('.browserStack');
+    if (!stack)
+      return true;
+    const clip = stack.getBoundingClientRect();
+    const {x: absX, y: absY} = this.toAbsolute(x, y);
+    return absX >= Math.ceil(clip.left) && absX <= Math.ceil(clip.left + clip.width) - 1 &&
+           absY >= Math.ceil(clip.top) && absY <= Math.ceil(clip.top + clip.height) - 1;
+  }
+
+  /**
+   * Bring a relative point into the shown part of the browser, as
+   * Page.dispatchMouseEvent does before it measures, when it has scrolled out
+   * since: a move's destination is always dispatched.
+   */
+  async _reveal(x, y) {
+    this._remeasure();
+    if (!this._browser || this._isShown(x, y))
+      return;
+    this._browser.scrollRectIntoViewIfNeeded(x, y, 0, 0);
+    if (this._win.windowUtils.flushApzRepaints())
+      await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
   }
 
   get boundingBox() {
@@ -118,6 +169,8 @@ export class MouseDispatch {
   }
 
   _sendAbsolute(eventType, absX, absY) {
+    if (this._args.ageMs > 0)
+      this._win.windowUtils.jugglerSetNextMouseEventAge(this._args.ageMs);
     return this._win.windowUtils.jugglerSendMouseEvent(
       eventType,
       absX,
@@ -177,6 +230,7 @@ export class MouseDispatch {
    * event in the process, in every tab, for the life of the browser.
    */
   async sendAcked(watcher, eventType, x, y, deadlineMs = kAckDeadlineMs) {
+    this._remeasure();
     const {x: absX, y: absY} = this.toAbsolute(x, y);
     const popup = this._popupAt(absX, absY);
     // This dispatches to the renderer synchronously.
@@ -222,47 +276,43 @@ export class MouseDispatch {
   }
 
   /**
-   * Dispatch the intermediate points of a humanized trajectory.
+   * Dispatch a planned humanized move (input/CursorTrajectory.js, or any mouse
+   * engine behind input/HumanizeSeam.js): every step but the last is an
+   * intermediate point, and the last is the destination, always dispatched.
    *
-   * Each step carries its own pause because the trajectory generator
-   * (input/CursorTrajectory.js) replays timing recorded from a real hand: the
-   * gaps are uneven, and evening them out would throw away the half of the
-   * realism that is not the shape of the path. The pause is taken BEFORE the
-   * point it belongs to, and it is taken even for a point that is then skipped,
-   * so dropping a point shifts nothing that follows it in time.
+   * The steps keep the timing the engine planned, because Cursory replays
+   * timing recorded from a real hand: the gaps are uneven, and evening them out
+   * would throw away the half of the realism that is not the shape of the path.
+   * `play` (the seam's Pacer) holds each step to its own due time from the
+   * start of the move, not a gap after the previous ack, so a late ack delays
+   * only its own point; a skipped point shifts nothing that follows it.
    *
-   * The pauses are a schedule counted from the start of the curve, not gaps
-   * taken after each ack: every point waits until its own due time. Waiting a
-   * full gap after the ack added each ack's latency to the curve, so a move ran
-   * as long as its plan plus one round trip per point: on a page busy 19ms in
-   * every 20, moves planned at 0.5s took 0.54-0.71s (tests/playwright/patches/
-   * humanize-pacing.py). A late point is dispatched as soon as it can be; the
-   * ones after it are still due on the original clock.
-   *
-   * Points outside the viewport are skipped, and a curve leaves the viewport
-   * more often than it sounds: measured over 400 random moves, 69% of Cursory
-   * paths stray outside the box spanned by their own endpoints, by up to 184px.
+   * Each step measures the browser rect afresh (_remeasure). Points outside
+   * the viewport, or in a band of it the window does not show, are skipped,
+   * and a curve leaves the viewport more often than it sounds: measured over
+   * 400 random moves, 69% of Cursory paths stray outside the box spanned by
+   * their own endpoints, by up to 184px.
    *
    * Bounding each ack individually is not enough to bound the work: a curve is
    * dispatched inside a SINGLE activation-chain slot, and holds up to ~90
    * points at the 1.5s default ceiling (the generator holds the sample rate at
    * 60Hz however the duration is scaled; measured worst case over 800 moves was
    * 83). A curve riding a coordinate that cannot be delivered would spend 90 x
-   * the deadline there. Rather than a wall-clock
-   * budget -- which would false-fire on exactly the slow pages the deadline
-   * exists to tolerate -- the first undelivered point abandons the rest of the
-   * curve. Intermediate points are humanization garnish: if one did not reach
-   * the renderer the rest of that curve almost certainly will not either, and
-   * dropping them costs realism, not correctness. The caller still dispatches
-   * the real destination afterwards.
+   * the deadline there. So the first undelivered point abandons the rest of the
+   * curve and the move goes straight to its destination. Intermediate points
+   * are humanization garnish: if one did not reach the renderer the rest of
+   * that curve almost certainly will not either, and dropping them costs
+   * realism, not correctness. The seam also fast-forwards to the destination
+   * once a move runs past 1.5x its time budget.
    *
-   * @param {Array<[number, number, number]>} steps [x, y, msToPauseBeforeIt].
-   * @param {number} trailingDelayMs pause before the caller's own dispatch of
-   *   the destination, so the movement ends on the generator's clock and not
-   *   the moment its last intermediate point landed.
-   * @returns {boolean} true if the whole curve was delivered.
+   * @param {{steps: Array<{x: number, y: number, t: number}>}} plan
+   * @param {(plan: object, dispatchStep: Function) => Promise} play
+   * @param {(x: number, y: number) => Promise} [sendDestination] how the last
+   *     step goes out; PageHandler's _sendMove, so the next command waits until
+   *     the page has it, as after an unplanned move.
    */
-  async sendTrajectoryAcked(watcher, eventType, steps, trailingDelayMs = 0) {
+  async sendTrajectoryAcked(watcher, eventType, plan, play,
+                            sendDestination = (x, y) => this.sendAcked(watcher, eventType, x, y)) {
     // A point on the pixel the cursor is already on generates no eMouseMove, so
     // it is never acked and the wait below would burn the whole deadline. The
     // generator already drops those, but it cannot see which points this method
@@ -271,28 +321,24 @@ export class MouseDispatch {
     // dispatched is the only place that check is reliable.
     let lastX = NaN;
     let lastY = NaN;
-    const startMs = ChromeUtils.now();
-    let dueMs = 0;
-    const untilDue = () => {
-      const waitMs = startMs + dueMs - ChromeUtils.now();
-      return waitMs > 0 ? new Promise(resolve => setTimeout(resolve, waitMs)) : null;
-    };
-    for (const [x, y, delayMs] of steps) {
-      dueMs += delayMs;
-      await untilDue();
+    const destination = plan.steps.length - 1;
+    await play(plan, async ({x, y}, i) => {
+      if (i === destination) {
+        await this._reveal(x, y);
+        await sendDestination(x, y);
+        return true;
+      }
       this._remeasure();
-      if (!this.isInViewport(x, y))
-        continue;
+      if (!this.isInViewport(x, y) || !this._isShown(x, y))
+        return true;
       if (Math.round(x) === lastX && Math.round(y) === lastY)
-        continue;
+        return true;
       if (!await this.sendAcked(watcher, eventType, x, y))
         return false;
       lastX = Math.round(x);
       lastY = Math.round(y);
-    }
-    dueMs += trailingDelayMs;
-    await untilDue();
-    return true;
+      return true;
+    });
   }
 
   /**
@@ -322,23 +368,25 @@ export class MouseDispatch {
     this._sendAbsolute('mouseover', absX, absY);
   }
 
-  /**
-   * One wheel notch of `linesX`/`linesY` lines, as a mouse wheel's native tick.
-   * Same conversion as mouse events; not acked.
-   */
-  sendWheel(x, y, linesX, linesY) {
+  /** Wheel events take the same conversion; they are not acked. */
+  sendWheel(x, y, {deltaX, deltaY, deltaZ, deltaMode, lineOrPageDeltaX, lineOrPageDeltaY, nativeNotches = false}) {
     const {x: absX, y: absY} = this.toAbsolute(x, y);
     const utils = this._win.windowUtils;
+    // The widget reads pixel deltas as device pixels. Scale by the chrome
+    // window's real ratio, not this._win.devicePixelRatio (MaskConfig spoofs it).
+    const scale = deltaMode === 0 /* WheelEvent.DOM_DELTA_PIXEL */
+        ? utils.toTopLevelWidgetRect(0, 0, 1, 1).width
+        : 1;
     utils.sendWheelEvent(
       absX,
       absY,
-      linesX,
-      linesY,
-      0,
-      1 /* WheelEvent.DOM_DELTA_LINE */,
+      deltaX * scale,
+      deltaY * scale,
+      deltaZ * scale,
+      deltaMode,
       this._args.modifiers,
-      linesX,
-      linesY,
-      utils.WHEEL_EVENT_NATIVE_NOTCHES);
+      lineOrPageDeltaX,
+      lineOrPageDeltaY,
+      nativeNotches ? utils.WHEEL_EVENT_NATIVE_NOTCHES : 0);
   }
 }

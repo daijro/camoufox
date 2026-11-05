@@ -87,10 +87,11 @@ def work(page):
 def same_input(page):
     """The input work() gives the page, without the driver's other reads.
 
-    fill() focuses the field and inserts the text; it neither clicks nor
-    presses a key. Input the page receives defines the interfaces of its
-    events on the page's window as a person's does, so the run left alone gets
-    the same fill(), and the comparison sees only what the other reads add.
+    Whatever input fill() sends (a click on the field and keys, or focus and
+    an insertText), the page receives it and Firefox's own actors define the
+    interfaces of its events on the page's window as they do for a person's.
+    The run left alone gets the same fill(), so the comparison sees only what
+    the other reads add.
     """
     page.locator("#in").fill("x")
 
@@ -102,8 +103,14 @@ def globals_of(binary, server, url, driven):
 
     server.arrived = threading.Event()
     # uBlock's content script runs when it likes, and wraps what it touches.
+    # Reader mode's parse-on-load check does too: stock Firefox reads the
+    # page's location and node geometry after the load's first paint
+    # (AboutReaderChild -> Readerable.isProbablyReaderable), which defines
+    # Location and DOMRectList on the page's window at whatever point the
+    # input has reached by then. Off in both runs, so neither races the input.
     with Camoufox(executable_path=str(binary), headless=True, os="linux",
-                  exclude_addons=[DefaultAddons.UBO]) as browser:
+                  exclude_addons=[DefaultAddons.UBO],
+                  firefox_user_prefs={"reader.parse-on-load.enabled": False}) as browser:
         page = browser.new_page()
         page.goto(url)
         if driven:

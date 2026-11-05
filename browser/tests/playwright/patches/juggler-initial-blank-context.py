@@ -8,11 +8,11 @@ read the launch identity -- navigator.platform and appVersion of the launch OS
 -- next to the context's own user agent. Now Juggler runs the context's init
 scripts on that document too.
 
-Each context here has a timezone and locale the launch does not, and an init
-script of the test's own that marks the document. On the initial
-about:blank (set_content(), no navigation) the marker, the navigator, the
-timezone and the language must equal what a served page in the same context
-reads.
+The launch identity is Windows; contexts claim macOS and Linux, and each has
+a timezone and locale the launch does not, and an init script of the test's
+own that marks the document. On the initial about:blank (set_content(), no
+navigation) the marker, the navigator, the timezone and the language must
+equal what a served page in the same context reads.
 
     python browser/tests/playwright/patches/juggler-initial-blank-context.py
 """
@@ -33,10 +33,10 @@ READ = """() => ({
   offset: new Date(2026, 0, 1).getTimezoneOffset(),
 })"""
 
-# Per-user values no launch default carries.
+# Another OS than the launch's, and per-user values no launch default carries.
 CONTEXTS = (
-    {"timezone_id": "Asia/Tokyo", "locale": "de-DE"},
-    {"timezone_id": "America/Sao_Paulo", "locale": "pt-BR"},
+    {"os": "macos", "timezone_id": "Asia/Tokyo", "locale": "de-DE"},
+    {"os": "linux", "timezone_id": "America/Sao_Paulo", "locale": "pt-BR"},
 )
 
 
@@ -73,13 +73,14 @@ def main() -> int:
             served_page.goto(url)
             served = served_page.evaluate(READ)
             context.close()
-            print(f"  {name:18s} set_content on {blank_url}: {blank}")
-            print(f"  {name:18s} served page:            {served}")
+            print(f"  {kwargs['os']:6s} {name:18s} set_content on {blank_url}: {blank}")
+            print(f"  {kwargs['os']:6s} {name:18s} served page:            {served}")
             if served["marker"] != name or served["timeZone"] != name:
                 failures.append(f"{name}: the served page did not get the context's own values: {served}")
             for key, value in served.items():
                 if blank[key] != value:
-                    failures.append(f"{name}: initial about:blank {key} {blank[key]!r}, the context's is {value!r}")
+                    failures.append(f"{kwargs['os']} {name}: initial about:blank {key} {blank[key]!r}, "
+                                    f"the context's is {value!r}")
     server.shutdown()
     for failure in failures:
         print(f"FAIL: {failure}")
