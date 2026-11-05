@@ -997,8 +997,8 @@ export class PageAgent {
       }
     };
     const onPaste = event => { cancelled = event.defaultPrevented; };
-    Services.els.addSystemEventListener(win, 'keypress', onKeypress, true);
-    Services.els.addSystemEventListener(win, 'paste', onPaste, false);
+    win.addEventListener('keypress', onKeypress, {capture: true, mozSystemGroup: true});
+    win.addEventListener('paste', onPaste, {mozSystemGroup: true});
     try {
       // The modifier leads and trails V as Shift does a key (_dispatchKeyEvent).
       await this._dispatchKeyEvent({type: 'keydown', ...modifier});
@@ -1009,8 +1009,8 @@ export class PageAgent {
       await pause(modifierTrail());
       await this._dispatchKeyEvent({type: 'keyup', ...modifier});
     } finally {
-      Services.els.removeSystemEventListener(win, 'keypress', onKeypress, true);
-      Services.els.removeSystemEventListener(win, 'paste', onPaste, false);
+      win.removeEventListener('keypress', onKeypress, {capture: true, mozSystemGroup: true});
+      win.removeEventListener('paste', onPaste, {mozSystemGroup: true});
     }
     if (error)
       throw error;

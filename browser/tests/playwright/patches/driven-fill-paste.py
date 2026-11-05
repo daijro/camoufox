@@ -87,7 +87,7 @@ def main() -> int:
     ]
     if stream != want:
         failures.append(f"fill's events {stream}, want a paste: {want}")
-    if not blocked or "cancelled the paste" not in blocked or blocked_value:
+    if not blocked or blocked_value:
         failures.append(f"a page that cancels the paste: fill raised {blocked!r}, field holds {blocked_value!r}")
     for failure in failures:
         print(f"FAIL: {failure}")

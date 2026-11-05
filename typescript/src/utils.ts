@@ -2088,14 +2088,21 @@ export async function launchOptions({
 	// it. setInto leaves an explicit caller value alone.
 	setInto(config, "voices:blockIfNotDefined", true);
 
-	// Pass the humanize option
-	if (pyTruthy(humanize)) {
+	const humanized = pyTruthy(humanize);
+	const humanizeManifest = executable_path
+		? buildFile(executable_path, "humanize-engines.json")
+		: utilsDeps.getPath("humanize-engines.json");
+	if (fs.existsSync(humanizeManifest)) {
+		// Pin every channel on every launch, as Python does.
+		setInto(config, "humanize", humanized);
+		setInto(config, "humanize:mouse", humanized ? "cursory" : "raw");
+		setInto(config, "humanize:keyboard", "raw");
+		setInto(config, "humanize:scroll", humanized ? "cursory" : "raw");
+	} else if (humanized) {
 		setInto(config, "humanize", true);
-		// MaskConfig expects maxTime to be a JSON number.
-		// float(humanize): a JSON number with a floating-point representation.
-		if (typeof humanize === "number") {
-			setInto(config, "humanize:maxTime", new PyFloat(humanize));
-		}
+	}
+	if (typeof humanize === "number") {
+		setInto(config, "humanize:maxTime", new PyFloat(humanize));
 	}
 
 	// Enable the main world context creation

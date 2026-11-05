@@ -1,5 +1,105 @@
+diff --git a/toolkit/xre/gfxtest/gfxtest.cpp b/toolkit/xre/gfxtest/gfxtest.cpp
+index 12866f1263..612b6b1541 100644
+--- a/toolkit/xre/gfxtest/gfxtest.cpp
++++ b/toolkit/xre/gfxtest/gfxtest.cpp
+@@ -15,7 +15,7 @@
+ #  include <gdk/gdk.h>
+ #endif
+ 
+-int glxtest(bool aWayland, int aOutputFd);
++int glxtest(bool aWayland, bool aHeadless, int aOutputFd);
+ 
+ #ifdef MOZ_ENABLE_VAAPI
+ int vaapitest(const char* aDrmDevice);
+@@ -37,7 +37,7 @@ static void PrintUsage() {
+       "\n"
+       "Commands:\n"
+       "\n"
+-      "  glx [-f fd] [-w]          probe OpenGL/EGL capabilities\n"
++      "  glx [-f fd] [-w] [-e]       probe OpenGL/EGL capabilities\n"
+ #ifdef MOZ_ENABLE_VAAPI
+       "  vaapi -d <drm_device>     probe VA-API video decode/encode\n"
+ #endif
+@@ -54,16 +54,21 @@ static int RunGlx(int argc, char** argv) {
+   struct option longOptions[] = {{"help", no_argument, nullptr, 'h'},
+                                  {"fd", required_argument, nullptr, 'f'},
+                                  {"wayland", no_argument, nullptr, 'w'},
++                                 {"headless", no_argument, nullptr, 'e'},
+                                  {nullptr, 0, nullptr, 0}};
+   int c;
+   optind = 1;
+   bool wayland = false;
++  bool headless = false;
+   int outputFd = 1;
+-  while ((c = getopt_long(argc, argv, "hf:w", longOptions, nullptr)) != -1) {
++  while ((c = getopt_long(argc, argv, "hf:we", longOptions, nullptr)) != -1) {
+     switch (c) {
+       case 'w':
+         wayland = true;
+         break;
++      case 'e':
++        headless = true;
++        break;
+       case 'f':
+         outputFd = atoi(optarg);
+         break;
+@@ -80,7 +85,7 @@ static int RunGlx(int argc, char** argv) {
+         break;
+     }
+   }
+-  return glxtest(wayland, outputFd);
++  return glxtest(wayland, headless, outputFd);
+ }
+ 
+ #ifdef MOZ_ENABLE_VAAPI
+diff --git a/toolkit/xre/gfxtest/glxtest.cpp b/toolkit/xre/gfxtest/glxtest.cpp
+index 17709c0e9a..97ed0e1ce0 100644
+--- a/toolkit/xre/gfxtest/glxtest.cpp
++++ b/toolkit/xre/gfxtest/glxtest.cpp
+@@ -1057,19 +1057,23 @@ void wayland_egltest() {
+ }
+ #endif
+ 
+-int childgltest(bool aWayland) {
++int childgltest(bool aWayland, bool aHeadless) {
+   log("GLX_TEST: childgltest start\n");
+ 
+   // Get a list of all GPUs from the PCI bus.
+   get_pci_status();
+ 
++  if (aHeadless) {
++    get_egl_status(nullptr, /* aLoadModifiers */ false);
++    record_value("TEST_TYPE\nEGL\n");
++  }
+ #ifdef MOZ_WAYLAND
+   if (aWayland) {
+     wayland_egltest();
+   }
+ #endif
+ #ifdef MOZ_X11
+-  if (!aWayland) {
++  if (!aWayland && !aHeadless) {
+     // TODO: --display command line argument is not properly handled
+     if (!x11_egltest()) {
+       glx_probe();
+@@ -1085,7 +1089,7 @@ int childgltest(bool aWayland) {
+ 
+ }  // extern "C"
+ 
+-int glxtest(bool aWayland, int aOutputFd) {
++int glxtest(bool aWayland, bool aHeadless, int aOutputFd) {
+   output_pipe = aOutputFd;
+   if (getenv("MOZ_AVOID_OPENGL_ALTOGETHER")) {
+     const char* msg = "ERROR\nMOZ_AVOID_OPENGL_ALTOGETHER envvar set";
+@@ -1097,5 +1101,5 @@ int glxtest(bool aWayland, int aOutputFd) {
+   if (!enable_logging) {
+     close_logging();
+   }
+-  return childgltest(aWayland);
++  return childgltest(aWayland, aHeadless);
+ }
 diff --git a/widget/gtk/GfxInfo.cpp b/widget/gtk/GfxInfo.cpp
-index cac1557e2f..ed519864be 100644
+index cac1557e2f..3c2ad4295f 100644
 --- a/widget/gtk/GfxInfo.cpp
 +++ b/widget/gtk/GfxInfo.cpp
 @@ -644,7 +644,7 @@ void GfxInfo::GetData() {
@@ -40,25 +140,21 @@ index cac1557e2f..ed519864be 100644
    for (auto& arg : argv) {
      if (!arg) {
        break;
-@@ -707,9 +715,15 @@ bool GfxInfo::FireGLXTestProcess() {
+@@ -707,9 +715,11 @@ bool GfxInfo::FireGLXTestProcess() {
    sGLXTestPipe = pfd[0];
  
    auto pipeID = std::to_string(pfd[1]);
-+  // Camoufox: a headless browser has no display server, so the X11 probe
-+  // fails, every GL feature is blocklisted and WebGL is gone (stock too).
-+  // Headless stands in for a headed browser on Xvfb, whose GL is Mesa's
-+  // llvmpipe: probe that through EGL, which needs no display.
 +  const bool headless = PR_GetEnv("MOZ_HEADLESS");
    const char* args[] = {"glx", "-f", pipeID.c_str(),
 -                        IsWaylandEnabled() ? "-w" : nullptr, nullptr};
 -  sGLXTestPID = FireTestProcess(GFX_PROBE_BINARY, nullptr, args);
-+                        (headless || IsWaylandEnabled()) ? "-w" : nullptr,
++                        headless ? "-e" : IsWaylandEnabled() ? "-w" : nullptr,
 +                        nullptr};
 +  sGLXTestPID = FireTestProcess(GFX_PROBE_BINARY, nullptr, args, headless);
    // Set pid to -1 to avoid further test launch.
    if (!sGLXTestPID) {
      sGLXTestPID = -1;
-@@ -1594,6 +1608,16 @@ nsresult GfxInfo::GetFeatureStatusImpl(
+@@ -1594,6 +1604,16 @@ nsresult GfxInfo::GetFeatureStatusImpl(
      return NS_OK;
    }
  
