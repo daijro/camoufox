@@ -22,7 +22,9 @@
 #
 # So `ci/run_skiplist_audit.py` now runs every entry with the skiplist disabled
 # and FAILS THE BUILD if a skipped test passes. An entry has to keep earning its
-# place. Add one only after watching it fail.
+# place. Add one only after watching it fail. An entry whose test passes or fails
+# with machine speed cannot be held to that, so `checked_by` names the patch guard
+# that checks its reason instead.
 #
 # Entries are matched against pytest node ids. `module` skips a whole file;
 # `test` skips one node id; `pattern` is a substring match, used sparingly.
@@ -93,9 +95,10 @@ skip:
       100 px into one such notch (docs/input-dispatch.md), so the page sees a
       wheel, and upstream's exact pixel delta is gone.
 
-  # A pattern, so the audit reports it as not audited: it cannot demand a failure
-  # here. A machine too slow to fit two moves in a frame passes this test.
-  - pattern: test_click_with_tweened_mouse_movement
+  # A machine too slow to fit two moves in a frame passes this test, so the
+  # audit cannot demand a failure. The guard checks the coalescing it asserts against.
+  - test: tests/async/test_click.py::test_click_with_tweened_mouse_movement
+    checked_by: driven-move-coalescing
     reason: >-
       Asserts click(steps=5) gives the page five mousemoves, one per step. A
       real mouse's moves are coalesced per refresh tick: stock Firefox on
