@@ -1482,6 +1482,15 @@ def _build_init_script(values: Dict[str, Any]) -> str:
             '  if (typeof w.setWebRTCIPv4 === "function") w.setWebRTCIPv4("");'
         )
 
+    # Whether this context has a proxy. The browser cannot infer it for a
+    # document with no HTTP channel (about:blank, srcdoc, blob:, data:), and
+    # Juggler's per-context proxies are not in network.proxy.*.
+    proxied = values.get('webrtcProxied')
+    if proxied is not None:
+        lines.append(
+            f'  if (typeof w.setWebRTCProxied === "function") w.setWebRTCProxied({"true" if proxied else "false"});'
+        )
+
     # Font list (comma-separated)
     font_list = values.get('fontList')
     if font_list and len(font_list) > 0:
@@ -1515,6 +1524,7 @@ def generate_context_fingerprint(
     os: Optional[str] = None,
     ff_version: Optional[str] = None,
     webrtc_ip: Optional[str] = None,
+    webrtc_proxied: Optional[bool] = None,
     timezone: Optional[str] = None,
     locale: Optional[str] = None,
     config_overrides: Optional[Dict[str, Any]] = None,
@@ -1656,6 +1666,7 @@ def generate_context_fingerprint(
             {'speechd': config['voices:speechd']} if 'voices:speechd' in config else config.get('voices')
         ),
         'webrtcIP': webrtc_ip or '',
+        'webrtcProxied': webrtc_proxied,
     }
 
     init_script = _build_init_script(init_values)

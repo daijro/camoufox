@@ -27,8 +27,8 @@ What PASS means:
     * a top-level blob: page the proxied page opened with noopener, which no
       document loaded over HTTP leads back to, gathers through the relay too;
     * behind an HTTP proxy, and behind a SOCKS5 proxy that refuses UDP
-      ASSOCIATE, nothing reaches the server, gathering ends within a few
-      seconds and the only srflx carries `webrtc:ipv4`, as before;
+      ASSOCIATE, nothing reaches the server and gathering ends within a few
+      seconds with no srflx: the page reads a machine whose UDP is blocked;
     * two pages in two contexts, each behind its own SOCKS5 proxy and given
       only each other's srflx, open a data channel through both relays.
 
@@ -415,8 +415,8 @@ async def main() -> int:
         checks += [
             (f"{label}: gathering ends without the STUN server",
              gather["elapsed"] is not None and gather["elapsed"] < 5000, gather["elapsed"]),
-            (f"{label}: the only srflx carries the identity's address",
-             [c.split(":")[0] for c in gather["srflx"]] == [SPOOFED_IP], gather["srflx"]),
+            (f"{label}: no srflx without a STUN answer (UDP blocked)",
+             gather["srflx"] == [] and gather["stats"] == [], gather["srflx"]),
         ]
     checks += [
         ("two contexts, each behind its own SOCKS5 proxy: the data channel opens",

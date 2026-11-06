@@ -12,7 +12,7 @@ const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sy
 const {MouseDispatch, kAckDeadlineMs} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
 const kMoveIntervalMs = 8; // a 125 Hz mouse
 const {humanizeSeam} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanizeSeam.js');
-const {normalDelay} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanDelay.js');
+const {logNormalDelay} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanDelay.js');
 const {cursory} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
 
 // Probe rounds for a humanized scrollIntoViewIfNeeded (see
@@ -25,22 +25,21 @@ const Cu = Components.utils;
 const XUL_NS = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
 const helper = new Helper();
 
-// How long a person holds a mouse button for a click: normal around 110 ms
-// (SD 30), the human click durations reported in arXiv 2607.26935 (centred on
-// 100-120 ms, sigma ~30 ms), and never shorter than 50 ms.
-const clickHold = () => normalDelay(110, 30, 50);
+// How long a person holds a mouse button for a click. Human press durations
+// are right-skewed (arXiv 2607.26935 centres them on 100-120 ms), so this is a
+// log-normal with a 95 ms median, sigma 0.42, never under 50 ms. The stream is
+// the launch's `humanize:seed`, so a seeded session reproduces its timings.
+const clickHold = () => logNormalDelay(95, 0.42, 50, Infinity, humanizeSeam().timing());
 
 // How long a person's button stays up between the clicks of a double click:
-// about 110 ms (SD 25; an estimate, no published or recorded figure found),
-// kept within 70-180 ms, so press to press stays well inside the OS
-// double-click time with clickHold() before it.
-const clickGap = () => normalDelay(110, 25, 70, 180);
+// 110 ms median, sigma 0.32, kept within 70-180 ms, so press to press stays
+// well inside the OS double-click time with clickHold() before it.
+const clickGap = () => logNormalDelay(110, 0.32, 70, 180, humanizeSeam().timing());
 
-// How long a person's pointer rests on a target before pressing it: about
-// 130 ms (SD 40; an estimate, no published or recorded figure found), kept
-// within 60-240 ms. Stock's OS input reads under 250 ms from arrival to press;
-// Playwright pressed under 10 ms after the move that brought the pointer there.
-const hoverDwell = () => normalDelay(130, 40, 60, 240);
+// How long a person's pointer rests on a target before pressing it: 125 ms
+// median, sigma 0.5, kept within 60-240 ms. Stock's OS input reads under
+// 250 ms from arrival to press; Playwright pressed under 10 ms after the move.
+const hoverDwell = () => logNormalDelay(125, 0.5, 60, 240, humanizeSeam().timing());
 
 function hashConsoleMessage(params) {
   return params.location.lineNumber + ':' + params.location.columnNumber + ':' + params.location.url;
@@ -733,23 +732,13 @@ export class PageHandler {
       this._userInputGateOpen.add(windowGlobal);
   }
 
-  // Camoufox: the OS delivers keys only to the active window's selected tab,
-  // and since Juggler no longer forces every page focused (content/main.js),
-  // a page typed into from behind another window or tab would get trusted
-  // keydowns with document.hasFocus() false, which no person's Firefox
-  // delivers. So keyboard input first brings its page to the front, as the
-  // mouse does through activateAndRun, and waits (bounded) for the window
-  // manager to make its window active.
+  // Camoufox: a driven page stays focused and active (content/main.js), so
+  // keyboard input does not have to raise its window or select its tab first.
+  // Page.bringToFront still does that for callers that ask for it.
   _isFrontPage() {
     const browser = this._pageTarget.linkedBrowser();
     const win = browser?.documentGlobal || browser?.ownerGlobal;
     return !!win && Services.focus.activeWindow === win && win.gBrowser?.selectedBrowser === browser;
-  }
-
-  async _activateForKeyboard() {
-    if (this._isFrontPage())
-      return;
-    await this._pageTarget.activateAndRun(() => this._focusFrontPage());
   }
 
   async _focusFrontPage() {
@@ -765,7 +754,6 @@ export class PageHandler {
 
   async ['Page.dispatchKeyEvent']({type, keyCode, code, key, repeat, location, text}) {
     await this._awaitUserInputGate();
-    await this._activateForKeyboard();
     // key events don't fire if we are dragging.
     if (this._isDragging) {
       if (type === 'keydown' && key === 'Escape') {
@@ -1166,7 +1154,6 @@ export class PageHandler {
 
   async ['Page.insertText'](options) {
     await this._awaitUserInputGate();
-    await this._activateForKeyboard();
     const planned = humanizeSeam().plan('keyboard', 'planInsert', await this._keyboardContext(true), options.text);
     if (!planned)
       return await this._contentPage.send('insertText', options);

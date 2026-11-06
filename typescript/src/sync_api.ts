@@ -289,6 +289,7 @@ export async function NewContext(
 		os: contextOs,
 		ff_version: ffVersion,
 		webrtc_ip: webrtcIp,
+		webrtc_proxied: proxy ? true : undefined,
 		webgl_config: webglConfig,
 	});
 

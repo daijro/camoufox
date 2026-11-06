@@ -13,8 +13,9 @@ queries for a peer's .local name onto the LAN. Now:
       would leave this host goes through the proxy's relay, the local network
       included;
     * behind a proxy that carries no UDP (HTTP CONNECT, or SOCKS5 refusing
-      UDP ASSOCIATE), none leaves at all, and the srflx a STUN server would
-      have mapped is made up from the identity's `webrtc:ipv4` (the exit);
+      UDP ASSOCIATE), none leaves at all and no srflx surfaces: the page reads
+      a machine whose UDP is blocked (a made-up srflx claimed a Binding Request
+      the page's STUN server knows it never received, LEAKS 616);
     * only datagrams that stay on this host go direct: to loopback, or to the
       socket's own address (the other end of a page's loopback connection,
       which still connects, as stock's does);
@@ -32,10 +33,6 @@ socket joined to the mDNS group (224.0.0.251:5353) sees any query or answer
 naming a <uuid>.local host candidate. On a build with the LAN shortcut, STUN
 behind every proxy arrives from host sockets and the loopback test multicasts
 its queries.
-
-With `webrtc:hostipv6` (two UDP host candidates), the made-up srflx takes the
-IPv4 host's interface preference and port, as nICEr's real one does (0x7E1F,
-not 0x7F1F): judged only when two UDP host candidates surface.
 
 Exit 0 PASS, 1 FAIL.
 
@@ -430,23 +427,10 @@ async def judge(lan: str, stun: "StunServer") -> int:
                 (f"{label}: no UDP reached the LAN STUN server", not r["sources"], r["sources"]),
                 (f"{label}: gathering ends without it",
                  r["gather"]["elapsed"] is not None and r["gather"]["elapsed"] < 5000, r["gather"]["elapsed"]),
-                (f"{label}: one srflx, the exit's address (webrtc:ipv4)",
-                 [c["address"] for c in srflx] == [SPOOFED_IP], [c["address"] for c in srflx]),
+                (f"{label}: no srflx without a STUN answer (UDP blocked)",
+                 not srflx and not r["gather"]["stats"],
+                 f"{[(c['address'], c['port']) for c in srflx]} stats {r['gather']['stats']}"),
             ]
-            udp_hosts = [c for c in cands if c["type"] == "host" and c["proto"] == "udp"]
-            if len(udp_hosts) >= 2 and len(srflx) == 1:
-                base = min(udp_hosts, key=lambda c: c["priority"])
-                want = (100 << 24) | (base["priority"] & 0x00FF0000) | (31 << 8) | 255
-                stats = r["gather"]["stats"]
-                checks += [
-                    (f"{label}: the made-up srflx has its IPv4 base's priority, in the candidate and getStats()",
-                     srflx[0]["priority"] == want and [s["priority"] for s in stats] == [want],
-                     f"candidate {srflx[0]['priority']:#x} stats {[hex(s['priority']) for s in stats]} want {want:#x}"),
-                    (f"{label}: the made-up srflx has its IPv4 base's port",
-                     srflx[0]["port"] == base["port"], f"srflx {srflx[0]['port']} base {base['port']}"),
-                ]
-            else:
-                print(f"  NOT JUDGED {label}: srflx priority needs two UDP host candidates, got {len(udp_hosts)}")
         checks += [
             (f"{label}: the page's two peer connections connect", r["loopback"] == "ping", r["loopback"]),
         ]

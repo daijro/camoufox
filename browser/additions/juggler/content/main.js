@@ -68,21 +68,14 @@ export function initialize(browsingContext, docShell) {
   const contextCrossProcessCookie = Services.cpmm.sharedData.get('juggler:context-cookie-' + browsingContext.originAttributes.userContextId) || { initScripts: [], bindings: [], settings: {} };
   const pageCrossProcessCookie = Services.cpmm.sharedData.get('juggler:page-cookie-' + browsingContext.browserId) || { initScripts: [], bindings: [], interceptFileChooserDialog: false };
 
-  // Camoufox: upstream Playwright forces every top-level document focused and
-  // active here (focus emulation, so parallel pages all "have focus"). A page
-  // reads it: measured 2026-11-01 on Linux (Xvfb + openbox and headless, 3
-  // launches each), stock Firefox 158.0.1 vs Playwright-driven camoufox:
-  //  - opener behind a window.open() popup, or a window behind a second
-  //    window: stock hasFocus() false, blur on the element, document and
-  //    window; driven hasFocus() true while :-moz-window-inactive matched, and
-  //    no document/window blur (nsFocusManager::BlurImpl skips it).
-  //  - opener tab behind a new foreground tab: stock visibilityState
-  //    "hidden", a visibilitychange, rAF and timers throttled to ~1/s; driven
-  //    "visible", no visibilitychange, rAF at 60 Hz and timers unthrottled.
-  // So the document keeps the window's real focus and activeness, as in stock.
-  // Input that must reach a page in the background goes through
-  // activateAndRun (TargetRegistry.js), which raises its window and selects
-  // its tab first, as a user would.
+  // Camoufox: a driven page stays focused and active, even when another
+  // window or tab is in front. This is deliberate, not stock: the product
+  // wants every page a caller opens to behave as if a person is looking at
+  // it, so parallel pages do not lose focus or throttling. It is page-visible
+  // (document.hasFocus(), visibilityState, blur), so cfparity allowlists it;
+  // see ci/tribal-rules.yml, driven-pages-stay-focused. Juggler's own OS input
+  // path still raises the selected tab through activateAndRun where the OS
+  // needs it.
   // A page reads this back: after a scripted same-origin `location.href = ...`
   // and `history.back()` -- no gesture, no permission -- stock Firefox 152.0.4
   // fires pageshow with persisted=true and does not re-run the document's
@@ -94,6 +87,8 @@ export function initialize(browsingContext, docShell) {
   // times out waiting for "load" and the next `page.evaluate` throws "The
   // operation is insecure" against the stale context. Closing this needs
   // FrameTree/PageAgent to treat a persisted pageshow as a navigation.
+  docShell.overrideHasFocus = true;
+  docShell.forceActiveState = true;
   docShell.disallowBFCache = true;
   data.frameTree = new FrameTree(browsingContext);
   for (const [name, value] of Object.entries(contextCrossProcessCookie.settings)) {

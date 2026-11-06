@@ -24,6 +24,7 @@ export const kChannelTags = Object.freeze({
   mouse: 0x6d6f7573n,     // "mous"
   keyboard: 0x6b657962n,  // "keyb"
   scroll: 0x7363726fn,    // "scro"
+  timing: 0x74696d65n,    // "time"
 });
 
 /** One splitmix64 output for the 64-bit state `x`. */

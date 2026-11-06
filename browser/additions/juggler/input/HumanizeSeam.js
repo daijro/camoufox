@@ -118,6 +118,9 @@ export class HumanizeSeam {
     this._streams = new Map();
     const seedText = config.getString('humanize:seed');
     this._seed = seedText ? parseSeed(seedText) : randomSeed();
+    // A separate stream for the delays between a person's input events, so
+    // click/hover timing does not shift a cursor or keyboard plan.
+    this._timing = channelStream(this._seed, 'timing');
   }
 
   _warnOnce(code, detail) {
@@ -125,6 +128,11 @@ export class HumanizeSeam {
       return;
     this._warned.add(code);
     this._warn(`${code}: ${detail}`);
+  }
+
+  /** The seeded stream for inter-event delays (click hold, hover dwell). */
+  timing() {
+    return this._timing;
   }
 
   get manifest() {

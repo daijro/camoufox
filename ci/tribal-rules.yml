@@ -301,6 +301,20 @@ rules:
       speaks it silently for as long as the text takes at ~150 words per
       minute. The two config keys that chose between the two tells are gone.
 
+  - id: driven-pages-stay-focused
+    title: A driven page stays focused and active, deliberately not stock
+    check: manual   # browser/tests/playwright/patches/driven-page-real-focus.py
+    evidence:
+      - "product decision, 2026-11-05: every page a caller opens must keep running as if a person is looking at it"
+      - "the stock-focus change in daijro/camoufox#997 made background pages lose focus and visibility; it is reverted here"
+    rationale: >-
+      Stock Firefox gives a page behind another window hasFocus() false, a
+      window blur, and a hidden, throttled state behind a foreground tab. A
+      driver's pages are all work the caller asked for, in parallel, so
+      Camoufox keeps every top-level driven document focused and active
+      (docShell.overrideHasFocus / forceActiveState). This is page-visible and
+      cfparity allowlists it: it is a product choice, not a parity bug.
+
   - id: no-glyph-spacing-noise
     title: Text is shaped exactly as stock Firefox shapes it; there is no spacing seed
     check: automated

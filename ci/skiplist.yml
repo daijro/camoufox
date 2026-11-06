@@ -265,32 +265,6 @@ skip:
       synthesizes a real click, which grants a real activation -- and so does
       page.evaluate(() => window.open(...)).
 
-  # --- focus emulation -------------------------------------------------------
-  #
-  # Upstream Playwright's Juggler forced every top-level document focused and
-  # active (docShell.overrideHasFocus / forceActiveState), so every page of a
-  # driven browser read as the focused, visible page. A page reads that: behind
-  # another window stock Firefox gives hasFocus() false and a window blur, and a
-  # background tab goes "hidden" with rAF and timers throttled. Camoufox keeps
-  # the real focus (browser/additions/juggler/content/main.js); keyboard input
-  # and bring_to_front() bring their page to the front first, as the mouse
-  # already did (protocol/PageHandler.js), so typing into several pages still
-  # lands in each (test_should_provide_target_for_keyboard_events passes).
-  # browser/tests/playwright/patches/driven-page-real-focus.py checks the stock
-  # behaviour.
-
-  - test: tests/async/test_emulation_focus.py::test_should_think_that_all_pages_are_focused
-    reason: >-
-      Asserts both pages of a context have document.hasFocus() true. The first
-      page sits behind the second page's window, and stock Firefox 158.0.1 reads
-      false there (and fires blur on its window); only one window is active.
-
-  - test: tests/async/test_emulation_focus.py::test_should_focus_popups_by_default
-    reason: >-
-      Asserts the opener still has document.hasFocus() true after window.open()
-      put a popup tab in front of it. In stock Firefox the opener is then a
-      background tab: hasFocus() false and visibilityState "hidden".
-
   # --- scrollbars in an emulated viewport --------------------------------------
   #
   # Upstream's headless Firefox hides content scrollbars with an agent style

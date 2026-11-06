@@ -107,6 +107,18 @@ fingerprint immune to `#751`.
 `browser/tests/playwright/patches/input-ack-backstop.py` covers the bounded waits
 themselves: a late renderer ack, and a drag whose page answers late.
 
+## Focus
+
+A driven page stays focused and active, deliberately not stock. Upstream
+Playwright's Juggler set `docShell.overrideHasFocus` and `forceActiveState` on
+every top-level document so parallel pages behave as if each is in front;
+Camoufox keeps that for the product (`content/main.js`). Stock gives a page
+behind another window `hasFocus()` false, a window `blur`, and a hidden,
+throttled state behind a foreground tab. The difference is page-visible, so
+`cfparity` allowlists it (`ci/tribal-rules.yml`, `driven-pages-stay-focused`).
+Keyboard input therefore does not raise the page first; `Page.bringToFront`
+still does that when a caller asks.
+
 ## The input gate
 
 Firefox's content process drops user input that reaches a document before its
@@ -204,9 +216,13 @@ clipboard, is cancelled in the system group; content never receives a
 through the system clipboard. The modifier leads V by about 60 ms and trails
 it by about 40 ms, as Shift does a key, and V is held 116.25 ms (SD 23.88;
 Dhakal et al., "Observations on Typing from 136 Million Keystrokes", CHI 2018).
-Every delay between a person's input events is a normal draw from
-`input/HumanDelay.js` (`normalDelay(mean, sd, min, max)`), with the figures its
-caller cites.
+Every delay between a person's input events comes from `input/HumanDelay.js`,
+with the figures its caller cites: a normal draw for a key or modifier hold
+(`normalDelay(mean, sd, min, max)`) and a right-skewed log-normal for a click
+hold, hover dwell or double-click gap (`logNormalDelay(median, sigma, min, max)`),
+as human timing is. They draw from the launch's `humanize:seed` on a separate
+`timing` stream, so a seeded session reproduces them without shifting a cursor
+or keyboard plan.
 
 A page that cancels the paste, or the shortcut's `keydown`, gets nothing
 pasted, as for a person, and `fill()` fails saying so. Nothing focused that

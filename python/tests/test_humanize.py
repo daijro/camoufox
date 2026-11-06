@@ -135,10 +135,9 @@ def test_a_build_without_the_manifest_refuses_what_it_cannot_do(humanize, channe
 @pytest.mark.parametrize(
     "humanize, expected",
     [
-        (
-            False,
-            {"humanize": False, "humanize:mouse": "raw", "humanize:keyboard": "raw", "humanize:scroll": "raw"},
-        ),
+        (None, {}),
+        (False, {}),
+        ({"mouse": raw(), "keyboard": raw(), "scroll": raw()}, {}),
         (
             True,
             {"humanize": True, "humanize:mouse": "auto", "humanize:keyboard": "auto", "humanize:scroll": "auto"},
@@ -175,7 +174,7 @@ def test_a_build_without_the_manifest_refuses_what_it_cannot_do(humanize, channe
         ),
     ],
 )
-def test_every_humanize_key_is_written_on_every_launch(humanize, expected) -> None:
+def test_humanize_writes_every_key_only_when_on(humanize, expected) -> None:
     config = humanize_config(humanize, BASE_MANIFEST)
     assert config == expected
     assert list(config) == list(expected)

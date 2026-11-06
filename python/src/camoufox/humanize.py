@@ -211,11 +211,19 @@ def humanize_config(
             )
         return {'humanize': True, **options} if enabled else {}
 
-    # Every key on every launch, so nothing depends on what an earlier launch set.
+    # Off adds no keys: a stock identity mirror must not look like it asked for
+    # humanized input. A custom mouse still needs mouse:internal for the moves
+    # the browser originates (the cursor step before a planned scroll).
+    custom_mouse = engines['mouse']['engine'] == 'custom'
+    if not enabled and not custom_mouse:
+        return {}
+
+    # Every key on every enabled launch, so nothing depends on what an earlier
+    # launch set.
     config: Dict[str, Any] = {'humanize': enabled}
     for channel in CHANNELS:
         config[f'humanize:{channel}'] = names[channel]
-    if engines['mouse']['engine'] == 'custom':
+    if custom_mouse:
         # Moves the browser originates (the cursor move before a planned
         # scroll) still get a humanized path, not a jump.
         config['humanize:mouse:internal'] = 'auto'

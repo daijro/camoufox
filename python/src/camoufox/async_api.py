@@ -265,7 +265,7 @@ async def AsyncNewContext(
     fp = await asyncio.get_event_loop().run_in_executor(
         None,
         lambda: generate_context_fingerprint(
-            preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config
+            preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webrtc_proxied=True if proxy else None, webgl_config=webgl_config
         ),
     )
 

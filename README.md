@@ -602,7 +602,7 @@ MPL-2.0 like the rest of the browser**; see
 
 ### Choosing an engine per channel
 
-`humanize` also takes one engine per input channel, so mouse, keyboard and scroll can be set separately (Python launcher; the TypeScript launcher takes `true` or a number). The browser applies them to the input commands Playwright already sends, so the Playwright code stays the same:
+`humanize` also takes one engine per input channel, so mouse, keyboard and scroll can be set separately. Both launchers accept the dict; `custom(fn)` runs in the caller's process and is Python-only. The browser applies the engines to the input commands Playwright already sends, so the Playwright code stays the same:
 
 ```python
 from camoufox import Camoufox

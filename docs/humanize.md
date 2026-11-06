@@ -151,8 +151,9 @@ that such a binary cannot run.
 `humanize:seed` is a decimal uint64 string, because Juggler reads config numbers
 only as doubles. Each channel's stream is
 `Mulberry32(splitmix64(seed ^ tag) & 0xffffffff)`, with tags `0x6d6f7573`
-(mouse), `0x6b657962` (keyboard) and `0x7363726f` (scroll). Without a seed, each
-launch draws a random one.
+(mouse), `0x6b657962` (keyboard), `0x7363726f` (scroll) and `0x74696d65`
+(timing: the click hold, hover dwell and double-click gap between events).
+Without a seed, each launch draws a random one.
 
 The launcher derives the same streams for `custom()` engines
 (`channel_stream` in `python/src/camoufox/humanize.py`).

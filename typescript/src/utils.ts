@@ -66,6 +66,7 @@ import {
 	validIPv6,
 } from "./ip.js";
 import { handleLocales } from "./locales.js";
+import { humanizeConfig, type HumanizeSetting, type Manifest } from "./humanize.js";
 import { INSTALL_DIR, LAUNCHER_CONSTANTS, OS_NAME } from "./paths.js";
 import {
 	buildFile,
@@ -1510,8 +1511,8 @@ export interface LaunchOptions {
 	geoip?: string | boolean;
 	/** Name of the GeoIP database to use (e.g. "GeoIP AIO by daijro"). */
 	geoip_db?: string;
-	/** Humanize the cursor movement: `true`, or the MAX duration in seconds. */
-	humanize?: boolean | number;
+	/** Humanize input per channel: `true`, a max cursor duration, or `{ mouse, keyboard, scroll, seed }`. */
+	humanize?: HumanizeSetting;
 	/** Locale(s) to use. The first listed locale is used for the Intl API. */
 	locale?: string | string[];
 	/** List of Firefox addons to use (paths to extracted addons). */
@@ -2088,22 +2089,14 @@ export async function launchOptions({
 	// it. setInto leaves an explicit caller value alone.
 	setInto(config, "voices:blockIfNotDefined", true);
 
-	const humanized = pyTruthy(humanize);
 	const humanizeManifest = executable_path
 		? buildFile(executable_path, "humanize-engines.json")
 		: utilsDeps.getPath("humanize-engines.json");
-	if (fs.existsSync(humanizeManifest)) {
-		// Pin every channel on every launch, as Python does.
-		setInto(config, "humanize", humanized);
-		setInto(config, "humanize:mouse", humanized ? "cursory" : "raw");
-		setInto(config, "humanize:keyboard", "raw");
-		setInto(config, "humanize:scroll", humanized ? "cursory" : "raw");
-	} else if (humanized) {
-		setInto(config, "humanize", true);
-	}
-	if (typeof humanize === "number") {
-		setInto(config, "humanize:maxTime", new PyFloat(humanize));
-	}
+	const manifest: Manifest | undefined = fs.existsSync(humanizeManifest)
+		? JSON.parse(fs.readFileSync(humanizeManifest, "utf8"))
+		: undefined;
+	for (const [key, value] of Object.entries(humanizeConfig(humanize, manifest)))
+		setInto(config, key, value);
 
 	// Enable the main world context creation
 	if (main_world_eval) {
@@ -2286,6 +2279,11 @@ export async function launchOptions({
 	// A SOCKS5 proxy's credentials go to Juggler, not through Playwright, which
 	// refuses them (socks5Auth).
 	const [launchProxy, proxyAuth] = socks5Auth(proxy);
+
+	// A launch-level proxy is this browser's, so a document with no HTTP
+	// channel (about:blank, srcdoc, blob:, data:) is proxied too. A context
+	// with its own proxy sets webrtcProxied in its init script instead.
+	if (proxy) setInto(config, "webrtc:proxied", true);
 
 	// Prepare environment variables to pass to Camoufox
 	const envVars: EnvVars = {

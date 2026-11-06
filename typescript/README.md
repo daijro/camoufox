@@ -239,7 +239,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `geoip` | `boolean \| string` | none | `true` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. Without a proxy, also decides whether IPv6 stays on. |
 | `geoip_db` | `string` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
 | `locale` | `string \| string[]` | from `geoip`, else the drawn identity's | Locale(s), e.g. `"en-US"`. The first is used for `Intl`. |
-| `humanize` | `boolean \| number` | off | Human cursor movement. A number caps one movement at that many seconds (default cap 1.5). |
+| `humanize` | `boolean \| number \| object` | off | Human input. `true` humanizes every channel; a number caps one cursor movement at that many seconds (default cap 1.5); an object picks an engine per channel (`mouse`, `keyboard`, `scroll`) from `raw()`, `cursory()`, `auto()` or `engine()`, plus an integer `seed`. `custom(fn)` is Python-only. |
 | `screen` | `Screen \| { max_width?, max_height?, min_width?, min_height? }` | the real display when headed | Bounds the generated screen. |
 | `window` | `[number, number]` | generated | Fixed outer window size. |
 | `fonts` | `string[]` | none | Extra font families on top of the OS's own. |
