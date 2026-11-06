@@ -15,9 +15,9 @@ asked it would wait out the STUN timeout before end-of-candidates.
 What PASS means:
     * two peer connections in the page connect and pass a message;
     * the page sees mDNS host candidates;
-    * against the TEST-NET STUN server, gathering ends within a few seconds and
-      the only srflx is the one carrying the identity's `webrtc:ipv4`, in the
-      page and in about:blank, srcdoc and blob: frames it creates.
+    * against the TEST-NET STUN server, gathering ends within a few seconds with
+      no srflx, since no server answered, in the page and in the about:blank,
+      srcdoc and blob: frames it creates.
 
     python browser/tests/playwright/patches/webrtc-proxy-local-network.py
 """
@@ -127,8 +127,7 @@ async def main() -> int:
         checks += [
             (f"{where}: a STUN server on the internet is not asked",
              gather["elapsed"] is not None and gather["elapsed"] < 5000, gather["elapsed"]),
-            (f"{where}: the only srflx carries the identity's address",
-             gather["srflx"] == [SPOOFED_IP], gather["srflx"]),
+            (f"{where}: no srflx without an answer", gather["srflx"] == [], gather["srflx"]),
         ]
     passed = True
     for label, ok, got in checks:

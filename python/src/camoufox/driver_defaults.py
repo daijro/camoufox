@@ -67,7 +67,7 @@ _FILL_TARGET = """(e) => {
 
 
 async def _click_to_focus(target: Any, timeout: Any, force: Any) -> None:
-    info = await target.evaluate(_FILL_TARGET)
+    info = await target.evaluate(_FILL_TARGET, timeout=timeout)
     if info['typed'] and not info['focused']:
         await target.click(timeout=timeout, force=force)
 

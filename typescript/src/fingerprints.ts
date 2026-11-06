@@ -1537,7 +1537,6 @@ export interface InitValues {
 	fontList?: string[];
 	speechVoices?: Array<string | VoiceObject> | { speechd: SpeechdGrid };
 	webrtcIP?: string;
-	webrtcProxied?: boolean;
 }
 
 /**
@@ -1600,12 +1599,6 @@ export function buildInitScript(values: InitValues): string {
 	} else {
 		lines.push(
 			'  if (typeof w.setWebRTCIPv4 === "function") w.setWebRTCIPv4("");',
-		);
-	}
-
-	if (!isNone(values.webrtcProxied)) {
-		lines.push(
-			`  if (typeof w.setWebRTCProxied === "function") w.setWebRTCProxied(${pyJsonDumps(values.webrtcProxied)});`,
 		);
 	}
 
@@ -1696,7 +1689,6 @@ export function generateContextFingerprint({
 	os,
 	ff_version,
 	webrtc_ip,
-	webrtc_proxied,
 	timezone,
 	locale,
 	config_overrides,
@@ -1706,7 +1698,6 @@ export function generateContextFingerprint({
 	os?: string | null;
 	ff_version?: string | null;
 	webrtc_ip?: string | null;
-	webrtc_proxied?: boolean | null;
 	timezone?: string | null;
 	locale?: string | null;
 	config_overrides?: Config | null;
@@ -1871,7 +1862,6 @@ export function generateContextFingerprint({
 				? { speechd: config["voices:speechd"] }
 				: config.voices,
 		webrtcIP: webrtc_ip || "",
-		webrtcProxied: webrtc_proxied ?? undefined,
 	};
 	const initScript = buildInitScript(initValues);
 

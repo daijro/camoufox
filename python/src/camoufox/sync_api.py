@@ -230,7 +230,7 @@ def NewContext(
 
     os, webgl_config = context_identity(browser, os, preset)
     fp = generate_context_fingerprint(
-        preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webrtc_proxied=True if proxy else None, webgl_config=webgl_config
+        preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config
     )
 
     # A browser launched elsewhere takes SOCKS5 credentials too.

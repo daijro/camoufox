@@ -5,7 +5,7 @@ docShell.overrideHasFocus and docShell.forceActiveState on every top-level
 document, so every page of a driven browser reads as focused and visible,
 whatever is in front of it. Camoufox keeps that behaviour for the product:
 a caller's pages must keep running as if a person is looking at each one.
-The deviation is page-visible, so cfparity allowlists it (see
+The deviation is page-visible (see
 ci/tribal-rules.yml, driven-pages-stay-focused).
 
 The page records what it sees in its DOM (a driver's evaluate runs in an

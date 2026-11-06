@@ -15,7 +15,7 @@ queries for a peer's .local name onto the LAN. Now:
     * behind a proxy that carries no UDP (HTTP CONNECT, or SOCKS5 refusing
       UDP ASSOCIATE), none leaves at all and no srflx surfaces: the page reads
       a machine whose UDP is blocked (a made-up srflx claimed a Binding Request
-      the page's STUN server knows it never received, LEAKS 616);
+      the page's STUN server knows it never received);
     * only datagrams that stay on this host go direct: to loopback, or to the
       socket's own address (the other end of a page's loopback connection,
       which still connects, as stock's does);

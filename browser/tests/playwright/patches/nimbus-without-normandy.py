@@ -60,8 +60,8 @@ def main() -> int:
         print(f"  {key:9}: {state[key]}")
     failures = []
     if state["normandy"]:
-        print("  (this build has Normandy, so stock behaviour applies; nothing to check)")
-        return 0
+        print("FAIL: this build has Normandy, which Camoufox leaves out (MOZ_NORMANDY)")
+        return 1
     for key in ("enabled", "labs", "rollouts", "studies"):
         if state[key]:
             failures.append(f"ExperimentAPI.{key} is true in a build without Normandy")

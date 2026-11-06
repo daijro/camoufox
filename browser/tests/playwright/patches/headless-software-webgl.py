@@ -139,8 +139,8 @@ def main() -> int:
         headed = report(binary, display)
 
     if not isinstance(headed.get("webgl"), dict) or "error" in headed["webgl"]:
-        print(f"NOTE: no WebGL headed on Xvfb either, nothing to compare: {headed}")
-        return 0
+        print(f"FAIL: no WebGL headed on Xvfb, nothing to compare: {headed}")
+        return 1
 
     failures = []
     for k in ("webgl", "webgl2"):

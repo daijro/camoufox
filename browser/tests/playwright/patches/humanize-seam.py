@@ -59,7 +59,7 @@ async def session(humanize, trace=None, window=None):
     if EXECUTABLE_PATH:
         kwargs["executable_path"] = EXECUTABLE_PATH
     if trace:
-        # The caller's environment too: an env= replaces it whole (a Pro build's lease, DISPLAY).
+        # The caller's environment too: an env= replaces it whole (DISPLAY).
         kwargs["env"] = {**os.environ, "CAMOU_HUMANIZE_TRACE": trace}
     async with AsyncCamoufox(**kwargs) as browser:
         page = await browser.new_page(viewport={"width": 1000, "height": 700})

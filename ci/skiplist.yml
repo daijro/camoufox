@@ -93,15 +93,17 @@ skip:
       100 px into one such notch (docs/input-dispatch.md), so the page sees a
       wheel, and upstream's exact pixel delta is gone.
 
-  - test: tests/async/test_click.py::test_click_with_tweened_mouse_movement
+  # A pattern, so the audit reports it as not audited: it cannot demand a failure
+  # here. A machine too slow to fit two moves in a frame passes this test.
+  - pattern: test_click_with_tweened_mouse_movement
     reason: >-
       Asserts click(steps=5) gives the page five mousemoves, one per step. A
       real mouse's moves are coalesced per refresh tick: stock Firefox on
       Linux under a 125 Hz mouse dispatches one mousemove per frame carrying
       2 to 4 moves in getCoalescedEvents(). Camoufox queues driven moves the
       same way and spaces them as a 125 Hz mouse's (docs/input-dispatch.md,
-      "Move coalescing"), so two steps can share a mousemove and the page
-      sees four.
+      "Move coalescing"), so two steps usually share a mousemove and the page
+      sees fewer than five.
 
   # --- client certificates the BROWSER has to present ------------------------
   #

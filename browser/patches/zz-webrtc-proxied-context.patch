@@ -1,159 +1,61 @@
 diff --git a/dom/base/WebRTCIPManager.cpp b/dom/base/WebRTCIPManager.cpp
-index 62198f4244..2c5ac91b92 100644
+index 62198f4244..be6fa0bd06 100644
 --- a/dom/base/WebRTCIPManager.cpp
 +++ b/dom/base/WebRTCIPManager.cpp
-@@ -23,6 +23,14 @@ WebRTCIPManager::IPv6KeyForUserContext(uint32_t userContextId) {
+@@ -23,6 +23,18 @@ WebRTCIPManager::IPv6KeyForUserContext(uint32_t userContextId) {
    return key;
  }
  
-+/* static */ nsString
-+WebRTCIPManager::ProxiedKeyForUserContext(uint32_t userContextId) {
++/* static */ bool
++WebRTCIPManager::IsProxied(uint32_t userContextId) {
 +  nsString key;
 +  key.AppendLiteral(u"webrtc_proxied_");
 +  key.AppendInt(userContextId);
-+  return key;
++  bool proxied = false;
++  return (RoverfoxStorageManager::GetBool(key, proxied) && proxied) ||
++         (RoverfoxStorageManager::GetBool(u"webrtc_proxied_browser"_ns,
++                                          proxied) &&
++          proxied);
 +}
 +
  /* static */ void
  WebRTCIPManager::SetIPv4(uint32_t userContextId, const nsAString& ipv4) {
    nsString key = IPv4KeyForUserContext(userContextId);
-@@ -53,6 +61,30 @@ WebRTCIPManager::GetIPv6(uint32_t userContextId, nsAString& outIPv6) {
-   return RoverfoxStorageManager::GetString(key, outIPv6);
- }
- 
-+/* static */ void
-+WebRTCIPManager::SetProxied(uint32_t userContextId, bool proxied) {
-+  nsString key = ProxiedKeyForUserContext(userContextId);
-+  RoverfoxStorageManager::PutBool(key, proxied);
-+  DisableProxiedFunction(userContextId);
-+}
-+
-+/* static */ bool
-+WebRTCIPManager::GetProxied(uint32_t userContextId, bool& outProxied) {
-+  nsString key = ProxiedKeyForUserContext(userContextId);
-+  return RoverfoxStorageManager::GetBool(key, outProxied);
-+}
-+
-+/* static */ void
-+WebRTCIPManager::DisableProxiedFunction(uint32_t userContextId) {
-+  RoverfoxStorageManager::MarkSetterUsed("webrtc_proxied", userContextId);
-+}
-+
-+/* static */ bool
-+WebRTCIPManager::IsProxiedFunctionEnabledForWebIDL(JSContext* aCx,
-+                                                   JSObject* aObj) {
-+  return RoverfoxStorageManager::IsSetterOffered(aObj, "webrtc_proxied");
-+}
-+
- /* static */ void
- WebRTCIPManager::DisableIPv4Function(uint32_t userContextId) {
-   RoverfoxStorageManager::MarkSetterUsed("webrtc_v4", userContextId);
 diff --git a/dom/base/WebRTCIPManager.h b/dom/base/WebRTCIPManager.h
-index a134ba615a..ade9062bfa 100644
+index a134ba615a..14813f6bcb 100644
 --- a/dom/base/WebRTCIPManager.h
 +++ b/dom/base/WebRTCIPManager.h
-@@ -44,6 +44,23 @@ public:
+@@ -44,6 +44,14 @@ public:
     */
    static bool GetIPv6(uint32_t userContextId, nsAString& outIPv6);
  
 +  /**
-+   * Set whether this user context reaches the network through a proxy.
-+   * A page with no HTTP-loaded document (about:blank, srcdoc, blob:, data:)
-+   * cannot answer that from its channel, and Juggler's per-context proxy is
-+   * not in network.proxy.*. The launcher sets it for a context with a proxy.
++   * Whether this user context reaches the network through a proxy. Juggler's
++   * proxies are not in network.proxy.*, and a document with no HTTP channel
++   * (about:blank, srcdoc, blob:, data:) cannot answer for itself, so
++   * TargetRegistry.js records them in storage.
 +   */
-+  static void SetProxied(uint32_t userContextId, bool proxied);
-+
-+  /**
-+   * Get the per-context proxy flag. Returns false when it was never set, so
-+   * the launch-level config or the document chain decides.
-+   */
-+  static bool GetProxied(uint32_t userContextId, bool& outProxied);
-+
-+  static void DisableProxiedFunction(uint32_t userContextId);
-+  static bool IsProxiedFunctionEnabledForWebIDL(JSContext* aCx, JSObject* aObj);
++  static bool IsProxied(uint32_t userContextId);
 +
    /**
     * Mark the setWebRTCIPv4 function as used/disabled for a context.
     * @param userContextId The user context ID
-@@ -75,6 +92,7 @@ public:
- private:
-   static nsString IPv4KeyForUserContext(uint32_t userContextId);
-   static nsString IPv6KeyForUserContext(uint32_t userContextId);
-+  static nsString ProxiedKeyForUserContext(uint32_t userContextId);
- };
- 
- } // namespace dom
-diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 920399da3c..c7f22ca6bc 100644
---- a/dom/base/nsGlobalWindowInner.cpp
-+++ b/dom/base/nsGlobalWindowInner.cpp
-@@ -7843,6 +7843,13 @@ void nsGlobalWindowInner::SetWebRTCIPv6(const nsAString& ipv6, ErrorResult& aRv)
-   RoverfoxStorageManager::RemoveSetter("setWebRTCIPv6");
- }
- 
-+void nsGlobalWindowInner::SetWebRTCProxied(bool proxied, ErrorResult& aRv) {
-+  WebRTCIPManager::SetProxied(RoverfoxStorageManager::UserContextId(this),
-+                              proxied);
-+
-+  RoverfoxStorageManager::RemoveSetter("setWebRTCProxied");
-+}
-+
- void nsGlobalWindowInner::StoreSharedWorker(SharedWorker* aSharedWorker) {
-   MOZ_ASSERT(aSharedWorker);
-   MOZ_ASSERT(!mSharedWorkers.Contains(aSharedWorker));
-diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index d658aa6272..d1d421e58a 100644
---- a/dom/base/nsGlobalWindowInner.h
-+++ b/dom/base/nsGlobalWindowInner.h
-@@ -708,6 +708,7 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
-   // WebRTC IP addresses for privacy-preserving IP spoofing
-   void SetWebRTCIPv4(const nsAString& ipv4, mozilla::ErrorResult& aRv);
-   void SetWebRTCIPv6(const nsAString& ipv6, mozilla::ErrorResult& aRv);
-+  void SetWebRTCProxied(bool proxied, mozilla::ErrorResult& aRv);
- 
-   void StoreSharedWorker(mozilla::dom::SharedWorker* aSharedWorker);
- 
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-index 584428444e..e83126cc55 100644
+index f2b647c364..c74c8161de 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-@@ -4959,6 +4959,22 @@ bool PeerConnectionImpl::ShouldForceProxy() const {
+@@ -4813,6 +4813,14 @@ bool PeerConnectionImpl::ShouldForceProxy() const {
    // Ok, we're supposed to be proxy_only, but only if a proxy is configured.
    // Let's just see if the document was loaded via a proxy.
  
-+  // Camoufox: the launcher sets a per-context flag when that context has a
-+  // proxy, and a launch-level one for the browser's own. A document with no
-+  // HTTP channel (about:blank, srcdoc, blob:, data:) cannot answer for
-+  // itself, and Juggler's per-context proxies are not in network.proxy.*.
-+  // Unset leaves the document chain and the launch-level prefs to decide, so
++  // Camoufox: Juggler's proxies, per context and for the browser, are not in
++  // network.proxy.*. Without one the document chain and the prefs decide, so
 +  // a direct launch stays direct.
-+  const uint32_t userContextId =
-+      mWindow ? dom::RoverfoxStorageManager::UserContextId(mWindow.get()) : 0;
-+  bool proxied = false;
-+  if (WebRTCIPManager::GetProxied(userContextId, proxied)) {
-+    return proxied;
-+  }
-+  if (MaskConfig::GetBool("webrtc:proxied")) {
++  if (mWindow && WebRTCIPManager::IsProxied(
++                     dom::RoverfoxStorageManager::UserContextId(mWindow.get()))) {
 +    return true;
 +  }
 +
    // Camoufox: about:blank, srcdoc, blob: and data: documents have no HTTP
    // channel, so stock gathers in them as if no proxy were set, and STUN
    // leaves around the proxy from the real address. They run for the document
-diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index becc14412c..2b2d939400 100644
---- a/dom/webidl/Window.webidl
-+++ b/dom/webidl/Window.webidl
-@@ -970,6 +970,11 @@ partial interface Window {
-   undefined setWebRTCIPv6(DOMString ipv6);
- };
- 
-+partial interface Window {
-+  [Throws, Func="mozilla::dom::WebRTCIPManager::IsProxiedFunctionEnabledForWebIDL"]
-+  undefined setWebRTCProxied(boolean proxied);
-+};
-+
- // Used to assign marks to appear on the scrollbar when
- // finding on a page.
- partial interface Window {

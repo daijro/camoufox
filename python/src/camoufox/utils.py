@@ -1829,12 +1829,6 @@ def launch_options(
     # refuses them (socks5_auth).
     proxy, proxy_auth = socks5_auth(proxy)
 
-    # A launch-level proxy is this browser's, so a document with no HTTP
-    # channel (about:blank, srcdoc, blob:, data:) is proxied too. A context
-    # with its own proxy sets webrtcProxied in its init script instead.
-    if proxy:
-        set_into(config, 'webrtc:proxied', True)
-
     # Prepare environment variables to pass to Camoufox
     env_vars = {
         **get_env_vars(config, target_os, path=executable_path),

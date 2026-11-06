@@ -53,10 +53,10 @@ index 12866f1263..612b6b1541 100644
  
  #ifdef MOZ_ENABLE_VAAPI
 diff --git a/toolkit/xre/gfxtest/glxtest.cpp b/toolkit/xre/gfxtest/glxtest.cpp
-index 17709c0e9a..97ed0e1ce0 100644
+index 17709c0e9a..b7ff1e0358 100644
 --- a/toolkit/xre/gfxtest/glxtest.cpp
 +++ b/toolkit/xre/gfxtest/glxtest.cpp
-@@ -1057,19 +1057,29 @@ void wayland_egltest() {
+@@ -1057,19 +1057,33 @@ void wayland_egltest() {
  }
  #endif
  
@@ -72,6 +72,10 @@ index 17709c0e9a..97ed0e1ce0 100644
 +  // FEATURE_FAILURE_EGL_LOAD_3 instead of using the display's GLX.
 +  bool headlessEgl = false;
 +  if (aHeadless) {
++    // Mesa's default EGL platform is the one it was built for, usually x11,
++    // which fails with no server. Surfaceless is the one that needs none.
++    setenv("EGL_PLATFORM", "surfaceless", 1);
++    setenv("LIBGL_ALWAYS_SOFTWARE", "1", 1);
 +    headlessEgl = get_egl_status(nullptr, /* aLoadModifiers */ false);
 +    if (headlessEgl) {
 +      record_value("TEST_TYPE\nEGL\n");
@@ -88,7 +92,7 @@ index 17709c0e9a..97ed0e1ce0 100644
      // TODO: --display command line argument is not properly handled
      if (!x11_egltest()) {
        glx_probe();
-@@ -1085,7 +1089,7 @@ int childgltest(bool aWayland) {
+@@ -1085,7 +1099,7 @@ int childgltest(bool aWayland) {
  
  }  // extern "C"
  
@@ -97,7 +101,7 @@ index 17709c0e9a..97ed0e1ce0 100644
    output_pipe = aOutputFd;
    if (getenv("MOZ_AVOID_OPENGL_ALTOGETHER")) {
      const char* msg = "ERROR\nMOZ_AVOID_OPENGL_ALTOGETHER envvar set";
-@@ -1097,5 +1101,5 @@ int glxtest(bool aWayland, int aOutputFd) {
+@@ -1097,5 +1111,5 @@ int glxtest(bool aWayland, int aOutputFd) {
    if (!enable_logging) {
      close_logging();
    }
@@ -105,48 +109,10 @@ index 17709c0e9a..97ed0e1ce0 100644
 +  return childgltest(aWayland, aHeadless);
  }
 diff --git a/widget/gtk/GfxInfo.cpp b/widget/gtk/GfxInfo.cpp
-index cac1557e2f..3c2ad4295f 100644
+index cac1557e2f..35335a750e 100644
 --- a/widget/gtk/GfxInfo.cpp
 +++ b/widget/gtk/GfxInfo.cpp
-@@ -644,7 +644,7 @@ void GfxInfo::GetData() {
- }
- 
- int GfxInfo::FireTestProcess(const nsAString& aBinaryFile, int* aOutPipe,
--                             const char** aStringArgs) {
-+                             const char** aStringArgs, bool aSoftwareGL) {
-   nsCOMPtr<nsIFile> appFile;
-   nsresult rv = XRE_GetBinaryPath(getter_AddRefs(appFile));
-   if (NS_FAILED(rv)) {
-@@ -672,12 +672,19 @@ int GfxInfo::FireTestProcess(const nsAString& aBinaryFile, int* aOutPipe,
-     }
-   }
- 
-+  // Camoufox: the probe alone sees Mesa's software GL (see FireGLXTestProcess).
-+  char** envp = nullptr;
-+  if (aSoftwareGL) {
-+    envp = g_environ_setenv(g_get_environ(), "LIBGL_ALWAYS_SOFTWARE", "1",
-+                            TRUE);
-+  }
-+
-   // Use G_SPAWN_LEAVE_DESCRIPTORS_OPEN | G_SPAWN_DO_NOT_REAP_CHILD flags
-   // to g_spawn_async_with_pipes() run posix_spawn() directly.
-   int pid;
-   GUniquePtr<GError> err;
-   g_spawn_async_with_pipes(
--      nullptr, argv, nullptr,
-+      nullptr, argv, envp,
-       GSpawnFlags(G_SPAWN_LEAVE_DESCRIPTORS_OPEN | G_SPAWN_DO_NOT_REAP_CHILD),
-       nullptr, nullptr, &pid, nullptr, aOutPipe, nullptr,
-       getter_Transfers(err));
-@@ -685,6 +692,7 @@ int GfxInfo::FireTestProcess(const nsAString& aBinaryFile, int* aOutPipe,
-     gfxCriticalNote << "FireTestProcess failed: " << err->message << "\n";
-     pid = 0;
-   }
-+  g_strfreev(envp);
-   for (auto& arg : argv) {
-     if (!arg) {
-       break;
-@@ -707,9 +715,19 @@ bool GfxInfo::FireGLXTestProcess() {
+@@ -707,8 +707,17 @@ bool GfxInfo::FireGLXTestProcess() {
    sGLXTestPipe = pfd[0];
  
    auto pipeID = std::to_string(pfd[1]);
@@ -158,17 +124,14 @@ index cac1557e2f..3c2ad4295f 100644
 +                                !PR_GetEnv("WAYLAND_DISPLAY");
    const char* args[] = {"glx", "-f", pipeID.c_str(),
 -                        IsWaylandEnabled() ? "-w" : nullptr, nullptr};
--  sGLXTestPID = FireTestProcess(GFX_PROBE_BINARY, nullptr, args);
 +                        headlessSoftware       ? "-e"
 +                        : IsWaylandEnabled() ? "-w"
 +                                             : nullptr,
 +                        nullptr};
-+  sGLXTestPID =
-+      FireTestProcess(GFX_PROBE_BINARY, nullptr, args, headlessSoftware);
+   sGLXTestPID = FireTestProcess(GFX_PROBE_BINARY, nullptr, args);
    // Set pid to -1 to avoid further test launch.
    if (!sGLXTestPID) {
-     sGLXTestPID = -1;
-@@ -1594,6 +1604,19 @@ nsresult GfxInfo::GetFeatureStatusImpl(
+@@ -1594,6 +1603,19 @@ nsresult GfxInfo::GetFeatureStatusImpl(
      return NS_OK;
    }
  
@@ -188,17 +151,3 @@ index cac1557e2f..3c2ad4295f 100644
    auto ret = GfxInfoBase::GetFeatureStatusImpl(
        aFeature, aStatus, aSuggestedDriverVersion, aDriverInfo, aFailureId, &os);
  
-diff --git a/widget/gtk/GfxInfo.h b/widget/gtk/GfxInfo.h
-index 436c1a80c1..98add4db5d 100644
---- a/widget/gtk/GfxInfo.h
-+++ b/widget/gtk/GfxInfo.h
-@@ -88,7 +88,8 @@ class GfxInfo final : public GfxInfoBase {
-   virtual bool DoesDriverVendorMatch(const nsAString& aBlocklistVendor,
-                                      const nsAString& aDriverVendor) override;
-   static int FireTestProcess(const nsAString& aBinaryFile, int* aOutPipe,
--                             const char** aStringArgs);
-+                             const char** aStringArgs,
-+                             bool aSoftwareGL = false);
- 
-  private:
-   bool mInitialized = false;

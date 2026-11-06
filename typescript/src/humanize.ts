@@ -15,6 +15,7 @@
  */
 
 import { PyFloat } from "./pycompat.js";
+import { LeakWarning } from "./warnings.js";
 
 export const CHANNELS = ["mouse", "keyboard", "scroll"] as const;
 export type Channel = (typeof CHANNELS)[number];
@@ -39,7 +40,10 @@ export interface Manifest {
 	auto?: Partial<Record<Channel, string[]>>;
 	engines?: Record<
 		string,
-		{ options?: Record<string, { key: string; min?: number; max?: number }> }
+		{
+			movesCursor?: boolean;
+			options?: Record<string, { key: string; min?: number; max?: number }>;
+		}
 	>;
 }
 
@@ -113,15 +117,14 @@ function asEngine(channel: string, value: unknown): Engine {
 
 export function normalize(humanize: HumanizeSetting): {
 	engines: Record<Channel, Engine>;
-	seed?: number;
+	seed?: number | bigint;
 } {
 	const allRaw = () =>
 		Object.fromEntries(CHANNELS.map((c) => [c, raw()])) as Record<
 			Channel,
 			Engine
 		>;
-	if (humanize === null || humanize === undefined || humanize === false)
-		return { engines: allRaw() };
+	if (!humanize) return { engines: allRaw() };
 	if (humanize === true)
 		return {
 			engines: Object.fromEntries(CHANNELS.map((c) => [c, auto()])) as Record<
@@ -148,13 +151,16 @@ export function normalize(humanize: HumanizeSetting): {
 		throw new Error(
 			`humanize has no channel ${JSON.stringify(unknown)}; the channels are ${CHANNELS.join(", ")} and "seed"`,
 		);
-	const seed = humanize.seed;
+	const seed = humanize.seed as number | bigint | undefined;
+	if (Number.isInteger(seed) && !Number.isSafeInteger(seed))
+		throw new Error(
+			`humanize.seed ${String(seed)} is past what a number holds exactly; pass a bigint`,
+		);
 	if (
 		seed !== undefined &&
-		(typeof seed !== "number" ||
-			!Number.isInteger(seed) ||
+		(!(typeof seed === "bigint" || Number.isInteger(seed)) ||
 			seed < 0 ||
-			seed >= 2 ** 64)
+			BigInt(seed) >= 2n ** 64n)
 	)
 		throw new Error(
 			`humanize.seed must be an integer in [0, 2**64), got ${String(seed)}`,
@@ -162,7 +168,7 @@ export function normalize(humanize: HumanizeSetting): {
 	const engines = Object.fromEntries(
 		CHANNELS.map((c) => [c, asEngine(c, humanize[c] ?? "auto")]),
 	) as Record<Channel, Engine>;
-	return { engines, seed: seed as number | undefined };
+	return { engines, seed };
 }
 
 function optionKeys(
@@ -196,6 +202,7 @@ function optionKeys(
 export function humanizeConfig(
 	humanize: HumanizeSetting,
 	manifest?: Manifest | null,
+	iKnowWhatImDoing?: boolean,
 ): Record<string, unknown> {
 	const { engines, seed } = normalize(humanize);
 	const legacy = !manifest;
@@ -213,12 +220,26 @@ export function humanizeConfig(
 				`humanize:${channel} names "${names[channel]}", which humanize-engines.json does not list for ${channel}`,
 			);
 	}
+	if (
+		available.engines?.[names.scroll]?.movesCursor &&
+		engines.mouse.engine === "raw"
+	)
+		LeakWarning.warn("humanize_scroll_teleports", iKnowWhatImDoing);
 	const options: Record<string, PyFloat> = {};
-	for (const channel of CHANNELS)
-		Object.assign(
-			options,
-			optionKeys(names[channel], engines[channel].options, available),
+	for (const channel of CHANNELS) {
+		const keys = optionKeys(
+			names[channel],
+			engines[channel].options,
+			available,
 		);
+		for (const [key, value] of Object.entries(keys)) {
+			if (key in options && Number(options[key]) !== Number(value))
+				throw new Error(
+					`humanize sets ${key} twice, to ${options[key]} and ${value}`,
+				);
+			options[key] = value;
+		}
+	}
 	const enabled = CHANNELS.some((c) => names[c] !== "raw");
 	if (legacy) {
 		const on = Object.fromEntries(
@@ -237,13 +258,11 @@ export function humanizeConfig(
 			);
 		return enabled ? { humanize: true, ...options } : {};
 	}
-	const customMouse = names.mouse === "custom";
 	// Off adds no keys, so a stock identity mirror has no humanize config.
-	if (!enabled && !customMouse) return {};
+	if (!enabled) return {};
 	const config: Record<string, unknown> = { humanize: enabled };
 	for (const channel of CHANNELS)
 		config[`humanize:${channel}`] = names[channel];
-	if (customMouse) config["humanize:mouse:internal"] = "auto";
 	Object.assign(config, options);
 	if (seed !== undefined) config["humanize:seed"] = String(seed);
 	return config;

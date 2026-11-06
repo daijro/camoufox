@@ -44,8 +44,7 @@ LOADER_CASES = [
 
 def gamepads_type(binary: Path, env=None) -> str:
     from camoufox.sync_api import Camoufox
-    # On top of the caller's environment: an env= replaces it whole, and a Pro
-    # build needs the caller's lease (CAMOU_LEASE_FILE).
+    # On top of the caller's environment: an env= replaces it whole.
     with Camoufox(headless=True, executable_path=str(binary), env={**os.environ, **(env or {})},
                   i_know_what_im_doing=True) as b:
         page = b.new_page()

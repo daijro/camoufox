@@ -13,11 +13,14 @@ deltaY 100, wheelDeltaY -300, DOMMouseScroll detail 5, one event however far
 the scroll. No wheel produces that, and a page reads it off the first event.
 
 mouse.wheel(dx, dy) turns 100 px into one notch, rounding, at least one; the
-notches of one call arrive tens of milliseconds apart.
+notches of one call arrive tens of milliseconds apart. A long wheel leaves the
+browser-wide activation slot free between them, so input in another context does
+not wait for it to finish.
 
     python browser/tests/playwright/patches/driven-wheel-notches.py
 """
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -58,10 +61,38 @@ def probe(binary):
         return out
 
 
+async def contended_wheel(binary):
+    """Click in one context while another scrolls. The stamps are the wheel's."""
+    from camoufox.async_api import AsyncCamoufox
+
+    async with AsyncCamoufox(executable_path=str(binary), headless=False, os="linux", window=(1280, 900)) as browser:
+        pages = []
+        for _ in range(2):
+            page = await (await browser.new_context()).new_page()
+            await page.set_content(PAGE)
+            pages.append(page)
+        scrolling, clicking = pages
+        await scrolling.mouse.move(190, 140)
+        await scrolling.evaluate(RECORD)
+        wheel = asyncio.create_task(scrolling.mouse.wheel(0, 20000))
+        await asyncio.sleep(0.3)
+        await clicking.mouse.click(190, 140)
+        finished_first = wheel.done()
+        await wheel
+        events = await scrolling.evaluate("window.__events")
+        return finished_first, [e[5] for e in events if e[0] == "wheel"]
+
+
 def main() -> int:
     with hidden_display("1920x1080"):
-        got = probe(resolve_binary())
+        binary = resolve_binary()
+        got = probe(binary)
+        wheel_finished_first, contended = asyncio.run(contended_wheel(binary))
     failures = []
+    if wheel_finished_first:
+        failures.append("a click in another context waited for a long wheel to finish")
+    if any(b - a < 10 for a, b in zip(contended, contended[1:])):
+        failures.append("a click in another context bunched a long wheel's notches under 10 ms apart")
     for name, notches in (("one", 1), ("three", 3)):
         events, scrolled = got[name]
         shape = [e[:5] if e[0] == "wheel" else e for e in events]

@@ -970,6 +970,9 @@ export class PageAgent {
     if (!text)
       return;
     const win = this._frameTree.mainFrame().domWindow();
+    // The shortcut reaches the document that holds focus, perhaps a frame's;
+    // this handler hears every frame in the process.
+    const events = win.docShell.chromeEventHandler;
     const mac = win.navigator.platform.startsWith('Mac');
     const modifier = mac
       ? {key: 'Meta', code: 'MetaLeft', keyCode: 224, location: 1, repeat: false}
@@ -997,8 +1000,8 @@ export class PageAgent {
       }
     };
     const onPaste = event => { cancelled = event.defaultPrevented; };
-    win.addEventListener('keypress', onKeypress, {capture: true, mozSystemGroup: true});
-    win.addEventListener('paste', onPaste, {mozSystemGroup: true});
+    events.addEventListener('keypress', onKeypress, {capture: true, mozSystemGroup: true});
+    events.addEventListener('paste', onPaste, {mozSystemGroup: true});
     try {
       // The modifier leads and trails V as Shift does a key (_dispatchKeyEvent).
       await this._dispatchKeyEvent({type: 'keydown', ...modifier});
@@ -1009,8 +1012,8 @@ export class PageAgent {
       await pause(modifierTrail());
       await this._dispatchKeyEvent({type: 'keyup', ...modifier});
     } finally {
-      win.removeEventListener('keypress', onKeypress, {capture: true, mozSystemGroup: true});
-      win.removeEventListener('paste', onPaste, {mozSystemGroup: true});
+      events.removeEventListener('keypress', onKeypress, {capture: true, mozSystemGroup: true});
+      events.removeEventListener('paste', onPaste, {mozSystemGroup: true});
     }
     if (error)
       throw error;

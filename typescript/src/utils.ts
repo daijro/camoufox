@@ -2099,7 +2099,9 @@ export async function launchOptions({
 	const manifest: Manifest | undefined = fs.existsSync(humanizeManifest)
 		? JSON.parse(fs.readFileSync(humanizeManifest, "utf8"))
 		: undefined;
-	for (const [key, value] of Object.entries(humanizeConfig(humanize, manifest)))
+	for (const [key, value] of Object.entries(
+		humanizeConfig(humanize, manifest, i_know_what_im_doing),
+	))
 		setInto(config, key, value);
 
 	// Enable the main world context creation
@@ -2283,11 +2285,6 @@ export async function launchOptions({
 	// A SOCKS5 proxy's credentials go to Juggler, not through Playwright, which
 	// refuses them (socks5Auth).
 	const [launchProxy, proxyAuth] = socks5Auth(proxy);
-
-	// A launch-level proxy is this browser's, so a document with no HTTP
-	// channel (about:blank, srcdoc, blob:, data:) is proxied too. A context
-	// with its own proxy sets webrtcProxied in its init script instead.
-	if (proxy) setInto(config, "webrtc:proxied", true);
 
 	// Prepare environment variables to pass to Camoufox
 	const envVars: EnvVars = {

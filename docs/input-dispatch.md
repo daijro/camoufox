@@ -114,8 +114,8 @@ Playwright's Juggler set `docShell.overrideHasFocus` and `forceActiveState` on
 every top-level document so parallel pages behave as if each is in front;
 Camoufox keeps that for the product (`content/main.js`). Stock gives a page
 behind another window `hasFocus()` false, a window `blur`, and a hidden,
-throttled state behind a foreground tab. The difference is page-visible, so
-`cfparity` allowlists it (`ci/tribal-rules.yml`, `driven-pages-stay-focused`).
+throttled state behind a foreground tab. The difference is page-visible
+(`ci/tribal-rules.yml`, `driven-pages-stay-focused`).
 Keyboard input therefore does not raise the page first; `Page.bringToFront`
 still does that when a caller asks.
 
@@ -198,7 +198,9 @@ notch's distance (120 px here), not the exact pixels asked for, and
 `mouse.wheel(0, 0)` sends nothing. Humanize does not change this: `raw()`
 and a `custom()` scroll engine's wheel steps are rounded the same way, each
 step at least one notch, so a custom engine should plan in notches (100 px)
-to land where it means to.
+to land where it means to. Without a scroll engine each notch takes the
+activation slot alone, so a long wheel does not hold up input in other contexts;
+an engine's plan keeps the slot for as long as it plays.
 `browser/tests/playwright/patches/driven-wheel-notches.py` compares the result
 with stock's.
 
@@ -220,9 +222,10 @@ Every delay between a person's input events comes from `input/HumanDelay.js`,
 with the figures its caller cites: a normal draw for a key or modifier hold
 (`normalDelay(mean, sd, min, max)`) and a right-skewed log-normal for a click
 hold, hover dwell or double-click gap (`logNormalDelay(median, sigma, min, max)`),
-as human timing is. They draw from the launch's `humanize:seed` on a separate
-`timing` stream, so a seeded session reproduces them without shifting a cursor
-or keyboard plan.
+as human timing is. The click delays draw from the launch's `humanize:seed` on a
+separate `timing` stream, so a seeded session reproduces them without shifting a
+cursor or keyboard plan. The key and modifier delays of a paste run in the
+content process, which has no such stream, and a seed does not reproduce them.
 
 A page that cancels the paste, or the shortcut's `keydown`, gets nothing
 pasted, as for a person, and `fill()` fails saying so. Nothing focused that

@@ -1119,6 +1119,8 @@ export class PageHandler {
 
   async ['Page.dispatchWheelEvent']({x, y, button, deltaX, deltaY, deltaZ, modifiers }) {
     await this._awaitUserInputGate();
+    const activation = { muteNotificationsPopup: true };
+    let planned;
     await this._pageTarget.activateAndRun(async () => {
       this._pageTarget.ensureContextMenuClosed();
 
@@ -1127,29 +1129,33 @@ export class PageHandler {
       // Camoufox: a scroll engine (input/HumanizeSeam.js; `cursory` by
       // default with humanize on) turns one wheel call into the events a
       // physical wheel produces.
-      const planned = humanizeSeam().plan('scroll', 'planWheel', {}, {x, y}, {deltaX, deltaY, deltaZ});
+      planned = humanizeSeam().plan('scroll', 'planWheel', {}, {x, y}, {deltaX, deltaY, deltaZ});
       if (planned) {
         await this._playWheelPlan(planned, 'Page.dispatchWheelEvent', modifiers);
         return;
       }
       // 2. Get element's bounding box in the browser after the scroll is completed.
-      const win = this._pageTarget._window;
       // 3. Make sure compositor is flushed after scrolling.
-      if (win.windowUtils.flushApzRepaints())
+      if (this._pageTarget._window.windowUtils.flushApzRepaints())
         await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
-      // Camoufox: without a scroll engine a wheel still turns in notches, as a
-      // mouse wheel does (docs/input-dispatch.md): no wheel produces a pixel
-      // delta. The plan is the `cursory` engine's, paced here instead of by
-      // the seam.
-      const {steps} = cursory.planWheel({rng: Math.random}, {x, y}, {deltaX, deltaY, deltaZ});
-      const start = ChromeUtils.now();
-      for (const step of steps) {
-        const waitMs = start + step.t - ChromeUtils.now();
-        if (waitMs > 0)
-          await new Promise(resolve => setTimeout(resolve, waitMs));
-        this._sendWheelStep(win, modifiers, step);
-      }
-    }, { muteNotificationsPopup: true });
+    }, activation);
+    if (planned)
+      return;
+    // Camoufox: without a scroll engine a wheel still turns in notches, as a
+    // mouse wheel does (docs/input-dispatch.md): no wheel produces a pixel
+    // delta. The plan is the `cursory` engine's, paced here instead of by
+    // the seam. Each notch takes the activation slot alone, so a long wheel
+    // does not hold input in every other context, and waits out its gap from
+    // the notch before, however long the slot took to come.
+    const win = this._pageTarget._window;
+    const {steps} = cursory.planWheel({rng: Math.random}, {x, y}, {deltaX, deltaY, deltaZ});
+    let previous = 0;
+    for (const step of steps) {
+      if (step.t > previous)
+        await new Promise(resolve => setTimeout(resolve, step.t - previous));
+      previous = step.t;
+      await this._pageTarget.activateAndRun(() => this._sendWheelStep(win, modifiers, step), activation);
+    }
   }
 
   async ['Page.insertText'](options) {

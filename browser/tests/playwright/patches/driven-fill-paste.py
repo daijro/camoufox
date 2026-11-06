@@ -13,7 +13,8 @@ is Firefox's; the system clipboard is not used.
 A person clicks the field before pasting into it, so fill() clicks a text
 field that does not have focus (the launcher, camoufox/driver_defaults.py).
 A field that has focus is pasted into as it is. A page that cancels the paste
-makes fill() fail, as the paste fails for a person.
+makes fill() fail, as the paste fails for a person. A field in a frame gets the
+same paste: the system clipboard must not reach it, whatever it holds.
 
     python browser/tests/playwright/patches/driven-fill-paste.py
 """
@@ -26,7 +27,8 @@ from helpers import resolve_binary  # noqa: E402
 
 TEXT = "Hi there, 42!é嗨"
 PAGE = ('<!doctype html><html><body><input id="fill" style="width:201px">'
-        '<input id="blocked" style="width:201px"></body></html>')
+        '<input id="blocked" style="width:201px">'
+        '<iframe srcdoc="<!doctype html><input id=inner>"></iframe></body></html>')
 RECORD = """() => {
   window.__events = [];
   const clip = (e) => e.clipboardData ? [e.clipboardData.types.join(','), e.clipboardData.getData('text/plain')] : null;
@@ -64,12 +66,16 @@ def probe(binary):
             blocked = None
         except Exception as e:  # noqa: BLE001 - the failure is what is checked
             blocked = str(e)
-        return first, again, blocked, page.locator("#blocked").input_value()
+        inner = page.frame_locator("iframe").locator("#inner")
+        inner.fill(TEXT, timeout=5000)
+        return first, again, blocked, page.locator("#blocked").input_value(), inner.input_value()
 
 
 def main() -> int:
-    (events, value), again, blocked, blocked_value = probe(resolve_binary())
+    (events, value), again, blocked, blocked_value, inner_value = probe(resolve_binary())
     failures = []
+    if inner_value != TEXT:
+        failures.append(f"the field in a frame holds {inner_value!r}")
     if value != TEXT:
         failures.append(f"the field holds {value!r}")
     if [t for _, t, *_ in again if t in ("mousedown", "focus", "click")]:

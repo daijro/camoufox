@@ -312,8 +312,32 @@ rules:
       window blur, and a hidden, throttled state behind a foreground tab. A
       driver's pages are all work the caller asked for, in parallel, so
       Camoufox keeps every top-level driven document focused and active
-      (docShell.overrideHasFocus / forceActiveState). This is page-visible and
-      cfparity allowlists it: it is a product choice, not a parity bug.
+      (docShell.overrideHasFocus / forceActiveState). This is page-visible: it
+      is a product choice, not a parity bug.
+
+  - id: no-made-up-srflx
+    title: A srflx candidate comes only from a STUN answer
+    check: manual   # browser/tests/playwright/patches/webrtc-context-ip.py, webrtc-socks5-udp.py
+    evidence:
+      - "daijro/camoufox#997: the fabricated srflx is removed, and its guards now run against a STUN server that answers"
+    rationale: >-
+      A srflx says the page's STUN server saw a Binding Request from that
+      address, and a page running its own server can tell it never did. Behind
+      a proxy with no UDP path, the page reads a machine whose UDP is blocked:
+      host candidates only. The identity's address replaces a srflx the browser
+      really gathered; it never invents one.
+
+  - id: juggler-records-the-proxy
+    title: Juggler records which contexts are proxied, not the launcher and not the page
+    check: manual   # browser/tests/playwright/patches/webrtc-socks5-udp.py (the top-level blob: check)
+    evidence:
+      - "daijro/camoufox#997, CI run 42147151481: a raw browser.new_context(proxy=...) gathered around its SOCKS5 proxy on a blob: page"
+    rationale: >-
+      A document with no HTTP channel has no proxy lookup to go by, so WebRTC
+      needs another answer. Every proxy reaches Juggler, however the caller
+      set it, and Juggler's flag is a default-branch pref a page cannot see. A
+      launcher config key misses a caller's own new_context, and a window
+      method is one more name a page can find.
 
   - id: no-glyph-spacing-noise
     title: Text is shaped exactly as stock Firefox shapes it; there is no spacing seed

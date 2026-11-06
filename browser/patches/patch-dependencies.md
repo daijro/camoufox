@@ -52,7 +52,6 @@ be listed there.
 | `voice-spoofing.patch` | `voices`, `voices:speechd`, `voices:blockIfNotDefined` |
 | `webgl-spoofing.patch` | `webGl:*`, `webGl2:*` |
 | `webrtc-ip-spoofing.patch` | `webrtc:ipv4`, `webrtc:ipv6`, `navigator.platform` |
-| `zz-webrtc-proxied-context.patch` | `webrtc:proxied` |
 | `windows-keyboard.patch` | `input:windowsKeyboard` (launch-wide: the shortcut tables and GTK's key handling are process-level) |
 | `zz-stock-cost-parity.patch` | `navigator.hardwareConcurrency`, `navigator.maxTouchPoints`, `screen.*` (re-orders the getters above so stock's work runs first) |
 
@@ -125,9 +124,9 @@ context:
 - `webrtc-ip-spoofing.patch` rewrites candidate, SDP and `getStats()` addresses
   to `webrtc:ipv4`/`ipv6`; it makes up host candidates when none reached the
   page, never a srflx. It also decides whether a page is behind a proxy
-  (`ShouldForceProxy`): the launcher's per-context `webrtc:proxied` decides for
-  a document with no HTTP channel, so a direct launch stays direct and a
-  proxied one never gathers around its proxy. The new patch keeps a srflx or
+  (`ShouldForceProxy`): Juggler records each proxy it sets, which decides for a
+  document with no HTTP channel, so a direct launch stays direct and a proxied
+  one never gathers around its proxy. The new patch keeps a srflx or
   relay address gathered through the proxy as it is, because a page's own STUN
   server already saw that address. Behind an HTTP proxy, or a SOCKS5 proxy that
   refuses UDP, no srflx surfaces: the page reads a machine whose UDP is

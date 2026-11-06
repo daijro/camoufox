@@ -29,6 +29,8 @@ What PASS means:
     * behind an HTTP proxy, and behind a SOCKS5 proxy that refuses UDP
       ASSOCIATE, nothing reaches the server and gathering ends within a few
       seconds with no srflx: the page reads a machine whose UDP is blocked;
+    * a datagram too large for the ICE stack's 9216-byte read buffer is dropped,
+      and gathering goes on (one once overran that buffer by up to 252 bytes);
     * two pages in two contexts, each behind its own SOCKS5 proxy and given
       only each other's srflx, open a data channel through both relays.
 
@@ -36,21 +38,21 @@ What PASS means:
 """
 
 import asyncio
-import ipaddress
 import socket
 import struct
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import resolve_binary  # noqa: E402
+from helpers import resolve_binary, stun_binding_response  # noqa: E402
 
 SPOOFED_IP = "203.0.113.9"
 STUN_ADDR = ("198.51.100.1", 3478)
 STUN_NAME = "stun.relay.test"
+# With its 10-byte relay header, this fills the relay read of 262 + 9216 bytes.
+OVERSIZED = 9468
 NAMES = {STUN_NAME: STUN_ADDR[0]}
 PAGE = b"<!doctype html><title>proxied</title><body>"
-COOKIE = 0x2112A442
 
 # The page scripts run in the main world: an isolated world cannot read the
 # RTCStatsReport getStats() returns.
@@ -161,20 +163,18 @@ class StunServer:
         self.net = net
         self.requests = []  # source of every Binding request
         self.mapped = []  # every XOR-MAPPED-ADDRESS returned, "ip:port"
+        self.oversized = False  # send a datagram past the read buffer before each answer
         net.hosts[STUN_ADDR] = self.on_datagram
 
     def on_datagram(self, data: bytes, src: tuple) -> None:
-        if len(data) < 20:
-            return
-        kind, _, cookie = struct.unpack("!HHI", data[:8])
-        if kind != 0x0001 or cookie != COOKIE:
+        response = stun_binding_response(data, *src)
+        if response is None:
             return
         self.requests.append(src)
-        ip = int(ipaddress.IPv4Address(src[0]))
-        attr = struct.pack("!HHBBHI", 0x0020, 8, 0, 1, src[1] ^ (COOKIE >> 16), ip ^ COOKIE)
         self.mapped.append(f"{src[0]}:{src[1]}")
-        self.net.send(struct.pack("!HHI", 0x0101, len(attr), COOKIE) + data[8:20] + attr,
-                      STUN_ADDR, src)
+        if self.oversized:
+            self.net.send(b"\xff" * OVERSIZED, STUN_ADDR, src)
+        self.net.send(response, STUN_ADDR, src)
 
 
 async def read_addr(reader: asyncio.StreamReader, atyp: int) -> tuple:
@@ -364,6 +364,10 @@ async def main() -> int:
         via_blob = await blob_page.evaluate(GATHER, f"stun:{STUN_ADDR[0]}:{STUN_ADDR[1]}")
         blob_requests, blob_mapped = stun.requests[before:], stun.mapped[before:]
 
+        stun.oversized = True
+        via_oversized = await page.evaluate(GATHER, f"stun:{STUN_ADDR[0]}:{STUN_ADDR[1]}")
+        stun.oversized = False
+
         before = len(stun.requests)
         http_page = await page_behind(browser, f"http://127.0.0.1:{http_port}")
         via_http = await http_page.evaluate(GATHER, f"stun:{STUN_NAME}:{STUN_ADDR[1]}")
@@ -405,6 +409,8 @@ async def main() -> int:
         ("SOCKS5, the blob: page: the one srflx is the address the server mapped",
          len(via_blob["srflx"]) == 1 and via_blob["srflx"][0] in blob_mapped,
          f"{via_blob['srflx']} mapped {sorted(set(blob_mapped))}"),
+        ("SOCKS5: an oversized datagram is dropped and the real answer still counts",
+         len(via_oversized["srflx"]) == 1, via_oversized["srflx"]),
         ("SOCKS5: the relay heard only from the control connection's address",
          relaying.strangers == 0, f"{relaying.strangers} strangers"),
         ("HTTP proxy and SOCKS5 refusing UDP: nothing reaches the STUN server",

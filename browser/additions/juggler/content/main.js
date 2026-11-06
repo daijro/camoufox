@@ -72,7 +72,7 @@ export function initialize(browsingContext, docShell) {
   // window or tab is in front. This is deliberate, not stock: the product
   // wants every page a caller opens to behave as if a person is looking at
   // it, so parallel pages do not lose focus or throttling. It is page-visible
-  // (document.hasFocus(), visibilityState, blur), so cfparity allowlists it;
+  // (document.hasFocus(), visibilityState, blur);
   // see ci/tribal-rules.yml, driven-pages-stay-focused. Juggler's own OS input
   // path still raises the selected tab through activateAndRun where the OS
   // needs it.

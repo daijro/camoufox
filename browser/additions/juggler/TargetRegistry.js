@@ -100,6 +100,12 @@ function withProxyAuth(proxy, auth) {
   return {...proxy, username: auth.username, password: auth.password};
 }
 
+// Camoufox: WebRTC must not gather around a Juggler proxy, which is not in
+// network.proxy.*. WebRTCIPManager::IsProxied reads this in the content process.
+function recordProxied(owner) {
+  Services.prefs.getDefaultBranch('roverfox.s.').setCharPref(`webrtc_proxied_${owner}`, '1');
+}
+
 // Camoufox: every juggler browser context is a Firefox container. A PUBLIC
 // container renders its name ("JUGGLER <id>") and colour in the URL bar and the
 // tab strip -- a visible automation cue a real Firefox never shows. The
@@ -432,6 +438,7 @@ export class TargetRegistry {
 
   setBrowserProxy(proxy) {
     this._browserProxy = withProxyAuth(proxy, this._launchProxyAuth);
+    recordProxied('browser');
     this._updateProxiesWithSameAuthCacheAndDifferentCredentials();
   }
 
@@ -1415,6 +1422,7 @@ class BrowserContext {
     // Clear AuthCache.
     Services.obs.notifyObservers(null, "net:clear-active-logins");
     this._proxy = withProxyAuth(proxy, this._proxyAuth);
+    recordProxied(this.userContextId);
     this._registry._updateProxiesWithSameAuthCacheAndDifferentCredentials();
   }
 

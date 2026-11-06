@@ -1,5 +1,5 @@
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-index c74e327..5844284 100644
+index e754f69..75610ff 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 @@ -105,6 +105,8 @@
@@ -11,25 +11,22 @@ index c74e327..5844284 100644
  #include "nsDocShell.h"
  #include "nsContentUtils.h"
  #include "nsDOMJSUtils.h"
-@@ -1814,6 +1816,7 @@ already_AddRefed<dom::Promise> PeerConnectionImpl::GetStats(
+@@ -1811,11 +1813,13 @@ already_AddRefed<dom::Promise> PeerConnectionImpl::GetStats(
    auto ipv4Opt = SpoofIP(false);
    auto ipv6Opt = SpoofIP(true);
    bool shouldSanitizeStats = ipv4Opt || ipv6Opt;
 +  std::set<std::string> proxiedAddresses = mProxiedAddresses;
-   // The port of the fabricated srflx (if any), so the synthetic getStats
-   // entry below matches the candidate/SDP exactly. 0 = nothing fabricated.
-   uint16_t fabricatedSrflxPort = mFabricatedSrflxPort;
-@@ -1824,7 +1827,8 @@ already_AddRefed<dom::Promise> PeerConnectionImpl::GetStats(
+ 
+   GetStats(aSelector, false)
        ->Then(
            GetMainThreadSerialEventTarget(), __func__,
-           [promise, window = mWindow, shouldSanitizeStats, ipv4Opt, ipv6Opt,
--           fabricatedSrflxPort, fabricatedSrflxStatsId, fabricatedSrflxUfrag](
-+           proxiedAddresses, fabricatedSrflxPort, fabricatedSrflxStatsId,
-+           fabricatedSrflxUfrag](
+-          [promise, window = mWindow, shouldSanitizeStats, ipv4Opt, ipv6Opt](
++          [promise, window = mWindow, shouldSanitizeStats, ipv4Opt, ipv6Opt,
++           proxiedAddresses](
                UniquePtr<dom::RTCStatsReportInternal>&& aReport) {
              // Camoufox: Sanitize IP addresses in stats before exposing to JS
              if (shouldSanitizeStats && aReport) {
-@@ -1848,9 +1852,11 @@ already_AddRefed<dom::Promise> PeerConnectionImpl::GetStats(
+@@ -1833,9 +1837,11 @@ already_AddRefed<dom::Promise> PeerConnectionImpl::GetStats(
                    addr.Assign(NS_ConvertUTF16toUTF8(candStat.mAddress.Value()));
                    // Check for colons AND no periods to avoid IPv4:port false positives
                    bool isIPv6 = addr.FindChar(':') != kNotFound && addr.FindChar('.') == kNotFound;
@@ -43,7 +40,7 @@ index c74e327..5844284 100644
                      candStat.mAddress.Value() = NS_ConvertUTF8toUTF16(ipv4Opt.value().c_str());
                    }
                  }
-@@ -2542,6 +2548,10 @@ PeerConnectionImpl::Close() {
+@@ -2489,6 +2495,10 @@ PeerConnectionImpl::Close() {
  
    if (mStunAddrsRequest) {
      for (const auto& hostname : mRegisteredMDNSHostnames) {
@@ -54,7 +51,7 @@ index c74e327..5844284 100644
        mStunAddrsRequest->SendUnregisterMDNSHostname(
            nsCString(hostname.c_str()));
      }
-@@ -3439,6 +3449,7 @@ void PeerConnectionImpl::CandidateReady(const std::string& candidate_,
+@@ -3386,6 +3396,7 @@ void PeerConnectionImpl::CandidateReady(const std::string& candidate_,
    STAMP_TIMECARD(mTimeCard, "Ice Candidate gathered");
    PC_AUTO_ENTER_API_CALL_VOID_RETURN(false);
  
@@ -62,7 +59,7 @@ index c74e327..5844284 100644
    const std::string& candidate = [&]() -> const std::string& {
      if (ShouldSpoofCandidateIP()) {
        static std::string spoofedCandidate;
-@@ -3578,10 +3589,11 @@ bool isSpecialIP(const std::string& ip) {
+@@ -3520,10 +3531,11 @@ bool isSpecialIP(const std::string& ip) {
  
  std::string getMaskForIP(const std::string& ip,
                           const std::optional<std::string>& ipv4Value,
@@ -77,7 +74,7 @@ index c74e327..5844284 100644
    }
    // Use colons AND no periods to avoid IPv4:port false positives
    bool isIPv6 = (ip.find(':') != std::string::npos) && (ip.find('.') == std::string::npos);
-@@ -3601,7 +3613,8 @@ std::string getMaskForIP(const std::string& ip,
+@@ -3543,7 +3555,8 @@ std::string getMaskForIP(const std::string& ip,
  
  std::string replaceIPAddresses(const std::string& input, const char* pattern,
                                 const std::optional<std::string>& ipv4,
@@ -87,7 +84,7 @@ index c74e327..5844284 100644
    // Replace IP addresses in a output line
    mozilla::RustRegex regex(pattern);
    if (!regex.IsValid()) {
-@@ -3614,7 +3627,7 @@ std::string replaceIPAddresses(const std::string& input, const char* pattern,
+@@ -3556,7 +3569,7 @@ std::string replaceIPAddresses(const std::string& input, const char* pattern,
  
    while (auto match = iter.Next()) {
      std::string ip = input.substr(match->start, match->end - match->start);
@@ -96,7 +93,7 @@ index c74e327..5844284 100644
  
      if (mask != ip) {
        result.append(input, lastEnd, match->start - lastEnd);
-@@ -3630,6 +3643,38 @@ std::string replaceIPAddresses(const std::string& input, const char* pattern,
+@@ -3572,6 +3585,38 @@ std::string replaceIPAddresses(const std::string& input, const char* pattern,
    return result;
  }
  
@@ -135,7 +132,7 @@ index c74e327..5844284 100644
  std::string PeerConnectionImpl::SpoofCandidateIP(const std::string& candidate) {
    if (!ShouldSpoofCandidateIP() || candidate.empty()) {
      return candidate;
-@@ -3640,10 +3685,11 @@ std::string PeerConnectionImpl::SpoofCandidateIP(const std::string& candidate) {
+@@ -3582,10 +3627,11 @@ std::string PeerConnectionImpl::SpoofCandidateIP(const std::string& candidate) {
  
    // ipv4
    const char* ipv4Pattern = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
@@ -149,7 +146,7 @@ index c74e327..5844284 100644
  
    return result;
  }
-@@ -3682,10 +3728,12 @@ nsresult PeerConnectionImpl::SanitizeSDPForIPLeak(std::string& sdp) {
+@@ -3624,10 +3670,12 @@ nsresult PeerConnectionImpl::SanitizeSDPForIPLeak(std::string& sdp) {
  
    // ipv4
    const char* ipv4Pattern = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
@@ -164,7 +161,7 @@ index c74e327..5844284 100644
  
    if (processedSdp != originalSdp) {
      sdp = processedSdp;
-@@ -4182,7 +4230,13 @@ void PeerConnectionImpl::OnCandidateFound(const std::string& aTransportId,
+@@ -4049,7 +4097,13 @@ void PeerConnectionImpl::OnCandidateFound(const std::string& aTransportId,
    if (mStunAddrsRequest && !aCandidateInfo.mMDNSAddress.empty()) {
      MOZ_ASSERT(!aCandidateInfo.mActualAddress.empty());
  
@@ -179,7 +176,7 @@ index c74e327..5844284 100644
        auto itor = mRegisteredMDNSHostnames.find(aCandidateInfo.mMDNSAddress);
  
        // We'll see the address twice if we're generating both UDP and TCP
-@@ -5257,6 +5311,19 @@ void PeerConnectionImpl::AddIceCandidate(const std::string& aCandidate,
+@@ -5109,6 +5163,19 @@ void PeerConnectionImpl::AddIceCandidate(const std::string& aCandidate,
  
        if (nPeriods == 1 &&
            addr.rfind(".local") + dotLocalLength == addr.length()) {
@@ -200,7 +197,7 @@ index c74e327..5844284 100644
            PendingIceCandidate cand;
            cand.mCandidate = aCandidate;
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.h b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
-index bf17875..140b259 100644
+index fdeb867..dc95864 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.h
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
 @@ -6,6 +6,7 @@
@@ -226,11 +223,11 @@ index bf17875..140b259 100644
 +  // peer connections in this process (a page's loopback test) still resolve
 +  // each other's, and nothing else learns or asks for them.
 +  static std::map<std::string, std::string>& ProxiedMDNSHostnames();
-   // Camoufox: when spoofing is on and ICE surfaced no public candidate (TCP
-   // proxy: STUN is UDP, can't traverse, so no srflx forms), fabricate a
-   // synthetic srflx carrying the spoof IP into the live candidate stream and
-@@ -746,6 +758,11 @@ class PeerConnectionImpl final
-   // set and shares the host's port as a real gather does.
+   // Camoufox: when spoofing is on and no host candidate reached the page,
+   // surface the pair a real gather reports. Never a srflx, which only a STUN
+   // answer can produce.
+@@ -730,6 +742,11 @@ class PeerConnectionImpl final
+   // with the UDP host's port, so a gather never brings a second host set.
    bool mSurfacedHostCandidate = false;
    uint16_t mSurfacedHostUdpPort = 0;
 +  // Camoufox: srflx and relay addresses outside the local network gathered
@@ -720,7 +717,7 @@ index c8bcce4..d76430e 100644
  
    // TODO: Convert flags?
    status = PR_SendTo(fd_, msg, len, flags, &naddr, PR_INTERVAL_NO_WAIT);
-@@ -1003,6 +1008,217 @@ abort:
+@@ -1003,6 +1008,221 @@ abort:
    return (_status);
  }
  
@@ -845,6 +842,10 @@ index c8bcce4..d76430e 100644
 +    } else {
 +      continue;
 +    }
++    // A relay read is larger than the caller's buffer, by the header's maximum.
++    if (got - header > maxlen) {
++      continue;
++    }
 +    *len = got - header;
 +    memcpy(buf, p + header, *len);
 +    return 0;
@@ -938,7 +939,7 @@ index c8bcce4..d76430e 100644
  NS_IMPL_ISUPPORTS(NrUdpSocketIpcProxy, nsIUDPSocketInternal)
  
  nsresult NrUdpSocketIpcProxy::Init(const RefPtr<NrUdpSocketIpc>& socket) {
-@@ -1291,9 +1507,12 @@ int NrUdpSocketIpc::sendto(const void* msg, size_t len, int flags,
+@@ -1291,9 +1511,12 @@ int NrUdpSocketIpc::sendto(const void* msg, size_t len, int flags,
    // so it is not a trust boundary; STUNUDPSocketFilter enforces the same
    // restriction in the parent process. Drop the packet, but report success so
    // the caller does not retry.
@@ -952,7 +953,7 @@ index c8bcce4..d76430e 100644
  
    int r;
    net::NetAddr addr;
-@@ -1602,9 +1821,10 @@ int NrSocketBase::CreateSocket(
+@@ -1602,9 +1825,10 @@ int NrSocketBase::CreateSocket(
    std::optional<std::pair<uint16_t, uint16_t>> ports;
    // Camoufox: behind a proxy, stock Firefox refuses UDP outright, which leaves
    // a page with no host candidate and no connection even to a peer on this
@@ -966,7 +967,7 @@ index c8bcce4..d76430e 100644
        config && config->GetForceProxy() && addr->protocol == IPPROTO_UDP;
  
    if (IsForbiddenAddress(addr)) {
-@@ -1642,6 +1862,8 @@ int NrSocketBase::CreateSocket(
+@@ -1642,6 +1866,8 @@ int NrSocketBase::CreateSocket(
      } else if (XRE_IsSocketProcess()) {
        if (addr->protocol == IPPROTO_TCP) {
          *sock = new NrTcpSocket(config);
@@ -975,7 +976,7 @@ index c8bcce4..d76430e 100644
        } else {
          *sock = new NrSocket();
        }
-@@ -1653,7 +1875,7 @@ int NrSocketBase::CreateSocket(
+@@ -1653,7 +1879,7 @@ int NrSocketBase::CreateSocket(
        }
      }
  
@@ -984,7 +985,7 @@ index c8bcce4..d76430e 100644
      r = (*sock)->create(ports ? &bindAddr : addr);
      if (!r) break;
    }
-@@ -1667,11 +1889,16 @@ abort:
+@@ -1667,11 +1893,16 @@ abort:
    return _status;
  }
  
