@@ -53,10 +53,57 @@ index 12866f1263..612b6b1541 100644
  
  #ifdef MOZ_ENABLE_VAAPI
 diff --git a/toolkit/xre/gfxtest/glxtest.cpp b/toolkit/xre/gfxtest/glxtest.cpp
-index 17709c0e9a..b7ff1e0358 100644
+index 17709c0e9a..e1a2fd47cd 100644
 --- a/toolkit/xre/gfxtest/glxtest.cpp
 +++ b/toolkit/xre/gfxtest/glxtest.cpp
-@@ -1057,19 +1057,33 @@ void wayland_egltest() {
+@@ -98,6 +98,9 @@ typedef void* (*PFNEGLGETPROCADDRESS)(const char*);
+ #define EGL_BLUE_SIZE 0x3022
+ #define EGL_GREEN_SIZE 0x3023
+ #define EGL_RED_SIZE 0x3024
++#define EGL_SURFACE_TYPE 0x3033
++#define EGL_PBUFFER_BIT 0x0001
++#define EGL_WINDOW_BIT 0x0004
+ #define EGL_NONE 0x3038
+ #define EGL_RENDERABLE_TYPE 0x3040
+ #define EGL_VENDOR 0x3053
+@@ -461,7 +464,7 @@ static void query_egl_dmabuf_modifiers(EGLDisplay dpy,
+   }
+ }
+ 
+-static bool get_egl_gl_status(EGLDisplay dpy,
++static bool get_egl_gl_status(EGLDisplay dpy, EGLint aSurfaceType,
+                               PFNEGLGETPROCADDRESS eglGetProcAddress) {
+   typedef EGLBoolean (*PFNEGLCHOOSECONFIGPROC)(
+       EGLDisplay dpy, EGLint const* attrib_list, EGLConfig* configs,
+@@ -526,6 +529,8 @@ static bool get_egl_gl_status(EGLDisplay dpy,
+   attribs.push_back(8);
+   attribs.push_back(EGL_BLUE_SIZE);
+   attribs.push_back(8);
++  attribs.push_back(EGL_SURFACE_TYPE);
++  attribs.push_back(aSurfaceType);
+   if (useGles) {
+     attribs.push_back(EGL_RENDERABLE_TYPE);
+     attribs.push_back(EGL_OPENGL_ES2_BIT);
+@@ -629,7 +634,8 @@ static bool get_egl_gl_status(EGLDisplay dpy,
+ }
+ 
+ static bool get_egl_status(EGLNativeDisplayType native_dpy,
+-                           bool aLoadModifiers) {
++                           bool aLoadModifiers,
++                           EGLint aSurfaceType = EGL_WINDOW_BIT) {
+   log("GLX_TEST: get_egl_status start\n");
+ 
+   EGLDisplay dpy = nullptr;
+@@ -705,7 +711,7 @@ static bool get_egl_status(EGLNativeDisplayType native_dpy,
+     }
+   }
+ 
+-  bool ret = get_egl_gl_status(dpy, eglGetProcAddress);
++  bool ret = get_egl_gl_status(dpy, aSurfaceType, eglGetProcAddress);
+ 
+   if (aLoadModifiers) {
+     query_egl_dmabuf_modifiers(dpy, eglGetProcAddress);
+@@ -1057,19 +1063,35 @@ void wayland_egltest() {
  }
  #endif
  
@@ -73,10 +120,12 @@ index 17709c0e9a..b7ff1e0358 100644
 +  bool headlessEgl = false;
 +  if (aHeadless) {
 +    // Mesa's default EGL platform is the one it was built for, usually x11,
-+    // which fails with no server. Surfaceless is the one that needs none.
++    // which fails with no server. Surfaceless is the one that needs none, and
++    // it has only pbuffer configs.
 +    setenv("EGL_PLATFORM", "surfaceless", 1);
 +    setenv("LIBGL_ALWAYS_SOFTWARE", "1", 1);
-+    headlessEgl = get_egl_status(nullptr, /* aLoadModifiers */ false);
++    headlessEgl =
++        get_egl_status(nullptr, /* aLoadModifiers */ false, EGL_PBUFFER_BIT);
 +    if (headlessEgl) {
 +      record_value("TEST_TYPE\nEGL\n");
 +    }
@@ -92,7 +141,7 @@ index 17709c0e9a..b7ff1e0358 100644
      // TODO: --display command line argument is not properly handled
      if (!x11_egltest()) {
        glx_probe();
-@@ -1085,7 +1099,7 @@ int childgltest(bool aWayland) {
+@@ -1085,7 +1107,7 @@ int childgltest(bool aWayland) {
  
  }  // extern "C"
  
@@ -101,7 +150,7 @@ index 17709c0e9a..b7ff1e0358 100644
    output_pipe = aOutputFd;
    if (getenv("MOZ_AVOID_OPENGL_ALTOGETHER")) {
      const char* msg = "ERROR\nMOZ_AVOID_OPENGL_ALTOGETHER envvar set";
-@@ -1097,5 +1111,5 @@ int glxtest(bool aWayland, int aOutputFd) {
+@@ -1097,5 +1119,5 @@ int glxtest(bool aWayland, int aOutputFd) {
    if (!enable_logging) {
      close_logging();
    }
