@@ -31,6 +31,9 @@ function installDriverOverrides() {
   // Juggler cannot report a page restored from bfcache, so a driven browser keeps none
   // (this alone disables it; docShell.disallowBFCache does not under SHIP).
   Services.prefs.getDefaultBranch("").setBoolPref("fission.bfcacheInParent", false);
+  // A driver's first page is about:blank, its URL on the command line: a headed
+  // launch otherwise opens the home page instead. No page can read this pref.
+  Services.prefs.getDefaultBranch("").setIntPref("browser.startup.page", 0);
   // Register JSWindowActors that will be instantiated for each frame.
   ActorManagerParent.addJSWindowActors({
     JugglerFrame: {

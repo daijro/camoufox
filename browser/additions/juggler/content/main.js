@@ -98,9 +98,11 @@ export function initialize(browsingContext, docShell) {
   for (const { worldName, name, script } of [...contextCrossProcessCookie.bindings, ...pageCrossProcessCookie.bindings])
     data.frameTree.addBinding(worldName, name, script);
   data.frameTree.setInitScripts([...contextCrossProcessCookie.initScripts, ...pageCrossProcessCookie.initScripts]);
-  data.frameTree.runInitScriptsOnInitialDocuments();
   data.channel = new SimpleChannel('', 'process-' + Services.appinfo.processID);
   data.pageAgent = new PageAgent(data.channel, data.frameTree);
+  // After PageAgent: what these scripts emit (binding calls, console) needs its
+  // listeners, and the driver needs the contexts it has just reported.
+  data.frameTree.runInitScriptsOnInitialDocuments();
   docShell.fileInputInterceptionEnabled = !!pageCrossProcessCookie.interceptFileChooserDialog;
 
   data.channel.register('', {
