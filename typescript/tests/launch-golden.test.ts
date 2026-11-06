@@ -48,7 +48,7 @@ const FLOAT_INPUTS: Record<string, (kwargs: any) => void> = {
 		kwargs.config["screen.width"] = new PyFloat(kwargs.config["screen.width"]);
 	},
 };
-const JS_EQUIVALENT_BLOB = new Set<string>(["humanize_int"]);
+const JS_EQUIVALENT_BLOB = new Set<string>();
 
 const PLACEHOLDERS: Array<[string, string]> = [
 	[path.join(FIXTURES, "bundle-old"), "<BUNDLE_OLD>"],

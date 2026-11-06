@@ -5,14 +5,6 @@
  */
 import "./node-floor.js";
 
-export {
-	auto,
-	cursory,
-	custom,
-	engine,
-	type HumanizeSetting,
-	raw,
-} from "./humanize.js";
 export type { DefaultAddon } from "./addons.js";
 export { DefaultAddons } from "./addons.js";
 export {
@@ -26,6 +18,14 @@ export {
 	loadPresets,
 	Screen,
 } from "./fingerprints.js";
+export {
+	auto,
+	cursory,
+	custom,
+	engine,
+	type HumanizeSetting,
+	raw,
+} from "./humanize.js";
 export {
 	findInstalledVersion,
 	listInstalled,

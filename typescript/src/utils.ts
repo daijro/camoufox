@@ -55,6 +55,11 @@ import {
 	setWebgpu,
 } from "./host_rendering.js";
 import {
+	type HumanizeSetting,
+	humanizeConfig,
+	type Manifest,
+} from "./humanize.js";
+import {
 	type ProxyConfig,
 	ProxyHelper,
 	proxyAuthEnv,
@@ -66,7 +71,6 @@ import {
 	validIPv6,
 } from "./ip.js";
 import { handleLocales } from "./locales.js";
-import { humanizeConfig, type HumanizeSetting, type Manifest } from "./humanize.js";
 import { INSTALL_DIR, LAUNCHER_CONSTANTS, OS_NAME } from "./paths.js";
 import {
 	buildFile,
