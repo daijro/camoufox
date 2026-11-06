@@ -126,9 +126,5 @@ def _host_gpu(
 
 
 def renders_on_hardware(gpu: Optional[Gpu]) -> bool:
-    """Whether the host's canvas and WebGL come from a GPU, not a software rasterizer.
-
-    A host that renders in software matches any GPU on its own OS: it reads as
-    a machine whose driver failed to load.
-    """
+    """Whether the host's canvas and WebGL come from a GPU, not a software rasterizer."""
     return gpu is not None and not is_software_renderer(gpu[1])

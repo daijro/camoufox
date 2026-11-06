@@ -51,7 +51,6 @@ import {
 	type Gpu,
 	hasCanvasPlaceholder,
 	hostGpu,
-	rendersOnHardware,
 	setWebgpu,
 } from "./host_rendering.js";
 import {
@@ -1176,10 +1175,10 @@ export type HostIdentity = [TargetOS | null, Gpu | null];
  * Whether the canvas is covered, and the host GPU the identity claims.
  *
  * The canvas renders on the host, so the identity claims the host's GPU when it
- * can: on the host's OS, with no GPU named, on a hardware GPU fpgen has
- * recorded there. A software renderer matches any GPU, and with WebGL off no GPU
- * is claimed. Any other identity contradicts the pixels, so the canvas is
- * covered unless the caller chose canvas_noise: false.
+ * can: on the host's OS, with no GPU named, a GPU or software renderer fpgen has
+ * recorded there. With WebGL off no GPU is claimed. Any other identity
+ * contradicts the pixels, so the canvas is covered unless the caller chose
+ * canvas_noise: false.
  */
 export async function planRendering(
 	targetOs: string | null,
@@ -1191,7 +1190,7 @@ export async function planRendering(
 	if (canvasNoise) return [true, null];
 	if (targetOs && targetOs === utilsDeps.hostOsKey() && !namedGpu) {
 		const host = webglDisabled ? null : await probe();
-		if (!rendersOnHardware(host)) return [false, null];
+		if (host === null) return [false, null];
 		const recorded = await utilsDeps.firefoxGpus(targetOs);
 		if (
 			recorded.some(

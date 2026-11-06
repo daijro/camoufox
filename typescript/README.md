@@ -142,8 +142,10 @@ come from the real OS, driver and GPU, whatever the identity claims.
 - **On the host's OS**, the launcher starts the browser once, unspoofed and with
   the same display, reads the GPU Firefox reports, and the identity claims it.
   The pixels then agree with the identity. A host that renders in software (no
-  GPU driver, as on most servers) keeps a drawn GPU: it reads as a machine
-  whose driver failed to load.
+  working GPU driver, as on most servers) claims its software renderer, such as
+  `llvmpipe` on Linux. Firefox reads the name and the pixels from one GL context,
+  so a machine with a broken driver reports the software renderer too, and a GPU
+  name over software pixels never happens on a real machine.
 - **On another OS, or with another GPU** (`webgl_config`, a preset's GPU, or a
   host GPU fpgen never recorded), the pixels would show the real one. Camoufox
   then turns on the canvas protection of `privacy.resistFingerprinting`, and

@@ -87,11 +87,11 @@ class TestHostOs:
         assert not placeholder(options)
         assert probes == [("/nonexistent/camoufox", False)]
 
-    def test_a_software_renderer_leaves_the_gpu_to_the_draw(self):
+    def test_a_software_host_claims_its_renderer_without_noise(self):
         with on_host(SOFTWARE_GPU):
             options, config = launch(os="linux")
 
-        assert "llvmpipe" not in config["webGl:renderer"]
+        assert (config["webGl:vendor"], config["webGl:renderer"]) == SOFTWARE_GPU
         assert not placeholder(options)
 
     def test_a_host_gpu_fpgen_never_recorded_is_not_claimed_and_the_canvas_is_covered(self):
@@ -270,7 +270,13 @@ class TestContextsOfAHostBrowser:
         assert 'setNavigatorPlatform("Linux' in script
         assert renderer_of(browser.new_context.return_value) == HOST_GPU[1]
 
-    def test_a_software_host_leaves_the_gpu_to_the_draw(self):
+    def test_a_context_of_a_software_host_claims_its_renderer(self):
+        browser = browser_on_host(SOFTWARE_GPU)
+        sync_api.NewContext(browser)
+
+        assert renderer_of(browser.new_context.return_value) == SOFTWARE_GPU[1]
+
+    def test_a_host_without_webgl_leaves_the_gpu_to_the_draw(self):
         browser = browser_on_host(None)
         sync_api.NewContext(browser)
 
@@ -303,8 +309,8 @@ class TestHostIdentity:
     def test_a_browser_without_noise_records_the_host(self):
         assert self.attach(False, None) == ("lin", HOST_GPU)
 
-    def test_a_software_host_records_its_os_only(self):
-        assert self.attach(False, None, SOFTWARE_GPU) == ("lin", None)
+    def test_a_software_host_records_its_renderer(self):
+        assert self.attach(False, None, SOFTWARE_GPU) == ("lin", SOFTWARE_GPU)
 
     def test_an_unrecorded_host_gpu_binds_no_context(self):
         """Its launch claims a drawn GPU behind the placeholder, so its contexts
