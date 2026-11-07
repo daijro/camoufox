@@ -100,7 +100,7 @@ CSS pixels:
 A `custom(fn)` channel is not an engine in this sense. The launcher writes
 `raw` for that channel, so the seam leaves Playwright's commands alone, and
 wraps Playwright's input methods on the client instead
-(`python/src/camoufox/_humanize_custom.py`).
+(`python/src/camoufox/_humanize_custom.py`, `typescript/src/_humanize_custom.ts`).
 User code never runs in the browser. A custom mouse also writes
 `humanize:mouse:internal=auto`, so the moves the seam originates itself, like
 the cursor move before a planned scroll, still get the build's mouse engine.
@@ -156,10 +156,11 @@ only as doubles. Each channel's stream is
 Without a seed, each launch draws a random one.
 
 The launcher derives the same streams for `custom()` engines
-(`channel_stream` in `python/src/camoufox/humanize.py`).
+(`channel_stream` in `python/src/camoufox/humanize.py`, `channelStream` in
+`typescript/src/humanize.ts`).
 `browser/tests/humanize/rng-vectors.json` is written from `HumanizeRng.js` by
-`browser/tests/juggler/gen-rng-vectors.mjs`, and both implementations are tested
-against it: change the derivation in both or in neither.
+`browser/tests/juggler/gen-rng-vectors.mjs`, and the browser and both launchers
+are tested against it: change the derivation in all of them or in none.
 
 With `CAMOU_HUMANIZE_TRACE=<file>` in the browser's environment, the seam
 appends one JSON line per humanized action with these fields:

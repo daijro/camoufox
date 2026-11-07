@@ -320,16 +320,19 @@ rules:
     check: manual   # browser/tests/playwright/patches/webrtc-context-ip.py, webrtc-socks5-udp.py
     evidence:
       - "daijro/camoufox#997: the fabricated srflx is removed, and its guards now run against a STUN server that answers"
+      - "webrtc-socks5-udp.py: gathering behind a proxy with no UDP takes as long as against a STUN server that never answers"
     rationale: >-
       A srflx says the page's STUN server saw a Binding Request from that
       address, and a page running its own server can tell it never did. Behind
       a proxy with no UDP path, the page reads a machine whose UDP is blocked:
-      host candidates only. The identity's address replaces a srflx the browser
+      host candidates only, obfuscated even with capture permission, and
+      datagrams dropped silently so gathering times out as it does on a
+      firewalled machine. The identity's address replaces a srflx the browser
       really gathered; it never invents one.
 
   - id: juggler-records-the-proxy
     title: Juggler records which contexts are proxied, not the launcher and not the page
-    check: manual   # browser/tests/playwright/patches/webrtc-socks5-udp.py (the top-level blob: check)
+    check: manual   # browser/tests/playwright/patches/webrtc-socks5-udp.py (blob:, about:blank, launch proxy), webrtc-proxy-no-udp-around.py (bypass, system proxy)
     evidence:
       - "daijro/camoufox#997, CI run 42147151481: a raw browser.new_context(proxy=...) gathered around its SOCKS5 proxy on a blob: page"
     rationale: >-
@@ -337,7 +340,9 @@ rules:
       needs another answer. Every proxy reaches Juggler, however the caller
       set it, and Juggler's flag is a default-branch pref a page cannot see. A
       launcher config key misses a caller's own new_context, and a window
-      method is one more name a page can find.
+      method is one more name a page can find. A system proxy is recorded at
+      startup, and a page in its proxy's bypass list counts as proxied: it
+      gets no UDP or ICE TCP, because this machine is not the identity's.
 
   - id: no-glyph-spacing-noise
     title: Text is shaped exactly as stock Firefox shapes it; there is no spacing seed
@@ -471,6 +476,7 @@ rules:
       - "fpgen Linux WebGL2 records: [1, 1] on 97%, the driver's range on the 3% without EXT_depth_clamp (GLES drivers, where Firefox reads it)"
       - "browser/tests/playwright/patches/stock-gpu-parity.py fails on the 146-style WebGL1 range on Linux, on a hardware GPU and on llvmpipe, and passes with the fix"
       - "Firefox 159 (bug 1735401) exposes EXT_texture_norm16 on WebGL2, no longer behind webgl.enable-draft-extensions: stock 159.0 on M1 (headless) and on Linux llvmpipe (Xvfb) list it on WebGL2 and not WebGL1; stock 158.0.1 on the same Linux and 146.0 on the same M1 list it on neither. dom/canvas/WebGLExtensions.cpp's IsSupported needs GLFeature::texture_norm16, core in desktop GL 3.1"
+      - "Firefox 159 caps WebGL2 MAX_UNIFORM_BLOCK_SIZE at 64 KiB (WebGL2ContextState.cpp, kMaxUniformBlockSize): on one Linux AMD machine, stock 146 reports 4294967292 and stock 159.0 65536, and stock-gpu-parity.py failed on the recording's 4120744960 until the launchers applied the cap"
       - "Firefox 159 adds EXT_clip_control (GLFeature::clip_control, GL 4.5) and EXT_texture_mirror_clamp_to_edge (GL 4.4) to WebGL1 and WebGL2: stock 159.0 on Linux llvmpipe, x86_64 and aarch64, lists both where 158.0.1 lists neither, and stock 159.0 on M1 lists neither. 159's third_party/angle renderer11_utils.cpp sets textureMirrorClampToEdgeEXT on every D3D11 device and clipControlEXT from feature level 10_0"
     rationale: >-
       fpgen's records are right for the Firefox that made them; what goes
@@ -687,6 +693,26 @@ rules:
       differ from stock. Updates, studies and the first-run page stay off
       through prefs in camoufox.cfg; uBO keeps its packaged lists through its
       own default (scripts/fetch-ubo.py freeze_lists).
+
+  - id: no-background-traffic
+    title: Firefox's background services stay off; what a page can see of them comes bundled
+    check: manual   # browser/tests/playwright/patches/no-background-traffic.py, tracking-protection-lists.py
+    evidence:
+      - "toolkit/components/url-classifier/UrlClassifierRemoteSettingsService.sys.mjs: the moz-sbrs update scheme reads its lists through RemoteSettings, so the build's dumps can supply them"
+      - "dom/push/PushServiceWebSocket.sys.mjs _queueRequest: a registration opens the socket itself, so the startup connection is not needed for pushManager.subscribe()"
+      - "measured 2026-11-06 on the changeset of tracking-protection-lists: 36 of 446 records, 2.82 MB, apply to Firefox 159"
+    rationale: >-
+      Remote Settings, Push, connectivity and captive-portal probes, Safe
+      Browsing, region lookup and new tab feeds send requests no page asked
+      for, which only the proxy operator and Mozilla see. A page sees none of
+      them, but it does see the lists Remote Settings delivers: without the
+      tracking tables a fingerprinting script stock blocks would load. So the
+      requests stay off and the page-visible collections are a pinned snapshot
+      (scripts/remote_settings.py pin, run on every Firefox bump). Push still
+      works for a page that subscribes. Media plugin updates stay on: without
+      them getCapabilities() lists no H264 and Widevine never resolves (#713),
+      and neither ships with Firefox, so a fresh profile asks Mozilla for them
+      and downloads them from Cisco and Google.
 
   - id: ipv4-only-network-not-disable-ipv6
     title: geoip without a proxy keeps IPv6 only where it agrees, and never uses network.dns.disableIPv6

@@ -11,6 +11,9 @@ validate a removed key as a live one, and must say that it has no effect.
 
 import json
 
+import pytest
+
+from camoufox.exceptions import UnsupportedVersion
 from camoufox.utils import validate_config
 
 
@@ -34,3 +37,10 @@ def test_a_removed_key_is_not_type_checked(tmp_path):
         {"property": "navigator.languages", "type": "array", "removed": "156.0.1-beta.32"},
     ])
     validate_config({"navigator.languages": "not-an-array"}, path=binary)
+
+
+def test_a_build_without_the_voice_grid_refuses_to_launch(tmp_path):
+    """Skipped like any unknown key, the grid would leave a Linux identity with no voices."""
+    binary = _browser_with(tmp_path, [{"property": "navigator.userAgent", "type": "str"}])
+    with pytest.raises(UnsupportedVersion, match="voices:speechd"):
+        validate_config({"voices:speechd": {"languages": [], "variants": []}}, path=binary)

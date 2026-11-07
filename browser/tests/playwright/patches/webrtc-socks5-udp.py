@@ -26,9 +26,24 @@ What PASS means:
     * a STUN server named by host name is asked through the relay by that name;
     * a top-level blob: page the proxied page opened with noopener, which no
       document loaded over HTTP leads back to, gathers through the relay too;
+    * so do about:blank and data: pages, whose documents loaded nothing through
+      the proxy, and pages behind a launch-level proxy;
+    * a relay works behind RFC 1929 credentials, and whichever way the grant
+      names it: an IPv6 address, a host name or the unspecified address (these
+      two mean the address the control connection reached);
+    * a TURN server over TCP is asked through the proxy, SOCKS5 or HTTP, and an
+      HTTP proxy that hangs up right after CONNECT does not take the browser
+      down (stock reports the close before the connect, then calls through the
+      callbacks the close cleared);
+    * a proxy that drops the control connection once the relay is in use leaves
+      gathering as UDP-blocked as a proxy that never had a relay;
     * behind an HTTP proxy, and behind a SOCKS5 proxy that refuses UDP
-      ASSOCIATE, nothing reaches the server and gathering ends within a few
-      seconds with no srflx: the page reads a machine whose UDP is blocked;
+      ASSOCIATE, nothing reaches the server, no srflx surfaces, and gathering
+      takes as long as it does for a machine whose STUN server never answers:
+      the page reads a machine whose UDP is blocked;
+    * with capture permission, which is what opens a real host candidate on
+      stock, a proxied page finds this machine's address in no candidate, SDP
+      or stat, while a direct page on the same browser does find it;
     * a datagram too large for the ICE stack's 9216-byte read buffer is dropped,
       and gathering goes on (one once overran that buffer by up to 252 bytes);
     * two pages in two contexts, each behind its own SOCKS5 proxy and given
@@ -44,7 +59,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import resolve_binary, stun_binding_response  # noqa: E402
+from helpers import own_address, resolve_binary, stun_binding_response  # noqa: E402
 
 SPOOFED_IP = "203.0.113.9"
 STUN_ADDR = ("198.51.100.1", 3478)
@@ -53,11 +68,16 @@ STUN_NAME = "stun.relay.test"
 OVERSIZED = 9468
 NAMES = {STUN_NAME: STUN_ADDR[0]}
 PAGE = b"<!doctype html><title>proxied</title><body>"
+TURN_TCP = f"turn:{STUN_ADDR[0]}:{STUN_ADDR[1]}?transport=tcp"
+CREDENTIALS = ("guard-user", "guard-password")
+# Both gatherings run the same STUN retransmit timers, which measured within
+# 20 ms of each other at 11.1 s; the margin is for a loaded CI runner.
+TIMER_TOLERANCE_MS = 1000
 
 # The page scripts run in the main world: an isolated world cannot read the
 # RTCStatsReport getStats() returns.
 GATHER = """mw:async (stun) => {
-  const pc = new RTCPeerConnection({iceServers: [{urls: stun}]});
+  const pc = new RTCPeerConnection({iceServers: [{urls: stun, username: 'guard', credential: 'guard'}]});
   const srflx = [];
   const start = performance.now();
   const ended = new Promise(resolve => {
@@ -80,6 +100,26 @@ GATHER = """mw:async (stun) => {
   });
   pc.close();
   return {srflx, sdp, stats, elapsed};
+}"""
+
+# Everything a page can read about its own candidates while it is capturing.
+CAPTURING = """mw:async (stun) => {
+  const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+  const pc = new RTCPeerConnection({iceServers: [{urls: stun}]});
+  stream.getTracks().forEach(track => pc.addTrack(track, stream));
+  const cands = [];
+  const ended = new Promise(resolve => {
+    setTimeout(resolve, 30000);
+    pc.onicecandidate = e => e.candidate ? cands.push(e.candidate.candidate) : resolve();
+  });
+  await pc.setLocalDescription(await pc.createOffer());
+  await ended;
+  const stats = [];
+  (await pc.getStats()).forEach(s => stats.push(s));
+  const seen = JSON.stringify([cands, pc.localDescription.sdp, stats]);
+  pc.close();
+  stream.getTracks().forEach(track => track.stop());
+  return seen;
 }"""
 
 # Each side keeps only its srflx candidates in what it hands the other, so the
@@ -206,6 +246,7 @@ class Relay(asyncio.DatagramProtocol):
         self.proxy, self.control_ip, self.public = proxy, control_ip, public
         self.client = None
         self.transport = None
+        self.control = None
         proxy.net.hosts[public] = self.to_client
 
     def connection_made(self, transport) -> None:
@@ -221,6 +262,11 @@ class Relay(asyncio.DatagramProtocol):
             return
         atyp, (host, port), payload = parsed
         self.proxy.destinations.append((atyp, host, port))
+        if self.proxy.hang_up:
+            self.proxy.hung_up += 1
+            self.control.close()
+            self.close()
+            return
         if atyp == 3:
             host = NAMES.get(host)
             if not host:
@@ -239,11 +285,19 @@ class Relay(asyncio.DatagramProtocol):
 
 
 class Socks5Proxy:
-    """A no-auth SOCKS5 proxy that serves the page on CONNECT and, unless
-    `udp` is False, relays UDP ASSOCIATE onto `net` from `public_ip`."""
+    """A SOCKS5 proxy that serves the page on CONNECT and, unless `udp` is
+    False, relays UDP ASSOCIATE onto `net` from `public_ip`. `auth` requires
+    those RFC 1929 credentials. `bound` is how the grant names the relay:
+    "address", "ipv6", "name" or "unspecified". `hang_up` drops the control
+    connection at the first datagram the relay hears."""
 
-    def __init__(self, net: Internet, public_ip: str, udp: bool = True) -> None:
-        self.net, self.public_ip, self.udp = net, public_ip, udp
+    def __init__(self, net: Internet, public_ip: str, udp: bool = True,
+                 auth: tuple = None, bound: str = "address", hang_up: bool = False) -> None:
+        self.net, self.public_ip, self.udp, self.auth, self.bound = net, public_ip, udp, auth, bound
+        self.hang_up = hang_up
+        self.hung_up = 0
+        self.authenticated = 0
+        self.connects = []  # (host, port) of every CONNECT
         self.associations = 0
         self.refused = 0
         self.strangers = 0
@@ -266,13 +320,24 @@ class Socks5Proxy:
     async def handle(self, reader, writer) -> None:
         version, count = await reader.readexactly(2)
         methods = await reader.readexactly(count)
-        if version != 5 or 0 not in methods:
+        method = 2 if self.auth else 0
+        if version != 5 or method not in methods:
             writer.write(b"\x05\xff")
             return
-        writer.write(b"\x05\x00")
+        writer.write(bytes((5, method)))
+        if self.auth:
+            await reader.readexactly(1)
+            user = (await reader.readexactly((await reader.readexactly(1))[0])).decode()
+            password = (await reader.readexactly((await reader.readexactly(1))[0])).decode()
+            if (user, password) != self.auth:
+                writer.write(b"\x01\x01")
+                return
+            self.authenticated += 1
+            writer.write(b"\x01\x00")
         _, cmd, _, atyp = await reader.readexactly(4)
-        _, port = await read_addr(reader, atyp)
+        host, port = await read_addr(reader, atyp)
         if cmd == 1:
+            self.connects.append((host, port))
             # Only plain HTTP: refusing 443 lets HTTPS-First fall back at once.
             if port != 80:
                 writer.write(b"\x05\x05\x00\x01" + bytes(6))
@@ -290,13 +355,25 @@ class Socks5Proxy:
             return
         self.associations += 1
         public = (self.public_ip, 40000 + self.associations)
-        control_ip = writer.get_extra_info("peername")[0]
+        # The browser reaches an IPv6 relay from ::1, not from the control connection's address.
+        local = "::1" if self.bound == "ipv6" else "127.0.0.1"
+        client_ip = local if self.bound == "ipv6" else writer.get_extra_info("peername")[0]
         loop = asyncio.get_running_loop()
         _, relay = await loop.create_datagram_endpoint(
-            lambda: Relay(self, control_ip, public), local_addr=("127.0.0.1", 0))
+            lambda: Relay(self, client_ip, public), local_addr=(local, 0))
+        relay.control = writer
         self.relays.append(relay)
-        bound = relay.transport.get_extra_info("sockname")
-        writer.write(b"\x05\x00\x00\x01" + socket.inet_aton(bound[0]) + struct.pack("!H", bound[1]))
+        port = relay.transport.get_extra_info("sockname")[1]
+        name = b"relay.proxy.test"
+        if self.bound == "ipv6":
+            bound = b"\x04" + socket.inet_pton(socket.AF_INET6, local)
+        elif self.bound == "name":
+            bound = b"\x03" + bytes((len(name),)) + name
+        elif self.bound == "unspecified":
+            bound = b"\x01" + bytes(4)
+        else:
+            bound = b"\x01" + socket.inet_aton(local)
+        writer.write(b"\x05\x00\x00" + bound + struct.pack("!H", port))
         await writer.drain()
         # The association lives as long as its control connection.
         await reader.read()
@@ -311,7 +388,8 @@ class Socks5Proxy:
         self.server.close()
 
 
-async def serve_http_proxy(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+async def serve_http_proxy(requests: list, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    requests.append((await reader.readline()).decode().strip())
     while (await reader.readline()) not in (b"\r\n", b""):
         pass
     writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n"
@@ -329,12 +407,21 @@ async def main() -> int:
     refusing = Socks5Proxy(net, "198.51.100.20", udp=False)
     peer_a = Socks5Proxy(net, "198.51.100.30")
     peer_b = Socks5Proxy(net, "198.51.100.40")
-    proxies = {p: await p.start() for p in (relaying, refusing, peer_a, peer_b)}
-    http = await asyncio.start_server(serve_http_proxy, "127.0.0.1", 0)
+    authed = Socks5Proxy(net, "198.51.100.50", auth=CREDENTIALS)
+    grants = {bound: Socks5Proxy(net, ip, bound=bound) for bound, ip in (
+        ("ipv6", "198.51.100.60"), ("name", "198.51.100.70"), ("unspecified", "198.51.100.80"))}
+    launched = Socks5Proxy(net, "198.51.100.90")
+    capturing = Socks5Proxy(net, "198.51.100.100")
+    hanging_up = Socks5Proxy(net, "198.51.100.110", hang_up=True)
+    proxies = {p: await p.start() for p in (relaying, refusing, peer_a, peer_b, authed, launched, capturing, hanging_up,
+                                            *grants.values())}
+    http_requests = []
+    http = await asyncio.start_server(lambda r, w: serve_http_proxy(http_requests, r, w), "127.0.0.1", 0)
     http_port = http.sockets[0].getsockname()[1]
+    stun_url = f"stun:{STUN_ADDR[0]}:{STUN_ADDR[1]}"
 
-    async def page_behind(browser, server: str):
-        context = await browser.new_context(proxy={"server": server})
+    async def page_behind(browser, server: str, **credentials):
+        context = await browser.new_context(proxy={"server": server, **credentials})
         page = await context.new_page()
         await page.goto("http://parity.test/")
         return page
@@ -350,37 +437,83 @@ async def main() -> int:
     def socks(proxy: Socks5Proxy) -> str:
         return f"socks5://127.0.0.1:{proxies[proxy]}"
 
-    async with AsyncCamoufox(headless=True, os="linux", config={"webrtc:ipv4": SPOOFED_IP},
-                             geoip=False, i_know_what_im_doing=True, main_world_eval=True,
-                             executable_path=str(resolve_binary())) as browser:
+    async def gather_through(page) -> tuple:
+        """The gathering, with the Binding requests it sent and the addresses they mapped."""
+        before = len(stun.requests)
+        gather = await page.evaluate(GATHER, stun_url)
+        return gather, stun.requests[before:], stun.mapped[before:]
+
+    def relayed(label: str, proxy: Socks5Proxy, result: tuple) -> list:
+        gather, requests, mapped = result
+        return [
+            (f"{label}: Binding requests came only from the proxy's relay",
+             bool(requests) and set(requests) <= proxy.publics(), f"{len(requests)} from {sorted(set(requests))}"),
+            (f"{label}: the one srflx is the address the server mapped",
+             len(gather["srflx"]) == 1 and gather["srflx"][0] in mapped, f"{gather['srflx']} mapped {sorted(set(mapped))}"),
+        ]
+
+    launch = dict(headless=True, os="linux", geoip=False, i_know_what_im_doing=True, main_world_eval=True,
+                  executable_path=str(resolve_binary()))
+    async with AsyncCamoufox(config={"webrtc:ipv4": SPOOFED_IP}, **launch) as browser:
+        unanswered = await (await browser.new_page()).evaluate(GATHER, stun_url)
         page = await page_behind(browser, socks(relaying))
-        by_ip = await page.evaluate(GATHER, f"stun:{STUN_ADDR[0]}:{STUN_ADDR[1]}")
+        by_ip = await page.evaluate(GATHER, stun_url)
         ip_requests, ip_mapped = list(stun.requests), list(stun.mapped)
         by_name = await page.evaluate(GATHER, f"stun:{STUN_NAME}:{STUN_ADDR[1]}")
         name_requests, name_mapped = stun.requests[len(ip_requests):], stun.mapped[len(ip_mapped):]
         blob_page = await blob_page_of(page)
         blob_url = blob_page.url
         before = len(stun.requests)
-        via_blob = await blob_page.evaluate(GATHER, f"stun:{STUN_ADDR[0]}:{STUN_ADDR[1]}")
+        via_blob = await blob_page.evaluate(GATHER, stun_url)
         blob_requests, blob_mapped = stun.requests[before:], stun.mapped[before:]
 
         stun.oversized = True
-        via_oversized = await page.evaluate(GATHER, f"stun:{STUN_ADDR[0]}:{STUN_ADDR[1]}")
+        via_oversized = await page.evaluate(GATHER, stun_url)
         stun.oversized = False
 
-        before = len(stun.requests)
         http_page = await page_behind(browser, f"http://127.0.0.1:{http_port}")
         via_http = await http_page.evaluate(GATHER, f"stun:{STUN_NAME}:{STUN_ADDR[1]}")
         refused_page = await page_behind(browser, socks(refusing))
-        via_refused = await refused_page.evaluate(GATHER, f"stun:{STUN_ADDR[0]}:{STUN_ADDR[1]}")
-        unrelayed_requests = len(stun.requests) - before
+        via_refused = await refused_page.evaluate(GATHER, stun_url)
 
-        stun_url = f"stun:{STUN_ADDR[0]}:{STUN_ADDR[1]}"
+        blank = await page.context.new_page()
+        via_blank = await gather_through(blank)
+        await blank.goto("data:text/html,<!doctype html><title>data</title>")
+        via_data = await gather_through(blank)
+        via_auth = await gather_through(await page_behind(
+            browser, socks(authed), username=CREDENTIALS[0], password=CREDENTIALS[1]))
+        via_grant = {bound: await gather_through(await page_behind(browser, socks(proxy)))
+                     for bound, proxy in grants.items()}
+        via_hang_up = await gather_through(await page_behind(browser, socks(hanging_up)))
+        await page.evaluate(GATHER, TURN_TCP)
+        await http_page.evaluate(GATHER, TURN_TCP)
+
         a, b = await page_behind(browser, socks(peer_a)), await page_behind(browser, socks(peer_b))
         offer = await a.evaluate(OFFER, stun_url)
         answer = await b.evaluate(ANSWER, [stun_url, srflx_only(offer)])
         opened = await a.evaluate(FINISH, srflx_only(answer))
         messages = (await a.evaluate("mw:received"), await b.evaluate("mw:received")) if opened else (None, None)
+
+    async with AsyncCamoufox(proxy={"server": socks(launched)}, **launch) as browser:
+        launch_context = await browser.new_context()
+        launch_blank = await launch_context.new_page()
+        via_launch_blank = await gather_through(launch_blank)
+        await launch_blank.goto("http://parity.test/")
+        via_launch_page = await gather_through(launch_blank)
+
+    # No webrtc:ipv4 here, which would hide the address behind its own replacement.
+    machine = own_address()
+    capture_prefs = {"media.navigator.streams.fake": True, "media.navigator.permission.disabled": True,
+                     "media.devices.insecure.enabled": True, "media.getusermedia.insecure.enabled": True}
+    async with AsyncCamoufox(firefox_user_prefs=capture_prefs, **launch) as browser:
+        direct_page = await browser.new_page()
+        await direct_page.route("**/*", lambda route: route.fulfill(status=200, content_type="text/html", body=PAGE))
+        await direct_page.goto("http://parity.test/")
+        seen_direct = await direct_page.evaluate(CAPTURING, stun_url)
+        seen_behind = {}
+        for label, server in (("SOCKS5", socks(capturing)), ("SOCKS5 refusing UDP", socks(refusing)),
+                              ("HTTP proxy", f"http://127.0.0.1:{http_port}")):
+            seen_behind[label] = await (await page_behind(browser, server)).evaluate(CAPTURING, stun_url)
     for proxy in proxies:
         proxy.close()
     http.close()
@@ -413,22 +546,50 @@ async def main() -> int:
          len(via_oversized["srflx"]) == 1, via_oversized["srflx"]),
         ("SOCKS5: the relay heard only from the control connection's address",
          relaying.strangers == 0, f"{relaying.strangers} strangers"),
-        ("HTTP proxy and SOCKS5 refusing UDP: nothing reaches the STUN server",
-         unrelayed_requests == 0 and refusing.refused >= 1,
-         f"{unrelayed_requests} requests, {refusing.refused} refused associations"),
+        *relayed("SOCKS5, about:blank", relaying, via_blank),
+        *relayed("SOCKS5, a data: page", relaying, via_data),
+        *relayed("SOCKS5 requiring credentials", authed, via_auth),
+        ("SOCKS5 requiring credentials: the association authenticated",
+         authed.authenticated >= 2 and authed.associations >= 1,
+         f"{authed.authenticated} logins, {authed.associations} associations"),
+        *[check for bound, result in via_grant.items()
+          for check in relayed(f"SOCKS5 granting a relay by {bound}", grants[bound], result)],
+        *relayed("launch proxy, about:blank", launched, via_launch_blank),
+        *relayed("launch proxy, a loaded page", launched, via_launch_page),
+        ("SOCKS5: a TURN server over TCP is asked through the proxy",
+         STUN_ADDR in relaying.connects, relaying.connects),
+        ("HTTP proxy: a TURN server over TCP is asked through CONNECT",
+         any(r.startswith(f"CONNECT {STUN_ADDR[0]}:{STUN_ADDR[1]} ") for r in http_requests), http_requests),
+        ("SOCKS5 refusing UDP: the browser asked for a relay and was refused",
+         refusing.refused >= 1, f"{refusing.refused} refused associations"),
     ]
     for label, gather in (("HTTP proxy", via_http), ("SOCKS5 refusing UDP", via_refused)):
         checks += [
-            (f"{label}: gathering ends without the STUN server",
-             gather["elapsed"] is not None and gather["elapsed"] < 5000, gather["elapsed"]),
+            (f"{label}: gathering takes as long as an unanswered STUN server's",
+             gather["elapsed"] is not None and unanswered["elapsed"] is not None
+             and abs(gather["elapsed"] - unanswered["elapsed"]) < TIMER_TOLERANCE_MS,
+             f"{gather['elapsed']} against {unanswered['elapsed']}"),
             (f"{label}: no srflx without a STUN answer (UDP blocked)",
              gather["srflx"] == [] and gather["stats"] == [], gather["srflx"]),
         ]
     checks += [
+        ("SOCKS5 losing its control connection: the relay was in use when it went",
+         hanging_up.hung_up >= 1, f"{hanging_up.hung_up} hang-ups"),
+        ("SOCKS5 losing its control connection: no srflx",
+         via_hang_up[0]["srflx"] == [] and via_hang_up[0]["stats"] == [], via_hang_up[0]["srflx"]),
+        ("SOCKS5 losing its control connection: gathering takes as long as an unanswered STUN server's",
+         via_hang_up[0]["elapsed"] is not None and unanswered["elapsed"] is not None
+         and abs(via_hang_up[0]["elapsed"] - unanswered["elapsed"]) < TIMER_TOLERANCE_MS,
+         f"{via_hang_up[0]['elapsed']} against {unanswered['elapsed']}"),
         ("two contexts, each behind its own SOCKS5 proxy: the data channel opens",
          opened and messages == ("pong", "ping"), f"opened={opened} messages={messages}"),
         ("two contexts: their datagrams crossed between the two relays",
          a_to_b > 0 and b_to_a > 0, f"{a_to_b} A->B, {b_to_a} B->A"),
+        ("capturing, direct: this machine's address reaches the page, so its absence below means something",
+         machine in seen_direct, machine),
+        *[(f"capturing, {label}: this machine's address reaches the page nowhere",
+           machine not in seen, f"{len(seen)} bytes of candidates, SDP and stats")
+          for label, seen in seen_behind.items()],
     ]
     passed = True
     for label, ok, got in checks:

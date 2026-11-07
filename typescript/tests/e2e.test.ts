@@ -552,9 +552,11 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 							.split(/\s+/)
 							.filter((pid) => {
 								try {
+									// By file, not name: a build's camoufox-bin is a symlink, so
+									// the process is called whatever it was launched through.
 									return (
-										fs.readFileSync(`/proc/${pid}/comm`, "utf-8").trim() ===
-										"camoufox-bin"
+										fs.readlinkSync(`/proc/${pid}/exe`) ===
+										fs.realpathSync(EXECUTABLE)
 									);
 								} catch {
 									return false;

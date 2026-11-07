@@ -978,9 +978,9 @@ export class PageAgent {
       ? {key: 'Meta', code: 'MetaLeft', keyCode: 224, location: 1, repeat: false}
       : {key: 'Control', code: 'ControlLeft', keyCode: 17, location: 1, repeat: false};
     const v = {key: 'v', code: 'KeyV', keyCode: 86, location: 0, repeat: false};
-    const editor = focusedEditor();
-    let shortcutRan = false;
-    let cancelled = false;
+    const field = focusedField(win);
+    const editor = field && fieldEditor(field);
+    const before = editor && fieldText(field);
     let error = null;
     // The shortcut's keypress is where Firefox runs its own clipboard paste
     // (GTK's key bindings, the global key handler). Content never gets a
@@ -990,7 +990,6 @@ export class PageAgent {
       if (!event.isTrusted || event.key !== 'v' || !(mac ? event.metaKey : event.ctrlKey))
         return;
       event.preventDefault();
-      shortcutRan = true;
       if (!editor)
         return;
       try {
@@ -999,9 +998,7 @@ export class PageAgent {
         error = e;
       }
     };
-    const onPaste = event => { cancelled = event.defaultPrevented; };
     events.addEventListener('keypress', onKeypress, {capture: true, mozSystemGroup: true});
-    events.addEventListener('paste', onPaste, {mozSystemGroup: true});
     try {
       // The modifier leads and trails V as Shift does a key (_dispatchKeyEvent).
       await this._dispatchKeyEvent({type: 'keydown', ...modifier});
@@ -1013,16 +1010,35 @@ export class PageAgent {
       await this._dispatchKeyEvent({type: 'keyup', ...modifier});
     } finally {
       events.removeEventListener('keypress', onKeypress, {capture: true, mozSystemGroup: true});
-      events.removeEventListener('paste', onPaste, {mozSystemGroup: true});
     }
     if (error)
       throw error;
-    if (!editor)
+    if (!editor || field.readOnly)
       return;
-    if (!shortcutRan)
-      throw new Error('Cannot insert text: the page cancelled the paste shortcut\'s keydown');
-    if (cancelled)
-      throw new Error('Cannot insert text: the page cancelled the paste');
+    // A page that cancels the paste may have put the text in itself: only a
+    // field left as it was refused it. A person types what they cannot paste.
+    if (pasted(field, before, text))
+      return;
+    await this._typeText(text, field);
+    if (fieldText(field) === before)
+      throw new Error('Cannot insert text: the page refused the paste and the keys');
+  }
+
+  // Key by key on a US keyboard, at a person's rate. A character it has no key
+  // for arrives as an input method commits it.
+  async _typeText(text, field) {
+    for (const character of text) {
+      // Keys sent on would land in whatever took the focus.
+      if (focusedField(this._frameTree.mainFrame().domWindow()) !== field)
+        throw new Error('Cannot insert text: the field lost focus while it was being typed into');
+      const key = {...(usKey(character) ?? {key: 'Process', code: '', keyCode: 229}), location: 0, repeat: false};
+      const started = ChromeUtils.now();
+      await this._dispatchKeyEvent({type: 'keydown', ...key, text: character});
+      await pause(keyHold());
+      await this._dispatchKeyEvent({type: 'keyup', ...key});
+      // Timer.sys.mjs reads a negative delay as a huge unsigned one.
+      await pause(Math.max(0, started + keyInterval() - ChromeUtils.now()));
+    }
   }
 
   async _crash() {
@@ -1173,23 +1189,63 @@ function pause(ms) {
 // "Observations on Typing from 136 Million Keystrokes", CHI 2018), never under
 // 50 ms.
 const keyHold = () => normalDelay(116.25, 23.88, 50);
+// Press to press while typing, from the same study: 238.66 ms, SD 111.60.
+const keyInterval = () => normalDelay(238.66, 111.6, 80);
 // How far a modifier leads the key it modifies, and trails its release: tens
 // of ms. No recorded figure; these keep the mean and spread of the uniform
 // 35-90 ms and 20-65 ms draws they replaced, with those floors.
 const modifierLead = () => normalDelay(62.5, 16, 35);
 const modifierTrail = () => normalDelay(42.5, 13, 20);
 
-// The editor of the focused text control or editable document, or null.
-function focusedEditor() {
-  const element = Services.focus.focusedElement;
-  if (!element)
-    return null;
+// What has focus in this page, frames included. Services.focus.focusedElement
+// is the active window's: in a process shared with another page, that page's.
+// A designMode document takes the focus itself, with no element in it.
+function focusedField(win) {
+  const focused = {};
+  const element = Services.focus.getFocusedElementForWindow(win, true, focused);
+  const doc = focused.value?.document;
+  return element ?? (doc?.designMode === 'on' ? doc.body : null);
+}
+
+// The editor of a focused text control or editable document, or null.
+function fieldEditor(element) {
   if (element.editor)
     return element.editor;
   const doc = element.ownerDocument;
   if (!element.isContentEditable && doc.designMode !== 'on')
     return null;
   return doc.defaultView.docShell.editingSession.getEditorForWindow(doc.defaultView);
+}
+
+function fieldText(element) {
+  return element.editor ? element.value : element.textContent;
+}
+
+// Filling a field with what it holds changes nothing, and is still done.
+function pasted(field, before, text) {
+  const after = fieldText(field);
+  return after !== before || after === text;
+}
+
+const kUsRows = [
+  ['`~', 'Backquote', 192], ['-_', 'Minus', 173], ['=+', 'Equal', 61],
+  ['[{', 'BracketLeft', 219], [']}', 'BracketRight', 221], ['\\|', 'Backslash', 220],
+  [';:', 'Semicolon', 59], ['\'"', 'Quote', 222], [',<', 'Comma', 188],
+  ['.>', 'Period', 190], ['/?', 'Slash', 191], [' ', 'Space', 32],
+];
+const kDigitShifts = ')!@#$%^&*(';
+
+// The key a US keyboard types this character with, or null.
+function usKey(character) {
+  if (/^[a-zA-Z]$/.test(character)) {
+    const upper = character.toUpperCase();
+    return {key: character, code: `Key${upper}`, keyCode: upper.charCodeAt(0)};
+  }
+  const digit = /^[0-9]$/.test(character) ? Number(character) : kDigitShifts.indexOf(character);
+  if (digit >= 0)
+    return {key: character, code: `Digit${digit}`, keyCode: 48 + digit};
+  const row = kUsRows.find(([characters]) => characters.includes(character));
+  return row ? {key: character, code: row[1], keyCode: row[2]} : null;
 }
 
 // Plain text to paste, as a text source puts it on the clipboard.

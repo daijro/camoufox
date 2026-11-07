@@ -702,7 +702,8 @@ def _generate_random_voice_subset(
 
     # macOS marks its system voice default (Samantha on an English system:
     # stock Firefox 152 on macOS 14, 15, 26 and 27, measured 2026-10-26).
-    # Windows (SAPI) and Linux mark none.
+    # Other system languages are unmeasured; they keep Samantha, since Firefox
+    # always marks one voice on macOS. Windows (SAPI) and Linux mark none.
     system_voice = (manifest.get('systemVoice') or {}).get('default')
     for voice in voices:
         if voice['name'] == system_voice:

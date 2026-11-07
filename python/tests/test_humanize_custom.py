@@ -304,6 +304,12 @@ def make_locator_class():
         def hover(self, *, modifiers=None, position=None, timeout=None, no_wait_after=None, force=None, trial=None):
             return self._log("hover", position)
 
+        def check(self, *, position=None, timeout=None, force=None, no_wait_after=None, trial=None):
+            return self._log("check", position)
+
+        def uncheck(self, *, position=None, timeout=None, force=None, no_wait_after=None, trial=None):
+            return self._log("uncheck", position)
+
         def fill(self, value, *, timeout=None, no_wait_after=None, force=None):
             return self._log("fill", value)
 
@@ -337,9 +343,42 @@ def make_locator_class():
     return FakeLocator
 
 
+class FakeFrame:
+    def __init__(self, page):
+        self.page = page
+
+    def locator(self, selector):
+        return self.page.locator(selector)
+
+    def click(self, selector, *, strict=None, **kwargs):
+        return self.page._page_call("frame.click", selector)
+
+    def dblclick(self, selector, *, strict=None, **kwargs):
+        return self.page._page_call("frame.dblclick", selector)
+
+    def hover(self, selector, *, strict=None, **kwargs):
+        return self.page._page_call("frame.hover", selector)
+
+    def check(self, selector, *, strict=None, **kwargs):
+        return self.page._page_call("frame.check", selector)
+
+    def uncheck(self, selector, *, strict=None, **kwargs):
+        return self.page._page_call("frame.uncheck", selector)
+
+    def fill(self, selector, value, *, strict=None, **kwargs):
+        return self.page._page_call("frame.fill", selector, value)
+
+    def type(self, selector, text, *, strict=None, **kwargs):
+        return self.page._page_call("frame.type", selector, text)
+
+    def press(self, selector, key, *, strict=None, **kwargs):
+        return self.page._page_call("frame.press", selector, key)
+
+
 class FakePage:
     def __init__(self, rec, locator_class, latency=0.0):
         self.rec = rec
+        self.main_frame = FakeFrame(self)
         self.mouse = FakeMouse(rec, latency)
         self.keyboard = FakeKeyboard(rec)
         self._locator_class = locator_class
@@ -359,6 +398,12 @@ class FakePage:
 
     def hover(self, selector, *, strict=None, **kwargs):
         return self._page_call("hover", selector)
+
+    def check(self, selector, *, strict=None, **kwargs):
+        return self._page_call("check", selector)
+
+    def uncheck(self, selector, *, strict=None, **kwargs):
+        return self._page_call("uncheck", selector)
 
     def fill(self, selector, value, *, strict=None, **kwargs):
         return self._page_call("fill", selector, value)
@@ -554,6 +599,40 @@ def test_a_click_calls_the_mouse_engine_once_at_the_point():
         ["mouse.move", 525.0, 310.0],
         ["locator.click", "#near", None],
     ]
+
+
+def test_the_click_before_a_fill_uses_the_mouse_engine():
+    calls = []
+
+    def mouse(page, x, y, *, original, rng, play):
+        calls.append((x, y))
+        return original()
+
+    browser, page = attached_page({"mouse": custom(mouse)})
+    rec = browser.rec
+    page.fill("#name", "text")
+    assert calls == [(140, 132)]
+    assert [e[0] for e in rec.events if e[0].startswith("locator.")][-2:] == ["locator.click", "locator.fill"]
+
+
+def test_a_keyboard_engine_alone_still_clicks_before_a_fill():
+    browser, page = attached_page({"keyboard": custom(noop)})
+    page.fill("#name", "text")
+    names = [e[0] for e in browser.rec.events if e[0].startswith("locator.")]
+    assert names.index("locator.click") < names.index("locator.selectText")
+
+
+def test_check_and_frame_methods_take_the_locator_flow():
+    calls = []
+
+    def mouse(page, x, y, *, original, rng, play):
+        calls.append((x, y))
+        return original()
+
+    _, page = attached_page({"mouse": custom(mouse)})
+    page.check("#near")
+    page.main_frame.click("#near")
+    assert calls == [(525, 310), (525, 310)]
 
 
 def test_an_engine_calling_its_own_channel_reaches_playwright():

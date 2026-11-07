@@ -183,15 +183,15 @@ async def main() -> int:
     # scroll into view before the fill; #far always does.
     into_view = [entry for entry in log if entry[:2] == ["scroll", "locator"]]
     if [entry[0] for entry in log if entry not in into_view] != [
-            "mouse", "scroll", "scroll", "mouse", "keyboard", "keyboard", "mouse"] or not into_view:
+            "mouse", "scroll", "scroll", "mouse", "mouse", "keyboard", "keyboard", "mouse"] or not into_view:
         failures.append(f"unexpected engine calls {log}")
     if [entry[1] for entry in log if entry[0] == "keyboard"] != ["fill", "press"]:
         failures.append("fill and press did not reach the keyboard function with their kinds")
     # Each click's point is the end of the planned path, and Playwright's own
     # move added nothing: the page saw only the planned moves.
     clicks = [e for e in events if e[0] == "click"]
-    if len(clicks) != 2:
-        failures.append(f"expected 2 clicks, got {clicks}")
+    if len(clicks) != 3:  # the click, the click before the fill, the far click
+        failures.append(f"expected 3 clicks, got {clicks}")
     # Playwright holds Shift for an uppercase key of its own accord.
     typed = [e[4] for e in events if e[0] == "keydown" and e[4] != "Shift"]
     if typed != [*"Hi there", "Tab"]:
@@ -229,12 +229,12 @@ async def main() -> int:
     engines = sorted({(r["channel"], r["engine"]) for r in records})
     internal = [r for r in records if r["channel"] == "mouse:internal"]
     print(f"custom mouse + scroll auto(): browser plans {engines}; "
-          f"{len([e for e in events_s if e[0] == 'click'])} of 3 clicks landed; "
+          f"{len([e for e in events_s if e[0] == 'click'])} of 4 clicks landed; "
           f"{len(internal)} mouse:internal moves {[(r['engine'], len(r['plan'])) for r in internal]}")
     if any(channel == "mouse" for channel, _ in engines):
         failures.append("the browser humanized a move the custom mouse had already planned")
     clicked = [e for e in events_s if e[0] == "click"]
-    if not any(channel == "scroll" for channel, _ in engines) or len(clicked) != 3:
+    if not any(channel == "scroll" for channel, _ in engines) or len(clicked) != 4:
         failures.append(f"the build's scroll engine did not bring every target into view: {len(clicked)} clicks")
     if any(entry[0] == "scroll" for entry in log_s):
         failures.append("the custom scroll function ran although scroll was auto()")

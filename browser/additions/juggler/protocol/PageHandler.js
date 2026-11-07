@@ -138,6 +138,7 @@ export class PageHandler {
     this._moveDelivery = null;
     // Arrival order of mouse commands (beforeDispatch).
     this._mouseTurn = Promise.resolve();
+    this._mouseDispatched = Promise.resolve();
     this._mouseTurns = new Map();
     this._lastMoveAt = 0;
     this._humanizeAbort = new AbortController();
@@ -913,7 +914,8 @@ export class PageHandler {
     // We must switch to proper tab in the tabbed browser so that
     // 1. Event is dispatched to a proper renderer.
     // 2. We receive an ack from the renderer for the dispatched event.
-    const dispatched = this._pageTarget.activateAndRun(async () => {
+    await this._clickPacing(type, clickCount);
+    const dispatched = this._mouseDispatched = this._pageTarget.activateAndRun(async () => {
       this._pageTarget.ensureContextMenuClosed();
       // If someone asks us to dispatch mouse event outside of viewport, then we normally would drop it.
       const dispatch = MouseDispatch.forBrowser(win, this._pageTarget._linkedBrowser, eventArgs);
@@ -944,29 +946,6 @@ export class PageHandler {
         // fire it on press. Follow the claimed OS (measured 2026-09-14: stock
         // Windows contextmenu.buttons=0, camoufox 2).
         const eventNames = (button === 2 && !this._contextMenuOnMouseUp()) ? ['mousedown', 'contextmenu'] : ['mousedown'];
-        // Camoufox: the second press of a double click comes a person's gap
-        // after the release, not right behind it (Playwright pipelines the
-        // clicks; driven-dblclick-gap.py). A script's own longer pause stands.
-        const upAt = this._buttonUpAt;
-        this._buttonUpAt = undefined;
-        if (clickCount > 1 && upAt !== undefined) {
-          const wait = upAt + clickGap() - ChromeUtils.now();
-          if (wait > 0)
-            await new Promise(resolve => setTimeout(resolve, wait));
-        }
-        // Camoufox: a press that follows the move bringing the pointer to its
-        // target comes a person's dwell after that move, not right behind it
-        // (Playwright pipelines move and press: a page read under 10 ms where
-        // stock reads under 250). A script's own longer pause stands; the
-        // second press of a double click follows its gap above, with no move
-        // before it.
-        const movedAt = this._movedAt;
-        this._movedAt = undefined;
-        if (clickCount <= 1 && movedAt !== undefined) {
-          const wait = movedAt + hoverDwell() - ChromeUtils.now();
-          if (wait > 0)
-            await new Promise(resolve => setTimeout(resolve, wait));
-        }
         await sendEvents(eventNames);
         this._buttonDownAt = ChromeUtils.now();
         return;
@@ -1029,8 +1008,6 @@ export class PageHandler {
       }
 
       if (type === 'mouseup') {
-        const downAt = this._buttonDownAt;
-        this._buttonDownAt = undefined;
         await this._settleDrag(true);
         if (this._isDragging) {
           this._dragMotion(dispatch, x, y);
@@ -1048,18 +1025,6 @@ export class PageHandler {
           await watcher.ensureEventsAndDispose(['dragover']);
           this._isDragging = false;
         } else {
-          // Camoufox: a person holds a mouse button down for a while before
-          // letting go; Playwright's click() sends mouseup right behind
-          // mousedown (pipelined), so the page saw every press released under
-          // 10 ms. Release no sooner than a person's hold after the press went
-          // in; a script's own longer `delay` stands as it is
-          // (driven-click-hold.py). Here, on the input chain, so the press has
-          // been dispatched before the hold is timed.
-          if (downAt !== undefined) {
-            const wait = downAt + clickHold() - ChromeUtils.now();
-            if (wait > 0)
-              await new Promise(resolve => setTimeout(resolve, wait));
-          }
           const eventNames = (button === 2 && this._contextMenuOnMouseUp()) ? ['mouseup', 'contextmenu'] : ['mouseup'];
           await sendEvents(eventNames);
           this._buttonUpAt = ChromeUtils.now();
@@ -1071,6 +1036,41 @@ export class PageHandler {
     // now comes after this one.
     this._mouseTurnTaken(params);
     await dispatched;
+  }
+
+  // Camoufox: a click's own pacing, on this page's turn and not on the chain
+  // every context shares: a person's rests hold no other page's input. The
+  // times they count from are set when the event before was dispatched, so
+  // that goes first; a failure there is its own command's to report.
+  async _clickPacing(type, clickCount) {
+    if (type !== 'mousedown' && type !== 'mouseup')
+      return;
+    await this._mouseDispatched.catch(() => {});
+    let wait = 0;
+    if (type === 'mouseup') {
+      // A person holds a button down for a while before letting go; Playwright
+      // sends mouseup right behind mousedown, so the page saw every press
+      // released under 10 ms. A script's own longer `delay` stands
+      // (driven-click-hold.py).
+      if (this._buttonDownAt !== undefined)
+        wait = this._buttonDownAt + clickHold() - ChromeUtils.now();
+      this._buttonDownAt = undefined;
+    } else if (clickCount > 1) {
+      // The second press of a double click comes a person's gap after the
+      // release, with no move before it (driven-dblclick-gap.py).
+      if (this._buttonUpAt !== undefined)
+        wait = this._buttonUpAt + clickGap() - ChromeUtils.now();
+    } else if (this._movedAt !== undefined) {
+      // A press comes a person's dwell after the move that brought the pointer
+      // to its target: a page read under 10 ms where stock reads under 250.
+      wait = this._movedAt + hoverDwell() - ChromeUtils.now();
+    }
+    if (type === 'mousedown') {
+      this._buttonUpAt = undefined;
+      this._movedAt = undefined;
+    }
+    if (wait > 0)
+      await new Promise(resolve => setTimeout(resolve, wait));
   }
 
   // Whether the drag a mousemove started has a drag session. Waited for a

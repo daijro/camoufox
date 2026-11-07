@@ -19,6 +19,7 @@ import {
 	InvalidPropertyType,
 	NonFirefoxFingerprint,
 	UnknownIPLocation,
+	UnsupportedVersion,
 } from "./exceptions.js";
 import {
 	clampScreenToDisplay,
@@ -629,6 +630,11 @@ export function validateConfig(
 	for (const [key, value] of Object.entries(configMap)) {
 		const entry = properties[key];
 		if (!entry) {
+			if (key === "voices:speechd") {
+				throw new UnsupportedVersion(
+					"This browser build cannot read voices:speechd, so a Linux identity would report no voices. Run `camoufox set --release` for the paired build, or pass `voices` in config.",
+				);
+			}
 			utilsDeps.print(`Skipping unknown patch ${key} : ${pyStr(value)}`);
 			continue; // Property not supported by this browser version; skip silently
 		}
@@ -1152,52 +1158,6 @@ export function attachSocks5Auth<T>(target: T): T {
 	(newContext as any)[CAMOUFOX_SOCKS5_AUTH] = true;
 	owner.newContext = newContext;
 	return target;
-}
-
-const CAMOUFOX_SCREENSHOTS = Symbol.for("camoufox.screenshots");
-
-/**
- * Screenshots that leave the page alone (python/src/camoufox/driver_defaults.py).
- *
- * Unless told caret: "initial", Playwright hides the caret for a screenshot by
- * setting `caret-color: transparent !important` in the style attribute of every
- * input, textarea and contenteditable element, from its utility world: the page
- * sees each change, reads the transparent caret while the capture runs, and is
- * left with `style` attributes it did not have. Firefox's capture never paints
- * the caret, so screenshots of every page under `target` (a Browser or
- * BrowserContext from a Camoufox launch) default to caret: "initial". The
- * default is filled in where the client sends the request, so page, element
- * and locator screenshots all get it; an explicit caret is kept.
- */
-export function attachScreenshotDefaults<T>(target: T): T {
-	const owner = target as any;
-	owner[CAMOUFOX_SCREENSHOTS] = true;
-	const connection = owner._connection;
-	if (!connection || connection[CAMOUFOX_SCREENSHOTS]) return target;
-	connection[CAMOUFOX_SCREENSHOTS] = true;
-	const send = connection.sendMessageToServer;
-	connection.sendMessageToServer = function (
-		object: any,
-		method: string,
-		params: Record<string, any>,
-		...rest: any[]
-	) {
-		if (
-			method === "screenshot" &&
-			params?.caret === undefined &&
-			launchedByCamoufox(object)
-		)
-			params = { ...params, caret: "initial" };
-		return send.call(this, object, method, params, ...rest);
-	};
-	return target;
-}
-
-/** ElementHandle -> Frame -> Page -> BrowserContext -> Browser. */
-function launchedByCamoufox(object: any): boolean {
-	for (let owner = object; owner; owner = owner._parent)
-		if (owner[CAMOUFOX_SCREENSHOTS]) return true;
-	return false;
 }
 
 /**

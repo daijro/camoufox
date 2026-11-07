@@ -76,6 +76,8 @@ export function initialize(browsingContext, docShell) {
   // see ci/tribal-rules.yml, driven-pages-stay-focused. Juggler's own OS input
   // path still raises the selected tab through activateAndRun where the OS
   // needs it.
+  docShell.overrideHasFocus = true;
+  docShell.forceActiveState = true;
   // A page reads this back: after a scripted same-origin `location.href = ...`
   // and `history.back()` -- no gesture, no permission -- stock Firefox 152.0.4
   // fires pageshow with persisted=true and does not re-run the document's
@@ -87,8 +89,6 @@ export function initialize(browsingContext, docShell) {
   // times out waiting for "load" and the next `page.evaluate` throws "The
   // operation is insecure" against the stale context. Closing this needs
   // FrameTree/PageAgent to treat a persisted pageshow as a navigation.
-  docShell.overrideHasFocus = true;
-  docShell.forceActiveState = true;
   docShell.disallowBFCache = true;
   data.frameTree = new FrameTree(browsingContext);
   for (const [name, value] of Object.entries(contextCrossProcessCookie.settings)) {

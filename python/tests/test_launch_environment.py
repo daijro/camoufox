@@ -570,13 +570,17 @@ class TestScreenshotCaret:
         evaluates = []
 
         class Field:
-            def __init__(self, focused):
-                self.focused = focused
+            def __init__(self, needs_click, lands):
+                self.needs_click = needs_click
+                self.lands = lands
                 self.first = self
 
             async def evaluate(self, expression, timeout=None):
                 evaluates.append(timeout)
-                return {"typed": True, "focused": self.focused}
+                return self.needs_click if expression == driver_defaults.FILL_NEEDS_CLICK else self.lands
+
+            async def scroll_into_view_if_needed(self, timeout=None):
+                pass
 
             async def click(self, **kwargs):
                 clicks.append(kwargs)
@@ -585,12 +589,12 @@ class TestScreenshotCaret:
             return selector
 
         browser = driver_defaults.mark(self.Owner())
-        for focused in (False, True):
+        for needs_click, lands in ((True, True), (False, True), (True, False)):
             frame = self.Owner(browser)
-            frame.locator = lambda selector, field=Field(focused): field
+            frame.locator = lambda selector, field=Field(needs_click, lands): field
             assert asyncio.run(driver_defaults._frame_fill_clicks_first(original)(frame, "#f", timeout=5)) == "#f"
-        assert clicks == [{"timeout": 5, "force": None}]
-        assert evaluates == [5, 5]  # a missing field fails within the caller's timeout
+        assert clicks == [{"timeout": 5, "force": None}]  # a covered field fills as it would have
+        assert set(evaluates) == {5}  # a missing field fails within the caller's timeout
 
     def test_installs_once_on_page_and_element_handle(self):
         from playwright._impl._element_handle import ElementHandle

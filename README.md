@@ -602,7 +602,7 @@ MPL-2.0 like the rest of the browser**; see
 
 ### Choosing an engine per channel
 
-`humanize` also takes one engine per input channel, so mouse, keyboard and scroll can be set separately. Both launchers accept the dict; `custom(fn)` runs in the caller's process and is Python-only. The browser applies the engines to the input commands Playwright already sends, so the Playwright code stays the same:
+`humanize` also takes one engine per input channel, so mouse, keyboard and scroll can be set separately. Both launchers accept the dict, and `custom(fn)` runs in the caller's process. The browser applies the engines to the input commands Playwright already sends, so the Playwright code stays the same:
 
 ```python
 from camoufox import Camoufox
@@ -624,7 +624,7 @@ The table is what this repository's build ships. A build lists its engines, and 
 
 ### Writing your own engine: `custom(fn)`
 
-A channel can also run a Python function of yours in your own process. The function plans the input and plays it through Playwright's own input methods, so the page sees the same trusted events as from any Playwright call. The browser runs that channel raw, and your code never runs inside the browser. The other channels keep the build's engines.
+A channel can also run a function of yours in your own process (Python below; TypeScript in [its README](typescript/README.md#your-own-humanize-engine-customfn)). The function plans the input and plays it through Playwright's own input methods, so the page sees the same trusted events as from any Playwright call. The browser runs that channel raw, and your code never runs inside the browser. The other channels keep the build's engines.
 
 ```python
 from camoufox.async_api import AsyncCamoufox

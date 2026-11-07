@@ -1,15 +1,16 @@
-"""A fresh profile downloads the tracking-protection lists, as stock Firefox does.
+"""A fresh profile has the tracking-protection lists without touching the network.
 
 Stock Firefox's Enhanced Tracking Protection (standard) blocks known
 fingerprinting and cryptomining scripts by checking each load against the
-URL-classifier tables, which it fetches from Remote Settings
-(`tracking-protection-lists`) within seconds of startup. Without the tables
-nothing is blocked, so a page sees a fingerprinting script load that stock
-Firefox would have refused.
+URL-classifier tables. Without the tables nothing is blocked, so a page sees a
+fingerprinting script load that stock Firefox would have refused. Camoufox
+bundles them (scripts/remote_settings.py) so no request goes to Mozilla.
 
-This guard needs the internet: the tables come only from Mozilla's servers.
+Every proxy pref points at a closed port here, so a table that shows up came
+from the build.
 """
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -43,7 +44,13 @@ def main() -> int:
     binary = resolve_binary()
     port = free_port()
     with tempfile.TemporaryDirectory(prefix="camoufox-etp-") as tmp:
-        (Path(tmp) / "user.js").write_text(f'user_pref("marionette.port", {port});\n', encoding="utf-8")
+        closed = free_port()
+        prefs = {"marionette.port": port, "network.proxy.type": 1, "network.proxy.http": "127.0.0.1",
+                 "network.proxy.http_port": closed, "network.proxy.ssl": "127.0.0.1",
+                 "network.proxy.ssl_port": closed}
+        (Path(tmp) / "user.js").write_text(
+            "".join(f"user_pref({json.dumps(k)}, {json.dumps(v)});\n" for k, v in prefs.items()),
+            encoding="utf-8")
         with tempfile.TemporaryFile(mode="w+") as log:
             proc = subprocess.Popen(
                 [str(binary), "--headless", "--no-remote", "--profile", tmp,
@@ -73,8 +80,8 @@ def main() -> int:
     print(f"  remote activity skipped: {result['skipRemote']}")
     print(f"  classifier tables      : {len(result['tables'])}")
     failures = []
-    if result["skipRemote"]:
-        failures.append("Remote Settings skips all remote activity, so no list is ever fetched")
+    if not result["skipRemote"]:
+        failures.append("Remote Settings would poll Mozilla's servers")
     missing = [t for t in TABLES if t not in result["tables"]]
     if missing:
         failures.append(f"no {', '.join(missing)} after 60 s")
@@ -83,7 +90,7 @@ def main() -> int:
     if failures:
         print(output)
         return 1
-    print("PASS: the fingerprinting and cryptomining lists reach a fresh profile.")
+    print("PASS: the fingerprinting and cryptomining lists load from the build alone.")
     return 0
 
 

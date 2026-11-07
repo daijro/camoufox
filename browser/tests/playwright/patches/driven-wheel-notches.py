@@ -6,7 +6,8 @@ each notch as its own `wheel` event: deltaMode 1 (lines), deltaY 6,
 wheelDeltaY -120, then DOMMouseScroll with detail 3 and MozMousePixelScroll
 with detail 60 (three 20 px lines), and the scroller moves 120 px per notch.
 Measured with XTest button 5 on Xvfb (three runs,
-identical).
+identical). docs/input-dispatch.md has the Windows measurement, which has the
+same shape; macOS is not measured.
 
 Juggler sent the requested pixels instead, unless humanize was on: deltaMode 0,
 deltaY 100, wheelDeltaY -300, DOMMouseScroll detail 5, one event however far

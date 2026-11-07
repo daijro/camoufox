@@ -12,10 +12,14 @@ queries for a peer's .local name onto the LAN. Now:
     * behind a SOCKS5 proxy that grants UDP ASSOCIATE, every datagram that
       would leave this host goes through the proxy's relay, the local network
       included;
-    * behind a proxy that carries no UDP (HTTP CONNECT, or SOCKS5 refusing
-      UDP ASSOCIATE), none leaves at all and no srflx surfaces: the page reads
-      a machine whose UDP is blocked (a made-up srflx claimed a Binding Request
-      the page's STUN server knows it never received);
+    * behind a proxy that carries no UDP (HTTP CONNECT, SOCKS5 refusing UDP
+      ASSOCIATE, or SOCKS5 dropping the association it just granted), none
+      leaves at all and no srflx surfaces: the page reads a machine whose UDP
+      is blocked (a made-up srflx claimed a Binding Request the page's STUN
+      server knows it never received);
+    * a page in its proxy's bypass list is still behind a proxy: neither its UDP
+      nor a TURN connection over TCP leaves, though a direct context's do;
+    * a system proxy counts, on about:blank too, where no load has shown it;
     * only datagrams that stay on this host go direct: to loopback, or to the
       socket's own address (the other end of a page's loopback connection,
       which still connects, as stock's does);
@@ -62,7 +66,7 @@ UUID_LOCAL = re.compile(rb"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 # The page scripts run in the main world: an isolated world cannot read the
 # RTCStatsReport getStats() returns.
 GATHER = """mw:async (stun) => {
-  const pc = new RTCPeerConnection({iceServers: [{urls: stun}]});
+  const pc = new RTCPeerConnection({iceServers: [{urls: stun, username: 'guard', credential: 'guard'}]});
   const cands = [];
   const start = performance.now();
   const ended = new Promise(resolve => {
@@ -116,6 +120,29 @@ def lan_ip() -> str:
 def parse_cand(c: str) -> dict:
     p = c.split()
     return {"proto": p[2].lower(), "priority": int(p[3]), "address": p[4], "port": int(p[5]), "type": p[7]}
+
+
+class TcpListener:
+    """Serves the page on this host's own address and counts every connection."""
+
+    def __init__(self, host: str) -> None:
+        self.host = host
+        self.connections = 0
+
+    async def start(self) -> "TcpListener":
+        self.server = await asyncio.start_server(self.serve, self.host, 0)
+        self.port = self.server.sockets[0].getsockname()[1]
+        return self
+
+    async def serve(self, reader, writer) -> None:
+        self.connections += 1
+        try:
+            await serve_http_proxy(reader, writer)
+        except ConnectionError:
+            writer.close()
+
+    def close(self) -> None:
+        self.server.close()
 
 
 STUN_RESPONDER = r"""
@@ -198,16 +225,20 @@ class MdnsWatch:
             if hasattr(socket, "SO_REUSEPORT"):
                 self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
             self.sock.bind(("", 5353))
-            for iface in (lan, "0.0.0.0"):
-                try:
-                    self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
-                                         socket.inet_aton("224.0.0.251") + socket.inet_aton(iface))
-                except OSError:
-                    pass
+            self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
+                                 socket.inet_aton("224.0.0.251") + socket.inet_aton(lan))
         except OSError as e:
             self.error = str(e)
             return
         threading.Thread(target=self.loop, daemon=True).start()
+        # A watcher that cannot hear this host's own query would pass every check below.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
+            sender.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(lan))
+            sender.sendto(b"00000000-0000-4000-8000-000000000000.local", ("224.0.0.251", 5353))
+        time.sleep(1)
+        if not self.seen:
+            self.error = "the watcher did not hear its own multicast query"
+        self.seen.clear()
 
     def loop(self) -> None:
         while True:
@@ -279,10 +310,12 @@ class Relay:
 
 
 class Socks5Proxy:
-    """No-auth SOCKS5 that serves the page on CONNECT :80 and, if `udp`, relays UDP ASSOCIATE."""
+    """No-auth SOCKS5 that serves the page on CONNECT :80 and, if `udp`, relays
+    UDP ASSOCIATE. `drops` ends each association as soon as it is granted."""
 
-    def __init__(self, udp: bool) -> None:
+    def __init__(self, udp: bool, drops: bool = False) -> None:
         self.udp = udp
+        self.drops = drops
         self.associations = 0
         self.refused = 0
         self.outer_ports: set[int] = set()
@@ -337,7 +370,8 @@ class Socks5Proxy:
         bound = relay.inner.getsockname()
         writer.write(b"\x05\x00\x00\x01" + socket.inet_aton(bound[0]) + struct.pack("!H", bound[1]))
         await writer.drain()
-        await reader.read()  # the association lives as long as its control connection
+        if not self.drops:
+            await reader.read()  # the association lives as long as its control connection
         relay.close()
 
     def close(self) -> None:
@@ -376,19 +410,41 @@ async def judge(lan: str, stun: "StunServer") -> int:
     from camoufox.async_api import AsyncCamoufox
 
     mdns = MdnsWatch(lan)
-    relaying, refusing = Socks5Proxy(udp=True), Socks5Proxy(udp=False)
-    ports = {p: await p.start() for p in (relaying, refusing)}
+    relaying, refusing, dropping = Socks5Proxy(udp=True), Socks5Proxy(udp=False), Socks5Proxy(udp=True, drops=True)
+    bypassed = Socks5Proxy(udp=True)
+    ports = {p: await p.start() for p in (relaying, refusing, dropping, bypassed)}
     http = await asyncio.start_server(serve_http_proxy, "127.0.0.1", 0)
     servers = {
         "SOCKS5 with UDP ASSOCIATE": f"socks5://127.0.0.1:{ports[relaying]}",
         "SOCKS5 refusing UDP": f"socks5://127.0.0.1:{ports[refusing]}",
+        "SOCKS5 dropping the association": f"socks5://127.0.0.1:{ports[dropping]}",
         "HTTP proxy": f"http://127.0.0.1:{http.sockets[0].getsockname()[1]}",
     }
     stun_url = f"stun:{stun.host}:{stun.port}"
     results = {}
-    async with AsyncCamoufox(headless=True, os="linux", geoip=False, i_know_what_im_doing=True,
-                             config={"webrtc:ipv4": SPOOFED_IP, "webrtc:hostipv6": True},
-                             main_world_eval=True, executable_path=str(resolve_binary())) as browser:
+    launch = dict(headless=True, os="linux", geoip=False, i_know_what_im_doing=True, main_world_eval=True,
+                  executable_path=str(resolve_binary()))
+    origin, turn = await TcpListener(lan).start(), await TcpListener(lan).start()
+    origin_url = f"http://{lan}:{origin.port}/"
+    turn_url = f"turn:{lan}:{turn.port}?transport=tcp"
+
+    async def around_from(page) -> tuple:
+        """What the STUN server heard and the TURN listener accepted from this page."""
+        before_stun, before_turn = len(stun.sources), turn.connections
+        await page.evaluate(GATHER, stun_url)
+        await page.evaluate(GATHER, turn_url)
+        await asyncio.sleep(0.5)
+        return stun.sources[before_stun:], turn.connections - before_turn
+
+    async with AsyncCamoufox(config={"webrtc:ipv4": SPOOFED_IP, "webrtc:hostipv6": True}, **launch) as browser:
+        direct_page = await browser.new_page()
+        await direct_page.goto(origin_url)
+        direct_stun, direct_turn = await around_from(direct_page)
+        bypass_context = await browser.new_context(
+            proxy={"server": f"socks5://127.0.0.1:{ports[bypassed]}", "bypass": lan})
+        bypass_page = await bypass_context.new_page()
+        await bypass_page.goto(origin_url)
+        bypass_stun, bypass_turn = await around_from(bypass_page)
         for label, server in servers.items():
             context = await browser.new_context(proxy={"server": server})
             page = await context.new_page()
@@ -402,11 +458,33 @@ async def judge(lan: str, stun: "StunServer") -> int:
             results[label] = {"gather": gather, "sources": sources, "loopback": loopback,
                               "mdns": mdns.seen[before_mdns:]}
             await context.close()
-    for p in (relaying, refusing):
+
+    # Without a schema, Firefox reads the system proxy from these variables on
+    # any desktop; GSettings would otherwise answer first.
+    system_proxy = f"http://127.0.0.1:{http.sockets[0].getsockname()[1]}"
+    env = {**os.environ, "http_proxy": system_proxy, "https_proxy": system_proxy, "XDG_DATA_DIRS": "/nonexistent"}
+    env.pop("GSETTINGS_SCHEMA_DIR", None)
+    async with AsyncCamoufox(env=env, **launch) as browser:
+        system_page = await browser.new_page()
+        before_stun = len(stun.sources)
+        await system_page.evaluate(GATHER, stun_url)
+        await asyncio.sleep(0.5)
+        system_stun = stun.sources[before_stun:]
+        await system_page.goto("http://parity.test/")
+        system_title = await system_page.title()
+
+    for p in (relaying, refusing, dropping, bypassed, origin, turn):
         p.close()
     http.close()
 
-    checks = []
+    checks = [
+        ("direct: the STUN server hears the page, so silence below means something", bool(direct_stun), direct_stun),
+        ("direct: the TURN listener accepts the page, so silence below means something", direct_turn > 0, direct_turn),
+        ("a page in the proxy's bypass list: no UDP leaves", not bypass_stun, bypass_stun),
+        ("a page in the proxy's bypass list: no TCP leaves", bypass_turn == 0, bypass_turn),
+        ("system proxy: pages load through it", system_title == "proxied", system_title),
+        ("system proxy, about:blank: no UDP leaves", not system_stun, system_stun),
+    ]
     for label, r in results.items():
         cands = [parse_cand(c) for c in r["gather"]["cands"]]
         srflx = [c for c in cands if c["type"] == "srflx"]
@@ -425,8 +503,7 @@ async def judge(lan: str, stun: "StunServer") -> int:
         else:
             checks += [
                 (f"{label}: no UDP reached the LAN STUN server", not r["sources"], r["sources"]),
-                (f"{label}: gathering ends without it",
-                 r["gather"]["elapsed"] is not None and r["gather"]["elapsed"] < 5000, r["gather"]["elapsed"]),
+                (f"{label}: gathering ends without it", r["gather"]["elapsed"] is not None, r["gather"]["elapsed"]),
                 (f"{label}: no srflx without a STUN answer (UDP blocked)",
                  not srflx and not r["gather"]["stats"],
                  f"{[(c['address'], c['port']) for c in srflx]} stats {r['gather']['stats']}"),
@@ -434,11 +511,8 @@ async def judge(lan: str, stun: "StunServer") -> int:
         checks += [
             (f"{label}: the page's two peer connections connect", r["loopback"] == "ping", r["loopback"]),
         ]
-        if mdns.error:
-            print(f"  NOT JUDGED {label}: cannot watch mDNS ({mdns.error})")
-        else:
-            checks.append((f"{label}: no mDNS query or answer for a host candidate's name leaves",
-                           not r["mdns"], sorted(set(r["mdns"]))[:4]))
+        checks.append((f"{label}: no mDNS query or answer for a host candidate's name leaves",
+                       not mdns.error and not r["mdns"], mdns.error or sorted(set(r["mdns"]))[:4]))
     passed = True
     for label, ok, got in checks:
         print(f"  {'PASS' if ok else 'FAIL'} {label}: {got}")

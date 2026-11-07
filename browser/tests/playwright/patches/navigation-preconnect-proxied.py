@@ -1,5 +1,5 @@
 """
-A navigation's preconnect obeys the context's proxy and its routes.
+A navigation's preconnect and a document's DNS prefetch obey the proxy and routes.
 
 Page.navigate preconnects to the host before the content process asks, as
 stock's own loads do. That connection is opened outside the page's load, so it
@@ -14,14 +14,19 @@ What PASS means:
     * direct, the origin is reached: the address works, so silence means something;
     * behind a context proxy and a launch proxy, the proxy serves the page and
       the origin hears nothing;
-    * with a route fulfilling the request, the origin hears nothing.
+    * with a route fulfilling the request, the origin hears nothing;
+    * a dns-prefetch link in a document that loaded nothing through the proxy
+      resolves the name on this machine only when no proxy is in play, which
+      the resolver's log shows.
 
     python browser/tests/playwright/patches/navigation-preconnect-proxied.py
 """
 
 import http.server
+import os
 import socketserver
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -70,6 +75,15 @@ def connections_during(listener: Listener, action) -> int:
     return listener.connections - before
 
 
+def prefetch_from(context, name: str) -> None:
+    """Open a route-fulfilled document, so no load shows Firefox the proxy."""
+    page = context.new_page()
+    body = f'<!doctype html><link rel="dns-prefetch" href="//{name}">'
+    page.route("**/*", lambda route: route.fulfill(status=200, content_type="text/html", body=body))
+    page.goto("http://document.test/")
+    time.sleep(SETTLE_SECONDS)
+
+
 def main() -> int:
     from camoufox.sync_api import Camoufox
 
@@ -77,7 +91,18 @@ def main() -> int:
     proxy = Listener("127.0.0.1")
     url = f"http://{origin.server_address[0]}:{origin.server_address[1]}/"
     server = f"http://127.0.0.1:{proxy.server_address[1]}"
-    launch = dict(headless=True, os="linux", executable_path=str(resolve_binary()), i_know_what_im_doing=True)
+    resolver_log = tempfile.TemporaryDirectory()
+    env = {**os.environ, "MOZ_LOG": "append,nsHostResolver:5", "MOZ_LOG_FILE": str(Path(resolver_log.name) / "resolver")}
+    launch = dict(headless=True, os="linux", executable_path=str(resolve_binary()), i_know_what_im_doing=True, env=env)
+
+    with Camoufox(**launch) as browser:
+        # First: a proxied context turns prefetch off for the whole browser.
+        prefetch_from(browser.new_context(), "direct-prefetch.test")
+        prefetch_from(browser.new_context(proxy={"server": server}), "context-prefetch.test")
+    with Camoufox(**launch, proxy={"server": server}, geoip=False) as browser:
+        prefetch_from(browser.new_context(), "launch-prefetch.test")
+    resolved = "".join(path.read_text(errors="replace") for path in Path(resolver_log.name).iterdir())
+    resolver_log.cleanup()
 
     with Camoufox(**launch) as browser:
         direct = connections_during(origin, lambda: browser.new_page().goto(url))
@@ -102,6 +127,9 @@ def main() -> int:
         ("launch proxy: the proxy serves the page", served_launch >= 1, served_launch),
         ("launch proxy: nothing went around it", around_launch == 0, around_launch),
         ("a route answers the request: the origin hears nothing", around_route == 0, around_route),
+        ("direct: a dns-prefetch link is resolved", "direct-prefetch.test" in resolved, len(resolved)),
+        ("context proxy: a dns-prefetch link is not resolved here", "context-prefetch.test" not in resolved, ""),
+        ("launch proxy: a dns-prefetch link is not resolved here", "launch-prefetch.test" not in resolved, ""),
     ]
     passed = True
     for label, ok, got in checks:

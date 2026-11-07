@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { UnsupportedVersion } from "../src/exceptions.js";
 import { PyFloat, pyTypeName } from "../src/pycompat.js";
 import {
 	CACHE_PREFS,
@@ -231,6 +232,18 @@ describe("validateConfig with removed keys (#835)", () => {
 		expect(printed.join("\n")).toContain(
 			"navigator.appCodeName: removed in 156.0.1-beta.32",
 		);
+	});
+
+	it("refuses a build without the voice grid, which would leave a Linux identity no voices", () => {
+		const binary = browserWith([
+			{ property: "navigator.userAgent", type: "str" },
+		]);
+		expect(() =>
+			validateConfig(
+				{ "voices:speechd": { languages: [], variants: [] } },
+				binary,
+			),
+		).toThrow(UnsupportedVersion);
 	});
 
 	it("does not type-check a removed key", () => {

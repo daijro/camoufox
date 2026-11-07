@@ -10,12 +10,18 @@ What is wrapped, per page of the browser (or persistent context) it is attached
 to, and what the function is called for:
 
     mouse     Mouse.move / click / dblclick; the move to the click point of
-              Page/Locator click, dblclick and hover
-    keyboard  Keyboard.type / press; Page/Locator fill, type, press, and
+              Page/Frame/Locator click, dblclick, hover, check and uncheck, and
+              of the click that focuses a field before fill
+    keyboard  Keyboard.type / press; Page/Frame/Locator fill, type, press, and
               Locator.press_sequentially
     scroll    Mouse.wheel; Locator.scroll_into_view_if_needed, and the scroll
-              into view before a Page/Locator click, dblclick, hover, fill,
-              type or press_sequentially when the element is not in view
+              into view before a Page/Frame/Locator click, dblclick, hover,
+              check, uncheck, fill, type or press_sequentially when the element
+              is not in view
+
+ElementHandle methods, tap, drag_and_drop and drag_to are Playwright's own. An
+ElementHandle cannot be scrolled and moved to in the flows below, and a drag's
+moves happen inside Playwright's server.
 
 Playwright runs an action inside its own server, so a client wrapper cannot
 reach into it. The wrappers act first: they scroll the element into view and
@@ -39,6 +45,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, Generator, List, Mapping, Optional, Tuple
 
 from ._warnings import LeakWarning
+from .driver_defaults import FILL_CLICK_LANDS, FILL_NEEDS_CLICK
 from .humanize import SeededRng, channel_stream, custom_engines, normalize
 
 # The channels whose function is running in this task. A call a function makes
@@ -48,6 +55,7 @@ _ACTIVE = ContextVar('camoufox_humanize_custom', default=frozenset())
 
 _ENGINES = '_camoufox_custom_engines'
 _ORIGINALS = '_camoufox_custom_originals'
+_ROUTED_FRAMES = '_camoufox_custom_routed'
 
 # Is the element's box inside its frame's viewport?
 _IN_VIEW = """e => {
@@ -284,12 +292,30 @@ def _pointer(engines: _Engines, locator: Any, original: Callable[..., Any], para
     return flow()
 
 
+def _click_to_focus(engines: _Engines, locator: Any, params: Dict[str, Any]) -> Flow:
+    """The click before a fill (driver_defaults), with the mouse engine's move.
+    The fill's own hook then finds the field focused."""
+    timeout = params.get('timeout')
+    if not (yield locator.evaluate(FILL_NEEDS_CLICK, timeout=timeout)):
+        return
+    yield _locator_original(locator, 'scroll_into_view_if_needed')(locator, timeout=timeout)
+    if (yield locator.evaluate(FILL_CLICK_LANDS, timeout=timeout)):
+        click = {'timeout': timeout, 'force': params.get('force')}
+        original = _locator_original(locator, 'click')
+        pointer = _pointer(engines, locator, original, click)
+        if pointer:
+            yield from pointer
+        else:
+            yield original(locator, **click)
+
+
 def _keys(kind: str, text_param: str, focus: str) -> Callable[..., Optional[Flow]]:
     """fill / type / press_sequentially / press on a locator."""
 
     def make(engines: _Engines, locator: Any, original: Callable[..., Any], params: Dict[str, Any]) -> Optional[Flow]:
         keyboard, scroll = engines.fn('keyboard'), engines.fn('scroll')
-        if not (keyboard or (scroll and kind != 'press')):
+        mouse = engines.fn('mouse') if kind == 'fill' else None
+        if not (keyboard or mouse or (scroll and kind != 'press')):
             return None
         text = params[text_param]
 
@@ -297,6 +323,8 @@ def _keys(kind: str, text_param: str, focus: str) -> Callable[..., Optional[Flow
             timeout = params.get('timeout')
             if scroll and kind != 'press':
                 yield from _scroll_into_view(engines, locator, timeout, if_needed=True)
+            if mouse or (keyboard and kind == 'fill'):
+                yield from _click_to_focus(engines, locator, params)
             if not keyboard or text == '':
                 return (yield original(locator, **params))
             if focus == 'select':
@@ -325,6 +353,8 @@ _LOCATOR_FLOWS: Dict[str, Callable[..., Optional[Flow]]] = {
     'click': _pointer,
     'dblclick': _pointer,
     'hover': _pointer,
+    'check': _pointer,
+    'uncheck': _pointer,
     'fill': _keys('fill', 'value', 'select'),
     'type': _keys('type', 'text', 'focus'),
     'press_sequentially': _keys('type', 'text', 'focus'),
@@ -366,13 +396,15 @@ def _patch_locator_class(cls: type) -> None:
         setattr(cls, name, make(name, original))
 
 
-# Page methods that take a selector, routed to the Locator method of the same
-# name when one of these channels has a custom engine.
+# Page and Frame methods that take a selector, routed to the Locator method of
+# the same name when one of these channels has a custom engine.
 _PAGE_ROUTES = {
     'click': ('mouse', 'scroll'),
     'dblclick': ('mouse', 'scroll'),
     'hover': ('mouse', 'scroll'),
-    'fill': ('keyboard', 'scroll'),
+    'check': ('mouse', 'scroll'),
+    'uncheck': ('mouse', 'scroll'),
+    'fill': ('mouse', 'keyboard', 'scroll'),
     'type': ('keyboard', 'scroll'),
     'press': ('keyboard',),
 }
@@ -444,23 +476,42 @@ def _attach_page(page: Any, engines: _Engines) -> None:
 
     # page.click(selector) and friends: the same flow as the locator's.
     for name, channels in _PAGE_ROUTES.items():
-        if not any(channel in engines.fns for channel in channels):
-            continue
-        original = getattr(page, name)
+        if any(channel in engines.fns for channel in channels):
+            setattr(page, name, _routed(getattr(page, name), page, name))
+    _patch_frame_class(type(page.main_frame))
 
-        def make(name: str, original: Callable[..., Any]) -> Callable[..., Any]:
+
+def _routed(original: Callable[..., Any], owner: Any, name: str) -> Callable[..., Any]:
+    @wraps(original)
+    def method(selector: str, *args: Any, **kwargs: Any) -> Any:
+        params = dict(inspect.signature(original).bind(selector, *args, **kwargs).arguments)
+        params.pop('selector')
+        strict = params.pop('strict', None)
+        locator = owner.locator(selector)
+        # Without strict, Page and Frame methods act on the first match.
+        return getattr(locator if strict else locator.first, name)(**params)
+
+    return method
+
+
+def _patch_frame_class(cls: type) -> None:
+    """Route a Frame class's input methods as a page's are, for frames of a
+    page with custom engines on one of the channels."""
+    if _ROUTED_FRAMES in cls.__dict__:
+        return
+    setattr(cls, _ROUTED_FRAMES, True)
+    for name, channels in _PAGE_ROUTES.items():
+        def make(original: Callable[..., Any], name: str, channels: Tuple[str, ...]) -> Callable[..., Any]:
             @wraps(original)
-            def method(selector: str, *args: Any, **kwargs: Any) -> Any:
-                params = dict(inspect.signature(original).bind(selector, *args, **kwargs).arguments)
-                params.pop('selector')
-                strict = params.pop('strict', None)
-                locator = page.locator(selector)
-                # Without strict, Page methods act on the first match.
-                return getattr(locator if strict else locator.first, name)(**params)
+            def method(self: Any, *args: Any, **kwargs: Any) -> Any:
+                engines: Optional[_Engines] = getattr(self.page, _ENGINES, None)
+                if engines is None or not any(channel in engines.fns for channel in channels):
+                    return original(self, *args, **kwargs)
+                return _routed(original.__get__(self), self, name)(*args, **kwargs)
 
             return method
 
-        setattr(page, name, make(name, original))
+        setattr(cls, name, make(getattr(cls, name), name, channels))
 
 
 def _attach_context(context: Any, engines: _Engines) -> None:

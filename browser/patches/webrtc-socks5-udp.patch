@@ -1,5 +1,5 @@
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
-index e754f69..75610ff 100644
+index bade2f403c..39ace626b3 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
 @@ -105,6 +105,8 @@
@@ -176,7 +176,31 @@ index e754f69..75610ff 100644
        auto itor = mRegisteredMDNSHostnames.find(aCandidateInfo.mMDNSAddress);
  
        // We'll see the address twice if we're generating both UDP and TCP
-@@ -5109,6 +5163,19 @@ void PeerConnectionImpl::AddIceCandidate(const std::string& aCandidate,
+@@ -5066,7 +5120,10 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
+       Preferences::GetBool("media.peerconnection.ice.default_address_only",
+                            false) ||
+       ShouldSpoofCandidateIP();
++  // Camoufox: capture permission widens what a page sees of this machine's
++  // network, which behind a proxy is not the identity's network.
+   default_address_only |=
++      mForceProxy ||
+       !MediaManager::Get()->IsActivelyCapturingOrHasAPermission(winId);
+   return default_address_only;
+ }
+@@ -5074,6 +5131,12 @@ bool PeerConnectionImpl::GetPrefDefaultAddressOnly() const {
+ bool PeerConnectionImpl::GetPrefObfuscateHostAddresses() const {
+   MOZ_ASSERT(NS_IsMainThread());
+ 
++  // Camoufox: behind a proxy no page sees this machine's address, whether it
++  // has capture permission or is on the blocklist.
++  if (mForceProxy) {
++    return true;
++  }
++
+   uint64_t winId = mWindow->WindowID();
+ 
+   bool obfuscate_host_addresses = Preferences::GetBool(
+@@ -5109,6 +5172,19 @@ void PeerConnectionImpl::AddIceCandidate(const std::string& aCandidate,
  
        if (nPeriods == 1 &&
            addr.rfind(".local") + dotLocalLength == addr.length()) {
@@ -197,7 +221,7 @@ index e754f69..75610ff 100644
            PendingIceCandidate cand;
            cand.mCandidate = aCandidate;
 diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.h b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
-index fdeb867..dc95864 100644
+index fdeb8675c3..dc95864053 100644
 --- a/dom/media/webrtc/jsapi/PeerConnectionImpl.h
 +++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.h
 @@ -6,6 +6,7 @@
@@ -240,10 +264,10 @@ index fdeb867..dc95864 100644
  
 diff --git a/dom/media/webrtc/transport/WebrtcUdpAssociation.cpp b/dom/media/webrtc/transport/WebrtcUdpAssociation.cpp
 new file mode 100644
-index 0000000..1287944
+index 0000000000..4f6fb48fdb
 --- /dev/null
 +++ b/dom/media/webrtc/transport/WebrtcUdpAssociation.cpp
-@@ -0,0 +1,318 @@
+@@ -0,0 +1,331 @@
 +/* This Source Code Form is subject to the terms of the Mozilla Public
 + * License, v. 2.0. If a copy of the MPL was not distributed with this file,
 + * You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -338,6 +362,10 @@ index 0000000..1287944
 +  }
 +  if (aUsername.Length() > 255 || aPassword.Length() > 255) {
 +    return Fail("credentials longer than SOCKS5 allows");
++  }
++  // RFC 1929 needs a username, and leaving out the password would be a guess.
++  if (aUsername.IsEmpty() && !aPassword.IsEmpty()) {
++    return Fail("a proxy password with no username");
 +  }
 +  mUsername = aUsername;
 +  mPassword = aPassword;
@@ -461,9 +489,9 @@ index 0000000..1287944
 +        if (mInBuf.Length() < 2) {
 +          return;
 +        }
-+        const uint8_t status = mInBuf[1];
++        const uint8_t version = mInBuf[0], status = mInBuf[1];
 +        mInBuf.RemoveElementsAt(0, 2);
-+        if (status != 0) {
++        if (version != 1 || status != 0) {
 +          return Fail("the proxy refused the credentials");
 +        }
 +        break;
@@ -477,11 +505,14 @@ index 0000000..1287944
 +          case 1:
 +            length = 4 + 4 + 2;
 +            break;
++          case 3:
++            length = 4 + 1 + mInBuf[4] + 2;
++            break;
 +          case 4:
 +            length = 4 + 16 + 2;
 +            break;
 +          default:
-+            return Fail("the relay address is not an IP address");
++            return Fail("the relay address has an unknown type");
 +        }
 +        if (mInBuf.Length() < length) {
 +          return;
@@ -492,7 +523,13 @@ index 0000000..1287944
 +          return Fail("the proxy refused UDP ASSOCIATE");
 +        }
 +        NetAddr relay;
-+        if (mInBuf[3] == 1) {
++        if (mInBuf[3] == 3) {
++          // Resolving the name here would ask this machine's resolver about
++          // the proxy, so a named relay is taken to be the proxy itself.
++          relay.inet.family = AF_INET;
++          relay.inet.ip = 0;
++          memcpy(&relay.inet.port, &mInBuf[length - 2], 2);
++        } else if (mInBuf[3] == 1) {
 +          relay.inet.family = AF_INET;
 +          memcpy(&relay.inet.ip, &mInBuf[4], 4);
 +          memcpy(&relay.inet.port, &mInBuf[8], 2);
@@ -564,7 +601,7 @@ index 0000000..1287944
 +}  // namespace mozilla::net
 diff --git a/dom/media/webrtc/transport/WebrtcUdpAssociation.h b/dom/media/webrtc/transport/WebrtcUdpAssociation.h
 new file mode 100644
-index 0000000..7fe6a54
+index 0000000000..7fe6a544a9
 --- /dev/null
 +++ b/dom/media/webrtc/transport/WebrtcUdpAssociation.h
 @@ -0,0 +1,88 @@
@@ -657,7 +694,7 @@ index 0000000..7fe6a54
 +
 +#endif  // webrtc_udp_association_h_
 diff --git a/dom/media/webrtc/transport/common.build b/dom/media/webrtc/transport/common.build
-index b7d8308..6e7a349 100644
+index b7d83085ea..6e7a349494 100644
 --- a/dom/media/webrtc/transport/common.build
 +++ b/dom/media/webrtc/transport/common.build
 @@ -29,6 +29,7 @@ transport_lcppsrcs = [
@@ -669,7 +706,7 @@ index b7d8308..6e7a349 100644
  
  transport_cppsrcs = [
 diff --git a/dom/media/webrtc/transport/ipc/WebrtcTCPSocket.cpp b/dom/media/webrtc/transport/ipc/WebrtcTCPSocket.cpp
-index 28458be..f0e6fd1 100644
+index 28458be..06b2e75 100644
 --- a/dom/media/webrtc/transport/ipc/WebrtcTCPSocket.cpp
 +++ b/dom/media/webrtc/transport/ipc/WebrtcTCPSocket.cpp
 @@ -216,11 +216,18 @@ nsresult WebrtcTCPSocket::DoProxyConfigLookup() {
@@ -695,29 +732,37 @@ index 28458be..f0e6fd1 100644
    if (NS_WARN_IF(NS_FAILED(rv))) {
      return rv;
    }
+@@ -289,8 +296,10 @@ void WebrtcTCPSocket::OpenWithoutHttpProxy(nsIProxyInfo* aSocksProxyInfo) {
+     return;
+   }
+ 
++  // Camoufox: a resolution to "direct" also arrives with proxy info; it would
++  // connect from this machine.
+   if (NS_WARN_IF(mProxyConfig.isSome() && mProxyConfig->forceProxy() &&
+-                 !aSocksProxyInfo)) {
++                 (!aSocksProxyInfo || mProxyType == "direct"))) {
+     CloseWithReason(NS_ERROR_FAILURE);
+     return;
+   }
+@@ -617,9 +626,11 @@ void WebrtcTCPSocket::FinishOpen() {
+   // OpenWithoutHttpProxy. From here on out, this class functions the same for
+   // these two cases.
+ 
+-  mSocketIn->AsyncWait(this, 0, 0, nullptr);
+-
++  // Camoufox: first, because AsyncWait reports an already closed stream at
++  // once, and the close clears the callbacks OnConnected would then call.
+   InvokeOnConnected();
++
++  mSocketIn->AsyncWait(this, 0, 0, nullptr);
+ }
+ 
+ NS_IMETHODIMP
 diff --git a/dom/media/webrtc/transport/nr_socket_prsock.cpp b/dom/media/webrtc/transport/nr_socket_prsock.cpp
-index c8bcce4..d76430e 100644
+index c8bcce464c..84893a8e5b 100644
 --- a/dom/media/webrtc/transport/nr_socket_prsock.cpp
 +++ b/dom/media/webrtc/transport/nr_socket_prsock.cpp
-@@ -753,11 +753,16 @@ int NrSocket::sendto(const void* msg, size_t len, int flags,
-   // mtransport) or the parent process -- never the content process, which uses
-   // NrUdpSocketIpc/NrTcpSocket (gated in NrUdpSocketIpc::sendto and enforced by
-   // STUNUDPSocketFilter in the parent process).
--  if (IsForbiddenAddress(to) || RefusesDestination(to)) {
-+  if (IsForbiddenAddress(to)) {
-     // Drop the packet, but report success so the caller does not retry.
-     _status = 0;
-     goto abort;
-   }
-+  // Camoufox: a destination this socket may not reach fails at once, so a
-+  // STUN transaction or check to it ends instead of timing out.
-+  if (RefusesDestination(to)) {
-+    ABORT(R_REJECTED);
-+  }
- 
-   // TODO: Convert flags?
-   status = PR_SendTo(fd_, msg, len, flags, &naddr, PR_INTERVAL_NO_WAIT);
-@@ -1003,6 +1008,221 @@ abort:
+@@ -1003,6 +1003,223 @@ abort:
    return (_status);
  }
  
@@ -759,8 +804,10 @@ index c8bcce4..d76430e 100644
 +  if (nr_is_stun_request_message((UCHAR*)msg, len) && ShouldDrop(len)) {
 +    return R_WOULDBLOCK;
 +  }
++  // A proxy without UDP looks like a firewall: the datagram goes nowhere and
++  // the transaction times out, as it does on a machine whose UDP is blocked.
 +  if (state_ == State::Failed) {
-+    return R_REJECTED;
++    return 0;
 +  }
 +
 +  uint16_t port;
@@ -939,21 +986,7 @@ index c8bcce4..d76430e 100644
  NS_IMPL_ISUPPORTS(NrUdpSocketIpcProxy, nsIUDPSocketInternal)
  
  nsresult NrUdpSocketIpcProxy::Init(const RefPtr<NrUdpSocketIpc>& socket) {
-@@ -1291,9 +1511,12 @@ int NrUdpSocketIpc::sendto(const void* msg, size_t len, int flags,
-   // so it is not a trust boundary; STUNUDPSocketFilter enforces the same
-   // restriction in the parent process. Drop the packet, but report success so
-   // the caller does not retry.
--  if (IsForbiddenAddress(to) || RefusesDestination(to)) {
-+  if (IsForbiddenAddress(to)) {
-     return 0;
-   }
-+  if (RefusesDestination(to)) {
-+    return R_REJECTED;
-+  }
- 
-   int r;
-   net::NetAddr addr;
-@@ -1602,9 +1825,10 @@ int NrSocketBase::CreateSocket(
+@@ -1602,9 +1819,10 @@ int NrSocketBase::CreateSocket(
    std::optional<std::pair<uint16_t, uint16_t>> ports;
    // Camoufox: behind a proxy, stock Firefox refuses UDP outright, which leaves
    // a page with no host candidate and no connection even to a peer on this
@@ -967,7 +1000,7 @@ index c8bcce4..d76430e 100644
        config && config->GetForceProxy() && addr->protocol == IPPROTO_UDP;
  
    if (IsForbiddenAddress(addr)) {
-@@ -1642,6 +1866,8 @@ int NrSocketBase::CreateSocket(
+@@ -1642,6 +1860,8 @@ int NrSocketBase::CreateSocket(
      } else if (XRE_IsSocketProcess()) {
        if (addr->protocol == IPPROTO_TCP) {
          *sock = new NrTcpSocket(config);
@@ -976,7 +1009,7 @@ index c8bcce4..d76430e 100644
        } else {
          *sock = new NrSocket();
        }
-@@ -1653,7 +1879,7 @@ int NrSocketBase::CreateSocket(
+@@ -1653,7 +1873,7 @@ int NrSocketBase::CreateSocket(
        }
      }
  
@@ -985,7 +1018,7 @@ index c8bcce4..d76430e 100644
      r = (*sock)->create(ports ? &bindAddr : addr);
      if (!r) break;
    }
-@@ -1667,11 +1893,16 @@ abort:
+@@ -1667,11 +1887,16 @@ abort:
    return _status;
  }
  
@@ -1005,7 +1038,7 @@ index c8bcce4..d76430e 100644
    uint16_t port;
    int r;
 diff --git a/dom/media/webrtc/transport/nr_socket_prsock.h b/dom/media/webrtc/transport/nr_socket_prsock.h
-index bfd5a26..c1a6abd 100644
+index bfd5a26286..c1a6abda03 100644
 --- a/dom/media/webrtc/transport/nr_socket_prsock.h
 +++ b/dom/media/webrtc/transport/nr_socket_prsock.h
 @@ -43,6 +43,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
@@ -1103,7 +1136,7 @@ index bfd5a26..c1a6abd 100644
    nr_udp_message(const PRNetAddr& from, UniquePtr<MediaPacket>&& data)
        : from(from), data(std::move(data)) {}
 diff --git a/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_candidate.cpp b/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_candidate.cpp
-index 5f250a5..d2b347e 100644
+index 5f250a5158..d2b347e93d 100644
 --- a/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_candidate.cpp
 +++ b/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_candidate.cpp
 @@ -681,7 +681,19 @@ int nr_ice_candidate_initialize(nr_ice_candidate *cand, NR_async_cb ready_cb, vo
@@ -1128,7 +1161,7 @@ index 5f250a5..d2b347e 100644
                LOG_ICE, LOG_DEBUG,
                "ICE-CANDIDATE(%s): Starting DNS resolution (%u/%s - %u/%s).",
 diff --git a/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_component.cpp b/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_component.cpp
-index dc21b54..6c67cb7 100644
+index dc21b541d5..7c29cbbfcd 100644
 --- a/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_component.cpp
 +++ b/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_component.cpp
 @@ -211,11 +211,11 @@ static int nr_ice_component_initialize_udp(struct nr_ice_ctx_ *ctx,nr_ice_compon
@@ -1142,7 +1175,7 @@ index dc21b54..6c67cb7 100644
 -    const int local_only = ctx->flags & NR_ICE_CTX_FLAGS_ONLY_PROXY;
 +       on a machine at the proxy's exit shows host candidates, and two peers
 +       in one page connect through them. Whatever they send off this host goes
-+       through the proxy's UDP relay, or fails at once when the proxy has none
++       through the proxy's UDP relay, or is dropped when the proxy has none
 +       (NrSocketBase), so neither the internet nor this network sees UDP that
 +       went around the proxy. */
  
@@ -1195,7 +1228,7 @@ index dc21b54..6c67cb7 100644
        /* https://datatracker.ietf.org/doc/html/draft-ietf-mmusic-mdns-ice-candidates#section-3.3.2-3 */
        // Note: This probably should not hold for FQDN (as opposed to mDNS), but
 diff --git a/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_ctx.cpp b/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_ctx.cpp
-index 04c9164..6a9d04e 100644
+index 04c91642dc..6a9d04e1bf 100644
 --- a/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_ctx.cpp
 +++ b/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_ctx.cpp
 @@ -590,7 +590,11 @@ static int nr_ice_get_default_address(nr_ice_ctx *ctx, int ip_version, nr_transp
@@ -1222,7 +1255,7 @@ index 04c9164..6a9d04e 100644
              ABORT(r);
            remote_addr=&known_remote_addr;
 diff --git a/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_socket.cpp b/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_socket.cpp
-index 5fca22f..c589fa6 100644
+index 5fca22f5e5..c589fa6e50 100644
 --- a/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_socket.cpp
 +++ b/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_socket.cpp
 @@ -129,10 +129,17 @@ static void nr_ice_socket_readable_cb(NR_SOCKET s, int how, void *cb_arg)
@@ -1248,7 +1281,7 @@ index 5fca22f..c589fa6 100644
              if(!is_req){
                if(!is_ind)
 diff --git a/dom/media/webrtc/transport/third_party/nICEr/src/stun/stun_client_ctx.cpp b/dom/media/webrtc/transport/third_party/nICEr/src/stun/stun_client_ctx.cpp
-index ee64d7a..285f610 100644
+index f2c1926947..68d0aaf483 100644
 --- a/dom/media/webrtc/transport/third_party/nICEr/src/stun/stun_client_ctx.cpp
 +++ b/dom/media/webrtc/transport/third_party/nICEr/src/stun/stun_client_ctx.cpp
 @@ -133,6 +133,11 @@ int nr_stun_client_start(nr_stun_client_ctx *ctx, int mode, NR_async_cb finished
@@ -1264,7 +1297,7 @@ index ee64d7a..285f610 100644
          r_log(NR_LOG_STUN,LOG_WARNING,"STUN-CLIENT(%s): Peer address is bogus",ctx->label);
          ABORT(r);
 diff --git a/dom/media/webrtc/transport/third_party/nICEr/src/stun/turn_client_ctx.cpp b/dom/media/webrtc/transport/third_party/nICEr/src/stun/turn_client_ctx.cpp
-index 8b3880c..c86133d 100644
+index 8b3880cbcf..c86133db6e 100644
 --- a/dom/media/webrtc/transport/third_party/nICEr/src/stun/turn_client_ctx.cpp
 +++ b/dom/media/webrtc/transport/third_party/nICEr/src/stun/turn_client_ctx.cpp
 @@ -925,6 +925,15 @@ int nr_turn_client_process_response(nr_turn_client_ctx *ctx,
@@ -1284,7 +1317,7 @@ index 8b3880c..c86133d 100644
  abort:
    return(_status);
 diff --git a/netwerk/ipc/PSocketProcess.ipdl b/netwerk/ipc/PSocketProcess.ipdl
-index aa9384f..c91e9d5 100644
+index 8168d164d7..041daa34d3 100644
 --- a/netwerk/ipc/PSocketProcess.ipdl
 +++ b/netwerk/ipc/PSocketProcess.ipdl
 @@ -127,8 +127,10 @@ parent:
@@ -1300,7 +1333,7 @@ index aa9384f..c91e9d5 100644
    async ExcludeHttp2OrHttp3(HttpConnectionInfoCloneArgs aArgs);
  
 diff --git a/netwerk/ipc/ProxyConfigLookup.cpp b/netwerk/ipc/ProxyConfigLookup.cpp
-index b09731c..888174e 100644
+index b09731c707..708e0dd0ba 100644
 --- a/netwerk/ipc/ProxyConfigLookup.cpp
 +++ b/netwerk/ipc/ProxyConfigLookup.cpp
 @@ -6,10 +6,13 @@
@@ -1368,7 +1401,7 @@ index b09731c..888174e 100644
    if (NS_FAILED(rv)) {
      return rv;
    }
-@@ -99,6 +102,26 @@ nsresult ProxyConfigLookup::DoProxyResolve(nsICancelable** aLookupCancellable) {
+@@ -99,6 +102,31 @@ nsresult ProxyConfigLookup::DoProxyResolve(nsICancelable** aLookupCancellable) {
    return rv;
  }
  
@@ -1388,7 +1421,12 @@ index b09731c..888174e 100644
 +  if (!uri && loadInfo->GetLoadingPrincipal()) {
 +    uri = loadInfo->GetLoadingPrincipal()->GetURI();
 +  }
-+  NS_ENSURE_TRUE(uri, NS_ERROR_INVALID_ARG);
++  // Camoufox: a page off the network (about:blank, data:, file:) has no URI a
++  // channel can resolve a proxy for, and its context's proxy still applies.
++  if (!uri || !(uri->SchemeIs("http") || uri->SchemeIs("https"))) {
++    rv = NS_NewURI(getter_AddRefs(uri), "https://proxy-lookup.invalid/");
++    NS_ENSURE_SUCCESS(rv, rv);
++  }
 +  return NS_NewChannelInternal(aChannel, uri, loadInfo);
 +}
 +
@@ -1396,7 +1434,7 @@ index b09731c..888174e 100644
                                                    nsIChannel* aChannel,
                                                    nsIProxyInfo* aProxyinfo,
 diff --git a/netwerk/ipc/ProxyConfigLookup.h b/netwerk/ipc/ProxyConfigLookup.h
-index 5dff98a..6b8e890 100644
+index 5dff98ad64..6b8e890fd2 100644
 --- a/netwerk/ipc/ProxyConfigLookup.h
 +++ b/netwerk/ipc/ProxyConfigLookup.h
 @@ -7,6 +7,8 @@
@@ -1441,7 +1479,7 @@ index 5dff98a..6b8e890 100644
  
  }  // namespace net
 diff --git a/netwerk/ipc/ProxyConfigLookupChild.cpp b/netwerk/ipc/ProxyConfigLookupChild.cpp
-index d64fa13..e3ea772 100644
+index d64fa1391f..e3ea7727c5 100644
 --- a/netwerk/ipc/ProxyConfigLookupChild.cpp
 +++ b/netwerk/ipc/ProxyConfigLookupChild.cpp
 @@ -13,6 +13,7 @@ namespace net {
@@ -1462,7 +1500,7 @@ index d64fa13..e3ea772 100644
  
  ProxyConfigLookupChild::ProxyConfigLookupChild(
 diff --git a/netwerk/ipc/ProxyConfigLookupChild.h b/netwerk/ipc/ProxyConfigLookupChild.h
-index de76941..b22582c 100644
+index de76941b17..b22582c176 100644
 --- a/netwerk/ipc/ProxyConfigLookupChild.h
 +++ b/netwerk/ipc/ProxyConfigLookupChild.h
 @@ -20,6 +20,7 @@ class ProxyConfigLookupChild final : public PProxyConfigLookupChild {
@@ -1474,7 +1512,7 @@ index de76941..b22582c 100644
  
    mozilla::ipc::IPCResult Recv__delete__(
 diff --git a/netwerk/ipc/ProxyConfigLookupParent.cpp b/netwerk/ipc/ProxyConfigLookupParent.cpp
-index ee23a20..bc884d9 100644
+index ee23a20be8..bc884d96fd 100644
 --- a/netwerk/ipc/ProxyConfigLookupParent.cpp
 +++ b/netwerk/ipc/ProxyConfigLookupParent.cpp
 @@ -12,10 +12,12 @@ namespace net {
@@ -1502,7 +1540,7 @@ index ee23a20..bc884d9 100644
    if (NS_WARN_IF(NS_FAILED(rv))) {
      nsTArray<ProxyInfoCloneArgs> emptyArray;
 diff --git a/netwerk/ipc/ProxyConfigLookupParent.h b/netwerk/ipc/ProxyConfigLookupParent.h
-index ef0e206..c2cf470 100644
+index ef0e206b40..c2cf4709c9 100644
 --- a/netwerk/ipc/ProxyConfigLookupParent.h
 +++ b/netwerk/ipc/ProxyConfigLookupParent.h
 @@ -17,7 +17,8 @@ class ProxyConfigLookupParent final : public PProxyConfigLookupParent {
@@ -1524,7 +1562,7 @@ index ef0e206..c2cf470 100644
  
  }  // namespace net
 diff --git a/netwerk/ipc/SocketProcessParent.cpp b/netwerk/ipc/SocketProcessParent.cpp
-index 2b9302a..2d8b9e1 100644
+index bf7e2b896b..8d06be3775 100644
 --- a/netwerk/ipc/SocketProcessParent.cpp
 +++ b/netwerk/ipc/SocketProcessParent.cpp
 @@ -265,15 +265,16 @@ SocketProcessParent::AllocPAltServiceParent() {
@@ -1548,7 +1586,7 @@ index 2b9302a..2d8b9e1 100644
    return IPC_OK();
  }
 diff --git a/netwerk/ipc/SocketProcessParent.h b/netwerk/ipc/SocketProcessParent.h
-index bdbaa5c..836aec2 100644
+index 78f3ec67f6..715a7b3b8c 100644
 --- a/netwerk/ipc/SocketProcessParent.h
 +++ b/netwerk/ipc/SocketProcessParent.h
 @@ -82,11 +82,11 @@ class SocketProcessParent final

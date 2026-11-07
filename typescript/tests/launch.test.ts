@@ -43,6 +43,7 @@ const { InvalidPropertyType, UnknownIPLocation } = await import(
 	"../src/exceptions.js"
 );
 const cpuAffinity = await import("../src/cpu_affinity.js");
+const { attachDriverDefaults } = await import("../src/driver_defaults.js");
 
 // Imported after launch-host, which has to set the cache directory first.
 const { MODEL } = await import("./fpgen-setup.js");
@@ -687,6 +688,7 @@ describe("test_launch_environment: stock media defaults", () => {
 
 describe("test_launch_environment: screenshot caret", () => {
 	class Connection {
+		_objects = new Map();
 		sent: Array<[string, Record<string, any>]> = [];
 		sendMessageToServer(_object: any, method: string, params: any) {
 			this.sent.push([method, params]);
@@ -700,9 +702,7 @@ describe("test_launch_environment: screenshot caret", () => {
 
 	it("pages under a Camoufox launch keep the caret", async () => {
 		const connection = new Connection();
-		const browser = utils.attachScreenshotDefaults(
-			owner(undefined, connection),
-		);
+		const browser = attachDriverDefaults(owner(undefined, connection));
 		// handle, frame, page, context
 		const handle = owner(
 			owner(owner(owner(browser, connection), connection), connection),
@@ -722,8 +722,8 @@ describe("test_launch_environment: screenshot caret", () => {
 
 	it("other browsers on the same connection are left alone", async () => {
 		const connection = new Connection();
-		utils.attachScreenshotDefaults(owner(undefined, connection));
-		utils.attachScreenshotDefaults(owner(undefined, connection));
+		attachDriverDefaults(owner(undefined, connection));
+		attachDriverDefaults(owner(undefined, connection));
 		await connection.sendMessageToServer(
 			owner(owner(undefined, connection), connection),
 			"screenshot",

@@ -74,6 +74,7 @@ def test_linux_voices_are_speech_dispatchers_order():
     assert names == ["Afrikaans", "Afrikaans+Adam", "Afrikaans+Alex"]
 
 
+@pytest.mark.usefixtures("any_installed_browser")
 def test_linux_launch_carries_the_grid():
     # ~15000 voice objects do not fit in the environment; the grid does.
     cfg = _launch_config(os="linux")
@@ -83,6 +84,7 @@ def test_linux_launch_carries_the_grid():
     assert cfg["voices:blockIfNotDefined"] is True
 
 
+@pytest.mark.usefixtures("any_installed_browser")
 def test_a_given_speechd_grid_is_kept():
     # A caller's grid is the identity's voices,
     # not something to draw over.
@@ -182,6 +184,15 @@ def test_unknown_os_falls_back_to_macos():
 
 from camoufox.exceptions import InvalidPropertyType  # noqa: E402
 from camoufox.utils import validate_voices  # noqa: E402
+
+
+@pytest.fixture
+def any_installed_browser(monkeypatch):
+    """The grid must not depend on the build this machine has active, whose
+    properties.json may predate it."""
+    from camoufox import utils
+
+    monkeypatch.setattr(utils, "validate_config", lambda *args, **kwargs: None)
 
 
 def _launch_config(**kwargs):

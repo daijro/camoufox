@@ -159,7 +159,8 @@ x86_64 Linux and Windows, thin elsewhere) and Rust SIMD, from
 `browser/assets/base.mozconfig`. `make dir` installs the Rust release Mozilla
 builds the tree with and fetches the profile pinned in
 `browser/scripts/data/pgo-profiles.json`; after bumping `upstream.sh`, run
-`python3 scripts/pgo.py pin`. Install `ccache`. It caches compiles but not the
+`python3 scripts/pgo.py pin` and `python3 scripts/remote_settings.py pin` (the
+page-visible lists, bundled so the browser never polls for them). Install `ccache`. It caches compiles but not the
 LTO link, so an incremental build still relinks libxul across C++ and Rust.
 
 ## Changing a patch

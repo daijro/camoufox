@@ -104,6 +104,28 @@ function withProxyAuth(proxy, auth) {
 // network.proxy.*. WebRTCIPManager::IsProxied reads this in the content process.
 function recordProxied(owner) {
   Services.prefs.getDefaultBranch('roverfox.s.').setCharPref(`webrtc_proxied_${owner}`, '1');
+  // Firefox turns prefetch off at its first proxied load. A document with no
+  // load yet (about:blank, a fulfilled route) would resolve its dns-prefetch
+  // links on this machine's resolver until then.
+  Services.prefs.getDefaultBranch('network.dns.').setBoolPref('disablePrefetch', true);
+}
+
+// A system proxy is not in network.proxy.* either, and a content process
+// cannot ask the OS for it.
+function usesSystemProxy() {
+  if (Services.prefs.getIntPref('network.proxy.type') !== 5)
+    return false;
+  const settings = Cc['@mozilla.org/system-proxy-settings;1'].getService(Ci.nsISystemProxySettings);
+  if (settings.PACURI)
+    return true;
+  try {
+    return settings.getProxyForURI('https://camoufox.invalid/', 'https', 'camoufox.invalid', 443) !== 'DIRECT';
+  } catch (e) {
+    // This is how Linux answers when no proxy is set.
+    if (e.result === Cr.NS_ERROR_FAILURE)
+      return false;
+    throw e;
+  }
 }
 
 // Camoufox: every juggler browser context is a Firefox container. A PUBLIC
@@ -246,6 +268,8 @@ export class TargetRegistry {
     this._proxiesWithClashingAuthCacheKeys = new Set();
     this._browserProxy = null;
     this._launchProxyAuth = readLaunchProxyAuth();
+    if (usesSystemProxy())
+      recordProxied('browser');
 
     // Cleanup containers from previous runs (if any)
     ContextualIdentityService.ensureDataReady();

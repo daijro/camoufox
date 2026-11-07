@@ -19,7 +19,8 @@ with no pointer or mouse event before it, where a person clicks the field
 first. A text field that is not focused is clicked (Playwright's click: the
 mouse moves there and presses, through the OS-path dispatch) before the fill;
 a focused one is pasted into as it is. Fields fill() sets without pasting
-(date, color, range, ...) are left alone.
+(date, color, range, ...) are left alone. So is a field something covers: a
+person cannot click it either, and fill() itself needs no click.
 """
 
 from typing import Any
@@ -55,21 +56,45 @@ def _with_caret_default(original: Any) -> Any:
     return screenshot
 
 
-# Whether a fill() target is a text field a person types into, and whether it
-# already has focus.
-_FILL_TARGET = """(e) => {
-  const active = e.ownerDocument.activeElement;
-  const type = e.localName === 'input' ? (e.getAttribute('type') || 'text').toLowerCase() : null;
-  const typed = e.localName === 'textarea' || e.isContentEditable ||
+# Whether fill() on this target should click first: a text field a person types
+# into, without focus. fill() on a label, or inside one, fills its control.
+FILL_NEEDS_CLICK = """(e) => {
+  const field = e.matches('a, input, textarea, button, select') || e.isContentEditable
+    ? e : (e.closest('label')?.control || e);
+  const type = field.localName === 'input' ? field.type : null;
+  const typed = field.localName === 'textarea' || field.isContentEditable ||
     ['text', 'search', 'email', 'url', 'tel', 'password', 'number'].includes(type);
-  return {typed, focused: active === e || (e.isContentEditable && e.contains(active))};
+  if (!typed || field.disabled || field.readOnly)
+    return false;
+  const active = field.getRootNode().activeElement;
+  return active !== field && !(field.isContentEditable && field.contains(active));
+}"""
+
+# Whether a click at the middle of the target reaches it, or its label.
+FILL_CLICK_LANDS = """(e) => {
+  const field = e.closest('label')?.control || e;
+  const r = e.getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  let hit = e.ownerDocument.elementFromPoint(x, y);
+  while (hit?.shadowRoot) {
+    const inner = hit.shadowRoot.elementFromPoint(x, y);
+    if (!inner || inner === hit)
+      break;
+    hit = inner;
+  }
+  for (; hit; hit = hit.parentNode || hit.host) {
+    if (hit === e || hit === field || hit.control === field)
+      return true;
+  }
+  return false;
 }"""
 
 
-async def _click_to_focus(target: Any, timeout: Any, force: Any) -> None:
-    info = await target.evaluate(_FILL_TARGET, timeout=timeout)
-    if info['typed'] and not info['focused']:
-        await target.click(timeout=timeout, force=force)
+async def _click_to_focus(target: Any, evaluate: Any, timeout: Any, force: Any) -> None:
+    if await evaluate(FILL_NEEDS_CLICK):
+        await target.scroll_into_view_if_needed(timeout=timeout)
+        if await evaluate(FILL_CLICK_LANDS):
+            await target.click(timeout=timeout, force=force)
 
 
 def _frame_fill_clicks_first(original: Any) -> Any:
@@ -78,7 +103,12 @@ def _frame_fill_clicks_first(original: Any) -> Any:
             target = self.locator(selector)
             if not kwargs.get('strict'):
                 target = target.first
-            await _click_to_focus(target, kwargs.get('timeout'), kwargs.get('force'))
+            timeout = kwargs.get('timeout')
+
+            def evaluate(script: str) -> Any:
+                return target.evaluate(script, timeout=timeout)
+
+            await _click_to_focus(target, evaluate, timeout, kwargs.get('force'))
         return await original(self, selector, *args, **kwargs)
 
     setattr(_fill, _MARK, True)
@@ -89,7 +119,7 @@ def _frame_fill_clicks_first(original: Any) -> Any:
 def _handle_fill_clicks_first(original: Any) -> Any:
     async def fill(self: Any, *args: Any, **kwargs: Any) -> None:
         if _launched_by_camoufox(self):
-            await _click_to_focus(self, kwargs.get('timeout'), kwargs.get('force'))
+            await _click_to_focus(self, self.evaluate, kwargs.get('timeout'), kwargs.get('force'))
         return await original(self, *args, **kwargs)
 
     setattr(fill, _MARK, True)
