@@ -10,10 +10,12 @@ from typing_extensions import Literal
 
 from camoufox.virtdisplay import VirtualDisplay
 
+from . import driver_defaults
 from .fingerprints import generate_context_fingerprint
 from .ip import Proxy, proxy_exit_geo
 from .utils import (
     attach_context_defaults,
+    attach_socks5_auth,
     context_identity,
     host_identity,
     launch_options,
@@ -160,6 +162,7 @@ def _launch(
             context = playwright.firefox.launch_persistent_context(
                 **persistent_context_options(from_options, no_viewport_default)
             )
+            driver_defaults.mark(context)
             return sync_attach_vd(context, virtual_display)
 
         identity = host_identity(from_options, canvas_noise)
@@ -224,6 +227,8 @@ def NewContext(
         preset=preset, os=os, ff_version=ff_version, webrtc_ip=webrtc_ip, webgl_config=webgl_config
     )
 
+    # A browser launched elsewhere takes SOCKS5 credentials too.
+    attach_socks5_auth(browser)
     context = browser.new_context(**new_context_options(fp, context_kwargs, proxy, geolocation))
     context.add_init_script(fp['init_script'])
     return context

@@ -2,8 +2,8 @@
 Verify humanize=True produces a human cursor trajectory (daijro/camoufox#677).
 
 Camoufox's cursor humanization has a single call site: the `mousemove` branch of
-`sendEvents()` in additions/juggler/protocol/PageHandler.js, which calls
-`humanizedSteps()` (additions/juggler/input/CursorTrajectory.js) and dispatches
+`sendEvents()` in browser/additions/juggler/protocol/PageHandler.js, which plans
+the move (browser/additions/juggler/input/CursorTrajectory.js) and dispatches
 the intermediate points. The Firefox 146 Juggler migration (commit 03c1230)
 rewrote that helper and silently dropped the branch, so from FF146 through v152
 `humanize=True` emitted only the endpoint mousemove -- no trajectory at all.
@@ -32,8 +32,9 @@ What PASS means:
     * those events are spread over a plausible human duration, with uneven
       gaps between them rather than a fixed cadence;
     * a humanized click still lands on the target element;
-    * without humanize, each move emits only its endpoint (pins the other
-      direction so accidental always-on humanization is also caught).
+    * without humanize, a move emits only its endpoint (pins the other
+      direction so accidental always-on humanization is also caught). Two
+      moves close together may share one event, coalesced, as a real mouse's do.
 """
 
 import asyncio
@@ -141,7 +142,13 @@ async def main() -> int:
     plain, plain_dest = await _collect_moves(False)
     print("\n=== humanize off ===")
     print(f"  mousemove events: {[m[:2] for m in plain]}")
-    if [m[:2] for m in plain] == [[20, 20], list(plain_dest)]:
+    # Two awaited moves 8 ms apart can share a refresh tick. The page then sees
+    # one mousemove, at the destination, with the start in getCoalescedEvents()
+    # — the same coalescing a 125 Hz mouse gets. A trajectory is many points
+    # that are neither endpoint.
+    endpoints = [[20, 20], list(plain_dest)]
+    points = [m[:2] for m in plain]
+    if points and points[-1] == list(plain_dest) and len(points) <= 2 and all(p in endpoints for p in points):
         print("  PASS: only endpoints emitted")
     else:
         passed = False

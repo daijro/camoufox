@@ -4,9 +4,15 @@
 Every package carries AMO's newest uBO release as an extracted addon under
 addons/UBO/ (Contents/Resources/addons/UBO/ on macOS), which both launchers load
 from beside the binary. So the uBO a user runs, and the filter lists it blocks
-with (browser/settings/distribution/policies.json keeps it from updating them),
-is the one the release was tested with, and a new uBO release reaches users with
+with, is the one the release was tested with, and a new uBO release reaches users with
 the next browser release without anyone bumping a pin.
+
+The bundled copy keeps its packaged filter lists: its default for autoUpdate
+is false (freeze_lists). Every launch is a fresh profile, and uBO's own default
+downloads every list from its CDNs within a minute of each launch, which a
+long-lived install does not. A policy cannot set it: any policies.json puts
+Firefox in enterprise mode, which pages and the network can tell (DNS over
+HTTPS stands down, for one).
 
 A release resolves the version once and hands the same pin to its tests and to
 every build through CAMOUFOX_UBO, so a uBO release landing mid-run cannot ship
@@ -16,6 +22,9 @@ untested. Without CAMOUFOX_UBO, `stage` resolves AMO's newest itself.
     scripts/fetch-ubo.py stage DIR    # extract the pinned (or newest) release into DIR/addons/UBO/
 """
 import argparse, hashlib, io, json, os, shutil, sys, tempfile, time, urllib.request, zipfile
+
+# uBO's userSettingsDefault entry, as js/background.js writes it.
+AUTO_UPDATE_DEFAULT = "    autoUpdate: true,\n"
 
 AMO_ADDON = "https://addons.mozilla.org/api/v5/addons/addon/ublock-origin/"
 GUID = "uBlock0@raymondhill.net"
@@ -63,6 +72,20 @@ def pin_from_env():
     return pin
 
 
+def freeze_lists(addon_dir):
+    """Make the extracted uBO default to autoUpdate: false. Fails if uBO's
+    source no longer has the one line this edits, rather than shipping a uBO
+    that downloads its lists."""
+    path = os.path.join(addon_dir, "js", "background.js")
+    with open(path, encoding="utf-8") as f:
+        source = f.read()
+    if source.count(AUTO_UPDATE_DEFAULT) != 1:
+        raise SystemExit(f"{path}: expected one {AUTO_UPDATE_DEFAULT.strip()!r} in "
+                         "userSettingsDefault; uBO changed, update freeze_lists()")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(source.replace(AUTO_UPDATE_DEFAULT, "    autoUpdate: false,\n"))
+
+
 def extract(xpi, pin, dest):
     """Unpack a verified XPI into dest, replacing whatever was there."""
     digest = hashlib.sha256(xpi).hexdigest()
@@ -86,6 +109,7 @@ def extract(xpi, pin, dest):
         tmp = tempfile.mkdtemp(prefix=".UBO.tmp-", dir=parent)
         try:
             z.extractall(tmp)
+            freeze_lists(tmp)
             shutil.rmtree(dest, ignore_errors=True)
             os.replace(tmp, dest)
         finally:

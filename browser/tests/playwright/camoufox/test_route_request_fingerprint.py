@@ -81,3 +81,42 @@ async def test_page_route_should_not_reorder_connection_and_cookie(context: Brow
     # Both are added before necko appends the sec-fetch-* headers.
     assert names.index("connection") < names.index("sec-fetch-mode")
     assert names.index("cookie") < names.index("sec-fetch-mode")
+
+
+async def _subresource_headers(context: BrowserContext, server: Server, intercept: bool, tag: str) -> List[str]:
+    """Load a page that requests a subresource and return that request's header names, in order."""
+    seen: List[str] = []
+
+    def _document(request: TestServerRequest) -> None:
+        request.setHeader("content-type", "text/html")
+        if tag == "img":
+            request.write(b'<html><body><img src="/sub.png"></body></html>')
+        else:
+            request.write(b"<html><body><script>fetch('/sub.png')</script></body></html>")
+        request.finish()
+
+    def _subresource(request: TestServerRequest) -> None:
+        for name, values in request.requestHeaders.getAllRawHeaders():
+            seen.extend(name.decode().lower() for _ in values)
+        request.setHeader("content-type", "image/png")
+        request.finish()
+
+    server.set_route("/sub-document.html", _document)
+    server.set_route("/sub.png", _subresource)
+
+    page = await context.new_page()
+    if intercept:
+        await page.route("**/*", lambda route: route.continue_())
+    async with page.expect_request_finished(lambda r: r.url.endswith("/sub.png")):
+        await page.goto(server.PREFIX + "/sub-document.html")
+    await page.close()
+    return seen
+
+
+async def test_page_route_should_not_reorder_subresource_headers(context: BrowserContext, server: Server) -> None:
+    # A subresource carries a referer. Stock sends it after "connection" for an <img> (necko sets a
+    # default-policy referer again after adding "connection") and before it for fetch().
+    for tag in ("img", "fetch"):
+        without_route = await _subresource_headers(context, server, intercept=False, tag=tag)
+        with_route = await _subresource_headers(context, server, intercept=True, tag=tag)
+        assert with_route == without_route, tag

@@ -124,10 +124,10 @@ persist a change there as a patch, never as an edit to that tree.
 | Path | What it is |
 |---|---|
 | `browser/` | The browser build: `Makefile`, `upstream.sh`, `multibuild.py`, `Dockerfile`, and the directories below. |
-| `browser/patches/` | Diffs applied to Firefox (42 top level, plus `playwright/`, `librewolf/`, `ghostery/`). Browser behaviour changes here. |
+| `browser/patches/` | Diffs applied to Firefox: one per behaviour at the top level, plus `playwright/`, `librewolf/` and `ghostery/`. Browser behaviour changes here. |
 | `browser/additions/camoucfg/` | The C++ config layer. `MaskConfig.hpp` reads `CAMOU_CONFIG`, which the patches consult. |
 | `browser/additions/juggler/` | Camoufox's Juggler, Playwright's Firefox protocol. The page agent runs in an isolated world. `input/` holds the Cursory cursor trajectories. |
-| `browser/settings/` | `camoufox.cfg` (prefs), `properties.json` (every config key and its type; a key the browser stops reading is marked `removed`, never deleted), policies. |
+| `browser/settings/` | `camoufox.cfg` (prefs), `properties.json` (every config key and its type; a key the browser stops reading is marked `removed`, never deleted). |
 | `browser/scripts/` | `patch.py` applies patches and writes the mozconfig; `copy-additions.sh`, `package.py`, `install-deps.sh`, font tooling. |
 | `browser/assets/` | Mozconfigs, README images. |
 | `browser/bundle/` | The per-OS `fontconfig/` files and `FONTS-README.txt`. The fonts are a release asset (`make fonts-extract`), pinned by `browser/scripts/data/font-bundle.json`. |
@@ -159,7 +159,8 @@ x86_64 Linux and Windows, thin elsewhere) and Rust SIMD, from
 `browser/assets/base.mozconfig`. `make dir` installs the Rust release Mozilla
 builds the tree with and fetches the profile pinned in
 `browser/scripts/data/pgo-profiles.json`; after bumping `upstream.sh`, run
-`python3 scripts/pgo.py pin`. Install `ccache`. It caches compiles but not the
+`python3 scripts/pgo.py pin` and `python3 scripts/remote_settings.py pin` (the
+page-visible lists, bundled so the browser never polls for them). Install `ccache`. It caches compiles but not the
 LTO link, so an incremental build still relinks libxul across C++ and Rust.
 
 ## Changing a patch
