@@ -169,11 +169,31 @@ def stock_firefox(flag: str, version: str) -> Path:
     return binary
 
 
+# Stock Firefox updates itself in place: the app.update.* prefs no longer stop
+# it, so a cached 158.0.1 that a guard launched became 159.0 within minutes
+# (2026-10-31, .ci-work/stock-firefox/158.0.1 read 159.0 two minutes after its
+# download). Only the enterprise policy does.
+NO_UPDATE_POLICY = {"policies": {"DisableAppUpdate": True}}
+
+
+def pin_stock(root: Path) -> None:
+    """Keep the downloaded release at its version: no app update, ever."""
+    policies = root / "distribution" / "policies.json"
+    policies.parent.mkdir(exist_ok=True)
+    policies.write_text(json.dumps(NO_UPDATE_POLICY), encoding="utf-8")
+
+
 def download_stock(version: str) -> Path:
     package = LINUX_PACKAGE.format(machine=platform.machine(), version=version)
     binary = WORK_DIR / "stock-firefox" / version / platform.machine() / "firefox" / "firefox"
     if binary.exists():
-        return binary
+        if ini_version(binary) == version:
+            pin_stock(binary.parent)
+            return binary
+        # A cache that updated itself is not the release: fetch it again.
+        stale = binary.parent.with_name(f"firefox.stale-{os.getpid()}")
+        binary.parent.rename(stale)
+        shutil.rmtree(stale, ignore_errors=True)
     base = ARCHIVE.format(version=version)
     sums = {name: digest for digest, name in (line.split("  ", 1) for line in signed_sums(base).splitlines())}
     if package not in sums:
@@ -191,6 +211,7 @@ def download_stock(version: str) -> Path:
             raise SystemExit(f"{package}: SHA-256 {digest.hexdigest()} is not the release's {sums[package]}")
         with tarfile.open(archive) as tar:
             tar.extractall(tmp, filter="data")
+        pin_stock(Path(tmp, "firefox"))
         # Renamed into place last, so an interrupted run leaves nothing cached.
         Path(tmp, "firefox").rename(binary.parent)
     return binary

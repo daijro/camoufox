@@ -368,7 +368,7 @@ def _dependency_files():
     for pattern in ("**/requirements*.txt", "**/pyproject.toml", "**/setup.cfg"):
         for path in REPO_ROOT.glob(pattern):
             parts = set(path.parts)
-            if "node_modules" in parts or ".venv" in parts or "venv" in parts:
+            if "node_modules" in parts or ".venv" in parts or "venv" in parts or ".claude" in parts:
                 continue
             # Skip the generated Firefox tree and any fetched upstream checkout.
             if any(p.startswith("camoufox-1") or p.startswith("playwright-python-") for p in path.parts):

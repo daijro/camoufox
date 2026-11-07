@@ -1,6 +1,7 @@
 import json
 import os
 import platform
+import re
 import shutil
 from functools import wraps
 from os import environ
@@ -14,6 +15,7 @@ import orjson
 from typing_extensions import TypeAlias
 from ua_parser import user_agent_parser
 
+from . import driver_defaults
 from .addons import DefaultAddons, add_default_addons, confirm_paths
 from .display import has_display, largest_display
 from .exceptions import (
@@ -22,10 +24,11 @@ from .exceptions import (
     NonFirefoxFingerprint,
     UnknownIPLocation,
 )
-from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, _generate_random_voice_subset, fix_navigator_arch, fix_hardware_concurrency, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
+from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, draw_voice_config, fix_navigator_arch, fix_hardware_concurrency, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
 from .geolocation import geoip_allowed, get_geolocation
-from .ip import Proxy, public_ip, public_ipv6, valid_ipv4, valid_ipv6
+from .humanize import HumanizeSetting, humanize_config
+from .ip import Proxy, proxy_auth_env, proxy_auth_init_script, public_ip, public_ipv6, socks5_auth, valid_ipv4, valid_ipv6
 from .locales import handle_locales
 import warnings
 
@@ -355,6 +358,17 @@ def _load_properties(path: Optional[Path] = None) -> Dict[str, Dict[str, str]]:
     return {prop['property']: prop for prop in prop_dict}
 
 
+def _load_humanize_engines(path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """
+    Loads humanize-engines.json, found the same way as properties.json. None
+    for a build that predates it.
+    """
+    manifest = Path(build_file(path, "humanize-engines.json") if path else get_path("humanize-engines.json"))
+    if not manifest.exists():
+        return None
+    return orjson.loads(manifest.read_bytes())
+
+
 def validate_config(config_map: Dict[str, str], path: Optional[Path] = None) -> None:
     """
     Validates the config map.
@@ -364,6 +378,8 @@ def validate_config(config_map: Dict[str, str], path: Optional[Path] = None) -> 
     for key, value in config_map.items():
         entry = properties.get(key)
         if not entry:
+            if key == 'voices:speechd':
+                LeakWarning.warn('voices_unread')
             print(f'Skipping unknown patch {key} : {value}')
             continue  # Not supported by this browser version: reported, then skipped
         if 'removed' in entry:
@@ -378,6 +394,8 @@ def validate_config(config_map: Dict[str, str], path: Optional[Path] = None) -> 
 
         if key == 'voices':
             validate_voices(value)
+        if key == 'voices:speechd':
+            validate_speechd_voices(value)
 
 
 def validate_type(value: Any, expected_type: str) -> bool:
@@ -434,6 +452,27 @@ def validate_voices(voices: Any) -> None:
                 f"Invalid voices[{index}]: missing {', '.join(missing)}. "
                 f"Every voice needs {{{', '.join(VOICE_FIELDS)}}}."
             )
+
+
+def validate_speechd_voices(grid: Any) -> None:
+    """
+    Validates a `voices:speechd` grid: {"languages": [[name, lang], ...],
+    "variants": [name, ...]}, the shape MaskConfig::MSpeechdVoices() expands.
+    """
+    languages = grid.get('languages') if isinstance(grid, dict) else None
+    variants = grid.get('variants') if isinstance(grid, dict) else None
+    if not (
+        isinstance(languages, list)
+        and all(
+            isinstance(entry, list) and len(entry) == 2 and all(isinstance(x, str) for x in entry)
+            for entry in languages
+        )
+        and isinstance(variants, list)
+        and all(isinstance(v, str) for v in variants)
+    ):
+        raise InvalidPropertyType(
+            'Invalid voices:speechd: expected {"languages": [[name, lang], ...], "variants": [name, ...]}'
+        )
 
 
 def get_target_os(config: Dict[str, Any]) -> Literal['mac', 'win', 'lin']:
@@ -624,6 +663,35 @@ def warn_manual_config(config: Dict[str, Any]) -> None:
         LeakWarning.warn('viewport', False)
 
 
+def saved_pref(profile_dir: Optional[str], pref: str) -> Any:
+    """The value a persistent profile's prefs.js holds for pref, if any."""
+    if not profile_dir:
+        return None
+    try:
+        with open(os.path.join(profile_dir, 'prefs.js'), encoding='utf-8') as f:
+            text = f.read()
+    except OSError:
+        return None
+    m = re.search(r'user_pref\("' + re.escape(pref) + r'",\s*(.+?)\);', text)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(1))
+    except ValueError:
+        return m.group(1)
+
+
+def set_toggle_pref(prefs: Dict[str, Any], pref: str, on: bool, stock: Any, toggled: Any,
+                    profile_dir: Optional[str]) -> None:
+    """Write a toggle only when on, or to clear a persistent non-stock value."""
+    if on:
+        prefs.setdefault(pref, toggled)
+        return
+    saved = saved_pref(profile_dir, pref)
+    if saved is not None and saved != stock:
+        prefs.setdefault(pref, stock)
+
+
 _WINDOW_DIM_KEYS = (
     'window.outerWidth',
     'window.outerHeight',
@@ -774,12 +842,44 @@ def persistent_context_options(from_options: Dict[str, Any], no_viewport_default
     }
 
 
+def attach_socks5_auth(target: Any) -> Any:
+    """
+    Let new_context()/new_page() of `target` take a SOCKS5 proxy with a username
+    and password.
+
+    Playwright refuses one ("Browser does not support socks5 proxy
+    authentication"). The context is made with the proxy alone, and an init
+    script hands Juggler the credentials before new_context() returns
+    (socks5_auth, proxy_auth_init_script). The wrapper sits on Playwright's
+    own Browser object, under both the sync and the async API, where
+    new_page() makes its context too.
+    """
+    impl = getattr(target, '_impl_obj', target)
+    original = getattr(impl, 'new_context', None)
+    if original is None or getattr(original, '_camoufox_socks5_auth', False):
+        return target
+
+    @wraps(original)
+    async def new_context(*args: Any, **kwargs: Any) -> Any:
+        kwargs['proxy'], auth = socks5_auth(kwargs.get('proxy'))
+        context = await original(*args, **kwargs)
+        if auth:
+            await context.add_init_script(script=proxy_auth_init_script(auth))
+        return context
+
+    new_context._camoufox_socks5_auth = True  # type: ignore[attr-defined]
+    impl.new_context = new_context
+    return target
+
+
 def attach_context_defaults(browser: Any, no_viewport_default: bool) -> None:
     """Give every new_page()/new_context() of `browser` Camoufox's defaults."""
+    attach_socks5_auth(browser)
     if no_viewport_default:
         attach_no_viewport_default(browser)
     attach_stock_media_defaults(browser)
     attach_desktop_only_warning(browser)
+    driver_defaults.mark(browser)
 
 
 def plan_rendering(
@@ -980,7 +1080,7 @@ def launch_options(
     webgl_config: Optional[Tuple[str, str]] = None,
     geoip: Optional[Union[str, bool]] = None,
     geoip_db: Optional[str] = None,
-    humanize: Optional[Union[bool, float]] = None,
+    humanize: HumanizeSetting = None,
     locale: Optional[Union[str, List[str]]] = None,
     addons: Optional[List[str]] = None,
     fonts: Optional[List[str]] = None,
@@ -1034,10 +1134,12 @@ def launch_options(
         geoip_db (Optional[str]):
             Name of the GeoIP database to use (e.g., "GeoIP AIO by daijro").
             If not specified, uses the one chosen with `camoufox set --geoip`, or the default.
-        humanize (Optional[Union[bool, float]]):
-            Humanize the cursor movement.
-            Takes either `True`, or the MAX duration in seconds of the cursor movement.
-            The cursor typically takes up to 1.5 seconds to move across the window.
+        humanize (Optional[Union[bool, float, dict]]):
+            Humanize mouse, keyboard and scroll input, per channel.
+            `True` uses the best engine the build offers on every channel; a number is the
+            MAX duration in seconds of a cursor movement (typically up to 1.5 seconds across
+            the window); a dict picks an engine per channel with the factories in
+            `camoufox.humanize`, e.g. `{"mouse": cursory(max_time=1.0), "scroll": raw(), "seed": 1234}`.
         locale (Optional[Union[str, List[str]]]):
             Locale(s) to use in Camoufox. The first listed locale will be used for the Intl API.
         addons (Optional[List[str]]):
@@ -1185,7 +1287,7 @@ def launch_options(
     _user_set_screen_window = is_domain_set(config, 'screen.', 'window.')
     _user_set_media_devices = is_domain_set(config, 'mediaDevices:')
     _user_set_fonts = bool(fonts) or is_domain_set(config, 'fonts')
-    _user_set_voices = is_domain_set(config, 'voices')
+    _user_set_voices = is_domain_set(config, 'voices', 'voices:speechd')
     _user_set_dnt = 'navigator.doNotTrack' in config
     _user_set_gpc = 'navigator.globalPrivacyControl' in config
     _user_set_accept_encoding = 'headers.Accept-Encoding' in config
@@ -1380,6 +1482,10 @@ def launch_options(
     else:
         firefox_user_prefs.setdefault('ui.useOverlayScrollbars', 1)
 
+    # Stock doubles a wheel's lines on Windows and Linux and never on macOS, and
+    # a page reads the result in deltaY (docs/input-dispatch.md).
+    firefox_user_prefs.setdefault('mousewheel.system_scroll_override.enabled', target_os != 'mac')
+
     # A Windows identity on another host: answers that come from the host
     # build's platform code are set to what stock Windows Firefox gives. A
     # Windows host already gives them, so nothing is set there.
@@ -1570,7 +1676,7 @@ def launch_options(
     # Drawn after the locale is resolved (locale= or geoip): the Windows voice
     # list is the display language's pack, so an fr-FR identity has French
     # voices, not the en-US ones.
-    if not _user_set_voices or 'voices' not in config:
+    if not _user_set_voices or ('voices' not in config and 'voices:speechd' not in config):
         os_name_v = OS_NAMES.get(target_os, 'macos')
         voice_locale = config.get('navigator.language')
         if config.get('locale:language'):
@@ -1578,9 +1684,9 @@ def launch_options(
                 part for part in (config['locale:language'], config.get('locale:region')) if part
             )
         try:
-            config['voices'] = _generate_random_voice_subset(
+            config.update(draw_voice_config(
                 os_name_v, voice_locale, seed=identity_seed(config, _identity_salt)
-            )
+            ))
         except (OSError, ValueError, KeyError) as e:
             # An empty list still blocks the host's voices (see below), so a
             # generation failure degrades to "no voices" rather than "all of
@@ -1596,13 +1702,11 @@ def launch_options(
     # leaves an explicit caller value alone.
     set_into(config, 'voices:blockIfNotDefined', True)
 
-    # Pass the humanize option
-    if humanize:
-        set_into(config, 'humanize', True)
-        # bool is a subclass of int, but MaskConfig expects maxTime to be a
-        # JSON number with a floating-point representation.
-        if isinstance(humanize, (int, float)) and not isinstance(humanize, bool):
-            set_into(config, 'humanize:maxTime', float(humanize))
+    # Pass the humanize option, checked against the engines the build ships
+    for key, value in humanize_config(
+        humanize, _load_humanize_engines(executable_path), i_know_what_im_doing
+    ).items():
+        set_into(config, key, value)
 
     # Enable the main world context creation
     if main_world_eval:
@@ -1612,16 +1716,18 @@ def launch_options(
     if allow_addon_new_tab:
         set_into(config, 'allowAddonNewtab', True)
 
-    # Set Firefox user preferences. Each toggle writes its pref on or off: a
-    # persistent profile keeps a user.js pref in prefs.js after the launch that
-    # set it, so a flag that only wrote when on stayed on for good.
+    # Fresh profiles get a toggle's pref only when on. A persistent profile
+    # may need the stock value written once to clear an earlier toggled value.
     if block_images:
         LeakWarning.warn('block_images', i_know_what_im_doing)
     if disable_coop:
         LeakWarning.warn('disable_coop', i_know_what_im_doing)
-    firefox_user_prefs.setdefault('permissions.default.image', 2 if block_images else 1)
-    firefox_user_prefs.setdefault('media.peerconnection.enabled', not block_webrtc)
-    firefox_user_prefs.setdefault('browser.tabs.remote.useCrossOriginOpenerPolicy', not disable_coop)
+    for on, pref, stock, toggled in (
+        (block_images, 'permissions.default.image', 1, 2),
+        (block_webrtc, 'media.peerconnection.enabled', True, False),
+        (disable_coop, 'browser.tabs.remote.useCrossOriginOpenerPolicy', True, False),
+    ):
+        set_toggle_pref(firefox_user_prefs, pref, bool(on), stock, toggled, launch_options.get('user_data_dir'))
     # A persistent context takes its context options here.
     if launch_options.get('is_mobile'):
         LeakWarning.warn('is_mobile', i_know_what_im_doing)
@@ -1725,10 +1831,15 @@ def launch_options(
     warn_if_executable_predates_playwright(executable_path)
     validate_config(config, path=executable_path)
 
+    # A SOCKS5 proxy's credentials go to Juggler, not through Playwright, which
+    # refuses them (socks5_auth).
+    proxy, proxy_auth = socks5_auth(proxy)
+
     # Prepare environment variables to pass to Camoufox
     env_vars = {
         **get_env_vars(config, target_os, path=executable_path),
         **get_pref_env_vars(firefox_user_prefs),
+        **(proxy_auth_env(proxy_auth) if proxy_auth else {}),
         **env,
     }
     result = {

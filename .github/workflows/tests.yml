@@ -287,6 +287,11 @@ jobs:
         # patch guard.
         run: python3 browser/tests/ucrt-math/check.py
 
+      - name: Juggler input planners and pacing
+        # The humanize seam, its streams and pacer, and the base engines are
+        # plain ES modules, so they run under Node without a browser build.
+        run: node --test browser/tests/juggler/*.test.mjs
+
       - name: CI pipeline self-tests
         # These assert that the pipeline reports honestly: skips carry reasons,
         # shards partition exactly, and nothing identifying a sundial vector
@@ -310,6 +315,16 @@ jobs:
               raise SystemExit('\n'.join(problems))
           print(f'skiplist OK: {len(load_skiplist())} entries, every one with a reason')
           "
+
+      # Every other job runs 3.12 or newer, whose grammar (PEP 701 f-strings)
+      # accepts code that 3.10, the oldest Python python/pyproject.toml allows,
+      # cannot import.
+      - uses: actions/setup-python@v5
+        id: oldest-python
+        with:
+          python-version: "3.10"
+      - name: pythonlib compiles on its oldest Python
+        run: ${{ steps.oldest-python.outputs.python-path }} -m compileall -q python/src
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -646,11 +661,16 @@ jobs:
           #                            binary, so AsyncCamoufox dies with
           #                            FileNotFoundError without it. That breaks
           #                            patch-guards, the leak suite and sundial.
+          #   humanize-engines.json -- the launchers read it there too; without
+          #                            it they treat the build as one that
+          #                            predates per-channel humanize.
           #   addons/UBO/           -- the uBlock Origin the launchers load by
           #                            default; without it every suite runs a
           #                            browser no user runs.
           make -C browser stage-fonts
-          [ -f "$src/properties.json" ] || cp -v browser/settings/properties.json "$src/properties.json"
+          for f in properties.json humanize-engines.json; do
+            [ -f "$src/$f" ] || cp -v "browser/settings/$f" "$src/$f"
+          done
           python3 browser/scripts/fetch-ubo.py stage "$src"
 
           # Fail here, once, rather than in five browser jobs with five
@@ -659,7 +679,7 @@ jobs:
           # browser/bundle/fonts/groups.json), not a copy per OS; groups.json is what
           # utils._generate_fontconfig reads to decide which of them an identity
           # may see, so its absence is the failure that matters.
-          for required in camoufox-bin properties.json camoufox.cfg fonts/groups.json fonts/LMW fontconfig/linux addons/UBO/manifest.json; do
+          for required in camoufox-bin properties.json humanize-engines.json camoufox.cfg fonts/groups.json fonts/LMW fontconfig/linux addons/UBO/manifest.json; do
             [ -e "$src/$required" ] || { echo "::error::artifact is missing $required"; exit 1; }
           done
 
@@ -926,8 +946,10 @@ jobs:
       - if: matrix.leg == 'spoofing'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - if: matrix.leg == 'parity'
-        # windows-keyboard sends real X11 key events.
-        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends xdotool x11-xkb-utils
+        # windows-keyboard sends real X11 key events. libegl1: a display-less
+        # headless launch probes Mesa through EGL (headless-software-webgl.patch).
+        # This image has GLX for Xvfb but not libEGL or the software rasterizer.
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends xdotool x11-xkb-utils libegl1 libgles2 libgl1-mesa-dri
       - if: matrix.leg != 'skiplist'
         run: xvfb-run -a python3 -m ci.run_patch_guards --group "${{ matrix.leg }}" --binary "$CAMOUFOX_BINARY"
       - name: Every skiplist entry is still failing

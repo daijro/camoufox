@@ -80,10 +80,12 @@ the patch.
 ### Step 1: Bump the Version and Find the Broken Patches
 
 Update `version` and `release` in `browser/upstream.sh`, pin the PGO profiles
-Mozilla trained for that release, then:
+Mozilla trained for that release and the Remote Settings collections a page can
+see of it, then:
 
 ```bash
 python3 scripts/pgo.py pin
+python3 scripts/remote_settings.py pin
 make dir
 ```
 
@@ -495,7 +497,7 @@ grep -r "class Navigator" . --include="*.h"
 
 ## Checklist
 
-- [ ] Bump `browser/upstream.sh`, run `python3 scripts/pgo.py pin`, and run `make dir` to list the failing patches
+- [ ] Bump `browser/upstream.sh`, run `python3 scripts/pgo.py pin` and `python3 scripts/remote_settings.py pin`, and run `make dir` to list the failing patches
 - [ ] Delete the [backports](../browser/patches/patch-dependencies.md#backports) the new Firefox ships
 - [ ] For each: `make clean`, apply its dependencies, `make first-checkpoint`, `make patch` it
 - [ ] Port each reject to the new Firefox code

@@ -61,6 +61,8 @@ def targets(entries: List[dict]) -> Tuple[List[str], List[str]]:
     selectable: List[str] = []
     unresolved: List[str] = []
     for entry in entries:
+        if "checked_by" in entry:
+            continue  # Its outcome varies with machine speed; a patch guard checks its reason.
         if "module" in entry:
             selectable.append(str(entry["module"]).lstrip("./"))
         elif "test" in entry:

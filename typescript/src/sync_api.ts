@@ -16,13 +16,17 @@ import {
 	type BrowserType,
 	firefox,
 } from "playwright-core";
+import { attachCustom } from "./_humanize_custom.js";
 import * as cpuAffinity from "./cpu_affinity.js";
+import { attachDriverDefaults } from "./driver_defaults.js";
 import { generateContextFingerprint } from "./fingerprints.js";
+import { customEngines } from "./humanize.js";
 import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "./ip.js";
 import {
 	applyNoViewport,
 	attachDesktopOnlyWarning,
 	attachNoViewportDefault,
+	attachSocks5Auth,
 	attachStockMediaDefaults,
 	attachVirtualDisplay,
 	contextIdentity,
@@ -96,6 +100,9 @@ export async function NewBrowser(
 		...kwargs
 	}: NewBrowserOptions = {},
 ): Promise<Browser | BrowserContext> {
+	// custom() humanize engines run in this process: checked before the launch,
+	// attached to the browser after it (also with from_options).
+	customEngines(kwargs.humanize);
 	const [virtualDisplay, headlessBool] = await startVirtualDisplay(
 		headless,
 		debug,
@@ -134,14 +141,18 @@ export async function NewBrowser(
 	// as the identity reports, so measurable parallelism matches
 	// navigator.hardwareConcurrency; the driver gets its cores back afterwards.
 	const pinTo = pinnedCoreCount(fromOptions);
-	const launch = () =>
-		launchWith(
-			playwright,
-			fromOptions as Record<string, any>,
-			Boolean(persistent_context),
-			noViewportDefault,
-			virtualDisplay,
-			canvasNoise,
+	const launch = async () =>
+		attachCustom(
+			await launchWith(
+				playwright,
+				fromOptions as Record<string, any>,
+				Boolean(persistent_context),
+				noViewportDefault,
+				virtualDisplay,
+				canvasNoise,
+			),
+			kwargs.humanize,
+			kwargs.i_know_what_im_doing,
 		);
 	try {
 		if (!pinTo) {
@@ -196,17 +207,20 @@ async function launchWith(
 			userDataDir ?? "",
 			options,
 		);
+		attachDriverDefaults(context);
 		return attachVirtualDisplay(context, virtualDisplay);
 	}
 
 	// Browser
 	const identity = await hostIdentity(fromOptions, canvasNoise);
 	const browser = await playwright.launch(fromOptions);
+	attachSocks5Auth(browser);
 	if (noViewportDefault) {
 		attachNoViewportDefault(browser);
 	}
 	attachStockMediaDefaults(browser);
 	attachDesktopOnlyWarning(browser);
+	attachDriverDefaults(browser);
 	(browser as any)._camoufoxHostIdentity = identity;
 	return attachVirtualDisplay(browser, virtualDisplay);
 }
@@ -301,6 +315,8 @@ export async function NewContext(
 		opts.permissions ??= ["geolocation"];
 	}
 
+	// A browser launched elsewhere takes SOCKS5 credentials too.
+	attachSocks5Auth(browser);
 	const context = await browser.newContext(opts);
 	await context.addInitScript(fp.init_script);
 	return context;

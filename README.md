@@ -451,6 +451,7 @@ right.
 | Timezone, locale and `Intl` | The identity's, per realm, workers included | They must agree with the IP's country | `timezone-spoofing`, `locale-spoofing` patches |
 | Geolocation | Coordinates from GeoIP, permission granted | They must agree with the IP | `geolocation-spoofing` patch, launcher |
 | WebRTC IP | ICE candidates, SDP and `getStats()` rewritten to the proxy IP | WebRTC otherwise reveals the real IP behind a proxy | `webrtc-ip-spoofing` patch |
+| WebRTC UDP behind a SOCKS5 proxy | STUN, TURN and peer-to-peer UDP go through the proxy's UDP relay (UDP ASSOCIATE), so the srflx candidate is the address the page's STUN server really saw; the local network gets no exception, and mDNS names stay in the browser. Without a relay, no UDP leaves the host and the srflx carries the proxy IP. Only a page's own loopback connection stays direct | Stock Firefox on the exit machine gathers a real srflx and connects peer to peer | `webrtc-socks5-udp` patch |
 | Touchscreen | A touchscreen laptop, not a phone | Touch points and pointer media must agree with the claimed device | `touchscreen-fingerprint-spoofing`, `force-default-pointer` patches |
 
 Left as stock Firefox has it, on purpose:
@@ -494,8 +495,14 @@ claims the host's OS. Details are in
 | Playwright's `evaluate`, selectors and init scripts run in an isolated world the page cannot see | Juggler |
 | `navigator.webdriver` is `false` | `playwright/1-leak-fixes` patch |
 | `select_option`, `fill` on date and colour inputs, and `set_input_files` fire trusted events | `trusted-automation-events` patch |
+| `fill` and `keyboard.insert_text` paste the text as a person does: the paste shortcut and Firefox's own paste, without the system clipboard | Juggler |
+| Screenshots leave the page's DOM alone (no caret-hiding style writes) | Launcher |
+| Mouse moves coalesce per frame as a real mouse's do, spaced as a 125 Hz mouse's | Juggler, `input-coalescing-parity` patch |
+| A drag fires `drag` at its source with each motion, as GTK does | Juggler, `drag-source-events` patch |
+| Driver calls define no interfaces on the page's window | `isolated-world-global-order` patch |
+| A SOCKS5 proxy with a username and password works, for the launch and per context: the launcher hands the credentials to Juggler, which Playwright alone refuses | Launcher, Juggler |
 | Headless reports a fine pointer, like a desktop | `force-default-pointer` patch |
-| Wheel events carry native ticks, like a physical wheel | `wheel-native-ticks` patch |
+| `mouse.wheel()` turns notches, as a physical wheel does: 100 px is one notch, each its own event with a native tick | Juggler, `wheel-native-ticks` patch |
 | Juggler's debugger leaves no side effects content can observe | `debugger-invisible-to-content` patch |
 | Per-context fingerprint setters are gone before page script runs | `window-setter-seal` patch |
 | Popup blocker on, as in stock Firefox | `popup-blocker-parity` patch |
@@ -518,7 +525,7 @@ claims the host's OS. Details are in
 | Feature | Where |
 |---|---|
 | Load extracted addons without a debug server: `addons=["/path/to/addon"]` | launcher, `camoufox-window-module` patch |
-| uBlock Origin installed by default: each browser release bundles the newest uBO release on AMO when it is built (`browser/scripts/fetch-ubo.py`), blocking with the default filter lists packaged in it, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | packaging, launcher, `policies.json` |
+| uBlock Origin installed by default: each browser release bundles the newest uBO release on AMO when it is built (`browser/scripts/fetch-ubo.py`), blocking with the default filter lists packaged in it, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | packaging (`fetch-ubo.py` freeze_lists), launcher |
 | Addons cannot open tabs unless `allow_addon_new_tab=True` | `disable-extension-newtab` patch |
 | Addons run in private browsing | `all-addons-private-mode` patch |
 
@@ -546,7 +553,6 @@ The full option list is in the [Python README](python/README.md#launch-options).
 |---|---|
 | Telemetry and data reporting removed at compile time | `librewolf/` patches |
 | Onboarding messages disabled | `ghostery/` patch |
-| No bundled search engines | `no-search-engines` patch |
 | Mozilla services and background traffic turned off | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
 | Firefox's bundled certificate revocations (OneCRL) enforced in every profile, with no network fetch | Stock Firefox since 159 |
 | Stock browser UI: no theme, toolbar or dialog changes | |
@@ -593,6 +599,59 @@ TypeScript port that reproduces the Python original exactly, at
 `browser/additions/juggler/input/cursory/`. **Cursory is LGPLv3-or-later, not
 MPL-2.0 like the rest of the browser**; see
 [`NOTICE`](browser/additions/juggler/input/cursory/NOTICE).
+
+### Choosing an engine per channel
+
+`humanize` also takes one engine per input channel, so mouse, keyboard and scroll can be set separately. Both launchers accept the dict, and `custom(fn)` runs in the caller's process. The browser applies the engines to the input commands Playwright already sends, so the Playwright code stays the same:
+
+```python
+from camoufox import Camoufox
+from camoufox.humanize import cursory, raw
+
+with Camoufox(humanize={"mouse": cursory(max_time=1.0), "scroll": raw(), "seed": 1234}) as browser:
+    ...
+```
+
+| Channel | Engines | `auto()` means |
+|---|---|---|
+| `mouse` | `raw()`, `cursory(max_time=, min_time=)` | `cursory()` |
+| `scroll` | `raw()`, `cursory()`: a wheel turn arrives as 3-line notches, tens of ms apart | `cursory()` |
+| `keyboard` | `raw()` | `raw()` |
+
+An omitted channel is `auto()`. `humanize=True` is `auto()` on every channel, and a number is `{"mouse": cursory(max_time=<number>)}`, as before. `seed` (an integer below 2^64) makes the humanized input repeatable: the same seed and the same actions give the same cursor paths and wheel timing, and each channel has its own random stream, so typing does not change the mouse paths. Without a seed, every launch draws a new one.
+
+The table is what this repository's build ships. A build lists its engines, and the options each takes, in `humanize-engines.json` beside `properties.json` ([docs/humanize.md](docs/humanize.md)). `engine(name, **options)` names any of them, and the launcher checks the setting against that file, raising `HumanizeEngineUnavailable` for an engine the build does not have. Set the environment variable `CAMOU_HUMANIZE_TRACE` to a file path to have the browser write every humanized action and its plan there as JSON lines.
+
+### Writing your own engine: `custom(fn)`
+
+A channel can also run a function of yours in your own process (Python below; TypeScript in [its README](typescript/README.md#your-own-humanize-engine-customfn)). The function plans the input and plays it through Playwright's own input methods, so the page sees the same trusted events as from any Playwright call. The browser runs that channel raw, and your code never runs inside the browser. The other channels keep the build's engines.
+
+```python
+from camoufox.async_api import AsyncCamoufox
+from camoufox.humanize import auto, custom
+
+async def my_move(page, x, y, *, original, rng, play):
+    steps = my_model((x, y), rng)                     # [(t_ms, x, y), ...]
+    await play([("move", sx, sy, t) for t, sx, sy in steps])
+
+async with AsyncCamoufox(humanize={"mouse": custom(my_move), "scroll": auto(), "seed": 1234}) as browser:
+    page = await browser.new_page()
+    await page.locator("#submit").click()             # my_move plans the move, Playwright clicks
+```
+
+| Channel | Called as | For |
+|---|---|---|
+| `mouse` | `fn(page, x, y, *, original, rng, play)` | `Mouse.move`/`click`/`dblclick`, and the move to the point of `click`, `dblclick` and `hover` on a `Page` or `Locator` |
+| `keyboard` | `fn(page, text, *, original, rng, play, kind)` with `kind` `"type"`, `"press"` or `"fill"` | `Keyboard.type`/`press`; `fill`, `type`, `press` on a `Page` or `Locator`, and `Locator.press_sequentially` |
+| `scroll` | `fn(page, target, *, original, rng, play)` with `target` a `Locator` or `(dx, dy)` | `Mouse.wheel`, `Locator.scroll_into_view_if_needed`, and bringing an element that is not in view into view before a click, hover or fill |
+
+- `original()` runs Playwright's own behaviour for the call. Calling it is how a function declines.
+- `rng()` returns a float in [0, 1) from the channel's seeded stream. It is the same stream the browser's engines would draw from for that seed, number for number.
+- `play(steps)` dispatches steps at their times, in ms from the start of the call: `("move", x, y, t)`, `("down" | "up", button, t)`, `("wheel", dx, dy, t)`, `("key", key, "down" | "up", t)`, `("text", text, t)` (pasted, as `keyboard.insert_text` is). It waits until each step is due on a monotonic clock rather than sleeping between steps, so a slow round trip delays one step and never adds up. Bad steps raise `ValueError` before anything is sent.
+- Playwright's actions run inside its own server, so the wrappers act first: they scroll the element into view and move to the click point, and Playwright's own move then has no distance left. A `fill` selects the field's text first, so your keys replace it.
+- With the sync API the functions are plain functions; with the async API they may be `async`. Exceptions reach the caller unchanged.
+- A custom mouse leaves the moves the browser makes itself (the cursor move before a scroll engine wheels) to the build's own mouse engine, so they are paths, not jumps.
+- The wrappers belong to the browser `Camoufox()` launched: other browsers in the same process are untouched. For a browser from `connect()`, launch it with `raw()` on those channels and call `camoufox.humanize.attach_custom(browser, humanize)`. Over a network each event is a round trip, so the launcher warns (`humanize_custom_remote`). `launch_server()` refuses `custom()`.
 
 # Building the browser
 

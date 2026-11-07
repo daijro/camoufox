@@ -281,11 +281,11 @@ passed to Playwright's `firefox.launch()` (or `launch_persistent_context()`).
 | `headless` | `bool`, `"virtual"` or `"virtual-gpu"` | `False` | See [Headless modes](#headless-modes). |
 | `gpu` | `str` or `int` | `CAMOUFOX_GPU`, or the only GPU | The card for `headless="virtual-gpu"`. See [The GPU display](#the-gpu-display). Not taken by `launch_options`. |
 | `require_gpu` | `bool` | `True` | With `headless="virtual-gpu"`, fail the launch when the browser does not render on the card; `False` warns. Not taken by `launch_options`. |
-| `proxy` | `dict` | none | Playwright proxy: `server`, `username`, `password`, `bypass`. |
+| `proxy` | `dict` | none | Playwright proxy: `server`, `username`, `password`, `bypass`. A `socks5://` proxy can have a username and password too (RFC 1929), which Playwright alone refuses; the same holds for `NewContext()` and `new_context()`. |
 | `geoip` | `bool` or `str` | none | `True` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. Without a proxy, also decides whether IPv6 stays on. Needs the `geoip` extra. |
 | `geoip_db` | `str` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
 | `locale` | `str` or `list[str]` | from `geoip`, else the drawn identity's | Locale(s), e.g. `"en-US"` or `["fr-FR", "en-US"]`. The first is used for `Intl`. |
-| `humanize` | `bool` or `float` | off | Human cursor movement. A number caps one movement at that many seconds (default cap 1.5). |
+| `humanize` | `bool`, `float` or `dict` | off | Human input. `True` humanizes every channel; a number caps one cursor movement at that many seconds (default cap 1.5). A dict picks an engine per channel (`mouse`, `keyboard`, `scroll`) from `camoufox.humanize` (`raw()`, `cursory()`, `auto()`, `engine()`, `custom(fn)`), plus an integer `seed` for repeatable input ([engines per channel](../README.md#choosing-an-engine-per-channel), [`custom(fn)`](../README.md#writing-your-own-engine-customfn)). |
 | `screen` | `camoufox.fingerprints.Screen` | the real display when headed | Bounds the generated screen: `Screen(max_width=1920, max_height=1080)`. |
 | `window` | `(int, int)` | generated | Fixed outer window size. |
 | `fonts` | `list[str]` | none | Extra font families on top of the OS's own. |

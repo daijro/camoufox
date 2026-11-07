@@ -15,7 +15,9 @@ explicit juggler Runtime.evaluate / Runtime.callFunction is on the stack
 page.evaluate(() => window.open(...)) still works. The window is SYNCHRONOUS:
 a popup opened after an `await` inside the evaluated function is blocked, as it
 would be on stock, or a page polling window.open() on a timer would eventually
-land inside somebody else's evaluate.
+land inside somebody else's evaluate. And it is the driver's own code only: page
+code the evaluate reaches (a handler it triggers, a getter or Proxy trap it
+reads) is blocked as on stock.
 
 Both directions are checked here, because either one regressing is silent:
 losing the driver's key breaks ~35 upstream tests, and losing the blocker puts
@@ -46,6 +48,15 @@ let opened = null;
 try { opened = window.open('', '_pageopen', 'width=120,height=120'); } catch (e) {}
 document.body.dataset.pageOpened = String(!!opened);
 if (opened) { try { opened.close(); } catch (e) {} }
+// Page code the driver's evaluate reaches (here a click handler it triggers)
+// runs while the driver's key is held, but it is the page calling: stock
+// blocks it, since a scripted click carries no activation.
+document.body.onclick = () => {
+  let w = null;
+  try { w = window.open('', '_reachedopen', 'width=120,height=120'); } catch (e) {}
+  document.body.dataset.reachedOpened = String(!!w);
+  if (w) { try { w.close(); } catch (e) {} }
+};
 </script></body>"""
 
 
@@ -103,6 +114,11 @@ async def probe(binary, port):
             "() => navigator.getAutoplayPolicy('mediaelement')"
         )
 
+        # Page code inside the driver's evaluate meets the blocker as on stock.
+        out["reached_opened"] = await page.evaluate(
+            "() => { document.body.click(); return document.body.dataset.reachedOpened; }"
+        )
+
         # Past the synchronous window the blocker is back.
         out["async_opened"] = await page.evaluate(
             "async () => { await new Promise(r => setTimeout(r, 40));"
@@ -136,6 +152,11 @@ def main() -> int:
         failures.append(
             f"autoplay policy is {out['autoplay']!r}, not stock's 'allowed-muted' "
             "without activation"
+        )
+    if out["reached_opened"] != "false":
+        failures.append(
+            "page code reached by the driver's evaluate (a click handler) opened a popup "
+            f"({out['reached_opened']!r}) -- only the driver's own code holds the key"
         )
     if out["async_opened"]:
         failures.append(
