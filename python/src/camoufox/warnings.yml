@@ -119,3 +119,7 @@ caller_value_incoherent: >-
     ({detail}). Camoufox launches with the value you passed, but a page that checks these values against each other
     can tell this browser is not the machine it claims to be. Leave {keys} out of config to have a coherent value drawn.
     i_know_what_im_doing does not silence this warning.
+
+voices_unread: >-
+    This browser build cannot read voices:speechd, so a Linux identity reports no voices.
+    Run `camoufox set --release` for the paired build, or pass `voices` in config.
