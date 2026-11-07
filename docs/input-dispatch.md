@@ -195,20 +195,26 @@ a ratio of 1 are not measured there. macOS differs: with a person turning a
 notched USB mouse on stock 159.0, a slow notch is `deltaMode` 1, `deltaY` 1,
 `wheelDeltaY` -48, `detail` 1 and a `MozMousePixelScroll` of 16, and the OS
 accelerates a faster turn to as many as 6 lines an event.
-`Page.dispatchWheelEvent` sends one event of three lines per notch on every OS,
-flagged as a native tick (`wheel-native-ticks.patch`), so Gecko applies the same
-system scroll speed. That matches Linux and Windows, not the macOS shape above.
+
+On a Linux or Windows identity, `Page.dispatchWheelEvent` sends one event of three
+lines per notch, flagged as a native tick (`wheel-native-ticks.patch`), so Gecko
+applies the same system scroll speed. On a macOS identity it sends lines without
+that flag and the launcher turns `mousewheel.system_scroll_override.enabled` off,
+as stock has it on macOS, which gives the shape above in proportion. Every one of
+the 78 recorded macOS bursts starts at one line, so a call starts there too and
+grows by 1 to 3 lines an event up to 12.
 
 A Playwright caller asks for pixels, so `mouse.wheel(dx, dy)` maps each axis to
 notches: 100 px is one notch, rounded to the nearest, at least one on an axis
-that moves. The notches of one call are 18 to 60 ms apart, drawn per notch; the
+that moves. On a macOS identity it maps to lines instead, at 16 px a line. The
+events of one call are 18 to 60 ms apart, drawn per event; the
 one recording of a person's wheel, on macOS, has bursts 20 to 80 ms apart (10th
 to 90th percentile), and nothing backs the range on Linux or Windows. The page therefore scrolls a
-notch's distance (120 px here), not the exact pixels asked for, and
+notch's distance (120 px here) or a whole number of lines, not the exact pixels asked for, and
 `mouse.wheel(0, 0)` sends nothing. Humanize does not change this: `raw()`
 and a `custom()` scroll engine's wheel steps are rounded the same way, each
-step at least one notch, so a custom engine should plan in notches (100 px)
-to land where it means to. Without a scroll engine each notch takes the
+step at least one notch, so a custom engine should plan in notches (100 px, or
+lines of 16 px on a macOS identity) to land where it means to. Without a scroll engine each notch takes the
 activation slot alone, so a long wheel does not hold up input in other contexts;
 an engine's plan keeps the slot for as long as it plays.
 `browser/tests/playwright/patches/driven-wheel-notches.py` compares the result

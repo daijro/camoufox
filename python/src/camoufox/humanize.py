@@ -97,7 +97,8 @@ def custom(fn: Callable[..., Any]) -> Engine:
     dispatches steps on a schedule. With the async API `fn` may be async.
 
     Every wheel step turns in whole notches, as a physical wheel does: 100 px
-    asked is one notch, rounded, at least one per step (docs/input-dispatch.md).
+    asked is one notch, rounded, at least one per step. A macOS identity turns
+    in lines, 16 px each, starting at one (docs/input-dispatch.md).
     """
     if not callable(fn):
         raise ValueError(f'custom() takes the function that plans the input, got {fn!r}')

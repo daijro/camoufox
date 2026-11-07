@@ -7,7 +7,12 @@ wheelDeltaY -120, then DOMMouseScroll with detail 3 and MozMousePixelScroll
 with detail 60 (three 20 px lines), and the scroller moves 120 px per notch.
 Measured with XTest button 5 on Xvfb (three runs,
 identical). docs/input-dispatch.md has the Windows measurement, which has the
-same shape; macOS is not measured.
+same shape.
+
+macOS differs. A person's notched mouse on stock 159.0 gives one line a slow
+notch: deltaY 1, wheelDeltaY -48, DOMMouseScroll detail 1, MozMousePixelScroll
+16. A faster turn starts at one line and grows, with those values in proportion.
+A line is the scroller's line height, so the 16 and 48 follow the page's font.
 
 Juggler sent the requested pixels instead, unless humanize was on: deltaMode 0,
 deltaY 100, wheelDeltaY -300, DOMMouseScroll detail 5, one event however far
@@ -45,16 +50,16 @@ NOTCH = [["wheel", 1, 0, 6, -120], ["DOMMouseScroll", 3], ["MozMousePixelScroll"
 NOTCH_PX = 120
 
 
-def probe(binary):
+def probe(binary, os, turns):
     from camoufox.sync_api import Camoufox
 
-    with Camoufox(executable_path=str(binary), headless=False, os="linux", window=(1280, 900)) as browser:
+    with Camoufox(executable_path=str(binary), headless=False, os=os, window=(1280, 900)) as browser:
         page = browser.new_page()
         page.set_content(PAGE)
         page.mouse.move(190, 140)
         page.evaluate(RECORD)
         out = {}
-        for name, dy in (("one", 100), ("three", 300)):
+        for name, dy in turns:
             page.evaluate("() => { window.__events = []; document.getElementById('s').scrollTop = 0; }")
             page.mouse.wheel(0, dy)
             page.wait_for_timeout(800)
@@ -84,12 +89,34 @@ async def contended_wheel(binary):
         return finished_first, [e[5] for e in events if e[0] == "wheel"]
 
 
+def mac_failures(got):
+    failures = []
+    line = next(e[1] for e in got["slow"][0] if e[0] == "MozMousePixelScroll")
+    for name, lines in (("slow", 1), ("turn", 6), ("long", 63)):
+        events, scrolled = got[name]
+        wheels = [e[3] for e in events if e[0] == "wheel"]
+        expected = [
+            part
+            for dy in wheels
+            for part in (["wheel", 1, 0, dy, -3 * line * dy], ["DOMMouseScroll", dy], ["MozMousePixelScroll", line * dy])
+        ]
+        shape = [e[:5] if e[0] == "wheel" else e for e in events]
+        if shape != expected:
+            failures.append(f"macOS mouse.wheel ({name}) delivered {shape}, expected {expected}")
+        if not wheels or wheels[0] != 1 or sum(wheels) != lines:
+            failures.append(f"macOS mouse.wheel ({name}) sent lines {wheels}: a burst starts at 1 and totals {lines}")
+        if scrolled != line * lines:
+            failures.append(f"macOS mouse.wheel ({name}) scrolled {scrolled} px, expected {line * lines}")
+    return failures
+
+
 def main() -> int:
     with hidden_display("1920x1080"):
         binary = resolve_binary()
-        got = probe(binary)
+        got = probe(binary, "linux", (("one", 100), ("three", 300)))
+        mac = probe(binary, "macos", (("slow", 16), ("turn", 100), ("long", 1000)))
         wheel_finished_first, contended = asyncio.run(contended_wheel(binary))
-    failures = []
+    failures = mac_failures(mac)
     if wheel_finished_first:
         failures.append("a click in another context waited for a long wheel to finish")
     if any(b - a < 10 for a, b in zip(contended, contended[1:])):

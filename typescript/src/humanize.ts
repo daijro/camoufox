@@ -120,7 +120,8 @@ export function cursory(
  *     scroll    fn(page, target, { original, rng, play })   target: a Locator or [dx, dy]
  *
  * Every wheel step turns in whole notches, as a physical wheel does: 100 px
- * asked is one notch, rounded, at least one per step (docs/input-dispatch.md).
+ * asked is one notch, rounded, at least one per step. A macOS identity turns
+ * in lines, 16 px each, starting at one (docs/input-dispatch.md).
  */
 export function custom(fn: CustomEngine): Engine {
 	if (typeof fn !== "function")

@@ -75,9 +75,25 @@ function durationBoundsMs({maxTime = kDefaultMaxTimeSeconds, minTime = 0}) {
 
 const kPxPerNotch = 100;
 const kLinesPerNotch = 3;
+const kPxPerMacLine = 16;
+const kMaxMacLines = 12;
 
 function toNotches(delta) {
-  return delta === 0 ? 0 : Math.sign(delta) * Math.max(1, Math.round(Math.abs(delta) / kPxPerNotch));
+  const count = delta === 0 ? 0 : Math.max(1, Math.round(Math.abs(delta) / kPxPerNotch));
+  return new Array(count).fill(Math.sign(delta) * kLinesPerNotch);
+}
+
+// macOS accelerates a turn: every recorded burst starts at one line and grows
+// (docs/input-dispatch.md).
+function toMacLines(delta, rng) {
+  let left = delta === 0 ? 0 : Math.max(1, Math.round(Math.abs(delta) / kPxPerMacLine));
+  const events = [];
+  for (let size = 1; left > 0; size = Math.min(kMaxMacLines, size + 1 + Math.floor(rng() * 3))) {
+    const lines = Math.min(size, left);
+    events.push(Math.sign(delta) * lines);
+    left -= lines;
+  }
+  return events;
 }
 
 /**
@@ -183,20 +199,22 @@ export const cursory = {
   },
 
   planWheel(ctx, at, {deltaX, deltaY, deltaZ}) {
-    const notchesX = toNotches(deltaX);
-    const notchesY = toNotches(deltaY);
-    const count = Math.max(1, Math.abs(notchesX), Math.abs(notchesY));
+    const eventsFor = delta => (ctx.macOS ? toMacLines(delta, ctx.rng) : toNotches(delta));
+    const xs = eventsFor(deltaX);
+    const ys = eventsFor(deltaY);
+    const count = Math.max(1, xs.length, ys.length);
     const steps = [];
     let t = 0;
     for (let i = 0; i < count; i++) {
       if (i)
         t += 18 + ctx.rng() * 42;
-      const lines = n => (i < Math.abs(n) ? Math.sign(n) * kLinesPerNotch : 0);
+      const dx = xs[i] ?? 0;
+      const dy = ys[i] ?? 0;
       steps.push({
         kind: 'wheel', t, x: at.x, y: at.y,
-        dx: lines(notchesX), dy: lines(notchesY), dz: i ? 0 : deltaZ,
+        dx, dy, dz: i ? 0 : deltaZ,
         mode: 1,
-        ticks: {x: lines(notchesX), y: lines(notchesY)},
+        ticks: {x: dx, y: dy},
         essential: true,
       });
     }

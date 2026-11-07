@@ -526,6 +526,18 @@ describe("test_launch_environment: prefs", () => {
 			expect("media.eme.enabled" in prefs).toBe(false);
 			expect(prefs["middlemouse.paste"]).toBe(false);
 		});
+		it("doubles a wheel's lines as stock does on each OS", async () => {
+			for (const [u, enabled] of [
+				[WIN_UA, true],
+				[LINUX_UA, true],
+				[MAC_UA, false],
+			] as const) {
+				const { prefs } = await onHost("lin", u);
+				expect(prefs["mousewheel.system_scroll_override.enabled"]).toBe(
+					enabled,
+				);
+			}
+		});
 		it("draws Windows' scrollbars at Windows' size", async () => {
 			const classic = await onHost("lin", WIN_UA, {
 				firefox_user_prefs: { "ui.useOverlayScrollbars": 0 },
