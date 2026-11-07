@@ -250,3 +250,21 @@ export class ProfileDirectoryError extends Error {
 		this.name = "ProfileDirectoryError";
 	}
 }
+
+/**
+ * Raised at launch when `humanize` names an engine the browser build does not
+ * ship: one its humanize-engines.json does not list for that channel.
+ */
+export class HumanizeEngineUnavailable extends Error {
+	constructor(
+		readonly channel: string,
+		readonly engine: string,
+		readonly available: string[],
+		reason = "",
+	) {
+		super(
+			`humanize ${channel}: ${engine} is not available in this build${reason ? ` (${reason})` : ""}; available: ${JSON.stringify(available)}`,
+		);
+		this.name = "HumanizeEngineUnavailable";
+	}
+}

@@ -21,8 +21,8 @@ export function normalDelay(mean, sd, min = 0, max = Infinity, random = Math.ran
 /**
  * A person's dwell or hold time in ms, right-skewed as human timing is: a
  * log-normal draw whose median is `medianMs`, with `sigma` the standard
- * deviation of the logarithm, clamped to [min, max]. `random` is as for
- * normalDelay.
+ * deviation of the logarithm, clamped to [min, max]. `random` is a seeded
+ * stream, as for normalDelay.
  */
 export function logNormalDelay(medianMs, sigma, min = 0, max = Infinity, random = Math.random) {
   const n = Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random());

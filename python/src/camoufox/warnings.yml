@@ -108,6 +108,14 @@ audio_seed_removed: >-
     stock Firefox renders it: stock gives one value per CPU architecture, so noise
     was a tell, not a disguise (ci/tribal-rules.yml: audio-is-not-noised).
 
+humanize_scroll_teleports: >-
+    humanize has mouse=raw() with a scroll engine that moves the cursor over the page before it scrolls.
+    With a raw mouse that move is a single jump.
+
+humanize_custom_remote: >-
+    humanize has a custom() engine on a remote browser. Each event it plays is a round trip over the network,
+    so network jitter lands between the events. Built-in engines run inside the browser and avoid it.
+
 addon_not_bundled: >-
     This Camoufox build has no {addon} addon at {path}, so it launches without it.
     Browser releases bundle their default addons; an older release or an unpackaged build does not.

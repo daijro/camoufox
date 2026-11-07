@@ -254,3 +254,20 @@ class FpgenModelError(RuntimeError):
     """Raised when fpgen's pinned model cannot be installed where fpgen reads it."""
 
     ...
+
+
+class HumanizeEngineUnavailable(ValueError):
+    """
+    Raised at launch when `humanize` names an engine the browser build does not
+    ship: one its humanize-engines.json does not list for that channel.
+    """
+
+    def __init__(self, channel: str, engine: str, available: list, reason: str = '') -> None:
+        self.channel = channel
+        self.engine = engine
+        self.available = available
+        super().__init__(
+            f'humanize {channel}: {engine} is not available in this build'
+            + (f' ({reason})' if reason else '')
+            + f'; available: {available}'
+        )

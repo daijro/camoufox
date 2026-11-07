@@ -17,9 +17,10 @@ diff --git a/lw/moz.build b/lw/moz.build
 index e69de29bb2..8b4e45fb64 100644
 --- a/lw/moz.build
 +++ b/lw/moz.build
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,9 @@
 +FINAL_TARGET_FILES += [
 +  "camoufox.cfg",
++  "humanize-engines.json",
 +  "properties.json"
 +]
 +
