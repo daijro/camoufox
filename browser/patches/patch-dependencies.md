@@ -97,9 +97,9 @@ These patches carry upstream Firefox changes that `browser/upstream.sh`'s
 version does not have yet. Drop each one when the Firefox it moves to ships
 the change.
 
-| Patch | Upstream change |
-|-------|-----------------|
-| `remote-security-settings.patch` | The startup import of the bundled OneCRL list into certificate storage, from mozilla-firefox's `release` branch ([Bug 2084311](https://bugzilla.mozilla.org/show_bug.cgi?id=2084311)). Firefox 158.0.1 ships the matching `security-state/onecrl.json` dump. Camoufox turns Remote Settings off, so without the import a fresh profile has no revocations. |
+None at present. Firefox 159 ships the startup import of the bundled OneCRL
+list ([Bug 2084311](https://bugzilla.mozilla.org/show_bug.cgi?id=2084311)),
+which `remote-security-settings.patch` carried for 158.0.1.
 
 ## Playwright
 
