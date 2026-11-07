@@ -587,7 +587,7 @@ export class PageHandler {
       deltaMode: step.mode,
       lineOrPageDeltaX: step.ticks?.x ?? 0,
       lineOrPageDeltaY: step.ticks?.y ?? 0,
-      nativeNotches: Boolean(step.ticks),
+      nativeNotches: Boolean(step.ticks) && !this._identityIs('Mac', 'Darwin'),
     });
   }
 
@@ -988,11 +988,15 @@ export class PageHandler {
   }
 
   _contextMenuOnMouseUp() {
+    return this._identityIs('Win', 'WINNT');
+  }
+
+  _identityIs(platformPrefix, hostOS) {
     let platform = '';
     try { platform = ChromeUtils.camouGetString('navigator.platform') || ''; } catch (e) {}
     if (platform)
-      return platform.startsWith('Win');
-    return Services.appinfo.OS === 'WINNT';
+      return platform.startsWith(platformPrefix);
+    return Services.appinfo.OS === hostOS;
   }
 
   async ['Page.dispatchWheelEvent']({x, y, button, deltaX, deltaY, deltaZ, modifiers }) {
@@ -1014,7 +1018,8 @@ export class PageHandler {
     // every other context, and waits out its gap from the notch before, however
     // long the slot took to come.
     const win = this._pageTarget._window;
-    const {steps} = cursory.planWheel({rng: Math.random}, {x, y}, {deltaX, deltaY, deltaZ});
+    const macOS = this._identityIs('Mac', 'Darwin');
+    const {steps} = cursory.planWheel({rng: Math.random, macOS}, {x, y}, {deltaX, deltaY, deltaZ});
     let previous = 0;
     for (const step of steps) {
       if (step.t > previous)

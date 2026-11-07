@@ -27,6 +27,15 @@ test('an untracked cursor moves straight to the target', () => {
   assert.deepEqual(steps, [{kind: 'move', x: 10, y: 20, t: 0}]);
 });
 
+test('a macOS turn starts at one line, grows, and carries the whole distance', () => {
+  for (const [delta, total] of [[1, 1], [16, 1], [100, 6], [-1000, -63], [20000, 1250]]) {
+    const {steps} = cursory.planWheel({rng: Math.random, macOS: true}, {x: 1, y: 2}, {deltaX: 0, deltaY: delta, deltaZ: 0});
+    assert.equal(steps[0].dy, Math.sign(delta));
+    assert.equal(steps.reduce((sum, step) => sum + step.dy, 0), total);
+    assert.ok(steps.every(step => Math.abs(step.dy) <= 12 && step.mode === 1 && step.ticks.y === step.dy));
+  }
+});
+
 test('notches carry the whole requested distance, one essential step per notch', () => {
   for (const [deltaX, deltaY, count] of [[0, 100, 1], [0, 449, 4], [0, -250, 3], [120, 0, 1], [0, 30, 1], [300, -500, 5]]) {
     const {steps} = cursory.planWheel({rng: Math.random}, {x: 1, y: 2}, {deltaX, deltaY, deltaZ: 0});

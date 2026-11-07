@@ -1851,6 +1851,14 @@ export async function launchOptions({
 		setInto(firefox_user_prefs, "ui.useOverlayScrollbars", 1);
 	}
 
+	// Stock doubles a wheel's lines on Windows and Linux and never on macOS, and
+	// a page reads the result in deltaY (docs/input-dispatch.md).
+	setInto(
+		firefox_user_prefs,
+		"mousewheel.system_scroll_override.enabled",
+		targetOs !== "mac",
+	);
+
 	// A Windows identity on another host: answers that come from the host
 	// build's platform code are set to what stock Windows Firefox gives.
 	if (targetOs === "win" && utilsDeps.hostOsKey() !== "win") {

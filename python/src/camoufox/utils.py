@@ -1468,6 +1468,10 @@ def launch_options(
     else:
         firefox_user_prefs.setdefault('ui.useOverlayScrollbars', 1)
 
+    # Stock doubles a wheel's lines on Windows and Linux and never on macOS, and
+    # a page reads the result in deltaY (docs/input-dispatch.md).
+    firefox_user_prefs.setdefault('mousewheel.system_scroll_override.enabled', target_os != 'mac')
+
     # A Windows identity on another host: answers that come from the host
     # build's platform code are set to what stock Windows Firefox gives. A
     # Windows host already gives them, so nothing is set there.

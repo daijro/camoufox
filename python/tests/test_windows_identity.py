@@ -121,6 +121,12 @@ def test_caller_behaviour_wins(launch):
     assert prefs["middlemouse.paste"] is True
 
 
+@pytest.mark.parametrize("ua, enabled", [(WIN_UA, True), (LIN_UA, True), (MAC_UA, False)])
+def test_wheel_override_follows_the_identity(launch, ua, enabled):
+    _, prefs = launch(ua)
+    assert prefs["mousewheel.system_scroll_override.enabled"] is enabled
+
+
 # Scrollbars are drawn by the host build's theme: GTK's are 12 px where stock
 # Windows measures 17 (classic, ui.useOverlayScrollbars 0), so a Windows 10
 # identity on a Linux host showed a 12 px gutter.
