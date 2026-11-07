@@ -48,10 +48,10 @@ index 70f77c9fcb..6193e123e5 100644
  
    get PREVIEW_MODE() {
 diff --git a/services/settings/dumps/main/moz.build b/services/settings/dumps/main/moz.build
-index 88e740b90e..d4ee9ebb42 100644
+index 88e740b90e..398cfe6556 100644
 --- a/services/settings/dumps/main/moz.build
 +++ b/services/settings/dumps/main/moz.build
-@@ -45,6 +45,19 @@ FINAL_TARGET_FILES.defaults.settings.main += [
+@@ -45,6 +45,21 @@ FINAL_TARGET_FILES.defaults.settings.main += [
  
  # These search config icons only apply to desktop.
  if CONFIG["MOZ_BUILD_APP"] == "browser":
@@ -65,8 +65,10 @@ index 88e740b90e..d4ee9ebb42 100644
 +        "tracking-protection-lists.json",
 +        "url-classifier-exceptions.json",
 +    ]
++    # Absolute: for a relative wildcard, faster make and recursive make disagree
++    # on whether the directory is kept.
 +    FINAL_TARGET_FILES.defaults.settings.main["tracking-protection-lists"] += [
-+        "tracking-protection-lists/*",
++        "/services/settings/dumps/main/tracking-protection-lists/*",
 +    ]
      FINAL_TARGET_FILES.defaults.settings.main["search-config-icons"] += [
          "search-config-icons/001500a9-1a6c-3f5a-ba15-a5f5a075d256",
