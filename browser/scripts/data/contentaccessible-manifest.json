@@ -1,5 +1,5 @@
 {
- "firefox_version": "159.0",
+ "firefox_version": "159.0.1",
  "packages": {
   "browser/omni.ja|content|activity-stream": {
    "files": {
@@ -2318,7 +2318,7 @@
     "chrome/toolkit/content/global/bindings/timekeeper.js": "fdccc112a17084dd6881027d5bd4a899a4403892b79c422d04c126385264fd29",
     "chrome/toolkit/content/global/bindings/timepicker.js": "8b63f5cbdd80b4739fab5a7bd1675c520f98a4a1c316c3c7496bf155ae5f941d",
     "chrome/toolkit/content/global/buildconfig.css": "e9cd781bbc7ee82f28a71520352a4b2c7ade454a87c51ca6c882ba69720a2330",
-    "chrome/toolkit/content/global/buildconfig.html": "01811babd9b0f239b1278b43fc6db3afd5da2d1811e0d20d6b968f399807c6cc",
+    "chrome/toolkit/content/global/buildconfig.html": "a54569417ee4e245ace4e2f8bbaf19b2ae13b71f7041010689e07b1f414b425d",
     "chrome/toolkit/content/global/certviewer/certDecoder.mjs": "03ba917df792554ed07ff559b30a846ca7e3315f838d0f2931cb527a86ad4fa5",
     "chrome/toolkit/content/global/certviewer/certviewer.css": "66defee9ba236bfb58d0e0283ec9abfe3509648bd6704a831edf7b69537213f1",
     "chrome/toolkit/content/global/certviewer/certviewer.html": "4b1478b882e97771965bfe39403455349f1a7a02a1ca7e716a6f711e1432cdaa",
@@ -2381,7 +2381,7 @@
     "chrome/toolkit/content/global/elements/moz-box-common.css": "c0a78f65d513a292ad97705ded7176dcf75c5f2eaaf1d88a844fc034430721f0",
     "chrome/toolkit/content/global/elements/moz-box-group.css": "d621e6622680807381bf1bf580e499bf385a8383b899b48d8d064c1b578a98a3",
     "chrome/toolkit/content/global/elements/moz-box-group.mjs": "d9db67505be2bc62b72761f754ed1453b32f94d9f3581660791bf76a4069812c",
-    "chrome/toolkit/content/global/elements/moz-box-item.css": "96ea4db946fc0841ed17b1ad61441e2a8216a281ac7af411c03f4f64372989be",
+    "chrome/toolkit/content/global/elements/moz-box-item.css": "44d48206cc7364f7177883a4cc6f4fa6a591de1fe10aadd6a0b9c87567bda5d9",
     "chrome/toolkit/content/global/elements/moz-box-item.mjs": "62343de3a4bcbd076d1f22e81afd1c0fa088fcbd9082f35a32956f70e62b2373",
     "chrome/toolkit/content/global/elements/moz-box-link.css": "11c2f8508cc9321f8f6e1a33a6753ad82b9c04319c148b7078655e2a1bcb9bdf",
     "chrome/toolkit/content/global/elements/moz-box-link.mjs": "62171b46d47f922d23e340ef7db2fbddf3ec37adc4efd7808dc686fdd1e09574",
