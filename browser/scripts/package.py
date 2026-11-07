@@ -6,8 +6,10 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import sys
 import tempfile
+import zipfile
 from shlex import join
 
 from _mixin import find_src_dir, get_moz_target, list_files, run, temp_cd
@@ -15,6 +17,10 @@ from _mixin import find_src_dir, get_moz_target, list_files, run, temp_cd
 # The GPU probe (gfxtest) is NOT here: without it nsIGfxInfo has no data and the
 # driver blocklist refuses every WebGL context where stock Firefox gets one.
 UNNEEDED_PATHS = {'uninstall', 'pingsender.exe', 'pingsender'}
+
+# APPNOTE.TXT 4.4.2: "version made by" host 3 is Unix, whose external
+# attributes carry st_mode in the high 16 bits.
+ZIP_CREATED_ON_UNIX = 3
 
 
 def inject_locales(target_dir, target, version, src_dir):
@@ -86,6 +92,43 @@ def ascii_file_names(root):
             digest = hashlib.sha256(name.encode('utf-8')).hexdigest()[:12]
             ascii_name = f"{kept}_u{digest}{ext}"
             os.rename(os.path.join(dirpath, name), os.path.join(dirpath, ascii_name))
+
+
+def readable_by_all(root):
+    """Give group and others read on every file and dir under root (and search
+    on dirs and on files the owner can execute), keeping the owner's bits.
+
+    The zip stores each entry's Unix mode and unzip restores it, so a 0700 dir
+    (a tempfile.mkdtemp staged in) makes everything under it unreadable to any
+    user but the one that unzipped it: a Docker image's app user then started
+    without uBO.
+    """
+    for dirpath, dirs, files in os.walk(root):
+        os.chmod(dirpath, os.stat(dirpath).st_mode | 0o755)
+        for name in files:
+            path = os.path.join(dirpath, name)
+            if os.path.islink(path):
+                continue
+            mode = os.stat(path).st_mode
+            os.chmod(path, mode | 0o644 | (0o111 if mode & 0o100 else 0))
+
+
+def unreadable_entries(zip_path):
+    """Zip entries whose stored Unix mode denies other users read (or search,
+    for a dir). Entries not made on Unix carry no mode (unzip applies the
+    umask) and pass."""
+    out = []
+    with zipfile.ZipFile(zip_path) as z:
+        for info in z.infolist():
+            mode = info.external_attr >> 16
+            if info.create_system != ZIP_CREATED_ON_UNIX or not mode:
+                continue
+            need = 0o005 if stat.S_ISDIR(mode) or info.is_dir() else 0o004
+            if stat.S_ISLNK(mode):
+                continue
+            if mode & need != need:
+                out.append(f'{info.filename} {oct(mode & 0o7777)}')
+    return out
 
 
 def add_includes_to_package(package_file, includes, fonts, new_file, target, version, src_dir):
@@ -198,7 +241,11 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target, ver
                 os.remove(os.path.join(target_dir, path))
 
         # Update package
+        readable_by_all(temp_dir)
         run(join(['7z', 'u', new_file, f'{temp_dir}/*', '-r', '-mx=9']))
+        unreadable = unreadable_entries(new_file)
+        if unreadable:
+            raise SystemExit(f'{new_file} has entries other users cannot read: {unreadable[:10]}')
 
 
 def get_args():
