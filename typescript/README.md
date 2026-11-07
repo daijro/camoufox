@@ -224,6 +224,44 @@ window size is spoofed, and to the host's own color scheme and motion settings.
 `launchOptions()` returns Playwright's camelCase keys (`executablePath`,
 `firefoxUserPrefs`), and does not handle `headless: "virtual"` or `"virtual-gpu"`.
 
+### Your own humanize engine: `custom(fn)`
+
+A channel can run a function of yours in your own process. It plans the input and plays it through Playwright's own input methods, so the page sees the same trusted events as from any Playwright call. The browser runs that channel raw, and your code never runs inside the browser.
+
+```ts
+import { auto, Camoufox, custom } from "camoufox";
+
+const browser = await Camoufox({
+	humanize: {
+		mouse: custom(async (page, x, y, { rng, play }) => {
+			const jitter = rng() * 4 - 2;
+			await play([
+				["move", x / 2 + jitter, y / 2 - jitter, 40],
+				["move", x, y, 90],
+			]);
+		}),
+		scroll: auto(),
+		seed: 1234,
+	},
+});
+const page = await browser.newPage();
+await page.goto("https://example.com");
+await page.locator("a").click(); // the function plans the move, Playwright clicks
+await browser.close();
+```
+
+| Channel | Called as | For |
+|---|---|---|
+| `mouse` | `fn(page, x, y, { original, rng, play })` | `Mouse.move`/`click`/`dblclick`; the move to the point of `click`, `dblclick`, `hover`, `check` and `uncheck` on a `Page`, `Frame` or `Locator`, and of the click that focuses a field before `fill` |
+| `keyboard` | `fn(page, text, { original, rng, play, kind })` with `kind` `"type"`, `"press"` or `"fill"` | `Keyboard.type`/`press`; `fill`, `type`, `press` on a `Page`, `Frame` or `Locator`, and `Locator.pressSequentially` |
+| `scroll` | `fn(page, target, { original, rng, play })` with `target` a `Locator` or `[dx, dy]` | `Mouse.wheel`, `Locator.scrollIntoViewIfNeeded`, and bringing an element that is not in view into view before those actions |
+
+- `original()` runs Playwright's own behaviour for the call. Calling it is how a function declines.
+- `rng()` returns a float in [0, 1) from the channel's seeded stream, number for number what the browser's engines and the Python launcher's `custom()` draw for that seed.
+- `play(steps)` dispatches steps at their times, in ms from the start of the call: `["move", x, y, t]`, `["down" | "up", button, t]`, `["wheel", dx, dy, t]`, `["key", key, "down" | "up", t]`, `["text", text, t]`. A slow round trip delays one step and never adds up. Bad steps reject before anything is sent.
+- `ElementHandle` methods, `tap`, `dragAndDrop` and `dragTo` are Playwright's own.
+- The wrappers belong to the browser `Camoufox()` launched. For a browser from `connect()`, launch it with `raw()` on those channels and call `attachCustom(browser, humanize)`. Over a network each event is a round trip, so the launcher warns. `launchServer()` refuses `custom()`.
+
 ## Launch options
 
 `Camoufox()`, `NewBrowser()`, `launchServer()` and `launchOptions()` take one
@@ -241,7 +279,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `geoip` | `boolean \| string` | none | `true` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. Without a proxy, also decides whether IPv6 stays on. |
 | `geoip_db` | `string` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
 | `locale` | `string \| string[]` | from `geoip`, else the drawn identity's | Locale(s), e.g. `"en-US"`. The first is used for `Intl`. |
-| `humanize` | `boolean \| number` | off | Human cursor movement. A number caps one movement at that many seconds (default cap 1.5). |
+| `humanize` | `boolean \| number \| object` | off | Human input. `true` humanizes every channel; a number caps one cursor movement at that many seconds (default cap 1.5); an object picks an engine per channel (`mouse`, `keyboard`, `scroll`) from `raw()`, `cursory()`, `auto()`, `engine()` or [`custom(fn)`](#your-own-humanize-engine-customfn), plus an integer `seed` (a `bigint` past 2\*\*53). |
 | `screen` | `Screen \| { max_width?, max_height?, min_width?, min_height? }` | the real display when headed | Bounds the generated screen. |
 | `window` | `[number, number]` | generated | Fixed outer window size. |
 | `fonts` | `string[]` | none | Extra font families on top of the OS's own. |
