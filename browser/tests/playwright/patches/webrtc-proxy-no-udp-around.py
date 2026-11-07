@@ -302,7 +302,10 @@ class Relay:
                 return
             if self.client and ":" not in src[0]:
                 head = b"\0\0\0\x01" + socket.inet_aton(src[0]) + struct.pack("!H", src[1])
-                self.inner.sendto(head + data, self.client)
+                try:
+                    self.inner.sendto(head + data, self.client)
+                except OSError:
+                    return
 
     def close(self) -> None:
         self.inner.close()
@@ -368,11 +371,15 @@ class Socks5Proxy:
         relay = Relay(self)
         self.relays.append(relay)
         bound = relay.inner.getsockname()
+        if self.drops:
+            # Closed before the grant: the browser flushes its queued datagrams on
+            # the grant, and a relay still open would forward them.
+            relay.close()
         writer.write(b"\x05\x00\x00\x01" + socket.inet_aton(bound[0]) + struct.pack("!H", bound[1]))
         await writer.drain()
         if not self.drops:
             await reader.read()  # the association lives as long as its control connection
-        relay.close()
+            relay.close()
 
     def close(self) -> None:
         for r in self.relays:
