@@ -3,7 +3,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UnsupportedVersion } from "../src/exceptions.js";
 import { PyFloat, pyTypeName } from "../src/pycompat.js";
 import {
 	CACHE_PREFS,
@@ -234,16 +233,19 @@ describe("validateConfig with removed keys (#835)", () => {
 		);
 	});
 
-	it("refuses a build without the voice grid, which would leave a Linux identity no voices", () => {
+	it("warns and launches on a build without the voice grid (#835), where a Linux identity has no voices", () => {
+		const warn = vi
+			.spyOn(process, "emitWarning")
+			.mockImplementation(() => undefined);
+		vi.spyOn(utilsDeps, "print").mockImplementation(() => undefined);
 		const binary = browserWith([
 			{ property: "navigator.userAgent", type: "str" },
 		]);
-		expect(() =>
-			validateConfig(
-				{ "voices:speechd": { languages: [], variants: [] } },
-				binary,
-			),
-		).toThrow(UnsupportedVersion);
+		validateConfig(
+			{ "voices:speechd": { languages: [], variants: [] } },
+			binary,
+		);
+		expect(String(warn.mock.calls[0]?.[0])).toContain("voices:speechd");
 	});
 
 	it("does not type-check a removed key", () => {

@@ -19,7 +19,6 @@ import {
 	InvalidPropertyType,
 	NonFirefoxFingerprint,
 	UnknownIPLocation,
-	UnsupportedVersion,
 } from "./exceptions.js";
 import {
 	clampScreenToDisplay,
@@ -626,9 +625,7 @@ export function validateConfig(
 		const entry = properties[key];
 		if (!entry) {
 			if (key === "voices:speechd") {
-				throw new UnsupportedVersion(
-					"This browser build cannot read voices:speechd, so a Linux identity would report no voices. Run `camoufox set --release` for the paired build, or pass `voices` in config.",
-				);
+				LeakWarning.warn("voices_unread");
 			}
 			utilsDeps.print(`Skipping unknown patch ${key} : ${pyStr(value)}`);
 			continue; // Property not supported by this browser version; skip silently

@@ -23,7 +23,6 @@ from .exceptions import (
     InvalidPropertyType,
     NonFirefoxFingerprint,
     UnknownIPLocation,
-    UnsupportedVersion,
 )
 from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, draw_voice_config, fix_navigator_arch, fix_hardware_concurrency, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
@@ -368,10 +367,7 @@ def validate_config(config_map: Dict[str, str], path: Optional[Path] = None) -> 
         entry = properties.get(key)
         if not entry:
             if key == 'voices:speechd':
-                raise UnsupportedVersion(
-                    "This browser build cannot read voices:speechd, so a Linux identity would report no "
-                    "voices. Run `camoufox set --release` for the paired build, or pass `voices` in config."
-                )
+                LeakWarning.warn('voices_unread')
             print(f'Skipping unknown patch {key} : {value}')
             continue  # Not supported by this browser version: reported, then skipped
         if 'removed' in entry:
