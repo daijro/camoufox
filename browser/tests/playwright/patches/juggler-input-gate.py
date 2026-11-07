@@ -64,7 +64,7 @@ def main() -> int:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     failures = []
-    with Camoufox(headless=True, executable_path=str(resolve_binary()), i_know_what_im_doing=True) as browser:
+    with Camoufox(headless=True, executable_path=str(resolve_binary()), os="linux", i_know_what_im_doing=True) as browser:
         for i in range(PAGES):
             page = browser.new_page()
             page.goto(f"{url}?{i}")
