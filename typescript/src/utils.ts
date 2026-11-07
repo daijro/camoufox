@@ -1662,8 +1662,18 @@ export async function launchOptions({
 			!("window.devicePixelRatio" in config) &&
 			coherence.isZoomedRatio(drawnDpr, targetOs)
 		) {
+			// A caller's layout.css.devPixelsPerPx is the scale the page renders
+			// at, so the ratio moves to that: otherwise the page reports one
+			// devicePixelRatio and matches another in matchMedia('(resolution)').
+			const callerScale = Number(
+				firefox_user_prefs["layout.css.devPixelsPerPx"] ?? -1,
+			);
 			config["window.devicePixelRatio"] = drawnDpr;
-			coherence.repairDevicePixelRatio(config, targetOs);
+			coherence.repairDevicePixelRatio(
+				config,
+				targetOs,
+				callerScale > 0 ? callerScale : undefined,
+			);
 		}
 	}
 

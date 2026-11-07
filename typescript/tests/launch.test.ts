@@ -1071,6 +1071,21 @@ describe.skipIf(!MODEL.ok)(
 			expect(config["screen.availHeight"]).toBe(1032);
 		});
 
+		it("a zoomed fpgen ratio follows the caller's render scale", async () => {
+			// A caller's layout.css.devPixelsPerPx is the scale the page renders
+			// at: the repair targets it, not the nearest step (1.75 for 1.818),
+			// or the page reports one ratio and matches another in matchMedia.
+			withDisplay({ maxWidth: 3840, maxHeight: 2160 });
+			const drawn = 1.8181818181818181;
+			const config = await launchConfig({
+				headless: true,
+				fingerprint: zoomedWindows(drawn),
+				firefox_user_prefs: { "layout.css.devPixelsPerPx": "1" },
+			});
+			expect(config["window.devicePixelRatio"]).toBe(1);
+			expect(config["screen.width"]).toBe(Math.round(1760 * drawn));
+		});
+
 		it("a real display scale from fpgen stays unmapped", async () => {
 			withDisplay({ maxWidth: 1920, maxHeight: 1080 });
 			const config = await launchConfig({

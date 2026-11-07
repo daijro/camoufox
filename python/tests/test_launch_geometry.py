@@ -179,3 +179,21 @@ def test_a_real_display_scale_from_fpgen_stays_unmapped():
             i_know_what_im_doing=True))
     assert "window.devicePixelRatio" not in config
     assert config["screen.width"] == 1760
+
+
+def test_a_zoomed_fpgen_ratio_follows_the_caller_s_render_scale():
+    # A caller who sets layout.css.devPixelsPerPx decides the scale the page
+    # renders at. The zoom repair moved 1.818 (175% with a zoom folded in) to
+    # 1.75 regardless, so the page reported devicePixelRatio 1.75 while
+    # matchMedia('(resolution: 1dppx)') matched: a pairing no Firefox has
+    # (font-fallback-windows.py, pinned to 1, failed on such a draw). The
+    # repair now targets the caller's scale, rescaling the geometry to it.
+    drawn = 1.8181818181818181
+    with host(Screen(max_width=3840, max_height=2160)):
+        opts = utils.launch_options(
+            headless=True, os="windows", fingerprint=_zoomed_windows_fingerprint(drawn),
+            firefox_user_prefs={"layout.css.devPixelsPerPx": "1"}, i_know_what_im_doing=True)
+    config = config_of(opts)
+    assert config["window.devicePixelRatio"] == 1
+    assert opts["firefox_user_prefs"]["layout.css.devPixelsPerPx"] == "1"
+    assert config["screen.width"] == round(1760 * drawn)

@@ -301,15 +301,17 @@ def is_zoomed_ratio(dpr: Any, target_os: str) -> bool:
     return float(dpr) not in {float(v) for v in allowed}
 
 
-def repair_device_pixel_ratio(config: Dict[str, Any], target_os: str) -> None:
-    """Move the ratio to the nearest display mode, rescaling the CSS geometry
-    so the screen stays the display behind it."""
+def repair_device_pixel_ratio(config: Dict[str, Any], target_os: str,
+                              target: Optional[float] = None) -> None:
+    """Move the ratio to `target` (the scale a caller renders at) or else the
+    nearest display mode, rescaling the CSS geometry so the screen stays the
+    display behind it."""
     dpr = config.get('window.devicePixelRatio')
     allowed = PLAUSIBLE_DPR.get(target_os)
     if dpr is None or not allowed:
         return
     # Nearest real scaling step: 1.818 becomes 1.75 on Windows, 2 on macOS.
-    step = min(allowed, key=lambda v: abs(float(v) - float(dpr)))
+    step = target if target else min(allowed, key=lambda v: abs(float(v) - float(dpr)))
     config['window.devicePixelRatio'] = step
     # The scraped ratio has a browser zoom folded in, which shrank every CSS
     # size by it; the display behind it keeps its device pixels. Rescale to the

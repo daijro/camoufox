@@ -318,16 +318,22 @@ export function isZoomedRatio(dpr: unknown, targetOs: string): boolean {
  * Move the ratio to the nearest display mode, rescaling the CSS geometry so
  * the screen stays the display behind it.
  */
-export function repairDevicePixelRatio(config: Config, targetOs: string): void {
+export function repairDevicePixelRatio(
+	config: Config,
+	targetOs: string,
+	target?: number,
+): void {
 	const dpr = config["window.devicePixelRatio"];
 	const allowed = PLAUSIBLE_DPR[targetOs];
 	if (isNone(dpr) || !allowed?.length) return;
-	// Nearest real scaling step; min() keeps the first of equal distances.
+	// `target` is the scale a caller renders at; else the nearest real scaling
+	// step (min() keeps the first of equal distances).
 	const x = Number(num(dpr));
 	let best = allowed[0];
 	for (const v of allowed.slice(1)) {
 		if (Math.abs(v - x) < Math.abs(best - x)) best = v;
 	}
+	if (target !== undefined && target > 0) best = target;
 	config["window.devicePixelRatio"] = best;
 	// The scraped ratio has a browser zoom folded in, which shrank every CSS
 	// size by it; the display behind it keeps its device pixels. Rescale to the
