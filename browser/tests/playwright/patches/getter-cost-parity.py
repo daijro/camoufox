@@ -61,11 +61,16 @@ FIRST_READS = ["navigator.hardwareConcurrency", "screen.width", "screen.colorDep
                "devicePixelRatio", "navigator.globalPrivacyControl"]
 
 # Spoofed getters, and controls Camoufox does not touch (a sanity check that
-# the two browsers are comparable on this machine).
+# the two browsers are comparable on this machine). innerWidth, innerHeight and
+# outerWidth are not listed: fingerprint-injection.patch forwards them to stock's
+# code (#963), so timing them compares the same code built twice and says
+# nothing about a spoof. Stock's own outerWidth swung to 4.06x the control on
+# one runner (stock elsewhere: ~2.3x), failing the FASTER bound with Camoufox
+# at its usual 2.00x.
 WINDOW = [
     "screen.width", "screen.height", "screen.availWidth", "screen.availHeight",
-    "screen.colorDepth", "screen.pixelDepth", "devicePixelRatio", "innerWidth",
-    "innerHeight", "outerWidth", "screenX", "history.length",
+    "screen.colorDepth", "screen.pixelDepth", "devicePixelRatio",
+    "screenX", "history.length",
     "navigator.hardwareConcurrency", "navigator.globalPrivacyControl",
     "navigator.maxTouchPoints", "G.getParameter(G.MAX_TEXTURE_SIZE)",
     "C.measureText('mmmmmmmmmmlli').width",

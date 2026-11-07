@@ -1,8 +1,8 @@
 diff --git a/dom/base/nsDOMWindowUtils.cpp b/dom/base/nsDOMWindowUtils.cpp
-index 9b6cddf8d9..75a1481158 100644
+index 9321637f72..d93380181f 100644
 --- a/dom/base/nsDOMWindowUtils.cpp
 +++ b/dom/base/nsDOMWindowUtils.cpp
-@@ -801,6 +801,10 @@ nsDOMWindowUtils::SendWheelEvent(float aX, float aY, double aDeltaX,
+@@ -804,6 +804,10 @@ nsDOMWindowUtils::SendWheelEvent(float aX, float aY, double aDeltaX,
        (aOptions & WHEEL_EVENT_CUSTOMIZED_BY_USER_PREFS) != 0;
    wheelEvent.mLineOrPageDeltaX = aLineOrPageDeltaX;
    wheelEvent.mLineOrPageDeltaY = aLineOrPageDeltaY;
@@ -11,10 +11,10 @@ index 9b6cddf8d9..75a1481158 100644
 +    wheelEvent.mWheelTicksY = aLineOrPageDeltaY / 3.0;
 +  }
    wheelEvent.mCallbackId = notifier.SaveCallback();
+   wheelEvent.mFlags.mIsSynthesizedForTests = true;
  
-   nsPresContext* presContext = GetPresContext();
 diff --git a/dom/interfaces/base/nsIDOMWindowUtils.idl b/dom/interfaces/base/nsIDOMWindowUtils.idl
-index 44284cc319..2711040b70 100644
+index b123f12082..533651acfe 100644
 --- a/dom/interfaces/base/nsIDOMWindowUtils.idl
 +++ b/dom/interfaces/base/nsIDOMWindowUtils.idl
 @@ -391,6 +391,10 @@ interface nsIDOMWindowUtils : nsISupports {

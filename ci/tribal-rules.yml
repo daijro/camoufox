@@ -418,6 +418,8 @@ rules:
       - "Linux: WebGL1 ALIASED_LINE_WIDTH_RANGE is [1, 2048] on 146 and [1, 1] on 156, WebGL2 [1, 1] on both. 146's dom/canvas/WebGLContext.cpp:324 forced REQUIRE_COMPAT_PROFILE on WebGL1 unless webgl.1.allow-core-profiles, which 146's StaticPrefList.yaml set on macOS only; 156 removed both, and WebGLContextValidate.cpp:211 reads the driver's range only off a core profile, leaving WebGLTypes.h:654's {1, 1}"
       - "fpgen Linux WebGL2 records: [1, 1] on 97%, the driver's range on the 3% without EXT_depth_clamp (GLES drivers, where Firefox reads it)"
       - "browser/tests/playwright/patches/stock-gpu-parity.py fails on the 146-style WebGL1 range on Linux, on a hardware GPU and on llvmpipe, and passes with the fix"
+      - "Firefox 159 (bug 1735401) exposes EXT_texture_norm16 on WebGL2, no longer behind webgl.enable-draft-extensions: stock 159.0 on M1 (headless) and on Linux llvmpipe (Xvfb) list it on WebGL2 and not WebGL1; stock 158.0.1 on the same Linux and 146.0 on the same M1 list it on neither. dom/canvas/WebGLExtensions.cpp's IsSupported needs GLFeature::texture_norm16, core in desktop GL 3.1"
+      - "Firefox 159 adds EXT_clip_control (GLFeature::clip_control, GL 4.5) and EXT_texture_mirror_clamp_to_edge (GL 4.4) to WebGL1 and WebGL2: stock 159.0 on Linux llvmpipe, x86_64 and aarch64, lists both where 158.0.1 lists neither, and stock 159.0 on M1 lists neither. 159's third_party/angle renderer11_utils.cpp sets textureMirrorClampToEdgeEXT on every D3D11 device and clipControlEXT from feature level 10_0"
     rationale: >-
       fpgen's records are right for the Firefox that made them; what goes
       stale is what that Firefox decided rather than the GPU. Hardware-owned
