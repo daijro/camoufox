@@ -29,8 +29,6 @@ FINAL_TARGET_FILES.modules.juggler.content += [
 FINAL_TARGET_FILES.modules.juggler.input += [
     "input/CursorTrajectory.js",
     "input/HumanDelay.js",
-    "input/HumanizeRng.js",
-    "input/HumanizeSeam.js",
     "input/MouseDispatch.js",
     "input/Pacer.js",
 ]

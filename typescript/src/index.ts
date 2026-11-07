@@ -5,7 +5,6 @@
  */
 import "./node-floor.js";
 
-export { attachCustom } from "./_humanize_custom.js";
 export type { DefaultAddon } from "./addons.js";
 export { DefaultAddons } from "./addons.js";
 export {
@@ -13,28 +12,12 @@ export {
 	AsyncNewBrowser,
 	AsyncNewContext,
 } from "./async_api.js";
-export { HumanizeEngineUnavailable } from "./exceptions.js";
 export {
 	generateContextFingerprint,
 	getRandomPreset,
 	loadPresets,
 	Screen,
 } from "./fingerprints.js";
-export {
-	auto,
-	CHANNEL_TAGS,
-	type CustomEngine,
-	channelStream,
-	cursory,
-	custom,
-	customEngines,
-	type EngineTools,
-	engine,
-	type HumanizeSetting,
-	raw,
-	SeededRng,
-	splitmix64,
-} from "./humanize.js";
 export {
 	findInstalledVersion,
 	listInstalled,

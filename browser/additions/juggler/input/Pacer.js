@@ -5,8 +5,7 @@
 "use strict";
 
 /**
- * Plays a humanize plan on its own schedule. The one pacing rule for every
- * engine.
+ * Plays a humanize plan on its own schedule.
  *
  * Each step carries `t`, milliseconds from the start of the action, and waits
  * until `start + t`, not a gap after the previous step's ack. Waiting a full

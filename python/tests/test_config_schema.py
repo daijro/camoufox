@@ -47,9 +47,7 @@ QUOTED = '"{key}"', "'{key}'"
 
 
 def _sources():
-    # humanize-engines.json names the config keys each humanize engine's
-    # options arrive in; the browser reads those keys through it.
-    for pattern in ("browser/patches/**/*.patch", "browser/additions/**/*", "browser/settings/humanize-engines.json"):
+    for pattern in ("browser/patches/**/*.patch", "browser/additions/**/*"):
         for path in REPO.glob(pattern):
             if path.is_file():
                 yield path

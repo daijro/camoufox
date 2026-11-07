@@ -95,14 +95,14 @@ export class MouseDispatch {
    * MouseDispatch serves a whole humanized move, whose steps are dispatched
    * over hundreds of ms, and the browser can move in the window meanwhile.
    *
-   * Measured 2026-10-31 (humanize-seam.py, ~1 in 4 runs): a window smaller
+   * Measured 2026-10-31 (~1 in 4 runs): a window smaller
    * than the chrome plus the viewport, as a 1366x768 screen draw gives a
    * 1000x700 viewport, leaves Juggler's .browserStack scrolling the browser,
    * and while it was overflow: auto a wheel turn scrolled it by the overflow
    * over ~130ms (TargetRegistry.updateViewportSize). A move that started
    * meanwhile kept the rect from its start, so every later point, the
    * destination included, reached the page shifted by the scroll (13-84 px):
-   * moves the engine never planned, a move that missed its target, and the
+   * moves nothing planned, a move that missed its target, and the
    * next click's mousedown away from the last mousemove, which a real mouse
    * never does. The chrome can still move the browser mid-move (a toolbar
    * changing height, the fullscreen toolbox sliding away).
@@ -273,14 +273,14 @@ export class MouseDispatch {
   }
 
   /**
-   * Dispatch a planned humanized move (input/CursorTrajectory.js, or any mouse
-   * engine behind input/HumanizeSeam.js): every step but the last is an
-   * intermediate point, and the last is the destination, always dispatched.
+   * Dispatch a planned humanized move (input/CursorTrajectory.js): every step
+   * but the last is an intermediate point, and the last is the destination,
+   * always dispatched.
    *
-   * The steps keep the timing the engine planned, because Cursory replays
+   * The steps keep the timing that was planned, because Cursory replays
    * timing recorded from a real hand: the gaps are uneven, and evening them out
    * would throw away the half of the realism that is not the shape of the path.
-   * `play` (the seam's Pacer) holds each step to its own due time from the
+   * `play` (input/Pacer.js) holds each step to its own due time from the
    * start of the move, not a gap after the previous ack, so a late ack delays
    * only its own point; a skipped point shifts nothing that follows it.
    *
@@ -299,8 +299,8 @@ export class MouseDispatch {
    * curve and the move goes straight to its destination. Intermediate points
    * are humanization garnish: if one did not reach the renderer the rest of
    * that curve almost certainly will not either, and dropping them costs
-   * realism, not correctness. The seam also fast-forwards to the destination
-   * once a move runs past 1.5x its time budget.
+   * realism, not correctness. Pacing also fast-forwards to the destination once
+   * a move runs past 1.5x its time budget.
    *
    * @param {{steps: Array<{x: number, y: number, t: number}>}} plan
    * @param {(plan: object, dispatchStep: Function) => Promise} play

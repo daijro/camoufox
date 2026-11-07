@@ -11,7 +11,6 @@
 import { type BrowserServer, firefox } from "playwright-core";
 import { withUnpinnedLaunch } from "./cpu_affinity.js";
 import { GpuDisplay, proveGpu } from "./gpudisplay.js";
-import { customEngines } from "./humanize.js";
 import { camelCase } from "./sync_api.js";
 import {
 	type GpuDisplayOptions,
@@ -70,13 +69,6 @@ export async function launchServer({
 		}
 		delete options[unsupported];
 	}
-
-	if (Object.keys(customEngines(options.humanize)).length)
-		throw new Error(
-			"launch_server() cannot run custom() humanize engines: they run in the process that drives " +
-				"the page. Serve with raw() on those channels, and on the client call " +
-				"attachCustom(browser, humanize) on the connected browser.",
-		);
 
 	const [virtualDisplay, headlessBool] = await startVirtualDisplay(
 		headless,

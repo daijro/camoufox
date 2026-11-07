@@ -12,7 +12,7 @@ from typing_extensions import Literal
 
 from camoufox.virtdisplay import VirtualDisplay
 
-from . import _humanize_custom, driver_defaults
+from . import driver_defaults
 from .fingerprints import generate_context_fingerprint
 from .ip import Proxy, proxy_exit_geo
 from .utils import (
@@ -107,9 +107,6 @@ async def AsyncNewBrowser(
         **kwargs:
             All other keyword arguments passed to `launch_options()`.
     """
-    # custom() humanize engines run in this process: checked before the launch,
-    # attached to the browser after it (also with from_options).
-    _humanize_custom.check(kwargs.get('humanize'), is_async=True)
     virtual_display, headless = await asyncio.get_running_loop().run_in_executor(
         None, start_virtual_display, headless, debug, kwargs
     )
@@ -118,11 +115,8 @@ async def AsyncNewBrowser(
     # close, which used to strand one Xvfb and its /tmp/.X<n> lock per failed
     # launch.
     try:
-        browser = await _new_browser(
+        return await _new_browser(
             playwright, virtual_display, headless, from_options, persistent_context, debug, kwargs
-        )
-        return _humanize_custom.attach(
-            browser, kwargs.get('humanize'), i_know_what_im_doing=kwargs.get('i_know_what_im_doing')
         )
     except BaseException:
         if virtual_display:

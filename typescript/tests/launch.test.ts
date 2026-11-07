@@ -37,8 +37,6 @@ import {
 
 const { OSError, PyFloat } = await import("../src/pycompat.js");
 const { Version } = await import("../src/pkgman.js");
-const { engine, humanizeConfig, raw } = await import("../src/humanize.js");
-type Manifest = import("../src/humanize.js").Manifest;
 const { InvalidPropertyType, UnknownIPLocation } = await import(
 	"../src/exceptions.js"
 );
@@ -822,49 +820,6 @@ describe("test_humanize", () => {
 	it("humanize: 0 is off, as in Python", async () => {
 		const config = await launchHumanize(0);
 		expect("humanize" in config).toBe(false);
-	});
-
-	const FANCY: Manifest = {
-		mouse: ["cursory"],
-		keyboard: ["fancy"],
-		scroll: ["fancy"],
-		auto: { mouse: ["cursory"], keyboard: ["fancy"], scroll: ["fancy"] },
-		engines: {
-			fancy: {
-				movesCursor: true,
-				options: { budgetSeconds: { key: "humanize:fancy:budgetSeconds" } },
-			},
-		},
-	};
-
-	it("refuses one option key with two values", () => {
-		expect(() =>
-			humanizeConfig(
-				{
-					keyboard: engine("fancy", { budgetSeconds: 5 }),
-					scroll: engine("fancy", { budgetSeconds: 6 }),
-				},
-				FANCY,
-			),
-		).toThrow("budgetSeconds twice");
-	});
-
-	it("warns when a cursor-moving scroll engine runs with a raw mouse", async () => {
-		const { warnings: caught } = await warnings.recordWarnings(async () =>
-			humanizeConfig({ mouse: raw(), scroll: engine("fancy") }, FANCY),
-		);
-		expect(caught.some((w) => w.message.includes("single jump"))).toBe(true);
-	});
-
-	it("keeps a seed above 2**53 exact", () => {
-		const seed = 2n ** 64n - 1n;
-		expect(humanizeConfig({ seed }, FANCY)["humanize:seed"]).toBe(
-			"18446744073709551615",
-		);
-		expect(() => humanizeConfig({ seed: 2 ** 53 }, FANCY)).toThrow("bigint");
-		expect(() => humanizeConfig({ seed: 2n ** 64n }, FANCY)).toThrow(
-			"humanize.seed",
-		);
 	});
 
 	it("humanize: true sets no duration", async () => {

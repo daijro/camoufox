@@ -169,7 +169,6 @@ package-linux: fonts-extract
 	python3 scripts/package.py linux \
 		--includes \
 			settings/properties.json \
-			settings/humanize-engines.json \
 			bundle/fontconfig \
 		--version $(version) \
 		--release $(release) \
@@ -180,7 +179,6 @@ package-macos: fonts-extract
 	python3 scripts/package.py macos \
 		--includes \
 			settings/properties.json \
-			settings/humanize-engines.json \
 		--version $(version) \
 		--release $(release) \
 		--arch $(arch) \
@@ -190,7 +188,6 @@ package-windows: fonts-extract
 	python3 scripts/package.py windows \
 		--includes \
 			settings/properties.json \
-			settings/humanize-engines.json \
 			~/.mozbuild/vs/VC/Redist/MSVC/*/$(vcredist_arch)/Microsoft.VC*.CRT/*.dll \
 		--version $(version) \
 		--release $(release) \

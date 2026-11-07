@@ -6,13 +6,11 @@
  */
 import { firefox } from "playwright-core";
 import { describe, expect, it } from "vitest";
-import { attachCustom } from "../src/_humanize_custom.js";
 import {
 	attachDriverDefaults,
 	FILL_CLICK_LANDS,
 	FILL_NEEDS_CLICK,
 } from "../src/driver_defaults.js";
-import { custom } from "../src/humanize.js";
 
 let guids = 0;
 
@@ -171,75 +169,5 @@ describe("screenshot caret", () => {
 		expect(sent.find((m) => m.method === "screenshot").params.caret).toBe(
 			undefined,
 		);
-	});
-});
-
-describe("custom engines on the real client", () => {
-	// The JS client's Locator calls Frame's public methods, so a Frame method routed
-	// to the Locator would call itself without the guard this pins.
-	function pageOf(frame: any, moves: unknown[][]) {
-		const page: any = {
-			mouse: {
-				move: async (x: number, y: number) => moves.push(["mouse.move", x, y]),
-				down: async () => {},
-				up: async () => {},
-				wheel: async () => {},
-				click: async () => {},
-				dblclick: async () => {},
-			},
-			keyboard: {
-				down: async () => {},
-				up: async () => {},
-				insertText: async () => {},
-				type: async () => {},
-				press: async () => {},
-			},
-			locator: (selector: string) => frame.locator(selector),
-			mainFrame: () => frame,
-			context: () => ({}),
-		};
-		frame._page = page;
-		return page;
-	}
-	const attach = (frame: any, fn: any) => {
-		const moves: unknown[][] = [];
-		const page = pageOf(frame, moves);
-		attachCustom({ on: () => {}, pages: () => [page] }, { mouse: custom(fn) });
-		return { page, moves };
-	};
-
-	it("Frame.click reaches the server once, after the engine's move", async () => {
-		const { frame, sent } = client();
-		const seen: number[][] = [];
-		const { moves } = attach(frame, (_p: any, x: number, y: number, t: any) => {
-			seen.push([x, y]);
-			return t.original();
-		});
-		await frame.click("#a");
-		expect(seen).toEqual([[140, 132]]);
-		expect(moves).toEqual([["mouse.move", 140, 132]]);
-		const clicks = sent.filter((m) => m.method === "click");
-		expect(clicks).toHaveLength(1);
-		expect(clicks[0].params.selector).toBe("#a >> nth=0");
-	});
-
-	it("a fill clicks once, through the engine, then fills", async () => {
-		const { frame, sent, calls } = client();
-		const seen: number[][] = [];
-		const { page } = attach(frame, (_p: any, x: number, y: number, t: any) => {
-			seen.push([x, y]);
-			return t.original();
-		});
-		await page.fill("#a", "x");
-		expect(seen).toEqual([[140, 132]]);
-		expect(sent.filter((m) => m.method === "click")).toHaveLength(1);
-		expect(calls().slice(-2)).toEqual([FILL_NEEDS_CLICK, "fill"]);
-	});
-
-	it("Locator.pressSequentially on a page with engines reaches the server", async () => {
-		const { frame, sent } = client();
-		attach(frame, () => {});
-		await frame.locator("#a").pressSequentially("hi");
-		expect(sent.filter((m) => m.method === "type")).toHaveLength(1);
 	});
 });
