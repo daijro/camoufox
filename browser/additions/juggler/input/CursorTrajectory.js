@@ -19,7 +19,10 @@
  * and keeps that recording's own timing -- pauses, overshoots and all.
  *
  * This module is the whole boundary between Camoufox and Cursory: it owns the
- * cadence and the pixel grid. Wheel notches are planned here too.
+ * cadence and the pixel grid. The base `cursory` engine also paces wheel
+ * notches here, so the public engines are cursory, raw and custom. The
+ * humanize seam (HumanizeSeam.js) supplies the options and seeded stream and
+ * plays each plan.
  */
 
 const kCursoryUrl = 'resource://gre/modules/juggler/input/cursory/cursory.js';
@@ -70,13 +73,6 @@ function durationBoundsMs({maxTime = kDefaultMaxTimeSeconds, minTime = 0}) {
   return {minMs: Math.min(Math.max(0, minTime * 1000), maxMs), maxMs};
 }
 
-/**
- * Past this multiple of its budget, a move whose acks are stalling
- * fast-forwards to its destination. It holds the process-wide activation slot
- * while it plays (kActivationSlotBudgetMs, 30s).
- */
-const kDeadlineFactor = 1.5;
-
 const kPxPerNotch = 100;
 const kLinesPerNotch = 3;
 
@@ -85,7 +81,7 @@ function toNotches(delta) {
 }
 
 /**
- * Plans a humanized mousemove from `ctx.cursor` to `to`.
+ * The `cursory` engine: plans a humanized mousemove from `ctx.cursor` to `to`.
  *
  * Coordinates are browser-relative, exactly as MouseDispatch wants them. The
  * plan's steps are `{kind: 'move', x, y, t}` with `t` in ms from the start of
@@ -95,7 +91,7 @@ function toNotches(delta) {
  * off-grid. Every other step is garnish that dispatch may drop.
  *
  * `ctx.options` carries `humanize:maxTime` / `humanize:minTime` (seconds), and
- * `ctx.rng` is the only randomness used.
+ * `ctx.rng` is the mouse channel's stream, the only randomness used.
  */
 export const cursory = {
   budgetMs(options) {
@@ -114,7 +110,8 @@ export const cursory = {
     const {minMs, maxMs} = durationBoundsMs(ctx.options);
     const {generateTrajectory} = loadCursory();
 
-    // Cursory takes a 48-bit seed, reused below.
+    // Cursory takes a 48-bit seed. Drawn from the channel stream so a seeded
+    // launch replays the same paths; the same seed is reused below.
     const seed = Math.floor(ctx.rng() * 2 ** 32) * 2 ** 16 + Math.floor(ctx.rng() * 2 ** 16);
     let {points, timings} = generateTrajectory(
         [fromX, fromY], [to.x, to.y], {frequency: kFrequencyHz, seed});
@@ -206,15 +203,3 @@ export const cursory = {
     return {steps, endState: {}};
   },
 };
-
-/** The plan for a `humanize=True` move, and when pacing it must give up. */
-export function humanizedMove(cursor, to) {
-  const options = {
-    maxTime: ChromeUtils.camouGetDouble('humanize:maxTime', kDefaultMaxTimeSeconds),
-    minTime: ChromeUtils.camouGetDouble('humanize:minTime', 0),
-  };
-  return {
-    plan: cursory.planMove({cursor, options, rng: Math.random}, to),
-    deadlineMs: cursory.budgetMs(options) * kDeadlineFactor,
-  };
-}

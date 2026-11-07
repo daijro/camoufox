@@ -65,7 +65,7 @@ not show is skipped, and a destination there is scrolled into view first.
 Measured 2026-10-31: in a window too small for the chrome plus the viewport
 (a 1366x768 screen draw), Juggler's `.browserStack` scrolled the browser on a
 wheel turn, and a move that kept its starting rect landed every later point,
-the destination included, 13-84 px off. The stack
+the destination included, 13-84 px off (`humanize-seam.py`, run d). The stack
 is `overflow: hidden` since, so only Juggler's own `scrollRectIntoViewIfNeeded`
 scrolls it.
 
@@ -77,8 +77,9 @@ thread and inherit any block on it — a 3s synchronous script delayed one by
 2849ms. `sendTrajectoryAcked()` abandons the rest of a curve after the first
 undelivered point and goes straight to the destination, so the ~90 bounded waits
 a curve can hold — the 1.5s default humanize ceiling at 60Hz — cannot add up to
-an unbounded slot. `input/Pacer.js` paces each move on its own schedule and
-fast-forwards one that runs past 1.5x its time budget. It also refuses
+an unbounded slot. The humanize seam (`input/HumanizeSeam.js`) paces every plan
+on its own schedule (`input/Pacer.js`) and fast-forwards one that runs past 1.5x
+its time budget. It also refuses
 to dispatch a point on the pixel the previous dispatch left the cursor on: a
 zero-displacement move produces no `eMouseMove`, so it is never acked, and
 that is the same deadlock reached from inside a curve rather than from
@@ -204,8 +205,12 @@ that moves. The notches of one call are 18 to 60 ms apart, drawn per notch; the
 one recording of a person's wheel, on macOS, has bursts 20 to 80 ms apart (10th
 to 90th percentile), and nothing backs the range on Linux or Windows. The page therefore scrolls a
 notch's distance (120 px here), not the exact pixels asked for, and
-`mouse.wheel(0, 0)` sends nothing. Humanize does not change this. Each notch takes the activation slot alone, so a
-long wheel does not hold up input in other contexts.
+`mouse.wheel(0, 0)` sends nothing. Humanize does not change this: `raw()`
+and a `custom()` scroll engine's wheel steps are rounded the same way, each
+step at least one notch, so a custom engine should plan in notches (100 px)
+to land where it means to. Without a scroll engine each notch takes the
+activation slot alone, so a long wheel does not hold up input in other contexts;
+an engine's plan keeps the slot for as long as it plays.
 `browser/tests/playwright/patches/driven-wheel-notches.py` compares the result
 with stock's.
 
@@ -227,7 +232,10 @@ Every delay between a person's input events comes from `input/HumanDelay.js`,
 with the figures its caller cites: a normal draw for a key or modifier hold
 (`normalDelay(mean, sd, min, max)`) and a right-skewed log-normal for a click
 hold, hover dwell or double-click gap (`logNormalDelay(median, sigma, min, max)`),
-as human timing is.
+as human timing is. The click delays draw from the launch's `humanize:seed` on a
+separate `timing` stream, so a seeded session reproduces them without shifting a
+cursor or keyboard plan. The key and modifier delays of a paste run in the
+content process, which has no such stream, and a seed does not reproduce them.
 
 A page that cancels the paste, or the shortcut's `keydown`, and leaves the field
 as it was gets the text typed instead, as a person types what they cannot paste:
