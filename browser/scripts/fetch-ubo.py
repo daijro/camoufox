@@ -63,6 +63,22 @@ def pin_from_env():
     return pin
 
 
+def world_readable(root):
+    """Set dirs 755 and files 644 under root, root included.
+
+    mkdtemp makes root 0700, and os.replace keeps that mode, so without this
+    addons/UBO is readable only by the build's user. A launcher running as
+    anyone else (a Docker image's app user) then finds no addon and starts
+    without uBO.
+    """
+    os.chmod(root, 0o755)
+    for dirpath, dirs, files in os.walk(root):
+        for name in dirs:
+            os.chmod(os.path.join(dirpath, name), 0o755)
+        for name in files:
+            os.chmod(os.path.join(dirpath, name), 0o644)
+
+
 def extract(xpi, pin, dest):
     """Unpack a verified XPI into dest, replacing whatever was there."""
     digest = hashlib.sha256(xpi).hexdigest()
@@ -86,6 +102,7 @@ def extract(xpi, pin, dest):
         tmp = tempfile.mkdtemp(prefix=".UBO.tmp-", dir=parent)
         try:
             z.extractall(tmp)
+            world_readable(tmp)
             shutil.rmtree(dest, ignore_errors=True)
             os.replace(tmp, dest)
         finally:
