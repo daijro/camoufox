@@ -1766,6 +1766,19 @@ def test_the_audit_can_name_a_target_for_every_entry_it_claims_to_check():
     assert unresolved == ["[chromium]"]
 
 
+def test_skiplist_checked_by_names_a_patch_guard():
+    """An entry the audit leaves out must still have its reason checked."""
+    from ci._util import REPO_ROOT
+    from ci.run_patch_guards import GROUPS
+    from ci.run_skiplist_audit import targets
+
+    guards = {guard for group in GROUPS.values() for guard in group}
+    entries = [e for e in load_skiplist(REPO_ROOT / "ci" / "skiplist.yml") if "checked_by" in e]
+    assert entries
+    assert targets(entries) == ([], [])
+    assert {e["checked_by"] for e in entries} <= guards
+
+
 def test_every_shipped_skiplist_entry_is_auditable():
     """Nothing currently in the file escapes the audit.
 

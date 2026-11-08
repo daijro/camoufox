@@ -98,11 +98,13 @@ describe.skipIf(!MODEL.ok)("the host's OS", () => {
 		expect(probes).toEqual([[BUNDLE_EXE, false]]);
 	});
 
-	it("a software renderer leaves the GPU to the draw", async () => {
+	it("a software host claims its renderer without noise", async () => {
 		onHost(SOFTWARE_GPU);
 		const { options, config } = await launch({ os: "linux" });
 
-		expect(config["webGl:renderer"]).not.toContain("llvmpipe");
+		expect([config["webGl:vendor"], config["webGl:renderer"]]).toEqual(
+			SOFTWARE_GPU,
+		);
 		expect(placeholder(options)).toBe(false);
 	});
 
@@ -346,7 +348,14 @@ describe.skipIf(!MODEL.ok)("contexts of a browser on the host", () => {
 		expect(rendererOf(calls.script)).toBe(HOST_GPU[1]);
 	});
 
-	it("a software host leaves the GPU to the draw", async () => {
+	it("a context of a software host claims its renderer", async () => {
+		const { browser, calls } = browserOnHost(SOFTWARE_GPU);
+		await NewContext(browser);
+
+		expect(rendererOf(calls.script)).toBe(SOFTWARE_GPU[1]);
+	});
+
+	it("a host without WebGL leaves the GPU to the draw", async () => {
 		const { browser, calls } = browserOnHost(null);
 		await NewContext(browser);
 
@@ -383,7 +392,7 @@ describe("hostIdentity", () => {
 			prefs[BASELINE_OVERRIDES_PREF] = CANVAS_PLACEHOLDER_TARGETS.join(",");
 		deps.hostOsKey = () => "lin";
 		deps.hostGpu = async () => gpu;
-		deps.firefoxGpus = async () => [HOST_GPU];
+		deps.firefoxGpus = async () => [HOST_GPU, SOFTWARE_GPU];
 		return utils.hostIdentity(
 			{
 				executablePath: "/nonexistent/camoufox",
@@ -399,10 +408,10 @@ describe("hostIdentity", () => {
 		expect(await identity(false, undefined)).toEqual(["lin", HOST_GPU]);
 	});
 
-	it("a software host records its OS only", async () => {
+	it("a software host records its renderer", async () => {
 		expect(await identity(false, undefined, SOFTWARE_GPU)).toEqual([
 			"lin",
-			null,
+			SOFTWARE_GPU,
 		]);
 	});
 
