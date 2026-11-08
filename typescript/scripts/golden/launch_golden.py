@@ -407,7 +407,7 @@ scenario('persistent_passthrough', fingerprint=FP['linux'], os='linux', user_dat
          slow_mo=50, timeout=12345)
 
 # executable_path handling
-scenario('executable_old_build', fingerprint=FP['linux'], os='linux', executable_path='<BUNDLE_OLD>/camoufox-bin')
+scenario('executable_old_build', fingerprint=FP['windows'], os='windows', executable_path='<BUNDLE_OLD>/camoufox-bin')
 scenario('executable_from_env', {'process_env': {'CAMOUFOX_EXECUTABLE_PATH': '<BUNDLE>/camoufox-bin'}},
          fingerprint=FP['linux'], os='linux', executable_path=None)
 

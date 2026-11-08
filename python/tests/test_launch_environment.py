@@ -1,6 +1,7 @@
 """Regression tests for per-launch environment isolation."""
 
 import copy
+import json
 import os
 
 import pytest
@@ -16,7 +17,7 @@ def isolated_launch_dependencies(monkeypatch):
     monkeypatch.setattr(utils, "from_fpgen", lambda *args, **kwargs: {})
     monkeypatch.setattr(utils, "get_screen_cons", lambda *args, **kwargs: None)
     monkeypatch.setattr(utils, "_generate_random_font_subset", lambda *args, **kwargs: [])
-    monkeypatch.setattr(utils, "_generate_random_voice_subset", lambda *args, **kwargs: [])
+    monkeypatch.setattr(utils, "draw_voice_config", lambda *args, **kwargs: {"voices": []})
     monkeypatch.setattr(utils, "fix_navigator_arch", lambda *args: None)
     monkeypatch.setattr(utils, "follow_baseline_protection", lambda *args: None)
     monkeypatch.setattr(utils, "clamp_window_dimensions", lambda *args: None)
@@ -193,14 +194,7 @@ class TestUiLocaleFollowsIntlLocale:
 
 
 class TestToggleSettingsAreWrittenBothWays:
-    """A persistent profile keeps every pref it was ever launched with.
-
-    Firefox saves a user.js pref into prefs.js, and a later launch that simply
-    omits it does not clear it. A profile once launched with block_webrtc kept
-    WebRTC off after the flag was removed (a real profile's prefs.js still held
-    media.peerconnection.enabled=false), so each toggle writes its pref on every
-    launch, on or off.
-    """
+    """Fresh profiles omit off toggles; persistent profiles clear old values."""
 
     UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0"
     TOGGLES = [
@@ -215,8 +209,21 @@ class TestToggleSettingsAreWrittenBothWays:
         )["firefox_user_prefs"]
 
     @pytest.mark.parametrize("flag, pref, stock, toggled", TOGGLES)
-    def test_off_writes_the_stock_value(self, isolated_launch_dependencies, flag, pref, stock, toggled):
-        assert self._prefs()[pref] == stock
+    def test_off_writes_nothing_as_stock_does(self, isolated_launch_dependencies, flag, pref, stock, toggled):
+        assert pref not in self._prefs()
+
+    @pytest.mark.parametrize("flag, pref, stock, toggled", TOGGLES)
+    def test_off_clears_a_value_an_earlier_launch_left(self, isolated_launch_dependencies, tmp_path,
+                                                       flag, pref, stock, toggled):
+        (tmp_path / "prefs.js").write_text(f'user_pref("{pref}", {json.dumps(toggled)});\n')
+        assert utils.saved_pref(str(tmp_path), pref) == toggled
+        prefs = {}
+        utils.set_toggle_pref(prefs, pref, False, stock, toggled, str(tmp_path))
+        assert prefs == {pref: stock}
+        (tmp_path / "prefs.js").write_text(f'user_pref("{pref}", {json.dumps(stock)});\n')
+        prefs = {}
+        utils.set_toggle_pref(prefs, pref, False, stock, toggled, str(tmp_path))
+        assert prefs == {}
 
     @pytest.mark.parametrize("flag, pref, stock, toggled", TOGGLES)
     def test_on_writes_the_toggled_value(self, isolated_launch_dependencies, flag, pref, stock, toggled):
@@ -515,6 +522,106 @@ class TestStockMediaDefaults:
         assert browser.kwargs["forced_colors"] == "active"
         # the ones the caller left alone still follow the host
         assert browser.kwargs["reduced_motion"] == "no-override"
+
+
+class TestScreenshotCaret:
+    """A screenshot of a page Camoufox launched defaults to caret="initial":
+    Playwright's caret hiding writes the page's style attributes, and Firefox's
+    capture never paints the caret anyway."""
+
+    class Owner:
+        def __init__(self, parent=None):
+            self._parent = parent
+
+    @staticmethod
+    def shot(owner, **kwargs):
+        import asyncio
+
+        from camoufox import driver_defaults
+
+        async def original(self, **kw):
+            return kw
+
+        return asyncio.run(driver_defaults._with_caret_default(original)(owner, **kwargs))
+
+    def test_pages_under_a_camoufox_launch_keep_the_caret(self):
+        from camoufox import driver_defaults
+
+        browser = driver_defaults.mark(self.Owner())
+        handle = self.Owner(self.Owner(self.Owner(self.Owner(browser))))  # handle, frame, page, context
+        assert self.shot(handle, caret=None)["caret"] == "initial"
+        assert self.shot(handle)["caret"] == "initial"
+
+    def test_the_callers_caret_wins(self):
+        from camoufox import driver_defaults
+
+        page = self.Owner(driver_defaults.mark(self.Owner()))
+        assert self.shot(page, caret="hide")["caret"] == "hide"
+
+    def test_other_browsers_are_left_alone(self):
+        assert self.shot(self.Owner(self.Owner()), caret=None)["caret"] is None
+
+    def test_fill_clicks_a_text_field_without_focus_first(self):
+        import asyncio
+
+        from camoufox import driver_defaults
+
+        clicks = []
+        evaluates = []
+
+        class Field:
+            def __init__(self, needs_click, lands):
+                self.needs_click = needs_click
+                self.lands = lands
+                self.first = self
+
+            async def evaluate(self, expression, timeout=None):
+                evaluates.append(timeout)
+                return self.needs_click if expression == driver_defaults.FILL_NEEDS_CLICK else self.lands
+
+            async def scroll_into_view_if_needed(self, timeout=None):
+                pass
+
+            async def click(self, **kwargs):
+                clicks.append(kwargs)
+
+        async def original(self, selector, **kwargs):
+            return selector
+
+        browser = driver_defaults.mark(self.Owner())
+        for needs_click, lands in ((True, True), (False, True), (True, False)):
+            frame = self.Owner(browser)
+            frame.locator = lambda selector, field=Field(needs_click, lands): field
+            assert asyncio.run(driver_defaults._frame_fill_clicks_first(original)(frame, "#f", timeout=5)) == "#f"
+        assert clicks == [{"timeout": 5, "force": None}]  # a covered field fills as it would have
+        assert set(evaluates) == {5}  # a missing field fails within the caller's timeout
+
+    def test_installs_once_on_page_and_element_handle(self):
+        from playwright._impl._element_handle import ElementHandle
+        from playwright._impl._page import Page
+
+        from camoufox import driver_defaults
+
+        driver_defaults.mark(self.Owner())
+        driver_defaults.mark(self.Owner())
+        for cls in (Page, ElementHandle):
+            assert getattr(cls.screenshot, "_camoufox_driver_defaults", False)
+            assert not getattr(cls.screenshot.__wrapped__, "_camoufox_driver_defaults", False)
+
+    def test_fill_wraps_frame_fill_on_playwright_without_frame__fill(self, monkeypatch):
+        # Playwright before 1.54 has no Frame._fill; launching must not fail there.
+        from playwright._impl import _frame
+
+        from camoufox import driver_defaults
+
+        class OldFrame:
+            async def fill(self, selector, value, **kwargs):
+                return value
+
+        monkeypatch.setattr(_frame, "Frame", OldFrame)
+        driver_defaults.mark(self.Owner())
+        assert getattr(OldFrame.fill, "_camoufox_driver_defaults", False)
+        assert not hasattr(OldFrame, "_fill")
 
 
 class TestDesktopOnlyWarning:

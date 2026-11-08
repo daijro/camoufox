@@ -142,8 +142,10 @@ come from the real OS, driver and GPU, whatever the identity claims.
 - **On the host's OS**, the launcher starts the browser once, unspoofed and with
   the same display, reads the GPU Firefox reports, and the identity claims it.
   The pixels then agree with the identity. A host that renders in software (no
-  GPU driver, as on most servers) keeps a drawn GPU: it reads as a machine
-  whose driver failed to load.
+  working GPU driver, as on most servers) claims its software renderer, such as
+  `llvmpipe` on Linux. Firefox reads the name and the pixels from one GL context,
+  so a machine with a broken driver reports the software renderer too, and a GPU
+  name over software pixels never happens on a real machine.
 - **On another OS, or with another GPU** (`webgl_config`, a preset's GPU, or a
   host GPU fpgen never recorded), the pixels would show the real one. Camoufox
   then turns on the canvas protection of `privacy.resistFingerprinting`, and
@@ -235,7 +237,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `headless` | `boolean \| "virtual" \| "virtual-gpu"` | `false` | See [Headless modes](#headless-modes). |
 | `gpu` | `string \| number` | `CAMOUFOX_GPU`, or the only GPU | The card for `headless: "virtual-gpu"`. Not taken by `launchOptions()`. |
 | `require_gpu` | `boolean` | `true` | With `headless: "virtual-gpu"`, fail the launch when the browser does not render on the card; `false` warns. Not taken by `launchOptions()`. |
-| `proxy` | `{ server, username?, password?, bypass? }` | none | Playwright proxy. |
+| `proxy` | `{ server, username?, password?, bypass? }` | none | Playwright proxy. A `socks5://` proxy can have a username and password too (RFC 1929), which Playwright alone refuses; the same holds for `NewContext()` and `newContext()`. |
 | `geoip` | `boolean \| string` | none | `true` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. Without a proxy, also decides whether IPv6 stays on. |
 | `geoip_db` | `string` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
 | `locale` | `string \| string[]` | from `geoip`, else the drawn identity's | Locale(s), e.g. `"en-US"`. The first is used for `Intl`. |

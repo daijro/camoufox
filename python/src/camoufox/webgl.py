@@ -78,6 +78,11 @@ _TEXTURE_MIRROR_CLAMP_TO_EDGE = 'EXT_texture_mirror_clamp_to_edge'
 
 _ALIASED_LINE_WIDTH_RANGE = '33902'
 
+# Firefox 159 caps this at 64 KiB (WebGL2ContextState.cpp, kMaxUniformBlockSize);
+# fpgen recorded the drivers' own limit, up to 4 GiB.
+_MAX_UNIFORM_BLOCK_SIZE = '35376'
+_MAX_UNIFORM_BLOCK_SIZE_CAP = 64 * 1024
+
 # What Firefox reports under privacy.resistFingerprinting. A Camoufox identity
 # presents none of RFP's other changes (UTC, rounded windows), so "Mozilla"
 # beside them names a browser that does not exist.
@@ -187,6 +192,9 @@ def to_config(webgl: Dict[str, Any], webgl2: Any, target_os: str) -> Dict[str, A
         # report one line width range. 146 forced WebGL1 onto a compatibility
         # profile, and fpgen recorded that profile's driver range.
         config['webGl:parameters'][_ALIASED_LINE_WIDTH_RANGE] = config['webGl2:parameters'][_ALIASED_LINE_WIDTH_RANGE]
+        parameters = config['webGl2:parameters']
+        if _MAX_UNIFORM_BLOCK_SIZE in parameters:
+            parameters[_MAX_UNIFORM_BLOCK_SIZE] = min(parameters[_MAX_UNIFORM_BLOCK_SIZE], _MAX_UNIFORM_BLOCK_SIZE_CAP)
     # The values are fpgen's cached objects; the caller gets its own copy.
     return orjson.loads(orjson.dumps(config))
 
@@ -245,6 +253,8 @@ def sample_webgl_for_screen(
     Software rasterisers cost fidelity -- real users do run without working
     drivers -- but "no consumer machine reports llvmpipe" is a live, standard
     check on a string every fingerprint script reads (sundial, 2026-09-14).
+    A host that really renders in software claims its renderer instead
+    (plan_rendering).
     """
     candidates = tuple(
         result

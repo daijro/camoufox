@@ -121,7 +121,9 @@ counted as fallbacks. The `route_web_socket` gap is real for users too:
 purpose, each with a reason (`ci/summarize.py` rejects an entry without one).
 A reason is not evidence, so `ci/run_skiplist_audit.py` runs every entry in the
 main world with the skiplist off and **fails the build if a skipped test
-passes**. `ISOLATION_HANGS` is a different list: those tests pass in the main
+passes**. An entry whose test passes or fails with machine speed names, in
+`checked_by`, the patch guard that checks its reason instead.
+`ISOLATION_HANGS` is a different list: those tests pass in the main
 world, so they would fail the audit, and `test_isolation_hangs_are_not_in_the_skiplist`
 keeps the two apart.
 
