@@ -2,7 +2,12 @@
 Shared helpers for patch verification tests.
 """
 
+import ipaddress
+import socket
+import struct
+import threading
 from contextlib import asynccontextmanager
+from typing import Optional
 
 
 @asynccontextmanager
@@ -100,13 +105,20 @@ def hidden_display(screen: str = "1400x900") -> Iterator[str]:
     """
     if not shutil.which("Xvfb"):
         raise SystemExit("Xvfb is required for this guard")
-    for n in range(140, 160):
-        if not os.path.exists(f"/tmp/.X11-unix/X{n}"):
-            break
-    display = f":{n}"
-    proc = subprocess.Popen(["Xvfb", display, "-screen", "0", f"{screen}x24", "-nolisten", "tcp"],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1.5)
+    # Xvfb picks a free display itself and names it on the pipe once it serves it. Picking the first
+    # number without a socket and starting Xvfb there raced other jobs starting servers: the guard's
+    # Xvfb lost the number and died, and the browser opened the winner's display (a 3840-wide screen
+    # in a 3456x2160 guard).
+    read_fd, write_fd = os.pipe()
+    proc = subprocess.Popen(["Xvfb", "-displayfd", str(write_fd), "-screen", "0", f"{screen}x24", "-nolisten", "tcp"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=(write_fd,))
+    os.close(write_fd)
+    with os.fdopen(read_fd) as pipe:
+        number = pipe.readline().strip()
+    if not number.isdigit() or proc.poll() is not None:
+        proc.kill()
+        raise SystemExit(f"Xvfb did not start a {screen} display")
+    display = f":{number}"
     saved = dict(os.environ)
     os.environ.update(DISPLAY=display, MOZ_ENABLE_WAYLAND="0", GDK_BACKEND="x11")
     os.environ.pop("WAYLAND_DISPLAY", None)
@@ -188,3 +200,52 @@ def marionette_env() -> Dict[str, str]:
     dropped the --remote-allow-system-access flag. A launch given env= gets
     nothing else, so the display hidden_display() set is carried along."""
     return {**os.environ, "MOZ_REMOTE_ALLOW_SYSTEM_ACCESS": "1"}
+
+
+def own_address() -> str:
+    """This host's address on its default route. A UDP connect sends nothing."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        probe.connect(("198.51.100.1", 9))
+        return probe.getsockname()[0]
+
+
+STUN_COOKIE = 0x2112A442
+
+
+def stun_binding_response(request: bytes, ip: str, port: int) -> Optional[bytes]:
+    """The answer to an RFC 8489 Binding request, mapping it to ip:port; None if it is not one."""
+    if len(request) < 20:
+        return None
+    kind, _, cookie = struct.unpack("!HHI", request[:8])
+    if kind != 0x0001 or cookie != STUN_COOKIE:
+        return None
+    attr = struct.pack("!HHBBHI", 0x0020, 8, 0, 1, port ^ (STUN_COOKIE >> 16),
+                       int(ipaddress.IPv4Address(ip)) ^ STUN_COOKIE)
+    return struct.pack("!HHI", 0x0101, len(attr), STUN_COOKIE) + request[8:20] + attr
+
+
+class AnsweringStun:
+    """A STUN server on this host that sees its clients at a public address, as
+    one across a NAT does: a real server-reflexive candidate, with no network.
+    Not on loopback: ICE pairs a host socket only with a server of its own kind."""
+
+    MAPPED_IP = "198.51.100.20"
+
+    def __init__(self) -> None:
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind((own_address(), 0))
+        self.url = "stun:{}:{}".format(*self.sock.getsockname())
+        threading.Thread(target=self._serve, daemon=True).start()
+
+    def _serve(self) -> None:
+        while True:
+            try:
+                data, src = self.sock.recvfrom(2048)
+            except OSError:
+                return
+            response = stun_binding_response(data, self.MAPPED_IP, src[1])
+            if response:
+                self.sock.sendto(response, src)
+
+    def close(self) -> None:
+        self.sock.close()

@@ -1,8 +1,8 @@
 """Bundled OneCRL revocations must reach a fresh profile without a network fetch.
 
-camoufox.cfg turns Remote Settings off, so the dump Firefox imports at
-startup is the only source. The eMudhra issuer and serials are from Mozilla's
-test_onecrl_loads_bundle.js.
+Every connection from this profile goes to a closed port, so the dump Firefox
+imports at startup (stock since Firefox 159, Bug 2084311) is the only source.
+The eMudhra issuer and serials are from Mozilla's test_onecrl_loads_bundle.js.
 Check certificate storage itself: a completed load notification does not prove
 that a revoked certificate will be rejected.
 """

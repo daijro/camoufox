@@ -18,8 +18,9 @@ from camoufox.pkgman import OS_NAME
 # failed launches that would have succeeded.
 DISPLAYFD_READ_TIMEOUT_S = 30.0
 
-# Xvfb screen geometry for headless="virtual". The root window size is not
-# observable (see virtual-display-default-1x1x24 in ci/tribal-rules.yml);
+# Xvfb screen geometry for headless="virtual". The root size stays unobservable
+# with the off-root occlusion and claimed-screen patches; see
+# virtual-display-default-1x1x24 in ci/tribal-rules.yml.
 # CAMOUFOX_VIRTUAL_DISPLAY_SIZE="<width>x<height>[x<depth>]" overrides it.
 DEFAULT_SCREEN = "1x1x24"
 SCREEN_ENV_VAR = "CAMOUFOX_VIRTUAL_DISPLAY_SIZE"

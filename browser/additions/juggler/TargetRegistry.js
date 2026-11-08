@@ -34,6 +34,100 @@ const helper = new Helper();
 
 const IDENTITY_NAME = 'JUGGLER ';
 
+// Camoufox: credentials for a SOCKS5 proxy (RFC 1929). Playwright's server
+// refuses a socks5 proxy that has a username, so the launchers send the proxy
+// without one and hand the credentials to Juggler apart from it:
+//   * launch-level: the CAMOU_PROXY_AUTH environment variable, read once when
+//     Juggler starts and then cleared, so processes started later do not
+//     inherit it;
+//   * per context: an init script whose body is
+//     `camoufoxProxyAuth: ({"host": ..., "port": ..., "username": ..., "password": ...});`.
+//     setInitScripts() takes it out, so it never reaches a content process.
+// Either applies only to a SOCKS5 proxy at that host and port.
+const PROXY_AUTH_ENV = 'CAMOU_PROXY_AUTH';
+const PROXY_AUTH_LABEL = 'camoufoxProxyAuth:';
+// Playwright's InitScript wraps each body; see content/FrameTree.js.
+const INIT_SCRIPT_WRAPPER = /^\s*\(\(\)\s*=>\s*\{([\s\S]*)\}\)\(\);?\s*$/;
+
+function parseProxyAuth(json) {
+  try {
+    const {host, port, username, password} = JSON.parse(json);
+    if (typeof host !== 'string' || typeof username !== 'string' || typeof password !== 'string')
+      return null;
+    return {host, port: port ?? null, username, password};
+  } catch (e) {
+    return null;
+  }
+}
+
+function readLaunchProxyAuth() {
+  if (!Services.env.exists(PROXY_AUTH_ENV))
+    return null;
+  const auth = parseProxyAuth(Services.env.get(PROXY_AUTH_ENV));
+  Services.env.set(PROXY_AUTH_ENV, '');
+  return auth;
+}
+
+// Splits the proxy credentials out of a list of init scripts.
+function takeProxyAuth(scripts) {
+  let auth = null;
+  const rest = [];
+  for (const initScript of scripts) {
+    const wrapped = INIT_SCRIPT_WRAPPER.exec(initScript.script);
+    const body = (wrapped ? wrapped[1] : initScript.script).trim();
+    if (!body.startsWith(PROXY_AUTH_LABEL)) {
+      rest.push(initScript);
+      continue;
+    }
+    const json = body.slice(PROXY_AUTH_LABEL.length).trim().replace(/^\(/, '').replace(/\);?$/, '');
+    auth = parseProxyAuth(json) || auth;
+  }
+  return {auth, scripts: rest};
+}
+
+function bareHost(host) {
+  return String(host).replace(/^\[(.*)\]$/, '$1').toLowerCase();
+}
+
+// The proxy with the credentials added, when they are for it.
+function withProxyAuth(proxy, auth) {
+  if (!proxy || !auth || proxy.type !== 'socks' || proxy.username || proxy.password)
+    return proxy;
+  if (bareHost(proxy.host) !== bareHost(auth.host))
+    return proxy;
+  if (auth.port !== null && Number(auth.port) !== proxy.port)
+    return proxy;
+  return {...proxy, username: auth.username, password: auth.password};
+}
+
+// Camoufox: WebRTC must not gather around a Juggler proxy, which is not in
+// network.proxy.*. WebRTCIPManager::IsProxied reads this in the content process.
+function recordProxied(owner) {
+  Services.prefs.getDefaultBranch('roverfox.s.').setCharPref(`webrtc_proxied_${owner}`, '1');
+  // Firefox turns prefetch off at its first proxied load. A document with no
+  // load yet (about:blank, a fulfilled route) would resolve its dns-prefetch
+  // links on this machine's resolver until then.
+  Services.prefs.getDefaultBranch('network.dns.').setBoolPref('disablePrefetch', true);
+}
+
+// A system proxy is not in network.proxy.* either, and a content process
+// cannot ask the OS for it.
+function usesSystemProxy() {
+  if (Services.prefs.getIntPref('network.proxy.type') !== 5)
+    return false;
+  const settings = Cc['@mozilla.org/system-proxy-settings;1'].getService(Ci.nsISystemProxySettings);
+  if (settings.PACURI)
+    return true;
+  try {
+    return settings.getProxyForURI('https://camoufox.invalid/', 'https', 'camoufox.invalid', 443) !== 'DIRECT';
+  } catch (e) {
+    // This is how Linux answers when no proxy is set.
+    if (e.result === Cr.NS_ERROR_FAILURE)
+      return false;
+    throw e;
+  }
+}
+
 // Camoufox: every juggler browser context is a Firefox container. A PUBLIC
 // container renders its name ("JUGGLER <id>") and colour in the URL bar and the
 // tab strip -- a visible automation cue a real Firefox never shows. The
@@ -173,6 +267,9 @@ export class TargetRegistry {
 
     this._proxiesWithClashingAuthCacheKeys = new Set();
     this._browserProxy = null;
+    this._launchProxyAuth = readLaunchProxyAuth();
+    if (usesSystemProxy())
+      recordProxied('browser');
 
     // Cleanup containers from previous runs (if any)
     ContextualIdentityService.ensureDataReady();
@@ -364,7 +461,8 @@ export class TargetRegistry {
   }
 
   setBrowserProxy(proxy) {
-    this._browserProxy = proxy;
+    this._browserProxy = withProxyAuth(proxy, this._launchProxyAuth);
+    recordProxied('browser');
     this._updateProxiesWithSameAuthCacheAndDifferentCredentials();
   }
 
@@ -765,13 +863,22 @@ export class PageTarget {
       this._linkedBrowser.style.setProperty('width', width + 'px');
       this._linkedBrowser.style.setProperty('height', height + 'px');
       this._linkedBrowser.style.setProperty('box-sizing', 'content-box');
-      this._linkedBrowser.closest('.browserStack').style.setProperty('overflow', 'auto');
+      // Keep the stack from taking wheel input as a scrollable overflow box.
+      this._linkedBrowser.closest('.browserStack').style.setProperty('overflow', 'hidden');
       this._linkedBrowser.closest('.browserStack').style.setProperty('contain', 'size');
       this._linkedBrowser.closest('.browserStack').style.setProperty('scrollbar-width', 'none');
 
       const stackRect = this._linkedBrowser.closest('.browserStack').getBoundingClientRect();
       const toolbarTop = stackRect.y;
-      this._window.resizeBy(width - this._window.innerWidth, height + toolbarTop - this._window.innerHeight);
+      // Camoufox: the identity's startup size (CamoufoxWindow.sys.mjs) gives
+      // way to the viewport. It held the window at the identity's outer size
+      // for its first 5 s, so a context's viewport larger than the launch
+      // window overflowed it: a page read innerHeight 700 in an outerHeight 699
+      // window, which no real window can.
+      const chromeWidth = Math.round(this._window.outerWidth - this._window.innerWidth);
+      const chromeHeight = Math.round(this._window.outerHeight - this._window.innerHeight + toolbarTop);
+      this._window.dispatchEvent(new this._window.CustomEvent('CamoufoxViewportSized'));
+      this._window.resizeTo(width + chromeWidth, height + chromeHeight);
 
       await this._channel.connect('').send('awaitViewportDimensions', { width: width / this._zoom, height: height / this._zoom });
     } else {
@@ -910,7 +1017,8 @@ export class PageTarget {
   }
 
   async setInitScripts(scripts) {
-    this.crossProcessCookie.initScripts = scripts;
+    // Camoufox: proxy credentials apply to a context, never to one page.
+    this.crossProcessCookie.initScripts = takeProxyAuth(scripts).scripts;
     this._updateCrossProcessCookie();
     await this.pushInitScripts();
   }
@@ -1255,6 +1363,8 @@ class BrowserContext {
     this._registry._browserContextIdToBrowserContext.set(this.browserContextId, this);
     this._registry._userContextIdToBrowserContext.set(this.userContextId, this);
     this._proxy = null;
+    // Camoufox: credentials for this context's SOCKS5 proxy (takeProxyAuth).
+    this._proxyAuth = null;
     this.removeOnDetach = removeOnDetach;
     this.extraHTTPHeaders = undefined;
     this.httpCredentials = undefined;
@@ -1335,7 +1445,8 @@ class BrowserContext {
   setProxy(proxy) {
     // Clear AuthCache.
     Services.obs.notifyObservers(null, "net:clear-active-logins");
-    this._proxy = proxy;
+    this._proxy = withProxyAuth(proxy, this._proxyAuth);
+    recordProxied(this.userContextId);
     this._registry._updateProxiesWithSameAuthCacheAndDifferentCredentials();
   }
 
@@ -1392,7 +1503,13 @@ class BrowserContext {
   }
 
   async setInitScripts(scripts) {
-    this.crossProcessCookie.initScripts = scripts;
+    const {auth, scripts: rest} = takeProxyAuth(scripts);
+    if (auth) {
+      this._proxyAuth = auth;
+      this._proxy = withProxyAuth(this._proxy, auth);
+      this._registry._updateProxiesWithSameAuthCacheAndDifferentCredentials();
+    }
+    this.crossProcessCookie.initScripts = rest;
     this._updateCrossProcessCookie();
     await Promise.all(Array.from(this.pages).map(page => page.pushInitScripts()));
   }

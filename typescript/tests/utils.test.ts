@@ -233,6 +233,21 @@ describe("validateConfig with removed keys (#835)", () => {
 		);
 	});
 
+	it("warns and launches on a build without the voice grid (#835), where a Linux identity has no voices", () => {
+		const warn = vi
+			.spyOn(process, "emitWarning")
+			.mockImplementation(() => undefined);
+		vi.spyOn(utilsDeps, "print").mockImplementation(() => undefined);
+		const binary = browserWith([
+			{ property: "navigator.userAgent", type: "str" },
+		]);
+		validateConfig(
+			{ "voices:speechd": { languages: [], variants: [] } },
+			binary,
+		);
+		expect(String(warn.mock.calls[0]?.[0])).toContain("voices:speechd");
+	});
+
 	it("does not type-check a removed key", () => {
 		vi.spyOn(utilsDeps, "print").mockImplementation(() => undefined);
 		const binary = browserWith([
