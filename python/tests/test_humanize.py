@@ -16,7 +16,7 @@ def captured_launch_config(monkeypatch):
         utils, "_generate_random_font_subset", lambda *_args, **_kwargs: []
     )
     monkeypatch.setattr(
-        utils, "_generate_random_voice_subset", lambda *_args, **_kwargs: []
+        utils, "draw_voice_config", lambda *_args, **_kwargs: {"voices": []}
     )
     monkeypatch.setattr(utils, "validate_config", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(utils, "add_default_addons", lambda *_args, **_kwargs: None)

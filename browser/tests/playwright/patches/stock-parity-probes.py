@@ -12,12 +12,12 @@ an invariant stock Firefox 152 holds:
   gum-fake            getUserMedia({audio: true, fake: true}) resolves without a
                       prompt
   storage-partition   a cross-site iframe's document.hasStorageAccess() is false
-  wheel-default       page.mouse.wheel(0, 300) delivers the delta the caller
-                      asked for: one event, deltaMode 0, deltaY 300
-  wheel-notches       the same scroll with humanize=True arrives as 3 events
-                      with wheelDeltaY a multiple of 120, as a physical wheel
+  wheel-default       page.mouse.wheel(0, 300) arrives as a physical wheel's
+                      3 notches, each wheelDeltaY -120 (docs/input-dispatch.md);
+                      on Linux, as macOS's differs (driven-wheel-notches)
+  wheel-notches       the same with humanize=True, which does not change it
   wheel-scaled        wheel-default again at layout.css.devPixelsPerPx 2:
-                      still deltaY 300, not 150
+                      still 3 notches, not a count halved by the scale
   query-cost          matchMedia('(color: 8)') and navigator.hardwareConcurrency
                       cost about what matchMedia('(min-width: 1px)') and
                       navigator.userAgent do (no sync IPC per read)
@@ -25,9 +25,7 @@ an invariant stock Firefox 152 holds:
                       about what UTC getters do
   timezone-relaunch   a persistent profile relaunched with another timezone
                       reports the new one, in the page and in a worker
-  web-serial          navigator.serial exists on a secure page. Any enterprise
-                      policy turns Web Serial off unless DefaultSerialGuardSetting
-                      turns it back on
+  web-serial          navigator.serial exists on a secure page, as in stock
 
     python browser/tests/playwright/patches/stock-parity-probes.py
 """
@@ -188,7 +186,8 @@ def run_probes(binary, port):
     from camoufox.sync_api import Camoufox
 
     config = {"webrtc:ipv4": "203.0.113.7", "timezone": "Asia/Tokyo"}
-    with Camoufox(headless=True, executable_path=str(binary), config=config, i_know_what_im_doing=True) as b:
+    with Camoufox(headless=True, executable_path=str(binary), os="linux", config=config,
+                  i_know_what_im_doing=True) as b:
         page = b.new_page()
         page.goto(f"http://localhost:{port}/")
         page.wait_for_function("() => document.body.dataset.result", timeout=60000)
@@ -205,16 +204,21 @@ def run_probes(binary, port):
 def probe_wheel(binary, port, humanize, prefs=None):
     """One scroll of 300px, with humanize on or off.
 
-    Off (the default) the caller's delta is delivered verbatim, which is what
-    upstream's own suite asserts. On, the scroll is quantised into the notches a
-    physical wheel produces. Both are shipped behaviour, so both are checked.
+    Either way the scroll is quantised into the notches a physical wheel
+    produces; both settings are checked so neither drifts from the other.
     """
     from camoufox.sync_api import Camoufox
 
-    with Camoufox(headless=True, executable_path=str(binary), humanize=humanize,
+    with Camoufox(headless=True, executable_path=str(binary), os="linux", humanize=humanize,
                   firefox_user_prefs=prefs or {}, i_know_what_im_doing=True) as b:
         page = b.new_page()
         page.goto(f"http://localhost:{port}/")
+        # The notches come 18-60 ms apart, and a content process still busy with the
+        # load when they arrive gets two in its queue at once and fires them as one
+        # wheel event (BrowserChild::RecvMouseWheelEvent coalescing): stock Linux
+        # 158.0.1 does the same with XTest notches 30 ms apart and a 150 ms busy page
+        # (deltaY [6, 12]). The page is idle first, so the notches are what is compared.
+        page.evaluate("() => new Promise((r) => requestIdleCallback(() => r(), {timeout: 2000}))")
         page.mouse.move(200, 200)
         page.mouse.wheel(0, 300)
         page.wait_for_timeout(1500)
@@ -283,16 +287,11 @@ def main() -> int:
         failures.append(f"gum-fake: getUserMedia({{fake: true}}) {out['gumFake']}")
     if out["storageAccess"] is not False:
         failures.append(f"storage-partition: cross-site iframe hasStorageAccess() = {out['storageAccess']}")
-    wheel = out["wheel"]
-    # Default: the delta the caller asked for, in pixels, as one event.
-    if len(wheel) != 1 or wheel[0]["mode"] != 0 or wheel[0]["dy"] != 300:
-        failures.append(f"wheel-default: wheel(0, 300) gave {wheel}")
-    if [e["dy"] for e in out["wheelScaled"]] != [300]:
-        failures.append(f"wheel-scaled: wheel(0, 300) at 2x gave {out['wheelScaled']}")
-    # humanize=True: notches, each carrying one native tick.
-    humanized = out["wheelHumanized"]
-    if len(humanized) != 3 or any(e["wd"] % 120 for e in humanized):
-        failures.append(f"wheel-notches: humanized wheel(0, 300) gave {humanized}")
+    # 300 px is three notches, each one native tick, humanized or not.
+    for name, events in (("wheel-default", out["wheel"]), ("wheel-notches", out["wheelHumanized"]),
+                         ("wheel-scaled", out["wheelScaled"])):
+        if [e["wd"] for e in events] != [-120, -120, -120]:
+            failures.append(f"{name}: wheel(0, 300) gave {events}")
     # 20000 reads of a value that lives in the config cost ~20 ms here, i.e.
     # ~1 us each: a hash lookup, no IPC. The state this guards against is a sync
     # IPC per read, measured at ~12 us each when it regressed -- 240 ms over the
@@ -315,7 +314,7 @@ def main() -> int:
     if not out["secureContext"]:
         failures.append("web-serial: the probe page is not a secure context -- check is vacuous")
     elif not out["serial"]:
-        failures.append("web-serial: navigator.serial is missing (policies.json needs DefaultSerialGuardSetting: 3)")
+        failures.append("web-serial: navigator.serial is missing")
 
     print()
     if failures:

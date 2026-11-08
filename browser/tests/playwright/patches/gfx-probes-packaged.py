@@ -17,16 +17,26 @@ launch that did not go through pythonlib -- measured 2026-09-18: stock Firefox
 152.0.4 on this machine returned a full WebGL 2.0 context from the real GPU and
 camoufox returned `null` from `canvas.getContext('webgl')`.
 
+That 09-18 stock measurement had the session's WAYLAND_DISPLAY in its
+environment, which runs the probe through EGL. With no display at all, stock
+-headless gets the same refusal (measured on 158.0.1, 2026-11-03): the X11 probe
+cannot connect. headless-software-webgl.patch probes through EGL with Mesa's
+software GL when headless and there is no display, so that launch has llvmpipe
+WebGL, as a headed browser on Xvfb does. The launch below therefore runs with
+no DISPLAY / WAYLAND_DISPLAY: whatever session the guard runs in, it checks
+that display-less fallback, and a missing gfxtest still shows as the refusal.
+
 Three checks, because each alone can pass while the others are broken: the
 packaging list must not name them, the build under test must have them beside
-the binary, and a bare launch -- no pythonlib, so no `webgl.force-enabled` --
-must still get a context.
+the binary, and a bare display-less headless launch -- no pythonlib, so no
+`webgl.force-enabled` -- must still get a context.
 
     python browser/tests/playwright/patches/gfx-probes-packaged.py
 """
 
 import http.server
 import json
+import os
 import shutil
 import socketserver
 import subprocess
@@ -111,6 +121,10 @@ def webgl_report(binary: Path) -> dict:
             [str(binary), "-headless", "-no-remote", "-profile", profile,
              f"http://127.0.0.1:{port}/"],
             stdout=subprocess.DEVNULL, stderr=err,
+            # Display-less: a session's WAYLAND_DISPLAY / DISPLAY would hand the
+            # probe a window system and hide the headless fallback this checks.
+            env={k: v for k, v in os.environ.items()
+                 if k not in ("DISPLAY", "WAYLAND_DISPLAY", "WAYLAND_SOCKET")},
         )
     try:
         if done.wait(LOAD_TIMEOUT_S):

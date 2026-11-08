@@ -164,9 +164,6 @@ async function readGpu(
 /**
  * Whether the host's canvas and WebGL come from a GPU, not a software
  * rasterizer.
- *
- * A host that renders in software matches any GPU on its own OS: it reads as a
- * machine whose driver failed to load.
  */
 export function rendersOnHardware(gpu: Gpu | null): gpu is Gpu {
 	return gpu !== null && !isSoftwareRenderer(gpu[1]);
