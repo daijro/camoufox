@@ -1,6 +1,6 @@
 # Tests
 
-Two things live here, and neither is a copy of anyone else's suite.
+Three things live here, and none is a copy of anyone else's suite.
 
 ### `patches/` — patch guards
 
@@ -23,6 +23,17 @@ A new guard must be added to a group; `ci/tests` fails until it is.
 python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin
 python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin --group automation
 python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin --only isolated-evaluate
+```
+
+### `juggler/` — unit tests for Juggler's input planners
+
+The cursor and wheel planners (`browser/additions/juggler/input/CursorTrajectory.js`),
+the pacer and the delays are plain ES modules with no Gecko imports at load time,
+so they run under Node without a build. `gecko.mjs` supplies the two Gecko globals
+they reach for lazily.
+
+```bash
+node --test browser/tests/juggler/*.test.mjs
 ```
 
 ### `camoufox/` — Camoufox's own Playwright tests

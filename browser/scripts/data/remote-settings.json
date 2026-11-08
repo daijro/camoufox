@@ -1,0 +1,11 @@
+{
+  "firefox": "159.0",
+  "collections": {
+    "bounce-tracking-protection-exceptions": 0,
+    "fingerprinting-protection-overrides": 376,
+    "partitioning-exempt-urls": 7,
+    "query-stripping": 3,
+    "tracking-protection-lists": 36,
+    "url-classifier-exceptions": 1301
+  }
+}

@@ -244,7 +244,7 @@ class NetworkRequest {
       overrideRequestHeaders(this.httpChannel, headers);
     } else {
       appendExtraHTTPHeaders(this.httpChannel, extraHTTPHeaders);
-      restoreInterceptedHeaderOrder(this.httpChannel, extraHTTPHeaders);
+      restoreInterceptedHeaderOrder(this.httpChannel, extraHTTPHeaders, this._refererBeforeConnection);
     }
     if (method)
       this.httpChannel.requestMethod = method;
@@ -331,6 +331,10 @@ class NetworkRequest {
       // Not our channel? Just in case this happens, don't do anything.
       return false;
     }
+    // Necko has laid out the headers by now, but the channel that replaces this one on
+    // interception does not keep the referer's slot (see restoreInterceptedHeaderOrder).
+    const names = requestHeaders(this.httpChannel).map(header => header.name.toLowerCase());
+    this._refererBeforeConnection = names.includes('referer') && names.indexOf('referer') < names.indexOf('connection');
 
     const shouldIntercept = this._shouldIntercept();
     if (!shouldIntercept) {
@@ -534,6 +538,13 @@ class NetworkRequest {
       requestStart: this.httpChannel.requestStartTime,
       responseStart: this.httpChannel.responseStartTime,
     };
+    // Camoufox: Page.navigate pre-connects as a typed load does, so a page's
+    // connection can predate its channel. Report those phases as a reused
+    // connection's (0, which the client reads as -1), not as negative times.
+    for (const phase of ['domainLookupStart', 'domainLookupEnd', 'connectStart', 'secureConnectionStart', 'connectEnd']) {
+      if (timing[phase] && timing[phase] < timing.startTime)
+        timing[phase] = 0;
+    }
 
     const { status, statusText, headers } = responseHead(this.httpChannel, opt_statusCode, opt_statusText);
     if (redirectStatus.includes(status) && this._overriddenHeadersForRedirect)
@@ -626,6 +637,23 @@ export class NetworkObserver {
         }
         if (this._targetRegistry.shouldBustHTTPAuthCacheForProxy(proxy))
           Services.obs.notifyObservers(null, "net:clear-active-logins");
+        // Camoufox: a SOCKS5 proxy gets its username and password (RFC 1929);
+        // Firefox takes credentials for SOCKS proxies only.
+        if (proxy.type === 'socks' && (proxy.username || proxy.password)) {
+          proxyFilter.onProxyFilterResult(protocolProxyService.newProxyInfoWithAuth(
+              proxy.type,
+              proxy.host,
+              proxy.port,
+              proxy.username || '',
+              proxy.password || '',
+              '', /* aProxyAuthorizationHeader */
+              '', /* aConnectionIsolationKey */
+              Ci.nsIProxyInfo.TRANSPARENT_PROXY_RESOLVES_HOST, /* aFlags */
+              UINT32_MAX, /* aFailoverTimeout */
+              null, /* failover proxy */
+          ));
+          return;
+        }
         proxyFilter.onProxyFilterResult(protocolProxyService.newProxyInfo(
             proxy.type,
             proxy.host,
@@ -834,7 +862,12 @@ const ON_BEFORE_CONNECT_HEADERS = ['upgrade-insecure-requests', 'sec-fetch-dest'
 // everything added from http-on-modify-request onwards. Order on the wire follows
 // nsHttpHeaderArray, and setting a header that is already present updates it in place, so moving
 // one means deleting it and adding it back.
-function restoreInterceptedHeaderOrder(httpChannel, extraHTTPHeaders) {
+//
+// Whether a referer comes before "connection" depends on the request: necko adds "connection" in
+// BeginConnect and then sets a default-policy referer again (ReEvaluateReferrerAfterTrackingStatus-
+// IsKnown), so an <img> sends "connection, referer" while fetch() sends "referer, connection".
+// The caller reads which from the channel before it was intercepted.
+function restoreInterceptedHeaderOrder(httpChannel, extraHTTPHeaders, refererBeforeConnection) {
   const headers = requestHeaders(httpChannel);
   const nameOf = header => header.name.toLowerCase();
 
@@ -858,7 +891,8 @@ function restoreInterceptedHeaderOrder(httpChannel, extraHTTPHeaders) {
 
   for (const header of displaced) {
     const boundary = nameOf(header) === 'connection' ?
-        firstIndex(h => !DEFAULT_REQUEST_HEADERS.includes(nameOf(h))) :
+        firstIndex(h => !DEFAULT_REQUEST_HEADERS.includes(nameOf(h)) &&
+            !(refererBeforeConnection && nameOf(h) === 'referer')) :
         firstIndex(h => lateHeaders.has(nameOf(h)));
     headers.splice(boundary, 0, header);
   }

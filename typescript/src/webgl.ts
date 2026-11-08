@@ -88,6 +88,11 @@ const TEXTURE_MIRROR_CLAMP_TO_EDGE = "EXT_texture_mirror_clamp_to_edge";
 
 const ALIASED_LINE_WIDTH_RANGE = "33902";
 
+// Firefox 159 caps this at 64 KiB (WebGL2ContextState.cpp, kMaxUniformBlockSize);
+// fpgen recorded the drivers' own limit, up to 4 GiB.
+const MAX_UNIFORM_BLOCK_SIZE = "35376";
+const MAX_UNIFORM_BLOCK_SIZE_CAP = 64 * 1024;
+
 // What Firefox reports under privacy.resistFingerprinting, which a Camoufox
 // identity otherwise does not present.
 const RFP_RENDERER = "Mozilla";
@@ -249,6 +254,12 @@ export function toConfig(
 		// profile, and fpgen recorded that profile's driver range.
 		config["webGl:parameters"][ALIASED_LINE_WIDTH_RANGE] =
 			config["webGl2:parameters"][ALIASED_LINE_WIDTH_RANGE];
+		const parameters = config["webGl2:parameters"];
+		if (MAX_UNIFORM_BLOCK_SIZE in parameters)
+			parameters[MAX_UNIFORM_BLOCK_SIZE] = Math.min(
+				parameters[MAX_UNIFORM_BLOCK_SIZE],
+				MAX_UNIFORM_BLOCK_SIZE_CAP,
+			);
 	}
 	// The values are the trace's cached objects; the caller gets its own copy.
 	return parsePyJson(orjsonDumps(config, false));

@@ -34,9 +34,23 @@ rules:
       1280, innerHeight 984, fullpage 1280x5367 either way, with only
       fingerprint-rotation noise in the colour count. Second, it costs
       throughput: past 30-40 concurrent browsers the framebuffer becomes the
-      bottleneck on a machine that handles 70-80 at 1x1. The root window is not
-      a fingerprint -- screen.* comes from the generated fingerprint, applied
-      per context in the browser.
+      bottleneck on a machine that handles 70-80 at 1x1. The root's size is
+      not a fingerprint -- screen.* comes from the generated fingerprint,
+      applied per context in the browser -- but a window lying outside the
+      root is observable: X reports it fully obscured, and an occluded
+      window's navigator.mediaDevices.enumerateDevices() never settles
+      (measured 2026-11-03, window at the identity's 319,76 on the 1x1 root),
+      and with no window manager it is never focused either (X focus follows
+      the pointer, which a 1x1 root pins at 0,0). Firefox also sizes and
+      places windows inside the X screen: on 1x1 a 400x300 window.open came
+      up 120x54 at 0,0. So 1x1 holds only together with two patches:
+      virtual-display-off-root-not-occluded.patch (no occlusion for a window
+      outside the root; and with no window manager a new top-level window is
+      focused at its first VisibilityNotify, as any desktop does)
+      and virtual-display-claimed-screen.patch (an X screen smaller than the
+      claimed one reports the claimed one). Guards: virtual-display-window-visible,
+      popup-window-size, popup-covered-click,
+      startup-size-hold-yields, all at this default.
     expect:
       module: camoufox.virtdisplay
       attribute: DEFAULT_SCREEN
@@ -287,6 +301,49 @@ rules:
       speaks it silently for as long as the text takes at ~150 words per
       minute. The two config keys that chose between the two tells are gone.
 
+  - id: driven-pages-stay-focused
+    title: A driven page stays focused and active, deliberately not stock
+    check: manual   # browser/tests/playwright/patches/driven-page-real-focus.py
+    evidence:
+      - "product decision, 2026-11-05: every page a caller opens must keep running as if a person is looking at it"
+      - "the stock-focus change in daijro/camoufox#997 made background pages lose focus and visibility; it is reverted here"
+    rationale: >-
+      Stock Firefox gives a page behind another window hasFocus() false, a
+      window blur, and a hidden, throttled state behind a foreground tab. A
+      driver's pages are all work the caller asked for, in parallel, so
+      Camoufox keeps every top-level driven document focused and active
+      (docShell.overrideHasFocus / forceActiveState). This is page-visible: it
+      is a product choice, not a parity bug.
+
+  - id: no-made-up-srflx
+    title: A srflx candidate comes only from a STUN answer
+    check: manual   # browser/tests/playwright/patches/webrtc-context-ip.py, webrtc-socks5-udp.py
+    evidence:
+      - "daijro/camoufox#997: the fabricated srflx is removed, and its guards now run against a STUN server that answers"
+      - "webrtc-socks5-udp.py: gathering behind a proxy with no UDP takes as long as against a STUN server that never answers"
+    rationale: >-
+      A srflx says the page's STUN server saw a Binding Request from that
+      address, and a page running its own server can tell it never did. Behind
+      a proxy with no UDP path, the page reads a machine whose UDP is blocked:
+      host candidates only, obfuscated even with capture permission, and
+      datagrams dropped silently so gathering times out as it does on a
+      firewalled machine. The identity's address replaces a srflx the browser
+      really gathered; it never invents one.
+
+  - id: juggler-records-the-proxy
+    title: Juggler records which contexts are proxied, not the launcher and not the page
+    check: manual   # browser/tests/playwright/patches/webrtc-socks5-udp.py (blob:, about:blank, launch proxy), webrtc-proxy-no-udp-around.py (bypass, system proxy)
+    evidence:
+      - "daijro/camoufox#997, CI run 42147151481: a raw browser.new_context(proxy=...) gathered around its SOCKS5 proxy on a blob: page"
+    rationale: >-
+      A document with no HTTP channel has no proxy lookup to go by, so WebRTC
+      needs another answer. Every proxy reaches Juggler, however the caller
+      set it, and Juggler's flag is a default-branch pref a page cannot see. A
+      launcher config key misses a caller's own new_context, and a window
+      method is one more name a page can find. A system proxy is recorded at
+      startup, and a page in its proxy's bypass list counts as proxied: it
+      gets no UDP or ICE TCP, because this machine is not the identity's.
+
   - id: no-glyph-spacing-noise
     title: Text is shaped exactly as stock Firefox shapes it; there is no spacing seed
     check: automated
@@ -354,7 +411,7 @@ rules:
       audio-matches-stock guard checks the build against the recorded values.
 
   - id: cross-os-canvas-is-the-rfp-placeholder
-    title: On the host's OS the identity claims the host's GPU; on another OS or GPU canvas readback is RFP's random placeholder
+    title: On the host's OS the identity claims the host's GPU or software renderer; on another OS or GPU canvas readback is RFP's random placeholder
     check: automated
     evidence:
       - "v156.0.1-beta.32, 2026-10-06: getImageData and readPixels identical with privacy.fingerprintingProtection on and off; CanvasUtils.cpp checks EfficientCanvasRandomization (PNG deBG chunk only) before CanvasRandomization"
@@ -362,12 +419,18 @@ rules:
       - "v156.0.1-beta.32: the three RFP canvas targets in privacy.baselineFingerprintingProtection.overrides give RFP's readback (random, toDataURL ~770 bytes) with hardwareConcurrency untouched"
       - "v156.0.1-beta.32: a Linux host with an RTX 5080 and a Ryzen iGPU reported 'AMD, Radeon HD 3200 Graphics, or similar' to WebGL, headless and headed"
       - "v156.0.1-beta.32: a Linux identity whose config claimed availHeight 1053 on a 1080 screen read 1080 (nsRFPService::GetSpoofedScreenAvailSize, no Linux offset)"
+      - "Stock 159.0 on Linux with an RX 7900 XTX under Xorg: WebGL reads 'Radeon R9 200 Series, or similar' on the working driver; with MESA_LOADER_DRIVER_OVERRIDE=bogus or LIBGL_ALWAYS_SOFTWARE=1 it reads 'llvmpipe, or similar' from Mesa, with the same readPixels hash as Xvfb. A private window on Xvfb gives that hash too. Broken NVIDIA and blocklisted drivers were not tried"
+      - "dom/canvas/WebGLContext.cpp, Firefox 159: UNMASKED_RENDERER_WEBGL is gl->fGetString(LOCAL_GL_RENDERER) on the context that draws the pixels, unless webgl.override-unmasked-renderer is set (empty by default)"
+      - "Stock 159.0 with privacy.resistFingerprinting reports the renderer 'Mozilla', and LibreWolf ships that pref on, so a GPU name over random readback is not what LibreWolf shows either"
     rationale: >-
       Canvas and WebGL pixels come from the host's OS, driver and GPU. On the
       host's OS the identity claims the GPU Firefox reports there, read from the
       browser itself because Firefox may render on another device than system
-      tools name and sanitizes the name its own way; a software renderer
-      matches any GPU, as a machine whose driver failed to load. On another OS,
+      tools name and sanitizes the name its own way. A software renderer is
+      claimed like a GPU: Firefox reads the name and the pixels from one GL
+      context, so a GPU name over software pixels never happens on a real
+      machine, and a machine with a broken GPU driver reports llvmpipe too. It
+      reads as a server, which is better than a contradiction. On another OS,
       or with another GPU (one the caller or a preset names, or a host GPU
       fpgen never recorded, which has no WebGL data to claim), nothing can
       agree, and Firefox 156's private windows do not hide pixels, so the
@@ -419,6 +482,7 @@ rules:
       - "fpgen Linux WebGL2 records: [1, 1] on 97%, the driver's range on the 3% without EXT_depth_clamp (GLES drivers, where Firefox reads it)"
       - "browser/tests/playwright/patches/stock-gpu-parity.py fails on the 146-style WebGL1 range on Linux, on a hardware GPU and on llvmpipe, and passes with the fix"
       - "Firefox 159 (bug 1735401) exposes EXT_texture_norm16 on WebGL2, no longer behind webgl.enable-draft-extensions: stock 159.0 on M1 (headless) and on Linux llvmpipe (Xvfb) list it on WebGL2 and not WebGL1; stock 158.0.1 on the same Linux and 146.0 on the same M1 list it on neither. dom/canvas/WebGLExtensions.cpp's IsSupported needs GLFeature::texture_norm16, core in desktop GL 3.1"
+      - "Firefox 159 caps WebGL2 MAX_UNIFORM_BLOCK_SIZE at 64 KiB (WebGL2ContextState.cpp, kMaxUniformBlockSize): on one Linux AMD machine, stock 146 reports 4294967292 and stock 159.0 65536, and stock-gpu-parity.py failed on the recording's 4120744960 until the launchers applied the cap"
       - "Firefox 159 adds EXT_clip_control (GLFeature::clip_control, GL 4.5) and EXT_texture_mirror_clamp_to_edge (GL 4.4) to WebGL1 and WebGL2: stock 159.0 on Linux llvmpipe, x86_64 and aarch64, lists both where 158.0.1 lists neither, and stock 159.0 on M1 lists neither. 159's third_party/angle renderer11_utils.cpp sets textureMirrorClampToEdgeEXT on every D3D11 device and clipControlEXT from feature level 10_0"
     rationale: >-
       fpgen's records are right for the Firefox that made them; what goes
@@ -621,6 +685,40 @@ rules:
       which answers plain GETs and cannot open the CONNECT tunnel the upgrade
       needs. A real proxy handles CONNECT, as every https:// site needs it to.
       Those tests are skiplisted rather than passed by changing the browser.
+
+  - id: no-enterprise-policies
+    title: Camoufox ships no policies.json; what a policy did lives in camoufox.cfg or the bundled uBO
+    check: manual   # browser/tests/playwright/patches/enterprise-policies.py
+    evidence:
+      - "measured 2026-10-26 on 158.0.1-beta.34: with policies.json, DoHHeuristics enterprisePolicy() returned policy_without_doh and DoH stood down; without it, no_policy_set"
+      - "the same file's SearchEngines policy and no-search-engines.patch left one inert engine where stock 158.0.1 adds Google, Bing, DuckDuckGo, Perplexity, Wikipedia (en), eBay (search-service-init.py)"
+    rationale: >-
+      Any policy file puts Firefox in enterprise mode, whatever it holds, and
+      enterprise mode is visible from outside: DNS over HTTPS stands down, and
+      the policies' own effects (no search engines, system addons removed)
+      differ from stock. Updates, studies and the first-run page stay off
+      through prefs in camoufox.cfg; uBO keeps its packaged lists through its
+      own default (scripts/fetch-ubo.py freeze_lists).
+
+  - id: no-background-traffic
+    title: Firefox's background services stay off; what a page can see of them comes bundled
+    check: manual   # browser/tests/playwright/patches/no-background-traffic.py, tracking-protection-lists.py
+    evidence:
+      - "toolkit/components/url-classifier/UrlClassifierRemoteSettingsService.sys.mjs: the moz-sbrs update scheme reads its lists through RemoteSettings, so the build's dumps can supply them"
+      - "dom/push/PushServiceWebSocket.sys.mjs _queueRequest: a registration opens the socket itself, so the startup connection is not needed for pushManager.subscribe()"
+      - "measured 2026-11-06 on the changeset of tracking-protection-lists: 36 of 446 records, 2.82 MB, apply to Firefox 159"
+    rationale: >-
+      Remote Settings, Push, connectivity and captive-portal probes, Safe
+      Browsing, region lookup and new tab feeds send requests no page asked
+      for, which only the proxy operator and Mozilla see. A page sees none of
+      them, but it does see the lists Remote Settings delivers: without the
+      tracking tables a fingerprinting script stock blocks would load. So the
+      requests stay off and the page-visible collections are a pinned snapshot
+      (scripts/remote_settings.py pin, run on every Firefox bump). Push still
+      works for a page that subscribes. Media plugin updates stay on: without
+      them getCapabilities() lists no H264 and Widevine never resolves (#713),
+      and neither ships with Firefox, so a fresh profile asks Mozilla for them
+      and downloads them from Cisco and Google.
 
   - id: ipv4-only-network-not-disable-ipv6
     title: geoip without a proxy keeps IPv6 only where it agrees, and never uses network.dns.disableIPv6

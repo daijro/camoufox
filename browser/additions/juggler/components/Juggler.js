@@ -17,31 +17,47 @@ const helper = new Helper();
 const Cc = Components.classes;
 const Ci = Components.interfaces;
 
-// Register JSWindowActors that will be instantiated for each frame.
-ActorManagerParent.addJSWindowActors({
-  JugglerFrame: {
-    parent: {
-      esModuleURI: 'resource://gre/modules/juggler/JugglerFrameParent.sys.mjs',
-    },
-    child: {
-      esModuleURI: 'resource://gre/modules/juggler/JugglerFrameChild.sys.mjs',
-      events: {
-        // Normally, we instantiate an actor when a new window is created.
-        DOMWindowCreated: {},
-        // However, for same-origin iframes, the navigation from about:blank
-        // to the URL will share the same window, so we need to also create
-        // an actor for a new document via DOMDocElementInserted.
-        DOMDocElementInserted: {},
-        // Also, listening to DOMContentLoaded.
-        DOMContentLoaded: {},
-        DOMWillOpenModalDialog: {},
-        DOMModalDialogClosed: {},
+// Camoufox: everything Juggler changes in a page is installed only once a
+// driver is attached (-juggler-pipe). Its frame actor turns off every
+// top-level docShell's bfcache.
+// focusmanager.testmode belongs to the driver too: it keeps a window that
+// loses focus to another window or a native dialog from being lowered, which a
+// page reads as the missing blur (stock's default is false).
+function installDriverOverrides() {
+  Services.prefs.getDefaultBranch("").setBoolPref("focusmanager.testmode", true);
+  // Juggler follows frames within one content process: keep cross-site iframes in their
+  // parent's process. A browser nobody drives keeps Firefox's isolation, which a page can tell.
+  Services.prefs.getDefaultBranch("").setIntPref("fission.webContentIsolationStrategy", 0);
+  // Juggler cannot report a page restored from bfcache, so a driven browser keeps none
+  // (this alone disables it; docShell.disallowBFCache does not under SHIP).
+  Services.prefs.getDefaultBranch("").setBoolPref("fission.bfcacheInParent", false);
+  // A driver's first page is about:blank, its URL on the command line: a headed
+  // launch otherwise opens the home page instead. No page can read this pref.
+  Services.prefs.getDefaultBranch("").setIntPref("browser.startup.page", 0);
+  // Register JSWindowActors that will be instantiated for each frame.
+  ActorManagerParent.addJSWindowActors({
+    JugglerFrame: {
+      parent: {
+        esModuleURI: 'resource://gre/modules/juggler/JugglerFrameParent.sys.mjs',
       },
+      child: {
+        esModuleURI: 'resource://gre/modules/juggler/JugglerFrameChild.sys.mjs',
+        // Instantiate an actor when a new window is created. An observer topic,
+        // not DOMWindowCreated: an event handed to the actor gets its reflector
+        // in the page's window, which defines `Event` there before the page's
+        // first script runs, as it never is in a browser nobody drives.
+        observers: ['content-document-global-created'],
+        events: {
+          DOMContentLoaded: {},
+          DOMWillOpenModalDialog: {},
+          DOMModalDialogClosed: {},
+        },
+      },
+      allFrames: true,
+      safeForUntrustedWebProcess: true,
     },
-    allFrames: true,
-    safeForUntrustedWebProcess: true,
-  },
-});
+  });
+}
 
 let browserStartupFinishedCallback;
 let browserStartupFinishedPromise = new Promise(x => browserStartupFinishedCallback = x);
@@ -78,6 +94,7 @@ export class Juggler {
         const jugglerPipeFlag = cmdLine.handleFlag('juggler-pipe', false);
         if (!jugglerPipeFlag)
           return;
+        installDriverOverrides();
 
         this._silent = cmdLine.findFlag('silent', false) >= 0;
         if (this._silent) {

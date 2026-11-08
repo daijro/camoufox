@@ -287,6 +287,11 @@ jobs:
         # patch guard.
         run: python3 browser/tests/ucrt-math/check.py
 
+      - name: Juggler input planners and pacing
+        # The cursor and wheel planners, the pacer and the delays are plain ES
+        # modules, so they run under Node without a browser build.
+        run: node --test browser/tests/juggler/*.test.mjs
+
       - name: CI pipeline self-tests
         # These assert that the pipeline reports honestly: skips carry reasons,
         # shards partition exactly, and nothing identifying a sundial vector
@@ -310,6 +315,16 @@ jobs:
               raise SystemExit('\n'.join(problems))
           print(f'skiplist OK: {len(load_skiplist())} entries, every one with a reason')
           "
+
+      # Every other job runs 3.12 or newer, whose grammar (PEP 701 f-strings)
+      # accepts code that 3.10, the oldest Python python/pyproject.toml allows,
+      # cannot import.
+      - uses: actions/setup-python@v5
+        id: oldest-python
+        with:
+          python-version: "3.10"
+      - name: pythonlib compiles on its oldest Python
+        run: ${{ steps.oldest-python.outputs.python-path }} -m compileall -q python/src
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -926,8 +941,10 @@ jobs:
       - if: matrix.leg == 'spoofing'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - if: matrix.leg == 'parity'
-        # windows-keyboard sends real X11 key events.
-        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends xdotool x11-xkb-utils
+        # windows-keyboard sends real X11 key events. libegl1: a display-less
+        # headless launch probes Mesa through EGL (headless-software-webgl.patch).
+        # This image has GLX for Xvfb but not libEGL or the software rasterizer.
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends xdotool x11-xkb-utils libegl1 libgles2 libgl1-mesa-dri
       - if: matrix.leg != 'skiplist'
         run: xvfb-run -a python3 -m ci.run_patch_guards --group "${{ matrix.leg }}" --binary "$CAMOUFOX_BINARY"
       - name: Every skiplist entry is still failing

@@ -1,0 +1,621 @@
+diff --git a/dom/bindings/BindingUtils.cpp b/dom/bindings/BindingUtils.cpp
+index 6cbfbce..c9272e3 100644
+--- a/dom/bindings/BindingUtils.cpp
++++ b/dom/bindings/BindingUtils.cpp
+@@ -27,6 +27,7 @@
+ #include "js/Symbol.h"
+ #include "js/experimental/JitInfo.h"  // JSJit{Getter,Setter,Method}CallArgs, JSJit{Getter,Setter}Op, JSJitInfo
+ #include "js/friend/StackLimits.h"  // js::AutoCheckRecursionLimit
++#include "jsapi.h"  // JS::DescribeScriptedCaller, JS::GetScriptedCallerGlobal
+ #include "jsfriendapi.h"
+ #include "mozilla/Assertions.h"
+ #include "mozilla/DebugOnly.h"
+@@ -959,6 +960,10 @@ bool InitInterfaceOrNamespaceObject(
+   return true;
+ }
+ 
++// Camoufox: set while an interface object is created for Juggler, the
++// automation driver (see GetPerInterfaceObjectHandle).
++static bool sCreatingForJuggler = false;
++
+ // name must be an atom (or JS::PropertyKey::NonIntAtom will assert).
+ static JSObject* CreateInterfaceObject(
+     JSContext* cx, JS::Handle<JSObject*> global,
+@@ -1003,7 +1008,9 @@ static JSObject* CreateInterfaceObject(
+     return nullptr;
+   }
+ 
+-  if (legacyWindowAliases && NS_IsMainThread()) {
++  // Camoufox: an interface created for Juggler defines its aliases later,
++  // with its name (GetPerInterfaceObjectHandle).
++  if (legacyWindowAliases && NS_IsMainThread() && !sCreatingForJuggler) {
+     for (; *legacyWindowAliases; ++legacyWindowAliases) {
+       if (!DefineConstructor(cx, global, *legacyWindowAliases, constructor)) {
+         return nullptr;
+@@ -4059,6 +4066,122 @@ JSObject* UnprivilegedJunkScopeOrWorkerGlobal(const fallible_t&) {
+ }
+ }  // namespace binding_detail
+ 
++// In ScriptSettings.cpp.
++nsIGlobalObject* GetStackIncumbentGlobalUnclamped();
++
++namespace binding_detail {
++static uint32_t sXrayUnderlyingResolveDepth = 0;
++
++AutoXrayUnderlyingResolve::AutoXrayUnderlyingResolve() {
++  if (NS_IsMainThread()) {
++    ++sXrayUnderlyingResolveDepth;
++  }
++}
++
++AutoXrayUnderlyingResolve::~AutoXrayUnderlyingResolve() {
++  if (NS_IsMainThread()) {
++    --sXrayUnderlyingResolveDepth;
++  }
++}
++
++bool InXrayUnderlyingResolve() {
++  return NS_IsMainThread() && sXrayUnderlyingResolveDepth > 0;
++}
++
++uint16_t gDeferredProtoWindows[prototypes::id::_ID_Count + 1] = {};
++uint32_t gDeferredProtoTotal = 0;
++
++void MaybeDefineForCachedReflector(JSContext* aCx, JSObject* aReflector) {
++  if (!NS_IsMainThread() || sCreatingForJuggler) {
++    return;
++  }
++  const DOMJSClass* clasp = GetDOMClass(aReflector);
++  if (!clasp) {
++    return;
++  }
++  JSObject* global = JS::GetNonCCWObjectGlobal(aReflector);
++  if (!(JS::GetClass(global)->flags & JSCLASS_DOM_GLOBAL)) {
++    return;
++  }
++  ProtoAndIfaceCache* cache = GetProtoAndIfaceCache(global);
++  if (!cache->HasUndefinedOnGlobal()) {
++    return;
++  }
++  bool marked = false;
++  for (prototypes::ID id : clasp->mInterfaceChain) {
++    if (id == prototypes::id::_ID_Count) {
++      break;
++    }
++    if (cache->IsUndefinedOnGlobal(id)) {
++      marked = true;
++      break;
++    }
++  }
++  if (!marked || IsJugglerCaller(aCx)) {
++    return;
++  }
++  // The page, or a browser actor, gets an object Juggler wrapped first:
++  // define its interfaces now, as wrapping it first would have.
++  JS::Rooted<JSObject*> rootedGlobal(aCx, global);
++  JSAutoRealm ar(aCx, rootedGlobal);
++  JS::Rooted<JSObject*> reflector(aCx, aReflector);
++  JS::Rooted<JSObject*> proto(aCx);
++  if (!JS_GetPrototype(aCx, reflector, &proto) || !proto ||
++      !WebIDLGlobalNameHash::DefineCreatedForPage(aCx, rootedGlobal, proto)) {
++    JS_ClearPendingException(aCx);
++  }
++}
++}  // namespace binding_detail
++
++// Camoufox: whether the innermost script running is Juggler's, either its own
++// modules or the isolated worlds it evaluates page scripts in. Those sandboxes
++// carry the location of the Juggler code that created them.
++bool binding_detail::IsJugglerCaller(JSContext* aCx) {
++  if (!NS_IsMainThread()) {
++    return false;
++  }
++  constexpr auto kJuggler = "resource://gre/modules/juggler/"_ns;
++  // A call into the page, such as an event listener that Juggler's input
++  // reached, hides the scripted caller (CallSetup's AutoIncumbentScript), so
++  // the page is the one asking there, as for real input. The entry global is
++  // no guide: Juggler's actor messages enter the page's window too.
++  JSObject* callerGlobal = JS::GetScriptedCallerGlobal(aCx);
++  if (!callerGlobal) {
++    // A callback hides the caller and names its incumbent global instead:
++    // a listener in one of Juggler's isolated worlds (Playwright's hit
++    // target check) is Juggler's, a page's or a browser actor's is not.
++    nsIGlobalObject* incumbent = GetStackIncumbentGlobalUnclamped();
++    callerGlobal = incumbent ? incumbent->GetGlobalJSObjectPreserveColor()
++                             : nullptr;
++    if (!callerGlobal || !xpc::IsSandbox(callerGlobal)) {
++      return false;
++    }
++  }
++  if (xpc::IsSandbox(callerGlobal)) {
++    xpc::RealmPrivate* realm = xpc::RealmPrivate::Get(callerGlobal);
++    return realm && FindInReadable(kJuggler, realm->GetLocation());
++  }
++  // Described from the caller's own realm: from the page's, frames the page's
++  // principal does not subsume (Juggler's system modules) are not visible.
++  JSAutoRealm ar(aCx, callerGlobal);
++  JS::AutoFilename filename;
++  if (!JS::DescribeScriptedCaller(&filename, aCx) || !filename.get()) {
++    return false;
++  }
++  nsDependentCString caller(filename.get());
++  // A driver's main-world evaluate (Juggler's `mw:` path, and its own helpers
++  // in the main-world context) runs in the page's realm as Debugger code,
++  // which keeps the Debugger's default name, and the script the `mw:` wrapper
++  // evals is named after it ("debugger eval code line N > eval"). No script a
++  // page loads or evals is called that (//# sourceURL changes only the display
++  // name). What it creates is Juggler's, as from an isolated world: a
++  // scraper's document.querySelectorAll() there must not define NodeList on
++  // the window before the page uses it (main-world-eval-globals.py).
++  constexpr auto kDebuggerEval = "debugger eval code"_ns;
++  return StringBeginsWith(caller, kJuggler) ||
++         StringBeginsWith(caller, kDebuggerEval);
++}
++
+ JS::Handle<JSObject*> GetPerInterfaceObjectHandle(
+     JSContext* aCx, size_t aSlotId, CreateInterfaceObjectsMethod aCreator,
+     DefineInterfaceProperty aDefineOnGlobal) {
+@@ -4072,7 +4195,57 @@ JS::Handle<JSObject*> GetPerInterfaceObjectHandle(
+   ProtoAndIfaceCache& protoAndIfaceCache = *GetProtoAndIfaceCache(global);
+   if (!protoAndIfaceCache.HasEntryInSlot(aSlotId)) {
+     JS::Rooted<JSObject*> rootedGlobal(aCx, global);
+-    aCreator(aCx, rootedGlobal, protoAndIfaceCache, aDefineOnGlobal);
++    // Camoufox: a window defines an interface's name on itself when the
++    // interface is first needed, so Object.getOwnPropertyNames(window) lists
++    // the interfaces in the order the page used them. When Juggler needs one
++    // (wrapping a node for an isolated world, a driver's evaluate), it is
++    // created but not defined, and stays listed as unused; the page defines
++    // it, with its aliases and legacy factory functions, when it first uses
++    // the name (WebIDLGlobalNameHash::DefineIfEnabled).
++    if (sCreatingForJuggler) {
++      // A parent interface of the one being created for Juggler; the
++      // outermost call marks it.
++      aCreator(aCx, rootedGlobal, protoAndIfaceCache,
++               aDefineOnGlobal == DefineInterfaceProperty::CheckExposure
++                   ? DefineInterfaceProperty::No
++                   : aDefineOnGlobal);
++    } else if (aDefineOnGlobal == DefineInterfaceProperty::CheckExposure &&
++               protoAndIfaceCache.IsWindowLike() && binding_detail::IsJugglerCaller(aCx)) {
++      // Interface objects and prototypes both: a reflector made for Juggler
++      // carries its prototypes' marks (MaybeDefineForCachedReflector).
++      constexpr size_t kFirst = prototypes::id::_ID_Start;
++      constexpr size_t kEnd = constructors::id::_ID_Count;
++      BitSet<kEnd - kFirst> created;
++      for (size_t i = kFirst; i < kEnd; ++i) {
++        created[i - kFirst] = protoAndIfaceCache.HasEntryInSlot(i);
++      }
++      sCreatingForJuggler = true;
++      aCreator(aCx, rootedGlobal, protoAndIfaceCache,
++               DefineInterfaceProperty::No);
++      sCreatingForJuggler = false;
++      for (size_t i = kFirst; i < kEnd; ++i) {
++        if (!created[i - kFirst] && protoAndIfaceCache.HasEntryInSlot(i)) {
++          protoAndIfaceCache.SetUndefinedOnGlobal(i, true);
++        }
++      }
++    } else {
++      aCreator(aCx, rootedGlobal, protoAndIfaceCache, aDefineOnGlobal);
++    }
++  } else if (aDefineOnGlobal == DefineInterfaceProperty::CheckExposure &&
++             protoAndIfaceCache.IsUndefinedOnGlobal(aSlotId) &&
++             !sCreatingForJuggler && !binding_detail::IsJugglerCaller(aCx)) {
++    // Camoufox: the page's own use of an interface Juggler created defines it
++    // now, as creating it would have. Only a slot created for Juggler is
++    // marked, and the interfaces it inherits from were created with it, so
++    // the mark is checked first: an object the page creates of any other
++    // interface costs what it does in stock.
++    JS::Rooted<JSObject*> rootedGlobal(aCx, global);
++    JS::Rooted<JSObject*> object(
++        aCx, protoAndIfaceCache.EntrySlotMustExist(aSlotId));
++    if (object && !WebIDLGlobalNameHash::DefineCreatedForPage(
++                      aCx, rootedGlobal, object)) {
++      JS_ClearPendingException(aCx);
++    }
+   }
+ 
+   /*
+diff --git a/dom/bindings/BindingUtils.h b/dom/bindings/BindingUtils.h
+index 9ade09b0bc..8a1b08ec1a 100644
+--- a/dom/bindings/BindingUtils.h
++++ b/dom/bindings/BindingUtils.h
+@@ -22,6 +22,7 @@
+ #include "jsfriendapi.h"
+ #include "mozilla/Array.h"
+ #include "mozilla/Assertions.h"
++#include "mozilla/BitSet.h"
+ #include "mozilla/DeferredFinalize.h"
+ #include "mozilla/EnumTypeTraits.h"
+ #include "mozilla/EnumeratedRange.h"
+@@ -328,6 +329,33 @@ struct MutableValueHandleWrapper {
+ 
+ }  // namespace binding_detail
+ 
++namespace binding_detail {
++// Camoufox: whether the innermost script running is Juggler's.
++bool IsJugglerCaller(JSContext* aCx);
++
++// Camoufox: marks the resolve an Xray of a window does on the window itself
++// before resolving on the Xray (ResolveOwnPropertyViaResolve in the generated
++// bindings). Done for Juggler, that resolve creates an interface without
++// defining it on the window (WebIDLGlobalNameHash::DefineIfEnabled).
++class MOZ_RAII AutoXrayUnderlyingResolve {
++ public:
++  AutoXrayUnderlyingResolve();
++  ~AutoXrayUnderlyingResolve();
++};
++
++bool InXrayUnderlyingResolve();
++
++// Camoufox: for each interface prototype, how many windows hold it created
++// for Juggler and not yet defined, and the sum. A reflector whose own
++// interface is counted is checked when it is handed out again
++// (DoGetOrCreateDOMReflector): Juggler may have wrapped it first. Main
++// thread only; workers never mark. The extra entry is for classes with no
++// prototype (_ID_Count), never counted.
++extern uint16_t gDeferredProtoWindows[prototypes::id::_ID_Count + 1];
++extern uint32_t gDeferredProtoTotal;
++void MaybeDefineForCachedReflector(JSContext* aCx, JSObject* aReflector);
++}  // namespace binding_detail
++
+ // UnwrapObject overloads that ensure we have a MutableHandle to keep it alive.
+ template <prototypes::ID PrototypeID, class T, typename U, typename CxType>
+ MOZ_ALWAYS_INLINE nsresult UnwrapObject(JS::MutableHandle<JSObject*> obj,
+@@ -569,6 +597,10 @@ class ProtoAndIfaceCache {
+   }
+ 
+   ~ProtoAndIfaceCache() {
++    for (size_t i = 0; mUndefinedOnGlobalCount && i < kProtoAndIfaceCacheCount;
++         ++i) {
++      SetUndefinedOnGlobal(i, false);
++    }
+     if (mKind == WindowLike) {
+       delete mArrayCache;
+     } else {
+@@ -607,6 +639,24 @@ class ProtoAndIfaceCache {
+ 
+   void Trace(JSTracer* aTracer) { FORWARD_OPERATION(Trace, (aTracer)); }
+ 
++  // Camoufox: whether interface object i was created for Juggler (the
++  // automation driver) and is not yet defined on the global. The page defines
++  // it when it first uses the name, as if Juggler had never touched it
++  // (isolated-world-global-order.patch).
++  bool IsWindowLike() const { return mKind == WindowLike; }
++  bool IsUndefinedOnGlobal(size_t i) const { return mUndefinedOnGlobal[i]; }
++  void SetUndefinedOnGlobal(size_t i, bool aValue) {
++    if (mUndefinedOnGlobal[i] != aValue) {
++      mUndefinedOnGlobalCount += aValue ? 1 : -1;
++      mUndefinedOnGlobal[i] = aValue;
++      if (i < prototypes::id::_ID_Count) {
++        binding_detail::gDeferredProtoWindows[i] += aValue ? 1 : -1;
++        binding_detail::gDeferredProtoTotal += aValue ? 1 : -1;
++      }
++    }
++  }
++  bool HasUndefinedOnGlobal() const { return mUndefinedOnGlobalCount != 0; }
++
+   size_t SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) {
+     size_t n = aMallocSizeOf(this);
+     n += (mKind == WindowLike
+@@ -617,6 +667,8 @@ class ProtoAndIfaceCache {
+ #undef FORWARD_OPERATION
+ 
+  private:
++  BitSet<kProtoAndIfaceCacheCount> mUndefinedOnGlobal;
++  size_t mUndefinedOnGlobalCount = 0;
+   union {
+     ArrayCache* mArrayCache;
+     PageTableCache* mPageTableCache;
+@@ -1261,6 +1313,16 @@ MOZ_ALWAYS_INLINE bool DoGetOrCreateDOMReflector(
+   MOZ_ASSERT_IF(givenProto, js::IsObjectInContextCompartment(givenProto, cx));
+   JSObject* obj = value->GetWrapper();
+   if (obj) {
++    // Camoufox: see gDeferredProtoWindows.
++    if (MOZ_UNLIKELY(binding_detail::gDeferredProtoTotal != 0)) {
++      const DOMJSClass* deferClass = GetDOMClass(obj);
++      if (deferClass &&
++          MOZ_UNLIKELY(binding_detail::gDeferredProtoWindows
++                           [deferClass->mNativeHooks->mPrototypeID] != 0)) {
++        binding_detail::MaybeDefineForCachedReflector(cx, obj);
++        obj = value->GetWrapper();
++      }
++    }
+ #ifdef DEBUG
+     AssertReflectorHasGivenProto(cx, obj, givenProto);
+     // Have to reget obj because AssertReflectorHasGivenProto can
+diff --git a/dom/bindings/Codegen.py b/dom/bindings/Codegen.py
+index 33560ca1e8..edde0318f4 100644
+--- a/dom/bindings/Codegen.py
++++ b/dom/bindings/Codegen.py
+@@ -14629,6 +14629,8 @@ class CGResolveOwnPropertyViaResolve(CGAbstractBindingMethod):
+               if (!JS_WrapId(cx, &wrappedId)) {
+                 return false;
+               }
++              // Camoufox: see AutoXrayUnderlyingResolve in BindingUtils.h.
++              binding_detail::AutoXrayUnderlyingResolve underlyingResolve;
+               JS::Rooted<mozilla::Maybe<JS::PropertyDescriptor>> objDesc(cx);
+               if (!self->DoResolve(cx, obj, wrappedId, &objDesc)) {
+                 return false;
+diff --git a/dom/bindings/WebIDLGlobalNameHash.cpp b/dom/bindings/WebIDLGlobalNameHash.cpp
+index 8bf9c952d5..f3cba19922 100644
+--- a/dom/bindings/WebIDLGlobalNameHash.cpp
++++ b/dom/bindings/WebIDLGlobalNameHash.cpp
+@@ -9,6 +9,7 @@
+ #include "js/GCAPI.h"
+ #include "js/Id.h"
+ #include "js/Object.h"  // JS::GetClass, JS::GetReservedSlot
++#include "js/PropertyAndElement.h"  // JS_AlreadyHasOwnPropertyById, JS_DefinePropertyById, JS_GetOwnPropertyDescriptorById
+ #include "js/Wrapper.h"
+ #include "jsapi.h"
+ #include "jsfriendapi.h"
+@@ -58,6 +59,179 @@ static JSObject* FindNamedConstructorForXray(
+   return interfaceObject;
+ }
+ 
++// Camoufox: define an interface object Juggler had created on the global, in
++// the order its creation defines things (CreateInterfaceObject in
++// BindingUtils.cpp): its name, its legacy window aliases, then its legacy
++// factory functions. A namespace object has only its name.
++static bool DefineOnGlobal(JSContext* aCx, JS::Handle<JSObject*> aGlobal,
++                           JS::Handle<jsid> aName,
++                           JS::Handle<JSObject*> aValue) {
++  bool alreadyDefined;
++  if (!JS_AlreadyHasOwnPropertyById(aCx, aGlobal, aName, &alreadyDefined)) {
++    return false;
++  }
++  // This is Enumerable: False per spec.
++  return alreadyDefined || JS_DefinePropertyById(aCx, aGlobal, aName, aValue,
++                                                 JSPROP_RESOLVING);
++}
++
++/* static */
++bool WebIDLGlobalNameHash::DefineCreatedInterface(
++    JSContext* aCx, JS::Handle<JSObject*> aGlobal,
++    constructors::id::ID aConstructorId,
++    JS::Handle<JSObject*> aInterfaceObject) {
++  ProtoAndIfaceCache* cache = GetProtoAndIfaceCache(aGlobal);
++  cache->SetUndefinedOnGlobal(aConstructorId, false);
++
++  const bool isInterface = IsInterfaceObject(aInterfaceObject);
++  JSString* ownName =
++      isInterface
++          ? JS_GetMaybePartialFunctionId(JS_GetObjectFunction(aInterfaceObject))
++          : nullptr;
++  auto factoryNamed = [&](JSString* aName) -> JSObject* {
++    if (!isInterface) {
++      return nullptr;
++    }
++    for (unsigned slot = INTERFACE_OBJECT_FIRST_LEGACY_FACTORY_FUNCTION;
++         slot < INTERFACE_OBJECT_MAX_SLOTS; ++slot) {
++      const JS::Value& v = js::GetFunctionNativeReserved(aInterfaceObject, slot);
++      if (!v.isObject()) {
++        break;
++      }
++      if (JS_GetMaybePartialFunctionId(JS_GetObjectFunction(&v.toObject())) ==
++          aName) {
++        return &v.toObject();
++      }
++    }
++    return nullptr;
++  };
++
++  // Every enabled name of the interface, sorted into creation order.
++  JS::RootedVector<jsid> own(aCx), aliases(aCx), factories(aCx);
++  for (size_t i = 0; i < sCount; ++i) {
++    const WebIDLNameTableEntry& entry = sEntries[i];
++    if (entry.mConstructorId != aConstructorId ||
++        (entry.mEnabled && !entry.mEnabled(aCx, aGlobal))) {
++      continue;
++    }
++    JSString* name = JS_AtomizeStringN(aCx, BindingName(entry.mNameOffset),
++                                       entry.mNameLength);
++    if (!name) {
++      return false;
++    }
++    jsid id = JS::PropertyKey::NonIntAtom(name);
++    bool ok = (!isInterface || name == ownName) ? own.append(id)
++              : factoryNamed(name)               ? factories.append(id)
++                                                 : aliases.append(id);
++    if (!ok) {
++      return false;
++    }
++  }
++
++  JS::Rooted<jsid> id(aCx);
++  JS::Rooted<JSObject*> value(aCx);
++  for (auto* list : {&own, &aliases}) {
++    for (size_t i = 0; i < list->length(); ++i) {
++      id = (*list)[i];
++      if (!DefineOnGlobal(aCx, aGlobal, id, aInterfaceObject)) {
++        return false;
++      }
++    }
++  }
++  // Legacy factory functions in the order the interface created them.
++  if (isInterface) {
++    for (unsigned slot = INTERFACE_OBJECT_FIRST_LEGACY_FACTORY_FUNCTION;
++         slot < INTERFACE_OBJECT_MAX_SLOTS; ++slot) {
++      const JS::Value& v = js::GetFunctionNativeReserved(aInterfaceObject, slot);
++      if (!v.isObject()) {
++        break;
++      }
++      value = &v.toObject();
++      JSString* name = JS_GetMaybePartialFunctionId(JS_GetObjectFunction(value));
++      if (!name) {
++        continue;
++      }
++      id = JS::PropertyKey::NonIntAtom(name);
++      bool enabled = false;
++      for (size_t i = 0; i < factories.length(); ++i) {
++        enabled = enabled || factories[i] == id.get();
++      }
++      if (enabled && !DefineOnGlobal(aCx, aGlobal, id, value)) {
++        return false;
++      }
++    }
++  }
++  return true;
++}
++
++/* static */
++bool WebIDLGlobalNameHash::DefineCreatedForPage(JSContext* aCx,
++                                                JS::Handle<JSObject*> aGlobal,
++                                                JS::Handle<JSObject*> aObject) {
++  // A page's own use of an interface defines it and the interfaces it
++  // inherits from, root first, as creating them would have. aObject is an
++  // interface prototype object or an interface object.
++  ProtoAndIfaceCache* cache = GetProtoAndIfaceCache(aGlobal);
++  JS::RootedVector<JSObject*> interfaces(aCx);
++  JS::Rooted<JSObject*> obj(aCx, aObject);
++  JS::Rooted<mozilla::Maybe<JS::PropertyDescriptor>> desc(aCx);
++  JS::Rooted<jsid> constructorId(
++      aCx, JS::PropertyKey::NonIntAtom(JS_AtomizeString(aCx, "constructor")));
++  if (IsInterfaceObject(obj)) {
++    if (!interfaces.append(obj)) {
++      return false;
++    }
++  } else {
++    while (obj) {
++      if (!JS_GetOwnPropertyDescriptorById(aCx, obj, constructorId, &desc)) {
++        return false;
++      }
++      if (desc.isSome() && desc->hasValue() && desc->value().isObject() &&
++          IsInterfaceObject(&desc->value().toObject()) &&
++          !interfaces.append(&desc->value().toObject())) {
++        return false;
++      }
++      JS::Rooted<JSObject*> proto(aCx);
++      if (!JS_GetPrototype(aCx, obj, &proto)) {
++        return false;
++      }
++      obj = proto;
++    }
++  }
++  JS::Rooted<JSObject*> iface(aCx);
++  for (size_t i = interfaces.length(); i-- > 0;) {
++    iface = interfaces[i];
++    JSString* name = JS_GetMaybePartialFunctionId(JS_GetObjectFunction(iface));
++    if (!name) {
++      continue;
++    }
++    const WebIDLNameTableEntry* entry =
++        GetEntry(JS::PropertyKey::NonIntAtom(name).toLinearString());
++    if (entry && cache->IsUndefinedOnGlobal(entry->mConstructorId) &&
++        !DefineCreatedInterface(aCx, aGlobal, entry->mConstructorId, iface)) {
++      return false;
++    }
++  }
++  // The prototypes' marks have done their job.
++  for (obj = aObject; obj;) {
++    const JSClass* clasp = JS::GetClass(obj);
++    if (IsDOMIfaceAndProtoClass(clasp)) {
++      const DOMIfaceAndProtoJSClass* protoClass =
++          DOMIfaceAndProtoJSClass::FromJSClass(clasp);
++      if (protoClass->mType == eInterfacePrototype ||
++          protoClass->mType == eGlobalInterfacePrototype) {
++        cache->SetUndefinedOnGlobal(protoClass->mPrototypeID, false);
++      }
++    }
++    JS::Rooted<JSObject*> proto(aCx);
++    if (!JS_GetPrototype(aCx, obj, &proto)) {
++      return false;
++    }
++    obj = proto;
++  }
++  return true;
++}
++
+ /* static */
+ bool WebIDLGlobalNameHash::DefineIfEnabled(
+     JSContext* aCx, JS::Handle<JSObject*> aObj, JS::Handle<jsid> aId,
+@@ -158,6 +332,20 @@ bool WebIDLGlobalNameHash::DefineIfEnabled(
+     return true;
+   }
+ 
++  // Camoufox: an Xray of the window resolves on the window first. For
++  // Juggler that creates the interface without defining it on the window, as
++  // creating it for Juggler does anywhere else (GetPerInterfaceObjectHandle);
++  // the Xray resolve that follows hands Juggler the interface.
++  if (binding_detail::InXrayUnderlyingResolve() &&
++      binding_detail::IsJugglerCaller(aCx)) {
++    if (NS_WARN_IF(!GetPerInterfaceObjectHandle(
++            aCx, entry->mConstructorId, entry->mCreate,
++            DefineInterfaceProperty::CheckExposure))) {
++      return Throw(aCx, NS_ERROR_FAILURE);
++    }
++    return true;
++  }
++
+   // We've already checked whether the interface is enabled (see
+   // checkEnabledForScope above), so it's fine to pass
+   // DefineInterfaceProperty::Always here.
+@@ -169,6 +357,15 @@ bool WebIDLGlobalNameHash::DefineIfEnabled(
+     return Throw(aCx, NS_ERROR_FAILURE);
+   }
+ 
++  // Camoufox: created for Juggler and not yet defined; define it now, as its
++  // creation would have (GetPerInterfaceObjectHandle).
++  if (GetProtoAndIfaceCache(global)->IsUndefinedOnGlobal(
++          entry->mConstructorId) &&
++      !DefineCreatedInterface(aCx, global, entry->mConstructorId,
++                              interfaceObject)) {
++    return false;
++  }
++
+   // We've already defined the property.  We indicate this to the caller
+   // by filling a property descriptor with JS::UndefinedValue() as the
+   // value.  We still have to fill in a property descriptor, though, so
+@@ -193,8 +390,10 @@ bool WebIDLGlobalNameHash::GetNames(JSContext* aCx, JS::Handle<JSObject*> aObj,
+     const WebIDLNameTableEntry& entry = sEntries[i];
+     // If aNameType is not AllNames, only include things whose entry slot in the
+     // ProtoAndIfaceCache is null.
++    // Camoufox: an interface created for Juggler is not on the global yet.
+     if ((aNameType == AllNames ||
+-         !cache->HasEntryInSlot(entry.mConstructorId)) &&
++         !cache->HasEntryInSlot(entry.mConstructorId) ||
++         cache->IsUndefinedOnGlobal(entry.mConstructorId)) &&
+         (!entry.mEnabled || entry.mEnabled(aCx, aObj))) {
+       JSString* str = JS_AtomizeStringN(aCx, BindingName(entry.mNameOffset),
+                                         entry.mNameLength);
+diff --git a/dom/bindings/WebIDLGlobalNameHash.h b/dom/bindings/WebIDLGlobalNameHash.h
+index 080edbd3eb..93755e09aa 100644
+--- a/dom/bindings/WebIDLGlobalNameHash.h
++++ b/dom/bindings/WebIDLGlobalNameHash.h
+@@ -72,6 +72,18 @@ class WebIDLGlobalNameHash {
+  private:
+   friend struct WebIDLNameTableEntry;
+ 
++  // Camoufox: see GetPerInterfaceObjectHandle in BindingUtils.cpp.
++ public:
++  static bool DefineCreatedForPage(JSContext* aCx,
++                                   JS::Handle<JSObject*> aGlobal,
++                                   JS::Handle<JSObject*> aObject);
++
++ private:
++  static bool DefineCreatedInterface(JSContext* aCx,
++                                     JS::Handle<JSObject*> aGlobal,
++                                     constructors::id::ID aConstructorId,
++                                     JS::Handle<JSObject*> aInterfaceObject);
++
+   // Look up an entry by key name. `nullptr` if the entry was not found.
+   // The impl of GetEntry is generated by Codegen.py in RegisterBindings.cpp
+   static const WebIDLNameTableEntry* GetEntry(JSLinearString* aKey);
+diff --git a/dom/script/ScriptSettings.cpp b/dom/script/ScriptSettings.cpp
+index dba6adb997..8f039e8807 100644
+--- a/dom/script/ScriptSettings.cpp
++++ b/dom/script/ScriptSettings.cpp
+@@ -239,6 +239,15 @@ nsIGlobalObject* GetIncumbentGlobal() {
+   return ClampToSubject(ScriptSettingsStack::IncumbentGlobal());
+ }
+ 
++// Camoufox: the incumbent global on the script settings stack, unclamped.
++// GetIncumbentGlobal() answers the current global when the subject principal
++// does not subsume the incumbent, which hides an isolated world's listener
++// while its event is wrapped in the page's realm (IsJugglerCaller in
++// BindingUtils.cpp).
++nsIGlobalObject* GetStackIncumbentGlobalUnclamped() {
++  return NS_IsMainThread() ? ScriptSettingsStack::IncumbentGlobal() : nullptr;
++}
++
+ nsIGlobalObject* GetCurrentGlobal() {
+   JSContext* cx = nsContentUtils::GetCurrentJSContext();
+   if (!cx) {

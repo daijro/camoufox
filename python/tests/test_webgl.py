@@ -305,6 +305,20 @@ def test_extensions_are_in_firefoxs_order():
                 assert exts == sorted(exts, key=str.casefold), (target_os, s, key)
 
 
+def test_a_uniform_block_is_at_most_what_firefox_allows():
+    """Firefox 159 caps MAX_UNIFORM_BLOCK_SIZE at 64 KiB
+    (WebGL2ContextState.cpp, kMaxUniformBlockSize); fpgen recorded the drivers' own."""
+    def block_size(recorded):
+        record = {
+            "vendor": "v", "renderer": "r", "supportedExtensions": [], "shaderPrecisionFormats": [],
+            "params": {"33902": {"value": [1, 1]}, "35376": {"value": recorded}},
+        }
+        return webgl.to_config(record, record, "lin")["webGl2:parameters"]["35376"]
+
+    assert block_size(4120744960) == 65536
+    assert block_size(16384) == 16384
+
+
 def test_webgl1_line_width_range_is_webgl2s():
     """Firefox 156 creates WebGL1 on the same GL profile as WebGL2. 146 forced
     a compatibility profile for WebGL1, where fpgen recorded the driver's
