@@ -142,11 +142,46 @@ class TestRules:
         assert config["screen.colorDepth"] == 30
         assert config["screen.pixelDepth"] == 30
 
+    def test_intel_mac_reports_deep_colour(self):
+        # 30 in all but one Intel Mac preset; macOS defaults to deep colour
+        # whatever the GPU.
+        config = {"webGl:renderer": "Intel(R) HD Graphics 400, or similar", "screen.colorDepth": 24}
+        assert [v.rule for v in coherence.validate(config, "mac")] == ["color-depth"]
+        assert coherence.apply(config, "mac") == []
+        assert config["screen.colorDepth"] == 30
+
+    def test_kept_keys_are_not_repaired(self):
+        config = {"webGl:renderer": "Apple M1, or similar", "screen.colorDepth": 24,
+                  "screen.pixelDepth": 30, "window.devicePixelRatio": 1.5}
+        left = coherence.apply(config, "mac", keep={"screen.colorDepth", "window.devicePixelRatio"})
+        assert [(v.rule, v.kept) for v in left] == [
+            ("color-depth", ("screen.colorDepth",)),
+            ("device-pixel-ratio", ("window.devicePixelRatio",)),
+        ]
+        assert config["screen.colorDepth"] == 24 and config["window.devicePixelRatio"] == 1.5
+        # pixelDepth is not kept, so it follows the colorDepth that stands.
+        assert config["screen.pixelDepth"] == 24
+
+    def test_a_repair_off_the_kept_keys_still_runs(self):
+        # The caller's innerHeight stands; the window grows to hold it.
+        config = {"window.innerHeight": 800, "window.outerHeight": 820}
+        assert coherence.apply(config, "lin", keep={"window.innerHeight"}) == []
+        assert config["window.innerHeight"] == 800
+        assert config["window.outerHeight"] == 800 + coherence.BROWSER_CHROME_HEIGHT
+
+    def test_kept_source_gpu_is_reported_not_dropped(self):
+        config = {"webGl:vendor": "Google Inc. (NVIDIA)",
+                  "webGl:renderer": "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11), or similar"}
+        left = coherence.drop_incoherent_source_values(config, "mac", keep={"webGl:renderer", "webGl:vendor"})
+        assert [(v.rule, v.kept) for v in left] == [("gpu-matches-os", ("webGl:renderer", "webGl:vendor"))]
+        assert "webGl:renderer" in config
+
     def test_colour_depth_is_24_or_30(self):
         config = {"screen.colorDepth": 32}
         assert [v.rule for v in coherence.validate(config, "lin")] == ["color-depth"]
         assert coherence.apply(config, "lin") == []
         assert config["screen.colorDepth"] == 24
+        assert config["screen.pixelDepth"] == 24
 
     def test_touch_points_are_a_digitiser_count(self):
         config = {"navigator.maxTouchPoints": 256}

@@ -368,7 +368,7 @@ def _dependency_files():
     for pattern in ("**/requirements*.txt", "**/pyproject.toml", "**/setup.cfg"):
         for path in REPO_ROOT.glob(pattern):
             parts = set(path.parts)
-            if "node_modules" in parts or ".venv" in parts or "venv" in parts:
+            if "node_modules" in parts or ".venv" in parts or "venv" in parts or ".claude" in parts:
                 continue
             # Skip the generated Firefox tree and any fetched upstream checkout.
             if any(p.startswith("camoufox-1") or p.startswith("playwright-python-") for p in path.parts):
@@ -625,6 +625,23 @@ def test_per_frame_state_reset_on_navigation_is_also_released_on_dispose():
         "iframe-heavy page destroys frames continuously."
         + explain("per-frame-state-released-on-dispose")
     )
+
+
+def test_juggler_reads_current_websocket_event_signatures():
+    source = (BROWSER / "additions" / "juggler" / "content" / "FrameTree.js").read_text(
+        encoding="utf-8"
+    )
+    expected = {
+        "webSocketClosed": "webSocketSerialID, httpChannelId, wasClean, code, reason",
+        "frameReceived": "webSocketSerialID, httpChannelId, frame",
+        "frameSent": "webSocketSerialID, httpChannelId, frame",
+    }
+    for callback, arguments in expected.items():
+        match = re.search(rf"\b{callback}:\s*\(([^)]*)\)\s*=>", source)
+        assert match, f"{callback} listener is missing from FrameTree.js"
+        assert match.group(1) == arguments, (
+            f"{callback} must read Firefox's current argument order; got ({match.group(1)})"
+        )
 
 
 def test_a_sandbox_held_over_a_page_window_is_nuked_not_just_dropped():

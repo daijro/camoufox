@@ -7,6 +7,7 @@
  * pickers (`set`, `set --geoip`, `remove --select`) use a numbered
  * prompt in place of inquirer's arrow-key list.
  */
+import "./node-floor.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";

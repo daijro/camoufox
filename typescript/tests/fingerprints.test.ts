@@ -16,6 +16,7 @@ import {
 	clampWindowDimensions,
 	clampWindowPosition,
 	drawMediaDevices,
+	drawVoiceConfig,
 	fixHardwareConcurrency,
 	fixNavigatorArch,
 	followBaselineProtection,
@@ -33,6 +34,7 @@ import {
 	type Preset,
 	Screen,
 	setMediaDevicesDefaults,
+	speechdVoices,
 	versionlessUa,
 	WINDOWS_11_MARKER_FONTS,
 } from "../src/fingerprints.js";
@@ -495,15 +497,32 @@ const REQUIRED_VOICE_FIELDS = [
 
 describe("voices (test_voices.py)", () => {
 	for (const os of ["macos", "windows", "linux"]) {
-		it(`${os}: non-empty full objects, none marked default`, () => {
+		it(`${os}: non-empty full objects`, () => {
 			const voices = generateRandomVoiceSubset(os, "en-US");
 			expect(voices.length).toBeGreaterThan(0);
 			for (const v of voices) {
 				for (const f of REQUIRED_VOICE_FIELDS) expect(v).toHaveProperty(f);
 			}
-			expect(voices.some((v) => v.isDefault)).toBe(false);
+			// macOS marks its system voice default; SAPI and speech-dispatcher none.
+			expect(voices.filter((v) => v.isDefault).map((v) => v.name)).toEqual(
+				os === "macos" ? ["Samantha"] : [],
+			);
 		});
 	}
+
+	it("draws Linux voices for the font release (test_linux_voices_follow_the_font_release)", () => {
+		for (let seed = 0; seed < 20; seed++) {
+			const count = generateRandomVoiceSubset("linux", null, seed).length;
+			expect([13362, 14805]).toContain(count);
+			const grid = drawVoiceConfig("linux", null, seed)["voices:speechd"];
+			expect(speechdVoices(grid).length).toBe(count);
+		}
+		expect(
+			generateRandomVoiceSubset("linux", null, 1)
+				.slice(0, 3)
+				.map((v) => v.name),
+		).toEqual(["Afrikaans", "Afrikaans+Adam", "Afrikaans+Alex"]);
+	});
 
 	it("uses the Windows display language pack", () => {
 		expect(generateRandomVoiceSubset("windows", "de-DE", 1)[0].lang).toBe(
@@ -525,7 +544,7 @@ describe("voices (test_voices.py)", () => {
 		for (const v of lin) {
 			expect(v.voiceUri.startsWith("urn:moz-tts:speechd:")).toBe(true);
 			expect(v.voiceUri.endsWith(`?${v.lang}`)).toBe(true);
-			expect(v.isLocalService).toBe(true);
+			expect(v.isLocalService).toBe(false);
 		}
 		const gb = lin.find((v) => v.name === "English (Great Britain)");
 		expect(gb?.voiceUri).toBe(

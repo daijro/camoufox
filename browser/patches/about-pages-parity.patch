@@ -1,0 +1,71 @@
+diff --git a/browser/components/about/AboutRedirector.cpp b/browser/components/about/AboutRedirector.cpp
+index cea04ed..f817d0d 100644
+--- a/browser/components/about/AboutRedirector.cpp
++++ b/browser/components/about/AboutRedirector.cpp
+@@ -166,13 +166,15 @@ static const RedirEntry kRedirMap[] = {
+     {"welcomeback", "chrome://browser/content/aboutWelcomeBack.xhtml",
+      nsIAboutModule::ALLOW_SCRIPT | nsIAboutModule::HIDE_FROM_ABOUTABOUT |
+          nsIAboutModule::IS_SECURE_CHROME_UI},
+-#ifdef MOZ_NORMANDY
++    // Camoufox: registered as in stock although Normandy is built out (its
++    // content still ships as resource://normandy-content). Without it a page's
++    // Worker, XHR or stylesheet to about:studies throws synchronously where
++    // stock fails asynchronously.
+     {"studies", "resource://normandy-content/about-studies/about-studies.html",
+      nsIAboutModule::ALLOW_SCRIPT | nsIAboutModule::IS_SECURE_CHROME_UI |
+          nsIAboutModule::URI_CAN_LOAD_IN_PRIVILEGEDABOUT_PROCESS |
+          nsIAboutModule::URI_MUST_LOAD_IN_CHILD |
+          nsIAboutModule::URI_SAFE_FOR_UNTRUSTED_CONTENT},
+-#endif
+ #ifdef MOZ_SELECTABLE_PROFILES
+     {"deleteprofile", "chrome://browser/content/profiles/delete-profile.html",
+      nsIAboutModule::URI_SAFE_FOR_UNTRUSTED_CONTENT |
+diff --git a/browser/components/about/components.conf b/browser/components/about/components.conf
+index f76be11..ffe1363 100644
+--- a/browser/components/about/components.conf
++++ b/browser/components/about/components.conf
+@@ -36,8 +36,8 @@ pages = [
+     'welcomeback',
+ ]
+ 
+-if buildconfig.substs.get('MOZ_NORMANDY'):
+-    pages += ['studies']
++# Camoufox: as in stock; see AboutRedirector.cpp.
++pages += ['studies']
+ 
+ if buildconfig.substs.get('MOZ_SELECTABLE_PROFILES'):
+     pages += [
+diff --git a/docshell/base/nsAboutRedirector.cpp b/docshell/base/nsAboutRedirector.cpp
+index 1ec396c..5e5af7f 100644
+--- a/docshell/base/nsAboutRedirector.cpp
++++ b/docshell/base/nsAboutRedirector.cpp
+@@ -111,10 +111,12 @@ static const RedirEntry kRedirMap[] = {
+      nsIAboutModule::IS_SECURE_CHROME_UI |
+          nsIAboutModule::HIDE_FROM_ABOUTABOUT},
+ #endif
+-#ifdef MOZ_CRASHREPORTER
++    // Camoufox: registered as in stock although the crash reporter is built out.
++    // Without it a page's Worker, XHR or stylesheet to about:crashes throws a
++    // synchronous SecurityError where stock fails asynchronously. The page
++    // itself ships either way (toolkit/crashreporter/jar.mn).
+     {"crashes", "chrome://global/content/crashes.html",
+      nsIAboutModule::IS_SECURE_CHROME_UI},
+-#endif
+     {"credits", "https://www.mozilla.org/credits/",
+      nsIAboutModule::URI_SAFE_FOR_UNTRUSTED_CONTENT |
+          nsIAboutModule::URI_MUST_LOAD_IN_CHILD},
+diff --git a/docshell/build/components.conf b/docshell/build/components.conf
+index 1f86eca..5bcb9e2 100644
+--- a/docshell/build/components.conf
++++ b/docshell/build/components.conf
+@@ -36,8 +36,8 @@ about_pages = [
+ 
+ if buildconfig.substs['MOZ_WIDGET_TOOLKIT'] != 'android':
+     about_pages.append('addons')
+-if defined('MOZ_CRASHREPORTER'):
+-    about_pages.append('crashes')
++# Camoufox: as in stock; see nsAboutRedirector.cpp.
++about_pages.append('crashes')
+ if buildconfig.substs['MOZ_WIDGET_TOOLKIT'] != 'android':
+     about_pages.append('profiles')
+ if buildconfig.substs['MOZ_WIDGET_TOOLKIT'] != 'android':

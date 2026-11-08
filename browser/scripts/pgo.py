@@ -26,7 +26,7 @@ ARTIFACT = 'public/build/profdata.tar.xz'
 MEMBERS = ('merged.profdata', 'en-US.log')
 
 # Mozilla's profile platform for each Camoufox target, as `use-pgo` assigns
-# them in Firefox 158's taskcluster/kinds/build: Linux arm64 is built with the
+# them in Firefox 159's taskcluster/kinds/build: Linux arm64 is built with the
 # x86_64 Linux profile.
 PROFILE_FOR = {
     ('linux', 'x86_64'): 'linux64',
