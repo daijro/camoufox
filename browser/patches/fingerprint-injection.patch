@@ -1,8 +1,8 @@
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index c62b3b0424..f9f88078bd 100644
+index 82a49c2d26..ac1d2ddbf4 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -659,3 +659,6 @@ GeneratedFile(
+@@ -667,3 +667,6 @@ GeneratedFile(
          "/servo/components/style/properties/counted_unknown_properties.py",
      ],
  )
@@ -11,7 +11,7 @@ index c62b3b0424..f9f88078bd 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 \ No newline at end of file
 diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
-index 49a25262ca..6e124cdb05 100644
+index 095b2f6fd4..bb0c62cd48 100644
 --- a/dom/base/nsGlobalWindowInner.cpp
 +++ b/dom/base/nsGlobalWindowInner.cpp
 @@ -3,6 +3,7 @@
@@ -22,43 +22,69 @@ index 49a25262ca..6e124cdb05 100644
  
  #include <inttypes.h>
  #include <stdio.h>
-@@ -3736,6 +3737,13 @@ nsresult nsGlobalWindowInner::GetInnerHeight(CallerType aCallerType,
+@@ -3753,6 +3754,10 @@ nsresult nsGlobalWindowInner::GetInnerHeight(CallerType aCallerType,
  
  int32_t nsGlobalWindowInner::GetOuterWidth(CallerType aCallerType,
                                             ErrorResult& aError) {
-+  // Camoufox: the inner and outer sizes are deliberately NOT read from
-+  // MaskConfig. CamoufoxWindow.sys.mjs sizes the real window and content area
-+  // to the drawn ones, so the real values are the identity's. A fixed value
-+  // contradicted the real window whenever it ended up a different size (the WM
-+  // clamped it, Juggler resized it for a viewport: innerWidth 1853 > outerWidth
-+  // 1680 on GNOME), and every iframe and page-opened popup reported the main
-+  // window's content size (#963).
++  // Camoufox: window size is not read from MaskConfig. CamoufoxWindow.sys.mjs
++  // sizes the real content area to the identity's innerWidth/innerHeight, so
++  // the real values are the identity's in the window it sized, and every other
++  // window (an iframe, a popup) reports its own size as in stock.
    FORWARD_TO_OUTER_OR_THROW(GetOuterWidthOuter, (aCallerType, aError), aError,
                              0);
  }
-@@ -3756,11 +3764,13 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
+@@ -3773,11 +3778,17 @@ double nsGlobalWindowInner::ScreenEdgeSlopY() const {
  
  int32_t nsGlobalWindowInner::GetScreenX(CallerType aCallerType,
                                          ErrorResult& aError) {
-+  if (auto value = MaskConfig::GetInt32("window.screenX")) return value.value();
++  // Camoufox: not read from MaskConfig. CamoufoxWindow.sys.mjs moves the
++  // first window to the identity's position, so every other window (a
++  // popup, a moved window) reports where it is, as in stock.
    FORWARD_TO_OUTER_OR_THROW(GetScreenXOuter, (aCallerType, aError), aError, 0);
  }
  
  int32_t nsGlobalWindowInner::GetScreenY(CallerType aCallerType,
                                          ErrorResult& aError) {
-+  if (auto value = MaskConfig::GetInt32("window.screenY")) return value.value();
++  // Camoufox: not read from MaskConfig. CamoufoxWindow.sys.mjs moves the
++  // first window to the identity's position, so every other window (a
++  // popup, a moved window) reports where it is, as in stock.
    FORWARD_TO_OUTER_OR_THROW(GetScreenYOuter, (aCallerType, aError), aError, 0);
  }
  
-@@ -3794,6 +3804,8 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
+@@ -3808,6 +3819,15 @@ static nsPresContext* GetPresContextForRatio(Document* aDoc) {
+   return nullptr;
+ }
+ 
++// Camoufox: the launch config is fixed for the life of the process, so it is
++// read once, not on every devicePixelRatio call (timing parity: stock's getter
++// is a few member reads).
++static const std::optional<double>& SpoofedDevicePixelRatio() {
++  static const std::optional<double> sValue =
++      MaskConfig::GetDouble("window.devicePixelRatio");
++  return sValue;
++}
++
  double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
                                                  ErrorResult& aError) {
    ENSURE_ACTIVE_DOCUMENT(aError, 0.0);
-+  if (auto value = MaskConfig::GetDouble("window.devicePixelRatio"))
-+    return value.value();
+@@ -3830,6 +3850,17 @@ double nsGlobalWindowInner::GetDevicePixelRatio(CallerType aCallerType,
+     }
+   }
  
-   RefPtr<nsPresContext> presContext = GetPresContextForRatio(mDoc);
-   if (NS_WARN_IF(!presContext)) {
++  // Camoufox: the identity's ratio is the screen's, at 100% zoom. Zoom scales
++  // it the way stock scales the real one, rounded to whole app units per device
++  // pixel, so zooming the page changes devicePixelRatio as it does in stock.
++  if (const auto& value = SpoofedDevicePixelRatio()) {
++    const int32_t unzoomed =
++        std::max(1, NSToIntRound(float(AppUnitsPerCSSPixel() / *value)));
++    return double(AppUnitsPerCSSPixel()) /
++           double(nsDeviceContext::ApplyFullZoomToAPD(
++               unzoomed, presContext->GetFullZoom()));
++  }
++
+   return double(AppUnitsPerCSSPixel()) /
+          double(presContext->AppUnitsPerDevPixel());
+ }
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
 index 3b48a7f1e2..4b989dd48a 100644
 --- a/dom/base/nsScreen.cpp

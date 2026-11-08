@@ -138,11 +138,75 @@ describe("rules", () => {
 		expect(config["screen.pixelDepth"]).toBe(30);
 	});
 
+	it("an Intel Mac reports deep colour too", () => {
+		const config: Record<string, any> = {
+			"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
+			"screen.colorDepth": 24,
+		};
+		expect(rules(config, "mac")).toEqual(["color-depth"]);
+		expect(coherence.apply(config, "mac")).toEqual([]);
+		expect(config["screen.colorDepth"]).toBe(30);
+	});
+
+	it("does not repair a kept key", () => {
+		const config: Record<string, any> = {
+			"webGl:renderer": "Apple M1, or similar",
+			"screen.colorDepth": 24,
+			"screen.pixelDepth": 30,
+			"window.devicePixelRatio": 1.5,
+		};
+		const left = coherence.apply(
+			config,
+			"mac",
+			new Set(["screen.colorDepth", "window.devicePixelRatio"]),
+		);
+		expect(left.map((v) => [v.rule, v.kept])).toEqual([
+			["color-depth", ["screen.colorDepth"]],
+			["device-pixel-ratio", ["window.devicePixelRatio"]],
+		]);
+		expect(config["screen.colorDepth"]).toBe(24);
+		expect(config["window.devicePixelRatio"]).toBe(1.5);
+		// pixelDepth is not kept, so it follows the colorDepth that stands.
+		expect(config["screen.pixelDepth"]).toBe(24);
+	});
+
+	it("still runs a repair off the kept keys", () => {
+		const config: Record<string, any> = {
+			"window.innerHeight": 800,
+			"window.outerHeight": 820,
+		};
+		expect(
+			coherence.apply(config, "lin", new Set(["window.innerHeight"])),
+		).toEqual([]);
+		expect(config["window.innerHeight"]).toBe(800);
+		expect(config["window.outerHeight"]).toBe(
+			800 + coherence.BROWSER_CHROME_HEIGHT,
+		);
+	});
+
+	it("reports a kept source GPU instead of dropping it", () => {
+		const config: Record<string, any> = {
+			"webGl:vendor": "Google Inc. (NVIDIA)",
+			"webGl:renderer":
+				"ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11), or similar",
+		};
+		const left = coherence.dropIncoherentSourceValues(
+			config,
+			"mac",
+			new Set(["webGl:renderer", "webGl:vendor"]),
+		);
+		expect(left.map((v) => [v.rule, v.kept])).toEqual([
+			["gpu-matches-os", ["webGl:renderer", "webGl:vendor"]],
+		]);
+		expect("webGl:renderer" in config).toBe(true);
+	});
+
 	it("colour depth is 24 or 30", () => {
-		const config = { "screen.colorDepth": 32 };
+		const config: Record<string, any> = { "screen.colorDepth": 32 };
 		expect(rules(config, "lin")).toEqual(["color-depth"]);
 		expect(coherence.apply(config, "lin")).toEqual([]);
 		expect(config["screen.colorDepth"]).toBe(24);
+		expect(config["screen.pixelDepth"]).toBe(24);
 	});
 
 	it("touch points are a digitiser count", () => {

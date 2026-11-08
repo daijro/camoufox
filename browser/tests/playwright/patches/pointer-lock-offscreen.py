@@ -21,7 +21,6 @@ the pointer there, and makes them inside a trap of their own.
     python browser/tests/playwright/patches/pointer-lock-offscreen.py [binary]
 """
 
-import os
 import shutil
 import subprocess
 import sys
@@ -30,7 +29,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import Marionette, free_port, hidden_display, marionette_args, resolve_binary  # noqa: E402
+from helpers import Marionette, free_port, hidden_display, marionette_args, marionette_env, resolve_binary  # noqa: E402
 
 SHIM = Path(__file__).resolve().parent / "assets" / "barrier-trap-shim.c"
 
@@ -80,7 +79,7 @@ def run(binary, shim, x, y):
     port = free_port()
     with tempfile.TemporaryDirectory() as profile:
         Path(profile, "user.js").write_text(f'user_pref("marionette.port", {port});\n')
-        env = {**os.environ, "LD_PRELOAD": str(shim), "MOZ_CRASHREPORTER_DISABLE": "1"}
+        env = {**marionette_env(), "LD_PRELOAD": str(shim), "MOZ_CRASHREPORTER_DISABLE": "1"}
         log_path = Path(profile, "stderr.log")
         log = open(log_path, "wb")
         proc = subprocess.Popen([str(binary), "-no-remote", "-profile", profile, *marionette_args()],

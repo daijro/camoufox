@@ -22,7 +22,9 @@
 #
 # So `ci/run_skiplist_audit.py` now runs every entry with the skiplist disabled
 # and FAILS THE BUILD if a skipped test passes. An entry has to keep earning its
-# place. Add one only after watching it fail.
+# place. Add one only after watching it fail. An entry whose test passes or fails
+# with machine speed cannot be held to that, so `checked_by` names the patch guard
+# that checks its reason instead.
 #
 # Entries are matched against pytest node ids. `module` skips a whole file;
 # `test` skips one node id; `pattern` is a substring match, used sparingly.
@@ -69,6 +71,42 @@ skip:
       The same auto-Shift, reached through keyboard.press("+") rather than
       type(). Listed separately because dropping auto-Shift would have to unskip
       both.
+
+  - test: tests/async/test_keyboard.py::test_should_only_emit_input_event
+    reason: >-
+      Asserts keyboard.insert_text("hello world") fires one `input` event and
+      no key events, which no person's input does. Camoufox pastes inserted
+      text with the paste shortcut (docs/input-dispatch.md), which is also how
+      fill() reaches the page.
+
+  - test: tests/async/test_keyboard.py::test_should_send_a_character_with_send_character
+    reason: >-
+      Asserts insert_text("a") still inserts after the page cancels every
+      keydown. Camoufox pastes inserted text with the paste shortcut, and a
+      shortcut whose keydown is cancelled pastes nothing, in stock Firefox as
+      here; insert_text() then fails saying so.
+
+  - test: tests/async/test_input.py::test_wheel_should_work
+    reason: >-
+      Asserts mouse.wheel(0, 100) arrives as one wheel event of deltaY 100 in
+      deltaMode 0 and scrolls exactly 100 px. A mouse wheel cannot produce
+      that: stock Firefox on Linux gets one event per notch, deltaMode 1,
+      deltaY 6, wheelDeltaY -120, and scrolls 120 px. Camoufox turns each
+      100 px into one such notch (docs/input-dispatch.md), so the page sees a
+      wheel, and upstream's exact pixel delta is gone.
+
+  # A machine too slow to fit two moves in a frame passes this test, so the
+  # audit cannot demand a failure. The guard checks the coalescing it asserts against.
+  - test: tests/async/test_click.py::test_click_with_tweened_mouse_movement
+    checked_by: driven-move-coalescing
+    reason: >-
+      Asserts click(steps=5) gives the page five mousemoves, one per step. A
+      real mouse's moves are coalesced per refresh tick: stock Firefox on
+      Linux under a 125 Hz mouse dispatches one mousemove per frame carrying
+      2 to 4 moves in getCoalescedEvents(). Camoufox queues driven moves the
+      same way and spaces them as a 125 Hz mouse's (docs/input-dispatch.md,
+      "Move coalescing"), so two steps usually share a mousemove and the page
+      sees fewer than five.
 
   # --- client certificates the BROWSER has to present ------------------------
   #

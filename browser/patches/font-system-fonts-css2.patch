@@ -1,67 +1,3 @@
-Camoufox: spoof CSS2 system-font keyword resolution to match navigator.platform.
-
-Sibling to system-ui-font-spoofing.patch. That patch covers the `system-ui`
-generic via gfxPlatformFontList::GetSystemUIFontFamilies(). It does NOT cover
-the older CSS2 system-font shorthand keywords:
-
-    font: caption | icon | menu | message-box | small-caption | status-bar
-
-CreepJS's headless detector (headless/getSystemFonts.ts) probes all six
-keywords:
-
-    SYSTEM_FONTS = ['caption','icon','menu','message-box','small-caption','status-bar']
-    for (const f of SYSTEM_FONTS) {
-      el.setAttribute('style', `font: ${f} !important`);
-      set.add(getComputedStyle(el).fontFamily);
-    }
-    // Linux: set = {"Sans"} or {"sans-serif"}, regardless of navigator.platform
-    // GeckoFonts["Sans"] === GeckoFonts["sans-serif"] === "Linux"
-    //   -> emits "Sans:Linux" / "sans-serif:Linux"
-
-Firefox routes CSS system-font resolution through nsLayoutUtils::
-ComputeSystemFont(), which either asks nsLayoutUtils' own
-GetSpoofedSystemFontForRFP() (when RFP's FontVisibilityRestrictGenerics target
-is on) or the platform LookAndFeel (otherwise). FontVisibilityRestrictGenerics
-is not in Firefox's default-enabled set (RFPTargetsDefault.inc) and Camoufox
-never turns it on, so upstream always took the LookAndFeel branch and the real
-host system font leaked through getComputedStyle().fontFamily.
-
-This patch makes ComputeSystemFont() take the spoof branch whenever
-navigator.platform is spoofed, and teaches GetSpoofedSystemFontForRFP() to
-answer for the spoofed OS:
-
-  - "-apple-system"  when navigator.platform starts with "Mac"
-                     (matches CreepJS GeckoFonts entry "-apple-system" -> "Mac")
-  - "Segoe UI"       when navigator.platform starts with "Win"
-                     (matches CreepJS GeckoFonts entry "Segoe UI" -> "Windows")
-  - "Ubuntu" 14.6667px when navigator.platform starts with "Linux"
-                     (a stock Ubuntu desktop's GTK interface font, "Ubuntu 11")
-  - (falls through)  otherwise (iPhone / unspoofed)
-
-Chrome documents are excluded from the spoof branch and keep the host's real
-system font. They are not reachable by the page, and handing the browser's own
-UI a family name from another OS ("Segoe UI" on Linux, "-apple-system" on
-Windows) leaves the toolbar, menus and titlebar falling back to the default
-serif font -- see daijro/camoufox#695.
-
-Because ComputeSystemFont() is the single entry point and now covers every
-content document unconditionally, the LookAndFeel-level hooks this patch used
-to carry (widget/gtk/nsLookAndFeel.cpp::PerThemeData::GetFont and
-gfxMacPlatformFontList::LookupSystemFont) can never fire for content: they are
-reached only when the spoof branch is *not* taken, which is exactly when
-navigator.platform is unspoofed (where they were no-ops) or when the document
-is chrome (where they broke the UI). They are dropped here.
-
-The OS is the one the document's context presents
-(NavigatorManager::GetSpoofedOS: the context's own navigator.platform, else the
-launch's), so a context drawn for another OS than the launch gets its own
-interface font. Both lookups are cached (the launch's in a function-static, the
-context's in RoverfoxStorageManager's local cache): CreepJS calls the CSS
-resolver six times in tight succession (one per CSS2 keyword) and uses probe
-duration as a probabilistic headless signal.
-
-Bug: daijro/camoufox#598, daijro/camoufox#695
-
 diff --git a/layout/base/moz.build b/layout/base/moz.build
 index 2ec366ca45..bcdc4301b9 100644
 --- a/layout/base/moz.build
@@ -75,7 +11,7 @@ index 2ec366ca45..bcdc4301b9 100644
      "/dom/base",
      "/dom/html",
 diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
-index 056c0e2f7f..06dbf09955 100644
+index 98152b5bc0..92d9cd38ba 100644
 --- a/layout/base/nsLayoutUtils.cpp
 +++ b/layout/base/nsLayoutUtils.cpp
 @@ -4,6 +4,8 @@
@@ -87,7 +23,7 @@ index 056c0e2f7f..06dbf09955 100644
  #include <algorithm>
  #include <limits>
  
-@@ -9820,8 +9822,91 @@ already_AddRefed<nsFontMetrics> nsLayoutUtils::GetMetricsFor(
+@@ -9852,8 +9854,83 @@ already_AddRefed<nsFontMetrics> nsLayoutUtils::GetMetricsFor(
    return aPresContext->GetMetricsFor(font, params);
  }
  
@@ -136,16 +72,8 @@ index 056c0e2f7f..06dbf09955 100644
 +    return;
 +  }
 +  if (aOS == MaskConfig::SpoofedOS::Windows) {
-+    // Windows reports the system font in device pixels, so every keyword is
-+    // 12 px x the display scale (30 px at 250 %). Use the DPR the identity
-+    // presents, which is the one the page cross-checks it against.
-+    static const float sWinScale = []() {
-+      if (auto dpr = MaskConfig::GetDouble("window.devicePixelRatio");
-+          dpr && *dpr > 0) {
-+        return static_cast<float>(*dpr);
-+      }
-+      return 1.0f;
-+    }();
++    // Stock Windows converts the NONCLIENTMETRICS height to CSS px, so every
++    // keyword is 12 px at any display scale.
 +    // Form controls resolve -moz-button/-moz-field/-moz-list, which stock
 +    // Windows maps to the dialog font "MS Shell Dlg 2" (nsLookAndFeel::
 +    // GetLookAndFeelFont, aUseShellDlg); every other keyword is the
@@ -162,7 +90,7 @@ index 056c0e2f7f..06dbf09955 100644
 +        aName = u"Segoe UI"_ns;
 +        break;
 +    }
-+    aStyle.size = 12.0f * sWinScale;
++    aStyle.size = 12;
 +    aStyle.systemFont = true;
 +    return;
 +  }
@@ -180,7 +108,7 @@ index 056c0e2f7f..06dbf09955 100644
  #if defined(XP_MACOSX) || defined(MOZ_WIDGET_UIKIT)
    aName = u"-apple-system"_ns;
    // Values taken from a macOS 10.15 system.
-@@ -9876,9 +9961,27 @@ void nsLayoutUtils::ComputeSystemFont(nsFont* aSystemFont,
+@@ -9908,9 +9985,27 @@ void nsLayoutUtils::ComputeSystemFont(nsFont* aSystemFont,
                                        const Document* aDocument) {
    gfxFontStyle fontStyle;
    nsAutoString systemFontName;
