@@ -1,0 +1,57 @@
+diff --git a/widget/gtk/nsWindow.cpp b/widget/gtk/nsWindow.cpp
+index 8b8fc4480a..34adff9235 100644
+--- a/widget/gtk/nsWindow.cpp
++++ b/widget/gtk/nsWindow.cpp
+@@ -3548,6 +3548,52 @@ void nsWindow::OnVisibilityNotifyEvent(GdkVisibilityState aState) {
+   auto state = aState == GDK_VISIBILITY_FULLY_OBSCURED
+                    ? OcclusionState::OCCLUDED
+                    : OcclusionState::UNKNOWN;
++#ifdef MOZ_X11
++  // Camoufox: a window that lies outside the root window is not occluded by
++  // anything a page could know of. The launcher's virtual display (Xvfb) keeps
++  // a 1x1 root (tribal rule virtual-display-default-1x1x24) while the window
++  // sits at the identity's screenX/screenY, so X reports it fully obscured,
++  // and an occluded window's documents stop being exposed devices:
++  // navigator.mediaDevices.enumerateDevices() never settles
++  // (MediaDevices::MaybeResumeDeviceExposure). A desktop window manager never
++  // places a window off its root, so stock never reaches this; a window that
++  // is on the root and covered by another stays occluded, as in stock.
++  if (state == OcclusionState::OCCLUDED && GdkIsX11Display() && mGdkWindow) {
++    GdkWindow* root = gdk_get_default_root_window();
++    gint x = 0, y = 0;
++    gdk_window_get_origin(mGdkWindow, &x, &y);
++    if (root && (x >= gdk_window_get_width(root) ||
++                 y >= gdk_window_get_height(root) ||
++                 x + gdk_window_get_width(mGdkWindow) <= 0 ||
++                 y + gdk_window_get_height(mGdkWindow) <= 0)) {
++      LOG("  fully obscured only by lying outside the root window");
++      state = OcclusionState::UNKNOWN;
++    }
++  }
++  // Camoufox: with no window manager, focus a new top-level window as every
++  // desktop window manager does. The launcher's virtual display (Xvfb, no
++  // window manager) leaves the X focus at PointerRoot, so a window is only
++  // activated while it holds the pointer, which a 1x1 root pins at 0,0: a
++  // window at the identity's position never gets a FocusIn, never becomes the
++  // active browser window, and an inactive window's documents are not exposed
++  // devices (enumerateDevices() never settles). Done on the window's first
++  // VisibilityNotify, which X sends once the window is viewable: at OnMap the
++  // top-level X window is not mapped yet and XSetInputFocus fails (BadMatch,
++  // swallowed by GDK's error trap, so focus stays PointerRoot). Stock on a
++  // display without a window manager is never
++  // activated at all; on a desktop it always is.
++  if (GdkIsX11Display() && mWindowType == WindowType::TopLevel && !mIsAlert &&
++      mShell && !g_object_get_data(G_OBJECT(mShell), "camoufox-wm-focus")) {
++    g_object_set_data(G_OBJECT(mShell), "camoufox-wm-focus",
++                      GINT_TO_POINTER(1));
++    const char* wm =
++        gdk_x11_screen_get_window_manager_name(gdk_screen_get_default());
++    if (!wm || !strcmp(wm, "unknown")) {
++      LOG("  no window manager: focusing the new top-level window");
++      gdk_window_focus(GetToplevelGdkWindow(), GDK_CURRENT_TIME);
++    }
++  }
++#endif
+   NotifyOcclusionState(state);
+ }
+ 

@@ -10,16 +10,14 @@ steps never finished in Camoufox:
   "openWindow() not supported in Camoufox": every `new_context()` failed.
 - `browsingContext.create` for a foreground tab and `browsingContext.activate`
   wait until the tab that was selected reports `visibilityState` "hidden".
-  Juggler's page agent, which runs in every loaded page even without
-  `--juggler-pipe`, forces its docshell active (`forceActiveState`), so that
-  tab stays "visible", no `visibilitychange` comes, and neither command ever
-  answered: opening a second tab in a window and every `bring_to_front()`
-  between tabs hung.
+  Juggler's page agent used to force every docshell active, so that tab stayed
+  "visible", no `visibilitychange` came, and neither command ever answered:
+  opening a second tab in a window and every `bring_to_front()` between tabs
+  hung.
 
 webdriver-bidi-app-name.patch opens windows for Camoufox as for Firefox, and
-webdriver-bidi-force-active.patch does not wait for "hidden" on a docshell that
-is forced active. Neither changes what a page observes, so the guard also checks
-that the tab put in the background still reports "visible".
+Juggler no longer forces a docshell active, so the tab put in the background
+reports "hidden", as in stock Firefox, and the wait ends.
 
 Playwright opens every page in a window of its own, so the guard gets a second
 tab in one window from window.open() and switches back with bring_to_front()
@@ -64,7 +62,7 @@ def run_child() -> int:
         background = popup.evaluate("document.visibilityState")
         browser.close()
     print(f"    the background tab reports {background!r}", flush=True)
-    return 0 if background == "visible" else 2
+    return 0 if background == "hidden" else 2
 
 
 def main() -> int:
@@ -80,7 +78,7 @@ def main() -> int:
             return 1
     sys.stdout.write(r.stdout.decode(errors="replace"))
     if r.returncode == 2:
-        print("FAIL: a background tab's visibilityState changed; pages would see it")
+        print("FAIL: a background tab does not report \"hidden\" as stock Firefox's does")
         return 1
     if r.returncode:
         print(f"FAIL: child exit {r.returncode}")

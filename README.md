@@ -121,6 +121,22 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
       Get <b>50% recurring discount</b> (not just first month). Upgrade your proxies. Reduce bans. Scale properly
     </td>
   </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://niuproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox" target="_blank">
+        <img width="380" alt="NiuProxy" src="https://github.com/user-attachments/assets/85dc8020-af1b-4c5d-82a0-6024ce54903b"/>
+      </a>
+    </td>
+    <td valign="middle">
+      🚀 <strong>NiuProxy — Exclusive Camoufox Offer | 20% OFF</strong><br>
+      🔥 Special Prices with Code camoufox80:<br>
+      • Static Native ISP — $4.80/IP<br>
+      • Residential 1TB — $0.44/GB<br>
+      • Residential 10TB — $0.30/GB<br>
+      🎁 <strong>Use camoufox80 for 20% OFF all recharges!</strong><br>
+      👉 <a href="https://niuproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">Visit NiuProxy<a>
+    </td>
+  </tr>
 </table>
 
 ## Tools & Services
@@ -196,26 +212,6 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
 Camoufox is intended to be used with rotating proxies (preferably residential IPs). Check out these providers:
 
 <table>
-  <tr>
-    <td width="25%" align="center" valign="middle">
-      <a href="https://www.rapidproxy.io/?ref=daijro" target="_blank">
-        <img width="380" alt="rapidproxy" src="https://github.com/user-attachments/assets/140337e0-50d5-452d-8a31-86c6b1761e47"/>
-      </a>
-    </td>
-    <td valign="middle">
-      <a href="https://www.rapidproxy.io/?ref=daijro">RapidProxy</a> - Power Your Data with Premium Proxies.<br>
-      🎁 Try proxies for free  + Use code <strong>RAPID10</strong> for <strong>10% OFF</strong>
-      <br>
-      <strong>Why Choose RapidProxy?</strong><br>
-      • 🌍 90M+ IPs in 200+ countries & regions<br>
-      • ♾️ No expiration on traffic — use anytime, no pressure<br>
-      • 🔥 Unlimited concurrency for maximum performance<br>
-      • 💰 Starting from just &#36;0.65/GB — built for scale<br>
-      • 📍 City-level targeting for precise geo access<br>
-      • 🔄 Flexible session control tailored to your needs<br>
-      Don’t miss out — start your free trial today and experience fast, stable, and scalable proxy performance with <a href="https://www.rapidproxy.io/?ref=daijro">RapidProxy</a>.
-    </td>
-  </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
       <a href="https://www.swiftproxy.net/?ref=daijro" target="_blank">
@@ -299,12 +295,20 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://roamproxy.com" target="_blank">
-        <img width="380" alt="Roamproxy" src="https://roamproxy.com/assets/camoufox-banner.png"/>
+      <a href="https://okkproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox" target="_blank">
+        <img width="380" alt="OkkProxy" src="https://github.com/user-attachments/assets/15df1ca6-bd84-4eee-9ed3-963bf343a021"/>
       </a>
     </td>
     <td valign="middle">
-      <strong><a href="https://roamproxy.com">Roam</a></strong> — Residential & static residential proxies, pay-as-you-go per GB. Use code CAMOUFOX15 for 15% extra credit on your first top-up.
+      👉 <strong><a href="https://okkproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">Get Started with OkkProxy</a></strong><br>
+      🚀 <strong>🔥 Static ISP Proxy Deals</strong><br>
+      • Broadcast IP — from $1.50/IP<br>
+      • Premium Native IP — from $4.50/IP<br>
+      🔥 <strong>Unlimited Residential Proxies — from $58/day</strong><br>
+      <strong>🎁 Use PAY2 for 10% OFF all recharges!</strong><br>
+      Also available: Rotating Residential and Mobile Proxies.<br>
+      👉 <a href="https://okkproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">Visit NiuProxy<a>
+    </td>
   </tr>
 </table>
 </details>
@@ -447,6 +451,7 @@ right.
 | Timezone, locale and `Intl` | The identity's, per realm, workers included | They must agree with the IP's country | `timezone-spoofing`, `locale-spoofing` patches |
 | Geolocation | Coordinates from GeoIP, permission granted | They must agree with the IP | `geolocation-spoofing` patch, launcher |
 | WebRTC IP | ICE candidates, SDP and `getStats()` rewritten to the proxy IP | WebRTC otherwise reveals the real IP behind a proxy | `webrtc-ip-spoofing` patch |
+| WebRTC UDP behind a SOCKS5 proxy | STUN, TURN and peer-to-peer UDP go through the proxy's UDP relay (UDP ASSOCIATE), so the srflx candidate is the address the page's STUN server really saw; the local network gets no exception, and mDNS names stay in the browser. Without a relay, no UDP leaves the host and the srflx carries the proxy IP. Only a page's own loopback connection stays direct | Stock Firefox on the exit machine gathers a real srflx and connects peer to peer | `webrtc-socks5-udp` patch |
 | Touchscreen | A touchscreen laptop, not a phone | Touch points and pointer media must agree with the claimed device | `touchscreen-fingerprint-spoofing`, `force-default-pointer` patches |
 
 Left as stock Firefox has it, on purpose:
@@ -469,7 +474,12 @@ the identity claim the host's OS, and does the host render on a GPU?
 | | Identity on the host's OS | Identity on another OS |
 |---|---|---|
 | **GPU rendering** | 🟢 <ins><b>Most stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ No canvas noise: looks like stock Firefox<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ The claimed GPU is the host's, so the pixels agree with it<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Every identity on this machine claims the same GPU, so there is less fingerprint diversity | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Readback is random, so the real OS does not show<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Canvas noise: looks like LibreWolf, Tor Browser or Mullvad Browser, which are rarer than stock Firefox |
-| **Software rendering**<br/>(no GPU driver, as on most servers) | 🟢 <ins><b>Stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ No canvas noise: looks like stock Firefox<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Looks like a GPU falling back to software rendering, which is rarer than a working GPU | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Readback is random, so the real OS does not show<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Canvas noise: looks like LibreWolf, Tor Browser or Mullvad Browser, which are rarer than stock Firefox |
+| **Software rendering**<br/>(no working GPU driver, as on most servers) | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ No canvas noise: looks like stock Firefox<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Claims the software renderer (`llvmpipe` on Linux), so the pixels agree with it<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Reads as a server or a broken driver, and every identity on this machine claims the same renderer | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Readback is random, so the real OS does not show<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Canvas noise: looks like LibreWolf, Tor Browser or Mullvad Browser, which are rarer than stock Firefox |
+
+A software-rendering host never claims a GPU. Firefox reads the name and the
+pixels from one GL context, so a GPU name over software pixels never happens on
+a real machine: with a broken GPU driver, Firefox reports `llvmpipe` too. To
+report a GPU, render on one with `headless="virtual-gpu"`.
 
 That is the default. These options override it:
 
@@ -490,8 +500,14 @@ claims the host's OS. Details are in
 | Playwright's `evaluate`, selectors and init scripts run in an isolated world the page cannot see | Juggler |
 | `navigator.webdriver` is `false` | `playwright/1-leak-fixes` patch |
 | `select_option`, `fill` on date and colour inputs, and `set_input_files` fire trusted events | `trusted-automation-events` patch |
+| `fill` and `keyboard.insert_text` paste the text as a person does: the paste shortcut and Firefox's own paste, without the system clipboard | Juggler |
+| Screenshots leave the page's DOM alone (no caret-hiding style writes) | Launcher |
+| Mouse moves coalesce per frame as a real mouse's do, spaced as a 125 Hz mouse's | Juggler, `input-coalescing-parity` patch |
+| A drag fires `drag` at its source with each motion, as GTK does | Juggler, `drag-source-events` patch |
+| Driver calls define no interfaces on the page's window | `isolated-world-global-order` patch |
+| A SOCKS5 proxy with a username and password works, for the launch and per context: the launcher hands the credentials to Juggler, which Playwright alone refuses | Launcher, Juggler |
 | Headless reports a fine pointer, like a desktop | `force-default-pointer` patch |
-| Wheel events carry native ticks, like a physical wheel | `wheel-native-ticks` patch |
+| `mouse.wheel()` turns notches, as a physical wheel does: 100 px is one notch, each its own event with a native tick | Juggler, `wheel-native-ticks` patch |
 | Juggler's debugger leaves no side effects content can observe | `debugger-invisible-to-content` patch |
 | Per-context fingerprint setters are gone before page script runs | `window-setter-seal` patch |
 | Popup blocker on, as in stock Firefox | `popup-blocker-parity` patch |
@@ -514,7 +530,7 @@ claims the host's OS. Details are in
 | Feature | Where |
 |---|---|
 | Load extracted addons without a debug server: `addons=["/path/to/addon"]` | launcher, `camoufox-window-module` patch |
-| uBlock Origin installed by default: each browser release bundles the newest uBO release on AMO when it is built (`browser/scripts/fetch-ubo.py`), blocking with the default filter lists packaged in it, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | packaging, launcher, `policies.json` |
+| uBlock Origin installed by default: each browser release bundles the newest uBO release on AMO when it is built (`browser/scripts/fetch-ubo.py`), blocking with the default filter lists packaged in it, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | packaging (`fetch-ubo.py` freeze_lists), launcher |
 | Addons cannot open tabs unless `allow_addon_new_tab=True` | `disable-extension-newtab` patch |
 | Addons run in private browsing | `all-addons-private-mode` patch |
 
@@ -542,9 +558,8 @@ The full option list is in the [Python README](python/README.md#launch-options).
 |---|---|
 | Telemetry and data reporting removed at compile time | `librewolf/` patches |
 | Onboarding messages disabled | `ghostery/` patch |
-| No bundled search engines | `no-search-engines` patch |
 | Mozilla services and background traffic turned off | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
-| Firefox's bundled certificate revocations (OneCRL) enforced in every profile, with no network fetch | `remote-security-settings` patch |
+| Firefox's bundled certificate revocations (OneCRL) enforced in every profile, with no network fetch | Stock Firefox since 159 |
 | Stock browser UI: no theme, toolbar or dialog changes | |
 
 > [!NOTE]

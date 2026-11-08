@@ -100,7 +100,7 @@ index b6696c70c4..57ce1586db 100644
  
  static void ReleaseFontData(void* aInfo, const void* aData, size_t aSize) {
 diff --git a/gfx/thebes/gfxDWriteFontList.cpp b/gfx/thebes/gfxDWriteFontList.cpp
-index 0d359b69d7..70740aeefa 100644
+index a804e7154b..ec81e42dc7 100644
 --- a/gfx/thebes/gfxDWriteFontList.cpp
 +++ b/gfx/thebes/gfxDWriteFontList.cpp
 @@ -5,6 +5,7 @@
@@ -111,16 +111,16 @@ index 0d359b69d7..70740aeefa 100644
  #include "SharedFontList-impl.h"
  #include "gfxDWriteCommon.h"
  #include "gfxDWriteFonts.h"
-@@ -1754,6 +1755,8 @@ void gfxDWriteFontList::InitSharedFontListForPlatform() {
+@@ -1675,6 +1676,8 @@ void gfxDWriteFontList::InitSharedFontListForPlatform() {
    // We activate bundled fonts if the pref is > 0 (on) or < 0 (auto), only an
    // explicit value of 0 (off) will disable them.
    TimeStamp start1 = TimeStamp::Now();
 +  // Camoufox: a native Windows identity keeps only the fonts stock Firefox
 +  // bundles (BundledFontFileEnumerator filters the directory).
    if (StaticPrefs::gfx_bundled_fonts_activate_AtStartup() != 0) {
+     RefPtr<IDWriteFactory> factory = Factory::EnsureDWriteFactory();
      mBundledFonts = CreateBundledFontsCollection(factory);
-   }
-@@ -2747,22 +2750,48 @@ class BundledFontFileEnumerator : public IDWriteFontFileEnumerator {
+@@ -2647,22 +2650,48 @@ class BundledFontFileEnumerator : public IDWriteFontFileEnumerator {
    nsCOMPtr<nsIFile> mFontDir;
    nsCOMPtr<nsIDirectoryEnumerator> mEntries;
    nsCOMPtr<nsISupports> mCurrent;
@@ -175,6 +175,57 @@ index 0d359b69d7..70740aeefa 100644
      }
    }
    *aHasCurrentFile = hasMore;
+diff --git a/gfx/thebes/gfxFcPlatformFontList.cpp b/gfx/thebes/gfxFcPlatformFontList.cpp
+index 4b4d7b7382..cf4fa5077f 100644
+--- a/gfx/thebes/gfxFcPlatformFontList.cpp
++++ b/gfx/thebes/gfxFcPlatformFontList.cpp
+@@ -37,10 +37,12 @@
+ #include "StandardFonts-linux.inc"
+ #undef StandardFonts
+ #include <cairo-ft.h>
++#include <dirent.h>
+ #include <dlfcn.h>
+ #include <fontconfig/fcfreetype.h>
+ #include <fontconfig/fontconfig.h>
+ #include <harfbuzz/hb.h>
++#include <sys/stat.h>
+ #include <unistd.h>
+ 
+ #include "mozilla/intl/Locale.h"
+@@ -3139,9 +3141,31 @@ void gfxFcPlatformFontList::ActivateBundledFonts() {
+       return;
+     }
+   }
+-  if (!mBundledFontsPath.IsEmpty()) {
+-    FcConfigAppFontAddDir(nullptr, ToFcChar8Ptr(mBundledFontsPath.get()));
++  if (mBundledFontsPath.IsEmpty()) {
++    return;
++  }
++  // Camoufox: fonts/ holds Firefox's own bundled font (Twemoji Mozilla) and,
++  // in subdirectories, the font sets camoufox ships for each OS. The launcher's
++  // fonts.conf scans exactly the subdirectories the identity's OS reads, but
++  // FcConfigAppFontAddDir is recursive, so it added every OS's set to every
++  // launch: a Windows identity's "Arial" family held macOS's regular Arial
++  // faces, which have no Armenian, beside Windows' own, so its default font
++  // passed lang="hy" text on to another face. Add the directory's own files
++  // only, as a stock build's fonts/ holds no more than that.
++  DIR* dir = opendir(mBundledFontsPath.get());
++  if (!dir) {
++    return;
++  }
++  while (const struct dirent* entry = readdir(dir)) {
++    nsAutoCString path(mBundledFontsPath);
++    path.Append('/');
++    path.Append(entry->d_name);
++    struct stat st;
++    if (stat(path.get(), &st) == 0 && S_ISREG(st.st_mode)) {
++      FcConfigAppFontAddFile(nullptr, ToFcChar8Ptr(path.get()));
++    }
+   }
++  closedir(dir);
+ }
+ #endif
+ 
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
 index 849b3af462..164c33448d 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
@@ -298,10 +349,10 @@ index 849b3af462..164c33448d 100644
    // font-family request by the page), and RFP settings allow generics to be
    // unrestricted, bump the effective visibility level applied here so as to
 diff --git a/gfx/thebes/gfxPlatformFontList.h b/gfx/thebes/gfxPlatformFontList.h
-index 66290cd704..bdd4b52666 100644
+index 4719c99e05..7c4948214f 100644
 --- a/gfx/thebes/gfxPlatformFontList.h
 +++ b/gfx/thebes/gfxPlatformFontList.h
-@@ -649,6 +649,19 @@ class gfxPlatformFontList : public gfxFontInfoLoader {
+@@ -654,6 +654,19 @@ class gfxPlatformFontList : public gfxFontInfoLoader {
      return mFontFamilyWhitelistActive;
    };
  
@@ -351,10 +402,10 @@ index 54433dc950..ef04e92585 100644
          // as this means we are dependent on any updates to the font list.
          mSeenLocalSource = true;
 diff --git a/gfx/thebes/moz.build b/gfx/thebes/moz.build
-index bb3da184dc..5afed86888 100644
+index ab172d9588..182d793f6b 100644
 --- a/gfx/thebes/moz.build
 +++ b/gfx/thebes/moz.build
-@@ -310,3 +310,6 @@ LICENSED_UNDER["gfx-font-list"].paths = [
+@@ -295,3 +295,6 @@ LICENSED_UNDER["gfx-font-list"].paths = [
      "gfxMacPlatformFontList.mm",
      "gfxPlatformFontList.cpp",
  ]

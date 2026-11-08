@@ -56,7 +56,6 @@ from ci._util import WORK_DIR, read_upstream_sh  # noqa: E402
 from camoufox import webgl  # noqa: E402
 from camoufox.fingerprints import _FPGEN_OS  # noqa: E402
 from camoufox.fpgen_model import load_fpgen  # noqa: E402
-from camoufox.host_rendering import renders_on_hardware  # noqa: E402
 from camoufox.utils import launch_options, resolve_verstr  # noqa: E402
 
 ARCHIVE = "https://archive.mozilla.org/pub/firefox/releases/{version}/"
@@ -169,11 +168,31 @@ def stock_firefox(flag: str, version: str) -> Path:
     return binary
 
 
+# Stock Firefox updates itself in place: the app.update.* prefs no longer stop
+# it, so a cached 158.0.1 that a guard launched became 159.0 within minutes
+# (2026-10-31, .ci-work/stock-firefox/158.0.1 read 159.0 two minutes after its
+# download). Only the enterprise policy does.
+NO_UPDATE_POLICY = {"policies": {"DisableAppUpdate": True}}
+
+
+def pin_stock(root: Path) -> None:
+    """Keep the downloaded release at its version: no app update, ever."""
+    policies = root / "distribution" / "policies.json"
+    policies.parent.mkdir(exist_ok=True)
+    policies.write_text(json.dumps(NO_UPDATE_POLICY), encoding="utf-8")
+
+
 def download_stock(version: str) -> Path:
     package = LINUX_PACKAGE.format(machine=platform.machine(), version=version)
     binary = WORK_DIR / "stock-firefox" / version / platform.machine() / "firefox" / "firefox"
     if binary.exists():
-        return binary
+        if ini_version(binary) == version:
+            pin_stock(binary.parent)
+            return binary
+        # A cache that updated itself is not the release: fetch it again.
+        stale = binary.parent.with_name(f"firefox.stale-{os.getpid()}")
+        binary.parent.rename(stale)
+        shutil.rmtree(stale, ignore_errors=True)
     base = ARCHIVE.format(version=version)
     sums = {name: digest for digest, name in (line.split("  ", 1) for line in signed_sums(base).splitlines())}
     if package not in sums:
@@ -191,6 +210,7 @@ def download_stock(version: str) -> Path:
             raise SystemExit(f"{package}: SHA-256 {digest.hexdigest()} is not the release's {sums[package]}")
         with tarfile.open(archive) as tar:
             tar.extractall(tmp, filter="data")
+        pin_stock(Path(tmp, "firefox"))
         # Renamed into place last, so an interrupted run leaves nothing cached.
         Path(tmp, "firefox").rename(binary.parent)
     return binary
@@ -268,15 +288,13 @@ def main() -> int:
         print(f"FAIL: stock Firefox reports the GPU {gpu}, which fpgen never recorded on {host_os}")
         return 1
     stock_flat = flatten(stock_out)
-    # Without webGl:vendor/renderer the launcher claims a hardware GPU of the
-    # host itself, through the path a real launch takes, and keeps the
-    # device's tables. A software renderer it leaves to the draw, so that one
-    # is named.
+    # Without webGl:vendor/renderer the launcher claims the host's own GPU or
+    # software renderer, through the path a real launch takes, and keeps the
+    # device's tables.
     device = nearest_device(target_os, gpu, stock_flat)
-    named = () if renders_on_hardware(tuple(gpu)) else ("webGl:vendor", "webGl:renderer")
     pinned = {
         k: v for k, v in device.items()
-        if k in named or k.startswith(("webGl:", "webGl2:")) and not k.endswith(("vendor", "renderer"))
+        if k.startswith(("webGl:", "webGl2:")) and not k.endswith(("vendor", "renderer"))
     }
     options = launch_options(
         os=host_os, headless=True, executable_path=str(camoufox), config=pinned, i_know_what_im_doing=True
