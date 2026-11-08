@@ -397,6 +397,23 @@ describe.skipIf(!MODEL.ok)("webgl (test_webgl.py)", () => {
 	});
 });
 
+it("a uniform block is at most what Firefox allows", () => {
+	// Firefox 159 caps MAX_UNIFORM_BLOCK_SIZE at 64 KiB (WebGL2ContextState.cpp,
+	// kMaxUniformBlockSize); fpgen recorded the drivers' own.
+	const blockSize = (recorded: number) => {
+		const record = {
+			vendor: "v",
+			renderer: "r",
+			supportedExtensions: [],
+			shaderPrecisionFormats: [],
+			params: { "33902": { value: [1, 1] }, "35376": { value: recorded } },
+		};
+		return toConfig(record, record, "lin")["webGl2:parameters"]["35376"];
+	};
+	expect(blockSize(4120744960)).toBe(65536);
+	expect(blockSize(16384)).toBe(16384);
+});
+
 it("an extension the backend adds takes Firefox's position", () => {
 	const recorded = {
 		vendor: "v",

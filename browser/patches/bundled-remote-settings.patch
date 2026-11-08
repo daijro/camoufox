@@ -1,0 +1,104 @@
+diff --git a/services/settings/Utils.sys.mjs b/services/settings/Utils.sys.mjs
+index 70f77c9fcb..6193e123e5 100644
+--- a/services/settings/Utils.sys.mjs
++++ b/services/settings/Utils.sys.mjs
+@@ -105,10 +105,9 @@ function _isUndefined(value) {
+ 
+ export var Utils = {
+   get SERVER_URL() {
+-    return lazy.allowServerURL
+-      ? // eslint-disable-next-line mozilla/valid-lazy
+-        lazy.gServerURL
+-      : AppConstants.REMOTE_SETTINGS_SERVER_URLS[0];
++    // Camoufox: camoufox.cfg empties this pref, and a release build would
++    // otherwise ignore that and keep the Mozilla server.
++    return lazy.gServerURL;
+   },
+ 
+   CHANGES_PATH: "/buckets/monitor/collections/changes/changeset",
+@@ -119,13 +118,9 @@ export var Utils = {
+   log,
+ 
+   get shouldSkipRemoteActivity() {
+-    if (
+-      (lazy.isRunningTests || Cu.isInAutomation) &&
+-      this.SERVER_URL == "data:,#remote-settings-dummy/v1"
+-    ) {
+-      return true;
+-    }
+-    return Services.policies?.isAllowed("remoteSettings") === false;
++    // Camoufox: the collections come only from the build's dumps
++    // (browser/scripts/remote_settings.py).
++    return true;
+   },
+ 
+   get CERT_CHAIN_ROOT_IDENTIFIER() {
+@@ -149,11 +144,8 @@ export var Utils = {
+   },
+ 
+   get LOAD_DUMPS() {
+-    // Load dumps only if pulling data from the production server, or in tests.
+-    return (
+-      AppConstants.REMOTE_SETTINGS_SERVER_URLS.includes(this.SERVER_URL) ||
+-      lazy.isRunningTests
+-    );
++    // Camoufox: with no server, the build's dumps are the only source.
++    return true;
+   },
+ 
+   get PREVIEW_MODE() {
+diff --git a/services/settings/dumps/main/moz.build b/services/settings/dumps/main/moz.build
+index 88e740b90e..398cfe6556 100644
+--- a/services/settings/dumps/main/moz.build
++++ b/services/settings/dumps/main/moz.build
+@@ -45,6 +45,21 @@ FINAL_TARGET_FILES.defaults.settings.main += [
+ 
+ # These search config icons only apply to desktop.
+ if CONFIG["MOZ_BUILD_APP"] == "browser":
++    # Camoufox: collections a stock profile downloads on first run. They come
++    # from browser/scripts/remote_settings.py, so the browser never asks.
++    FINAL_TARGET_FILES.defaults.settings.main += [
++        "bounce-tracking-protection-exceptions.json",
++        "fingerprinting-protection-overrides.json",
++        "partitioning-exempt-urls.json",
++        "query-stripping.json",
++        "tracking-protection-lists.json",
++        "url-classifier-exceptions.json",
++    ]
++    # Absolute: for a relative wildcard, faster make and recursive make disagree
++    # on whether the directory is kept.
++    FINAL_TARGET_FILES.defaults.settings.main["tracking-protection-lists"] += [
++        "/services/settings/dumps/main/tracking-protection-lists/*",
++    ]
+     FINAL_TARGET_FILES.defaults.settings.main["search-config-icons"] += [
+         "search-config-icons/001500a9-1a6c-3f5a-ba15-a5f5a075d256",
+         "search-config-icons/001500a9-1a6c-3f5a-ba15-a5f5a075d256.meta.json",
+diff --git a/services/settings/remote-settings.sys.mjs b/services/settings/remote-settings.sys.mjs
+index b180cfc850..9dfd178d9e 100644
+--- a/services/settings/remote-settings.sys.mjs
++++ b/services/settings/remote-settings.sys.mjs
+@@ -745,6 +745,10 @@ function remoteSettingsFunction() {
+    */
+   remoteSettings.init = () => {
+     lazy.console.info("Initialize Remote Settings");
++    // Camoufox: nothing to poll, and subscribing would open the Push socket.
++    if (lazy.Utils.shouldSkipRemoteActivity) {
++      return;
++    }
+     // Hook the Push broadcast and RemoteSettings polling.
+     // When we start on a new profile there will be no ETag stored.
+     // Use an arbitrary ETag that is guaranteed not to occur.
+diff --git a/toolkit/components/url-classifier/UrlClassifierRemoteSettingsService.sys.mjs b/toolkit/components/url-classifier/UrlClassifierRemoteSettingsService.sys.mjs
+index d38a7141b5..fcf11500ed 100644
+--- a/toolkit/components/url-classifier/UrlClassifierRemoteSettingsService.sys.mjs
++++ b/toolkit/components/url-classifier/UrlClassifierRemoteSettingsService.sys.mjs
+@@ -96,7 +96,8 @@ UrlClassifierRemoteSettingsService.prototype = {
+       try {
+         // SafeBrowsing maintains its own files, so we can remove the downloaded
+         // files after SafeBrowsing processes the data.
+-        let buffer = await rs.attachments.downloadAsBytes(entry);
++        // Camoufox: get() reads the build's dump; nothing is downloaded.
++        let { buffer } = await rs.attachments.get(entry);
+         let bytes = new Uint8Array(buffer);
+         let strData = "";
+         for (let i = 0; i < bytes.length; i++) {
