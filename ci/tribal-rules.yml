@@ -411,7 +411,7 @@ rules:
       audio-matches-stock guard checks the build against the recorded values.
 
   - id: cross-os-canvas-is-the-rfp-placeholder
-    title: On the host's OS the identity claims the host's GPU; on another OS or GPU canvas readback is RFP's random placeholder
+    title: On the host's OS the identity claims the host's GPU or software renderer; on another OS or GPU canvas readback is RFP's random placeholder
     check: automated
     evidence:
       - "v156.0.1-beta.32, 2026-10-06: getImageData and readPixels identical with privacy.fingerprintingProtection on and off; CanvasUtils.cpp checks EfficientCanvasRandomization (PNG deBG chunk only) before CanvasRandomization"
@@ -419,12 +419,18 @@ rules:
       - "v156.0.1-beta.32: the three RFP canvas targets in privacy.baselineFingerprintingProtection.overrides give RFP's readback (random, toDataURL ~770 bytes) with hardwareConcurrency untouched"
       - "v156.0.1-beta.32: a Linux host with an RTX 5080 and a Ryzen iGPU reported 'AMD, Radeon HD 3200 Graphics, or similar' to WebGL, headless and headed"
       - "v156.0.1-beta.32: a Linux identity whose config claimed availHeight 1053 on a 1080 screen read 1080 (nsRFPService::GetSpoofedScreenAvailSize, no Linux offset)"
+      - "Stock 159.0 on Linux with an RX 7900 XTX under Xorg: WebGL reads 'Radeon R9 200 Series, or similar' on the working driver; with MESA_LOADER_DRIVER_OVERRIDE=bogus or LIBGL_ALWAYS_SOFTWARE=1 it reads 'llvmpipe, or similar' from Mesa, with the same readPixels hash as Xvfb. A private window on Xvfb gives that hash too. Broken NVIDIA and blocklisted drivers were not tried"
+      - "dom/canvas/WebGLContext.cpp, Firefox 159: UNMASKED_RENDERER_WEBGL is gl->fGetString(LOCAL_GL_RENDERER) on the context that draws the pixels, unless webgl.override-unmasked-renderer is set (empty by default)"
+      - "Stock 159.0 with privacy.resistFingerprinting reports the renderer 'Mozilla', and LibreWolf ships that pref on, so a GPU name over random readback is not what LibreWolf shows either"
     rationale: >-
       Canvas and WebGL pixels come from the host's OS, driver and GPU. On the
       host's OS the identity claims the GPU Firefox reports there, read from the
       browser itself because Firefox may render on another device than system
-      tools name and sanitizes the name its own way; a software renderer
-      matches any GPU, as a machine whose driver failed to load. On another OS,
+      tools name and sanitizes the name its own way. A software renderer is
+      claimed like a GPU: Firefox reads the name and the pixels from one GL
+      context, so a GPU name over software pixels never happens on a real
+      machine, and a machine with a broken GPU driver reports llvmpipe too. It
+      reads as a server, which is better than a contradiction. On another OS,
       or with another GPU (one the caller or a preset names, or a host GPU
       fpgen never recorded, which has no WebGL data to claim), nothing can
       agree, and Firefox 156's private windows do not hide pixels, so the

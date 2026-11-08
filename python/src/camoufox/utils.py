@@ -48,7 +48,7 @@ from .pkgman import (
 from .gpudisplay import GPU_PREFS, GpuDisplay, async_prove_gpu, prove_gpu, select_gpu
 from .virtdisplay import VirtualDisplay
 from ._warnings import WARNINGS_DATA, FallbackWarning, LeakWarning, _warn_from_caller
-from .host_rendering import Gpu, add_canvas_placeholder, has_canvas_placeholder, host_gpu, renders_on_hardware, set_webgpu
+from .host_rendering import Gpu, add_canvas_placeholder, has_canvas_placeholder, host_gpu, set_webgpu
 from .webgl import firefox_gpus, sample_webgl_for_screen, webgl_for_gpu
 
 ListOrString: TypeAlias = Union[Tuple[str, ...], List[str], str]
@@ -879,17 +879,17 @@ def plan_rendering(
 ) -> Tuple[bool, Optional[Gpu]]:
     """Whether the canvas is covered, and the host GPU the identity claims.
 
-    The canvas renders on the host, so the identity claims the host's GPU when
-    it can: on the host's OS, with no GPU named, on a hardware GPU fpgen has
-    recorded there. A software renderer matches any GPU, and with WebGL off no
-    GPU is claimed. Any other identity contradicts the pixels, so the canvas is
-    covered unless the caller chose canvas_noise=False.
+    The canvas renders on the host, so the identity claims what Firefox reports
+    there when it can: on the host's OS, with no GPU named, a GPU or software
+    renderer fpgen has recorded there. With WebGL off no GPU is claimed. Any
+    other identity contradicts the pixels, so the canvas is covered unless the
+    caller chose canvas_noise=False.
     """
     if canvas_noise:
         return True, None
     if target_os == _host_os_key() and not named_gpu:
         host = None if webgl_disabled else probe()
-        if not renders_on_hardware(host):
+        if host is None:
             return False, None
         if host in firefox_gpus(target_os):
             return False, host

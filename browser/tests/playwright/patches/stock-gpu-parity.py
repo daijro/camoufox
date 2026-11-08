@@ -56,7 +56,6 @@ from ci._util import WORK_DIR, read_upstream_sh  # noqa: E402
 from camoufox import webgl  # noqa: E402
 from camoufox.fingerprints import _FPGEN_OS  # noqa: E402
 from camoufox.fpgen_model import load_fpgen  # noqa: E402
-from camoufox.host_rendering import renders_on_hardware  # noqa: E402
 from camoufox.utils import launch_options, resolve_verstr  # noqa: E402
 
 ARCHIVE = "https://archive.mozilla.org/pub/firefox/releases/{version}/"
@@ -289,15 +288,13 @@ def main() -> int:
         print(f"FAIL: stock Firefox reports the GPU {gpu}, which fpgen never recorded on {host_os}")
         return 1
     stock_flat = flatten(stock_out)
-    # Without webGl:vendor/renderer the launcher claims a hardware GPU of the
-    # host itself, through the path a real launch takes, and keeps the
-    # device's tables. A software renderer it leaves to the draw, so that one
-    # is named.
+    # Without webGl:vendor/renderer the launcher claims the host's own GPU or
+    # software renderer, through the path a real launch takes, and keeps the
+    # device's tables.
     device = nearest_device(target_os, gpu, stock_flat)
-    named = () if renders_on_hardware(tuple(gpu)) else ("webGl:vendor", "webGl:renderer")
     pinned = {
         k: v for k, v in device.items()
-        if k in named or k.startswith(("webGl:", "webGl2:")) and not k.endswith(("vendor", "renderer"))
+        if k.startswith(("webGl:", "webGl2:")) and not k.endswith(("vendor", "renderer"))
     }
     options = launch_options(
         os=host_os, headless=True, executable_path=str(camoufox), config=pinned, i_know_what_im_doing=True

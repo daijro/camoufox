@@ -253,6 +253,8 @@ def sample_webgl_for_screen(
     Software rasterisers cost fidelity -- real users do run without working
     drivers -- but "no consumer machine reports llvmpipe" is a live, standard
     check on a string every fingerprint script reads (sundial, 2026-09-14).
+    A host that really renders in software claims its renderer instead
+    (plan_rendering).
     """
     candidates = tuple(
         result
