@@ -985,8 +985,8 @@ index bb523c2717..d57e3992cd 100644
      return true;
    }
  
-+  // Playwright: emulate focused page by never bluring when leaving document.
-+  if (XRE_IsContentProcess() && aIsLeavingDocument && docShell && nsDocShell::Cast(docShell)->ShouldOverrideHasFocus()) {
++  // Playwright: emulate focused page by never bluring when focus leaves the tab. Camoufox: not when it moves into one of the page's frames, which blurs as in stock.
++  if (XRE_IsContentProcess() && aIsLeavingDocument && !aAncestorBrowsingContextToFocus && docShell && nsDocShell::Cast(docShell)->ShouldOverrideHasFocus()) {
 +    return true;
 +  }
 +
@@ -2701,29 +2701,6 @@ index 30ca546027..049725c879 100644
  #ifdef ENABLE_WEBDRIVER
    nsCOMPtr<nsIMarionette> marionette = do_GetService(NS_MARIONETTE_CONTRACTID);
    if (marionette) {
-diff --git a/services/settings/Utils.sys.mjs b/services/settings/Utils.sys.mjs
-index 70f77c9fcb..e11bad0f28 100644
---- a/services/settings/Utils.sys.mjs
-+++ b/services/settings/Utils.sys.mjs
-@@ -105,7 +105,7 @@ function _isUndefined(value) {
- 
- export var Utils = {
-   get SERVER_URL() {
--    return lazy.allowServerURL
-+    return true || lazy.allowServerURL
-       ? // eslint-disable-next-line mozilla/valid-lazy
-         lazy.gServerURL
-       : AppConstants.REMOTE_SETTINGS_SERVER_URLS[0];
-@@ -119,6 +119,9 @@ export var Utils = {
-   log,
- 
-   get shouldSkipRemoteActivity() {
-+    // Playwright does not set Cu.isInAutomation, hence we just return true
-+    // here in order to disable the remote activity.
-+    return true;
-     if (
-       (lazy.isRunningTests || Cu.isInAutomation) &&
-       this.SERVER_URL == "data:,#remote-settings-dummy/v1"
 diff --git a/third_party/libwebrtc/api/location.h b/third_party/libwebrtc/api/location.h
 new file mode 100644
 index 0000000000..040cbc972b

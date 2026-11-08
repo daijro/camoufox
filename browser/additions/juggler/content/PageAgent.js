@@ -11,6 +11,7 @@ const Cu = Components.utils;
 const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
 const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
+const {normalDelay} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanDelay.js');
 
 const dragService = Cc["@mozilla.org/widget/dragservice;1"].getService(
   Ci.nsIDragService
@@ -146,6 +147,7 @@ export class PageAgent {
         adoptNode: this._adoptNode.bind(this),
         crash: this._crash.bind(this),
         describeNode: this._describeNode.bind(this),
+        awaitUserInputGate: this._awaitUserInputGate.bind(this),
         dispatchKeyEvent: this._dispatchKeyEvent.bind(this),
         dispatchDragEvent: this._dispatchDragEvent.bind(this),
         dispatchTouchEvent: this._dispatchTouchEvent.bind(this),
@@ -481,6 +483,32 @@ export class PageAgent {
     return typeof text === 'string' && text.length === 1 && /[A-Z~!@#$%^&*()_+{}|:"<>?]/.test(text);
   }
 
+  // Camoufox: resolves once this process's top document accepts user input
+  // (PageHandler._awaitUserInputGate): minTimeElapsedInMS after readyState
+  // became "loading" (performance.timing.domLoading, the same moment as
+  // Document::mLoadingOrRestoredFromBFCacheTimeStamp), then a refresh tick.
+  // The initial about:blank is exempt, as in nsPresContext.
+  async _awaitUserInputGate() {
+    const win = this._frameTree.mainFrame().domWindow();
+    if (!win || win.document.isInitialDocument)
+      return;
+    const timing = win.performance.timing;
+    if (!timing.domLoading)
+      return;
+    const gateMs = Services.prefs.getIntPref('dom.input_events.security.minTimeElapsedInMS', 100);
+    // +2: performance.now() is clamped to the timer precision.
+    const waitMs = gateMs + 2 - (win.performance.now() - (timing.domLoading - timing.navigationStart));
+    if (waitMs <= 0)
+      return;
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+    // minNumTicks: a tick after the time has passed; a hidden page's refresh
+    // driver is throttled, and the gate is open for it anyway.
+    await new Promise(resolve => {
+      win.requestAnimationFrame(() => resolve());
+      setTimeout(resolve, 100);
+    });
+  }
+
   async _dispatchKeyEvent({type, keyCode, code, key, repeat, location, text}) {
     const frame = this._frameTree.mainFrame();
     const tip = frame.textInputProcessor();
@@ -493,7 +521,7 @@ export class PageAgent {
       this._autoShiftKey = key;
       // A person presses Shift tens of ms before the key it modifies; 0 ms
       // between the two keydowns is a scripted-typing tell.
-      await new Promise(resolve => setTimeout(resolve, 35 + Math.random() * 55));
+      await pause(modifierLead());
     }
     const shiftKey = this._realShiftDown || !!this._autoShiftKey;
     let keyEvent = new KeyboardEvent("", {
@@ -527,7 +555,7 @@ export class PageAgent {
       tip.keyup(keyEvent, flags);
       if (this._autoShiftKey === key) {
         this._autoShiftKey = null;
-        await new Promise(resolve => setTimeout(resolve, 20 + Math.random() * 45));
+        await pause(modifierTrail());
         tip.keyup(new KeyboardEvent("", { key: 'Shift', code: 'ShiftLeft', location: 1, keyCode: 16 }), 0);
       }
     } else {
@@ -590,6 +618,13 @@ export class PageAgent {
     const session = this._getCurrentDragSession();
     const dropEffect = session.dataTransfer.dropEffect;
 
+    if (type === 'drag') {
+      const win = this._frameTree.mainFrame().domWindow();
+      win.windowUtils.jugglerSendMouseEvent(
+        'drag', x, y, 0, 0, modifiers, false, 0.0, win.MouseEvent.MOZ_SOURCE_MOUSE,
+        true, false, 0, win.windowUtils.DEFAULT_MOUSE_POINTER_ID, false);
+      return;
+    }
     if ((type === 'drop' && dropEffect !== 'none') || type ===  'dragover') {
       const win = this._frameTree.mainFrame().domWindow();
       win.windowUtils.jugglerSendMouseEvent(
@@ -604,7 +639,7 @@ export class PageAgent {
         win.MouseEvent.MOZ_SOURCE_MOUSE /*inputSource*/,
         true /*isDOMEventSynthesized*/,
         false /*isWidgetEventSynthesized*/,
-        0 /*buttons*/,
+        type === 'dragover' ? 1 : 0 /*buttons: the held button; released for drop*/,
         win.windowUtils.DEFAULT_MOUSE_POINTER_ID /* pointerIdentifier */,
         false /*disablePointerEvent*/,
       );
@@ -613,22 +648,95 @@ export class PageAgent {
     if (type === 'dragend') {
       const session = this._getCurrentDragSession();
       session?.endDragSession(true);
+      await this._afterFrame();
       return;
     }
   }
 
+  // A frame after the drag session ends, by when the page has its pointer back:
+  // the session's end moves the pointer on the next refresh. Bounded, since a
+  // throttled page may not paint.
+  _afterFrame() {
+    const win = this._frameTree.mainFrame().domWindow();
+    return new Promise(resolve => {
+      win.requestAnimationFrame(() => resolve());
+      setTimeout(resolve, 100);
+    });
+  }
+
   async _insertText({text}) {
-    const frame = this._frameTree.mainFrame();
-    // A focused text control inserts through its own editor, as a keystroke
-    // does: one beforeinput/input pair, maxlength applies, and the value counts
-    // as user-edited so blur fires `change`. nsITextInputProcessor would fire
-    // `input` twice there (compositionupdate and compositionend).
-    const editor = frame.domWindow().document.activeElement?.editor;
-    if (editor) {
-      editor.insertText(text);
+    if (!text)
       return;
+    const win = this._frameTree.mainFrame().domWindow();
+    // The shortcut reaches the document that holds focus, perhaps a frame's;
+    // this handler hears every frame in the process.
+    const events = win.docShell.chromeEventHandler;
+    const mac = win.navigator.platform.startsWith('Mac');
+    const modifier = mac
+      ? {key: 'Meta', code: 'MetaLeft', keyCode: 224, location: 1, repeat: false}
+      : {key: 'Control', code: 'ControlLeft', keyCode: 17, location: 1, repeat: false};
+    const v = {key: 'v', code: 'KeyV', keyCode: 86, location: 0, repeat: false};
+    const field = focusedField(win);
+    const editor = field && fieldEditor(field);
+    const before = editor && fieldText(field);
+    let error = null;
+    // The shortcut's keypress is where Firefox runs its own clipboard paste
+    // (GTK's key bindings, the global key handler). Content never gets a
+    // keypress for a shortcut, so cancelling it in the system group is
+    // invisible; the paste with the text runs in its place, at that moment.
+    const onKeypress = event => {
+      if (!event.isTrusted || event.key !== 'v' || !(mac ? event.metaKey : event.ctrlKey))
+        return;
+      event.preventDefault();
+      if (!editor)
+        return;
+      try {
+        editor.pasteTransferable(textTransferable(win, text));
+      } catch (e) {
+        error = e;
+      }
+    };
+    events.addEventListener('keypress', onKeypress, {capture: true, mozSystemGroup: true});
+    try {
+      // The modifier leads and trails V as Shift does a key (_dispatchKeyEvent).
+      await this._dispatchKeyEvent({type: 'keydown', ...modifier});
+      await pause(modifierLead());
+      await this._dispatchKeyEvent({type: 'keydown', ...v});
+      await pause(keyHold());
+      await this._dispatchKeyEvent({type: 'keyup', ...v});
+      await pause(modifierTrail());
+      await this._dispatchKeyEvent({type: 'keyup', ...modifier});
+    } finally {
+      events.removeEventListener('keypress', onKeypress, {capture: true, mozSystemGroup: true});
     }
-    frame.textInputProcessor().commitCompositionWith(text);
+    if (error)
+      throw error;
+    if (!editor || field.readOnly)
+      return;
+    // A page that cancels the paste may have put the text in itself: only a
+    // field left as it was refused it. A person types what they cannot paste.
+    if (pasted(field, before, text))
+      return;
+    await this._typeText(text, field);
+    if (fieldText(field) === before)
+      throw new Error('Cannot insert text: the page refused the paste and the keys');
+  }
+
+  // Key by key on a US keyboard, at a person's rate. A character it has no key
+  // for arrives as an input method commits it.
+  async _typeText(text, field) {
+    for (const character of text) {
+      // Keys sent on would land in whatever took the focus.
+      if (focusedField(this._frameTree.mainFrame().domWindow()) !== field)
+        throw new Error('Cannot insert text: the field lost focus while it was being typed into');
+      const key = {...(usKey(character) ?? {key: 'Process', code: '', keyCode: 229}), location: 0, repeat: false};
+      const started = ChromeUtils.now();
+      await this._dispatchKeyEvent({type: 'keydown', ...key, text: character});
+      await pause(keyHold());
+      await this._dispatchKeyEvent({type: 'keyup', ...key});
+      // Timer.sys.mjs reads a negative delay as a huge unsigned one.
+      await pause(Math.max(0, started + keyInterval() - ChromeUtils.now()));
+    }
   }
 
   async _crash() {
@@ -771,3 +879,80 @@ export class PageAgent {
   }
 }
 
+function pause(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// How long a person holds a key: 116.25 ms (SD 23.88; Dhakal et al.,
+// "Observations on Typing from 136 Million Keystrokes", CHI 2018), never under
+// 50 ms.
+const keyHold = () => normalDelay(116.25, 23.88, 50);
+// Press to press while typing, from the same study: 238.66 ms, SD 111.60.
+const keyInterval = () => normalDelay(238.66, 111.6, 80);
+// How far a modifier leads the key it modifies, and trails its release: tens
+// of ms. No recorded figure; these keep the mean and spread of the uniform
+// 35-90 ms and 20-65 ms draws they replaced, with those floors.
+const modifierLead = () => normalDelay(62.5, 16, 35);
+const modifierTrail = () => normalDelay(42.5, 13, 20);
+
+// What has focus in this page, frames included. Services.focus.focusedElement
+// is the active window's: in a process shared with another page, that page's.
+// A designMode document takes the focus itself, with no element in it.
+function focusedField(win) {
+  const focused = {};
+  const element = Services.focus.getFocusedElementForWindow(win, true, focused);
+  const doc = focused.value?.document;
+  return element ?? (doc?.designMode === 'on' ? doc.body : null);
+}
+
+// The editor of a focused text control or editable document, or null.
+function fieldEditor(element) {
+  if (element.editor)
+    return element.editor;
+  const doc = element.ownerDocument;
+  if (!element.isContentEditable && doc.designMode !== 'on')
+    return null;
+  return doc.defaultView.docShell.editingSession.getEditorForWindow(doc.defaultView);
+}
+
+function fieldText(element) {
+  return element.editor ? element.value : element.textContent;
+}
+
+// Filling a field with what it holds changes nothing, and is still done.
+function pasted(field, before, text) {
+  const after = fieldText(field);
+  return after !== before || after === text;
+}
+
+const kUsRows = [
+  ['`~', 'Backquote', 192], ['-_', 'Minus', 173], ['=+', 'Equal', 61],
+  ['[{', 'BracketLeft', 219], [']}', 'BracketRight', 221], ['\\|', 'Backslash', 220],
+  [';:', 'Semicolon', 59], ['\'"', 'Quote', 222], [',<', 'Comma', 188],
+  ['.>', 'Period', 190], ['/?', 'Slash', 191], [' ', 'Space', 32],
+];
+const kDigitShifts = ')!@#$%^&*(';
+
+// The key a US keyboard types this character with, or null.
+function usKey(character) {
+  if (/^[a-zA-Z]$/.test(character)) {
+    const upper = character.toUpperCase();
+    return {key: character, code: `Key${upper}`, keyCode: upper.charCodeAt(0)};
+  }
+  const digit = /^[0-9]$/.test(character) ? Number(character) : kDigitShifts.indexOf(character);
+  if (digit >= 0)
+    return {key: character, code: `Digit${digit}`, keyCode: 48 + digit};
+  const row = kUsRows.find(([characters]) => characters.includes(character));
+  return row ? {key: character, code: row[1], keyCode: row[2]} : null;
+}
+
+// Plain text to paste, as a text source puts it on the clipboard.
+function textTransferable(win, text) {
+  const transferable = Cc['@mozilla.org/widget/transferable;1'].createInstance(Ci.nsITransferable);
+  transferable.init(win.docShell.QueryInterface(Ci.nsILoadContext));
+  transferable.addDataFlavor('text/plain');
+  const data = Cc['@mozilla.org/supports-string;1'].createInstance(Ci.nsISupportsString);
+  data.data = text;
+  transferable.setTransferData('text/plain', data);
+  return transferable;
+}

@@ -1,0 +1,57 @@
+diff --git a/widget/gtk/ScreenHelperGTK.cpp b/widget/gtk/ScreenHelperGTK.cpp
+index 7139efb9..6d55ea71 100644
+--- a/widget/gtk/ScreenHelperGTK.cpp
++++ b/widget/gtk/ScreenHelperGTK.cpp
+@@ -16,9 +16,11 @@
+ #include <dlfcn.h>
+ #include <gtk/gtk.h>
+ 
++#include "MaskConfig.hpp"
+ #include "gfxPlatformGtk.h"
+ #include "mozilla/Logging.h"
+ #include "mozilla/ScopeExit.h"
++#include "mozilla/StaticPrefs_layout.h"
+ #include "mozilla/StaticPrefs_widget.h"
+ #include "mozilla/StaticPtr.h"
+ #include "mozilla/ToString.h"
+@@ -149,6 +151,40 @@ static already_AddRefed<Screen> MakeScreenGtk(unsigned int aMonitor,
+     rect = availRect;
+   }
+ 
++  // Camoufox: on the launcher's virtual display (Xvfb, a 1x1x24 root by
++  // default; tribal rule virtual-display-default-1x1x24) the X screen is
++  // smaller than the screen the identity claims. Firefox sizes and places
++  // windows inside this screen -- window.open's size and position, a popup's
++  // placement next to its anchor (the date picker), fullscreen -- so on a 1x1
++  // root a 400x300 window.open at 37,41 opened 120x54 at 0,0 and a date
++  // picker left its input uncovered. Such a screen reports the claimed one,
++  // in the device pixels the page's CSS pixels map to (Screen.cpp's scale).
++  // An X screen that holds the claimed one is left as it is.
++  if (GdkIsX11Display() && aMonitor == 0) {
++    auto width = MaskConfig::GetUint32("screen.width");
++    auto height = MaskConfig::GetUint32("screen.height");
++    const double prefScale = StaticPrefs::layout_css_devPixelsPerPx();
++    const double scale = prefScale > 0.0 ? prefScale : geometryScaleFactor;
++    if (width && *width && height && *height) {
++      const int32_t w = NSToIntRound(*width * scale);
++      const int32_t h = NSToIntRound(*height * scale);
++      if (rect.width < w || rect.height < h) {
++        rect = LayoutDeviceIntRect(0, 0, w, h);
++        auto avail = MaskConfig::GetRect("screen.availLeft", "screen.availTop",
++                                         "screen.availWidth",
++                                         "screen.availHeight");
++        availRect =
++            avail ? LayoutDeviceIntRect(NSToIntRound((*avail)[0] * scale),
++                                        NSToIntRound((*avail)[1] * scale),
++                                        NSToIntRound((*avail)[2] * scale),
++                                        NSToIntRound((*avail)[3] * scale))
++                        .Intersect(rect)
++                  : rect;
++        LOG_SCREEN("  X screen smaller than the claimed one: [%d x %d]", w, h);
++      }
++    }
++  }
++
+   if (!rect.width || !rect.height) {
+     NS_WARNING("Reporting screen with zero size!");
+   }

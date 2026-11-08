@@ -41,18 +41,47 @@ diff --git a/docshell/base/BrowsingContext.cpp b/docshell/base/BrowsingContext.c
 index 5da611e913..d63498919d 100644
 --- a/docshell/base/BrowsingContext.cpp
 +++ b/docshell/base/BrowsingContext.cpp
-@@ -4398,6 +4398,18 @@ bool BrowsingContext::IsPopupAllowed() {
+@@ -7,6 +7,7 @@
+ #include "ipc/IPCMessageUtils.h"
+ #include "mozilla/GfxMessageUtils.h"
+ 
++#include "jsapi.h"
+ #ifdef ACCESSIBILITY
+ #  include "mozilla/a11y/DocAccessibleParent.h"
+ #  include "mozilla/a11y/Platform.h"
+@@ -4395,11 +4395,39 @@ void BrowsingContext::DidSet(FieldIndex<IDX_IsOffline>, bool aOldValue) {
+ }
+ 
++// Camoufox: whether the code calling into the DOM right now is the driver's
++// own (see IsPopupAllowed below).
++static bool IsDriverScriptedCaller() {
++  JSContext* cx = nsContentUtils::GetCurrentJSContext();
++  JS::AutoFilename filename;
++  return cx && JS::DescribeScriptedCaller(&filename, cx) && filename.get() &&
++         StringBeginsWith(nsDependentCString(filename.get()),
++                          "debugger eval code"_ns);
++}
++
+ bool BrowsingContext::IsPopupAllowed() {
+   for (auto* context = GetCurrentWindowContext(); context;
+        context = context->GetParentWindowContext()) {
      if (context->CanShowPopup()) {
        return true;
      }
 +    // Camoufox: an explicit driver evaluate opens popups the way handling user
 +    // input does, without granting the document a user-gesture activation.
 +    // See nsIDocShell::driverPopupsAllowed; the flag is only ever set around a
-+    // juggler Runtime.evaluate / Runtime.callFunction, so page scripts never
-+    // see it and the popup blocker stays at Firefox's default for them.
++    // juggler Runtime.evaluate / Runtime.callFunction. It counts only when the
++    // driver's own code is the one calling: page code the evaluate reaches (a
++    // getter, a Proxy trap, a toJSON) runs while the flag is set too, and must
++    // meet the popup blocker exactly as it would on stock. Driver code is the
++    // only code compiled as "debugger eval code" (Debugger executeInGlobal's
++    // name, which //# sourceURL cannot set); an eval inside it is
++    // "debugger eval code line N > eval".
 +    if (BrowsingContext* bc = context->GetBrowsingContext()) {
 +      if (nsIDocShell* shell = bc->GetDocShell()) {
-+        if (nsDocShell::Cast(shell)->DriverPopupsAllowed()) {
++        if (nsDocShell::Cast(shell)->DriverPopupsAllowed() &&
++            IsDriverScriptedCaller()) {
 +          return true;
 +        }
 +      }
