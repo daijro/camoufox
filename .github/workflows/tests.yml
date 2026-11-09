@@ -83,7 +83,7 @@ on:
         required: false
         type: string
       ubo:
-        description: "The uBlock Origin release to bundle, as browser/scripts/fetch-ubo.py resolves it; default AMO's newest"
+        description: "The uBlock Origin release to bundle, as browser/scripts/fetch-ubo.py resolves it; default the committed pin (browser/scripts/data/ubo.json)"
         required: false
         type: string
     secrets:

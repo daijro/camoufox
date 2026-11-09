@@ -271,6 +271,17 @@ rules:
       except_paths: ["python/pyproject.toml"]
       allowed_forms: ["-e ../../../python", "-e ./python", "-e python"]
 
+  - id: ubo-release-pinned
+    title: The bundled uBlock Origin is a committed pin, never AMO's newest
+    check: manual   # ci/tests/test_fetch_ubo.py, browser/tests/playwright/patches/main-world-eval-globals.py
+    evidence:
+      - "2026-11-09: uBO 1.76.0 (AMO's newest mid-sync) put RegExp after URL in the global order of every tab after the first; stock 158, no uBO and uBO 1.75.4 keep it after Number in every tab and window"
+    rationale: >-
+      uBO runs in every page, so a uBO release can change what a page observes.
+      fetch-ubo.py resolve reads browser/scripts/data/ubo.json; `newest` prints
+      AMO's latest as a candidate. A bump is a commit, made after the stock
+      parity and automation guards pass with it.
+
   # -------------------------------------------------------------------------
   # Measurement
   # -------------------------------------------------------------------------
