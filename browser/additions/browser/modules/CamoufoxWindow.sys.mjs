@@ -14,7 +14,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 // Default-branch prefs are never written to prefs.js, so they reset every launch.
-const ADDONS_INSTALLED_PREF = "camoufox.addons.installed";
 const CERTS_IMPORTED_PREF = "camoufox.certificates.imported";
 
 function debug(msg) {
@@ -72,14 +71,12 @@ async function installTemporaryAddon(addonPath) {
   return addon;
 }
 
+// Resolves once every addon's background has registered its listeners, which
+// for uBO means every request after it is filtered.
+let addonsInstalled = null;
+
 function installAddons() {
-  const addonPaths = ChromeUtils.camouGetStringList("addons");
-  if (!addonPaths?.length || !onceThisLaunch(ADDONS_INSTALLED_PREF)) {
-    return;
-  }
-  Promise.all(addonPaths.map(installTemporaryAddon))
-    .then(addons => debug("Installed " + addons.length + " addon(s)"))
-    .catch(e => debug("Failed to install addons: " + e));
+  addonsInstalled = Promise.all((ChromeUtils.camouGetStringList("addons") ?? []).map(installTemporaryAddon));
 }
 
 function importCertificates() {
@@ -332,6 +329,16 @@ function applyAcceptLanguages() {
 export const CamoufoxWindow = {
   onStartup() {
     applyAcceptLanguages();
+    installAddons();
+  },
+
+  // Juggler awaits this before it opens a page: Playwright starts the browser
+  // with no window, so a page opened sooner is loaded before uBO filters it.
+  addonsInstalled() {
+    if (!addonsInstalled) {
+      throw new Error("addons awaited before browser-before-ui-startup");
+    }
+    return addonsInstalled;
   },
 
   // Called from gBrowserInit.onLoad() with the window. The category's jsGlobal
@@ -344,7 +351,6 @@ export const CamoufoxWindow = {
         debug(`CamoufoxWindow ${step.name} failed: ${e}`);
       }
     }
-    installAddons();
     importCertificates();
   },
 };

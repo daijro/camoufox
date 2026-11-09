@@ -10,6 +10,7 @@ const {TargetRegistry} = ChromeUtils.importESModule("resource://gre/modules/jugg
 const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 const {PageHandler} = ChromeUtils.importESModule("resource://gre/modules/juggler/protocol/PageHandler.js");
 const {AppConstants} = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
+const {CamoufoxWindow} = ChromeUtils.importESModule("resource:///modules/CamoufoxWindow.sys.mjs");
 
 const helper = new Helper();
 
@@ -31,6 +32,7 @@ export class BrowserHandler {
     if (this._enabled)
       return;
     await this._startCompletePromise;
+    await CamoufoxWindow.addonsInstalled();
     this._enabled = true;
     this._attachToDefaultContext = attachToDefaultContext;
 

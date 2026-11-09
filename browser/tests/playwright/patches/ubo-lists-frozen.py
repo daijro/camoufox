@@ -10,13 +10,12 @@ seconds otherwise. Every launch is a fresh profile, so that was about 2.7 MB
 through the user's proxy per launch, and blocking that depended on the day.
 
 The browser runs through a local proxy that records each CONNECT and refuses
-it, so the guard needs no network. Camoufox installs uBO after the first window
-has loaded, so the guard reloads a local page with an ad script until uBO
-blocks it. The proxy records a CONNECT before refusing it, and the page's load
-event waits for the refused script, so each load's verdict is settled when it
-returns.
+it, so the guard needs no network. The proxy records a CONNECT before refusing
+it, and the page's load event waits for the refused script, so the load's
+verdict is settled when it returns.
 
-    active   uBO blocks the ad script within READY_S of launch
+    active   uBO blocks the ad script on the launch's first page: Juggler
+             starts no page before uBO's request listeners exist
     control  the page's ordinary image host is requested (the proxy sees traffic)
     frozen   no host uBO fetches lists from (its assets.json) is contacted
              from launch until WAIT_S after uBO first blocks
@@ -42,7 +41,6 @@ from helpers import resolve_binary  # noqa: E402
 # Past uBO's 37-second scheduled update, with room for its 5-second spacing
 # between list fetches.
 WAIT_S = 50
-READY_S = 60
 AD_HOST = "pagead2.googlesyndication.com"
 CONTROL_HOST = "example.com"
 AD_PAGE = (f'<!doctype html><script src="https://{AD_HOST}/pagead/js/adsbygoogle.js"></script>'
@@ -116,13 +114,9 @@ def main() -> int:
         # lookup a proxied launch makes would fail, and location is not tested here.
         with Camoufox(headless=True, executable_path=str(binary), i_know_what_im_doing=True, geoip=False,
                       proxy={"server": f"http://127.0.0.1:{proxy.getsockname()[1]}"}) as browser:
-            page = browser.new_page()
-            deadline = time.monotonic() + READY_S
-            while not blocks_ad(page, f"{base}/ad.html", hosts):
-                if time.monotonic() > deadline:
-                    print(f"FAIL: uBO did not block {AD_HOST} within {READY_S}s -- check is vacuous")
-                    return 1
-                time.sleep(1)
+            if not blocks_ad(browser.new_page(), f"{base}/ad.html", hosts):
+                print(f"FAIL: uBO did not block {AD_HOST} on the first page of the launch")
+                return 1
             time.sleep(WAIT_S)
     finally:
         proxy.close()
