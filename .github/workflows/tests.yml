@@ -270,11 +270,7 @@ jobs:
       # assert against it. It is a pure-Python install; no browser involved.
       - run: |
           pip install -r ci/requirements.txt pytest -e python
-          # fpgen downloads its model on first import with TLS verification
-          # OFF and no checksum, and its release picker can only ever reach the
-          # April-2025 model. Install the pinned one first: see
-          # python/scripts/pin-fpgen-model.py.
-          python3 python/scripts/pin-fpgen-model.py
+      - uses: ./.github/actions/fpgen-model
 
       - name: Synthesized input goes through one chokepoint
         run: python3 browser/scripts/check-input-dispatch.py
@@ -353,11 +349,7 @@ jobs:
           # The geoip extra: python/tests/test_geoip_sources.py downloads every GeoIP
           # source and fails when one stops publishing, which gates releases.
           pip install -r ci/requirements.txt pytest -e 'python[geoip]'
-          # fpgen downloads its model on first import with TLS verification
-          # OFF and no checksum, and its release picker can only ever reach the
-          # April-2025 model. Install the pinned one first: see
-          # python/scripts/pin-fpgen-model.py.
-          python3 python/scripts/pin-fpgen-model.py
+      - uses: ./.github/actions/fpgen-model
       - name: Run
         # pythonlib resolves the published release through the GitHub API
         # (pkgman.py honours GITHUB_TOKEN). Unauthenticated, a runner shares the
@@ -405,11 +397,9 @@ jobs:
           # fixtures from its pythonlib before the suite runs.
           python3 -m venv .venv
           .venv/bin/pip install -r ci/requirements.txt -e python
-          # fpgen downloads its model on first import with TLS verification
-          # OFF and no checksum, and its release picker can only ever reach the
-          # April-2025 model. Install the pinned one first: see
-          # python/scripts/pin-fpgen-model.py.
-          .venv/bin/python python/scripts/pin-fpgen-model.py
+      - uses: ./.github/actions/fpgen-model
+        with:
+          python: .venv/bin/python
       - name: Test prerequisites
         # Everything tests/prereq.ts may ask for. In CI a missing prerequisite
         # FAILS its tests rather than skipping them, so this list is the job's
@@ -780,11 +770,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
           pip install -r ci/requirements.txt -e python
-          # fpgen downloads its model on first import with TLS verification
-          # OFF and no checksum, and its release picker can only ever reach the
-          # April-2025 model. Install the pinned one first: see
-          # python/scripts/pin-fpgen-model.py.
-          python3 python/scripts/pin-fpgen-model.py
+      - uses: ./.github/actions/fpgen-model
 
       - name: Download
         # Same GitHub API path as the pythonlib job above, and the same anonymous
@@ -929,11 +915,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
           pip install -e python
-          # fpgen downloads its model on first import with TLS verification
-          # OFF and no checksum, and its release picker can only ever reach the
-          # April-2025 model. Install the pinned one first: see
-          # python/scripts/pin-fpgen-model.py.
-          python3 python/scripts/pin-fpgen-model.py
+      - uses: ./.github/actions/fpgen-model
       # Fonts and properties.json are staged into the artifact by the build job;
       # `make stage-fonts` here would find no source tree and do nothing.
       # ipv4-only-network.py builds its test network in an unprivileged user
@@ -989,13 +971,10 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
           cd browser/tests/build-tester && npm install && pip install -r requirements.txt
-          # build-tester pulls pythonlib -- and so fpgen -- through its own
-          # requirements.txt (`-e ../../../python`) rather than `pip install -e
-          # python`, so the pin the other jobs get by matching that line has
-          # to be spelled out here. Without it this job was still downloading
-          # fpgen's model itself: TLS verification off, no checksum, and only
-          # ever the April-2025 release (observed in run 36050915401).
-          python3 "$GITHUB_WORKSPACE/python/scripts/pin-fpgen-model.py"
+      # build-tester installs pythonlib through its own requirements.txt
+      # (`-e ../../../python`), and still needs the pin before fpgen loads
+      # (observed downloading the April-2025 model in run 36050915401).
+      - uses: ./.github/actions/fpgen-model
       - run: xvfb-run -a python3 -m ci.run_build_tester --binary "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -1035,11 +1014,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
           pip install -e python
-          # fpgen downloads its model on first import with TLS verification
-          # OFF and no checksum, and its release picker can only ever reach the
-          # April-2025 model. Install the pinned one first: see
-          # python/scripts/pin-fpgen-model.py.
-          python3 python/scripts/pin-fpgen-model.py
+      - uses: ./.github/actions/fpgen-model
       - name: Run
         # Launches browsers, kills them, and proves nothing survived -- the
         # failure a long-running scraper hits after six hours and no Playwright
@@ -1102,11 +1077,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
           pip install -e python
-          # fpgen downloads its model on first import with TLS verification
-          # OFF and no checksum, and its release picker can only ever reach the
-          # April-2025 model. Install the pinned one first: see
-          # python/scripts/pin-fpgen-model.py.
-          python3 python/scripts/pin-fpgen-model.py
+      - uses: ./.github/actions/fpgen-model
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: typescript/package.json
@@ -1163,11 +1134,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
           pip install -e python
-          # fpgen downloads its model on first import with TLS verification
-          # OFF and no checksum, and its release picker can only ever reach the
-          # April-2025 model. Install the pinned one first: see
-          # python/scripts/pin-fpgen-model.py.
-          python3 python/scripts/pin-fpgen-model.py
+      - uses: ./.github/actions/fpgen-model
       - run: xvfb-run -a python3 -m ci.run_native --subset growth --shard "${{ matrix.shard }}" --binary "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -1196,11 +1163,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: |
           pip install -e python
-          # fpgen downloads its model on first import with TLS verification
-          # OFF and no checksum, and its release picker can only ever reach the
-          # April-2025 model. Install the pinned one first: see
-          # python/scripts/pin-fpgen-model.py.
-          python3 python/scripts/pin-fpgen-model.py
+      - uses: ./.github/actions/fpgen-model
       - name: Run
         # Exits 0 with a SKIP result if sundial itself is unreachable -- the
         # browser was never measured, so neither a pass nor a failure would be
