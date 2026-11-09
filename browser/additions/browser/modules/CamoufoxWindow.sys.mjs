@@ -243,7 +243,12 @@ function applyWindowSize(win) {
     }
     if (win.windowState === win.STATE_MAXIMIZED) {
       win.restore();
-    } else if (held && held[0] === win.outerWidth && held[1] === win.outerHeight) {
+    } else if (held && held[0] === win.outerWidth && held[1] === win.outerHeight &&
+               !misfit().some(Boolean)) {
+      // The window being at the held size is not enough: the toolbars can
+      // reflow after it got there (84px to 72px tall, a few hundred ms in, on
+      // a loaded host) with no resize event, which left the content area
+      // 12px too tall for the rest of the launch.
       unpin();
       return;
     }
