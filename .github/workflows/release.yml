@@ -72,9 +72,9 @@ env:
 jobs:
   # ---------------------------------------------------------------------------
   ubo:
-    # The uBlock Origin release every package bundles: AMO's newest, resolved
-    # once, so the tests below and every build in the matrix use the same one
-    # even when uBO publishes a release mid-run.
+    # The uBlock Origin release every package bundles, the pin in
+    # browser/scripts/data/ubo.json, read once so the tests below and every
+    # build in the matrix use the same one.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     permissions:

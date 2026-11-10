@@ -230,7 +230,7 @@ def add_includes_to_package(package_file, includes, fonts, new_file, target, ver
         inject_locales(target_dir, target, version, src_dir)
 
         # uBlock Origin, which both launchers load from addons/UBO/ beside the
-        # binary: AMO's newest, or the release's pin in CAMOUFOX_UBO.
+        # binary: the pin in data/ubo.json, or the release's in CAMOUFOX_UBO.
         run(join([sys.executable, os.path.join('scripts', 'fetch-ubo.py'), 'stage', target_dir]))
 
         # Remove unneeded paths
