@@ -1,0 +1,281 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: "PMono"; src: url(DejaVuSansMono.woff); }
+@font-face { font-family: "PVar"; src: url(VotoSerifGX.latin1.ttf); }
+#lay { position: absolute; left: 0; top: 0; width: 517.3px; }
+#lay div { font-family: PMono; }
+#lay .v { font-family: PVar; }
+</style>
+<body>
+<div id="lay"></div>
+<svg id="svg" width="300" height="200" xmlns="http://www.w3.org/2000/svg">
+  <path id="p1" d="M 3.3 7.7 C 40.1 180.9 120.7 -60.2 210.5 90.3 S 280 190 297 13" fill="none" stroke="black"/>
+  <path id="p2" d="M 10 100 A 63.7 41.3 23.9 1 1 190.2 120.4 Q 240 10 290 150" fill="none" stroke="black"/>
+  <text id="t1" x="5.5" y="180.25" font-family="PMono" font-size="13.37" rotate="3 7 11">Fingerprint 0123</text>
+  <text id="t2" x="5.5" y="195.25" font-family="PVar" font-size="12.9" style="font-variation-settings: 'wght' 637.3">Variable Weights</text>
+</svg>
+<script>
+"use strict";
+const out = {};
+const fnv = (d) => { let h = 0x811c9dc5; for (let i = 0; i < d.length; i++) { h ^= d[i] & 255; h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, "0"); };
+const fnvF64 = (arr) => fnv(new Uint8Array(new Float64Array(arr).buffer));
+// NaN payload bits are their own vector (key "nan"); hash values with NaN as one canonical value.
+const fnvVal = (arr) => fnvF64(arr.map(x => Number.isNaN(x) ? 0.123456789 : x));
+const fnvF32 = (arr) => fnv(new Uint8Array(new Float32Array(arr).buffer));
+let seed = 12345; const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0);
+const rf = () => rnd() / 4294967296;
+const step = async (name, fn) => { try { await fn(); } catch (e) { out[name + ".error"] = String(e).slice(0, 200); } };
+
+// ---------- Math.* ----------
+function mathInputs() {
+  const xs = [];
+  for (let i = 0; i < 4000; i++) {
+    const m = rf() * 2 - 1, e = Math.floor(rf() * 80) - 40;
+    xs.push(m * Math.pow(2, e));
+  }
+  for (let i = 0; i < 500; i++) xs.push((rf() - 0.5) * 2e6, (rf() - 0.5) * 1e22, rf() * 710, -rf() * 745, 1 + (rf() - 0.5) * 1e-6);
+  xs.push(0, -0, 1, -1, Math.PI, Math.E, 1e300, -1e300, 5e-324, 0.5, 2, 709.78, -708.4, Infinity, -Infinity, NaN);
+  return xs;
+}
+function mathTests() {
+  const xs = mathInputs();
+  const unary = ["sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+    "exp", "expm1", "log", "log1p", "log2", "log10", "cbrt", "sqrt", "fround", "round", "trunc", "sign", "clz32"];
+  for (const f of unary) out["math." + f] = fnvVal(xs.map(x => Math[f](x)));
+  const ys = xs.map(() => (rf() - 0.5) * 20);
+  out["math.pow"] = fnvVal(xs.map((x, i) => Math.pow(Math.abs(x), ys[i])));
+  out["math.atan2"] = fnvVal(xs.map((x, i) => Math.atan2(x, ys[i])));
+  out["math.hypot"] = fnvVal(xs.map((x, i) => Math.hypot(x, ys[i], x * 0.37)));
+  out["math.imul_div_mod"] = fnvVal(xs.map((x, i) => (x / ys[i]) + (x % ys[i])));
+  out["math.toString"] = fnv(Array.from(new TextEncoder().encode(xs.slice(0, 600).map(x => x.toString() + x.toExponential(7) + x.toFixed(3)).join())));
+  out["math.parseFloat"] = fnvVal(["0.1", "1e-320", "2.2250738585072011e-308", "123456789012345678901234567890", "0.30000000000000004"].map(parseFloat));
+}
+
+// ---------- DOMMatrix / geometry (C++ double math) ----------
+function matrixTests() {
+  const res = [];
+  for (let i = 0; i < 300; i++) {
+    const m = new DOMMatrix().translate(rf() * 100, rf() * 100, rf() * 50).rotate(rf() * 360, rf() * 360, rf() * 360)
+      .scale(0.5 + rf(), 0.5 + rf(), 0.5 + rf()).skewX(rf() * 30).multiply(new DOMMatrix([1, rf() * 0.01, 0, 0, 0, 1, 0, rf() * 0.003, 0, 0, 1, 0, 0, 0, 0, 1]));
+    const inv = m.inverse();
+    const p = m.transformPoint(new DOMPoint(rf() * 300, rf() * 300, rf() * 30, 1));
+    res.push(...m.toFloat64Array(), ...inv.toFloat64Array(), p.x, p.y, p.z, p.w);
+    const r = m.rotateAxisAngle(rf(), rf(), rf(), rf() * 180);
+    res.push(...r.toFloat64Array());
+  }
+  out["dommatrix"] = fnvF64(res);
+  const q = DOMQuad.fromRect({ x: 1.5, y: 2.25, width: 33.3, height: 44.4 });
+  out["domquad"] = fnvF64([q.getBounds().width, q.p3.x]);
+}
+
+// ---------- layout / text / SVG ----------
+async function layoutTests() {
+  await document.fonts.load("16px PMono"); await document.fonts.load("16px PVar");
+  const lay = document.getElementById("lay");
+  const texts = ["The quick brown fox jumps over the lazy dog 0123456789", "WAVATAYa  ffi fl, ;:!?", "iiiiiiiiiilllllllmmmmmmmmm"];
+  for (let i = 0; i < 40; i++) {
+    const d = document.createElement("div");
+    if (i % 2) d.className = "v";
+    d.textContent = texts[i % 3];
+    d.style.fontSize = (9 + rf() * 20).toFixed(3) + "px";
+    d.style.letterSpacing = (rf() * 2 - 0.5).toFixed(3) + "px";
+    d.style.wordSpacing = (rf() * 3).toFixed(3) + "px";
+    d.style.lineHeight = (1 + rf()).toFixed(3);
+    if (i % 2) d.style.fontVariationSettings = `'wght' ${(100 + rf() * 800).toFixed(2)}`;
+    if (i % 5 === 0) d.style.transform = `rotate(${(rf() * 40).toFixed(3)}deg) skewX(${(rf() * 10).toFixed(2)}deg) scale(${(0.7 + rf() * 0.6).toFixed(4)})`;
+    if (i % 7 === 0) d.style.transform = `perspective(${(200 + rf() * 400).toFixed(1)}px) rotateY(${(rf() * 50).toFixed(2)}deg)`;
+    lay.appendChild(d);
+  }
+  const rects = [];
+  for (const d of lay.children) {
+    const r = d.getBoundingClientRect(); rects.push(r.x, r.y, r.width, r.height);
+    const range = document.createRange(); range.selectNodeContents(d);
+    for (const cr of range.getClientRects()) rects.push(cr.x, cr.y, cr.width, cr.height);
+  }
+  out["layout.rects"] = fnvF64(rects);
+  out["layout.rects.n"] = rects.length;
+  const svg = [];
+  for (const id of ["p1", "p2"]) {
+    const p = document.getElementById(id); const len = p.getTotalLength(); svg.push(len);
+    for (let k = 0; k <= 50; k++) { const pt = p.getPointAtLength(len * k / 50); svg.push(pt.x, pt.y); }
+    const b = p.getBBox(); svg.push(b.x, b.y, b.width, b.height);
+    svg.push(p.isPointInFill(new DOMPoint(150, 80)) ? 1 : 0);
+  }
+  for (const id of ["t1", "t2"]) {
+    const t = document.getElementById(id); svg.push(t.getComputedTextLength());
+    const b = t.getBBox(); svg.push(b.x, b.y, b.width, b.height);
+    for (let k = 0; k < t.getNumberOfChars(); k++) { const e = t.getExtentOfChar(k); svg.push(e.x, e.y, e.width, e.height, t.getRotationOfChar(k)); }
+  }
+  out["layout.svg"] = fnvF64(svg);
+}
+
+// ---------- canvas ----------
+const W = 96, H = 64;
+function base(ctx) {
+  const g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, "rgb(250,30,90)"); g.addColorStop(0.5, "rgb(40,200,120)"); g.addColorStop(1, "rgb(20,60,240)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+function over(ctx) {
+  const g = ctx.createLinearGradient(W, 0, 0, H);
+  g.addColorStop(0, "rgba(255,220,0,0.8)"); g.addColorStop(1, "rgba(0,120,255,0.55)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+function canvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return [c, c.getContext("2d", { willReadFrequently: true })]; }
+function canvasTests() {
+  for (const op of ["source-over", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color", "luminosity", "xor", "lighter"]) {
+    const [c, ctx] = canvas(W, H);
+    base(ctx); ctx.globalCompositeOperation = op; over(ctx);
+    out["canvas.blend." + op] = fnv(ctx.getImageData(0, 0, W, H).data);
+  }
+  const [c, ctx] = canvas(220, 160);
+  const rg = ctx.createRadialGradient(70, 60, 5, 90, 80, 90);
+  rg.addColorStop(0, "#f0a"); rg.addColorStop(0.37, "rgba(10,200,250,0.7)"); rg.addColorStop(1, "#204");
+  ctx.fillStyle = rg; ctx.fillRect(0, 0, 220, 160);
+  out["canvas.radial"] = fnv(ctx.getImageData(0, 0, 220, 160).data);
+  const cg = ctx.createConicGradient(1.1, 110, 80); cg.addColorStop(0, "red"); cg.addColorStop(0.5, "lime"); cg.addColorStop(1, "blue");
+  ctx.fillStyle = cg; ctx.fillRect(0, 0, 220, 160);
+  out["canvas.conic"] = fnv(ctx.getImageData(0, 0, 220, 160).data);
+  ctx.clearRect(0, 0, 220, 160);
+  ctx.setTransform(1.13, 0.31, -0.27, 0.91, 13.7, 4.2);
+  ctx.lineWidth = 3.7; ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(20,30,200,0.8)";
+  ctx.beginPath(); ctx.moveTo(10, 10); ctx.bezierCurveTo(60, 150, 120, -40, 190, 100); ctx.arc(120, 70, 33.3, 0.3, 4.9); ctx.quadraticCurveTo(10, 140, 30, 20); ctx.stroke();
+  ctx.shadowBlur = 7.5; ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowOffsetX = 3.3;
+  ctx.fillStyle = "#a40"; ctx.beginPath(); ctx.ellipse(100, 90, 40.5, 17.25, 0.6, 0, 6); ctx.fill();
+  out["canvas.paths"] = fnv(ctx.getImageData(0, 0, 220, 160).data);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.shadowBlur = 0; ctx.clearRect(0, 0, 220, 160);
+  ctx.filter = "blur(2.7px) saturate(1.7) hue-rotate(33deg)"; base(ctx); over(ctx); ctx.filter = "none";
+  out["canvas.filter"] = fnv(ctx.getImageData(0, 0, 220, 160).data);
+  const [s, sctx] = canvas(23, 17); base(sctx); over(sctx);
+  for (const q of ["low", "medium", "high"]) {
+    ctx.clearRect(0, 0, 220, 160); ctx.imageSmoothingQuality = q; ctx.setTransform(1, 0.2, -0.1, 1, 5, 3);
+    ctx.drawImage(s, 0, 0, 200.5, 140.3); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    out["canvas.drawImage." + q] = fnv(ctx.getImageData(0, 0, 220, 160).data);
+  }
+  ctx.clearRect(0, 0, 220, 160);
+  ctx.font = "17.3px PMono"; ctx.fillStyle = "#123"; ctx.fillText("Fingerprint ÅgŴ 0123", 4.3, 30.6);
+  ctx.font = "21px PVar"; ctx.fillText("Variable font", 4.3, 70.6);
+  ctx.rotate(0.21); ctx.font = "13px PMono"; ctx.fillText("rotated text 42", 30, 100);
+  out["canvas.text"] = fnv(ctx.getImageData(0, 0, 220, 160).data);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.font = "17.3px PMono";
+  const m = ctx.measureText("Fingerprint ÅgŴ 0123");
+  out["canvas.measureText"] = fnvF64([m.width, m.actualBoundingBoxLeft, m.actualBoundingBoxRight, m.actualBoundingBoxAscent, m.actualBoundingBoxDescent]);
+  const p = new Path2D("M 3 3 C 40 180 120 -60 210 90"); out["canvas.isPointInStroke"] = [ctx.isPointInStroke(p, 60, 60), ctx.isPointInPath(p, 100, 40)].join();
+}
+
+// ---------- WebGL ----------
+function webglTests() {
+  const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+  const gl = c.getContext("webgl2", { preserveDrawingBuffer: true, antialias: false });
+  if (!gl) { out["webgl"] = "none"; return; }
+  const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+  out["webgl.renderer"] = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  const vs = `#version 300 es
+in vec2 p; out vec2 uv; void main(){ uv = p*0.5+0.5; gl_Position = vec4(p,0,1); }`;
+  const fs = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+void main(){ float a = sin(uv.x*37.1)*exp(uv.y*2.3) + pow(uv.x+0.01, 3.7) + inversesqrt(uv.y+0.02) + atan(uv.x, uv.y+0.1) + log2(uv.x+1.3);
+ o = vec4(fract(a), fract(a*7.3), fract(sqrt(a*a+1.0)*13.1), 1.0); }`;
+  const prog = gl.createProgram();
+  for (const [t, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) { const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s); gl.attachShader(prog, s); }
+  gl.linkProgram(prog); gl.useProgram(prog);
+  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  const px = new Uint8Array(64 * 64 * 4); gl.readPixels(0, 0, 64, 64, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  out["webgl.shader"] = fnv(px);
+}
+
+// ---------- NaN + WASM relaxed SIMD ----------
+async function wasmTests() {
+  const f = new Float32Array(2), u = new Uint8Array(f.buffer); f[0] = Infinity; f[0] = f[0] - f[0]; f[1] = 0 / 0;
+  const d = new Float64Array(1), du = new Uint8Array(d.buffer); d[0] = Infinity; d[0] = d[0] - d[0];
+  out["nan"] = Array.from(u).concat(Array.from(du)).map(x => x.toString(16)).join(",");
+  const b64 = await (await fetch("relaxed.b64")).text();
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const inst = new WebAssembly.Instance(new WebAssembly.Module(bytes));
+  const mem = new Uint8Array(inst.exports.mem.buffer), f32 = new Float32Array(inst.exports.mem.buffer);
+  for (const name of Object.keys(inst.exports).filter(k => k !== "mem")) {
+    const acc = [];
+    for (let t = 0; t < 64; t++) {
+      if (t === 0) f32.set([1 + 2 ** -12, NaN, 3e9, -0, 1 + 2 ** -12, 0, -3e9, 0, -1, 0, NaN, 0]);
+      else if (t === 1) for (let i = 0; i < 48; i++) mem[i] = [0x80, 0x10, 0x1f, 0x8f, 0x7f, 0xff, 0x00, 0x01][i % 8];
+      else for (let i = 0; i < 48; i++) mem[i] = rnd() >>> 24;
+      inst.exports[name](); acc.push(...mem.slice(48, 64));
+    }
+    out["wasm.relaxed." + name] = fnv(acc);
+  }
+}
+
+// ---------- Web Audio ----------
+async function render(build, len = 44100, rate = 44100, ch = 1) {
+  const ctx = new OfflineAudioContext(ch, len, rate); build(ctx); const buf = await ctx.startRendering();
+  const parts = []; for (let i = 0; i < ch; i++) parts.push(...buf.getChannelData(i)); return fnvF32(parts);
+}
+async function audioTests() {
+  out["audio.osc_comp"] = await render((c) => { const o = c.createOscillator(); o.type = "triangle"; o.frequency.value = 10000;
+    const k = c.createDynamicsCompressor(); k.threshold.value = -50; k.knee.value = 40; k.ratio.value = 12; k.attack.value = 0; k.release.value = 0.25;
+    o.connect(k); k.connect(c.destination); o.start(0); });
+  for (const type of ["sine", "square", "sawtooth"]) out["audio.osc." + type] = await render((c) => { const o = c.createOscillator(); o.type = type; o.frequency.value = 1234.5; o.frequency.linearRampToValueAtTime(4321, 0.9); o.connect(c.destination); o.start(0); }, 22050);
+  out["audio.periodic"] = await render((c) => { const o = c.createOscillator(); o.setPeriodicWave(c.createPeriodicWave(new Float32Array([0, 0.3, 0.1, 0.7]), new Float32Array([0, 0.2, 0.5, 0.05]))); o.connect(c.destination); o.start(0); }, 22050);
+  for (const type of ["lowpass", "peaking", "allpass"]) out["audio.biquad." + type] = await render((c) => { const o = c.createOscillator(); o.type = "sawtooth"; o.frequency.value = 220;
+    const f = c.createBiquadFilter(); f.type = type; f.frequency.value = 1500; f.Q.value = 7.3; f.gain.value = 6; o.connect(f); f.connect(c.destination); o.start(0); }, 22050);
+  out["audio.iir"] = await render((c) => { const o = c.createOscillator(); o.type = "square"; const f = c.createIIRFilter([0.1, 0.2, 0.1], [1, -1.2, 0.5]); o.connect(f); f.connect(c.destination); o.start(0); }, 22050);
+  out["audio.convolver"] = await render((c) => { const o = c.createOscillator(); o.type = "sawtooth"; const v = c.createConvolver(); const ir = c.createBuffer(2, 2048, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] = (rf() * 2 - 1) * Math.exp(-i / 300); }
+    v.buffer = ir; o.connect(v); v.connect(c.destination); o.start(0); }, 22050, 44100, 2);
+  out["audio.panner_hrtf"] = await render((c) => { const o = c.createOscillator(); const p = c.createPanner(); p.panningModel = "HRTF"; p.positionX.value = 1.3; p.positionZ.value = -0.7;
+    o.connect(p); p.connect(c.destination); o.start(0); }, 22050, 44100, 2);
+  out["audio.waveshaper"] = await render((c) => { const o = c.createOscillator(); const w = c.createWaveShaper(); const curve = new Float32Array(257); for (let i = 0; i < 257; i++) curve[i] = Math.tanh((i - 128) / 40); w.curve = curve; w.oversample = "4x"; o.connect(w); w.connect(c.destination); o.start(0); }, 22050);
+}
+
+// ---------- encoders ----------
+async function audioEncode(codec, extra = {}) {
+  const chunks = []; let err = null;
+  const enc = new AudioEncoder({ output: (c) => { const b = new Uint8Array(c.byteLength); c.copyTo(b); chunks.push(...b); }, error: (e) => { err = e; } });
+  const cfg = { codec, sampleRate: 48000, numberOfChannels: 1, bitrate: 64000, ...extra };
+  const sup = await AudioEncoder.isConfigSupported(cfg); if (!sup.supported) return "unsupported";
+  enc.configure(cfg);
+  const n = 48000, s = new Float32Array(n); let ph = 0; seed = 777;
+  for (let i = 0; i < n; i++) { ph = (ph + 37 + (i >> 9)) & 1023; const tri = (ph < 512 ? ph : 1023 - ph) - 256; s[i] = tri / 512 * 0.6 + ((rnd() >>> 20) - 2048) / 2048 * 0.05; }
+  for (let off = 0; off < n; off += 960) enc.encode(new AudioData({ format: "f32", sampleRate: 48000, numberOfFrames: 960, numberOfChannels: 1, timestamp: off * 1e6 / 48000 | 0, data: s.subarray(off, off + 960) }));
+  await enc.flush(); enc.close();
+  return err ? "error:" + err : fnv(chunks) + "/" + chunks.length;
+}
+async function videoEncode(codec) {
+  const cfg = { codec, width: 128, height: 96, bitrate: 300000, framerate: 30, hardwareAcceleration: "prefer-software", latencyMode: "quality" };
+  const sup = await VideoEncoder.isConfigSupported(cfg); if (!sup.supported) return "unsupported";
+  const chunks = []; let err = null;
+  const enc = new VideoEncoder({ output: (c) => { const b = new Uint8Array(c.byteLength); c.copyTo(b); chunks.push(...b); }, error: (e) => { err = e; } });
+  enc.configure(cfg);
+  const px = new Uint8Array(128 * 96 * 4);
+  for (let f = 0; f < 12; f++) {
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 128; x++) { const i = (y * 128 + x) * 4; px[i] = (x * 2 + f * 9) & 255; px[i + 1] = (y * 3 + ((x * y + f) & 31)) & 255; px[i + 2] = ((x ^ y) + f * 17) & 255; px[i + 3] = 255; }
+    const fr = new VideoFrame(px, { format: "RGBA", codedWidth: 128, codedHeight: 96, timestamp: f * 33333 });
+    enc.encode(fr, { keyFrame: f === 0 }); fr.close();
+  }
+  await enc.flush(); enc.close();
+  return err ? "error:" + err : fnv(chunks) + "/" + chunks.length;
+}
+async function codecTests() {
+  out["codec.opus"] = await audioEncode("opus");
+  out["codec.opus.voip"] = await audioEncode("opus", { opus: { application: "voip", complexity: 10 } });
+  for (const c of ["flac", "vorbis", "mp4a.40.2"]) await step("codec." + c, async () => { out["codec." + c] = await audioEncode(c); });
+  for (const c of ["vp8", "vp09.00.10.08", "av01.0.04M.08", "avc1.42001f"]) await step("codec." + c, async () => { out["codec." + c] = await videoEncode(c); });
+}
+
+(async () => {
+  await step("math", mathTests);
+  await step("dommatrix", matrixTests);
+  await step("layout", layoutTests);
+  await step("canvas", canvasTests);
+  await step("webgl", webglTests);
+  await step("wasm", wasmTests);
+  await step("audio", audioTests);
+  await step("codec", codecTests);
+  out["ua"] = navigator.userAgent; out["hc"] = navigator.hardwareConcurrency;
+  fetch("/result", { method: "POST", body: JSON.stringify(out) });
+})();
+</script>

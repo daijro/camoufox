@@ -72,15 +72,16 @@ diff --git a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h b/gfx/skia/skia/src/
 diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/StaticPrefList.yaml
 --- a/modules/libpref/init/StaticPrefList.yaml
 +++ b/modules/libpref/init/StaticPrefList.yaml
-@@ -8334,6 +8334,16 @@
+@@ -8334,6 +8334,17 @@
    value: false
    mirror: once
  
-+# The x86 CPU vendor whose RCPPS/RSQRTPS estimates Skia's raster pipeline
-+# reproduces: 0 the CPU it runs on, 1 Intel, 2 AMD. The two vendors' estimate
-+# instructions give different bits, which reach canvas readback through blend
-+# modes, perspective and matrix inversion (SkCpuEstimates.h). A value naming
-+# the CPU it runs on changes nothing.
++# The x86 CPU vendor whose RCPPS/RSQRTPS estimates Skia's raster pipeline and
++# libopus's encoder reproduce: 0 the CPU it runs on, 1 Intel, 2 AMD. The two
++# vendors' estimate instructions give different bits, which reach canvas
++# readback through blend modes, perspective and matrix inversion, and encoded
++# Opus through the PVQ search (SkCpuEstimates.h, opus_cpu_estimates.h). A
++# value naming the CPU it runs on changes nothing. The name predates Opus.
 +- name: gfx.skia.cpu_vendor_estimates
 +  type: RelaxedAtomicUint32
 +  value: 0
@@ -89,3 +90,158 @@ diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/Sta
  # Log severe performance warnings to the error console and profiles.
  # This should be use to quickly find which slow paths are used by test cases.
  - name: gfx.perf-warnings.enabled
+diff --git a/config/external/gkcodecs/gkcodecs.symbols b/config/external/gkcodecs/gkcodecs.symbols
+--- a/config/external/gkcodecs/gkcodecs.symbols
++++ b/config/external/gkcodecs/gkcodecs.symbols
+@@ -106,6 +106,7 @@ opus_packet_parse
+ opus_strerror
+ opus_multistream_encode_float
+ opus_multistream_surround_encoder_create
++opus_mozilla_set_cpu_estimates
+ vorbis_block_clear
+ vorbis_block_init
+ vorbis_comment_clear
+diff --git a/dom/media/encoder/OpusTrackEncoder.cpp b/dom/media/encoder/OpusTrackEncoder.cpp
+--- a/dom/media/encoder/OpusTrackEncoder.cpp
++++ b/dom/media/encoder/OpusTrackEncoder.cpp
+@@ -4,6 +4,7 @@
+ #include "OpusTrackEncoder.h"
+ 
+ #include <opus/opus.h>
++#include <opus/opus_cpu_estimates.h>
+ 
+ #include "VideoUtils.h"
+ #include "mozilla/CheckedInt.h"
+@@ -169,6 +170,7 @@ nsresult OpusTrackEncoder::Init(int aChannels) {
+   }
+ 
+   int error = 0;
++  opus_mozilla_use_cpu_vendor();
+   mEncoder = opus_encoder_create(mOutputSampleRate, mChannels,
+                                  OPUS_APPLICATION_AUDIO, &error);
+ 
+diff --git a/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp b/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp
+--- a/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp
++++ b/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp
+@@ -9,6 +9,7 @@
+ #include "FFmpegRuntimeLinker.h"
+ #include "FFmpegUtils.h"
+ #include "MediaData.h"
++#include "opus/opus_cpu_estimates.h"
+ 
+ namespace mozilla {
+ 
+@@ -53,6 +54,9 @@ MediaResult FFmpegAudioEncoder<LIBAV_VER>::InitEncoder() {
+ 
+   FFMPEG_LOG("FFmpegAudioEncoder::InitEncoder");
+ 
++  // FFmpeg's libopus wrapper encodes with gkcodecs' libopus.
++  opus_mozilla_use_cpu_vendor();
++
+   // Initialize the common members of the encoder instance
+   auto r = AllocateCodecContext(/* aHardware */ false);
+   if (r.isErr()) {
+diff --git a/media/libopus/celt/x86/vq_sse2.c b/media/libopus/celt/x86/vq_sse2.c
+--- a/media/libopus/celt/x86/vq_sse2.c
++++ b/media/libopus/celt/x86/vq_sse2.c
+@@ -37,10 +37,26 @@
+ #include "mathops.h"
+ #include "vq.h"
+ #include "x86cpu.h"
++#include "opus_cpu_estimates.h"
++#include "SkCpuEstimates.h"
+ 
+ 
+ #ifndef FIXED_POINT
+ 
++/* Another vendor's RCPPS/RSQRTPS, when Gecko set a table (opus_cpu_estimates.h). */
++static __m128 estimate_as(__m128 v, int rsqrt)
++{
++   const uint32_t *table = opus_mozilla_cpu_estimates();
++   uint32_t b[4];
++   int i;
++   if (!table)
++      return rsqrt ? _mm_rsqrt_ps(v) : _mm_rcp_ps(v);
++   _mm_storeu_ps((float*)(void*)b, v);
++   for (i=0;i<4;i++)
++      b[i] = rsqrt ? sk_cpu_estimate_rsqrt(table, b[i]) : sk_cpu_estimate_rcp(table, b[i]);
++   return _mm_loadu_ps((float*)(void*)b);
++}
++
+ opus_val16 op_pvq_search_sse2(celt_norm *_X, int *iy, int K, int N, int arch)
+ {
+    int i, j;
+@@ -105,7 +121,7 @@ opus_val16 op_pvq_search_sse2(celt_norm *_X, int *iy, int K, int N, int arch)
+          sums = _mm_set_ps1(1.f);
+       }
+       /* Using K+e with e < 1 guarantees we cannot get more than K pulses. */
+-      rcp4 = _mm_mul_ps(_mm_set_ps1((float)(K+.8)), _mm_rcp_ps(sums));
++      rcp4 = _mm_mul_ps(_mm_set_ps1((float)(K+.8)), estimate_as(sums, 0));
+       xy4 = yy4 = _mm_setzero_ps();
+       pulses_sum = _mm_setzero_si128();
+       for (j=0;j<N;j+=4)
+@@ -170,7 +186,7 @@ opus_val16 op_pvq_search_sse2(celt_norm *_X, int *iy, int K, int N, int arch)
+          y4 = _mm_loadu_ps(&y[j]);
+          x4 = _mm_add_ps(x4, xy4);
+          y4 = _mm_add_ps(y4, yy4);
+-         y4 = _mm_rsqrt_ps(y4);
++         y4 = estimate_as(y4, 1);
+          r4 = _mm_mul_ps(x4, y4);
+          /* Update the index of the max. */
+          pos = _mm_max_epi16(pos, _mm_and_si128(count, _mm_castps_si128(_mm_cmpgt_ps(r4, max))));
+diff --git a/media/libopus/moz.build b/media/libopus/moz.build
+--- a/media/libopus/moz.build
++++ b/media/libopus/moz.build
+@@ -7,6 +7,7 @@ with Files("*"):
+ 
+ EXPORTS.opus += [
+     "include/opus.h",
++    "include/opus_cpu_estimates.h",
+     "include/opus_defines.h",
+     "include/opus_multistream.h",
+     "include/opus_types.h",
+@@ -70,6 +71,9 @@ LOCAL_INCLUDES += [
+     "src",
+ ]
+ 
++# SkCpuEstimates.h, for celt/x86/vq_sse2.c (opus_cpu_estimates.h)
++LOCAL_INCLUDES += ["/gfx/skia/skia/src/opts"]
++
+ # sources.mozbuild is generated from gen-sources.py when a new libopus is
+ # imported.
+ include("sources.mozbuild")
+@@ -78,6 +82,7 @@ UNIFIED_SOURCES += celt_sources
+ UNIFIED_SOURCES += silk_sources
+ UNIFIED_SOURCES += opus_sources
+ SOURCES += opus_nonunified_sources
++SOURCES += ["celt/mozilla_cpu_estimates.c"]
+ 
+ if CONFIG["MOZ_SAMPLE_TYPE_FLOAT32"]:
+     UNIFIED_SOURCES += silk_sources_float
+diff --git a/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc b/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc
+--- a/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc
++++ b/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc
+@@ -14,6 +14,7 @@
+ #include <cstdlib>
+ 
+ #include "rtc_base/checks.h"
++#include "opus/opus_cpu_estimates.h"
+ 
+ enum {
+ #if WEBRTC_OPUS_SUPPORT_120MS_PTIME
+@@ -73,6 +74,7 @@ int16_t WebRtcOpus_EncoderCreate(OpusEncInst** inst,
+   }
+ 
+   int error;
++  opus_mozilla_use_cpu_vendor();
+   state->encoder = opus_encoder_create(
+       sample_rate_hz, static_cast<int>(channels), opus_app, &error);
+ 
+@@ -120,6 +122,7 @@ int16_t WebRtcOpus_MultistreamEncoderCreate(
+ 
+   int error;
+   const int sample_rate_hz = 48000;
++  opus_mozilla_use_cpu_vendor();
+   state->multistream_encoder = opus_multistream_encoder_create(
+       sample_rate_hz, channels, streams, coupled_streams, channel_mapping,
+       opus_app, &error);

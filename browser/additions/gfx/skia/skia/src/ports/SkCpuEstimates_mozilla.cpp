@@ -3,7 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Which recorded RCPPS/RSQRTPS table Skia's raster pipeline uses
-// (src/opts/SkCpuEstimates.h), from gfx.skia.cpu_vendor_estimates.
+// (src/opts/SkCpuEstimates.h) and libopus's PVQ search
+// (media/libopus/include/opus_cpu_estimates.h) use, from
+// gfx.skia.cpu_vendor_estimates. Off x86 there is none to reproduce.
 
 #include "include/core/SkTypes.h"
 
@@ -48,5 +50,9 @@ const uint32_t* sk_cpu_estimates() {
   }
   return kSkCpuEstimateTables[vendor - 1];
 }
+
+#else
+
+const uint32_t* sk_cpu_estimates() { return nullptr; }
 
 #endif
