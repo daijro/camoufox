@@ -254,7 +254,7 @@ class NetworkRequest {
       overrideRequestHeaders(this.httpChannel, headers, this._originalHeaderOrder);
     } else {
       appendExtraHTTPHeaders(this.httpChannel, extraHTTPHeaders);
-      restoreInterceptedHeaderOrder(this.httpChannel, extraHTTPHeaders, this._originalHeaderOrder);
+      restoreInterceptedHeaderOrder(this.httpChannel, this._originalHeaderOrder);
     }
     if (method)
       this.httpChannel.requestMethod = method;
@@ -886,8 +886,6 @@ function overrideRequestHeaders(httpChannel, headers, originalOrder) {
   appendExtraHTTPHeaders(httpChannel, ordered);
 }
 
-// Headers necko adds in HttpBaseChannel::Init, before anything else touches the channel.
-const DEFAULT_REQUEST_HEADERS = ['host', 'user-agent', 'accept', 'accept-language', 'accept-encoding'];
 // Headers necko adds in nsHttpChannel::OnBeforeConnect, which runs after the cookie header is set
 // and after http-on-modify-request, where we add the extra headers.
 const ON_BEFORE_CONNECT_HEADERS = ['upgrade-insecure-requests', 'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-user'];
@@ -907,9 +905,9 @@ const ON_BEFORE_CONNECT_HEADERS = ['upgrade-insecure-requests', 'sec-fetch-dest'
 // is taken from the original channel. Order on the wire follows nsHttpHeaderArray, and setting a
 // header that is already present updates it in place, so moving one means deleting it and adding
 // it back.
-function restoreInterceptedHeaderOrder(httpChannel, extraHTTPHeaders, originalOrder) {
+function restoreInterceptedHeaderOrder(httpChannel, originalOrder) {
   const headers = requestHeaders(httpChannel);
-  const ordered = orderRequestHeaders(headers, originalOrder, extraHTTPHeaders.map(header => header.name.toLowerCase()));
+  const ordered = orderRequestHeaders(headers, originalOrder);
   if (ordered.every((header, i) => header === headers[i]))
     return;
   // The host header cannot be removed, and it sorts first either way.
@@ -920,27 +918,12 @@ function restoreInterceptedHeaderOrder(httpChannel, extraHTTPHeaders, originalOr
 }
 
 // `headers` sorted into the order a channel that was never intercepted sends them:
-//   1. every header the original channel had, in its order (`originalOrder`, read at
-//      http-on-modify-request, before we add anything);
-//   2. headers added from http-on-modify-request onwards (Juggler's extra headers, a route's new
-//      ones), in the order given;
+//   1. every header the original channel had, in its order (`originalOrder`, as the request
+//      recorded it before interception);
+//   2. headers added since (a route's new ones), in the order given;
 //   3. the ones necko adds in OnBeforeConnect.
-// Without an original order (it is recorded for every request we see), fall back to placing
-// "connection" after the defaults and "cookie" before the late headers.
-function orderRequestHeaders(headers, originalOrder, lateNames = []) {
+function orderRequestHeaders(headers, originalOrder) {
   const nameOf = header => header.name.toLowerCase();
-  if (!originalOrder) {
-    const rest = headers.filter(h => !['connection', 'cookie'].includes(nameOf(h)));
-    const pick = name => headers.filter(h => nameOf(h) === name);
-    const late = new Set([...ON_BEFORE_CONNECT_HEADERS, ...lateNames]);
-    const firstIndex = predicate => {
-      const index = rest.findIndex(predicate);
-      return index === -1 ? rest.length : index;
-    };
-    rest.splice(firstIndex(h => !DEFAULT_REQUEST_HEADERS.includes(nameOf(h))), 0, ...pick('connection'));
-    rest.splice(firstIndex(h => late.has(nameOf(h))), 0, ...pick('cookie'));
-    return rest;
-  }
   const rank = header => {
     const name = nameOf(header);
     const original = originalOrder.indexOf(name);

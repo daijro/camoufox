@@ -15,6 +15,8 @@
 
 from typing import Dict, List, Tuple
 
+import pytest
+
 from playwright.async_api import BrowserContext, Route
 from tests.server import Server, TestServerRequest
 
@@ -144,16 +146,19 @@ async def test_page_route_should_preserve_order_when_continuing_with_headers(
     assert with_route == without_route
 
 
-async def test_page_route_should_preserve_fetch_header_order_when_continuing_with_headers(
-    context: BrowserContext, server: Server
+@pytest.mark.parametrize("forward_headers", [False, True])
+async def test_page_route_should_preserve_fetch_header_order(
+    context: BrowserContext, server: Server, forward_headers: bool
 ) -> None:
+    # A fetch() with a header of its own: a resumed one sent "connection" ahead of its referer and
+    # that header, where the same fetch unrouted sends it after them.
     async def _fetch_headers(intercept: bool) -> List[Tuple[str, str]]:
         seen: List[Tuple[str, str]] = []
 
         def _page(request: TestServerRequest) -> None:
             request.setHeader("content-type", "text/html")
             request.write(
-                b"<script>fetch('/fingerprint-fetch').then(() => "
+                b"<script>fetch('/fingerprint-fetch', {headers: {'X-A': '1'}}).then(() => "
                 b"document.documentElement.dataset.fetched = 'true')</script>"
             )
             request.finish()
@@ -170,7 +175,7 @@ async def test_page_route_should_preserve_fetch_header_order_when_continuing_wit
         page = await context.new_page()
         if intercept:
             await page.route(
-                "**/*", lambda route: _continue_route(route, forward_headers=True)
+                "**/*", lambda route: _continue_route(route, forward_headers)
             )
         await page.goto(server.PREFIX + "/fingerprint-fetch.html")
         await page.wait_for_function(
