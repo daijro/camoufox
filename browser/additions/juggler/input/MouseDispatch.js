@@ -290,9 +290,7 @@ export class MouseDispatch {
    * to 184px. A real pointer that leaves the page fires mouseout/mouseleave and
    * comes back with mouseover, so the first point outside the viewport, or in a
    * band of it the window does not show, moves the pointer off the content
-   * (leaveContent), and the next point inside re-enters it. Skipping those
-   * points instead left the cursor frozen at the edge with no exit, then
-   * reappearing elsewhere.
+   * (leaveContent), and the next point inside re-enters it.
    *
    * Bounding each ack individually is not enough to bound the work: a curve is
    * dispatched inside a SINGLE activation-chain slot, and holds up to ~90
@@ -322,6 +320,8 @@ export class MouseDispatch {
     // dispatched is the only place that check is reliable.
     let lastX = NaN;
     let lastY = NaN;
+    // The last step inside the content, where the pointer leaves from.
+    let inside = null;
     let offContent = false;
     const destination = plan.steps.length - 1;
     await play(plan, async ({x, y}, i) => {
@@ -333,7 +333,7 @@ export class MouseDispatch {
       this._remeasure();
       if (!this.isInViewport(x, y) || !this._isShown(x, y)) {
         if (!offContent) {
-          this.leaveContent(x, y);
+          this.leaveContent(inside, {x, y});
           offContent = true;
           lastX = NaN;
           lastY = NaN;
@@ -341,6 +341,7 @@ export class MouseDispatch {
         return true;
       }
       offContent = false;
+      inside = {x, y};
       if (Math.round(x) === lastX && Math.round(y) === lastY)
         return true;
       if (!await this.sendAcked(watcher, eventType, x, y))
@@ -363,23 +364,46 @@ export class MouseDispatch {
   }
 
   /**
-   * Move the pointer off the content toward a relative point outside the
-   * viewport, as a curve straying off the page does. Above the content, within
-   * its width, is the toolbar, where a cursor leaving through the top edge
-   * really is, so the pointer goes there; anywhere else it parks as
-   * parkOffContent() does. Unacked for the same reason: it never reaches the
-   * renderer, which sees only the exit.
+   * Move the pointer off the content, as a curve straying off the page does,
+   * from the relative point `from` (the last one inside, or null) toward `to`.
+   *
+   * Stock reports the exit one pixel past the edge the pointer crossed, a few
+   * pixels from the last mousemove (159.0 on X11, by hand): the OS reports
+   * where the pointer crossed, not its next sample. So the pointer goes to
+   * where the segment crosses the edge. That point is on the chrome when the
+   * window has some there (the toolbar above the content), so the pointer
+   * moves onto it; past the window's own edge the pointer leaves the window.
+   * A point in a band of the viewport the window does not show is on the
+   * chrome already. Unacked: neither event reaches the renderer, which sees
+   * only the exit.
    */
-  leaveContent(x, y) {
-    // The last row wholly above the content: the row the content's fractional
-    // top falls in is partly content (see the constructor).
-    const absY = Math.floor(this._box.top + y);
-    if (y < 0 && absY >= 0 && absY < Math.floor(this._box.top)) {
-      const absX = Math.min(Math.max(x, 0), this._box.width - 1) + this._box.left;
-      this._sendAbsolute('mousemove', absX, absY);
-      return;
+  leaveContent(from, to) {
+    const {width, height} = this._box;
+    // The first pixel past an edge the point is beyond: -1 before the near
+    // edges, width or height after the far ones, which are exclusive.
+    const past = (v, size) => v < 0 ? -1 : v >= size ? size : null;
+    const ex = past(to.x, width);
+    const ey = past(to.y, height);
+    // How far along from->to each coordinate reaches its edge; the pointer
+    // stops at the first edge it reaches.
+    let tx = Infinity;
+    let ty = Infinity;
+    if (from) {
+      if (ex !== null)
+        tx = (ex - from.x) / (to.x - from.x);
+      if (ey !== null)
+        ty = (ey - from.y) / (to.y - from.y);
     }
-    this.parkOffContent();
+    const t = Math.min(tx, ty);
+    const along = (f, s, size) => Math.min(Math.max(Math.round(from && t !== Infinity ? f + t * (s - f) : s), 0), size - 1);
+    const x = ex !== null && tx === t ? ex : along(from?.x, to.x, width);
+    const y = ey !== null && ty === t ? ey : along(from?.y, to.y, height);
+    // The row the content's fractional top falls in is partly content (see the
+    // constructor), so a point above the content is floored onto the row above.
+    const absX = Math.floor(this._box.left + x);
+    const absY = Math.floor(this._box.top + y);
+    const onChrome = absX >= 0 && absY >= 0 && absX < this._win.innerWidth && absY < this._win.innerHeight;
+    this._sendAbsolute(onChrome ? 'mousemove' : 'mousecancel', absX, absY);
   }
 
   /**
