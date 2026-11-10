@@ -75,8 +75,14 @@ WEBGL = [
     "G.getParameter(G.MAX_TEXTURE_SIZE)", "G.getParameter(G.MAX_VERTEX_ATTRIBS)",
     "G.getParameter(G.VENDOR)", "G.getParameter(G.VERSION)", "G.getParameter(G.SHADING_LANGUAGE_VERSION)",
     "G.getParameter(G.RENDERER)", "G.getParameter(37446)",
-    "G.getExtension('OES_texture_float')", "G.getSupportedExtensions().length",
+    "G.getExtension('OES_texture_float')",
 ]
+# getSupportedExtensions() is not timed: each call allocates ~30 fresh strings,
+# and on CI runners that cost halves or doubles between sessions and between a
+# page and its worker, in stock and Camoufox alike (2026-11-07 and -09: stock
+# 4375 ns in the page and 10781 in its worker, then 7500 and 4062; Camoufox
+# 7812, then 4844). The spoof's per-call work is IsSupported(), which
+# getExtension() times above.
 GL_SETUP = "G.getExtension('WEBGL_debug_renderer_info');"
 # In a worker the renderer strings cost ~23 us in one browser session and
 # ~60 us in another, in stock and Camoufox alike (measured 2026-10-26: stock

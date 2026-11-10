@@ -2855,6 +2855,7 @@ def test_packaged_font_names_are_ascii(tmp_path, monkeypatch):
     local filename and exits 1, which stops a consumer's `set -e` install.
     """
     import shlex
+    import zipfile
 
     package = _package_module()
     monkeypatch.chdir(tmp_path)
@@ -2874,6 +2875,11 @@ def test_packaged_font_names_are_ascii(tmp_path, monkeypatch):
         if args[:2] == ["7z", "u"]:
             fonts = pathlib.Path(args[3].removesuffix("/*"), "fonts")
             packaged.append({p.name: p.read_bytes() for p in fonts.iterdir()})
+            # Packaging reads the zip back to check its modes.
+            staged = pathlib.Path(args[3].removesuffix("/*"))
+            with zipfile.ZipFile(args[2], "w") as z:
+                for p in staged.rglob("*"):
+                    z.write(p, p.relative_to(staged))
 
     monkeypatch.setattr(package, "run", fake_run)
     monkeypatch.setattr(package, "inject_locales", lambda *args: None)
@@ -3241,3 +3247,46 @@ def test_the_install_gate_launches_and_interacts_through_each_installed_package(
     assert {"build", "fetch-browser"} <= set(install["needs"])
     runs = "\n".join(s.get("run") or "" for s in install["steps"])
     assert '--browser "$CAMOUFOX_BINARY"' in runs
+
+
+def test_packaged_entries_are_readable_by_every_user(tmp_path):
+    """unzip restores each entry's stored mode: a 0700 dir in the zip (the
+    mkdtemp fetch-ubo staged addons/UBO in) hid uBO from a Docker image's
+    non-owner app user. Packaging opens up the staging tree, then refuses a zip
+    that still carries an entry other users can't read."""
+    import stat
+    import zipfile
+
+    package = _package_module()
+
+    root = tmp_path / "pkg"
+    (root / "addons" / "UBO").mkdir(parents=True)
+    (root / "addons" / "UBO" / "manifest.json").write_text("{}")
+    (root / "camoufox-bin").write_text("")
+    (root / "addons" / "UBO").chmod(0o700)
+    (root / "addons" / "UBO" / "manifest.json").chmod(0o600)
+    (root / "camoufox-bin").chmod(0o700)
+    package.readable_by_all(str(root))
+    assert stat.S_IMODE((root / "addons" / "UBO").stat().st_mode) == 0o755
+    assert stat.S_IMODE((root / "addons" / "UBO" / "manifest.json").stat().st_mode) == 0o644
+    assert stat.S_IMODE((root / "camoufox-bin").stat().st_mode) == 0o755, "executables stay executable"
+
+    def entry(name, mode):
+        info = zipfile.ZipInfo(name)
+        info.external_attr = mode << 16
+        return info
+
+    good, bad = tmp_path / "good.zip", tmp_path / "bad.zip"
+    with zipfile.ZipFile(good, "w") as z:
+        z.writestr(entry("camoufox/", stat.S_IFDIR | 0o755), "")
+        z.writestr(entry("camoufox/camoufox-bin", stat.S_IFREG | 0o755), "")
+        foreign = entry("camoufox/from-windows", stat.S_IFREG | 0o600)
+        foreign.create_system = 0
+        z.writestr(foreign, "")
+    with zipfile.ZipFile(bad, "w") as z:
+        z.writestr(entry("camoufox/addons/UBO/", stat.S_IFDIR | 0o700), "")
+        z.writestr(entry("camoufox/addons/UBO/manifest.json", stat.S_IFREG | 0o600), "")
+        z.writestr(entry("camoufox/addons/x/", stat.S_IFDIR | 0o744), "")
+    assert package.unreadable_entries(str(good)) == []
+    assert package.unreadable_entries(str(bad)) == [
+        "camoufox/addons/UBO/ 0o700", "camoufox/addons/UBO/manifest.json 0o600", "camoufox/addons/x/ 0o744"]
