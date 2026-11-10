@@ -480,6 +480,7 @@ rules:
       - "Windows: 156 exposes EXT_depth_clamp in WebGL1 and WebGL2 on both GPUs, 146 on neither, and no fpgen Windows record has it. third_party/angle/src/libANGLE/renderer/d3d/d3d11/renderer11_utils.cpp:1334 (156, ANGLE chromium/7778) sets depthClampEXT = true on every D3D11 feature level; 146's ANGLE (chromium/5359) never sets it"
       - "Linux: WebGL1 ALIASED_LINE_WIDTH_RANGE is [1, 2048] on 146 and [1, 1] on 156, WebGL2 [1, 1] on both. 146's dom/canvas/WebGLContext.cpp:324 forced REQUIRE_COMPAT_PROFILE on WebGL1 unless webgl.1.allow-core-profiles, which 146's StaticPrefList.yaml set on macOS only; 156 removed both, and WebGLContextValidate.cpp:211 reads the driver's range only off a core profile, leaving WebGLTypes.h:654's {1, 1}"
       - "fpgen Linux WebGL2 records: [1, 1] on 97%, the driver's range on the 3% without EXT_depth_clamp (GLES drivers, where Firefox reads it)"
+      - "fpgen Linux records for the GeForce GTX 480 and 980 also differ in WebGL1 and WebGL2 ALIASED_POINT_SIZE_RANGE, a 146 compatibility-profile value; CreepJS flags any mirrored non-string WebGL1/WebGL2 parameter that differs"
       - "browser/tests/playwright/patches/stock-gpu-parity.py fails on the 146-style WebGL1 range on Linux, on a hardware GPU and on llvmpipe, and passes with the fix"
       - "Firefox 159 (bug 1735401) exposes EXT_texture_norm16 on WebGL2, no longer behind webgl.enable-draft-extensions: stock 159.0 on M1 (headless) and on Linux llvmpipe (Xvfb) list it on WebGL2 and not WebGL1; stock 158.0.1 on the same Linux and 146.0 on the same M1 list it on neither. dom/canvas/WebGLExtensions.cpp's IsSupported needs GLFeature::texture_norm16, core in desktop GL 3.1"
       - "Firefox 159 caps WebGL2 MAX_UNIFORM_BLOCK_SIZE at 64 KiB (WebGL2ContextState.cpp, kMaxUniformBlockSize): on one Linux AMD machine, stock 146 reports 4294967292 and stock 159.0 65536, and stock-gpu-parity.py failed on the recording's 4120744960 until the launchers applied the cap"
@@ -492,9 +493,10 @@ rules:
       corrected where the launchers convert a recording (to_config). ANGLE's
       D3D11 backend gives every Windows GPU EXT_depth_clamp, which takes its
       place in Firefox's alphabetical extension order. WebGL1 now shares
-      WebGL2's GL profile, so it reports the line width range the same device
-      recorded for WebGL2, which is right for core profiles and GLES drivers
-      alike. Live state that also changed (the stencil masks) is answered by
+      WebGL2's GL profile, so it reports the value the same device recorded
+      for WebGL2 for every parameter both contexts report (the line width
+      range, the point size range...), which is right for core profiles and
+      GLES drivers alike. Live state that also changed (the stencil masks) is answered by
       the real context and needs nothing. stock-gpu-parity finds the next
       drift: it fails where stock Firefox of the recorded release and of the
       shipped one differ on the same machine and Camoufox does not follow the
