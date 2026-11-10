@@ -184,3 +184,36 @@ async def test_page_route_should_preserve_fetch_header_order_when_continuing_wit
     with_route = await _fetch_headers(intercept=True)
 
     assert with_route == without_route
+
+
+async def test_page_route_installs_and_fulfils(context: BrowserContext, server: Server) -> None:
+    # Playwright >= 1.64 passes bypassServiceWorker with Network.setRequestInterception. A browser
+    # that rejects the parameter fails every page.route() call outright (daijro/camoufox#873).
+    server.set_route("/probe.html", lambda request: (
+        request.setHeader("content-type", "text/html"),
+        request.write(b"<html><body>probe</body></html>"),
+        request.finish(),
+    ))
+    hits: List[str] = []
+
+    async def _handler(route) -> None:
+        hits.append(route.request.url)
+        await route.fulfill(body="intercepted")
+
+    page = await context.new_page()
+    await page.route("**/probe.txt", _handler)
+    await page.goto(server.PREFIX + "/probe.html")
+
+    assert await page.evaluate("fetch('/probe.txt').then(r => r.text())") == "intercepted"
+    assert hits == [server.PREFIX + "/probe.txt"]
+
+
+async def test_storage_state_capture_installs_interception(context: BrowserContext) -> None:
+    # Storage-state capture drives the internal page that passes bypassServiceWorker: true, so the
+    # flag's path is exercised here even though Playwright exposes no way to observe its effect.
+    page = await context.new_page()
+    await page.set_content("<html><body>probe</body></html>")
+
+    state = await context.storage_state()
+
+    assert "cookies" in state

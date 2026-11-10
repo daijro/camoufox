@@ -46,6 +46,9 @@ export class PageNetwork {
     this._extraHTTPHeaders = null;
     this._responseStorage = new ResponseStorage(MAX_RESPONSE_STORAGE_SIZE, MAX_RESPONSE_STORAGE_SIZE / 10);
     this._requestInterceptionEnabled = false;
+    // Playwright sends bypassServiceWorker=true for its internal storage-state page, which wants
+    // network-level interception rather than having the request handed to a service worker.
+    this._bypassServiceWorker = false;
     // This is requestId => NetworkRequest map, only contains requests that are
     // awaiting interception action (abort, resume, fulfill) over the protocol.
     this._interceptedRequests = new Map();
@@ -62,12 +65,14 @@ export class PageNetwork {
     ];
   }
 
-  enableRequestInterception() {
+  enableRequestInterception(bypassServiceWorker = false) {
     this._requestInterceptionEnabled = true;
+    this._bypassServiceWorker = !!bypassServiceWorker;
   }
 
   disableRequestInterception() {
     this._requestInterceptionEnabled = false;
+    this._bypassServiceWorker = false;
     for (const intercepted of this._interceptedRequests.values())
       intercepted.resume();
     this._interceptedRequests.clear();
@@ -324,7 +329,7 @@ class NetworkRequest {
 
   // nsINetworkInterceptController
   shouldPrepareForIntercept(aURI, channel) {
-    const interceptController = this._fallThroughInterceptController();
+    const interceptController = this._shouldBypassServiceWorker() ? undefined : this._fallThroughInterceptController();
     if (interceptController && interceptController.shouldPrepareForIntercept(aURI, channel)) {
       // We assume that interceptController is a service worker if there is one,
       // and yield interception to it.
@@ -471,6 +476,12 @@ class NetworkRequest {
     if (browserContext.requestInterceptionEnabled)
       return true;
     return false;
+  }
+
+  _shouldBypassServiceWorker() {
+    // The bypass flag lives on the page network, and only matters for requests we are intercepting
+    // anyway: handing those to the page's service worker is what the caller asked us not to do.
+    return !!this._pageNetwork?._bypassServiceWorker && this._shouldIntercept();
   }
 
   _fallThroughInterceptController() {

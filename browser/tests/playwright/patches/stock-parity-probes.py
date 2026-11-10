@@ -136,7 +136,10 @@ PROBES = """async (port) => {
     const f = document.createElement('iframe');
     f.src = `http://127.0.0.1:${port}/frame`;
     document.body.appendChild(f);
-    setTimeout(() => r('timeout'), 5000);
+    // The bundled uBO holds every request until its filter lists are compiled,
+    // which in a fresh profile takes 2.7 s on a 16-core host and past 5 s on a
+    // CI runner. The value is what is checked; this only bounds a hang.
+    setTimeout(() => r('timeout'), 30000);
   });
 
   // The result of every read is accumulated into `sink`, and `sink` is returned.
