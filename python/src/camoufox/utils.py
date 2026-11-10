@@ -27,8 +27,8 @@ from .exceptions import (
 from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, draw_voice_config, fix_navigator_arch, fix_hardware_concurrency, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
 from .geolocation import geoip_allowed, get_geolocation
-from .ip import Proxy, proxy_auth_env, proxy_auth_init_script, public_ip, public_ipv6, socks5_auth, valid_ipv4, valid_ipv6
-from .locales import handle_locales
+from .ip import ExitGeo, Proxy, proxy_auth_env, proxy_auth_init_script, public_ip, public_ipv6, socks5_auth, valid_ipv4, valid_ipv6
+from .locales import SELECTOR, handle_locales
 import warnings
 
 from .pkgman import (
@@ -940,6 +940,36 @@ def context_identity(
             'a context another OS or GPU.'
         )
     return host_name, gpu
+
+
+def needs_exit_geo(
+    webrtc_ip: Optional[str],
+    geolocation: Optional[Dict[str, float]],
+    context_kwargs: Dict[str, Any],
+) -> bool:
+    """Whether a context behind a proxy needs to look up where it exits."""
+    return not (
+        webrtc_ip
+        and geolocation
+        and 'timezone_id' in context_kwargs
+        and 'locale' in context_kwargs
+    )
+
+
+def place_at_exit(
+    geo: ExitGeo,
+    webrtc_ip: Optional[str],
+    geolocation: Optional[Dict[str, float]],
+    context_kwargs: Dict[str, Any],
+) -> Tuple[str, Dict[str, float]]:
+    """Place a proxied context at the exit, keeping caller-provided values."""
+    context_kwargs.setdefault('timezone_id', geo.timezone)
+    if 'locale' not in context_kwargs:
+        context_kwargs['locale'] = SELECTOR.from_region(geo.country).as_string
+    return (
+        webrtc_ip or geo.ip,
+        geolocation or {'latitude': geo.latitude, 'longitude': geo.longitude},
+    )
 
 
 def new_context_options(
