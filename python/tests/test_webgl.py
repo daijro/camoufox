@@ -330,3 +330,20 @@ def test_webgl1_line_width_range_is_webgl2s():
             config = sample_webgl_for_screen(target_os, 1920, 1080, s)
             if config["webGl2Enabled"]:
                 assert config["webGl:parameters"]["33902"] == config["webGl2:parameters"]["33902"], (target_os, s)
+
+
+@pytest.mark.parametrize('target_os', ['win', 'mac', 'lin'])
+def test_webgl1_reports_webgl2s_values_for_every_shared_parameter(target_os):
+    # Firefox 156+ creates WebGL1 on WebGL2's GL profile, so every parameter
+    # both report is one driver value. fpgen recorded Firefox 146, which put
+    # WebGL1 on a compatibility profile: two Linux devices carry a different
+    # ALIASED_POINT_SIZE_RANGE there. CreepJS flags any mismatch except the
+    # version strings and the line width range.
+    for vendor, renderer in webgl.firefox_gpus(target_os):
+        for config in webgl.recorded_devices(target_os, vendor, renderer):
+            if not config['webGl2Enabled']:
+                continue
+            p1, p2 = config['webGl:parameters'], config['webGl2:parameters']
+            mismatch = {k: (p1[k], p2[k]) for k in p2
+                        if k in p1 and not isinstance(p1[k], str) and p1[k] != p2[k]}
+            assert not mismatch, (renderer, mismatch)

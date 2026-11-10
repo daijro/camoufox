@@ -78,8 +78,6 @@ _TEXTURE_NORM16_OSES = ('mac', 'lin', 'win')
 _CLIP_CONTROL = 'EXT_clip_control'
 _TEXTURE_MIRROR_CLAMP_TO_EDGE = 'EXT_texture_mirror_clamp_to_edge'
 
-_ALIASED_LINE_WIDTH_RANGE = '33902'
-
 # Firefox 159 caps this at 64 KiB (WebGL2ContextState.cpp, kMaxUniformBlockSize);
 # fpgen recorded the drivers' own limit, up to 4 GiB.
 _MAX_UNIFORM_BLOCK_SIZE = '35376'
@@ -190,10 +188,15 @@ def to_config(webgl: Dict[str, Any], webgl2: Any, target_os: str) -> Dict[str, A
         if target_os in _TEXTURE_NORM16_OSES:
             backend += (_TEXTURE_NORM16,)
         config.update(_context_config('webGl2', webgl2, target_os, backend))
-        # Firefox 156 creates WebGL1 on the same GL profile as WebGL2, so both
-        # report one line width range. 146 forced WebGL1 onto a compatibility
-        # profile, and fpgen recorded that profile's driver range.
-        config['webGl:parameters'][_ALIASED_LINE_WIDTH_RANGE] = config['webGl2:parameters'][_ALIASED_LINE_WIDTH_RANGE]
+        # Firefox 156 creates WebGL1 on the same GL profile as WebGL2, so every
+        # parameter both report is one driver value (the line width range, the
+        # point size range...). 146 forced WebGL1 onto a compatibility profile,
+        # and fpgen recorded that profile's values. Only the version strings
+        # differ between the two.
+        webgl1_parameters = config['webGl:parameters']
+        for key, value in config['webGl2:parameters'].items():
+            if key in webgl1_parameters and not isinstance(value, str):
+                webgl1_parameters[key] = value
         parameters = config['webGl2:parameters']
         if _MAX_UNIFORM_BLOCK_SIZE in parameters:
             parameters[_MAX_UNIFORM_BLOCK_SIZE] = min(parameters[_MAX_UNIFORM_BLOCK_SIZE], _MAX_UNIFORM_BLOCK_SIZE_CAP)
