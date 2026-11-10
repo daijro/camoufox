@@ -10,10 +10,12 @@ Usage:
     python3 python/scripts/pin-fpgen-model.py           # install if not already pinned
     python3 python/scripts/pin-fpgen-model.py --check    # verify only; non-zero if not pinned
     python3 python/scripts/pin-fpgen-model.py --force    # re-download and reinstall
+    python3 python/scripts/pin-fpgen-model.py --archive F  # keep the archive in F, and install from F when it is there
 """
 
 import argparse
 import sys
+from pathlib import Path
 
 try:
     from camoufox.fpgen_model import PIN, ensure_fpgen_model, fpgen_data_dir, is_pinned
@@ -26,6 +28,9 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--check', action='store_true', help='verify only; non-zero if not pinned')
     ap.add_argument('--force', action='store_true', help='reinstall even if already pinned')
+    ap.add_argument('--archive', type=Path,
+                    help='keep the downloaded archive in this file, and install from it when it is '
+                         'there (still checked against the pin), so CI can cache it')
     args = ap.parse_args()
 
     if args.check:
@@ -36,7 +41,7 @@ def main():
               file=sys.stderr)
         return 1
 
-    ensure_fpgen_model(force=args.force)
+    ensure_fpgen_model(force=args.force, archive=args.archive)
     print(f'OK: fpgen model {PIN["tag"]} pinned in {fpgen_data_dir()}', file=sys.stderr)
     return 0
 
