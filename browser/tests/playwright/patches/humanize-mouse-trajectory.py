@@ -33,8 +33,9 @@ What PASS means:
       gaps between them rather than a fixed cadence;
     * a humanized click still lands on the target element;
     * a curve that strays outside the viewport leaves the document as a real
-      cursor does (mouseout with no relatedTarget, one pixel past the edge it
-      crossed), and comes back with a mouseover before its next mousemove;
+      cursor does: a last mousemove just inside the edge it crosses, then,
+      in the same refresh, a mouseout with no relatedTarget just past it, as
+      stock reports; it comes back with a mouseover before its next mousemove;
     * without humanize, a move emits only its endpoint (pins the other
       direction so accidental always-on humanization is also caught). Two
       moves close together may share one event, coalesced, as a real mouse's do.
@@ -92,10 +93,20 @@ EDGE_INSET = 2
 EDGE_SWEEPS = 10
 EDGE_RECORDER = """
     window.edge = [];
-    addEventListener("mousemove", e => edge.push(["move", e.clientX, e.clientY]));
-    document.addEventListener("mouseout", e => { if (!e.relatedTarget) edge.push(["out", e.clientX, e.clientY]); });
-    document.addEventListener("mouseover", e => { if (!e.relatedTarget) edge.push(["over", e.clientX, e.clientY]); });
+    const rec = kind => e => edge.push([kind, e.clientX, e.clientY, e.timeStamp]);
+    addEventListener("mousemove", rec("move"));
+    document.addEventListener("mouseout", e => { if (!e.relatedTarget) rec("out")(e); });
+    document.addEventListener("mouseover", e => { if (!e.relatedTarget) rec("over")(e); });
 """
+# Stock 159.0 on X11, 27 exits by hand through every edge, slow flicks and fast
+# ones and slips along an edge: the last mousemove before each mouseout was
+# 0-5px inside the edge crossed, the mouseout 1-8px past it, 2-8px apart (one
+# sample of a mouse polled every millisecond), and within 1ms of each other.
+STOCK_INSIDE_PX = 5
+STOCK_PAST_PX = range(1, 9)
+STOCK_APART_PX = 2
+# The two are one sample apart, so they reach the page in the same refresh.
+FRAME_MS = 1000 / 60
 
 
 async def _edge_sweeps():
@@ -114,18 +125,32 @@ async def _edge_sweeps():
         return await page.evaluate("edge"), w, h
 
 
-def _exits_off_the_edge(events, w, h):
-    """Exits not reported one pixel past an edge, where stock reports them: the
-    OS gives the point where the pointer crossed."""
-    return [[x, y] for kind, x, y in events
-            if kind == "out" and x not in (-1, w) and y not in (-1, h)]
+def _exits_unlike_stock(events, w, h):
+    """Exits the page sees unlike any stock one, each with the last mousemove
+    before it: (move x, y), (out x, y), ms between them."""
+    bad = []
+    last = None
+    for kind, x, y, t in events:
+        if kind == "move":
+            last = (x, y, t)
+        if kind != "out":
+            continue
+        # How far past the edge it crossed the exit is, and how far inside
+        # that edge the last move was.
+        past, inside = (-x, last[0]) if x < 0 else (x - w + 1, w - 1 - last[0]) if x >= w else \
+            (-y, last[1]) if y < 0 else (y - h + 1, h - 1 - last[1])
+        apart = ((x - last[0]) ** 2 + (y - last[1]) ** 2) ** 0.5
+        ms = t - last[2]
+        if past not in STOCK_PAST_PX or inside > STOCK_INSIDE_PX or apart < STOCK_APART_PX or ms >= FRAME_MS:
+            bad.append([last[:2], (x, y), round(ms, 1)])
+    return bad
 
 
 def _unannounced_moves(events):
     """mousemoves the page got while it had last been told the cursor left."""
     outside = False
     bad = []
-    for kind, x, y in events:
+    for kind, x, y, _ in events:
         if kind == "out":
             outside = True
         elif kind == "over":
@@ -214,7 +239,7 @@ async def main() -> int:
     events, w, h = await _edge_sweeps()
     exits = sum(1 for e in events if e[0] == "out")
     unannounced = _unannounced_moves(events)
-    misplaced = _exits_off_the_edge(events, w, h)
+    misplaced = _exits_unlike_stock(events, w, h)
     print("\n=== curves leaving the viewport ===")
     print(f"  {EDGE_SWEEPS} moves along each of the top and left edges: {len(events)} events, {exits} document exits")
     if exits and not unannounced and not misplaced:
@@ -226,7 +251,7 @@ async def main() -> int:
         if unannounced:
             print(f"  FAIL: mousemoves after an exit with no mouseover first: {unannounced[:5]}")
         if misplaced:
-            print(f"  FAIL: exits not one pixel past the edge crossed ({w}x{h}): {misplaced[:5]}")
+            print(f"  FAIL: exits unlike stock's, as (last move, exit, ms apart) in {w}x{h}: {misplaced[:5]}")
 
     moves, clicked = await _humanized_click_hits_target()
     print("\n=== humanized click ===")

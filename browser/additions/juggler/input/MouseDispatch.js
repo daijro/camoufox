@@ -48,6 +48,7 @@
 export const kAckDeadlineMs = 5000;
 
 const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
+const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
 const helper = new Helper();
 
 function warnUndelivered(eventType, x, y, box, deadlineMs) {
@@ -288,9 +289,10 @@ export class MouseDispatch {
    * viewport more often than it sounds: measured over 400 random moves, 69% of
    * Cursory paths stray outside the box spanned by their own endpoints, by up
    * to 184px. A real pointer that leaves the page fires mouseout/mouseleave and
-   * comes back with mouseover, so the first point outside the viewport, or in a
-   * band of it the window does not show, moves the pointer off the content
-   * (leaveContent), and the next point inside re-enters it.
+   * comes back with mouseover, so a curve heading out of the viewport leaves
+   * it where and when it crosses the edge (_crossing); one that lands in a
+   * band of it the window does not show moves the pointer off the content
+   * there (leaveContent). The next point inside re-enters it.
    *
    * Bounding each ack individually is not enough to bound the work: a curve is
    * dispatched inside a SINGLE activation-chain slot, and holds up to ~90
@@ -304,13 +306,15 @@ export class MouseDispatch {
    * realism, not correctness. Pacing also fast-forwards to the destination once
    * a move runs past 1.5x its time budget.
    *
+   * @param {{x: number, y: number}} from where the cursor is, which the plan
+   *     leaves out: NaN when it is not known (parkOffContent)
    * @param {{steps: Array<{x: number, y: number, t: number}>}} plan
    * @param {(plan: object, dispatchStep: Function) => Promise} play
    * @param {(x: number, y: number) => Promise} [sendDestination] how the last
    *     step goes out; PageHandler's _sendMove, so the next command waits until
    *     the page has it, as after an unplanned move.
    */
-  async sendTrajectoryAcked(watcher, eventType, plan, play,
+  async sendTrajectoryAcked(watcher, eventType, from, plan, play,
                             sendDestination = (x, y) => this.sendAcked(watcher, eventType, x, y)) {
     // A point on the pixel the cursor is already on generates no eMouseMove, so
     // it is never acked and the wait below would burn the whole deadline. The
@@ -318,36 +322,60 @@ export class MouseDispatch {
     // skipped for being off-screen, and skipping one can leave the next landing
     // back where the last dispatch left the cursor. Tracking what was actually
     // dispatched is the only place that check is reliable.
-    let lastX = NaN;
-    let lastY = NaN;
-    // The last step inside the content, where the pointer leaves from.
-    let inside = null;
+    // The cursor's own position goes first, so that a curve heading straight
+    // off the page leaves from it (below). It is never sent: the cursor is
+    // already on that pixel.
+    this._remeasure();
+    const start = this.isInViewport(from.x, from.y) && this._isShown(from.x, from.y);
+    const steps = start ? [{x: from.x, y: from.y, t: 0}, ...plan.steps] : plan.steps;
+    let lastX = start ? Math.round(from.x) : NaN;
+    let lastY = start ? Math.round(from.y) : NaN;
     let offContent = false;
-    const destination = plan.steps.length - 1;
-    await play(plan, async ({x, y}, i) => {
-      if (i === destination) {
-        await this._reveal(x, y);
-        await sendDestination(x, y);
-        return true;
-      }
-      this._remeasure();
-      if (!this.isInViewport(x, y) || !this._isShown(x, y)) {
-        if (!offContent) {
-          this.leaveContent(inside, {x, y});
-          offContent = true;
-          lastX = NaN;
-          lastY = NaN;
-        }
-        return true;
-      }
-      offContent = false;
-      inside = {x, y};
+    const destination = steps.length - 1;
+    const send = async (x, y) => {
       if (Math.round(x) === lastX && Math.round(y) === lastY)
         return true;
       if (!await this.sendAcked(watcher, eventType, x, y))
         return false;
       lastX = Math.round(x);
       lastY = Math.round(y);
+      return true;
+    };
+    const leave = (x, y) => {
+      this.leaveContent(x, y);
+      offContent = true;
+      lastX = NaN;
+      lastY = NaN;
+    };
+    await play({...plan, steps}, async (step, i) => {
+      const {x, y} = step;
+      if (i === destination) {
+        await this._reveal(x, y);
+        await sendDestination(x, y);
+        return true;
+      }
+      const begun = ChromeUtils.now();
+      this._remeasure();
+      if (!this.isInViewport(x, y) || !this._isShown(x, y)) {
+        if (!offContent)
+          leave(x, y);
+        return true;
+      }
+      offContent = false;
+      if (!await send(x, y))
+        return false;
+      // A step on the way to one outside the viewport leaves it at the moment
+      // the pointer crosses the edge, not at the next step's time.
+      const next = steps[i + 1];
+      if (i + 1 === destination || this.isInViewport(next.x, next.y))
+        return true;
+      const {ms, last, exit} = this._crossing(step, next);
+      const wait = ms - (ChromeUtils.now() - begun);
+      if (wait > 0)
+        await new Promise(resolve => setTimeout(resolve, wait));
+      if (last && !await send(last.x, last.y))
+        return false;
+      leave(exit.x, exit.y);
       return true;
     });
   }
@@ -364,40 +392,55 @@ export class MouseDispatch {
   }
 
   /**
-   * Move the pointer off the content, as a curve straying off the page does,
-   * from the relative point `from` (the last one inside, or null) toward `to`.
-   *
-   * Stock reports the exit one pixel past the edge the pointer crossed, a few
-   * pixels from the last mousemove (159.0 on X11, by hand): the OS reports
-   * where the pointer crossed, not its next sample. So the pointer goes to
-   * where the segment crosses the edge. That point is on the chrome when the
-   * window has some there (the toolbar above the content), so the pointer
-   * moves onto it; past the window's own edge the pointer leaves the window.
-   * A point in a band of the viewport the window does not show is on the
-   * chrome already. Unacked: neither event reaches the renderer, which sees
-   * only the exit.
+   * How a pointer moving from the step `from`, inside the viewport, to the
+   * step `to`, outside it, leaves: `ms` after `from` it crosses the edge,
+   * having last been seen at `last` (null if not since `from`), and leaves
+   * for `exit`. Stock 159.0 on X11 (27 exits by hand, slow and fast, every
+   * edge) fires one more mousemove 0-5px inside the edge, then the mouseout
+   * 1-8px past it within a millisecond, 2-8px apart and further apart the
+   * faster the pointer: the last sample of a mouse polled every millisecond,
+   * and the first one after. They were never less than 2px apart.
    */
-  leaveContent(from, to) {
+  _crossing(from, to) {
     const {width, height} = this._box;
-    // The first pixel past an edge the point is beyond: -1 before the near
-    // edges, width or height after the far ones, which are exclusive.
-    const past = (v, size) => v < 0 ? -1 : v >= size ? size : null;
-    const ex = past(to.x, width);
-    const ey = past(to.y, height);
-    // How far along from->to each coordinate reaches its edge; the pointer
-    // stops at the first edge it reaches.
-    let tx = Infinity;
-    let ty = Infinity;
-    if (from) {
-      if (ex !== null)
-        tx = (ex - from.x) / (to.x - from.x);
-      if (ey !== null)
-        ty = (ey - from.y) / (to.y - from.y);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    // How far along from->to each coordinate reaches its edge of the content.
+    const reach = (f, d, size) => d < 0 && f + d < 0 ? -f / d : d > 0 && f + d >= size ? (size - f) / d : Infinity;
+    const k = Math.min(reach(from.x, dx, width), reach(from.y, dy, height));
+    const at = u => ({x: from.x + u * dx, y: from.y + u * dy});
+    const span = Math.max(to.t - from.t, 1);
+    const ms = k * span;
+    const sampled = Math.floor(ms);
+    const clamp = (v, size) => Math.min(Math.max(Math.round(v), 0), size - 1);
+    const sample = sampled > 0 ? at(sampled / span) : null;
+    const last = sample && {x: clamp(sample.x, width), y: clamp(sample.y, height)};
+    const seen = last ?? {x: Math.round(from.x), y: Math.round(from.y)};
+    const exit = at(Math.max((sampled + 1) / span, (Math.hypot(seen.x - from.x, seen.y - from.y) + 2) / Math.hypot(dx, dy)));
+    // The coordinate that crossed lands on a pixel past its edge, and on one
+    // further out if the pixels the page sees would be under 2px apart.
+    const crossedX = reach(from.x, dx, width) === k;
+    const beyond = (v, d, size) => d < 0 ? Math.min(Math.floor(v), -1) : Math.max(Math.floor(v), size);
+    let x = crossedX ? beyond(exit.x, dx, width) : Math.round(exit.x);
+    let y = crossedX ? Math.round(exit.y) : beyond(exit.y, dy, height);
+    if (Math.hypot(x - seen.x, y - seen.y) < 2) {
+      if (crossedX)
+        x += Math.sign(dx);
+      else
+        y += Math.sign(dy);
     }
-    const t = Math.min(tx, ty);
-    const along = (f, s, size) => Math.min(Math.max(Math.round(from && t !== Infinity ? f + t * (s - f) : s), 0), size - 1);
-    const x = ex !== null && tx === t ? ex : along(from?.x, to.x, width);
-    const y = ey !== null && ty === t ? ey : along(from?.y, to.y, height);
+    return {ms, last, exit: {x, y}};
+  }
+
+  /**
+   * Move the pointer off the content to the relative point (x, y), outside the
+   * viewport or in a band of it the window does not show. That point is on the
+   * chrome when the window has some there (the toolbar above the content), so
+   * the pointer moves onto it; past the window's own edge the pointer leaves
+   * the window. Unacked: neither event reaches the renderer, which sees only
+   * the exit.
+   */
+  leaveContent(x, y) {
     // The row the content's fractional top falls in is partly content (see the
     // constructor), so a point above the content is floored onto the row above.
     const absX = Math.floor(this._box.left + x);
