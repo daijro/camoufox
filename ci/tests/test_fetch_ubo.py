@@ -120,6 +120,20 @@ def test_the_manifest_names_the_bundled_ubo():
     assert "ubo" not in release.manifest("v1", "d", "0" * 40)
 
 
+def test_the_staged_addon_is_readable_by_every_user(tmp_path):
+    """The launcher may run as a user that doesn't own the install (a Docker
+    image's app user): a 0700 staging dir hid addons/UBO from it, so uBO never
+    loaded."""
+    data = xpi()
+    pin = {"version": "1.76.0", "url": "u", "sha256": hashlib.sha256(data).hexdigest()}
+    ubo = tmp_path / "addons" / "UBO"
+    fetch_ubo.extract(data, pin, str(ubo))
+    for path in [ubo, *ubo.rglob("*")]:
+        mode = path.stat().st_mode & 0o777
+        want = 0o755 if path.is_dir() else 0o644
+        assert mode == want, f"{path.relative_to(tmp_path)} is {oct(mode)}, want {oct(want)}"
+
+
 def test_a_ubo_whose_default_moved_is_refused(tmp_path):
     """Shipping a uBO that downloads its lists is worse than failing the build."""
     (tmp_path / "js").mkdir()
