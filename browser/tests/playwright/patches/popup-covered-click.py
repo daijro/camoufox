@@ -10,6 +10,11 @@ OS (XTest) clicks on the same page: the clicks land on the picker at once, the
 page sees none of them, the picker stays open. MouseDispatch._popupAt now
 sends such an event without waiting for an ack.
 
+A click right after showPicker() lands on the picker or the page, whichever the
+parent routes it to; either way it must not wait out the ack deadline. Before
+the covered clicks, the guard moves the mouse over #t until a move stops
+reaching the page, so it never clicks before the picker covers #t.
+
 Runs headless and, where Xvfb is installed, on a private Xvfb display.
 
     python browser/tests/playwright/patches/popup-covered-click.py
@@ -40,7 +45,9 @@ PAGE = """<!doctype html><html><body style="margin:0">
 <pre id="log" style="position:absolute;left:600px;top:500px"></pre>
 <script>
 const log = (m) => document.getElementById('log').append(m + ' ');
-for (const k of ['mousedown', 'mouseup', 'click']) document.getElementById('t').addEventListener(k, () => log(k));
+const t = document.getElementById('t');
+for (const k of ['mousedown', 'mouseup', 'click']) t.addEventListener(k, () => log(k));
+t.addEventListener('mousemove', (e) => { t.dataset.moved = e.clientX + ',' + e.clientY; });
 document.getElementById('open').addEventListener('click', () => {
   const d = document.createElement('input');
   d.type = 'date';
@@ -61,6 +68,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(PAGE.encode())
 
 
+def timed_click(page):
+    t = time.monotonic()
+    try:
+        page.locator("#t").click(timeout=4000)
+        return round(time.monotonic() - t, 2)
+    except Exception as e:
+        return type(e).__name__
+
+
+def wait_covered(page, deadline_s=30):
+    """Whether the picker came to cover #t: a move there stops reaching the
+    page. Juggler acks a move the parent gives the page, and the page handles
+    it at its next refresh tick, before that tick's animation frame callbacks."""
+    end = time.monotonic() + deadline_s
+    i = 0
+    while time.monotonic() < end:
+        x, y = 150 + i % 2 * 20, 90
+        i += 1
+        page.mouse.move(x, y)
+        seen = page.evaluate("""([x, y]) => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(
+            () => r(document.getElementById('t').dataset.moved === `${x},${y}`))))""", [x, y])
+        if not seen:
+            return True
+    return False
+
+
 def probe(binary, display):
     from camoufox.sync_api import Camoufox
 
@@ -69,22 +102,29 @@ def probe(binary, display):
         kw["env"] = {**os.environ, "DISPLAY": display}
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_port}/"
     with Camoufox(**kw) as browser:
+        # Each phase has its own page, so its own window and picker panel: a
+        # panel still hiding the last picker refuses to open again
+        # (nsXULPopupManager::MayShowPopup).
         page = browser.new_page()
-        page.goto(f"http://127.0.0.1:{srv.server_port}/", wait_until="load")
+        page.goto(url, wait_until="load")
+        # A click while the picker opens lands on the picker or the page, as an
+        # OS click would, but never waits for an ack the popup swallowed.
         page.locator("#open").click()
-        page.wait_for_timeout(1000)
+        racing = timed_click(page)
+        page.close()
+        page = browser.new_page()
+        page.goto(url, wait_until="load")
+        page.locator("#open").click()
+        covered = wait_covered(page)
         took = []
         for _ in range(2):
-            t = time.monotonic()
-            try:
-                page.locator("#t").click(timeout=4000)
-                took.append(round(time.monotonic() - t, 2))
-            except Exception as e:
-                took.append(type(e).__name__)
+            took.append(timed_click(page))
             page.wait_for_timeout(300)
         # The page's own log, read from the DOM: evaluate runs in an isolated world.
-        out = {"took": took, "page": page.locator("#log").text_content().split()}
+        out = {"racing": racing, "covered": covered, "took": took,
+               "page": page.locator("#log").text_content().split()}
     srv.shutdown()
     return out
 
@@ -99,8 +139,10 @@ def main() -> int:
                 continue
             got = probe(binary, None if where == "headless" else where)
             seen[where] = got
-            if got["page"][:1] != ["picker"]:
-                failures.append(f"{where}: the picker did not open: {got['page']}")
+            if not isinstance(got["racing"], float) or got["racing"] >= 2:
+                failures.append(f"{where}: a click while the picker opened took {got['racing']}, want under 2 s")
+            if not got["covered"] or got["page"][:1] != ["picker"]:
+                failures.append(f"{where}: the picker did not open over #t: {got['page']}")
             elif any(e in got["page"] for e in ("mousedown", "mouseup", "click")):
                 failures.append(f"{where}: the page got the clicks, so no popup covered #t: {got['page']}")
             elif not all(isinstance(s, float) and s < 2 for s in got["took"]):
