@@ -246,6 +246,75 @@ describe("rules", () => {
 		]);
 	});
 
+	it("repairing the ratio keeps the physical display", () => {
+		// fpgen's 1920x1080 monitor recorded at a 110% browser zoom: the zoom is
+		// folded into the ratio (1.0909) and shrinks every CSS size by it. The
+		// display mode is 100%, so the CSS geometry is the display's own.
+		const config: Record<string, unknown> = {
+			"window.devicePixelRatio": 1.0909090909090908,
+			"screen.width": 1760,
+			"screen.height": 990,
+			"screen.availWidth": 1760,
+			"screen.availHeight": 946,
+			"screen.availLeft": 0,
+			"screen.availTop": 0,
+			"window.outerWidth": 1760,
+			"window.outerHeight": 953,
+			"window.innerWidth": 1760,
+			"window.innerHeight": 807,
+			"window.screenX": -7,
+			"window.screenY": -7,
+		};
+		coherence.apply(config, "win");
+		expect(config["window.devicePixelRatio"]).toBe(1);
+		expect([config["screen.width"], config["screen.height"]]).toEqual([
+			1920, 1080,
+		]);
+		expect([config["screen.availWidth"], config["screen.availHeight"]]).toEqual(
+			[1920, 1032],
+		);
+		expect([config["window.outerWidth"], config["window.innerWidth"]]).toEqual([
+			1920, 1920,
+		]);
+		expect(config["window.innerHeight"]).toBe(880);
+		expect([config["window.screenX"], config["window.screenY"]]).toEqual([
+			-8, -8,
+		]);
+		// A screen the caller set is the caller's display: the ratio still moves
+		// to a real step, and no CSS size is rescaled, the caller's or another.
+		const screenSet: Record<string, unknown> = {
+			"window.devicePixelRatio": 1.0909090909090908,
+			"screen.width": 1760,
+			"screen.height": 990,
+			"window.outerWidth": 1760,
+		};
+		expect(
+			coherence.apply(screenSet, "win", new Set(["screen.width"])),
+		).toEqual([]);
+		expect(screenSet["window.devicePixelRatio"]).toBe(1);
+		expect([
+			screenSet["screen.width"],
+			screenSet["screen.height"],
+			screenSet["window.outerWidth"],
+		]).toEqual([1760, 990, 1760]);
+		// A ratio the caller set stays, reported by that key alone.
+		const kept: Record<string, unknown> = {
+			"window.devicePixelRatio": 1.0909090909090908,
+			"screen.width": 1760,
+			"screen.height": 990,
+		};
+		const left = coherence.apply(
+			kept,
+			"win",
+			new Set(["window.devicePixelRatio", "screen.width"]),
+		);
+		expect(kept["window.devicePixelRatio"]).toBe(1.0909090909090908);
+		expect(kept["screen.width"]).toBe(1760);
+		expect(left.map((v) => [v.rule, v.kept])).toEqual([
+			["device-pixel-ratio", ["window.devicePixelRatio"]],
+		]);
+	});
+
 	it("desktop screens are landscape", () => {
 		const config = { "screen.width": 1440, "screen.height": 2560 };
 		expect(rules(config, "win")).toEqual(["screen-shape"]);

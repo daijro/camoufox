@@ -243,7 +243,7 @@ this section in step with the launcher options.
 - **`headless="virtual-gpu"`** renders on one GPU, named by `gpu=` or `CAMOUFOX_GPU` (a PCI address is the stable choice); several GPUs and no selector raise `AmbiguousGpuSelection`. Without root it needs Xorg.wrap allowed to start Xorg as root for any user, and the card's config in `/etc/X11`; `python -m camoufox gpu-setup <gpu> | sudo sh` does both, and every failure that setup would fix ends with that command. A browser that does not render on the card raises `GpuSoftwareFallback` (`require_gpu=False` warns). Every error is a `VirtualDisplayError`. `gpu` and `require_gpu` are not `launch_options()` arguments.
 - **`os` values are lowercase** `windows`, `macos`, `linux`; anything else raises `InvalidOS`.
 - **`geoip` in Python needs the extra**: `pip install "camoufox[geoip]"`, else `NotInstalledGeoIPExtra`.
-- **`InvalidIP`** is raised when the public-IP or proxy exit-IP lookup fails, or when `webrtc_ip` is not a valid IPv4/IPv6 address. Pass `webrtc_ip` and `timezone_id` to `NewContext` to skip the lookup.
+- **`InvalidIP`** is raised when the public-IP or proxy exit-IP lookup fails, or when `webrtc_ip` is not a valid IPv4/IPv6 address. Pass `webrtc_ip`, `timezone_id`, `locale` and `geolocation` to `NewContext` to skip the lookup.
 - **`InvalidProxy`** means the proxy `server` string could not be parsed.
 - **`UnknownIPLocation`**: the IP is not in the GeoIP database; pass `locale` and set coordinates another way.
 - **Version ceilings:** Playwright below 1.63; Node.js 22.15 or newer.

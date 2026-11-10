@@ -778,7 +778,7 @@ export class PageHandler {
         const humanized = eventType === 'mousemove' && ChromeUtils.camouGetBool('humanize', false) &&
             humanizedMove(this._lastTrackedPos, {x, y});
         if (humanized) {
-          await dispatch.sendTrajectoryAcked(watcher, 'mousemove', humanized.plan,
+          await dispatch.sendTrajectoryAcked(watcher, 'mousemove', this._lastTrackedPos, humanized.plan,
               (plan, dispatchStep) => play(plan, dispatchStep, {signal: this._humanizeAbort.signal, deadlineMs: humanized.deadlineMs}),
               (destX, destY) => this._sendMove(dispatch, watcher, destX, destY));
         } else if (eventType === 'mousemove') {

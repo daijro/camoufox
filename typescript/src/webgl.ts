@@ -88,8 +88,6 @@ const TEXTURE_NORM16_OSES: ReadonlySet<string> = new Set(["mac", "lin", "win"]);
 const CLIP_CONTROL = "EXT_clip_control";
 const TEXTURE_MIRROR_CLAMP_TO_EDGE = "EXT_texture_mirror_clamp_to_edge";
 
-const ALIASED_LINE_WIDTH_RANGE = "33902";
-
 // Firefox 159 caps this at 64 KiB (WebGL2ContextState.cpp, kMaxUniformBlockSize);
 // fpgen recorded the drivers' own limit, up to 4 GiB.
 const MAX_UNIFORM_BLOCK_SIZE = "35376";
@@ -251,11 +249,16 @@ export function toConfig(
 			config,
 			contextConfig("webGl2", webgl2, targetOs, webgl2Backend),
 		);
-		// Firefox 156 creates WebGL1 on the same GL profile as WebGL2, so both
-		// report one line width range. 146 forced WebGL1 onto a compatibility
-		// profile, and fpgen recorded that profile's driver range.
-		config["webGl:parameters"][ALIASED_LINE_WIDTH_RANGE] =
-			config["webGl2:parameters"][ALIASED_LINE_WIDTH_RANGE];
+		// Firefox 156 creates WebGL1 on the same GL profile as WebGL2, so every
+		// parameter both report is one driver value (the line width range, the
+		// point size range...). 146 forced WebGL1 onto a compatibility profile,
+		// and fpgen recorded that profile's values. Only the version strings
+		// differ between the two.
+		const webgl1Parameters = config["webGl:parameters"];
+		for (const [key, value] of Object.entries(config["webGl2:parameters"])) {
+			if (key in webgl1Parameters && typeof value !== "string")
+				webgl1Parameters[key] = value;
+		}
 		const parameters = config["webGl2:parameters"];
 		if (MAX_UNIFORM_BLOCK_SIZE in parameters)
 			parameters[MAX_UNIFORM_BLOCK_SIZE] = Math.min(
