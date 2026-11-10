@@ -10,7 +10,7 @@ from random import Random, choice, randrange
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from camoufox._warnings import WARNINGS_DATA, FallbackWarning, _warn_from_caller
-from camoufox.coherence import gpu_cpu_vendor
+from camoufox.coherence import hardware_cpu_vendor
 from camoufox.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
@@ -866,17 +866,18 @@ def set_cpu_vendor_default(config: Dict[str, Any], target_os: str, salt: int = 0
     Skia's raster pipeline draws blend modes, perspective and inverted
     matrices with them, so a canvas a page reads back shows the vendor
     (gfx.skia.cpu_vendor_estimates, cpu-vendor-estimates.patch). A GPU that
-    only one vendor's CPU carries decides it (coherence.gpu_cpu_vendor); any
-    other is drawn at Firefox's own x86 split, seeded by the identity. Apple
-    Silicon has no x86 vendor. Run after the GPU is drawn; nothing is set when
-    the caller set the key.
+    only one vendor's CPU carries decides it, then a core count only Intel
+    ships (coherence.hardware_cpu_vendor); any other identity is drawn at
+    Firefox's own x86 split, seeded by the identity. Apple Silicon has no x86
+    vendor. Run after the GPU and navigator.hardwareConcurrency are final;
+    nothing is set when the caller set the key.
     """
     if 'cpu:vendor' in config:
         return
     renderer = config.get('webGl:renderer')
     if 'Apple M' in str(renderer or ''):
         return
-    vendor = gpu_cpu_vendor(renderer, target_os)
+    vendor = hardware_cpu_vendor(config, target_os)
     if not vendor:
         draw = Random(identity_seed(config, salt) ^ 0xC9D0).random()
         vendor = 'intel' if draw < X86_INTEL_SHARE else 'amd'

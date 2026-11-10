@@ -122,7 +122,9 @@ vendor, or is 0, Skia runs unchanged.
 
 The launcher sets the pref from `cpu:vendor`, which `cpu_vendor` sets and the
 identity otherwise draws: Intel for an Intel iGPU or any x86 Mac, AMD for a
-Radeon APU's graphics, and otherwise 81.4% Intel, the Intel share among x86
+Radeon APU's graphics, Intel for a hardwareConcurrency of 10, 14, 18, 22 or 28
+(no AMD CPU reports those; Intel's hybrids do, e.g. the Core Ultra 5 125H's
+18), and otherwise 81.4% Intel, the Intel share among x86
 CPUs in Firefox's hardware report (data.firefox.com, week of 2026-11-02:
 Intel 76.86%, AMD 17.61%, Apple 5.04%). The report has no per-OS split;
 Steam's survey puts AMD far higher, so the share is a choice, kept in

@@ -12,10 +12,15 @@ const WIN_UA =
 const NVIDIA =
 	"ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar";
 
-function drawn(renderer: string | null, os = "win", salt = 0): unknown {
+function drawn(
+	renderer: string | null,
+	os = "win",
+	salt = 0,
+	cores = 8,
+): unknown {
 	const config: Record<string, unknown> = {
 		"navigator.userAgent": WIN_UA,
-		"navigator.hardwareConcurrency": 8,
+		"navigator.hardwareConcurrency": cores,
 	};
 	if (renderer) config["webGl:renderer"] = renderer;
 	setCpuVendorDefault(config, os, salt);
@@ -127,7 +132,7 @@ describe("cpu:vendor", () => {
 			"webGl:renderer": "Intel(R) HD Graphics, or similar",
 		};
 		expect(coherence.validate(config, "lin").map((v) => v.rule)).toEqual([
-			"cpu-vendor-matches-gpu",
+			"cpu-vendor-matches-hardware",
 		]);
 		coherence.apply(config, "lin");
 		expect(config["cpu:vendor"]).toBe("intel");
@@ -137,6 +142,48 @@ describe("cpu:vendor", () => {
 		};
 		coherence.apply(mac, "mac");
 		expect("cpu:vendor" in mac).toBe(false);
+	});
+
+	it.each([
+		10, 14, 18, 22, 28,
+	])("a core count only Intel ships (%i) decides the vendor", (cores) => {
+		const draws = new Set(
+			Array.from({ length: 200 }, (_, s) => drawn(NVIDIA, "win", s, cores)),
+		);
+		expect(draws).toEqual(new Set(["intel"]));
+	});
+
+	it("a core count both vendors ship leaves the draw open", () => {
+		const draws = new Set(
+			Array.from({ length: 200 }, (_, s) => drawn(NVIDIA, "win", s, 16)),
+		);
+		expect(draws).toEqual(new Set(["intel", "amd"]));
+	});
+
+	it("the GPU decides before the core count", () => {
+		const apu = "Radeon HD 3200 Graphics, or similar";
+		expect(drawn(apu, "lin", 0, 14)).toBe("amd");
+		const config: Record<string, unknown> = {
+			"cpu:vendor": "amd",
+			"webGl:renderer": apu,
+			"navigator.hardwareConcurrency": 14,
+		};
+		expect(coherence.validate(config, "lin").map((v) => v.rule)).toEqual([
+			"cpu-vendor-matches-hardware",
+		]);
+	});
+
+	it("coherence repairs a vendor its core count contradicts", () => {
+		const config: Record<string, unknown> = {
+			"cpu:vendor": "amd",
+			"webGl:renderer": NVIDIA,
+			"navigator.hardwareConcurrency": 22,
+		};
+		expect(coherence.validate(config, "win").map((v) => v.rule)).toEqual([
+			"cpu-vendor-matches-hardware",
+		]);
+		coherence.apply(config, "win");
+		expect(config["cpu:vendor"]).toBe("intel");
 	});
 
 	it("the pref values are the patch's", () => {

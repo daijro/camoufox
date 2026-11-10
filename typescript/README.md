@@ -252,7 +252,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `block_webrtc` | `boolean` | `false` | Disable WebRTC entirely. |
 | `block_webgl` | `boolean` | `false` | Disable WebGL. Warns: many WAFs check for it. |
 | `webgl_config` | `[vendor, renderer]` | drawn | Use one GPU fpgen has recorded for Firefox on `os`; any other pair throws. Needs `os`. |
-| `cpu_vendor` | `"intel" \| "amd"` | follows the GPU, else drawn | The x86 vendor whose RCPPS/RSQRTPS rounding Skia's canvas (blend modes, perspective) and the Opus encoder use. Drawn 81% Intel, from Firefox's x86 hardware report; an Intel iGPU or Intel Mac is Intel, a Radeon iGPU AMD; a value the GPU contradicts warns. No effect for an Apple Silicon identity. |
+| `cpu_vendor` | `"intel" \| "amd"` | follows the GPU and cores, else drawn | The x86 vendor whose RCPPS/RSQRTPS rounding Skia's canvas (blend modes, perspective) and the Opus encoder use. Drawn 81% Intel, from Firefox's x86 hardware report; an Intel iGPU or Intel Mac is Intel, a Radeon iGPU AMD, and 10, 14, 18, 22 or 28 logical cores (counts only Intel's hybrids report) Intel; a value the GPU or cores contradict warns. No effect for an Apple Silicon identity. |
 | `canvas_noise` | `boolean` | on for another OS or GPU | Random canvas and WebGL readback, as in LibreWolf. Warns. See [The canvas on another OS](#the-canvas-on-another-os). |
 | `disable_coop` | `boolean` | `false` | Turn off Cross-Origin-Opener-Policy so elements in cross-origin iframes (such as the Turnstile checkbox) can be clicked. Warns. |
 | `main_world_eval` | `boolean` | `false` | Allow `page.evaluate("mw:...")` and `mw:` init scripts to run in the page's own world. |

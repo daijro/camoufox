@@ -52,5 +52,6 @@
   }
 ,
   "x86IntelShare": 0.8136,
-  "cpuVendorEstimatesPref": {"intel": 1, "amd": 2}
+  "cpuVendorEstimatesPref": {"intel": 1, "amd": 2},
+  "intelOnlyCoreCounts": [10, 14, 18, 22, 28]
 }

@@ -65,7 +65,7 @@ def test_a_callers_vendor_is_kept():
 
 def test_coherence_repairs_a_vendor_its_gpu_contradicts():
     config = {"cpu:vendor": "amd", "webGl:renderer": "Intel(R) HD Graphics, or similar"}
-    assert [v.rule for v in coherence.validate(config, "lin")] == ["cpu-vendor-matches-gpu"]
+    assert [v.rule for v in coherence.validate(config, "lin")] == ["cpu-vendor-matches-hardware"]
     coherence.apply(config, "lin")
     assert config["cpu:vendor"] == "intel"
     config = {"cpu:vendor": "intel", "webGl:renderer": "Apple M1, or similar"}
@@ -77,9 +77,34 @@ def test_coherence_keeps_a_callers_contradicting_vendor_and_reports_it():
     config = {"cpu:vendor": "amd", "webGl:renderer": "Intel(R) HD Graphics, or similar"}
     left = coherence.apply(config, "lin", keep=frozenset({"cpu:vendor"}))
     assert config["cpu:vendor"] == "amd"
-    assert [(v.rule, v.kept) for v in left] == [("cpu-vendor-matches-gpu", ("cpu:vendor",))]
+    assert [(v.rule, v.kept) for v in left] == [("cpu-vendor-matches-hardware", ("cpu:vendor",))]
 
 
 def test_the_pref_values_are_the_patchs():
     # SK_CPU_VENDOR_INTEL / SK_CPU_VENDOR_AMD in SkCpuEstimates.h
     assert LAUNCHER_CONSTANTS["cpuVendorEstimatesPref"] == {"intel": 1, "amd": 2}
+
+
+@pytest.mark.parametrize("cores", [10, 14, 18, 22, 28])
+def test_a_core_count_only_intel_ships_decides_the_vendor(cores):
+    # Intel's hybrids report these; every AMD CPU reports an even count
+    # without them (coherence.INTEL_ONLY_CORE_COUNTS).
+    assert {_drawn(NVIDIA, salt=salt, cores=cores) for salt in range(200)} == {"intel"}
+
+
+def test_a_core_count_both_vendors_ship_leaves_the_draw_open():
+    assert {_drawn(NVIDIA, salt=salt, cores=16) for salt in range(200)} == {"intel", "amd"}
+
+
+def test_the_gpu_decides_before_the_core_count():
+    amd_apu = "Radeon HD 3200 Graphics, or similar"
+    assert _drawn(amd_apu, "lin", cores=14) == "amd"
+    config = {"cpu:vendor": "amd", "webGl:renderer": amd_apu, "navigator.hardwareConcurrency": 14}
+    assert [v.rule for v in coherence.validate(config, "lin")] == ["cpu-vendor-matches-hardware"]
+
+
+def test_coherence_repairs_a_vendor_its_core_count_contradicts():
+    config = {"cpu:vendor": "amd", "webGl:renderer": NVIDIA, "navigator.hardwareConcurrency": 22}
+    assert [v.rule for v in coherence.validate(config, "win")] == ["cpu-vendor-matches-hardware"]
+    coherence.apply(config, "win")
+    assert config["cpu:vendor"] == "intel"
