@@ -408,9 +408,8 @@ export class MouseDispatch {
    * having last been seen at `last` (null if not since `from`), and leaves
    * for `exit`. Stock 159.0 on X11 (27 exits by hand, slow and fast, every
    * edge) fires one more mousemove 0-5px inside the edge, then the mouseout
-   * 1-8px past it within a millisecond, 2-8px apart and further apart the
-   * faster the pointer: the last sample of a mouse polled every millisecond,
-   * and the first one after. They were never less than 2px apart.
+   * 1-8px past it within a millisecond, 2-8px apart: the last sample of a
+   * mouse polled every millisecond, and the first one after.
    */
   _crossing(from, to) {
     const {width, height} = this._box;
@@ -419,28 +418,18 @@ export class MouseDispatch {
     // How far along from->to each coordinate reaches its edge of the content.
     const reach = (f, d, size) => d < 0 && f + d < 0 ? -f / d : d > 0 && f + d >= size ? (size - f) / d : Infinity;
     const k = Math.min(reach(from.x, dx, width), reach(from.y, dy, height));
-    const at = u => ({x: from.x + u * dx, y: from.y + u * dy});
     const span = Math.max(to.t - from.t, 1);
     const ms = k * span;
     const sampled = Math.floor(ms);
     const clamp = (v, size) => Math.min(Math.max(Math.round(v), 0), size - 1);
-    const sample = sampled > 0 ? at(sampled / span) : null;
-    const last = sample && {x: clamp(sample.x, width), y: clamp(sample.y, height)};
+    const last = sampled > 0 ? {x: clamp(from.x + sampled / span * dx, width), y: clamp(from.y + sampled / span * dy, height)} : null;
     const seen = last ?? {x: Math.round(from.x), y: Math.round(from.y)};
-    const exit = at(Math.max((sampled + 1) / span, (Math.hypot(seen.x - from.x, seen.y - from.y) + 2) / Math.hypot(dx, dy)));
-    // The coordinate that crossed lands on a pixel past its edge, and on one
-    // further out if the pixels the page sees would be under 2px apart.
-    const crossedX = reach(from.x, dx, width) === k;
-    const beyond = (v, d, size) => d < 0 ? Math.min(Math.floor(v), -1) : Math.max(Math.floor(v), size);
-    let x = crossedX ? beyond(exit.x, dx, width) : Math.round(exit.x);
-    let y = crossedX ? Math.round(exit.y) : beyond(exit.y, dy, height);
-    if (Math.hypot(x - seen.x, y - seen.y) < 2) {
-      if (crossedX)
-        x += Math.sign(dx);
-      else
-        y += Math.sign(dy);
-    }
-    return {ms, last, exit: {x, y}};
+    // Straight across the edge from the pixel the page last saw. 3px on, as a
+    // fractional content offset can put the two a pixel nearer on the page
+    // than planned, and stock's were never under 2px apart.
+    const across = (v, d, size) => d < 0 ? Math.min(v - 3, -1) : Math.max(v + 3, size);
+    const exit = reach(from.x, dx, width) === k ? {x: across(seen.x, dx, width), y: seen.y} : {x: seen.x, y: across(seen.y, dy, height)};
+    return {ms, last, exit};
   }
 
   /**
