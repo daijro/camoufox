@@ -12,7 +12,8 @@ same shape.
 macOS differs. A person's notched mouse on stock 159.0 gives one line a slow
 notch: deltaY 1, wheelDeltaY -48, DOMMouseScroll detail 1, MozMousePixelScroll
 16. A faster turn starts at one line and grows, with those values in proportion.
-A line is the scroller's line height, so the 16 and 48 follow the page's font.
+A line is the scroller's line height, so the 16 and 48 follow the page's font;
+the legacy events carry it rounded, the scroll moves the exact (at 2x, half-pixel) amount.
 
 Juggler sent the requested pixels instead, unless humanize was on: deltaMode 0,
 deltaY 100, wheelDeltaY -300, DOMMouseScroll detail 5, one event however far
@@ -92,6 +93,14 @@ async def contended_wheel(binary):
 def mac_failures(got):
     failures = []
     line = next(e[1] for e in got["slow"][0] if e[0] == "MozMousePixelScroll")
+    # The scroller's line height, which a one-line notch scrolls. At a
+    # devicePixelRatio of 2 it can be a half pixel (29 device px = 14.5 CSS
+    # px): stock scrolls the fraction, while the legacy events carry it rounded
+    # (EventStateManager: CSSIntSize::FromAppUnitsRounded, "We don't deal with
+    # fractional amount in legacy event").
+    line_px = got["slow"][1]
+    if round(line_px + 1e-9) != line:
+        failures.append(f"macOS line height {line_px} px, but MozMousePixelScroll carries {line}")
     for name, lines in (("slow", 1), ("turn", 6), ("long", 63)):
         events, scrolled = got[name]
         wheels = [e[3] for e in events if e[0] == "wheel"]
@@ -105,8 +114,8 @@ def mac_failures(got):
             failures.append(f"macOS mouse.wheel ({name}) delivered {shape}, expected {expected}")
         if not wheels or wheels[0] != 1 or sum(wheels) != lines:
             failures.append(f"macOS mouse.wheel ({name}) sent lines {wheels}: a burst starts at 1 and totals {lines}")
-        if scrolled != line * lines:
-            failures.append(f"macOS mouse.wheel ({name}) scrolled {scrolled} px, expected {line * lines}")
+        if abs(scrolled - line_px * lines) > 0.01:
+            failures.append(f"macOS mouse.wheel ({name}) scrolled {scrolled} px, expected {line_px * lines}")
     return failures
 
 

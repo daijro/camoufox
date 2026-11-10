@@ -123,6 +123,10 @@ class Rule(NamedTuple):
     check: Callable[[Dict[str, Any], str], Optional[str]]
     #: Repairs the identity in place. None where no correct value is determined.
     repair: Optional[Callable[[Dict[str, Any], str], None]]
+    #: Keys the repair only adjusts to stay consistent with what it repairs. A
+    #: caller who set any of them keeps all of them as they were, the repair
+    #: itself still runs, and they never block it.
+    adjusts: Tuple[str, ...] = ()
 
 
 def _renderer(config: Dict[str, Any]) -> str:
@@ -279,13 +283,45 @@ def _check_device_pixel_ratio(config: Dict[str, Any], target_os: str) -> Optiona
     return None
 
 
-def _repair_device_pixel_ratio(config: Dict[str, Any], target_os: str) -> None:
+# The CSS geometry a ratio scales: device pixels / devicePixelRatio.
+CSS_GEOMETRY_KEYS = (
+    'screen.width', 'screen.height', 'screen.availWidth', 'screen.availHeight',
+    'screen.availLeft', 'screen.availTop',
+    'window.outerWidth', 'window.outerHeight', 'window.innerWidth', 'window.innerHeight',
+    'window.screenX', 'window.screenY',
+)
+
+
+def is_zoomed_ratio(dpr: Any, target_os: str) -> bool:
+    """A devicePixelRatio no display mode of the OS offers: a browser zoom
+    folded into the ratio, which scaled every CSS size with it."""
+    allowed = PLAUSIBLE_DPR.get(target_os)
+    if not allowed or isinstance(dpr, bool) or not isinstance(dpr, (int, float)) or dpr <= 0:
+        return False
+    return float(dpr) not in {float(v) for v in allowed}
+
+
+def repair_device_pixel_ratio(config: Dict[str, Any], target_os: str,
+                              target: Optional[float] = None) -> None:
+    """Move the ratio to `target` (the scale a caller renders at) or else the
+    nearest display mode, rescaling the CSS geometry so the screen stays the
+    display behind it."""
     dpr = config.get('window.devicePixelRatio')
     allowed = PLAUSIBLE_DPR.get(target_os)
     if dpr is None or not allowed:
         return
     # Nearest real scaling step: 1.818 becomes 1.75 on Windows, 2 on macOS.
-    config['window.devicePixelRatio'] = min(allowed, key=lambda v: abs(float(v) - float(dpr)))
+    step = target if target else min(allowed, key=lambda v: abs(float(v) - float(dpr)))
+    config['window.devicePixelRatio'] = step
+    # The scraped ratio has a browser zoom folded in, which shrank every CSS
+    # size by it; the display behind it keeps its device pixels. Rescale to the
+    # step so the screen is still that display: 1760x990 at 1.0909 is a
+    # 1920x1080 monitor, so 1920x1080 at 1. Firefox rounds device / ratio.
+    scale = float(dpr) / float(step)
+    for key in CSS_GEOMETRY_KEYS:
+        value = config.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            config[key] = int(round(value * scale))
 
 
 def _check_window_chrome(config: Dict[str, Any], target_os: str) -> Optional[str]:
@@ -362,7 +398,7 @@ RULES: List[Rule] = [
     Rule('color-depth', _check_color_depth, _repair_color_depth),
     Rule('pixel-depth', _check_pixel_depth, _repair_pixel_depth),
     Rule('touch-points', _check_touch_points, _repair_touch_points),
-    Rule('device-pixel-ratio', _check_device_pixel_ratio, _repair_device_pixel_ratio),
+    Rule('device-pixel-ratio', _check_device_pixel_ratio, repair_device_pixel_ratio, CSS_GEOMETRY_KEYS),
     Rule('window-chrome', _check_window_chrome, _repair_window_chrome),
     Rule('screen-shape', _check_screen_shape, None),
     Rule('avail-bounds', _check_avail_bounds, _repair_avail_bounds),
@@ -461,6 +497,12 @@ def apply(config: Dict[str, Any], target_os: str, keep: AbstractSet[str] = froze
             continue
         repaired = dict(config)
         rule.repair(repaired, target_os)
+        if rule.adjusts and keep.intersection(rule.adjusts):
+            for key in rule.adjusts:
+                if key in config:
+                    repaired[key] = config[key]
+                else:
+                    repaired.pop(key, None)
         blocked = _changed(config, repaired, keep)
         if blocked:
             kept[rule.name] = blocked

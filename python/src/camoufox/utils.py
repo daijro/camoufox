@@ -27,8 +27,8 @@ from .exceptions import (
 from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, draw_voice_config, fix_navigator_arch, fix_hardware_concurrency, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
 from .geolocation import geoip_allowed, get_geolocation
-from .ip import Proxy, proxy_auth_env, proxy_auth_init_script, public_ip, public_ipv6, socks5_auth, valid_ipv4, valid_ipv6
-from .locales import handle_locales
+from .ip import ExitGeo, Proxy, proxy_auth_env, proxy_auth_init_script, public_ip, public_ipv6, socks5_auth, valid_ipv4, valid_ipv6
+from .locales import SELECTOR, handle_locales
 import warnings
 
 from .pkgman import (
@@ -970,6 +970,36 @@ def context_identity(
     return host_name, gpu
 
 
+def needs_exit_geo(
+    webrtc_ip: Optional[str],
+    geolocation: Optional[Dict[str, float]],
+    context_kwargs: Dict[str, Any],
+) -> bool:
+    """Whether a context behind a proxy needs to look up where it exits."""
+    return not (
+        webrtc_ip
+        and geolocation
+        and 'timezone_id' in context_kwargs
+        and 'locale' in context_kwargs
+    )
+
+
+def place_at_exit(
+    geo: ExitGeo,
+    webrtc_ip: Optional[str],
+    geolocation: Optional[Dict[str, float]],
+    context_kwargs: Dict[str, Any],
+) -> Tuple[str, Dict[str, float]]:
+    """Place a proxied context at the exit, keeping caller-provided values."""
+    context_kwargs.setdefault('timezone_id', geo.timezone)
+    if 'locale' not in context_kwargs:
+        context_kwargs['locale'] = SELECTOR.from_region(geo.country).as_string
+    return (
+        webrtc_ip or geo.ip,
+        geolocation or {'latitude': geo.latitude, 'longitude': geo.longitude},
+    )
+
+
 def new_context_options(
     fingerprint: Dict[str, Any],
     context_kwargs: Dict[str, Any],
@@ -1388,6 +1418,25 @@ def launch_options(
         )
 
     target_os = get_target_os(config)
+
+    # fpgen.yml leaves devicePixelRatio unmapped, so the page reports the
+    # rendering scale while the screen keeps fpgen's CSS sizes. A drawn ratio
+    # no display offers is a browser zoom that shrank those sizes (1760x990 at
+    # 1.0909 is a 1920x1080 monitor at 110%): it moves to the display's scale
+    # with the geometry rescaled, so the screen is the display it was recorded
+    # on. Here, before the display clamp and the available area are derived
+    # from it. A caller's layout.css.devPixelsPerPx is the scale the page
+    # renders at, so the ratio moves to that instead: otherwise the page reports
+    # one devicePixelRatio and matches another in matchMedia('(resolution)').
+    if not _used_preset and isinstance(fingerprint, dict) and not _user_set_screen_window:
+        drawn_dpr = (fingerprint.get('window') or {}).get('devicePixelRatio')
+        if 'window.devicePixelRatio' not in config and coherence.is_zoomed_ratio(drawn_dpr, target_os):
+            try:
+                caller_scale = float(firefox_user_prefs.get('layout.css.devPixelsPerPx') or -1)
+            except (TypeError, ValueError):
+                caller_scale = -1.0
+            config['window.devicePixelRatio'] = drawn_dpr
+            coherence.repair_device_pixel_ratio(config, target_os, caller_scale if caller_scale > 0 else None)
 
     # A preset whose screen is a phone viewport is not a real desktop device;
     # the floor is normally skipped for presets, on the assumption that a preset

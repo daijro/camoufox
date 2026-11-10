@@ -212,6 +212,40 @@ class TestRules:
             "device-pixel-ratio"
         ]
 
+    def test_repairing_the_ratio_keeps_the_physical_display(self):
+        # fpgen's 1920x1080 monitor recorded at a 110% browser zoom: the zoom is
+        # folded into the ratio (1.0909) and shrinks every CSS size by it. The
+        # display mode is 100%, so the CSS geometry is the display's own. Kept
+        # at 1760x990 with a ratio of 1, the page claims a 1760x990 monitor
+        # while the browser renders at 1 on the real one: a fullscreen window
+        # measured 1920x1080 against screen.width 1760 (cg.12 on WSLg).
+        config = {"window.devicePixelRatio": 1.0909090909090908,
+                  "screen.width": 1760, "screen.height": 990,
+                  "screen.availWidth": 1760, "screen.availHeight": 946,
+                  "screen.availLeft": 0, "screen.availTop": 0,
+                  "window.outerWidth": 1760, "window.outerHeight": 953,
+                  "window.innerWidth": 1760, "window.innerHeight": 807,
+                  "window.screenX": -7, "window.screenY": -7}
+        coherence.apply(config, "win")
+        assert config["window.devicePixelRatio"] == 1
+        assert (config["screen.width"], config["screen.height"]) == (1920, 1080)
+        assert (config["screen.availWidth"], config["screen.availHeight"]) == (1920, 1032)
+        assert (config["window.outerWidth"], config["window.innerWidth"]) == (1920, 1920)
+        assert config["window.innerHeight"] == 880
+        assert (config["window.screenX"], config["window.screenY"]) == (-8, -8)
+        # A screen the caller set is the caller's display: the ratio still moves
+        # to a real step, and no CSS size is rescaled, the caller's or another.
+        config = {"window.devicePixelRatio": 1.0909090909090908, "screen.width": 1760,
+                  "screen.height": 990, "window.outerWidth": 1760}
+        assert coherence.apply(config, "win", keep={"screen.width"}) == []
+        assert config["window.devicePixelRatio"] == 1
+        assert (config["screen.width"], config["screen.height"], config["window.outerWidth"]) == (1760, 990, 1760)
+        # A ratio the caller set stays, reported by that key alone.
+        config = {"window.devicePixelRatio": 1.0909090909090908, "screen.width": 1760, "screen.height": 990}
+        left = coherence.apply(config, "win", keep={"window.devicePixelRatio", "screen.width"})
+        assert config["window.devicePixelRatio"] == 1.0909090909090908 and config["screen.width"] == 1760
+        assert [(v.rule, v.kept) for v in left] == [("device-pixel-ratio", ("window.devicePixelRatio",))]
+
     def test_desktop_screens_are_landscape(self):
         config = {"screen.width": 1440, "screen.height": 2560}
         assert [v.rule for v in coherence.validate(config, "win")] == ["screen-shape"]

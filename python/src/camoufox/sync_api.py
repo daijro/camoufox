@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple, Union, overload
+from typing import Any, Dict, Optional, Union, overload
 
 from playwright.sync_api import (
     Browser,
@@ -12,15 +12,17 @@ from camoufox.virtdisplay import VirtualDisplay
 
 from . import driver_defaults
 from .fingerprints import generate_context_fingerprint
-from .ip import Proxy, proxy_exit_geo
+from .ip import ExitGeo, Proxy, proxy_exit_geo
 from .utils import (
     attach_context_defaults,
     attach_socks5_auth,
     context_identity,
     host_identity,
     launch_options,
+    needs_exit_geo,
     new_context_options,
     persistent_context_options,
+    place_at_exit,
     spoofs_window_dimensions,
     start_virtual_display,
     sync_attach_vd,
@@ -175,8 +177,8 @@ def _launch(
             cpu_affinity.restore(pid, previous)
 
 
-def _resolve_proxy_geo(proxy: Dict[str, str]) -> Tuple[str, str]:
-    """The proxy's exit IP and timezone."""
+def _resolve_proxy_geo(proxy: Dict[str, str]) -> ExitGeo:
+    """Where the proxy exits."""
     return proxy_exit_geo(Proxy(**proxy).as_string())
 
 
@@ -207,8 +209,9 @@ def NewContext(
         ff_version: Firefox major version to claim in the UA. Defaults to the browser's own.
         webrtc_ip: IPv4 or IPv6 address to spoof for WebRTC ICE candidates.
         proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).
-            Unless webrtc_ip and timezone_id are both given, they are looked up from the
-            proxy's exit IP; InvalidIP is raised if that lookup fails.
+            The context is placed where the proxy exits: webrtc_ip, timezone_id, locale and
+            geolocation each default to the exit IP's, looked up through the proxy unless all
+            four are given; InvalidIP is raised if that lookup fails.
         geolocation: Per-context geolocation ({"latitude": float, "longitude": float}).
         **context_kwargs: Additional Playwright new_context() options.
     """
@@ -216,11 +219,10 @@ def NewContext(
     # the browser the page is actually talking to.
     ff_version = ff_version or browser.version.split('.', 1)[0]
 
-    # Auto-derive WebRTC IP and timezone from proxy's exit IP when not explicitly provided
-    if proxy and (not webrtc_ip or "timezone_id" not in context_kwargs):
-        exit_ip, timezone = _resolve_proxy_geo(proxy)
-        webrtc_ip = webrtc_ip or exit_ip
-        context_kwargs.setdefault("timezone_id", timezone)
+    if proxy and needs_exit_geo(webrtc_ip, geolocation, context_kwargs):
+        webrtc_ip, geolocation = place_at_exit(
+            _resolve_proxy_geo(proxy), webrtc_ip, geolocation, context_kwargs
+        )
 
     os, webgl_config = context_identity(browser, os, preset)
     fp = generate_context_fingerprint(

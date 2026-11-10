@@ -1,0 +1,25 @@
+diff --git a/dom/canvas/OffscreenCanvas.cpp b/dom/canvas/OffscreenCanvas.cpp
+--- a/dom/canvas/OffscreenCanvas.cpp
++++ b/dom/canvas/OffscreenCanvas.cpp
+@@ -15,6 +15,7 @@
+ #include "mozilla/Atomics.h"
+ #include "mozilla/CheckedInt.h"
+ #include "mozilla/Logging.h"
++#include "mozilla/StaticPrefs_webgl.h"
+ #include "mozilla/dom/BlobImpl.h"
+ #include "mozilla/dom/DocumentInlines.h"
+ #include "mozilla/dom/OffscreenCanvasBinding.h"
+@@ -196,6 +197,13 @@
+       contextType = CanvasContextType::WebGL1;
+       break;
+     case OffscreenRenderingContextId::Webgl2:
++      // Camoufox: a canvas element offers no WebGL2 with webgl.enable-webgl2
++      // off (CanvasUtils::GetCanvasContextType); this one did, so a device
++      // claimed without WebGL2 still had one here, on the host's parameters.
++      if (!StaticPrefs::webgl_enable_webgl2()) {
++        aResult.SetNull();
++        return;
++      }
+       contextType = CanvasContextType::WebGL2;
+       break;
+     case OffscreenRenderingContextId::Webgpu:

@@ -1788,6 +1788,40 @@ export async function launchOptions({
 
 	const targetOs = getTargetOs(config);
 
+	// fpgen.yml leaves devicePixelRatio unmapped, so the page reports the
+	// rendering scale while the screen keeps fpgen's CSS sizes. A drawn ratio no
+	// display offers is a browser zoom that shrank those sizes (1760x990 at
+	// 1.0909 is a 1920x1080 monitor at 110%): it moves to the display's scale
+	// with the geometry rescaled, so the screen is the display it was recorded
+	// on. Here, before the display clamp and the available area are derived
+	// from it.
+	if (
+		!usedPreset &&
+		fingerprint != null &&
+		typeof fingerprint === "object" &&
+		!userSetScreenWindow
+	) {
+		const drawnDpr = (fingerprint as Record<string, any>).window
+			?.devicePixelRatio;
+		if (
+			!("window.devicePixelRatio" in config) &&
+			coherence.isZoomedRatio(drawnDpr, targetOs)
+		) {
+			// A caller's layout.css.devPixelsPerPx is the scale the page renders
+			// at, so the ratio moves to that: otherwise the page reports one
+			// devicePixelRatio and matches another in matchMedia('(resolution)').
+			const callerScale = Number(
+				firefox_user_prefs["layout.css.devPixelsPerPx"] ?? -1,
+			);
+			config["window.devicePixelRatio"] = drawnDpr;
+			coherence.repairDevicePixelRatio(
+				config,
+				targetOs,
+				callerScale > 0 ? callerScale : undefined,
+			);
+		}
+	}
+
 	// A preset whose screen is a phone viewport is not a real desktop device.
 	if (!userSetScreenWindow && coherence.screenIsImplausible(config)) {
 		coherence.repairScreenOrientation(config);

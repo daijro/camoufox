@@ -815,14 +815,19 @@ def test_webgl_browser_owned_values_follow_firefox():
     from camoufox import webgl
 
     why = explain("webgl-browser-owned-values-follow-firefox")
-    recorded = {"params": {"33902": {"value": [1, 2048]}}, "shaderPrecisionFormats": [], "supportedExtensions": []}
-    webgl2 = {**recorded, "params": {"33902": {"value": [1, 1]}}}
+    # Line width (33902) and point size (33901) ranges: WebGL1 takes WebGL2's
+    # value for every parameter both report (one GL profile since Firefox 156).
+    recorded = {"params": {"33902": {"value": [1, 2048]}, "33901": {"value": [1, 2047]}},
+                "shaderPrecisionFormats": [], "supportedExtensions": []}
+    webgl2 = {**recorded, "params": {"33902": {"value": [1, 1]}, "33901": {"value": [1, 255]}}}
     for target_os in ("win", "mac", "lin"):
         config = webgl.to_config({"vendor": "v", "renderer": "r", **recorded}, webgl2, target_os)
         assert config["webGl:parameters"]["33902"] == [1, 1], why
+        assert config["webGl:parameters"]["33901"] == [1, 255], why
         assert ("EXT_depth_clamp" in config["webGl:supportedExtensions"]) == (target_os == "win"), why
     ts = (REPO_ROOT / "typescript" / "src" / "webgl.ts").read_text(encoding="utf-8")
-    for line in ('win: ["EXT_depth_clamp"]', 'ALIASED_LINE_WIDTH_RANGE = "33902"'):
+    for line in ('win: ["EXT_depth_clamp"]',
+                 'for (const [key, value] of Object.entries(config["webGl2:parameters"]))'):
         assert line in ts, why
 
     assert (BROWSER / "tests" / "playwright" / "patches" / "stock-gpu-parity.py").exists(), why

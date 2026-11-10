@@ -224,17 +224,31 @@ function applyWindowSize(win) {
   // Only the window manager's changes are undone: a page entering fullscreen
   // or the find bar taking room from the content area leaves the outer size
   // or the size mode to the page and the user, as in stock.
+  // An X11 window manager's frame (_NET_FRAME_EXTENTS) can arrive after the
+  // window maps. It changes only the margins Firefox adds to the outer size,
+  // and with the content area unchanged no resize event fires, so the hold
+  // also checks on a timer.
   const deadline = Date.now() + 5000;
   let held = null;
+  let holdTimer = null;
+  const stopHolding = () => {
+    win.removeEventListener("sizemodechange", holdStartupSize);
+    win.removeEventListener("resize", holdStartupSize);
+    win.clearInterval(holdTimer);
+  };
   const holdStartupSize = () => {
     if (Date.now() > deadline || win.windowState === win.STATE_FULLSCREEN) {
-      win.removeEventListener("sizemodechange", holdStartupSize);
-      win.removeEventListener("resize", holdStartupSize);
+      stopHolding();
       return;
     }
     if (win.windowState === win.STATE_MAXIMIZED) {
       win.restore();
-    } else if (held && held[0] === win.outerWidth && held[1] === win.outerHeight) {
+    } else if (held && held[0] === win.outerWidth && held[1] === win.outerHeight &&
+               !misfit().some(Boolean)) {
+      // The window being at the held size is not enough: the toolbars can
+      // reflow after it got there (84px to 72px tall, a few hundred ms in, on
+      // a loaded host) with no resize event, which left the content area
+      // 12px too tall for the rest of the launch.
       unpin();
       return;
     }
@@ -249,12 +263,12 @@ function applyWindowSize(win) {
   holdStartupSize();
   win.addEventListener("sizemodechange", holdStartupSize);
   win.addEventListener("resize", holdStartupSize);
+  holdTimer = win.setInterval(holdStartupSize, 100);
   // A driver's viewport takes over from the identity's startup size at once.
   win.addEventListener(
     "CamoufoxViewportSized",
     () => {
-      win.removeEventListener("sizemodechange", holdStartupSize);
-      win.removeEventListener("resize", holdStartupSize);
+      stopHolding();
       if (pin) {
         pin.remove();
         pin = null;
