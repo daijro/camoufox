@@ -1,0 +1,91 @@
+diff --git a/gfx/skia/moz.build b/gfx/skia/moz.build
+--- a/gfx/skia/moz.build
++++ b/gfx/skia/moz.build
+@@ -508,6 +508,7 @@
+     'skia/src/pdf/SkPDFDevice.cpp',
+     'skia/src/pdf/SkPDFFont.cpp',
+     'skia/src/pdf/SkPDFType1Font.cpp',
++    'skia/src/ports/SkCpuEstimates_mozilla.cpp',
+     'skia/src/sksl/SkSLLexer.cpp',
+     'skia/src/utils/SkParse.cpp',
+     'skia/src/utils/SkParsePath.cpp',
+diff --git a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h b/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h
+--- a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h
++++ b/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h
+@@ -116,6 +116,7 @@
+     #include <lsxintrin.h>
+ #else
+     #include <immintrin.h>
++    #include "src/opts/SkCpuEstimates.h"
+ #endif
+ 
+ // Notes:
+@@ -608,8 +609,21 @@
+     SI I32 abs_  (I32 v)     { return (I32)_mm256_abs_epi32((__m256i)v); }
+     SI F   floor_(F v)       { return _mm256_floor_ps(v);    }
+     SI F   ceil_(F v)        { return _mm256_ceil_ps(v);     }
+-    SI F   rcp_approx(F v)   { return _mm256_rcp_ps  (v);    }  // use rcp_fast instead
+-    SI F   rsqrt_approx(F v) { return _mm256_rsqrt_ps(v);    }
++    // Another vendor's estimates, when gfx.skia.cpu_vendor_estimates names one (SkCpuEstimates.h).
++    template <uint32_t (*Op)(const uint32_t*, uint32_t)>
++    SI F estimate_as(const uint32_t* table, F v) {
++        U32 bits = sk_bit_cast<U32>(v);
++        for (int i = 0; i < 8; i++) { bits[i] = Op(table, bits[i]); }
++        return sk_bit_cast<F>(bits);
++    }
++    SI F   rcp_approx(F v)   {  // use rcp_fast instead
++        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rcp>(table, v); }
++        return _mm256_rcp_ps  (v);
++    }
++    SI F   rsqrt_approx(F v) {
++        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rsqrt>(table, v); }
++        return _mm256_rsqrt_ps(v);
++    }
+     SI F   sqrt_ (F v)       { return _mm256_sqrt_ps (v);    }
+     SI F   rcp_precise (F v) {
+         F e = rcp_approx(v);
+@@ -809,9 +823,22 @@
+ #else
+     SI I32 abs_(I32 v)         { return max(v, -v); }
+ #endif
+-    SI F   rcp_approx(F v)     { return _mm_rcp_ps  (v);    }  // use rcp_fast instead
++    // Another vendor's estimates, when gfx.skia.cpu_vendor_estimates names one (SkCpuEstimates.h).
++    template <uint32_t (*Op)(const uint32_t*, uint32_t)>
++    SI F estimate_as(const uint32_t* table, F v) {
++        U32 bits = sk_bit_cast<U32>(v);
++        for (int i = 0; i < 4; i++) { bits[i] = Op(table, bits[i]); }
++        return sk_bit_cast<F>(bits);
++    }
++    SI F   rcp_approx(F v)     {  // use rcp_fast instead
++        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rcp>(table, v); }
++        return _mm_rcp_ps  (v);
++    }
+     SI F   rcp_precise (F v)   { F e = rcp_approx(v); return e * (2.0f - v * e); }
+-    SI F   rsqrt_approx(F v)   { return _mm_rsqrt_ps(v);    }
++    SI F   rsqrt_approx(F v)   {
++        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rsqrt>(table, v); }
++        return _mm_rsqrt_ps(v);
++    }
+     SI F    sqrt_(F v)         { return _mm_sqrt_ps (v);    }
+ 
+     SI I32 iround(F v)         { return (I32)_mm_cvtps_epi32(v); }
+diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/StaticPrefList.yaml
+--- a/modules/libpref/init/StaticPrefList.yaml
++++ b/modules/libpref/init/StaticPrefList.yaml
+@@ -8334,6 +8334,16 @@
+   value: false
+   mirror: once
+ 
++# The x86 CPU vendor whose RCPPS/RSQRTPS estimates Skia's raster pipeline
++# reproduces: 0 the CPU it runs on, 1 Intel, 2 AMD. The two vendors' estimate
++# instructions give different bits, which reach canvas readback through blend
++# modes, perspective and matrix inversion (SkCpuEstimates.h). A value naming
++# the CPU it runs on changes nothing.
++- name: gfx.skia.cpu_vendor_estimates
++  type: RelaxedAtomicUint32
++  value: 0
++  mirror: always
++
+ # Log severe performance warnings to the error console and profiles.
+ # This should be use to quickly find which slow paths are used by test cases.
+ - name: gfx.perf-warnings.enabled

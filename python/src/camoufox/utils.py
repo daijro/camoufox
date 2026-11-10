@@ -24,7 +24,7 @@ from .exceptions import (
     NonFirefoxFingerprint,
     UnknownIPLocation,
 )
-from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, draw_voice_config, fix_navigator_arch, fix_hardware_concurrency, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
+from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, draw_voice_config, fix_navigator_arch, fix_hardware_concurrency, set_cpu_vendor_default, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import ExitGeo, Proxy, proxy_auth_env, proxy_auth_init_script, public_ip, public_ipv6, socks5_auth, valid_ipv4, valid_ipv6
@@ -1096,6 +1096,7 @@ def launch_options(
     block_webgl: Optional[bool] = None,
     disable_coop: Optional[bool] = None,
     webgl_config: Optional[Tuple[str, str]] = None,
+    cpu_vendor: Optional[Literal['intel', 'amd']] = None,
     geoip: Optional[Union[str, bool]] = None,
     geoip_db: Optional[str] = None,
     humanize: Optional[Union[bool, float]] = None,
@@ -1229,6 +1230,14 @@ def launch_options(
             Use a specific WebGL vendor/renderer pair. Passed as a tuple of (vendor, renderer).
             The pair must be one fpgen has recorded from Firefox on `os`
             (camoufox.webgl.firefox_gpus); any other raises ValueError.
+        cpu_vendor (Optional[Literal['intel', 'amd']]):
+            The x86 CPU vendor whose RCPPS/RSQRTPS estimates Skia's raster
+            pipeline uses, so canvas blend modes, perspective and matrix
+            inversion read back as on that vendor's CPU. Drawn with the
+            identity by default: from the GPU where only one vendor's CPU
+            carries it (Intel integrated graphics, AMD APU graphics, every x86
+            Mac), otherwise at Firefox's x86 split, about 81% Intel. Not set for
+            an Apple Silicon identity, which is ARM.
         canvas_noise (Optional[bool]):
             Replace canvas and WebGL readback with random data, as
             privacy.resistFingerprinting does in LibreWolf, Tor Browser and
@@ -1293,6 +1302,10 @@ def launch_options(
     # Warn the user for manual config settings
     if not i_know_what_im_doing:
         warn_manual_config(config)
+    if cpu_vendor is not None:
+        if cpu_vendor not in coherence.CPU_VENDORS:
+            raise ValueError(f'cpu_vendor must be one of {coherence.CPU_VENDORS}, not {cpu_vendor!r}')
+        config['cpu:vendor'] = cpu_vendor
     _caller_keys = frozenset(config)
 
     # Snapshot which domains the USER set before fingerprint generation fills in
@@ -1826,6 +1839,9 @@ def launch_options(
             },
         )
 
+    # The CPU vendor follows the GPU, so it is drawn once the GPU is final.
+    set_cpu_vendor_default(config, target_os, _identity_salt)
+
     # Every identity passes the whole-identity checks, whatever built it: a
     # generated fingerprint, a bundled preset, or a config the caller wrote.
     # The pools are sampled independently -- navigator and screen from the
@@ -1837,6 +1853,13 @@ def launch_options(
     if _incoherent and debug:
         for _violation in _incoherent:
             print(f'Incoherent identity ({_violation.rule}): {_violation.detail}')
+
+    # Skia computes RCPPS/RSQRTPS as cpu:vendor's CPU does. A build without
+    # cpu-vendor-estimates.patch ignores the pref and keeps the host's.
+    if config.get('cpu:vendor') in coherence.CPU_VENDORS:
+        firefox_user_prefs.setdefault(
+            'gfx.skia.cpu_vendor_estimates', LAUNCHER_CONSTANTS['cpuVendorEstimatesPref'][config['cpu:vendor']]
+        )
 
     # Render at the claimed display scale, so (resolution) and the CSS geometry
     # agree with devicePixelRatio as on the real machine (#933). That includes 1:

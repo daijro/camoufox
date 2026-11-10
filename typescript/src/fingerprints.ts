@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { generate, InvalidConstraints } from "fpgen-js";
 import * as random from "python-random";
+import { gpuCpuVendor } from "./coherence.js";
 import {
 	supported as cpuAffinitySupported,
 	hostCoreCount,
@@ -1221,6 +1222,34 @@ export function setMediaDevicesDefaults(
 			? "mac"
 			: "lin";
 	Object.assign(config, drawMediaDevices(osKey, identitySeed(config, salt)));
+}
+
+/**
+ * Intel's share of the x86 desktop CPUs running Firefox (Firefox Public Data
+ * Report, week of 2026-11-02: Intel 76.86%, AMD 17.61%); fingerprints.py.
+ */
+export const X86_INTEL_SHARE: number = LAUNCHER_CONSTANTS.x86IntelShare;
+
+/**
+ * Draw the identity's x86 CPU vendor (cpu:vendor), as
+ * fingerprints.set_cpu_vendor_default does: the GPU decides where only one
+ * vendor's CPU carries it, otherwise Firefox's x86 split, seeded by the
+ * identity. Apple Silicon has no x86 vendor. Run after the GPU is drawn.
+ */
+export function setCpuVendorDefault(
+	config: Config,
+	targetOs: string,
+	salt: number | bigint = 0,
+): void {
+	if ("cpu:vendor" in config) return;
+	const gpu = config["webGl:renderer"];
+	if ((pyTruthy(gpu) ? pyStr(gpu) : "").includes("Apple M")) return;
+	let vendor = gpuCpuVendor(gpu, targetOs);
+	if (!vendor) {
+		const draw = rng((identitySeed(config, salt) ^ 0xc9d0) >>> 0).random();
+		vendor = draw < X86_INTEL_SHARE ? "intel" : "amd";
+	}
+	config["cpu:vendor"] = vendor;
 }
 
 // ---------------------------------------------------------------------------

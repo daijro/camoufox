@@ -410,6 +410,26 @@ rules:
       the audio hash with the values that must match across contexts, and the
       audio-matches-stock guard checks the build against the recorded values.
 
+  - id: canvas-follows-the-claimed-cpu-vendor
+    title: Skia's RCPPS/RSQRTPS give the claimed x86 vendor's bits, Intel or AMD, drawn at Firefox's x86 share
+    check: manual   # ci/tests/test_cpu_estimates.py, browser/tests/cpu-estimates/check.py, guard cpu-vendor-estimates
+    evidence:
+      - "2026-11-10, all 2^32 inputs: Core i7-12700H (Linux) and i9-11900H (Windows 11) give identical RCPPS/RSQRTPS bits; Ryzen 7 9850X3D (Zen 5) and Threadripper 7970X (Zen 4) give identical bits; the two vendors differ (browser/tests/cpu-estimates/provenance.json)"
+      - "stock Firefox 159.0, gradient over gradient, getImageData FNV-1a: i9-11900H on Windows and Ryzen 9850X3D on Linux agree for source-over, multiply, screen and soft-light and differ for color-dodge, color-burn, hue, saturation, color and luminosity; the build with gfx.skia.cpu_vendor_estimates 1 on the Ryzen gives the i9's hashes for all ten (guard cpu-vendor-estimates)"
+      - "Firefox Public Data Report, hardware, week of 2026-11-02: Intel 76.86%, AMD 17.61%, Apple 5.04%, so Intel is 81.4% of x86; no per-OS split is published"
+    rationale: >-
+      The two estimate instructions are specified only to a relative error, and
+      each vendor implements them with its own table, the same across that
+      vendor's generations and OSes. Skia's raster pipeline uses them for
+      blend modes, perspective and matrix inversion, so canvas readback names
+      the host's vendor. The patch reproduces the other vendor's table when the
+      pref names it and changes nothing otherwise. The launcher draws the vendor
+      with the identity: from the GPU where only one vendor's CPU carries it
+      (Intel integrated graphics, Radeon APU graphics, every x86 Mac), else at
+      Firefox's x86 share, which Steam's survey would put far lower for Intel.
+      Audio is not part of it: the offline render splits x86-64 from ARM64, not
+      Intel from AMD (audio-is-not-noised).
+
   - id: cross-os-canvas-is-the-rfp-placeholder
     title: On the host's OS the identity claims the host's GPU or software renderer; on another OS or GPU canvas readback is RFP's random placeholder
     check: automated

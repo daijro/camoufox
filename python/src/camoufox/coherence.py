@@ -380,6 +380,58 @@ def _repair_avail_bounds(config: Dict[str, Any], target_os: str) -> None:
         config['screen.availHeight'] = height
 
 
+# The x86 CPU vendor a GPU implies (cpu:vendor). Firefox reports every Intel
+# integrated GPU as "Intel(R) HD Graphics" or "Intel(R) HD Graphics 400"
+# (SanitizeRenderer.cpp), and only an Intel CPU carries one; Arc, the A750
+# bucket, is a discrete card too. "Radeon HD 3200 Graphics" is the bucket of
+# AMD's integrated GPUs since Zen ("AMD Radeon(TM) Graphics") besides the
+# Radeon HD 2000-4000 cards of 2007-2009, so on Windows and Linux it is taken
+# as an AMD APU. Every x86 Mac has an Intel CPU, whatever GPU it reports.
+# Apple Silicon is ARM: it has no x86 vendor. Any other GPU leaves the vendor
+# open.
+CPU_VENDORS = ('intel', 'amd')
+_INTEL_IGPUS = ('Intel(R) HD Graphics, or similar', 'Intel(R) HD Graphics 400, or similar',
+                'Intel(R) HD Graphics Direct3D11', 'Intel(R) HD Graphics 400 Direct3D11')
+_AMD_IGPUS = ('Radeon HD 3200 Graphics',)
+
+
+def gpu_cpu_vendor(renderer: Optional[str], target_os: str) -> Optional[str]:
+    """The CPU vendor this GPU implies, or None when it leaves it open."""
+    renderer = str(renderer or '')
+    if not renderer or 'Apple M' in renderer:
+        return None
+    if target_os == 'mac':
+        return 'intel'
+    if any(igpu in renderer for igpu in _INTEL_IGPUS):
+        return 'intel'
+    if any(igpu in renderer for igpu in _AMD_IGPUS):
+        return 'amd'
+    return None
+
+
+def _check_cpu_vendor(config: Dict[str, Any], target_os: str) -> Optional[str]:
+    vendor = config.get('cpu:vendor')
+    if vendor is None:
+        return None
+    if vendor not in CPU_VENDORS:
+        return f'cpu:vendor {vendor!r}; it is one of {", ".join(CPU_VENDORS)}'
+    if _is_apple_silicon(config):
+        return f'cpu:vendor {vendor!r} beside {_renderer(config)!r}, an ARM machine'
+    implied = gpu_cpu_vendor(_renderer(config), target_os)
+    if implied and implied != vendor:
+        which = 'an Intel' if implied == 'intel' else 'an AMD'
+        return f'cpu:vendor {vendor!r} beside {_renderer(config)!r}, which only {which} CPU carries'
+    return None
+
+
+def _repair_cpu_vendor(config: Dict[str, Any], target_os: str) -> None:
+    implied = gpu_cpu_vendor(_renderer(config), target_os)
+    if implied:
+        config['cpu:vendor'] = implied
+    elif _is_apple_silicon(config):
+        config.pop('cpu:vendor', None)
+
+
 def _check_arch_agreement(config: Dict[str, Any], target_os: str) -> Optional[str]:
     ua = str(config.get('navigator.userAgent') or '')
     platform = str(config.get('navigator.platform') or '')
@@ -403,6 +455,7 @@ RULES: List[Rule] = [
     Rule('screen-shape', _check_screen_shape, None),
     Rule('avail-bounds', _check_avail_bounds, _repair_avail_bounds),
     Rule('arch-agreement', _check_arch_agreement, None),
+    Rule('cpu-vendor-matches-gpu', _check_cpu_vendor, _repair_cpu_vendor),
 ]
 
 

@@ -29,6 +29,7 @@
   { "property": "webrtc:ipv4", "type": "str" },
   { "property": "webrtc:ipv6", "type": "str" },
   { "property": "network:ipv4Only", "type": "bool" },
+  { "property": "cpu:vendor", "type": "str" },
   { "property": "fonts", "type": "array" },
   { "property": "geolocation:latitude", "type": "double" },
   { "property": "geolocation:longitude", "type": "double" },

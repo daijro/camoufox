@@ -438,6 +438,55 @@ function checkArchAgreement(config: Config, _targetOs: string): string | null {
 	return null;
 }
 
+// The x86 CPU vendor a GPU implies (cpu:vendor); coherence.py explains the
+// buckets. Intel integrated graphics: Intel. "Radeon HD 3200 Graphics", the
+// bucket of AMD's APU graphics: AMD. Every x86 Mac: Intel. Apple Silicon is
+// ARM and has no x86 vendor; any other GPU leaves it open.
+export const CPU_VENDORS = ["intel", "amd"] as const;
+export type CpuVendor = (typeof CPU_VENDORS)[number];
+const INTEL_IGPUS = [
+	"Intel(R) HD Graphics, or similar",
+	"Intel(R) HD Graphics 400, or similar",
+	"Intel(R) HD Graphics Direct3D11",
+	"Intel(R) HD Graphics 400 Direct3D11",
+];
+const AMD_IGPUS = ["Radeon HD 3200 Graphics"];
+
+/** The CPU vendor this GPU implies, or null when it leaves it open. */
+export function gpuCpuVendor(
+	gpuRenderer: unknown,
+	targetOs: string,
+): CpuVendor | null {
+	const r = pyTruthy(gpuRenderer) ? pyStr(gpuRenderer) : "";
+	if (!r || r.includes("Apple M")) return null;
+	if (targetOs === "mac") return "intel";
+	if (INTEL_IGPUS.some((igpu) => r.includes(igpu))) return "intel";
+	if (AMD_IGPUS.some((igpu) => r.includes(igpu))) return "amd";
+	return null;
+}
+
+function checkCpuVendor(config: Config, targetOs: string): string | null {
+	const vendor = config["cpu:vendor"];
+	if (isNone(vendor)) return null;
+	if (!(CPU_VENDORS as readonly unknown[]).includes(vendor)) {
+		return `cpu:vendor ${pyRepr(vendor)}; it is one of ${CPU_VENDORS.join(", ")}`;
+	}
+	if (isAppleSilicon(config)) {
+		return `cpu:vendor ${pyRepr(vendor)} beside ${pyRepr(renderer(config))}, an ARM machine`;
+	}
+	const implied = gpuCpuVendor(renderer(config), targetOs);
+	if (implied && implied !== vendor) {
+		return `cpu:vendor ${pyRepr(vendor)} beside ${pyRepr(renderer(config))}, which only ${implied === "intel" ? "an Intel" : "an AMD"} CPU carries`;
+	}
+	return null;
+}
+
+function repairCpuVendor(config: Config, targetOs: string): void {
+	const implied = gpuCpuVendor(renderer(config), targetOs);
+	if (implied) config["cpu:vendor"] = implied;
+	else if (isAppleSilicon(config)) delete config["cpu:vendor"];
+}
+
 export const RULES: readonly Rule[] = [
 	{
 		name: "apple-silicon-cores",
@@ -463,6 +512,11 @@ export const RULES: readonly Rule[] = [
 	{ name: "screen-shape", check: checkScreenShape, repair: null },
 	{ name: "avail-bounds", check: checkAvailBounds, repair: repairAvailBounds },
 	{ name: "arch-agreement", check: checkArchAgreement, repair: null },
+	{
+		name: "cpu-vendor-matches-gpu",
+		check: checkCpuVendor,
+		repair: repairCpuVendor,
+	},
 ];
 
 /** Whether the screen is one no desktop reports (portrait, or tiny). */

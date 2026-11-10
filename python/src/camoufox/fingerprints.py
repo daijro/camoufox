@@ -10,6 +10,7 @@ from random import Random, choice, randrange
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from camoufox._warnings import WARNINGS_DATA, FallbackWarning, _warn_from_caller
+from camoufox.coherence import gpu_cpu_vendor
 from camoufox.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
@@ -849,6 +850,37 @@ def fix_navigator_arch(config: Dict[str, Any], target_os: str) -> None:
         config['navigator.platform'] = target
     if config.get('navigator.oscpu') != target:
         config['navigator.oscpu'] = target
+
+
+# Intel's share of the x86 desktop CPUs running Firefox: the Firefox Public Data
+# Report's CPU vendor dataset for the week of 2026-11-02 counts Intel 76.86%,
+# AMD 17.61%, Apple 5.04% (data.firefox.com/dashboard/hardware), so Intel is
+# 76.86 / (76.86 + 17.61) of the x86 machines. The dataset has no per-OS split.
+X86_INTEL_SHARE: float = LAUNCHER_CONSTANTS['x86IntelShare']
+
+
+def set_cpu_vendor_default(config: Dict[str, Any], target_os: str, salt: int = 0) -> None:
+    """Draw the identity's x86 CPU vendor (cpu:vendor).
+
+    Intel's and AMD's RCPPS/RSQRTPS estimates differ in their low bits, and
+    Skia's raster pipeline draws blend modes, perspective and inverted
+    matrices with them, so a canvas a page reads back shows the vendor
+    (gfx.skia.cpu_vendor_estimates, cpu-vendor-estimates.patch). A GPU that
+    only one vendor's CPU carries decides it (coherence.gpu_cpu_vendor); any
+    other is drawn at Firefox's own x86 split, seeded by the identity. Apple
+    Silicon has no x86 vendor. Run after the GPU is drawn; nothing is set when
+    the caller set the key.
+    """
+    if 'cpu:vendor' in config:
+        return
+    renderer = config.get('webGl:renderer')
+    if 'Apple M' in str(renderer or ''):
+        return
+    vendor = gpu_cpu_vendor(renderer, target_os)
+    if not vendor:
+        draw = Random(identity_seed(config, salt) ^ 0xC9D0).random()
+        vendor = 'intel' if draw < X86_INTEL_SHARE else 'amd'
+    config['cpu:vendor'] = vendor
 
 
 # What Firefox's baseline fingerprinting protection, on by default, reports in
