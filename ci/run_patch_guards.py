@@ -53,6 +53,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "navigation-preconnect-proxied",
         "spoofed-voice-speaks",
         "startup-prefs",
+        "startup-size-frame-extents",
         "system-font-alias-stall",
         "system-ui-font-spoofing",
         "timezone-stable",
