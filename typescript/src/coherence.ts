@@ -79,6 +79,12 @@ export interface Rule {
 	check: (config: Config, targetOs: string) => string | null;
 	/** Repairs the identity in place. null where no correct value is determined. */
 	repair: ((config: Config, targetOs: string) => void) | null;
+	/**
+	 * Keys the repair only adjusts to stay consistent with what it repairs. A
+	 * caller who set any of them keeps all of them as they were, the repair
+	 * itself still runs, and they never block it.
+	 */
+	adjusts?: readonly string[];
 }
 
 function isNone(value: unknown): boolean {
@@ -276,17 +282,70 @@ function checkDevicePixelRatio(
 	return null;
 }
 
-function repairDevicePixelRatio(config: Config, targetOs: string): void {
+// The CSS geometry a ratio scales: device pixels / devicePixelRatio.
+const CSS_GEOMETRY_KEYS = [
+	"screen.width",
+	"screen.height",
+	"screen.availWidth",
+	"screen.availHeight",
+	"screen.availLeft",
+	"screen.availTop",
+	"window.outerWidth",
+	"window.outerHeight",
+	"window.innerWidth",
+	"window.innerHeight",
+	"window.screenX",
+	"window.screenY",
+] as const;
+
+/** Python's round(): half to even, so both launchers draw the same geometry. */
+function roundHalfEven(v: number): number {
+	const r = Math.round(v);
+	return Math.abs(v % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+}
+
+/**
+ * A devicePixelRatio no display mode of the OS offers: a browser zoom folded
+ * into the ratio, which scaled every CSS size with it.
+ */
+export function isZoomedRatio(dpr: unknown, targetOs: string): boolean {
+	const allowed = PLAUSIBLE_DPR[targetOs];
+	if (!allowed?.length || typeof dpr !== "number" || !(dpr > 0)) return false;
+	return !allowed.some((v) => v === dpr);
+}
+
+/**
+ * Move the ratio to the nearest display mode, rescaling the CSS geometry so
+ * the screen stays the display behind it.
+ */
+export function repairDevicePixelRatio(
+	config: Config,
+	targetOs: string,
+	target?: number,
+): void {
 	const dpr = config["window.devicePixelRatio"];
 	const allowed = PLAUSIBLE_DPR[targetOs];
 	if (isNone(dpr) || !allowed?.length) return;
-	// Nearest real scaling step; min() keeps the first of equal distances.
+	// `target` is the scale a caller renders at; else the nearest real scaling
+	// step (min() keeps the first of equal distances).
 	const x = Number(num(dpr));
 	let best = allowed[0];
 	for (const v of allowed.slice(1)) {
 		if (Math.abs(v - x) < Math.abs(best - x)) best = v;
 	}
+	if (target !== undefined && target > 0) best = target;
 	config["window.devicePixelRatio"] = best;
+	// The scraped ratio has a browser zoom folded in, which shrank every CSS
+	// size by it; the display behind it keeps its device pixels. Rescale to the
+	// step so the screen is still that display: 1760x990 at 1.0909 is a
+	// 1920x1080 monitor, so 1920x1080 at 1. Firefox rounds device / ratio.
+	const scale = x / best;
+	for (const key of CSS_GEOMETRY_KEYS) {
+		const value = config[key];
+		if (typeof value === "number") {
+			config[key] = roundHalfEven(value * scale);
+		}
+	}
 }
 
 function checkWindowChrome(config: Config, _targetOs: string): string | null {
@@ -394,6 +453,7 @@ export const RULES: readonly Rule[] = [
 		name: "device-pixel-ratio",
 		check: checkDevicePixelRatio,
 		repair: repairDevicePixelRatio,
+		adjusts: CSS_GEOMETRY_KEYS,
 	},
 	{
 		name: "window-chrome",
@@ -512,6 +572,12 @@ export function apply(
 		if (!rule.repair || !rule.check(config, targetOs)) continue;
 		const repaired: Config = { ...config };
 		rule.repair(repaired, targetOs);
+		if (rule.adjusts?.some((key) => keep.has(key))) {
+			for (const key of rule.adjusts) {
+				if (key in config) repaired[key] = config[key];
+				else delete repaired[key];
+			}
+		}
 		const blocked = changed(config, repaired, keep);
 		if (blocked.length) {
 			kept.set(rule.name, blocked);

@@ -1131,6 +1131,71 @@ describe.skipIf(!MODEL.ok)(
 			}
 		});
 
+		const zoomedWindows = (dpr: number) => {
+			// fpgen's 1920x1080 monitor recorded at a 110% browser zoom: every CSS
+			// size shrunk by the zoom folded into the ratio.
+			const fp = fingerprints.generateFingerprint({ os: "windows" }) as Record<
+				string,
+				any
+			>;
+			Object.assign(fp.screen, {
+				width: 1760,
+				height: 990,
+				availWidth: 1760,
+				availHeight: 946,
+				availLeft: 0,
+				availTop: 0,
+			});
+			Object.assign(fp.window, {
+				devicePixelRatio: dpr,
+				outerWidth: 1760,
+				outerHeight: 953,
+				screenX: -7,
+				screenY: -7,
+			});
+			return fp;
+		};
+
+		it("a zoomed fpgen ratio claims the display it was recorded on", async () => {
+			// A ratio no display offers is a zoom: repaired to the display's scale
+			// with the geometry rescaled (test_launch_geometry.py).
+			withDisplay({ maxWidth: 1920, maxHeight: 1080 });
+			const config = await launchConfig({
+				headless: true,
+				fingerprint: zoomedWindows(1.0909090909090908),
+			});
+			expect(config["window.devicePixelRatio"]).toBe(1);
+			expect([config["screen.width"], config["screen.height"]]).toEqual([
+				1920, 1080,
+			]);
+			expect(config["screen.availHeight"]).toBe(1032);
+		});
+
+		it("a zoomed fpgen ratio follows the caller's render scale", async () => {
+			// A caller's layout.css.devPixelsPerPx is the scale the page renders
+			// at: the repair targets it, not the nearest step (1.75 for 1.818),
+			// or the page reports one ratio and matches another in matchMedia.
+			withDisplay({ maxWidth: 3840, maxHeight: 2160 });
+			const drawn = 1.8181818181818181;
+			const config = await launchConfig({
+				headless: true,
+				fingerprint: zoomedWindows(drawn),
+				firefox_user_prefs: { "layout.css.devPixelsPerPx": "1" },
+			});
+			expect(config["window.devicePixelRatio"]).toBe(1);
+			expect(config["screen.width"]).toBe(Math.round(1760 * drawn));
+		});
+
+		it("a real display scale from fpgen stays unmapped", async () => {
+			withDisplay({ maxWidth: 1920, maxHeight: 1080 });
+			const config = await launchConfig({
+				headless: true,
+				fingerprint: zoomedWindows(1.25),
+			});
+			expect("window.devicePixelRatio" in config).toBe(false);
+			expect(config["screen.width"]).toBe(1760);
+		});
+
 		it("headful generated geometry never exceeds the display (15 draws)", async () => {
 			withDisplay({ maxWidth: 1280, maxHeight: 720 });
 			for (let attempt = 0; attempt < 15; attempt++) {

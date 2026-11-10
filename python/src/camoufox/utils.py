@@ -1391,6 +1391,25 @@ def launch_options(
 
     target_os = get_target_os(config)
 
+    # fpgen.yml leaves devicePixelRatio unmapped, so the page reports the
+    # rendering scale while the screen keeps fpgen's CSS sizes. A drawn ratio
+    # no display offers is a browser zoom that shrank those sizes (1760x990 at
+    # 1.0909 is a 1920x1080 monitor at 110%): it moves to the display's scale
+    # with the geometry rescaled, so the screen is the display it was recorded
+    # on. Here, before the display clamp and the available area are derived
+    # from it. A caller's layout.css.devPixelsPerPx is the scale the page
+    # renders at, so the ratio moves to that instead: otherwise the page reports
+    # one devicePixelRatio and matches another in matchMedia('(resolution)').
+    if not _used_preset and isinstance(fingerprint, dict) and not _user_set_screen_window:
+        drawn_dpr = (fingerprint.get('window') or {}).get('devicePixelRatio')
+        if 'window.devicePixelRatio' not in config and coherence.is_zoomed_ratio(drawn_dpr, target_os):
+            try:
+                caller_scale = float(firefox_user_prefs.get('layout.css.devPixelsPerPx') or -1)
+            except (TypeError, ValueError):
+                caller_scale = -1.0
+            config['window.devicePixelRatio'] = drawn_dpr
+            coherence.repair_device_pixel_ratio(config, target_os, caller_scale if caller_scale > 0 else None)
+
     # A preset whose screen is a phone viewport is not a real desktop device;
     # the floor is normally skipped for presets, on the assumption that a preset
     # IS a real machine, which 736x414 disproves.
