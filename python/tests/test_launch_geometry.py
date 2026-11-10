@@ -143,3 +143,57 @@ class TestViewportOperationsDoNotDeadlock:
                 config = launch(os=os_name)
                 assert "window.innerWidth" not in config, os_name
                 assert "window.innerHeight" not in config, os_name
+
+
+def _zoomed_windows_fingerprint(dpr):
+    """fpgen's 1920x1080 monitor recorded at a 110% browser zoom: every CSS size
+    shrunk by the zoom folded into the ratio."""
+    from camoufox.fingerprints import generate_fingerprint
+
+    fp = generate_fingerprint(os="windows")
+    fp["screen"].update(width=1760, height=990, availWidth=1760, availHeight=946, availLeft=0, availTop=0)
+    fp["window"].update(devicePixelRatio=dpr, outerWidth=1760, outerHeight=953, screenX=-7, screenY=-7)
+    return fp
+
+
+def test_a_zoomed_fpgen_ratio_claims_the_display_it_was_recorded_on():
+    # fpgen.yml leaves the ratio unmapped, so the page saw 1 while the screen
+    # kept the zoomed 1760x990: a 1760x990 monitor that, rendered at 1 on the
+    # real 1920x1080 one, made a fullscreen window 1920x1080 against
+    # screen.width 1760 (cg.13 on WSLg). A ratio no display offers is a zoom,
+    # so it is repaired to the display's scale with the geometry rescaled.
+    with host(Screen(max_width=1920, max_height=1080)):
+        config = config_of(utils.launch_options(
+            headless=True, os="windows", fingerprint=_zoomed_windows_fingerprint(1.0909090909090908),
+            i_know_what_im_doing=True))
+    assert config["window.devicePixelRatio"] == 1
+    assert (config["screen.width"], config["screen.height"]) == (1920, 1080)
+    assert config["screen.availHeight"] == 1032
+
+
+def test_a_real_display_scale_from_fpgen_stays_unmapped():
+    # 1.25 is a scale Windows offers: the identity is left as fpgen.yml maps it.
+    with host(Screen(max_width=1920, max_height=1080)):
+        config = config_of(utils.launch_options(
+            headless=True, os="windows", fingerprint=_zoomed_windows_fingerprint(1.25),
+            i_know_what_im_doing=True))
+    assert "window.devicePixelRatio" not in config
+    assert config["screen.width"] == 1760
+
+
+def test_a_zoomed_fpgen_ratio_follows_the_caller_s_render_scale():
+    # A caller who sets layout.css.devPixelsPerPx decides the scale the page
+    # renders at. The zoom repair moved 1.818 (175% with a zoom folded in) to
+    # 1.75 regardless, so the page reported devicePixelRatio 1.75 while
+    # matchMedia('(resolution: 1dppx)') matched: a pairing no Firefox has
+    # (font-fallback-windows.py, pinned to 1, failed on such a draw). The
+    # repair now targets the caller's scale, rescaling the geometry to it.
+    drawn = 1.8181818181818181
+    with host(Screen(max_width=3840, max_height=2160)):
+        opts = utils.launch_options(
+            headless=True, os="windows", fingerprint=_zoomed_windows_fingerprint(drawn),
+            firefox_user_prefs={"layout.css.devPixelsPerPx": "1"}, i_know_what_im_doing=True)
+    config = config_of(opts)
+    assert config["window.devicePixelRatio"] == 1
+    assert opts["firefox_user_prefs"]["layout.css.devPixelsPerPx"] == "1"
+    assert config["screen.width"] == round(1760 * drawn)

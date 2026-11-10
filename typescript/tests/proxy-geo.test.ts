@@ -1,8 +1,9 @@
 /**
- * NewContext derives the WebRTC IP and timezone from the proxy's exit IP.
+ * NewContext places a context behind a proxy where the proxy exits.
  * Twin of python/tests/test_proxy_geo.py: the lookup must go through the
- * proxy as Playwright would reach it (a scheme-less server is http), and a
- * failed lookup must raise rather than leave the context on the host's values.
+ * proxy as Playwright would reach it (a scheme-less server is http), a failed
+ * lookup must raise rather than leave the context on the host's values, and
+ * the locale and position move with the clock.
  * Also the twin of test_new_context_version.py: the context's UA names the
  * browser's Firefox version.
  */
@@ -33,6 +34,9 @@ const EXIT = {
 	status: "success",
 	query: "203.0.113.7",
 	timezone: "Europe/Paris",
+	countryCode: "FR",
+	lat: 48.8566,
+	lon: 2.3522,
 };
 
 function fakeBrowser(version = "152.0.4") {
@@ -112,13 +116,54 @@ describe("NewContext proxy lookup", () => {
 		await expect(launched).rejects.toThrow(/webrtc_ip/);
 	});
 
-	it("skips the lookup when both values are given", async () => {
+	it("moves the locale and position with the clock", async () => {
+		const { browser, calls } = fakeBrowser();
+		await NewContext(browser, {
+			os: "linux",
+			proxy: { server: "1.2.3.4:8080" },
+		});
+		expect(calls.options.timezoneId).toBe("Europe/Paris");
+		expect(calls.options.locale).toMatch(/-FR$/);
+		expect(calls.options.geolocation).toEqual({
+			latitude: 48.8566,
+			longitude: 2.3522,
+		});
+		expect(calls.options.permissions).toEqual(["geolocation"]);
+	});
+
+	it("keeps the values the caller gave", async () => {
+		const position = { latitude: 51.5072, longitude: -0.1276 };
+		const { browser, calls } = fakeBrowser();
+		await NewContext(browser, {
+			os: "linux",
+			proxy: { server: "1.2.3.4:8080" },
+			locale: "en-GB",
+			geolocation: position,
+		} as any);
+		expect(calls.options.locale).toBe("en-GB");
+		expect(calls.options.geolocation).toEqual(position);
+		expect(calls.options.timezoneId).toBe("Europe/Paris");
+		expect(calls.script).toContain("203.0.113.7");
+	});
+
+	it("raises on a lookup without the country", async () => {
+		const { countryCode: _, ...partial } = EXIT;
+		impit.respond = async () => partial;
+		const { browser } = fakeBrowser();
+		await expect(
+			NewContext(browser, { os: "linux", proxy: { server: "1.2.3.4:8080" } }),
+		).rejects.toThrow(InvalidIP);
+	});
+
+	it("skips the lookup when every value is given", async () => {
 		const { browser } = fakeBrowser();
 		await NewContext(browser, {
 			os: "linux",
 			proxy: { server: "1.2.3.4:8080" },
 			webrtc_ip: "198.51.100.1",
 			timezoneId: "UTC",
+			locale: "en-US",
+			geolocation: { latitude: 40.7128, longitude: -74.006 },
 		} as any);
 		expect(impit.proxyUrls).toEqual([]);
 	});

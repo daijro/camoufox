@@ -18,7 +18,12 @@ import {
 	rendererBucket,
 } from "../src/fingerprints.js";
 import { orjsonDumps } from "../src/pycompat.js";
-import { sampleWebglForScreen, toConfig, webglForGpu } from "../src/webgl.js";
+import {
+	firefoxGpus,
+	sampleWebglForScreen,
+	toConfig,
+	webglForGpu,
+} from "../src/webgl.js";
 import { MODEL } from "./fpgen-setup.js";
 import { prerequisite } from "./prereq.js";
 
@@ -384,17 +389,26 @@ describe.skipIf(!MODEL.ok)("webgl (test_webgl.py)", () => {
 		}
 	});
 
-	it("WebGL1's line width range is WebGL2's", () => {
-		// Firefox 156 creates WebGL1 on the same GL profile as WebGL2. 146
-		// forced a compatibility profile for WebGL1, where fpgen recorded the
-		// driver's wide-line range (Linux: [1, 2048], [1, 7.375], [1, 10] ...).
+	it("WebGL1 reports WebGL2's value for every parameter both report", () => {
+		// Firefox 156+ creates WebGL1 on WebGL2's GL profile. fpgen recorded
+		// Firefox 146, which put WebGL1 on a compatibility profile: the line
+		// width range differs there, and on the Linux GTX 480 and 980 records
+		// the point size range too.
 		for (const os of OSES) {
-			for (let s = 0; s < 100; s++) {
-				const config = sampleWebglForScreen(os, 1920, 1080, s);
-				if (!config.webGl2Enabled) continue;
-				expect(config["webGl:parameters"]["33902"], `${os} ${s}`).toEqual(
-					config["webGl2:parameters"]["33902"],
-				);
+			for (const [vendor, renderer] of firefoxGpus(os)) {
+				for (let s = 0; s < 5; s++) {
+					const config = webglForGpu(os, vendor, renderer, s);
+					if (!config.webGl2Enabled) continue;
+					const p1 = config["webGl:parameters"];
+					const p2 = config["webGl2:parameters"];
+					const mismatch = Object.keys(p2).filter(
+						(k) =>
+							k in p1 &&
+							typeof p1[k] !== "string" &&
+							JSON.stringify(p1[k]) !== JSON.stringify(p2[k]),
+					);
+					expect(mismatch, `${os} ${renderer} ${s}`).toEqual([]);
+				}
 			}
 		}
 	});
