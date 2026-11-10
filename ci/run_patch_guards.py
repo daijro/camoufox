@@ -51,6 +51,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "locale-explicit-names",
         "media-devices-coherence",
         "navigation-preconnect-proxied",
+        "offscreen-webgl2-follows-canvas",
         "spoofed-voice-speaks",
         "startup-prefs",
         "system-font-alias-stall",
