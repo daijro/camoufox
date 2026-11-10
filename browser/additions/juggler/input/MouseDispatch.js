@@ -200,16 +200,27 @@ export class MouseDispatch {
    * click under the picker showPicker() opened took 15s and timed out
    * Playwright, where stock's click went to the picker at once (2026-11-03,
    * tests/playwright/patches/popup-covered-click.py). Mirrors
-   * nsXULPopupManager::GetVisiblePopups: open, and not transparent to the mouse.
+   * nsXULPopupManager::GetVisiblePopups: visible, and not transparent to the mouse.
+   *
+   * The parent counts a popup from ePopupVisible, which layout sets on an
+   * opening popup that state still reports as "showing". Flushing layout first
+   * makes every popup with an outer rect (empty until it opens) one the parent
+   * hands the event to, so this neither waits out the deadline for a click the
+   * popup took nor skips the ack of a move the page still gets.
    */
   _popupAt(absX, absY) {
-    const doc = this._win.document;
+    const popups = [...this._win.document.querySelectorAll('panel, menupopup, tooltip')]
+        .filter(popup => popup.state === 'open' || popup.state === 'showing');
+    if (popups.some(popup => popup.state === 'showing'))
+      this._win.windowUtils.flushLayoutWithoutThrottledAnimations();
     let point = null;
-    for (const popup of doc.querySelectorAll('panel, menupopup, tooltip')) {
-      if (popup.state !== 'open' || this._win.getComputedStyle(popup).pointerEvents === 'none')
+    for (const popup of popups) {
+      if (this._win.getComputedStyle(popup).pointerEvents === 'none')
+        continue;
+      const r = popup.getOuterScreenRect();
+      if (!r.width || !r.height)
         continue;
       point ??= this._win.windowUtils.toScreenRectInCSSUnits(absX, absY, 0, 0);
-      const r = popup.getOuterScreenRect();
       if (point.x >= r.left && point.x < r.right && point.y >= r.top && point.y < r.bottom)
         return popup;
     }

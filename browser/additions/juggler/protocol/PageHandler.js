@@ -131,6 +131,7 @@ export class PageHandler {
 
     this._pendingEventWatchers = new Set();
     this._moveDelivery = null;
+    this._moveDeliveredAt = 0;
     // Arrival order of mouse commands (beforeDispatch).
     this._mouseTurn = Promise.resolve();
     this._mouseDispatched = Promise.resolve();
@@ -316,9 +317,9 @@ export class PageHandler {
     this._pageNetwork.setExtraHTTPHeaders(headers);
   }
 
-  async ['Network.setRequestInterception']({enabled}) {
+  async ['Network.setRequestInterception']({enabled, bypassServiceWorker}) {
     if (enabled)
-      this._pageNetwork.enableRequestInterception();
+      this._pageNetwork.enableRequestInterception(bypassServiceWorker);
     else
       this._pageNetwork.disableRequestInterception();
   }
@@ -696,6 +697,7 @@ export class PageHandler {
     if (!pending)
       return;
     await pending.delivered();
+    this._moveDeliveredAt = ChromeUtils.now();
     if (this._moveDelivery === pending)
       this._moveDelivery = null;
     pending.dispose();
@@ -941,7 +943,10 @@ export class PageHandler {
     } else if (this._movedAt !== undefined) {
       // A press comes a person's dwell after the move that brought the pointer
       // to its target: a page read under 10 ms where stock reads under 250.
-      wait = this._movedAt + hoverDwell() - ChromeUtils.now();
+      // It counts from the refresh tick that gave the page the move, a frame
+      // after the queue took it, as the page's mouseover does.
+      await this._moveDelivered();
+      wait = Math.max(this._movedAt, this._moveDeliveredAt) + hoverDwell() - ChromeUtils.now();
     }
     if (type === 'mousedown') {
       this._buttonUpAt = undefined;
