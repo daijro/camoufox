@@ -513,7 +513,8 @@ def gpu_fits_cpu(renderer: Optional[str], target_os: str, arch: Optional[str], m
     by_gpu, makers = gpu_cpu(renderer, target_os)
     if arch is None and maker is not None:
         arch = next((a for a in CPU_ARCHES if maker in cpu_manufacturers(target_os, a)), None)
-    if arch is None:
+    if arch is None or 'llvmpipe' in str(renderer or ''):
+        # Mesa's software renderer draws on whatever CPU the machine has.
         return True
     if by_gpu is None:
         # A discrete card or an open bucket: an x86 machine. No ARM laptop or
@@ -562,10 +563,10 @@ def cpu_conflict(config: Dict[str, Any], target_os: str) -> Optional[str]:
     renderer = _renderer(config)
     claimed = ' '.join(str(v) for v in (maker, arch) if v)
     if renderer and not gpu_fits_cpu(renderer, target_os, arch, maker):
-        return f'a {claimed} CPU beside {renderer!r}'
+        return f'CPU {claimed} beside {renderer!r}'
     cores = config.get('navigator.hardwareConcurrency')
     if (arch or 'x86') == 'x86' and maker and maker != cores_cpu_vendor(cores) and cores_cpu_vendor(cores):
-        return f'a {claimed} CPU with hardwareConcurrency {cores}, which only an Intel CPU reports'
+        return f'CPU {claimed} with hardwareConcurrency {cores}, which only an Intel CPU reports'
     return None
 
 

@@ -70,14 +70,14 @@ def test_impossible_machines_are_rejected(cpu, target_os):
 
 
 def test_an_os_left_open_is_drawn_among_those_with_a_gpu_for_the_cpu():
-    # fpgen records Apple GPUs only on macOS, so an ARM identity is a Mac.
-    assert _os_for_cpu({"arch": "arm"}, None) == "macos"
+    # fpgen records Apple GPUs only on macOS and no ARM GPU on Windows, so an
+    # ARM identity is a Mac or a Linux machine rendering in software.
+    assert _os_for_cpu({"arch": "arm"}, None) == ["macos", "linux"]
     assert _os_for_cpu({"manufacturer": "amd"}, None) == ["windows", "linux"]
     assert _os_for_cpu({"arch": "x86"}, ["macos", "linux"]) == ["macos", "linux"]
     with pytest.raises(ValueError):
         _os_for_cpu({"manufacturer": "amd"}, "macos")
-    with pytest.raises(ValueError):
-        _os_for_cpu({"manufacturer": "qualcomm"}, None)
+    assert _os_for_cpu({"manufacturer": "qualcomm"}, None) == "linux"
 
 
 @pytest.mark.parametrize(
@@ -94,6 +94,8 @@ def test_an_os_left_open_is_drawn_among_those_with_a_gpu_for_the_cpu():
         ("ANGLE (Qualcomm, Adreno X1-85 GPU Direct3D11 vs_5_0 ps_5_0), or similar", "win", "arm", "qualcomm", True),
         ("V3D 4.2", "lin", "arm", "broadcom", True),
         ("V3D 4.2", "lin", "arm", "qualcomm", False),
+        ("llvmpipe, or similar", "lin", "arm", "ampere", True),   # software rendering runs on any CPU
+        ("llvmpipe, or similar", "lin", "x86", "amd", True),
     ],
 )
 def test_the_gpu_must_fit_the_cpu(renderer, target_os, arch, maker, fits):

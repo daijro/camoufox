@@ -31,6 +31,7 @@
   { "property": "network:ipv4Only", "type": "bool" },
   { "property": "cpu:arch", "type": "str" },
   { "property": "cpu:manufacturer", "type": "str" },
+  { "property": "cpu:vendor", "type": "str", "removed": "159.0-beta.35" },
   { "property": "fonts", "type": "array" },
   { "property": "geolocation:latitude", "type": "double" },
   { "property": "geolocation:longitude", "type": "double" },

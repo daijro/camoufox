@@ -109,8 +109,9 @@ describe("the caller's option", () => {
 	it.skipIf(!MODEL.ok)(
 		"an OS left open is drawn among those with a GPU for the CPU",
 		async () => {
-			// fpgen records Apple GPUs only on macOS, so an ARM identity is a Mac.
-			expect(await osForCpu({ arch: "arm" }, null)).toBe("macos");
+			// fpgen records Apple GPUs only on macOS and no ARM GPU on Windows, so
+			// an ARM identity is a Mac or a Linux machine rendering in software.
+			expect(await osForCpu({ arch: "arm" }, null)).toEqual(["macos", "linux"]);
 			expect(await osForCpu({ manufacturer: "amd" }, null)).toEqual([
 				"windows",
 				"linux",
@@ -122,12 +123,11 @@ describe("the caller's option", () => {
 			await expect(osForCpu({ manufacturer: "amd" }, "macos")).rejects.toThrow(
 				"cpu={'manufacturer': 'amd'}: no mac machine has a CPU made by 'amd'; on mac it is one of apple, intel",
 			);
+			expect(await osForCpu({ manufacturer: "qualcomm" }, null)).toBe("linux");
 			await expect(
-				osForCpu({ manufacturer: "qualcomm" }, null),
+				osForCpu({ manufacturer: "qualcomm" }, "macos"),
 			).rejects.toThrow(
-				"cpu={'manufacturer': 'qualcomm'}: fpgen has recorded no windows GPU beside that CPU; " +
-					"no mac machine has a CPU made by 'qualcomm'; on mac it is one of apple, intel; " +
-					"fpgen has recorded no linux GPU beside that CPU",
+				"cpu={'manufacturer': 'qualcomm'}: no mac machine has a CPU made by 'qualcomm'; on mac it is one of apple, intel",
 			);
 		},
 	);
@@ -150,6 +150,8 @@ describe("the caller's option", () => {
 		],
 		["V3D 4.2", "lin", "arm", "broadcom", true],
 		["V3D 4.2", "lin", "arm", "qualcomm", false],
+		["llvmpipe, or similar", "lin", "arm", "ampere", true], // software rendering runs on any CPU
+		["llvmpipe, or similar", "lin", "x86", "amd", true],
 	])("the GPU must fit the CPU: %s on %s, %s %s", (renderer, os, arch, maker, fits) => {
 		expect(coherence.gpuFitsCpu(renderer, os, arch, maker)).toBe(fits);
 	});
@@ -294,7 +296,7 @@ describe("coherence", () => {
 		expect(config["cpu:manufacturer"]).toBe("amd");
 		expect(left.map((v) => v.rule)).toEqual(["cpu-matches-hardware"]);
 		expect(left[0].detail).toBe(
-			"a amd x86 CPU beside 'Intel(R) HD Graphics, or similar'",
+			"CPU amd x86 beside 'Intel(R) HD Graphics, or similar'",
 		);
 	});
 
@@ -306,7 +308,7 @@ describe("coherence", () => {
 			"navigator.hardwareConcurrency": 22,
 		};
 		expect(coherence.validate(config, "win").map((v) => v.detail)).toEqual([
-			"a amd x86 CPU with hardwareConcurrency 22, which only an Intel CPU reports",
+			"CPU amd x86 with hardwareConcurrency 22, which only an Intel CPU reports",
 		]);
 		coherence.apply(config, "win");
 		expect(config["cpu:manufacturer"]).toBe("intel");

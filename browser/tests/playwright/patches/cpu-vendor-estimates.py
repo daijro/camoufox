@@ -1,22 +1,27 @@
 r"""
-A canvas and an Opus stream come out as they do on the claimed CPU vendor's
-machine.
+A page computes what it computes on the claimed CPU: Intel, AMD or ARM64.
 
 Skia's raster pipeline computes the non-separable and dodge/burn blend modes,
 perspective and matrix inversion with RCPPS/RSQRTPS, whose bits differ between
 Intel and AMD and agree across generations and OSes of one vendor
-(docs/HOST-PARITY.md, browser/tests/cpu-estimates/). cpu-vendor-estimates.patch
-reproduces the other vendor's instructions when gfx.skia.cpu_vendor_estimates
-names it; the launcher sets the pref from cpu_vendor. libopus's PVQ search
-(the encoder) uses the same two instructions, and Gecko hands it the same table
-(media/libopus/include/opus_cpu_estimates.h).
+(docs/HOST-PARITY.md, browser/tests/cpu-estimates/). libopus's PVQ search (the
+encoder) uses the same two instructions. Firefox's ARM64 build differs from
+x86-64 in far more: every Web Audio node, canvas composite operation,
+drawImage, filters and paths, Opus, VP8/VP9, relaxed SIMD wasm and the sign of
+the default NaN. cpu-vendor-estimates.patch computes the claimed CPU's results
+when general.cpu_identity names one (1 Intel, 2 AMD, 3 ARM64); the launcher
+sets it from `cpu`.
 
 This guard draws a gradient over a gradient with ten composite operations and
-hashes getImageData (FNV-1a), launched with cpu_vendor="intel" and with
-cpu_vendor="amd". Each must equal what stock Firefox gives on that vendor's
-CPU, whatever the host's vendor. It then encodes one second of a fixed signal
-with WebCodecs' AudioEncoder (Opus, 64 kbit/s, 20 ms frames) and hashes the
-encoded bytes.
+hashes getImageData (FNV-1a), launched with cpu={"manufacturer": "intel"} and
+with "amd". Each must equal what stock Firefox gives on that vendor's CPU,
+whatever the host's vendor. It then encodes one second of a fixed signal with
+WebCodecs' AudioEncoder (Opus, 64 kbit/s, 20 ms frames) and hashes the encoded
+bytes. Last, launched with cpu={"arch": "arm"}, it runs the CPU probe
+(browser/tests/cpu-probe/page.html) and compares every key on which stock
+Firefox's x86-64 and ARM64 Linux recordings differ with the ARM64 one, except
+WebGL, which depends on the host, and canvas text, which depends on the drawn
+devicePixelRatio.
 
 Provenance of EXPECTED: stock Firefox 159.0, headless, a fresh profile, this
 same probe page.
@@ -24,15 +29,20 @@ same probe page.
   amd:   Ryzen 7 9850X3D, Ubuntu 26.04.
 source-over, multiply, screen and soft-light use no estimate and agree on
 both; the other six differ. Opus: the same hashes on an i7-12700H (Ubuntu)
-and a Ryzen Threadripper 7970X (Firefox 158, Ubuntu).
+and a Ryzen Threadripper 7970X (Firefox 158, Ubuntu). ARM64: the cpu-probe
+results recorded on an Apple M4 and a Ryzen 9850X3D in the same Debian
+container (browser/tests/cpu-probe/README.md).
 
-What PASS means: both launches match their vendor in every operation. Without
-the patch the launch naming the other vendor gives the host's hashes and fails.
-The host must be Intel or AMD x86-64.
+What PASS means: each launch matches its CPU in every value. Without the
+patch a launch naming another CPU gives the host's values and fails. The host
+must be Intel or AMD x86-64 with a display whose GPU an ARM machine can have,
+such as Xvfb's llvmpipe (LIBGL_ALWAYS_SOFTWARE=1 on a host with a GPU).
 
     python browser/tests/playwright/patches/cpu-vendor-estimates.py
 """
 
+import json
+import mimetypes
 import platform
 import sys
 from pathlib import Path
@@ -79,6 +89,8 @@ PROBE = """() => {
 }"""
 
 PAGE = "https://cpu-vendor-estimates.test/"
+CPU_PROBE = Path(__file__).resolve().parents[2] / "cpu-probe"
+STOCK_X86, STOCK_ARM64 = "linux-x86_64-docker-ryzen-9850x3d", "linux-arm64-docker-apple-m4"
 
 OPUS_PROBE = """async () => {
   const fnv = (d) => { let h = 0x811c9dc5; for (let i = 0; i < d.length; i++) { h ^= d[i]; h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, "0"); };
@@ -118,25 +130,74 @@ def render(**kwargs) -> dict:
         return out
 
 
+def stock(name: str) -> dict:
+    return json.loads((CPU_PROBE / "results" / f"{name}.json").read_text())
+
+
+def arm64_keys() -> dict:
+    """The keys on which stock x86-64 and ARM64 Linux differ, with ARM64's values."""
+    x86, arm = stock(STOCK_X86), stock(STOCK_ARM64)
+    # Canvas text is rasterized at the drawn devicePixelRatio; the references are at 1.
+    host_only = {"ua", "hc", "webgl", "canvas.text"}
+    return {k: v for k, v in arm.items() if x86.get(k) != v and k not in host_only}
+
+
+def probe(**kwargs) -> dict:
+    """What browser/tests/cpu-probe/page.html POSTs, served from PAGE."""
+    from camoufox.sync_api import Camoufox
+
+    def serve(route):
+        path = CPU_PROBE / route.request.url.removeprefix(PAGE).split("?")[0]
+        if route.request.method == "POST":
+            route.fulfill(status=204)
+        elif path.is_file():
+            route.fulfill(body=path.read_bytes(), content_type=mimetypes.guess_type(path)[0] or "text/plain")
+        else:
+            route.fulfill(status=404)
+
+    with Camoufox(**launch_kwargs(os="linux", **kwargs)) as browser:
+        page = browser.new_page()
+        page.route(PAGE + "**", serve)
+        with page.expect_request(lambda r: r.method == "POST", timeout=240_000) as posted:
+            page.goto(PAGE + "page.html")
+        return json.loads(posted.value.post_data)
+
+
 def main() -> int:
     host = host_vendor()
     if platform.machine().lower() not in ("x86_64", "amd64") or not host:
         print(f"FAIL: needs an Intel or AMD x86-64 host, not {platform.machine()} {platform.processor()!r}")
         return 1
 
-    seen = {f"cpu_vendor={v!r}": (v, render(cpu_vendor=v)) for v in EXPECTED}
+    seen = {v: render(cpu={"manufacturer": v}) for v in EXPECTED}
     failures = []
-    for name, (vendor, got) in seen.items():
+    for vendor, got in seen.items():
         wrong = sorted(k for k, v in EXPECTED[vendor].items() if got.get(k) != v)
-        print(f"  {name}: {'matches stock ' + vendor if not wrong else 'differs in ' + ', '.join(wrong)}")
+        print(f"  cpu={vendor}: {'matches stock ' + vendor if not wrong else 'differs in ' + ', '.join(wrong)}")
         if wrong:
-            failures.append(f"{name}: {', '.join(f'{k} {got.get(k)} (stock {EXPECTED[vendor][k]})' for k in wrong)}")
+            failures.append(f"cpu={vendor}: {', '.join(f'{k} {got.get(k)} (stock {EXPECTED[vendor][k]})' for k in wrong)}")
+
+    expected = arm64_keys()
+    expected_errors = {k for k in stock(STOCK_ARM64) if k.endswith(".error")}
+    # Headless, Firefox names a software renderer "GeForce GTX 980", which no ARM
+    # machine has; under a display (Xvfb in CI) it reports llvmpipe.
+    got = probe(cpu={"arch": "arm"}, headless=False)
+    # A step that throws stops drawing from the page's shared random stream, so
+    # every later key would differ for a reason that is not the CPU.
+    errors = {k: v for k, v in got.items() if k.endswith(".error") and k not in expected_errors}
+    if errors:
+        print(f"FAIL: cpu=arm: the probe page failed: {errors}")
+        return 1
+    wrong = sorted(k for k, v in expected.items() if got.get(k) != v)
+    print(f"  cpu=arm: {len(expected) - len(wrong)}/{len(expected)} values match stock ARM64")
+    if wrong:
+        failures.append(f"cpu=arm: {', '.join(f'{k} {got.get(k)} (stock {expected[k]})' for k in wrong)}")
 
     for failure in failures:
         print(f"FAIL: {failure}")
     if failures:
         return 1
-    print(f"PASS: on this {host} host, canvas and Opus come out as stock Firefox's do on Intel and on AMD.")
+    print(f"PASS: on this {host} host, a page computes as stock Firefox does on Intel, on AMD and on ARM64.")
     return 0
 
 

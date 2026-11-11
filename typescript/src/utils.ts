@@ -878,9 +878,8 @@ const CPU_OS_NAMES: Record<string, string> = {
  * The OSes a machine with this CPU can run, among those asked for, as
  * utils._os_for_cpu. Throws ValueError when the CPU is malformed or none of
  * them can. With no OS asked for, only OSes with a GPU fpgen recorded beside
- * such a CPU are drawn (an ARM identity is a Mac until Windows-on-ARM or
- * Linux-on-ARM GPUs are recorded; pass os: "linux" on an ARM Linux host to
- * claim its own GPU).
+ * such a CPU are drawn: an ARM identity is a Mac, or Linux rendering with
+ * llvmpipe, until Windows-on-ARM or Linux-on-ARM GPUs are recorded.
  */
 export async function osForCpu(
 	cpu: unknown,

@@ -1,7 +1,8 @@
 diff --git a/config/external/gkcodecs/gkcodecs.symbols b/config/external/gkcodecs/gkcodecs.symbols
+index df93d763dd..747f94e67d 100644
 --- a/config/external/gkcodecs/gkcodecs.symbols
 +++ b/config/external/gkcodecs/gkcodecs.symbols
-@@ -106,6 +106,8 @@
+@@ -106,6 +106,8 @@ opus_packet_parse
  opus_strerror
  opus_multistream_encode_float
  opus_multistream_surround_encoder_create
@@ -10,7 +11,7 @@ diff --git a/config/external/gkcodecs/gkcodecs.symbols b/config/external/gkcodec
  vorbis_block_clear
  vorbis_block_init
  vorbis_comment_clear
-@@ -146,6 +148,7 @@
+@@ -146,6 +148,7 @@ vpx_codec_enc_config_set
  vpx_codec_enc_init_multi_ver
  vpx_codec_enc_init_ver
  vpx_codec_encode
@@ -19,6 +20,7 @@ diff --git a/config/external/gkcodecs/gkcodecs.symbols b/config/external/gkcodec
  vpx_codec_error
  vpx_codec_error_detail
 diff --git a/dom/media/encoder/OpusTrackEncoder.cpp b/dom/media/encoder/OpusTrackEncoder.cpp
+index d23e27a0ab..b90cca3b71 100644
 --- a/dom/media/encoder/OpusTrackEncoder.cpp
 +++ b/dom/media/encoder/OpusTrackEncoder.cpp
 @@ -4,6 +4,7 @@
@@ -29,7 +31,7 @@ diff --git a/dom/media/encoder/OpusTrackEncoder.cpp b/dom/media/encoder/OpusTrac
  
  #include "VideoUtils.h"
  #include "mozilla/CheckedInt.h"
-@@ -169,6 +170,7 @@
+@@ -169,6 +170,7 @@ nsresult OpusTrackEncoder::Init(int aChannels) {
    }
  
    int error = 0;
@@ -38,6 +40,7 @@ diff --git a/dom/media/encoder/OpusTrackEncoder.cpp b/dom/media/encoder/OpusTrac
                                   OPUS_APPLICATION_AUDIO, &error);
  
 diff --git a/dom/media/platforms/ffmpeg/FFmpegAudioDecoder.cpp b/dom/media/platforms/ffmpeg/FFmpegAudioDecoder.cpp
+index c80630f200..fa20cf4f05 100644
 --- a/dom/media/platforms/ffmpeg/FFmpegAudioDecoder.cpp
 +++ b/dom/media/platforms/ffmpeg/FFmpegAudioDecoder.cpp
 @@ -12,6 +12,7 @@
@@ -48,7 +51,7 @@ diff --git a/dom/media/platforms/ffmpeg/FFmpegAudioDecoder.cpp b/dom/media/platf
  #if defined(FFVPX_VERSION)
  #  include "libavutil/channel_layout.h"
  #endif
-@@ -104,6 +105,8 @@
+@@ -104,6 +105,8 @@ RefPtr<MediaDataDecoder::InitPromise> FFmpegAudioDecoder<LIBAV_VER>::Init() {
  
    AVDictionary* options = nullptr;
    if (mCodecID == AV_CODEC_ID_OPUS) {
@@ -58,6 +61,7 @@ diff --git a/dom/media/platforms/ffmpeg/FFmpegAudioDecoder.cpp b/dom/media/platf
      // stereo channels by 180-degree out of phase. This improves quality, but
      // needs to be disabled when the output is downmixed to mono.
 diff --git a/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp b/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp
+index 723c75580e..4d3deadfbe 100644
 --- a/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp
 +++ b/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp
 @@ -9,6 +9,7 @@
@@ -68,7 +72,7 @@ diff --git a/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp b/dom/media/platf
  
  namespace mozilla {
  
-@@ -53,6 +54,9 @@
+@@ -53,6 +54,9 @@ MediaResult FFmpegAudioEncoder<LIBAV_VER>::InitEncoder() {
  
    FFMPEG_LOG("FFmpegAudioEncoder::InitEncoder");
  
@@ -79,6 +83,7 @@ diff --git a/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp b/dom/media/platf
    auto r = AllocateCodecContext(/* aHardware */ false);
    if (r.isErr()) {
 diff --git a/dom/media/platforms/ffmpeg/FFmpegVideoEncoder.cpp b/dom/media/platforms/ffmpeg/FFmpegVideoEncoder.cpp
+index 274a5afc5a..73a5341684 100644
 --- a/dom/media/platforms/ffmpeg/FFmpegVideoEncoder.cpp
 +++ b/dom/media/platforms/ffmpeg/FFmpegVideoEncoder.cpp
 @@ -30,6 +30,17 @@
@@ -99,7 +104,7 @@ diff --git a/dom/media/platforms/ffmpeg/FFmpegVideoEncoder.cpp b/dom/media/platf
  // The ffmpeg namespace is introduced to avoid the PixelFormat's name conflicts
  // with MediaDataEncoder::PixelFormat in MediaDataEncoder class scope.
  namespace ffmpeg {
-@@ -684,6 +695,11 @@
+@@ -684,6 +695,11 @@ MediaResult FFmpegVideoEncoder<LIBAV_VER>::InitEncoderInternal(bool aHardware) {
    SetContextBitrate();
  
    AVDictionary* options = nullptr;
@@ -112,6 +117,7 @@ diff --git a/dom/media/platforms/ffmpeg/FFmpegVideoEncoder.cpp b/dom/media/platf
      return MediaResult(
          NS_ERROR_DOM_MEDIA_FATAL_ERR,
 diff --git a/dom/media/platforms/ffmpeg/ffvpx/FFVPXRuntimeLinker.cpp b/dom/media/platforms/ffmpeg/ffvpx/FFVPXRuntimeLinker.cpp
+index 99a6bd76a2..d1d7b539d0 100644
 --- a/dom/media/platforms/ffmpeg/ffvpx/FFVPXRuntimeLinker.cpp
 +++ b/dom/media/platforms/ffmpeg/ffvpx/FFVPXRuntimeLinker.cpp
 @@ -7,6 +7,7 @@
@@ -122,25 +128,27 @@ diff --git a/dom/media/platforms/ffmpeg/ffvpx/FFVPXRuntimeLinker.cpp b/dom/media
  #include "mozilla/ToString.h"
  #include "nsLocalFile.h"
  #include "nsXPCOMPrivate.h"
-@@ -180,6 +181,17 @@
+@@ -180,6 +181,18 @@ void FFVPXRuntimeLinker::GetFFTFuncs(FFmpegFFTFuncs* aOutFuncs) {
                       "ffvpx loaded without av_tx_init/av_tx_uninit");
    aOutFuncs->init = sFFVPXLib.av_tx_init;
    aOutFuncs->uninit = sFFVPXLib.av_tx_uninit;
 +#if defined(__x86_64__) || defined(_M_X64)
 +  // general.cpu_identity = ARM64: transforms run the NEON codelets, so Web
 +  // Audio's FFT (convolver, analyser, PeriodicWave, HRTF) has ARM's results.
++  // libmozavutil always exports the switch, as it does av_tx_init.
 +  if (StaticPrefs::general_cpu_identity() == 3) {
 +    using SetFn = void (*)(int);
-+    if (auto set = reinterpret_cast<SetFn>(PR_FindFunctionSymbol(
-+            sFFVPXLib.mAVUtilLib, "av_tx_cfp_emulate_arm64"))) {
-+      set(1);
-+    }
++    auto set = reinterpret_cast<SetFn>(PR_FindFunctionSymbol(
++        sFFVPXLib.mAVUtilLib, "av_tx_cfp_emulate_arm64"));
++    MOZ_RELEASE_ASSERT(set, "ffvpx loaded without av_tx_cfp_emulate_arm64");
++    set(1);
 +  }
 +#endif
  }
  
  }  // namespace mozilla
 diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNodeEngine.cpp
+index b816c9d4b3..bedca3ba30 100644
 --- a/dom/media/webaudio/AudioNodeEngine.cpp
 +++ b/dom/media/webaudio/AudioNodeEngine.cpp
 @@ -19,9 +19,21 @@
@@ -165,7 +173,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNo
  already_AddRefed<ThreadSharedFloatArrayBufferList>
  ThreadSharedFloatArrayBufferList::Create(uint32_t aChannelCount, size_t aLength,
                                           const mozilla::fallible_t&) {
-@@ -73,6 +85,13 @@
+@@ -73,6 +85,13 @@ void AudioBufferAddWithScale(const float* aInput, float aScale, float* aOutput,
      return;
    }
  #endif
@@ -179,7 +187,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNo
  
  #ifdef USE_SSE2
    if (mozilla::supports_sse2()) {
-@@ -119,6 +138,13 @@
+@@ -119,6 +138,13 @@ void AudioBlockCopyChannelWithScale(const float* aInput, float aScale,
        return;
      }
  #endif
@@ -193,7 +201,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNo
  
  #ifdef USE_SSE2
      if (mozilla::supports_sse2()) {
-@@ -142,6 +168,12 @@
+@@ -142,6 +168,12 @@ void BufferComplexMultiply(const float* aInput, const float* aScale,
      return;
    }
  #endif
@@ -206,7 +214,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNo
  #ifdef USE_SSE2
    if (mozilla::supports_sse()) {
  #  if defined(USE_SSE4_2)
-@@ -191,6 +223,13 @@
+@@ -191,6 +223,13 @@ void AudioBlockCopyChannelWithScale(const float aInput[WEBAUDIO_BLOCK_SIZE],
      return;
    }
  #endif
@@ -220,7 +228,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNo
  
  #ifdef USE_SSE2
    if (mozilla::supports_sse2()) {
-@@ -224,6 +263,12 @@
+@@ -224,6 +263,12 @@ void AudioBufferInPlaceScale(float* aBlock, float aScale, uint32_t aSize) {
      return;
    }
  #endif
@@ -233,7 +241,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNo
  
  #ifdef USE_SSE2
    if (mozilla::supports_sse2()) {
-@@ -244,6 +289,12 @@
+@@ -244,6 +289,12 @@ void AudioBufferInPlaceScale(float* aBlock, float* aScale, uint32_t aSize) {
      return;
    }
  #endif
@@ -246,7 +254,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNo
  
  #ifdef USE_SSE2
    if (mozilla::supports_sse2()) {
-@@ -286,6 +337,13 @@
+@@ -286,6 +337,13 @@ void AudioBlockPanStereoToStereo(const float aInputL[WEBAUDIO_BLOCK_SIZE],
      return;
    }
  #endif
@@ -260,7 +268,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNo
  
  #ifdef USE_SSE2
    if (mozilla::supports_sse2()) {
-@@ -332,6 +390,13 @@
+@@ -332,6 +390,13 @@ void AudioBlockPanStereoToStereo(const float aInputL[WEBAUDIO_BLOCK_SIZE],
      return;
    }
  #endif
@@ -274,7 +282,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNo
  
  #ifdef USE_SSE2
    if (mozilla::supports_sse2()) {
-@@ -367,6 +432,11 @@
+@@ -367,6 +432,11 @@ float AudioBufferSumOfSquares(const float* aInput, uint32_t aLength) {
      return Engine<xsimd::neon>::AudioBufferSumOfSquares(aInput, aLength);
    }
  #endif
@@ -287,6 +295,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNo
  #ifdef USE_SSE2
    if (mozilla::supports_sse()) {
 diff --git a/dom/media/webaudio/AudioNodeEngineGeneric.h b/dom/media/webaudio/AudioNodeEngineGeneric.h
+index 1342a6f462..31dae386cf 100644
 --- a/dom/media/webaudio/AudioNodeEngineGeneric.h
 +++ b/dom/media/webaudio/AudioNodeEngineGeneric.h
 @@ -10,6 +10,16 @@
@@ -307,9 +316,10 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGeneric.h b/dom/media/webaudio/Au
  struct Engine {
    static void AudioBufferAddWithScale(const float* aInput, float aScale,
 diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudio/AudioNodeEngineGenericImpl.h
+index 78a24ce7bf..2ad44d9cdf 100644
 --- a/dom/media/webaudio/AudioNodeEngineGenericImpl.h
 +++ b/dom/media/webaudio/AudioNodeEngineGenericImpl.h
-@@ -18,9 +18,62 @@
+@@ -18,8 +18,61 @@
  #  define MOZ_UNROLL(_)
  #endif
  
@@ -318,7 +328,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
 +
  namespace mozilla {
  
- template <class Arch>
++template <class Arch>
 +struct EngineBatchArch {
 +  using type = Arch;
 +};
@@ -368,11 +378,10 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
 +  return reduce_add(aX);
 +}
 +
-+template <class Arch>
+ template <class Arch>
  static bool is_aligned(const void* ptr) {
    return (reinterpret_cast<uintptr_t>(ptr) &
-           ~(static_cast<uintptr_t>(Arch::alignment()) - 1)) ==
-@@ -52,13 +105,13 @@
+@@ -52,13 +105,13 @@ void Engine<Arch>::AudioBufferAddWithScale(const float* aInput, float aScale,
    MOZ_ASSERT(is_aligned<Arch>(aInput), "aInput is aligned");
    MOZ_ASSERT(is_aligned<Arch>(aOutput), "aOutput is aligned");
  
@@ -391,7 +400,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
      // Avoid xsimd::fma here: it lowers to vfmadd*ps on x86 FMA3 builds and
      // vfmaq_f32 on aarch64 NEON, an explicit single-rounded fused
      // multiply-add that bypasses the project-wide -ffp-contract=off and
-@@ -83,15 +136,15 @@
+@@ -83,15 +136,15 @@ void Engine<Arch>::AudioBlockCopyChannelWithScale(const float* aInput,
    MOZ_ASSERT(is_aligned<Arch>(aInput), "aInput is aligned");
    MOZ_ASSERT(is_aligned<Arch>(aOutput), "aOutput is aligned");
  
@@ -411,7 +420,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
      auto vout = vin * vgain;
      vout.store_aligned(&aOutput[i]);
    }
-@@ -106,14 +159,14 @@
+@@ -106,14 +159,14 @@ void Engine<Arch>::AudioBlockCopyChannelWithScale(
    MOZ_ASSERT(is_aligned<Arch>(aOutput), "aOutput is aligned");
    MOZ_ASSERT(is_aligned<Arch>(aScale), "aScale is aligned");
  
@@ -430,7 +439,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
      auto vout = vin * vscaled;
      vout.store_aligned(&aOutput[i]);
    }
-@@ -124,12 +177,12 @@
+@@ -124,12 +177,12 @@ void Engine<Arch>::AudioBufferInPlaceScale(float* aBlock, float aScale,
                                             uint32_t aSize) {
    MOZ_ASSERT(is_aligned<Arch>(aBlock), "aBlock is aligned");
  
@@ -447,7 +456,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
      auto vout = vin * vgain;
      vout.store_aligned(&aBlock[i]);
    }
-@@ -142,11 +195,11 @@
+@@ -142,11 +195,11 @@ void Engine<Arch>::AudioBufferInPlaceScale(float* aBlock, float* aScale,
    MOZ_ASSERT(is_aligned<Arch>(aBlock), "aBlock is aligned");
    MOZ_ASSERT(is_aligned<Arch>(aScale), "aScale is aligned");
  
@@ -463,7 +472,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
      auto vout = vin * vgain;
      vout.store_aligned(&aBlock[i]);
    }
-@@ -166,21 +219,21 @@
+@@ -166,21 +219,21 @@ void Engine<Arch>::AudioBlockPanStereoToStereo(
    MOZ_ASSERT(is_aligned<Arch>(aOutputL), "aOutputL is aligned");
    MOZ_ASSERT(is_aligned<Arch>(aOutputR), "aOutputR is aligned");
  
@@ -492,7 +501,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
        vout.store_aligned(&aOutputL[i]);
  
        /* right channel : aOutputR = aInputR * gainR */
-@@ -190,16 +243,16 @@
+@@ -190,16 +243,16 @@ void Engine<Arch>::AudioBlockPanStereoToStereo(
    } else {
      MOZ_UNROLL(2)
      for (unsigned i = 0; i < WEBAUDIO_BLOCK_SIZE;
@@ -513,7 +522,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
        vout.store_aligned(&aOutputR[i]);
      }
    }
-@@ -212,9 +265,24 @@
+@@ -212,9 +265,24 @@ void Engine<Arch>::BufferComplexMultiply(const float* aInput,
    MOZ_ASSERT(is_aligned<Arch>(aInput), "aInput is aligned");
    MOZ_ASSERT(is_aligned<Arch>(aOutput), "aOutput is aligned");
    MOZ_ASSERT(is_aligned<Arch>(aScale), "aScale is aligned");
@@ -539,7 +548,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
    MOZ_UNROLL(2)
    for (unsigned i = 0; i < aSize * 2;
         i += 2 * xsimd::batch<std::complex<float>, Arch>::size) {
-@@ -246,22 +314,22 @@
+@@ -246,22 +314,22 @@ float Engine<Arch>::AudioBufferSumOfSquares(const float* aInput,
    MOZ_ASSERT(is_aligned<Arch>(aInput), "aInput is aligned");
  
    constexpr uint32_t unroll_factor = 4;
@@ -569,7 +578,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
    for (uint32_t i = vLength; i < aLength; ++i) sum += aInput[i] * aInput[i];
    return sum;
  };
-@@ -283,13 +351,13 @@
+@@ -283,13 +351,13 @@ void Engine<Arch>::NaNToZeroInPlace(float* aSamples, size_t aCount) {
  
    MOZ_ASSERT(is_aligned<Arch>(aSamples), "aSamples is aligned");
  
@@ -587,7 +596,7 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
      vout.store_aligned(&aSamples[i]);
    }
  
-@@ -316,24 +384,24 @@
+@@ -316,24 +384,24 @@ void Engine<Arch>::AudioBlockPanStereoToStereo(
    MOZ_ASSERT(is_aligned<Arch>(aOutputL), "aOutputL is aligned");
    MOZ_ASSERT(is_aligned<Arch>(aOutputR), "aOutputR is aligned");
  
@@ -622,9 +631,10 @@ diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudi
      auto outL = xsimd::select(mask, outL_true, outL_false);
      auto outR = xsimd::select(mask, outR_true, outR_false);
 diff --git a/dom/media/webaudio/moz.build b/dom/media/webaudio/moz.build
+index 3bd802d715..2a51a8f759 100644
 --- a/dom/media/webaudio/moz.build
 +++ b/dom/media/webaudio/moz.build
-@@ -134,7 +134,8 @@
+@@ -134,7 +134,8 @@ if CONFIG["TARGET_CPU"] == "aarch64" or CONFIG["BUILD_ARM_NEON"]:
  # Are we targeting x86 or x64?  If so, build SSEX files.
  if CONFIG["INTEL_ARCHITECTURE"]:
      DEFINES["USE_SSE2"] = True
@@ -635,9 +645,10 @@ diff --git a/dom/media/webaudio/moz.build b/dom/media/webaudio/moz.build
      SOURCES["AudioNodeEngineSSE2.cpp"].flags += CONFIG["SSE2_FLAGS"]
      if CONFIG["SSE4_2_FLAGS"]:
 diff --git a/gfx/skia/moz.build b/gfx/skia/moz.build
+index 7c81493630..9a217dcfb3 100644
 --- a/gfx/skia/moz.build
 +++ b/gfx/skia/moz.build
-@@ -508,6 +508,7 @@
+@@ -508,6 +508,7 @@ SOURCES += [
      'skia/src/pdf/SkPDFDevice.cpp',
      'skia/src/pdf/SkPDFFont.cpp',
      'skia/src/pdf/SkPDFType1Font.cpp',
@@ -645,7 +656,7 @@ diff --git a/gfx/skia/moz.build b/gfx/skia/moz.build
      'skia/src/sksl/SkSLLexer.cpp',
      'skia/src/utils/SkParse.cpp',
      'skia/src/utils/SkParsePath.cpp',
-@@ -583,6 +584,18 @@
+@@ -583,6 +584,18 @@ if CONFIG['INTEL_ARCHITECTURE']:
      ]
      SOURCES['skia/modules/skcms/src/skcms_TransformHsw.cc'].flags += skia_opt_flags
      SOURCES['skia/src/opts/SkOpts_ml3.cpp'].flags += skia_opt_flags
@@ -665,6 +676,7 @@ diff --git a/gfx/skia/moz.build b/gfx/skia/moz.build
  
  # We allow warnings for third-party code that can be updated from upstream.
 diff --git a/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp b/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp
+index 58cbdda37b..9d7feeef26 100644
 --- a/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp
 +++ b/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp
 @@ -5,6 +5,7 @@
@@ -675,7 +687,7 @@ diff --git a/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp b/gfx/skia/skia/s
  #include "include/private/base/SkFeatures.h"
  #include "src/core/SkBitmapProcState.h"
  #include "src/core/SkCpu.h"
-@@ -22,6 +23,7 @@
+@@ -22,6 +23,7 @@ namespace SkOpts {
      DEFINE_DEFAULT(S32_alpha_D32_filter_DXDY);
  
      void Init_BitmapProcState_ssse3();
@@ -683,7 +695,7 @@ diff --git a/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp b/gfx/skia/skia/s
      void Init_BitmapProcState_lasx();
  
      static bool init() {
-@@ -31,6 +33,8 @@
+@@ -31,6 +33,8 @@ namespace SkOpts {
          #if SK_CPU_X64_LEVEL < SK_CPU_X64_LEVEL_SSSE3
              if (SkCpu::Supports(SkX64::SSSE3)) { Init_BitmapProcState_ssse3(); }
          #endif
@@ -693,6 +705,7 @@ diff --git a/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp b/gfx/skia/skia/s
          #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
              if (SkCpu::Supports(SkLoongArch::ASX)) { Init_BitmapProcState_lasx(); }
 diff --git a/gfx/skia/skia/src/core/SkBlitMask_opts.cpp b/gfx/skia/skia/src/core/SkBlitMask_opts.cpp
+index f98993139e..f761e13ab8 100644
 --- a/gfx/skia/skia/src/core/SkBlitMask_opts.cpp
 +++ b/gfx/skia/skia/src/core/SkBlitMask_opts.cpp
 @@ -5,6 +5,7 @@
@@ -703,7 +716,7 @@ diff --git a/gfx/skia/skia/src/core/SkBlitMask_opts.cpp b/gfx/skia/skia/src/core
  #include "include/private/base/SkFeatures.h"
  #include "src/core/SkBlitMask.h"
  #include "src/core/SkCpu.h"
-@@ -21,6 +22,7 @@
+@@ -21,6 +22,7 @@ namespace SkOpts {
      DEFINE_DEFAULT(blit_mask_d32_a8);
  
      void Init_BlitMask_ssse3();
@@ -711,7 +724,7 @@ diff --git a/gfx/skia/skia/src/core/SkBlitMask_opts.cpp b/gfx/skia/skia/src/core
  
      static bool init() {
      #if defined(SK_ENABLE_OPTIMIZE_SIZE)
-@@ -29,6 +31,8 @@
+@@ -29,6 +31,8 @@ namespace SkOpts {
          #if SK_CPU_X64_LEVEL < SK_CPU_X64_LEVEL_SSSE3
              if (SkCpu::Supports(SkX64::SSSE3)) { Init_BlitMask_ssse3(); }
          #endif
@@ -721,6 +734,7 @@ diff --git a/gfx/skia/skia/src/core/SkBlitMask_opts.cpp b/gfx/skia/skia/src/core
        return true;
      }
 diff --git a/gfx/skia/skia/src/core/SkBlitRow_D32.cpp b/gfx/skia/skia/src/core/SkBlitRow_D32.cpp
+index 27f0b4d229..36e9c2db2a 100644
 --- a/gfx/skia/skia/src/core/SkBlitRow_D32.cpp
 +++ b/gfx/skia/skia/src/core/SkBlitRow_D32.cpp
 @@ -12,6 +12,7 @@
@@ -731,7 +745,7 @@ diff --git a/gfx/skia/skia/src/core/SkBlitRow_D32.cpp b/gfx/skia/skia/src/core/S
  
  #include <cstring>
  #include <iterator>
-@@ -155,128 +156,7 @@
+@@ -155,128 +156,7 @@ static void blit_row_s32_opaque(SkPMColor* dst,
  
  #elif defined(SK_ARM_HAS_NEON)
      #include <arm_neon.h>
@@ -861,7 +875,7 @@ diff --git a/gfx/skia/skia/src/core/SkBlitRow_D32.cpp b/gfx/skia/skia/src/core/S
  #elif SK_CPU_LSX_LEVEL >= SK_CPU_LSX_LEVEL_LASX
      #include <lasxintrin.h>
  
-@@ -537,6 +417,14 @@
+@@ -537,6 +417,14 @@ static void blit_row_s32_opaque(SkPMColor* dst,
      }
  #endif
  
@@ -876,7 +890,7 @@ diff --git a/gfx/skia/skia/src/core/SkBlitRow_D32.cpp b/gfx/skia/skia/src/core/S
  SkBlitRow::Proc32 SkBlitRow::Factory32(unsigned flags) {
      static const SkBlitRow::Proc32 kProcs[] = {
          blit_row_s32_opaque,
-@@ -548,6 +436,14 @@
+@@ -548,6 +436,14 @@ SkBlitRow::Proc32 SkBlitRow::Factory32(unsigned flags) {
      SkASSERT(flags < std::size(kProcs));
      flags &= std::size(kProcs) - 1;  // just to be safe
  
@@ -892,6 +906,7 @@ diff --git a/gfx/skia/skia/src/core/SkBlitRow_D32.cpp b/gfx/skia/skia/src/core/S
  }
  
 diff --git a/gfx/skia/skia/src/core/SkBlitRow_opts.cpp b/gfx/skia/skia/src/core/SkBlitRow_opts.cpp
+index da48a55d0c..70ff96b165 100644
 --- a/gfx/skia/skia/src/core/SkBlitRow_opts.cpp
 +++ b/gfx/skia/skia/src/core/SkBlitRow_opts.cpp
 @@ -5,6 +5,7 @@
@@ -902,7 +917,7 @@ diff --git a/gfx/skia/skia/src/core/SkBlitRow_opts.cpp b/gfx/skia/skia/src/core/
  #include "include/private/base/SkFeatures.h"
  #include "src/core/SkBlitRow.h"
  #include "src/core/SkCpu.h"
-@@ -22,6 +23,7 @@
+@@ -22,6 +23,7 @@ namespace SkOpts {
      DEFINE_DEFAULT(blit_row_s32a_opaque);
  
      void Init_BlitRow_ml3();
@@ -910,7 +925,7 @@ diff --git a/gfx/skia/skia/src/core/SkBlitRow_opts.cpp b/gfx/skia/skia/src/core/
      void Init_BlitRow_lasx();
  
      static bool init() {
-@@ -31,6 +33,8 @@
+@@ -31,6 +33,8 @@ namespace SkOpts {
          #if SK_CPU_X64_LEVEL < SK_CPU_X64_LEVEL_AVX2
              if (SkCpu::Supports(SkX64::ML3)) { Init_BlitRow_ml3(); }
          #endif
@@ -920,6 +935,7 @@ diff --git a/gfx/skia/skia/src/core/SkBlitRow_opts.cpp b/gfx/skia/skia/src/core/
          #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
              if (SkCpu::Supports(SkLoongArch::ASX)) { Init_BlitRow_lasx(); }
 diff --git a/gfx/skia/skia/src/core/SkConvertPixels.cpp b/gfx/skia/skia/src/core/SkConvertPixels.cpp
+index 7ae979a931..9be36f00dc 100644
 --- a/gfx/skia/skia/src/core/SkConvertPixels.cpp
 +++ b/gfx/skia/skia/src/core/SkConvertPixels.cpp
 @@ -4,6 +4,7 @@
@@ -930,7 +946,7 @@ diff --git a/gfx/skia/skia/src/core/SkConvertPixels.cpp b/gfx/skia/skia/src/core
  #include "src/core/SkConvertPixels.h"
  
  #include "include/core/SkColorType.h"
-@@ -53,7 +54,8 @@
+@@ -53,7 +54,8 @@ static bool swizzle_or_premul(const SkImageInfo& dstInfo,       void* dstPixels,
          steps.fFlags.linearize         ||
          steps.fFlags.gamut_transform   ||
  #if !defined(SK_ARM_HAS_NEON)
@@ -941,6 +957,7 @@ diff --git a/gfx/skia/skia/src/core/SkConvertPixels.cpp b/gfx/skia/skia/src/core
          steps.fFlags.encode) {
          return false;
 diff --git a/gfx/skia/skia/src/core/SkOpts.cpp b/gfx/skia/skia/src/core/SkOpts.cpp
+index adfbdc30f0..667b7884fe 100644
 --- a/gfx/skia/skia/src/core/SkOpts.cpp
 +++ b/gfx/skia/skia/src/core/SkOpts.cpp
 @@ -4,6 +4,7 @@
@@ -951,7 +968,7 @@ diff --git a/gfx/skia/skia/src/core/SkOpts.cpp b/gfx/skia/skia/src/core/SkOpts.c
  #include "src/core/SkOpts.h"
  
  #include "include/private/base/SkFeatures.h"
-@@ -45,6 +46,7 @@
+@@ -45,6 +46,7 @@ namespace SkOpts {
  
      // Each Init_foo() is defined in src/opts/SkOpts_foo.cpp.
      void Init_ml3();
@@ -959,7 +976,7 @@ diff --git a/gfx/skia/skia/src/core/SkOpts.cpp b/gfx/skia/skia/src/core/SkOpts.c
      void Init_ml4();
      void Init_lasx();
  
-@@ -63,6 +65,8 @@
+@@ -63,6 +65,8 @@ namespace SkOpts {
              #endif
          #endif
  
@@ -969,6 +986,7 @@ diff --git a/gfx/skia/skia/src/core/SkOpts.cpp b/gfx/skia/skia/src/core/SkOpts.c
          #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
              if (SkCpu::Supports(SkLoongArch::ASX)) { Init_lasx(); }
 diff --git a/gfx/skia/skia/src/core/SkSwizzler_opts.cpp b/gfx/skia/skia/src/core/SkSwizzler_opts.cpp
+index 6d37af434f..7c9758d446 100644
 --- a/gfx/skia/skia/src/core/SkSwizzler_opts.cpp
 +++ b/gfx/skia/skia/src/core/SkSwizzler_opts.cpp
 @@ -5,6 +5,7 @@
@@ -979,7 +997,7 @@ diff --git a/gfx/skia/skia/src/core/SkSwizzler_opts.cpp b/gfx/skia/skia/src/core
  #include "include/private/base/SkFeatures.h"
  #include "src/core/SkCpu.h"
  #include "src/core/SkOptsTargets.h"
-@@ -32,6 +33,7 @@
+@@ -32,6 +33,7 @@ namespace SkOpts {
      DEFINE_DEFAULT(inverted_CMYK_to_BGR1);
  
      void Init_Swizzler_ssse3();
@@ -987,7 +1005,7 @@ diff --git a/gfx/skia/skia/src/core/SkSwizzler_opts.cpp b/gfx/skia/skia/src/core
      void Init_Swizzler_ml3();
      void Init_Swizzler_lasx();
  
-@@ -46,6 +48,8 @@
+@@ -46,6 +48,8 @@ namespace SkOpts {
          #if SK_CPU_X64_LEVEL < SK_CPU_X64_LEVEL_AVX2
              if (SkCpu::Supports(SkX64::ML3)) { Init_Swizzler_ml3(); }
          #endif
@@ -997,6 +1015,7 @@ diff --git a/gfx/skia/skia/src/core/SkSwizzler_opts.cpp b/gfx/skia/skia/src/core
          #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
              if (SkCpu::Supports(SkLoongArch::ASX)) { Init_Swizzler_lasx(); }
 diff --git a/gfx/skia/skia/src/opts/SkBitmapProcState_opts.h b/gfx/skia/skia/src/opts/SkBitmapProcState_opts.h
+index 407563eae4..2ce9074aec 100644
 --- a/gfx/skia/skia/src/opts/SkBitmapProcState_opts.h
 +++ b/gfx/skia/skia/src/opts/SkBitmapProcState_opts.h
 @@ -24,7 +24,11 @@
@@ -1013,6 +1032,7 @@ diff --git a/gfx/skia/skia/src/opts/SkBitmapProcState_opts.h b/gfx/skia/skia/src
      #include <lasxintrin.h>
  #elif SK_CPU_LSX_LEVEL >= SK_CPU_LSX_LEVEL_LSX
 diff --git a/gfx/skia/skia/src/opts/SkBlitMask_opts.h b/gfx/skia/skia/src/opts/SkBlitMask_opts.h
+index 6b1aa74116..981c17df99 100644
 --- a/gfx/skia/skia/src/opts/SkBlitMask_opts.h
 +++ b/gfx/skia/skia/src/opts/SkBlitMask_opts.h
 @@ -12,7 +12,11 @@
@@ -1029,6 +1049,7 @@ diff --git a/gfx/skia/skia/src/opts/SkBlitMask_opts.h b/gfx/skia/skia/src/opts/S
  
  namespace SK_OPTS_NS {
 diff --git a/gfx/skia/skia/src/opts/SkBlitRow_opts.h b/gfx/skia/skia/src/opts/SkBlitRow_opts.h
+index 54de40498a..e7c5479b5b 100644
 --- a/gfx/skia/skia/src/opts/SkBlitRow_opts.h
 +++ b/gfx/skia/skia/src/opts/SkBlitRow_opts.h
 @@ -89,7 +89,11 @@
@@ -1045,9 +1066,10 @@ diff --git a/gfx/skia/skia/src/opts/SkBlitRow_opts.h b/gfx/skia/skia/src/opts/Sk
      // SkMulDiv255Round() applied to each lane.
      static inline uint8x8_t SkMulDiv255Round_neon8(uint8x8_t x, uint8x8_t y) {
 diff --git a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h b/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h
+index 9a0edd9594..711a5501b6 100644
 --- a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h
 +++ b/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h
-@@ -108,7 +108,11 @@
+@@ -108,7 +108,11 @@ using NoCtx = const void*;
  #if defined(SKRP_CPU_SCALAR)
      #include <math.h>
  #elif defined(SKRP_CPU_NEON)
@@ -1060,7 +1082,7 @@ diff --git a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h b/gfx/skia/skia/src/
  #elif defined(SKRP_CPU_LASX)
      #include <lasxintrin.h>
      #include <lsxintrin.h>
-@@ -116,6 +120,7 @@
+@@ -116,6 +120,7 @@ using NoCtx = const void*;
      #include <lsxintrin.h>
  #else
      #include <immintrin.h>
@@ -1068,7 +1090,7 @@ diff --git a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h b/gfx/skia/skia/src/
  #endif
  
  // Notes:
-@@ -608,8 +613,21 @@
+@@ -608,8 +613,21 @@ namespace SK_OPTS_NS {
      SI I32 abs_  (I32 v)     { return (I32)_mm256_abs_epi32((__m256i)v); }
      SI F   floor_(F v)       { return _mm256_floor_ps(v);    }
      SI F   ceil_(F v)        { return _mm256_ceil_ps(v);     }
@@ -1092,7 +1114,7 @@ diff --git a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h b/gfx/skia/skia/src/
      SI F   sqrt_ (F v)       { return _mm256_sqrt_ps (v);    }
      SI F   rcp_precise (F v) {
          F e = rcp_approx(v);
-@@ -809,9 +827,22 @@
+@@ -809,9 +827,22 @@ namespace SK_OPTS_NS {
  #else
      SI I32 abs_(I32 v)         { return max(v, -v); }
  #endif
@@ -1118,6 +1140,7 @@ diff --git a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h b/gfx/skia/skia/src/
  
      SI I32 iround(F v)         { return (I32)_mm_cvtps_epi32(v); }
 diff --git a/gfx/skia/skia/src/opts/SkSwizzler_opts.inc b/gfx/skia/skia/src/opts/SkSwizzler_opts.inc
+index e5c506b55e..695820d10b 100644
 --- a/gfx/skia/skia/src/opts/SkSwizzler_opts.inc
 +++ b/gfx/skia/skia/src/opts/SkSwizzler_opts.inc
 @@ -17,7 +17,11 @@
@@ -1134,9 +1157,10 @@ diff --git a/gfx/skia/skia/src/opts/SkSwizzler_opts.inc b/gfx/skia/skia/src/opts
      #include <lasxintrin.h>
  #elif SK_CPU_LSX_LEVEL >= SK_CPU_LSX_LEVEL_LSX
 diff --git a/js/public/Initialization.h b/js/public/Initialization.h
+index 26578b6efd..c0cc94edb1 100644
 --- a/js/public/Initialization.h
 +++ b/js/public/Initialization.h
-@@ -196,6 +196,14 @@
+@@ -196,6 +196,14 @@ extern JS_PUBLIC_API void JS_ShutDown(void);
   */
  extern JS_PUBLIC_API void JS_FrontendOnlyShutDown(void);
  
@@ -1152,6 +1176,7 @@ diff --git a/js/public/Initialization.h b/js/public/Initialization.h
      (defined(JS_CODEGEN_X64) || defined(JS_CODEGEN_X86))
  namespace JS {
 diff --git a/js/src/builtin/DataViewObject.cpp b/js/src/builtin/DataViewObject.cpp
+index 4a779d656b..afecad1a4c 100644
 --- a/js/src/builtin/DataViewObject.cpp
 +++ b/js/src/builtin/DataViewObject.cpp
 @@ -14,6 +14,7 @@
@@ -1162,7 +1187,7 @@ diff --git a/js/src/builtin/DataViewObject.cpp b/js/src/builtin/DataViewObject.c
  #include "jit/InlinableNatives.h"
  #include "js/Conversions.h"
  #include "js/experimental/TypedData.h"  // JS_NewDataView
-@@ -578,6 +579,9 @@
+@@ -578,6 +579,9 @@ bool DataViewObject::write(JSContext* cx, Handle<DataViewObject*> obj,
      if (js::SupportDifferentialTesting()) {
        value = JS::CanonicalizeNaN(static_cast<double>(value));
      }
@@ -1173,9 +1198,10 @@ diff --git a/js/src/builtin/DataViewObject.cpp b/js/src/builtin/DataViewObject.c
  
    // Step 6.
 diff --git a/js/src/jit/CacheIRCompiler.cpp b/js/src/jit/CacheIRCompiler.cpp
+index 1cf65a9bc4..9a3e787441 100644
 --- a/js/src/jit/CacheIRCompiler.cpp
 +++ b/js/src/jit/CacheIRCompiler.cpp
-@@ -8252,6 +8252,9 @@
+@@ -8252,6 +8252,9 @@ bool CacheIRCompiler::emitStoreDataViewValueResult(
    if (Scalar::isFloatingType(elementType) && js::SupportDifferentialTesting()) {
      masm.canonicalizeDoubleNaN(floatScratch0);
    }
@@ -1186,9 +1212,10 @@ diff --git a/js/src/jit/CacheIRCompiler.cpp b/js/src/jit/CacheIRCompiler.cpp
    // Load the value into a gpr register.
    switch (elementType) {
 diff --git a/js/src/jit/CodeGenerator.cpp b/js/src/jit/CodeGenerator.cpp
+index ed329aea64..6a743cf124 100644
 --- a/js/src/jit/CodeGenerator.cpp
 +++ b/js/src/jit/CodeGenerator.cpp
-@@ -19892,16 +19892,19 @@
+@@ -19892,16 +19892,19 @@ void CodeGenerator::visitStoreDataViewElement(LStoreDataViewElement* lir) {
        break;
      case Scalar::Float16: {
        FloatRegister fvalue = ToFloatRegister(value);
@@ -1209,9 +1236,10 @@ diff --git a/js/src/jit/CodeGenerator.cpp b/js/src/jit/CodeGenerator.cpp
        break;
      }
 diff --git a/js/src/jit/JitOptions.cpp b/js/src/jit/JitOptions.cpp
+index 64a142b361..e776c27848 100644
 --- a/js/src/jit/JitOptions.cpp
 +++ b/js/src/jit/JitOptions.cpp
-@@ -58,6 +58,8 @@
+@@ -58,6 +58,8 @@ T overrideDefault(const char* param, T dflt) {
  }
  
  #define SET_DEFAULT(var, dflt) var = overrideDefault("JIT_OPTION_" #var, dflt)
@@ -1221,6 +1249,7 @@ diff --git a/js/src/jit/JitOptions.cpp b/js/src/jit/JitOptions.cpp
    // Whether to perform expensive graph-consistency DEBUG-only assertions.
    // It can be useful to disable this to reduce DEBUG-compile time of large
 diff --git a/js/src/jit/JitOptions.h b/js/src/jit/JitOptions.h
+index 62a4a22b4d..bffb8259c7 100644
 --- a/js/src/jit/JitOptions.h
 +++ b/js/src/jit/JitOptions.h
 @@ -5,6 +5,7 @@
@@ -1231,7 +1260,7 @@ diff --git a/js/src/jit/JitOptions.h b/js/src/jit/JitOptions.h
  #include "mozilla/Maybe.h"
  
  #include "jit/IonTypes.h"
-@@ -187,6 +188,25 @@
+@@ -187,6 +188,25 @@ struct DefaultJitOptions {
  
  extern DefaultJitOptions JitOptions;
  
@@ -1258,9 +1287,10 @@ diff --git a/js/src/jit/JitOptions.h b/js/src/jit/JitOptions.h
  #if defined(JS_CODEGEN_NONE)
    return false;
 diff --git a/js/src/jit/MacroAssembler.cpp b/js/src/jit/MacroAssembler.cpp
+index 7c7c55fff1..e85aa3d56e 100644
 --- a/js/src/jit/MacroAssembler.cpp
 +++ b/js/src/jit/MacroAssembler.cpp
-@@ -75,11 +75,29 @@
+@@ -75,11 +75,29 @@ TrampolinePtr MacroAssembler::preBarrierTrampoline(MIRType type) {
    return rt->preBarrier(type);
  }
  
@@ -1291,9 +1321,10 @@ diff --git a/js/src/jit/MacroAssembler.cpp b/js/src/jit/MacroAssembler.cpp
      case Scalar::Float16:
        storeFloat16(value, dest, temp, volatileLiveRegs);
 diff --git a/js/src/jit/MacroAssembler.h b/js/src/jit/MacroAssembler.h
+index 5be27d414b..a0ebd97651 100644
 --- a/js/src/jit/MacroAssembler.h
 +++ b/js/src/jit/MacroAssembler.h
-@@ -5521,6 +5521,9 @@
+@@ -5521,6 +5521,9 @@ class MacroAssembler : public MacroAssemblerSpecific {
      }
    }
  
@@ -1304,6 +1335,7 @@ diff --git a/js/src/jit/MacroAssembler.h b/js/src/jit/MacroAssembler.h
    void storeToTypedFloatArray(Scalar::Type arrayType, FloatRegister value,
                                const T& dest, Register temp,
 diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h
+index d5610eea38..b6e24d9f90 100644
 --- a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h
 +++ b/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h
 @@ -9,11 +9,25 @@
@@ -1332,7 +1364,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
  //{{{ check_macroassembler_style
  // ===============================================================
  // Move instructions
-@@ -1555,6 +1569,7 @@
+@@ -1555,6 +1569,7 @@ void MacroAssembler::blendInt16x8(const uint16_t lanes[8], FloatRegister lhs,
  
  void MacroAssembler::laneSelectSimd128(FloatRegister mask, FloatRegister lhs,
                                         FloatRegister rhs, FloatRegister dest) {
@@ -1340,7 +1372,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    MacroAssemblerX86Shared::laneSelectSimd128(mask, lhs, rhs, dest);
  }
  
-@@ -1827,6 +1842,7 @@
+@@ -1827,6 +1842,7 @@ void MacroAssembler::swizzleInt8x16(FloatRegister lhs, FloatRegister rhs,
  
  void MacroAssembler::swizzleInt8x16Relaxed(FloatRegister lhs, FloatRegister rhs,
                                             FloatRegister dest) {
@@ -1348,7 +1380,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    ScratchSimd128Scope scratch(*this);
    lhs = moveSimd128IntIfNotAVX(lhs, &rhs, dest, scratch);
    vpshufb(rhs, lhs, dest);
-@@ -2186,6 +2202,7 @@
+@@ -2186,6 +2202,7 @@ void MacroAssembler::q15MulrSatInt16x8(FloatRegister lhs, FloatRegister rhs,
  
  void MacroAssembler::q15MulrInt16x8Relaxed(FloatRegister lhs, FloatRegister rhs,
                                             FloatRegister dest) {
@@ -1356,7 +1388,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    lhs = moveSimd128IntIfNotAVXCommutative(lhs, &rhs, dest);
    vpmulhrsw(Operand(rhs), lhs, dest);
  }
-@@ -3095,6 +3112,7 @@
+@@ -3095,6 +3112,7 @@ void MacroAssembler::widenDotInt16x8(FloatRegister lhs, const SimdConstant& rhs,
  
  void MacroAssembler::dotInt8x16Int7x16(FloatRegister lhs, FloatRegister rhs,
                                         FloatRegister dest) {
@@ -1364,7 +1396,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    ScratchSimd128Scope scratch(*this);
    if (lhs == dest && !HasAVX()) {
      moveSimd128Int(lhs, scratch);
-@@ -3107,6 +3125,7 @@
+@@ -3107,6 +3125,7 @@ void MacroAssembler::dotInt8x16Int7x16(FloatRegister lhs, FloatRegister rhs,
  void MacroAssembler::dotInt8x16Int7x16ThenAdd(FloatRegister lhs,
                                                FloatRegister rhs,
                                                FloatRegister dest) {
@@ -1372,7 +1404,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    ScratchSimd128Scope scratch(*this);
    rhs = moveSimd128IntIfNotAVX(rhs, scratch);
    vpmaddubsw(lhs, rhs, scratch);
-@@ -3348,21 +3367,25 @@
+@@ -3348,21 +3367,25 @@ void MacroAssembler::unsignedTruncSatFloat64x2ToInt32x4(FloatRegister src,
  
  void MacroAssembler::truncFloat32x4ToInt32x4Relaxed(FloatRegister src,
                                                      FloatRegister dest) {
@@ -1398,7 +1430,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    MacroAssemblerX86Shared::unsignedTruncFloat64x2ToInt32x4Relaxed(src, dest);
  }
  
-@@ -3507,6 +3530,7 @@
+@@ -3507,6 +3530,7 @@ void MacroAssembler::unsignedWidenHighInt32x4(FloatRegister src,
  
  void MacroAssembler::fmaFloat32x4(FloatRegister src1, FloatRegister src2,
                                    FloatRegister srcDest) {
@@ -1406,7 +1438,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    if (HasFMA()) {
      vfmadd231ps(src2, src1, srcDest);
      return;
-@@ -3519,6 +3543,7 @@
+@@ -3519,6 +3543,7 @@ void MacroAssembler::fmaFloat32x4(FloatRegister src1, FloatRegister src2,
  
  void MacroAssembler::fnmaFloat32x4(FloatRegister src1, FloatRegister src2,
                                     FloatRegister srcDest) {
@@ -1414,7 +1446,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    if (HasFMA()) {
      vfnmadd231ps(src2, src1, srcDest);
      return;
-@@ -3531,6 +3556,7 @@
+@@ -3531,6 +3556,7 @@ void MacroAssembler::fnmaFloat32x4(FloatRegister src1, FloatRegister src2,
  
  void MacroAssembler::fmaFloat64x2(FloatRegister src1, FloatRegister src2,
                                    FloatRegister srcDest) {
@@ -1422,7 +1454,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    if (HasFMA()) {
      vfmadd231pd(src2, src1, srcDest);
      return;
-@@ -3543,6 +3569,7 @@
+@@ -3543,6 +3569,7 @@ void MacroAssembler::fmaFloat64x2(FloatRegister src1, FloatRegister src2,
  
  void MacroAssembler::fnmaFloat64x2(FloatRegister src1, FloatRegister src2,
                                     FloatRegister srcDest) {
@@ -1430,7 +1462,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    if (HasFMA()) {
      vfnmadd231pd(src2, src1, srcDest);
      return;
-@@ -3555,11 +3582,13 @@
+@@ -3555,11 +3582,13 @@ void MacroAssembler::fnmaFloat64x2(FloatRegister src1, FloatRegister src2,
  
  void MacroAssembler::minFloat32x4Relaxed(FloatRegister src,
                                           FloatRegister srcDest) {
@@ -1444,7 +1476,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    ScratchSimd128Scope scratch(*this);
    lhs = moveSimd128FloatIfNotAVX(lhs, &rhs, dest, scratch);
    vminps(Operand(rhs), lhs, dest);
-@@ -3567,11 +3596,13 @@
+@@ -3567,11 +3596,13 @@ void MacroAssembler::minFloat32x4Relaxed(FloatRegister lhs, FloatRegister rhs,
  
  void MacroAssembler::maxFloat32x4Relaxed(FloatRegister src,
                                           FloatRegister srcDest) {
@@ -1458,7 +1490,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    ScratchSimd128Scope scratch(*this);
    lhs = moveSimd128FloatIfNotAVX(lhs, &rhs, dest, scratch);
    vmaxps(Operand(rhs), lhs, dest);
-@@ -3579,11 +3610,13 @@
+@@ -3579,11 +3610,13 @@ void MacroAssembler::maxFloat32x4Relaxed(FloatRegister lhs, FloatRegister rhs,
  
  void MacroAssembler::minFloat64x2Relaxed(FloatRegister src,
                                           FloatRegister srcDest) {
@@ -1472,7 +1504,7 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    ScratchSimd128Scope scratch(*this);
    lhs = moveSimd128FloatIfNotAVX(lhs, &rhs, dest, scratch);
    vminpd(Operand(rhs), lhs, dest);
-@@ -3591,11 +3624,13 @@
+@@ -3591,11 +3624,13 @@ void MacroAssembler::minFloat64x2Relaxed(FloatRegister lhs, FloatRegister rhs,
  
  void MacroAssembler::maxFloat64x2Relaxed(FloatRegister src,
                                           FloatRegister srcDest) {
@@ -1487,9 +1519,10 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/
    lhs = moveSimd128FloatIfNotAVX(lhs, &rhs, dest, scratch);
    vmaxpd(Operand(rhs), lhs, dest);
 diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared.cpp b/js/src/jit/x86-shared/MacroAssembler-x86-shared.cpp
+index 96016496c5..ec704e9024 100644
 --- a/js/src/jit/x86-shared/MacroAssembler-x86-shared.cpp
 +++ b/js/src/jit/x86-shared/MacroAssembler-x86-shared.cpp
-@@ -2258,3 +2258,341 @@
+@@ -2258,3 +2258,341 @@ CodeOffset MacroAssembler::wasmMarkedSlowCall(const wasm::CallSiteDesc& desc,
  }
  
  //}}} check_macroassembler_style
@@ -1832,9 +1865,10 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared.cpp b/js/src/jit/x8
 +}
 +#endif  // JS_CODEGEN_X64
 diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared.h b/js/src/jit/x86-shared/MacroAssembler-x86-shared.h
+index 7f413eba4e..29b60bef1d 100644
 --- a/js/src/jit/x86-shared/MacroAssembler-x86-shared.h
 +++ b/js/src/jit/x86-shared/MacroAssembler-x86-shared.h
-@@ -515,6 +515,20 @@
+@@ -515,6 +515,20 @@ class MacroAssemblerX86Shared : public Assembler {
    void unsignedTruncFloat64x2ToInt32x4Relaxed(FloatRegister src,
                                                FloatRegister dest);
  
@@ -1856,9 +1890,10 @@ diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared.h b/js/src/jit/x86-
    void splatX8(Register input, FloatRegister output);
    void splatX4(Register input, FloatRegister output);
 diff --git a/js/src/vm/Initialization.cpp b/js/src/vm/Initialization.cpp
+index 1c715512d3..61ad2726f4 100644
 --- a/js/src/vm/Initialization.cpp
 +++ b/js/src/vm/Initialization.cpp
-@@ -320,6 +320,12 @@
+@@ -320,6 +320,12 @@ JS_PUBLIC_API bool JS_SetICUMemoryFunctions(JS_ICUAllocFn allocFn,
  #endif
  }
  
@@ -1872,6 +1907,7 @@ diff --git a/js/src/vm/Initialization.cpp b/js/src/vm/Initialization.cpp
      (defined(JS_CODEGEN_X64) || defined(JS_CODEGEN_X86))
  void JS::SetAVXEnabled(bool enabled) {
 diff --git a/js/src/vm/TypedArrayObject-inl.h b/js/src/vm/TypedArrayObject-inl.h
+index 2702836452..0781b26392 100644
 --- a/js/src/vm/TypedArrayObject-inl.h
 +++ b/js/src/vm/TypedArrayObject-inl.h
 @@ -18,6 +18,7 @@
@@ -1882,7 +1918,7 @@ diff --git a/js/src/vm/TypedArrayObject-inl.h b/js/src/vm/TypedArrayObject-inl.h
  #include "js/Conversions.h"
  #include "js/ScalarType.h"  // js::Scalar::Type
  #include "js/Value.h"
-@@ -669,6 +670,7 @@
+@@ -669,6 +670,7 @@ class ElementSpecific {
        if (js::SupportDifferentialTesting()) {
          d = JS::CanonicalizeNaN(d);
        }
@@ -1891,6 +1927,7 @@ diff --git a/js/src/vm/TypedArrayObject-inl.h b/js/src/vm/TypedArrayObject-inl.h
      return ConvertNumber<T>(d);
    }
 diff --git a/js/src/vm/TypedArrayObject.cpp b/js/src/vm/TypedArrayObject.cpp
+index 3cf414d3cd..516eb1cf53 100644
 --- a/js/src/vm/TypedArrayObject.cpp
 +++ b/js/src/vm/TypedArrayObject.cpp
 @@ -37,6 +37,7 @@
@@ -1901,7 +1938,7 @@ diff --git a/js/src/vm/TypedArrayObject.cpp b/js/src/vm/TypedArrayObject.cpp
  #include "jit/TrampolineNatives.h"
  #include "js/Conversions.h"
  #include "js/experimental/TypedData.h"  // JS_GetArrayBufferViewType, JS_GetTypedArray{Length,ByteOffset,ByteLength}, JS_IsTypedArrayObject
-@@ -1276,6 +1277,7 @@
+@@ -1276,6 +1277,7 @@ bool TypedArrayObjectTemplate<NativeType>::convertValue(JSContext* cx,
        // See the comment in ElementSpecific::doubleToNative.
        d = JS::CanonicalizeNaN(d);
      }
@@ -1909,7 +1946,7 @@ diff --git a/js/src/vm/TypedArrayObject.cpp b/js/src/vm/TypedArrayObject.cpp
    }
  
    // Assign based on characteristics of the destination type
-@@ -3117,6 +3119,7 @@
+@@ -3117,6 +3119,7 @@ static NativeType ConvertToNativeType(const Value& value) {
        // See the comment in ElementSpecific::doubleToNative.
        d = JS::CanonicalizeNaN(d);
      }
@@ -1917,7 +1954,7 @@ diff --git a/js/src/vm/TypedArrayObject.cpp b/js/src/vm/TypedArrayObject.cpp
  
      return ConvertNumber<NativeType>(d);
    } else if constexpr (std::is_same_v<NativeType, int64_t>) {
-@@ -3953,6 +3956,7 @@
+@@ -3953,6 +3956,7 @@ static void TypedArraySliceCopySlowSet(TypedArrayObject* tarray, size_t index,
        // See the comment in ElementSpecific::doubleToNative.
        value = JS::CanonicalizeNaN(value);
      }
@@ -1926,6 +1963,7 @@ diff --git a/js/src/vm/TypedArrayObject.cpp b/js/src/vm/TypedArrayObject.cpp
    TypedArrayObjectTemplate<NativeType>::setIndex(
        *tarray, index, ConvertNumber<NativeType>(value));
 diff --git a/js/xpconnect/src/nsXPConnect.cpp b/js/xpconnect/src/nsXPConnect.cpp
+index e9b93e5e8d..1ce410fe43 100644
 --- a/js/xpconnect/src/nsXPConnect.cpp
 +++ b/js/xpconnect/src/nsXPConnect.cpp
 @@ -16,6 +16,7 @@
@@ -1936,7 +1974,7 @@ diff --git a/js/xpconnect/src/nsXPConnect.cpp b/js/xpconnect/src/nsXPConnect.cpp
  #include "mozilla/StaticPrefs_javascript.h"
  
  #include "AccessCheck.h"
-@@ -90,6 +91,10 @@
+@@ -90,6 +91,10 @@ static bool IsLockdownModeEnabled() {
  #endif
  
  static void InitJSEngine() {
@@ -1948,9 +1986,10 @@ diff --git a/js/xpconnect/src/nsXPConnect.cpp b/js/xpconnect/src/nsXPConnect.cpp
      (defined(JS_CODEGEN_X64) || defined(JS_CODEGEN_X86))
    // Update static engine preferences, such as AVX, before
 diff --git a/media/ffvpx/libavutil/avutil.symbols b/media/ffvpx/libavutil/avutil.symbols
+index d03c9f0b5d..6dd0bc6231 100644
 --- a/media/ffvpx/libavutil/avutil.symbols
 +++ b/media/ffvpx/libavutil/avutil.symbols
-@@ -336,6 +336,7 @@
+@@ -336,6 +336,7 @@ av_malloc_array
  av_get_sample_fmt_name
  av_tx_uninit
  av_tx_init
@@ -1959,9 +1998,10 @@ diff --git a/media/ffvpx/libavutil/avutil.symbols b/media/ffvpx/libavutil/avutil
  av_vk_frame_alloc
  av_vk_get_optional_device_extensions
 diff --git a/media/ffvpx/libavutil/tx.c b/media/ffvpx/libavutil/tx.c
+index 54660c9079..37009ae0e7 100644
 --- a/media/ffvpx/libavutil/tx.c
 +++ b/media/ffvpx/libavutil/tx.c
-@@ -344,6 +344,7 @@
+@@ -344,6 +344,7 @@ static const FFTXCodelet * const * const codelet_list[] = {
      ff_tx_null_list,
  #if HAVE_X86ASM
      ff_tx_codelet_list_float_x86,
@@ -1969,7 +2009,7 @@ diff --git a/media/ffvpx/libavutil/tx.c b/media/ffvpx/libavutil/tx.c
  #endif
  #if ARCH_AARCH64
      ff_tx_codelet_list_float_aarch64,
-@@ -351,6 +352,27 @@
+@@ -351,6 +352,27 @@ static const FFTXCodelet * const * const codelet_list[] = {
  };
  static const int codelet_list_num = FF_ARRAY_ELEMS(codelet_list);
  
@@ -1997,7 +2037,7 @@ diff --git a/media/ffvpx/libavutil/tx.c b/media/ffvpx/libavutil/tx.c
  static const int cpu_slow_mask = AV_CPU_FLAG_SSE2SLOW | AV_CPU_FLAG_SSE3SLOW  |
                                   AV_CPU_FLAG_ATOM     | AV_CPU_FLAG_SSSE3SLOW |
                                   AV_CPU_FLAG_AVXSLOW  | AV_CPU_FLAG_SLOW_GATHER;
-@@ -424,6 +446,9 @@
+@@ -424,6 +446,9 @@ int ff_tx_decompose_length(int dst[TX_MAX_DECOMPOSITIONS], enum AVTXType type,
          const FFTXCodelet * const * list = codelet_list[codelet_list_idx];
          const FFTXCodelet *cd = NULL;
  
@@ -2007,7 +2047,7 @@ diff --git a/media/ffvpx/libavutil/tx.c b/media/ffvpx/libavutil/tx.c
          while ((cd = *list++)) {
              int fl = len;
              int skip = 0, prio;
-@@ -753,6 +778,9 @@
+@@ -753,6 +778,9 @@ av_cold int ff_tx_init_subtx(AVTXContext *s, enum AVTXType type,
          const FFTXCodelet * const * list = codelet_list[codelet_list_idx];
          const FFTXCodelet *cd = NULL;
  
@@ -2018,26 +2058,28 @@ diff --git a/media/ffvpx/libavutil/tx.c b/media/ffvpx/libavutil/tx.c
              /* Check if the type matches */
              if (cd->type != TX_TYPE_ANY && type != cd->type)
 diff --git a/media/ffvpx/libavutil/tx.h b/media/ffvpx/libavutil/tx.h
+index c950095735..adb74804dd 100644
 --- a/media/ffvpx/libavutil/tx.h
 +++ b/media/ffvpx/libavutil/tx.h
-@@ -186,6 +186,13 @@
+@@ -185,6 +185,13 @@ enum AVTXFlags {
+     AV_TX_REAL_TO_IMAGINARY = 1ULL << 4,
  };
  
- /**
++/**
 + * Camoufox: select the NEON transform codelets, executed by an emulator, on
 + * x86-64, so that results match an ARM64 CPU's. Affects contexts initialized
 + * afterwards.
 + */
 +void av_tx_cfp_emulate_arm64(int on);
 +
-+/**
+ /**
   * Initialize a transform context with the given configuration
   * (i)MDCTs with an odd length are currently not supported.
-  *
 diff --git a/media/ffvpx/libavutil/tx_priv.h b/media/ffvpx/libavutil/tx_priv.h
+index d3fcdbf563..bcc9bf2a9f 100644
 --- a/media/ffvpx/libavutil/tx_priv.h
 +++ b/media/ffvpx/libavutil/tx_priv.h
-@@ -384,6 +384,7 @@
+@@ -384,6 +384,7 @@ int ff_tx_mdct_gen_exp_int32 (AVTXContext *s, int *pre_tab);
  extern const FFTXCodelet * const ff_tx_codelet_list_float_c       [];
  extern const FFTXCodelet * const ff_tx_codelet_list_float_x86     [];
  extern const FFTXCodelet * const ff_tx_codelet_list_float_aarch64 [];
@@ -2046,9 +2088,10 @@ diff --git a/media/ffvpx/libavutil/tx_priv.h b/media/ffvpx/libavutil/tx_priv.h
  extern const FFTXCodelet * const ff_tx_codelet_list_double_c      [];
  
 diff --git a/media/ffvpx/libavutil/x86/moz.build b/media/ffvpx/libavutil/x86/moz.build
+index 8a2116cdc4..8de0a5d45d 100644
 --- a/media/ffvpx/libavutil/x86/moz.build
 +++ b/media/ffvpx/libavutil/x86/moz.build
-@@ -17,6 +17,7 @@
+@@ -17,6 +17,7 @@ SOURCES += [
      'pixelutils.asm',
      'tx_float.asm',
      'tx_float_init.c',
@@ -2057,6 +2100,7 @@ diff --git a/media/ffvpx/libavutil/x86/moz.build b/media/ffvpx/libavutil/x86/moz
  
  FINAL_LIBRARY = 'mozavutil'
 diff --git a/media/libopus/celt/celt_tx_tables.h b/media/libopus/celt/celt_tx_tables.h
+index 3fdabcbea0..f7297b338e 100644
 --- a/media/libopus/celt/celt_tx_tables.h
 +++ b/media/libopus/celt/celt_tx_tables.h
 @@ -81,8 +81,10 @@
@@ -2073,6 +2117,7 @@ diff --git a/media/libopus/celt/celt_tx_tables.h b/media/libopus/celt/celt_tx_ta
  #endif
  
 diff --git a/media/libopus/celt/cpu_support.h b/media/libopus/celt/cpu_support.h
+index 9f13d8aecf..9c5b9b1cf9 100644
 --- a/media/libopus/celt/cpu_support.h
 +++ b/media/libopus/celt/cpu_support.h
 @@ -57,8 +57,11 @@
@@ -2088,9 +2133,10 @@ diff --git a/media/libopus/celt/cpu_support.h b/media/libopus/celt/cpu_support.h
  
  #else
 diff --git a/media/libopus/celt/mdct.h b/media/libopus/celt/mdct.h
+index 3f8414f9b0..63d06dfcdf 100644
 --- a/media/libopus/celt/mdct.h
 +++ b/media/libopus/celt/mdct.h
-@@ -76,6 +76,21 @@
+@@ -76,6 +76,21 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
  #include "arm/mdct_arm.h"
  #endif
  
@@ -2113,6 +2159,7 @@ diff --git a/media/libopus/celt/mdct.h b/media/libopus/celt/mdct.h
  
  #if !defined(OVERRIDE_CLT_MDCT_FORWARD)
 diff --git a/media/libopus/celt/pitch.c b/media/libopus/celt/pitch.c
+index 5d5ee60463..90d4ce11f6 100644
 --- a/media/libopus/celt/pitch.c
 +++ b/media/libopus/celt/pitch.c
 @@ -36,6 +36,7 @@
@@ -2123,7 +2170,7 @@ diff --git a/media/libopus/celt/pitch.c b/media/libopus/celt/pitch.c
  #include "os_support.h"
  #include "modes.h"
  #include "stack_alloc.h"
-@@ -264,6 +265,14 @@
+@@ -264,6 +265,14 @@ celt_pitch_xcorr_c(const opus_val16 *_x, const opus_val16 *_y,
  #endif
     celt_assert(max_pitch>0);
     celt_sig_assert(((size_t)_x&3)==0);
@@ -2139,6 +2186,7 @@ diff --git a/media/libopus/celt/pitch.c b/media/libopus/celt/pitch.c
     {
        opus_val32 sum[4]={0,0,0,0};
 diff --git a/media/libopus/celt/pitch.h b/media/libopus/celt/pitch.h
+index 8d6652becc..e91848971a 100644
 --- a/media/libopus/celt/pitch.h
 +++ b/media/libopus/celt/pitch.h
 @@ -50,6 +50,21 @@
@@ -2164,6 +2212,7 @@ diff --git a/media/libopus/celt/pitch.h b/media/libopus/celt/pitch.h
        int len, int C, int factor, int arch);
  
 diff --git a/media/libopus/celt/x86/vq_sse2.c b/media/libopus/celt/x86/vq_sse2.c
+index 4c4ebf8e2d..848c726b22 100644
 --- a/media/libopus/celt/x86/vq_sse2.c
 +++ b/media/libopus/celt/x86/vq_sse2.c
 @@ -37,10 +37,26 @@
@@ -2193,7 +2242,7 @@ diff --git a/media/libopus/celt/x86/vq_sse2.c b/media/libopus/celt/x86/vq_sse2.c
  opus_val16 op_pvq_search_sse2(celt_norm *_X, int *iy, int K, int N, int arch)
  {
     int i, j;
-@@ -105,7 +121,7 @@
+@@ -105,7 +121,7 @@ opus_val16 op_pvq_search_sse2(celt_norm *_X, int *iy, int K, int N, int arch)
           sums = _mm_set_ps1(1.f);
        }
        /* Using K+e with e < 1 guarantees we cannot get more than K pulses. */
@@ -2202,7 +2251,7 @@ diff --git a/media/libopus/celt/x86/vq_sse2.c b/media/libopus/celt/x86/vq_sse2.c
        xy4 = yy4 = _mm_setzero_ps();
        pulses_sum = _mm_setzero_si128();
        for (j=0;j<N;j+=4)
-@@ -170,7 +186,7 @@
+@@ -170,7 +186,7 @@ opus_val16 op_pvq_search_sse2(celt_norm *_X, int *iy, int K, int N, int arch)
           y4 = _mm_loadu_ps(&y[j]);
           x4 = _mm_add_ps(x4, xy4);
           y4 = _mm_add_ps(y4, yy4);
@@ -2212,6 +2261,7 @@ diff --git a/media/libopus/celt/x86/vq_sse2.c b/media/libopus/celt/x86/vq_sse2.c
           /* Update the index of the max. */
           pos = _mm_max_epi16(pos, _mm_and_si128(count, _mm_castps_si128(_mm_cmpgt_ps(r4, max))));
 diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_celt_map.c
+index ba8eafe6ad..f89b1e9d74 100644
 --- a/media/libopus/celt/x86/x86_celt_map.c
 +++ b/media/libopus/celt/x86/x86_celt_map.c
 @@ -34,6 +34,14 @@
@@ -2229,7 +2279,7 @@ diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_
  
  #if defined(OPUS_HAVE_RTCD)
  
-@@ -53,7 +61,8 @@
+@@ -53,7 +61,8 @@ void (*const CELT_FIR_IMPL[OPUS_ARCHMASK + 1])(
    celt_fir_c,
    celt_fir_c,
    MAY_HAVE_SSE4_1(celt_fir), /* sse4.1  */
@@ -2239,7 +2289,7 @@ diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_
  };
  
  void (*const XCORR_KERNEL_IMPL[OPUS_ARCHMASK + 1])(
-@@ -66,7 +75,8 @@
+@@ -66,7 +75,8 @@ void (*const XCORR_KERNEL_IMPL[OPUS_ARCHMASK + 1])(
    xcorr_kernel_c,
    xcorr_kernel_c,
    MAY_HAVE_SSE4_1(xcorr_kernel), /* sse4.1  */
@@ -2249,7 +2299,7 @@ diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_
  };
  
  #endif
-@@ -83,7 +93,8 @@
+@@ -83,7 +93,8 @@ opus_val32 (*const CELT_INNER_PROD_IMPL[OPUS_ARCHMASK + 1])(
    celt_inner_prod_c,
    MAY_HAVE_SSE2(celt_inner_prod),
    MAY_HAVE_SSE4_1(celt_inner_prod), /* sse4.1  */
@@ -2259,7 +2309,7 @@ diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_
  };
  
  #endif
-@@ -104,7 +115,8 @@
+@@ -104,7 +115,8 @@ void (*const PITCH_XCORR_IMPL[OPUS_ARCHMASK + 1])(
    celt_pitch_xcorr_c,
    celt_pitch_xcorr_c,
    celt_pitch_xcorr_c,
@@ -2269,7 +2319,7 @@ diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_
  };
  
  #endif
-@@ -122,7 +134,8 @@
+@@ -122,7 +134,8 @@ void (*const XCORR_KERNEL_IMPL[OPUS_ARCHMASK + 1])(
    MAY_HAVE_SSE(xcorr_kernel),
    MAY_HAVE_SSE(xcorr_kernel),
    MAY_HAVE_SSE(xcorr_kernel),
@@ -2279,7 +2329,7 @@ diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_
  };
  
  opus_val32 (*const CELT_INNER_PROD_IMPL[OPUS_ARCHMASK + 1])(
-@@ -134,7 +147,8 @@
+@@ -134,7 +147,8 @@ opus_val32 (*const CELT_INNER_PROD_IMPL[OPUS_ARCHMASK + 1])(
    MAY_HAVE_SSE(celt_inner_prod),
    MAY_HAVE_SSE(celt_inner_prod),
    MAY_HAVE_SSE(celt_inner_prod),
@@ -2289,7 +2339,7 @@ diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_
  };
  
  void (*const DUAL_INNER_PROD_IMPL[OPUS_ARCHMASK + 1])(
-@@ -149,7 +163,8 @@
+@@ -149,7 +163,8 @@ void (*const DUAL_INNER_PROD_IMPL[OPUS_ARCHMASK + 1])(
    MAY_HAVE_SSE(dual_inner_prod),
    MAY_HAVE_SSE(dual_inner_prod),
    MAY_HAVE_SSE(dual_inner_prod),
@@ -2299,7 +2349,7 @@ diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_
  };
  
  void (*const COMB_FILTER_CONST_IMPL[OPUS_ARCHMASK + 1])(
-@@ -165,7 +180,8 @@
+@@ -165,7 +180,8 @@ void (*const COMB_FILTER_CONST_IMPL[OPUS_ARCHMASK + 1])(
    MAY_HAVE_SSE(comb_filter_const),
    MAY_HAVE_SSE(comb_filter_const),
    MAY_HAVE_SSE(comb_filter_const),
@@ -2309,7 +2359,7 @@ diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_
  };
  
  
-@@ -179,7 +195,8 @@
+@@ -179,7 +195,8 @@ opus_val16 (*const OP_PVQ_SEARCH_IMPL[OPUS_ARCHMASK + 1])(
    op_pvq_search_c,
    MAY_HAVE_SSE2(op_pvq_search),
    MAY_HAVE_SSE2(op_pvq_search),
@@ -2320,6 +2370,7 @@ diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_
  #endif
  
 diff --git a/media/libopus/celt/x86/x86cpu.c b/media/libopus/celt/x86/x86cpu.c
+index 2e7c32aeec..7ac5c476a9 100644
 --- a/media/libopus/celt/x86/x86cpu.c
 +++ b/media/libopus/celt/x86/x86cpu.c
 @@ -34,6 +34,7 @@
@@ -2330,7 +2381,7 @@ diff --git a/media/libopus/celt/x86/x86cpu.c b/media/libopus/celt/x86/x86cpu.c
  
  #if defined(OPUS_HAVE_RTCD) && \
    ((defined(OPUS_X86_MAY_HAVE_SSE) && !defined(OPUS_X86_PRESUME_SSE)) || \
-@@ -173,7 +174,11 @@
+@@ -173,7 +174,11 @@ static int opus_select_arch_impl(void)
  }
  
  int opus_select_arch(void) {
@@ -2344,9 +2395,10 @@ diff --git a/media/libopus/celt/x86/x86cpu.c b/media/libopus/celt/x86/x86cpu.c
      /* Randomly downgrade the architecture. */
      arch = rand()%(arch+1);
 diff --git a/media/libopus/moz.build b/media/libopus/moz.build
+index e140171d13..492e4b80c9 100644
 --- a/media/libopus/moz.build
 +++ b/media/libopus/moz.build
-@@ -7,6 +7,7 @@
+@@ -7,6 +7,7 @@ with Files("*"):
  
  EXPORTS.opus += [
      "include/opus.h",
@@ -2354,7 +2406,7 @@ diff --git a/media/libopus/moz.build b/media/libopus/moz.build
      "include/opus_defines.h",
      "include/opus_multistream.h",
      "include/opus_types.h",
-@@ -70,6 +71,9 @@
+@@ -70,6 +71,9 @@ LOCAL_INCLUDES += [
      "src",
  ]
  
@@ -2364,7 +2416,7 @@ diff --git a/media/libopus/moz.build b/media/libopus/moz.build
  # sources.mozbuild is generated from gen-sources.py when a new libopus is
  # imported.
  include("sources.mozbuild")
-@@ -78,6 +82,7 @@
+@@ -78,6 +82,7 @@ UNIFIED_SOURCES += celt_sources
  UNIFIED_SOURCES += silk_sources
  UNIFIED_SOURCES += opus_sources
  SOURCES += opus_nonunified_sources
@@ -2372,7 +2424,7 @@ diff --git a/media/libopus/moz.build b/media/libopus/moz.build
  
  if CONFIG["MOZ_SAMPLE_TYPE_FLOAT32"]:
      UNIFIED_SOURCES += silk_sources_float
-@@ -98,6 +103,15 @@
+@@ -98,6 +103,15 @@ if CONFIG["TARGET_CPU"] in ("x86", "x86_64"):
      SOURCES += celt_sources_sse4_1
      SOURCES += silk_sources_x86_rtcd
      SOURCES += silk_sources_sse4_1
@@ -2389,9 +2441,10 @@ diff --git a/media/libopus/moz.build b/media/libopus/moz.build
          SOURCES += silk_sources_fixed_sse4_1
      for f in SOURCES:
 diff --git a/media/libopus/silk/x86/x86_silk_map.c b/media/libopus/silk/x86/x86_silk_map.c
+index 39ad75276c..121a3de75b 100644
 --- a/media/libopus/silk/x86/x86_silk_map.c
 +++ b/media/libopus/silk/x86/x86_silk_map.c
-@@ -53,7 +53,8 @@
+@@ -53,7 +53,8 @@ opus_int64 (*const SILK_INNER_PROD16_IMPL[ OPUS_ARCHMASK + 1 ] )(
    silk_inner_prod16_c,
    silk_inner_prod16_c,
    MAY_HAVE_SSE4_1( silk_inner_prod16 ), /* sse4.1 */
@@ -2401,7 +2454,7 @@ diff --git a/media/libopus/silk/x86/x86_silk_map.c b/media/libopus/silk/x86/x86_
  };
  
  #endif
-@@ -66,7 +67,8 @@
+@@ -66,7 +67,8 @@ opus_int (*const SILK_VAD_GETSA_Q8_IMPL[ OPUS_ARCHMASK + 1 ] )(
    silk_VAD_GetSA_Q8_c,
    silk_VAD_GetSA_Q8_c,
    MAY_HAVE_SSE4_1( silk_VAD_GetSA_Q8 ), /* sse4.1 */
@@ -2411,7 +2464,7 @@ diff --git a/media/libopus/silk/x86/x86_silk_map.c b/media/libopus/silk/x86/x86_
  };
  
  void (*const SILK_NSQ_IMPL[ OPUS_ARCHMASK + 1 ] )(
-@@ -90,7 +92,8 @@
+@@ -90,7 +92,8 @@ void (*const SILK_NSQ_IMPL[ OPUS_ARCHMASK + 1 ] )(
    silk_NSQ_c,
    silk_NSQ_c,
    MAY_HAVE_SSE4_1( silk_NSQ ), /* sse4.1 */
@@ -2421,7 +2474,7 @@ diff --git a/media/libopus/silk/x86/x86_silk_map.c b/media/libopus/silk/x86/x86_
  };
  
  void (*const SILK_VQ_WMAT_EC_IMPL[ OPUS_ARCHMASK + 1 ] )(
-@@ -111,7 +114,8 @@
+@@ -111,7 +114,8 @@ void (*const SILK_VQ_WMAT_EC_IMPL[ OPUS_ARCHMASK + 1 ] )(
    silk_VQ_WMat_EC_c,
    silk_VQ_WMat_EC_c,
    MAY_HAVE_SSE4_1( silk_VQ_WMat_EC ), /* sse4.1 */
@@ -2431,7 +2484,7 @@ diff --git a/media/libopus/silk/x86/x86_silk_map.c b/media/libopus/silk/x86/x86_
  };
  
  void (*const SILK_NSQ_DEL_DEC_IMPL[ OPUS_ARCHMASK + 1 ] )(
-@@ -135,7 +139,8 @@
+@@ -135,7 +139,8 @@ void (*const SILK_NSQ_DEL_DEC_IMPL[ OPUS_ARCHMASK + 1 ] )(
    silk_NSQ_del_dec_c,
    silk_NSQ_del_dec_c,
    MAY_HAVE_SSE4_1( silk_NSQ_del_dec ), /* sse4.1 */
@@ -2441,7 +2494,7 @@ diff --git a/media/libopus/silk/x86/x86_silk_map.c b/media/libopus/silk/x86/x86_
  };
  
  #if defined(FIXED_POINT)
-@@ -155,7 +160,8 @@
+@@ -155,7 +160,8 @@ void (*const SILK_BURG_MODIFIED_IMPL[ OPUS_ARCHMASK + 1 ] )(
    silk_burg_modified_c,
    silk_burg_modified_c,
    MAY_HAVE_SSE4_1( silk_burg_modified ), /* sse4.1 */
@@ -2451,7 +2504,7 @@ diff --git a/media/libopus/silk/x86/x86_silk_map.c b/media/libopus/silk/x86/x86_
  };
  
  #endif
-@@ -171,7 +177,8 @@
+@@ -171,7 +177,8 @@ double (*const SILK_INNER_PRODUCT_FLP_IMPL[ OPUS_ARCHMASK + 1 ] )(
    silk_inner_product_FLP_c,
    silk_inner_product_FLP_c,
    silk_inner_product_FLP_c, /* sse4.1 */
@@ -2462,6 +2515,7 @@ diff --git a/media/libopus/silk/x86/x86_silk_map.c b/media/libopus/silk/x86/x86_
  
  #endif
 diff --git a/media/libspeex_resampler/src/simd_detect.cpp b/media/libspeex_resampler/src/simd_detect.cpp
+index 1c8295c3a9..777b03bcea 100644
 --- a/media/libspeex_resampler/src/simd_detect.cpp
 +++ b/media/libspeex_resampler/src/simd_detect.cpp
 @@ -6,16 +6,24 @@
@@ -2492,9 +2546,10 @@ diff --git a/media/libspeex_resampler/src/simd_detect.cpp b/media/libspeex_resam
  #endif
  
 diff --git a/media/libvpx/config/linux/arm64/vp8_rtcd.h b/media/libvpx/config/linux/arm64/vp8_rtcd.h
+index 84cddbcda9..3d2755b8b5 100644
 --- a/media/libvpx/config/linux/arm64/vp8_rtcd.h
 +++ b/media/libvpx/config/linux/arm64/vp8_rtcd.h
-@@ -189,6 +189,9 @@
+@@ -189,6 +189,9 @@ void vp8_sixtap_predict8x8_c(unsigned char *src_ptr, int src_pixels_per_line, in
  void vp8_sixtap_predict8x8_neon(unsigned char *src_ptr, int src_pixels_per_line, int xoffset, int yoffset, unsigned char *dst_ptr, int dst_pitch);
  #define vp8_sixtap_predict8x8 vp8_sixtap_predict8x8_neon
  
@@ -2505,9 +2560,10 @@ diff --git a/media/libvpx/config/linux/arm64/vp8_rtcd.h b/media/libvpx/config/li
  
  #include "vpx_config.h"
 diff --git a/media/libvpx/config/linux/arm64/vp9_rtcd.h b/media/libvpx/config/linux/arm64/vp9_rtcd.h
+index fa8c44f45f..244bbb7521 100644
 --- a/media/libvpx/config/linux/arm64/vp9_rtcd.h
 +++ b/media/libvpx/config/linux/arm64/vp9_rtcd.h
-@@ -46,6 +46,10 @@
+@@ -46,6 +46,10 @@ struct yv12_buffer_config;
  extern "C" {
  #endif
  
@@ -2518,7 +2574,7 @@ diff --git a/media/libvpx/config/linux/arm64/vp9_rtcd.h b/media/libvpx/config/li
  int64_t vp9_block_error_c(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, int64_t *ssz);
  int64_t vp9_block_error_neon(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, int64_t *ssz);
  #define vp9_block_error vp9_block_error_neon
-@@ -97,6 +101,24 @@
+@@ -97,6 +101,24 @@ void vp9_scale_and_extend_frame_c(const struct yv12_buffer_config *src, struct y
  void vp9_scale_and_extend_frame_neon(const struct yv12_buffer_config *src, struct yv12_buffer_config *dst, INTERP_FILTER filter_type, int phase_scaler);
  #define vp9_scale_and_extend_frame vp9_scale_and_extend_frame_neon
  
@@ -2543,7 +2599,7 @@ diff --git a/media/libvpx/config/linux/arm64/vp9_rtcd.h b/media/libvpx/config/li
  void vp9_rtcd(void);
  
  #include "vpx_config.h"
-@@ -109,6 +131,15 @@
+@@ -109,6 +131,15 @@ static void setup_rtcd_internal(void)
  
      (void)flags;
  
@@ -2560,6 +2616,7 @@ diff --git a/media/libvpx/config/linux/arm64/vp9_rtcd.h b/media/libvpx/config/li
  #endif
  
 diff --git a/media/libvpx/config/linux/arm64/vpx_config.asm b/media/libvpx/config/linux/arm64/vpx_config.asm
+index 042179d481..cea244e88c 100644
 --- a/media/libvpx/config/linux/arm64/vpx_config.asm
 +++ b/media/libvpx/config/linux/arm64/vpx_config.asm
 @@ -68,7 +68,7 @@
@@ -2572,6 +2629,7 @@ diff --git a/media/libvpx/config/linux/arm64/vpx_config.asm b/media/libvpx/confi
  .equ CONFIG_ERROR_CONCEALMENT ,  0
  .equ CONFIG_SHARED ,  0
 diff --git a/media/libvpx/config/linux/arm64/vpx_config.c b/media/libvpx/config/linux/arm64/vpx_config.c
+index 2dce1f8245..8eb701afcf 100644
 --- a/media/libvpx/config/linux/arm64/vpx_config.c
 +++ b/media/libvpx/config/linux/arm64/vpx_config.c
 @@ -6,5 +6,5 @@
@@ -2582,6 +2640,7 @@ diff --git a/media/libvpx/config/linux/arm64/vpx_config.c b/media/libvpx/config/
 +static const char* const cfg = "--target=arm64-linux-gcc --enable-external-build --disable-examples --disable-install-docs --disable-unit-tests --enable-multi-res-encoding --size-limit=8192x4608 --enable-pic --disable-avx512 --disable-sve --log=config.log";
  const char *vpx_codec_build_config(void) {return cfg;}
 diff --git a/media/libvpx/config/linux/arm64/vpx_config.h b/media/libvpx/config/linux/arm64/vpx_config.h
+index c75879de4c..93ac4497b4 100644
 --- a/media/libvpx/config/linux/arm64/vpx_config.h
 +++ b/media/libvpx/config/linux/arm64/vpx_config.h
 @@ -77,7 +77,7 @@
@@ -2594,9 +2653,10 @@ diff --git a/media/libvpx/config/linux/arm64/vpx_config.h b/media/libvpx/config/
  #define CONFIG_ERROR_CONCEALMENT 0
  #define CONFIG_SHARED 0
 diff --git a/media/libvpx/config/win/aarch64/vp8_rtcd.h b/media/libvpx/config/win/aarch64/vp8_rtcd.h
+index 84cddbcda9..3d2755b8b5 100644
 --- a/media/libvpx/config/win/aarch64/vp8_rtcd.h
 +++ b/media/libvpx/config/win/aarch64/vp8_rtcd.h
-@@ -189,6 +189,9 @@
+@@ -189,6 +189,9 @@ void vp8_sixtap_predict8x8_c(unsigned char *src_ptr, int src_pixels_per_line, in
  void vp8_sixtap_predict8x8_neon(unsigned char *src_ptr, int src_pixels_per_line, int xoffset, int yoffset, unsigned char *dst_ptr, int dst_pitch);
  #define vp8_sixtap_predict8x8 vp8_sixtap_predict8x8_neon
  
@@ -2607,9 +2667,10 @@ diff --git a/media/libvpx/config/win/aarch64/vp8_rtcd.h b/media/libvpx/config/wi
  
  #include "vpx_config.h"
 diff --git a/media/libvpx/config/win/aarch64/vp9_rtcd.h b/media/libvpx/config/win/aarch64/vp9_rtcd.h
+index fa8c44f45f..244bbb7521 100644
 --- a/media/libvpx/config/win/aarch64/vp9_rtcd.h
 +++ b/media/libvpx/config/win/aarch64/vp9_rtcd.h
-@@ -46,6 +46,10 @@
+@@ -46,6 +46,10 @@ struct yv12_buffer_config;
  extern "C" {
  #endif
  
@@ -2620,7 +2681,7 @@ diff --git a/media/libvpx/config/win/aarch64/vp9_rtcd.h b/media/libvpx/config/wi
  int64_t vp9_block_error_c(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, int64_t *ssz);
  int64_t vp9_block_error_neon(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, int64_t *ssz);
  #define vp9_block_error vp9_block_error_neon
-@@ -97,6 +101,24 @@
+@@ -97,6 +101,24 @@ void vp9_scale_and_extend_frame_c(const struct yv12_buffer_config *src, struct y
  void vp9_scale_and_extend_frame_neon(const struct yv12_buffer_config *src, struct yv12_buffer_config *dst, INTERP_FILTER filter_type, int phase_scaler);
  #define vp9_scale_and_extend_frame vp9_scale_and_extend_frame_neon
  
@@ -2645,7 +2706,7 @@ diff --git a/media/libvpx/config/win/aarch64/vp9_rtcd.h b/media/libvpx/config/wi
  void vp9_rtcd(void);
  
  #include "vpx_config.h"
-@@ -109,6 +131,15 @@
+@@ -109,6 +131,15 @@ static void setup_rtcd_internal(void)
  
      (void)flags;
  
@@ -2662,6 +2723,7 @@ diff --git a/media/libvpx/config/win/aarch64/vp9_rtcd.h b/media/libvpx/config/wi
  #endif
  
 diff --git a/media/libvpx/config/win/aarch64/vpx_config.asm b/media/libvpx/config/win/aarch64/vpx_config.asm
+index 591bd202a7..e1ac67fbba 100644
 --- a/media/libvpx/config/win/aarch64/vpx_config.asm
 +++ b/media/libvpx/config/win/aarch64/vpx_config.asm
 @@ -68,7 +68,7 @@
@@ -2674,6 +2736,7 @@ diff --git a/media/libvpx/config/win/aarch64/vpx_config.asm b/media/libvpx/confi
  .equ CONFIG_ERROR_CONCEALMENT ,  0
  .equ CONFIG_SHARED ,  0
 diff --git a/media/libvpx/config/win/aarch64/vpx_config.c b/media/libvpx/config/win/aarch64/vpx_config.c
+index 809e36cf16..a54f19f57c 100644
 --- a/media/libvpx/config/win/aarch64/vpx_config.c
 +++ b/media/libvpx/config/win/aarch64/vpx_config.c
 @@ -6,5 +6,5 @@
@@ -2684,6 +2747,7 @@ diff --git a/media/libvpx/config/win/aarch64/vpx_config.c b/media/libvpx/config/
 +static const char* const cfg = "--target=arm64-win64-vs15 --enable-external-build --disable-examples --disable-install-docs --disable-unit-tests --enable-multi-res-encoding --size-limit=8192x4608 --enable-pic --disable-avx512 --disable-sve --log=config.log";
  const char *vpx_codec_build_config(void) {return cfg;}
 diff --git a/media/libvpx/config/win/aarch64/vpx_config.h b/media/libvpx/config/win/aarch64/vpx_config.h
+index b0ef200aff..c876ab4f32 100644
 --- a/media/libvpx/config/win/aarch64/vpx_config.h
 +++ b/media/libvpx/config/win/aarch64/vpx_config.h
 @@ -77,7 +77,7 @@
@@ -2696,9 +2760,10 @@ diff --git a/media/libvpx/config/win/aarch64/vpx_config.h b/media/libvpx/config/
  #define CONFIG_ERROR_CONCEALMENT 0
  #define CONFIG_SHARED 0
 diff --git a/media/libvpx/generate_sources_mozbuild.sh b/media/libvpx/generate_sources_mozbuild.sh
+index 2ced47ef55..d51b699feb 100755
 --- a/media/libvpx/generate_sources_mozbuild.sh
 +++ b/media/libvpx/generate_sources_mozbuild.sh
-@@ -227,9 +227,9 @@
+@@ -227,9 +227,9 @@ gen_config_files win/x64 "--target=x86_64-win64-vs15 ${all_platforms} ${x86_plat
  gen_config_files win/ia32 "--target=x86-win32-gcc ${all_platforms} ${x86_platforms}"
  
  gen_config_files linux/arm "--target=armv7-linux-gcc ${all_platforms} ${runtime_cpu_detect} ${realtime_only}"
@@ -2711,9 +2776,10 @@ diff --git a/media/libvpx/generate_sources_mozbuild.sh b/media/libvpx/generate_s
  gen_config_files linux/loongarch64 "--target=loongarch64-linux-gcc ${all_platforms} ${runtime_cpu_detect} ${realtime_only}"
  
 diff --git a/media/libvpx/libvpx/vp8/vp8_cx_iface.c b/media/libvpx/libvpx/vp8/vp8_cx_iface.c
+index 524b1bbf76..8103efa19a 100644
 --- a/media/libvpx/libvpx/vp8/vp8_cx_iface.c
 +++ b/media/libvpx/libvpx/vp8/vp8_cx_iface.c
-@@ -84,6 +84,7 @@
+@@ -84,6 +84,7 @@ struct vpx_codec_alg_priv {
    vpx_codec_priv_t base;
    vpx_codec_enc_cfg_t cfg;
    struct vp8_extracfg vp8_cfg;
@@ -2721,7 +2787,7 @@ diff --git a/media/libvpx/libvpx/vp8/vp8_cx_iface.c b/media/libvpx/libvpx/vp8/vp
    vpx_rational64_t timestamp_ratio;
    vpx_codec_pts_t pts_offset;
    unsigned char pts_offset_initialized;
-@@ -155,6 +156,10 @@
+@@ -155,6 +156,10 @@ static vpx_codec_err_t validate_config(vpx_codec_alg_priv_t *ctx,
    RANGE_CHECK_HI(cfg, rc_max_quantizer, 63);
    RANGE_CHECK_HI(cfg, rc_min_quantizer, cfg->rc_max_quantizer);
    RANGE_CHECK_HI(cfg, g_threads, 64);
@@ -2732,7 +2798,7 @@ diff --git a/media/libvpx/libvpx/vp8/vp8_cx_iface.c b/media/libvpx/libvpx/vp8/vp
  #if CONFIG_REALTIME_ONLY
    RANGE_CHECK_HI(cfg, g_lag_in_frames, 0);
  #elif CONFIG_MULTI_RES_ENCODING
-@@ -180,6 +185,11 @@
+@@ -180,6 +185,11 @@ static vpx_codec_err_t validate_config(vpx_codec_alg_priv_t *ctx,
    RANGE_CHECK_HI(cfg, rc_resize_up_thresh, 100);
    RANGE_CHECK_HI(cfg, rc_resize_down_thresh, 100);
  
@@ -2744,7 +2810,7 @@ diff --git a/media/libvpx/libvpx/vp8/vp8_cx_iface.c b/media/libvpx/libvpx/vp8/vp
  #if CONFIG_REALTIME_ONLY
    RANGE_CHECK(cfg, g_pass, VPX_RC_ONE_PASS, VPX_RC_ONE_PASS);
  #elif CONFIG_MULTI_RES_ENCODING
-@@ -733,6 +743,8 @@
+@@ -733,6 +743,8 @@ static vpx_codec_err_t vp8e_init(vpx_codec_ctx_t *ctx,
      }
  
      priv->vp8_cfg = default_extracfg;
@@ -2753,7 +2819,7 @@ diff --git a/media/libvpx/libvpx/vp8/vp8_cx_iface.c b/media/libvpx/libvpx/vp8/vp
      priv->vp8_cfg.pkt_list = &priv->pkt_list.head;
  
      priv->cx_data_sz = priv->cfg.g_w * priv->cfg.g_h * 3 / 2 * 2;
-@@ -838,7 +850,10 @@
+@@ -838,7 +850,10 @@ static vpx_codec_err_t pick_quickcompress_mode(vpx_codec_alg_priv_t *ctx,
    /* Use best quality mode if no deadline is given. */
    new_qc = MODE_BESTQUALITY;
  
@@ -2766,6 +2832,7 @@ diff --git a/media/libvpx/libvpx/vp8/vp8_cx_iface.c b/media/libvpx/libvpx/vp8/vp
      VPX_STATIC_ASSERT(TICKS_PER_SEC > 1000000 &&
                        (TICKS_PER_SEC % 1000000) == 0);
 diff --git a/media/libvpx/libvpx/vp9/encoder/vp9_svc_layercontext.c b/media/libvpx/libvpx/vp9/encoder/vp9_svc_layercontext.c
+index 2d03bcaa86..1159d90d4c 100644
 --- a/media/libvpx/libvpx/vp9/encoder/vp9_svc_layercontext.c
 +++ b/media/libvpx/libvpx/vp9/encoder/vp9_svc_layercontext.c
 @@ -13,6 +13,7 @@
@@ -2776,7 +2843,7 @@ diff --git a/media/libvpx/libvpx/vp9/encoder/vp9_svc_layercontext.c b/media/libv
  #include "vp9/encoder/vp9_extend.h"
  #include "vpx_dsp/vpx_dsp_common.h"
  
-@@ -352,11 +353,8 @@
+@@ -352,11 +353,8 @@ void vp9_restore_layer_context(VP9_COMP *const cpi) {
    // Check if it is one_pass_cbr_svc mode and lc->speed > 0 (real-time mode
    // does not use speed = 0).
    if (is_one_pass_svc(cpi) && lc->speed > 0) {
@@ -2791,9 +2858,10 @@ diff --git a/media/libvpx/libvpx/vp9/encoder/vp9_svc_layercontext.c b/media/libv
    cpi->loopfilter_ctrl = lc->loopfilter_ctrl;
    // Reset the frames_since_key and frames_to_key counters to their values
 diff --git a/media/libvpx/libvpx/vp9/vp9_cx_iface.c b/media/libvpx/libvpx/vp9/vp9_cx_iface.c
+index f80a6e5b81..31a4f34758 100644
 --- a/media/libvpx/libvpx/vp9/vp9_cx_iface.c
 +++ b/media/libvpx/libvpx/vp9/vp9_cx_iface.c
-@@ -123,6 +123,7 @@
+@@ -123,6 +123,7 @@ struct vpx_codec_alg_priv {
    vpx_codec_priv_t base;
    vpx_codec_enc_cfg_t cfg;
    struct vp9_extracfg extra_cfg;
@@ -2801,7 +2869,7 @@ diff --git a/media/libvpx/libvpx/vp9/vp9_cx_iface.c b/media/libvpx/libvpx/vp9/vp
    vpx_codec_pts_t pts_offset;
    unsigned char pts_offset_initialized;
    VP9EncoderConfig oxcf;
-@@ -220,7 +221,10 @@
+@@ -220,7 +221,10 @@ static vpx_codec_err_t validate_config(vpx_codec_alg_priv_t *ctx,
  #if CONFIG_REALTIME_ONLY
    RANGE_CHECK(cfg, g_pass, VPX_RC_ONE_PASS, VPX_RC_ONE_PASS);
  #else
@@ -2813,7 +2881,7 @@ diff --git a/media/libvpx/libvpx/vp9/vp9_cx_iface.c b/media/libvpx/libvpx/vp9/vp
  #endif
    RANGE_CHECK(extra_cfg, min_gf_interval, 0, (MAX_LAG_BUFFERS - 1));
    RANGE_CHECK(extra_cfg, max_gf_interval, 0, (MAX_LAG_BUFFERS - 1));
-@@ -980,10 +984,9 @@
+@@ -980,10 +984,9 @@ static vpx_codec_err_t ctrl_set_cpuused(vpx_codec_alg_priv_t *ctx,
    // Use fastest speed setting (speed 9 or -9) if it's set beyond the range.
    extra_cfg.cpu_used = CAST(VP8E_SET_CPUUSED, args);
    extra_cfg.cpu_used = clamp(extra_cfg.cpu_used, -9, 9);
@@ -2826,7 +2894,7 @@ diff --git a/media/libvpx/libvpx/vp9/vp9_cx_iface.c b/media/libvpx/libvpx/vp9/vp
    return update_extra_cfg(ctx, &extra_cfg);
  }
  
-@@ -1223,6 +1226,8 @@
+@@ -1223,6 +1226,8 @@ static vpx_codec_err_t encoder_init(vpx_codec_ctx_t *ctx,
      }
  
      priv->extra_cfg = default_extra_cfg;
@@ -2835,7 +2903,7 @@ diff --git a/media/libvpx/libvpx/vp9/vp9_cx_iface.c b/media/libvpx/libvpx/vp9/vp
      vp9_initialize_enc();
  
      res = validate_config(priv, &priv->cfg, &priv->extra_cfg);
-@@ -1262,6 +1267,10 @@
+@@ -1262,6 +1267,10 @@ static vpx_codec_err_t pick_quickcompress_mode(vpx_codec_alg_priv_t *ctx,
    (void)duration;
    deadline = VPX_DL_REALTIME;
  #else
@@ -2847,6 +2915,7 @@ diff --git a/media/libvpx/libvpx/vp9/vp9_cx_iface.c b/media/libvpx/libvpx/vp9/vp
      case VPX_RC_ONE_PASS:
        if (deadline > 0) {
 diff --git a/media/libvpx/libvpx/vpx/src/vpx_encoder.c b/media/libvpx/libvpx/vpx/src/vpx_encoder.c
+index f2b8b9f6a5..285400f3c8 100644
 --- a/media/libvpx/libvpx/vpx/src/vpx_encoder.c
 +++ b/media/libvpx/libvpx/vpx/src/vpx_encoder.c
 @@ -22,6 +22,14 @@
@@ -2865,9 +2934,10 @@ diff --git a/media/libvpx/libvpx/vpx/src/vpx_encoder.c b/media/libvpx/libvpx/vpx
    return (vpx_codec_alg_priv_t *)ctx->priv;
  }
 diff --git a/media/libvpx/libvpx/vpx/vpx_encoder.h b/media/libvpx/libvpx/vpx/vpx_encoder.h
+index 2671fb3b76..1b652db003 100644
 --- a/media/libvpx/libvpx/vpx/vpx_encoder.h
 +++ b/media/libvpx/libvpx/vpx/vpx_encoder.h
-@@ -1157,6 +1157,19 @@
+@@ -1157,6 +1157,19 @@ const vpx_codec_cx_pkt_t *vpx_codec_get_cx_data(vpx_codec_ctx_t *ctx,
  const vpx_image_t *vpx_codec_get_preview_frame(vpx_codec_ctx_t *ctx);
  
  /*!@} - end defgroup encoder*/
@@ -2888,9 +2958,10 @@ diff --git a/media/libvpx/libvpx/vpx/vpx_encoder.h b/media/libvpx/libvpx/vpx/vpx
  }
  #endif
 diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
+index a1006fa938..561edacd6f 100644
 --- a/media/libvpx/sources.mozbuild
 +++ b/media/libvpx/sources.mozbuild
-@@ -1991,6 +1991,7 @@
+@@ -1991,6 +1991,7 @@ files = {
      'libvpx/vp8/encoder/encodemb.c',
      'libvpx/vp8/encoder/encodemv.c',
      'libvpx/vp8/encoder/ethreading.c',
@@ -2898,7 +2969,7 @@ diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
      'libvpx/vp8/encoder/lookahead.c',
      'libvpx/vp8/encoder/mcomp.c',
      'libvpx/vp8/encoder/modecosts.c',
-@@ -2001,6 +2002,7 @@
+@@ -2001,6 +2002,7 @@ files = {
      'libvpx/vp8/encoder/ratectrl.c',
      'libvpx/vp8/encoder/rdopt.c',
      'libvpx/vp8/encoder/segmentation.c',
@@ -2906,7 +2977,7 @@ diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
      'libvpx/vp8/encoder/tokenize.c',
      'libvpx/vp8/encoder/treewriter.c',
      'libvpx/vp8/encoder/vp8_quantize.c',
-@@ -2041,7 +2043,14 @@
+@@ -2041,7 +2043,14 @@ files = {
      'libvpx/vp9/encoder/arm/neon/vp9_error_neon.c',
      'libvpx/vp9/encoder/arm/neon/vp9_frame_scale_neon.c',
      'libvpx/vp9/encoder/arm/neon/vp9_quantize_neon.c',
@@ -2921,7 +2992,7 @@ diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
      'libvpx/vp9/encoder/vp9_bitstream.c',
      'libvpx/vp9/encoder/vp9_context_tree.c',
      'libvpx/vp9/encoder/vp9_cost.c',
-@@ -2053,8 +2062,10 @@
+@@ -2053,8 +2062,10 @@ files = {
      'libvpx/vp9/encoder/vp9_ethread.c',
      'libvpx/vp9/encoder/vp9_ext_ratectrl.c',
      'libvpx/vp9/encoder/vp9_extend.c',
@@ -2932,7 +3003,7 @@ diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
      'libvpx/vp9/encoder/vp9_mcomp.c',
      'libvpx/vp9/encoder/vp9_multi_thread.c',
      'libvpx/vp9/encoder/vp9_noise_estimate.c',
-@@ -2070,6 +2081,7 @@
+@@ -2070,6 +2081,7 @@ files = {
      'libvpx/vp9/encoder/vp9_speed_features.c',
      'libvpx/vp9/encoder/vp9_subexp.c',
      'libvpx/vp9/encoder/vp9_svc_layercontext.c',
@@ -2940,7 +3011,7 @@ diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
      'libvpx/vp9/encoder/vp9_tokenize.c',
      'libvpx/vp9/encoder/vp9_tpl_model.c',
      'libvpx/vp9/encoder/vp9_treewriter.c',
-@@ -2495,6 +2507,7 @@
+@@ -2495,6 +2507,7 @@ files = {
      'libvpx/vp8/encoder/encodemb.c',
      'libvpx/vp8/encoder/encodemv.c',
      'libvpx/vp8/encoder/ethreading.c',
@@ -2948,7 +3019,7 @@ diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
      'libvpx/vp8/encoder/lookahead.c',
      'libvpx/vp8/encoder/mcomp.c',
      'libvpx/vp8/encoder/modecosts.c',
-@@ -2505,6 +2518,7 @@
+@@ -2505,6 +2518,7 @@ files = {
      'libvpx/vp8/encoder/ratectrl.c',
      'libvpx/vp8/encoder/rdopt.c',
      'libvpx/vp8/encoder/segmentation.c',
@@ -2956,7 +3027,7 @@ diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
      'libvpx/vp8/encoder/tokenize.c',
      'libvpx/vp8/encoder/treewriter.c',
      'libvpx/vp8/encoder/vp8_quantize.c',
-@@ -2545,7 +2559,14 @@
+@@ -2545,7 +2559,14 @@ files = {
      'libvpx/vp9/encoder/arm/neon/vp9_error_neon.c',
      'libvpx/vp9/encoder/arm/neon/vp9_frame_scale_neon.c',
      'libvpx/vp9/encoder/arm/neon/vp9_quantize_neon.c',
@@ -2971,7 +3042,7 @@ diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
      'libvpx/vp9/encoder/vp9_bitstream.c',
      'libvpx/vp9/encoder/vp9_context_tree.c',
      'libvpx/vp9/encoder/vp9_cost.c',
-@@ -2557,8 +2578,10 @@
+@@ -2557,8 +2578,10 @@ files = {
      'libvpx/vp9/encoder/vp9_ethread.c',
      'libvpx/vp9/encoder/vp9_ext_ratectrl.c',
      'libvpx/vp9/encoder/vp9_extend.c',
@@ -2982,7 +3053,7 @@ diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
      'libvpx/vp9/encoder/vp9_mcomp.c',
      'libvpx/vp9/encoder/vp9_multi_thread.c',
      'libvpx/vp9/encoder/vp9_noise_estimate.c',
-@@ -2574,6 +2597,7 @@
+@@ -2574,6 +2597,7 @@ files = {
      'libvpx/vp9/encoder/vp9_speed_features.c',
      'libvpx/vp9/encoder/vp9_subexp.c',
      'libvpx/vp9/encoder/vp9_svc_layercontext.c',
@@ -2991,6 +3062,7 @@ diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
      'libvpx/vp9/encoder/vp9_tpl_model.c',
      'libvpx/vp9/encoder/vp9_treewriter.c',
 diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/StaticPrefList.yaml
+index f71cabfc6a..63e457eb91 100644
 --- a/modules/libpref/init/StaticPrefList.yaml
 +++ b/modules/libpref/init/StaticPrefList.yaml
 @@ -7101,6 +7101,20 @@
@@ -3014,7 +3086,7 @@ diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/Sta
  - name: general.aboutConfig.enable
    type: bool
    value: true
-@@ -13552,6 +13566,15 @@
+@@ -13562,6 +13576,15 @@
    mirror: always
  
  # WebM
@@ -3031,6 +3103,7 @@ diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/Sta
    type: RelaxedAtomicBool
    value: true
 diff --git a/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc b/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc
+index 2fd36d903b..aeccbf24f5 100644
 --- a/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc
 +++ b/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc
 @@ -14,6 +14,7 @@
@@ -3041,7 +3114,7 @@ diff --git a/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interfa
  
  enum {
  #if WEBRTC_OPUS_SUPPORT_120MS_PTIME
-@@ -73,6 +74,7 @@
+@@ -73,6 +74,7 @@ int16_t WebRtcOpus_EncoderCreate(OpusEncInst** inst,
    }
  
    int error;
@@ -3049,7 +3122,7 @@ diff --git a/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interfa
    state->encoder = opus_encoder_create(
        sample_rate_hz, static_cast<int>(channels), opus_app, &error);
  
-@@ -120,6 +122,7 @@
+@@ -120,6 +122,7 @@ int16_t WebRtcOpus_MultistreamEncoderCreate(
  
    int error;
    const int sample_rate_hz = 48000;

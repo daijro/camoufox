@@ -608,7 +608,8 @@ export function gpuFitsCpu(
 				(cpuManufacturers(targetOs, x) as readonly unknown[]).includes(m),
 			) ?? null;
 	}
-	if (a === null) return true;
+	// Mesa's software renderer draws on whatever CPU the machine has.
+	if (a === null || pyStr(gpuRenderer ?? "").includes("llvmpipe")) return true;
 	if (byGpu === null) {
 		// A discrete card or an open bucket: an x86 machine. No ARM laptop or
 		// board on sale carries a discrete GPU Firefox would name.
@@ -683,7 +684,7 @@ export function cpuConflict(config: Config, targetOs: string): string | null {
 		.map(pyStr)
 		.join(" ");
 	if (r && !gpuFitsCpu(r, targetOs, arch, maker)) {
-		return `a ${claimed} CPU beside ${pyRepr(r)}`;
+		return `CPU ${claimed} beside ${pyRepr(r)}`;
 	}
 	const cores = config["navigator.hardwareConcurrency"];
 	const byCores = coresCpuVendor(cores);
@@ -693,7 +694,7 @@ export function cpuConflict(config: Config, targetOs: string): string | null {
 		maker !== byCores &&
 		byCores
 	) {
-		return `a ${claimed} CPU with hardwareConcurrency ${pyStr(cores)}, which only an Intel CPU reports`;
+		return `CPU ${claimed} with hardwareConcurrency ${pyStr(cores)}, which only an Intel CPU reports`;
 	}
 	return null;
 }

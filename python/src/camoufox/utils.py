@@ -559,8 +559,8 @@ def _os_for_cpu(cpu: Any, os: Optional[ListOrString]) -> ListOrString:
 
     Raises ValueError when the CPU is malformed or none of them can. With no
     OS asked for, only OSes with a GPU fpgen recorded beside such a CPU are
-    drawn (an ARM identity is a Mac until Windows-on-ARM or Linux-on-ARM GPUs
-    are recorded; pass os='linux' on an ARM Linux host to claim its own GPU).
+    drawn: an ARM identity is a Mac, or Linux rendering with llvmpipe, until
+    Windows-on-ARM or Linux-on-ARM GPUs are recorded.
     """
     asked = [os] if isinstance(os, str) else list(os or _CPU_OS_NAMES)
     check_valid_os(asked)

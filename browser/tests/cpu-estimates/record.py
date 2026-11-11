@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Record this CPU's RCPPS/RSQRTPS tables for gfx.skia.cpu_vendor_estimates.
+Record this CPU's RCPPS/RSQRTPS tables for general.cpu_identity (Intel, AMD).
 
     python3 browser/tests/cpu-estimates/record.py
     python3 browser/scripts/gen-cpu-estimate-tables.py

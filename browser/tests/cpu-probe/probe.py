@@ -2,10 +2,7 @@
 
   python3 -I probe.py <firefox binary> [pref=value ...]
 
-The layout and canvas tests use two webfonts from a Firefox source tree's
-layout/reftests/fonts (DejaVuSansMono.woff, VotoSerifGX.latin1.ttf), found in
-$PROBE_FONTS, else next to this file; without them those tests measure
-fallback fonts. Headless, a fresh profile, up to 240 s.
+Headless, a fresh profile, up to 240 s.
 """
 import http.server, json, os, shutil, subprocess, sys, tempfile, threading
 
@@ -19,8 +16,6 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         name = os.path.basename(self.path.split("?")[0]) or "page.html"
         path = os.path.join(HERE, name)
-        if not os.path.isfile(path) and os.environ.get("PROBE_FONTS"):
-            path = os.path.join(os.environ["PROBE_FONTS"], name)
         if not os.path.isfile(path):
             self.send_response(404); self.end_headers(); return
         body = open(path, "rb").read()
