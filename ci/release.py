@@ -172,8 +172,7 @@ def manifest(tag: str, digest: str, commit: str, ubo: Optional[dict] = None) -> 
 
     The libraries read `interface` to refuse a browser they cannot drive.
     `ubo` records the uBlock Origin release the builds bundle (its version, AMO
-    url and sha256), which is in no commit: browser/scripts/fetch-ubo.py
-    resolves AMO's newest for each release.
+    url and sha256), the pin in browser/scripts/data/ubo.json.
     """
     out = {"schema": 1, "tag": tag, "source_digest": digest, "commit": commit,
            "interface": browser_interface()}

@@ -10,11 +10,8 @@ named JSON, Date and Array there, so the first `mw:` evaluate resolved all of
 them. Typed arrays and the others are now told by internal class, and the
 result is read through Debugger instead of the page's JSON.stringify.
 
-Tabs load the same page, which reads its own global order once it has
-settled; one gets `mw:() => 1` before that. None of them is the browser's first
-tab, which differs from every later one with no evaluate at all: the bundled
-uBlock Origin is not yet running there, and in later tabs it resolves the
-page's RegExp (measured 2026-11-09: index 7 in the first tab, ~924 after). The names the wrapper used to
+Two tabs load the same page, which reads its own global order once it has
+settled; only one gets `mw:() => 1` before that. The names the wrapper used to
 resolve must stand in the same order in both. Other names are left out: two
 untouched tabs already differ there (XMLHttpRequest, JSON, Location,
 DOMRectList: tab setup and timing, not the evaluate).
@@ -26,9 +23,9 @@ then, before the page used them, because Juggler's main-world code runs in the
 page's realm as Debugger code and was taken for the page's own (NodeList
 about 30 names early). It is Juggler's, as
 an isolated world's is: those interfaces must stand where the untouched tab has
-them. It is compared with an untouched tab opened just before it: the first tab of a
-browser also places HTMLCollection differently (measured 2026-11-04: 415 vs
-~944).
+them. It is compared with an untouched tab opened just before it, not the
+first: the first tab of a browser places HTMLCollection differently from every
+later one with no evaluate at all (measured 2026-11-04: 415 vs ~944).
 
     python browser/tests/playwright/patches/main-world-eval-globals.py
 """
@@ -74,7 +71,7 @@ def probe(binary):
     try:
         with Camoufox(executable_path=str(binary), headless=True, os="linux", main_world_eval=True,
                       i_know_what_im_doing=True) as browser:
-            for name in ("first", "plain", "mw", "plain2", "scrape"):
+            for name in ("plain", "mw", "plain2", "scrape"):
                 page = browser.new_page()
                 page.goto(url, wait_until="load")
                 if name == "mw":
