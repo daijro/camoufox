@@ -52,6 +52,11 @@
   }
 ,
   "x86IntelShare": 0.8136,
-  "cpuVendorEstimatesPref": {"intel": 1, "amd": 2},
+  "cpuIdentityPref": {"x86/intel": 1, "x86/amd": 2, "arm": 3},
+  "cpuManufacturers": {
+    "mac": {"x86": ["intel"], "arm": ["apple"]},
+    "windows": {"x86": ["intel", "amd"], "arm": ["qualcomm"]},
+    "linux": {"x86": ["intel", "amd"], "arm": ["apple", "qualcomm", "broadcom", "nvidia", "ampere", "rockchip", "mediatek", "amlogic", "allwinner"]}
+  },
   "intelOnlyCoreCounts": [10, 14, 18, 22, 28]
 }

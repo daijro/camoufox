@@ -10,7 +10,7 @@ from random import Random, choice, randrange
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from camoufox._warnings import WARNINGS_DATA, FallbackWarning, _warn_from_caller
-from camoufox.coherence import hardware_cpu_vendor
+from camoufox.coherence import hardware_cpu
 from camoufox.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
@@ -859,29 +859,30 @@ def fix_navigator_arch(config: Dict[str, Any], target_os: str) -> None:
 X86_INTEL_SHARE: float = LAUNCHER_CONSTANTS['x86IntelShare']
 
 
-def set_cpu_vendor_default(config: Dict[str, Any], target_os: str, salt: int = 0) -> None:
-    """Draw the identity's x86 CPU vendor (cpu:vendor).
+def set_cpu_default(config: Dict[str, Any], target_os: str, salt: int = 0) -> None:
+    """Fill in the identity's CPU (cpu:arch, cpu:manufacturer).
 
-    Intel's and AMD's RCPPS/RSQRTPS estimates differ in their low bits, and
-    Skia's raster pipeline draws blend modes, perspective and inverted
-    matrices with them, so a canvas a page reads back shows the vendor
-    (gfx.skia.cpu_vendor_estimates, cpu-vendor-estimates.patch). A GPU that
-    only one vendor's CPU carries decides it, then a core count only Intel
-    ships (coherence.hardware_cpu_vendor); any other identity is drawn at
-    Firefox's own x86 split, seeded by the identity. Apple Silicon has no x86
-    vendor. Run after the GPU and navigator.hardwareConcurrency are final;
-    nothing is set when the caller set the key.
+    The CPU shows in values a page computes, not in anything Firefox reports:
+    canvas pixels, Web Audio samples, encoded Opus, relaxed-SIMD wasm and NaN
+    signs differ between x86-64 and ARM64, and canvas and Opus between Intel's
+    and AMD's RCPPS/RSQRTPS (coherence.py). The GPU decides what it can (an
+    Apple GPU is an Apple ARM CPU, an Intel iGPU or Intel Mac an Intel one, a
+    Radeon iGPU an AMD one), then a core count only Intel ships; any other x86
+    identity's vendor is drawn at Firefox's own x86 split, seeded by the
+    identity. An ARM identity whose GPU names no single SoC maker keeps its
+    manufacturer unset: every ARM64 CPU computes alike. Run after the GPU and
+    navigator.hardwareConcurrency are final. Keys the caller set are kept.
     """
-    if 'cpu:vendor' in config:
+    arch, maker = hardware_cpu(config, target_os)
+    arch = config.get('cpu:arch') or arch or 'x86'
+    config.setdefault('cpu:arch', arch)
+    if 'cpu:manufacturer' in config or arch != config['cpu:arch']:
         return
-    renderer = config.get('webGl:renderer')
-    if 'Apple M' in str(renderer or ''):
-        return
-    vendor = hardware_cpu_vendor(config, target_os)
-    if not vendor:
+    if not maker and arch == 'x86':
         draw = Random(identity_seed(config, salt) ^ 0xC9D0).random()
-        vendor = 'intel' if draw < X86_INTEL_SHARE else 'amd'
-    config['cpu:vendor'] = vendor
+        maker = 'intel' if draw < X86_INTEL_SHARE else 'amd'
+    if maker:
+        config['cpu:manufacturer'] = maker
 
 
 # What Firefox's baseline fingerprinting protection, on by default, reports in

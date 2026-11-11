@@ -352,6 +352,18 @@ scenario('webgl_config_macos', fingerprint=FP['macos'], os='macos', webgl_config
 scenario('webgl_config_no_os', fingerprint=FP['linux'], webgl_config=INPUTS['webgl_pairs']['lin'][0])
 scenario('webgl_config_unknown', fingerprint=FP['linux'], os='linux', webgl_config=['Nope', 'Nope GPU'])
 
+# cpu: the CPU the identity computes as (cpu:arch, cpu:manufacturer, general.cpu_identity)
+scenario('cpu_amd_windows', fingerprint=FP['windows'], os='windows', cpu={'manufacturer': 'amd'})
+scenario('cpu_intel_mac', fingerprint=FP['macos'], os='macos', cpu={'arch': 'x86', 'manufacturer': 'intel'})
+scenario('cpu_apple_mac', fingerprint=FP['macos'], os='macos', cpu={'manufacturer': 'apple'})
+scenario('cpu_arm_no_os', {'generate': 'macos'}, cpu={'arch': 'arm'})
+scenario('cpu_x86_os_list', fingerprint=FP['linux'], os=['macos', 'linux'], cpu={'arch': 'x86'})
+scenario('cpu_amd_mac', fingerprint=FP['macos'], os='macos', cpu={'manufacturer': 'amd'})
+scenario('cpu_unknown_key', fingerprint=FP['linux'], os='linux', cpu={'vendor': 'intel'})
+scenario('cpu_not_a_dict', fingerprint=FP['linux'], os='linux', cpu='arm')
+scenario('cpu_gpu_contradicts', fingerprint=FP['windows'], os='windows',
+         webgl_config=INPUTS['webgl_pairs']['win'][0], cpu={'arch': 'arm', 'manufacturer': 'qualcomm'})
+
 # fonts / voices
 scenario('fonts_custom', fingerprint=FP['linux'], os='linux', fonts=['Arial', 'Helvetica', 'Comic Sans MS'])
 scenario('fonts_custom_only', fingerprint=FP['windows'], os='windows', fonts=['Arial'], custom_fonts_only=True)

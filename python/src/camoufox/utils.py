@@ -24,7 +24,7 @@ from .exceptions import (
     NonFirefoxFingerprint,
     UnknownIPLocation,
 )
-from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, draw_voice_config, fix_navigator_arch, fix_hardware_concurrency, set_cpu_vendor_default, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
+from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, draw_voice_config, fix_navigator_arch, fix_hardware_concurrency, set_cpu_default, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
 from .geolocation import geoip_allowed, get_geolocation
 from .ip import ExitGeo, Proxy, proxy_auth_env, proxy_auth_init_script, public_ip, public_ipv6, socks5_auth, valid_ipv4, valid_ipv6
@@ -532,6 +532,55 @@ def check_custom_fingerprint(fingerprint: Dict[str, Any]) -> None:
         )
 
     LeakWarning.warn('custom_fingerprint', False)
+
+
+def cpu_identity_pref(config: Dict[str, Any]) -> int:
+    """general.cpu_identity for the identity's CPU: 0 compute as the host, 1
+    Intel x86, 2 AMD x86, 3 ARM64 (every ARM64 CPU computes alike)."""
+    arch, maker = config.get('cpu:arch'), config.get('cpu:manufacturer')
+    table = LAUNCHER_CONSTANTS['cpuIdentityPref']
+    if arch == 'arm':
+        return table['arm']
+    return table.get(f'x86/{maker}', 0) if arch in ('x86', None) else 0
+
+
+def vpx_realtime_only(config: Dict[str, Any], target_os: str) -> bool:
+    """media.libvpx.realtime_only: Firefox builds libvpx realtime-only for
+    Windows and Linux on ARM64 (not macOS), which changes the WebCodecs VP8/VP9
+    encoders' output and rejects quality-mode VP8 outright."""
+    return config.get('cpu:arch') == 'arm' and target_os in ('win', 'lin')
+
+
+_CPU_OS_NAMES = {'windows': 'win', 'macos': 'mac', 'linux': 'lin'}
+
+
+def _os_for_cpu(cpu: Any, os: Optional[ListOrString]) -> ListOrString:
+    """The OSes a machine with this CPU can run, among those asked for.
+
+    Raises ValueError when the CPU is malformed or none of them can. With no
+    OS asked for, only OSes with a GPU fpgen recorded beside such a CPU are
+    drawn (an ARM identity is a Mac until Windows-on-ARM or Linux-on-ARM GPUs
+    are recorded; pass os='linux' on an ARM Linux host to claim its own GPU).
+    """
+    asked = [os] if isinstance(os, str) else list(os or _CPU_OS_NAMES)
+    check_valid_os(asked)
+    errors, fits = [], []
+    for name in asked:
+        try:
+            resolved = coherence.resolve_cpu(cpu, _CPU_OS_NAMES[name])
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+        if os is None and not any(
+            coherence.gpu_fits_cpu(r, _CPU_OS_NAMES[name], resolved.get('cpu:arch'), resolved.get('cpu:manufacturer'))
+            for _, r in firefox_gpus(_CPU_OS_NAMES[name])
+        ):
+            errors.append(f'fpgen has recorded no {name} GPU beside that CPU')
+            continue
+        fits.append(name)
+    if not fits:
+        raise ValueError(f'cpu={cpu!r}: ' + '; '.join(dict.fromkeys(errors)))
+    return fits[0] if len(fits) == 1 else fits
 
 
 def check_valid_os(os: ListOrString) -> None:
@@ -1096,7 +1145,7 @@ def launch_options(
     block_webgl: Optional[bool] = None,
     disable_coop: Optional[bool] = None,
     webgl_config: Optional[Tuple[str, str]] = None,
-    cpu_vendor: Optional[Literal['intel', 'amd']] = None,
+    cpu: Optional[Dict[str, str]] = None,
     geoip: Optional[Union[str, bool]] = None,
     geoip_db: Optional[str] = None,
     humanize: Optional[Union[bool, float]] = None,
@@ -1230,14 +1279,23 @@ def launch_options(
             Use a specific WebGL vendor/renderer pair. Passed as a tuple of (vendor, renderer).
             The pair must be one fpgen has recorded from Firefox on `os`
             (camoufox.webgl.firefox_gpus); any other raises ValueError.
-        cpu_vendor (Optional[Literal['intel', 'amd']]):
-            The x86 CPU vendor whose RCPPS/RSQRTPS estimates Skia's raster
-            pipeline uses, so canvas blend modes, perspective and matrix
-            inversion read back as on that vendor's CPU. Drawn with the
-            identity by default: from the GPU where only one vendor's CPU
-            carries it (Intel integrated graphics, AMD APU graphics, every x86
-            Mac), otherwise at Firefox's x86 split, about 81% Intel. Not set for
-            an Apple Silicon identity, which is ARM.
+        cpu (Optional[Dict[str, str]]):
+            The CPU the identity computes as: {'arch': 'x86' or 'arm',
+            'manufacturer': ...}, either key optional (a manufacturer implies
+            its arch). Firefox never reports it, but canvas pixels, Web Audio
+            samples, encoded Opus, relaxed-SIMD wasm and NaN signs differ
+            between x86-64 and ARM64, and canvas and Opus between Intel and AMD;
+            the browser computes them as the claimed CPU does. Manufacturers per
+            OS: macos x86 intel, arm apple; windows x86 intel or amd, arm
+            qualcomm; linux x86 intel or amd, arm apple, qualcomm, broadcom,
+            nvidia, ampere, rockchip, mediatek, amlogic or allwinner. A pair no
+            machine on the OS has (an AMD Mac, an Apple x86 CPU), or one the
+            GPU contradicts (an Apple GPU on x86, an Intel iGPU on AMD), raises
+            ValueError. Without `os`, the OS is drawn among those with a
+            recorded GPU for the CPU. By default the CPU follows the GPU (Apple
+            GPU: Apple ARM; Intel iGPU or Intel Mac: Intel; Radeon iGPU: AMD)
+            and a core count only Intel ships, otherwise x86 drawn 81% Intel,
+            as among Firefox's x86 users.
         canvas_noise (Optional[bool]):
             Replace canvas and WebGL readback with random data, as
             privacy.resistFingerprinting does in LibreWolf, Tor Browser and
@@ -1302,10 +1360,8 @@ def launch_options(
     # Warn the user for manual config settings
     if not i_know_what_im_doing:
         warn_manual_config(config)
-    if cpu_vendor is not None:
-        if cpu_vendor not in coherence.CPU_VENDORS:
-            raise ValueError(f'cpu_vendor must be one of {coherence.CPU_VENDORS}, not {cpu_vendor!r}')
-        config['cpu:vendor'] = cpu_vendor
+    if cpu is not None:
+        os = _os_for_cpu(cpu, os)
     _caller_keys = frozenset(config)
 
     # Snapshot which domains the USER set before fingerprint generation fills in
@@ -1403,6 +1459,8 @@ def launch_options(
         )
 
     target_os = get_target_os(config)
+    if cpu is not None:
+        config.update(coherence.resolve_cpu(cpu, target_os))
 
     # fpgen.yml leaves devicePixelRatio unmapped, so the page reports the
     # rendering scale while the screen keeps fpgen's CSS sizes. A drawn ratio
@@ -1825,6 +1883,7 @@ def launch_options(
                 target_os, config.get('screen.width'), config.get('screen.height'),
                 seed=identity_seed(config, _identity_salt),
                 cores=config.get('navigator.hardwareConcurrency'),
+                cpu=config,
             )
         enable_webgl2 = webgl_fp.pop('webGl2Enabled')
 
@@ -1839,8 +1898,14 @@ def launch_options(
             },
         )
 
-    # The CPU vendor follows the GPU, so it is drawn once the GPU is final.
-    set_cpu_vendor_default(config, target_os, _identity_salt)
+    # The CPU follows the GPU, so it is drawn once the GPU is final. A CPU the
+    # caller named that the GPU contradicts (a preset's, webgl_config's, the
+    # host's) is no machine at all.
+    if cpu is not None:
+        _conflict = coherence.cpu_conflict(config, target_os)
+        if _conflict:
+            raise ValueError(f'cpu={cpu!r}: {_conflict}')
+    set_cpu_default(config, target_os, _identity_salt)
 
     # Every identity passes the whole-identity checks, whatever built it: a
     # generated fingerprint, a bundled preset, or a config the caller wrote.
@@ -1854,12 +1919,14 @@ def launch_options(
         for _violation in _incoherent:
             print(f'Incoherent identity ({_violation.rule}): {_violation.detail}')
 
-    # Skia computes RCPPS/RSQRTPS as cpu:vendor's CPU does. A build without
-    # cpu-vendor-estimates.patch ignores the pref and keeps the host's.
-    if config.get('cpu:vendor') in coherence.CPU_VENDORS:
-        firefox_user_prefs.setdefault(
-            'gfx.skia.cpu_vendor_estimates', LAUNCHER_CONSTANTS['cpuVendorEstimatesPref'][config['cpu:vendor']]
-        )
+    # The browser computes canvas, audio, Opus, wasm and NaNs as the claimed
+    # CPU does (cpu-identity.patch). A build without the patch ignores the pref
+    # and computes as the host does.
+    _cpu_pref = cpu_identity_pref(config)
+    if _cpu_pref:
+        firefox_user_prefs.setdefault('general.cpu_identity', _cpu_pref)
+    if vpx_realtime_only(config, target_os):
+        firefox_user_prefs.setdefault('media.libvpx.realtime_only', True)
 
     # Render at the claimed display scale, so (resolution) and the CSS geometry
     # agree with devicePixelRatio as on the real machine (#933). That includes 1:

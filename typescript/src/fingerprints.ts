@@ -15,7 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { generate, InvalidConstraints } from "fpgen-js";
 import * as random from "python-random";
-import { hardwareCpuVendor } from "./coherence.js";
+import { hardwareCpu } from "./coherence.js";
 import {
 	supported as cpuAffinitySupported,
 	hostCoreCount,
@@ -1231,26 +1231,33 @@ export function setMediaDevicesDefaults(
 export const X86_INTEL_SHARE: number = LAUNCHER_CONSTANTS.x86IntelShare;
 
 /**
- * Draw the identity's x86 CPU vendor (cpu:vendor), as
- * fingerprints.set_cpu_vendor_default does: the GPU decides where only one
- * vendor's CPU carries it, then a core count only Intel ships, otherwise
- * Firefox's x86 split, seeded by the identity. Apple Silicon has no x86
- * vendor. Run after the GPU and navigator.hardwareConcurrency are final.
+ * Fill in the identity's CPU (cpu:arch, cpu:manufacturer), as
+ * fingerprints.set_cpu_default does. The GPU decides what it can (an Apple
+ * GPU is an Apple ARM CPU, an Intel iGPU or Intel Mac an Intel one, a Radeon
+ * iGPU an AMD one), then a core count only Intel ships; any other x86
+ * identity's vendor is drawn at Firefox's own x86 split, seeded by the
+ * identity. An ARM identity whose GPU names no single SoC maker keeps its
+ * manufacturer unset: every ARM64 CPU computes alike. Run after the GPU and
+ * navigator.hardwareConcurrency are final. Keys the caller set are kept.
  */
-export function setCpuVendorDefault(
+export function setCpuDefault(
 	config: Config,
 	targetOs: string,
 	salt: number | bigint = 0,
 ): void {
-	if ("cpu:vendor" in config) return;
-	const gpu = config["webGl:renderer"];
-	if ((pyTruthy(gpu) ? pyStr(gpu) : "").includes("Apple M")) return;
-	let vendor = hardwareCpuVendor(config, targetOs);
-	if (!vendor) {
+	let [arch, maker]: [string | null, string | null] = hardwareCpu(
+		config,
+		targetOs,
+	);
+	arch =
+		(pyTruthy(config["cpu:arch"]) ? config["cpu:arch"] : null) || arch || "x86";
+	if (!("cpu:arch" in config)) config["cpu:arch"] = arch;
+	if ("cpu:manufacturer" in config || arch !== config["cpu:arch"]) return;
+	if (!maker && arch === "x86") {
 		const draw = rng((identitySeed(config, salt) ^ 0xc9d0) >>> 0).random();
-		vendor = draw < X86_INTEL_SHARE ? "intel" : "amd";
+		maker = draw < X86_INTEL_SHARE ? "intel" : "amd";
 	}
-	config["cpu:vendor"] = vendor;
+	if (maker) config["cpu:manufacturer"] = maker;
 }
 
 // ---------------------------------------------------------------------------

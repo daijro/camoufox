@@ -5,13 +5,13 @@
 // Which recorded RCPPS/RSQRTPS table Skia's raster pipeline uses
 // (src/opts/SkCpuEstimates.h) and libopus's PVQ search
 // (media/libopus/include/opus_cpu_estimates.h) use, from
-// gfx.skia.cpu_vendor_estimates. Off x86 there is none to reproduce.
+// general.cpu_identity (1 Intel, 2 AMD). Off x86 there is none to reproduce.
 
 #include "include/core/SkTypes.h"
 
 #if defined(SK_CPU_X86)
 
-#  include "mozilla/StaticPrefs_gfx.h"
+#  include "mozilla/StaticPrefs_general.h"
 #  include "src/opts/SkCpuEstimateTables.h"
 
 #  include <string.h>
@@ -43,7 +43,7 @@ static uint32_t HostVendor() {
 
 const uint32_t* sk_cpu_estimates() {
   static const uint32_t sHost = HostVendor();
-  const uint32_t vendor = mozilla::StaticPrefs::gfx_skia_cpu_vendor_estimates();
+  const uint32_t vendor = mozilla::StaticPrefs::general_cpu_identity();
   if ((vendor != SK_CPU_VENDOR_INTEL && vendor != SK_CPU_VENDOR_AMD) ||
       vendor == sHost) {
     return nullptr;
@@ -51,8 +51,14 @@ const uint32_t* sk_cpu_estimates() {
   return kSkCpuEstimateTables[vendor - 1];
 }
 
+bool sk_cpu_emulates_arm64() {
+  return mozilla::StaticPrefs::general_cpu_identity() == SK_CPU_IDENTITY_ARM64;
+}
+
 #else
 
 const uint32_t* sk_cpu_estimates() { return nullptr; }
+
+bool sk_cpu_emulates_arm64() { return false; }
 
 #endif

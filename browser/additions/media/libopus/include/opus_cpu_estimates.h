@@ -7,10 +7,15 @@
  * bits differ between Intel and AMD CPUs, so the encoded stream shows which
  * vendor encoded it. Like Skia's raster pipeline, it can compute another
  * vendor's bits from a recorded table (gfx/skia/skia/src/opts/SkCpuEstimates.h),
- * chosen by gfx.skia.cpu_vendor_estimates.
+ * chosen by general.cpu_identity.
+ *
+ * When general.cpu_identity emulates an arm64 CPU, x86 encoders and decoders
+ * instead run Firefox aarch64's NEON kernels, ported to C
+ * (celt/x86/celt_neonemu.c, celt_tx_neonemu.c).
  *
  * libopus is built into gkcodecs, which cannot read prefs, so Gecko hands it
- * the table: opus_mozilla_use_cpu_vendor() before each encoder is created.
+ * both: opus_mozilla_use_cpu_vendor() before each encoder or decoder is
+ * created.
  */
 
 #ifndef OPUS_CPU_ESTIMATES_H
@@ -31,6 +36,10 @@ extern "C" {
 #endif
 void opus_mozilla_set_cpu_estimates(const uint32_t* table);
 const uint32_t* opus_mozilla_cpu_estimates(void);
+/* Nonzero: encoders and decoders created from now on run Firefox aarch64's
+ * kernels. */
+void opus_mozilla_set_emulate_arm64(int on);
+int opus_mozilla_emulates_arm64(void);
 #if defined(__GNUC__)
 #  pragma GCC visibility pop
 #endif
@@ -40,9 +49,11 @@ const uint32_t* opus_mozilla_cpu_estimates(void);
 
 /* Defined in libxul by gfx/skia/skia/src/ports/SkCpuEstimates_mozilla.cpp. */
 const uint32_t* sk_cpu_estimates();
+bool sk_cpu_emulates_arm64();
 
 static inline void opus_mozilla_use_cpu_vendor() {
   opus_mozilla_set_cpu_estimates(sk_cpu_estimates());
+  opus_mozilla_set_emulate_arm64(sk_cpu_emulates_arm64());
 }
 #endif
 

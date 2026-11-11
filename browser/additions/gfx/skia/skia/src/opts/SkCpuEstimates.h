@@ -38,6 +38,7 @@ enum {
   SK_CPU_VENDOR_HOST = 0,
   SK_CPU_VENDOR_INTEL = 1,
   SK_CPU_VENDOR_AMD = 2,
+  SK_CPU_IDENTITY_ARM64 = 3,
 };
 
 static inline uint32_t sk_cpu_estimate_rcp(const uint32_t* table, uint32_t b) {
@@ -75,10 +76,15 @@ static inline uint32_t sk_cpu_estimate_rsqrt(const uint32_t* table, uint32_t b) 
 }
 
 #ifdef __cplusplus
-/* The recorded table of the vendor gfx.skia.cpu_vendor_estimates names, or
+/* The recorded table of the vendor general.cpu_identity names, or
  * nullptr when the native instruction already gives that vendor's bits: the
  * pref is 0, or names the CPU this runs on (SkCpuEstimates_mozilla.cpp). */
 const uint32_t* sk_cpu_estimates();
+
+/* Whether general.cpu_identity names an ARM64 machine on this x86-64 one:
+ * the opts tiers then switch to Skia's AArch64 code, built against
+ * SkNeonEmu.h (the _neonemu.cpp files). */
+bool sk_cpu_emulates_arm64();
 #endif
 
 #endif
