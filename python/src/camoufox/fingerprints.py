@@ -10,6 +10,7 @@ from random import Random, choice, randrange
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from camoufox._warnings import WARNINGS_DATA, FallbackWarning, _warn_from_caller
+from camoufox.coherence import hardware_cpu
 from camoufox.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
@@ -849,6 +850,39 @@ def fix_navigator_arch(config: Dict[str, Any], target_os: str) -> None:
         config['navigator.platform'] = target
     if config.get('navigator.oscpu') != target:
         config['navigator.oscpu'] = target
+
+
+# Intel's share of the x86 desktop CPUs running Firefox: the Firefox Public Data
+# Report's CPU vendor dataset for the week of 2026-11-02 counts Intel 76.86%,
+# AMD 17.61%, Apple 5.04% (data.firefox.com/dashboard/hardware), so Intel is
+# 76.86 / (76.86 + 17.61) of the x86 machines. The dataset has no per-OS split.
+X86_INTEL_SHARE: float = LAUNCHER_CONSTANTS['x86IntelShare']
+
+
+def set_cpu_default(config: Dict[str, Any], target_os: str, salt: int = 0) -> None:
+    """Fill in the identity's CPU (cpu:arch, cpu:manufacturer).
+
+    The CPU shows in values a page computes, not in anything Firefox reports:
+    canvas pixels, Web Audio samples, encoded Opus, relaxed-SIMD wasm and NaN
+    signs differ between x86-64 and ARM64, and canvas and Opus between Intel's
+    and AMD's RCPPS/RSQRTPS (coherence.py). The GPU decides what it can (an
+    Apple GPU is an Apple ARM CPU, an Intel iGPU or Intel Mac an Intel one, a
+    Radeon iGPU an AMD one), then a core count only Intel ships; any other x86
+    identity's vendor is drawn at Firefox's own x86 split, seeded by the
+    identity. An ARM identity whose GPU names no single SoC maker keeps its
+    manufacturer unset: every ARM64 CPU computes alike. Run after the GPU and
+    navigator.hardwareConcurrency are final. Keys the caller set are kept.
+    """
+    arch, maker = hardware_cpu(config, target_os)
+    arch = config.get('cpu:arch') or arch or 'x86'
+    config.setdefault('cpu:arch', arch)
+    if 'cpu:manufacturer' in config or arch != config['cpu:arch']:
+        return
+    if not maker and arch == 'x86':
+        draw = Random(identity_seed(config, salt) ^ 0xC9D0).random()
+        maker = 'intel' if draw < X86_INTEL_SHARE else 'amd'
+    if maker:
+        config['cpu:manufacturer'] = maker
 
 
 # What Firefox's baseline fingerprinting protection, on by default, reports in

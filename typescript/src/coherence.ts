@@ -10,7 +10,16 @@
  * `validate()` reports what is still broken; `apply()` repairs what it can.
  */
 import { LAUNCHER_CONSTANTS } from "./paths.js";
-import { isPyInt, num, pyRepr, pyStr, pyTruthy } from "./pycompat.js";
+import {
+	comparePyStr,
+	isPlainObject,
+	isPyInt,
+	num,
+	pyRepr,
+	pyStr,
+	pyTruthy,
+	ValueError,
+} from "./pycompat.js";
 
 type Config = Record<string, any>;
 
@@ -438,6 +447,279 @@ function checkArchAgreement(config: Config, _targetOs: string): string | null {
 	return null;
 }
 
+// The CPU the identity claims: its architecture (cpu:arch) and manufacturer
+// (cpu:manufacturer); coherence.py explains why it shows (canvas, Web Audio,
+// Opus, relaxed-SIMD wasm and NaN signs differ between x86-64 and ARM64, and
+// canvas and Opus between Intel and AMD) and has the sources for the table of
+// manufacturers per OS (launcher-constants.json, cpuManufacturers).
+//
+// The GPU decides where it can: Intel integrated graphics, Intel; "Radeon HD
+// 3200 Graphics", the bucket of AMD's APU graphics, AMD; every x86 Mac, Intel;
+// an Apple GPU, Apple ARM; an Adreno, Qualcomm; a VideoCore/V3D, Broadcom; a
+// Mali, an ARM SoC of some other maker. Any other GPU leaves the CPU open. A
+// core count only Intel's hybrids report (10, 14, 18, 22, 28) implies Intel,
+// for x86 only (an M4 Pro has 14).
+export const CPU_ARCHES = ["x86", "arm"] as const;
+export type CpuArch = (typeof CPU_ARCHES)[number];
+export const CPU_MANUFACTURERS: Readonly<
+	Record<string, Readonly<Record<string, readonly string[]>>>
+> = LAUNCHER_CONSTANTS.cpuManufacturers;
+export const CPU_VENDORS = ["intel", "amd"] as const;
+const INTEL_ONLY_CORE_COUNTS: ReadonlySet<unknown> = new Set(
+	LAUNCHER_CONSTANTS.intelOnlyCoreCounts,
+);
+export type CpuVendor = (typeof CPU_VENDORS)[number];
+const INTEL_IGPUS = [
+	"Intel(R) HD Graphics, or similar",
+	"Intel(R) HD Graphics 400, or similar",
+	"Intel(R) HD Graphics Direct3D11",
+	"Intel(R) HD Graphics 400 Direct3D11",
+];
+const AMD_IGPUS = ["Radeon HD 3200 Graphics"];
+/** ARM GPUs and the SoC makers that ship them. */
+const ARM_GPUS: ReadonlyArray<[string, readonly string[]]> = [
+	["Apple M", ["apple"]],
+	["Apple GPU", ["apple"]],
+	["Adreno", ["qualcomm"]],
+	["V3D", ["broadcom"]],
+	["VideoCore", ["broadcom"]],
+	["Mali", ["rockchip", "mediatek", "amlogic", "allwinner"]],
+	["Immortalis", ["mediatek"]],
+	["Tegra", ["nvidia"]],
+];
+
+/** The cpuManufacturers key for a launcher OS name (win, mac, lin, ...). */
+export function cpuOs(targetOs: string): "windows" | "mac" | "linux" {
+	const map: Record<string, "windows" | "mac"> = {
+		win: "windows",
+		windows: "windows",
+		mac: "mac",
+		macos: "mac",
+	};
+	return Object.hasOwn(map, targetOs) ? map[targetOs] : "linux";
+}
+
+export function cpuManufacturers(
+	targetOs: string,
+	arch: unknown,
+): readonly string[] {
+	const table = CPU_MANUFACTURERS[cpuOs(targetOs)];
+	return typeof arch === "string" && Object.hasOwn(table, arch)
+		? table[arch]
+		: [];
+}
+
+/**
+ * Check a caller's `cpu` option and fill in what it implies, as
+ * coherence.resolve_cpu does. Throws ValueError for anything no real machine
+ * running `targetOs` is: an unknown key, architecture or manufacturer, or a
+ * pair such as an AMD Mac or an Apple x86 CPU. A manufacturer alone implies
+ * its architecture.
+ */
+export function resolveCpu(
+	cpu: unknown,
+	targetOs: string,
+): Record<string, string> {
+	if (!isPlainObject(cpu)) {
+		throw new ValueError(
+			`cpu must be a dict such as {'arch': 'x86', 'manufacturer': 'intel'}, not ${pyRepr(cpu)}`,
+		);
+	}
+	const unknownKeys = Object.keys(cpu)
+		.filter((k) => k !== "arch" && k !== "manufacturer")
+		.sort(comparePyStr);
+	if (unknownKeys.length) {
+		throw new ValueError(
+			`cpu takes 'arch' and 'manufacturer', not ${unknownKeys.map(pyRepr).join(", ")}`,
+		);
+	}
+	let arch: unknown = isNone(cpu.arch) ? null : cpu.arch;
+	const maker: unknown = isNone(cpu.manufacturer) ? null : cpu.manufacturer;
+	if (arch !== null && !(CPU_ARCHES as readonly unknown[]).includes(arch)) {
+		throw new ValueError(
+			`cpu arch must be one of ('x86', 'arm'), not ${pyRepr(arch)}`,
+		);
+	}
+	const osName = cpuOs(targetOs);
+	const table = CPU_MANUFACTURERS[osName];
+	const makersOf = (a: string): readonly string[] =>
+		Object.hasOwn(table, a) ? table[a] : [];
+	if (maker !== null) {
+		const arches = CPU_ARCHES.filter((a) =>
+			(makersOf(a) as readonly unknown[]).includes(maker),
+		);
+		if (!arches.length) {
+			const known = [...new Set(Object.values(table).flat())].sort(
+				comparePyStr,
+			);
+			throw new ValueError(
+				`no ${osName} machine has a CPU made by ${pyRepr(maker)}; on ${osName} it is one of ${known.join(", ")}`,
+			);
+		}
+		if (arch === null) arch = arches[0];
+		else if (!(arches as readonly unknown[]).includes(arch)) {
+			throw new ValueError(
+				`no ${osName} machine has an ${pyStr(arch)} CPU made by ${pyRepr(maker)}; ${osName} ${pyStr(arch)} CPUs are made by ` +
+					`${makersOf(arch as string).join(", ") || "nobody"}`,
+			);
+		}
+	} else if (arch !== null && !makersOf(arch as string).length) {
+		throw new ValueError(`no ${osName} machine has an ${pyStr(arch)} CPU`);
+	}
+	const out: Record<string, string> = {};
+	if (arch !== null) out["cpu:arch"] = arch as string;
+	if (maker !== null) out["cpu:manufacturer"] = maker as string;
+	return out;
+}
+
+/**
+ * The CPU architecture this GPU implies and the manufacturers it allows, as
+ * coherence.gpu_cpu. [null, []] when the GPU leaves both open. An empty list
+ * with an architecture means any maker of that architecture on `targetOs`.
+ */
+export function gpuCpu(
+	gpuRenderer: unknown,
+	targetOs: string,
+): [CpuArch | null, readonly string[]] {
+	const r = pyTruthy(gpuRenderer) ? pyStr(gpuRenderer) : "";
+	if (!r) return [null, []];
+	for (const [marker, makers] of ARM_GPUS) {
+		if (r.includes(marker)) return ["arm", makers];
+	}
+	if (cpuOs(targetOs) === "mac") return ["x86", ["intel"]];
+	if (INTEL_IGPUS.some((igpu) => r.includes(igpu))) return ["x86", ["intel"]];
+	if (AMD_IGPUS.some((igpu) => r.includes(igpu))) return ["x86", ["amd"]];
+	return [null, []];
+}
+
+/** Whether a machine with this GPU can have this CPU. */
+export function gpuFitsCpu(
+	gpuRenderer: unknown,
+	targetOs: string,
+	arch: unknown,
+	maker: unknown,
+): boolean {
+	const [byGpu, makers] = gpuCpu(gpuRenderer, targetOs);
+	let a: unknown = isNone(arch) ? null : arch;
+	const m: unknown = isNone(maker) ? null : maker;
+	if (a === null && m !== null) {
+		a =
+			CPU_ARCHES.find((x) =>
+				(cpuManufacturers(targetOs, x) as readonly unknown[]).includes(m),
+			) ?? null;
+	}
+	// Mesa's software renderer draws on whatever CPU the machine has.
+	if (a === null || pyStr(gpuRenderer ?? "").includes("llvmpipe")) return true;
+	if (byGpu === null) {
+		// A discrete card or an open bucket: an x86 machine. No ARM laptop or
+		// board on sale carries a discrete GPU Firefox would name.
+		return a === "x86" && cpuOs(targetOs) !== "mac";
+	}
+	if (byGpu !== a) return false;
+	return (
+		m === null || !makers.length || (makers as readonly unknown[]).includes(m)
+	);
+}
+
+/** The x86 CPU vendor this GPU implies, or null when it leaves it open. */
+export function gpuCpuVendor(
+	gpuRenderer: unknown,
+	targetOs: string,
+): CpuVendor | null {
+	const [arch, makers] = gpuCpu(gpuRenderer, targetOs);
+	return arch === "x86" && makers.length === 1
+		? (makers[0] as CpuVendor)
+		: null;
+}
+
+/** The x86 CPU vendor this navigator.hardwareConcurrency implies, or null. */
+export function coresCpuVendor(cores: unknown): CpuVendor | null {
+	return INTEL_ONLY_CORE_COUNTS.has(cores) ? "intel" : null;
+}
+
+/**
+ * The [arch, manufacturer] the identity's GPU or, failing that, its core
+ * count implies.
+ */
+export function hardwareCpu(
+	config: Config,
+	targetOs: string,
+): [CpuArch | null, string | null] {
+	const [arch, makers] = gpuCpu(renderer(config), targetOs);
+	if (arch === "arm") return [arch, makers.length === 1 ? makers[0] : null];
+	const vendor =
+		(makers.length ? makers[0] : null) ||
+		coresCpuVendor(config["navigator.hardwareConcurrency"]);
+	return [vendor || arch ? "x86" : null, vendor];
+}
+
+/** The x86 CPU vendor the identity's GPU or, failing that, its core count implies. */
+export function hardwareCpuVendor(
+	config: Config,
+	targetOs: string,
+): CpuVendor | null {
+	const [arch, maker] = hardwareCpu(config, targetOs);
+	return arch === "x86" ? (maker as CpuVendor | null) : null;
+}
+
+/** Why the claimed CPU cannot sit in this machine, or null. */
+export function cpuConflict(config: Config, targetOs: string): string | null {
+	const arch = isNone(config["cpu:arch"]) ? null : config["cpu:arch"];
+	const maker = isNone(config["cpu:manufacturer"])
+		? null
+		: config["cpu:manufacturer"];
+	if (arch === null && maker === null) return null;
+	const cpu: Record<string, unknown> = {};
+	if (arch !== null) cpu.arch = arch;
+	if (maker !== null) cpu.manufacturer = maker;
+	try {
+		resolveCpu(cpu, targetOs);
+	} catch (e) {
+		if (e instanceof ValueError) return e.message;
+		throw e;
+	}
+	const r = renderer(config);
+	const claimed = [maker, arch]
+		.filter((v) => pyTruthy(v))
+		.map(pyStr)
+		.join(" ");
+	if (r && !gpuFitsCpu(r, targetOs, arch, maker)) {
+		return `CPU ${claimed} beside ${pyRepr(r)}`;
+	}
+	const cores = config["navigator.hardwareConcurrency"];
+	const byCores = coresCpuVendor(cores);
+	if (
+		(pyTruthy(arch) ? arch : "x86") === "x86" &&
+		pyTruthy(maker) &&
+		maker !== byCores &&
+		byCores
+	) {
+		return `CPU ${claimed} with hardwareConcurrency ${pyStr(cores)}, which only an Intel CPU reports`;
+	}
+	return null;
+}
+
+function checkCpu(config: Config, targetOs: string): string | null {
+	return cpuConflict(config, targetOs);
+}
+
+function repairCpu(config: Config, targetOs: string): void {
+	// The GPU decides. An AMD APU's GPU beside an Intel-only core count stays
+	// reported: no vendor matches both.
+	const [implied, maker] = hardwareCpu(config, targetOs);
+	const arch = implied ?? "x86";
+	config["cpu:arch"] = arch;
+	if (maker) config["cpu:manufacturer"] = maker;
+	else if (
+		!(cpuManufacturers(targetOs, arch) as readonly unknown[]).includes(
+			config["cpu:manufacturer"],
+		) ||
+		cpuConflict(config, targetOs)
+	) {
+		delete config["cpu:manufacturer"];
+	}
+}
+
 export const RULES: readonly Rule[] = [
 	{
 		name: "apple-silicon-cores",
@@ -463,6 +745,7 @@ export const RULES: readonly Rule[] = [
 	{ name: "screen-shape", check: checkScreenShape, repair: null },
 	{ name: "avail-bounds", check: checkAvailBounds, repair: repairAvailBounds },
 	{ name: "arch-agreement", check: checkArchAgreement, repair: null },
+	{ name: "cpu-matches-hardware", check: checkCpu, repair: repairCpu },
 ];
 
 /** Whether the screen is one no desktop reports (portrait, or tiny). */

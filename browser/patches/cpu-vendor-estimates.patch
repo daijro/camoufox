@@ -1,0 +1,3132 @@
+diff --git a/config/external/gkcodecs/gkcodecs.symbols b/config/external/gkcodecs/gkcodecs.symbols
+index df93d763dd..747f94e67d 100644
+--- a/config/external/gkcodecs/gkcodecs.symbols
++++ b/config/external/gkcodecs/gkcodecs.symbols
+@@ -106,6 +106,8 @@ opus_packet_parse
+ opus_strerror
+ opus_multistream_encode_float
+ opus_multistream_surround_encoder_create
++opus_mozilla_set_cpu_estimates
++opus_mozilla_set_emulate_arm64
+ vorbis_block_clear
+ vorbis_block_init
+ vorbis_comment_clear
+@@ -146,6 +148,7 @@ vpx_codec_enc_config_set
+ vpx_codec_enc_init_multi_ver
+ vpx_codec_enc_init_ver
+ vpx_codec_encode
++vpx_mozilla_set_realtime_only
+ vpx_codec_err_to_string
+ vpx_codec_error
+ vpx_codec_error_detail
+diff --git a/dom/media/encoder/OpusTrackEncoder.cpp b/dom/media/encoder/OpusTrackEncoder.cpp
+index d23e27a0ab..b90cca3b71 100644
+--- a/dom/media/encoder/OpusTrackEncoder.cpp
++++ b/dom/media/encoder/OpusTrackEncoder.cpp
+@@ -4,6 +4,7 @@
+ #include "OpusTrackEncoder.h"
+ 
+ #include <opus/opus.h>
++#include <opus/opus_cpu_estimates.h>
+ 
+ #include "VideoUtils.h"
+ #include "mozilla/CheckedInt.h"
+@@ -169,6 +170,7 @@ nsresult OpusTrackEncoder::Init(int aChannels) {
+   }
+ 
+   int error = 0;
++  opus_mozilla_use_cpu_vendor();
+   mEncoder = opus_encoder_create(mOutputSampleRate, mChannels,
+                                  OPUS_APPLICATION_AUDIO, &error);
+ 
+diff --git a/dom/media/platforms/ffmpeg/FFmpegAudioDecoder.cpp b/dom/media/platforms/ffmpeg/FFmpegAudioDecoder.cpp
+index c80630f200..fa20cf4f05 100644
+--- a/dom/media/platforms/ffmpeg/FFmpegAudioDecoder.cpp
++++ b/dom/media/platforms/ffmpeg/FFmpegAudioDecoder.cpp
+@@ -12,6 +12,7 @@
+ #include "VideoUtils.h"
+ #include "libavutil/dict.h"
+ #include "libavutil/samplefmt.h"
++#include "opus/opus_cpu_estimates.h"
+ #if defined(FFVPX_VERSION)
+ #  include "libavutil/channel_layout.h"
+ #endif
+@@ -104,6 +105,8 @@ RefPtr<MediaDataDecoder::InitPromise> FFmpegAudioDecoder<LIBAV_VER>::Init() {
+ 
+   AVDictionary* options = nullptr;
+   if (mCodecID == AV_CODEC_ID_OPUS) {
++    // FFmpeg's libopus wrapper decodes with gkcodecs' libopus.
++    opus_mozilla_use_cpu_vendor();
+     // Opus has a special feature for stereo coding where it represent wide
+     // stereo channels by 180-degree out of phase. This improves quality, but
+     // needs to be disabled when the output is downmixed to mono.
+diff --git a/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp b/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp
+index 723c75580e..4d3deadfbe 100644
+--- a/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp
++++ b/dom/media/platforms/ffmpeg/FFmpegAudioEncoder.cpp
+@@ -9,6 +9,7 @@
+ #include "FFmpegRuntimeLinker.h"
+ #include "FFmpegUtils.h"
+ #include "MediaData.h"
++#include "opus/opus_cpu_estimates.h"
+ 
+ namespace mozilla {
+ 
+@@ -53,6 +54,9 @@ MediaResult FFmpegAudioEncoder<LIBAV_VER>::InitEncoder() {
+ 
+   FFMPEG_LOG("FFmpegAudioEncoder::InitEncoder");
+ 
++  // FFmpeg's libopus wrapper encodes with gkcodecs' libopus.
++  opus_mozilla_use_cpu_vendor();
++
+   // Initialize the common members of the encoder instance
+   auto r = AllocateCodecContext(/* aHardware */ false);
+   if (r.isErr()) {
+diff --git a/dom/media/platforms/ffmpeg/FFmpegVideoEncoder.cpp b/dom/media/platforms/ffmpeg/FFmpegVideoEncoder.cpp
+index 274a5afc5a..73a5341684 100644
+--- a/dom/media/platforms/ffmpeg/FFmpegVideoEncoder.cpp
++++ b/dom/media/platforms/ffmpeg/FFmpegVideoEncoder.cpp
+@@ -30,6 +30,17 @@
+ #endif
+ #include "nsStringFwd.h"
+ 
++#if defined(FFVPX_VERSION) && !defined(MOZ_SYSTEM_LIBVPX)
++// Defined in gkcodecs by media/libvpx (vpx/vpx_encoder.h).
++#  if defined(__GNUC__)
++#    pragma GCC visibility push(default)
++#  endif
++extern "C" void vpx_mozilla_set_realtime_only(int on);
++#  if defined(__GNUC__)
++#    pragma GCC visibility pop
++#  endif
++#endif
++
+ // The ffmpeg namespace is introduced to avoid the PixelFormat's name conflicts
+ // with MediaDataEncoder::PixelFormat in MediaDataEncoder class scope.
+ namespace ffmpeg {
+@@ -684,6 +695,11 @@ MediaResult FFmpegVideoEncoder<LIBAV_VER>::InitEncoderInternal(bool aHardware) {
+   SetContextBitrate();
+ 
+   AVDictionary* options = nullptr;
++#if defined(FFVPX_VERSION) && !defined(MOZ_SYSTEM_LIBVPX)
++  // Encode as Firefox's realtime-only libvpx builds (Windows and Linux arm64)
++  // do, when the identity is one of those.
++  vpx_mozilla_set_realtime_only(StaticPrefs::media_libvpx_realtime_only());
++#endif
+   if (int ret = OpenCodecContext(mCodecContext->codec, &options); ret < 0) {
+     return MediaResult(
+         NS_ERROR_DOM_MEDIA_FATAL_ERR,
+diff --git a/dom/media/platforms/ffmpeg/ffvpx/FFVPXRuntimeLinker.cpp b/dom/media/platforms/ffmpeg/ffvpx/FFVPXRuntimeLinker.cpp
+index 99a6bd76a2..d1d7b539d0 100644
+--- a/dom/media/platforms/ffmpeg/ffvpx/FFVPXRuntimeLinker.cpp
++++ b/dom/media/platforms/ffmpeg/ffvpx/FFVPXRuntimeLinker.cpp
+@@ -7,6 +7,7 @@
+ #include "FFmpegLibWrapper.h"
+ #include "FFmpegLog.h"
+ #include "mozilla/FileUtils.h"
++#include "mozilla/StaticPrefs_general.h"
+ #include "mozilla/ToString.h"
+ #include "nsLocalFile.h"
+ #include "nsXPCOMPrivate.h"
+@@ -180,6 +181,18 @@ void FFVPXRuntimeLinker::GetFFTFuncs(FFmpegFFTFuncs* aOutFuncs) {
+                      "ffvpx loaded without av_tx_init/av_tx_uninit");
+   aOutFuncs->init = sFFVPXLib.av_tx_init;
+   aOutFuncs->uninit = sFFVPXLib.av_tx_uninit;
++#if defined(__x86_64__) || defined(_M_X64)
++  // general.cpu_identity = ARM64: transforms run the NEON codelets, so Web
++  // Audio's FFT (convolver, analyser, PeriodicWave, HRTF) has ARM's results.
++  // libmozavutil always exports the switch, as it does av_tx_init.
++  if (StaticPrefs::general_cpu_identity() == 3) {
++    using SetFn = void (*)(int);
++    auto set = reinterpret_cast<SetFn>(PR_FindFunctionSymbol(
++        sFFVPXLib.mAVUtilLib, "av_tx_cfp_emulate_arm64"));
++    MOZ_RELEASE_ASSERT(set, "ffvpx loaded without av_tx_cfp_emulate_arm64");
++    set(1);
++  }
++#endif
+ }
+ 
+ }  // namespace mozilla
+diff --git a/dom/media/webaudio/AudioNodeEngine.cpp b/dom/media/webaudio/AudioNodeEngine.cpp
+index b816c9d4b3..bedca3ba30 100644
+--- a/dom/media/webaudio/AudioNodeEngine.cpp
++++ b/dom/media/webaudio/AudioNodeEngine.cpp
+@@ -19,9 +19,21 @@
+ #endif
+ #include "AudioBlock.h"
+ #include "Tracing.h"
++#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || \
++    defined(_M_IX86)
++#  include "AudioNodeEngineGeneric.h"
++#  include "mozilla/StaticPrefs_general.h"
++#endif
+ 
+ namespace mozilla {
+ 
++#ifdef MOZ_AUDIO_NEON_EMU
++// general.cpu_identity = 3 (ARM64): take the NEON paths, emulated.
++static bool EmulatesArm64() {
++  return StaticPrefs::general_cpu_identity() == 3;
++}
++#endif
++
+ already_AddRefed<ThreadSharedFloatArrayBufferList>
+ ThreadSharedFloatArrayBufferList::Create(uint32_t aChannelCount, size_t aLength,
+                                          const mozilla::fallible_t&) {
+@@ -73,6 +85,13 @@ void AudioBufferAddWithScale(const float* aInput, float aScale, float* aOutput,
+     return;
+   }
+ #endif
++#ifdef MOZ_AUDIO_NEON_EMU
++  if (EmulatesArm64()) {
++    Engine<NeonEmuArch>::AudioBufferAddWithScale(aInput, aScale, aOutput,
++                                                 aSize);
++    return;
++  }
++#endif
+ 
+ #ifdef USE_SSE2
+   if (mozilla::supports_sse2()) {
+@@ -119,6 +138,13 @@ void AudioBlockCopyChannelWithScale(const float* aInput, float aScale,
+       return;
+     }
+ #endif
++#ifdef MOZ_AUDIO_NEON_EMU
++    if (EmulatesArm64()) {
++      Engine<NeonEmuArch>::AudioBlockCopyChannelWithScale(aInput, aScale,
++                                                          aOutput);
++      return;
++    }
++#endif
+ 
+ #ifdef USE_SSE2
+     if (mozilla::supports_sse2()) {
+@@ -142,6 +168,12 @@ void BufferComplexMultiply(const float* aInput, const float* aScale,
+     return;
+   }
+ #endif
++#ifdef MOZ_AUDIO_NEON_EMU
++  if (EmulatesArm64()) {
++    Engine<NeonEmuArch>::BufferComplexMultiply(aInput, aScale, aOutput, aSize);
++    return;
++  }
++#endif
+ #ifdef USE_SSE2
+   if (mozilla::supports_sse()) {
+ #  if defined(USE_SSE4_2)
+@@ -191,6 +223,13 @@ void AudioBlockCopyChannelWithScale(const float aInput[WEBAUDIO_BLOCK_SIZE],
+     return;
+   }
+ #endif
++#ifdef MOZ_AUDIO_NEON_EMU
++  if (EmulatesArm64()) {
++    Engine<NeonEmuArch>::AudioBlockCopyChannelWithScale(aInput, aScale,
++                                                        aOutput);
++    return;
++  }
++#endif
+ 
+ #ifdef USE_SSE2
+   if (mozilla::supports_sse2()) {
+@@ -224,6 +263,12 @@ void AudioBufferInPlaceScale(float* aBlock, float aScale, uint32_t aSize) {
+     return;
+   }
+ #endif
++#ifdef MOZ_AUDIO_NEON_EMU
++  if (EmulatesArm64()) {
++    Engine<NeonEmuArch>::AudioBufferInPlaceScale(aBlock, aScale, aSize);
++    return;
++  }
++#endif
+ 
+ #ifdef USE_SSE2
+   if (mozilla::supports_sse2()) {
+@@ -244,6 +289,12 @@ void AudioBufferInPlaceScale(float* aBlock, float* aScale, uint32_t aSize) {
+     return;
+   }
+ #endif
++#ifdef MOZ_AUDIO_NEON_EMU
++  if (EmulatesArm64()) {
++    Engine<NeonEmuArch>::AudioBufferInPlaceScale(aBlock, aScale, aSize);
++    return;
++  }
++#endif
+ 
+ #ifdef USE_SSE2
+   if (mozilla::supports_sse2()) {
+@@ -286,6 +337,13 @@ void AudioBlockPanStereoToStereo(const float aInputL[WEBAUDIO_BLOCK_SIZE],
+     return;
+   }
+ #endif
++#ifdef MOZ_AUDIO_NEON_EMU
++  if (EmulatesArm64()) {
++    Engine<NeonEmuArch>::AudioBlockPanStereoToStereo(
++        aInputL, aInputR, aGainL, aGainR, aIsOnTheLeft, aOutputL, aOutputR);
++    return;
++  }
++#endif
+ 
+ #ifdef USE_SSE2
+   if (mozilla::supports_sse2()) {
+@@ -332,6 +390,13 @@ void AudioBlockPanStereoToStereo(const float aInputL[WEBAUDIO_BLOCK_SIZE],
+     return;
+   }
+ #endif
++#ifdef MOZ_AUDIO_NEON_EMU
++  if (EmulatesArm64()) {
++    Engine<NeonEmuArch>::AudioBlockPanStereoToStereo(
++        aInputL, aInputR, aGainL, aGainR, aIsOnTheLeft, aOutputL, aOutputR);
++    return;
++  }
++#endif
+ 
+ #ifdef USE_SSE2
+   if (mozilla::supports_sse2()) {
+@@ -367,6 +432,11 @@ float AudioBufferSumOfSquares(const float* aInput, uint32_t aLength) {
+     return Engine<xsimd::neon>::AudioBufferSumOfSquares(aInput, aLength);
+   }
+ #endif
++#ifdef MOZ_AUDIO_NEON_EMU
++  if (EmulatesArm64()) {
++    return Engine<NeonEmuArch>::AudioBufferSumOfSquares(aInput, aLength);
++  }
++#endif
+ 
+ #ifdef USE_SSE2
+   if (mozilla::supports_sse()) {
+diff --git a/dom/media/webaudio/AudioNodeEngineGeneric.h b/dom/media/webaudio/AudioNodeEngineGeneric.h
+index 1342a6f462..31dae386cf 100644
+--- a/dom/media/webaudio/AudioNodeEngineGeneric.h
++++ b/dom/media/webaudio/AudioNodeEngineGeneric.h
+@@ -10,6 +10,16 @@
+ 
+ namespace mozilla {
+ 
++#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || \
++    defined(_M_IX86)
++// general.cpu_identity = ARM64 on x86: Engine<NeonEmuArch> computes what
++// Engine<xsimd::neon> computes on an ARM CPU, with SSE2 registers. NEON's
++// xsimd::fma is a fused multiply-add and its reduce_add adds pairwise, so
++// those two follow ARM; every other operation here is exact on both.
++#  define MOZ_AUDIO_NEON_EMU 1
++struct NeonEmuArch : xsimd::sse2 {};
++#endif
++
+ template <class Arch>
+ struct Engine {
+   static void AudioBufferAddWithScale(const float* aInput, float aScale,
+diff --git a/dom/media/webaudio/AudioNodeEngineGenericImpl.h b/dom/media/webaudio/AudioNodeEngineGenericImpl.h
+index 78a24ce7bf..2ad44d9cdf 100644
+--- a/dom/media/webaudio/AudioNodeEngineGenericImpl.h
++++ b/dom/media/webaudio/AudioNodeEngineGenericImpl.h
+@@ -18,8 +18,61 @@
+ #  define MOZ_UNROLL(_)
+ #endif
+ 
++#include <cmath>
++#include <type_traits>
++
+ namespace mozilla {
+ 
++template <class Arch>
++struct EngineBatchArch {
++  using type = Arch;
++};
++#ifdef MOZ_AUDIO_NEON_EMU
++template <>
++struct EngineBatchArch<NeonEmuArch> {
++  using type = xsimd::sse2;
++};
++#endif
++template <class Arch>
++using EBatch = xsimd::batch<float, typename EngineBatchArch<Arch>::type>;
++template <class Arch>
++using EBatchBool =
++    xsimd::batch_bool<float, typename EngineBatchArch<Arch>::type>;
++
++template <class Arch>
++static MOZ_ALWAYS_INLINE EBatch<Arch> EngineFma(const EBatch<Arch>& aX,
++                                                const EBatch<Arch>& aY,
++                                                const EBatch<Arch>& aZ) {
++#ifdef MOZ_AUDIO_NEON_EMU
++  if constexpr (std::is_same_v<Arch, NeonEmuArch>) {
++    // vfmaq_f32: one rounding per lane.
++    alignas(16) float x[EBatch<Arch>::size], y[EBatch<Arch>::size],
++        z[EBatch<Arch>::size];
++    aX.store_aligned(x);
++    aY.store_aligned(y);
++    aZ.store_aligned(z);
++    for (size_t i = 0; i < EBatch<Arch>::size; ++i) {
++      x[i] = std::fma(x[i], y[i], z[i]);
++    }
++    return EBatch<Arch>::load_aligned(x);
++  }
++#endif
++  return xsimd::fma(aX, aY, aZ);
++}
++
++template <class Arch>
++static MOZ_ALWAYS_INLINE float EngineReduceAdd(const EBatch<Arch>& aX) {
++#ifdef MOZ_AUDIO_NEON_EMU
++  if constexpr (std::is_same_v<Arch, NeonEmuArch>) {
++    // vpadd_f32 twice: (x0 + x1) + (x2 + x3).
++    alignas(16) float x[4];
++    aX.store_aligned(x);
++    return (x[0] + x[1]) + (x[2] + x[3]);
++  }
++#endif
++  return reduce_add(aX);
++}
++
+ template <class Arch>
+ static bool is_aligned(const void* ptr) {
+   return (reinterpret_cast<uintptr_t>(ptr) &
+@@ -52,13 +105,13 @@ void Engine<Arch>::AudioBufferAddWithScale(const float* aInput, float aScale,
+   MOZ_ASSERT(is_aligned<Arch>(aInput), "aInput is aligned");
+   MOZ_ASSERT(is_aligned<Arch>(aOutput), "aOutput is aligned");
+ 
+-  xsimd::batch<float, Arch> vgain(aScale);
++  EBatch<Arch> vgain(aScale);
+ 
+-  uint32_t aVSize = aSize & ~(xsimd::batch<float, Arch>::size - 1);
++  uint32_t aVSize = aSize & ~(EBatch<Arch>::size - 1);
+   MOZ_UNROLL(4)
+-  for (unsigned i = 0; i < aVSize; i += xsimd::batch<float, Arch>::size) {
+-    auto vin1 = xsimd::batch<float, Arch>::load_aligned(&aInput[i]);
+-    auto vin2 = xsimd::batch<float, Arch>::load_aligned(&aOutput[i]);
++  for (unsigned i = 0; i < aVSize; i += EBatch<Arch>::size) {
++    auto vin1 = EBatch<Arch>::load_aligned(&aInput[i]);
++    auto vin2 = EBatch<Arch>::load_aligned(&aOutput[i]);
+     // Avoid xsimd::fma here: it lowers to vfmadd*ps on x86 FMA3 builds and
+     // vfmaq_f32 on aarch64 NEON, an explicit single-rounded fused
+     // multiply-add that bypasses the project-wide -ffp-contract=off and
+@@ -83,15 +136,15 @@ void Engine<Arch>::AudioBlockCopyChannelWithScale(const float* aInput,
+   MOZ_ASSERT(is_aligned<Arch>(aInput), "aInput is aligned");
+   MOZ_ASSERT(is_aligned<Arch>(aOutput), "aOutput is aligned");
+ 
+-  MOZ_ASSERT((WEBAUDIO_BLOCK_SIZE % xsimd::batch<float, Arch>::size == 0),
++  MOZ_ASSERT((WEBAUDIO_BLOCK_SIZE % EBatch<Arch>::size == 0),
+              "requires tail processing");
+ 
+-  xsimd::batch<float, Arch> vgain = (aScale);
++  EBatch<Arch> vgain = (aScale);
+ 
+   MOZ_UNROLL(4)
+   for (unsigned i = 0; i < WEBAUDIO_BLOCK_SIZE;
+-       i += xsimd::batch<float, Arch>::size) {
+-    auto vin = xsimd::batch<float, Arch>::load_aligned(&aInput[i]);
++       i += EBatch<Arch>::size) {
++    auto vin = EBatch<Arch>::load_aligned(&aInput[i]);
+     auto vout = vin * vgain;
+     vout.store_aligned(&aOutput[i]);
+   }
+@@ -106,14 +159,14 @@ void Engine<Arch>::AudioBlockCopyChannelWithScale(
+   MOZ_ASSERT(is_aligned<Arch>(aOutput), "aOutput is aligned");
+   MOZ_ASSERT(is_aligned<Arch>(aScale), "aScale is aligned");
+ 
+-  MOZ_ASSERT((WEBAUDIO_BLOCK_SIZE % xsimd::batch<float, Arch>::size == 0),
++  MOZ_ASSERT((WEBAUDIO_BLOCK_SIZE % EBatch<Arch>::size == 0),
+              "requires tail processing");
+ 
+   MOZ_UNROLL(4)
+   for (unsigned i = 0; i < WEBAUDIO_BLOCK_SIZE;
+-       i += xsimd::batch<float, Arch>::size) {
+-    auto vscaled = xsimd::batch<float, Arch>::load_aligned(&aScale[i]);
+-    auto vin = xsimd::batch<float, Arch>::load_aligned(&aInput[i]);
++       i += EBatch<Arch>::size) {
++    auto vscaled = EBatch<Arch>::load_aligned(&aScale[i]);
++    auto vin = EBatch<Arch>::load_aligned(&aInput[i]);
+     auto vout = vin * vscaled;
+     vout.store_aligned(&aOutput[i]);
+   }
+@@ -124,12 +177,12 @@ void Engine<Arch>::AudioBufferInPlaceScale(float* aBlock, float aScale,
+                                            uint32_t aSize) {
+   MOZ_ASSERT(is_aligned<Arch>(aBlock), "aBlock is aligned");
+ 
+-  xsimd::batch<float, Arch> vgain(aScale);
++  EBatch<Arch> vgain(aScale);
+ 
+-  uint32_t aVSize = aSize & ~(xsimd::batch<float, Arch>::size - 1);
++  uint32_t aVSize = aSize & ~(EBatch<Arch>::size - 1);
+   MOZ_UNROLL(4)
+-  for (unsigned i = 0; i < aVSize; i += xsimd::batch<float, Arch>::size) {
+-    auto vin = xsimd::batch<float, Arch>::load_aligned(&aBlock[i]);
++  for (unsigned i = 0; i < aVSize; i += EBatch<Arch>::size) {
++    auto vin = EBatch<Arch>::load_aligned(&aBlock[i]);
+     auto vout = vin * vgain;
+     vout.store_aligned(&aBlock[i]);
+   }
+@@ -142,11 +195,11 @@ void Engine<Arch>::AudioBufferInPlaceScale(float* aBlock, float* aScale,
+   MOZ_ASSERT(is_aligned<Arch>(aBlock), "aBlock is aligned");
+   MOZ_ASSERT(is_aligned<Arch>(aScale), "aScale is aligned");
+ 
+-  uint32_t aVSize = aSize & ~(xsimd::batch<float, Arch>::size - 1);
++  uint32_t aVSize = aSize & ~(EBatch<Arch>::size - 1);
+   MOZ_UNROLL(4)
+-  for (unsigned i = 0; i < aVSize; i += xsimd::batch<float, Arch>::size) {
+-    auto vin = xsimd::batch<float, Arch>::load_aligned(&aBlock[i]);
+-    auto vgain = xsimd::batch<float, Arch>::load_aligned(&aScale[i]);
++  for (unsigned i = 0; i < aVSize; i += EBatch<Arch>::size) {
++    auto vin = EBatch<Arch>::load_aligned(&aBlock[i]);
++    auto vgain = EBatch<Arch>::load_aligned(&aScale[i]);
+     auto vout = vin * vgain;
+     vout.store_aligned(&aBlock[i]);
+   }
+@@ -166,21 +219,21 @@ void Engine<Arch>::AudioBlockPanStereoToStereo(
+   MOZ_ASSERT(is_aligned<Arch>(aOutputL), "aOutputL is aligned");
+   MOZ_ASSERT(is_aligned<Arch>(aOutputR), "aOutputR is aligned");
+ 
+-  MOZ_ASSERT((WEBAUDIO_BLOCK_SIZE % xsimd::batch<float, Arch>::size == 0),
++  MOZ_ASSERT((WEBAUDIO_BLOCK_SIZE % EBatch<Arch>::size == 0),
+              "requires tail processing");
+ 
+-  xsimd::batch<float, Arch> vgainl(aGainL);
+-  xsimd::batch<float, Arch> vgainr(aGainR);
++  EBatch<Arch> vgainl(aGainL);
++  EBatch<Arch> vgainr(aGainR);
+ 
+   if (aIsOnTheLeft) {
+     MOZ_UNROLL(2)
+     for (unsigned i = 0; i < WEBAUDIO_BLOCK_SIZE;
+-         i += xsimd::batch<float, Arch>::size) {
+-      auto vinl = xsimd::batch<float, Arch>::load_aligned(&aInputL[i]);
+-      auto vinr = xsimd::batch<float, Arch>::load_aligned(&aInputR[i]);
++         i += EBatch<Arch>::size) {
++      auto vinl = EBatch<Arch>::load_aligned(&aInputL[i]);
++      auto vinr = EBatch<Arch>::load_aligned(&aInputR[i]);
+ 
+       /* left channel : aOutputL  = aInputL + aInputR * gainL */
+-      auto vout = xsimd::fma(vinr, vgainl, vinl);
++      auto vout = EngineFma<Arch>(vinr, vgainl, vinl);
+       vout.store_aligned(&aOutputL[i]);
+ 
+       /* right channel : aOutputR = aInputR * gainR */
+@@ -190,16 +243,16 @@ void Engine<Arch>::AudioBlockPanStereoToStereo(
+   } else {
+     MOZ_UNROLL(2)
+     for (unsigned i = 0; i < WEBAUDIO_BLOCK_SIZE;
+-         i += xsimd::batch<float, Arch>::size) {
+-      auto vinl = xsimd::batch<float, Arch>::load_aligned(&aInputL[i]);
+-      auto vinr = xsimd::batch<float, Arch>::load_aligned(&aInputR[i]);
++         i += EBatch<Arch>::size) {
++      auto vinl = EBatch<Arch>::load_aligned(&aInputL[i]);
++      auto vinr = EBatch<Arch>::load_aligned(&aInputR[i]);
+ 
+       /* left channel : aInputL * gainL */
+       auto vscaled = vinl * vgainl;
+       vscaled.store_aligned(&aOutputL[i]);
+ 
+       /* right channel: aOutputR = aInputR + aInputL * gainR */
+-      auto vout = xsimd::fma(vinl, vgainr, vinr);
++      auto vout = EngineFma<Arch>(vinl, vgainr, vinr);
+       vout.store_aligned(&aOutputR[i]);
+     }
+   }
+@@ -212,9 +265,24 @@ void Engine<Arch>::BufferComplexMultiply(const float* aInput,
+   MOZ_ASSERT(is_aligned<Arch>(aInput), "aInput is aligned");
+   MOZ_ASSERT(is_aligned<Arch>(aOutput), "aOutput is aligned");
+   MOZ_ASSERT(is_aligned<Arch>(aScale), "aScale is aligned");
+-  MOZ_ASSERT((aSize % xsimd::batch<float, Arch>::size == 0),
++  MOZ_ASSERT((aSize % EBatch<Arch>::size == 0),
+              "requires tail processing");
+ 
++#ifdef MOZ_AUDIO_NEON_EMU
++  if constexpr (std::is_same_v<Arch, NeonEmuArch>) {
++    // xsimd on NEON: re = vfmaq(-(ai*bi), ar, br), im = vfmaq(ai*br, ar, bi),
++    // one rounding for the fused product.
++    for (unsigned i = 0; i < aSize * 2; i += 2) {
++      float ar = aInput[i], ai = aInput[i + 1];
++      float br = aScale[i], bi = aScale[i + 1];
++      float re = std::fma(ar, br, -(ai * bi));
++      float im = std::fma(ar, bi, ai * br);
++      aOutput[i] = re;
++      aOutput[i + 1] = im;
++    }
++    return;
++  } else
++#endif
+   MOZ_UNROLL(2)
+   for (unsigned i = 0; i < aSize * 2;
+        i += 2 * xsimd::batch<std::complex<float>, Arch>::size) {
+@@ -246,22 +314,22 @@ float Engine<Arch>::AudioBufferSumOfSquares(const float* aInput,
+   MOZ_ASSERT(is_aligned<Arch>(aInput), "aInput is aligned");
+ 
+   constexpr uint32_t unroll_factor = 4;
+-  xsimd::batch<float, Arch> accs[unroll_factor] = {0.f, 0.f, 0.f, 0.f};
++  EBatch<Arch> accs[unroll_factor] = {0.f, 0.f, 0.f, 0.f};
+ 
+   uint32_t vLength =
+-      aLength & ~(unroll_factor * xsimd::batch<float, Arch>::size - 1);
++      aLength & ~(unroll_factor * EBatch<Arch>::size - 1);
+ 
+   for (uint32_t i = 0; i < vLength;
+-       i += unroll_factor * xsimd::batch<float, Arch>::size) {
++       i += unroll_factor * EBatch<Arch>::size) {
+     MOZ_UNROLL(4)
+     for (uint32_t j = 0; j < unroll_factor; ++j) {
+-      auto in = xsimd::batch<float, Arch>::load_aligned(
+-          &aInput[i + xsimd::batch<float, Arch>::size * j]);
+-      accs[j] = xsimd::fma(in, in, accs[j]);
++      auto in = EBatch<Arch>::load_aligned(
++          &aInput[i + EBatch<Arch>::size * j]);
++      accs[j] = EngineFma<Arch>(in, in, accs[j]);
+     }
+   }
+ 
+-  sum += reduce_add((accs[0] + accs[1]) + (accs[2] + accs[3]));
++  sum += EngineReduceAdd<Arch>((accs[0] + accs[1]) + (accs[2] + accs[3]));
+   for (uint32_t i = vLength; i < aLength; ++i) sum += aInput[i] * aInput[i];
+   return sum;
+ };
+@@ -283,13 +351,13 @@ void Engine<Arch>::NaNToZeroInPlace(float* aSamples, size_t aCount) {
+ 
+   MOZ_ASSERT(is_aligned<Arch>(aSamples), "aSamples is aligned");
+ 
+-  uint32_t vCount = aCount & ~(xsimd::batch<float, Arch>::size - 1);
++  uint32_t vCount = aCount & ~(EBatch<Arch>::size - 1);
+ 
+   MOZ_UNROLL(4)
+-  for (uint32_t i = 0; i < vCount; i += xsimd::batch<float, Arch>::size) {
+-    auto vin = xsimd::batch<float, Arch>::load_aligned(&aSamples[i]);
++  for (uint32_t i = 0; i < vCount; i += EBatch<Arch>::size) {
++    auto vin = EBatch<Arch>::load_aligned(&aSamples[i]);
+     auto vout =
+-        xsimd::select(xsimd::isnan(vin), xsimd::batch<float, Arch>(0.f), vin);
++        xsimd::select(xsimd::isnan(vin), EBatch<Arch>(0.f), vin);
+     vout.store_aligned(&aSamples[i]);
+   }
+ 
+@@ -316,24 +384,24 @@ void Engine<Arch>::AudioBlockPanStereoToStereo(
+   MOZ_ASSERT(is_aligned<Arch>(aOutputL), "aOutputL is aligned");
+   MOZ_ASSERT(is_aligned<Arch>(aOutputR), "aOutputR is aligned");
+ 
+-  MOZ_ASSERT((WEBAUDIO_BLOCK_SIZE % xsimd::batch<float, Arch>::size == 0),
++  MOZ_ASSERT((WEBAUDIO_BLOCK_SIZE % EBatch<Arch>::size == 0),
+              "requires tail processing");
+ 
+   MOZ_UNROLL(2)
+   for (uint32_t i = 0; i < WEBAUDIO_BLOCK_SIZE;
+-       i += xsimd::batch<float, Arch>::size) {
+-    auto mask = xsimd::batch_bool<float, Arch>::load_aligned(&aIsOnTheLeft[i]);
++       i += EBatch<Arch>::size) {
++    auto mask = EBatchBool<Arch>::load_aligned(&aIsOnTheLeft[i]);
+ 
+-    auto inputL = xsimd::batch<float, Arch>::load_aligned(&aInputL[i]);
+-    auto inputR = xsimd::batch<float, Arch>::load_aligned(&aInputR[i]);
+-    auto gainL = xsimd::batch<float, Arch>::load_aligned(&aGainL[i]);
+-    auto gainR = xsimd::batch<float, Arch>::load_aligned(&aGainR[i]);
++    auto inputL = EBatch<Arch>::load_aligned(&aInputL[i]);
++    auto inputR = EBatch<Arch>::load_aligned(&aInputR[i]);
++    auto gainL = EBatch<Arch>::load_aligned(&aGainL[i]);
++    auto gainR = EBatch<Arch>::load_aligned(&aGainR[i]);
+ 
+-    auto outL_true = xsimd::fma(inputR, gainL, inputL);
++    auto outL_true = EngineFma<Arch>(inputR, gainL, inputL);
+     auto outR_true = inputR * gainR;
+ 
+     auto outL_false = inputL * gainL;
+-    auto outR_false = xsimd::fma(inputL, gainR, inputR);
++    auto outR_false = EngineFma<Arch>(inputL, gainR, inputR);
+ 
+     auto outL = xsimd::select(mask, outL_true, outL_false);
+     auto outR = xsimd::select(mask, outR_true, outR_false);
+diff --git a/dom/media/webaudio/moz.build b/dom/media/webaudio/moz.build
+index 3bd802d715..2a51a8f759 100644
+--- a/dom/media/webaudio/moz.build
++++ b/dom/media/webaudio/moz.build
+@@ -134,7 +134,8 @@ if CONFIG["TARGET_CPU"] == "aarch64" or CONFIG["BUILD_ARM_NEON"]:
+ # Are we targeting x86 or x64?  If so, build SSEX files.
+ if CONFIG["INTEL_ARCHITECTURE"]:
+     DEFINES["USE_SSE2"] = True
+-    SOURCES += ["AudioNodeEngineSSE2.cpp"]
++    SOURCES += ["AudioNodeEngineNeonEmu.cpp", "AudioNodeEngineSSE2.cpp"]
++    SOURCES["AudioNodeEngineNeonEmu.cpp"].flags += CONFIG["SSE2_FLAGS"]
+     LOCAL_INCLUDES += ["/third_party/xsimd/include"]
+     SOURCES["AudioNodeEngineSSE2.cpp"].flags += CONFIG["SSE2_FLAGS"]
+     if CONFIG["SSE4_2_FLAGS"]:
+diff --git a/gfx/skia/moz.build b/gfx/skia/moz.build
+index 7c81493630..9a217dcfb3 100644
+--- a/gfx/skia/moz.build
++++ b/gfx/skia/moz.build
+@@ -508,6 +508,7 @@ SOURCES += [
+     'skia/src/pdf/SkPDFDevice.cpp',
+     'skia/src/pdf/SkPDFFont.cpp',
+     'skia/src/pdf/SkPDFType1Font.cpp',
++    'skia/src/ports/SkCpuEstimates_mozilla.cpp',
+     'skia/src/sksl/SkSLLexer.cpp',
+     'skia/src/utils/SkParse.cpp',
+     'skia/src/utils/SkParsePath.cpp',
+@@ -583,6 +584,18 @@ if CONFIG['INTEL_ARCHITECTURE']:
+     ]
+     SOURCES['skia/modules/skcms/src/skcms_TransformHsw.cc'].flags += skia_opt_flags
+     SOURCES['skia/src/opts/SkOpts_ml3.cpp'].flags += skia_opt_flags
++    # general.cpu_identity = ARM64: Skia's AArch64 code built against
++    # SkNeonEmu.h, chosen at startup.
++    skia_neonemu_sources = [
++        'skia/src/core/SkBitmapProcState_opts_neonemu.cpp',
++        'skia/src/core/SkBlitMask_opts_neonemu.cpp',
++        'skia/src/core/SkBlitRow_opts_neonemu.cpp',
++        'skia/src/core/SkSwizzler_opts_neonemu.cpp',
++        'skia/src/opts/SkOpts_neonemu.cpp',
++    ]
++    SOURCES += skia_neonemu_sources
++    for f in skia_neonemu_sources:
++        SOURCES[f].flags += skia_opt_flags
+ 
+ 
+ # We allow warnings for third-party code that can be updated from upstream.
+diff --git a/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp b/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp
+index 58cbdda37b..9d7feeef26 100644
+--- a/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp
++++ b/gfx/skia/skia/src/core/SkBitmapProcState_opts.cpp
+@@ -5,6 +5,7 @@
+  * found in the LICENSE file.
+  */
+ 
++#include "src/opts/SkCpuEstimates.h"
+ #include "include/private/base/SkFeatures.h"
+ #include "src/core/SkBitmapProcState.h"
+ #include "src/core/SkCpu.h"
+@@ -22,6 +23,7 @@ namespace SkOpts {
+     DEFINE_DEFAULT(S32_alpha_D32_filter_DXDY);
+ 
+     void Init_BitmapProcState_ssse3();
++    void Init_BitmapProcState_neonemu();
+     void Init_BitmapProcState_lasx();
+ 
+     static bool init() {
+@@ -31,6 +33,8 @@ namespace SkOpts {
+         #if SK_CPU_X64_LEVEL < SK_CPU_X64_LEVEL_SSSE3
+             if (SkCpu::Supports(SkX64::SSSE3)) { Init_BitmapProcState_ssse3(); }
+         #endif
++        // general.cpu_identity = ARM64: Skia's AArch64 code, emulated.
++        if (sk_cpu_emulates_arm64()) { Init_BitmapProcState_neonemu(); }
+     #elif defined(SK_CPU_LOONGARCH)
+         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
+             if (SkCpu::Supports(SkLoongArch::ASX)) { Init_BitmapProcState_lasx(); }
+diff --git a/gfx/skia/skia/src/core/SkBlitMask_opts.cpp b/gfx/skia/skia/src/core/SkBlitMask_opts.cpp
+index f98993139e..f761e13ab8 100644
+--- a/gfx/skia/skia/src/core/SkBlitMask_opts.cpp
++++ b/gfx/skia/skia/src/core/SkBlitMask_opts.cpp
+@@ -5,6 +5,7 @@
+  * found in the LICENSE file.
+  */
+ 
++#include "src/opts/SkCpuEstimates.h"
+ #include "include/private/base/SkFeatures.h"
+ #include "src/core/SkBlitMask.h"
+ #include "src/core/SkCpu.h"
+@@ -21,6 +22,7 @@ namespace SkOpts {
+     DEFINE_DEFAULT(blit_mask_d32_a8);
+ 
+     void Init_BlitMask_ssse3();
++    void Init_BlitMask_neonemu();
+ 
+     static bool init() {
+     #if defined(SK_ENABLE_OPTIMIZE_SIZE)
+@@ -29,6 +31,8 @@ namespace SkOpts {
+         #if SK_CPU_X64_LEVEL < SK_CPU_X64_LEVEL_SSSE3
+             if (SkCpu::Supports(SkX64::SSSE3)) { Init_BlitMask_ssse3(); }
+         #endif
++        // general.cpu_identity = ARM64: Skia's AArch64 code, emulated.
++        if (sk_cpu_emulates_arm64()) { Init_BlitMask_neonemu(); }
+     #endif
+       return true;
+     }
+diff --git a/gfx/skia/skia/src/core/SkBlitRow_D32.cpp b/gfx/skia/skia/src/core/SkBlitRow_D32.cpp
+index 27f0b4d229..36e9c2db2a 100644
+--- a/gfx/skia/skia/src/core/SkBlitRow_D32.cpp
++++ b/gfx/skia/skia/src/core/SkBlitRow_D32.cpp
+@@ -12,6 +12,7 @@
+ #include "src/core/SkColorData.h"
+ #include "src/core/SkColorPriv.h"
+ #include "src/core/SkMemset.h"
++#include "src/opts/SkCpuEstimates.h"
+ 
+ #include <cstring>
+ #include <iterator>
+@@ -155,128 +156,7 @@ static void blit_row_s32_opaque(SkPMColor* dst,
+ 
+ #elif defined(SK_ARM_HAS_NEON)
+     #include <arm_neon.h>
+-
+-    static void blit_row_s32_blend(SkPMColor* dst, const SkPMColor* src, int count, U8CPU alpha) {
+-        SkASSERT(alpha <= 255);
+-
+-        uint16_t src_scale = SkAlpha255To256(alpha);
+-        uint16_t dst_scale = 256 - src_scale;
+-
+-        while (count >= 2) {
+-            uint8x8_t vsrc, vdst, vres;
+-            uint16x8_t vsrc_wide, vdst_wide;
+-
+-            vsrc = vreinterpret_u8_u32(vld1_u32(src));
+-            vdst = vreinterpret_u8_u32(vld1_u32(dst));
+-
+-            vsrc_wide = vmovl_u8(vsrc);
+-            vsrc_wide = vmulq_u16(vsrc_wide, vdupq_n_u16(src_scale));
+-
+-            vdst_wide = vmull_u8(vdst, vdup_n_u8(dst_scale));
+-
+-            vdst_wide += vsrc_wide;
+-            vres = vshrn_n_u16(vdst_wide, 8);
+-
+-            vst1_u32(dst, vreinterpret_u32_u8(vres));
+-
+-            src += 2;
+-            dst += 2;
+-            count -= 2;
+-        }
+-
+-        if (count == 1) {
+-            uint8x8_t vsrc = vdup_n_u8(0), vdst = vdup_n_u8(0), vres;
+-            uint16x8_t vsrc_wide, vdst_wide;
+-
+-            vsrc = vreinterpret_u8_u32(vld1_lane_u32(src, vreinterpret_u32_u8(vsrc), 0));
+-            vdst = vreinterpret_u8_u32(vld1_lane_u32(dst, vreinterpret_u32_u8(vdst), 0));
+-
+-            vsrc_wide = vmovl_u8(vsrc);
+-            vsrc_wide = vmulq_u16(vsrc_wide, vdupq_n_u16(src_scale));
+-            vdst_wide = vmull_u8(vdst, vdup_n_u8(dst_scale));
+-            vdst_wide += vsrc_wide;
+-            vres = vshrn_n_u16(vdst_wide, 8);
+-
+-            vst1_lane_u32(dst, vreinterpret_u32_u8(vres), 0);
+-        }
+-    }
+-
+-    static void blit_row_s32a_blend(SkPMColor* dst, const SkPMColor* src, int count, U8CPU alpha) {
+-        SkASSERT(alpha < 255);
+-
+-        unsigned alpha256 = SkAlpha255To256(alpha);
+-
+-        if (count & 1) {
+-            uint8x8_t vsrc = vdup_n_u8(0), vdst = vdup_n_u8(0), vres;
+-            uint16x8_t vdst_wide, vsrc_wide;
+-            unsigned dst_scale;
+-
+-            vsrc = vreinterpret_u8_u32(vld1_lane_u32(src, vreinterpret_u32_u8(vsrc), 0));
+-            vdst = vreinterpret_u8_u32(vld1_lane_u32(dst, vreinterpret_u32_u8(vdst), 0));
+-
+-            dst_scale = vget_lane_u8(vsrc, 3);
+-            dst_scale = SkAlphaMulInv256(dst_scale, alpha256);
+-
+-            vsrc_wide = vmovl_u8(vsrc);
+-            vsrc_wide = vmulq_n_u16(vsrc_wide, alpha256);
+-
+-            vdst_wide = vmovl_u8(vdst);
+-            vdst_wide = vmulq_n_u16(vdst_wide, dst_scale);
+-
+-            vdst_wide += vsrc_wide;
+-            vres = vshrn_n_u16(vdst_wide, 8);
+-
+-            vst1_lane_u32(dst, vreinterpret_u32_u8(vres), 0);
+-            dst++;
+-            src++;
+-            count--;
+-        }
+-
+-        uint8x8_t alpha_mask;
+-        static const uint8_t alpha_mask_setup[] = {3,3,3,3,7,7,7,7};
+-        alpha_mask = vld1_u8(alpha_mask_setup);
+-
+-        while (count) {
+-
+-            uint8x8_t vsrc, vdst, vres, vsrc_alphas;
+-            uint16x8_t vdst_wide, vsrc_wide, vsrc_scale, vdst_scale;
+-
+-            __builtin_prefetch(src+32);
+-            __builtin_prefetch(dst+32);
+-
+-            vsrc = vreinterpret_u8_u32(vld1_u32(src));
+-            vdst = vreinterpret_u8_u32(vld1_u32(dst));
+-
+-            vsrc_scale = vdupq_n_u16(alpha256);
+-
+-            vsrc_alphas = vtbl1_u8(vsrc, alpha_mask);
+-            vdst_scale = vmovl_u8(vsrc_alphas);
+-            // Calculate SkAlphaMulInv256(vdst_scale, vsrc_scale).
+-            // A 16-bit lane would overflow if we used 0xFFFF here,
+-            // so use an approximation with 0xFF00 that is off by 1,
+-            // and add back 1 after to get the correct value.
+-            // This is valid if alpha256 <= 255.
+-            vdst_scale = vmlsq_u16(vdupq_n_u16(0xFF00), vdst_scale, vsrc_scale);
+-            vdst_scale = vsraq_n_u16(vdst_scale, vdst_scale, 8);
+-            vdst_scale = vsraq_n_u16(vdupq_n_u16(1), vdst_scale, 8);
+-
+-            vsrc_wide = vmovl_u8(vsrc);
+-            vsrc_wide *= vsrc_scale;
+-
+-            vdst_wide = vmovl_u8(vdst);
+-            vdst_wide *= vdst_scale;
+-
+-            vdst_wide += vsrc_wide;
+-            vres = vshrn_n_u16(vdst_wide, 8);
+-
+-            vst1_u32(dst, vreinterpret_u32_u8(vres));
+-
+-            src += 2;
+-            dst += 2;
+-            count -= 2;
+-        }
+-    }
+-
++    #include "src/core/SkBlitRow_D32_neon.inc"
+ #elif SK_CPU_LSX_LEVEL >= SK_CPU_LSX_LEVEL_LASX
+     #include <lasxintrin.h>
+ 
+@@ -537,6 +417,14 @@ static void blit_row_s32_opaque(SkPMColor* dst,
+     }
+ #endif
+ 
++#if defined(SK_CPU_X86) && !defined(SK_ENABLE_OPTIMIZE_SIZE)
++namespace SkOpts {
++    // SkBlitRow_opts_neonemu.cpp
++    void neonemu_blit_row_s32_blend(SkPMColor*, const SkPMColor*, int, U8CPU);
++    void neonemu_blit_row_s32a_blend(SkPMColor*, const SkPMColor*, int, U8CPU);
++}  // namespace SkOpts
++#endif
++
+ SkBlitRow::Proc32 SkBlitRow::Factory32(unsigned flags) {
+     static const SkBlitRow::Proc32 kProcs[] = {
+         blit_row_s32_opaque,
+@@ -548,6 +436,14 @@ SkBlitRow::Proc32 SkBlitRow::Factory32(unsigned flags) {
+     SkASSERT(flags < std::size(kProcs));
+     flags &= std::size(kProcs) - 1;  // just to be safe
+ 
++#if defined(SK_CPU_X86) && !defined(SK_ENABLE_OPTIMIZE_SIZE)
++    // general.cpu_identity = ARM64: the NEON blends, emulated.
++    if (sk_cpu_emulates_arm64() && (flags == 1 || flags == 3)) {
++        return flags == 1 ? SkOpts::neonemu_blit_row_s32_blend
++                          : SkOpts::neonemu_blit_row_s32a_blend;
++    }
++#endif
++
+     return flags == Flags32::kSrcPixelAlpha_Flag32 ? SkOpts::blit_row_s32a_opaque : kProcs[flags];
+ }
+ 
+diff --git a/gfx/skia/skia/src/core/SkBlitRow_opts.cpp b/gfx/skia/skia/src/core/SkBlitRow_opts.cpp
+index da48a55d0c..70ff96b165 100644
+--- a/gfx/skia/skia/src/core/SkBlitRow_opts.cpp
++++ b/gfx/skia/skia/src/core/SkBlitRow_opts.cpp
+@@ -5,6 +5,7 @@
+  * found in the LICENSE file.
+  */
+ 
++#include "src/opts/SkCpuEstimates.h"
+ #include "include/private/base/SkFeatures.h"
+ #include "src/core/SkBlitRow.h"
+ #include "src/core/SkCpu.h"
+@@ -22,6 +23,7 @@ namespace SkOpts {
+     DEFINE_DEFAULT(blit_row_s32a_opaque);
+ 
+     void Init_BlitRow_ml3();
++    void Init_BlitRow_neonemu();
+     void Init_BlitRow_lasx();
+ 
+     static bool init() {
+@@ -31,6 +33,8 @@ namespace SkOpts {
+         #if SK_CPU_X64_LEVEL < SK_CPU_X64_LEVEL_AVX2
+             if (SkCpu::Supports(SkX64::ML3)) { Init_BlitRow_ml3(); }
+         #endif
++        // general.cpu_identity = ARM64: Skia's AArch64 code, emulated.
++        if (sk_cpu_emulates_arm64()) { Init_BlitRow_neonemu(); }
+     #elif defined(SK_CPU_LOONGARCH)
+         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
+             if (SkCpu::Supports(SkLoongArch::ASX)) { Init_BlitRow_lasx(); }
+diff --git a/gfx/skia/skia/src/core/SkConvertPixels.cpp b/gfx/skia/skia/src/core/SkConvertPixels.cpp
+index 7ae979a931..9be36f00dc 100644
+--- a/gfx/skia/skia/src/core/SkConvertPixels.cpp
++++ b/gfx/skia/skia/src/core/SkConvertPixels.cpp
+@@ -4,6 +4,7 @@
+  * Use of this source code is governed by a BSD-style license that can be
+  * found in the LICENSE file.
+  */
++#include "src/opts/SkCpuEstimates.h"
+ #include "src/core/SkConvertPixels.h"
+ 
+ #include "include/core/SkColorType.h"
+@@ -53,7 +54,8 @@ static bool swizzle_or_premul(const SkImageInfo& dstInfo,       void* dstPixels,
+         steps.fFlags.linearize         ||
+         steps.fFlags.gamut_transform   ||
+ #if !defined(SK_ARM_HAS_NEON)
+-        steps.fFlags.unpremul          ||
++        // ARM unpremultiplies in its swizzler, and so does its emulation.
++        (steps.fFlags.unpremul && !sk_cpu_emulates_arm64()) ||
+ #endif
+         steps.fFlags.encode) {
+         return false;
+diff --git a/gfx/skia/skia/src/core/SkOpts.cpp b/gfx/skia/skia/src/core/SkOpts.cpp
+index adfbdc30f0..667b7884fe 100644
+--- a/gfx/skia/skia/src/core/SkOpts.cpp
++++ b/gfx/skia/skia/src/core/SkOpts.cpp
+@@ -4,6 +4,7 @@
+  * Use of this source code is governed by a BSD-style license that can be
+  * found in the LICENSE file.
+  */
++#include "src/opts/SkCpuEstimates.h"
+ #include "src/core/SkOpts.h"
+ 
+ #include "include/private/base/SkFeatures.h"
+@@ -45,6 +46,7 @@ namespace SkOpts {
+ 
+     // Each Init_foo() is defined in src/opts/SkOpts_foo.cpp.
+     void Init_ml3();
++    void Init_neonemu();
+     void Init_ml4();
+     void Init_lasx();
+ 
+@@ -63,6 +65,8 @@ namespace SkOpts {
+             #endif
+         #endif
+ 
++        // general.cpu_identity = ARM64: Skia's AArch64 code, emulated.
++        if (sk_cpu_emulates_arm64()) { Init_neonemu(); }
+     #elif defined(SK_CPU_LOONGARCH)
+         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
+             if (SkCpu::Supports(SkLoongArch::ASX)) { Init_lasx(); }
+diff --git a/gfx/skia/skia/src/core/SkSwizzler_opts.cpp b/gfx/skia/skia/src/core/SkSwizzler_opts.cpp
+index 6d37af434f..7c9758d446 100644
+--- a/gfx/skia/skia/src/core/SkSwizzler_opts.cpp
++++ b/gfx/skia/skia/src/core/SkSwizzler_opts.cpp
+@@ -5,6 +5,7 @@
+  * found in the LICENSE file.
+  */
+ 
++#include "src/opts/SkCpuEstimates.h"
+ #include "include/private/base/SkFeatures.h"
+ #include "src/core/SkCpu.h"
+ #include "src/core/SkOptsTargets.h"
+@@ -32,6 +33,7 @@ namespace SkOpts {
+     DEFINE_DEFAULT(inverted_CMYK_to_BGR1);
+ 
+     void Init_Swizzler_ssse3();
++    void Init_Swizzler_neonemu();
+     void Init_Swizzler_ml3();
+     void Init_Swizzler_lasx();
+ 
+@@ -46,6 +48,8 @@ namespace SkOpts {
+         #if SK_CPU_X64_LEVEL < SK_CPU_X64_LEVEL_AVX2
+             if (SkCpu::Supports(SkX64::ML3)) { Init_Swizzler_ml3(); }
+         #endif
++        // general.cpu_identity = ARM64: Skia's AArch64 code, emulated.
++        if (sk_cpu_emulates_arm64()) { Init_Swizzler_neonemu(); }
+     #elif defined(SK_CPU_LOONGARCH)
+         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
+             if (SkCpu::Supports(SkLoongArch::ASX)) { Init_Swizzler_lasx(); }
+diff --git a/gfx/skia/skia/src/opts/SkBitmapProcState_opts.h b/gfx/skia/skia/src/opts/SkBitmapProcState_opts.h
+index 407563eae4..2ce9074aec 100644
+--- a/gfx/skia/skia/src/opts/SkBitmapProcState_opts.h
++++ b/gfx/skia/skia/src/opts/SkBitmapProcState_opts.h
+@@ -24,7 +24,11 @@
+ #if SK_CPU_X64_LEVEL >= SK_CPU_X64_LEVEL_SSE2
+     #include <immintrin.h>
+ #elif defined(SK_ARM_HAS_NEON)
+-    #include <arm_neon.h>
++    #if defined(SK_NEON_EMU)
++        #include "src/opts/SkNeonEmu.h"
++    #else
++        #include <arm_neon.h>
++    #endif
+ #elif SK_CPU_LSX_LEVEL >= SK_CPU_LSX_LEVEL_LASX
+     #include <lasxintrin.h>
+ #elif SK_CPU_LSX_LEVEL >= SK_CPU_LSX_LEVEL_LSX
+diff --git a/gfx/skia/skia/src/opts/SkBlitMask_opts.h b/gfx/skia/skia/src/opts/SkBlitMask_opts.h
+index 6b1aa74116..981c17df99 100644
+--- a/gfx/skia/skia/src/opts/SkBlitMask_opts.h
++++ b/gfx/skia/skia/src/opts/SkBlitMask_opts.h
+@@ -12,7 +12,11 @@
+ #include "src/core/Sk4px.h"
+ 
+ #if defined(SK_ARM_HAS_NEON)
+-    #include <arm_neon.h>
++    #if defined(SK_NEON_EMU)
++        #include "src/opts/SkNeonEmu.h"
++    #else
++        #include <arm_neon.h>
++    #endif
+ #endif
+ 
+ namespace SK_OPTS_NS {
+diff --git a/gfx/skia/skia/src/opts/SkBlitRow_opts.h b/gfx/skia/skia/src/opts/SkBlitRow_opts.h
+index 54de40498a..e7c5479b5b 100644
+--- a/gfx/skia/skia/src/opts/SkBlitRow_opts.h
++++ b/gfx/skia/skia/src/opts/SkBlitRow_opts.h
+@@ -89,7 +89,11 @@
+ #endif
+ 
+ #if defined(SK_ARM_HAS_NEON)
+-    #include <arm_neon.h>
++    #if defined(SK_NEON_EMU)
++        #include "src/opts/SkNeonEmu.h"
++    #else
++        #include <arm_neon.h>
++    #endif
+ 
+     // SkMulDiv255Round() applied to each lane.
+     static inline uint8x8_t SkMulDiv255Round_neon8(uint8x8_t x, uint8x8_t y) {
+diff --git a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h b/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h
+index 9a0edd9594..711a5501b6 100644
+--- a/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h
++++ b/gfx/skia/skia/src/opts/SkRasterPipeline_opts.h
+@@ -108,7 +108,11 @@ using NoCtx = const void*;
+ #if defined(SKRP_CPU_SCALAR)
+     #include <math.h>
+ #elif defined(SKRP_CPU_NEON)
+-    #include <arm_neon.h>
++    #if defined(SK_NEON_EMU)
++        #include "src/opts/SkNeonEmu.h"
++    #else
++        #include <arm_neon.h>
++    #endif
+ #elif defined(SKRP_CPU_LASX)
+     #include <lasxintrin.h>
+     #include <lsxintrin.h>
+@@ -116,6 +120,7 @@ using NoCtx = const void*;
+     #include <lsxintrin.h>
+ #else
+     #include <immintrin.h>
++    #include "src/opts/SkCpuEstimates.h"
+ #endif
+ 
+ // Notes:
+@@ -608,8 +613,21 @@ namespace SK_OPTS_NS {
+     SI I32 abs_  (I32 v)     { return (I32)_mm256_abs_epi32((__m256i)v); }
+     SI F   floor_(F v)       { return _mm256_floor_ps(v);    }
+     SI F   ceil_(F v)        { return _mm256_ceil_ps(v);     }
+-    SI F   rcp_approx(F v)   { return _mm256_rcp_ps  (v);    }  // use rcp_fast instead
+-    SI F   rsqrt_approx(F v) { return _mm256_rsqrt_ps(v);    }
++    // Another vendor's estimates, when general.cpu_identity names one (SkCpuEstimates.h).
++    template <uint32_t (*Op)(const uint32_t*, uint32_t)>
++    SI F estimate_as(const uint32_t* table, F v) {
++        U32 bits = sk_bit_cast<U32>(v);
++        for (int i = 0; i < 8; i++) { bits[i] = Op(table, bits[i]); }
++        return sk_bit_cast<F>(bits);
++    }
++    SI F   rcp_approx(F v)   {  // use rcp_fast instead
++        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rcp>(table, v); }
++        return _mm256_rcp_ps  (v);
++    }
++    SI F   rsqrt_approx(F v) {
++        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rsqrt>(table, v); }
++        return _mm256_rsqrt_ps(v);
++    }
+     SI F   sqrt_ (F v)       { return _mm256_sqrt_ps (v);    }
+     SI F   rcp_precise (F v) {
+         F e = rcp_approx(v);
+@@ -809,9 +827,22 @@ namespace SK_OPTS_NS {
+ #else
+     SI I32 abs_(I32 v)         { return max(v, -v); }
+ #endif
+-    SI F   rcp_approx(F v)     { return _mm_rcp_ps  (v);    }  // use rcp_fast instead
++    // Another vendor's estimates, when general.cpu_identity names one (SkCpuEstimates.h).
++    template <uint32_t (*Op)(const uint32_t*, uint32_t)>
++    SI F estimate_as(const uint32_t* table, F v) {
++        U32 bits = sk_bit_cast<U32>(v);
++        for (int i = 0; i < 4; i++) { bits[i] = Op(table, bits[i]); }
++        return sk_bit_cast<F>(bits);
++    }
++    SI F   rcp_approx(F v)     {  // use rcp_fast instead
++        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rcp>(table, v); }
++        return _mm_rcp_ps  (v);
++    }
+     SI F   rcp_precise (F v)   { F e = rcp_approx(v); return e * (2.0f - v * e); }
+-    SI F   rsqrt_approx(F v)   { return _mm_rsqrt_ps(v);    }
++    SI F   rsqrt_approx(F v)   {
++        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rsqrt>(table, v); }
++        return _mm_rsqrt_ps(v);
++    }
+     SI F    sqrt_(F v)         { return _mm_sqrt_ps (v);    }
+ 
+     SI I32 iround(F v)         { return (I32)_mm_cvtps_epi32(v); }
+diff --git a/gfx/skia/skia/src/opts/SkSwizzler_opts.inc b/gfx/skia/skia/src/opts/SkSwizzler_opts.inc
+index e5c506b55e..695820d10b 100644
+--- a/gfx/skia/skia/src/opts/SkSwizzler_opts.inc
++++ b/gfx/skia/skia/src/opts/SkSwizzler_opts.inc
+@@ -17,7 +17,11 @@
+ #if SK_CPU_X64_LEVEL >= SK_CPU_X64_LEVEL_SSE1
+     #include <immintrin.h>
+ #elif defined(SK_ARM_HAS_NEON)
+-    #include <arm_neon.h>
++    #if defined(SK_NEON_EMU)
++        #include "src/opts/SkNeonEmu.h"
++    #else
++        #include <arm_neon.h>
++    #endif
+ #elif SK_CPU_LSX_LEVEL >= SK_CPU_LSX_LEVEL_LASX
+     #include <lasxintrin.h>
+ #elif SK_CPU_LSX_LEVEL >= SK_CPU_LSX_LEVEL_LSX
+diff --git a/js/public/Initialization.h b/js/public/Initialization.h
+index 26578b6efd..c0cc94edb1 100644
+--- a/js/public/Initialization.h
++++ b/js/public/Initialization.h
+@@ -196,6 +196,14 @@ extern JS_PUBLIC_API void JS_ShutDown(void);
+  */
+ extern JS_PUBLIC_API void JS_FrontendOnlyShutDown(void);
+ 
++namespace JS {
++// Compute as an ARM64 CPU does where x86-64 and ARM64 give different bits:
++// NaN signs in typed arrays and DataViews, and the relaxed SIMD
++// instructions. Camoufox sets it from general.cpu_identity. No effect on an
++// ARM64 build. Must be called before JS_Init*.
++extern JS_PUBLIC_API void SetEmulateArm64(bool enabled);
++}  // namespace JS
++
+ #if defined(ENABLE_JIT_SIMD) && \
+     (defined(JS_CODEGEN_X64) || defined(JS_CODEGEN_X86))
+ namespace JS {
+diff --git a/js/src/builtin/DataViewObject.cpp b/js/src/builtin/DataViewObject.cpp
+index 4a779d656b..afecad1a4c 100644
+--- a/js/src/builtin/DataViewObject.cpp
++++ b/js/src/builtin/DataViewObject.cpp
+@@ -14,6 +14,7 @@
+ 
+ #include "builtin/Number.h"
+ #include "jit/AtomicOperations.h"
++#include "jit/JitOptions.h"
+ #include "jit/InlinableNatives.h"
+ #include "js/Conversions.h"
+ #include "js/experimental/TypedData.h"  // JS_NewDataView
+@@ -578,6 +579,9 @@ bool DataViewObject::write(JSContext* cx, Handle<DataViewObject*> obj,
+     if (js::SupportDifferentialTesting()) {
+       value = JS::CanonicalizeNaN(static_cast<double>(value));
+     }
++    if (js::jit::EmulateArm64) {
++      value = static_cast<NativeType>(js::jit::ArmNaN(static_cast<double>(value)));
++    }
+   }
+ 
+   // Step 6.
+diff --git a/js/src/jit/CacheIRCompiler.cpp b/js/src/jit/CacheIRCompiler.cpp
+index 1cf65a9bc4..9a3e787441 100644
+--- a/js/src/jit/CacheIRCompiler.cpp
++++ b/js/src/jit/CacheIRCompiler.cpp
+@@ -8252,6 +8252,9 @@ bool CacheIRCompiler::emitStoreDataViewValueResult(
+   if (Scalar::isFloatingType(elementType) && js::SupportDifferentialTesting()) {
+     masm.canonicalizeDoubleNaN(floatScratch0);
+   }
++  if (Scalar::isFloatingType(elementType)) {
++    masm.emulateArmNaN(floatScratch0);
++  }
+ 
+   // Load the value into a gpr register.
+   switch (elementType) {
+diff --git a/js/src/jit/CodeGenerator.cpp b/js/src/jit/CodeGenerator.cpp
+index ed329aea64..6a743cf124 100644
+--- a/js/src/jit/CodeGenerator.cpp
++++ b/js/src/jit/CodeGenerator.cpp
+@@ -19892,16 +19892,19 @@ void CodeGenerator::visitStoreDataViewElement(LStoreDataViewElement* lir) {
+       break;
+     case Scalar::Float16: {
+       FloatRegister fvalue = ToFloatRegister(value);
++      masm.emulateArmNaN(fvalue);
+       masm.moveFloat16ToGPR(fvalue, temp, volatileRegs);
+       break;
+     }
+     case Scalar::Float32: {
+       FloatRegister fvalue = ToFloatRegister(value);
++      masm.emulateArmNaN(fvalue);
+       masm.moveFloat32ToGPR(fvalue, temp);
+       break;
+     }
+     case Scalar::Float64: {
+       FloatRegister fvalue = ToFloatRegister(value);
++      masm.emulateArmNaN(fvalue);
+       masm.moveDoubleToGPR64(fvalue, temp64);
+       break;
+     }
+diff --git a/js/src/jit/JitOptions.cpp b/js/src/jit/JitOptions.cpp
+index 64a142b361..e776c27848 100644
+--- a/js/src/jit/JitOptions.cpp
++++ b/js/src/jit/JitOptions.cpp
+@@ -58,6 +58,8 @@ T overrideDefault(const char* param, T dflt) {
+ }
+ 
+ #define SET_DEFAULT(var, dflt) var = overrideDefault("JIT_OPTION_" #var, dflt)
++bool EmulateArm64 = false;
++
+ DefaultJitOptions::DefaultJitOptions() {
+   // Whether to perform expensive graph-consistency DEBUG-only assertions.
+   // It can be useful to disable this to reduce DEBUG-compile time of large
+diff --git a/js/src/jit/JitOptions.h b/js/src/jit/JitOptions.h
+index 62a4a22b4d..bffb8259c7 100644
+--- a/js/src/jit/JitOptions.h
++++ b/js/src/jit/JitOptions.h
+@@ -5,6 +5,7 @@
+ #ifndef jit_JitOptions_h
+ #define jit_JitOptions_h
+ 
++#include "mozilla/Casting.h"
+ #include "mozilla/Maybe.h"
+ 
+ #include "jit/IonTypes.h"
+@@ -187,6 +188,25 @@ struct DefaultJitOptions {
+ 
+ extern DefaultJitOptions JitOptions;
+ 
++// Whether to compute as an ARM64 CPU does where x86-64 and ARM64 give
++// different bits (Camoufox's general.cpu_identity, JS::SetEmulateArm64): the
++// sign of the NaN an invalid operation makes, and the relaxed SIMD
++// instructions. Set once, before JS_Init.
++extern bool EmulateArm64;
++
++// A NaN as an ARM64 CPU would hand it to memory. x86's SSE makes the
++// negative default NaN (0xFFF8000000000000) where ARM64 makes the positive
++// one, and that NaN is a valid double Value, so it reaches typed arrays and
++// DataViews as computed. Stores clear the sign of a NaN instead of tracking
++// where it came from; a NaN the script negated on purpose stores positive too.
++inline double ArmNaN(double d) {
++  if (EmulateArm64 && d != d) {
++    return mozilla::BitwiseCast<double>(mozilla::BitwiseCast<uint64_t>(d) &
++                                        ~(uint64_t(1) << 63));
++  }
++  return d;
++}
++
+ inline bool HasJitBackend() {
+ #if defined(JS_CODEGEN_NONE)
+   return false;
+diff --git a/js/src/jit/MacroAssembler.cpp b/js/src/jit/MacroAssembler.cpp
+index 7c7c55fff1..e85aa3d56e 100644
+--- a/js/src/jit/MacroAssembler.cpp
++++ b/js/src/jit/MacroAssembler.cpp
+@@ -75,11 +75,29 @@ TrampolinePtr MacroAssembler::preBarrierTrampoline(MIRType type) {
+   return rt->preBarrier(type);
+ }
+ 
++void MacroAssembler::emulateArmNaN(FloatRegister value) {
++  // See ArmNaN (JitOptions.h). Clearing the sign of a NaN leaves it a NaN, so
++  // the register may stay live.
++  if (!EmulateArm64) {
++    return;
++  }
++  Label done;
++  if (value.isDouble()) {
++    branchDouble(DoubleOrdered, value, value, &done);
++    absDouble(value, value);
++  } else {
++    branchFloat(DoubleOrdered, value, value, &done);
++    absFloat32(value, value);
++  }
++  bind(&done);
++}
++
+ template <typename T>
+ void MacroAssembler::storeToTypedFloatArray(Scalar::Type arrayType,
+                                             FloatRegister value, const T& dest,
+                                             Register temp,
+                                             LiveRegisterSet volatileLiveRegs) {
++  emulateArmNaN(value);
+   switch (arrayType) {
+     case Scalar::Float16:
+       storeFloat16(value, dest, temp, volatileLiveRegs);
+diff --git a/js/src/jit/MacroAssembler.h b/js/src/jit/MacroAssembler.h
+index 5be27d414b..a0ebd97651 100644
+--- a/js/src/jit/MacroAssembler.h
++++ b/js/src/jit/MacroAssembler.h
+@@ -5521,6 +5521,9 @@ class MacroAssembler : public MacroAssemblerSpecific {
+     }
+   }
+ 
++  // In ARM64 emulation, clears the sign of a NaN in `value` (ArmNaN).
++  void emulateArmNaN(FloatRegister value);
++
+   template <typename T>
+   void storeToTypedFloatArray(Scalar::Type arrayType, FloatRegister value,
+                               const T& dest, Register temp,
+diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h b/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h
+index d5610eea38..b6e24d9f90 100644
+--- a/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h
++++ b/js/src/jit/x86-shared/MacroAssembler-x86-shared-inl.h
+@@ -9,11 +9,25 @@
+ 
+ #include "mozilla/Casting.h"
+ 
++#include "jit/JitOptions.h"
++
+ #include <bit>
+ 
+ namespace js {
+ namespace jit {
+ 
++// In ARM64 emulation (EmulateArm64), each relaxed SIMD op gives the result
++// SpiderMonkey's arm64 backend gets; see MacroAssembler-x86-shared.cpp.
++#ifdef JS_CODEGEN_X64
++#  define ARM64_EMULATION(stmt) \
++    if (EmulateArm64) {         \
++      stmt;                     \
++      return;                   \
++    }
++#else
++#  define ARM64_EMULATION(stmt)
++#endif
++
+ //{{{ check_macroassembler_style
+ // ===============================================================
+ // Move instructions
+@@ -1555,6 +1569,7 @@ void MacroAssembler::blendInt16x8(const uint16_t lanes[8], FloatRegister lhs,
+ 
+ void MacroAssembler::laneSelectSimd128(FloatRegister mask, FloatRegister lhs,
+                                        FloatRegister rhs, FloatRegister dest) {
++  ARM64_EMULATION(armLaneSelectSimd128(mask, lhs, rhs, dest))
+   MacroAssemblerX86Shared::laneSelectSimd128(mask, lhs, rhs, dest);
+ }
+ 
+@@ -1827,6 +1842,7 @@ void MacroAssembler::swizzleInt8x16(FloatRegister lhs, FloatRegister rhs,
+ 
+ void MacroAssembler::swizzleInt8x16Relaxed(FloatRegister lhs, FloatRegister rhs,
+                                            FloatRegister dest) {
++  ARM64_EMULATION(swizzleInt8x16(lhs, rhs, dest))
+   ScratchSimd128Scope scratch(*this);
+   lhs = moveSimd128IntIfNotAVX(lhs, &rhs, dest, scratch);
+   vpshufb(rhs, lhs, dest);
+@@ -2186,6 +2202,7 @@ void MacroAssembler::q15MulrSatInt16x8(FloatRegister lhs, FloatRegister rhs,
+ 
+ void MacroAssembler::q15MulrInt16x8Relaxed(FloatRegister lhs, FloatRegister rhs,
+                                            FloatRegister dest) {
++  ARM64_EMULATION(q15MulrSatInt16x8(lhs, rhs, dest))
+   lhs = moveSimd128IntIfNotAVXCommutative(lhs, &rhs, dest);
+   vpmulhrsw(Operand(rhs), lhs, dest);
+ }
+@@ -3095,6 +3112,7 @@ void MacroAssembler::widenDotInt16x8(FloatRegister lhs, const SimdConstant& rhs,
+ 
+ void MacroAssembler::dotInt8x16Int7x16(FloatRegister lhs, FloatRegister rhs,
+                                        FloatRegister dest) {
++  ARM64_EMULATION(armDotInt8x16Int7x16(lhs, rhs, dest, false))
+   ScratchSimd128Scope scratch(*this);
+   if (lhs == dest && !HasAVX()) {
+     moveSimd128Int(lhs, scratch);
+@@ -3107,6 +3125,7 @@ void MacroAssembler::dotInt8x16Int7x16(FloatRegister lhs, FloatRegister rhs,
+ void MacroAssembler::dotInt8x16Int7x16ThenAdd(FloatRegister lhs,
+                                               FloatRegister rhs,
+                                               FloatRegister dest) {
++  ARM64_EMULATION(armDotInt8x16Int7x16(lhs, rhs, dest, true))
+   ScratchSimd128Scope scratch(*this);
+   rhs = moveSimd128IntIfNotAVX(rhs, scratch);
+   vpmaddubsw(lhs, rhs, scratch);
+@@ -3348,21 +3367,25 @@ void MacroAssembler::unsignedTruncSatFloat64x2ToInt32x4(FloatRegister src,
+ 
+ void MacroAssembler::truncFloat32x4ToInt32x4Relaxed(FloatRegister src,
+                                                     FloatRegister dest) {
++  ARM64_EMULATION(armTruncSimd128(false, false, src, dest))
+   vcvttps2dq(src, dest);
+ }
+ 
+ void MacroAssembler::unsignedTruncFloat32x4ToInt32x4Relaxed(
+     FloatRegister src, FloatRegister dest) {
++  ARM64_EMULATION(armTruncSimd128(true, false, src, dest))
+   MacroAssemblerX86Shared::unsignedTruncFloat32x4ToInt32x4Relaxed(src, dest);
+ }
+ 
+ void MacroAssembler::truncFloat64x2ToInt32x4Relaxed(FloatRegister src,
+                                                     FloatRegister dest) {
++  ARM64_EMULATION(armTruncSimd128(false, true, src, dest))
+   vcvttpd2dq(src, dest);
+ }
+ 
+ void MacroAssembler::unsignedTruncFloat64x2ToInt32x4Relaxed(
+     FloatRegister src, FloatRegister dest) {
++  ARM64_EMULATION(armTruncSimd128(true, true, src, dest))
+   MacroAssemblerX86Shared::unsignedTruncFloat64x2ToInt32x4Relaxed(src, dest);
+ }
+ 
+@@ -3507,6 +3530,7 @@ void MacroAssembler::unsignedWidenHighInt32x4(FloatRegister src,
+ 
+ void MacroAssembler::fmaFloat32x4(FloatRegister src1, FloatRegister src2,
+                                   FloatRegister srcDest) {
++  ARM64_EMULATION(armFmaSimd128(false, false, src1, src2, srcDest))
+   if (HasFMA()) {
+     vfmadd231ps(src2, src1, srcDest);
+     return;
+@@ -3519,6 +3543,7 @@ void MacroAssembler::fmaFloat32x4(FloatRegister src1, FloatRegister src2,
+ 
+ void MacroAssembler::fnmaFloat32x4(FloatRegister src1, FloatRegister src2,
+                                    FloatRegister srcDest) {
++  ARM64_EMULATION(armFmaSimd128(true, false, src1, src2, srcDest))
+   if (HasFMA()) {
+     vfnmadd231ps(src2, src1, srcDest);
+     return;
+@@ -3531,6 +3556,7 @@ void MacroAssembler::fnmaFloat32x4(FloatRegister src1, FloatRegister src2,
+ 
+ void MacroAssembler::fmaFloat64x2(FloatRegister src1, FloatRegister src2,
+                                   FloatRegister srcDest) {
++  ARM64_EMULATION(armFmaSimd128(false, true, src1, src2, srcDest))
+   if (HasFMA()) {
+     vfmadd231pd(src2, src1, srcDest);
+     return;
+@@ -3543,6 +3569,7 @@ void MacroAssembler::fmaFloat64x2(FloatRegister src1, FloatRegister src2,
+ 
+ void MacroAssembler::fnmaFloat64x2(FloatRegister src1, FloatRegister src2,
+                                    FloatRegister srcDest) {
++  ARM64_EMULATION(armFmaSimd128(true, true, src1, src2, srcDest))
+   if (HasFMA()) {
+     vfnmadd231pd(src2, src1, srcDest);
+     return;
+@@ -3555,11 +3582,13 @@ void MacroAssembler::fnmaFloat64x2(FloatRegister src1, FloatRegister src2,
+ 
+ void MacroAssembler::minFloat32x4Relaxed(FloatRegister src,
+                                          FloatRegister srcDest) {
++  ARM64_EMULATION(armMinMaxSimd128(false, false, src, srcDest, srcDest))
+   vminps(Operand(src), srcDest, srcDest);
+ }
+ 
+ void MacroAssembler::minFloat32x4Relaxed(FloatRegister lhs, FloatRegister rhs,
+                                          FloatRegister dest) {
++  ARM64_EMULATION(armMinMaxSimd128(false, false, rhs, lhs, dest))
+   ScratchSimd128Scope scratch(*this);
+   lhs = moveSimd128FloatIfNotAVX(lhs, &rhs, dest, scratch);
+   vminps(Operand(rhs), lhs, dest);
+@@ -3567,11 +3596,13 @@ void MacroAssembler::minFloat32x4Relaxed(FloatRegister lhs, FloatRegister rhs,
+ 
+ void MacroAssembler::maxFloat32x4Relaxed(FloatRegister src,
+                                          FloatRegister srcDest) {
++  ARM64_EMULATION(armMinMaxSimd128(true, false, src, srcDest, srcDest))
+   vmaxps(Operand(src), srcDest, srcDest);
+ }
+ 
+ void MacroAssembler::maxFloat32x4Relaxed(FloatRegister lhs, FloatRegister rhs,
+                                          FloatRegister dest) {
++  ARM64_EMULATION(armMinMaxSimd128(true, false, rhs, lhs, dest))
+   ScratchSimd128Scope scratch(*this);
+   lhs = moveSimd128FloatIfNotAVX(lhs, &rhs, dest, scratch);
+   vmaxps(Operand(rhs), lhs, dest);
+@@ -3579,11 +3610,13 @@ void MacroAssembler::maxFloat32x4Relaxed(FloatRegister lhs, FloatRegister rhs,
+ 
+ void MacroAssembler::minFloat64x2Relaxed(FloatRegister src,
+                                          FloatRegister srcDest) {
++  ARM64_EMULATION(armMinMaxSimd128(false, true, src, srcDest, srcDest))
+   vminpd(Operand(src), srcDest, srcDest);
+ }
+ 
+ void MacroAssembler::minFloat64x2Relaxed(FloatRegister lhs, FloatRegister rhs,
+                                          FloatRegister dest) {
++  ARM64_EMULATION(armMinMaxSimd128(false, true, rhs, lhs, dest))
+   ScratchSimd128Scope scratch(*this);
+   lhs = moveSimd128FloatIfNotAVX(lhs, &rhs, dest, scratch);
+   vminpd(Operand(rhs), lhs, dest);
+@@ -3591,11 +3624,13 @@ void MacroAssembler::minFloat64x2Relaxed(FloatRegister lhs, FloatRegister rhs,
+ 
+ void MacroAssembler::maxFloat64x2Relaxed(FloatRegister src,
+                                          FloatRegister srcDest) {
++  ARM64_EMULATION(armMinMaxSimd128(true, true, src, srcDest, srcDest))
+   vmaxpd(Operand(src), srcDest, srcDest);
+ }
+ 
+ void MacroAssembler::maxFloat64x2Relaxed(FloatRegister lhs, FloatRegister rhs,
+                                          FloatRegister dest) {
++  ARM64_EMULATION(armMinMaxSimd128(true, true, rhs, lhs, dest))
+   ScratchSimd128Scope scratch(*this);
+   lhs = moveSimd128FloatIfNotAVX(lhs, &rhs, dest, scratch);
+   vmaxpd(Operand(rhs), lhs, dest);
+diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared.cpp b/js/src/jit/x86-shared/MacroAssembler-x86-shared.cpp
+index 96016496c5..ec704e9024 100644
+--- a/js/src/jit/x86-shared/MacroAssembler-x86-shared.cpp
++++ b/js/src/jit/x86-shared/MacroAssembler-x86-shared.cpp
+@@ -2258,3 +2258,341 @@ CodeOffset MacroAssembler::wasmMarkedSlowCall(const wasm::CallSiteDesc& desc,
+ }
+ 
+ //}}} check_macroassembler_style
++
++// ===============================================================
++// ARM64 emulation of wasm relaxed SIMD (general.cpu_identity=3).
++//
++// Relaxed SIMD lets each CPU pick its own result for out-of-range swizzle
++// indices, NaN and signed-zero min/max, overflowing truncation, lane select,
++// the i7 dot product and the NaN of a fused multiply-add, so the results tell
++// x86 from ARM. When EmulateArm64 is set, these lower to the result an ARMv8
++// core gives (the instruction SpiderMonkey's arm64 backend emits, at the
++// default FPCR) instead of the x86 one. Only the relaxed ops take this path;
++// the deterministic SIMD ops are unchanged.
++
++#ifdef JS_CODEGEN_X64
++namespace {
++
++// Up to kMax SIMD registers borrowed for the length of one operation: they
++// are saved below the stack pointer's current frame and restored on scope
++// exit. The scratch register and the registers in `avoid` are never taken.
++class ArmEmuTemps {
++  static constexpr size_t kMax = 10;
++  MacroAssembler& masm_;
++  FloatRegister regs_[kMax];
++  size_t count_ = 0;
++
++ public:
++  ArmEmuTemps(MacroAssembler& masm, size_t count,
++              std::initializer_list<FloatRegister> avoid)
++      : masm_(masm) {
++    MOZ_RELEASE_ASSERT(count <= kMax);
++    for (uint32_t code = 0; count_ < count && code < FloatRegisters::TotalPhys;
++         code++) {
++      FloatRegister r(FloatRegisters::Encoding(code), FloatRegisters::Simd128);
++      bool taken = r.encoding() == ScratchSimd128Reg.encoding();
++      for (FloatRegister a : avoid) {
++        taken |= a.encoding() == r.encoding();
++      }
++      if (!taken) {
++        regs_[count_++] = r;
++      }
++    }
++    MOZ_RELEASE_ASSERT(count_ == count);
++    masm_.reserveStack(16 * count_);
++    for (size_t i = 0; i < count_; i++) {
++      masm_.vmovdqu(regs_[i], Operand(Address(StackPointer, 16 * i)));
++    }
++  }
++  ~ArmEmuTemps() {
++    for (size_t i = 0; i < count_; i++) {
++      masm_.vmovdqu(Operand(Address(StackPointer, 16 * i)), regs_[i]);
++    }
++    masm_.freeStack(16 * count_);
++  }
++  FloatRegister operator[](size_t i) const { return regs_[i]; }
++};
++
++// The two-operand forms below (dest == first source) encode the same on SSE
++// and AVX hosts.
++struct ArmEmuOps {
++  MacroAssembler& m;
++  bool dbl;
++
++  void mov(FloatRegister src, FloatRegister dest) {
++    if (src != dest) {
++      m.vmovdqa(src, dest);
++    }
++  }
++  void and_(FloatRegister d, FloatRegister s) { m.vpand(Operand(s), d, d); }
++  void andn(FloatRegister d, FloatRegister s) {  // d = ~d & s
++    m.vpandn(Operand(s), d, d);
++  }
++  void or_(FloatRegister d, FloatRegister s) { m.vpor(Operand(s), d, d); }
++  void xor_(FloatRegister d, FloatRegister s) { m.vpxor(Operand(s), d, d); }
++  void eq(FloatRegister d, FloatRegister s) {
++    if (dbl) {
++      m.vpcmpeqq(Operand(s), d, d);
++    } else {
++      m.vpcmpeqd(Operand(s), d, d);
++    }
++  }
++  // d = all ones in the lanes where d or s is NaN.
++  void unord(FloatRegister d, FloatRegister s) {
++    if (dbl) {
++      m.vcmpunordpd(Operand(s), d, d);
++    } else {
++      m.vcmpunordps(Operand(s), d, d);
++    }
++  }
++  void splat(uint64_t bits64, uint32_t bits32, FloatRegister d) {
++    m.loadConstantSimd128(dbl ? SimdConstant::SplatX2(int64_t(bits64))
++                              : SimdConstant::SplatX4(int32_t(bits32)),
++                          d);
++  }
++  void quietBit(FloatRegister d) { splat(0x0008000000000000, 0x00400000, d); }
++  void signBit(FloatRegister d) { splat(0x8000000000000000, 0x80000000, d); }
++  void absMask(FloatRegister d) { splat(0x7fffffffffffffff, 0x7fffffff, d); }
++  void infBits(FloatRegister d) { splat(0x7ff0000000000000, 0x7f800000, d); }
++  // ARM's default NaN (FPCR.DN=0 still uses it for invalid operations): the
++  // sign is clear, where x86's is set.
++  void defaultNaN(FloatRegister d) {
++    splat(0x7ff8000000000000, 0x7fc00000, d);
++  }
++  // v = m ? x : v, bitwise. Clobbers t.
++  void blend(FloatRegister v, FloatRegister x, FloatRegister mask,
++             FloatRegister t) {
++    mov(mask, t);
++    andn(t, v);  // ~mask & v
++    mov(x, v);
++    and_(v, mask);
++    or_(v, t);
++  }
++  // d = lanes of x that are a signalling NaN. Clobbers t and k.
++  void snan(FloatRegister x, FloatRegister d, FloatRegister t,
++            FloatRegister k) {
++    mov(x, d);
++    quietBit(k);
++    and_(d, k);
++    eq(d, k);  // quiet bit set
++    mov(x, t);
++    unord(t, x);
++    andn(d, t);  // NaN without the quiet bit
++  }
++};
++
++}  // namespace
++
++// ARM FMIN/FMAX: NaN operands propagate as FPProcessNaNs picks them (a
++// signalling NaN first, then the first operand), quieted; -0 < +0.
++void MacroAssemblerX86Shared::armMinMaxSimd128(bool isMax, bool isDouble,
++                                               FloatRegister lhs,
++                                               FloatRegister rhs,
++                                               FloatRegister dest) {
++  MacroAssembler& masm = asMasm();
++  ScratchSimd128Scope k(masm);
++  ArmEmuTemps T(masm, 6, {lhs, rhs, dest});
++  ArmEmuOps o{masm, isDouble};
++  FloatRegister a = T[0], b = T[1], r = T[2], t = T[3], x = T[4], y = T[5];
++  o.mov(lhs, a);
++  o.mov(rhs, b);
++
++  // Ordered lanes: both operand orders agree except on zeros, where OR keeps
++  // a -0 (min) and AND keeps a +0 (max).
++  auto op = [&](FloatRegister d, FloatRegister s) {
++    if (isDouble) {
++      isMax ? masm.vmaxpd(Operand(s), d, d) : masm.vminpd(Operand(s), d, d);
++    } else {
++      isMax ? masm.vmaxps(Operand(s), d, d) : masm.vminps(Operand(s), d, d);
++    }
++  };
++  o.mov(a, r);
++  op(r, b);
++  o.mov(b, t);
++  op(t, a);
++  isMax ? o.and_(r, t) : o.or_(r, t);
++
++  // NaN lanes: b when b is signalling and a is not, or a is not NaN; else a.
++  o.snan(b, x, t, k);  // x = snan(b)
++  o.mov(a, y);
++  o.quietBit(k);
++  o.and_(y, k);
++  o.eq(y, k);  // y = a has the quiet bit
++  o.and_(x, y);
++  o.mov(a, y);
++  o.unord(y, a);  // y = isNaN(a)
++  o.andn(x, y);   // x = pickA = isNaN(a) & ~(quiet(a) & snan(b))
++  o.mov(b, y);
++  o.blend(y, a, x, t);  // y = pickA ? a : b
++  o.quietBit(k);
++  o.or_(y, k);
++  o.mov(a, x);
++  o.unord(x, b);  // either NaN
++  o.blend(r, y, x, t);
++  o.mov(r, dest);
++}
++
++// ARM FMLA/FMLS: fused, NaN operands propagate by FPProcessNaNs3 with the
++// addend first (FMLS negates the first factor before, flipping a NaN's
++// sign), a quiet-NaN addend with an inf*0 product gives the default NaN, and
++// the default NaN is positive.
++void MacroAssemblerX86Shared::armFmaSimd128(bool negate, bool isDouble,
++                                            FloatRegister src1,
++                                            FloatRegister src2,
++                                            FloatRegister srcDest) {
++  MacroAssembler& masm = asMasm();
++  ScratchSimd128Scope k(masm);
++  ArmEmuTemps T(masm, 10, {src1, src2, srcDest});
++  ArmEmuOps o{masm, isDouble};
++  FloatRegister A = T[0], B = T[1], C = T[2], r = T[3], v = T[4], x = T[5],
++                m = T[6], t = T[7], p = T[8], q = T[9];
++  o.mov(src1, A);
++  o.mov(src2, B);
++  o.mov(srcDest, C);
++  if (negate) {
++    o.signBit(k);
++    o.xor_(A, k);
++  }
++
++  o.mov(C, r);
++  if (HasFMA()) {
++    if (isDouble) {
++      masm.vfmadd231pd(B, A, r);
++    } else {
++      masm.vfmadd231ps(B, A, r);
++    }
++  } else {
++    // No FMA unit: unfused, so not ARM's rounding in every case.
++    o.mov(A, t);
++    if (isDouble) {
++      masm.vmulpd(Operand(B), t, t);
++      masm.vaddpd(Operand(t), r, r);
++    } else {
++      masm.vmulps(Operand(B), t, t);
++      masm.vaddps(Operand(t), r, r);
++    }
++  }
++
++  // The NaN an ARM core returns, lowest priority first.
++  o.defaultNaN(v);
++  FloatRegister order[3] = {B, A, C};
++  for (FloatRegister s : order) {  // quiet NaNs
++    o.mov(s, m);
++    o.unord(m, s);
++    o.mov(s, x);
++    o.quietBit(k);
++    o.or_(x, k);
++    o.blend(v, x, m, t);
++  }
++  for (FloatRegister s : order) {  // signalling NaNs
++    o.snan(s, m, t, k);
++    o.mov(s, x);
++    o.quietBit(k);
++    o.or_(x, k);
++    o.blend(v, x, m, t);
++  }
++  // A quiet-NaN addend loses to the default NaN when the product is inf*0.
++  o.absMask(k);
++  o.mov(A, m);
++  o.and_(m, k);
++  o.mov(B, p);
++  o.and_(p, k);
++  o.mov(m, x);
++  o.mov(p, q);
++  o.infBits(k);
++  o.eq(m, k);  // inf(A)
++  o.eq(p, k);  // inf(B)
++  o.xor_(t, t);
++  o.eq(x, t);  // zero(A)
++  o.eq(q, t);  // zero(B)
++  o.and_(m, q);
++  o.and_(p, x);
++  o.or_(m, p);  // inf*0
++  o.mov(C, x);
++  o.unord(x, C);
++  o.mov(C, p);
++  o.quietBit(k);
++  o.and_(p, k);
++  o.eq(p, k);
++  o.and_(x, p);  // quiet NaN addend
++  o.and_(m, x);
++  o.defaultNaN(x);
++  o.blend(v, x, m, t);
++
++  o.mov(r, m);
++  o.unord(m, r);
++  o.blend(r, v, m, t);
++  o.mov(r, srcDest);
++}
++
++// ARM BSL: a bitwise select, not a byte blend on the mask's top bit.
++void MacroAssemblerX86Shared::armLaneSelectSimd128(FloatRegister mask,
++                                                   FloatRegister lhs,
++                                                   FloatRegister rhs,
++                                                   FloatRegister dest) {
++  MacroAssembler& masm = asMasm();
++  ArmEmuTemps T(masm, 3, {mask, lhs, rhs, dest});
++  ArmEmuOps o{masm, false};
++  o.mov(rhs, T[0]);
++  o.mov(lhs, T[1]);
++  o.blend(T[0], T[1], mask, T[2]);
++  o.mov(T[0], dest);
++}
++
++// ARM SMULL/SMULL2/ADDP: both operands signed, the pair sum wraps at 16 bits
++// (x86's PMADDUBSW takes lhs unsigned and saturates). With `add`, SADALP
++// widens the pair sums into the int32 accumulator `dest`.
++void MacroAssemblerX86Shared::armDotInt8x16Int7x16(FloatRegister lhs,
++                                                   FloatRegister rhs,
++                                                   FloatRegister dest,
++                                                   bool add) {
++  MacroAssembler& masm = asMasm();
++  ArmEmuTemps T(masm, 4, {lhs, rhs, dest});
++  ArmEmuOps o{masm, false};
++  FloatRegister ae = T[0], be = T[1], ao = T[2], bo = T[3];
++  o.mov(lhs, ae);
++  o.mov(rhs, be);
++  o.mov(lhs, ao);
++  o.mov(rhs, bo);
++  masm.vpsllw(Imm32(8), ae, ae);
++  masm.vpsraw(Imm32(8), ae, ae);  // even bytes, sign-extended
++  masm.vpsllw(Imm32(8), be, be);
++  masm.vpsraw(Imm32(8), be, be);
++  masm.vpsraw(Imm32(8), ao, ao);  // odd bytes, sign-extended
++  masm.vpsraw(Imm32(8), bo, bo);
++  masm.vpmullw(Operand(be), ae, ae);
++  masm.vpmullw(Operand(bo), ao, ao);
++  masm.vpaddw(Operand(ao), ae, ae);
++  if (add) {
++    masm.loadConstantSimd128(SimdConstant::SplatX8(1), be);
++    masm.vpmaddwd(Operand(be), ae, ae);
++    masm.vpaddd(Operand(ae), dest, dest);
++  } else {
++    o.mov(ae, dest);
++  }
++}
++
++// ARM FCVTZS/FCVTZU (then SQXTN/UQXTN for f64x2): saturating, NaN -> 0, the
++// same as the non-relaxed trunc_sat ops.
++void MacroAssemblerX86Shared::armTruncSimd128(bool isUnsigned, bool isDouble,
++                                              FloatRegister src,
++                                              FloatRegister dest) {
++  MacroAssembler& masm = asMasm();
++  ArmEmuTemps T(masm, 3, {src, dest});
++  masm.vmovdqa(src, T[0]);
++  if (isDouble) {
++    if (isUnsigned) {
++      unsignedTruncSatFloat64x2ToInt32x4(T[0], T[1], T[2]);
++    } else {
++      truncSatFloat64x2ToInt32x4(T[0], T[1], T[2]);
++    }
++  } else {
++    if (isUnsigned) {
++      unsignedTruncSatFloat32x4ToInt32x4(T[0], T[1], T[2]);
++    } else {
++      truncSatFloat32x4ToInt32x4(T[0], T[2]);
++    }
++  }
++  masm.vmovdqa(T[2], dest);
++}
++#endif  // JS_CODEGEN_X64
+diff --git a/js/src/jit/x86-shared/MacroAssembler-x86-shared.h b/js/src/jit/x86-shared/MacroAssembler-x86-shared.h
+index 7f413eba4e..29b60bef1d 100644
+--- a/js/src/jit/x86-shared/MacroAssembler-x86-shared.h
++++ b/js/src/jit/x86-shared/MacroAssembler-x86-shared.h
+@@ -515,6 +515,20 @@ class MacroAssemblerX86Shared : public Assembler {
+   void unsignedTruncFloat64x2ToInt32x4Relaxed(FloatRegister src,
+                                               FloatRegister dest);
+ 
++#ifdef JS_CODEGEN_X64
++  // ARM64 emulation of the relaxed SIMD ops (general.cpu_identity=3).
++  void armMinMaxSimd128(bool isMax, bool isDouble, FloatRegister lhs,
++                        FloatRegister rhs, FloatRegister dest);
++  void armFmaSimd128(bool negate, bool isDouble, FloatRegister src1,
++                     FloatRegister src2, FloatRegister srcDest);
++  void armLaneSelectSimd128(FloatRegister mask, FloatRegister lhs,
++                            FloatRegister rhs, FloatRegister dest);
++  void armDotInt8x16Int7x16(FloatRegister lhs, FloatRegister rhs,
++                            FloatRegister dest, bool add);
++  void armTruncSimd128(bool isUnsigned, bool isDouble, FloatRegister src,
++                       FloatRegister dest);
++#endif
++
+   void splatX16(Register input, FloatRegister output);
+   void splatX8(Register input, FloatRegister output);
+   void splatX4(Register input, FloatRegister output);
+diff --git a/js/src/vm/Initialization.cpp b/js/src/vm/Initialization.cpp
+index 1c715512d3..61ad2726f4 100644
+--- a/js/src/vm/Initialization.cpp
++++ b/js/src/vm/Initialization.cpp
+@@ -320,6 +320,12 @@ JS_PUBLIC_API bool JS_SetICUMemoryFunctions(JS_ICUAllocFn allocFn,
+ #endif
+ }
+ 
++JS_PUBLIC_API void JS::SetEmulateArm64(bool enabled) {
++#if !defined(JS_CODEGEN_ARM64)
++  js::jit::EmulateArm64 = enabled;
++#endif
++}
++
+ #if defined(ENABLE_JIT_SIMD) && \
+     (defined(JS_CODEGEN_X64) || defined(JS_CODEGEN_X86))
+ void JS::SetAVXEnabled(bool enabled) {
+diff --git a/js/src/vm/TypedArrayObject-inl.h b/js/src/vm/TypedArrayObject-inl.h
+index 2702836452..0781b26392 100644
+--- a/js/src/vm/TypedArrayObject-inl.h
++++ b/js/src/vm/TypedArrayObject-inl.h
+@@ -18,6 +18,7 @@
+ #include "builtin/Number.h"
+ #include "gc/Zone.h"
+ #include "jit/AtomicOperations.h"
++#include "jit/JitOptions.h"
+ #include "js/Conversions.h"
+ #include "js/ScalarType.h"  // js::Scalar::Type
+ #include "js/Value.h"
+@@ -669,6 +670,7 @@ class ElementSpecific {
+       if (js::SupportDifferentialTesting()) {
+         d = JS::CanonicalizeNaN(d);
+       }
++      d = js::jit::ArmNaN(d);
+     }
+     return ConvertNumber<T>(d);
+   }
+diff --git a/js/src/vm/TypedArrayObject.cpp b/js/src/vm/TypedArrayObject.cpp
+index 3cf414d3cd..516eb1cf53 100644
+--- a/js/src/vm/TypedArrayObject.cpp
++++ b/js/src/vm/TypedArrayObject.cpp
+@@ -37,6 +37,7 @@
+ #include "gc/Barrier.h"
+ #include "gc/MaybeRooted.h"
+ #include "jit/InlinableNatives.h"
++#include "jit/JitOptions.h"
+ #include "jit/TrampolineNatives.h"
+ #include "js/Conversions.h"
+ #include "js/experimental/TypedData.h"  // JS_GetArrayBufferViewType, JS_GetTypedArray{Length,ByteOffset,ByteLength}, JS_IsTypedArrayObject
+@@ -1276,6 +1277,7 @@ bool TypedArrayObjectTemplate<NativeType>::convertValue(JSContext* cx,
+       // See the comment in ElementSpecific::doubleToNative.
+       d = JS::CanonicalizeNaN(d);
+     }
++    d = js::jit::ArmNaN(d);
+   }
+ 
+   // Assign based on characteristics of the destination type
+@@ -3117,6 +3119,7 @@ static NativeType ConvertToNativeType(const Value& value) {
+       // See the comment in ElementSpecific::doubleToNative.
+       d = JS::CanonicalizeNaN(d);
+     }
++    d = js::jit::ArmNaN(d);
+ 
+     return ConvertNumber<NativeType>(d);
+   } else if constexpr (std::is_same_v<NativeType, int64_t>) {
+@@ -3953,6 +3956,7 @@ static void TypedArraySliceCopySlowSet(TypedArrayObject* tarray, size_t index,
+       // See the comment in ElementSpecific::doubleToNative.
+       value = JS::CanonicalizeNaN(value);
+     }
++    value = js::jit::ArmNaN(value);
+   }
+   TypedArrayObjectTemplate<NativeType>::setIndex(
+       *tarray, index, ConvertNumber<NativeType>(value));
+diff --git a/js/xpconnect/src/nsXPConnect.cpp b/js/xpconnect/src/nsXPConnect.cpp
+index e9b93e5e8d..1ce410fe43 100644
+--- a/js/xpconnect/src/nsXPConnect.cpp
++++ b/js/xpconnect/src/nsXPConnect.cpp
+@@ -16,6 +16,7 @@
+ #include "mozilla/glean/bindings/GleanPings.h"
+ #include "mozilla/Likely.h"
+ #include "mozilla/ScriptPreloader.h"
++#include "mozilla/StaticPrefs_general.h"
+ #include "mozilla/StaticPrefs_javascript.h"
+ 
+ #include "AccessCheck.h"
+@@ -90,6 +91,10 @@ static bool IsLockdownModeEnabled() {
+ #endif
+ 
+ static void InitJSEngine() {
++  // Compute as an ARM64 CPU does when general.cpu_identity claims one
++  // (Camoufox). Before JS_Init, like AVX below.
++  JS::SetEmulateArm64(mozilla::StaticPrefs::general_cpu_identity() == 3);
++
+ #if defined(ENABLE_JIT_SIMD) && \
+     (defined(JS_CODEGEN_X64) || defined(JS_CODEGEN_X86))
+   // Update static engine preferences, such as AVX, before
+diff --git a/media/ffvpx/libavutil/avutil.symbols b/media/ffvpx/libavutil/avutil.symbols
+index d03c9f0b5d..6dd0bc6231 100644
+--- a/media/ffvpx/libavutil/avutil.symbols
++++ b/media/ffvpx/libavutil/avutil.symbols
+@@ -336,6 +336,7 @@ av_malloc_array
+ av_get_sample_fmt_name
+ av_tx_uninit
+ av_tx_init
++av_tx_cfp_emulate_arm64
+ #if defined(MOZ_ENABLE_VULKAN_VIDEO) && !defined(MOZ_FFVPX_AUDIOONLY)
+ av_vk_frame_alloc
+ av_vk_get_optional_device_extensions
+diff --git a/media/ffvpx/libavutil/tx.c b/media/ffvpx/libavutil/tx.c
+index 54660c9079..37009ae0e7 100644
+--- a/media/ffvpx/libavutil/tx.c
++++ b/media/ffvpx/libavutil/tx.c
+@@ -344,6 +344,7 @@ static const FFTXCodelet * const * const codelet_list[] = {
+     ff_tx_null_list,
+ #if HAVE_X86ASM
+     ff_tx_codelet_list_float_x86,
++    ff_tx_codelet_list_float_neonemu,
+ #endif
+ #if ARCH_AARCH64
+     ff_tx_codelet_list_float_aarch64,
+@@ -351,6 +352,27 @@ static const FFTXCodelet * const * const codelet_list[] = {
+ };
+ static const int codelet_list_num = FF_ARRAY_ELEMS(codelet_list);
+ 
++/* Camoufox: with general.cpu_identity = ARM64 on an x86-64 host, transforms
++ * use the NEON codelets (executed by x86/tx_float_neonemu.c) instead of the
++ * x86 ones, so their output has ARM's bits. */
++static int tx_emulate_arm64;
++
++void av_tx_cfp_emulate_arm64(int on)
++{
++    tx_emulate_arm64 = !!on;
++}
++
++static int tx_list_skipped(const FFTXCodelet * const * list)
++{
++#if HAVE_X86ASM
++    if (list == ff_tx_codelet_list_float_x86)
++        return tx_emulate_arm64;
++    if (list == ff_tx_codelet_list_float_neonemu)
++        return !tx_emulate_arm64;
++#endif
++    return 0;
++}
++
+ static const int cpu_slow_mask = AV_CPU_FLAG_SSE2SLOW | AV_CPU_FLAG_SSE3SLOW  |
+                                  AV_CPU_FLAG_ATOM     | AV_CPU_FLAG_SSSE3SLOW |
+                                  AV_CPU_FLAG_AVXSLOW  | AV_CPU_FLAG_SLOW_GATHER;
+@@ -424,6 +446,9 @@ int ff_tx_decompose_length(int dst[TX_MAX_DECOMPOSITIONS], enum AVTXType type,
+         const FFTXCodelet * const * list = codelet_list[codelet_list_idx];
+         const FFTXCodelet *cd = NULL;
+ 
++        if (tx_list_skipped(list))
++            continue;
++
+         while ((cd = *list++)) {
+             int fl = len;
+             int skip = 0, prio;
+@@ -753,6 +778,9 @@ av_cold int ff_tx_init_subtx(AVTXContext *s, enum AVTXType type,
+         const FFTXCodelet * const * list = codelet_list[codelet_list_idx];
+         const FFTXCodelet *cd = NULL;
+ 
++        if (tx_list_skipped(list))
++            continue;
++
+         while ((cd = *list++)) {
+             /* Check if the type matches */
+             if (cd->type != TX_TYPE_ANY && type != cd->type)
+diff --git a/media/ffvpx/libavutil/tx.h b/media/ffvpx/libavutil/tx.h
+index c950095735..adb74804dd 100644
+--- a/media/ffvpx/libavutil/tx.h
++++ b/media/ffvpx/libavutil/tx.h
+@@ -185,6 +185,13 @@ enum AVTXFlags {
+     AV_TX_REAL_TO_IMAGINARY = 1ULL << 4,
+ };
+ 
++/**
++ * Camoufox: select the NEON transform codelets, executed by an emulator, on
++ * x86-64, so that results match an ARM64 CPU's. Affects contexts initialized
++ * afterwards.
++ */
++void av_tx_cfp_emulate_arm64(int on);
++
+ /**
+  * Initialize a transform context with the given configuration
+  * (i)MDCTs with an odd length are currently not supported.
+diff --git a/media/ffvpx/libavutil/tx_priv.h b/media/ffvpx/libavutil/tx_priv.h
+index d3fcdbf563..bcc9bf2a9f 100644
+--- a/media/ffvpx/libavutil/tx_priv.h
++++ b/media/ffvpx/libavutil/tx_priv.h
+@@ -384,6 +384,7 @@ int ff_tx_mdct_gen_exp_int32 (AVTXContext *s, int *pre_tab);
+ extern const FFTXCodelet * const ff_tx_codelet_list_float_c       [];
+ extern const FFTXCodelet * const ff_tx_codelet_list_float_x86     [];
+ extern const FFTXCodelet * const ff_tx_codelet_list_float_aarch64 [];
++extern const FFTXCodelet * const ff_tx_codelet_list_float_neonemu [];
+ 
+ extern const FFTXCodelet * const ff_tx_codelet_list_double_c      [];
+ 
+diff --git a/media/ffvpx/libavutil/x86/moz.build b/media/ffvpx/libavutil/x86/moz.build
+index 8a2116cdc4..8de0a5d45d 100644
+--- a/media/ffvpx/libavutil/x86/moz.build
++++ b/media/ffvpx/libavutil/x86/moz.build
+@@ -17,6 +17,7 @@ SOURCES += [
+     'pixelutils.asm',
+     'tx_float.asm',
+     'tx_float_init.c',
++    'tx_float_neonemu.c',
+ ]
+ 
+ FINAL_LIBRARY = 'mozavutil'
+diff --git a/media/libopus/celt/celt_tx_tables.h b/media/libopus/celt/celt_tx_tables.h
+index 3fdabcbea0..f7297b338e 100644
+--- a/media/libopus/celt/celt_tx_tables.h
++++ b/media/libopus/celt/celt_tx_tables.h
+@@ -81,8 +81,10 @@
+ #endif
+ #endif
+ 
+-/* Tables are needed if either C PFA is enabled or ARM Neon TX MDCT is enabled */
+-#if defined(ENABLE_PFA) || defined(OPUS_ARM_TX_MDCT)
++/* Tables are needed if either C PFA is enabled or ARM Neon TX MDCT is enabled
++   (Mozilla: or emulated on x86, x86/celt_mdct_neonemu.c) */
++#if defined(ENABLE_PFA) || defined(OPUS_ARM_TX_MDCT) || \
++    defined(OPUS_X86_NEONEMU_MDCT)
+ #define NEED_CELT_TX_TABLES (1)
+ #endif
+ 
+diff --git a/media/libopus/celt/cpu_support.h b/media/libopus/celt/cpu_support.h
+index 9f13d8aecf..9c5b9b1cf9 100644
+--- a/media/libopus/celt/cpu_support.h
++++ b/media/libopus/celt/cpu_support.h
+@@ -57,8 +57,11 @@
+  * arch[2] -> sse2
+  * arch[3] -> sse4.1
+  * arch[4] -> avx
++ * arch[5] -> Mozilla: Firefox aarch64's NEON kernels run in C, when
++ *            Gecko emulates an arm64 CPU (opus_mozilla_set_emulate_arm64)
+  */
+ #define OPUS_ARCHMASK 7
++#define OPUS_ARCH_X86_NEONEMU 5
+ int opus_select_arch(void);
+ 
+ #else
+diff --git a/media/libopus/celt/mdct.h b/media/libopus/celt/mdct.h
+index 3f8414f9b0..63d06dfcdf 100644
+--- a/media/libopus/celt/mdct.h
++++ b/media/libopus/celt/mdct.h
+@@ -76,6 +76,21 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
+ #include "arm/mdct_arm.h"
+ #endif
+ 
++/* Mozilla: arch OPUS_ARCH_X86_NEONEMU runs Firefox aarch64's inverse MDCT
++   (x86/celt_mdct_neonemu.c). */
++#include "x86/celt_neonemu.h"
++#if defined(OPUS_X86_NEONEMU) && !defined(OVERRIDE_CLT_MDCT_BACKWARD)
++void clt_mdct_backward_neonemu(const mdct_lookup *l, kiss_fft_scalar *in,
++      kiss_fft_scalar * OPUS_RESTRICT out,
++      const celt_coef * OPUS_RESTRICT window,
++      int overlap, int shift, int stride, int arch);
++# define OVERRIDE_CLT_MDCT_BACKWARD (1)
++# define clt_mdct_backward(_l, _in, _out, _window, _overlap, _shift, _stride, _arch) \
++   ((((_arch) & OPUS_ARCHMASK) == OPUS_ARCH_X86_NEONEMU \
++     ? clt_mdct_backward_neonemu : clt_mdct_backward_c) \
++    (_l, _in, _out, _window, _overlap, _shift, _stride, _arch))
++#endif
++
+ 
+ 
+ #if !defined(OVERRIDE_CLT_MDCT_FORWARD)
+diff --git a/media/libopus/celt/pitch.c b/media/libopus/celt/pitch.c
+index 5d5ee60463..90d4ce11f6 100644
+--- a/media/libopus/celt/pitch.c
++++ b/media/libopus/celt/pitch.c
+@@ -36,6 +36,7 @@
+ #endif
+ 
+ #include "pitch.h"
++#include "x86/celt_neonemu.h"
+ #include "os_support.h"
+ #include "modes.h"
+ #include "stack_alloc.h"
+@@ -264,6 +265,14 @@ celt_pitch_xcorr_c(const opus_val16 *_x, const opus_val16 *_y,
+ #endif
+    celt_assert(max_pitch>0);
+    celt_sig_assert(((size_t)_x&3)==0);
++#if defined(OPUS_X86_NEONEMU)
++   if ((arch&OPUS_ARCHMASK) == OPUS_ARCH_X86_NEONEMU)
++   {
++      /* aarch64's pitch correlation; its xcorr_kernel only serves this. */
++      celt_pitch_xcorr_neonemu(_x, _y, xcorr, len, max_pitch);
++      return;
++   }
++#endif
+    for (i=0;i<max_pitch-3;i+=4)
+    {
+       opus_val32 sum[4]={0,0,0,0};
+diff --git a/media/libopus/celt/pitch.h b/media/libopus/celt/pitch.h
+index 8d6652becc..e91848971a 100644
+--- a/media/libopus/celt/pitch.h
++++ b/media/libopus/celt/pitch.h
+@@ -50,6 +50,21 @@
+ # include "arm/pitch_arm.h"
+ #endif
+ 
++/* Mozilla: arch OPUS_ARCH_X86_NEONEMU runs Firefox aarch64's deemphasis. */
++#include "x86/celt_neonemu.h"
++#if defined(OPUS_X86_NEONEMU)
++# define OVERRIDE_CELT_DEEMPHASIS
++# define celt_deemphasis(y, x, coef, m, N, arch) \
++    (((arch) & OPUS_ARCHMASK) == OPUS_ARCH_X86_NEONEMU \
++     ? celt_deemphasis_neonemu(y, x, coef, m, N) \
++     : celt_deemphasis_c(y, x, coef, m, N))
++# define OVERRIDE_DEEMPHASIS_STEREO_SIMPLE
++# define deemphasis_stereo_simple(in, pcm, N, coef, mem, arch) \
++    (((arch) & OPUS_ARCHMASK) == OPUS_ARCH_X86_NEONEMU \
++     ? deemphasis_stereo_simple_neonemu(in, pcm, N, coef, mem) \
++     : deemphasis_stereo_simple_c(in, pcm, N, coef, mem))
++#endif
++
+ void pitch_downsample(celt_sig * OPUS_RESTRICT x[], opus_val16 * OPUS_RESTRICT x_lp,
+       int len, int C, int factor, int arch);
+ 
+diff --git a/media/libopus/celt/x86/vq_sse2.c b/media/libopus/celt/x86/vq_sse2.c
+index 4c4ebf8e2d..848c726b22 100644
+--- a/media/libopus/celt/x86/vq_sse2.c
++++ b/media/libopus/celt/x86/vq_sse2.c
+@@ -37,10 +37,26 @@
+ #include "mathops.h"
+ #include "vq.h"
+ #include "x86cpu.h"
++#include "opus_cpu_estimates.h"
++#include "SkCpuEstimates.h"
+ 
+ 
+ #ifndef FIXED_POINT
+ 
++/* Another vendor's RCPPS/RSQRTPS, when Gecko set a table (opus_cpu_estimates.h). */
++static __m128 estimate_as(__m128 v, int rsqrt)
++{
++   const uint32_t *table = opus_mozilla_cpu_estimates();
++   uint32_t b[4];
++   int i;
++   if (!table)
++      return rsqrt ? _mm_rsqrt_ps(v) : _mm_rcp_ps(v);
++   _mm_storeu_ps((float*)(void*)b, v);
++   for (i=0;i<4;i++)
++      b[i] = rsqrt ? sk_cpu_estimate_rsqrt(table, b[i]) : sk_cpu_estimate_rcp(table, b[i]);
++   return _mm_loadu_ps((float*)(void*)b);
++}
++
+ opus_val16 op_pvq_search_sse2(celt_norm *_X, int *iy, int K, int N, int arch)
+ {
+    int i, j;
+@@ -105,7 +121,7 @@ opus_val16 op_pvq_search_sse2(celt_norm *_X, int *iy, int K, int N, int arch)
+          sums = _mm_set_ps1(1.f);
+       }
+       /* Using K+e with e < 1 guarantees we cannot get more than K pulses. */
+-      rcp4 = _mm_mul_ps(_mm_set_ps1((float)(K+.8)), _mm_rcp_ps(sums));
++      rcp4 = _mm_mul_ps(_mm_set_ps1((float)(K+.8)), estimate_as(sums, 0));
+       xy4 = yy4 = _mm_setzero_ps();
+       pulses_sum = _mm_setzero_si128();
+       for (j=0;j<N;j+=4)
+@@ -170,7 +186,7 @@ opus_val16 op_pvq_search_sse2(celt_norm *_X, int *iy, int K, int N, int arch)
+          y4 = _mm_loadu_ps(&y[j]);
+          x4 = _mm_add_ps(x4, xy4);
+          y4 = _mm_add_ps(y4, yy4);
+-         y4 = _mm_rsqrt_ps(y4);
++         y4 = estimate_as(y4, 1);
+          r4 = _mm_mul_ps(x4, y4);
+          /* Update the index of the max. */
+          pos = _mm_max_epi16(pos, _mm_and_si128(count, _mm_castps_si128(_mm_cmpgt_ps(r4, max))));
+diff --git a/media/libopus/celt/x86/x86_celt_map.c b/media/libopus/celt/x86/x86_celt_map.c
+index ba8eafe6ad..f89b1e9d74 100644
+--- a/media/libopus/celt/x86/x86_celt_map.c
++++ b/media/libopus/celt/x86/x86_celt_map.c
+@@ -34,6 +34,14 @@
+ #include "pitch.h"
+ #include "pitch_sse.h"
+ #include "vq.h"
++#include "x86/celt_neonemu.h"
++
++/* arch[OPUS_ARCH_X86_NEONEMU] */
++#if defined(OPUS_X86_NEONEMU)
++# define NEONEMU_OR_C(name) name ## _neonemu
++#else
++# define NEONEMU_OR_C(name) name ## _c
++#endif
+ 
+ #if defined(OPUS_HAVE_RTCD)
+ 
+@@ -53,7 +61,8 @@ void (*const CELT_FIR_IMPL[OPUS_ARCHMASK + 1])(
+   celt_fir_c,
+   celt_fir_c,
+   MAY_HAVE_SSE4_1(celt_fir), /* sse4.1  */
+-  MAY_HAVE_SSE4_1(celt_fir)  /* avx  */
++  MAY_HAVE_SSE4_1(celt_fir),  /* avx  */
++  celt_fir_c
+ };
+ 
+ void (*const XCORR_KERNEL_IMPL[OPUS_ARCHMASK + 1])(
+@@ -66,7 +75,8 @@ void (*const XCORR_KERNEL_IMPL[OPUS_ARCHMASK + 1])(
+   xcorr_kernel_c,
+   xcorr_kernel_c,
+   MAY_HAVE_SSE4_1(xcorr_kernel), /* sse4.1  */
+-  MAY_HAVE_SSE4_1(xcorr_kernel)  /* avx  */
++  MAY_HAVE_SSE4_1(xcorr_kernel),  /* avx  */
++  xcorr_kernel_c
+ };
+ 
+ #endif
+@@ -83,7 +93,8 @@ opus_val32 (*const CELT_INNER_PROD_IMPL[OPUS_ARCHMASK + 1])(
+   celt_inner_prod_c,
+   MAY_HAVE_SSE2(celt_inner_prod),
+   MAY_HAVE_SSE4_1(celt_inner_prod), /* sse4.1  */
+-  MAY_HAVE_SSE4_1(celt_inner_prod)  /* avx  */
++  MAY_HAVE_SSE4_1(celt_inner_prod),  /* avx  */
++  celt_inner_prod_c
+ };
+ 
+ #endif
+@@ -104,7 +115,8 @@ void (*const PITCH_XCORR_IMPL[OPUS_ARCHMASK + 1])(
+   celt_pitch_xcorr_c,
+   celt_pitch_xcorr_c,
+   celt_pitch_xcorr_c,
+-  MAY_HAVE_AVX2(celt_pitch_xcorr)
++  MAY_HAVE_AVX2(celt_pitch_xcorr),
++  celt_pitch_xcorr_c                 /* neonemu: hooked in pitch.c */
+ };
+ 
+ #endif
+@@ -122,7 +134,8 @@ void (*const XCORR_KERNEL_IMPL[OPUS_ARCHMASK + 1])(
+   MAY_HAVE_SSE(xcorr_kernel),
+   MAY_HAVE_SSE(xcorr_kernel),
+   MAY_HAVE_SSE(xcorr_kernel),
+-  MAY_HAVE_SSE(xcorr_kernel)
++  MAY_HAVE_SSE(xcorr_kernel),
++  xcorr_kernel_c                 /* aarch64 float uses C */
+ };
+ 
+ opus_val32 (*const CELT_INNER_PROD_IMPL[OPUS_ARCHMASK + 1])(
+@@ -134,7 +147,8 @@ opus_val32 (*const CELT_INNER_PROD_IMPL[OPUS_ARCHMASK + 1])(
+   MAY_HAVE_SSE(celt_inner_prod),
+   MAY_HAVE_SSE(celt_inner_prod),
+   MAY_HAVE_SSE(celt_inner_prod),
+-  MAY_HAVE_SSE(celt_inner_prod)
++  MAY_HAVE_SSE(celt_inner_prod),
++  NEONEMU_OR_C(celt_inner_prod)
+ };
+ 
+ void (*const DUAL_INNER_PROD_IMPL[OPUS_ARCHMASK + 1])(
+@@ -149,7 +163,8 @@ void (*const DUAL_INNER_PROD_IMPL[OPUS_ARCHMASK + 1])(
+   MAY_HAVE_SSE(dual_inner_prod),
+   MAY_HAVE_SSE(dual_inner_prod),
+   MAY_HAVE_SSE(dual_inner_prod),
+-  MAY_HAVE_SSE(dual_inner_prod)
++  MAY_HAVE_SSE(dual_inner_prod),
++  NEONEMU_OR_C(dual_inner_prod)
+ };
+ 
+ void (*const COMB_FILTER_CONST_IMPL[OPUS_ARCHMASK + 1])(
+@@ -165,7 +180,8 @@ void (*const COMB_FILTER_CONST_IMPL[OPUS_ARCHMASK + 1])(
+   MAY_HAVE_SSE(comb_filter_const),
+   MAY_HAVE_SSE(comb_filter_const),
+   MAY_HAVE_SSE(comb_filter_const),
+-  MAY_HAVE_SSE(comb_filter_const)
++  MAY_HAVE_SSE(comb_filter_const),
++  NEONEMU_OR_C(comb_filter_const)
+ };
+ 
+ 
+@@ -179,7 +195,8 @@ opus_val16 (*const OP_PVQ_SEARCH_IMPL[OPUS_ARCHMASK + 1])(
+   op_pvq_search_c,
+   MAY_HAVE_SSE2(op_pvq_search),
+   MAY_HAVE_SSE2(op_pvq_search),
+-  MAY_HAVE_SSE2(op_pvq_search)
++  MAY_HAVE_SSE2(op_pvq_search),
++  op_pvq_search_c                 /* aarch64 runs the C search */
+ };
+ #endif
+ 
+diff --git a/media/libopus/celt/x86/x86cpu.c b/media/libopus/celt/x86/x86cpu.c
+index 2e7c32aeec..7ac5c476a9 100644
+--- a/media/libopus/celt/x86/x86cpu.c
++++ b/media/libopus/celt/x86/x86cpu.c
+@@ -34,6 +34,7 @@
+ #include "main.h"
+ #include "pitch.h"
+ #include "x86cpu.h"
++#include "opus_cpu_estimates.h"
+ 
+ #if defined(OPUS_HAVE_RTCD) && \
+   ((defined(OPUS_X86_MAY_HAVE_SSE) && !defined(OPUS_X86_PRESUME_SSE)) || \
+@@ -173,7 +174,11 @@ static int opus_select_arch_impl(void)
+ }
+ 
+ int opus_select_arch(void) {
+-    int arch = opus_select_arch_impl();
++    int arch;
++    if (opus_mozilla_emulates_arm64()) {
++        return OPUS_ARCH_X86_NEONEMU;
++    }
++    arch = opus_select_arch_impl();
+ #ifdef FUZZING
+     /* Randomly downgrade the architecture. */
+     arch = rand()%(arch+1);
+diff --git a/media/libopus/moz.build b/media/libopus/moz.build
+index e140171d13..492e4b80c9 100644
+--- a/media/libopus/moz.build
++++ b/media/libopus/moz.build
+@@ -7,6 +7,7 @@ with Files("*"):
+ 
+ EXPORTS.opus += [
+     "include/opus.h",
++    "include/opus_cpu_estimates.h",
+     "include/opus_defines.h",
+     "include/opus_multistream.h",
+     "include/opus_types.h",
+@@ -70,6 +71,9 @@ LOCAL_INCLUDES += [
+     "src",
+ ]
+ 
++# SkCpuEstimates.h, for celt/x86/vq_sse2.c (opus_cpu_estimates.h)
++LOCAL_INCLUDES += ["/gfx/skia/skia/src/opts"]
++
+ # sources.mozbuild is generated from gen-sources.py when a new libopus is
+ # imported.
+ include("sources.mozbuild")
+@@ -78,6 +82,7 @@ UNIFIED_SOURCES += celt_sources
+ UNIFIED_SOURCES += silk_sources
+ UNIFIED_SOURCES += opus_sources
+ SOURCES += opus_nonunified_sources
++SOURCES += ["celt/mozilla_cpu_estimates.c"]
+ 
+ if CONFIG["MOZ_SAMPLE_TYPE_FLOAT32"]:
+     UNIFIED_SOURCES += silk_sources_float
+@@ -98,6 +103,15 @@ if CONFIG["TARGET_CPU"] in ("x86", "x86_64"):
+     SOURCES += celt_sources_sse4_1
+     SOURCES += silk_sources_x86_rtcd
+     SOURCES += silk_sources_sse4_1
++    # aarch64 kernels for general.cpu_identity = arm64
++    SOURCES += ["celt/x86/celt_neonemu.c"]
++    if CONFIG["TARGET_CPU"] == "x86_64" and CONFIG["MOZ_SAMPLE_TYPE_FLOAT32"]:
++        # aarch64's inverse MDCT, translated from celt/arm/celt_tx_neon.S
++        DEFINES["OPUS_X86_NEONEMU_MDCT"] = True
++        SOURCES += [
++            "celt/x86/celt_mdct_neonemu.c",
++            "celt/x86/celt_tx_neonemu.c",
++        ]
+     if not CONFIG["MOZ_SAMPLE_TYPE_FLOAT32"]:
+         SOURCES += silk_sources_fixed_sse4_1
+     for f in SOURCES:
+diff --git a/media/libopus/silk/x86/x86_silk_map.c b/media/libopus/silk/x86/x86_silk_map.c
+index 39ad75276c..121a3de75b 100644
+--- a/media/libopus/silk/x86/x86_silk_map.c
++++ b/media/libopus/silk/x86/x86_silk_map.c
+@@ -53,7 +53,8 @@ opus_int64 (*const SILK_INNER_PROD16_IMPL[ OPUS_ARCHMASK + 1 ] )(
+   silk_inner_prod16_c,
+   silk_inner_prod16_c,
+   MAY_HAVE_SSE4_1( silk_inner_prod16 ), /* sse4.1 */
+-  MAY_HAVE_SSE4_1( silk_inner_prod16 )  /* avx */
++  MAY_HAVE_SSE4_1( silk_inner_prod16 ),  /* avx */
++  silk_inner_prod16_c                  /* neonemu: aarch64 matches C */
+ };
+ 
+ #endif
+@@ -66,7 +67,8 @@ opus_int (*const SILK_VAD_GETSA_Q8_IMPL[ OPUS_ARCHMASK + 1 ] )(
+   silk_VAD_GetSA_Q8_c,
+   silk_VAD_GetSA_Q8_c,
+   MAY_HAVE_SSE4_1( silk_VAD_GetSA_Q8 ), /* sse4.1 */
+-  MAY_HAVE_SSE4_1( silk_VAD_GetSA_Q8 )  /* avx */
++  MAY_HAVE_SSE4_1( silk_VAD_GetSA_Q8 ),  /* avx */
++  silk_VAD_GetSA_Q8_c                  /* neonemu: aarch64 matches C */
+ };
+ 
+ void (*const SILK_NSQ_IMPL[ OPUS_ARCHMASK + 1 ] )(
+@@ -90,7 +92,8 @@ void (*const SILK_NSQ_IMPL[ OPUS_ARCHMASK + 1 ] )(
+   silk_NSQ_c,
+   silk_NSQ_c,
+   MAY_HAVE_SSE4_1( silk_NSQ ), /* sse4.1 */
+-  MAY_HAVE_SSE4_1( silk_NSQ )  /* avx */
++  MAY_HAVE_SSE4_1( silk_NSQ ),  /* avx */
++  silk_NSQ_c                  /* neonemu: aarch64 matches C */
+ };
+ 
+ void (*const SILK_VQ_WMAT_EC_IMPL[ OPUS_ARCHMASK + 1 ] )(
+@@ -111,7 +114,8 @@ void (*const SILK_VQ_WMAT_EC_IMPL[ OPUS_ARCHMASK + 1 ] )(
+   silk_VQ_WMat_EC_c,
+   silk_VQ_WMat_EC_c,
+   MAY_HAVE_SSE4_1( silk_VQ_WMat_EC ), /* sse4.1 */
+-  MAY_HAVE_SSE4_1( silk_VQ_WMat_EC )  /* avx */
++  MAY_HAVE_SSE4_1( silk_VQ_WMat_EC ),  /* avx */
++  silk_VQ_WMat_EC_c                  /* neonemu: aarch64 matches C */
+ };
+ 
+ void (*const SILK_NSQ_DEL_DEC_IMPL[ OPUS_ARCHMASK + 1 ] )(
+@@ -135,7 +139,8 @@ void (*const SILK_NSQ_DEL_DEC_IMPL[ OPUS_ARCHMASK + 1 ] )(
+   silk_NSQ_del_dec_c,
+   silk_NSQ_del_dec_c,
+   MAY_HAVE_SSE4_1( silk_NSQ_del_dec ), /* sse4.1 */
+-  MAY_HAVE_AVX2( silk_NSQ_del_dec )  /* avx */
++  MAY_HAVE_AVX2( silk_NSQ_del_dec ),  /* avx */
++  silk_NSQ_del_dec_c                  /* neonemu: aarch64 matches C */
+ };
+ 
+ #if defined(FIXED_POINT)
+@@ -155,7 +160,8 @@ void (*const SILK_BURG_MODIFIED_IMPL[ OPUS_ARCHMASK + 1 ] )(
+   silk_burg_modified_c,
+   silk_burg_modified_c,
+   MAY_HAVE_SSE4_1( silk_burg_modified ), /* sse4.1 */
+-  MAY_HAVE_SSE4_1( silk_burg_modified )  /* avx */
++  MAY_HAVE_SSE4_1( silk_burg_modified ),  /* avx */
++  silk_burg_modified_c                  /* neonemu: aarch64 matches C */
+ };
+ 
+ #endif
+@@ -171,7 +177,8 @@ double (*const SILK_INNER_PRODUCT_FLP_IMPL[ OPUS_ARCHMASK + 1 ] )(
+   silk_inner_product_FLP_c,
+   silk_inner_product_FLP_c,
+   silk_inner_product_FLP_c, /* sse4.1 */
+-  MAY_HAVE_AVX2( silk_inner_product_FLP )  /* avx */
++  MAY_HAVE_AVX2( silk_inner_product_FLP ),  /* avx */
++  silk_inner_product_FLP_c                  /* neonemu: aarch64 matches C */
+ };
+ 
+ #endif
+diff --git a/media/libspeex_resampler/src/simd_detect.cpp b/media/libspeex_resampler/src/simd_detect.cpp
+index 1c8295c3a9..777b03bcea 100644
+--- a/media/libspeex_resampler/src/simd_detect.cpp
++++ b/media/libspeex_resampler/src/simd_detect.cpp
+@@ -6,16 +6,24 @@
+ 
+ #include "mozilla/SSE.h"
+ #include "mozilla/arm.h"
++#include "mozilla/StaticPrefs_general.h"
++
++// Camoufox: general.cpu_identity = ARM64. Firefox for aarch64 builds this
++// resampler without SIMD (the NEON file is only built for 32-bit ARM), so an
++// emulated ARM64 CPU takes the plain C paths.
++static bool EmulatesArm64() {
++  return mozilla::StaticPrefs::general_cpu_identity() == 3;
++}
+ 
+ #ifdef USE_SSE2
+ int moz_speex_have_double_simd() {
+-  return mozilla::supports_sse2() ? 1 : 0;
++  return (mozilla::supports_sse2() && !EmulatesArm64()) ? 1 : 0;
+ }
+ #endif
+ 
+ #ifdef USE_SSE
+ int moz_speex_have_single_simd() {
+-  return mozilla::supports_sse() ? 1 : 0;
++  return (mozilla::supports_sse() && !EmulatesArm64()) ? 1 : 0;
+ }
+ #endif
+ 
+diff --git a/media/libvpx/config/linux/arm64/vp8_rtcd.h b/media/libvpx/config/linux/arm64/vp8_rtcd.h
+index 84cddbcda9..3d2755b8b5 100644
+--- a/media/libvpx/config/linux/arm64/vp8_rtcd.h
++++ b/media/libvpx/config/linux/arm64/vp8_rtcd.h
+@@ -189,6 +189,9 @@ void vp8_sixtap_predict8x8_c(unsigned char *src_ptr, int src_pixels_per_line, in
+ void vp8_sixtap_predict8x8_neon(unsigned char *src_ptr, int src_pixels_per_line, int xoffset, int yoffset, unsigned char *dst_ptr, int dst_pitch);
+ #define vp8_sixtap_predict8x8 vp8_sixtap_predict8x8_neon
+ 
++void vp8_temporal_filter_apply_c(unsigned char *frame1, unsigned int stride, unsigned char *frame2, unsigned int block_size, int strength, int filter_weight, unsigned int *accumulator, unsigned short *count);
++#define vp8_temporal_filter_apply vp8_temporal_filter_apply_c
++
+ void vp8_rtcd(void);
+ 
+ #include "vpx_config.h"
+diff --git a/media/libvpx/config/linux/arm64/vp9_rtcd.h b/media/libvpx/config/linux/arm64/vp9_rtcd.h
+index fa8c44f45f..244bbb7521 100644
+--- a/media/libvpx/config/linux/arm64/vp9_rtcd.h
++++ b/media/libvpx/config/linux/arm64/vp9_rtcd.h
+@@ -46,6 +46,10 @@ struct yv12_buffer_config;
+ extern "C" {
+ #endif
+ 
++void vp9_apply_temporal_filter_c(const uint8_t *y_src, int y_src_stride, const uint8_t *y_pre, int y_pre_stride, const uint8_t *u_src, const uint8_t *v_src, int uv_src_stride, const uint8_t *u_pre, const uint8_t *v_pre, int uv_pre_stride, unsigned int block_width, unsigned int block_height, int ss_x, int ss_y, int strength, const int *const blk_fw, int use_32x32, uint32_t *y_accumulator, uint16_t *y_count, uint32_t *u_accumulator, uint16_t *u_count, uint32_t *v_accumulator, uint16_t *v_count);
++void vp9_apply_temporal_filter_neon(const uint8_t *y_src, int y_src_stride, const uint8_t *y_pre, int y_pre_stride, const uint8_t *u_src, const uint8_t *v_src, int uv_src_stride, const uint8_t *u_pre, const uint8_t *v_pre, int uv_pre_stride, unsigned int block_width, unsigned int block_height, int ss_x, int ss_y, int strength, const int *const blk_fw, int use_32x32, uint32_t *y_accumulator, uint16_t *y_count, uint32_t *u_accumulator, uint16_t *u_count, uint32_t *v_accumulator, uint16_t *v_count);
++#define vp9_apply_temporal_filter vp9_apply_temporal_filter_neon
++
+ int64_t vp9_block_error_c(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, int64_t *ssz);
+ int64_t vp9_block_error_neon(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, int64_t *ssz);
+ #define vp9_block_error vp9_block_error_neon
+@@ -97,6 +101,24 @@ void vp9_scale_and_extend_frame_c(const struct yv12_buffer_config *src, struct y
+ void vp9_scale_and_extend_frame_neon(const struct yv12_buffer_config *src, struct yv12_buffer_config *dst, INTERP_FILTER filter_type, int phase_scaler);
+ #define vp9_scale_and_extend_frame vp9_scale_and_extend_frame_neon
+ 
++void vpx_convolve12_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_neon(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_neon_dotprod(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_neon_i8mm(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++RTCD_EXTERN void (*vpx_convolve12)(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++
++void vpx_convolve12_horiz_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_horiz_neon(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_horiz_neon_dotprod(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_horiz_neon_i8mm(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++RTCD_EXTERN void (*vpx_convolve12_horiz)(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++
++void vpx_convolve12_vert_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_vert_neon(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_vert_neon_dotprod(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_vert_neon_i8mm(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++RTCD_EXTERN void (*vpx_convolve12_vert)(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++
+ void vp9_rtcd(void);
+ 
+ #include "vpx_config.h"
+@@ -109,6 +131,15 @@ static void setup_rtcd_internal(void)
+ 
+     (void)flags;
+ 
++    vpx_convolve12 = vpx_convolve12_neon;
++    if (flags & HAS_NEON_DOTPROD) vpx_convolve12 = vpx_convolve12_neon_dotprod;
++    if (flags & HAS_NEON_I8MM) vpx_convolve12 = vpx_convolve12_neon_i8mm;
++    vpx_convolve12_horiz = vpx_convolve12_horiz_neon;
++    if (flags & HAS_NEON_DOTPROD) vpx_convolve12_horiz = vpx_convolve12_horiz_neon_dotprod;
++    if (flags & HAS_NEON_I8MM) vpx_convolve12_horiz = vpx_convolve12_horiz_neon_i8mm;
++    vpx_convolve12_vert = vpx_convolve12_vert_neon;
++    if (flags & HAS_NEON_DOTPROD) vpx_convolve12_vert = vpx_convolve12_vert_neon_dotprod;
++    if (flags & HAS_NEON_I8MM) vpx_convolve12_vert = vpx_convolve12_vert_neon_i8mm;
+ }
+ #endif
+ 
+diff --git a/media/libvpx/config/linux/arm64/vpx_config.asm b/media/libvpx/config/linux/arm64/vpx_config.asm
+index 042179d481..cea244e88c 100644
+--- a/media/libvpx/config/linux/arm64/vpx_config.asm
++++ b/media/libvpx/config/linux/arm64/vpx_config.asm
+@@ -68,7 +68,7 @@
+ .equ CONFIG_DECODERS ,  1
+ .equ CONFIG_STATIC_MSVCRT ,  0
+ .equ CONFIG_SPATIAL_RESAMPLING ,  1
+-.equ CONFIG_REALTIME_ONLY ,  1
++.equ CONFIG_REALTIME_ONLY ,  0
+ .equ CONFIG_ONTHEFLY_BITPACKING ,  0
+ .equ CONFIG_ERROR_CONCEALMENT ,  0
+ .equ CONFIG_SHARED ,  0
+diff --git a/media/libvpx/config/linux/arm64/vpx_config.c b/media/libvpx/config/linux/arm64/vpx_config.c
+index 2dce1f8245..8eb701afcf 100644
+--- a/media/libvpx/config/linux/arm64/vpx_config.c
++++ b/media/libvpx/config/linux/arm64/vpx_config.c
+@@ -6,5 +6,5 @@
+ /* in the file PATENTS.  All contributing project authors may */
+ /* be found in the AUTHORS file in the root of the source tree. */
+ #include "vpx/vpx_codec.h"
+-static const char* const cfg = "--target=arm64-linux-gcc --enable-external-build --disable-examples --disable-install-docs --disable-unit-tests --enable-multi-res-encoding --size-limit=8192x4608 --enable-pic --disable-avx512 --enable-realtime-only --disable-sve --log=config.log";
++static const char* const cfg = "--target=arm64-linux-gcc --enable-external-build --disable-examples --disable-install-docs --disable-unit-tests --enable-multi-res-encoding --size-limit=8192x4608 --enable-pic --disable-avx512 --disable-sve --log=config.log";
+ const char *vpx_codec_build_config(void) {return cfg;}
+diff --git a/media/libvpx/config/linux/arm64/vpx_config.h b/media/libvpx/config/linux/arm64/vpx_config.h
+index c75879de4c..93ac4497b4 100644
+--- a/media/libvpx/config/linux/arm64/vpx_config.h
++++ b/media/libvpx/config/linux/arm64/vpx_config.h
+@@ -77,7 +77,7 @@
+ #define CONFIG_DECODERS 1
+ #define CONFIG_STATIC_MSVCRT 0
+ #define CONFIG_SPATIAL_RESAMPLING 1
+-#define CONFIG_REALTIME_ONLY 1
++#define CONFIG_REALTIME_ONLY 0
+ #define CONFIG_ONTHEFLY_BITPACKING 0
+ #define CONFIG_ERROR_CONCEALMENT 0
+ #define CONFIG_SHARED 0
+diff --git a/media/libvpx/config/win/aarch64/vp8_rtcd.h b/media/libvpx/config/win/aarch64/vp8_rtcd.h
+index 84cddbcda9..3d2755b8b5 100644
+--- a/media/libvpx/config/win/aarch64/vp8_rtcd.h
++++ b/media/libvpx/config/win/aarch64/vp8_rtcd.h
+@@ -189,6 +189,9 @@ void vp8_sixtap_predict8x8_c(unsigned char *src_ptr, int src_pixels_per_line, in
+ void vp8_sixtap_predict8x8_neon(unsigned char *src_ptr, int src_pixels_per_line, int xoffset, int yoffset, unsigned char *dst_ptr, int dst_pitch);
+ #define vp8_sixtap_predict8x8 vp8_sixtap_predict8x8_neon
+ 
++void vp8_temporal_filter_apply_c(unsigned char *frame1, unsigned int stride, unsigned char *frame2, unsigned int block_size, int strength, int filter_weight, unsigned int *accumulator, unsigned short *count);
++#define vp8_temporal_filter_apply vp8_temporal_filter_apply_c
++
+ void vp8_rtcd(void);
+ 
+ #include "vpx_config.h"
+diff --git a/media/libvpx/config/win/aarch64/vp9_rtcd.h b/media/libvpx/config/win/aarch64/vp9_rtcd.h
+index fa8c44f45f..244bbb7521 100644
+--- a/media/libvpx/config/win/aarch64/vp9_rtcd.h
++++ b/media/libvpx/config/win/aarch64/vp9_rtcd.h
+@@ -46,6 +46,10 @@ struct yv12_buffer_config;
+ extern "C" {
+ #endif
+ 
++void vp9_apply_temporal_filter_c(const uint8_t *y_src, int y_src_stride, const uint8_t *y_pre, int y_pre_stride, const uint8_t *u_src, const uint8_t *v_src, int uv_src_stride, const uint8_t *u_pre, const uint8_t *v_pre, int uv_pre_stride, unsigned int block_width, unsigned int block_height, int ss_x, int ss_y, int strength, const int *const blk_fw, int use_32x32, uint32_t *y_accumulator, uint16_t *y_count, uint32_t *u_accumulator, uint16_t *u_count, uint32_t *v_accumulator, uint16_t *v_count);
++void vp9_apply_temporal_filter_neon(const uint8_t *y_src, int y_src_stride, const uint8_t *y_pre, int y_pre_stride, const uint8_t *u_src, const uint8_t *v_src, int uv_src_stride, const uint8_t *u_pre, const uint8_t *v_pre, int uv_pre_stride, unsigned int block_width, unsigned int block_height, int ss_x, int ss_y, int strength, const int *const blk_fw, int use_32x32, uint32_t *y_accumulator, uint16_t *y_count, uint32_t *u_accumulator, uint16_t *u_count, uint32_t *v_accumulator, uint16_t *v_count);
++#define vp9_apply_temporal_filter vp9_apply_temporal_filter_neon
++
+ int64_t vp9_block_error_c(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, int64_t *ssz);
+ int64_t vp9_block_error_neon(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, int64_t *ssz);
+ #define vp9_block_error vp9_block_error_neon
+@@ -97,6 +101,24 @@ void vp9_scale_and_extend_frame_c(const struct yv12_buffer_config *src, struct y
+ void vp9_scale_and_extend_frame_neon(const struct yv12_buffer_config *src, struct yv12_buffer_config *dst, INTERP_FILTER filter_type, int phase_scaler);
+ #define vp9_scale_and_extend_frame vp9_scale_and_extend_frame_neon
+ 
++void vpx_convolve12_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_neon(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_neon_dotprod(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_neon_i8mm(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++RTCD_EXTERN void (*vpx_convolve12)(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++
++void vpx_convolve12_horiz_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_horiz_neon(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_horiz_neon_dotprod(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_horiz_neon_i8mm(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++RTCD_EXTERN void (*vpx_convolve12_horiz)(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++
++void vpx_convolve12_vert_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_vert_neon(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_vert_neon_dotprod(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++void vpx_convolve12_vert_neon_i8mm(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++RTCD_EXTERN void (*vpx_convolve12_vert)(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, const InterpKernel12 *filter, int x0_q4, int x_step_q4, int y0_q4, int y_step_q4, int w, int h);
++
+ void vp9_rtcd(void);
+ 
+ #include "vpx_config.h"
+@@ -109,6 +131,15 @@ static void setup_rtcd_internal(void)
+ 
+     (void)flags;
+ 
++    vpx_convolve12 = vpx_convolve12_neon;
++    if (flags & HAS_NEON_DOTPROD) vpx_convolve12 = vpx_convolve12_neon_dotprod;
++    if (flags & HAS_NEON_I8MM) vpx_convolve12 = vpx_convolve12_neon_i8mm;
++    vpx_convolve12_horiz = vpx_convolve12_horiz_neon;
++    if (flags & HAS_NEON_DOTPROD) vpx_convolve12_horiz = vpx_convolve12_horiz_neon_dotprod;
++    if (flags & HAS_NEON_I8MM) vpx_convolve12_horiz = vpx_convolve12_horiz_neon_i8mm;
++    vpx_convolve12_vert = vpx_convolve12_vert_neon;
++    if (flags & HAS_NEON_DOTPROD) vpx_convolve12_vert = vpx_convolve12_vert_neon_dotprod;
++    if (flags & HAS_NEON_I8MM) vpx_convolve12_vert = vpx_convolve12_vert_neon_i8mm;
+ }
+ #endif
+ 
+diff --git a/media/libvpx/config/win/aarch64/vpx_config.asm b/media/libvpx/config/win/aarch64/vpx_config.asm
+index 591bd202a7..e1ac67fbba 100644
+--- a/media/libvpx/config/win/aarch64/vpx_config.asm
++++ b/media/libvpx/config/win/aarch64/vpx_config.asm
+@@ -68,7 +68,7 @@
+ .equ CONFIG_DECODERS ,  1
+ .equ CONFIG_STATIC_MSVCRT ,  0
+ .equ CONFIG_SPATIAL_RESAMPLING ,  1
+-.equ CONFIG_REALTIME_ONLY ,  1
++.equ CONFIG_REALTIME_ONLY ,  0
+ .equ CONFIG_ONTHEFLY_BITPACKING ,  0
+ .equ CONFIG_ERROR_CONCEALMENT ,  0
+ .equ CONFIG_SHARED ,  0
+diff --git a/media/libvpx/config/win/aarch64/vpx_config.c b/media/libvpx/config/win/aarch64/vpx_config.c
+index 809e36cf16..a54f19f57c 100644
+--- a/media/libvpx/config/win/aarch64/vpx_config.c
++++ b/media/libvpx/config/win/aarch64/vpx_config.c
+@@ -6,5 +6,5 @@
+ /* in the file PATENTS.  All contributing project authors may */
+ /* be found in the AUTHORS file in the root of the source tree. */
+ #include "vpx/vpx_codec.h"
+-static const char* const cfg = "--target=arm64-win64-vs15 --enable-external-build --disable-examples --disable-install-docs --disable-unit-tests --enable-multi-res-encoding --size-limit=8192x4608 --enable-pic --disable-avx512 --enable-realtime-only --disable-sve --log=config.log";
++static const char* const cfg = "--target=arm64-win64-vs15 --enable-external-build --disable-examples --disable-install-docs --disable-unit-tests --enable-multi-res-encoding --size-limit=8192x4608 --enable-pic --disable-avx512 --disable-sve --log=config.log";
+ const char *vpx_codec_build_config(void) {return cfg;}
+diff --git a/media/libvpx/config/win/aarch64/vpx_config.h b/media/libvpx/config/win/aarch64/vpx_config.h
+index b0ef200aff..c876ab4f32 100644
+--- a/media/libvpx/config/win/aarch64/vpx_config.h
++++ b/media/libvpx/config/win/aarch64/vpx_config.h
+@@ -77,7 +77,7 @@
+ #define CONFIG_DECODERS 1
+ #define CONFIG_STATIC_MSVCRT 0
+ #define CONFIG_SPATIAL_RESAMPLING 1
+-#define CONFIG_REALTIME_ONLY 1
++#define CONFIG_REALTIME_ONLY 0
+ #define CONFIG_ONTHEFLY_BITPACKING 0
+ #define CONFIG_ERROR_CONCEALMENT 0
+ #define CONFIG_SHARED 0
+diff --git a/media/libvpx/generate_sources_mozbuild.sh b/media/libvpx/generate_sources_mozbuild.sh
+index 2ced47ef55..d51b699feb 100755
+--- a/media/libvpx/generate_sources_mozbuild.sh
++++ b/media/libvpx/generate_sources_mozbuild.sh
+@@ -227,9 +227,9 @@ gen_config_files win/x64 "--target=x86_64-win64-vs15 ${all_platforms} ${x86_plat
+ gen_config_files win/ia32 "--target=x86-win32-gcc ${all_platforms} ${x86_platforms}"
+ 
+ gen_config_files linux/arm "--target=armv7-linux-gcc ${all_platforms} ${runtime_cpu_detect} ${realtime_only}"
+-gen_config_files linux/arm64 "--target=arm64-linux-gcc ${all_platforms} ${realtime_only} ${disable_sve}" # Bug 1889813
++gen_config_files linux/arm64 "--target=arm64-linux-gcc ${all_platforms} ${disable_sve}" # Bug 1889813; Camoufox: full encoder, realtime-only at runtime (media.libvpx.realtime_only)
+ gen_config_files mac/arm64 "--target=arm64-darwin-gcc ${all_platforms}"
+-gen_config_files win/aarch64 "--target=arm64-win64-vs15 ${all_platforms} ${realtime_only} ${disable_sve}" # Bug 1885585
++gen_config_files win/aarch64 "--target=arm64-win64-vs15 ${all_platforms} ${disable_sve}" # Bug 1885585; Camoufox: full encoder, realtime-only at runtime (media.libvpx.realtime_only)
+ 
+ gen_config_files linux/loongarch64 "--target=loongarch64-linux-gcc ${all_platforms} ${runtime_cpu_detect} ${realtime_only}"
+ 
+diff --git a/media/libvpx/libvpx/vp8/vp8_cx_iface.c b/media/libvpx/libvpx/vp8/vp8_cx_iface.c
+index 524b1bbf76..8103efa19a 100644
+--- a/media/libvpx/libvpx/vp8/vp8_cx_iface.c
++++ b/media/libvpx/libvpx/vp8/vp8_cx_iface.c
+@@ -84,6 +84,7 @@ struct vpx_codec_alg_priv {
+   vpx_codec_priv_t base;
+   vpx_codec_enc_cfg_t cfg;
+   struct vp8_extracfg vp8_cfg;
++  int mozilla_realtime_only; /* vpx_mozilla_realtime_only() */
+   vpx_rational64_t timestamp_ratio;
+   vpx_codec_pts_t pts_offset;
+   unsigned char pts_offset_initialized;
+@@ -155,6 +156,10 @@ static vpx_codec_err_t validate_config(vpx_codec_alg_priv_t *ctx,
+   RANGE_CHECK_HI(cfg, rc_max_quantizer, 63);
+   RANGE_CHECK_HI(cfg, rc_min_quantizer, cfg->rc_max_quantizer);
+   RANGE_CHECK_HI(cfg, g_threads, 64);
++#if !CONFIG_REALTIME_ONLY
++  if (ctx->mozilla_realtime_only) RANGE_CHECK_HI(cfg, g_lag_in_frames, 0);
++  else
++#endif
+ #if CONFIG_REALTIME_ONLY
+   RANGE_CHECK_HI(cfg, g_lag_in_frames, 0);
+ #elif CONFIG_MULTI_RES_ENCODING
+@@ -180,6 +185,11 @@ static vpx_codec_err_t validate_config(vpx_codec_alg_priv_t *ctx,
+   RANGE_CHECK_HI(cfg, rc_resize_up_thresh, 100);
+   RANGE_CHECK_HI(cfg, rc_resize_down_thresh, 100);
+ 
++#if !CONFIG_REALTIME_ONLY
++  if (ctx->mozilla_realtime_only)
++    RANGE_CHECK(cfg, g_pass, VPX_RC_ONE_PASS, VPX_RC_ONE_PASS);
++  else
++#endif
+ #if CONFIG_REALTIME_ONLY
+   RANGE_CHECK(cfg, g_pass, VPX_RC_ONE_PASS, VPX_RC_ONE_PASS);
+ #elif CONFIG_MULTI_RES_ENCODING
+@@ -733,6 +743,8 @@ static vpx_codec_err_t vp8e_init(vpx_codec_ctx_t *ctx,
+     }
+ 
+     priv->vp8_cfg = default_extracfg;
++    priv->mozilla_realtime_only = vpx_mozilla_realtime_only();
++    if (priv->mozilla_realtime_only) priv->vp8_cfg.cpu_used = 4;
+     priv->vp8_cfg.pkt_list = &priv->pkt_list.head;
+ 
+     priv->cx_data_sz = priv->cfg.g_w * priv->cfg.g_h * 3 / 2 * 2;
+@@ -838,7 +850,10 @@ static vpx_codec_err_t pick_quickcompress_mode(vpx_codec_alg_priv_t *ctx,
+   /* Use best quality mode if no deadline is given. */
+   new_qc = MODE_BESTQUALITY;
+ 
+-  if (deadline) {
++  if (ctx->mozilla_realtime_only) {
++    (void)duration;
++    new_qc = MODE_REALTIME;
++  } else if (deadline) {
+     /* Convert duration parameter from stream timebase to microseconds */
+     VPX_STATIC_ASSERT(TICKS_PER_SEC > 1000000 &&
+                       (TICKS_PER_SEC % 1000000) == 0);
+diff --git a/media/libvpx/libvpx/vp9/encoder/vp9_svc_layercontext.c b/media/libvpx/libvpx/vp9/encoder/vp9_svc_layercontext.c
+index 2d03bcaa86..1159d90d4c 100644
+--- a/media/libvpx/libvpx/vp9/encoder/vp9_svc_layercontext.c
++++ b/media/libvpx/libvpx/vp9/encoder/vp9_svc_layercontext.c
+@@ -13,6 +13,7 @@
+ #include "vp9/encoder/vp9_aq_cyclicrefresh.h"
+ #include "vp9/encoder/vp9_encoder.h"
+ #include "vp9/encoder/vp9_svc_layercontext.h"
++#include "vpx/vpx_encoder.h"
+ #include "vp9/encoder/vp9_extend.h"
+ #include "vpx_dsp/vpx_dsp_common.h"
+ 
+@@ -352,11 +353,8 @@ void vp9_restore_layer_context(VP9_COMP *const cpi) {
+   // Check if it is one_pass_cbr_svc mode and lc->speed > 0 (real-time mode
+   // does not use speed = 0).
+   if (is_one_pass_svc(cpi) && lc->speed > 0) {
+-#if CONFIG_REALTIME_ONLY
+-    cpi->oxcf.speed = VPXMAX(lc->speed, 5);
+-#else
+-    cpi->oxcf.speed = lc->speed;
+-#endif
++    cpi->oxcf.speed =
++        vpx_mozilla_realtime_only() ? VPXMAX(lc->speed, 5) : lc->speed;
+   }
+   cpi->loopfilter_ctrl = lc->loopfilter_ctrl;
+   // Reset the frames_since_key and frames_to_key counters to their values
+diff --git a/media/libvpx/libvpx/vp9/vp9_cx_iface.c b/media/libvpx/libvpx/vp9/vp9_cx_iface.c
+index f80a6e5b81..31a4f34758 100644
+--- a/media/libvpx/libvpx/vp9/vp9_cx_iface.c
++++ b/media/libvpx/libvpx/vp9/vp9_cx_iface.c
+@@ -123,6 +123,7 @@ struct vpx_codec_alg_priv {
+   vpx_codec_priv_t base;
+   vpx_codec_enc_cfg_t cfg;
+   struct vp9_extracfg extra_cfg;
++  int mozilla_realtime_only; /* vpx_mozilla_realtime_only() */
+   vpx_codec_pts_t pts_offset;
+   unsigned char pts_offset_initialized;
+   VP9EncoderConfig oxcf;
+@@ -220,7 +221,10 @@ static vpx_codec_err_t validate_config(vpx_codec_alg_priv_t *ctx,
+ #if CONFIG_REALTIME_ONLY
+   RANGE_CHECK(cfg, g_pass, VPX_RC_ONE_PASS, VPX_RC_ONE_PASS);
+ #else
+-  RANGE_CHECK(cfg, g_pass, VPX_RC_ONE_PASS, VPX_RC_LAST_PASS);
++  if (ctx->mozilla_realtime_only)
++    RANGE_CHECK(cfg, g_pass, VPX_RC_ONE_PASS, VPX_RC_ONE_PASS);
++  else
++    RANGE_CHECK(cfg, g_pass, VPX_RC_ONE_PASS, VPX_RC_LAST_PASS);
+ #endif
+   RANGE_CHECK(extra_cfg, min_gf_interval, 0, (MAX_LAG_BUFFERS - 1));
+   RANGE_CHECK(extra_cfg, max_gf_interval, 0, (MAX_LAG_BUFFERS - 1));
+@@ -980,10 +984,9 @@ static vpx_codec_err_t ctrl_set_cpuused(vpx_codec_alg_priv_t *ctx,
+   // Use fastest speed setting (speed 9 or -9) if it's set beyond the range.
+   extra_cfg.cpu_used = CAST(VP8E_SET_CPUUSED, args);
+   extra_cfg.cpu_used = clamp(extra_cfg.cpu_used, -9, 9);
+-#if CONFIG_REALTIME_ONLY
+-  if (extra_cfg.cpu_used > -5 && extra_cfg.cpu_used < 5)
++  if (ctx->mozilla_realtime_only && extra_cfg.cpu_used > -5 &&
++      extra_cfg.cpu_used < 5)
+     extra_cfg.cpu_used = (extra_cfg.cpu_used > 0) ? 5 : -5;
+-#endif
+   return update_extra_cfg(ctx, &extra_cfg);
+ }
+ 
+@@ -1223,6 +1226,8 @@ static vpx_codec_err_t encoder_init(vpx_codec_ctx_t *ctx,
+     }
+ 
+     priv->extra_cfg = default_extra_cfg;
++    priv->mozilla_realtime_only = vpx_mozilla_realtime_only();
++    if (priv->mozilla_realtime_only) priv->extra_cfg.cpu_used = 5;
+     vp9_initialize_enc();
+ 
+     res = validate_config(priv, &priv->cfg, &priv->extra_cfg);
+@@ -1262,6 +1267,10 @@ static vpx_codec_err_t pick_quickcompress_mode(vpx_codec_alg_priv_t *ctx,
+   (void)duration;
+   deadline = VPX_DL_REALTIME;
+ #else
++  if (ctx->mozilla_realtime_only) {
++    (void)duration;
++    deadline = VPX_DL_REALTIME;
++  } else
+   switch (ctx->cfg.g_pass) {
+     case VPX_RC_ONE_PASS:
+       if (deadline > 0) {
+diff --git a/media/libvpx/libvpx/vpx/src/vpx_encoder.c b/media/libvpx/libvpx/vpx/src/vpx_encoder.c
+index f2b8b9f6a5..285400f3c8 100644
+--- a/media/libvpx/libvpx/vpx/src/vpx_encoder.c
++++ b/media/libvpx/libvpx/vpx/src/vpx_encoder.c
+@@ -22,6 +22,14 @@
+ 
+ #define SAVE_STATUS(ctx, var) ((ctx) ? ((ctx)->err = (var)) : (var))
+ 
++static volatile int mozilla_realtime_only;
++
++void vpx_mozilla_set_realtime_only(int on) { mozilla_realtime_only = on != 0; }
++
++int vpx_mozilla_realtime_only(void) {
++  return CONFIG_REALTIME_ONLY || mozilla_realtime_only;
++}
++
+ static vpx_codec_alg_priv_t *get_alg_priv(vpx_codec_ctx_t *ctx) {
+   return (vpx_codec_alg_priv_t *)ctx->priv;
+ }
+diff --git a/media/libvpx/libvpx/vpx/vpx_encoder.h b/media/libvpx/libvpx/vpx/vpx_encoder.h
+index 2671fb3b76..1b652db003 100644
+--- a/media/libvpx/libvpx/vpx/vpx_encoder.h
++++ b/media/libvpx/libvpx/vpx/vpx_encoder.h
+@@ -1157,6 +1157,19 @@ const vpx_codec_cx_pkt_t *vpx_codec_get_cx_data(vpx_codec_ctx_t *ctx,
+ const vpx_image_t *vpx_codec_get_preview_frame(vpx_codec_ctx_t *ctx);
+ 
+ /*!@} - end defgroup encoder*/
++
++/* Mozilla: encode as a CONFIG_REALTIME_ONLY build does (Firefox's Windows and
++ * Linux arm64 builds), so another build produces their bitstreams. Each
++ * encoder reads it when it is created. Always on in a realtime-only build. */
++#if defined(__GNUC__)
++#pragma GCC visibility push(default)
++#endif
++void vpx_mozilla_set_realtime_only(int on);
++int vpx_mozilla_realtime_only(void);
++#if defined(__GNUC__)
++#pragma GCC visibility pop
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/media/libvpx/sources.mozbuild b/media/libvpx/sources.mozbuild
+index a1006fa938..561edacd6f 100644
+--- a/media/libvpx/sources.mozbuild
++++ b/media/libvpx/sources.mozbuild
+@@ -1991,6 +1991,7 @@ files = {
+     'libvpx/vp8/encoder/encodemb.c',
+     'libvpx/vp8/encoder/encodemv.c',
+     'libvpx/vp8/encoder/ethreading.c',
++    'libvpx/vp8/encoder/firstpass.c',
+     'libvpx/vp8/encoder/lookahead.c',
+     'libvpx/vp8/encoder/mcomp.c',
+     'libvpx/vp8/encoder/modecosts.c',
+@@ -2001,6 +2002,7 @@ files = {
+     'libvpx/vp8/encoder/ratectrl.c',
+     'libvpx/vp8/encoder/rdopt.c',
+     'libvpx/vp8/encoder/segmentation.c',
++    'libvpx/vp8/encoder/temporal_filter.c',
+     'libvpx/vp8/encoder/tokenize.c',
+     'libvpx/vp8/encoder/treewriter.c',
+     'libvpx/vp8/encoder/vp8_quantize.c',
+@@ -2041,7 +2043,14 @@ files = {
+     'libvpx/vp9/encoder/arm/neon/vp9_error_neon.c',
+     'libvpx/vp9/encoder/arm/neon/vp9_frame_scale_neon.c',
+     'libvpx/vp9/encoder/arm/neon/vp9_quantize_neon.c',
++    'libvpx/vp9/encoder/arm/neon/vp9_temporal_filter_neon.c',
++    'libvpx/vp9/encoder/arm/neon/vp9_temporal_filter_neon_dotprod.c',
++    'libvpx/vp9/encoder/arm/neon/vp9_temporal_filter_neon_i8mm.c',
++    'libvpx/vp9/encoder/vp9_alt_ref_aq.c',
++    'libvpx/vp9/encoder/vp9_aq_360.c',
++    'libvpx/vp9/encoder/vp9_aq_complexity.c',
+     'libvpx/vp9/encoder/vp9_aq_cyclicrefresh.c',
++    'libvpx/vp9/encoder/vp9_aq_variance.c',
+     'libvpx/vp9/encoder/vp9_bitstream.c',
+     'libvpx/vp9/encoder/vp9_context_tree.c',
+     'libvpx/vp9/encoder/vp9_cost.c',
+@@ -2053,8 +2062,10 @@ files = {
+     'libvpx/vp9/encoder/vp9_ethread.c',
+     'libvpx/vp9/encoder/vp9_ext_ratectrl.c',
+     'libvpx/vp9/encoder/vp9_extend.c',
++    'libvpx/vp9/encoder/vp9_firstpass.c',
+     'libvpx/vp9/encoder/vp9_frame_scale.c',
+     'libvpx/vp9/encoder/vp9_lookahead.c',
++    'libvpx/vp9/encoder/vp9_mbgraph.c',
+     'libvpx/vp9/encoder/vp9_mcomp.c',
+     'libvpx/vp9/encoder/vp9_multi_thread.c',
+     'libvpx/vp9/encoder/vp9_noise_estimate.c',
+@@ -2070,6 +2081,7 @@ files = {
+     'libvpx/vp9/encoder/vp9_speed_features.c',
+     'libvpx/vp9/encoder/vp9_subexp.c',
+     'libvpx/vp9/encoder/vp9_svc_layercontext.c',
++    'libvpx/vp9/encoder/vp9_temporal_filter.c',
+     'libvpx/vp9/encoder/vp9_tokenize.c',
+     'libvpx/vp9/encoder/vp9_tpl_model.c',
+     'libvpx/vp9/encoder/vp9_treewriter.c',
+@@ -2495,6 +2507,7 @@ files = {
+     'libvpx/vp8/encoder/encodemb.c',
+     'libvpx/vp8/encoder/encodemv.c',
+     'libvpx/vp8/encoder/ethreading.c',
++    'libvpx/vp8/encoder/firstpass.c',
+     'libvpx/vp8/encoder/lookahead.c',
+     'libvpx/vp8/encoder/mcomp.c',
+     'libvpx/vp8/encoder/modecosts.c',
+@@ -2505,6 +2518,7 @@ files = {
+     'libvpx/vp8/encoder/ratectrl.c',
+     'libvpx/vp8/encoder/rdopt.c',
+     'libvpx/vp8/encoder/segmentation.c',
++    'libvpx/vp8/encoder/temporal_filter.c',
+     'libvpx/vp8/encoder/tokenize.c',
+     'libvpx/vp8/encoder/treewriter.c',
+     'libvpx/vp8/encoder/vp8_quantize.c',
+@@ -2545,7 +2559,14 @@ files = {
+     'libvpx/vp9/encoder/arm/neon/vp9_error_neon.c',
+     'libvpx/vp9/encoder/arm/neon/vp9_frame_scale_neon.c',
+     'libvpx/vp9/encoder/arm/neon/vp9_quantize_neon.c',
++    'libvpx/vp9/encoder/arm/neon/vp9_temporal_filter_neon.c',
++    'libvpx/vp9/encoder/arm/neon/vp9_temporal_filter_neon_dotprod.c',
++    'libvpx/vp9/encoder/arm/neon/vp9_temporal_filter_neon_i8mm.c',
++    'libvpx/vp9/encoder/vp9_alt_ref_aq.c',
++    'libvpx/vp9/encoder/vp9_aq_360.c',
++    'libvpx/vp9/encoder/vp9_aq_complexity.c',
+     'libvpx/vp9/encoder/vp9_aq_cyclicrefresh.c',
++    'libvpx/vp9/encoder/vp9_aq_variance.c',
+     'libvpx/vp9/encoder/vp9_bitstream.c',
+     'libvpx/vp9/encoder/vp9_context_tree.c',
+     'libvpx/vp9/encoder/vp9_cost.c',
+@@ -2557,8 +2578,10 @@ files = {
+     'libvpx/vp9/encoder/vp9_ethread.c',
+     'libvpx/vp9/encoder/vp9_ext_ratectrl.c',
+     'libvpx/vp9/encoder/vp9_extend.c',
++    'libvpx/vp9/encoder/vp9_firstpass.c',
+     'libvpx/vp9/encoder/vp9_frame_scale.c',
+     'libvpx/vp9/encoder/vp9_lookahead.c',
++    'libvpx/vp9/encoder/vp9_mbgraph.c',
+     'libvpx/vp9/encoder/vp9_mcomp.c',
+     'libvpx/vp9/encoder/vp9_multi_thread.c',
+     'libvpx/vp9/encoder/vp9_noise_estimate.c',
+@@ -2574,6 +2597,7 @@ files = {
+     'libvpx/vp9/encoder/vp9_speed_features.c',
+     'libvpx/vp9/encoder/vp9_subexp.c',
+     'libvpx/vp9/encoder/vp9_svc_layercontext.c',
++    'libvpx/vp9/encoder/vp9_temporal_filter.c',
+     'libvpx/vp9/encoder/vp9_tokenize.c',
+     'libvpx/vp9/encoder/vp9_tpl_model.c',
+     'libvpx/vp9/encoder/vp9_treewriter.c',
+diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/StaticPrefList.yaml
+index f71cabfc6a..63e457eb91 100644
+--- a/modules/libpref/init/StaticPrefList.yaml
++++ b/modules/libpref/init/StaticPrefList.yaml
+@@ -7101,6 +7101,20 @@
+ # Prefs starting with "general."
+ #---------------------------------------------------------------------------
+ 
++# The CPU whose arithmetic the browser reproduces where CPUs give different
++# bits: 0 the CPU it runs on, 1 an Intel x86-64, 2 an AMD x86-64, 3 an ARM64.
++# Intel's and AMD's RCPPS/RSQRTPS estimates differ, and reach canvas readback
++# through Skia's blend modes, perspective and matrix inversion, and encoded
++# Opus through the PVQ search (SkCpuEstimates.h, opus_cpu_estimates.h). An
++# ARM64 CPU also rounds Skia's raster pipeline, Web Audio's FFT and mixing and
++# Opus differently (fused multiply-adds, NEON estimates), makes positive NaNs
++# and answers relaxed SIMD with other lanes (JS::SetEmulateArm64). A value
++# naming the CPU it runs on changes nothing. Read at startup.
++- name: general.cpu_identity
++  type: RelaxedAtomicUint32
++  value: 0
++  mirror: always
++
+ - name: general.aboutConfig.enable
+   type: bool
+   value: true
+@@ -13562,6 +13576,15 @@
+   mirror: always
+ 
+ # WebM
++# Encode VP8 and VP9 as Firefox's Windows and Linux arm64 builds do: their
++# libvpx is built realtime-only, which rejects VP8 with lookahead and gives
++# VP9 another bitstream in quality mode. macOS arm64 and x86 builds are not.
++# Read when each encoder is created.
++- name: media.libvpx.realtime_only
++  type: RelaxedAtomicBool
++  value: false
++  mirror: always
++
+ - name: media.webm.enabled
+   type: RelaxedAtomicBool
+   value: true
+diff --git a/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc b/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc
+index 2fd36d903b..aeccbf24f5 100644
+--- a/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc
++++ b/third_party/libwebrtc/modules/audio_coding/codecs/opus/opus_interface.cc
+@@ -14,6 +14,7 @@
+ #include <cstdlib>
+ 
+ #include "rtc_base/checks.h"
++#include "opus/opus_cpu_estimates.h"
+ 
+ enum {
+ #if WEBRTC_OPUS_SUPPORT_120MS_PTIME
+@@ -73,6 +74,7 @@ int16_t WebRtcOpus_EncoderCreate(OpusEncInst** inst,
+   }
+ 
+   int error;
++  opus_mozilla_use_cpu_vendor();
+   state->encoder = opus_encoder_create(
+       sample_rate_hz, static_cast<int>(channels), opus_app, &error);
+ 
+@@ -120,6 +122,7 @@ int16_t WebRtcOpus_MultistreamEncoderCreate(
+ 
+   int error;
+   const int sample_rate_hz = 48000;
++  opus_mozilla_use_cpu_vendor();
+   state->multistream_encoder = opus_multistream_encoder_create(
+       sample_rate_hz, channels, streams, coupled_streams, channel_mapping,
+       opus_app, &error);

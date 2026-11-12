@@ -104,6 +104,13 @@ export interface LauncherConstants {
 	windows11MarkerFonts: string[];
 	plausibleCoreCounts: number[];
 	appleSiliconCores: number[];
+	x86IntelShare: number;
+	cpuIdentityPref: Record<"x86/intel" | "x86/amd" | "arm", number>;
+	cpuManufacturers: Record<
+		"mac" | "windows" | "linux",
+		Record<"x86" | "arm", string[]>
+	>;
+	intelOnlyCoreCounts: number[];
 	appleSiliconPanels: Record<string, [number, number][]>;
 	intelMacIgpCores: number[];
 	intelMacDgpuExtraCores: number[];

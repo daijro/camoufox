@@ -380,6 +380,213 @@ def _repair_avail_bounds(config: Dict[str, Any], target_os: str) -> None:
         config['screen.availHeight'] = height
 
 
+# The CPU the identity claims: its architecture (cpu:arch) and manufacturer
+# (cpu:manufacturer). Firefox's user agent and navigator never say (Firefox on
+# ARM64 Linux reports "Linux x86_64", Windows on ARM an x86 platform, an Apple
+# Silicon Mac "Intel Mac OS X"), but the values a page computes do: canvas
+# pixels, Web Audio samples, encoded Opus, relaxed-SIMD wasm results and the
+# sign of a NaN differ between x86-64 and ARM64, and within x86 the canvas and
+# Opus differ between Intel and AMD (their RCPPS/RSQRTPS tables). Every ARM64
+# chip computes as every other (an Apple M4 and a Cortex-A72 agree on all of
+# them), so the manufacturer of an ARM CPU only has to agree with the GPU.
+#
+# Which manufacturers make each OS's machines:
+#   mac      x86: Intel (every Intel Mac)    arm: Apple
+#   windows  x86: Intel, AMD                 arm: Qualcomm (Snapdragon X; the
+#            only Windows-on-ARM laptops on sale as of 2026-11)
+#   linux    x86: Intel, AMD                 arm: Apple (Asahi), Qualcomm,
+#            Broadcom (Raspberry Pi), NVIDIA, Ampere, Rockchip, MediaTek,
+#            Amlogic, Allwinner
+#
+# The GPU decides where it can. Every Intel integrated GPU reads "Intel(R) HD
+# Graphics" or "Intel(R) HD Graphics 400" (SanitizeRenderer.cpp), and only an
+# Intel CPU carries one; Arc, the A750 bucket, is a discrete card too. "Radeon
+# HD 3200 Graphics" is the bucket of AMD's integrated GPUs since Zen ("AMD
+# Radeon(TM) Graphics") besides the Radeon HD 2000-4000 cards of 2007-2009, so
+# on Windows and Linux it is taken as an AMD APU. Every x86 Mac has an Intel
+# CPU, whatever GPU it reports, and an Apple GPU sits on an Apple CPU. An
+# Adreno sits on a Qualcomm SoC, a VideoCore/V3D on a Broadcom one, a Mali on
+# an ARM SoC of some other maker. Any other GPU is a discrete card or a bucket
+# that leaves the CPU open.
+#
+# The core count can decide the x86 vendor too. Every AMD x86 CPU since 2015
+# runs one or two threads per core, and its one-thread parts have 2 to 8
+# cores, so it reports an even count with no 10, 14, 18, 22 or 28 (Wikipedia's
+# lists of Ryzen and Athlon processors, Zen 5c hybrids included). Intel's
+# hybrids reach those: the Core Ultra 5 225 reports 10, the 245K 14, the 125H
+# 18, the 155H 22 and the i7-14700K 28. ARM chips reach them too (an M4 Pro
+# has 14), so the rule is for x86 only.
+CPU_ARCHES = ('x86', 'arm')
+CPU_MANUFACTURERS: Dict[str, Dict[str, Tuple[str, ...]]] = {
+    os_: {arch: tuple(makers) for arch, makers in by_arch.items()}
+    for os_, by_arch in LAUNCHER_CONSTANTS['cpuManufacturers'].items()
+}
+CPU_VENDORS = ('intel', 'amd')
+INTEL_ONLY_CORE_COUNTS = frozenset(LAUNCHER_CONSTANTS['intelOnlyCoreCounts'])
+_INTEL_IGPUS = ('Intel(R) HD Graphics, or similar', 'Intel(R) HD Graphics 400, or similar',
+                'Intel(R) HD Graphics Direct3D11', 'Intel(R) HD Graphics 400 Direct3D11')
+_AMD_IGPUS = ('Radeon HD 3200 Graphics',)
+# ARM GPUs and the SoC makers that ship them.
+_ARM_GPUS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    ('Apple M', ('apple',)),
+    ('Apple GPU', ('apple',)),
+    ('Adreno', ('qualcomm',)),
+    ('V3D', ('broadcom',)),
+    ('VideoCore', ('broadcom',)),
+    ('Mali', ('rockchip', 'mediatek', 'amlogic', 'allwinner')),
+    ('Immortalis', ('mediatek',)),
+    ('Tegra', ('nvidia',)),
+)
+
+
+def cpu_os(target_os: str) -> str:
+    """The cpuManufacturers key for a launcher OS name (win, mac, lin, ...)."""
+    return {'win': 'windows', 'windows': 'windows', 'mac': 'mac', 'macos': 'mac'}.get(target_os, 'linux')
+
+
+def cpu_manufacturers(target_os: str, arch: str) -> Tuple[str, ...]:
+    return CPU_MANUFACTURERS[cpu_os(target_os)].get(arch, ())
+
+
+def resolve_cpu(cpu: Any, target_os: str) -> Dict[str, str]:
+    """Check a caller's `cpu` option and fill in what it implies.
+
+    Raises ValueError for anything no real machine running `target_os` is: an
+    unknown key, architecture or manufacturer, or a pair such as an AMD Mac or
+    an Apple x86 CPU. A manufacturer alone implies its architecture.
+    """
+    if not isinstance(cpu, dict):
+        raise ValueError(f"cpu must be a dict such as {{'arch': 'x86', 'manufacturer': 'intel'}}, not {cpu!r}")
+    unknown = sorted(set(cpu) - {'arch', 'manufacturer'})
+    if unknown:
+        raise ValueError(f"cpu takes 'arch' and 'manufacturer', not {', '.join(map(repr, unknown))}")
+    arch, maker = cpu.get('arch'), cpu.get('manufacturer')
+    if arch is not None and arch not in CPU_ARCHES:
+        raise ValueError(f"cpu arch must be one of {CPU_ARCHES}, not {arch!r}")
+    os_name = cpu_os(target_os)
+    table = CPU_MANUFACTURERS[os_name]
+    if maker is not None:
+        arches = [a for a in CPU_ARCHES if maker in table.get(a, ())]
+        if not arches:
+            known = sorted({m for makers in table.values() for m in makers})
+            raise ValueError(f"no {os_name} machine has a CPU made by {maker!r}; on {os_name} it is one of {', '.join(known)}")
+        if arch is None:
+            arch = arches[0]
+        elif arch not in arches:
+            raise ValueError(
+                f"no {os_name} machine has an {arch} CPU made by {maker!r}; {os_name} {arch} CPUs are made by "
+                f"{', '.join(table.get(arch, ())) or 'nobody'}"
+            )
+    elif arch is not None and not table.get(arch):
+        raise ValueError(f"no {os_name} machine has an {arch} CPU")
+    out = {}
+    if arch is not None:
+        out['cpu:arch'] = arch
+    if maker is not None:
+        out['cpu:manufacturer'] = maker
+    return out
+
+
+def gpu_cpu(renderer: Optional[str], target_os: str) -> Tuple[Optional[str], Tuple[str, ...]]:
+    """The CPU architecture this GPU implies and the manufacturers it allows.
+
+    (None, ()) when the GPU leaves both open. An empty tuple with an
+    architecture means any maker of that architecture on `target_os`.
+    """
+    renderer = str(renderer or '')
+    if not renderer:
+        return None, ()
+    for marker, makers in _ARM_GPUS:
+        if marker in renderer:
+            return 'arm', makers
+    if cpu_os(target_os) == 'mac':
+        return 'x86', ('intel',)
+    if any(igpu in renderer for igpu in _INTEL_IGPUS):
+        return 'x86', ('intel',)
+    if any(igpu in renderer for igpu in _AMD_IGPUS):
+        return 'x86', ('amd',)
+    return None, ()
+
+
+def gpu_fits_cpu(renderer: Optional[str], target_os: str, arch: Optional[str], maker: Optional[str]) -> bool:
+    """Whether a machine with this GPU can have this CPU."""
+    by_gpu, makers = gpu_cpu(renderer, target_os)
+    if arch is None and maker is not None:
+        arch = next((a for a in CPU_ARCHES if maker in cpu_manufacturers(target_os, a)), None)
+    if arch is None or 'llvmpipe' in str(renderer or ''):
+        # Mesa's software renderer draws on whatever CPU the machine has.
+        return True
+    if by_gpu is None:
+        # A discrete card or an open bucket: an x86 machine. No ARM laptop or
+        # board on sale carries a discrete GPU Firefox would name.
+        return arch == 'x86' and cpu_os(target_os) != 'mac'
+    if by_gpu != arch:
+        return False
+    return maker is None or not makers or maker in makers
+
+
+def gpu_cpu_vendor(renderer: Optional[str], target_os: str) -> Optional[str]:
+    """The x86 CPU vendor this GPU implies, or None when it leaves it open."""
+    arch, makers = gpu_cpu(renderer, target_os)
+    return makers[0] if arch == 'x86' and len(makers) == 1 else None
+
+
+def cores_cpu_vendor(cores: Any) -> Optional[str]:
+    """The x86 CPU vendor this navigator.hardwareConcurrency implies, or None."""
+    return 'intel' if cores in INTEL_ONLY_CORE_COUNTS else None
+
+
+def hardware_cpu(config: Dict[str, Any], target_os: str) -> Tuple[Optional[str], Optional[str]]:
+    """The (arch, manufacturer) the identity's GPU or, failing that, its core count implies."""
+    arch, makers = gpu_cpu(_renderer(config), target_os)
+    if arch == 'arm':
+        return arch, makers[0] if len(makers) == 1 else None
+    vendor = (makers[0] if makers else None) or cores_cpu_vendor(config.get('navigator.hardwareConcurrency'))
+    return ('x86' if vendor or arch else None), vendor
+
+
+def hardware_cpu_vendor(config: Dict[str, Any], target_os: str) -> Optional[str]:
+    """The x86 CPU vendor the identity's GPU or, failing that, its core count implies."""
+    arch, maker = hardware_cpu(config, target_os)
+    return maker if arch == 'x86' else None
+
+
+def cpu_conflict(config: Dict[str, Any], target_os: str) -> Optional[str]:
+    """Why the claimed CPU cannot sit in this machine, or None."""
+    arch, maker = config.get('cpu:arch'), config.get('cpu:manufacturer')
+    if arch is None and maker is None:
+        return None
+    try:
+        resolve_cpu({k: v for k, v in (('arch', arch), ('manufacturer', maker)) if v is not None}, target_os)
+    except ValueError as exc:
+        return str(exc)
+    renderer = _renderer(config)
+    claimed = ' '.join(str(v) for v in (maker, arch) if v)
+    if renderer and not gpu_fits_cpu(renderer, target_os, arch, maker):
+        return f'CPU {claimed} beside {renderer!r}'
+    cores = config.get('navigator.hardwareConcurrency')
+    if (arch or 'x86') == 'x86' and maker and maker != cores_cpu_vendor(cores) and cores_cpu_vendor(cores):
+        return f'CPU {claimed} with hardwareConcurrency {cores}, which only an Intel CPU reports'
+    return None
+
+
+def _check_cpu(config: Dict[str, Any], target_os: str) -> Optional[str]:
+    return cpu_conflict(config, target_os)
+
+
+def _repair_cpu(config: Dict[str, Any], target_os: str) -> None:
+    # The GPU decides. An AMD APU's GPU beside an Intel-only core count stays
+    # reported: no vendor matches both.
+    arch, maker = hardware_cpu(config, target_os)
+    if arch is None:
+        arch = 'x86'
+    config['cpu:arch'] = arch
+    if maker:
+        config['cpu:manufacturer'] = maker
+    elif config.get('cpu:manufacturer') not in cpu_manufacturers(target_os, arch) or cpu_conflict(config, target_os):
+        config.pop('cpu:manufacturer', None)
+
+
 def _check_arch_agreement(config: Dict[str, Any], target_os: str) -> Optional[str]:
     ua = str(config.get('navigator.userAgent') or '')
     platform = str(config.get('navigator.platform') or '')
@@ -403,6 +610,7 @@ RULES: List[Rule] = [
     Rule('screen-shape', _check_screen_shape, None),
     Rule('avail-bounds', _check_avail_bounds, _repair_avail_bounds),
     Rule('arch-agreement', _check_arch_agreement, None),
+    Rule('cpu-matches-hardware', _check_cpu, _repair_cpu),
 ]
 
 

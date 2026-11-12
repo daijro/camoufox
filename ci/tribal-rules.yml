@@ -421,6 +421,34 @@ rules:
       the audio hash with the values that must match across contexts, and the
       audio-matches-stock guard checks the build against the recorded values.
 
+  - id: canvas-follows-the-claimed-cpu-vendor
+    title: A page computes as the claimed CPU does, Intel, AMD or ARM64; the x86 vendor is drawn at Firefox's x86 share
+    check: manual   # ci/tests/test_cpu_estimates.py, browser/tests/cpu-estimates/check.py, guard cpu-vendor-estimates
+    evidence:
+      - "2026-11-10, all 2^32 inputs: Core i7-12700H (Linux) and i9-11900H (Windows 11) give identical RCPPS/RSQRTPS bits; Ryzen 7 9850X3D (Zen 5) and Threadripper 7970X (Zen 4) give identical bits; the two vendors differ (browser/tests/cpu-estimates/provenance.json)"
+      - "stock Firefox 159.0, gradient over gradient, getImageData FNV-1a: i9-11900H on Windows and Ryzen 9850X3D on Linux agree for source-over, multiply, screen and soft-light and differ for color-dodge, color-burn, hue, saturation, color and luminosity; the build with general.cpu_identity 1 on the Ryzen gives the i9's hashes for all ten (guard cpu-vendor-estimates)"
+      - "stock Firefox 159.0, WebCodecs AudioEncoder Opus 64 kbit/s mono, one second of a fixed signal: one byte stream on the i7-12700H (Linux) and i9-11900H (Windows), another on the Ryzen 9850X3D (Linux) and the Threadripper 7970X (Firefox 158, Linux); libopus celt/x86/vq_sse2.c calls _mm_rcp_ps and _mm_rsqrt_ps; the build with general.cpu_identity 1 on the Ryzen gives the Intel stream byte for byte (guard cpu-vendor-estimates)"
+      - "stock Firefox 159.0 on the same four x86 CPUs: Web Audio nodes, NaN bits, the 11 WebAssembly relaxed SIMD operations, WebGL shaders, flac/vorbis/AAC and the video encoders gave one value per OS, none per vendor; an Apple M4 differs in all of Web Audio, nearly all canvas operations, Opus, NaN sign and 9 relaxed SIMD operations"
+      - "2026-11-11, the build with general.cpu_identity 3 on the Ryzen 9850X3D, launched through the Python launcher under Xvfb: all 45 cpu-probe keys on which stock 159.0 x86-64 and ARM64 Linux differ (canvas text aside, which follows devicePixelRatio) equal the Apple M4 container's (guard cpu-vendor-estimates)"
+      - "Firefox Public Data Report, hardware, week of 2026-11-02: Intel 76.86%, AMD 17.61%, Apple 5.04%, so Intel is 81.4% of x86; no per-OS split is published"
+    rationale: >-
+      The two estimate instructions are specified only to a relative error, and
+      each vendor implements them with its own table, the same across that
+      vendor's generations and OSes. Skia's raster pipeline uses them for
+      blend modes, perspective and matrix inversion, and libopus for the PVQ
+      search in its encoder, so canvas readback and encoded Opus name the
+      host's vendor. The patch reproduces the other vendor's table when the
+      pref names it and changes nothing otherwise; libgkcodecs cannot read
+      prefs, so Gecko hands libopus the table before creating an encoder. The launcher draws the vendor
+      with the identity: from the GPU where only one vendor's CPU carries it
+      (Intel integrated graphics, Radeon APU graphics, every x86 Mac), else at
+      Firefox's x86 share, which Steam's survey would put far lower for Intel.
+      Audio is not part of the vendor split: the offline render splits x86-64
+      from ARM64, not Intel from AMD (audio-is-not-noised). An ARM64 identity
+      on x86-64 runs Firefox's aarch64 code paths emulated in C (Skia, Web
+      Audio, ffvpx, libopus) and ARM's NaN and relaxed SIMD rules in the JIT;
+      nothing emulates x86 on an ARM64 build.
+
   - id: cross-os-canvas-is-the-rfp-placeholder
     title: On the host's OS the identity claims the host's GPU or software renderer; on another OS or GPU canvas readback is RFP's random placeholder
     check: automated
