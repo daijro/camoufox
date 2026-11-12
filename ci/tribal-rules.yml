@@ -430,6 +430,7 @@ rules:
       - "stock Firefox 159.0, WebCodecs AudioEncoder Opus 64 kbit/s mono, one second of a fixed signal: one byte stream on the i7-12700H (Linux) and i9-11900H (Windows), another on the Ryzen 9850X3D (Linux) and the Threadripper 7970X (Firefox 158, Linux); libopus celt/x86/vq_sse2.c calls _mm_rcp_ps and _mm_rsqrt_ps; the build with general.cpu_identity 1 on the Ryzen gives the Intel stream byte for byte (guard cpu-vendor-estimates)"
       - "stock Firefox 159.0 on the same four x86 CPUs: Web Audio nodes, NaN bits, the 11 WebAssembly relaxed SIMD operations, WebGL shaders, flac/vorbis/AAC and the video encoders gave one value per OS, none per vendor; an Apple M4 differs in all of Web Audio, nearly all canvas operations, Opus, NaN sign and 9 relaxed SIMD operations"
       - "2026-11-11, the build with general.cpu_identity 3 on the Ryzen 9850X3D, launched through the Python launcher under Xvfb: all 45 cpu-probe keys on which stock 159.0 x86-64 and ARM64 Linux differ (canvas text aside, which follows devicePixelRatio) equal the Apple M4 container's (guard cpu-vendor-estimates)"
+      - "2026-11-11, the aarch64 build on an Apple M4 (Debian container, Xvfb, 8 cores), launched through the Python launcher: cpu intel and amd each give stock's ten composite hashes and Opus stream, and all 46 cpu-probe keys on which stock 159.0 x86-64 and ARM64 Linux differ equal the i7-12700H's and the Ryzen 9850X3D's (guard cpu-vendor-estimates)"
       - "Firefox Public Data Report, hardware, week of 2026-11-02: Intel 76.86%, AMD 17.61%, Apple 5.04%, so Intel is 81.4% of x86; no per-OS split is published"
     rationale: >-
       The two estimate instructions are specified only to a relative error, and
@@ -447,7 +448,9 @@ rules:
       from ARM64, not Intel from AMD (audio-is-not-noised). An ARM64 identity
       on x86-64 runs Firefox's aarch64 code paths emulated in C (Skia, Web
       Audio, ffvpx, libopus) and ARM's NaN and relaxed SIMD rules in the JIT;
-      nothing emulates x86 on an ARM64 build.
+      an Intel or AMD identity on ARM64 runs the x86 paths the same way (SSE,
+      AVX2 and FMA intrinsics in C, ffvpx's x86 assembly translated by
+      x86toc.py) and x86's NaN and relaxed SIMD rules.
 
   - id: cross-os-canvas-is-the-rfp-placeholder
     title: On the host's OS the identity claims the host's GPU or software renderer; on another OS or GPU canvas readback is RFP's random placeholder

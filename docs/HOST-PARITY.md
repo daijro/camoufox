@@ -158,10 +158,28 @@ The two translated ARM sources are generated from Firefox's aarch64 assembly by
 (`browser/tests/cpu-probe/`) with an ARM identity and compares every key on
 which stock x86-64 and ARM64 Linux differ.
 
+With `general.cpu_identity` 1 or 2, an aarch64 build computes what the
+x86-64 build computes on an AVX2 and FMA core of that vendor:
+
+- The x86 code paths are compiled for aarch64 against
+  `third_party/simde/x86emu`, which stands in for `<immintrin.h>`: SIMDe's
+  SSE, AVX2 and FMA intrinsics, with x86's negative default NaN, its NaN
+  operand order and its out-of-range conversions (`x86emu.h`). Skia runs its
+  SSE2, SSSE3 and AVX2 raster pipeline and blend kernels
+  (`SkOpts_X86EmuTarget.h`, the `*_x86emu.cpp` files), with the vendor's
+  estimate tables as on x86-64.
+- Web Audio mixes as its SSE4.2 engine does, on NEON registers with the
+  product rounded before each add (`AudioNodeEngineX86Emu.cpp`); the speex
+  resampler runs its SSE path, and libopus its SSE CELT float kernels
+  (`celt_x86emu.c`).
+- ffvpx's FFT runs its x86-64 AVX2 and FMA3 assembly, translated to C
+  (`tx_float_x86emu.c`) by `browser/scripts/x86toc.py`.
+- The JIT and the interpreter make x86's negative default NaN (Math
+  functions and constant folding included), and wasm relaxed SIMD gives the
+  lanes SpiderMonkey's x64 backend gives (`JS::SetEmulateX86`).
+
 What this does not cover:
 
-- An x86 identity on an ARM64 host. Nothing emulates x86 on aarch64, so an
-  ARM64 build always computes as ARM64.
 - WebGL. Shaders run on the host's GPU or llvmpipe; an ARM identity on Linux
   claims llvmpipe, since no Linux ARM GPU is recorded yet.
 - hardwareConcurrency and other CPU-shaped values do not yet follow the vendor.

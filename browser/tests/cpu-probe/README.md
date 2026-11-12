@@ -46,8 +46,10 @@ What they show:
   node, every canvas composite operation, drawImage, filter and paths, Opus,
   VP9, 9 of 11 relaxed SIMD operations, and the sign of the default NaN.
   Layout, DOMMatrix, Math and text measurement agree. `cpu-vendor-estimates.patch`
-  computes all of it on x86-64 when `general.cpu_identity` is 3; the guard
-  `cpu-vendor-estimates` checks it against `linux-arm64-docker-apple-m4`.
+  computes all of it on x86-64 when `general.cpu_identity` is 3, and the x86
+  values on ARM64 when it is 1 or 2; the guard `cpu-vendor-estimates` checks
+  it against `linux-arm64-docker-apple-m4`, `linux-x86_64-i7-12700h` and
+  `linux-x86_64-docker-ryzen-9850x3d`.
 - OS, not CPU: Windows differs in Math sin/cos/tan/pow, layout, DOMMatrix,
   text and Vorbis; macOS in pow, layout, DOMMatrix and text.
 - Host-dependent rather than CPU-dependent: H.264 encoder availability,
