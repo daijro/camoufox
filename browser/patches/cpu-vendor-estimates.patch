@@ -2085,18 +2085,17 @@ index 4a779d656b..afecad1a4c 100644
  
    // Step 6.
 diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
-index 2dba1b6e0c..7f870c95a2 100644
 --- a/js/src/builtin/Math.cpp
 +++ b/js/src/builtin/Math.cpp
-@@ -26,6 +26,7 @@
+@@ -25,6 +25,7 @@
+ #endif
  
- #include "builtin/UcrtMath.h"
  #include "jit/InlinableNatives.h"
 +#include "jit/JitOptions.h"
  #include "js/Class.h"
  #include "js/ForOfIterator.h"
  #include "js/Prefs.h"
-@@ -158,7 +159,7 @@ static bool math_abs(JSContext* cx, unsigned argc, Value* vp) {
+@@ -138,7 +139,7 @@
  
  double js::math_acos_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2105,7 +2104,7 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  static bool math_acos(JSContext* cx, unsigned argc, Value* vp) {
-@@ -168,7 +169,7 @@ static bool math_acos(JSContext* cx, unsigned argc, Value* vp) {
+@@ -148,7 +149,7 @@
  
  double js::math_asin_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2114,7 +2113,7 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  static bool math_asin(JSContext* cx, unsigned argc, Value* vp) {
-@@ -251,7 +252,7 @@ static bool math_clz32(JSContext* cx, unsigned argc, Value* vp) {
+@@ -231,13 +232,13 @@
  
  double js::math_cos_fdlibm_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2123,20 +2122,14 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  double js::math_cos_native_impl(double x) {
-@@ -259,10 +260,10 @@ double js::math_cos_native_impl(double x) {
+   MOZ_ASSERT(!math_use_fdlibm_for_sin_cos_tan());
    AutoUnsafeCallWithABI unsafe;
- #ifdef JS_UCRT_MATH
-   if (UseUcrtMath()) {
--    return ucrt_cos(x);
-+    return jit::X86NaN(ucrt_cos(x), x);
-   }
- #endif
 -  return std::cos(x);
 +  return jit::X86NaN(std::cos(x), x);
  }
  
  static bool math_cos(JSContext* cx, unsigned argc, Value* vp) {
-@@ -401,7 +402,7 @@ static bool math_f16round(JSContext* cx, unsigned argc, Value* vp) {
+@@ -376,7 +377,7 @@
  
  double js::math_log_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2145,7 +2138,7 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  static bool math_log(JSContext* cx, unsigned argc, Value* vp) {
-@@ -558,13 +559,13 @@ double js::ecmaPow(double x, double y) {
+@@ -533,13 +534,13 @@
     */
    if (std::isfinite(x) && x != 0.0) {
      if (y == 0.5) {
@@ -2162,7 +2155,7 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  static bool math_pow(JSContext* cx, unsigned argc, Value* vp) {
-@@ -651,7 +652,7 @@ static bool math_round(JSContext* cx, unsigned argc, Value* vp) {
+@@ -626,13 +627,13 @@
  
  double js::math_sin_fdlibm_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2171,20 +2164,14 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  double js::math_sin_native_impl(double x) {
-@@ -659,10 +660,10 @@ double js::math_sin_native_impl(double x) {
+   MOZ_ASSERT(!math_use_fdlibm_for_sin_cos_tan());
    AutoUnsafeCallWithABI unsafe;
- #ifdef JS_UCRT_MATH
-   if (UseUcrtMath()) {
--    return ucrt_sin(x);
-+    return jit::X86NaN(ucrt_sin(x), x);
-   }
- #endif
 -  return std::sin(x);
 +  return jit::X86NaN(std::sin(x), x);
  }
  
  static bool math_sin(JSContext* cx, unsigned argc, Value* vp) {
-@@ -675,7 +676,7 @@ static bool math_sin(JSContext* cx, unsigned argc, Value* vp) {
+@@ -645,7 +646,7 @@
  
  double js::math_sqrt_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2193,7 +2180,7 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  static bool math_sqrt(JSContext* cx, unsigned argc, Value* vp) {
-@@ -685,7 +686,7 @@ static bool math_sqrt(JSContext* cx, unsigned argc, Value* vp) {
+@@ -655,13 +656,13 @@
  
  double js::math_tan_fdlibm_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2202,20 +2189,14 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  double js::math_tan_native_impl(double x) {
-@@ -693,10 +694,10 @@ double js::math_tan_native_impl(double x) {
+   MOZ_ASSERT(!math_use_fdlibm_for_sin_cos_tan());
    AutoUnsafeCallWithABI unsafe;
- #ifdef JS_UCRT_MATH
-   if (UseUcrtMath()) {
--    return ucrt_tan(x);
-+    return jit::X86NaN(ucrt_tan(x), x);
-   }
- #endif
 -  return std::tan(x);
 +  return jit::X86NaN(std::tan(x), x);
  }
  
  static bool math_tan(JSContext* cx, unsigned argc, Value* vp) {
-@@ -709,7 +710,7 @@ static bool math_tan(JSContext* cx, unsigned argc, Value* vp) {
+@@ -674,7 +675,7 @@
  
  double js::math_log10_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2224,7 +2205,7 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  static bool math_log10(JSContext* cx, unsigned argc, Value* vp) {
-@@ -719,7 +720,7 @@ static bool math_log10(JSContext* cx, unsigned argc, Value* vp) {
+@@ -684,7 +685,7 @@
  
  double js::math_log2_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2233,7 +2214,7 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  static bool math_log2(JSContext* cx, unsigned argc, Value* vp) {
-@@ -729,7 +730,7 @@ static bool math_log2(JSContext* cx, unsigned argc, Value* vp) {
+@@ -694,7 +695,7 @@
  
  double js::math_log1p_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2242,7 +2223,7 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  static bool math_log1p(JSContext* cx, unsigned argc, Value* vp) {
-@@ -779,7 +780,7 @@ static bool math_tanh(JSContext* cx, unsigned argc, Value* vp) {
+@@ -744,7 +745,7 @@
  
  double js::math_acosh_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2251,7 +2232,7 @@ index 2dba1b6e0c..7f870c95a2 100644
  }
  
  static bool math_acosh(JSContext* cx, unsigned argc, Value* vp) {
-@@ -799,7 +800,7 @@ static bool math_asinh(JSContext* cx, unsigned argc, Value* vp) {
+@@ -764,7 +765,7 @@
  
  double js::math_atanh_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
