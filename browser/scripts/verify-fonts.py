@@ -17,7 +17,8 @@ For each OS it
      alias names bundle/fontconfig/<os>/fonts.conf rewrites (checked with
      fc-match: the alias must resolve to its bundled target);
   3. checks the CSS generics resolve to a family in fonts.json[os];
-  4. checks every essential / variant / marker name is in fonts.json[os];
+  4. checks every essential / variant / marker name is in fonts.json[os], and
+     every OS version that reports an alias's target reports the alias;
   5. draws _generate_random_font_subset a few times and checks each draw is inside fonts.json[os] and contains the
      essentials and markers;
   6. checks scripts/package.py's flattening is safe: no basename collides
@@ -45,7 +46,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PYTHON_SRC = os.path.join(os.path.dirname(REPO), 'python', 'src')
 PACKAGE = os.path.join(PYTHON_SRC, 'camoufox')
 sys.path.insert(0, PYTHON_SRC)
-from camoufox.fingerprints import _generate_random_font_subset  # noqa: E402
+from camoufox.fingerprints import _generate_random_font_subset, _load_font_bases, _load_font_groups  # noqa: E402
 
 OSDIRS = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}
 GENERICS = ['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'system-ui']
@@ -218,7 +219,6 @@ def main():
             alias_elems = conf_alias_elements(text)
 
             # 4. constants
-            suffix = {'win': 'WINDOWS', 'mac': 'MACOS', 'lin': 'LINUX'}[os_key]
             essential = essentials[os_key]
             markers = constants['markerFonts'][os_key]
             # The Windows 11 families: part of the Windows base, and only
@@ -230,24 +230,34 @@ def main():
                     fail(f'{os_key}: {label} names not in fonts.json: {missing}')
                 else:
                     print(f'OK: {len(lst)} {label} names all in fonts.json[{os_key}] ({len(reportable)})')
-            # An unconditional pattern rewrite whose TARGET is reportable makes the
-            # alias renderable for every identity, so the alias must be reported by
-            # every identity too (essential). Rewrites to an unbundled/unreported
-            # target are inert (the allowlist blocks the target) and only noted.
+            # An unconditional pattern rewrite renders its alias wherever its
+            # TARGET is reported, so every OS version (font-bases.json, plus the
+            # essentials every identity reports) that reports the target must
+            # report the alias too. A target an optional group adds could be
+            # drawn without the alias. Rewrites to an unreported target are
+            # inert (the allowlist blocks the target).
             skip = {'MS Shell Dlg 2', 'MONO', 'mono', 'sans', 'sans serif', *GENERICS}
             live = {a: t for a, t in aliases.items() if a not in skip and t in rset}
             inert = sorted(a for a, t in aliases.items() if a not in skip and t not in rset)
-            not_always = sorted(set(live) - set(essential))
-            if not_always:
-                msg = (f'{os_key}: fonts.conf rewrites {not_always} unconditionally to a reportable target, '
-                       f'so they render for every identity but are not always reported (_ESSENTIAL_FONTS_{suffix})')
+            unreported = sorted({
+                f'{a} ({base["id"]})'
+                for base in _load_font_bases()[os_key] for a, t in live.items()
+                for reported in [set(base['fonts']) | set(essential)]
+                if t in reported and a not in reported
+            })
+            in_groups = sorted({a for unit in _load_font_groups()[os_key] for a, t in live.items() if t in unit['fonts']})
+            if unreported:
                 # Renderable-but-unreported is the safe direction of the invariant;
                 # it is a hard failure only where the real OS reports the name
                 # (Windows: every box resolves the GDI substitutes; macOS: the TTC
                 # weight names are real families there).
-                (fail if os_key in ('win', 'mac') else warn)(msg)
-            elif live:
-                print(f'OK: {len(live)} live alias rewrites are all essential (always reported)')
+                (fail if os_key in ('win', 'mac') else warn)(
+                    f'{os_key}: fonts.conf rewrites {unreported} to a target that OS version reports, '
+                    f'so they render there but are not reported (gen-fonts-json.py ALIASES)')
+            if in_groups:
+                fail(f'{os_key}: fonts.conf rewrites {in_groups} to a target a font group adds')
+            if live and not unreported and not in_groups:
+                print(f'OK: {len(live)} live alias rewrites are reported wherever their target is')
             if inert:
                 print(f'note: {len(inert)} alias rewrites are inert for {os_key} (target not reportable): {inert[:4]}...')
 

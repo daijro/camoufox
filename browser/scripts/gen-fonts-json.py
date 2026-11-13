@@ -82,9 +82,9 @@ ALIASES = {
         'Nirmala UI Semilight': 'Nirmala UI',
     },
     # macOS registers each weight of these TTCs as its own family, which
-    # fontconfig and fc-scan do not, so they are listed (and always reported, as
-    # _ESSENTIAL_FONTS_MACOS) here; bundle/fontconfig/macos/fonts.conf rewrites
-    # each to its base family.
+    # fontconfig and fc-scan do not, so they are listed here, reported by each
+    # OS version that has the base family; bundle/fontconfig/macos/fonts.conf
+    # rewrites each to its base family.
     'mac': {
         'American Typewriter Semibold': 'American Typewriter',
         'Apple SD Gothic Neo ExtraBold': 'Apple SD Gothic Neo',

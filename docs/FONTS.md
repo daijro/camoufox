@@ -260,8 +260,10 @@ cd python && python3 -m pytest -q -k "font or humanize or launch_environment"
 The full run checks, per OS: `fonts.json[os]` ⊆ what `fc-list` publishes (aliases
 resolved via `fc-match`), no file reachable outside that OS's groups, generics
 resolve to a reportable family, essential / variant / marker ⊆ `fonts.json`,
-20 draws stay inside `fonts.json`, each face stored exactly once, no subfolders,
-and no basename collisions within a package's group set.
+every OS version that reports an alias's target reports the alias, 20 draws stay
+inside `fonts.json`, each face stored exactly once, no subfolders, and no
+basename collisions within a package's group set. The release runs the full
+check; every pull request runs `--quick` on the fonts its build carries.
 
 ## Known residue
 
