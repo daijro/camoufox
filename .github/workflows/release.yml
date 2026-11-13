@@ -186,6 +186,9 @@ jobs:
       # The uBlock Origin release the tests ran with; scripts/package.py bundles it.
       CAMOUFOX_UBO: ${{ needs.ubo.outputs.pin }}
     strategy:
+      # Every target builds to the end, so one release run reports every broken
+      # target; publish-browser still needs all of them to succeed.
+      fail-fast: false
       matrix:
         target: [linux, windows, macos]
         arch: [x86_64, arm64, i686]

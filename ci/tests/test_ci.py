@@ -3165,6 +3165,17 @@ def test_every_windows_release_build_installs_the_32_bit_loader():
         assert "libc6-i386" in out.split(), f"windows {arch} does not install libc6-i386"
 
 
+def test_one_failed_release_build_does_not_cancel_the_others():
+    """Only a release builds Windows, macOS and arm64, and a failed build
+    cancelled the rest, so each release run could report one broken target."""
+    import yaml
+
+    jobs = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]
+    assert jobs["build-browser"]["strategy"]["fail-fast"] is False
+    publish = jobs["publish-browser"]
+    assert "build-browser" in publish["needs"] and "if" not in publish
+
+
 # ---------------------------------------------------------------------------
 # the installed packages launch a browser
 # ---------------------------------------------------------------------------
