@@ -3145,6 +3145,37 @@ def test_pull_requests_verify_the_fonts():
                for job in workflow["jobs"].values() for step in job.get("steps", []))
 
 
+def test_every_windows_release_build_installs_the_32_bit_loader():
+    """Mozilla's Wine runs midl.exe through /lib/ld-linux.so.2. Clang from
+    apt.llvm.org once pulled libc6-i386 in by accident; when that step went,
+    the Windows x86_64 release failed at its first IDL file."""
+    import subprocess
+    import yaml
+
+    job = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]["build-browser"]
+    script = next(step["run"] for step in job["steps"] if step.get("name") == "Install dependencies")
+    matrix = job["strategy"]["matrix"]
+    excluded = [(e["target"], e["arch"]) for e in matrix.get("exclude", [])]
+    for arch in matrix["arch"]:
+        if ("windows", arch) in excluded:
+            continue
+        body = script.replace("${{ matrix.target }}", "windows").replace("${{ matrix.arch }}", arch)
+        out = subprocess.run(["bash", "-ec", "sudo() { echo \"$@\"; }\n" + body],
+                             capture_output=True, text=True, check=True).stdout
+        assert "libc6-i386" in out.split(), f"windows {arch} does not install libc6-i386"
+
+
+def test_one_failed_release_build_does_not_cancel_the_others():
+    """Only a release builds Windows, macOS and arm64, and a failed build
+    cancelled the rest, so each release run could report one broken target."""
+    import yaml
+
+    jobs = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]
+    assert jobs["build-browser"]["strategy"]["fail-fast"] is False
+    publish = jobs["publish-browser"]
+    assert "build-browser" in publish["needs"] and "if" not in publish
+
+
 # ---------------------------------------------------------------------------
 # the installed packages launch a browser
 # ---------------------------------------------------------------------------

@@ -186,6 +186,9 @@ jobs:
       # The uBlock Origin release the tests ran with; scripts/package.py bundles it.
       CAMOUFOX_UBO: ${{ needs.ubo.outputs.pin }}
     strategy:
+      # Every target builds to the end, so one release run reports every broken
+      # target; publish-browser still needs all of them to succeed.
+      fail-fast: false
       matrix:
         target: [linux, windows, macos]
         arch: [x86_64, arm64, i686]
@@ -256,7 +259,8 @@ jobs:
           # through fc-list/fc-match, so the bundle is checked with the same tool
           # the browser uses rather than assumed correct.
           sudo apt-get install -y msitools p7zip-full aria2 ccache fontconfig
-          if [ "${{ matrix.arch }}" != "x86_64" ]; then
+          # libc6-i386: Mozilla's Wine runs midl.exe through /lib/ld-linux.so.2.
+          if [ "${{ matrix.target }}" = windows ] || [ "${{ matrix.arch }}" != "x86_64" ]; then
             sudo apt-get install -y libc6-i386 lib32gcc-s1 lib32stdc++6 gcc-multilib g++-multilib
           fi
 
