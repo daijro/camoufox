@@ -975,6 +975,12 @@ jobs:
       # (`-e ../../../python`), and still needs the pin before fpgen loads
       # (observed downloading the April-2025 model in run 36050915401).
       - uses: ./.github/actions/fpgen-model
+      - name: Verify the bundled fonts match fonts.json
+        # The release runs the full check before it builds. This quick one, on
+        # the fonts the artifact carries, fails the pull request that breaks it.
+        run: |
+          pip install -e python
+          python3 browser/scripts/verify-fonts.py --quick --bundle "$(dirname "$CAMOUFOX_BINARY")"
       - run: xvfb-run -a python3 -m ci.run_build_tester --binary "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
         if: always()

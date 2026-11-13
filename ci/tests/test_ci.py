@@ -3134,6 +3134,17 @@ def test_every_workflow_step_running_verify_fonts_installs_the_package():
                     )
 
 
+def test_pull_requests_verify_the_fonts():
+    """verify-fonts.py ran only in the release, so a pull request that broke it
+    merged green and the next release failed before building."""
+    import yaml
+
+    workflow = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8"))
+    assert "pull_request" in workflow[True]
+    assert any("verify-fonts.py" in (step.get("run") or "")
+               for job in workflow["jobs"].values() for step in job.get("steps", []))
+
+
 # ---------------------------------------------------------------------------
 # the installed packages launch a browser
 # ---------------------------------------------------------------------------
