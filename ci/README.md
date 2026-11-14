@@ -40,7 +40,8 @@ in full.
 | `pythonlib` | `ci.run_pythonlib` | `python/`'s own tests |
 | `typescript` | `ci.run_typescript` | Type check, lint, vitest, byte-for-byte parity with `python/` |
 | `install` | `ci.run_install` | The packed packages install into clean environments, fetch a real browser, and launch it and the browser under test through the installed package: the User-Agent claims the launched Firefox, the page and the request agree on it, the bundled fonts render, and a click and typed text reach the page as trusted events |
-| `build` / `fetch-browser` | `ci.run_prepare`, `ci.run_build` | The browser under test: compiled from this branch, or the published release built from the same sources |
+| `build` / `fetch-browser` | `ci.run_prepare`, `ci.run_build` | The browser under test: built and packaged from this branch by the command a release's build runs, or the published release built from the same sources |
+| `preflight` | `ci.run_prepare`, `ci.run_build --preflight` | Each target only a release builds (linux arm64, windows x86_64 and i686, macos x86_64 and arm64) configures, passes the export tiers, and compiles every source file a patch or an addition touches ([below](#what-a-release-builds)) |
 | `patch-guards` | `ci.run_patch_guards --group spoofing\|automation\|parity`, `ci.run_skiplist_audit` | One guard per shipped behaviour ([`browser/tests/playwright/`](../browser/tests/playwright/README.md)); every skiplist entry still fails |
 | `build-tester` | `ci.run_build_tester` | The raw binary against the anti-detect checks ([README](../browser/tests/build-tester/README.md)) |
 | `typescript-browser` | `ci.run_typescript --browser` | The npm launcher against a real browser |
@@ -195,7 +196,7 @@ Anything that is not `success` fails it, including `skipped`, except:
 
 | May be skipped | When |
 |---|---|
-| `build` | The browser was fetched, not compiled |
+| `build`, `preflight` | The browser was fetched, not compiled |
 | `fetch-browser` | The browser was compiled, not fetched |
 | `sundial` | Disabled in `ci/sundial.yml`, or no credential |
 | `carry-browser` | The push to `main` was not carried |
@@ -226,7 +227,7 @@ Each tier gates the next, so a lint failure never reaches the build:
 |---|---|---|
 | 0 static | lint, self-tests, settled decisions | seconds |
 | 1 unit | pythonlib, typescript | about a minute |
-| 2 browser | build (browser sources changed) or fetch (they did not) | minutes to hours |
+| 2 browser | build and five preflights (browser sources changed) or fetch (they did not) | minutes to hours |
 | 3a smoke | patch guards, skiplist audit, build-tester, typescript-browser, install | about 15 min |
 | 3b full | Playwright × 6, native, growth × 7, stealth | about 40 min |
 | 4 gate | the required check | seconds |
@@ -242,6 +243,25 @@ Each tier gates the next, so a lint failure never reaches the build:
 | **Network retries only** | `ci.run_prepare` (`setup-minimal`, `dir`, `mozbootstrap`) retries only failures that read as transient network errors. A failed hunk or compile error fails at once. |
 
 Pushing to a branch cancels its running build (`cancel-in-progress`).
+
+## What a release builds
+
+A release builds six targets and a pull request builds one. Every step of a
+release's build therefore also runs on a pull request
+([`one-build-entry-point`](tribal-rules.yml)):
+
+| | Pull request | Release |
+|---|---|---|
+| Runner setup | [`build-host`](../.github/actions/build-host/action.yml) | the same action |
+| Source tree | `ci.run_prepare` | the same |
+| linux x86_64 | `ci.run_build`: `multibuild.py` retargets, builds and packages | the same command |
+| The other five targets | `ci.run_build --preflight`: `multibuild.py` retargets, then [`preflight.py`](../browser/scripts/preflight.py) configures, runs the `pre-export`, `export` and `pre-compile` tiers and compiles the objects of every patched or added source file | `ci.run_build`: the full build |
+
+A preflight does not link or package, so a link error on a cross-compiled
+target is still found by a release. Its compiles are cached per target, and a
+target that passed is not preflighted again until the browser's compiled
+inputs, `build-host` or the runner scripts change; the twice-weekly scheduled
+run preflights every target regardless.
 
 ## Releases
 
@@ -293,7 +313,8 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | Command | Needs a browser | What it runs |
 |---|---|---|
 | `python3 -m ci.run_prepare` | | `make setup-minimal`, `dir`, `mozbootstrap` |
-| `python3 -m ci.run_build` | | The browser build |
+| `python3 -m ci.run_build` | | The browser build and package for linux x86_64; `--target`, `--arch` for another |
+| `python3 -m ci.run_build --target windows --arch x86_64 --preflight` | | Preflight one target |
 | `python3 -m ci.run_pythonlib` | | `python/`'s tests |
 | `python3 -m ci.run_typescript` | | `typescript/`'s tests |
 | `python3 -m ci.run_typescript --browser <bin>` | yes | The npm launcher end to end |

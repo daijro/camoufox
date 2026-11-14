@@ -668,6 +668,7 @@ python3 multibuild.py --target linux windows macos --arch x86_64 arm64
 | `--arch` | `x86_64`, `arm64`, `i686` (one or more; `i686` builds Windows only) |
 | `--bootstrap` | Bootstrap the build system first |
 | `--clean` | Clean the build directory first |
+| `--preflight` | Check that each target builds without building it: configure, the export tiers, and every patched source file (minutes, not hours) |
 
 Artifacts are written to `browser/dist/`.
 

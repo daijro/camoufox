@@ -970,6 +970,27 @@ def test_patches_never_edit_additions():
     assert not edited, "\n".join(edited) + explain("patches-never-edit-additions")
 
 
+def test_one_build_entry_point():
+    """Rule: one-build-entry-point."""
+    builds = {
+        ("tests.yml", "build"): "python3 -m ci.run_build",
+        ("tests.yml", "preflight"): "python3 -m ci.run_build --target ${{ matrix.target }} --arch ${{ matrix.arch }} --preflight",
+        ("release.yml", "build-browser"): "python3 -m ci.run_build --target ${{ matrix.target }} --arch ${{ matrix.arch }}",
+    }
+    import yaml
+
+    for (workflow, job), command in builds.items():
+        steps = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8"))["jobs"][job]["steps"]
+        lines = [line.strip() for step in steps for line in (step.get("run") or "").splitlines()
+                 if not line.lstrip().startswith("#")]
+        assert command in lines, f"{workflow}:{job} does not run `{command}`" + explain("one-build-entry-point")
+        for direct in ("multibuild.py", "make build", "make -C browser build", "mach build", "make set-target"):
+            assert not any(direct in line for line in lines), (
+                f"{workflow}:{job} runs `{direct}` itself" + explain("one-build-entry-point"))
+    assert '"multibuild.py", "--target", args.target, "--arch", args.arch' in (
+        REPO_ROOT / "ci" / "run_build.py").read_text(encoding="utf-8"), explain("one-build-entry-point")
+
+
 # ---------------------------------------------------------------------------
 # juggler
 # ---------------------------------------------------------------------------

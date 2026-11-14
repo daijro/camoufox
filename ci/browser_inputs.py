@@ -72,7 +72,7 @@ BROWSER_DIRS = (
     "browser/scripts",
     "browser/bundle/fontconfig",
 )
-BROWSER_FILES = ("browser/upstream.sh", "browser/Makefile")
+BROWSER_FILES = ("browser/upstream.sh", "browser/Makefile", "browser/multibuild.py")
 
 # Tools under browser/scripts/ that no build runs, so touching one must not
 # invalidate a cached browser and cost an hour of compiling. ci/tests/test_ci.py
