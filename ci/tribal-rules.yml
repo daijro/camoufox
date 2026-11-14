@@ -844,6 +844,21 @@ rules:
       to manage. A fix that cannot wait is cut by dispatching release.yml on
       main, and an open issue labelled `regression` holds the promotion.
 
+  - id: a-tested-tree-is-tested-once
+    title: A push to main that lands a tree its pull request run passed, and a cut of a commit main's run passed, do not run the suites again
+    check: manual   # ci/tests/test_carry.py, ci/tests/test_release.py
+    evidence:
+      - "main runs 43528865366 and 43540606337 re-ran every suite on trees their pull request runs (#1038, #1039) had passed; the only failure in each was the getter-cost timing guard, which re-running only re-sampled"
+      - "release.yml's dispatch ran tests.yml a third time on a commit main's run had already passed before building anything"
+    rationale: >-
+      A pull request run tests the merge of the pull request into main as main
+      stood then. With nothing merged in between, the squashed commit has that
+      tree exactly, so a second run proves nothing new and only gives
+      non-deterministic checks another chance to fail after the merge. Main
+      still runs what the pull request could not, the stealth check, and tests
+      in full whenever its tree differs. A cut reuses main's own gate result,
+      the same check a promotion already requires.
+
   # -------------------------------------------------------------------------
   # Build
   # -------------------------------------------------------------------------

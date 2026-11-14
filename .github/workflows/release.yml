@@ -7,7 +7,8 @@ name: Release
 #                  prerelease is promoted to stable (as by a tag, below), unless
 #                  an issue labelled `regression` is open. However that ends, the
 #                  `cut` job then dispatches this workflow on main.
-#   dispatch       (prerelease)  the test pipeline runs on main; if it passes, a
+#   dispatch       (prerelease)  the test pipeline runs on main, unless main's
+#                  own run already passed on that commit; once it has, a
 #                  browser prerelease is built when the browser's sources
 #                  changed, and -- when anything a library ships changed --
 #                  camoufox <next>bN goes to PyPI (pip ignores it without --pre)
@@ -90,12 +91,34 @@ jobs:
         run: python3 browser/scripts/fetch-ubo.py resolve
 
   # ---------------------------------------------------------------------------
-  tests:
-    # The dispatched commit, exactly -- not whatever main is by the time a job checks out.
-    needs: ubo
+  tested:
+    # Main's own run tests every merge. When it already passed on the commit
+    # this cut releases, the cut does not run the suite a second time.
     if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
+      checks: read
+    outputs:
+      passed: ${{ steps.gate.outputs.passed }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: gate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -m ci.release tested
+
+  # ---------------------------------------------------------------------------
+  tests:
+    # The dispatched commit, exactly -- not whatever main is by the time a job checks out.
+    needs: [ubo, tested]
+    if: github.event_name == 'workflow_dispatch' && needs.tested.outputs.passed != 'true'
+    permissions:
+      contents: read
+      actions: read # tests.yml's resolve and summary jobs declare it, for a carried push to main
       pull-requests: write # tests.yml's summary job declares it; it comments on pull requests only
     uses: ./.github/workflows/tests.yml
     with:
@@ -105,11 +128,12 @@ jobs:
 
   # ---------------------------------------------------------------------------
   plan:
-    needs: tests
+    needs: [tested, tests]
     # A promotion skips `tests`: check-promotable requires that they passed on its commit.
     if: >-
       !cancelled() &&
-      (github.event_name != 'workflow_dispatch' || needs.tests.result == 'success')
+      (github.event_name != 'workflow_dispatch' || needs.tests.result == 'success' ||
+       needs.tested.outputs.passed == 'true')
     runs-on: ubuntu-24.04
     permissions:
       contents: read

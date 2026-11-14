@@ -20,7 +20,8 @@ SLOWER_FACTOR times stock and at least MIN_GAP_NS more. It also fails when a
 getter is at least FASTER_MIN_GAP_NS cheaper than stock's and, measured against an
 untouched control getter in the same browser, under 1/FASTER_FACTOR of stock's
 cost: one that skips stock's work shows as plainly (screen.width took 18-24 ns
-against stock's 107 ns when it did). Each figure is the fastest of several
+against stock's 107 ns when it did). The renderer strings, whose GPU round trip
+swings between sessions, fail only under 1/ROUND_TRIP_SKIP_FACTOR of stock's. Each figure is the fastest of several
 rounds over two launches, so a busy runner inflates both browsers rather than
 one.
 
@@ -90,10 +91,13 @@ GL_SETUP = "G.getExtension('WEBGL_debug_renderer_info');"
 # every launch of one guard run and 22.5-24.4 us in three others, Camoufox
 # 22.5-26.3 us and then 51.9 us), so the worker does not time them. In the page
 # it took stock 15.0 and 20.6 us for the two strings and Camoufox 31.3 and 35.0
-# (2026-11-13). The spoof adds a memoized lookup after the round trip, so a cost
-# over stock's is the session's, not the spoof's: only a skipped round trip, a
-# few hundred ns against stock's microseconds, fails.
+# (2026-11-13), and in the next run stock 33.8 us and Camoufox 15.6. The spoof
+# adds a memoized lookup after the round trip, so a cost within a few times
+# stock's, either way, is the session's, not the spoof's. A skipped round trip
+# costs what the other strings do, ~50 ns: under 1/ROUND_TRIP_SKIP_FACTOR of
+# stock's, which fails.
 ROUND_TRIP = ("G.getParameter(G.RENDERER)", "G.getParameter(37446)")
+ROUND_TRIP_SKIP_FACTOR = 10.0
 WORKER_WEBGL = [e for e in WEBGL if e not in ROUND_TRIP]
 
 # Spoofed getters, and controls Camoufox does not touch (a sanity check that
@@ -192,6 +196,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.server.results.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
         self.send_response(204)
         self.end_headers()
+
+
+def judge(expr, s, c, stock_base, camou_base):
+    """(slower, faster) for Camoufox's c ns against stock's s ns, the two
+    browsers' control getters costing camou_base and stock_base."""
+    if expr in ROUND_TRIP:
+        return False, ROUND_TRIP_SKIP_FACTOR * c < s
+    return (c > SLOWER_FACTOR * s and c - s >= MIN_GAP_NS,
+            FASTER_FACTOR * c / camou_base < s / stock_base and s - c >= FASTER_MIN_GAP_NS)
 
 
 def stock_firefox():
@@ -339,9 +352,7 @@ def measure() -> int:
                     print(f"{where:6s} {expr[:44]:44s} {'-':>8s} {'-':>9s}  not measurable")
                     continue
                 control = expr in CONTROLS
-                slow = c > SLOWER_FACTOR * s and c - s >= MIN_GAP_NS and expr not in ROUND_TRIP
-                fast = (FASTER_FACTOR * c / camou_base < s / stock_base
-                        and s - c >= FASTER_MIN_GAP_NS)
+                slow, fast = judge(expr, s, c, stock_base, camou_base)
                 mark = ("  <- control" if control else "  <- SLOWER" if slow
                         else "  <- FASTER" if fast else "")
                 print(f"{where:6s} {expr[:44]:44s} {s:8.0f} {c:9.0f}{mark}")
@@ -368,7 +379,7 @@ def measure() -> int:
             print(f"FAIL: {f}")
         return 1
     print(f"PASS: no spoofed getter costs over {SLOWER_FACTOR}x or under 1/{FASTER_FACTOR} of "
-          f"stock Firefox's from script.")
+          f"stock Firefox's from script, and no GPU round trip skipped.")
     return 0
 
 
