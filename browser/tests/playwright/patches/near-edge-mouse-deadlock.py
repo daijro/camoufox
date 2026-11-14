@@ -46,15 +46,16 @@ COVERAGE
 Both dispatch paths reach the same conversion, so both are covered:
   * direct dispatch -- `page.mouse.move(x, 0)`, humanize off, and the humanized
     move's explicit endpoint. Deterministic on an affected chrome offset.
-  * humanized trajectory -- how it is actually hit in the field. Every
-    PageHandler starts at `_lastTrackedPos = {x: 0, y: 0}` (PageHandler.js:86),
-    so a session's FIRST humanized move always departs from the top-left corner,
-    and since a generated curve wanders well off the straight line (median
-    33-57px perpendicular, 69% of paths leaving their own endpoint box) it
-    rides the y==0 row. On a stock build a first humanized click hung on 5 of 20 cold
-    pages; all five had dispatched a point at y==0 and the 15 that completed had
-    dispatched none. Sampled here rather than asserted deterministically, since
-    whether the curve touches the row is random.
+  * humanized trajectory -- how it was actually hit in the field. A page's
+    FIRST humanized move used to depart from the top-left corner (the pointer
+    started at (0, 0)), and since a generated curve wanders well off the
+    straight line (median 33-57px perpendicular, 69% of paths leaving their
+    own endpoint box) a curve from the corner rides the y==0 row. On a stock
+    build a first humanized click hung on 5 of 20 cold pages; all five had
+    dispatched a point at y==0 and the 15 that completed had dispatched none.
+    Each page here moves to the corner first, then clicks. Sampled rather than
+    asserted deterministically, since whether the curve touches the row is
+    random.
 
 Run against a specific build:
     CAMOUFOX_EXECUTABLE_PATH=/path/to/camoufox-bin python3 browser/tests/playwright/patches/near-edge-mouse-deadlock.py
@@ -64,7 +65,7 @@ What PASS means:
       actually observes it -- an event swallowed by chrome leaves no mousemove;
     * the browser still responds to input afterwards, proving the global chain
       is not poisoned;
-    * a session's first humanized click completes on repeated cold pages.
+    * a humanized click from the top-left corner completes on repeated pages.
 
 Before the fix the first direct move times out; after it, every move completes.
 """
@@ -82,10 +83,11 @@ SPOOFED_OSES = ["windows", "macos", "linux"]
 # Relative y == 0 is the deadlock coordinate. x is varied only to show it is the
 # whole row that is poisoned, not one particular pixel.
 TOP_EDGE_TARGETS = [(31, 0), (0, 0), (500, 0)]
-# Fresh pages for the humanized half: each resets _lastTrackedPos to (0, 0), so
-# each is an independent chance for the first trajectory to ride the top edge.
+# Pages for the humanized half: each is an independent chance for a trajectory
+# from the corner to ride the top edge.
 COLD_PAGES = 4
-# Close enough to the top that a trajectory from (0, 0) sweeps the y==0 row.
+CORNER = (1, 1)
+# Close enough to the top that a trajectory from CORNER sweeps the y==0 row.
 HUMANIZED_TARGET = (660, 186)
 INTERIOR = (250, 250)
 TIMEOUT_S = 20
@@ -175,7 +177,7 @@ async def _humanized() -> bool:
             print(f"{label}  ok")
             await page.close()
 
-            # Cold pages: the trajectory departs (0, 0) and may ride the y==0 row.
+            # The click's trajectory departs CORNER and may ride the y==0 row.
             for i in range(1, COLD_PAGES + 1):
                 label = f"  [{spoofed_os}] cold page {i}/{COLD_PAGES}: click -> {HUMANIZED_TARGET}"
                 page = await browser.new_page()
@@ -188,8 +190,7 @@ async def _humanized() -> bool:
                     ".addEventListener('click',()=>window.__clicked=true)"
                 )
                 try:
-                    # click() moves first, so this is the session's first
-                    # trajectory -- generated from the initial (0, 0).
+                    await asyncio.wait_for(page.mouse.move(*CORNER), timeout=TIMEOUT_S)
                     await asyncio.wait_for(page.click("#b"), timeout=TIMEOUT_S)
                     clicked = await asyncio.wait_for(
                         page.evaluate("window.__clicked"), timeout=TIMEOUT_S

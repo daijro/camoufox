@@ -32,13 +32,15 @@ What PASS means:
     * those events are spread over a plausible human duration, with uneven
       gaps between them rather than a fixed cadence;
     * a humanized click still lands on the target element;
+    * a page's first move does not leave the top-left corner: the page cannot
+      know where the cursor was before its first mouse event, so the curve
+      starts from a point drawn over the viewport, not from (0, 0);
     * a curve that strays outside the viewport leaves the document as a real
       cursor does: a last mousemove just inside the edge it crosses, then,
       in the same refresh, a mouseout with no relatedTarget just past it, as
       stock reports; it comes back with a mouseover before its next mousemove;
     * without humanize, a move emits only its endpoint (pins the other
-      direction so accidental always-on humanization is also caught). Two
-      moves close together may share one event, coalesced, as a real mouse's do.
+      direction so accidental always-on humanization is also caught).
 """
 
 import asyncio
@@ -79,11 +81,35 @@ async def _collect_moves(humanize):
     async with AsyncCamoufox(**launch_kwargs(os="linux", humanize=humanize)) as browser:
         page = await browser.new_page()
         await page.set_content(BODY)
-        await page.evaluate(RECORDER)
         dest = await _dest_within(page)
+        # Recorded from the second move: the first starts anywhere in the
+        # viewport, so its length is not this check's to control.
         await page.mouse.move(20, 20)
+        await page.evaluate(RECORDER)
         await page.mouse.move(*dest)
         return await page.evaluate("moves"), dest
+
+
+# Fresh pages, each one's first move recorded. A curve from (0, 0) puts every
+# first mousemove within a few samples of the corner, on its edge rows; one
+# from a point drawn over the viewport lands within CORNER_PX of the corner
+# well under 1% of the time, so most of FIRST_MOVE_PAGES staying clear of it
+# separates the two without depending on any one draw.
+FIRST_MOVE_PAGES = 6
+CORNER_PX = 100
+
+
+async def _first_moves():
+    async with AsyncCamoufox(**launch_kwargs(os="linux", humanize=True)) as browser:
+        firsts = []
+        for _ in range(FIRST_MOVE_PAGES):
+            page = await browser.new_page()
+            await page.set_content(BODY)
+            await page.evaluate(RECORDER)
+            await page.mouse.move(*await _dest_within(page))
+            firsts.append((await page.evaluate("moves"))[0][:2])
+            await page.close()
+        return firsts
 
 
 # Moves that run along the top edge, then the left one, so that curves stray
@@ -170,6 +196,8 @@ async def _humanized_click_hits_target():
         await page.set_content(
             '<button id="b" style="position:absolute;left:600px;top:400px">go</button>'
         )
+        # From a known start, so the click's move is a long one.
+        await page.mouse.move(20, 20)
         await page.evaluate(
             "window.moves=0;window.clicked=false;"
             "addEventListener('mousemove',()=>moves++);"
@@ -180,8 +208,8 @@ async def _humanized_click_hits_target():
 
 
 def _gaps(moves):
-    """Inter-event gaps, in ms, of the trajectory that followed the first move."""
-    times = [m[2] for m in moves[1:]]
+    """Inter-event gaps, in ms, of the trajectory."""
+    times = [m[2] for m in moves]
     return [round(b - a, 1) for a, b in zip(times, times[1:])]
 
 
@@ -224,17 +252,11 @@ async def main() -> int:
     plain, plain_dest = await _collect_moves(False)
     print("\n=== humanize off ===")
     print(f"  mousemove events: {[m[:2] for m in plain]}")
-    # Two awaited moves 8 ms apart can share a refresh tick. The page then sees
-    # one mousemove, at the destination, with the start in getCoalescedEvents()
-    # — the same coalescing a 125 Hz mouse gets. A trajectory is many points
-    # that are neither endpoint.
-    endpoints = [[20, 20], list(plain_dest)]
-    points = [m[:2] for m in plain]
-    if points and points[-1] == list(plain_dest) and len(points) <= 2 and all(p in endpoints for p in points):
-        print("  PASS: only endpoints emitted")
+    if [m[:2] for m in plain] == [list(plain_dest)]:
+        print("  PASS: only the endpoint emitted")
     else:
         passed = False
-        print("  FAIL: expected only the two endpoints")
+        print("  FAIL: expected only the endpoint")
 
     # A curve leaving the viewport used to send nothing until it came back, so
     # the page saw the cursor stop at the edge and reappear elsewhere with no
@@ -257,6 +279,16 @@ async def main() -> int:
                 print(f"  FAIL: mousemoves after an exit with no mouseover first: {unannounced[:5]}")
             if misplaced:
                 print(f"  FAIL: exits unlike stock's, as (last move, exit, ms apart) in {w}x{h}: {misplaced[:5]}")
+
+    firsts = await _first_moves()
+    near_corner = [p for p in firsts if (p[0] ** 2 + p[1] ** 2) ** 0.5 < CORNER_PX]
+    print("\n=== first move of a page ===")
+    print(f"  first mousemove of {len(firsts)} fresh pages: {firsts}")
+    if len(near_corner) * 2 < len(firsts):
+        print("  PASS: first moves start across the viewport")
+    else:
+        passed = False
+        print(f"  FAIL: {len(near_corner)} first moves within {CORNER_PX}px of (0, 0) -- curves start at the origin")
 
     moves, clicked = await _humanized_click_hits_target()
     print("\n=== humanized click ===")

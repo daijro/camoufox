@@ -225,6 +225,16 @@ export const cursory = {
   },
 };
 
+/**
+ * Where the cursor starts a page's first move. A page cannot know where the
+ * cursor is until its first mouse event, so any point of the viewport is one a
+ * real cursor could be resting on; the synthesized pointer's (0, 0) put the
+ * start of every page's first curve in the top-left corner.
+ */
+export function restingPoint({width, height}) {
+  return {x: Math.floor(Math.random() * width), y: Math.floor(Math.random() * height)};
+}
+
 /** The plan for a `humanize=True` move, and when pacing it must give up. */
 export function humanizedMove(cursor, to) {
   const options = {
