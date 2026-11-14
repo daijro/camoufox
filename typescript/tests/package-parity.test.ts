@@ -6,6 +6,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { LIBRARY_VERSION } from "../src/__version__.js";
+import { IN_VIEW } from "../src/_humanize_custom.js";
 import { FILL_CLICK_LANDS, FILL_NEEDS_CLICK } from "../src/driver_defaults.js";
 import { DATA_FILES, LOCAL_DATA } from "../src/paths.js";
 
@@ -61,6 +62,7 @@ describe("the page scripts are the Python package's, byte for byte", () => {
 	it.each([
 		["driver_defaults.py", "FILL_NEEDS_CLICK", FILL_NEEDS_CLICK],
 		["driver_defaults.py", "FILL_CLICK_LANDS", FILL_CLICK_LANDS],
+		["_humanize_custom.py", "_IN_VIEW", IN_VIEW],
 	])("%s %s", (file, name, script) => {
 		expect(script).toBe(constant(file, name));
 	});

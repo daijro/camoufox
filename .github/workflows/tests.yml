@@ -284,8 +284,8 @@ jobs:
         run: python3 browser/tests/ucrt-math/check.py
 
       - name: Juggler input planners and pacing
-        # The cursor and wheel planners, the pacer and the delays are plain ES
-        # modules, so they run under Node without a browser build.
+        # The humanize seam, its streams and pacer, and the base engines are
+        # plain ES modules, so they run under Node without a browser build.
         run: node --test browser/tests/juggler/*.test.mjs
 
       - name: CI pipeline self-tests
@@ -651,11 +651,16 @@ jobs:
           #                            binary, so AsyncCamoufox dies with
           #                            FileNotFoundError without it. That breaks
           #                            patch-guards, the leak suite and sundial.
+          #   humanize-engines.json -- the launchers read it there too; without
+          #                            it they treat the build as one that
+          #                            predates per-channel humanize.
           #   addons/UBO/           -- the uBlock Origin the launchers load by
           #                            default; without it every suite runs a
           #                            browser no user runs.
           make -C browser stage-fonts
-          [ -f "$src/properties.json" ] || cp -v browser/settings/properties.json "$src/properties.json"
+          for f in properties.json humanize-engines.json; do
+            [ -f "$src/$f" ] || cp -v "browser/settings/$f" "$src/$f"
+          done
           python3 browser/scripts/fetch-ubo.py stage "$src"
 
           # Fail here, once, rather than in five browser jobs with five
@@ -664,7 +669,7 @@ jobs:
           # browser/bundle/fonts/groups.json), not a copy per OS; groups.json is what
           # utils._generate_fontconfig reads to decide which of them an identity
           # may see, so its absence is the failure that matters.
-          for required in camoufox-bin properties.json camoufox.cfg fonts/groups.json fonts/LMW fontconfig/linux addons/UBO/manifest.json; do
+          for required in camoufox-bin properties.json humanize-engines.json camoufox.cfg fonts/groups.json fonts/LMW fontconfig/linux addons/UBO/manifest.json; do
             [ -e "$src/$required" ] || { echo "::error::artifact is missing $required"; exit 1; }
           done
 

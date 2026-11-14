@@ -55,6 +55,11 @@ import {
 	setWebgpu,
 } from "./host_rendering.js";
 import {
+	type HumanizeSetting,
+	humanizeConfig,
+	type Manifest,
+} from "./humanize.js";
+import {
 	type ProxyConfig,
 	ProxyHelper,
 	proxyAuthEnv,
@@ -1572,8 +1577,8 @@ export interface LaunchOptions {
 	geoip?: string | boolean;
 	/** Name of the GeoIP database to use (e.g. "GeoIP AIO by daijro"). */
 	geoip_db?: string;
-	/** Humanize the cursor movement: `true`, or the MAX duration in seconds. */
-	humanize?: boolean | number;
+	/** Humanize input per channel: `true`, a max cursor duration, or `{ mouse, keyboard, scroll, seed }`. */
+	humanize?: HumanizeSetting;
 	/** Locale(s) to use. The first listed locale is used for the Intl API. */
 	locale?: string | string[];
 	/** List of Firefox addons to use (paths to extracted addons). */
@@ -2199,15 +2204,16 @@ export async function launchOptions({
 	// it. setInto leaves an explicit caller value alone.
 	setInto(config, "voices:blockIfNotDefined", true);
 
-	// Pass the humanize option
-	if (pyTruthy(humanize)) {
-		setInto(config, "humanize", true);
-		// MaskConfig expects maxTime to be a JSON number.
-		// float(humanize): a JSON number with a floating-point representation.
-		if (typeof humanize === "number") {
-			setInto(config, "humanize:maxTime", new PyFloat(humanize));
-		}
-	}
+	const humanizeManifest = executable_path
+		? buildFile(executable_path, "humanize-engines.json")
+		: utilsDeps.getPath("humanize-engines.json");
+	const manifest: Manifest | undefined = fs.existsSync(humanizeManifest)
+		? JSON.parse(fs.readFileSync(humanizeManifest, "utf8"))
+		: undefined;
+	for (const [key, value] of Object.entries(
+		humanizeConfig(humanize, manifest, i_know_what_im_doing),
+	))
+		setInto(config, key, value);
 
 	// Enable the main world context creation
 	if (main_world_eval) {
