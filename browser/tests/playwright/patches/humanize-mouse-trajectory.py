@@ -33,9 +33,9 @@ What PASS means:
       gaps between them rather than a fixed cadence;
     * a humanized click still lands on the target element;
     * a curve that strays outside the viewport leaves the document as a real
-      cursor does: a last mousemove just inside the edge it crosses, then,
-      in the same refresh, a mouseout with no relatedTarget just past it, as
-      stock reports; it comes back with a mouseover before its next mousemove;
+      cursor does: a last mousemove inside the edge it crosses and a mouseout
+      with no relatedTarget past it, one mouse sample apart, as stock reports;
+      it comes back with a mouseover before its next mousemove;
     * without humanize, a move emits only its endpoint (pins the other
       direction so accidental always-on humanization is also caught). Two
       moves close together may share one event, coalesced, as a real mouse's do.
@@ -98,15 +98,17 @@ EDGE_RECORDER = """
     document.addEventListener("mouseout", e => { if (!e.relatedTarget) rec("out")(e); });
     document.addEventListener("mouseover", e => { if (!e.relatedTarget) rec("over")(e); });
 """
-# Stock 159.0 on X11, 27 exits by hand through every edge, slow flicks and fast
-# ones and slips along an edge: the last mousemove before each mouseout was
-# 0-5px inside the edge crossed, the mouseout 1-8px past it, 2-8px apart (one
-# sample of a mouse polled every millisecond), and within 1ms of each other.
-STOCK_INSIDE_PX = 5
-STOCK_PAST_PX = range(1, 9)
-STOCK_APART_PX = 2
-# The two are one sample apart, so they reach the page in the same refresh.
-FRAME_MS = 1000 / 60
+# Stock 159.0.1 on X11, 66 exits driven with XTest at 1 kHz (a mouse polled every
+# millisecond) through the top, left and right edges, from rest 2 and 4px inside at
+# 0.5-11 px/ms and in flicks from mid-page at 5-15 px/ms: the last mousemove before
+# each mouseout and the mouseout are one sample apart. The exit is 1px or more past the edge, the
+# move inside and the exit past it add up to no more than their distance, and that
+# distance is one sample's travel: 1px at 0.5 px/ms, 14.9px at 15. Exits by hand
+# gave the slow end of that (0-5px inside, 1-8px past). The time between them is
+# no test: a moving pointer's exit came 1-3ms after its last move, but one leaving
+# from rest came when it left, 563-665ms after it stopped.
+STOCK_PAST_MIN_PX = 1
+STOCK_MAX_STEP_PX = 16
 # Prefs to sweep under: the defaults, and text scaled to 105%, which puts the
 # content's top at 85.5, as some hosts' toolbars do, where an exit point
 # rounded unlike the moves lands a pixel off.
@@ -144,9 +146,10 @@ def _exits_unlike_stock(events, w, h):
         past, inside = (-x, last[0]) if x < 0 else (x - w + 1, w - 1 - last[0]) if x >= w else \
             (-y, last[1]) if y < 0 else (y - h + 1, h - 1 - last[1])
         apart = ((x - last[0]) ** 2 + (y - last[1]) ** 2) ** 0.5
-        ms = t - last[2]
-        if past not in STOCK_PAST_PX or inside > STOCK_INSIDE_PX or apart < STOCK_APART_PX or ms >= FRAME_MS:
-            bad.append([last[:2], (x, y), round(ms, 1)])
+        # One sample apart: across the edge in a single step no longer than a
+        # fast flick's (+1 for the rounding of both points).
+        if past < STOCK_PAST_MIN_PX or inside < 0 or inside + past > apart + 1 or apart > STOCK_MAX_STEP_PX:
+            bad.append([last[:2], (x, y), round(t - last[2], 1)])
     return bad
 
 
