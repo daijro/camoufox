@@ -42,6 +42,20 @@ def test_explicit_deprecated_source_is_kept(cache):
     assert geolocation.load_geoip_config()["name"] == DEPRECATED
 
 
+def test_implicit_source_missing_from_repos_moves_to_default(cache):
+    # A source renamed or removed upstream, saved before it went
+    _saved(cache, name="Gone")
+    config = geolocation.load_geoip_config()
+    assert config["name"] == DEFAULT
+    assert "urls" in config and "paths" in config
+
+
+def test_explicit_source_missing_from_repos_raises_naming_it(cache):
+    _saved(cache, name="Gone", explicit=True)
+    with pytest.raises(ValueError, match=r"'Gone' not found. Available: .*GeoIP AIO by daijro"):
+        geolocation.load_geoip_config()
+
+
 def test_save_records_explicit_choice(cache):
     config = geolocation._get_geoip_config_by_name(DEPRECATED)
     geolocation.save_geoip_config(config, explicit=True)

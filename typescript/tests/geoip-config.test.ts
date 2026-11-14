@@ -53,6 +53,21 @@ it("keeps an explicit deprecated source", () => {
 	expect(g.loadGeoipConfig().name).toBe(DEPRECATED);
 });
 
+it("moves an implicit source missing from repos.yml to the default", () => {
+	saved({ name: "Gone" });
+	const config = g.loadGeoipConfig();
+	expect(config.name).toBe(DEFAULT);
+	expect(config).toHaveProperty("urls");
+	expect(config).toHaveProperty("paths");
+});
+
+it("raises, naming it, for an explicit source missing from repos.yml", () => {
+	saved({ name: "Gone", explicit: true });
+	expect(() => g.loadGeoipConfig()).toThrow(
+		/'Gone' not found. Available: \[.*GeoIP AIO by daijro/,
+	);
+});
+
 it("records an explicit choice", () => {
 	const config = g.getGeoipConfigByName(DEPRECATED);
 	g.saveGeoipConfig(config, true);
