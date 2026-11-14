@@ -230,14 +230,18 @@ through the system clipboard. The modifier leads V by about 60 ms and trails
 it by about 40 ms, as Shift does a key, and V is held 116.25 ms (SD 23.88;
 Dhakal et al., "Observations on Typing from 136 Million Keystrokes", CHI 2018).
 Every delay between a person's input events comes from `input/HumanDelay.js`,
-with the figures its caller cites: a normal draw for a key or modifier hold
-(`normalDelay(mean, sd, min, max)`) and a right-skewed log-normal for a click
+with the figures its caller cites: a normal draw for a modifier's lead or trail
+(`normalDelay(mean, sd, min, max)`) and a right-skewed log-normal for a key's
+hold, the time from one key's press to the next, or a click
 hold, hover dwell or double-click gap (`logNormalDelay(median, sigma, min, max)`),
 as human timing is.
 
 A page that cancels the paste, or the shortcut's `keydown`, and leaves the field
 as it was gets the text typed instead, as a person types what they cannot paste:
 key by key on a US keyboard, 238.66 ms press to press (SD 111.60, the same study).
+A key due before the one ahead of it is up goes down first, as a person rolls
+over keys; one that needs Shift, or follows one, waits for the keys held, so
+each key comes up under the Shift it went down with.
 A character with no US key arrives as an input method commits it. Typing stops
 with an error if the focus leaves the field, and a read-only field takes nothing,
 without error. A page that writes the pasted text in later than the shortcut's
