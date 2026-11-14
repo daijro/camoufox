@@ -847,8 +847,18 @@ class ExecutionContext {
       }
     });
     // Camoufox: no synthetic user activation here either (see evaluateScript).
-    let {success, obj} = this._getResult(
-        this.withDriverPopups(() => funEvaluation.obj.apply(null, args)), exceptionDetails);
+    //
+    // Called from Debugger-compiled code with bypassCSP, so the page's CSP
+    // does not block an eval the call makes. Debugger.Object.apply does not
+    // lift CSP, and lifting it there by clearing every JS security callback let
+    // a page read the isolated world's and Juggler's frames in new Error().stack.
+    const bindings = {fn: funEvaluation.obj};
+    const names = args.map((arg, i) => {
+      bindings['arg' + i] = arg;
+      return 'arg' + i;
+    });
+    let {success, obj} = this._getResult(this.withDriverPopups(() => this._debuggee.executeInGlobalWithBindings(
+        `fn(${names.join(', ')})`, bindings, {useInnerBindings: true, bypassCSP: true})), exceptionDetails);
     if (!success)
       return null;
     if (obj && obj.isPromise) {
