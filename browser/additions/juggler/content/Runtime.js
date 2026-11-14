@@ -558,8 +558,9 @@ class Runtime {
       return {success: true, obj: obj.promiseValue};
     if (obj.promiseState === 'rejected') {
       const debuggee = executionContext._debuggee;
-      exceptionDetails.text = debuggee.executeInGlobalWithBindings('e.message', {e: obj.promiseReason}, {useInnerBindings: true}).return;
-      exceptionDetails.stack = debuggee.executeInGlobalWithBindings('e.stack', {e: obj.promiseReason}, {useInnerBindings: true}).return;
+      const options = executionContext._evalOptions({useInnerBindings: true});
+      exceptionDetails.text = debuggee.executeInGlobalWithBindings('e.message', {e: obj.promiseReason}, options).return;
+      exceptionDetails.stack = debuggee.executeInGlobalWithBindings('e.stack', {e: obj.promiseReason}, options).return;
       return {success: false, obj: null};
     }
     let resolve, reject;
@@ -588,7 +589,7 @@ class Runtime {
     if (!this._debugger.onDebuggerStatement)
       this._debugger.onDebuggerStatement = this._onDebuggerStatement.bind(this);
     executionContext._debuggee.executeInGlobalWithBindings(
-        'p.then(() => { debugger; }, () => { debugger; })', {p: obj}, {useInnerBindings: true});
+        'p.then(() => { debugger; }, () => { debugger; })', {p: obj}, executionContext._evalOptions({useInnerBindings: true}));
     return await promise;
   }
 
@@ -602,8 +603,9 @@ class Runtime {
         continue;
       }
       const debuggee = pendingPromise.executionContext._debuggee;
-      pendingPromise.exceptionDetails.text = debuggee.executeInGlobalWithBindings('e.message', {e: obj.promiseReason}, {useInnerBindings: true}).return;
-      pendingPromise.exceptionDetails.stack = debuggee.executeInGlobalWithBindings('e.stack', {e: obj.promiseReason}, {useInnerBindings: true}).return;
+      const options = pendingPromise.executionContext._evalOptions({useInnerBindings: true});
+      pendingPromise.exceptionDetails.text = debuggee.executeInGlobalWithBindings('e.message', {e: obj.promiseReason}, options).return;
+      pendingPromise.exceptionDetails.stack = debuggee.executeInGlobalWithBindings('e.stack', {e: obj.promiseReason}, options).return;
       pendingPromise.resolve({success: false, obj: null});
     }
     if (!this._pendingPromises.size)
@@ -687,6 +689,18 @@ class ExecutionContext {
     this._jsonStringifyObjectValue = null;
   }
 
+  // Camoufox: the name Debugger-compiled code has in a stack. Code compiled
+  // into the page's own global shows in the page's Error().stack, where the
+  // default, "debugger eval code", is a name only DevTools and drivers produce;
+  // it is named after the document instead, as an inline <script> is. C++
+  // tells this code apart by how it was compiled, never by its name
+  // (JS::IsScriptedCallerDebuggerCode).
+  _evalOptions(options) {
+    if (this._contextGlobal !== this._domWindow)
+      return options;
+    return {...options, url: this._domWindow.document.URL};
+  }
+
   get _jsonStringifyObject() {
     if (this._jsonStringifyObjectValue)
       return this._jsonStringifyObjectValue;
@@ -712,7 +726,7 @@ class ExecutionContext {
         Array.prototype.toJSON = oldArrayToJSON;
 
       return hasSymbol ? undefined : result;
-    }).bind(null, JSON.stringify.bind(JSON))`).return;
+    }).bind(null, JSON.stringify.bind(JSON))`, this._evalOptions()).return;
   }
 
   id() {
@@ -806,7 +820,7 @@ class ExecutionContext {
     // stock Firefox grants activation only from real input, which juggler's
     // synthesized-trusted clicks already provide (measured 2026-09-14).
     let {success, obj} = this._getResult(
-        this.withDriverPopups(() => this._debuggee.executeInGlobal(script)), exceptionDetails);
+        this.withDriverPopups(() => this._debuggee.executeInGlobal(script, this._evalOptions())), exceptionDetails);
     if (!success)
       return null;
     if (obj && obj.isPromise) {
@@ -820,14 +834,14 @@ class ExecutionContext {
 
   evaluateScriptSafely(script) {
     try {
-      this._debuggee.executeInGlobal(script);
+      this._debuggee.executeInGlobal(script, this._evalOptions());
     } catch (e) {
       dump(`WARNING: ${e.message}\n${e.stack}\n`);
     }
   }
 
   async evaluateFunction(functionText, args, exceptionDetails = {}) {
-    const funEvaluation = this._getResult(this._debuggee.executeInGlobal('(' + functionText + ')'), exceptionDetails);
+    const funEvaluation = this._getResult(this._debuggee.executeInGlobal('(' + functionText + ')', this._evalOptions()), exceptionDetails);
     if (!funEvaluation.success)
       return null;
     if (!funEvaluation.obj.callable)
@@ -1004,13 +1018,13 @@ class ExecutionContext {
       };
     }
     const baseObject = Array.isArray(obj) ? '([])' : '({})';
-    const debuggerObj = this._debuggee.executeInGlobal(baseObject).return;
+    const debuggerObj = this._debuggee.executeInGlobal(baseObject, this._evalOptions()).return;
     debuggerObj.defineProperties(properties);
     return debuggerObj;
   }
 
   _serialize(obj) {
-    const result = this._debuggee.executeInGlobalWithBindings('stringify(e)', {e: obj, stringify: this._jsonStringifyObject}, {useInnerBindings: true});
+    const result = this._debuggee.executeInGlobalWithBindings('stringify(e)', {e: obj, stringify: this._jsonStringifyObject}, this._evalOptions({useInnerBindings: true}));
     if (result.throw)
       throw new Error('Object is not serializable');
     return result.return === undefined ? undefined : JSON.parse(result.return);
@@ -1042,9 +1056,10 @@ class ExecutionContext {
     if (!completionValue)
       throw new Error('evaluation terminated');
     if (completionValue.throw) {
-      if (this._debuggee.executeInGlobalWithBindings('e instanceof Error', {e: completionValue.throw}, {useInnerBindings: true}).return) {
-        exceptionDetails.text = this._debuggee.executeInGlobalWithBindings('e.message', {e: completionValue.throw}, {useInnerBindings: true}).return;
-        exceptionDetails.stack = this._debuggee.executeInGlobalWithBindings('e.stack', {e: completionValue.throw}, {useInnerBindings: true}).return;
+      const options = this._evalOptions({useInnerBindings: true});
+      if (this._debuggee.executeInGlobalWithBindings('e instanceof Error', {e: completionValue.throw}, options).return) {
+        exceptionDetails.text = this._debuggee.executeInGlobalWithBindings('e.message', {e: completionValue.throw}, options).return;
+        exceptionDetails.stack = this._debuggee.executeInGlobalWithBindings('e.stack', {e: completionValue.throw}, options).return;
       } else {
         exceptionDetails.value = this._serialize(completionValue.throw);
       }

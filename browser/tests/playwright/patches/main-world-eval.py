@@ -39,6 +39,9 @@ What PASS means:
       would otherwise corrupt, awaits promises, and reports page errors with
       their real message;
     * writes made through "mw:" are visible to page script;
+    * a stack the page captures while "mw:" code runs names no "debugger eval
+      code", the Debugger's default name for what it compiles, which only
+      DevTools and drivers produce;
     * unprefixed evaluation stays isolated even with the flag on.
 """
 
@@ -54,6 +57,7 @@ PAGE = """
 <script>
   window.pageSecret = 41;
   window.pageAdd = (a, b) => a + b;
+  window.pageStack = () => new Error().stack;
   document.querySelector('#probe').addEventListener('click', () => {
     document.documentElement.dataset.sawMainWorldWrite = String(window.writtenFromMw);
   });
@@ -132,6 +136,10 @@ async def _run_enabled() -> bool:
         _check(results, "page global", await page.evaluate("mw:window.pageSecret"), 41)
         _check(results, "page function", await page.evaluate("mw:window.pageAdd(1, 2)"), 3)
         _check(results, "unprefixed stays isolated", await page.evaluate("window.pageSecret"), None)
+
+        stack = await page.evaluate("mw:window.pageStack()")
+        print(f"       page stack: {stack.splitlines()}")
+        _check(results, "page stack names no debugger code", "debugger eval code" in stack, False)
 
         print("  -- statements (#631) --")
         for label, script, expected in STATEMENT_CASES:
