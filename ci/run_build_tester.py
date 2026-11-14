@@ -253,6 +253,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         violations.append(f"categories that must be clean have failing checks: {pretty}")
         status = evidence.FAIL
 
+    outcomes = list(result.tests.values())
+    launched = sum(1 for tid, o in result.tests.items() if tid.endswith("/launch") and o == evidence.PASS)
+    expected = int(cfg.get("profile_count", 8))
+    if evidence.ERROR in outcomes or launched < expected:
+        errored = sorted(t for t, o in result.tests.items() if o == evidence.ERROR)
+        reason = (
+            f"{launched} of {expected} profiles produced results"
+            + (f"; failed to launch: {', '.join(errored)}" if errored else "")
+        )
+        result.note(reason)
+        violations.append(reason)
+        status = evidence.FAIL
+    # The suite exits non-zero whenever any check fails, so a failing check
+    # explains the exit code. With none failing, the exit has no explanation.
+    if proc.code != 0 and evidence.FAIL not in outcomes and status == evidence.PASS:
+        reason = f"build-tester exited {proc.code} with no failing check to account for it"
+        result.note(reason)
+        violations.append(reason)
+        status = evidence.FAIL
+
     slots = uniqueness(full)
     allowed = int(cfg.get("allow_uniqueness_collisions", 0))
     result.metrics["uniqueness"] = slots
