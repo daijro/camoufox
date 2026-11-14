@@ -848,11 +848,10 @@ class ExecutionContext {
     });
     // Camoufox: no synthetic user activation here either (see evaluateScript).
     //
-    // Called from Debugger-compiled code rather than Debugger.Object.apply.
-    // 0-playwright.patch lifts CSP for apply by clearing every JS security
-    // callback, the one that drops other principals' frames from a stack
-    // included, so a page listener or hook this call reached read the isolated
-    // world's and Juggler's frames in new Error().stack. bypassCSP lifts only CSP.
+    // Called from Debugger-compiled code with bypassCSP, so the page's CSP
+    // does not block an eval the call makes. Debugger.Object.apply does not
+    // lift CSP, and lifting it there by clearing every JS security callback let
+    // a page read the isolated world's and Juggler's frames in new Error().stack.
     const bindings = {fn: funEvaluation.obj};
     const names = args.map((arg, i) => {
       bindings['arg' + i] = arg;

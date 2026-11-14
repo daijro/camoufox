@@ -5,7 +5,7 @@ Every callFunction reaches the page through ExecutionContext.evaluateFunction
 (content/Runtime.js): the `mw:` evaluate, and the isolated world's utility
 script, whose focus(), click() and dispatchEvent() run page listeners
 synchronously. It used to call through Debugger.Object.apply, which
-0-playwright.patch runs with every JS security callback cleared to lift CSP.
+0-playwright.patch then ran with every JS security callback cleared to lift CSP.
 That included subsumes, which the engine asks before it puts another
 principal's frame into a stack a page reads. So a page that hooked an API and
 read `new Error().stack` when it was called got the isolated world's frames
