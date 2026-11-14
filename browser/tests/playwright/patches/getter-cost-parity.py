@@ -84,11 +84,17 @@ WEBGL = [
 # 7812, then 4844). The spoof's per-call work is IsSupported(), which
 # getExtension() times above.
 GL_SETUP = "G.getExtension('WEBGL_debug_renderer_info');"
-# In a worker the renderer strings cost ~23 us in one browser session and
-# ~60 us in another, in stock and Camoufox alike (measured 2026-10-26: stock
-# 62.5 us in every launch of one guard run and 22.5-24.4 us in three others,
-# Camoufox 22.5-26.3 us and then 51.9 us), so the worker times only the rest.
-WORKER_WEBGL = [e for e in WEBGL if e not in ("G.getParameter(G.RENDERER)", "G.getParameter(37446)")]
+# The renderer strings are stock's round trip to the GPU process, and its cost
+# changes between browser sessions, in stock and Camoufox alike. In a worker it
+# took ~23 us in one session and ~60 us in another (2026-10-26: stock 62.5 us in
+# every launch of one guard run and 22.5-24.4 us in three others, Camoufox
+# 22.5-26.3 us and then 51.9 us), so the worker does not time them. In the page
+# it took stock 15.0 and 20.6 us for the two strings and Camoufox 31.3 and 35.0
+# (2026-11-13). The spoof adds a memoized lookup after the round trip, so a cost
+# over stock's is the session's, not the spoof's: only a skipped round trip, a
+# few hundred ns against stock's microseconds, fails.
+ROUND_TRIP = ("G.getParameter(G.RENDERER)", "G.getParameter(37446)")
+WORKER_WEBGL = [e for e in WEBGL if e not in ROUND_TRIP]
 
 # Spoofed getters, and controls Camoufox does not touch (a sanity check that
 # the two browsers are comparable on this machine). innerWidth, innerHeight and
@@ -333,7 +339,7 @@ def measure() -> int:
                     print(f"{where:6s} {expr[:44]:44s} {'-':>8s} {'-':>9s}  not measurable")
                     continue
                 control = expr in CONTROLS
-                slow = c > SLOWER_FACTOR * s and c - s >= MIN_GAP_NS
+                slow = c > SLOWER_FACTOR * s and c - s >= MIN_GAP_NS and expr not in ROUND_TRIP
                 fast = (FASTER_FACTOR * c / camou_base < s / stock_base
                         and s - c >= FASTER_MIN_GAP_NS)
                 mark = ("  <- control" if control else "  <- SLOWER" if slow
