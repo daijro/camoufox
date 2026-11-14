@@ -41,6 +41,10 @@ name: Tests
 # is tested against the published browser its users actually run. Tier 3b waits
 # on 3a so a browser that fails its guards does not also burn six Playwright
 # shards proving the same thing.
+#
+# A push to main that lands exactly the tree a passing pull request run tested
+# carries that run's results (ci/carry.py) and runs only what the pull request
+# could not: the stealth check, whose credential a fork's run does not get.
 
 on:
   pull_request:
@@ -118,6 +122,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: read # ci.carry: the merged pull request's runs and their artifacts
+      pull-requests: read # ci.carry: which pull request a push to main merged
     outputs:
       browser_version: ${{ steps.versions.outputs.browser_version }}
       browser_release: ${{ steps.versions.outputs.browser_release }}
@@ -129,6 +135,8 @@ jobs:
       has_sundial: ${{ steps.sundial.outputs.has_sundial }}
       shard_matrix: ${{ steps.shards.outputs.matrix }}
       ubo: ${{ steps.ubo.outputs.pin }}
+      prebuilt_key: ${{ steps.prebuilt.outputs.key }}
+      carried: ${{ steps.carry.outputs.run }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -166,6 +174,35 @@ jobs:
             python3 browser/scripts/fetch-ubo.py resolve
           fi
 
+      - name: Record the tree this run tests
+        id: tree
+        if: github.event_name == 'pull_request'
+        run: |
+          git rev-parse 'HEAD^{tree}' | tee tested-tree
+          echo "tree=$(cat tested-tree)" >> "$GITHUB_OUTPUT"
+      - name: Upload the tree marker
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tested-tree-${{ steps.tree.outputs.tree }}
+          path: tested-tree
+
+      - name: Did the merged pull request already test this tree?
+        id: carry
+        # A push to main whose tree a passing pull request run tested carries
+        # that run's results, and runs only what it could not: the stealth check.
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -m ci.carry --sha "${{ github.sha }}"
+
+      - name: The cache key of a browser built from these sources
+        id: prebuilt
+        # Shared by the build job and a carried run, which caches the pull
+        # request's browser for main as main's own build would have.
+        run: |
+          echo "key=browser-${{ steps.versions.outputs.browser_version }}-${{ steps.versions.outputs.browser_release }}-native-$(python3 -m ci.browser_inputs --digest)" >> "$GITHUB_OUTPUT"
+
       - name: Does this change the browser?
         id: scope
         env:
@@ -176,6 +213,11 @@ jobs:
         # users are running, which takes a minute instead of seventy -- as long
         # as that build matches this tree's browser sources (see below).
         run: |
+          if [ -n "${{ steps.carry.outputs.run }}" ]; then
+            # What the carried run did, so the summary requires what it ran.
+            echo "browser_changed=${{ steps.carry.outputs.built }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "browser_changed=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Not a pull request -- building, which also refreshes the shared ccache."
@@ -253,6 +295,8 @@ jobs:
   static:
     name: Static checks
     needs: resolve
+    # Every other tier waits on this one, so a carried run skips them all here.
+    if: needs.resolve.outputs.carried == ''
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -506,19 +550,10 @@ jobs:
       # dir` + `make build` do not.
       BUILD_TARGET: linux,x86_64
     steps:
-      # Checkout first, because the cache key below is a hash of the tree.
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-
-      - name: Hash the inputs that can change compiled output
-        id: native
-        # Not hashFiles(): this has to EXCLUDE the files Juggler's moz.build
-        # packages as resources, and hashFiles has no way to say "everything except".
-        # ci/browser_inputs.py is stdlib-only on purpose -- it runs here, before
-        # the pip install that a cache hit skips.
-        run: echo "hash=$(python3 -m ci.browser_inputs --digest)" >> "$GITHUB_OUTPUT"
 
       - name: Is a browser with this compiled half already built?
         id: prebuilt
@@ -537,7 +572,7 @@ jobs:
           # `browser_changed` (see resolve) is a different question and stays as
           # it is: it decides build-versus-fetch against the base, and is true
           # for every push to a branch that touched the browser once.
-          key: browser-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}-native-${{ steps.native.outputs.hash }}
+          key: ${{ needs.resolve.outputs.prebuilt_key }}
           # No restore-keys, deliberately. A prefix match would serve a browser
           # whose compiled half was built from different sources, and every
           # suite downstream would report on it looking perfectly healthy.
@@ -1152,10 +1187,42 @@ jobs:
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
+  carry-browser:
+    name: Carry the pull request's browser
+    # A carried run (resolve) tests nothing the pull request run already did.
+    # Its browser is this run's, for the stealth check, and a built one is
+    # cached for main as main's own build would have, so the next pull request
+    # restores it instead of compiling.
+    needs: resolve
+    if: needs.resolve.outputs.carried != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: camoufox-dist
+          run-id: ${{ needs.resolve.outputs.carried }}
+          github-token: ${{ github.token }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: camoufox-dist
+          path: camoufox-dist.tar.zst
+          retention-days: 3
+      - if: needs.resolve.outputs.browser_changed == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: camoufox-dist.tar.zst
+          key: ${{ needs.resolve.outputs.prebuilt_key }}
+
+  # ---------------------------------------------------------------------------
   sundial:
     name: Stealth check
-    needs: [resolve, build, fetch-browser, patch-guards, build-tester]
-    if: always() && needs.resolve.outputs.has_sundial == 'true' && needs.patch-guards.result == 'success' && needs.build-tester.result == 'success'
+    needs: [resolve, build, fetch-browser, patch-guards, build-tester, carry-browser]
+    if: >-
+      always() && needs.resolve.outputs.has_sundial == 'true' &&
+      ((needs.patch-guards.result == 'success' && needs.build-tester.result == 'success') ||
+       needs.carry-browser.result == 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -1200,11 +1267,12 @@ jobs:
   summary:
     name: Summary
     needs: [resolve, static, pythonlib, typescript, install, build, fetch-browser, playwright,
-            patch-guards, build-tester, native, typescript-browser, growth, sundial]
+            patch-guards, build-tester, native, typescript-browser, growth, carry-browser, sundial]
     if: always() && needs.resolve.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: read # the carried run's results
       pull-requests: write
     outputs:
       verdict: ${{ steps.summarize.outputs.verdict }}
@@ -1217,6 +1285,16 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -r ci/requirements.txt
 
+      # First, so a suite this run repeats replaces the carried result.
+      - name: The carried run's results
+        if: needs.resolve.outputs.carried != ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: results-*
+          merge-multiple: true
+          path: .ci-work/results
+          run-id: ${{ needs.resolve.outputs.carried }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
         with:
           pattern: results-*
@@ -1306,7 +1384,7 @@ jobs:
     # did not run has not passed, and silently skipping one is the cheapest way
     # to a green tick.
     needs: [resolve, static, pythonlib, typescript, install, build, fetch-browser, playwright,
-            patch-guards, build-tester, native, typescript-browser, growth, sundial, summary]
+            patch-guards, build-tester, native, typescript-browser, growth, carry-browser, sundial, summary]
     if: always()
     runs-on: ubuntu-24.04
     permissions:
@@ -1317,19 +1395,28 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
           BROWSER_CHANGED: ${{ needs.resolve.outputs.browser_changed }}
           HAS_SUNDIAL: ${{ needs.resolve.outputs.has_sundial }}
+          CARRIED: ${{ needs.resolve.outputs.carried }}
         run: |
           python3 - <<'PY'
           import json, os, sys
 
           results = {name: job["result"] for name, job in json.loads(os.environ["RESULTS"]).items()}
           built = os.environ.get("BROWSER_CHANGED") == "true"
+          carried = os.environ.get("CARRIED") != ""
 
-          # The only jobs allowed to be skipped, and only for these reasons.
+          # The only jobs allowed to be skipped, and only for these reasons. A
+          # carried run's suites ran in the pull request run; the summary
+          # requires their results from it.
           may_skip = {
-              "build": not built,
-              "fetch-browser": built,
+              "build": not built or carried,
+              "fetch-browser": built or carried,
               "sundial": os.environ.get("HAS_SUNDIAL") != "true",
+              "carry-browser": not carried,
           }
+          if carried:
+              may_skip.update(dict.fromkeys(("static", "pythonlib", "typescript", "install", "playwright",
+                                             "patch-guards", "build-tester", "native", "typescript-browser",
+                                             "growth"), True))
 
           problems = []
           for name, result in sorted(results.items()):

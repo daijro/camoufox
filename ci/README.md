@@ -23,6 +23,15 @@ resolve ── static ─────────────── lint, tribal
                                summary ──► one comment on the PR ──► gate: "All tests passed"
 ```
 
+A push to `main` whose tree a passing pull request run already tested (nothing
+else merged in between) runs none of that again. `resolve` finds the run
+(`ci.carry`), `carry-browser` takes over the browser it tested, `sundial` runs
+against it, since a pull request from a fork has no credential for it, and
+`summary` reports the carried results with this run's grade. Each pull request
+run records the tree it tested as a `tested-tree-<tree>` artifact. A push that
+lands any other tree, or whose run's browser has expired (three days), is tested
+in full.
+
 ## Jobs
 
 | Job | Runner | What it proves |
@@ -38,6 +47,7 @@ resolve ── static ─────────────── lint, tribal
 | `playwright` | `ci.run_playwright --shard i/6` | Upstream playwright-python's suite, plus [`browser/tests/playwright/camoufox/`](../browser/tests/playwright/camoufox/README.md) |
 | `native` | `ci.run_native --subset browser` | Leaks, context isolation, crash recovery ([below](#camoufoxs-own-suite)) |
 | `growth` | `ci.run_native --subset growth --shard i/7` | Memory growth, one test per runner |
+| `carry-browser` | | A carried push to `main`: the pull request run's browser, cached for `main` when it was built |
 | `sundial` | `ci.run_sundial` | The stealth grade ([below](#stealth-grade)) |
 | `summary` | `ci.summarize` | Folds every result into one table and a pull request comment |
 | `gate` | | The required check, **`All tests passed`** |
@@ -188,6 +198,8 @@ Anything that is not `success` fails it, including `skipped`, except:
 | `build` | The browser was fetched, not compiled |
 | `fetch-browser` | The browser was compiled, not fetched |
 | `sundial` | Disabled in `ci/sundial.yml`, or no credential |
+| `carry-browser` | The push to `main` was not carried |
+| every suite but `sundial` | The push to `main` was carried; `summary` requires their results from the pull request run |
 
 `sundial` may also record a `skip` result when the sundial service is
 unreachable. A rejected credential, a full report, or a score under the floor
@@ -224,7 +236,8 @@ Each tier gates the next, so a lint failure never reaches the build:
 | **Fetch instead of build** | A pull request that does not touch browser sources tests the published release built from exactly this tree's sources (`ci.release paired`). With no such release, it builds. |
 | **Compiled-input cache** | The build cache is keyed on a hash of the compiled inputs only (`ci/browser_inputs.py`). On a hit the browser is restored and this branch's Juggler JavaScript and other resources, the files Juggler's `moz.build` lists in `FINAL_TARGET_FILES`, are laid over it. Everything else, including any new file type, counts as native and forces a build. |
 | **No partial restore** | That cache has no `restore-keys`: a partial match would hand the tests a browser built from different sources. A self-test checks the key covers every browser-affecting path. |
-| **Warm ccache** | Pushes to `main` and a twice-weekly schedule keep the ccache from being evicted; pull requests restore it. |
+| **Warm ccache** | Pushes to `main` that build, and a twice-weekly schedule, keep the ccache from being evicted; pull requests restore it. A carried push builds nothing, so it caches the pull request's browser under the compiled-input key instead. |
+| **Carried pushes** | A push to `main` that lands the tree its pull request run tested reuses that run's results ([above](#the-test-pipeline)). |
 | **PGO and LTO** | Every build uses Mozilla's PGO profile for the same Firefox and links libxul with cross-language LTO, as a release does ([`builds-are-optimized-like-stock`](tribal-rules.yml)). ccache caches the compiles, not that link, so a warm build still pays for it. |
 | **Network retries only** | `ci.run_prepare` (`setup-minimal`, `dir`, `mozbootstrap`) retries only failures that read as transient network errors. A failed hunk or compile error fails at once. |
 
@@ -247,7 +260,8 @@ exactly one browser build.
      ▼
 dispatch on main ─► ubo ─► tests ─► plan ─┬─► build-browser ─► publish-browser ─┐
                   (AMO's  (tests.yml,     │   (only if its      v156.0.1-beta.N  │
-                   newest) this commit)   │    sources changed)                  ├─► publish-pypi ─► publish-npm ─► tag-library
+                   newest) unless main's  │    sources changed)                  ├─► publish-pypi ─► publish-npm ─► tag-library
+                           run passed it) │                                      │
                                           └─► build-library ─────────────────────┘   0.5.9bN          0.5.9-beta.N    v0.5.9bN
                                               (only if what it ships changed)        (pip: --pre)     @next
 

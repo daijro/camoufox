@@ -2905,7 +2905,7 @@ def test_packaged_font_names_are_ascii(tmp_path, monkeypatch):
 PUBLISHED = [{"tag_name": "v1.0-beta.1", "draft": False, "prerelease": True, "body": ""}]
 
 
-def _scope(repo: pathlib.Path, base: str, releases=None) -> tuple[str, str]:
+def _scope(repo: pathlib.Path, base: str, releases=None, carried: str = "", built: str = "") -> tuple[str, str]:
     """Run the workflow's own "Does this change the browser?" step in `repo`.
 
     The step asks `ci.release paired` for the release built from the tree's
@@ -2914,11 +2914,13 @@ def _scope(repo: pathlib.Path, base: str, releases=None) -> tuple[str, str]:
     import subprocess
 
     text = WORKFLOW.read_text(encoding="utf-8")
-    start = text.index("        run: |\n          if [ \"${{ github.event_name }}\" != \"pull_request\" ]")
+    start = text.index("        run: |\n          if [ -n \"${{ steps.carry.outputs.run }}\" ]")
     end = text.index("      - name: May the stealth check run?", start)
     lines = text[start:end].splitlines()[1:]
     block = "\n".join(line[10:] if line.startswith(" " * 10) else line.strip() for line in lines)
-    block = block.replace("${{ github.event_name }}", "pull_request")
+    block = block.replace("${{ github.event_name }}", "push" if carried else "pull_request")
+    block = block.replace("${{ steps.carry.outputs.run }}", carried)
+    block = block.replace("${{ steps.carry.outputs.built }}", built)
     block = block.replace("${{ github.event.pull_request.base.sha }}", base)
     listed = repo.parent / "releases.json"
     listed.write_text(json.dumps(PUBLISHED if releases is None else releases))
@@ -2928,6 +2930,7 @@ def _scope(repo: pathlib.Path, base: str, releases=None) -> tuple[str, str]:
         f"python3 -m ci.release paired --root {repo} --releases {listed}",
     )
     out = repo.parent / "out.txt"
+    out.unlink(missing_ok=True)
     proc = subprocess.run(
         ["bash", "-e", "-c", block], cwd=repo, capture_output=True, text=True,
         env={**os.environ, "GITHUB_OUTPUT": str(out), "PYTHONPATH": str(CI_ROOT.parent)},
@@ -2989,6 +2992,12 @@ def test_browser_pr_builds(release_repo):
     (release_repo / "browser" / "patches" / "a.patch").write_text("b\n")
     _git(release_repo, "commit", "-qam", "browser change")
     assert _scope(release_repo, base)[0] == "browser_changed=true"
+
+
+def test_a_carried_push_requires_what_the_pull_request_run_ran(release_repo):
+    base = _git(release_repo, "rev-parse", "HEAD")
+    assert _scope(release_repo, base, carried="5", built="false")[0] == "browser_changed=false"
+    assert _scope(release_repo, base, carried="5", built="true")[0] == "browser_changed=true"
 
 
 def test_unpublished_release_tag_builds(release_repo):
