@@ -34,6 +34,14 @@ def get_addon_path(addon_name: str, executable_path: Union[str, Path]) -> str:
     """
     Returns the path to the addon the build at executable_path bundles.
     """
+    env_path = os.environ.get("CAMOUFOX_BROWSER_ADDON_" + addon_name.upper())
+    if env_path:
+        return env_path
+    # NOTE this is a placeholder for package managers
+    default_path_by_addon_name = {}
+    default_path = default_path_by_addon_name.get(addon_name)
+    if default_path:
+        return default_path
     return str(build_file(executable_path, os.path.join('addons', addon_name)))
 
 
