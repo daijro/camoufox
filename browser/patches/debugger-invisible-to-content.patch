@@ -159,10 +159,10 @@ index 50438c8f63..e6badff41a 100644
    [[nodiscard]] static bool ensureExecutionObservabilityOfFrame(
        JSContext* cx, AbstractFramePtr frame);
 diff --git a/js/src/jsapi.cpp b/js/src/jsapi.cpp
-index 04fb2a5e66..9079a3c99a 100644
+index 04fb2a5e66..666232e251 100644
 --- a/js/src/jsapi.cpp
 +++ b/js/src/jsapi.cpp
-@@ -4911,6 +4911,29 @@ JS_PUBLIC_API bool DescribeScriptedCaller(AutoFilename* filename, JSContext* cx,
+@@ -4911,6 +4911,19 @@ JS_PUBLIC_API bool DescribeScriptedCaller(AutoFilename* filename, JSContext* cx,
    return true;
  }
  
@@ -176,23 +176,13 @@ index 04fb2a5e66..9079a3c99a 100644
 +    return false;
 +  }
 +
-+  // Code eval or Function compiled names the script that compiled it as its
-+  // introduction script, so the walk ends at the outermost script.
-+  for (BaseScript* script = i.script(); script;
-+       script = script->sourceObject()->unwrappedIntroductionScript()) {
-+    ScriptSource* ss = script->scriptSource();
-+    if (ss->hasIntroductionType() &&
-+        strcmp(ss->introductionType(), "debugger eval") == 0) {
-+      return true;
-+    }
-+  }
-+  return false;
++  return IsDebuggerEvalCode(i.script());
 +}
 +
  // Fast path to get the activation and realm to use for GetScriptedCallerGlobal.
  // If this returns false, the fast path didn't work out and the caller has to
  // use the (much slower) NonBuiltinFrameIter path.
-@@ -5097,7 +5120,7 @@ JS_PUBLIC_API bool JS::IsAsyncStackCaptureEnabledForRealm(JSContext* cx) {
+@@ -5097,7 +5110,7 @@ JS_PUBLIC_API bool JS::IsAsyncStackCaptureEnabledForRealm(JSContext* cx) {
    }
  
    if (!cx->options().asyncStackCaptureDebuggeeOnly() ||
@@ -221,11 +211,73 @@ index aa406d46e3..5b9d66ff31 100644
  /**
   * Informs the JS engine that the scripted caller should be hidden. This can be
   * used by the embedding to maintain an override of the scripted caller in its
+diff --git a/js/src/vm/JSFunction.cpp b/js/src/vm/JSFunction.cpp
+index d59add35d1..ad41a2602f 100644
+--- a/js/src/vm/JSFunction.cpp
++++ b/js/src/vm/JSFunction.cpp
+@@ -261,7 +261,8 @@ static bool CallerGetterImpl(JSContext* cx, const CallArgs& args) {
+     ++iter;
+   }
+ 
+-  if (iter.done() || !iter.isFunctionFrame()) {
++  if (iter.done() || !iter.isFunctionFrame() ||
++      iter.realm()->hidesDebuggerCodeFromContent(iter.script())) {
+     args.rval().setNull();
+     return true;
+   }
+diff --git a/js/src/vm/JSScript.cpp b/js/src/vm/JSScript.cpp
+index 1106b8c3bb..e6a0d76efc 100644
+--- a/js/src/vm/JSScript.cpp
++++ b/js/src/vm/JSScript.cpp
+@@ -3001,6 +3001,20 @@ out:
+   return script->offsetToPC(offset);
+ }
+ 
++bool js::IsDebuggerEvalCode(BaseScript* script) {
++  // Code eval or Function compiled names the script that compiled it as its
++  // introduction script, so the walk ends at the outermost script.
++  for (; script;
++       script = script->sourceObject()->unwrappedIntroductionScript()) {
++    ScriptSource* ss = script->scriptSource();
++    if (ss->hasIntroductionType() &&
++        strcmp(ss->introductionType(), "debugger eval") == 0) {
++      return true;
++    }
++  }
++  return false;
++}
++
+ JS_PUBLIC_API unsigned js::GetScriptLineExtent(
+     JSScript* script, JS::LimitedColumnNumberOneOrigin* columnp) {
+   unsigned lineno = script->lineno();
+diff --git a/js/src/vm/JSScript.h b/js/src/vm/JSScript.h
+index 239b31ee4c..fc98bb740e 100644
+--- a/js/src/vm/JSScript.h
++++ b/js/src/vm/JSScript.h
+@@ -2531,6 +2531,10 @@ extern JS::UniqueChars FormatIntroducedFilename(const char* filename,
+ 
+ extern jsbytecode* LineNumberToPC(JSScript* script, unsigned lineno);
+ 
++// Whether a Debugger compiled |script|, or compiled the code that eval or
++// Function turned into |script|.
++extern bool IsDebuggerEvalCode(BaseScript* script);
++
+ extern JS_PUBLIC_API unsigned GetScriptLineExtent(
+     JSScript* script, JS::LimitedColumnNumberOneOrigin* columnp = nullptr);
+ 
 diff --git a/js/src/vm/Realm.cpp b/js/src/vm/Realm.cpp
-index 08d20f419c..19ebba3554 100644
+index 08d20f419c..9813a27504 100644
 --- a/js/src/vm/Realm.cpp
 +++ b/js/src/vm/Realm.cpp
-@@ -453,6 +453,24 @@ void Realm::setNewObjectMetadata(JSContext* cx, HandleObject obj) {
+@@ -26,6 +26,7 @@
+ #include "vm/DateTime.h"
+ #include "vm/Iteration.h"
+ #include "vm/JSContext.h"
++#include "vm/JSScript.h"
+ #include "wasm/WasmInstance.h"
+ 
+ #include "gc/Marking-inl.h"
+@@ -453,6 +454,29 @@ void Realm::setNewObjectMetadata(JSContext* cx, HandleObject obj) {
    }
  }
  
@@ -247,10 +299,15 @@ index 08d20f419c..19ebba3554 100644
 +  }
 +}
 +
++bool Realm::hidesDebuggerCodeFromContent(BaseScript* script) const {
++  return isDebuggee() && !isDebuggeeVisibleToContent() &&
++         IsDebuggerEvalCode(script);
++}
++
  void Realm::updateDebuggerObservesFlag(unsigned flag) {
    MOZ_ASSERT(isDebuggee());
    MOZ_ASSERT(flag == DebuggerObservesAllExecution ||
-@@ -664,7 +682,7 @@ bool Realm::shouldCaptureStackForThrow() {
+@@ -664,7 +688,7 @@ bool Realm::shouldCaptureStackForThrow() {
    // To match other browsers, we always capture a stack trace if the realm is a
    // debuggee (this includes the devtools console being open) or if unlimited
    // stack traces have been enabled for this realm (used in automation).
@@ -260,10 +317,18 @@ index 08d20f419c..19ebba3554 100644
    }
  
 diff --git a/js/src/vm/Realm.h b/js/src/vm/Realm.h
-index 15ff9f089c..a06fc97374 100644
+index 15ff9f089c..172370679a 100644
 --- a/js/src/vm/Realm.h
 +++ b/js/src/vm/Realm.h
-@@ -417,6 +417,9 @@ class JS::Realm : public JS::shadow::Realm {
+@@ -38,6 +38,7 @@ class LCovRealm;
+ }  // namespace coverage
+ 
+ class AutoRestoreRealmDebugMode;
++class BaseScript;
+ class DateTimeInfo;
+ class Debugger;
+ class GlobalObject;
+@@ -417,6 +418,9 @@ class JS::Realm : public JS::shadow::Realm {
      DebuggerObservesCoverage = 1 << 2,
      DebuggerObservesWasm = 1 << 3,
      DebuggerObservesNativeCall = 1 << 4,
@@ -273,7 +338,7 @@ index 15ff9f089c..a06fc97374 100644
    };
    uint32_t debugModeBits_ = 0;
    friend class js::AutoRestoreRealmDebugMode;
-@@ -743,6 +746,16 @@ class JS::Realm : public JS::shadow::Realm {
+@@ -743,6 +747,21 @@ class JS::Realm : public JS::shadow::Realm {
    // object.
    bool isDebuggee() const { return !!(debugModeBits_ & IsDebuggee); }
  
@@ -287,10 +352,15 @@ index 15ff9f089c..a06fc97374 100644
 +  }
 +  void updateAllDebuggersInvisibleToContent();
 +
++  // True for code an invisible-to-content Debugger compiled here: content
++  // sees neither its frames nor its functions, as if the embedder had called
++  // in natively.
++  bool hidesDebuggerCodeFromContent(js::BaseScript* script) const;
++
    void setIsDebuggee();
    void unsetIsDebuggee();
  
-@@ -754,6 +767,7 @@ class JS::Realm : public JS::shadow::Realm {
+@@ -754,6 +773,7 @@ class JS::Realm : public JS::shadow::Realm {
      isTracingExecution_ = true;
      setIsDebuggee();
      updateDebuggerObservesAllExecution();
@@ -298,7 +368,7 @@ index 15ff9f089c..a06fc97374 100644
    }
  
    void disableExecutionTracing() {
-@@ -767,6 +781,8 @@ class JS::Realm : public JS::shadow::Realm {
+@@ -767,6 +787,8 @@ class JS::Realm : public JS::shadow::Realm {
      updateDebuggerObservesAllExecution();
      if (!hasDebuggers()) {
        unsetIsDebuggee();
@@ -307,3 +377,19 @@ index 15ff9f089c..a06fc97374 100644
      }
    }
  
+diff --git a/js/src/vm/SavedStacks.cpp b/js/src/vm/SavedStacks.cpp
+index db96f4fbbb..c133d931d9 100644
+--- a/js/src/vm/SavedStacks.cpp
++++ b/js/src/vm/SavedStacks.cpp
+@@ -1553,6 +1553,11 @@ bool SavedStacks::insertFrames(JSContext* cx, MutableHandle<SavedFrame*> frame,
+     displayAtom = iter.maybeFunctionDisplayAtom();
+ 
+     auto principals = iter.realm()->principals();
++    if (!iter.isWasm() && iter.hasScript() &&
++        iter.realm()->hidesDebuggerCodeFromContent(iter.script())) {
++      principals =
++          const_cast<JSPrincipals*>(cx->runtime()->trustedPrincipals());
++    }
+     MOZ_ASSERT_IF(framePtr && !iter.isWasm(), iter.pc());
+ 
+     // If we haven't yet seen the start, then don't add anything to the stack

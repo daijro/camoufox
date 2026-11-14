@@ -39,9 +39,12 @@ What PASS means:
       would otherwise corrupt, awaits promises, and reports page errors with
       their real message;
     * writes made through "mw:" are visible to page script;
-    * a stack the page captures while "mw:" code runs names no "debugger eval
-      code", the Debugger's default name for what it compiles, which only
-      DevTools and drivers produce;
+    * a stack the page captures while "mw:" code runs holds only the page's own
+      frames, as when the browser calls the page with no script below it; in
+      particular it names no "debugger eval code", the Debugger's default name
+      for what it compiles, which only DevTools and drivers produce;
+    * a page function's `caller` is null, so the page cannot read Juggler's
+      wrapper source;
     * unprefixed evaluation stays isolated even with the flag on.
 """
 
@@ -58,6 +61,7 @@ PAGE = """
   window.pageSecret = 41;
   window.pageAdd = (a, b) => a + b;
   window.pageStack = () => new Error().stack;
+  window.pageCaller = function () { return window.pageCaller.caller; };
   document.querySelector('#probe').addEventListener('click', () => {
     document.documentElement.dataset.sawMainWorldWrite = String(window.writtenFromMw);
   });
@@ -140,6 +144,8 @@ async def _run_enabled() -> bool:
         stack = await page.evaluate("mw:window.pageStack()")
         print(f"       page stack: {stack.splitlines()}")
         _check(results, "page stack names no debugger code", "debugger eval code" in stack, False)
+        _check(results, "page stack holds only the page's frame", len(stack.splitlines()), 1)
+        _check(results, "page function's caller is null", await page.evaluate("mw:window.pageCaller() === null"), True)
 
         print("  -- statements (#631) --")
         for label, script, expected in STATEMENT_CASES:
