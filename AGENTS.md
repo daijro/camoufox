@@ -202,7 +202,9 @@ change while you work:
   only `patches/` and `camoufox/`. A deliberate difference from upstream goes
   in `ci/skiplist.yml`, with its reason.
 - **Tests against an unpackaged build** need `make -C browser stage-fonts` first.
-  Without it the browser has no content fonts.
+  Without it the browser has no content fonts. CI tests the package
+  ([`ci-tests-the-packaged-browser`](ci/tribal-rules.yml)), and `startup-prefs.py`
+  fails on an unpackaged build, which ignores the launcher's once-mirrored prefs.
 - **The stealth grade** (`ci/run_sundial.py`) reports a letter and a count, never
   the individual vectors.
 

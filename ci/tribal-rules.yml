@@ -848,6 +848,22 @@ rules:
   # Build
   # -------------------------------------------------------------------------
 
+  - id: ci-tests-the-packaged-browser
+    title: CI tests the browser as a release packages it, never the unpackaged dist/bin
+    check: manual   # browser/tests/playwright/patches/startup-prefs.py fails on an unpackaged build
+    evidence:
+      - "issue #1050: in dist/bin, autoconfig opens prefcalls.js through nsFileChannel, whose Init starts the socket process, and serializing prefs for it freezes every mirror:once pref before camoufox.cfg applies CAMOU_PREFS (gdb on a 159.0-beta.35 CI build). gfx.bundled-fonts.activate=0 applied on the v158.0.1-beta.41 package and was ignored by the same package extracted to a loose tree"
+      - "tests.yml skipped the typescript e2e locale assertions (CAMOUFOX_TEST_ALLOW_MISSING: packaged-locales) because dist/bin carries no language packs"
+    rationale: >-
+      The suites must test what users run. The tree mach build leaves differs
+      from the release package in ways a page or the launcher can observe: the
+      launcher's once-mirrored prefs (custom_fonts_only, the virtual-gpu GPU
+      prefs) never apply there, and it has no language packs. The build job
+      therefore runs make package-linux, as a release does, and the test jobs
+      run that package. A cache hit writes the branch's Juggler into the
+      package's omni.ja. Local objdir builds stay unpackaged, so a guard that
+      depends on packaging says so.
+
   - id: builds-are-optimized-like-stock
     title: Every build, tested or shipped and on every OS, uses stock's PGO profile, stock's LTO mode and Rust SIMD
     check: automated

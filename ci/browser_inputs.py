@@ -45,7 +45,7 @@ Run:
     python3 -m ci.browser_inputs --digest        # the native-inputs hash
     python3 -m ci.browser_inputs --list          # what feeds that hash
     python3 -m ci.browser_inputs --resources     # source -> path in the dist
-    python3 -m ci.browser_inputs --overlay DIR   # lay resources over a dist/bin
+    python3 -m ci.browser_inputs --overlay DIR   # lay resources over a packaged browser
 """
 
 from __future__ import annotations
@@ -53,8 +53,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
-import shutil
 import sys
+import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -198,8 +198,8 @@ def source_digest(root: Optional[Path] = None) -> str:
     return digest.hexdigest()[:32]
 
 
-def overlay(dist_bin: Path, root: Optional[Path] = None) -> List[str]:
-    """Lay the current resources over an already-built dist/bin.
+def overlay(install: Path, root: Optional[Path] = None) -> List[str]:
+    """Lay the current resources over a packaged browser, in its omni.ja.
 
     Every entry is written, not just the changed ones: the set is then always
     exactly what moz.build says, so a stale file cannot survive. (A resource
@@ -207,13 +207,18 @@ def overlay(dist_bin: Path, root: Optional[Path] = None) -> List[str]:
     that forces a real build rather than an overlay.)
     """
     root = root or REPO_ROOT
-    written = []
-    for source, destination in sorted(resource_entries(root).items()):
-        target = dist_bin / destination
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(root / source, target)
-        written.append(destination)
-    return written
+    resources = {destination: (root / source).read_bytes()
+                 for source, destination in resource_entries(root).items()}
+    jar = install / "omni.ja"
+    rewritten = jar.with_name(jar.name + ".new")
+    with zipfile.ZipFile(jar) as old, zipfile.ZipFile(rewritten, "w", zipfile.ZIP_DEFLATED) as new:
+        for info in old.infolist():
+            if info.filename not in resources:
+                new.writestr(info, old.read(info))
+        for destination, data in sorted(resources.items()):
+            new.writestr(destination, data)
+    rewritten.replace(jar)
+    return sorted(resources)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -222,7 +227,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--source-digest", action="store_true")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--resources", action="store_true")
-    parser.add_argument("--overlay", type=Path, metavar="DIST_BIN")
+    parser.add_argument("--overlay", type=Path, metavar="INSTALL_DIR")
     args = parser.parse_args(argv)
 
     if args.digest:

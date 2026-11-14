@@ -537,7 +537,7 @@ jobs:
           # `browser_changed` (see resolve) is a different question and stays as
           # it is: it decides build-versus-fetch against the base, and is true
           # for every push to a branch that touched the browser once.
-          key: browser-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}-native-${{ steps.native.outputs.hash }}
+          key: package-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}-native-${{ steps.native.outputs.hash }}
           # No restore-keys, deliberately. A prefix match would serve a browser
           # whose compiled half was built from different sources, and every
           # suite downstream would report on it looking perfectly healthy.
@@ -637,26 +637,15 @@ jobs:
           CAMOUFOX_UBO: ${{ needs.resolve.outputs.ubo }}
         run: |
           set -euo pipefail
-          src="browser/camoufox-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}/obj-x86_64-pc-linux-gnu/dist/bin"
-          test -x "$src/camoufox-bin" || { echo "::error::no camoufox-bin at $src"; exit 1; }
-
-          # `mach build` produces an *unpackaged* tree. Two things
-          # browser/scripts/package.py would add are load-bearing for the test
-          # jobs and are missing here:
-          #
-          #   fonts/ + fontconfig/  -- without them every glyph in page content
-          #                            renders as tofu, silently, because the
-          #                            browser chrome still has system fonts.
-          #   properties.json       -- the Python API resolves it next to the
-          #                            binary, so AsyncCamoufox dies with
-          #                            FileNotFoundError without it. That breaks
-          #                            patch-guards, the leak suite and sundial.
-          #   addons/UBO/           -- the uBlock Origin the launchers load by
-          #                            default; without it every suite runs a
-          #                            browser no user runs.
-          make -C browser stage-fonts
-          [ -f "$src/properties.json" ] || cp -v browser/settings/properties.json "$src/properties.json"
-          python3 browser/scripts/fetch-ubo.py stage "$src"
+          # Packaged as a release packages it, so every suite tests the browser
+          # a release ships: omni.ja, the language packs, the fonts,
+          # properties.json and uBO. The unpackaged dist/bin behaves
+          # differently: autoconfig opens prefcalls.js through a file channel
+          # there, which starts the socket process and freezes every
+          # once-mirrored pref before camoufox.cfg applies the launcher's (#1050).
+          make -C browser package-linux arch=x86_64
+          mkdir -p pack/bin
+          unzip -q "browser/camoufox-${{ needs.resolve.outputs.browser_version }}-${{ needs.resolve.outputs.browser_release }}-lin.x86_64.zip" -d pack/bin
 
           # Fail here, once, rather than in five browser jobs with five
           # different confusing errors.
@@ -664,22 +653,10 @@ jobs:
           # browser/bundle/fonts/groups.json), not a copy per OS; groups.json is what
           # utils._generate_fontconfig reads to decide which of them an identity
           # may see, so its absence is the failure that matters.
-          for required in camoufox-bin properties.json camoufox.cfg fonts/groups.json fonts/LMW fontconfig/linux addons/UBO/manifest.json; do
-            [ -e "$src/$required" ] || { echo "::error::artifact is missing $required"; exit 1; }
+          for required in camoufox-bin omni.ja properties.json camoufox.cfg fonts/groups.json fonts/LMW fontconfig/linux addons/UBO/manifest.json; do
+            [ -e "pack/bin/$required" ] || { echo "::error::artifact is missing $required"; exit 1; }
           done
-
-          # -h (--dereference) is load-bearing, not tidiness. mach builds dist/bin
-          # out of symlinks -- 17 of them here, and properties.json and
-          # camoufox.cfg are ABSOLUTE links into the source tree. Archiving the
-          # links means they resolve on this runner, where the tree exists, and
-          # dangle on every runner that only downloads the artifact. The browser
-          # then starts with no config at all, which is where every spoofing pref
-          # lives, and the failure surfaces as "properties.json missing" three
-          # jobs later.
-          #
-          # It also defeats the check above: `[ -e ]` follows a symlink, so the
-          # file looked present right up until it was unpacked somewhere else.
-          tar -C "$(dirname "$src")" -chf - bin | zstd -3 -T0 -o camoufox-dist.tar.zst
+          tar -C pack -cf - bin | zstd -3 -T0 -o camoufox-dist.tar.zst
           ls -lh camoufox-dist.tar.zst
 
       # A restored browser still has to produce the `build` result, or the
@@ -693,12 +670,11 @@ jobs:
         env:
           CAMOUFOX_UBO: ${{ needs.resolve.outputs.ubo }}
         # The compiled half is identical by construction -- that is what the key
-        # asserts. What can still differ is the JavaScript, and in the
-        # unpackaged dist/bin that CI archives there is no omni.ja to rebuild:
-        # Juggler is loose files under modules/juggler/, so delivering new
-        # JavaScript is a copy. ci/browser_inputs.py reads the destinations out
-        # of Juggler's moz.build rather than assuming a prefix, because two files
-        # in the same source directory land at different depths.
+        # asserts. What can still differ is the JavaScript, which the package
+        # holds in omni.ja, so ci/browser_inputs.py rewrites those entries. It
+        # reads the destinations out of Juggler's moz.build rather than assuming
+        # a prefix, because two files in the same source directory land at
+        # different depths.
         run: |
           set -euo pipefail
           command -v zstd >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y zstd; }
@@ -1067,13 +1043,6 @@ jobs:
       contents: read
     env:
       CAMOUFOX_FPGEN_DATA: ${{ github.workspace }}/.ci-work/fpgen
-      # The browser under test is the build job's unpackaged dist/bin, which
-      # packages en-US only: browser/scripts/package.py adds the langpacks, and CI never
-      # runs it. A de-DE/fr-FR identity therefore presents en-US here though a
-      # packaged release presents de-DE. The e2e locale assertions skip on that
-      # (named) gap; everything else in the page-vs-config checks still runs.
-      # Remove this once the test artifact carries the langpacks.
-      CAMOUFOX_TEST_ALLOW_MISSING: packaged-locales
     steps:
       - uses: actions/checkout@v4
         with:

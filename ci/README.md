@@ -222,7 +222,8 @@ Each tier gates the next, so a lint failure never reaches the build:
 | Mechanism | Effect |
 |---|---|
 | **Fetch instead of build** | A pull request that does not touch browser sources tests the published release built from exactly this tree's sources (`ci.release paired`). With no such release, it builds. |
-| **Compiled-input cache** | The build cache is keyed on a hash of the compiled inputs only (`ci/browser_inputs.py`). On a hit the browser is restored and this branch's Juggler JavaScript and other resources, the files Juggler's `moz.build` lists in `FINAL_TARGET_FILES`, are laid over it. Everything else, including any new file type, counts as native and forces a build. |
+| **Packaged like a release** | The build job runs `make package-linux`, as a release does, and every suite tests that package ([`ci-tests-the-packaged-browser`](tribal-rules.yml)). |
+| **Compiled-input cache** | The build cache is keyed on a hash of the compiled inputs only (`ci/browser_inputs.py`). On a hit the package is restored and this branch's Juggler JavaScript and other resources, the files Juggler's `moz.build` lists in `FINAL_TARGET_FILES`, are written into its `omni.ja`. Everything else, including any new file type, counts as native and forces a build. |
 | **No partial restore** | That cache has no `restore-keys`: a partial match would hand the tests a browser built from different sources. A self-test checks the key covers every browser-affecting path. |
 | **Warm ccache** | Pushes to `main` and a twice-weekly schedule keep the ccache from being evicted; pull requests restore it. |
 | **PGO and LTO** | Every build uses Mozilla's PGO profile for the same Firefox and links libxul with cross-language LTO, as a release does ([`builds-are-optimized-like-stock`](tribal-rules.yml)). ccache caches the compiles, not that link, so a warm build still pays for it. |
