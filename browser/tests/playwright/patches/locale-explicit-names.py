@@ -13,8 +13,8 @@ The guard launches with a spoofed locale whose region differs from every code
 it asks about, and checks:
   * the spoofed locale reached the page (otherwise the check is vacuous). That
     is read from navigator.language, not Intl's default: Intl only defaults to
-    a locale the build has packaged, and the unpackaged objdir build CI tests
-    has only en-US (scripts/package.py injects the language packs);
+    a locale the build has packaged, and an unpackaged objdir build has only
+    en-US (scripts/package.py injects the language packs);
   * DisplayNames translates each explicit region code to its own name;
   * an explicitly named Intl.Locale keeps its own subtags.
 

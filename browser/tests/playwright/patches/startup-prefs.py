@@ -16,6 +16,14 @@ firefox_user_prefs, so juggler never sets it): dom.gamepad.enabled=false removes
 navigator.getGamepads ([Pref="dom.gamepad.enabled"]). A control launch without
 it must still expose getGamepads, so the check is not vacuous.
 
+A once-mirrored pref (`mirror: once` in StaticPrefList.yaml) keeps the value
+it had when the first of them was read, so CAMOU_PREFS must be applied before
+anything reads one. gfx.bundled-fonts.activate=0 through CAMOU_PREFS_1 must
+stop a bare launch from rendering Twemoji Mozilla, the font Firefox bundles,
+which a control launch renders. An unpackaged build fails this: autoconfig opens
+prefcalls.js through a file channel, which starts the socket process and
+freezes every once-mirrored pref before camoufox.cfg runs (daijro/camoufox#1050).
+
 The loader used to return silently on JSON it could not parse and swallow each
 pref that failed to set, so a launch ran on with identity prefs missing. Three
 launches of the bare binary take a screenshot: unparseable JSON and a pref of
@@ -35,6 +43,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
+TWEMOJI = """() => {
+  const ctx = document.createElement('canvas').getContext('2d');
+  const width = font => { ctx.font = font; return ctx.measureText('#0123456789').width; };
+  return width('72px "Twemoji Mozilla", serif') !== width('72px serif');
+}"""
+
 LOADER_CASES = [
     ("unparseable JSON", '{"browser.startup.page":', False),
     ("a string for an integer pref", '{"browser.startup.page":"one"}', False),
@@ -50,6 +64,22 @@ def gamepads_type(binary: Path, env=None) -> str:
         page = b.new_page()
         page.goto("about:blank")
         return page.evaluate("typeof navigator.getGamepads")
+
+
+def twemoji_renders(binary: Path, prefs=None) -> bool:
+    """Whether a bare launch, given `prefs` through CAMOU_PREFS_1, renders Twemoji Mozilla."""
+    from playwright.sync_api import sync_playwright
+
+    env = dict(os.environ)
+    if prefs:
+        env["CAMOU_PREFS_1"] = json.dumps(prefs)
+    with sync_playwright() as p:
+        browser = p.firefox.launch(executable_path=str(binary), headless=True, env=env)
+        try:
+            page = browser.new_page()
+            return page.evaluate(TWEMOJI)
+        finally:
+            browser.close()
 
 
 def bare_launch(binary: Path, prefs: str):
@@ -80,6 +110,16 @@ def main() -> int:
         failures.append(f"control launch: getGamepads is {control} (expected function) -- check is vacuous")
     if applied != "undefined":
         failures.append("a pref passed via CAMOU_PREFS was not applied at startup (camoufox.cfg block missing?)")
+
+    bundled = twemoji_renders(binary)
+    once = twemoji_renders(binary, {"gfx.bundled-fonts.activate": 0})
+    print(f"  control launch        : Twemoji Mozilla renders = {bundled}")
+    print(f"  once-mirrored pref    : Twemoji Mozilla renders = {once} (gfx.bundled-fonts.activate=0)")
+    if not bundled:
+        failures.append("control launch: Twemoji Mozilla does not render -- check is vacuous")
+    if once:
+        failures.append("gfx.bundled-fonts.activate=0 via CAMOU_PREFS was not applied: "
+                        "a once-mirrored pref was read before camoufox.cfg ran")
 
     for label, prefs, should_start in LOADER_CASES:
         started, output = bare_launch(binary, prefs)

@@ -2597,17 +2597,27 @@ def test_juggler_moz_build_itself_is_native(tmp_path):
 
 
 def test_the_overlay_writes_where_moz_build_says(tmp_path):
+    """Into the package's omni.ja, leaving every other entry as it was."""
+    import zipfile
+
     from ci.browser_inputs import overlay
 
     root = _fake_repo(tmp_path)
-    dist = tmp_path / "bin"
+    install = tmp_path / "bin"
+    install.mkdir()
+    with zipfile.ZipFile(install / "omni.ja", "w") as jar:
+        jar.writestr("modules/juggler/content/FrameTree.js", "old js\n")
+        jar.writestr("greprefs.js", "prefs\n")
     (root / "browser" / "additions" / "juggler" / "content" / "FrameTree.js").write_text("new js\n")
-    written = overlay(dist, root)
+    written = overlay(install, root)
     assert sorted(written) == [
         "modules/juggler/Helper.js",
         "modules/juggler/content/FrameTree.js",
     ]
-    assert (dist / "modules/juggler/content/FrameTree.js").read_text() == "new js\n"
+    with zipfile.ZipFile(install / "omni.ja") as jar:
+        assert sorted(jar.namelist()) == sorted([*written, "greprefs.js"])
+        assert jar.read("modules/juggler/content/FrameTree.js") == b"new js\n"
+        assert jar.read("greprefs.js") == b"prefs\n"
 
 
 def test_the_overlay_runs_only_on_a_hit_and_before_the_upload():
