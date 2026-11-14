@@ -90,14 +90,16 @@ export async function launchServer({
 			server.on("close", () => display.kill());
 		}
 		if (virtualDisplay instanceof GpuDisplay) {
-			const browser = await firefox.connect(server.wsEndpoint());
 			try {
-				await proveGpu(browser, virtualDisplay);
+				const browser = await firefox.connect(server.wsEndpoint());
+				try {
+					await proveGpu(browser, virtualDisplay);
+				} finally {
+					await browser.close();
+				}
 			} catch (error) {
 				await server.close();
 				throw error;
-			} finally {
-				await browser.close();
 			}
 		}
 
