@@ -12,7 +12,7 @@ const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sy
 const {MouseDispatch, kAckDeadlineMs} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
 const kMoveIntervalMs = 8; // a 125 Hz mouse
 const {logNormalDelay} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanDelay.js');
-const {cursory, humanizedMove} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
+const {cursory, humanizedMove, restingPoint} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
 const {play} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/Pacer.js');
 
 const Cc = Components.classes;
@@ -109,6 +109,10 @@ export class PageHandler {
     // Camoufox: last position an actual mousemove landed on. Used as the
     // start point for the humanized cursor trajectory (humanize=True).
     this._lastTrackedPos = { x: 0, y: 0 };
+    // Camoufox: whether a mouse command has placed the pointer yet. Until one
+    // has, (0, 0) is only where the synthesized pointer starts, and a humanized
+    // move starts from restingPoint() instead.
+    this._pointerPlaced = false;
     // Camoufox: documents whose content process accepts user input (see
     // _awaitUserInputGate), keyed by WindowGlobalParent.
     this._userInputGateOpen = new WeakSet();
@@ -775,10 +779,11 @@ export class PageHandler {
         // Camoufox: with humanize on, a direct mousemove becomes a human-like
         // trajectory of intermediate mousemoves that ends exactly on the
         // requested destination.
+        const from = this._pointerPlaced ? this._lastTrackedPos : restingPoint(dispatch.boundingBox);
         const humanized = eventType === 'mousemove' && ChromeUtils.camouGetBool('humanize', false) &&
-            humanizedMove(this._lastTrackedPos, {x, y});
+            humanizedMove(from, {x, y});
         if (humanized) {
-          await dispatch.sendTrajectoryAcked(watcher, 'mousemove', this._lastTrackedPos, humanized.plan,
+          await dispatch.sendTrajectoryAcked(watcher, 'mousemove', from, humanized.plan,
               (plan, dispatchStep) => play(plan, dispatchStep, {signal: this._humanizeAbort.signal, deadlineMs: humanized.deadlineMs}),
               (destX, destY) => this._sendMove(dispatch, watcher, destX, destY));
         } else if (eventType === 'mousemove') {
@@ -789,6 +794,7 @@ export class PageHandler {
       }
       await Promise.all(promises);
       await watcher.dispose();
+      this._pointerPlaced = true;
     };
 
     // We must switch to proper tab in the tabbed browser so that
@@ -814,6 +820,7 @@ export class PageHandler {
         // pointerenter / mouseover carried buttons=1 and pressure=0.5, which a
         // real mouse never does (measured 2026-09-14 against XTEST input).
         this._lastTrackedPos = { x: NaN, y: NaN };
+        this._pointerPlaced = true;
         return;
       }
 
