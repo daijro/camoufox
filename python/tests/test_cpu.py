@@ -10,9 +10,10 @@ with its GPU and OS, and sent to the browser as general.cpu_identity.
 import pytest
 
 from camoufox import coherence
-from camoufox.fingerprints import X86_INTEL_SHARE, set_cpu_default
+from camoufox.fingerprints import X86_INTEL_SHARE, is_software_renderer, set_cpu_default
 from camoufox.pkgman import LAUNCHER_CONSTANTS
 from camoufox.utils import _os_for_cpu, cpu_identity_pref, vpx_realtime_only
+from camoufox.webgl import sample_webgl_for_screen
 
 WIN_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0"
 NVIDIA = "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar"
@@ -78,6 +79,18 @@ def test_an_os_left_open_is_drawn_among_those_with_a_gpu_for_the_cpu():
     with pytest.raises(ValueError):
         _os_for_cpu({"manufacturer": "amd"}, "macos")
     assert _os_for_cpu({"manufacturer": "qualcomm"}, None) == "linux"
+
+
+def test_an_arm_linux_identity_draws_the_software_renderer():
+    # Beside an ARM CPU, the only GPU fpgen records from Firefox on Linux is
+    # llvmpipe, so a synthetic draw falls back to it rather than finding
+    # nothing; an x86 draw still never claims software rendering.
+    for seed in range(20):
+        for cpu in ({"cpu:arch": "arm"}, {"cpu:arch": "arm", "cpu:manufacturer": "ampere"}):
+            renderer = sample_webgl_for_screen("lin", 1280, 768, seed=seed, cpu=cpu)["webGl:renderer"]
+            assert is_software_renderer(renderer), (seed, cpu, renderer)
+        renderer = sample_webgl_for_screen("lin", 1920, 1080, seed=seed, cpu={"cpu:arch": "x86"})["webGl:renderer"]
+        assert not is_software_renderer(renderer), (seed, renderer)
 
 
 @pytest.mark.parametrize(

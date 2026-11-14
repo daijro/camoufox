@@ -10,10 +10,15 @@
  */
 import { describe, expect, it } from "vitest";
 import * as coherence from "../src/coherence.js";
-import { setCpuDefault, X86_INTEL_SHARE } from "../src/fingerprints.js";
+import {
+	isSoftwareRenderer,
+	setCpuDefault,
+	X86_INTEL_SHARE,
+} from "../src/fingerprints.js";
 import { LAUNCHER_CONSTANTS } from "../src/paths.js";
 import { ValueError } from "../src/pycompat.js";
 import { cpuIdentityPref, osForCpu, vpxRealtimeOnly } from "../src/utils.js";
+import { sampleWebglForScreen } from "../src/webgl.js";
 import { MODEL } from "./fpgen-setup.js";
 
 const WIN_UA =
@@ -105,6 +110,36 @@ describe("the caller's option", () => {
 			"cpu must be a dict such as {'arch': 'x86', 'manufacturer': 'intel'}, not 'arm'",
 		);
 	});
+
+	it.skipIf(!MODEL.ok)(
+		"an ARM Linux identity draws the software renderer",
+		() => {
+			// Beside an ARM CPU, the only GPU fpgen records from Firefox on Linux
+			// is llvmpipe, so a synthetic draw falls back to it rather than finding
+			// nothing; an x86 draw still never claims software rendering.
+			for (let seed = 0; seed < 20; seed++) {
+				for (const cpu of [
+					{ "cpu:arch": "arm" },
+					{ "cpu:arch": "arm", "cpu:manufacturer": "ampere" },
+				]) {
+					const got = sampleWebglForScreen(
+						"lin",
+						1280,
+						768,
+						seed,
+						null,
+						null,
+						cpu,
+					);
+					expect(isSoftwareRenderer(got["webGl:renderer"])).toBe(true);
+				}
+				const x86 = sampleWebglForScreen("lin", 1920, 1080, seed, null, null, {
+					"cpu:arch": "x86",
+				});
+				expect(isSoftwareRenderer(x86["webGl:renderer"])).toBe(false);
+			}
+		},
+	);
 
 	it.skipIf(!MODEL.ok)(
 		"an OS left open is drawn among those with a GPU for the CPU",
