@@ -957,6 +957,19 @@ def test_every_build_is_optimized_like_stock():
                 assert marker not in text, f"{path.name}" + explain("builds-are-optimized-like-stock")
 
 
+def test_patches_never_edit_additions():
+    """Rule: patches-never-edit-additions."""
+    additions = BROWSER / "additions"
+    provided = {str(f.relative_to(additions)) for f in additions.rglob("*") if f.is_file()}
+    edited = [
+        f"{patch.relative_to(BROWSER)}: {target}"
+        for patch in sorted((BROWSER / "patches").rglob("*.patch"))
+        for target in re.findall(r"^\+\+\+ b/(\S+)", patch.read_text(encoding="utf-8", errors="replace"), re.M)
+        if target in provided
+    ]
+    assert not edited, "\n".join(edited) + explain("patches-never-edit-additions")
+
+
 # ---------------------------------------------------------------------------
 # juggler
 # ---------------------------------------------------------------------------

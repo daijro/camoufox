@@ -85,6 +85,11 @@ const uint32_t* sk_cpu_estimates();
  * the opts tiers then switch to Skia's AArch64 code, built against
  * SkNeonEmu.h (the _neonemu.cpp files). */
 bool sk_cpu_emulates_arm64();
+
+/* Whether general.cpu_identity names an x86-64 machine on this aarch64 one:
+ * the opts tiers then switch to Skia's x86 code, built against simde
+ * (the _x86emu.cpp files). */
+bool sk_cpu_emulates_x86();
 #endif
 
 #endif

@@ -888,3 +888,16 @@ rules:
       tree with (scripts/patch.py reads taskcluster/kinds/toolchain/rust.yml),
       because lld cannot read Rust bitcode from an LLVM newer than the
       bootstrapped clang's, and a Rust profile only fits that compiler.
+
+  - id: patches-never-edit-additions
+    title: A patch never edits a file browser/additions/ provides; the change goes in the addition
+    check: automated
+    evidence:
+      - "release run 43631788944: the aarch64 targets failed on an undeclared sk_cpu_emulates_x86 and the x86 targets on an undefined opus_mozilla_set_emulate_x86, both from cpu-vendor-estimates.patch hunks to four additions (#1034)"
+      - "make set-target (scripts/patch.py --mozconfig-only), which multibuild.py runs for each target, copied the additions over the patched tree, so the hunks had been applied and were then overwritten"
+    rationale: >-
+      An addition is a whole file this repository owns, so the copy in
+      browser/additions/ has to be the file that is compiled. A hunk on top of
+      it holds only until the additions are copied again, and a release copied
+      them after the patches while a pull request's build did not, so the
+      tests passed on code no release contained.

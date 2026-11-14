@@ -5,7 +5,8 @@
 // Which recorded RCPPS/RSQRTPS table Skia's raster pipeline uses
 // (src/opts/SkCpuEstimates.h) and libopus's PVQ search
 // (media/libopus/include/opus_cpu_estimates.h) use, from
-// general.cpu_identity (1 Intel, 2 AMD). Off x86 there is none to reproduce.
+// general.cpu_identity (1 Intel, 2 AMD). On aarch64 an x86 identity always
+// needs its table, since the emulated SSE code has no RCPPS of its own.
 
 #include "include/core/SkTypes.h"
 
@@ -55,10 +56,35 @@ bool sk_cpu_emulates_arm64() {
   return mozilla::StaticPrefs::general_cpu_identity() == SK_CPU_IDENTITY_ARM64;
 }
 
+bool sk_cpu_emulates_x86() { return false; }
+
+#elif defined(SK_CPU_ARM64)
+
+#  include "mozilla/StaticPrefs_general.h"
+#  include "src/opts/SkCpuEstimateTables.h"
+
+static bool IsX86Vendor(uint32_t vendor) {
+  return vendor == SK_CPU_VENDOR_INTEL || vendor == SK_CPU_VENDOR_AMD;
+}
+
+// An x86 identity here is always emulated, so its vendor's table always applies.
+const uint32_t* sk_cpu_estimates() {
+  const uint32_t vendor = mozilla::StaticPrefs::general_cpu_identity();
+  return IsX86Vendor(vendor) ? kSkCpuEstimateTables[vendor - 1] : nullptr;
+}
+
+bool sk_cpu_emulates_arm64() { return false; }
+
+bool sk_cpu_emulates_x86() {
+  return IsX86Vendor(mozilla::StaticPrefs::general_cpu_identity());
+}
+
 #else
 
 const uint32_t* sk_cpu_estimates() { return nullptr; }
 
 bool sk_cpu_emulates_arm64() { return false; }
+
+bool sk_cpu_emulates_x86() { return false; }
 
 #endif

@@ -11,7 +11,9 @@
  *
  * When general.cpu_identity emulates an arm64 CPU, x86 encoders and decoders
  * instead run Firefox aarch64's NEON kernels, ported to C
- * (celt/x86/celt_neonemu.c, celt_tx_neonemu.c).
+ * (celt/x86/celt_neonemu.c, celt_tx_neonemu.c). When it names an x86 CPU
+ * on aarch64, they run Firefox x86-64's SSE kernels, built against simde
+ * (celt/arm/celt_x86emu.c), with the named vendor's PVQ estimates.
  *
  * libopus is built into gkcodecs, which cannot read prefs, so Gecko hands it
  * both: opus_mozilla_use_cpu_vendor() before each encoder or decoder is
@@ -40,6 +42,8 @@ const uint32_t* opus_mozilla_cpu_estimates(void);
  * kernels. */
 void opus_mozilla_set_emulate_arm64(int on);
 int opus_mozilla_emulates_arm64(void);
+void opus_mozilla_set_emulate_x86(int on);
+int opus_mozilla_emulates_x86(void);
 #if defined(__GNUC__)
 #  pragma GCC visibility pop
 #endif
@@ -50,10 +54,12 @@ int opus_mozilla_emulates_arm64(void);
 /* Defined in libxul by gfx/skia/skia/src/ports/SkCpuEstimates_mozilla.cpp. */
 const uint32_t* sk_cpu_estimates();
 bool sk_cpu_emulates_arm64();
+bool sk_cpu_emulates_x86();
 
 static inline void opus_mozilla_use_cpu_vendor() {
   opus_mozilla_set_cpu_estimates(sk_cpu_estimates());
   opus_mozilla_set_emulate_arm64(sk_cpu_emulates_arm64());
+  opus_mozilla_set_emulate_x86(sk_cpu_emulates_x86());
 }
 #endif
 
