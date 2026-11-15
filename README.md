@@ -510,6 +510,8 @@ claims the host's OS. Details are in
 | Headless reports a fine pointer, like a desktop | `force-default-pointer` patch |
 | `mouse.wheel()` turns notches, as a physical wheel does: 100 px is one notch, each its own event with a native tick | Juggler, `wheel-native-ticks` patch |
 | Juggler's debugger leaves no side effects content can observe | `debugger-invisible-to-content` patch |
+| A stack the page captures while a driver call runs its code (`focus`, `dispatch_event`, an `mw:` evaluate) holds only the page's frames, never Juggler's, the isolated world's or the code the `mw:` evaluate compiled; a page function's `caller` is never driver code | Juggler, `debugger-invisible-to-content` patch |
+| Code an `mw:` evaluate runs is named after the document, as an inline script is, never `debugger eval code` | Juggler, `debugger-invisible-to-content` patch |
 | Per-context fingerprint setters are gone before page script runs | `window-setter-seal` patch |
 | Popup blocker on, as in stock Firefox | `popup-blocker-parity` patch |
 | On X11, a pointer-locked window partly off the top or left of the screen keeps running (stock Firefox can crash: the X server refuses the cursor barrier and GDK aborts) | `pointer-lock-offscreen` patch |
