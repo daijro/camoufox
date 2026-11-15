@@ -901,3 +901,17 @@ rules:
       it holds only until the additions are copied again, and a release copied
       them after the patches while a pull request's build did not, so the
       tests passed on code no release contained.
+
+  - id: one-build-entry-point
+    title: A pull request and a release build through one command, ci.run_build
+    check: automated
+    evidence:
+      - "release runs 41280578561, 43352392915, 43395652803 and 43631788944 each failed on a commit whose tests had passed, in a step only release.yml ran: midl.exe under Wine (twice), verify-fonts.py, and make set-target"
+      - "run 43631788944: tests.yml built with make build and release.yml with multibuild.py, whose make set-target changed the sources after they were patched"
+    rationale: >-
+      A step only a release runs is run for the first time by a release. The
+      pull request's build job therefore runs the release's command for linux
+      x86_64 (retarget, build, package), the preflight jobs run its front half
+      and compile the patched sources for every other release target, and all
+      of them set up the runner through .github/actions/build-host. Linking
+      and packaging the cross-compiled targets is all a release does first.

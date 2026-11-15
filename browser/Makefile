@@ -6,7 +6,7 @@ ff_source_tarball := firefox-$(version).source.tar.xz
 
 .PHONY: help fetch setup-minimal setup ff-dbg revert fetch-fonts fonts-extract fonts-check \
         fonts-clean dir set-target mozbootstrap setup-macos-sdk bootstrap diff first-checkpoint \
-        checkpoint clean distclean build package-linux package-macos package-windows run edit-cfg \
+        checkpoint clean distclean build preflight package-linux package-macos package-windows run edit-cfg \
         check-arg grep patch unpatch workspace tests stage-fonts stage-ubo unbusy path \
         generate-assets-car
 
@@ -22,6 +22,7 @@ help:
 	@echo "  clean               - Remove build artifacts"
 	@echo "  distclean           - Remove everything including downloads"
 	@echo "  build               - Build Camoufox"
+	@echo "  preflight           - Check that BUILD_TARGET builds, without building it"
 	@echo "  set-target          - Change the build target with BUILD_TARGET"
 	@echo "  setup-macos-sdk     - Download the macOS SDK for cross-compilation"
 	@echo "  fetch-fonts         - Download and verify the font bundle"
@@ -164,6 +165,12 @@ build: unbusy
 		make dir; \
 	fi
 	cd $(cf_source_dir) && ./mach build $(_ARGS)
+
+preflight:
+	@if [ ! -f $(cf_source_dir)/_READY ]; then \
+		make dir; \
+	fi
+	python3 scripts/preflight.py $(cf_source_dir)
 
 package-linux: fonts-extract
 	python3 scripts/package.py linux \

@@ -150,7 +150,12 @@ make build                     # ./mach build
 make run                       # run the build (wipes ~/.camoufox)
 make package-linux arch=x86_64 # or package-macos / package-windows
 python3 multibuild.py --target linux windows macos --arch x86_64 arm64
+python3 multibuild.py --target windows macos --arch x86_64 --preflight  # compile what the patches touch, in minutes
 ```
+
+A pull request builds Linux x86_64 only. CI preflights the other release
+targets, and `--preflight` does the same locally for a patch with code for
+another OS or CPU.
 
 Every build, a local one included, is optimized as stock is
 ([`builds-are-optimized-like-stock`](ci/tribal-rules.yml)): with the PGO

@@ -227,35 +227,6 @@ jobs:
             arch: i686
 
     steps:
-      - name: Maximize build space
-        uses: AdityaGarg8/remove-unwanted-software@8831c82abf29b34eb2caac48d5f999ecfc0d8eef # v4.1
-        with:
-          remove-dotnet: "true"
-          remove-android: "true"
-          remove-haskell: "true"
-          remove-codeql: "true"
-          remove-docker-images: "true"
-          remove-cached-tools: "true"
-          remove-swapfile: "true"
-          verbose: "false"
-
-      - name: Remove unwanted tools
-        # Originally from here: https://github.com/AdityaGarg8/remove-unwanted-software/blob/master/action.yml
-        run: |
-          sudo apt-get remove -y '^aspnetcore-.*' > /dev/null
-          sudo apt-get remove -y '^dotnet-.*' > /dev/null
-          sudo apt-get remove -y '^llvm-.*' > /dev/null
-          sudo apt-get remove -y 'php.*' > /dev/null
-          sudo apt-get remove -y '^mongodb-.*' > /dev/null
-          sudo apt-get remove -y '^mysql-.*' > /dev/null
-          sudo apt-get remove -y azure-cli google-chrome-stable firefox ${POWERSHELL} mono-devel libgl1-mesa-dri --fix-missing > /dev/null
-          if [[ (${CODENAME} = focal) || (${CODENAME} = jammy) ]]; then
-            sudo apt-get remove -y google-cloud-sdk --fix-missing > /dev/null
-            sudo apt-get remove -y google-cloud-cli --fix-missing > /dev/null
-          fi
-          sudo apt-get autoremove -y > /dev/null
-          sudo apt-get clean > /dev/null
-
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.plan.outputs.sha }}
@@ -266,27 +237,13 @@ jobs:
         # from; the build takes the number itself from the tag.
         run: python3 -m ci.release set-build --tag "${{ needs.plan.outputs.browser_tag }}"
 
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      # The disk space, packages and swap, exactly as tests.yml's build and
+      # preflight jobs get them.
+      - uses: ./.github/actions/build-host
         with:
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Check disk space
-        run: df -h
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          # ccache: the mozconfig enables --with-ccache, but the runner image no
-          # longer ships it, so configure fails with "Cannot find ccache".
-          # fontconfig: browser/scripts/verify-fonts.py resolves every reportable family
-          # through fc-list/fc-match, so the bundle is checked with the same tool
-          # the browser uses rather than assumed correct.
-          sudo apt-get install -y msitools p7zip-full aria2 ccache fontconfig
-          # libc6-i386: Mozilla's Wine runs midl.exe through /lib/ld-linux.so.2.
-          if [ "${{ matrix.target }}" = windows ] || [ "${{ matrix.arch }}" != "x86_64" ]; then
-            sudo apt-get install -y libc6-i386 lib32gcc-s1 lib32stdc++6 gcc-multilib g++-multilib
-          fi
 
       - name: Fetch the font bundle
         # The bundle is a release asset, not repo content (~2.16 GB extracted,
@@ -313,26 +270,17 @@ jobs:
       - name: Prepare the source tree
         # setup-minimal (which fetches the tarball) -> dir -> mozbootstrap, with
         # the two network-bound steps retried on transient failures, exactly as
-        # the tests.yml build job does. multibuild.py then finds _READY and
-        # builds without re-patching.
+        # the tests.yml build job does.
         run: python3 -m ci.run_prepare
 
-      - name: Create swap space
-        run: |
-          sudo fallocate -l 24G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          free -h
-          df -h /
-
       - name: Build
+        # The command tests.yml's build job runs for linux x86_64
+        # (ci/tribal-rules.yml: one-build-entry-point).
         env:
           # Cap Rust parallelism to lower peak memory (avoids OOM/SIGTERM).
           # Tune to taste: higher = faster but more RAM.
           CARGO_BUILD_JOBS: "1"
-        working-directory: browser
-        run: python3 ./multibuild.py --target ${{ matrix.target }} --arch ${{ matrix.arch }}
+        run: python3 -m ci.run_build --target ${{ matrix.target }} --arch ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

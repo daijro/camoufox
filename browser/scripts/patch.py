@@ -10,7 +10,6 @@ Run:
 """
 
 import os
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -53,22 +52,20 @@ class Patcher:
 
     def camoufox_patches(self):
         """
-        Apply all patches
+        Apply all patches, or with --mozconfig-only retarget the patched tree
         """
         version, release = extract_args()
         with temp_cd(find_src_dir('.', version, release)):
-            # Reset only when the source tree has its own local repository.
-            reset_to_unpatched()
+            if not options.mozconfig_only:
+                # Reset only when the source tree has its own local repository.
+                reset_to_unpatched()
 
-            # Re-copy additions and settings after reset
-            print("Re-copying additions and settings...")
-            run(f'bash ../scripts/copy-additions.sh {version} {release}')
+                # Re-copy additions and settings after reset
+                print("Re-copying additions and settings...")
+                run(f'bash ../scripts/copy-additions.sh {version} {release}')
 
-            # Create the base mozconfig file
-            run('cp -v ../assets/base.mozconfig mozconfig')
-            # Set cross building target
             print(f'Using target: {self.moz_target}')
-            self._update_mozconfig()
+            self._write_mozconfig()
 
             if not options.mozconfig_only:
                 failed_patches = []
@@ -136,42 +133,27 @@ class Patcher:
             rejects.append(f'patch exited with status {result.returncode}')
         return rejects
 
-    def _update_mozconfig(self):
+    def _write_mozconfig(self):
         """
-        Helper for adding additional mozconfig code from assets/<target>.mozconfig
+        Write the mozconfig: the target, assets/base.mozconfig, then assets/<target>.mozconfig
         """
-        mozconfig_backup = "mozconfig.backup"
-        mozconfig = "mozconfig"
-
-        # Create backup if it doesn't exist
-        if not os.path.exists(mozconfig_backup):
-            if os.path.exists(mozconfig):
-                shutil.copy2(mozconfig, mozconfig_backup)
-            else:
-                with open(mozconfig_backup, 'w', encoding='utf-8') as f:
-                    pass
-
-        # Read backup content
-        with open(mozconfig_backup, 'r', encoding='utf-8') as f:
-            content = f.read()
-
         # Set first: base.mozconfig picks stock's LTO mode for the target and
         # reads the profile. configure resolves rustc and cargo through rustup,
         # which honours RUSTUP_TOOLCHAIN.
         content = (f"CAMOUFOX_TARGET={self.moz_target}\n"
                    f"CAMOUFOX_PGO_PROFILE={self.pgo_profile}\n"
                    "ac_add_options --target=$CAMOUFOX_TARGET\n"
-                   f"export RUSTUP_TOOLCHAIN={self.rust}\n\n") + content
-
-        # Add target-specific mozconfig if it exists
+                   f"export RUSTUP_TOOLCHAIN={self.rust}\n\n")
+        with open(os.path.join("..", "assets", "base.mozconfig"), encoding='utf-8') as f:
+            content += f.read()
+        # Linux has no mozconfig of its own
         target_mozconfig = os.path.join("..", "assets", f"{self.target}.mozconfig")
         if os.path.exists(target_mozconfig):
-            with open(target_mozconfig, 'r', encoding='utf-8') as f:
+            with open(target_mozconfig, encoding='utf-8') as f:
                 content += f.read()
 
-        # Update mozconfig
-        print(f"-> Updating mozconfig, target is {self.moz_target}")
-        with open(mozconfig, 'w', encoding='utf-8') as f:
+        print(f"-> Writing mozconfig, target is {self.moz_target}")
+        with open("mozconfig", 'w', encoding='utf-8') as f:
             f.write(content)
 
 
