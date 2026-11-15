@@ -1780,22 +1780,6 @@ index 54de40498a..e7c5479b5b 100644
  
      // SkMulDiv255Round() applied to each lane.
      static inline uint8x8_t SkMulDiv255Round_neon8(uint8x8_t x, uint8x8_t y) {
-diff --git a/gfx/skia/skia/src/opts/SkCpuEstimates.h b/gfx/skia/skia/src/opts/SkCpuEstimates.h
-index ff13bd4b14..002e4e0519 100644
---- a/gfx/skia/skia/src/opts/SkCpuEstimates.h
-+++ b/gfx/skia/skia/src/opts/SkCpuEstimates.h
-@@ -85,6 +85,11 @@ const uint32_t* sk_cpu_estimates();
-  * the opts tiers then switch to Skia's AArch64 code, built against
-  * SkNeonEmu.h (the _neonemu.cpp files). */
- bool sk_cpu_emulates_arm64();
-+
-+/* Whether general.cpu_identity names an x86-64 machine on this aarch64 one:
-+ * the opts tiers then switch to Skia's x86 code, built against simde
-+ * (the _x86emu.cpp files). */
-+bool sk_cpu_emulates_x86();
- #endif
- 
- #endif
 diff --git a/gfx/skia/skia/src/opts/SkOpts_RestoreTarget.h b/gfx/skia/skia/src/opts/SkOpts_RestoreTarget.h
 index e6fab59ac6..ae81feef2d 100644
 --- a/gfx/skia/skia/src/opts/SkOpts_RestoreTarget.h
@@ -1987,56 +1971,6 @@ index e5c506b55e..695820d10b 100644
  #elif SK_CPU_LSX_LEVEL >= SK_CPU_LSX_LEVEL_LASX
      #include <lasxintrin.h>
  #elif SK_CPU_LSX_LEVEL >= SK_CPU_LSX_LEVEL_LSX
-diff --git a/gfx/skia/skia/src/ports/SkCpuEstimates_mozilla.cpp b/gfx/skia/skia/src/ports/SkCpuEstimates_mozilla.cpp
-index 4408a74d1f..cdf1742f52 100644
---- a/gfx/skia/skia/src/ports/SkCpuEstimates_mozilla.cpp
-+++ b/gfx/skia/skia/src/ports/SkCpuEstimates_mozilla.cpp
-@@ -5,7 +5,8 @@
- // Which recorded RCPPS/RSQRTPS table Skia's raster pipeline uses
- // (src/opts/SkCpuEstimates.h) and libopus's PVQ search
- // (media/libopus/include/opus_cpu_estimates.h) use, from
--// general.cpu_identity (1 Intel, 2 AMD). Off x86 there is none to reproduce.
-+// general.cpu_identity (1 Intel, 2 AMD). On aarch64 an x86 identity always
-+// needs its table, since the emulated SSE code has no RCPPS of its own.
- 
- #include "include/core/SkTypes.h"
- 
-@@ -55,10 +56,35 @@ bool sk_cpu_emulates_arm64() {
-   return mozilla::StaticPrefs::general_cpu_identity() == SK_CPU_IDENTITY_ARM64;
- }
- 
-+bool sk_cpu_emulates_x86() { return false; }
-+
-+#elif defined(SK_CPU_ARM64)
-+
-+#  include "mozilla/StaticPrefs_general.h"
-+#  include "src/opts/SkCpuEstimateTables.h"
-+
-+static bool IsX86Vendor(uint32_t vendor) {
-+  return vendor == SK_CPU_VENDOR_INTEL || vendor == SK_CPU_VENDOR_AMD;
-+}
-+
-+// An x86 identity here is always emulated, so its vendor's table always applies.
-+const uint32_t* sk_cpu_estimates() {
-+  const uint32_t vendor = mozilla::StaticPrefs::general_cpu_identity();
-+  return IsX86Vendor(vendor) ? kSkCpuEstimateTables[vendor - 1] : nullptr;
-+}
-+
-+bool sk_cpu_emulates_arm64() { return false; }
-+
-+bool sk_cpu_emulates_x86() {
-+  return IsX86Vendor(mozilla::StaticPrefs::general_cpu_identity());
-+}
-+
- #else
- 
- const uint32_t* sk_cpu_estimates() { return nullptr; }
- 
- bool sk_cpu_emulates_arm64() { return false; }
- 
-+bool sk_cpu_emulates_x86() { return false; }
-+
- #endif
 diff --git a/js/public/Initialization.h b/js/public/Initialization.h
 index 26578b6efd..2e87dec987 100644
 --- a/js/public/Initialization.h
@@ -2085,6 +2019,7 @@ index 4a779d656b..afecad1a4c 100644
  
    // Step 6.
 diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
+index 7fd0c2716d..457df34d39 100644
 --- a/js/src/builtin/Math.cpp
 +++ b/js/src/builtin/Math.cpp
 @@ -25,6 +25,7 @@
@@ -2095,7 +2030,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  #include "js/Class.h"
  #include "js/ForOfIterator.h"
  #include "js/Prefs.h"
-@@ -138,7 +139,7 @@
+@@ -138,7 +139,7 @@ static bool math_abs(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_acos_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2104,7 +2039,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_acos(JSContext* cx, unsigned argc, Value* vp) {
-@@ -148,7 +149,7 @@
+@@ -148,7 +149,7 @@ static bool math_acos(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_asin_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2113,7 +2048,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_asin(JSContext* cx, unsigned argc, Value* vp) {
-@@ -231,13 +232,13 @@
+@@ -231,13 +232,13 @@ static bool math_clz32(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_cos_fdlibm_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2129,7 +2064,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_cos(JSContext* cx, unsigned argc, Value* vp) {
-@@ -376,7 +377,7 @@
+@@ -376,7 +377,7 @@ static bool math_f16round(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_log_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2138,7 +2073,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_log(JSContext* cx, unsigned argc, Value* vp) {
-@@ -533,13 +534,13 @@
+@@ -533,13 +534,13 @@ double js::ecmaPow(double x, double y) {
     */
    if (std::isfinite(x) && x != 0.0) {
      if (y == 0.5) {
@@ -2155,7 +2090,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_pow(JSContext* cx, unsigned argc, Value* vp) {
-@@ -626,13 +627,13 @@
+@@ -626,13 +627,13 @@ static bool math_round(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_sin_fdlibm_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2171,7 +2106,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_sin(JSContext* cx, unsigned argc, Value* vp) {
-@@ -645,7 +646,7 @@
+@@ -645,7 +646,7 @@ static bool math_sin(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_sqrt_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2180,7 +2115,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_sqrt(JSContext* cx, unsigned argc, Value* vp) {
-@@ -655,13 +656,13 @@
+@@ -655,13 +656,13 @@ static bool math_sqrt(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_tan_fdlibm_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2196,7 +2131,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_tan(JSContext* cx, unsigned argc, Value* vp) {
-@@ -674,7 +675,7 @@
+@@ -674,7 +675,7 @@ static bool math_tan(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_log10_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2205,7 +2140,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_log10(JSContext* cx, unsigned argc, Value* vp) {
-@@ -684,7 +685,7 @@
+@@ -684,7 +685,7 @@ static bool math_log10(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_log2_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2214,7 +2149,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_log2(JSContext* cx, unsigned argc, Value* vp) {
-@@ -694,7 +695,7 @@
+@@ -694,7 +695,7 @@ static bool math_log2(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_log1p_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2223,7 +2158,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_log1p(JSContext* cx, unsigned argc, Value* vp) {
-@@ -744,7 +745,7 @@
+@@ -744,7 +745,7 @@ static bool math_tanh(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_acosh_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -2232,7 +2167,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static bool math_acosh(JSContext* cx, unsigned argc, Value* vp) {
-@@ -764,7 +765,7 @@
+@@ -764,7 +765,7 @@ static bool math_asinh(JSContext* cx, unsigned argc, Value* vp) {
  
  double js::math_atanh_impl(double x) {
    AutoUnsafeCallWithABI unsafe;
@@ -27227,49 +27162,6 @@ index 3f8414f9b0..7ee9028d36 100644
  
  
  #if !defined(OVERRIDE_CLT_MDCT_FORWARD)
-diff --git a/media/libopus/celt/mozilla_cpu_estimates.c b/media/libopus/celt/mozilla_cpu_estimates.c
-index a813f0ad72..cb4b2e6538 100644
---- a/media/libopus/celt/mozilla_cpu_estimates.c
-+++ b/media/libopus/celt/mozilla_cpu_estimates.c
-@@ -2,13 +2,15 @@
-  * License, v. 2.0. If a copy of the MPL was not distributed with this
-  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
- 
--/* The table and the arm64 switch opus_cpu_estimates.h describes. Built on
-- * every CPU so that Gecko links the same way everywhere; only x86 reads them
-- * (the PVQ search and opus_select_arch). */
-+/* The table and the arm64 and x86 switches opus_cpu_estimates.h describes.
-+ * Built on every CPU so that Gecko links the same way everywhere; x86 reads
-+ * the table and the arm64 switch, aarch64 the table and the x86 switch (the
-+ * PVQ search and opus_select_arch). */
- 
- #include <stdatomic.h>
- 
- #include "opus_cpu_estimates.h"
-+#include "cpu_support.h"
- 
- static _Atomic(const uint32_t*) sTable;
- 
-@@ -29,3 +31,19 @@ void opus_mozilla_set_emulate_arm64(int on) {
- int opus_mozilla_emulates_arm64(void) {
-   return atomic_load_explicit(&sEmulateArm64, memory_order_relaxed);
- }
-+
-+static _Atomic(int) sEmulateX86;
-+
-+void opus_mozilla_set_emulate_x86(int on) {
-+  atomic_store_explicit(&sEmulateX86, on != 0, memory_order_relaxed);
-+}
-+
-+int opus_mozilla_emulates_x86(void) {
-+  return atomic_load_explicit(&sEmulateX86, memory_order_relaxed);
-+}
-+
-+#if defined(OPUS_ARM_X86EMU)
-+int opus_select_arch(void) {
-+  return opus_mozilla_emulates_x86() ? OPUS_ARCH_ARM_X86EMU : 0;
-+}
-+#endif
 diff --git a/media/libopus/celt/pitch.c b/media/libopus/celt/pitch.c
 index 5d5ee60463..90d4ce11f6 100644
 --- a/media/libopus/celt/pitch.c
@@ -27559,43 +27451,6 @@ index 2e7c32aeec..7ac5c476a9 100644
  #ifdef FUZZING
      /* Randomly downgrade the architecture. */
      arch = rand()%(arch+1);
-diff --git a/media/libopus/include/opus_cpu_estimates.h b/media/libopus/include/opus_cpu_estimates.h
-index 1520b122cf..ee715c711b 100644
---- a/media/libopus/include/opus_cpu_estimates.h
-+++ b/media/libopus/include/opus_cpu_estimates.h
-@@ -11,7 +11,9 @@
-  *
-  * When general.cpu_identity emulates an arm64 CPU, x86 encoders and decoders
-  * instead run Firefox aarch64's NEON kernels, ported to C
-- * (celt/x86/celt_neonemu.c, celt_tx_neonemu.c).
-+ * (celt/x86/celt_neonemu.c, celt_tx_neonemu.c). When it names an x86 CPU
-+ * on aarch64, they run Firefox x86-64's SSE kernels, built against simde
-+ * (celt/arm/celt_x86emu.c), with the named vendor's PVQ estimates.
-  *
-  * libopus is built into gkcodecs, which cannot read prefs, so Gecko hands it
-  * both: opus_mozilla_use_cpu_vendor() before each encoder or decoder is
-@@ -40,6 +42,8 @@ const uint32_t* opus_mozilla_cpu_estimates(void);
-  * kernels. */
- void opus_mozilla_set_emulate_arm64(int on);
- int opus_mozilla_emulates_arm64(void);
-+void opus_mozilla_set_emulate_x86(int on);
-+int opus_mozilla_emulates_x86(void);
- #if defined(__GNUC__)
- #  pragma GCC visibility pop
- #endif
-@@ -50,10 +54,12 @@ int opus_mozilla_emulates_arm64(void);
- /* Defined in libxul by gfx/skia/skia/src/ports/SkCpuEstimates_mozilla.cpp. */
- const uint32_t* sk_cpu_estimates();
- bool sk_cpu_emulates_arm64();
-+bool sk_cpu_emulates_x86();
- 
- static inline void opus_mozilla_use_cpu_vendor() {
-   opus_mozilla_set_cpu_estimates(sk_cpu_estimates());
-   opus_mozilla_set_emulate_arm64(sk_cpu_emulates_arm64());
-+  opus_mozilla_set_emulate_x86(sk_cpu_emulates_x86());
- }
- #endif
- 
 diff --git a/media/libopus/moz.build b/media/libopus/moz.build
 index e140171d13..eaae48b464 100644
 --- a/media/libopus/moz.build
@@ -28309,7 +28164,7 @@ index a1006fa938..561edacd6f 100644
      'libvpx/vp9/encoder/vp9_tpl_model.c',
      'libvpx/vp9/encoder/vp9_treewriter.c',
 diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/StaticPrefList.yaml
-index f71cabfc6a..63e457eb91 100644
+index 80be46d83c..07d8b06f02 100644
 --- a/modules/libpref/init/StaticPrefList.yaml
 +++ b/modules/libpref/init/StaticPrefList.yaml
 @@ -7101,6 +7101,20 @@
@@ -28333,7 +28188,7 @@ index f71cabfc6a..63e457eb91 100644
  - name: general.aboutConfig.enable
    type: bool
    value: true
-@@ -13562,6 +13576,15 @@
+@@ -13552,6 +13566,15 @@
    mirror: always
  
  # WebM
