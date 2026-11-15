@@ -50,6 +50,9 @@ What PASS means:
       nested call) reports the stacks and callers it reports when a timer
       calls the same function, so a page cannot hide code of its own and
       sees none of its own code missing;
+    * a script element "mw:" code adds is the document's, so it keeps its
+      frame, and code in the isolated world, whose frames the page cannot
+      read, keeps its own stack for the errors it reports;
     * unprefixed evaluation stays isolated even with the flag on.
 """
 
@@ -182,6 +185,21 @@ async def _run_enabled() -> bool:
             _check(results, f"page code, {name}: as from a timer", from_driver[name], seen)
         _check(results, "driver code leaves no frame", await page.evaluate("mw:new Error().stack"), "")
         _check(results, "nor does code it evals", await page.evaluate("mw:eval('new Error().stack')"), "")
+        added = await page.evaluate(
+            "mw:(() => { const script = document.createElement('script');"
+            " script.textContent = 'window.addedStack = new Error().stack;\\n//# sourceURL=added.js';"
+            " document.head.append(script); return window.addedStack; })()"
+        )
+        _check(results, "a script element it adds keeps its frame", added.split(":")[0], "@added.js")
+        _check(results, "and shows no driver frame below it", len(added.splitlines()), 1)
+        isolated = await page.evaluate("(function isolatedFunction() { return new Error().stack; })()")
+        _check(results, "isolated code reads its own frames", "isolatedFunction" in isolated, True)
+        thrown = None
+        try:
+            await page.evaluate("(function isolatedFunction() { throw new Error('thrown'); })()")
+        except Exception as exc:  # noqa: BLE001 - the report is the point
+            thrown = str(exc)
+        _check(results, "and its errors report them", thrown is not None and "isolatedFunction" in thrown, True)
 
         print("  -- statements (#631) --")
         for label, script, expected in STATEMENT_CASES:

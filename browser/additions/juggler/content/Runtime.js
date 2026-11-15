@@ -689,16 +689,20 @@ class ExecutionContext {
     this._jsonStringifyObjectValue = null;
   }
 
-  // Camoufox: the name Debugger-compiled code has in a stack. Code compiled
-  // into the page's own global shows in the page's Error().stack, where the
-  // default, "debugger eval code", is a name only DevTools and drivers produce;
-  // it is named after the document instead, as an inline <script> is. C++
-  // tells this code apart by how it was compiled, never by its name
-  // (JS::IsScriptedCallerDebuggerCode).
+  // Camoufox: options for code compiled into the page's own global (its
+  // window with world isolation off, or a worker's global), whose frames the
+  // page's principal can read. hideFromContent keeps them out of the page's
+  // Error().stack and Function.caller. An isolated world's frames are not the
+  // page's to read, so that code keeps its own stacks. The page names its
+  // window's code after the document, as an inline <script> is, never the
+  // default "debugger eval code". C++ tells this code apart by how it was
+  // compiled, never by its name (JS::IsScriptedCallerDebuggerCode).
   _evalOptions(options) {
+    if (!this._domWindow)
+      return {...options, hideFromContent: true};
     if (this._contextGlobal !== this._domWindow)
       return options;
-    return {...options, url: this._domWindow.document.URL};
+    return {...options, hideFromContent: true, url: this._domWindow.document.URL};
   }
 
   get _jsonStringifyObject() {
@@ -872,7 +876,7 @@ class ExecutionContext {
       return 'arg' + i;
     });
     let {success, obj} = this._getResult(this.withDriverPopups(() => this._debuggee.executeInGlobalWithBindings(
-        `fn(${names.join(', ')})`, bindings, {useInnerBindings: true, bypassCSP: true})), exceptionDetails);
+        `fn(${names.join(', ')})`, bindings, this._evalOptions({useInnerBindings: true, bypassCSP: true}))), exceptionDetails);
     if (!success)
       return null;
     if (obj && obj.isPromise) {
