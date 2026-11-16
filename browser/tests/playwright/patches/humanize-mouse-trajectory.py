@@ -107,8 +107,16 @@ EDGE_RECORDER = """
 # gave the slow end of that (0-5px inside, 1-8px past). The time between them is
 # no test: a moving pointer's exit came 1-3ms after its last move, but one leaving
 # from rest came when it left, 563-665ms after it stopped.
+# The same XTest drive through all four edges at up to 25 px/ms, at
+# devicePixelRatio 1 and 1.09 (208 exits): a 20-25 px/ms flick crosses in one
+# sample of 19-25.3px, so the step bound is that, not the 15 px/ms drive's 16;
+# and where the content is fractionally taller than innerHeight (1040.42 at
+# 1.09, innerHeight 1040), the last move came on row 1040 in 7 of 26 bottom
+# exits, one past innerHeight - 1. innerWidth and innerHeight round, so the
+# right and bottom edges allow that one row.
 STOCK_PAST_MIN_PX = 1
-STOCK_MAX_STEP_PX = 16
+STOCK_MAX_STEP_PX = 26
+ROUNDED_EDGE_PX = 1
 # Prefs to sweep under: the defaults, and text scaled to 105%, which puts the
 # content's top at 85.5, as some hosts' toolbars do, where an exit point
 # rounded unlike the moves lands a pixel off.
@@ -145,10 +153,13 @@ def _exits_unlike_stock(events, w, h):
         # that edge the last move was.
         past, inside = (-x, last[0]) if x < 0 else (x - w + 1, w - 1 - last[0]) if x >= w else \
             (-y, last[1]) if y < 0 else (y - h + 1, h - 1 - last[1])
+        # innerWidth/innerHeight round, so past the right or bottom edge the
+        # last row inside can be one beyond them.
+        floor = -ROUNDED_EDGE_PX if (x >= w or y >= h) else 0
         apart = ((x - last[0]) ** 2 + (y - last[1]) ** 2) ** 0.5
         # One sample apart: across the edge in a single step no longer than a
         # fast flick's (+1 for the rounding of both points).
-        if past < STOCK_PAST_MIN_PX or inside < 0 or inside + past > apart + 1 or apart > STOCK_MAX_STEP_PX:
+        if past < STOCK_PAST_MIN_PX or inside < floor or inside + past > apart + 1 or apart > STOCK_MAX_STEP_PX:
             bad.append([last[:2], (x, y), round(t - last[2], 1)])
     return bad
 
