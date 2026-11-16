@@ -1596,8 +1596,9 @@ export interface LaunchOptions {
 	/** Firefox version to use. Defaults to the current Camoufox version. */
 	ff_version?: number;
 	/** Whether to run the browser in headless mode. Defaults to false.
-	 * NewBrowser and launchServer run headless: true on Linux on Xvfb when available;
-	 * launchOptions() alone starts no display. */
+	 * `true` is Firefox's own headless mode and starts no display; only
+	 * `"virtual"` and `"virtual-gpu"` (Camoufox, NewBrowser and launchServer)
+	 * start one. launchOptions() alone starts no display. */
 	headless?: boolean;
 	/** Whether to enable running scripts in the main world ("mw:" prefix). */
 	main_world_eval?: boolean;
@@ -1622,7 +1623,7 @@ export interface LaunchOptions {
 	i_know_what_im_doing?: boolean;
 	/** Prints the config being sent to Camoufox. */
 	debug?: boolean;
-	/** Virtual display number, e.g. ":99". Handled by Camoufox & NewBrowser. */
+	/** Virtual display number, e.g. ":99". Handled by Camoufox, NewBrowser and launchServer. */
 	virtual_display?: string;
 	/** Pin the browser to navigator.hardwareConcurrency cores (Linux/Windows).
 	 * OFF by default -- it costs real CPU and serializes concurrent launches. */
