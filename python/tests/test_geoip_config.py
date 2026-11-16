@@ -56,6 +56,15 @@ def test_explicit_source_missing_from_repos_raises_naming_it(cache):
         geolocation.load_geoip_config()
 
 
+def test_an_explicit_source_missing_from_repos_can_be_replaced_from_the_cli(cache, monkeypatch):
+    from camoufox import __main__ as cli
+
+    _saved(cache, name="Gone", explicit=True)
+    monkeypatch.setattr(cli, "_inquirer_select", lambda choices, message: dict(choices)[DEFAULT])
+    cli._select_geoip_source()
+    assert geolocation.load_geoip_config()["name"] == DEFAULT
+
+
 def test_save_records_explicit_choice(cache):
     config = geolocation._get_geoip_config_by_name(DEPRECATED)
     geolocation.save_geoip_config(config, explicit=True)

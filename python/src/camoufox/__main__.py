@@ -725,7 +725,10 @@ def _select_geoip_source():
         rprint("No GeoIP sources configured.", fg="red")
         return
 
-    current = load_geoip_config().get("name", "")
+    try:
+        current = load_geoip_config().get("name", "")
+    except ValueError:
+        current = ""  # the saved source is gone; picking one replaces it
     choices = [
         (
             r["name"]
@@ -1076,8 +1079,11 @@ class VersionInfo:
             mmdb_path = get_mmdb_path()
             if mmdb_path.exists():
                 # Show active database name and last update time
-                geoip_cfg = load_geoip_config()
-                self._row("Database", geoip_cfg.get("name", "Unknown"))
+                try:
+                    name = load_geoip_config().get("name", "Unknown")
+                except ValueError as exc:
+                    name = str(exc)  # the saved source is gone from repos.yml
+                self._row("Database", name)
                 mtime = mmdb_path.stat().st_mtime
                 dt = datetime.fromtimestamp(mtime, tz=timezone.utc).astimezone()
                 self._row("Updated", dt.strftime("%Y-%m-%d %H:%M"), style="dim")
