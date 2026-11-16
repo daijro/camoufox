@@ -22,12 +22,13 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import sys
 from pathlib import Path
 from typing import List, Optional
 
 from . import results as evidence
-from ._util import BROWSER_ROOT, EVIDENCE_DIR, read_upstream_sh, run
+from ._util import BROWSER_ROOT, EVIDENCE_DIR, WORK_DIR, read_upstream_sh, run
 
 # mach prints errors in a few shapes; catch the common ones for the summary.
 _ERROR_RE = re.compile(
@@ -55,11 +56,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     cmd = [sys.executable, "multibuild.py", "--target", args.target, "--arch", args.arch]
     if args.preflight:
         cmd.append("--preflight")
-    proc = run(cmd, cwd=BROWSER_ROOT, timeout=args.timeout, tee=True, capture=False)
+    # The build streams to the console for an hour, so nothing is captured; the
+    # log is what the error summary reads. pipefail keeps multibuild.py's status.
+    log = WORK_DIR / f"{gate}.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    proc = run(["bash", "-o", "pipefail", "-c", f"{shlex.join(cmd)} 2>&1 | tee {shlex.quote(str(log))}"],
+               cwd=BROWSER_ROOT, timeout=args.timeout, capture=False)
     result.metrics["exit_code"] = proc.code
 
     if proc.code != 0:
-        errors = _ERROR_RE.findall(proc.combined())[:15]
+        errors = _ERROR_RE.findall(log.read_text(errors="replace"))[:15]
         result.note(f"multibuild.py exited {proc.code}")
         for line in errors:
             result.note(line.strip()[:300])
