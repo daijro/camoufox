@@ -28,7 +28,7 @@ def _make_run(tmp_path, config):
     if config is not None:
         env["CAMOU_CONFIG"] = config
     return subprocess.run(
-        ["make", "--no-print-directory", "-C", str(BROWSER), "run", f"cf_source_dir={source}"],
+        ["make", "--silent", "--no-print-directory", "-C", str(BROWSER), "run", f"cf_source_dir={source}"],
         env=env, capture_output=True, text=True, check=False,
     )
 
@@ -48,4 +48,4 @@ def test_make_run_passes_valid_json_with_debug(tmp_path, config, expected):
 def test_make_run_stops_on_a_config_that_is_not_json(tmp_path):
     proc = _make_run(tmp_path, "{")
     assert proc.returncode != 0
-    assert proc.stdout == ""  # mach never ran
+    assert proc.stdout == ""  # mach, which prints its config, never ran
