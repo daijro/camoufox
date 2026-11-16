@@ -322,7 +322,7 @@ scenario('proxy_localhost', fingerprint=FP['linux'], os='linux', proxy={'server'
 scenario('proxy_manual_geolocation', fingerprint=FP['linux'], os='linux', proxy={'server': 'socks5://1.2.3.4:1080'},
          config={'geolocation:latitude': 10.5, 'geolocation:longitude': 20.25})
 
-# humanize
+# humanize: in-browser humanization is refused; only raw()/custom(fn) per channel
 scenario('humanize_true', fingerprint=FP['linux'], os='linux', humanize=True)
 scenario('humanize_float', fingerprint=FP['linux'], os='linux', humanize=1.5)
 scenario('humanize_int', fingerprint=FP['linux'], os='linux', humanize=2)

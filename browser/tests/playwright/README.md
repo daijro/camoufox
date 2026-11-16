@@ -14,7 +14,7 @@ Each guard belongs to one of three groups (`GROUPS` in
 `ci/run_patch_guards.py`), and CI runs each group as its own job:
 
 - **spoofing**: a spoofed value still reaches the page and holds together (media devices, voices, fonts, the touchscreen digitizer, the sealed setters, …);
-- **automation**: Playwright stays invisible to the page and never deadlocks it (isolated evaluate, trusted events, humanized and edge-case mouse input, …);
+- **automation**: Playwright stays invisible to the page and never deadlocks it (isolated evaluate, trusted events, edge-case mouse input, …);
 - **parity**: what a page or the OS can observe matches stock Firefox (content-accessible files, GPU probes, browser-owned WebGL and WebGPU values against stock Firefox of the same version, the popup blocker, the Windows manifest, …).
 
 A new guard must be added to a group; `ci/tests` fails until it is.
@@ -25,12 +25,13 @@ python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin --group automation
 python3 -m ci.run_patch_guards --binary /path/to/camoufox-bin --only isolated-evaluate
 ```
 
-### `juggler/` — unit tests for Juggler's input planners
+### `juggler/` — unit tests for Juggler's input modules
 
-The humanize seam (`browser/additions/juggler/input/HumanizeSeam.js`), its seeded
-streams and pacer, and the base `cursory` engine are plain ES modules with no
-Gecko imports at load time, so they run under Node without a build. `gecko.mjs`
-supplies the two Gecko globals they reach for lazily.
+The browser plans no input of its own: each Playwright call is one event, and
+humanization is the driver's (docs/humanize.md). What is left to test without a
+build is `browser/additions/juggler/input/HumanDelay.js`, the draw behind the
+paste and auto-Shift modifier timing, a plain ES module that runs under Node.
+`gecko.mjs` supplies the Gecko global it is loaded through.
 
 ```bash
 node --test browser/tests/juggler/*.test.mjs

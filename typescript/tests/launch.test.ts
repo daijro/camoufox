@@ -35,10 +35,9 @@ import {
 	warnings,
 } from "./launch-host.js";
 
-const { OSError, PyFloat } = await import("../src/pycompat.js");
+const { OSError } = await import("../src/pycompat.js");
 const { Version } = await import("../src/pkgman.js");
-const { engine, humanizeConfig, raw } = await import("../src/humanize.js");
-type Manifest = import("../src/humanize.js").Manifest;
+const { custom, normalize, raw } = await import("../src/humanize.js");
 const { InvalidPropertyType, UnknownIPLocation } = await import(
 	"../src/exceptions.js"
 );
@@ -826,76 +825,77 @@ describe("test_humanize", () => {
 		};
 	});
 
-	const launchHumanize = (humanize: boolean | number) =>
-		launch({ humanize, block_webgl: true, i_know_what_im_doing: true }).then(
-			() => captured,
-		);
+	const noop = () => undefined;
+	const launchHumanize = (humanize: unknown) =>
+		launch({
+			humanize: humanize as any,
+			block_webgl: true,
+			i_know_what_im_doing: true,
+		}).then(() => captured);
 
-	it("humanize: 0 is off, as in Python", async () => {
-		const config = await launchHumanize(0);
-		expect("humanize" in config).toBe(false);
-	});
-
-	const FANCY: Manifest = {
-		mouse: ["cursory"],
-		keyboard: ["fancy"],
-		scroll: ["fancy"],
-		auto: { mouse: ["cursory"], keyboard: ["fancy"], scroll: ["fancy"] },
-		engines: {
-			fancy: {
-				movesCursor: true,
-				options: { budgetSeconds: { key: "humanize:fancy:budgetSeconds" } },
-			},
+	it.each([
+		null,
+		false,
+		{},
+		{ mouse: raw() },
+		{
+			mouse: custom(noop),
+			keyboard: custom(noop),
+			scroll: custom(noop),
+			seed: 9,
 		},
-	};
-
-	it("refuses one option key with two values", () => {
-		expect(() =>
-			humanizeConfig(
-				{
-					keyboard: engine("fancy", { budgetSeconds: 5 }),
-					scroll: engine("fancy", { budgetSeconds: 6 }),
-				},
-				FANCY,
-			),
-		).toThrow("budgetSeconds twice");
-	});
-
-	it("warns when a cursor-moving scroll engine runs with a raw mouse", async () => {
-		const { warnings: caught } = await warnings.recordWarnings(async () =>
-			humanizeConfig({ mouse: raw(), scroll: engine("fancy") }, FANCY),
-		);
-		expect(caught.some((w) => w.message.includes("single jump"))).toBe(true);
-	});
-
-	it("keeps a seed above 2**53 exact", () => {
-		const seed = 2n ** 64n - 1n;
-		expect(humanizeConfig({ seed }, FANCY)["humanize:seed"]).toBe(
-			"18446744073709551615",
-		);
-		expect(() => humanizeConfig({ seed: 2 ** 53 }, FANCY)).toThrow("bigint");
-		expect(() => humanizeConfig({ seed: 2n ** 64n }, FANCY)).toThrow(
-			"humanize.seed",
+		{ keyboard: "raw", seed: 2n ** 64n - 1n },
+	])("no humanize key reaches the browser (%#)", async (humanize) => {
+		const config = await launchHumanize(humanize);
+		expect(Object.keys(config).filter((k) => k.startsWith("humanize"))).toEqual(
+			[],
 		);
 	});
 
-	it("humanize: true sets no duration", async () => {
-		const config = await launchHumanize(true);
-		expect(config.humanize).toBe(true);
-		expect("humanize:maxTime" in config).toBe(false);
+	it("defaults every channel to raw", () => {
+		expect(normalize(null)).toEqual({
+			engines: { mouse: raw(), keyboard: raw(), scroll: raw() },
+		});
+		const { engines, seed } = normalize({ scroll: custom(noop), seed: 5 });
+		expect(engines.mouse).toEqual(raw());
+		expect(engines.keyboard).toEqual(raw());
+		expect(engines.scroll.engine).toBe("custom");
+		expect(engines.scroll.fn).toBe(noop);
+		expect(seed).toBe(5);
 	});
 
 	it.each([
-		1, 5, 1.25,
-	])("a duration (%s) is encoded as a double", async (duration) => {
-		const config = await launchHumanize(duration);
-		expect(config.humanize).toBe(true);
-		expect(config["humanize:maxTime"]).toBeInstanceOf(PyFloat);
-		expect(Number(config["humanize:maxTime"])).toBe(duration);
-		// ...and serialized with a floating-point representation.
-		expect(utils.configJson({ t: config["humanize:maxTime"] })).toBe(
-			`{"t":${Number.isInteger(duration) ? `${duration}.0` : duration}}`,
+		true,
+		0,
+		1.5,
+		2,
+		{ mouse: "cursory" },
+		{ mouse: { engine: "auto", options: {} } },
+		{ scroll: { engine: "cursory", options: { maxTime: 1 } } },
+	])("refuses in-browser humanization (%#)", async (humanize) => {
+		expect(() => normalize(humanize)).toThrow("no longer humanizes");
+		await expect(launchHumanize(humanize)).rejects.toThrow(
+			"no longer humanizes",
 		);
+	});
+
+	it.each([
+		[{ touch: raw() }, "no channel"],
+		[{ seed: -1 }, "seed"],
+		[{ seed: 2n ** 64n }, "seed"],
+		[{ seed: 2 ** 53 }, "bigint"],
+		[{ seed: true }, "seed"],
+		[{ seed: "1" }, "seed"],
+		[{ mouse: 3 }, "must be raw() or custom"],
+		[{ mouse: "custom" }, "needs its function"],
+		[{ mouse: { ...custom(noop), options: { speed: 1 } } }, "takes no options"],
+		[{ mouse: { engine: "raw", options: { speed: 1 } } }, "takes no options"],
+	])("refuses a malformed setting (%#)", (humanize, message) => {
+		expect(() => normalize(humanize)).toThrow(message);
+	});
+
+	it("custom() needs a function", () => {
+		expect(() => custom("not callable" as any)).toThrow("takes the function");
 	});
 });
 

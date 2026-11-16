@@ -4,7 +4,7 @@ input, and the page receives exactly what they play.
 
 `custom(fn)` on a channel (python/src/camoufox/_humanize_custom.py) runs that
 channel raw in the browser and wraps Playwright's input methods on the client:
-the function gets the call, a stream seeded the browser's way, and `play()`,
+the function gets the call, a seeded stream (rng-vectors.json), and `play()`,
 which dispatches steps on a schedule through Playwright's own input.
 
 Run against a specific build:
@@ -17,22 +17,16 @@ What PASS means:
       adds no mousemove (Playwright's own move has no distance left), a fill
       types the text key by key, and an element out of view is brought in by
       the scroll function's wheel steps;
-    * custom() mouse beside the build's own scroll engine: the browser scrolls
-      the element into view with its engine and moves the cursor there with
-      mouse:internal (a path, not a jump), while no move from the custom mouse
-      is humanized a second time;
     * the same seed gives the same input; another seed does not.
 """
 
 import asyncio
-import json
 import math
 import os
 import sys
-import tempfile
 
 from camoufox.async_api import AsyncCamoufox
-from camoufox.humanize import auto, custom
+from camoufox.humanize import custom
 
 EXECUTABLE_PATH = os.environ.get("CAMOUFOX_EXECUTABLE_PATH")
 
@@ -121,11 +115,10 @@ def reference_engines(log):
     return move, keys, scroll, planned
 
 
-async def custom_session(seed, humanize_extra=None, trace=None, nested=False):
+async def custom_session(seed):
     log = []
     move, keys, scroll, planned = reference_engines(log)
     humanize = {"mouse": custom(move), "keyboard": custom(keys), "scroll": custom(scroll), "seed": seed}
-    humanize.update(humanize_extra or {})
     from camoufox.fingerprints import Screen
 
     # A screen that holds the 1000x700 page: one that cannot clamps the page
@@ -133,9 +126,6 @@ async def custom_session(seed, humanize_extra=None, trace=None, nested=False):
     kwargs = dict(headless=True, os="linux", humanize=humanize, screen=Screen(min_width=1100, min_height=800))
     if EXECUTABLE_PATH:
         kwargs["executable_path"] = EXECUTABLE_PATH
-    if trace:
-        # The caller's environment too: an env= replaces it whole (DISPLAY).
-        kwargs["env"] = {**os.environ, "CAMOU_HUMANIZE_TRACE": trace}
     async with AsyncCamoufox(**kwargs) as browser:
         page = await browser.new_page(viewport={"width": 1000, "height": 700})
         await page.set_content(BODY)
@@ -149,9 +139,6 @@ async def custom_session(seed, humanize_extra=None, trace=None, nested=False):
         await page.locator("#name").fill("Hi there")
         await page.keyboard.press("Tab")
         await page.locator("#far").click()
-        if nested:
-            # A scroller elsewhere on the page: the browser moves the cursor over it first.
-            await page.locator("#deep").click()
         state = await page.evaluate(
             "() => [document.querySelector('#name').value, Math.round(scrollY),"
             " (r => r.top >= 0 && r.bottom <= innerHeight)(document.querySelector('#far').getBoundingClientRect())]"
@@ -220,35 +207,11 @@ async def main() -> int:
     if log_c == log:
         failures.append("another seed gave the same input")
 
-    # Custom mouse beside the build's own scroll engine.
-    with tempfile.TemporaryDirectory() as tmp:
-        trace = os.path.join(tmp, "trace.jsonl")
-        log_s, events_s, state_s, _ = await custom_session(77, {"scroll": auto()}, trace, nested=True)
-        with open(trace) as f:
-            records = [json.loads(line) for line in f]
-    engines = sorted({(r["channel"], r["engine"]) for r in records})
-    internal = [r for r in records if r["channel"] == "mouse:internal"]
-    print(f"custom mouse + scroll auto(): browser plans {engines}; "
-          f"{len([e for e in events_s if e[0] == 'click'])} of 4 clicks landed; "
-          f"{len(internal)} mouse:internal moves {[(r['engine'], len(r['plan'])) for r in internal]}")
-    if any(channel == "mouse" for channel, _ in engines):
-        failures.append("the browser humanized a move the custom mouse had already planned")
-    clicked = [e for e in events_s if e[0] == "click"]
-    if not any(channel == "scroll" for channel, _ in engines) or len(clicked) != 4:
-        failures.append(f"the build's scroll engine did not bring every target into view: {len(clicked)} clicks")
-    if any(entry[0] == "scroll" for entry in log_s):
-        failures.append("the custom scroll function ran although scroll was auto()")
-    # Only an engine that plans scrolling into view (not the base cursory
-    # wheel plan) moves the cursor over a scroller first.
-    into_view = any(r["channel"] == "scroll" and r["command"] == "Page.scrollIntoViewIfNeeded" for r in records)
-    if (into_view and not internal) or any(r["engine"] == "raw" or len(r["plan"]) < 2 for r in internal):
-        failures.append(f"a cursor move the browser originated was a jump: {internal}")
-
     for failure in failures:
         print(f"FAIL: {failure}")
     if failures:
         return 1
-    print("PASS: custom engines plan every channel client-side, beside built-in ones, and replay by seed")
+    print("PASS: custom engines plan every channel client-side and replay by seed")
     return 0
 
 

@@ -1,5 +1,6 @@
-"""custom() humanize engines: the factory, the launch config, the seeded streams
-(parity with the browser's), the page wrappers and play()'s pacing.
+"""custom() humanize engines: the factory, the seeded streams (pinned in
+browser/tests/humanize/rng-vectors.json, shared with the TypeScript launcher),
+the page wrappers and play()'s pacing.
 
 The page here is a fake that records what reaches Playwright, and the sequence
 it records is pinned in browser/tests/humanize/custom-sequence.json. The browser
@@ -21,22 +22,18 @@ from pathlib import Path
 import pytest
 
 from camoufox import _humanize_custom as hc
-from camoufox.exceptions import HumanizeEngineUnavailable
 from camoufox.humanize import (
     CHANNELS,
     SeededRng,
-    auto,
     channel_stream,
     custom,
     custom_engines,
-    engine,
-    humanize_config,
+    normalize,
     raw,
     splitmix64,
 )
 
 REPO = Path(__file__).resolve().parents[2]
-BASE_MANIFEST = json.loads((REPO / "browser" / "settings" / "humanize-engines.json").read_text())
 VECTORS = json.loads((REPO / "browser" / "tests" / "humanize" / "rng-vectors.json").read_text())
 SEQUENCE = REPO / "browser" / "tests" / "humanize" / "custom-sequence.json"
 
@@ -48,24 +45,13 @@ def noop(page, *args, **kwargs):
 # ---- streams ---------------------------------------------------------------
 
 def test_stream_reference_outputs():
-    # The same reference values as browser/tests/juggler/rng.test.mjs.
     assert splitmix64(0) == 0xE220A8397B1DCDAF
     assert splitmix64(0x9E3779B97F4A7C15) == 0x6E789E6AA1B965F4
     rng = SeededRng(0)
     assert [round(rng() * 2**32) for _ in range(3)] == [1144304738, 1416247, 958946056]
 
 
-def test_stream_derivation_matches_the_browser_pin():
-    # rng.test.mjs pins the browser's first draw per channel for seed 1234.
-    source = (REPO / "browser" / "tests" / "juggler" / "rng.test.mjs").read_text()
-    pinned = dict(
-        (k, int(v)) for k, v in re.findall(r"(\w+): (\d+)", re.search(r"const PINNED = \{([^}]*)\}", source)[1])
-    )
-    assert pinned == {c: round(channel_stream(1234, c)() * 2**32) for c in CHANNELS}
-
-
-def test_streams_are_the_browsers_draw_for_draw():
-    # rng-vectors.json is written from the browser's HumanizeRng.js.
+def test_streams_match_the_pinned_vectors():
     for seed, value in VECTORS["splitmix64"]:
         assert splitmix64(int(seed)) == int(value)
     for entry in VECTORS["streams"]:
@@ -85,65 +71,19 @@ def test_stream_helpers():
         channel_stream(1, "touch")
 
 
-# ---- factory and config ----------------------------------------------------
+# ---- factory ---------------------------------------------------------------
 
 def test_custom_takes_a_function():
     with pytest.raises(ValueError, match=r"custom\(\) takes the function"):
         custom(42)
     with pytest.raises(ValueError, match=r"needs its function, as custom\(fn\)"):
-        humanize_config({"mouse": "custom"}, BASE_MANIFEST)
+        normalize({"mouse": "custom"})
     with pytest.raises(ValueError, match=r"needs its function"):
-        humanize_config({"mouse": engine("custom")}, BASE_MANIFEST)
+        normalize({"mouse": {"engine": "custom", "options": {}}})
     with pytest.raises(ValueError, match=r"custom\(\) takes no options"):
-        humanize_config({"mouse": {**custom(noop), "options": {"speed": 1}}}, BASE_MANIFEST)
+        normalize({"mouse": {**custom(noop), "options": {"speed": 1}}})
     assert custom_engines({"mouse": custom(noop), "keyboard": raw()}) == {"mouse": noop}
-    assert custom_engines(True) == {}
-
-
-def test_custom_channels_run_raw_in_the_browser():
-    config = humanize_config(
-        {"mouse": custom(noop), "keyboard": custom(noop), "scroll": auto(), "seed": 5}, BASE_MANIFEST
-    )
-    assert config == {
-        "humanize": True,
-        "humanize:mouse": "raw",
-        "humanize:mouse:internal": "auto",
-        "humanize:keyboard": "raw",
-        "humanize:scroll": "auto",
-        "humanize:seed": "5",
-    }
-    # Only a custom mouse writes mouse:internal.
-    config = humanize_config({"keyboard": custom(noop), "scroll": custom(noop)}, BASE_MANIFEST)
-    assert config == {
-        "humanize": True,
-        "humanize:mouse": "auto",
-        "humanize:keyboard": "raw",
-        "humanize:scroll": "raw",
-    }
-    # Every channel custom: the browser humanizes nothing itself.
-    config = humanize_config({c: custom(noop) for c in CHANNELS}, BASE_MANIFEST)
-    assert config["humanize"] is False and config["humanize:mouse:internal"] == "auto"
-
-
-def test_custom_mouse_does_not_teleport_a_cursor_moving_scroll():
-    manifest = {
-        **BASE_MANIFEST,
-        "scroll": [*BASE_MANIFEST["scroll"], "fancy"],
-        "engines": {**BASE_MANIFEST["engines"], "fancy": {"movesCursor": True}},
-    }
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        humanize_config({"mouse": custom(noop), "scroll": engine("fancy")}, manifest)
-    with pytest.warns(RuntimeWarning, match="single jump"):
-        humanize_config({"mouse": raw(), "scroll": engine("fancy")}, manifest)
-
-
-def test_custom_on_a_build_without_the_manifest():
-    # Such a build runs every base engine or none, so custom() goes with raw().
-    assert humanize_config({c: custom(noop) for c in CHANNELS}, None) == {}
-    assert humanize_config({"mouse": custom(noop), "keyboard": raw(), "scroll": raw()}, None) == {}
-    with pytest.raises(HumanizeEngineUnavailable):
-        humanize_config({"mouse": custom(noop)}, None)
+    assert custom_engines(None) == {}
 
 
 def test_the_sync_api_refuses_an_async_function():

@@ -13,7 +13,6 @@ export {
 	AsyncNewBrowser,
 	AsyncNewContext,
 } from "./async_api.js";
-export { HumanizeEngineUnavailable } from "./exceptions.js";
 export {
 	generateContextFingerprint,
 	getRandomPreset,
@@ -21,15 +20,12 @@ export {
 	Screen,
 } from "./fingerprints.js";
 export {
-	auto,
 	CHANNEL_TAGS,
 	type CustomEngine,
 	channelStream,
-	cursory,
 	custom,
 	customEngines,
 	type EngineTools,
-	engine,
 	type HumanizeSetting,
 	raw,
 	SeededRng,

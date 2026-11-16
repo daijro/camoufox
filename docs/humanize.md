@@ -1,175 +1,69 @@
-# Humanized input: engines and `humanize-engines.json`
+# Humanized input lives in the driver
 
-`humanize` picks an engine per input channel (`mouse`, `keyboard`, `scroll`).
-The browser applies it to the Juggler input commands Playwright already sends,
-so the same Playwright script drives every build, humanized or not. This page
-is for whoever adds an engine to a build. The user-facing API is in the README
-("Choosing an engine per channel").
+The browser does not humanize input. Each Juggler input command Playwright sends
+becomes one event of the shape a real device gives stock Firefox
+([input-dispatch.md](input-dispatch.md) has each shape per OS), and the browser adds
+no paths, pacing, splitting or randomness of its own. Whatever makes input look
+human (the path a cursor takes, the times between keys, how a wheel turn is
+broken into strokes) is planned in the process that drives the browser and sent as
+ordinary Playwright calls.
 
-## Where it runs
+This keeps the two jobs apart. The browser's job is that one call looks like one
+real event; the driver's job is that the sequence of events looks like a person.
+A driver that humanizes on its own (a cursor or typing library) gets exactly the
+events it sends, never a second layer of delays on top of its own.
 
-`browser/additions/juggler/input/HumanizeSeam.js` is the only place that knows about
-engines. `PageHandler` asks it for a plan at five command sites:
+## What the launchers keep
 
-| Command | Engine method | Channel |
-|---|---|---|
-| `Page.dispatchMouseEvent` `mousemove` | `planMove(ctx, to)` | mouse |
-| `Page.dispatchWheelEvent` | `planWheel(ctx, at, {deltaX, deltaY, deltaZ})` | scroll |
-| `Page.scrollIntoViewIfNeeded` | `planIntoView(ctx, probe)`, in rounds | scroll |
-| `Page.dispatchKeyEvent` | `planKey(ctx, keyEvent)` | keyboard |
-| `Page.insertText` | `planInsert(ctx, text)` | keyboard |
+`humanize` is still a launch option in both launchers, for driver-side engines:
 
-A `null` plan, a `raw` channel, or an engine without that method leaves the
-stock dispatch in charge, byte for byte.
+```python
+from camoufox.humanize import custom, raw
 
-## Writing an engine
-
-An engine is an object exported under its own name from an ES module that
-Juggler can import. Its methods are pure planners. They return
-`{steps, endState}` or `null` to decline. Each step carries `t`, the time in
-ms from the start of the action, and the values in `t` never decrease. The step
-kinds are:
-
-- `move` (`x`, `y`)
-- `wheel` (`x`, `y`, `dx`, `dy`, `dz`, `mode`, `ticks`)
-- `key` (`type`, `key`, `code`, `keyCode`, `location`, `text`)
-- `text` (`text`)
-- `probe` (`planIntoView` only, last): measure again and plan another round
-
-A move plan ends exactly on its target.
-
-`ctx` holds:
-
-- `rng`: the channel's seeded stream, the only randomness a planner may use.
-- `options`: the engine's options, read from their config keys.
-- `budgetMs`: the time the plan must fit in.
-- `seed`: the launch's 64-bit seed.
-- `now`: the time the action was planned at (ms, monotonic). A keyboard engine
-  paces a keydown against the previous one on the page with it, so the time
-  the client spent between two commands is absorbed rather than added.
-- `cursor`, `viewport` and `keyboardState`: per-page state. `keyboardState` is
-  one object per page that a keyboard engine may keep its own state in.
-- `focus` (keyboard, on keydowns and `insertText`): the focused element as
-  `{editable, multiline, type, maxLength}`. `editable` is true for a text
-  `input`, a `textarea` or a contenteditable host that accepts input.
-
-A planner reads no clock other than `ctx.now`, and uses no `Math.random`.
-Everything it draws from `ctx.rng` must not depend on `ctx.now`, so a seeded
-session draws the same numbers however late its commands arrive.
-
-An engine can also define two optional methods:
-
-- `available(channel)`: return `false` when the engine cannot run on that
-  channel right now. `auto` then skips it, and an explicit request for it falls
-  back with a warning. An engine listed on several channels can be ready on
-  some of them only.
-- `budgetMs(options)`: the engine's own time budget. Without it, the budget is
-  the `budgetSeconds` option, or 8 s by default.
-
-The seam plays plans with `Pacer.js`: every step is due at `start + t`, so a
-slow ack delays only its own step. A plan over its budget is compressed. One
-still playing past 1.5x its budget fast-forwards: it skips the remaining waits
-and every step not marked `essential: true`, but always dispatches the last
-step. An engine that throws falls back to the channel's last `auto` choice.
-
-### Scrolling into view
-
-`Page.scrollIntoViewIfNeeded` (the scroll inside `click`, `hover` and `fill`)
-runs in rounds when the scroll engine has `planIntoView`. Each round the page
-reports a probe, the engine plans wheel steps from it, and the browser first
-moves the cursor to the first wheel's position (with the `mouse:internal`
-engine, a single `mousemove` when that is `raw`), then plays the wheels. A plan
-that ends in a `probe` step asks for another round, up to 4. The stock scroll
-always runs last: it does nothing when the element is already in view, and it
-raises the same errors as without an engine. The probe, in top-level viewport
-CSS pixels:
-
-| Field | Meaning |
-|---|---|
-| `targetRect` | The element (or the requested rect within it), or `null` when it cannot be scrolled to. |
-| `clip` | The band the element can be seen in: the viewport inset by 20 px (10 px at the sides), minus fixed or sticky bars at the element's column, intersected with each scrollable ancestor. |
-| `region` | The element's visible part of `clip`, or `null`. |
-| `hitTestable`, `occluder` | Whether a fixed or sticky element covers `region` (hit-tested at five points), and its rect. |
-| `scrollers` | The ancestors that can move the element, innermost first, then the page if it can: `{isPage, rect, band, scrollTop, maxScroll, wheelPoint: {down, up}}`, where `rect` is the scroller's box (`null` for the page) and `band` the part of it that is visible. `wheelPoint` is the point nearest the cursor from which a wheel in that direction scrolls this scroller rather than one inside it. |
-| `viewport` | `{width, height}`. |
-
-`ctx.round` is the round number, from 0.
-
-## Engines outside the browser: `custom()`
-
-A `custom(fn)` channel is not an engine in this sense. The launcher writes
-`raw` for that channel, so the seam leaves Playwright's commands alone, and
-wraps Playwright's input methods on the client instead
-(`python/src/camoufox/_humanize_custom.py`, `typescript/src/_humanize_custom.ts`).
-User code never runs in the browser. A custom mouse also writes
-`humanize:mouse:internal=auto`, so the moves the seam originates itself, like
-the cursor move before a planned scroll, still get the build's mouse engine.
-The browser guard is `browser/tests/playwright/patches/humanize-custom.py`.
-
-## `humanize-engines.json`
-
-Each build ships one beside `properties.json`. `browser/settings/humanize-engines.json`
-is this repository's:
-
-```json
-{
-  "version": 1,
-  "mouse": ["raw", "cursory"],
-  "keyboard": ["raw"],
-  "scroll": ["raw", "cursory"],
-  "auto": {"mouse": ["cursory"], "keyboard": ["raw"], "scroll": ["cursory"]},
-  "engines": {
-    "cursory": {
-      "module": "resource://gre/modules/juggler/input/CursorTrajectory.js",
-      "options": {
-        "maxTime": {"key": "humanize:maxTime", "min": 0},
-        "minTime": {"key": "humanize:minTime", "min": 0}
-      }
-    }
-  }
-}
+humanize = {"mouse": custom(my_move), "keyboard": raw(), "scroll": raw(), "seed": 1234}
 ```
 
-| Field | Meaning |
-|---|---|
-| `mouse` / `keyboard` / `scroll` | The engines the channel may name. `raw` is always allowed. |
-| `auto` | What `auto()` tries, in order: the first engine whose `available()` is not `false`. The last entry is the fallback for a failed or unavailable engine. |
-| `engines.<name>.module` | The chrome URL of the module that exports the engine as `<name>`. |
-| `engines.<name>.options` | Option name → `{key, min, max}`. The launchers accept only these options, check the range (`min` defaults to 0), and write each one as a double under `key`. The browser hands them to the engine as `ctx.options`. |
-| `engines.<name>.movesCursor` | The scroll engine moves the cursor before it scrolls. With a `raw()` mouse, the launcher warns that the move is a jump. |
+- Each channel (`mouse`, `keyboard`, `scroll`) is `raw()` (Playwright as it is) or
+  `custom(fn)`. An omitted channel is `raw()`, and so is `humanize=None` or `False`.
+- `humanize=True`, a number, an engine name, or a dict naming any other engine is
+  refused with an error saying the browser no longer humanizes. Before this
+  change those turned on the browser's own cursor paths and wheel pacing.
+- Nothing about humanize reaches the browser's config. The `humanize*` keys are
+  marked `removed` in `browser/settings/properties.json`.
 
-To add an engine to a build, package its module in a `jar.mn`, add its entry
-and its channels to the build's `humanize-engines.json`, and declare its option
-keys in `properties.json`. Neither the seam nor the launchers change.
+`custom(fn)` wraps Playwright's input methods on the client
+(`python/src/camoufox/_humanize_custom.py`, `typescript/src/_humanize_custom.ts`);
+the README's "Writing your own engine" has the call signatures. User code never
+runs in the browser. The browser guard is
+`browser/tests/playwright/patches/humanize-custom.py`.
 
-A binary without the file predates per-channel humanize. The launchers then
-write only `humanize` and `humanize:maxTime`/`minTime`, and refuse a setting
-that such a binary cannot run.
+## Seeds
 
-## Seeds and the trace
-
-`humanize:seed` is a decimal uint64 string, because Juggler reads config numbers
-only as doubles. Each channel's stream is
-`Mulberry32(splitmix64(seed ^ tag) & 0xffffffff)`, with tags `0x6d6f7573`
-(mouse), `0x6b657962` (keyboard), `0x7363726f` (scroll) and `0x74696d65`
-(timing: the click hold, hover dwell and double-click gap between events).
-Without a seed, each launch draws a random one.
-
-The launcher derives the same streams for `custom()` engines
+`seed` (an integer below 2^64) seeds one stream per channel, passed to a custom
+function as `rng`. Each stream is `Mulberry32(splitmix64(seed ^ tag) & 0xffffffff)`,
+with tags `0x6d6f7573` (mouse), `0x6b657962` (keyboard) and `0x7363726f` (scroll)
 (`channel_stream` in `python/src/camoufox/humanize.py`, `channelStream` in
-`typescript/src/humanize.ts`).
-`browser/tests/humanize/rng-vectors.json` is written from `HumanizeRng.js` by
-`browser/tests/juggler/gen-rng-vectors.mjs`, and the browser and both launchers
-are tested against it: change the derivation in all of them or in none.
+`typescript/src/humanize.ts`). `browser/tests/humanize/rng-vectors.json` pins the
+draws, and both launchers are tested against it: change the derivation in both or
+in neither. Without a seed, each launch draws a random one.
 
-With `CAMOU_HUMANIZE_TRACE=<file>` in the browser's environment, the seam
-appends one JSON line per humanized action with these fields:
+## What the browser still times
 
-- `channel`, `engine`, `command`
-- `seedStreamPos`, `budgetMs`
-- `plan`
-- `dispatched`: `[{i, tPlanned, tActual}]`
-- `outcome`
+Some single commands still carry timing inside the browser, because without it
+one Playwright call would produce events no keyboard can:
 
-The unit tests are in `browser/tests/juggler/` (`node --test browser/tests/juggler/*.test.mjs`),
-and the browser guard is `browser/tests/playwright/patches/humanize-seam.py`.
+- **Paste.** `fill()` and `keyboard.insert_text()` send `Page.insertText`, which
+  Juggler turns into Ctrl+V (Cmd+V on a Mac identity) around Firefox's own paste.
+  The modifier leads V by about 60 ms, V is held about 116 ms, and the modifier
+  trails by about 40 ms. Without them the shortcut would go down and up in the
+  same millisecond.
+- **Shift for a shifted character.** A `keyboard.press("A")` or a typed `!` holds
+  Shift around the key, with the same lead and trail.
+- **A refused paste.** A page that cancels the paste gets the text typed key by
+  key at a person's rate, as a person types what they cannot paste.
+
+These are one command's own events, drawn in the content process from
+`input/HumanDelay.js` with the figures input-dispatch.md cites; they never pace
+one command against the next. Mouse moves are also sent at least 8 ms apart (a
+125 Hz mouse's reports), which a driver pacing its moves at 8 ms or more never
+sees.

@@ -4,7 +4,7 @@ Client-side humanize engines: `custom(fn)` on a channel.
 The function runs in this process, never in the browser. It plans a channel's
 input and plays it through Playwright's own input methods, so the page sees the
 same trusted events as from any Playwright call. The browser runs that channel
-raw (camoufox.humanize.humanize_config), so input is never humanized twice.
+raw, as it runs every channel: it has no humanization of its own.
 
 What is wrapped, per page of the browser (or persistent context) it is attached
 to, and what the function is called for:

@@ -8,8 +8,8 @@
  * The one place in the parent process that dispatches synthesized mouse input.
  *
  * It exists because the alternative did not work. Between 2026-04 and 2026-09,
- * four separate deadlocks shipped -- exact-edge coordinates (#225), humanized
- * trajectory points that bypassed the endpoint's guard (#677/#225), a
+ * four separate deadlocks shipped -- exact-edge coordinates (#225), the
+ * since-removed in-browser trajectory's points that bypassed the endpoint's guard (#677/#225), a
  * zero-displacement move, and the top-edge row (#751/#752) -- each fixed by
  * adding one more coordinate guard at one more call site. The guards were
  * correct; the arithmetic behind them was copied per call site, so every new
@@ -46,10 +46,6 @@
  * diagnose. So: well above the slowest legitimate ack, not near the typical one.
  */
 export const kAckDeadlineMs = 5000;
-
-const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
-const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
-const helper = new Helper();
 
 function warnUndelivered(eventType, x, y, box, deadlineMs) {
   dump(
@@ -93,17 +89,17 @@ export class MouseDispatch {
   /**
    * Measure the browser rect again. Every dispatch does this synchronously
    * before converting its point (docs/input-dispatch.md, "A fresh rect"): one
-   * MouseDispatch serves a whole humanized move, whose steps are dispatched
-   * over hundreds of ms, and the browser can move in the window meanwhile.
+   * MouseDispatch can serve a command for longer than a frame (a click's
+   * press and release), and the browser can move in the window meanwhile.
    *
-   * Measured 2026-10-31 (humanize-seam.py, ~1 in 4 runs): a window smaller
+   * Measured 2026-10-31 (~1 in 4 runs): a window smaller
    * than the chrome plus the viewport, as a 1366x768 screen draw gives a
    * 1000x700 viewport, leaves Juggler's .browserStack scrolling the browser,
    * and while it was overflow: auto a wheel turn scrolled it by the overflow
    * over ~130ms (TargetRegistry.updateViewportSize). A move that started
    * meanwhile kept the rect from its start, so every later point, the
    * destination included, reached the page shifted by the scroll (13-84 px):
-   * moves the engine never planned, a move that missed its target, and the
+   * moves nothing asked for, a move that missed its target, and the
    * next click's mousedown away from the last mousemove, which a real mouse
    * never does. The chrome can still move the browser mid-move (a toolbar
    * changing height, the fullscreen toolbox sliding away).
@@ -111,36 +107,6 @@ export class MouseDispatch {
   _remeasure() {
     if (this._browser)
       this._measured(this._browser.getBoundingClientRect());
-  }
-
-  /**
-   * Is this relative point in the part of the browser the window shows? The
-   * browser is clipped by its .browserStack, which scrolls when the window is
-   * too small for the viewport (TargetRegistry.updateViewportSize); a point
-   * in the clipped band lands on chrome and is never acked.
-   */
-  _isShown(x, y) {
-    const stack = this._browser?.closest('.browserStack');
-    if (!stack)
-      return true;
-    const clip = stack.getBoundingClientRect();
-    const {x: absX, y: absY} = this.toAbsolute(x, y);
-    return absX >= Math.ceil(clip.left) && absX <= Math.ceil(clip.left + clip.width) - 1 &&
-           absY >= Math.ceil(clip.top) && absY <= Math.ceil(clip.top + clip.height) - 1;
-  }
-
-  /**
-   * Bring a relative point into the shown part of the browser, as
-   * Page.dispatchMouseEvent does before it measures, when it has scrolled out
-   * since: a move's destination is always dispatched.
-   */
-  async _reveal(x, y) {
-    this._remeasure();
-    if (!this._browser || this._isShown(x, y))
-      return;
-    this._browser.scrollRectIntoViewIfNeeded(x, y, 0, 0);
-    if (this._win.windowUtils.flushApzRepaints())
-      await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
   }
 
   get boundingBox() {
@@ -285,113 +251,6 @@ export class MouseDispatch {
   }
 
   /**
-   * Dispatch a planned humanized move (input/CursorTrajectory.js, or any mouse
-   * engine behind input/HumanizeSeam.js): every step but the last is an
-   * intermediate point, and the last is the destination, always dispatched.
-   *
-   * The steps keep the timing the engine planned, because Cursory replays
-   * timing recorded from a real hand: the gaps are uneven, and evening them out
-   * would throw away the half of the realism that is not the shape of the path.
-   * `play` (the seam's Pacer) holds each step to its own due time from the
-   * start of the move, not a gap after the previous ack, so a late ack delays
-   * only its own point; a skipped point shifts nothing that follows it.
-   *
-   * Each step measures the browser rect afresh (_remeasure). A curve leaves the
-   * viewport more often than it sounds: measured over 400 random moves, 69% of
-   * Cursory paths stray outside the box spanned by their own endpoints, by up
-   * to 184px. A real pointer that leaves the page fires mouseout/mouseleave and
-   * comes back with mouseover, so a curve heading out of the viewport leaves
-   * it where and when it crosses the edge (_crossing); one that lands in a
-   * band of it the window does not show moves the pointer off the content
-   * there (leaveContent). The next point inside re-enters it.
-   *
-   * Bounding each ack individually is not enough to bound the work: a curve is
-   * dispatched inside a SINGLE activation-chain slot, and holds up to ~90
-   * points at the 1.5s default ceiling (the generator holds the sample rate at
-   * 60Hz however the duration is scaled; measured worst case over 800 moves was
-   * 83). A curve riding a coordinate that cannot be delivered would spend 90 x
-   * the deadline there. So the first undelivered point abandons the rest of the
-   * curve and the move goes straight to its destination. Intermediate points
-   * are humanization garnish: if one did not reach the renderer the rest of
-   * that curve almost certainly will not either, and dropping them costs
-   * realism, not correctness. The seam also fast-forwards to the destination
-   * once a move runs past 1.5x its time budget.
-   *
-   * @param {{x: number, y: number}} from where the cursor is, which the plan
-   *     leaves out: NaN when it is not known (parkOffContent)
-   * @param {{steps: Array<{x: number, y: number, t: number}>}} plan
-   * @param {(plan: object, dispatchStep: Function) => Promise} play
-   * @param {(x: number, y: number) => Promise} [sendDestination] how the last
-   *     step goes out; PageHandler's _sendMove, so the next command waits until
-   *     the page has it, as after an unplanned move.
-   */
-  async sendTrajectoryAcked(watcher, eventType, from, plan, play,
-                            sendDestination = (x, y) => this.sendAcked(watcher, eventType, x, y)) {
-    // A point on the pixel the cursor is already on generates no eMouseMove, so
-    // it is never acked and the wait below would burn the whole deadline. The
-    // generator already drops those, but it cannot see which points this method
-    // skipped for being off-screen, and skipping one can leave the next landing
-    // back where the last dispatch left the cursor. Tracking what was actually
-    // dispatched is the only place that check is reliable.
-    // The cursor's own position goes first, so that a curve heading straight
-    // off the page leaves from it (below). It is never sent: the cursor is
-    // already on that pixel.
-    this._remeasure();
-    const start = this.isInViewport(from.x, from.y) && this._isShown(from.x, from.y);
-    const steps = start ? [{x: from.x, y: from.y, t: 0}, ...plan.steps] : plan.steps;
-    let lastX = start ? Math.round(from.x) : NaN;
-    let lastY = start ? Math.round(from.y) : NaN;
-    let offContent = false;
-    const destination = steps.length - 1;
-    const send = async (x, y) => {
-      if (Math.round(x) === lastX && Math.round(y) === lastY)
-        return true;
-      if (!await this.sendAcked(watcher, eventType, x, y))
-        return false;
-      lastX = Math.round(x);
-      lastY = Math.round(y);
-      return true;
-    };
-    const leave = (x, y) => {
-      this.leaveContent(x, y);
-      offContent = true;
-      lastX = NaN;
-      lastY = NaN;
-    };
-    await play({...plan, steps}, async (step, i) => {
-      const {x, y} = step;
-      if (i === destination) {
-        await this._reveal(x, y);
-        await sendDestination(x, y);
-        return true;
-      }
-      const begun = ChromeUtils.now();
-      this._remeasure();
-      if (!this.isInViewport(x, y) || !this._isShown(x, y)) {
-        if (!offContent)
-          leave(x, y);
-        return true;
-      }
-      offContent = false;
-      if (!await send(x, y))
-        return false;
-      // A step on the way to one outside the viewport leaves it at the moment
-      // the pointer crosses the edge, not at the next step's time.
-      const next = steps[i + 1];
-      if (i + 1 === destination || this.isInViewport(next.x, next.y))
-        return true;
-      const {ms, last, exit} = this._crossing(step, next);
-      const wait = ms - (ChromeUtils.now() - begun);
-      if (wait > 0)
-        await new Promise(resolve => setTimeout(resolve, wait));
-      if (last && !await send(last.x, last.y))
-        return false;
-      leave(exit.x, exit.y);
-      return true;
-    });
-  }
-
-  /**
    * Park the cursor off web content so hover effects clear.
    *
    * Deliberately dispatched at the chrome window's own origin rather than a
@@ -400,53 +259,6 @@ export class MouseDispatch {
    */
   parkOffContent() {
     this._sendAbsolute('mousemove', 0, 0);
-  }
-
-  /**
-   * How a pointer moving from the step `from`, inside the viewport, to the
-   * step `to`, outside it, leaves: `ms` after `from` it crosses the edge,
-   * having last been seen at `last` (null if not since `from`), and leaves
-   * for `exit`. Stock 159.0 on X11 (27 exits by hand, slow and fast, every
-   * edge) fires one more mousemove 0-5px inside the edge, then the mouseout
-   * 1-8px past it within a millisecond, 2-8px apart: the last sample of a
-   * mouse polled every millisecond, and the first one after.
-   */
-  _crossing(from, to) {
-    const {width, height} = this._box;
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    // How far along from->to each coordinate reaches its edge of the content.
-    const reach = (f, d, size) => d < 0 && f + d < 0 ? -f / d : d > 0 && f + d >= size ? (size - f) / d : Infinity;
-    const k = Math.min(reach(from.x, dx, width), reach(from.y, dy, height));
-    const span = Math.max(to.t - from.t, 1);
-    const ms = k * span;
-    const sampled = Math.floor(ms);
-    const clamp = (v, size) => Math.min(Math.max(Math.round(v), 0), size - 1);
-    const last = sampled > 0 ? {x: clamp(from.x + sampled / span * dx, width), y: clamp(from.y + sampled / span * dy, height)} : null;
-    const seen = last ?? {x: Math.round(from.x), y: Math.round(from.y)};
-    // Straight across the edge from the pixel the page last saw. 3px on, as a
-    // fractional content offset can put the two a pixel nearer on the page
-    // than planned, and stock's were never under 2px apart.
-    const across = (v, d, size) => d < 0 ? Math.min(v - 3, -1) : Math.max(v + 3, size);
-    const exit = reach(from.x, dx, width) === k ? {x: across(seen.x, dx, width), y: seen.y} : {x: seen.x, y: across(seen.y, dy, height)};
-    return {ms, last, exit};
-  }
-
-  /**
-   * Move the pointer off the content to the relative point (x, y), outside the
-   * viewport or in a band of it the window does not show. That point is on the
-   * chrome when the window has some there (the toolbar above the content), so
-   * the pointer moves onto it; past the window's own edge the pointer leaves
-   * the window. Unacked: neither event reaches the renderer, which sees only
-   * the exit.
-   */
-  leaveContent(x, y) {
-    // The row the content's fractional top falls in is partly content (see the
-    // constructor), so a point above the content is floored onto the row above.
-    const absX = Math.floor(this._box.left + x);
-    const absY = Math.floor(this._box.top + y);
-    const onChrome = absX >= 0 && absY >= 0 && absX < this._win.innerWidth && absY < this._win.innerHeight;
-    this._sendAbsolute(onChrome ? 'mousemove' : 'mousecancel', absX, absY);
   }
 
   /**

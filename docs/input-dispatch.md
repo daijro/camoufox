@@ -39,7 +39,7 @@ a callback that never returns. One unbounded `await` for an ack that will never
 arrive wedges every later input event, in every tab, permanently — at 0% CPU,
 with nothing in flight and no diagnostic.
 
-`#677` is why review is not enough: restoring the humanize trajectory meant
+`#677` is why review is not enough: restoring the (since removed) in-browser trajectory meant
 writing a bounds check, and the one written was a copy of the pre-`#225` form,
 reintroducing a fixed deadlock one day before it was re-fixed.
 
@@ -59,13 +59,10 @@ produced no ack, and the page saw no mousemove (~1 in 25 runs of
 `near-edge-mouse-deadlock.py`). Both dispatch sites (`Page.dispatchMouseEvent`,
 `Page.dispatchWheelEvent`) measure synchronously before dispatching.
 `MouseDispatch.sendAcked()` measures again before every event it sends, so each
-step of a humanized move, dispatched over hundreds of ms, goes out against
-where the browser is then; a step in a band of the viewport the window does
-not show is skipped, and a destination there is scrolled into view first.
+event goes out against where the browser is then.
 Measured 2026-10-31: in a window too small for the chrome plus the viewport
 (a 1366x768 screen draw), Juggler's `.browserStack` scrolled the browser on a
-wheel turn, and a move that kept its starting rect landed every later point,
-the destination included, 13-84 px off (`humanize-seam.py`, run d). The stack
+wheel turn, and a move that kept its starting rect landed 13-84 px off. The stack
 is `overflow: hidden` since, so only Juggler's own `scrollRectIntoViewIfNeeded`
 scrolls it.
 
@@ -74,16 +71,10 @@ drops the event with a warning naming the type, coordinate and browser rect. The
 deadline is sized above the slowest *legitimate* ack, not near the typical one:
 acks are p99 1ms on an idle page, but they are delivered from the content main
 thread and inherit any block on it — a 3s synchronous script delayed one by
-2849ms. `sendTrajectoryAcked()` abandons the rest of a curve after the first
-undelivered point and goes straight to the destination, so the ~90 bounded waits
-a curve can hold — the 1.5s default humanize ceiling at 60Hz — cannot add up to
-an unbounded slot. The humanize seam (`input/HumanizeSeam.js`) paces every plan
-on its own schedule (`input/Pacer.js`) and fast-forwards one that runs past 1.5x
-its time budget. It also refuses
-to dispatch a point on the pixel the previous dispatch left the cursor on: a
-zero-displacement move produces no `eMouseMove`, so it is never acked, and
-that is the same deadlock reached from inside a curve rather than from
-`Page.dispatchMouseEvent`.
+2849ms. One command holds at most one such wait per event it sends, and the
+browser sends no events a command did not ask for. A zero-displacement move
+produces no `eMouseMove`, so it is never acked; `Page.dispatchMouseEvent` does
+not wait for one (`noop-mousemove-deadlock.py`).
 `apz-repaints-flushed` waits at most `kAckDeadlineMs` too: a flush sent to a
 GPU process that dies never comes back, and stalled every such dispatch until
 the backstop. So does the drag path's `juggler-drag-finalized`, per input
@@ -99,11 +90,11 @@ and `FrameTree.js` (the ack *producer*).
 
 **Boundary coverage.**
 `browser/tests/playwright/patches/mouse-boundary-sweep.py` sweeps the whole
-viewport ring across every spoofed OS with humanize on and off, asserting each
+viewport ring across every spoofed OS, asserting each
 point is acked *and observed by the page*. Hand-picked coordinate lists are what
-let each of the four bugs through: `humanize-edge-deadlock.py` probed only the
-far edges, and `humanize-mouse-trajectory.py` pins `os="linux"` — the one
-fingerprint immune to `#751`.
+let each of the four bugs through: the far-edge test probed only the far edges,
+and the in-browser trajectory test (both removed with the trajectory) pinned
+`os="linux"` — the one fingerprint immune to `#751`.
 `browser/tests/playwright/patches/input-ack-backstop.py` covers the bounded waits
 themselves: a late renderer ack, and a drag whose page answers late.
 
@@ -182,43 +173,48 @@ with stock's.
 
 ## Wheel notches
 
-A mouse wheel turns in notches, and stock Firefox delivers each one as its own
-`wheel` event. On Linux (GTK, X11) stock 158.0.1 gives every notch
+A mouse wheel turns in notches. On Linux (GTK, X11) stock 158.0.1 gives a notch
 `deltaMode` 1, `deltaY` 6, `wheelDeltaY` -120, a `DOMMouseScroll` with
 `detail` 3 and a `MozMousePixelScroll` of three lines, and scrolls 120 px
 (measured with XTest button 5). On Windows, stock 159.0 has the same shape
 (measured with `SendInput` at a device pixel ratio of 2.5, 45 runs identical):
-`deltaMode` 1, `deltaY` 6, `wheelDeltaY` -120, `detail` 3, one event per notch
-with no acceleration. Its pixels differ only because line height does, so three
-native lines need no per-OS constant. A physical wheel, other line settings and
-a ratio of 1 are not measured there. macOS differs: with a person turning a
-notched USB mouse on stock 159.0, a slow notch is `deltaMode` 1, `deltaY` 1,
-`wheelDeltaY` -48, `detail` 1 and a `MozMousePixelScroll` of 16, and the OS
-accelerates a faster turn to as many as 6 lines an event.
+`deltaMode` 1, `deltaY` 6, `wheelDeltaY` -120, `detail` 3, no acceleration. Its
+pixels differ only because line height does, so three native lines need no
+per-OS constant. macOS differs: with a person turning a notched USB mouse on
+stock 159.0, a slow notch is `deltaMode` 1, `deltaY` 1, `wheelDeltaY` -48,
+`detail` 1 and a `MozMousePixelScroll` of 16, and the OS accelerates a faster
+turn into single events of more lines.
 
-On a Linux or Windows identity, `Page.dispatchWheelEvent` sends one event of three
-lines per notch, flagged as a native tick (`wheel-native-ticks.patch`), so Gecko
-applies the same system scroll speed. On a macOS identity it sends lines without
-that flag and the launcher turns `mousewheel.system_scroll_override.enabled` off,
-as stock has it on macOS, which gives the shape above in proportion. Every one of
-the 78 recorded macOS bursts starts at one line, so a call starts there too and
-grows by 1 to 3 lines an event up to 12.
+**One call is one event.** `Page.dispatchWheelEvent` (`mouse.wheel(dx, dy)`)
+sends exactly one wheel event and returns; the browser does not split a call
+into notches, space them or move the cursor for it. The driver decides how a
+turn is broken up, by sending one call per event it wants, at its own times.
 
-A Playwright caller asks for pixels, so `mouse.wheel(dx, dy)` maps each axis to
-notches: 100 px is one notch, rounded to the nearest, at least one on an axis
-that moves. On a macOS identity it maps to lines instead, at 16 px a line. The
-events of one call are 18 to 60 ms apart, drawn per event; the
-one recording of a person's wheel, on macOS, has bursts 20 to 80 ms apart (10th
-to 90th percentile), and nothing backs the range on Linux or Windows. The page therefore scrolls a
-notch's distance (120 px here) or a whole number of lines, not the exact pixels asked for, and
-`mouse.wheel(0, 0)` sends nothing. Humanize does not change this: `raw()`
-and a `custom()` scroll engine's wheel steps are rounded the same way, each
-step at least one notch, so a custom engine should plan in notches (100 px, or
-lines of 16 px on a macOS identity) to land where it means to. Without a scroll engine each notch takes the
-activation slot alone, so a long wheel does not hold up input in other contexts;
-an engine's plan keeps the slot for as long as it plays.
-`browser/tests/playwright/patches/driven-wheel-notches.py` compares the result
-with stock's.
+- **Linux and Windows identities.** Each axis maps to notches: 100 px is one
+  notch, rounded to the nearest, at least one on an axis that moves. The event
+  carries three lines per notch and is flagged as native ticks
+  (`wheel-native-ticks.patch`), so Gecko applies the same system scroll speed and
+  gives `wheelDeltaY` -120 per notch. `mouse.wheel(0, 300)` is one event of
+  three notches: `deltaY` 18, `wheelDeltaY` -360, `detail` 9, 360 px. That is a
+  shape stock produces: `WinMouseScrollHandler` turns a `WM_MOUSEWHEEL` of
+  N x 120 into one event of N ticks (a fast spin the OS batched, or a wheel
+  driver that sends multiples), and GTK turns a smooth-scroll delta of N into
+  one event of N notches. Most notched mice on stock drivers send one notch an
+  event, so a driver imitating one sends one call per 100 px.
+- **macOS identities.** The call is one event of `round(px / 16)` lines, at
+  least one, without the native-tick flag; the launcher turns
+  `mousewheel.system_scroll_override.enabled` off, as stock has it on macOS. In
+  the one macOS recording of a person's notched mouse
+  (`human-input-recordings/mac-mini`, a Keychron M6, 1666 wheel events), every
+  event is a single line-mode event of 1 to 13 lines, `wheelDeltaY` -48 a line;
+  a turn starts at one line an event and climbs.
+
+The page scrolls a whole number of notches or lines, not the exact pixels asked
+for, and `mouse.wheel(0, 0)` sends nothing. There is no recording of a notched
+mouse on Linux or Windows here; the Windows recordings (`win-i9-intel`,
+`win-i9-intel-dpr1`) and the MacBook one are touchpads, which scroll in pixels
+(`deltaMode` 0), a shape `mouse.wheel` does not produce.
+`browser/tests/playwright/patches/driven-wheel-notches.py` checks each shape.
 
 ## Pasted text
 
@@ -234,14 +230,9 @@ clipboard, is cancelled in the system group; content never receives a
 through the system clipboard. The modifier leads V by about 60 ms and trails
 it by about 40 ms, as Shift does a key, and V is held 116.25 ms (SD 23.88;
 Dhakal et al., "Observations on Typing from 136 Million Keystrokes", CHI 2018).
-Every delay between a person's input events comes from `input/HumanDelay.js`,
-with the figures its caller cites: a normal draw for a key or modifier hold
-(`normalDelay(mean, sd, min, max)`) and a right-skewed log-normal for a click
-hold, hover dwell or double-click gap (`logNormalDelay(median, sigma, min, max)`),
-as human timing is. The click delays draw from the launch's `humanize:seed` on a
-separate `timing` stream, so a seeded session reproduces them without shifting a
-cursor or keyboard plan. The key and modifier delays of a paste run in the
-content process, which has no such stream, and a seed does not reproduce them.
+Each of these delays is a normal draw from `input/HumanDelay.js`
+(`normalDelay(mean, sd, min, max)`) with the figures its caller cites. They are the paste's own events, one command's
+worth; the browser never paces one command against another (docs/humanize.md).
 
 A page that cancels the paste, or the shortcut's `keydown`, and leaves the field
 as it was gets the text typed instead, as a person types what they cannot paste:

@@ -543,7 +543,7 @@ claims the host's OS. Details are in
 
 | Feature | How to use it | Where |
 |---|---|---|
-| Human cursor movement, replayed from 2356 recordings of real people ([Cursory](https://github.com/Vinyzu/cursory)) | `humanize=True`, or a number of seconds to cap each move | Juggler `input/` |
+| Human input: none in the browser. Each Playwright input call is one native event; humanization is the driver's | `humanize={"mouse": custom(fn), ...}` runs your functions in the driver | [Human input](#human-input) |
 | Run code in the page's own world | `main_world_eval=True`, then `page.evaluate("mw:...")` | Juggler |
 | Finish animations at once so Playwright never waits | `config={"instantAnimations": True}` (detectable; warns) | `no-css-animations` patch |
 | Read closed shadow roots | `config={"forceScopeAccess": True}` | `shadow-root-bypass` patch |
@@ -612,58 +612,36 @@ and anti-bot vendors look for the one that does not. File a
 [detection report](https://github.com/daijro/camoufox/issues/new?template=camoufox-detected.md)
 when you find one.
 
-## Human cursor
+## Human input
 
-<img src="browser/assets/humanize-cursor.svg" alt="Cursor paths Camoufox produced with humanize=True, replayed at their recorded speed" width="900">
+The browser does not humanize input. Each Playwright input call reaches the page
+as one event of the shape a real device gives stock Firefox: a `mouse.move` is
+one move, a click is a press and a release, `mouse.wheel(dx, dy)` is one wheel
+event in whole notches (Linux and Windows: 100 px a notch, carried in that one
+event as a fast spin of a notched wheel can be; macOS: one event of 16 px lines),
+and `fill()` is Firefox's own paste. The browser adds no timing, paths, pacing or
+randomness of its own, so how human the input looks is up to the driver: send the
+moves, notches and keys a person would, at a person's times
+([docs/input-dispatch.md](docs/input-dispatch.md) has each event's shape per OS).
 
-Each dot is a `mousemove` event the page received from six `page.mouse.move()`
-calls with `humanize=True`, shown at the speed it arrived; close dots mean the
-hand slowed down. `browser/scripts/cursor-demo.py` regenerates the figure.
-
-Camoufox does not compute its cursor paths. It picks one of Cursory's 2356
-recorded human movements that suits the move, morphs it onto the start and end
-points, and replays it with the recording's own timing, including pauses and
-overshoots. It ships [cursory-js](https://github.com/JWriter20/cursory-js), a
-TypeScript port that reproduces the Python original exactly, at
-`browser/additions/juggler/input/cursory/`. **Cursory is LGPLv3-or-later, not
-MPL-2.0 like the rest of the browser**; see
-[`NOTICE`](browser/additions/juggler/input/cursory/NOTICE).
-
-### Choosing an engine per channel
-
-`humanize` also takes one engine per input channel, so mouse, keyboard and scroll can be set separately. Both launchers accept the dict, and `custom(fn)` runs in the caller's process. The browser applies the engines to the input commands Playwright already sends, so the Playwright code stays the same:
-
-```python
-from camoufox import Camoufox
-from camoufox.humanize import cursory, raw
-
-with Camoufox(humanize={"mouse": cursory(max_time=1.0), "scroll": raw(), "seed": 1234}) as browser:
-    ...
-```
-
-| Channel | Engines | `auto()` means |
-|---|---|---|
-| `mouse` | `raw()`, `cursory(max_time=, min_time=)` | `cursory()` |
-| `scroll` | `raw()`, `cursory()`: a wheel turn arrives as 3-line notches, tens of ms apart | `cursory()` |
-| `keyboard` | `raw()` | `raw()` |
-
-An omitted channel is `auto()`. `humanize=True` is `auto()` on every channel, and a number is `{"mouse": cursory(max_time=<number>)}`, as before. `seed` (an integer below 2^64) makes the humanized input repeatable: the same seed and the same actions give the same cursor paths and wheel timing, and each channel has its own random stream, so typing does not change the mouse paths. Without a seed, every launch draws a new one.
-
-The table is what this repository's build ships. A build lists its engines, and the options each takes, in `humanize-engines.json` beside `properties.json` ([docs/humanize.md](docs/humanize.md)). `engine(name, **options)` names any of them, and the launcher checks the setting against that file, raising `HumanizeEngineUnavailable` for an engine the build does not have. Set the environment variable `CAMOU_HUMANIZE_TRACE` to a file path to have the browser write every humanized action and its plan there as JSON lines.
+`humanize=True` and `humanize=<seconds>` are refused with a message saying so.
+`humanize={"mouse": ..., "keyboard": ..., "scroll": ..., "seed": ...}` remains,
+for the driver-side engines below; each channel is `raw()` (Playwright as it is)
+or `custom(fn)`, and an omitted channel is `raw()` ([docs/humanize.md](docs/humanize.md)).
 
 ### Writing your own engine: `custom(fn)`
 
-A channel can also run a function of yours in your own process (Python below; TypeScript in [its README](typescript/README.md#your-own-humanize-engine-customfn)). The function plans the input and plays it through Playwright's own input methods, so the page sees the same trusted events as from any Playwright call. The browser runs that channel raw, and your code never runs inside the browser. The other channels keep the build's engines.
+A channel can run a function of yours in your own process (Python below; TypeScript in [its README](typescript/README.md#your-own-humanize-engine-customfn)). The function plans the input and plays it through Playwright's own input methods, so the page sees the same trusted events as from any Playwright call. Your code never runs inside the browser. The other channels stay `raw()`.
 
 ```python
 from camoufox.async_api import AsyncCamoufox
-from camoufox.humanize import auto, custom
+from camoufox.humanize import custom, raw
 
 async def my_move(page, x, y, *, original, rng, play):
     steps = my_model((x, y), rng)                     # [(t_ms, x, y), ...]
     await play([("move", sx, sy, t) for t, sx, sy in steps])
 
-async with AsyncCamoufox(humanize={"mouse": custom(my_move), "scroll": auto(), "seed": 1234}) as browser:
+async with AsyncCamoufox(humanize={"mouse": custom(my_move), "scroll": raw(), "seed": 1234}) as browser:
     page = await browser.new_page()
     await page.locator("#submit").click()             # my_move plans the move, Playwright clicks
 ```
@@ -675,11 +653,10 @@ async with AsyncCamoufox(humanize={"mouse": custom(my_move), "scroll": auto(), "
 | `scroll` | `fn(page, target, *, original, rng, play)` with `target` a `Locator` or `(dx, dy)` | `Mouse.wheel`, `Locator.scroll_into_view_if_needed`, and bringing an element that is not in view into view before a click, hover or fill |
 
 - `original()` runs Playwright's own behaviour for the call. Calling it is how a function declines.
-- `rng()` returns a float in [0, 1) from the channel's seeded stream. It is the same stream the browser's engines would draw from for that seed, number for number.
-- `play(steps)` dispatches steps at their times, in ms from the start of the call: `("move", x, y, t)`, `("down" | "up", button, t)`, `("wheel", dx, dy, t)`, `("key", key, "down" | "up", t)`, `("text", text, t)` (pasted, as `keyboard.insert_text` is). It waits until each step is due on a monotonic clock rather than sleeping between steps, so a slow round trip delays one step and never adds up. Bad steps raise `ValueError` before anything is sent.
+- `rng()` returns a float in [0, 1) from the channel's seeded stream: the same seed gives the same numbers in Python and TypeScript (`browser/tests/humanize/rng-vectors.json`).
+- `play(steps)` dispatches steps at their times, in ms from the start of the call: `("move", x, y, t)`, `("down" | "up", button, t)`, `("wheel", dx, dy, t)` (one wheel event each), `("key", key, "down" | "up", t)`, `("text", text, t)` (pasted, as `keyboard.insert_text` is). It waits until each step is due on a monotonic clock rather than sleeping between steps, so a slow round trip delays one step and never adds up. Bad steps raise `ValueError` before anything is sent.
 - Playwright's actions run inside its own server, so the wrappers act first: they scroll the element into view and move to the click point, and Playwright's own move then has no distance left. A `fill` selects the field's text first, so your keys replace it.
 - With the sync API the functions are plain functions; with the async API they may be `async`. Exceptions reach the caller unchanged.
-- A custom mouse leaves the moves the browser makes itself (the cursor move before a scroll engine wheels) to the build's own mouse engine, so they are paths, not jumps.
 - The wrappers belong to the browser `Camoufox()` launched: other browsers in the same process are untouched. For a browser from `connect()`, launch it with `raw()` on those channels and call `camoufox.humanize.attach_custom(browser, humanize)`. Over a network each event is a round trip, so the launcher warns (`humanize_custom_remote`). `launch_server()` refuses `custom()`.
 
 # Building the browser
@@ -828,7 +805,6 @@ flowchart TD
 | Part | Licence |
 |---|---|
 | The browser (`browser/`: patches, additions, settings, build system) | [MPL-2.0](LICENSE), the licence of the Firefox source it modifies |
-| Vendored Cursory trajectories | LGPLv3-or-later ([`NOTICE`](browser/additions/juggler/input/cursory/NOTICE)) |
 | Python package | MIT ([`python/LICENSE`](python/LICENSE)) |
 | TypeScript package | MIT ([`typescript/LICENSE`](typescript/LICENSE)); includes a port of NumPy's pairwise summation ([notice](typescript/THIRD_PARTY_NOTICES.md)) and depends on [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and [`python-random`](https://www.npmjs.com/package/python-random) |
 
@@ -839,7 +815,6 @@ flowchart TD
 | [LibreWolf](https://gitlab.com/librewolf-community/browser/source) | Debloat patches and the original build system |
 | [BetterFox](https://github.com/yokoffing/BetterFox) | Speed and debloat preferences |
 | [Ghostery](https://github.com/ghostery/user-agent-desktop) | Debloat reference ([disable onboarding](browser/patches/ghostery/Disable-Onboarding-Messages.patch)) |
-| [Vinyzu/cursory](https://github.com/Vinyzu/cursory) | The recorded human mouse movements behind `humanize=True`, vendored via [cursory-js](https://github.com/JWriter20/cursory-js) |
-| [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor) | The Bézier cursor Camoufox used before Cursory |
+| [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor) | The Bézier cursor an earlier Camoufox browser drew |
 | [scrapfly/fingerprint-generator](https://github.com/scrapfly/fingerprint-generator) (fpgen) | The device distribution identities are drawn from |
 | [CreepJS](https://github.com/abrahamjuliot/creepjs), [Browserleaks](https://browserleaks.com), [BrowserScan](https://www.browserscan.net/) | Leak testing |

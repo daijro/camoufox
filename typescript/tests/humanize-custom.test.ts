@@ -1,6 +1,6 @@
 /**
- * custom() humanize engines: the factory, the launch config, the seeded streams
- * (parity with the browser's), the page wrappers and play()'s pacing. The twin of
+ * custom() humanize engines: the factory, the seeded streams (parity with the
+ * Python launcher's), the page wrappers and play()'s pacing. The twin of
  * python/tests/test_humanize_custom.py, against the same fake page and the same
  * recorded sequence, browser/tests/humanize/custom-sequence.json.
  */
@@ -9,17 +9,12 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { attachCustom, validateSteps } from "../src/_humanize_custom.js";
-import { HumanizeEngineUnavailable } from "../src/exceptions.js";
 import {
-	auto,
 	CHANNELS,
 	type CustomEngine,
 	channelStream,
 	custom,
 	customEngines,
-	engine,
-	humanizeConfig,
-	type Manifest,
 	normalize,
 	raw,
 	SeededRng,
@@ -33,14 +28,13 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BROWSER = path.resolve(HERE, "..", "..", "browser");
 const json = (...parts: string[]) =>
 	JSON.parse(fs.readFileSync(path.join(BROWSER, ...parts), "utf-8"));
-const BASE_MANIFEST: Manifest = json("settings", "humanize-engines.json");
 const VECTORS = json("tests", "humanize", "rng-vectors.json");
 const SEQUENCE = json("tests", "humanize", "custom-sequence.json");
 
 const noop: CustomEngine = () => undefined;
 
 describe("streams", () => {
-	it("gives the reference outputs of rng.test.mjs", () => {
+	it("gives the reference outputs", () => {
 		expect(splitmix64(0n)).toBe(0xe220a8397b1dcdafn);
 		expect(splitmix64(0x9e3779b97f4a7c15n)).toBe(0x6e789e6aa1b965f4n);
 		const rng = SeededRng(0);
@@ -49,23 +43,7 @@ describe("streams", () => {
 		]);
 	});
 
-	it("derives the channel streams as the browser pins them", () => {
-		const source = fs.readFileSync(
-			path.join(BROWSER, "tests", "juggler", "rng.test.mjs"),
-			"utf-8",
-		);
-		const body = source.match(/const PINNED = \{([^}]*)\}/)?.[1] ?? "";
-		const pinned = Object.fromEntries(
-			[...body.matchAll(/(\w+): (\d+)/g)].map((m) => [m[1], Number(m[2])]),
-		);
-		expect(Object.keys(pinned).sort()).toEqual([...CHANNELS].sort());
-		for (const channel of CHANNELS)
-			expect(Math.round(channelStream(1234, channel)() * 2 ** 32)).toBe(
-				pinned[channel],
-			);
-	});
-
-	it("is the browser's draw for draw", () => {
+	it("matches the pinned vectors draw for draw", () => {
 		for (const [seed, value] of VECTORS.splitmix64)
 			expect(splitmix64(BigInt(seed))).toBe(BigInt(value));
 		for (const entry of VECTORS.streams)
@@ -88,123 +66,24 @@ describe("streams", () => {
 describe("factory and config", () => {
 	it("custom() takes a function", () => {
 		expect(() => custom(42 as any)).toThrow("custom() takes the function");
-		expect(() => humanizeConfig({ mouse: "custom" }, BASE_MANIFEST)).toThrow(
+		expect(() => normalize({ mouse: "custom" })).toThrow(
 			"needs its function, as custom(fn)",
 		);
 		expect(() =>
-			humanizeConfig({ mouse: engine("custom") }, BASE_MANIFEST),
-		).toThrow("needs its function");
-		expect(() =>
-			humanizeConfig(
-				{ mouse: { ...custom(noop), options: { speed: 1 } } },
-				BASE_MANIFEST,
-			),
+			normalize({ mouse: { ...custom(noop), options: { speed: 1 } } }),
 		).toThrow("custom() takes no options");
 		expect(customEngines({ mouse: custom(noop), keyboard: raw() })).toEqual({
 			mouse: noop,
 		});
-		expect(customEngines(true)).toEqual({});
+		expect(customEngines(null)).toEqual({});
 	});
 
-	it("a channel set to null is refused; only an omitted one is auto", () => {
+	it("a channel set to null is refused; only an omitted one is raw", () => {
 		expect(() => normalize({ mouse: null })).toThrow(
-			'humanize["mouse"] must be an engine',
+			'humanize["mouse"] must be raw() or custom(fn)',
 		);
-		expect(normalize({}).engines.mouse.engine).toBe("auto");
+		expect(normalize({}).engines.mouse.engine).toBe("raw");
 		expect(normalize({ seed: null }).seed).toBeUndefined();
-	});
-
-	it("custom channels run raw in the browser", () => {
-		expect(
-			humanizeConfig(
-				{
-					mouse: custom(noop),
-					keyboard: custom(noop),
-					scroll: auto(),
-					seed: 5,
-				},
-				BASE_MANIFEST,
-			),
-		).toEqual({
-			humanize: true,
-			"humanize:mouse": "raw",
-			"humanize:mouse:internal": "auto",
-			"humanize:keyboard": "raw",
-			"humanize:scroll": "auto",
-			"humanize:seed": "5",
-		});
-		// Only a custom mouse writes mouse:internal.
-		expect(
-			humanizeConfig(
-				{ keyboard: custom(noop), scroll: custom(noop) },
-				BASE_MANIFEST,
-			),
-		).toEqual({
-			humanize: true,
-			"humanize:mouse": "auto",
-			"humanize:keyboard": "raw",
-			"humanize:scroll": "raw",
-		});
-		// Every channel custom: the browser humanizes nothing itself.
-		const config = humanizeConfig(
-			Object.fromEntries(CHANNELS.map((c) => [c, custom(noop)])),
-			BASE_MANIFEST,
-		);
-		expect(config.humanize).toBe(false);
-		expect(config["humanize:mouse:internal"]).toBe("auto");
-	});
-
-	it("a custom mouse does not teleport a cursor-moving scroll", async () => {
-		const manifest: Manifest = {
-			...BASE_MANIFEST,
-			scroll: [...(BASE_MANIFEST.scroll ?? []), "fancy"],
-			engines: { ...BASE_MANIFEST.engines, fancy: { movesCursor: true } },
-		};
-		const jump = async (humanize: Record<string, unknown>) =>
-			(
-				await warnings.recordWarnings(async () =>
-					humanizeConfig(humanize, manifest),
-				)
-			).warnings.some((w) => w.message.includes("single jump"));
-		expect(await jump({ mouse: custom(noop), scroll: engine("fancy") })).toBe(
-			false,
-		);
-		expect(await jump({ mouse: raw(), scroll: engine("fancy") })).toBe(true);
-	});
-
-	it("goes with raw() on a build without the manifest", () => {
-		expect(
-			humanizeConfig(
-				Object.fromEntries(CHANNELS.map((c) => [c, custom(noop)])),
-				null,
-			),
-		).toEqual({});
-		expect(
-			humanizeConfig(
-				{ mouse: custom(noop), keyboard: raw(), scroll: raw() },
-				null,
-			),
-		).toEqual({});
-		expect(() => humanizeConfig({ mouse: custom(noop) }, null)).toThrow(
-			HumanizeEngineUnavailable,
-		);
-	});
-
-	it("names what a build does not have", () => {
-		const unavailable = (() => {
-			try {
-				humanizeConfig({ mouse: engine("nope") }, BASE_MANIFEST);
-			} catch (error) {
-				return error as HumanizeEngineUnavailable;
-			}
-		})();
-		expect(unavailable).toBeInstanceOf(HumanizeEngineUnavailable);
-		expect(unavailable?.channel).toBe("mouse");
-		expect(unavailable?.engine).toBe("nope");
-		expect(unavailable?.available).toEqual(BASE_MANIFEST.mouse);
-		expect(unavailable?.message).toContain(
-			"humanize mouse: nope is not available in this build; available: ",
-		);
 	});
 
 	it("NewBrowser attaches the engines to what it launched", async () => {
@@ -228,7 +107,7 @@ describe("factory and config", () => {
 		await expect(
 			NewBrowser({ launch } as any, {
 				from_options: { headless: true },
-				humanize: { mouse: engine("custom") },
+				humanize: { mouse: "custom" },
 			}),
 		).rejects.toThrow("needs its function");
 		expect(launch).not.toHaveBeenCalled();

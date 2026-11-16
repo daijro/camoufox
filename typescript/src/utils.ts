@@ -54,11 +54,7 @@ import {
 	hostGpu,
 	setWebgpu,
 } from "./host_rendering.js";
-import {
-	type HumanizeSetting,
-	humanizeConfig,
-	type Manifest,
-} from "./humanize.js";
+import { type HumanizeSetting, normalize } from "./humanize.js";
 import {
 	type ProxyConfig,
 	ProxyHelper,
@@ -1577,7 +1573,7 @@ export interface LaunchOptions {
 	geoip?: string | boolean;
 	/** Name of the GeoIP database to use (e.g. "GeoIP AIO by daijro"). */
 	geoip_db?: string;
-	/** Humanize input per channel: `true`, a max cursor duration, or `{ mouse, keyboard, scroll, seed }`. */
+	/** Driver-side humanization per channel, `{ mouse, keyboard, scroll, seed }` of raw() or custom(fn). The browser never humanizes input itself. */
 	humanize?: HumanizeSetting;
 	/** Locale(s) to use. The first listed locale is used for the Intl API. */
 	locale?: string | string[];
@@ -2204,16 +2200,9 @@ export async function launchOptions({
 	// it. setInto leaves an explicit caller value alone.
 	setInto(config, "voices:blockIfNotDefined", true);
 
-	const humanizeManifest = executable_path
-		? buildFile(executable_path, "humanize-engines.json")
-		: utilsDeps.getPath("humanize-engines.json");
-	const manifest: Manifest | undefined = fs.existsSync(humanizeManifest)
-		? JSON.parse(fs.readFileSync(humanizeManifest, "utf8"))
-		: undefined;
-	for (const [key, value] of Object.entries(
-		humanizeConfig(humanize, manifest, i_know_what_im_doing),
-	))
-		setInto(config, key, value);
+	// humanize runs in the driver (_humanize_custom.ts): checked here, and
+	// nothing about it reaches the browser's config.
+	normalize(humanize);
 
 	// Enable the main world context creation
 	if (main_world_eval) {
