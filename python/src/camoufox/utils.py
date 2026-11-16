@@ -1537,7 +1537,7 @@ def launch_options(
     if custom_fonts_only:
         firefox_user_prefs['gfx.bundled-fonts.activate'] = 0
         if fonts:
-            LeakWarning.warn('custom_fonts_only')
+            LeakWarning.warn('custom_fonts_only', i_know_what_im_doing)
         else:
             raise ValueError('No custom fonts were passed, but `custom_fonts_only` is enabled.')
     elif not _user_set_fonts or not config.get('fonts'):
