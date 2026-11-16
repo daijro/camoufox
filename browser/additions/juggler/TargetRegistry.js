@@ -18,7 +18,7 @@ const {setTimeout, clearTimeout} = ChromeUtils.importESModule("resource://gre/mo
 // The per-ack deadline in MouseDispatch.js covers the await that has actually
 // caused all four shipped deadlocks, and apz-repaints-flushed and
 // juggler-drag-finalized share it, but other unbounded waits are reachable
-// from a single slot -- TabSwitchDone below, the drag path's dragover waits,
+// from a single slot -- TabSwitchDone, the drag path's dragover waits,
 // and the cross-process dispatchDragEvent sends all have the same shape. None
 // of them has failed yet. Bounding only the wait that has already bitten us
 // is the posture that produced those four fixes, so bound the slot itself too.
@@ -670,11 +670,6 @@ export class PageTarget {
     // to disallow concurrent tab switching.
     const result = globalTabAndWindowActivationChain.then(async () => {
       this._window.focus();
-      if (tabBrowser.selectedTab !== this._tab) {
-        const promise = helper.awaitEvent(ownerWindow, 'TabSwitchDone');
-        tabBrowser.selectedTab = this._tab;
-        await promise;
-      }
       const notificationsPopup = muteNotificationsPopup ? this._linkedBrowser?.ownerDocument.getElementById('notification-popup') : null;
       notificationsPopup?.style.setProperty('pointer-events', 'none');
       try {
@@ -682,13 +677,29 @@ export class PageTarget {
         const expired = new Promise(resolve => {
           timer = setTimeout(() => resolve(kSlotExpired), kActivationSlotBudgetMs);
         });
+        // The tab switch is inside the budget: a TabSwitchDone that never
+        // fires must not wedge the chain, and its listener goes with the slot.
+        let onSwitched;
+        const run = async () => {
+          if (tabBrowser.selectedTab !== this._tab) {
+            const switched = new Promise(resolve => {
+              onSwitched = () => resolve();
+              ownerWindow.addEventListener('TabSwitchDone', onSwitched, {once: true});
+            });
+            tabBrowser.selectedTab = this._tab;
+            await switched;
+          }
+          return callback();
+        };
         try {
-          if (await Promise.race([callback(), expired]) === kSlotExpired) {
+          if (await Promise.race([run(), expired]) === kSlotExpired) {
             dump(`[juggler] WARN activation-chain slot exceeded ` +
                  `${kActivationSlotBudgetMs}ms; advancing the chain without it\n`);
           }
         } finally {
           clearTimeout(timer);
+          if (onSwitched)
+            ownerWindow.removeEventListener('TabSwitchDone', onSwitched);
         }
       } finally {
         notificationsPopup?.style.removeProperty('pointer-events');
