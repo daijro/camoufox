@@ -43,3 +43,9 @@ def test_make_run_passes_valid_json_with_debug(tmp_path, config, expected):
     proc = _make_run(tmp_path, config)
     assert proc.returncode == 0, proc.stderr
     assert json.loads(proc.stdout.splitlines()[-1]) == expected
+
+
+def test_make_run_stops_on_a_config_that_is_not_json(tmp_path):
+    proc = _make_run(tmp_path, "{")
+    assert proc.returncode != 0
+    assert proc.stdout == ""  # mach never ran
