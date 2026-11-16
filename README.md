@@ -253,12 +253,12 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
   </tr>     
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://mangoproxy.com/?utm_source=github&utm_medium=partner&utm_campaign=daijro" target="_blank">
+      <a href="https://mangoproxy.com/prod-isp-static/?utm_source=daijro&utm_medium=partner&utm_campaign=daijro_github" target="_blank">
         <img width="380" alt="mangoproxy" src="https://github.com/user-attachments/assets/c2cd3ddf-c940-4906-be1b-5505dcdb6e06"/>
       </a>
     </td>
     <td valign="middle">
-      <a href="https://mangoproxy.com/?utm_source=github&utm_medium=partner&utm_campaign=daijro">MangoProxy</a> is a Residential, ISP, Mobile and Datacenter proxy service designed for professional tasks where stability, speed, and anonymity matter.<br>
+      <a href="https://mangoproxy.com/prod-isp-static/?utm_source=daijro&utm_medium=partner&utm_campaign=daijro_github">MangoProxy</a> is a Residential, ISP, Mobile and Datacenter proxy service designed for professional tasks where stability, speed, and anonymity matter.<br>
       Use code DAIJRO for 8% OFF ISP Static Proxies
     </td>
   </tr>
