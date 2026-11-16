@@ -680,6 +680,7 @@ export class PageTarget {
         // The tab switch is inside the budget: a TabSwitchDone that never
         // fires must not wedge the chain, and its listener goes with the slot.
         let onSwitched;
+        let entered = false;
         const run = async () => {
           if (tabBrowser.selectedTab !== this._tab) {
             const switched = new Promise(resolve => {
@@ -689,12 +690,17 @@ export class PageTarget {
             tabBrowser.selectedTab = this._tab;
             await switched;
           }
+          entered = true;
           return callback();
         };
         try {
           if (await Promise.race([run(), expired]) === kSlotExpired) {
             dump(`[juggler] WARN activation-chain slot exceeded ` +
                  `${kActivationSlotBudgetMs}ms; advancing the chain without it\n`);
+            // The command never ran, so it must not report success; the chain
+            // still advances (it swallows this rejection below).
+            if (!entered)
+              throw new Error(`Tab switch did not complete within ${kActivationSlotBudgetMs}ms`);
           }
         } finally {
           clearTimeout(timer);
