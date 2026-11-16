@@ -24,7 +24,9 @@ any refresh). Stock dispatches each move at the refresh tick itself: 90-91% of
 its moves landed within 2.5 ms of a requestAnimationFrame callback, against
 19-43% of synthesized ones, which landed anywhere in the frame. So a humanized
 move must deliver its points at refresh ticks, as the page's own rAF measures
-them, with a median gap of one frame.
+them. Gaps are whole frames: one while the hand moves, more where the
+recording paused (Cursory replays recorded hands, hesitations included), and
+never less than a frame, which only the generator's own clock gives.
 
 Run against a specific build:
     CAMOUFOX_EXECUTABLE_PATH=/path/to/camoufox-bin python browser/tests/playwright/patches/humanize-mouse-trajectory.py
@@ -75,8 +77,15 @@ RECORDER = """
 # stock's 90%, far above the 19-43% of moves played on the generator's clock.
 TICK_MS = 2.5
 AT_TICK = 0.75
-# Most gaps of a move are exactly one frame; a pause in the hand is whole frames.
-MEDIAN_FRAMES = (0.85, 1.25)
+# A gap under a frame is the generator's clock; a pause in the hand is whole
+# frames. A median of about one frame failed Cursory's hesitant recordings
+# (CI, 2026-11-14..16: medians 25.5-58.5 ms against a 17.1 ms frame, every gap
+# a whole frame, 28-50% of them exactly one). Delivery that skipped frames
+# would have no one-frame gaps.
+SHORT_FRAME = 0.85
+MAX_SHORT = 0.1
+ONE_FRAME = (0.85, 1.25)
+MIN_ONE_FRAME = 0.2
 
 # The default humanize ceiling is 1.5s; anything under 50ms for a ~1200px move
 # means the trajectory is being emitted as fast as the event loop allows.
@@ -232,13 +241,16 @@ async def main() -> int:
         print(f"  FAIL: expected {MIN_DURATION_MS}-{MAX_DURATION_MS}ms, got {duration}ms")
     at_tick = sum(1 for m in humanized if _tick_distance(m[2], frames) <= TICK_MS)
     share = at_tick / len(humanized) if humanized else 0
-    median = statistics.median(gaps) if gaps else 0
-    if share >= AT_TICK and MEDIAN_FRAMES[0] * frame_ms <= median <= MEDIAN_FRAMES[1] * frame_ms:
-        print(f"  PASS: delivered at refresh ticks ({share:.0%}), median gap {median}ms")
+    short = sum(1 for g in gaps if g < SHORT_FRAME * frame_ms) / len(gaps) if gaps else 1
+    one = sum(1 for g in gaps if ONE_FRAME[0] * frame_ms <= g <= ONE_FRAME[1] * frame_ms) / len(gaps) if gaps else 0
+    if share >= AT_TICK and short <= MAX_SHORT and one >= MIN_ONE_FRAME:
+        print(f"  PASS: delivered at refresh ticks ({share:.0%}); {one:.0%} of gaps one frame, "
+              f"{short:.0%} under one")
     else:
         passed = False
         print(f"  FAIL: {share:.0%} of mousemoves within {TICK_MS}ms of a refresh tick "
-              f"(need {AT_TICK:.0%}), median gap {median}ms against a {frame_ms:.1f}ms frame")
+              f"(need {AT_TICK:.0%}); {one:.0%} of gaps one {frame_ms:.1f}ms frame (need "
+              f"{MIN_ONE_FRAME:.0%}), {short:.0%} under one (at most {MAX_SHORT:.0%})")
 
     plain, plain_dest, _ = await _collect_moves(False)
     print("\n=== humanize off ===")
