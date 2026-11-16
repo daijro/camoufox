@@ -46,6 +46,7 @@
       <strong>Special codes for Camoufox users:</strong><br>
       • <code>CAMOUFOX35</code> - 35% off to Mobile and Residential Proxies<br>
       • <code>CAMOUFOX40</code> - 40% off to ISP (Static) Proxies<br>
+      • <code>CAMOUFOX2X</code> - 2X traffic for Black Friday<br>
       Check Nodemaven's new GitHub for more web scraping and automation solutions - https://github.com/nodemaven
     </td>
   </tr>
@@ -212,6 +213,26 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
 Camoufox is intended to be used with rotating proxies (preferably residential IPs). Check out these providers:
 
 <table>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://www.rapidproxy.io/?ref=daijro" target="_blank">
+        <img width="380" alt="rapidproxy" src="https://github.com/user-attachments/assets/140337e0-50d5-452d-8a31-86c6b1761e47"/>
+      </a>
+    </td>
+    <td valign="middle">
+      <a href="https://www.rapidproxy.io/?ref=daijro">RapidProxy</a> - Power Your Data with Premium Proxies.<br>
+      🎁 Try proxies for free  + Use code <strong>RAPID10</strong> for <strong>10% OFF</strong>
+      <br>
+      <strong>Why Choose RapidProxy?</strong><br>
+      • 🌍 90M+ IPs in 200+ countries & regions<br>
+      • ♾️ No expiration on traffic — use anytime, no pressure<br>
+      • 🔥 Unlimited concurrency for maximum performance<br>
+      • 💰 Starting from just &#36;0.65/GB — built for scale<br>
+      • 📍 City-level targeting for precise geo access<br>
+      • 🔄 Flexible session control tailored to your needs<br>
+      Don’t miss out — start your free trial today and experience fast, stable, and scalable proxy performance with <a href="https://www.rapidproxy.io/?ref=daijro">RapidProxy</a>.
+    </td>
+  </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
       <a href="https://www.swiftproxy.net/?ref=daijro" target="_blank">
