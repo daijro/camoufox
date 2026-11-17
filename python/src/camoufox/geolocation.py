@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 from platformdirs import user_cache_dir
-from yaml import CDumper, CLoader
+
+import yaml
+
+if yaml.__with_libyaml__:
+    from yaml import CDumper, CLoader
+else:
+    from yaml import Dumper as CDumper, Loader as CLoader
+
 from yaml import dump as yaml_dump
 from yaml import load as yaml_load
 

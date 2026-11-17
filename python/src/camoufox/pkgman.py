@@ -26,7 +26,15 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 from typing_extensions import TypeAlias
-from yaml import CLoader, load
+
+import yaml
+
+if yaml.__with_libyaml__:
+    from yaml import CLoader
+else:
+    from yaml import Loader as CLoader
+
+from yaml import load
 
 from .__version__ import CONSTRAINTS
 from .exceptions import (
