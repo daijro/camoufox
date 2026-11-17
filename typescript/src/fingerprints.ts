@@ -15,7 +15,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { generate, InvalidConstraints } from "fpgen-js";
 import * as random from "python-random";
-import { hardwareCpu } from "./coherence.js";
+import {
+	hardwareCpu,
+	INTEL_MAC_DGPU_CORES,
+	INTEL_MAC_IGP_CORES,
+} from "./coherence.js";
 import {
 	supported as cpuAffinitySupported,
 	hostCoreCount,
@@ -902,25 +906,51 @@ export interface HostCpu {
  * PLAUSIBLE_CORE_COUNTS -- or the fingerprint's own value (snapped, capped by
  * the host) when the browser can be pinned to that many cores.
  *
+ * An Intel Mac's GPU bounds the counts beside it: no Intel iGPU Mac reports
+ * more than 16 threads, and the 2019 Mac Pro tops the dGPU table at 56. A
+ * host past its GPU's table would otherwise ship a count the launch then
+ * reads as incoherent with that GPU, and the GPU is the value that gets
+ * dropped -- a bundled macOS preset loses its recorded GPU on a many-core
+ * host (daijro/camoufox#1090). Apple Silicon needs nothing here: the
+ * apple-silicon-cores repair already snaps the count to the GPU.
+ *
  * @param canPin false when nothing will pin the browser (launchServer, or
  *   launchOptions used directly); undefined/null: whatever the host supports.
  * @param host overrides for the host probes (tests).
+ * @param targetOs the launch's OS key; the GPU bound applies to macOS only.
  */
 export function fixHardwareConcurrency(
 	config: Config,
 	canPin?: boolean | null,
 	host: HostCpu = {},
+	targetOs?: string | null,
 ): void {
+	// The GPU's core-count table, when the machine is an Intel Mac.
+	let machineCores: ReadonlySet<number> | null = null;
+	if (targetOs === "mac" || targetOs === "macos") {
+		const renderer = String(config["webGl:renderer"] ?? "");
+		if (renderer && !renderer.includes("Apple M")) {
+			machineCores = renderer.includes("Intel")
+				? INTEL_MAC_IGP_CORES
+				: INTEL_MAC_DGPU_CORES;
+		}
+	}
+	const table = (cap: number): number[] => {
+		const plausible = PLAUSIBLE_CORE_COUNTS.filter((c) => c <= cap);
+		if (!machineCores)
+			return plausible.length ? plausible : [PLAUSIBLE_CORE_COUNTS[0]];
+		const both = plausible.filter((c) => machineCores.has(c));
+		if (both.length) return both;
+		return plausible.length ? plausible : [PLAUSIBLE_CORE_COUNTS[0]];
+	};
+
 	const n = "cpuCount" in host ? host.cpuCount : hostCpuCount();
 	if (!n) return;
 	const pinnable =
 		(host.canPinHost ?? cpuAffinitySupported()) && canPin !== false;
 
 	const cap = Math.trunc(n);
-	const hostAllowed = PLAUSIBLE_CORE_COUNTS.filter((c) => c <= cap);
-	const hostValue = hostAllowed.length
-		? hostAllowed[hostAllowed.length - 1]
-		: PLAUSIBLE_CORE_COUNTS[0];
+	const hostValue = table(cap)[table(cap).length - 1];
 
 	let drawn = config["navigator.hardwareConcurrency"];
 	if (typeof drawn === "boolean") drawn = Number(drawn); // a Python bool is an int
@@ -930,11 +960,8 @@ export function fixHardwareConcurrency(
 		Number.isInteger(drawn) &&
 		drawn >= 1
 	) {
-		const target = Math.min(drawn, cap);
-		const allowed = PLAUSIBLE_CORE_COUNTS.filter((c) => c <= target);
-		config["navigator.hardwareConcurrency"] = allowed.length
-			? allowed[allowed.length - 1]
-			: PLAUSIBLE_CORE_COUNTS[0];
+		const allowed = table(Math.min(drawn, cap));
+		config["navigator.hardwareConcurrency"] = allowed[allowed.length - 1];
 		return;
 	}
 	config["navigator.hardwareConcurrency"] = hostValue;

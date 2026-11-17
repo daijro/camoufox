@@ -8,6 +8,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { Generator } from "fpgen-js";
 import { describe, expect, it, vi } from "vitest";
+import { INTEL_MAC_IGP_CORES } from "../src/coherence.js";
 import { InvalidIP } from "../src/exceptions.js";
 import {
 	appVersionFromUserAgent,
@@ -313,6 +314,38 @@ describe("media devices", () => {
 });
 
 describe("fixHardwareConcurrency", () => {
+	it("bounds a Mac's draw to cores a Mac with its GPU has", () => {
+		// A macOS identity whose GPU no Intel-Mac IGP ships beside the kept
+		// count has its GPU dropped (daijro/camoufox#1090), so the count snaps
+		// to the GPU's table. A dGPU Intel Mac goes to 56 threads (the 2019
+		// Mac Pro), so its table still leaves 32 on a 64-core host.
+		const host = { cpuCount: 32, canPinHost: true };
+		for (const drawn of [12, 6]) {
+			const c = {
+				"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
+				"navigator.hardwareConcurrency": drawn,
+			};
+			fixHardwareConcurrency(c, undefined, host, "macos");
+			expect([...INTEL_MAC_IGP_CORES]).toContain(
+				c["navigator.hardwareConcurrency"],
+			);
+		}
+		const dgpu = {
+			"webGl:renderer": "Radeon Pro 5300M, or similar",
+			"navigator.hardwareConcurrency": 32,
+		};
+		fixHardwareConcurrency(dgpu, undefined, host, "macos");
+		expect(dgpu["navigator.hardwareConcurrency"]).toBe(32);
+
+		// Off macOS the GPU does not bound the count.
+		const lin = {
+			"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
+			"navigator.hardwareConcurrency": 12,
+		};
+		fixHardwareConcurrency(lin, undefined, host, "linux");
+		expect(lin["navigator.hardwareConcurrency"]).toBe(12);
+	});
+
 	it("keeps a plausible draw the host can be pinned to", () => {
 		for (const drawn of [4, 6, 8, 10, 12, 14, 16]) {
 			const c = { "navigator.hardwareConcurrency": drawn };

@@ -316,9 +316,12 @@ class TestIntelMacDraws:
         drawn = {sample_webgl_for_screen("mac", 2560, 1440, seed=s, cores=20)["webGl:renderer"] for s in range(300)}
         assert not any("Intel" in renderer for renderer in drawn), drawn
 
-    def test_a_preset_gpu_is_checked_against_the_host_core_count(self, monkeypatch):
+    def test_a_preset_gpu_survives_a_host_core_count_no_mac_with_it_reports(self, monkeypatch):
         """A launch replaces the preset's core count with the host's, after the
-        preset's GPU has been read: the GPU has to fit the count that ships."""
+        preset's GPU has been read. On a host whose count no Intel iGPU Mac
+        reports, the count is the value that yields (16 is the most such a Mac
+        claims), not the GPU -- the old order dropped the GPU and redrew it
+        from the generic pool (daijro/camoufox#1090)."""
         preset = dict(fp.load_presets("150")["presets"]["macos"][0])
         preset["navigator"] = {**preset["navigator"], "hardwareConcurrency": 8}
         preset["screen"] = {**preset["screen"], "width": 1440, "height": 900, "availWidth": 1440,
@@ -327,8 +330,8 @@ class TestIntelMacDraws:
                            "unmaskedRenderer": "Intel(R) HD Graphics 400, or similar"}
         monkeypatch.setattr(fp, "host_cpu_count", lambda: 20)
         config = launch(os="macos", fingerprint_preset=preset)
-        assert config["navigator.hardwareConcurrency"] == 20
-        assert "Intel" not in config["webGl:renderer"]
+        assert config["navigator.hardwareConcurrency"] == 16
+        assert config["webGl:renderer"] == preset["webgl"]["unmaskedRenderer"]
         assert coherence.validate(config, "mac") == []
 
 

@@ -1905,7 +1905,7 @@ export async function launchOptions({
 	// impossible-geometry tells, unless the user is driving these themselves.
 	if (!userSetArch) utilsDeps.fixNavigatorArch(config, targetOs);
 	if (!userSetNavigator)
-		utilsDeps.fixHardwareConcurrency(config, Boolean(pin_cpu_cores));
+		utilsDeps.fixHardwareConcurrency(config, Boolean(pin_cpu_cores), {}, targetOs);
 	if (!userSetScreenWindow) {
 		// Lift netbook-era geometry to something current hardware reports,
 		// before the display clamp below so a genuinely small real monitor still

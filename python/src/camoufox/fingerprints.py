@@ -769,7 +769,9 @@ def host_cpu_count() -> Optional[int]:
 PLAUSIBLE_CORE_COUNTS = tuple(LAUNCHER_CONSTANTS['plausibleCoreCounts'])
 
 
-def fix_hardware_concurrency(config: Dict[str, Any], can_pin: Optional[bool] = None) -> None:
+def fix_hardware_concurrency(
+    config: Dict[str, Any], can_pin: Optional[bool] = None, target_os: Optional[str] = None
+) -> None:
     """navigator.hardwareConcurrency = the host's parallelism, snapped DOWN
     into PLAUSIBLE_CORE_COUNTS.
 
@@ -793,6 +795,28 @@ def fix_hardware_concurrency(config: Dict[str, Any], can_pin: Optional[bool] = N
     launcher value. A caller that sets navigator.hardwareConcurrency
     themselves is left alone (see the _user_set_navigator guard).
     """
+    # An Intel Mac's GPU bounds the counts beside it: no Intel iGPU Mac
+    # reports more than 16 threads, and the 2019 Mac Pro tops the dGPU table
+    # at 56. A host past its GPU's table would otherwise ship a count the
+    # launch then reads as incoherent with that GPU, and the GPU is the value
+    # that gets dropped -- a bundled macOS preset loses its recorded GPU on a
+    # many-core host (daijro/camoufox#1090). Apple Silicon needs nothing here:
+    # the apple-silicon-cores repair already snaps the count to the GPU.
+    machine_cores: Optional[FrozenSet[int]] = None
+    if target_os in ('mac', 'macos'):
+        from . import coherence as _coh
+
+        renderer = str(config.get('webGl:renderer') or '')
+        if renderer and 'Apple M' not in renderer:
+            machine_cores = (
+                _coh.INTEL_MAC_IGP_CORES if 'Intel' in renderer else _coh.INTEL_MAC_DGPU_CORES
+            )
+
+    def table(cap: int) -> List[int]:
+        plausible = [c for c in PLAUSIBLE_CORE_COUNTS if c <= cap]
+        if machine_cores is None:
+            return plausible or [PLAUSIBLE_CORE_COUNTS[0]]
+        return sorted(set(plausible) & machine_cores) or plausible or [PLAUSIBLE_CORE_COUNTS[0]]
     n = host_cpu_count()
     if not n:
         return
@@ -810,20 +834,17 @@ def fix_hardware_concurrency(config: Dict[str, Any], can_pin: Optional[bool] = N
     pinnable = _can_pin() and can_pin is not False
 
     cap = int(n)
-    host_allowed = [c for c in PLAUSIBLE_CORE_COUNTS if c <= cap]
-    host_value = host_allowed[-1] if host_allowed else PLAUSIBLE_CORE_COUNTS[0]
+    host_allowed = table(cap)
+    host_value = host_allowed[-1]
 
     drawn = config.get('navigator.hardwareConcurrency')
     if pinnable and isinstance(drawn, int) and drawn >= 1:
         # The draw is kept for diversity, snapped down into the table and capped
         # by the host so pinning can honour it.
-        target = min(drawn, cap)
-        allowed = [c for c in PLAUSIBLE_CORE_COUNTS if c <= target]
+        allowed = table(min(drawn, cap))
         # The floor is the table's even on a 1-3 core host: reporting the host's
         # own 1, 2 or 3 would contradict the drawn GPU (see the table above).
-        config['navigator.hardwareConcurrency'] = (
-            allowed[-1] if allowed else PLAUSIBLE_CORE_COUNTS[0]
-        )
+        config['navigator.hardwareConcurrency'] = allowed[-1]
         return
     config['navigator.hardwareConcurrency'] = host_value
 
