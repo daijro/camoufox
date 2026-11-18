@@ -99,6 +99,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "webdriver-bidi-tabs",
     ),
     "parity": (
+        "bare-launch-host-fonts",
         "certificate-revocations",
         "contentaccessible-parity",
         "css-device-size-fractional",
