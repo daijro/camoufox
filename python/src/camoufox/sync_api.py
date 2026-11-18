@@ -10,7 +10,7 @@ from typing_extensions import Literal
 
 from camoufox.virtdisplay import VirtualDisplay
 
-from . import _humanize_custom, driver_defaults
+from . import _humanize_playwright, driver_defaults
 from .fingerprints import generate_context_fingerprint
 from .ip import ExitGeo, Proxy, proxy_exit_geo
 from .utils import (
@@ -112,9 +112,9 @@ def NewBrowser(
         **kwargs:
             All other keyword arguments passed to `launch_options()`.
     """
-    # custom() humanize engines run in this process: checked before the launch,
+    # humanize runs in this process: checked before the launch,
     # attached to the browser after it (also with from_options).
-    _humanize_custom.check(kwargs.get('humanize'), is_async=False)
+    _humanize_playwright.check(kwargs.get('humanize'), is_async=False)
     virtual_display, headless = start_virtual_display(headless, debug, kwargs)
     # Everything after the display exists can fail (bad proxy, missing binary,
     # unsatisfiable constraints) before sync/async_attach_vd wires kill() into
@@ -122,7 +122,7 @@ def NewBrowser(
     # launch.
     try:
         browser, os = _launch(playwright, virtual_display, headless, from_options, persistent_context, debug, kwargs)
-        return _humanize_custom.attach(
+        return _humanize_playwright.attach(
             browser, kwargs.get('humanize'), os, i_know_what_im_doing=kwargs.get('i_know_what_im_doing')
         )
     except BaseException:

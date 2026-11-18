@@ -1212,8 +1212,9 @@ def launch_options(
             If not specified, uses the one chosen with `camoufox set --geoip`, or the default.
         humanize (Optional[Union[bool, dict]]):
             Driver-side humanization. True is `myuri()` on every channel; a dict takes
-            `myuri()`, `custom(fn)` or `raw()` from `camoufox.humanize` per channel (an omitted
-            channel is `myuri()`), e.g. `{"mouse": custom(my_mouse), "scroll": raw(), "seed": 1234}`.
+            `myuri()` or `raw()` from `camoufox.humanize` per channel (an omitted channel is
+            `myuri()`), e.g. `{"mouse": myuri(move=my_move), "scroll": raw(), "seed": 1234}`;
+            `myuri(**parts)` replaces parts of myuri's with your functions.
             The browser never humanizes input itself; each Playwright call is one event.
         locale (Optional[Union[str, List[str]]]):
             Locale(s) to use in Camoufox. The first listed locale will be used for the Intl API.
@@ -1817,7 +1818,7 @@ def launch_options(
     # leaves an explicit caller value alone.
     set_into(config, 'voices:blockIfNotDefined', True)
 
-    # humanize runs in the driver (camoufox._humanize_custom): checked here,
+    # humanize runs in the driver (camoufox._humanize_playwright): checked here,
     # and nothing of it reaches the browser's config.
     normalize_humanize(humanize)
 

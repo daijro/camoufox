@@ -25,6 +25,8 @@ person cannot click it either, and fill() itself needs no click.
 
 from typing import Any
 
+from myuri.page_functions import HIT_TEST_JS
+
 _MARK = '_camoufox_driver_defaults'
 
 
@@ -70,36 +72,10 @@ FILL_NEEDS_CLICK = """(e) => {
   return active !== field && !(field.isContentEditable && field.contains(active));
 }"""
 
-# Why a press at a point of the target would miss it, or null when it lands on
-# the target, its label's control, or the button or link it is in. `at` is
-# [dx, dy] into the target's box (its middle when absent), and a third true
-# entry also misses a disabled target.
-PRESS_MISSES = """(e, at) => {
-  const field = e.closest('label')?.control || e;
-  const target = e.matches('input, textarea, select') ? e : e.closest('button, [role=button], a, [role=link]') || e;
-  if (at?.[2] && (target.matches(':disabled') || target.closest('[aria-disabled="true"]')))
-    return 'element is not enabled';
-  const r = e.getBoundingClientRect();
-  const [x, y] = at ? [r.left + at[0], r.top + at[1]] : [r.left + r.width / 2, r.top + r.height / 2];
-  let hit = e.ownerDocument.elementFromPoint(x, y);
-  while (hit?.shadowRoot) {
-    const inner = hit.shadowRoot.elementFromPoint(x, y);
-    if (!inner || inner === hit)
-      break;
-    hit = inner;
-  }
-  for (let n = hit; n; n = n.parentNode || n.host) {
-    if (n === e || n === target || n === field || n.control === field)
-      return null;
-  }
-  return hit ? '<' + hit.localName + '> intercepts pointer events' : 'element is not at the point';
-}"""
-
-
 async def _click_to_focus(target: Any, evaluate: Any, timeout: Any, force: Any) -> None:
     if await evaluate(FILL_NEEDS_CLICK):
         await target.scroll_into_view_if_needed(timeout=timeout)
-        if await evaluate(PRESS_MISSES) is None:
+        if await evaluate(HIT_TEST_JS) is None:
             await target.click(timeout=timeout, force=force)
 
 
