@@ -719,6 +719,38 @@ rules:
       paste and auto-Shift timing remains only for raw Playwright, and steps
       aside when the engine holds Shift itself.
 
+  - id: humanize-smart-actions-are-myuris
+    title: myuri is the one implementation of humanized input; Camoufox adapts Playwright to it
+    check: automated
+    evidence:
+      - "daijro/camoufox#1000: the launchers carried a second smart click (scroll into view, hit test, retry) beside the one in myuri; it moved into myuri (JWriter20/Myuri#23) and both launchers drive myuri.Actions"
+      - "JWriter20/Myuri#23: Actions takes a host of input calls and page reads, so one implementation drives Playwright in Python and TypeScript"
+    rationale: >-
+      Two copies of the decisions around a click drift, and input built from
+      two drifting copies is a fingerprint. The launchers hold only the host
+      (each event a Playwright input call), the wrappers that route
+      Playwright's methods to myuri, and the timeout and error Playwright's
+      action would give. A page read that decides where to aim or whether a
+      press lands (the hit test, the scroll plan) is myuri's, imported, never
+      written again here.
+
+  - id: humanize-parts-replace-myuris-pieces
+    title: A caller customises humanized input by replacing myuri's parts, with one seeded stream per browser
+    check: manual
+    evidence:
+      - "daijro/camoufox#1000: custom(fn) per channel replaced the whole channel, so a caller who wanted their own scroll lost myuri's clicks; it gave way to myuri(part=fn), with move, press, point, reaches, into_view, wheel, type and key"
+      - "browser/tests/humanize/sequence.json: one seeded scenario plays the same input in both launchers"
+    rationale: >-
+      myuri(part=fn) keeps every other part myuri's, so a replaced scroll still
+      serves myuri's clicks and a replaced move still ends where myuri
+      presses. A part is called with the page, its arguments, default (myuri's
+      part), rng and play; Playwright calls inside it are Playwright's own, so
+      it never recurses into myuri. raw() is Playwright's behaviour: its parts
+      are Playwright's, a move one event and a scroll into view Playwright's.
+      The seed is 32 bits, myuri's Mulberry32, and the browser has one stream
+      that every page and part draws from, so two pages never replay the same
+      draws and Python and TypeScript draw the same numbers.
+
   - id: human-click-timing
     title: Click timing belongs to the person, not the OS; the cursor's stillness before a press is the device's
     check: manual
@@ -734,8 +766,8 @@ rules:
       engine's path ended, held for its drawn hold: Playwright's click moves
       first, and the browser counts that move against the next press's click
       count. Playwright's trial click is no dry run either (it presses, and
-      the page swallows the events), so the wrapper runs its own hit test in
-      the isolated world and plans again on a miss. A click on the target the
+      the page swallows the events), so myuri runs its own hit test in the
+      isolated world and aims again on a miss. A click on the target the
       pointer already rests on presses where it is, and the engine is told
       how long ago the last press was released, so a click within the OS's
       500 ms continues the run as a person's quick clicks do.

@@ -544,7 +544,7 @@ claims the host's OS. Details are in
 
 | Feature | How to use it | Where |
 |---|---|---|
-| Human input: none in the browser. Each Playwright input call is one native event of the identity's OS; humanization is the driver's | `humanize=True` runs myuri in the driver; `custom(fn)` runs your own functions | [Human input](#human-input) |
+| Human input: none in the browser. Each Playwright input call is one native event of the identity's OS; humanization is the driver's | `humanize=True` runs myuri in the driver; `myuri(part=fn)` replaces any of its parts | [Human input](#human-input) |
 | Run code in the page's own world | `main_world_eval=True`, then `page.evaluate("mw:...")` | Juggler |
 | Finish animations at once so Playwright never waits | `config={"instantAnimations": True}` (detectable; warns) | `no-css-animations` patch |
 | Read closed shadow roots | `config={"forceScopeAccess": True}` | `shadow-root-bypass` patch |
@@ -628,53 +628,84 @@ moves, notches and keys a person would, at a person's times
 The `humanize` option picks an engine per channel, run in your own process:
 
 ```python
-from camoufox.humanize import custom, myuri, raw
+from camoufox.humanize import myuri, raw
 
 Camoufox(humanize=True)   # myuri() on every channel
 Camoufox(humanize={"keyboard": myuri(wpm=70), "scroll": raw(), "seed": 1234})
 ```
 
-- `myuri()` is [myuri](https://github.com/JWriter20/Myuri), fitted to recordings of
-  people on each OS and drawn for the launch identity's OS. Both packages depend on
-  it, pinned to the release they were tested with.
-- `custom(fn)` is a function of yours (below), and `raw()` is Playwright as it is.
+- `myuri()` is [myuri](https://github.com/JWriter20/Myuri)'s smart actions, fitted
+  to recordings of people on each OS and drawn for the launch identity's OS: the
+  path, the press, the typing and the wheel turns, and the decisions around a
+  click (scroll the element into view, choose the point, check that the press
+  lands, try again when it does not). Both packages depend on it, pinned to the
+  release they were tested with.
+- `raw()` is Playwright as it is.
 - A channel a dict leaves out is `myuri()`. `humanize=None` or `False`, the
   default, is `raw()` everywhere.
 
 The engine decides when each event happens; the browser decides what each event
 looks like for the identity's OS ([docs/humanize.md](docs/humanize.md)).
 
-### Writing your own engine: `custom(fn)`
+### Replacing a part: `myuri(part=fn)`
 
-A channel can run a function of yours in your own process (Python below; TypeScript in [its README](typescript/README.md#your-own-humanize-engine-customfn)). The function plans the input and plays it through Playwright's own input methods, so the page sees the same trusted events as from any Playwright call. Your code never runs inside the browser. Pass `raw()` for the channels it leaves alone.
+Each piece of myuri is a part you can replace with a function of yours, in your own process (Python below; TypeScript in [its README](typescript/README.md#replacing-a-part)). The rest stay myuri's, so a scroll of your own still serves myuri's clicks, and your move still ends where myuri presses.
 
 ```python
+import asyncio
+
 from camoufox.async_api import AsyncCamoufox
-from camoufox.humanize import custom, raw
+from camoufox.humanize import myuri
 
-async def my_move(page, x, y, *, original, rng, play, click):
-    steps = my_model((x, y), rng)                     # [(t_ms, x, y), ...]
-    await play([("move", sx, sy, t) for t, sx, sy in steps])
-    if click:
-        await original(x, y, delay=90 + 30 * rng())   # press at (x, y), holding 90-120 ms
+async def my_move(page, x, y, *, default, rng, play):
+    await asyncio.sleep(0.1 + 0.2 * rng())            # a pause to look, then myuri's path
+    await default()
 
-async with AsyncCamoufox(humanize={"mouse": custom(my_move), "keyboard": raw(), "scroll": raw(), "seed": 1234}) as browser:
+async def my_into_view(page, locator, *, default, rng, play):
+    await locator.scroll_into_view_if_needed()        # Playwright's own scroll
+    # or: await default() for myuri's wheel turns
+
+async with AsyncCamoufox(humanize={
+    "mouse": myuri(move=my_move),
+    "scroll": myuri(into_view=my_into_view),
+    "keyboard": myuri(wpm=70),
+    "seed": 1234,
+}) as browser:
     page = await browser.new_page()
-    await page.locator("#submit").click()             # my_move plans the move, Playwright clicks
+    await page.set_content('<button id="submit" style="margin-top:3000px">Send</button>')
+    await page.locator("#submit").click()             # my_into_view, then myuri's click after my pause
 ```
 
-| Channel | Called as | For |
-|---|---|---|
-| `mouse` | `fn(page, x, y, *, original, rng, play, click)` with `click` `None` for a move, else `{"button", "click_count", "box"}` | `Mouse.move`/`click`/`dblclick`; `click`, `dblclick`, `hover`, `check`, `uncheck` on a `Page` or `Locator` |
-| `keyboard` | `fn(page, text, *, original, rng, play, kind)` with `kind` `"type"`, `"press"` or `"fill"` | `Keyboard.type`/`press`; `fill`, `type`, `press` on a `Page` or `Locator`, and `Locator.press_sequentially` |
-| `scroll` | `fn(page, target, *, original, rng, play)` with `target` a `Locator` or `(dx, dy)` | `Mouse.wheel`, `Locator.scroll_into_view_if_needed`, and bringing an element that is not in view into view before a click, hover or fill |
+| Channel | Part | Called as | myuri's part |
+|---|---|---|---|
+| `mouse` | `move` | `fn(page, x, y, ...)` | a path from the cursor to (x, y) |
+| | `press` | `fn(page, button, click_count, ...)` | the dwell, then each press and its hold |
+| | `point` | `fn(page, box, attempt, ...)`, returns `(x, y)` | where in the element's visible box to aim; `attempt` counts the misses |
+| | `reaches` | `fn(page, locator, x, y, pressing, ...)`, returns `None` or why it misses | whether a press at (x, y) lands on the element: not covered, enabled |
+| `scroll` | `into_view` | `fn(page, locator, ...)` | wheel turns until the element is in view, waiting for each scroll to land |
+| | `wheel` | `fn(page, dx, dy, ...)` | one scroll split into wheel notches |
+| `keyboard` | `type` | `fn(page, text, ...)` | keys at a person's rhythm, with the mistakes they make |
+| | `key` | `fn(page, key, ...)` | one key or chord (`"Enter"`, `"Control+a"`) |
 
-- `original()` runs Playwright's own behaviour for the call. Calling it is how a function declines. For a click it is `original(x, y, delay=hold_ms)`: a mouse down and up at (x, y), after a move there only if the cursor is elsewhere; `delay` is the hold of each press (and, as in Playwright, the gap between the presses of a double click). It first checks that the point reaches the element, enabled and not covered; a press that would miss raises inside `original()`, and the function is called again until the timeout, which raises Playwright's `TimeoutError`. A click the function never presses does not happen.
-- `rng()` returns a float in [0, 1) from the channel's seeded stream: the same seed gives the same numbers in Python and TypeScript (`browser/tests/humanize/rng-vectors.json`).
+Every part is also called with `default`, `rng` and `play`, as keywords:
+
+- `default(*args)` runs myuri's part, with the same arguments when given none. A part that only adjusts myuri wraps it.
+- `rng()` returns a float in [0, 1) from the humanize seed's stream: one stream per browser, the same numbers in Python and TypeScript.
 - `play(steps)` dispatches steps at their times, in ms from the start of the call: `("move", x, y, t)`, `("down" | "up", button, t)`, `("wheel", dx, dy, t)` (one wheel event each), `("key", key, "down" | "up", t)`, `("text", text, t)` (pasted, as `keyboard.insert_text` is). It waits until each step is due on a monotonic clock rather than sleeping between steps, so a slow round trip delays one step and never adds up. Bad steps raise `ValueError` before anything is sent.
-- Playwright's actions run inside its own server, so the wrappers act first: they scroll the element into view, and the function moves to the click point, so Playwright's own move has no distance left (a zero-distance move sends no event). A `fill` selects the field's text first, so your keys replace it.
-- With the sync API the functions are plain functions; with the async API they may be `async`. Exceptions reach the caller unchanged.
-- The wrappers belong to the browser `Camoufox()` launched: other browsers in the same process are untouched. For a browser from `connect()`, launch it without humanize and call `camoufox.humanize.attach(browser, humanize, os)` with its identity's OS. Over a network each event is a round trip, so the launcher warns (`humanize_custom_remote`). `launch_server()` refuses any engine but `raw()`.
+- Playwright calls inside a part are Playwright's own: `page.mouse.move` in a move part moves the mouse once.
+- With the sync API a part is a plain function, and `default` and `play` return their result; with the async API they return awaitables, and the part may be `async`. Exceptions reach the caller unchanged.
+
+What each channel drives:
+
+| Channel | For |
+|---|---|
+| `mouse` | `Mouse.move`/`click`/`dblclick`; `click`, `dblclick`, `hover`, `check`, `uncheck` on a `Page`, `Frame` or `Locator`, and the click that focuses a field before `fill` |
+| `keyboard` | `Keyboard.type`/`press`; `fill`, `type`, `press` on a `Page`, `Frame` or `Locator`, and `Locator.press_sequentially` |
+| `scroll` | `Mouse.wheel`, `Locator.scroll_into_view_if_needed`, and bringing an element into view before a pointer action, fill or typing |
+
+- A click that never reaches its element raises Playwright's `TimeoutError` at the call's timeout, naming what covers the point. `trial=True` goes to Playwright alone, and `force=True` skips the reach check.
+- `ElementHandle` methods, `tap`, `drag_and_drop` and `drag_to` are Playwright's own.
+- The wrappers belong to the browser `Camoufox()` launched: other browsers in the same process are untouched. For a browser from `connect()`, launch it without humanize and call `camoufox.humanize.attach(browser, humanize, os)` with its identity's OS. Over a network each event is a round trip, so the launcher warns (`humanize_remote`). `launch_server()` refuses any engine but `raw()`.
 
 # Building the browser
 

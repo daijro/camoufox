@@ -19,19 +19,22 @@ events it sends, never a second layer of delays on top of its own.
 `keyboard`, `scroll`) runs one engine in the driver process:
 
 ```python
-from camoufox.humanize import custom, myuri, raw
+from camoufox.humanize import myuri, raw
 
 humanize = {"mouse": myuri(), "keyboard": myuri(wpm=70), "scroll": raw(), "seed": 1234}
 ```
 
-- `myuri()` is [myuri](https://github.com/JWriter20/Myuri), fitted to recordings
-  of people on each OS ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml), the
+- `myuri()` is [myuri](https://github.com/JWriter20/Myuri)'s smart actions, fitted
+  to recordings of people on each OS ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml), the
   `human-*` rules). It plans for the launch identity's OS, since input behaviour
   belongs to the browser, not the context. Both packages depend on it (PyPI
   `myuri`, npm `@jwriter20/myuri`), pinned to one release so a seed plans the
   same input in Python and TypeScript.
-- `custom(fn)` runs your own function; the README's "Writing your own engine"
-  has the call signatures.
+- `myuri(part=fn)` replaces one of myuri's parts (`move`, `press`, `point`,
+  `reaches`, `into_view`, `wheel`, `type`, `key`) with your function and keeps
+  the rest; the README's "Replacing a part" has the call signatures. myuri is
+  the one implementation of the smart actions: Camoufox adapts Playwright to
+  it and adds none of its own.
 - `raw()` is Playwright as it is.
 - `humanize=True` is `myuri()` on every channel, and a channel a dict leaves out
   is `myuri()`. `humanize=None` or `False` (the default) is `raw()` everywhere.
@@ -45,33 +48,33 @@ coalescing, fractional coordinates), which a driver cannot set
 ([`humanize-timing-is-the-engine-and-shape-is-the-browser`](../ci/tribal-rules.yml)).
 
 The engines wrap Playwright's input methods on the client
-(`python/src/camoufox/_humanize_custom.py`, `_humanize_myuri.py`, and their
-TypeScript counterparts). User code never runs in the browser. The browser
-guard is `browser/tests/playwright/patches/humanize-custom.py`.
+(`python/src/camoufox/_humanize_playwright.py` and its TypeScript counterpart).
+Each page gets one `myuri.Actions`, whose host sends every event through
+Playwright's own input methods. A `raw()` channel's parts are Playwright's: its
+move is one event and its scroll into view is Playwright's. User code never runs
+in the browser. The browser guard is `browser/tests/playwright/patches/humanize.py`.
 
-A humanized click is pressed by the wrapper, not by Playwright's click. The
-engine moves the cursor and waits its dwell, and its `original()` sends a mouse
-down and up where the cursor is, held for the engine's drawn hold. Playwright's
-click would move again first, and the browser counts that move against the
-next press's click count ([Click count](input-dispatch.md#click-count)).
-Before pressing, the wrapper checks in the page's isolated world that the point
-reaches the element: nothing covers it, and the element is enabled. A press
-that would miss is planned again, with the engine called again, on Playwright's
-retry schedule until the call's timeout. It then raises Playwright's
-`TimeoutError`, naming what covers the point. Playwright's own wait for the
-element to stop moving is not part of this check. `trial=True` and `force=True`
-work as they do in Playwright: a trial click goes to Playwright alone, and a
-forced click skips the check.
+A humanized click is myuri's, not Playwright's. myuri wheels the element into
+view, waiting for each scroll to land, chooses a point in the element's visible
+part, moves there and waits its dwell, then presses where the cursor is, held for
+its drawn hold. Playwright's click would move again first, and the browser counts
+that move against the next press's click count
+([Click count](input-dispatch.md#click-count)). Before pressing, myuri checks in
+the page's isolated world that the point reaches the element: nothing covers it,
+and the element is enabled. A press that would miss is aimed again elsewhere, on
+Playwright's retry schedule until the call's timeout. It then raises Playwright's
+`TimeoutError`, naming what covers the point. `trial=True` and `force=True` work
+as they do in Playwright: a trial click goes to Playwright alone, and a forced
+click skips the check.
 
 ## Seeds
 
-`seed` (an integer below 2^64) seeds one stream per channel, passed to a custom
-function as `rng`. Each stream is `Mulberry32(splitmix64(seed ^ tag) & 0xffffffff)`,
-with tags `0x6d6f7573` (mouse), `0x6b657962` (keyboard) and `0x7363726f` (scroll)
-(`channel_stream` in `python/src/camoufox/humanize.py`, `channelStream` in
-`typescript/src/humanize.ts`). `browser/tests/humanize/rng-vectors.json` pins the
-draws, and both launchers are tested against it: change the derivation in both or
-in neither. Without a seed, each launch draws a random one.
+`seed` (an integer in [0, 2^32)) seeds one stream for the browser, which every
+page and part draws from, so two pages never replay the same draws. It is
+myuri's `make_rng`, which draws the same numbers in Python and TypeScript;
+`browser/tests/humanize/sequence.json` pins the input one seeded scenario plays,
+and both launchers are tested against it. Without a seed, each launch draws a
+random one.
 
 ## What the browser still times
 

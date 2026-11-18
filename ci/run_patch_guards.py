@@ -77,7 +77,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "driver-stack-frames",
         "fonts-ready-driver",
         "force-scope-access",
-        "humanize-custom",
+        "humanize",
         "input-ack-backstop",
         "isolated-evaluate",
         "long-press-no-link-preview",

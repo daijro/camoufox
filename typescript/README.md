@@ -238,48 +238,68 @@ const browser = await Camoufox({
 await browser.close();
 ```
 
-- `myuri()` is [myuri](https://github.com/JWriter20/Myuri), fitted to recordings of people on each OS and drawn for the launch identity's OS. The package depends on it (`@jwriter20/myuri`).
-- `custom(fn)` is a function of yours (below), and `raw()` is Playwright as it is.
+- `myuri()` is [myuri](https://github.com/JWriter20/Myuri)'s smart actions, fitted to recordings of people on each OS and drawn for the launch identity's OS: the path, the press, the typing and the wheel turns, and the decisions around a click (scroll the element into view, choose the point, check that the press lands, try again when it does not). The package depends on it (`@jwriter20/myuri`), pinned to the release it was tested with.
+- `raw()` is Playwright as it is.
 - A channel an object leaves out is `myuri()`. `humanize: null` or `false`, the default, is `raw()` everywhere.
 
-### Your own humanize engine: `custom(fn)`
+### Replacing a part
 
-A channel can run a function of yours in your own process. It plans the input and plays it through Playwright's own input methods, so the page sees the same trusted events as from any Playwright call, and your code never runs inside the browser. Pass `raw()` for the channels it leaves alone.
+Each piece of myuri is a part you can replace with a function of yours, in your own process. The rest stay myuri's, so a scroll of your own still serves myuri's clicks, and your move still ends where myuri presses.
 
 ```ts
-import { Camoufox, custom, raw } from "camoufox";
+import { setTimeout as sleep } from "node:timers/promises";
+import { Camoufox, myuri } from "camoufox";
 
 const browser = await Camoufox({
 	humanize: {
-		mouse: custom(async (page, x, y, { original, rng, play, click }) => {
-			const jitter = rng() * 4 - 2;
-			await play([
-				["move", x / 2 + jitter, y / 2 - jitter, 40],
-				["move", x, y, 90],
-			]);
-			// press at (x, y), holding 90-120 ms
-			if (click) await original(x, y, { delay: 90 + 30 * rng() });
+		// a pause to look, then myuri's path
+		mouse: myuri({
+			move: async (page, x, y, { default: path, rng }) => {
+				await sleep(100 + 200 * rng());
+				await path();
+			},
 		}),
-		keyboard: raw(),
-		scroll: raw(),
+		// Playwright's own scroll; `default()` would be myuri's wheel turns
+		scroll: myuri({
+			intoView: (page, locator) => locator.scrollIntoViewIfNeeded(),
+		}),
+		keyboard: myuri({ wpm: 70 }),
 		seed: 1234,
 	},
 });
 const page = await browser.newPage();
-await page.goto("https://example.com");
-await page.locator("a").click(); // the function plans the move, Playwright clicks
+await page.setContent('<button id="submit" style="margin-top:3000px">Send</button>');
+await page.locator("#submit").click();
 await browser.close();
 ```
 
-| Channel | Called as | For |
-|---|---|---|
-| `mouse` | `fn(page, x, y, { original, rng, play, click })` with `click` `null` for a move, else `{ button, clickCount, box }` | `Mouse.move`/`click`/`dblclick`; `click`, `dblclick`, `hover`, `check` and `uncheck` on a `Page`, `Frame` or `Locator`, and the click that focuses a field before `fill` |
-| `keyboard` | `fn(page, text, { original, rng, play, kind })` with `kind` `"type"`, `"press"` or `"fill"` | `Keyboard.type`/`press`; `fill`, `type`, `press` on a `Page`, `Frame` or `Locator`, and `Locator.pressSequentially` |
-| `scroll` | `fn(page, target, { original, rng, play })` with `target` a `Locator` or `[dx, dy]` | `Mouse.wheel`, `Locator.scrollIntoViewIfNeeded`, and bringing an element that is not in view into view before those actions |
+| Channel | Part | Called as | myuri's part |
+|---|---|---|---|
+| `mouse` | `move` | `fn(page, x, y, ctx)` | a path from the cursor to (x, y) |
+| | `press` | `fn(page, button, clickCount, ctx)` | the dwell, then each press and its hold |
+| | `point` | `fn(page, box, attempt, ctx)`, returns `[x, y]` | where in the element's visible box to aim; `attempt` counts the misses |
+| | `reaches` | `fn(page, locator, x, y, pressing, ctx)`, returns `null` or why it misses | whether a press at (x, y) lands on the element: not covered, enabled |
+| `scroll` | `intoView` | `fn(page, locator, ctx)` | wheel turns until the element is in view, waiting for each scroll to land |
+| | `wheel` | `fn(page, dx, dy, ctx)` | one scroll split into wheel notches |
+| `keyboard` | `type` | `fn(page, text, ctx)` | keys at a person's rhythm, with the mistakes they make |
+| | `key` | `fn(page, key, ctx)` | one key or chord (`"Enter"`, `"Control+a"`) |
 
-- `original()` runs Playwright's own behaviour for the call. Calling it is how a function declines. For a click it is `original(x, y, { delay })`: a mouse down and up at (x, y), after a move there only if the cursor is elsewhere; `delay` is the hold of each press in ms (and, as in Playwright, the gap between the presses of a double click). It first checks that the point reaches the element, enabled and not covered; a press that would miss rejects inside `original()`, and the function is called again until the timeout, which rejects with Playwright's `TimeoutError`. A click the function never presses does not happen. `box` is the element's bounding box, or `null` when the caller gave a `position` or called `Mouse.click` or `Mouse.dblclick`.
-- `rng()` returns a float in [0, 1) from the channel's seeded stream, number for number what the Python launcher's `custom()` draws for that seed.
-- `play(steps)` dispatches steps at their times, in ms from the start of the call: `["move", x, y, t]`, `["down" | "up", button, t]`, `["wheel", dx, dy, t]` (one wheel event: 100 px is one notch, rounded, at least one, all in that event; 16 px lines on a macOS identity), `["key", key, "down" | "up", t]`, `["text", text, t]`. A slow round trip delays one step and never adds up. Bad steps reject before anything is sent.
+`ctx` is `{ default, rng, play }`:
+
+- `default(...args)` runs myuri's part, with the same arguments when given none. A part that only adjusts myuri wraps it.
+- `rng()` returns a float in [0, 1) from the humanize seed's stream: one stream per browser, number for number what the Python launcher draws for that seed.
+- `play(steps)` dispatches steps at their times, in ms from the start of the call: `["move", x, y, t]`, `["down" | "up", button, t]`, `["wheel", dx, dy, t]` (one wheel event each), `["key", key, "down" | "up", t]`, `["text", text, t]`. A slow round trip delays one step and never adds up. Bad steps reject before anything is sent.
+- Playwright calls inside a part are Playwright's own: `page.mouse.move` in a move part moves the mouse once. A part that throws rejects the call.
+
+What each channel drives:
+
+| Channel | For |
+|---|---|
+| `mouse` | `Mouse.move`/`click`/`dblclick`; `click`, `dblclick`, `hover`, `check` and `uncheck` on a `Page`, `Frame` or `Locator`, and the click that focuses a field before `fill` |
+| `keyboard` | `Keyboard.type`/`press`; `fill`, `type`, `press` on a `Page`, `Frame` or `Locator`, and `Locator.pressSequentially` |
+| `scroll` | `Mouse.wheel`, `Locator.scrollIntoViewIfNeeded`, and bringing an element into view before a pointer action, fill or typing |
+
+- A click that never reaches its element rejects with Playwright's `TimeoutError` at the call's timeout, naming what covers the point. `trial: true` goes to Playwright alone, and `force: true` skips the reach check.
 - `ElementHandle` methods, `tap`, `dragAndDrop` and `dragTo` are Playwright's own.
 - The wrappers belong to the browser `Camoufox()` launched. For a browser from `connect()`, launch it without humanize and call `attach(browser, humanize, os)` with its identity's OS. Over a network each event is a round trip, so the launcher warns. `launchServer()` refuses any engine but `raw()`.
 
@@ -300,7 +320,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `geoip` | `boolean \| string` | none | `true` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. Without a proxy, also decides whether IPv6 stays on. |
 | `geoip_db` | `string` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
 | `locale` | `string \| string[]` | from `geoip`, else the drawn identity's | Locale(s), e.g. `"en-US"`. The first is used for `Intl`. |
-| `humanize` | `boolean \| object` | every channel raw | Driver-side input. `true` is [`myuri()`](#human-input) on every channel; an object picks per channel (`mouse`, `keyboard`, `scroll`) `myuri()`, `custom(fn)` or `raw()`, an omitted channel being `myuri()`, plus an integer `seed` (a `bigint` past 2\*\*53). The browser never humanizes input; a number is refused. |
+| `humanize` | `boolean \| object` | every channel raw | Driver-side input. `true` is [`myuri()`](#human-input) on every channel; an object picks per channel (`mouse`, `keyboard`, `scroll`) `myuri()`, `myuri({ part: fn })` or `raw()`, an omitted channel being `myuri()`, plus an integer `seed` in [0, 2\*\*32). The browser never humanizes input; a number is refused. |
 | `screen` | `Screen \| { max_width?, max_height?, min_width?, min_height? }` | the real display when headed | Bounds the generated screen. |
 | `window` | `[number, number]` | generated | Fixed outer window size. |
 | `fonts` | `string[]` | none | Extra font families on top of the OS's own. |
