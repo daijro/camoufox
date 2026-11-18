@@ -12,8 +12,10 @@ import json
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -110,6 +112,15 @@ class Result:
         return (self.stdout or "") + (("\n" + self.stderr) if self.stderr else "")
 
 
+def _end_group(proc: subprocess.Popen) -> None:
+    # Even when the leader has exited: a child still holding its output open
+    # would keep the reader waiting.
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
 def run(
     cmd: Sequence[str] | str,
     *,
@@ -121,36 +132,64 @@ def run(
     tee: bool = False,
     input: Optional[str] = None,
 ) -> Result:
-    """Run a command. Never raises on a non-zero exit unless check=True."""
+    """Run a command. Never raises on a non-zero exit unless check=True.
+
+    capture=False leaves the output on the console. tee=True echoes the
+    captured output as it arrives, with stderr merged into stdout.
+    """
     shell = isinstance(cmd, str)
     printable = cmd if shell else " ".join(shlex.quote(c) for c in cmd)
     log(f"$ {printable}" + (f"  (cwd={cwd})" if cwd else ""))
 
-    full_env = {**os.environ, **(env or {})}
-    try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(cwd) if cwd else None,
-            env=full_env,
-            shell=shell,
-            timeout=timeout,
-            capture_output=capture and not tee,
-            text=True,
-            input=input,
-        )
-    except subprocess.TimeoutExpired as exc:
-        out = exc.stdout or ""
-        err = exc.stderr or ""
-        if isinstance(out, bytes):
-            out = out.decode("utf-8", "replace")
-        if isinstance(err, bytes):
-            err = err.decode("utf-8", "replace")
-        res = Result(124, out, err + f"\nTIMEOUT after {timeout}s")
+    # Its own process group, so a timeout or an interrupt ends the command's
+    # children too, not just the command.
+    with subprocess.Popen(
+        cmd,
+        cwd=str(cwd) if cwd else None,
+        env={**os.environ, **(env or {})},
+        shell=shell,
+        stdin=subprocess.PIPE if input is not None else None,
+        stdout=subprocess.PIPE if capture else None,
+        stderr=(subprocess.STDOUT if tee else subprocess.PIPE) if capture else None,
+        text=True,
+        errors="replace",
+        start_new_session=True,
+    ) as proc:
+        expired = threading.Event()
+
+        def expire() -> None:
+            expired.set()
+            _end_group(proc)
+
+        timer = threading.Timer(timeout, expire) if timeout else None
+        if timer:
+            timer.start()
+        try:
+            if capture and tee:
+                if input is not None:
+                    proc.stdin.write(input)
+                    proc.stdin.close()
+                lines = []
+                for line in proc.stdout:
+                    print(line, end="", flush=True)
+                    lines.append(line)
+                proc.wait()
+                out, err = "".join(lines), ""
+            else:
+                out, err = proc.communicate(input)
+        except BaseException:
+            _end_group(proc)
+            raise
+        finally:
+            if timer:
+                timer.cancel()
+
+    if expired.is_set():
         if check:
             die(f"command timed out: {printable}")
-        return res
+        return Result(124, out or "", (err or "") + f"\nTIMEOUT after {timeout}s")
 
-    res = Result(proc.returncode, proc.stdout or "", proc.stderr or "")
+    res = Result(proc.returncode, out or "", err or "")
     if check and not res.ok:
         log(res.combined()[-4000:], level="ERROR")
         die(f"command failed ({res.code}): {printable}")

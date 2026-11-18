@@ -1234,22 +1234,24 @@ def test_a_failed_patch_hunk_is_not_transient():
 
 
 class _FakeRun:
-    """Stands in for run_prepare._run_capturing, replaying scripted outcomes."""
+    """Stands in for run_prepare's run(), replaying scripted (code, output) outcomes."""
 
     def __init__(self, outcomes):
         self.outcomes = list(outcomes)
         self.calls = []
 
     def __call__(self, cmd, **kwargs):
+        from ci._util import Result
+
         self.calls.append(cmd)
-        return self.outcomes.pop(0)
+        return Result(*self.outcomes.pop(0), "")
 
 
 def _run_step(monkeypatch, outcomes, *, target="mozbootstrap", retry=True, attempts=3):
     import ci.run_prepare as rp
 
     fake = _FakeRun(outcomes)
-    monkeypatch.setattr(rp, "_run_capturing", fake)
+    monkeypatch.setattr(rp, "run", fake)
     monkeypatch.setattr(rp.time, "sleep", lambda _s: None)
     code = rp.run_step(target, retry=retry, attempts=attempts, backoff=0, timeout=60)
     return code, fake
@@ -1382,15 +1384,13 @@ def test_a_known_ungated_category_is_not_unknown():
     assert out["out_of_scope_failed"] == 2
 
 
-def test_run_capturing_keeps_stdout_and_stderr():
-    """The classifier reads this output, so losing stderr loses the diagnosis."""
-    from ci.run_prepare import _run_capturing
+def test_a_teed_run_keeps_stdout_and_stderr():
+    """run_prepare's classifier reads this output, so losing stderr loses the diagnosis."""
+    from ci._util import run
 
-    code, out = _run_capturing(
-        ["bash", "-c", "echo on-stdout; echo on-stderr >&2; exit 3"], timeout=30
-    )
-    assert code == 3
-    assert "on-stdout" in out and "on-stderr" in out
+    proc = run(["bash", "-c", "echo on-stdout; echo on-stderr >&2; exit 3"], timeout=30, tee=True)
+    assert proc.code == 3
+    assert "on-stdout" in proc.combined() and "on-stderr" in proc.combined()
 
 
 def test_a_step_that_wedges_without_printing_is_killed():
@@ -1402,13 +1402,27 @@ def test_a_step_that_wedges_without_printing_is_killed():
     """
     import time
 
-    from ci.run_prepare import _run_capturing
+    from ci._util import run
 
     started = time.monotonic()
-    code, out = _run_capturing(["bash", "-c", "sleep 60"], timeout=2)
+    proc = run(["bash", "-c", "sleep 60"], timeout=2, tee=True)
     elapsed = time.monotonic() - started
-    assert code == 124, "a timed-out step must not report success"
-    assert "TIMEOUT" in out
+    assert proc.code == 124, "a timed-out step must not report success"
+    assert "TIMEOUT" in proc.combined()
+    assert elapsed < 15, f"the timeout did not fire promptly ({elapsed:.1f}s)"
+
+
+def test_a_child_holding_the_output_open_does_not_outlast_the_timeout():
+    """The command exits, but a child it left running keeps the pipe open."""
+    import time
+
+    from ci._util import run
+
+    started = time.monotonic()
+    proc = run(["bash", "-c", "sleep 60 & echo started"], timeout=2, tee=True)
+    elapsed = time.monotonic() - started
+    assert proc.code == 124
+    assert "started" in proc.stdout
     assert elapsed < 15, f"the timeout did not fire promptly ({elapsed:.1f}s)"
 
 

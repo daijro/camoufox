@@ -17,7 +17,6 @@ sys.exit(2)
 def test_a_failed_build_lists_the_compiler_errors(tmp_path, monkeypatch):
     (tmp_path / "multibuild.py").write_text(_FAKE_MULTIBUILD)
     monkeypatch.setattr(run_build, "BROWSER_ROOT", tmp_path)
-    monkeypatch.setattr(run_build, "WORK_DIR", tmp_path / "work")
     monkeypatch.setattr(run_build, "read_upstream_sh", lambda: {})
 
     code = run_build.main(["--evidence-dir", str(tmp_path / "out")])
@@ -40,7 +39,6 @@ time.sleep(60)
 def test_a_build_past_its_timeout_is_ended_with_its_children(tmp_path, monkeypatch):
     (tmp_path / "multibuild.py").write_text(_HANGING_MULTIBUILD)
     monkeypatch.setattr(run_build, "BROWSER_ROOT", tmp_path)
-    monkeypatch.setattr(run_build, "WORK_DIR", tmp_path / "work")
     monkeypatch.setattr(run_build, "read_upstream_sh", lambda: {})
 
     code = run_build.main(["--evidence-dir", str(tmp_path / "out"), "--timeout", "2"])
@@ -64,18 +62,3 @@ def _gone(pid, wait=5.0):
             return True
         time.sleep(0.1)
     return False
-
-
-def test_a_relative_work_dir_still_holds_the_log(tmp_path, monkeypatch):
-    (tmp_path / "browser").mkdir()
-    (tmp_path / "browser" / "multibuild.py").write_text(_FAKE_MULTIBUILD)
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(run_build, "BROWSER_ROOT", tmp_path / "browser")
-    monkeypatch.setattr(run_build, "WORK_DIR", run_build.Path(".ci-work"))
-    monkeypatch.setattr(run_build, "read_upstream_sh", lambda: {})
-
-    code = run_build.main(["--evidence-dir", str(tmp_path / "out")])
-
-    saved = json.loads(next((tmp_path / "out").glob("*.json")).read_text())
-    assert (code, saved["metrics"]["error_count"]) == (1, 2)
-    assert "compiling" in (tmp_path / ".ci-work" / "build.log").read_text()

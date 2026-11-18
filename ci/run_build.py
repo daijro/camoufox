@@ -21,62 +21,19 @@ Run:
 from __future__ import annotations
 
 import argparse
-import os
 import re
-import shlex
-import signal
-import subprocess
 import sys
-import threading
 from pathlib import Path
 from typing import List, Optional
 
 from . import results as evidence
-from ._util import BROWSER_ROOT, EVIDENCE_DIR, WORK_DIR, log, read_upstream_sh
+from ._util import BROWSER_ROOT, EVIDENCE_DIR, read_upstream_sh, run
 
 # mach prints errors in a few shapes; catch the common ones for the summary.
 _ERROR_RE = re.compile(
     r"^(?:.*?:\d+:\d+: (?:fatal )?error: .*|error\[E\d+\].*|.*\berror: .*)$",
     re.MULTILINE,
 )
-
-
-def build(cmd: List[str], log_path: Path, timeout: int) -> int:
-    """Run `cmd` in BROWSER_ROOT, streaming its output to the console and to
-    `log_path`. Returns its exit code, or 124 when `timeout` seconds pass.
-
-    The build runs in its own process group, and a timeout or an interrupt ends
-    the whole group: mach's compilers would otherwise outlive multibuild.py and
-    keep writing to dist/ after the gate recorded its result.
-    """
-    log(f"$ {shlex.join(cmd)}  (cwd={BROWSER_ROOT})")
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    expired = threading.Event()
-    with open(log_path, "w", encoding="utf-8") as fh, subprocess.Popen(
-        cmd, cwd=BROWSER_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, errors="replace", start_new_session=True,
-    ) as proc:
-        def end_group() -> None:
-            if proc.poll() is None:
-                os.killpg(proc.pid, signal.SIGKILL)
-
-        def expire() -> None:
-            expired.set()
-            end_group()
-
-        timer = threading.Timer(timeout, expire)
-        timer.start()
-        try:
-            for line in proc.stdout:
-                sys.stdout.write(line)
-                fh.write(line)
-            code = proc.wait()
-        except BaseException:
-            end_group()
-            raise
-        finally:
-            timer.cancel()
-    return 124 if expired.is_set() else code
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -98,13 +55,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     cmd = [sys.executable, "multibuild.py", "--target", args.target, "--arch", args.arch]
     if args.preflight:
         cmd.append("--preflight")
-    log_path = WORK_DIR / f"{gate}.log"
-    code = build(cmd, log_path, args.timeout)
-    result.metrics["exit_code"] = code
+    proc = run(cmd, cwd=BROWSER_ROOT, timeout=args.timeout, tee=True)
+    result.metrics["exit_code"] = proc.code
 
-    if code != 0:
-        errors = _ERROR_RE.findall(log_path.read_text(errors="replace"))[:15]
-        result.note(f"multibuild.py exited {code}")
+    if proc.code != 0:
+        errors = _ERROR_RE.findall(proc.combined())[:15]
+        result.note(f"multibuild.py exited {proc.code}")
         for line in errors:
             result.note(line.strip()[:300])
         result.metrics["error_count"] = len(errors)
