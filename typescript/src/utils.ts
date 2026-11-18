@@ -1943,7 +1943,7 @@ export async function launchOptions({
 	if (custom_fonts_only) {
 		firefox_user_prefs["gfx.bundled-fonts.activate"] = 0;
 		if (fonts?.length) {
-			LeakWarning.warn("custom_fonts_only");
+			LeakWarning.warn("custom_fonts_only", i_know_what_im_doing);
 		} else {
 			throw new ValueError(
 				"No custom fonts were passed, but `custom_fonts_only` is enabled.",

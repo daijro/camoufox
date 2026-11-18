@@ -234,6 +234,24 @@ class TestToggleSettingsAreWrittenBothWays:
         assert self._prefs(firefox_user_prefs={pref: toggled})[pref] == toggled
 
 
+class TestCustomFontsOnlyWarning:
+    UA = "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
+    TEXT = "Disabling OS-specific fonts"
+
+    def _launch(self, **kwargs):
+        return utils.launch_options(
+            config={"navigator.userAgent": self.UA}, fonts=["Arial"], custom_fonts_only=True, **kwargs
+        )
+
+    def test_the_flag_silences_it(self, isolated_launch_dependencies, recwarn):
+        self._launch(i_know_what_im_doing=True)
+        assert not [w for w in recwarn if self.TEXT in str(w.message)]
+
+    def test_without_the_flag_it_warns_and_names_the_flag(self, isolated_launch_dependencies):
+        with pytest.warns(utils.LeakWarning, match=r"Disabling OS-specific fonts[\s\S]*i_know_what_im_doing=True"):
+            self._launch()
+
+
 class TestGeoipIPv6:
     """Without a proxy, sites reach this host over IPv6 when it has an address.
 

@@ -210,6 +210,31 @@ describe("test_launch_environment: prefs", () => {
 		});
 	});
 
+	describe("custom_fonts_only warning", () => {
+		const TEXT = "Disabling OS-specific fonts";
+		const launchWith = async (opts: Record<string, any>) => {
+			const { error, warnings: caught } = await warnings.recordWarnings(() =>
+				utils.launchOptions({
+					env: { HOME },
+					...ua(LINUX_UA),
+					fonts: ["Arial"],
+					custom_fonts_only: true,
+					...opts,
+				}),
+			);
+			if (error) throw error;
+			return caught.filter((w) => w.message.includes(TEXT));
+		};
+		it("the flag silences it", async () => {
+			expect(await launchWith({ i_know_what_im_doing: true })).toEqual([]);
+		});
+		it("without the flag it warns and names the flag", async () => {
+			const caught = await launchWith({});
+			expect(caught).toHaveLength(1);
+			expect(caught[0].message).toContain("pass `i_know_what_im_doing=True`");
+		});
+	});
+
 	describe("toggle settings (test_launch_environment.py)", () => {
 		// Fresh profiles omit off toggles; persistent profiles clear old values.
 		const TOGGLES: [string, string, unknown, unknown][] = [
