@@ -245,14 +245,20 @@ async function play(page: any, steps: unknown) {
 
 // ---- flows -----------------------------------------------------------------
 
-function moveTo(engines: Engines, page: any, x: number, y: number) {
+function moveTo(
+	engines: Engines,
+	page: any,
+	x: number,
+	y: number,
+	options?: Options,
+) {
 	const { move } = page[ORIGINALS];
 	return call(
 		engines,
 		"mouse",
 		page,
 		[x, y],
-		(nx = x, ny = y, options?: Options) => move(nx, ny, options),
+		(nx = x, ny = y, more?: Options) => move(nx, ny, { ...options, ...more }),
 		{ click: null },
 	);
 }
@@ -349,7 +355,7 @@ function pointer(name: string): Flow {
 			const toggles = name === "check" || name === "uncheck";
 			for (let attempt = 0; ; attempt += 1) {
 				if (!scroll)
-					// The point must be on screen; the browser's scroll engine plans this.
+					// The point must be on screen; with no scroll engine, Playwright scrolls it there.
 					await locatorOriginal(locator, "scrollIntoViewIfNeeded")(locator, {
 						timeout,
 					});
@@ -588,15 +594,7 @@ function attachPage(page: any, engines: Engines): void {
 				);
 			};
 		mouse.move = passthroughUnless("mouse", o.move, (x, y, options) =>
-			call(
-				engines,
-				"mouse",
-				page,
-				[x, y],
-				(nx = x, ny = y, more?: Options) =>
-					o.move(nx, ny, { ...options, ...more }),
-				{ click: null },
-			),
+			moveTo(engines, page, x, y, options),
 		);
 		mouse.click = passthroughUnless("mouse", o.click, clickAt("click"));
 		mouse.dblclick = passthroughUnless(
@@ -679,11 +677,6 @@ function isolateDispatch(connection: any): void {
 	};
 }
 
-/** Check a `humanize` setting before a launch. */
-export function check(humanize: unknown): void {
-	normalize(humanize);
-}
-
 /**
  * Run the engines of `humanize` on every page of `target`, a Browser or
  * BrowserContext, including pages and contexts opened later. Other browsers in
@@ -699,7 +692,6 @@ export function attach<T>(
 	os: OsName,
 	iKnowWhatImDoing?: boolean,
 ): T {
-	check(humanize);
 	const { engines: channels, seed: given } = normalize(humanize);
 	const fns: Partial<Record<Channel, CustomEngine>> = {};
 	for (const channel of CHANNELS) {

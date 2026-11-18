@@ -845,7 +845,7 @@ describe("test_humanize", () => {
 			scroll: custom(noop),
 			seed: 9,
 		},
-		{ keyboard: "raw", seed: 2n ** 64n - 1n },
+		{ keyboard: raw(), seed: 2n ** 64n - 1n },
 	])("no humanize key reaches the browser (%#)", async (humanize) => {
 		const config = await launchHumanize(humanize);
 		expect(Object.keys(config).filter((k) => k.startsWith("humanize"))).toEqual(
@@ -896,17 +896,12 @@ describe("test_humanize", () => {
 		[{ seed: 2 ** 53 }, "bigint"],
 		[{ seed: true }, "seed"],
 		[{ seed: "1" }, "seed"],
-		[{ mouse: 3 }, "must be myuri(), custom(fn) or raw()"],
+		[{ mouse: 3 }, "is not an engine"],
 		[{ mouse: { engine: "myuri", options: { speed: 1 } } }, "takes wpm"],
-		[{ mouse: "custom" }, "needs its function"],
 		[{ mouse: { ...custom(noop), options: { speed: 1 } } }, "takes no options"],
 		[{ mouse: { engine: "raw", options: { speed: 1 } } }, "takes no options"],
 	])("refuses a malformed setting (%#)", (humanize, message) => {
 		expect(() => normalize(humanize)).toThrow(message);
-	});
-
-	it("custom() needs a function", () => {
-		expect(() => custom("not callable" as any)).toThrow("takes the function");
 	});
 });
 

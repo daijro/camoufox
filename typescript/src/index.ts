@@ -21,19 +21,15 @@ export {
 } from "./fingerprints.js";
 export {
 	type Box,
-	CHANNEL_TAGS,
 	type Click,
 	type CustomEngine,
-	channelStream,
 	custom,
-	drivenChannels,
 	type EngineTools,
 	type HumanizeSetting,
 	type MyuriOptions,
 	myuri,
 	raw,
-	SeededRng,
-	splitmix64,
+	type SeededRng,
 } from "./humanize.js";
 export {
 	findInstalledVersion,

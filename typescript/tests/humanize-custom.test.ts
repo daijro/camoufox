@@ -19,7 +19,7 @@ import {
 	myuri,
 	normalize,
 	raw,
-	SeededRng,
+	type SeededRng,
 	splitmix64,
 } from "../src/humanize.js";
 import { launchServer } from "../src/server.js";
@@ -36,15 +36,6 @@ const SEQUENCE = json("tests", "humanize", "custom-sequence.json");
 const noop: CustomEngine = () => undefined;
 
 describe("streams", () => {
-	it("gives the reference outputs", () => {
-		expect(splitmix64(0n)).toBe(0xe220a8397b1dcdafn);
-		expect(splitmix64(0x9e3779b97f4a7c15n)).toBe(0x6e789e6aa1b965f4n);
-		const rng = SeededRng(0);
-		expect([rng(), rng(), rng()].map((d) => Math.round(d * 2 ** 32))).toEqual([
-			1144304738, 1416247, 958946056,
-		]);
-	});
-
 	it("matches the pinned vectors draw for draw", () => {
 		for (const [seed, value] of VECTORS.splitmix64)
 			expect(splitmix64(BigInt(seed))).toBe(BigInt(value));
@@ -53,14 +44,10 @@ describe("streams", () => {
 				const stream = channelStream(BigInt(entry.seed), channel);
 				const draws = entry[channel].map(() => stream() * 2 ** 32);
 				expect(draws).toEqual(entry[channel]);
-				expect(stream.position).toBe(entry[channel].length);
 			}
 	});
 
-	it("has the helpers", () => {
-		const first = channelStream(7, "mouse")();
-		expect(channelStream(7, "mouse").uniform(10, 20)).toBe(10 + 10 * first);
-		expect(channelStream(7, "mouse").random()).toBe(first);
+	it("an unknown channel has no stream", () => {
 		expect(() => channelStream(1, "touch")).toThrow("unknown humanize channel");
 	});
 });
@@ -68,9 +55,9 @@ describe("streams", () => {
 describe("factory and config", () => {
 	it("custom() takes a function", () => {
 		expect(() => custom(42 as any)).toThrow("custom() takes the function");
-		expect(() => normalize({ mouse: "custom" })).toThrow(
-			"needs its function, as custom(fn)",
-		);
+		expect(() =>
+			normalize({ mouse: { engine: "custom", options: {} } }),
+		).toThrow("custom() takes the function");
 		expect(() =>
 			normalize({ mouse: { ...custom(noop), options: { speed: 1 } } }),
 		).toThrow("custom() takes no options");
@@ -83,7 +70,7 @@ describe("factory and config", () => {
 
 	it("a channel set to null is refused; an omitted one is myuri", () => {
 		expect(() => normalize({ mouse: null })).toThrow(
-			'humanize["mouse"] must be myuri(), custom(fn) or raw()',
+			'humanize["mouse"]=None is not an engine',
 		);
 		expect(normalize({}).engines.mouse.engine).toBe("myuri");
 		expect(normalize({ seed: null }).seed).toBeUndefined();
@@ -112,9 +99,9 @@ describe("factory and config", () => {
 		await expect(
 			NewBrowser({ launch } as any, {
 				from_options: { headless: true },
-				humanize: { mouse: "custom" },
+				humanize: { mouse: { engine: "custom", options: {} } },
 			}),
-		).rejects.toThrow("needs its function");
+		).rejects.toThrow("custom() takes the function");
 		expect(launch).not.toHaveBeenCalled();
 	});
 

@@ -1210,9 +1210,10 @@ def launch_options(
         geoip_db (Optional[str]):
             Name of the GeoIP database to use (e.g., "GeoIP AIO by daijro").
             If not specified, uses the one chosen with `camoufox set --geoip`, or the default.
-        humanize (Optional[dict]):
-            Driver-side humanization, per channel: `raw()` or `custom(fn)` from
-            `camoufox.humanize`, e.g. `{"mouse": custom(my_mouse), "scroll": raw(), "seed": 1234}`.
+        humanize (Optional[Union[bool, dict]]):
+            Driver-side humanization. True is `myuri()` on every channel; a dict takes
+            `myuri()`, `custom(fn)` or `raw()` from `camoufox.humanize` per channel (an omitted
+            channel is `myuri()`), e.g. `{"mouse": custom(my_mouse), "scroll": raw(), "seed": 1234}`.
             The browser never humanizes input itself; each Playwright call is one event.
         locale (Optional[Union[str, List[str]]]):
             Locale(s) to use in Camoufox. The first listed locale will be used for the Intl API.

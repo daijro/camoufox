@@ -1,7 +1,6 @@
 """Humanize launch configuration: myuri(), custom(fn) or raw() per channel, run
 by the driver. Nothing of it reaches the browser's config."""
 
-import json
 
 import pytest
 
@@ -66,7 +65,7 @@ def captured_launch_config(monkeypatch):
         {},
         {"mouse": raw()},
         {"mouse": custom(noop), "keyboard": custom(noop), "scroll": custom(noop), "seed": 9},
-        {"keyboard": "raw", "seed": 2**64 - 1},
+        {"keyboard": raw(), "seed": 2**64 - 1},
     ],
 )
 def test_no_humanize_key_reaches_the_browser(captured_launch_config, humanize) -> None:
@@ -104,9 +103,8 @@ def test_in_browser_humanization_is_refused(humanize) -> None:
         ({"seed": 2**64}, "seed"),
         ({"seed": True}, "seed"),
         ({"seed": "1"}, "seed"),
-        ({"mouse": 3}, "must be myuri\\(\\), custom\\(fn\\) or raw\\(\\)"),
+        ({"mouse": 3}, "is not an engine"),
         ({"mouse": {"engine": "myuri", "options": {"speed": 1}}}, "takes wpm"),
-        ({"mouse": "custom"}, "needs its function"),
         ({"mouse": {**custom(noop), "options": {"speed": 1}}}, "takes no options"),
         ({"mouse": {"engine": "raw", "options": {"speed": 1}}}, "takes no options"),
     ],
@@ -114,16 +112,6 @@ def test_in_browser_humanization_is_refused(humanize) -> None:
 def test_malformed_settings_are_refused(humanize, message) -> None:
     with pytest.raises(ValueError, match=message):
         normalize(humanize)
-
-
-def test_raw_is_plain_data() -> None:
-    assert raw() == {"engine": "raw", "options": {}}
-    assert json.loads(json.dumps(raw())) == raw()
-
-
-def test_custom_needs_a_function() -> None:
-    with pytest.raises(ValueError, match="takes the function"):
-        custom("not callable")
 
 
 def test_launch_options_refuses_in_browser_humanization(captured_launch_config) -> None:

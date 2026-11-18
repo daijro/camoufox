@@ -138,41 +138,21 @@ const IN_BROWSER =
 	"Pass True, or myuri(), custom(fn) or raw() per channel (camoufox.humanize)";
 
 function asEngine(channel: string, value: unknown): Engine {
-	const candidate =
-		typeof value === "string" ? { engine: value, options: {} } : value;
+	const entry = value as Partial<Engine> | null;
 	if (
-		!candidate ||
-		typeof candidate !== "object" ||
-		typeof (candidate as { engine?: unknown }).engine !== "string"
+		typeof entry !== "object" ||
+		!["myuri", "custom", "raw"].includes(entry?.engine as string)
 	)
 		throw new ValueError(
-			`humanize["${channel}"] must be myuri(), custom(fn) or raw(), got ${String(value)}`,
+			`humanize["${channel}"]=${pyRepr(value)} is not an engine; ${IN_BROWSER}`,
 		);
-	const entry = candidate as {
-		engine: string;
-		options?: Record<string, unknown>;
-		fn?: CustomEngine;
-	};
-	const hasOptions = Object.keys(entry.options ?? {}).length > 0;
-	if (entry.engine === "myuri") return myuri(entry.options);
-	if (entry.engine === "custom") {
-		if (typeof entry.fn !== "function")
-			throw new ValueError(
-				`humanize["${channel}"]: a custom engine needs its function, as custom(fn)`,
-			);
-		if (hasOptions)
-			throw new ValueError(
-				`humanize["${channel}"]: custom() takes no options; the function is the engine`,
-			);
-		return { engine: "custom", options: {}, fn: entry.fn };
-	}
-	if (entry.engine !== "raw")
+	const { engine, options = {}, fn } = entry as Engine;
+	if (engine === "myuri") return myuri(options);
+	if (Object.keys(options).length)
 		throw new ValueError(
-			`humanize["${channel}"]: "${entry.engine}" is not an engine; ${IN_BROWSER}`,
+			`humanize["${channel}"]: ${engine}() takes no options`,
 		);
-	if (hasOptions)
-		throw new ValueError(`humanize["${channel}"]: raw() takes no options`);
-	return raw();
+	return engine === "custom" ? custom(fn as CustomEngine) : raw();
 }
 
 /** The engine per channel of a `humanize` setting, and the seed if given. */
@@ -216,7 +196,7 @@ export function normalize(humanize: unknown): {
 	const engines = Object.fromEntries(
 		CHANNELS.map((c) => [
 			c,
-			asEngine(c, setting[c] === undefined ? "myuri" : setting[c]),
+			asEngine(c, setting[c] === undefined ? myuri() : setting[c]),
 		]),
 	) as Record<Channel, Engine>;
 	return { engines, seed };
@@ -250,34 +230,22 @@ export function splitmix64(x: bigint): bigint {
 
 /**
  * Mulberry32 over a 32-bit seed. Calling it (or `random()`) returns a float in
- * [0, 1), bit for bit what the Python launcher's stream returns; `position` counts the
- * draws.
+ * [0, 1), bit for bit what the Python launcher's stream returns.
  */
 export interface SeededRng {
 	(): number;
 	random(): number;
-	uniform(low: number, high: number): number;
-	readonly position: number;
 }
 
 export function SeededRng(seed32: number): SeededRng {
 	let a = seed32 | 0;
-	let position = 0;
 	const random = () => {
-		position += 1;
 		a = (a + 0x6d2b79f5) | 0;
 		let t = Math.imul(a ^ (a >>> 15), 1 | a);
 		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
 		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 	};
-	return Object.defineProperty(
-		Object.assign(() => random(), {
-			random,
-			uniform: (low: number, high: number) => low + (high - low) * random(),
-		}),
-		"position",
-		{ get: () => position },
-	) as SeededRng;
+	return Object.assign(() => random(), { random });
 }
 
 /** The stream a channel draws from for the 64-bit master `seed`. */

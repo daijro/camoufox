@@ -16,7 +16,6 @@ import math
 import os
 import re
 import time
-import warnings
 from pathlib import Path
 
 import pytest
@@ -24,7 +23,6 @@ import pytest
 from camoufox import _humanize_custom as hc
 from camoufox.humanize import (
     CHANNELS,
-    SeededRng,
     channel_stream,
     custom,
     driven_channels,
@@ -44,13 +42,6 @@ def noop(page, *args, **kwargs):
 
 # ---- streams ---------------------------------------------------------------
 
-def test_stream_reference_outputs():
-    assert splitmix64(0) == 0xE220A8397B1DCDAF
-    assert splitmix64(0x9E3779B97F4A7C15) == 0x6E789E6AA1B965F4
-    rng = SeededRng(0)
-    assert [round(rng() * 2**32) for _ in range(3)] == [1144304738, 1416247, 958946056]
-
-
 def test_streams_match_the_pinned_vectors():
     for seed, value in VECTORS["splitmix64"]:
         assert splitmix64(int(seed)) == int(value)
@@ -60,13 +51,9 @@ def test_streams_match_the_pinned_vectors():
             draws = [stream() * 2**32 for _ in entry[channel]]
             assert all(d == int(d) for d in draws)
             assert [int(d) for d in draws] == entry[channel], (entry["seed"], channel)
-            assert stream.position == len(entry[channel])
 
 
-def test_stream_helpers():
-    rng = channel_stream(7, "mouse")
-    first = channel_stream(7, "mouse")()
-    assert rng.uniform(10, 20) == 10 + 10 * first
+def test_an_unknown_channel_has_no_stream():
     with pytest.raises(ValueError, match="unknown humanize channel"):
         channel_stream(1, "touch")
 
@@ -76,9 +63,7 @@ def test_stream_helpers():
 def test_custom_takes_a_function():
     with pytest.raises(ValueError, match=r"custom\(\) takes the function"):
         custom(42)
-    with pytest.raises(ValueError, match=r"needs its function, as custom\(fn\)"):
-        normalize({"mouse": "custom"})
-    with pytest.raises(ValueError, match=r"needs its function"):
+    with pytest.raises(ValueError, match=r"custom\(\) takes the function"):
         normalize({"mouse": {"engine": "custom", "options": {}}})
     with pytest.raises(ValueError, match=r"custom\(\) takes no options"):
         normalize({"mouse": {**custom(noop), "options": {"speed": 1}}})

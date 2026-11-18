@@ -124,7 +124,6 @@ class _Engines:
 
     def __init__(self, fns: Mapping[str, Callable[..., Any]], seed: int, is_async: bool) -> None:
         self.fns = dict(fns)
-        self.seed = seed
         self.is_async = is_async
         self.rng: Dict[str, SeededRng] = {channel: channel_stream(seed, channel) for channel in fns}
 
@@ -243,9 +242,11 @@ def _play(page: Any, steps: Any) -> Flow:
 
 # ---- flows -----------------------------------------------------------------
 
-def _move(engines: _Engines, page: Any, x: float, y: float) -> Flow:
+def _move(engines: _Engines, page: Any, x: float, y: float, **extra: Any) -> Flow:
     move = _originals(page)['move']
-    return (yield from _call(engines, 'mouse', page, (x, y), lambda *a, **k: move(*(a or (x, y)), **k), click=None))
+    return (yield from _call(
+        engines, 'mouse', page, (x, y), lambda *a, **k: move(*(a or (x, y)), **{**extra, **k}), click=None,
+    ))
 
 
 def _locator_original(locator: Any, name: str) -> Callable[..., Any]:
@@ -287,7 +288,7 @@ def _pointer(engines: _Engines, locator: Any, original: Callable[..., Any], para
         click.setdefault('button', 'left')
         for attempt in itertools.count():
             if not scroll:
-                # The point must be on screen; the browser's scroll engine plans this.
+                # The point must be on screen; with no scroll engine, Playwright scrolls it there.
                 yield _locator_original(locator, 'scroll_into_view_if_needed')(locator, timeout=timeout)
             box = yield locator.bounding_box(timeout=timeout)
             if not box:
@@ -525,11 +526,7 @@ def _attach_page(page: Any, engines: _Engines) -> None:
 
     if 'mouse' in engines.fns:
         def move(x: float, y: float, *, steps: Optional[int] = None) -> Flow:
-            extra = {} if steps is None else {'steps': steps}
-            return (yield from _call(
-                engines, 'mouse', page, (x, y), lambda *a, **k: o['move'](*(a or (x, y)), **{**extra, **k}),
-                click=None,
-            ))
+            return (yield from _move(engines, page, x, y, **({} if steps is None else {'steps': steps})))
 
         def click_at(name: str) -> Callable[..., Flow]:
             def flow(x: float, y: float, **kwargs: Any) -> Flow:
@@ -627,9 +624,9 @@ def _is_async(target: Any) -> bool:
     return isinstance(target, AsyncBase)
 
 
-def check(humanize: Any, is_async: bool) -> None:
-    """Check a `humanize` setting before a launch."""
-    engines, _seed = normalize(humanize)
+def check(humanize: Any, is_async: bool) -> Tuple[Dict[str, Any], Optional[int]]:
+    """Check a `humanize` setting before a launch, and normalize it."""
+    engines, seed = normalize(humanize)
     if not is_async:
         for channel, engine in engines.items():
             fn = engine.get('fn')
@@ -638,13 +635,13 @@ def check(humanize: Any, is_async: bool) -> None:
                     f'humanize["{channel}"]: custom({getattr(fn, "__name__", fn)}) is async, but this is the '
                     'sync API. Pass a plain function, or use AsyncCamoufox.'
                 )
+    return engines, seed
 
 
 def attach(
     target: Any,
     humanize: Any,
     os: str,
-    seed: Optional[int] = None,
     i_know_what_im_doing: Optional[bool] = None,
     is_async: Optional[bool] = None,
 ) -> Any:
@@ -654,12 +651,11 @@ def attach(
     Other browsers in this process are untouched. `os` ('macos', 'windows' or
     'linux') is the launch identity's, whose people myuri plans for.
 
-    The streams use `humanize["seed"]`, or `seed`, or a random seed.
+    The streams use `humanize["seed"]`, or a random seed.
     """
     if is_async is None:
         is_async = _is_async(target)
-    check(humanize, is_async)
-    channels, given = normalize(humanize)
+    channels, seed = check(humanize, is_async)
     fns: Dict[str, Callable[..., Any]] = {}
     for channel, engine in channels.items():
         if engine['engine'] == 'custom':
@@ -676,9 +672,7 @@ def attach(
     if getattr(getattr(impl, '_connection', None), 'is_remote', False):
         LeakWarning.warn('humanize_custom_remote', i_know_what_im_doing)
 
-    if given is None:
-        given = seed if seed is not None else secrets.randbits(64)
-    engines = _Engines(fns, given, is_async)
+    engines = _Engines(fns, secrets.randbits(64) if seed is None else seed, is_async)
 
     if not hasattr(target, 'new_context'):
         # A BrowserContext (a persistent context).

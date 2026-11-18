@@ -16,7 +16,7 @@ it is sent (docs/input-dispatch.md). How a person moves, types and scrolls is
 the driver's job. A channel (mouse, keyboard, scroll) is one of
 
     myuri()     paths, clicks, typing and wheel turns planned by myuri for the
-                identity's OS (the `humanize` extra)
+                identity's OS
     custom(fn)  a function in this process plans the channel's input
     raw()       Playwright's own calls, unchanged
 
@@ -91,23 +91,14 @@ _IN_BROWSER = (
 
 
 def _as_engine(channel: str, value: Any) -> Engine:
-    candidate = {'engine': value, 'options': {}} if isinstance(value, str) else value
-    if not isinstance(candidate, Mapping) or not isinstance(candidate.get('engine'), str):
-        raise ValueError(f'humanize["{channel}"] must be myuri(), custom(fn) or raw(), got {value!r}')
-    name = candidate['engine']
+    if not isinstance(value, Mapping) or value.get('engine') not in ('myuri', 'custom', 'raw'):
+        raise ValueError(f'humanize["{channel}"]={value!r} is not an engine; {_IN_BROWSER}')
+    name, options = value['engine'], value.get('options') or {}
     if name == 'myuri':
-        return myuri(**(candidate.get('options') or {}))
-    if name == 'custom':
-        if not callable(candidate.get('fn')):
-            raise ValueError(f'humanize["{channel}"]: a custom engine needs its function, as custom(fn)')
-        if candidate.get('options'):
-            raise ValueError(f'humanize["{channel}"]: custom() takes no options; the function is the engine')
-        return {'engine': 'custom', 'options': {}, 'fn': candidate['fn']}
-    if name != 'raw':
-        raise ValueError(f'humanize["{channel}"]: {name!r} is not an engine; {_IN_BROWSER}')
-    if candidate.get('options'):
-        raise ValueError(f'humanize["{channel}"]: raw() takes no options')
-    return raw()
+        return myuri(**options)
+    if options:
+        raise ValueError(f'humanize["{channel}"]: {name}() takes no options')
+    return custom(value.get('fn')) if name == 'custom' else raw()
 
 
 def normalize(humanize: HumanizeSetting) -> Tuple[Dict[str, Engine], Optional[int]]:
@@ -125,7 +116,7 @@ def normalize(humanize: HumanizeSetting) -> Tuple[Dict[str, Engine], Optional[in
     seed = humanize.get('seed')
     if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**64):
         raise ValueError(f'humanize["seed"] must be an integer in [0, 2**64), got {seed!r}')
-    engines = {channel: _as_engine(channel, humanize.get(channel, 'myuri')) for channel in CHANNELS}
+    engines = {channel: _as_engine(channel, humanize.get(channel, myuri())) for channel in CHANNELS}
     return engines, seed
 
 
@@ -169,28 +160,21 @@ def splitmix64(x: int) -> int:
 class SeededRng:
     """
     Mulberry32 over a 32-bit seed. Calling it (or `random()`) returns a float
-    in [0, 1), bit for bit what the browser's stream returns; `position`
-    counts the draws.
+    in [0, 1), bit for bit what the TypeScript launcher's stream returns.
     """
 
-    __slots__ = ('_a', 'position')
+    __slots__ = ('_a',)
 
     def __init__(self, seed32: int) -> None:
         self._a = seed32 & _MASK32
-        self.position = 0
 
     def random(self) -> float:
-        self.position += 1
         a = self._a = (self._a + 0x6D2B79F5) & _MASK32
         t = ((a ^ (a >> 15)) * (1 | a)) & _MASK32
         t = ((t + (((t ^ (t >> 7)) * (61 | t)) & _MASK32)) & _MASK32) ^ t
         return ((t ^ (t >> 14)) & _MASK32) / 4294967296
 
     __call__ = random
-
-    def uniform(self, low: float, high: float) -> float:
-        """low + (high - low) * one draw."""
-        return low + (high - low) * self.random()
 
 
 def channel_stream(seed: int, channel: str) -> SeededRng:

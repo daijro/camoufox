@@ -102,8 +102,4 @@ def _move_to(plan: Any, os: str, page: Any, point: Tuple[float, float], rng: Any
 
 def _wheel(plan: Any, os: str, page: Any, delta: Tuple[float, float], rng: Any) -> Flow:
     # Camoufox identities point with a mouse, whose wheel turns in notches.
-    steps = plan.plan_wheel(delta[0], delta[1], rng, os=os, device='mouse')
-    return (yield from _play(page, [
-        ('wheel', step[1], step[2], step[3]) if step[0] == 'wheel' else ('key', step[1], step[2], step[3])
-        for step in steps
-    ]))
+    return (yield from _play(page, plan.plan_wheel(delta[0], delta[1], rng, os=os, device='mouse')))
