@@ -5,7 +5,7 @@ per channel, run by the driver. Nothing of it reaches the browser's config."""
 import pytest
 
 from camoufox import utils
-from camoufox.humanize import CHANNELS, myuri, normalize, raw
+from camoufox.humanize import CHANNELS, cursory, myuri, normalize, raw
 
 
 def noop(*_args, **_kwargs):
@@ -85,10 +85,15 @@ def test_no_humanize_is_raw_and_humanize_is_myuri() -> None:
     assert seed == 5
 
 
+def test_cursory_is_myuri() -> None:
+    assert cursory() == myuri() and cursory(move=noop) == myuri(move=noop)
+    engines, _seed = normalize({"mouse": {"engine": "cursory", "options": {"move": noop}}, "scroll": cursory()})
+    assert engines == {"mouse": myuri(move=noop), "keyboard": myuri(), "scroll": myuri()}
+
+
 @pytest.mark.parametrize(
     "humanize",
-    [1.5, 2, {"mouse": "cursory"}, {"mouse": {"engine": "auto", "options": {}}},
-     {"scroll": {"engine": "cursory", "options": {"maxTime": 1}}}],
+    [1.5, 2, {"mouse": "cursory"}, {"mouse": {"engine": "auto", "options": {}}}],
 )
 def test_in_browser_humanization_is_refused(humanize) -> None:
     with pytest.raises(ValueError, match="the browser does not humanize input"):
@@ -105,6 +110,7 @@ def test_in_browser_humanization_is_refused(humanize) -> None:
         ({"seed": "1"}, "seed"),
         ({"mouse": 3}, "is not an engine"),
         ({"mouse": {"engine": "myuri", "options": {"speed": 1}}}, r"myuri\(\) has no part 'speed'"),
+        ({"mouse": {"engine": "cursory", "options": {"maxTime": 1}}}, r"myuri\(\) has no part 'maxTime'"),
         ({"mouse": myuri(type=noop)}, r'humanize\["mouse"\]: myuri\(type=...\) is not a mouse part'),
         ({"mouse": {"engine": "myuri", "options": {"wpm": 70}}}, r"myuri\(wpm=...\) is not a mouse part"),
         ({"keyboard": {"engine": "myuri", "options": {"type": "fast"}}}, "takes the function that replaces the part"),

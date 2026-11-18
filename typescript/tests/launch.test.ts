@@ -37,7 +37,7 @@ import {
 
 const { OSError } = await import("../src/pycompat.js");
 const { Version } = await import("../src/pkgman.js");
-const { myuri, normalize, raw } = await import("../src/humanize.js");
+const { cursory, myuri, normalize, raw } = await import("../src/humanize.js");
 const { InvalidPropertyType, UnknownIPLocation } = await import(
 	"../src/exceptions.js"
 );
@@ -872,13 +872,27 @@ describe("test_humanize", () => {
 		expect(seed).toBe(5);
 	});
 
+	it("takes cursory() as myuri()", () => {
+		expect(cursory()).toEqual(myuri());
+		expect(cursory({ move: noop })).toEqual(myuri({ move: noop }));
+		expect(
+			normalize({
+				mouse: { engine: "cursory", options: { move: noop } },
+				scroll: cursory(),
+			}).engines,
+		).toEqual({
+			mouse: myuri({ move: noop }),
+			keyboard: myuri(),
+			scroll: myuri(),
+		});
+	});
+
 	it.each([
 		0,
 		1.5,
 		2,
 		{ mouse: "cursory" },
 		{ mouse: { engine: "auto", options: {} } },
-		{ scroll: { engine: "cursory", options: { maxTime: 1 } } },
 		{ mouse: { engine: "custom", options: {} } },
 	])("refuses in-browser humanization (%#)", async (humanize) => {
 		expect(() => normalize(humanize)).toThrow(
@@ -900,6 +914,10 @@ describe("test_humanize", () => {
 		[
 			{ mouse: { engine: "myuri", options: { speed: 1 } } },
 			"myuri() has no part 'speed'",
+		],
+		[
+			{ mouse: { engine: "cursory", options: { maxTime: 1 } } },
+			"myuri() has no part 'maxTime'",
 		],
 		[
 			{ mouse: myuri({ type: noop }) },

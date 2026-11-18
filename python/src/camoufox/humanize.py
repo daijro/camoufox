@@ -22,6 +22,8 @@ the driver's job. A channel (mouse, keyboard, scroll) is one of
                 around a click (scroll into view, the point, whether it lands)
     raw()       Playwright's own calls, unchanged
 
+cursory() is another name for myuri(), which runs cursory's paths.
+
 `myuri(**parts)` replaces any of myuri's parts on its channel with a function
 of yours; the rest stay myuri's (camoufox._humanize_playwright).
 
@@ -74,6 +76,9 @@ def myuri(**options: Any) -> Engine:
     return {'engine': 'myuri', 'options': dict(options)}
 
 
+cursory = myuri
+
+
 _IN_BROWSER = (
     'the browser does not humanize input: each Playwright call is one event. '
     'Pass True, or myuri() or raw() per channel (camoufox.humanize)'
@@ -81,7 +86,7 @@ _IN_BROWSER = (
 
 
 def _as_engine(channel: str, value: Any) -> Engine:
-    if not isinstance(value, Mapping) or value.get('engine') not in ('myuri', 'raw'):
+    if not isinstance(value, Mapping) or value.get('engine') not in ('myuri', 'cursory', 'raw'):
         raise ValueError(f'humanize["{channel}"]={value!r} is not an engine; {_IN_BROWSER}')
     options = value.get('options') or {}
     if value['engine'] == 'raw':

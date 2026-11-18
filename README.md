@@ -640,6 +640,7 @@ Camoufox(humanize={"keyboard": myuri(wpm=70), "scroll": raw(), "seed": 1234})
   click (scroll the element into view, choose the point, check that the press
   lands, try again when it does not). Both packages depend on it, pinned to the
   release they were tested with.
+- `cursory()` is another name for `myuri()`: myuri runs cursory's paths.
 - `raw()` is Playwright as it is.
 - A channel a dict leaves out is `myuri()`. `humanize=None` or `False`, the
   default, is `raw()` everywhere.

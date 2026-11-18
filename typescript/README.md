@@ -239,6 +239,7 @@ await browser.close();
 ```
 
 - `myuri()` is [myuri](https://github.com/JWriter20/Myuri)'s smart actions, fitted to recordings of people on each OS and drawn for the launch identity's OS: the path, the press, the typing and the wheel turns, and the decisions around a click (scroll the element into view, choose the point, check that the press lands, try again when it does not). The package depends on it (`@jwriter20/myuri`), pinned to the release it was tested with.
+- `cursory()` is another name for `myuri()`: myuri runs cursory's paths.
 - `raw()` is Playwright as it is.
 - A channel an object leaves out is `myuri()`. `humanize: null` or `false`, the default, is `raw()` everywhere.
 

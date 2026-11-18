@@ -20,6 +20,7 @@ export {
 	Screen,
 } from "./fingerprints.js";
 export {
+	cursory,
 	type HumanizeSetting,
 	type MyuriOptions,
 	myuri,

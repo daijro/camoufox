@@ -35,6 +35,7 @@ humanize = {"mouse": myuri(), "keyboard": myuri(wpm=70), "scroll": raw(), "seed"
   the rest; the README's "Replacing a part" has the call signatures. myuri is
   the one implementation of the smart actions: Camoufox adapts Playwright to
   it and adds none of its own.
+- `cursory()` is another name for `myuri()`: myuri runs cursory's paths.
 - `raw()` is Playwright as it is.
 - `humanize=True` is `myuri()` on every channel, and a channel a dict leaves out
   is `myuri()`. `humanize=None` or `False` (the default) is `raw()` everywhere.

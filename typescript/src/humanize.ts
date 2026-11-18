@@ -24,6 +24,8 @@
  *                 around a click (scroll into view, the point, whether it lands)
  *     raw()       Playwright's own calls, unchanged
  *
+ * cursory() is another name for myuri(), which runs cursory's paths.
+ *
  * `myuri(parts)` replaces any of myuri's parts on its channel with a function
  * of yours; the rest stay myuri's (_humanize_playwright.ts). `humanize` may be
  * null / false (every channel raw), true (every channel myuri), or an object
@@ -129,6 +131,8 @@ export function myuri(options: MyuriOptions = {}): Engine {
 	return { engine: "myuri", options: { ...options } };
 }
 
+export const cursory = myuri;
+
 const IN_BROWSER =
 	"the browser does not humanize input: each Playwright call is one event. " +
 	"Pass True, or myuri() or raw() per channel (camoufox.humanize)";
@@ -137,7 +141,7 @@ function asEngine(channel: Channel, value: unknown): Engine {
 	const entry = value as Partial<Engine> | null;
 	if (
 		typeof entry !== "object" ||
-		!["myuri", "raw"].includes(entry?.engine as string)
+		!["myuri", "cursory", "raw"].includes(entry?.engine as string)
 	)
 		throw new ValueError(
 			`humanize["${channel}"]=${pyRepr(value)} is not an engine; ${IN_BROWSER}`,
