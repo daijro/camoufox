@@ -87,9 +87,11 @@ that is the same deadlock reached from inside a curve rather than from
 GPU process that dies never comes back, and stalled every such dispatch until
 the backstop. So does the drag path's `juggler-drag-finalized`, per input
 event: an answer a busy page gives later still decides the next event, so the
-drag drops, and mouseup ends the wait. `activateAndRun()` carries a 30s
-backstop for the waits still unbounded in the same slot (`TabSwitchDone`, the
-drag path's `dragover` and cross-process sends), none of which has failed yet.
+drag drops, and mouseup ends the wait. `activateAndRun()` bounds the whole
+slot, tab switch included, at 30s, a backstop for the waits still unbounded in
+it (`TabSwitchDone`, the drag path's `dragover` and cross-process sends). A
+slot that expires before its tab switch completes fails its command with "Tab
+switch did not complete within 30000ms"; the chain advances either way.
 
 **The static check.** `browser/scripts/check-input-dispatch.py`, wired into the
 `static` job of `.github/workflows/tests.yml`. Two exemptions, both

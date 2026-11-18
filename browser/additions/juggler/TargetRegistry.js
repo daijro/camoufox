@@ -19,9 +19,10 @@ const {setTimeout, clearTimeout} = ChromeUtils.importESModule("resource://gre/mo
 // caused all four shipped deadlocks, and apz-repaints-flushed and
 // juggler-drag-finalized share it, but other unbounded waits are reachable
 // from a single slot -- TabSwitchDone, the drag path's dragover waits,
-// and the cross-process dispatchDragEvent sends all have the same shape. None
-// of them has failed yet. Bounding only the wait that has already bitten us
-// is the posture that produced those four fixes, so bound the slot itself too.
+// and the cross-process dispatchDragEvent sends all have the same shape, and
+// a TabSwitchDone that never fires wedges the chain (#1092). Bounding only the
+// wait that has already bitten us is the posture that produced those four
+// fixes, so bound the slot itself too.
 //
 // Sized as a backstop, not a tuning knob: with a 5s ack deadline a legitimate
 // worst-case input slot approaches 10s, so this must sit well clear of that.
