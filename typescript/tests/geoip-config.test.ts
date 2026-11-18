@@ -68,6 +68,31 @@ it("raises, naming it, for an explicit source missing from repos.yml", () => {
 	);
 });
 
+it("the CLI reports an explicit source missing from repos.yml", async () => {
+	saved({ name: "Gone", explicit: true });
+	const savedArgv = process.argv;
+	let output = "";
+	const write = vi
+		.spyOn(process.stdout, "write")
+		.mockImplementation((chunk) => {
+			output += String(chunk);
+			return true;
+		});
+	try {
+		for (const command of ["version", "list"]) {
+			vi.resetModules();
+			process.argv = ["node", "camoufox", command];
+			await import("../src/__main__.js");
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		}
+	} finally {
+		write.mockRestore();
+		process.argv = savedArgv;
+	}
+	expect(process.exitCode ?? 0).toBe(0);
+	expect(output.match(/'Gone' not found/g)).toHaveLength(2);
+});
+
 it("records an explicit choice", () => {
 	const config = g.getGeoipConfigByName(DEPRECATED);
 	g.saveGeoipConfig(config, true);
