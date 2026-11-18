@@ -35,7 +35,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomBytes } from "node:crypto";
 import { inspect } from "node:util";
 import { errors } from "playwright-core";
-import { engine as myuriEngine, requireMyuri } from "./_humanize_myuri.js";
+import { engine as myuriEngine } from "./_humanize_myuri.js";
 import {
 	FILL_NEEDS_CLICK,
 	PRESS_MISSES,
@@ -681,9 +681,7 @@ function isolateDispatch(connection: any): void {
 
 /** Check a `humanize` setting before a launch. */
 export function check(humanize: unknown): void {
-	const { engines } = normalize(humanize);
-	if (CHANNELS.some((channel) => engines[channel].engine === "myuri"))
-		requireMyuri();
+	normalize(humanize);
 }
 
 /**

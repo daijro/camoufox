@@ -726,6 +726,7 @@ rules:
       - "private recordings: click hold p50 94-109 ms and rapid-click down-to-down 141-157 ms on both OSes with both devices"
       - "private recordings: last move to pointerdown p50 48-63 ms with a mouse and 16-31 ms with a touchpad or trackpad, on both OSes"
       - "private recordings: every Windows median is a multiple of 15.6 ms, the OS's input timestamp grid, so Windows and macOS figures differ by up to one grid step for that reason alone"
+      - "private recordings: a later press in a run of quick clicks in place is held 63/83/113 ms (p10/50/90, 130 presses), a first press 78/96/125 ms; the pointer does not move between them"
     rationale: >-
       These are the targets the engine's click model is fitted to, with one
       model for every OS. A tap on a touchpad presses sooner after the last
@@ -734,7 +735,10 @@ rules:
       first, and the browser counts that move against the next press's click
       count. Playwright's trial click is no dry run either (it presses, and
       the page swallows the events), so the wrapper runs its own hit test in
-      the isolated world and plans again on a miss.
+      the isolated world and plans again on a miss. A click on the target the
+      pointer already rests on presses where it is, and the engine is told
+      how long ago the last press was released, so a click within the OS's
+      500 ms continues the run as a person's quick clicks do.
 
   - id: human-pointer-moves-follow-the-os
     title: How moves reach the page is the OS's; how often is the display's
@@ -795,11 +799,15 @@ rules:
       - "private recordings (macOS): deltaMode 1, 1-13 accelerated lines per event, wheelDelta/delta 48 vertical and 27 horizontal, at about 20 ms gaps"
       - "private recordings: horizontal scrolling held Shift on every macOS event; on Windows it arrived as a mix of Shift with deltaY and deltaX"
       - "private recordings: a touchpad or trackpad scrolls in pixels (deltaMode 0) on both OSes"
+      - "private recordings (Windows mouse): every short scroll opened with a lone notch, then strokes of 1-5 notches (median 2) 47-78 ms apart; a stroke of 2-10 notches arrived about one notch a 15.6 ms tick"
+      - "private recordings (macOS mouse): after a re-grip of up to 140 ms the next stroke started at the last frame's lines or one fewer in 81% of 83; after 160 ms or more, always at one line"
     rationale: >-
       Both mice were the same make with notched wheels, so the difference is
       the OS. deltaMode, the wheelDelta ratio and the Shift modifier are
       properties of the event, so the browser sets them for the launch OS; how
-      many notches and how far apart is the engine's scroll plan.
+      many notches and how far apart is the engine's scroll plan, which nudges
+      a short scroll notch by notch and, on macOS, keeps the speed across a
+      quick re-grip as the OS does.
 
   - id: human-typing-timing
     title: Typing timing belongs to the person and the keyboard, not the OS

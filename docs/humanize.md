@@ -27,8 +27,9 @@ humanize = {"mouse": myuri(), "keyboard": myuri(wpm=70), "scroll": raw(), "seed"
 - `myuri()` is [myuri](https://github.com/JWriter20/Myuri), fitted to recordings
   of people on each OS ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml), the
   `human-*` rules). It plans for the launch identity's OS, since input behaviour
-  belongs to the browser, not the context. It needs
-  `pip install "camoufox[humanize]"` (npm: `@jwriter20/myuri`).
+  belongs to the browser, not the context. Both packages depend on it (PyPI
+  `myuri`, npm `@jwriter20/myuri`), pinned to one release so a seed plans the
+  same input in Python and TypeScript.
 - `custom(fn)` runs your own function; the README's "Writing your own engine"
   has the call signatures.
 - `raw()` is Playwright as it is.

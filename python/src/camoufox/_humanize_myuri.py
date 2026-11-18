@@ -6,26 +6,20 @@ myuri only plans; nothing here runs in the page except its scroll measurement.
 
 from __future__ import annotations
 
+import time
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from ._humanize_custom import FLOW, POINTER, Flow, _play, _Sleep
-from .exceptions import NotInstalledHumanizeExtra
 
 # An element still out of view after this many wheel plans (one that moves as
 # it scrolls) is brought into view by Playwright's own scroll.
 _SCROLL_PASSES = 3
 
+# When the last press was released, until the pointer next moves.
+_RELEASED = '_camoufox_myuri_released'
+
 _VIEWPORT = '() => [innerWidth, innerHeight]'
 _CLIENT_ORIGIN = 'e => { const r = e.getBoundingClientRect(); return [r.x, r.y]; }'
-
-
-def require() -> None:
-    try:
-        import myuri.plan  # noqa: F401
-    except ImportError as e:
-        raise NotInstalledHumanizeExtra(
-            'humanize uses myuri, which is not installed. Install it with: pip install "camoufox[humanize]"'
-        ) from e
 
 
 def engine(channel: str, options: Dict[str, Any], os: str) -> Callable[..., Flow]:
@@ -41,12 +35,16 @@ def engine(channel: str, options: Dict[str, Any], os: str) -> Callable[..., Flow
         yield from _move_to(plan, os, page, (x, y), rng)
         if not click:
             return None
-        presses = plan.plan_click(rng, os=os, click_count=click['click_count'])
+        released = getattr(page, _RELEASED, None)
+        presses = plan.plan_click(rng, os=os, click_count=click['click_count'],
+                                  since_release_ms=None if released is None else (time.monotonic() - released) * 1000)
         yield _Sleep(presses['dwell_ms'] / 1000)
         down, up = presses['presses'][0][0], presses['presses'][-1][1]
         # The press holds each press for `delay` and waits it again between
         # presses, so spread the plan's span evenly over those 2n - 1 intervals.
-        return (yield original(x, y, delay=(up - down) / (2 * len(presses['presses']) - 1)))
+        result = yield original(x, y, delay=(up - down) / (2 * len(presses['presses']) - 1))
+        setattr(page, _RELEASED, time.monotonic())
+        return result
 
     def keyboard(page: Any, text: str, *, original: Any, rng: Any, play: Any, kind: str) -> Flow:
         if kind == 'press':
@@ -96,6 +94,7 @@ def _move_to(plan: Any, os: str, page: Any, point: Tuple[float, float], rng: Any
     start = yield from _cursor(page, rng)
     if start == point:
         return None
+    setattr(page, _RELEASED, None)
     path = plan.plan_move(plan.Vector(*start), plan.Vector(*point), rng, os=os)
     yield from _play(page, [('move', x, y, t) for x, y, t in path])
     return None

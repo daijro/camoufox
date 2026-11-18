@@ -642,6 +642,30 @@ describe("wrappers", () => {
 		]);
 	});
 
+	it("myuri clicks again in place as a run", async () => {
+		const { browser, page } = await attachedPage({ mouse: myuri(), seed: 3 });
+		await page.locator("#near").click();
+		const stamped: unknown[][] = [];
+		browser.events.push = (event: unknown[]) =>
+			stamped.push([...event, performance.now()]);
+		for (let i = 0; i < 12; i += 1) await page.locator("#near").click();
+		const events = stamped.filter((e) => String(e[0]).startsWith("mouse."));
+		// The pointer rests on the target, so it presses where it is.
+		expect(events.filter((e) => e[0] === "mouse.move")).toEqual([]);
+		// Each press comes a run's gap (recorded 30-250 ms) after the last
+		// release, as quick clicks in place do, and the OS counts the run.
+		const gaps = events.flatMap((e, i) =>
+			e[0] === "mouse.up" && events[i + 1]?.[0] === "mouse.down"
+				? [(events[i + 1].at(-1) as number) - (e.at(-1) as number)]
+				: [],
+		);
+		expect(gaps).toHaveLength(11);
+		for (const gap of gaps) {
+			expect(gap).toBeGreaterThanOrEqual(28);
+			expect(gap).toBeLessThan(300);
+		}
+	});
+
 	it("myuri turns a wheel in mouse notches", async () => {
 		const { browser, page } = await attachedPage({ scroll: myuri(), seed: 3 });
 		await page.mouse.wheel(0, 300);

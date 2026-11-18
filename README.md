@@ -635,8 +635,8 @@ Camoufox(humanize={"keyboard": myuri(wpm=70), "scroll": raw(), "seed": 1234})
 ```
 
 - `myuri()` is [myuri](https://github.com/JWriter20/Myuri), fitted to recordings of
-  people on each OS and drawn for the launch identity's OS. Install it with
-  `pip install "camoufox[humanize]"`.
+  people on each OS and drawn for the launch identity's OS. Both packages depend on
+  it, pinned to the release they were tested with.
 - `custom(fn)` is a function of yours (below), and `raw()` is Playwright as it is.
 - A channel a dict leaves out is `myuri()`. `humanize=None` or `False`, the
   default, is `raw()` everywhere.

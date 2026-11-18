@@ -6,10 +6,8 @@
  * in the page except its scroll measurement.
  */
 
-import { createRequire } from "node:module";
 import { POINTER } from "./_humanize_custom.js";
 import { pageFunction } from "./driver_defaults.js";
-import { NotInstalledHumanizeExtra } from "./exceptions.js";
 import type {
 	Channel,
 	CustomEngine,
@@ -22,31 +20,20 @@ import type { OsName } from "./utils.js";
 type Planner = typeof import("@jwriter20/myuri");
 type Point = [number, number];
 
-const MODULE = "@jwriter20/myuri";
-
 // An element still out of view after this many wheel plans (one that moves as
 // it scrolls) is brought into view by Playwright's own scroll.
 const SCROLL_PASSES = 3;
+
+// When the last press was released, until the pointer next moves.
+const RELEASED = new WeakMap<object, number>();
 
 const VIEWPORT = "() => [innerWidth, innerHeight]";
 const CLIENT_ORIGIN =
 	"e => { const r = e.getBoundingClientRect(); return [r.x, r.y]; }";
 
-export function requireMyuri(): void {
-	try {
-		createRequire(import.meta.url).resolve(MODULE);
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "MODULE_NOT_FOUND")
-			throw error;
-		throw new NotInstalledHumanizeExtra(
-			`humanize uses myuri, which is not installed. Install it with: npm i ${MODULE}`,
-		);
-	}
-}
-
 let loaded: Promise<Planner> | undefined;
 const planner = () => {
-	loaded ??= import(MODULE) as Promise<Planner>;
+	loaded ??= import("@jwriter20/myuri");
 	return loaded;
 };
 
@@ -73,15 +60,22 @@ export function engine(
 		}
 		await moveTo(plan, os, page, point, rng, play);
 		if (!click) return;
+		const released = RELEASED.get(page);
 		const { dwellMs, presses } = plan.planClick(rng, {
 			os,
 			clickCount: click.clickCount,
+			sinceReleaseMs:
+				released === undefined ? undefined : performance.now() - released,
 		});
 		await sleep(dwellMs);
 		const span = presses[presses.length - 1][1] - presses[0][0];
 		// The press holds each press for `delay` and waits it again between
 		// presses, so spread the plan's span evenly over those 2n - 1 intervals.
-		return original(...point, { delay: span / (2 * presses.length - 1) });
+		const result = await original(...point, {
+			delay: span / (2 * presses.length - 1),
+		});
+		RELEASED.set(page, performance.now());
+		return result;
 	};
 
 	const keyboard = async (
@@ -157,6 +151,7 @@ async function moveTo(
 ) {
 	const start = await cursor(page, rng);
 	if (start[0] === point[0] && start[1] === point[1]) return;
+	RELEASED.delete(page);
 	await play(
 		plan
 			.planMove(

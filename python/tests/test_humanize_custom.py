@@ -665,6 +665,27 @@ def test_myuri_moves_to_a_point_in_the_box_and_clicks_there():
     assert events[-2:] == [["mouse.down", "left", 1], ["mouse.up", "left", 1]]
 
 
+def test_myuri_clicks_again_in_place_as_a_run():
+    from camoufox.humanize import myuri
+
+    class Stamped(list):
+        def append(self, event):
+            super().append([*event, time.monotonic()])
+
+    browser, page = attached_page({"mouse": myuri(), "seed": 3})
+    page.locator("#near").click()
+    browser.rec.events = Stamped()
+    for _ in range(12):
+        page.locator("#near").click()
+    events = [e for e in browser.rec.events if e[0].startswith("mouse.")]
+    # The pointer rests on the target, so it presses where it is.
+    assert not [e for e in events if e[0] == "mouse.move"]
+    # Each press comes a run's gap (recorded 30-250 ms) after the last release,
+    # as quick clicks in place do, and the OS counts the run.
+    gaps = [b[-1] - a[-1] for a, b in zip(events, events[1:]) if a[0] == "mouse.up" and b[0] == "mouse.down"]
+    assert len(gaps) == 11 and all(0.028 <= gap < 0.3 for gap in gaps)
+
+
 def test_myuri_turns_a_wheel_in_mouse_notches():
     from camoufox.humanize import myuri
 

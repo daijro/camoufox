@@ -238,7 +238,7 @@ const browser = await Camoufox({
 await browser.close();
 ```
 
-- `myuri()` is [myuri](https://github.com/JWriter20/Myuri), fitted to recordings of people on each OS and drawn for the launch identity's OS. Install it with `npm i @jwriter20/myuri`; without it the launch throws `NotInstalledHumanizeExtra`.
+- `myuri()` is [myuri](https://github.com/JWriter20/Myuri), fitted to recordings of people on each OS and drawn for the launch identity's OS. The package depends on it (`@jwriter20/myuri`).
 - `custom(fn)` is a function of yours (below), and `raw()` is Playwright as it is.
 - A channel an object leaves out is `myuri()`. `humanize: null` or `false`, the default, is `raw()` everywhere.
 

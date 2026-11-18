@@ -630,10 +630,6 @@ def _is_async(target: Any) -> bool:
 def check(humanize: Any, is_async: bool) -> None:
     """Check a `humanize` setting before a launch."""
     engines, _seed = normalize(humanize)
-    if any(engine['engine'] == 'myuri' for engine in engines.values()):
-        from ._humanize_myuri import require
-
-        require()
     if not is_async:
         for channel, engine in engines.items():
             fn = engine.get('fn')

@@ -366,10 +366,10 @@ jobs:
 
       - name: Check Python compatibility
         # The package must run on the floor pyproject.toml declares (python =
-        # "^3.10"); `3.10-` means "needs at most 3.10". typing_extensions is a
+        # "^3.11"); `3.11-` means "needs at most 3.11". typing_extensions is a
         # dependency, not a stdlib module for vermin to date.
         working-directory: python
-        run: ../.venv/bin/vermin . --eval-annotations --backport typing_extensions --target=3.10- --violations src/camoufox/
+        run: ../.venv/bin/vermin . --eval-annotations --backport typing_extensions --target=3.11- --violations src/camoufox/
 
       - name: Stamp the version and the paired browser
         run: |
