@@ -15,11 +15,15 @@ What PASS means:
       and the text, and their default() runs myuri's part;
     * a replaced move part draws the path the page sees, and myuri still
       presses where that path ended;
-    * the same seed gives the same input; another seed does not.
+    * the same seed gives the same input; another seed does not;
+    * myuri's moves reach the page at refresh ticks, in whole frames, as a
+      real mouse's do in stock Firefox.
 """
 
 import asyncio
+import bisect
 import os
+import statistics
 import sys
 
 from camoufox.async_api import AsyncCamoufox
@@ -53,6 +57,24 @@ SETTLE = """() => new Promise(resolve => {
 })"""
 
 STEPS = 10
+
+# Stock Firefox delivers a real mouse's motion at refresh ticks: on Xvfb 90-91%
+# of its mousemoves landed within 2.5 ms of a requestAnimationFrame callback,
+# against 19-43% for moves played on a generator's own clock (#978). Gaps are
+# whole frames: one while the hand moves, more where it paused; a gap under a
+# frame is only the generator's clock, and delivery that skips frames has few
+# one-frame gaps.
+FRAMES = """() => {
+  window.moves = []; window.frames = [];
+  addEventListener('mousemove', () => moves.push(performance.now()));
+  (function tick(t) { frames.push(t); requestAnimationFrame(tick); })(performance.now());
+}"""
+TICK_MS = 2.5
+AT_TICK = 0.75
+SHORT_FRAME = 0.85
+MAX_SHORT = 0.1
+ONE_FRAME = (0.85, 1.25)
+MIN_ONE_FRAME = 0.2
 
 
 def logged_parts(log):
@@ -130,6 +152,39 @@ async def session(humanize, fingerprint):
     return before, far, state
 
 
+async def refresh_ticks(fingerprint, failures):
+    """One long move of myuri's reaches the page at refresh ticks, in whole frames."""
+    kwargs = dict(headless=True, os="linux", humanize=True, fingerprint=fingerprint, i_know_what_im_doing=True)
+    if EXECUTABLE_PATH:
+        kwargs["executable_path"] = EXECUTABLE_PATH
+    async with AsyncCamoufox(**kwargs) as browser:
+        page = await browser.new_page(viewport={"width": 1000, "height": 700})
+        await page.set_content(BODY)
+        await page.mouse.move(20, 20)
+        await page.evaluate(FRAMES)
+        await page.mouse.move(950, 650)
+        moves, frames = await page.evaluate("[moves, frames]")
+    frame = statistics.median(b - a for a, b in zip(frames, frames[1:]))
+    gaps = [b - a for a, b in zip(moves, moves[1:])]
+    if len(gaps) < 10:
+        failures.append(f"a long move reached the page as {len(moves)} mousemoves")
+        return
+
+    def from_tick(t):
+        i = bisect.bisect_left(frames, t)
+        return min(abs(frames[j] - t) for j in (i - 1, i) if 0 <= j < len(frames))
+
+    at_tick = sum(from_tick(t) <= TICK_MS for t in moves) / len(moves)
+    short = sum(g < SHORT_FRAME * frame for g in gaps) / len(gaps)
+    one = sum(ONE_FRAME[0] * frame <= g <= ONE_FRAME[1] * frame for g in gaps) / len(gaps)
+    print(f"refresh ticks: {len(moves)} mousemoves, {at_tick:.0%} at a tick; of the gaps, "
+          f"{one:.0%} one {frame:.1f} ms frame and {short:.0%} under one")
+    if at_tick < AT_TICK or short > MAX_SHORT or one < MIN_ONE_FRAME:
+        failures.append(f"myuri's moves are not delivered at refresh ticks in whole frames: {at_tick:.0%} at a "
+                        f"tick (need {AT_TICK:.0%}), {one:.0%} one frame (need {MIN_ONE_FRAME:.0%}), "
+                        f"{short:.0%} under one (at most {MAX_SHORT:.0%})")
+
+
 def check_page(label, before, far, state, failures):
     events = before + far
     kinds = [e[0] for e in events]
@@ -202,6 +257,8 @@ async def main() -> int:
         failures.append("the same seed gave different input")
     if not differs:
         failures.append("another seed gave the same input")
+
+    await refresh_ticks(fingerprint, failures)
 
     for failure in failures:
         print(f"FAIL: {failure}")
