@@ -72,6 +72,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
     ),
     "automation": (
         "addons-install-once",
+        "closed-page-released",
         "context-process-isolation",
         "debug-logging-off",
         "driver-stack-frames",
