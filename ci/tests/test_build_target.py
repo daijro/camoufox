@@ -6,26 +6,12 @@ macos,arm64 configured a macOS cross-build that failed minutes later on the
 missing SDK.
 """
 
-import importlib.util
-import sys
-
 import pytest
-
-from ci._util import BROWSER_ROOT
 
 
 @pytest.fixture
-def patch_py(monkeypatch):
-    """scripts/patch.py imported the way ci/tests/test_set_target.py does: its
-    module level parses argv, so it sees a real invocation, not pytest's."""
-    monkeypatch.setattr(sys, "argv", ["patch.py", "1.0", "r1"])
-    monkeypatch.syspath_prepend(str(BROWSER_ROOT / "scripts"))
-    spec = importlib.util.spec_from_file_location(
-        "patch_py", BROWSER_ROOT / "scripts" / "patch.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def patch_py(load_patch_py):
+    return load_patch_py()
 
 
 def test_unset_defaults_to_the_documented_linux_build(patch_py, monkeypatch):
