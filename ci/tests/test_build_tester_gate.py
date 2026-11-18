@@ -77,3 +77,14 @@ def test_build_tester_tolerates_the_exit_code_of_checks_it_does_not_gate(tmp_pat
     profiles = _default_run()
     profiles[1] = _launched("macOS Per-Context B", "macos", failed_checks=1)
     assert _profile_run(tmp_path, monkeypatch, profiles) == (0, "pass")
+
+
+def test_build_tester_records_each_profile_under_its_own_identity():
+    """Three per-context profiles of one OS must not overwrite each other's results."""
+    from ci.run_build_tester import flatten
+
+    profiles = _default_run()
+    profiles[0] = _crashed("macOS Per-Context A", "macos")
+    launches = {t: o for t, o in flatten({"profiles": profiles}).items() if t.endswith("/launch")}
+    assert len(launches) == 8
+    assert list(launches.values()).count("error") == 1

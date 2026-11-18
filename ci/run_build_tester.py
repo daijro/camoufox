@@ -87,9 +87,9 @@ def flatten(full: dict) -> Dict[str, str]:
     tests: Dict[str, str] = {}
     for profile in full.get("profiles") or []:
         meta = profile.get("profile") or {}
-        # Identify by os+mode+index, never by the display name, which carries a
-        # random letter suffix and would churn every run.
-        slot = f"{meta.get('os', '?')}-{meta.get('mode', '?')}-{meta.get('index', profile.get('index', 0))}"
+        # runner.py's display name ("macOS Per-Context A") is the one field that
+        # tells a run's profiles apart, and it is the same every run.
+        slot = meta["name"]
         results = profile.get("results") or {}
         if profile.get("error"):
             tests[f"{slot}/launch"] = evidence.ERROR
@@ -253,10 +253,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         violations.append(f"categories that must be clean have failing checks: {pretty}")
         status = evidence.FAIL
 
-    # Counted from the profiles themselves: flatten() keys a slot by os, mode and
-    # index, and runner.py records no index, so its slots merge profiles.
     profiles = full.get("profiles") or []
-    errored = [(p.get("profile") or {}).get("name", "?") for p in profiles if p.get("error")]
+    errored = [p["profile"]["name"] for p in profiles if p.get("error")]
     launched = len(profiles) - len(errored)
     expected = int(cfg.get("profile_count", 8))
     if errored or launched < expected:
