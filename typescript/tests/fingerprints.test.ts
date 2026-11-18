@@ -929,10 +929,8 @@ describe.skipIf(!MODEL.ok)("fpgen generation (needs the model)", () => {
 	it("accepts a list of OSes (Python raises InvalidConstraints here)", () => {
 		// Divergence by design: fpgen passes predicates the casefolded value,
 		// so Python's `v in {'Linux', 'Windows'}` never matches; TS compares
-		// casefolded. The list must not raise (Python's does) and every draw
-		// must stay inside it; that the predicate admits both OSes is checked
-		// directly, rather than by hoping 20 random draws land on both (a
-		// ~0.4%-per-run flake, issue #1094).
+		// casefolded. The predicate is checked directly because 20 random
+		// draws miss one of the OSes in about 0.4% of runs (#1094).
 		const real = Generator.prototype.generate;
 		let predicate: ((v: unknown) => boolean) | null = null;
 		const spy = vi
