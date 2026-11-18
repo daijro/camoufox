@@ -173,10 +173,8 @@ def find_rustup():
     it somewhere on PATH (/usr/bin, /opt/homebrew/bin). Look on PATH first,
     then the rustup.sh default, and fail loudly when neither exists.
     """
-    rustup = shutil.which("rustup")
-    if rustup is None:
-        rustup = os.path.expanduser("~/.cargo/bin/rustup")
-    if rustup is None or not os.path.isfile(rustup):
+    rustup = shutil.which("rustup") or os.path.expanduser("~/.cargo/bin/rustup")
+    if not os.access(rustup, os.X_OK):
         raise SystemExit(
             "rustup not found on PATH or at ~/.cargo/bin/rustup; "
             "install it with browser/scripts/install-deps.sh and open a new shell"
