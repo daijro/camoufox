@@ -37,7 +37,7 @@ import {
 
 const { OSError } = await import("../src/pycompat.js");
 const { Version } = await import("../src/pkgman.js");
-const { custom, myuri, normalize, raw } = await import("../src/humanize.js");
+const { myuri, normalize, raw } = await import("../src/humanize.js");
 const { InvalidPropertyType, UnknownIPLocation } = await import(
 	"../src/exceptions.js"
 );
@@ -840,12 +840,12 @@ describe("test_humanize", () => {
 		{},
 		{ mouse: raw() },
 		{
-			mouse: custom(noop),
-			keyboard: custom(noop),
-			scroll: custom(noop),
+			mouse: myuri({ move: noop }),
+			keyboard: myuri({ type: noop, wpm: 70 }),
+			scroll: myuri({ wheel: noop }),
 			seed: 9,
 		},
-		{ keyboard: raw(), seed: 2n ** 64n - 1n },
+		{ keyboard: raw(), seed: 2 ** 32 - 1 },
 	])("no humanize key reaches the browser (%#)", async (humanize) => {
 		const config = await launchHumanize(humanize);
 		expect(Object.keys(config).filter((k) => k.startsWith("humanize"))).toEqual(
@@ -862,14 +862,13 @@ describe("test_humanize", () => {
 			engines: { mouse: myuri(), keyboard: myuri(), scroll: myuri() },
 		});
 		const { engines, seed } = normalize({
-			scroll: custom(noop),
+			scroll: myuri({ intoView: noop }),
 			keyboard: { engine: "myuri", options: { wpm: 70 } },
 			seed: 5,
 		});
 		expect(engines.mouse).toEqual(myuri());
 		expect(engines.keyboard).toEqual(myuri({ wpm: 70 }));
-		expect(engines.scroll.engine).toBe("custom");
-		expect(engines.scroll.fn).toBe(noop);
+		expect(engines.scroll).toEqual(myuri({ intoView: noop }));
 		expect(seed).toBe(5);
 	});
 
@@ -880,6 +879,7 @@ describe("test_humanize", () => {
 		{ mouse: "cursory" },
 		{ mouse: { engine: "auto", options: {} } },
 		{ scroll: { engine: "cursory", options: { maxTime: 1 } } },
+		{ mouse: { engine: "custom", options: {} } },
 	])("refuses in-browser humanization (%#)", async (humanize) => {
 		expect(() => normalize(humanize)).toThrow(
 			"the browser does not humanize input",
@@ -892,13 +892,27 @@ describe("test_humanize", () => {
 	it.each([
 		[{ touch: raw() }, "no channel"],
 		[{ seed: -1 }, "seed"],
-		[{ seed: 2n ** 64n }, "seed"],
-		[{ seed: 2 ** 53 }, "bigint"],
+		[{ seed: 2 ** 32 }, "seed"],
+		[{ seed: 1.5 }, "seed"],
 		[{ seed: true }, "seed"],
 		[{ seed: "1" }, "seed"],
 		[{ mouse: 3 }, "is not an engine"],
-		[{ mouse: { engine: "myuri", options: { speed: 1 } } }, "takes wpm"],
-		[{ mouse: { ...custom(noop), options: { speed: 1 } } }, "takes no options"],
+		[
+			{ mouse: { engine: "myuri", options: { speed: 1 } } },
+			"myuri() has no part 'speed'",
+		],
+		[
+			{ mouse: myuri({ type: noop }) },
+			'humanize["mouse"]: myuri({ type }) is not a mouse part',
+		],
+		[
+			{ mouse: { engine: "myuri", options: { wpm: 70 } } },
+			"myuri({ wpm }) is not a mouse part",
+		],
+		[
+			{ keyboard: { engine: "myuri", options: { type: "fast" } } },
+			"takes the function that replaces the part",
+		],
 		[{ mouse: { engine: "raw", options: { speed: 1 } } }, "takes no options"],
 	])("refuses a malformed setting (%#)", (humanize, message) => {
 		expect(() => normalize(humanize)).toThrow(message);

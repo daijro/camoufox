@@ -1581,7 +1581,7 @@ export interface LaunchOptions {
 	geoip?: string | boolean;
 	/** Name of the GeoIP database to use (e.g. "GeoIP AIO by daijro"). */
 	geoip_db?: string;
-	/** Driver-side humanization per channel, `{ mouse, keyboard, scroll, seed }` of myuri(), custom(fn) or raw(); `true` is myuri() on every channel, and a channel the object omits is myuri(). The browser never humanizes input itself. */
+	/** Driver-side humanization per channel, `{ mouse, keyboard, scroll, seed }` of myuri() or raw(); `true` is myuri() on every channel, and a channel the object omits is myuri(). The browser never humanizes input itself. */
 	humanize?: HumanizeSetting;
 	/** Locale(s) to use. The first listed locale is used for the Intl API. */
 	locale?: string | string[];
@@ -2208,7 +2208,7 @@ export async function launchOptions({
 	// it. setInto leaves an explicit caller value alone.
 	setInto(config, "voices:blockIfNotDefined", true);
 
-	// humanize runs in the driver (_humanize_custom.ts): checked here, and
+	// humanize runs in the driver (_humanize_playwright.ts): checked here, and
 	// nothing about it reaches the browser's config.
 	normalize(humanize);
 

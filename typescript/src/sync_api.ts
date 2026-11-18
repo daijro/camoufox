@@ -16,7 +16,7 @@ import {
 	type BrowserType,
 	firefox,
 } from "playwright-core";
-import { attach } from "./_humanize_custom.js";
+import { attach } from "./_humanize_playwright.js";
 import * as cpuAffinity from "./cpu_affinity.js";
 import { attachDriverDefaults } from "./driver_defaults.js";
 import { generateContextFingerprint } from "./fingerprints.js";
