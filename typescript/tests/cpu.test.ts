@@ -122,18 +122,10 @@ describe("the caller's option", () => {
 					{ "cpu:arch": "arm" },
 					{ "cpu:arch": "arm", "cpu:manufacturer": "ampere" },
 				]) {
-					const got = sampleWebglForScreen(
-						"lin",
-						1280,
-						768,
-						seed,
-						null,
-						null,
-						cpu,
-					);
+					const got = sampleWebglForScreen("lin", 1280, 768, seed, null, cpu);
 					expect(isSoftwareRenderer(got["webGl:renderer"])).toBe(true);
 				}
-				const x86 = sampleWebglForScreen("lin", 1920, 1080, seed, null, null, {
+				const x86 = sampleWebglForScreen("lin", 1920, 1080, seed, null, {
 					"cpu:arch": "x86",
 				});
 				expect(isSoftwareRenderer(x86["webGl:renderer"])).toBe(false);
