@@ -52,7 +52,7 @@ pysocks = "*"
 inquirer = "*"
 # humanize's default engine. Pinned: a seed must plan the same input in Python and
 # TypeScript, and in every install of one camoufox release.
-myuri = "3.2.0"
+myuri = "4.0.0"
 maxminddb = {version = "*", optional = true}
 
 [tool.poetry.extras]
