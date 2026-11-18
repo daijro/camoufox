@@ -83,9 +83,9 @@ const uint32_t* sk_cpu_estimates();
 
 /* The same, resolved once when SkOpts initialises (the moment the opts tiers
  * are chosen too), for the raster pipeline: an inline load instead of a call.
- * The call made every rcp and rsqrt stage spill its vector registers, so even
- * the native path (identity 0, or the host's own vendor) drew estimate blends
- * 1.3-1.8x slower than stock Firefox. Opus keeps sk_cpu_estimates(). */
+ * The call made every rcp and rsqrt stage spill its vector registers, which
+ * slowed estimate blends even on the native path (identity 0, or the host's
+ * own vendor), a cost a page can time. Opus keeps sk_cpu_estimates(). */
 extern const uint32_t* gSkCpuEstimatesForPipeline;
 void sk_cpu_estimates_init_pipeline();
 static inline const uint32_t* sk_cpu_estimates_cached() { return gSkCpuEstimatesForPipeline; }
