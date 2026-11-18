@@ -864,6 +864,7 @@ flowchart TD
 | [LibreWolf](https://gitlab.com/librewolf-community/browser/source) | Debloat patches and the original build system |
 | [BetterFox](https://github.com/yokoffing/BetterFox) | Speed and debloat preferences |
 | [Ghostery](https://github.com/ghostery/user-agent-desktop) | Debloat reference ([disable onboarding](browser/patches/ghostery/Disable-Onboarding-Messages.patch)) |
-| [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor) | The Bézier cursor an earlier Camoufox browser drew |
+| [Vinyzu/cursory](https://github.com/Vinyzu/cursory) | The recorded human mouse movements behind `humanize=True`, which [myuri](https://github.com/JWriter20/Myuri) replays (via [cursory-js](https://github.com/JWriter20/cursory-js) in TypeScript) |
+| [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor) | The Bézier cursor Camoufox used before Cursory |
 | [scrapfly/fingerprint-generator](https://github.com/scrapfly/fingerprint-generator) (fpgen) | The device distribution identities are drawn from |
 | [CreepJS](https://github.com/abrahamjuliot/creepjs), [Browserleaks](https://browserleaks.com), [BrowserScan](https://www.browserscan.net/) | Leak testing |
