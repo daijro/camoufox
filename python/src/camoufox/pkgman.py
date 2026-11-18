@@ -26,15 +26,14 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 from typing_extensions import TypeAlias
-
-import yaml
-
-if yaml.__with_libyaml__:
-    from yaml import CLoader
-else:
-    from yaml import Loader as CLoader
-
 from yaml import load
+
+try:
+    from yaml import CDumper as Dumper
+    from yaml import CLoader as Loader
+except ImportError:
+    # PyYAML built without libyaml, as on a Python it has no wheel for yet
+    from yaml import Dumper, Loader
 
 from .__version__ import CONSTRAINTS
 from .exceptions import (
@@ -227,7 +226,7 @@ class RepoConfig:
         """
         repos_path = LOCAL_DATA / 'repos.yml'
         with open(repos_path, 'r') as f:
-            data = load(f, Loader=CLoader)
+            data = load(f, Loader=Loader)
         return [RepoConfig.from_dict(r, spoof_library_version) for r in data.get('browsers', [])]
 
     @staticmethod
@@ -237,7 +236,7 @@ class RepoConfig:
         """
         repos_path = LOCAL_DATA / 'repos.yml'
         with open(repos_path, 'r') as f:
-            data = load(f, Loader=CLoader)
+            data = load(f, Loader=Loader)
         return data.get('default', {}).get('browser', 'Official')
 
     @staticmethod
@@ -1160,7 +1159,7 @@ def load_yaml(file: str) -> Dict[str, Any]:
     Load a local YAML file as a dictionary
     """
     with open(LOCAL_DATA / file, 'r') as f:
-        return load(f, Loader=CLoader)
+        return load(f, Loader=Loader)
 
 
 def format_asset_date(iso: Optional[str], now: Optional[Any] = None) -> str:
