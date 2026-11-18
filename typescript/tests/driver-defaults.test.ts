@@ -6,13 +6,13 @@
  */
 import { firefox } from "playwright-core";
 import { describe, expect, it } from "vitest";
-import { attachCustom } from "../src/_humanize_custom.js";
+import { attach as attachHumanize } from "../src/_humanize_custom.js";
 import {
 	attachDriverDefaults,
-	FILL_CLICK_LANDS,
 	FILL_NEEDS_CLICK,
+	PRESS_MISSES,
 } from "../src/driver_defaults.js";
-import { custom } from "../src/humanize.js";
+import { custom, raw } from "../src/humanize.js";
 
 let guids = 0;
 
@@ -40,10 +40,15 @@ function client({
 			return { value: { x: 40, y: 120, width: 200, height: 24 } };
 		if (method === "screenshot") return { binary: "" };
 		if (method !== "evaluateExpression") return {};
-		const answers: Record<string, boolean> = {
-			[FILL_NEEDS_CLICK]: !focused,
-			[FILL_CLICK_LANDS]: lands,
-		};
+		// An element with no borders, serialized as Playwright's protocol does.
+		if (params.expression.includes("borderLeftWidth"))
+			return { value: { a: [{ n: 0 }, { n: 0 }], id: 1 } };
+		// The press check answers null, or why the press would miss.
+		if (params.expression === PRESS_MISSES)
+			return {
+				value: lands ? { v: "null" } : { s: "<div> intercepts pointer events" },
+			};
+		const answers: Record<string, boolean> = { [FILL_NEEDS_CLICK]: !focused };
 		return { value: { b: answers[params.expression] ?? true } };
 	};
 	connection.onmessage = (message: any) => {
@@ -74,6 +79,10 @@ function client({
 	create(frameGuid, "ElementHandle", elementGuid, { preview: "" });
 	return {
 		connection,
+		// A press on the field, as the page sees a mouse down.
+		focus: () => {
+			focused = true;
+		},
 		frame: connection._objects.get(frameGuid),
 		handle: connection._objects.get(elementGuid),
 		// What the page would see: the plumbing of finding an element is not it.
@@ -91,7 +100,7 @@ describe("fill clicks first", () => {
 	const CLICKED = [
 		FILL_NEEDS_CLICK,
 		"scrollIntoViewIfNeeded",
-		FILL_CLICK_LANDS,
+		PRESS_MISSES,
 		"click",
 		"fill",
 	];
@@ -122,7 +131,7 @@ describe("fill clicks first", () => {
 		expect(calls()).toEqual([
 			FILL_NEEDS_CLICK,
 			"scrollIntoViewIfNeeded",
-			FILL_CLICK_LANDS,
+			PRESS_MISSES,
 			"fill",
 		]);
 	});
@@ -177,12 +186,16 @@ describe("screenshot caret", () => {
 describe("custom engines on the real client", () => {
 	// The JS client's Locator calls Frame's public methods, so a Frame method routed
 	// to the Locator would call itself without the guard this pins.
-	function pageOf(frame: any, moves: unknown[][]) {
+	function pageOf(frame: any, input: unknown[][], focus: () => void) {
 		const page: any = {
+			_timeoutSettings: { timeout: () => ({ timeout: 30000 }) },
 			mouse: {
-				move: async (x: number, y: number) => moves.push(["mouse.move", x, y]),
-				down: async () => {},
-				up: async () => {},
+				move: async (x: number, y: number) => input.push(["mouse.move", x, y]),
+				down: async () => {
+					focus();
+					input.push(["mouse.down"]);
+				},
+				up: async () => input.push(["mouse.up"]),
 				wheel: async () => {},
 				click: async () => {},
 				dblclick: async () => {},
@@ -201,44 +214,58 @@ describe("custom engines on the real client", () => {
 		frame._page = page;
 		return page;
 	}
-	const attach = (frame: any, fn: any) => {
-		const moves: unknown[][] = [];
-		const page = pageOf(frame, moves);
-		attachCustom({ on: () => {}, pages: () => [page] }, { mouse: custom(fn) });
-		return { page, moves };
+	const attach = ({ frame, focus }: any, fn: any) => {
+		const input: unknown[][] = [];
+		const page = pageOf(frame, input, focus);
+		attachHumanize(
+			{ on: () => {}, pages: () => [page] },
+			{ mouse: custom(fn), keyboard: raw(), scroll: raw() },
+			"linux",
+		);
+		return { page, input };
 	};
 
-	it("Frame.click reaches the server once, after the engine's move", async () => {
-		const { frame, sent } = client();
+	it("Frame.click presses once, at the engine's point", async () => {
+		const fake = client();
+		const { frame, sent, calls } = fake;
 		const seen: number[][] = [];
-		const { moves } = attach(frame, (_p: any, x: number, y: number, t: any) => {
+		const { input } = attach(fake, (_p: any, x: number, y: number, t: any) => {
 			seen.push([x, y]);
 			return t.original();
 		});
 		await frame.click("#a");
 		expect(seen).toEqual([[140, 132]]);
-		expect(moves).toEqual([["mouse.move", 140, 132]]);
-		const clicks = sent.filter((m) => m.method === "click");
-		expect(clicks).toHaveLength(1);
-		expect(clicks[0].params.selector).toBe("#a >> nth=0");
+		expect(calls()).toContain(PRESS_MISSES);
+		expect(input).toEqual([
+			["mouse.move", 140, 132],
+			["mouse.down"],
+			["mouse.up"],
+		]);
+		expect(sent.filter((m) => m.method === "click")).toEqual([]);
 	});
 
 	it("a fill clicks once, through the engine, then fills", async () => {
-		const { frame, sent, calls } = client();
+		const fake = client();
+		const { sent, calls } = fake;
 		const seen: number[][] = [];
-		const { page } = attach(frame, (_p: any, x: number, y: number, t: any) => {
-			seen.push([x, y]);
-			return t.original();
-		});
+		const { page, input } = attach(
+			fake,
+			(_p: any, x: number, y: number, t: any) => {
+				seen.push([x, y]);
+				return t.original();
+			},
+		);
 		await page.fill("#a", "x");
 		expect(seen).toEqual([[140, 132]]);
-		expect(sent.filter((m) => m.method === "click")).toHaveLength(1);
+		expect(input.filter(([e]) => e === "mouse.down")).toHaveLength(1);
+		expect(sent.filter((m) => m.method === "click")).toEqual([]);
 		expect(calls().slice(-2)).toEqual([FILL_NEEDS_CLICK, "fill"]);
 	});
 
 	it("Locator.pressSequentially on a page with engines reaches the server", async () => {
-		const { frame, sent } = client();
-		attach(frame, () => {});
+		const fake = client();
+		const { frame, sent } = fake;
+		attach(fake, () => {});
 		await frame.locator("#a").pressSequentially("hi");
 		expect(sent.filter((m) => m.method === "type")).toHaveLength(1);
 	});

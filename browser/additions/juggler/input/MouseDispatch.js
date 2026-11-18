@@ -126,6 +126,24 @@ export class MouseDispatch {
     return x >= 0 && y >= 0 && x < this._box.width && y < this._box.height;
   }
 
+  /**
+   * The device pixels inside the CSS pixel holding relative (x, y), as
+   * relative points: one at a display scale of 1, two or three at 2.5.
+   */
+  devicePointsIn(x, y) {
+    const scale = this._win.devicePixelRatio;
+    const axis = (v, origin) => {
+      // The content area starts on the device pixel nearest its CSS origin.
+      const start = Math.round(origin * scale);
+      const points = [];
+      for (let k = Math.ceil(Math.floor(v) * scale); k < (Math.floor(v) + 1) * scale; k++)
+        points.push((start + k) / scale - origin);
+      return points;
+    };
+    const xs = axis(x, this._box.left);
+    return axis(y, this._box.top).flatMap(py => xs.map(px => ({x: px, y: py})));
+  }
+
   /** Relative point -> absolute, snapped clear of both of the element's edges. */
   toAbsolute(x, y) {
     return {

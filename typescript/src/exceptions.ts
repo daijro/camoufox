@@ -131,6 +131,13 @@ export class NotInstalledGeoIPExtra extends Error {
 	}
 }
 
+export class NotInstalledHumanizeExtra extends Error {
+	constructor(message?: string) {
+		super(message ?? "humanize uses myuri, which is not installed.");
+		this.name = "NotInstalledHumanizeExtra";
+	}
+}
+
 export class NonFirefoxFingerprint extends Error {
 	constructor(message?: string) {
 		super(message ?? "A passed fingerprint is not a Firefox fingerprint.");

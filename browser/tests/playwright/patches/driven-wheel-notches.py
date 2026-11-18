@@ -27,6 +27,9 @@ WM_MOUSEWHEEL of N x 120 (WinMouseScrollHandler) or a GTK smooth delta of N
 does: deltaY 6 per notch, wheelDeltaY -120 per notch. On macOS the call is one
 event of round(px / 16) lines.
 
+Gecko scrolls at most a page per wheel event (EventStateManager::DoScrollText),
+so the scroller is taller than the longest turn here.
+
     python browser/tests/playwright/patches/driven-wheel-notches.py
 """
 
@@ -37,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import hidden_display, resolve_binary  # noqa: E402
 
 PAGE = """<!doctype html><html><body style="margin:0;font:14px/18px sans-serif">
-<div id="s" style="position:absolute;left:40px;top:40px;width:300px;height:200px;overflow:auto">
+<div id="s" style="position:absolute;left:40px;top:40px;width:300px;height:1100px;overflow:auto">
 <div style="width:3000px;height:3000px"></div></div></body></html>"""
 RECORD = """() => {
   window.__events = [];

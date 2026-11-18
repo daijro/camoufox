@@ -27,7 +27,7 @@ from camoufox.humanize import (
     SeededRng,
     channel_stream,
     custom,
-    custom_engines,
+    driven_channels,
     normalize,
     raw,
     splitmix64,
@@ -82,24 +82,26 @@ def test_custom_takes_a_function():
         normalize({"mouse": {"engine": "custom", "options": {}}})
     with pytest.raises(ValueError, match=r"custom\(\) takes no options"):
         normalize({"mouse": {**custom(noop), "options": {"speed": 1}}})
-    assert custom_engines({"mouse": custom(noop), "keyboard": raw()}) == {"mouse": noop}
-    assert custom_engines(None) == {}
+    assert driven_channels({"mouse": custom(noop), "keyboard": raw(), "scroll": raw()}) == ("mouse",)
+    assert driven_channels({"mouse": raw()}) == ("keyboard", "scroll")
+    assert driven_channels(None) == ()
 
 
 def test_the_sync_api_refuses_an_async_function():
     async def mover(page, x, y, **_):
         pass
 
+    humanize = {"mouse": custom(mover), "keyboard": raw(), "scroll": raw()}
     with pytest.raises(ValueError, match=r"custom\(mover\) is async, but this is the sync API"):
-        hc.check({"mouse": custom(mover)}, is_async=False)
-    assert hc.check({"mouse": custom(mover)}, is_async=True) == {"mouse": mover}
+        hc.check(humanize, is_async=False)
+    hc.check(humanize, is_async=True)
 
 
 def test_launch_server_refuses_custom(monkeypatch):
     from camoufox import server
 
     monkeypatch.setattr(server, "launch_options", lambda **_: pytest.fail("launched"))
-    with pytest.raises(ValueError, match="launch_server\\(\\) cannot run custom\\(\\) humanize engines"):
+    with pytest.raises(ValueError, match="launch_server\\(\\) cannot run humanize engines"):
         server.launch_server(humanize={"mouse": custom(noop)})
 
 
@@ -154,17 +156,21 @@ class Recorder:
 class FakeMouse:
     def __init__(self, rec, latency=0.0):
         self.rec, self.latency = rec, latency
+        # The checkbox the next release toggles: what the last hit test found.
+        self.checked, self.aimed = set(), None
 
     def move(self, x, y, *, steps=None):
         self.rec.events.append(["mouse.move", x, y])
         return self.rec.ret(latency=self.latency)
 
     def down(self, *, button=None, click_count=None):
-        self.rec.events.append(["mouse.down", button or "left"])
+        self.rec.events.append(["mouse.down", button or "left", click_count or 1])
         return self.rec.ret()
 
     def up(self, *, button=None, click_count=None):
-        self.rec.events.append(["mouse.up", button or "left"])
+        self.rec.events.append(["mouse.up", button or "left", click_count or 1])
+        if self.aimed:
+            self.checked ^= {self.aimed}
         return self.rec.ret()
 
     def wheel(self, delta_x, delta_y):
@@ -172,7 +178,7 @@ class FakeMouse:
         return self.rec.ret()
 
     def click(self, x, y, *, delay=None, button=None, click_count=None):
-        self.rec.events.append(["mouse.click", x, y])
+        self.rec.events.append(["mouse.click", x, y, delay])
         return self.rec.ret()
 
     def dblclick(self, x, y, *, delay=None, button=None):
@@ -235,7 +241,9 @@ def make_locator_class():
 
         def click(self, *, modifiers=None, position=None, delay=None, button=None, click_count=None,
                   timeout=None, force=None, no_wait_after=None, trial=None, steps=None):
-            return self._log("click", position)
+            if not trial:
+                self._page.mouse.checked ^= {self.selector}
+            return self._log("click", position, delay)
 
         def dblclick(self, *, modifiers=None, position=None, delay=None, button=None, timeout=None,
                      force=None, no_wait_after=None, trial=None, steps=None):
@@ -272,12 +280,20 @@ def make_locator_class():
         def focus(self, *, timeout=None):
             return self._log("focus")
 
+        def is_checked(self, *, timeout=None):
+            return self._page.rec.ret(self.selector in self._page.mouse.checked)
+
         def bounding_box(self, *, timeout=None):
             return self._page.rec.ret(dict(BOXES[self.selector][0]))
 
         def evaluate(self, expression, arg=None, *, timeout=None):
-            if "clientLeft" in expression:
+            if "borderLeftWidth" in expression:
                 return self._page.rec.ret([2, 3])
+            if "elementFromPoint" in expression:
+                # What covers the point at each press, until the list runs out.
+                covered = self._page.covered
+                self._page.mouse.aimed = self.selector
+                return self._page.rec.ret(covered.pop(0) if covered else None)
             return self._page.rec.ret(BOXES[self.selector][1])
 
     return FakeLocator
@@ -322,9 +338,18 @@ class FakePage:
         self.mouse = FakeMouse(rec, latency)
         self.keyboard = FakeKeyboard(rec)
         self._locator_class = locator_class
+        self.covered = []
+        self.timeout = 30000
+        # Playwright's client keeps the default timeout here.
+        page = self
+        self._impl_obj = type("Impl", (), {"_timeout_settings": type("T", (), {"timeout": lambda _: page.timeout})()})()
 
     def locator(self, selector):
         return self._locator_class(self, selector)
+
+    def evaluate(self, expression, arg=None):
+        assert expression == "() => [innerWidth, innerHeight]", expression
+        return self.rec.ret([1000, 700])
 
     def _page_call(self, name, selector, *args):
         self.rec.events.append([f"page.{name}", selector, *args])
@@ -403,8 +428,7 @@ def reference_engines(log, is_async):
     """Three engines that draw from their streams, play steps, and use original."""
     at = {"x": 0.0, "y": 0.0}
 
-    def move(page, x, y, *, original, rng, play):
-        log.append(["fn.mouse", x, y])
+    def path(x, y, rng):
         n = 3 + math.floor(rng() * 4)
         sx, sy = at["x"], at["y"]
         steps = []
@@ -413,7 +437,17 @@ def reference_engines(log, is_async):
             jitter = (rng() - 0.5) * 4 * (1 - f)
             steps.append(["move", sx + (x - sx) * f + jitter, sy + (y - sy) * f - jitter, i * 2])
         at.update(x=x, y=y)
-        return play(steps)
+        return steps
+
+    def move(page, x, y, *, original, rng, play, click):
+        log.append(["fn.mouse", x, y, click and click["click_count"]])
+        play(path(x, y, rng))
+        return original(delay=90 + math.floor(rng() * 30)) if click else None
+
+    async def move_async(page, x, y, *, original, rng, play, click):
+        log.append(["fn.mouse", x, y, click and click["click_count"]])
+        await play(path(x, y, rng))
+        return (await original(delay=90 + math.floor(rng() * 30))) if click else None
 
     def keys(page, text, *, original, rng, play, kind):
         log.append(["fn.keyboard", kind, text])
@@ -443,7 +477,7 @@ def reference_engines(log, is_async):
 
         return engine
 
-    return asyncify(move), asyncify(keys), asyncify(scroll)
+    return move_async, asyncify(keys), asyncify(scroll)
 
 
 def scenario(is_async):
@@ -452,7 +486,7 @@ def scenario(is_async):
     rec = browser.rec
     move, keys, scroll = reference_engines(rec.events, is_async)
     humanize = {"mouse": custom(move), "keyboard": custom(keys), "scroll": custom(scroll), "seed": 1234}
-    hc.attach(browser, humanize, is_async=is_async)
+    hc.attach(browser, humanize, "linux", is_async=is_async)
     BOXES["#far"] = (BOXES["#far"][0], False)
 
     async def actions_async(page):
@@ -498,53 +532,160 @@ def test_the_scenario_matches_the_shared_sequence(is_async):
 def test_the_scenario_reads_as_intended():
     events = scenario(False)
     names = [e[0] for e in events]
-    # Each mouse move is the engine's path, and the click after it is Playwright's.
-    assert names[0] == "fn.mouse" and events[names.index("locator.click")][1] == "#far"
+    # Each mouse move is the engine's path, and a press is a down and an up where it
+    # ends; only the trial click is Playwright's.
+    assert names[0] == "fn.mouse" and names.count("locator.click") == 1 and "mouse.click" not in names
     # The element out of view is scrolled by the scroll engine, through original().
     far = names.index("fn.scroll", names.index("fn.scroll") + 1)
     assert events[far] == ["fn.scroll", "#far"] and names[far + 1] == "locator.scrollIntoViewIfNeeded"
     # hover(position=) moves to the padding-box point: box + border + position.
-    assert ["fn.mouse", 500 + 2 + 5, 300 + 3 + 6] in events
+    assert ["fn.mouse", 500 + 2 + 5, 300 + 3 + 6, None] in events
     # fill selects, then types key by key; press() declines through original().
     fill = names.index("fn.keyboard")
     assert names[fill - 1] == "locator.selectText" and names[fill + 1] == "keyboard.down"
     assert ["keyboard.press", "Enter"] in events and "keyboard.type" not in names
     # page.click routes to the first match; fill("") and trial clicks are Playwright's alone.
-    assert ["locator.fill", "#name", ""] in events and events[-1] == ["locator.click", "#near", None]
+    assert ["locator.fill", "#name", ""] in events and events[-1] == ["locator.click", "#near", None, None]
 
 
 # ---- wrappers ----------------------------------------------------------------
 
 def attached_page(humanize, is_async=False, latency=0.0):
+    """A page whose channels are raw() except those `humanize` names."""
     browser = FakeBrowser(is_async)
-    hc.attach(browser, humanize, is_async=is_async)
+    hc.attach(browser, {**{channel: raw() for channel in CHANNELS}, **humanize}, "linux", is_async=is_async)
     page = run(browser.rec, browser.new_page())
     if latency:
         page.mouse.latency = latency
     return browser, page
 
 
-def test_a_click_calls_the_mouse_engine_once_at_the_point():
+def test_a_click_is_pressed_by_the_mouse_engine_at_its_point():
     seen = []
 
-    def mover(page, x, y, *, original, rng, play):
-        seen.append((x, y))
-        return original()
+    def mover(page, x, y, *, original, rng, play, click):
+        seen.append((x, y, click))
+        return original(x + 1, y - 1, delay=104)
 
     browser, page = attached_page({"mouse": custom(mover)})
     page.locator("#near").click()
-    assert seen == [(525.0, 310.0)]
+    box = dict(BOXES["#near"][0])
+    assert seen == [(525.0, 310.0, {"button": "left", "click_count": 1, "box": box})]
+    # The engine never moved, so the press moves to its point, then presses there.
+    assert browser.rec.events == [
+        ["locator.scrollIntoViewIfNeeded", "#near"],
+        ["mouse.move", 526, 309],
+        ["mouse.down", "left", 1],
+        ["mouse.up", "left", 1],
+    ]
+
+
+def test_a_press_after_the_engine_moved_sends_no_other_move():
+    def mover(page, x, y, *, original, rng, play, click):
+        page.mouse.move(x, y)
+        return original(x, y)
+
+    browser, page = attached_page({"mouse": custom(mover)})
+    page.locator("#near").dblclick()
+    page.mouse.click(10, 20)
     assert browser.rec.events == [
         ["locator.scrollIntoViewIfNeeded", "#near"],
         ["mouse.move", 525.0, 310.0],
-        ["locator.click", "#near", None],
+        ["mouse.down", "left", 1], ["mouse.up", "left", 1], ["mouse.down", "left", 2], ["mouse.up", "left", 2],
+        ["mouse.move", 10, 20],
+        ["mouse.down", "left", 1], ["mouse.up", "left", 1],
     ]
+
+
+def test_a_covered_point_is_reached_for_again():
+    calls = []
+
+    def mover(page, x, y, *, original, rng, play, click):
+        calls.append((x, y))
+        return original()
+
+    browser, page = attached_page({"mouse": custom(mover)})
+    page.covered = ["<div> intercepts pointer events"]
+    page.locator("#near").click()
+    assert calls == [(525.0, 310.0)] * 2
+    assert [e[0] for e in browser.rec.events].count("mouse.down") == 1
+
+
+def test_a_forced_press_skips_the_check():
+    calls = []
+
+    def mover(page, x, y, *, original, rng, play, click):
+        calls.append((x, y))
+        return original()
+
+    browser, page = attached_page({"mouse": custom(mover)})
+    page.covered = ["<div> intercepts pointer events"]
+    page.locator("#near").click(force=True)
+    assert calls == [(525.0, 310.0)]
+    assert [e[0] for e in browser.rec.events].count("mouse.down") == 1
+    assert page.covered
+
+
+def test_a_point_covered_past_the_timeout_raises():
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+    browser, page = attached_page({"mouse": custom(lambda page, x, y, *, original, **_: original())})
+    page.covered = ["<div> intercepts pointer events"] * 100
+    with pytest.raises(PlaywrightTimeoutError, match="<div> intercepts pointer events"):
+        page.locator("#near").click(timeout=150)
+    assert "mouse.down" not in [e[0] for e in browser.rec.events]
+
+
+def test_a_zero_timeout_waits_for_the_point():
+    browser, page = attached_page({"mouse": custom(lambda page, x, y, *, original, **_: original())})
+    page.covered = ["<div> intercepts pointer events"] * 3
+    page.timeout = 0
+    page.locator("#near").click()
+    assert [e[0] for e in browser.rec.events].count("mouse.down") == 1
+
+
+def test_a_hover_is_the_engine_move_alone():
+    _, page = attached_page({"mouse": custom(lambda page, x, y, *, original, **_: original())})
+    page.locator("#near").hover()
+    assert page.rec.events == [["locator.scrollIntoViewIfNeeded", "#near"], ["mouse.move", 525.0, 310.0]]
+
+
+def test_myuri_moves_to_a_point_in_the_box_and_clicks_there():
+    from camoufox.humanize import myuri
+
+    browser, page = attached_page({"mouse": myuri(), "seed": 3})
+    page.locator("#near").click()
+    events = browser.rec.events
+    box = BOXES["#near"][0]
+    moves = [e for e in events if e[0] == "mouse.move"]
+    assert len(moves) > 1 and not [e for e in events if e[0] == "locator.click"]
+    # The press is where the path ends, inside the box, with no move after it.
+    x, y = moves[-1][1:]
+    assert box["x"] <= x <= box["x"] + box["width"] and box["y"] <= y <= box["y"] + box["height"]
+    assert events[-2:] == [["mouse.down", "left", 1], ["mouse.up", "left", 1]]
+
+
+def test_myuri_turns_a_wheel_in_mouse_notches():
+    from camoufox.humanize import myuri
+
+    browser, page = attached_page({"scroll": myuri(), "seed": 3})
+    page.mouse.wheel(0, 300)
+    wheels = [e for e in browser.rec.events if e[0] == "mouse.wheel"]
+    # Windows and Linux mouse wheels send one 100 px event a notch (docs/input-dispatch.md).
+    assert wheels and all(dx == 0 and abs(dy) == 100 for _, dx, dy in wheels)
+
+
+def test_a_click_the_engine_never_presses_does_not_happen():
+    browser, page = attached_page({"mouse": custom(noop)})
+    page.locator("#near").click()
+    page.mouse.click(10, 20)
+    assert browser.rec.events == [["locator.scrollIntoViewIfNeeded", "#near"]]
 
 
 def test_the_click_before_a_fill_uses_the_mouse_engine():
     calls = []
 
-    def mouse(page, x, y, *, original, rng, play):
+    def mouse(page, x, y, *, original, rng, play, click):
         calls.append((x, y))
         return original()
 
@@ -552,7 +693,7 @@ def test_the_click_before_a_fill_uses_the_mouse_engine():
     rec = browser.rec
     page.fill("#name", "text")
     assert calls == [(140, 132)]
-    assert [e[0] for e in rec.events if e[0].startswith("locator.")][-2:] == ["locator.click", "locator.fill"]
+    assert [e[0] for e in rec.events][-2:] == ["mouse.up", "locator.fill"]
 
 
 def test_a_keyboard_engine_alone_still_clicks_before_a_fill():
@@ -565,18 +706,19 @@ def test_a_keyboard_engine_alone_still_clicks_before_a_fill():
 def test_check_and_frame_methods_take_the_locator_flow():
     calls = []
 
-    def mouse(page, x, y, *, original, rng, play):
+    def mouse(page, x, y, *, original, rng, play, click):
         calls.append((x, y))
         return original()
 
     _, page = attached_page({"mouse": custom(mouse)})
     page.check("#near")
+    page.check("#near")  # already checked: no click
     page.main_frame.click("#near")
     assert calls == [(525, 310), (525, 310)]
 
 
 def test_an_engine_calling_its_own_channel_reaches_playwright():
-    def mover(page, x, y, *, original, rng, play):
+    def mover(page, x, y, *, original, rng, play, click):
         page.mouse.move(x - 1, y - 1)  # not back into this function
         return page.mouse.move(x, y)
 
@@ -612,7 +754,7 @@ def test_popups_and_new_contexts_are_wrapped_and_other_browsers_are_not():
     assert calls == [("a", 1, 2), ("a", 3, 4)]
     assert other.rec.events == [["mouse.move", 5, 6]]
     with pytest.raises(ValueError, match="already attached"):
-        hc.attach(browser, {"mouse": custom(mover)}, is_async=False)
+        hc.attach(browser, {"mouse": custom(mover), "keyboard": raw(), "scroll": raw()}, "linux", is_async=False)
 
 
 def test_the_streams_follow_the_seed():

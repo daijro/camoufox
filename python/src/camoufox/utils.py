@@ -744,6 +744,13 @@ def _camou_config_blob(from_options: Dict[str, Any]) -> str:
     return ''.join(v for _, v in sorted(chunks))
 
 
+def launch_os(from_options: Dict[str, Any]) -> str:
+    """The OS ('macos', 'windows' or 'linux') of the identity these launch
+    options claim, the host's when they claim no user agent."""
+    blob = _camou_config_blob(from_options)
+    return OS_NAMES[get_target_os(orjson.loads(blob) if blob else {})]
+
+
 def pinned_core_count(from_options: Dict[str, Any]) -> Optional[int]:
     """The core count the browser must be pinned to for these launch options,
     or None: the identity's navigator.hardwareConcurrency when this host can

@@ -1,7 +1,7 @@
 /**
- * Client-side humanize engines: `custom(fn)` on a channel. The TypeScript twin
- * of python/src/camoufox/_humanize_custom.py; both are held to the sequence in
- * browser/tests/humanize/custom-sequence.json.
+ * Client-side humanize engines: `custom(fn)` or `myuri()` on a channel. The
+ * TypeScript twin of python/src/camoufox/_humanize_custom.py; both are held to
+ * the sequence in browser/tests/humanize/custom-sequence.json.
  *
  * The function runs in this process, never in the browser. It plans a channel's
  * input and plays it through Playwright's own input methods, so the page sees
@@ -11,9 +11,9 @@
  * What is wrapped, per page of the browser (or persistent context) it is
  * attached to, and what the function is called for:
  *
- *     mouse     Mouse.move / click / dblclick; the move to the click point of
- *               Page/Frame/Locator click, dblclick, hover, check and uncheck,
- *               and of the click that focuses a field before fill
+ *     mouse     Mouse.move / click / dblclick; the move to the point, and the
+ *               press, of Page/Frame/Locator click, dblclick, hover, check
+ *               and uncheck, and of the click that focuses a field before fill
  *     keyboard  Keyboard.type / press; Page/Frame/Locator fill, type, press,
  *               and Locator.pressSequentially
  *     scroll    Mouse.wheel; Locator.scrollIntoViewIfNeeded, and the scroll into
@@ -34,22 +34,25 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomBytes } from "node:crypto";
 import { inspect } from "node:util";
+import { errors } from "playwright-core";
+import { engine as myuriEngine, requireMyuri } from "./_humanize_myuri.js";
 import {
-	FILL_CLICK_LANDS,
 	FILL_NEEDS_CLICK,
+	PRESS_MISSES,
 	pageFunction,
 	patchFrameFill,
 } from "./driver_defaults.js";
 import {
+	CHANNELS,
 	type Channel,
 	type CustomEngine,
 	channelStream,
-	customEngines,
 	type EngineTools,
 	type HumanizeSetting,
 	normalize,
 	type SeededRng,
 } from "./humanize.js";
+import type { OsName } from "./utils.js";
 import { LeakWarning } from "./warnings.js";
 
 /**
@@ -72,13 +75,18 @@ const ENGINES = Symbol.for("camoufox.custom-engines");
 const ORIGINALS = Symbol.for("camoufox.custom-originals");
 const ROUTED_FRAMES = Symbol.for("camoufox.custom-routed");
 const DISPATCH_ISOLATED = Symbol.for("camoufox.custom-dispatch");
+/** Where the last move left the cursor on a page, in page px. Playwright does not report it. */
+export const POINTER = new WeakMap<object, [number, number]>();
 
 // Is the element's box inside its frame's viewport?
 export const IN_VIEW = `e => {
   const r = e.getBoundingClientRect();
   return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
 }`;
-const BORDERS = "e => [e.clientLeft, e.clientTop]";
+// Playwright offsets a click's position by the computed border widths. An
+// element's clientLeft can differ: a themed text input's includes its frame.
+const BORDERS =
+	"e => [getComputedStyle(e).borderLeftWidth, getComputedStyle(e).borderTopWidth].map(v => parseInt(v, 10))";
 
 const BUTTONS = ["left", "right", "middle"];
 
@@ -245,6 +253,7 @@ function moveTo(engines: Engines, page: any, x: number, y: number) {
 		page,
 		[x, y],
 		(nx = x, ny = y, options?: Options) => move(nx, ny, options),
+		{ click: null },
 	);
 }
 
@@ -277,41 +286,148 @@ async function scrollIntoView(
 	);
 }
 
-/** click / dblclick / hover: scroll into view, move to the point, then
- * Playwright's own action, whose move is then zero-length. */
-const pointer: Flow = (engines, locator, original, [options = {}]) => {
-	const mouse = engines.fn("mouse");
-	const scroll = engines.fn("scroll");
-	if (!(mouse || scroll) || options.trial) return null;
-	return (async () => {
-		const { timeout, position } = options;
-		if (scroll) await scrollIntoView(engines, locator, timeout, true);
-		if (mouse) {
-			if (!scroll)
-				// The point must be on screen; the browser's scroll engine plans this.
-				await locatorOriginal(locator, "scrollIntoViewIfNeeded")(locator, {
-					timeout,
-				});
-			const box = await locator.boundingBox({ timeout });
-			if (box) {
-				let x = box.x + box.width / 2;
-				let y = box.y + box.height / 2;
-				if (position) {
-					// position is relative to the padding box
-					const [left, top] = await locator.evaluate(
-						pageFunction(BORDERS),
-						undefined,
-						{ timeout },
-					);
-					x = box.x + left + position.x;
-					y = box.y + top + position.y;
+// Locator.click options a press honours; position and delay are the engine's.
+const CLICK_OPTIONS = ["button", "clickCount", "modifiers"];
+
+// Playwright's waits between attempts at a pointer action.
+const RETRY_MS = [0, 20, 100, 100, 500];
+
+/** A press would not reach its element: something covers the point. */
+class Missed extends Error {}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Press `count` times at (x, y), holding each press `delay` ms and waiting as
+ * long between presses, as Playwright's click does. The cursor moves there
+ * first only if it is somewhere else. */
+async function press(
+	page: any,
+	x: number,
+	y: number,
+	button: string,
+	count: number,
+	delay: number | undefined,
+	modifiers: string[],
+) {
+	const o = page[ORIGINALS];
+	const here = POINTER.get(page);
+	if (here?.[0] !== x || here?.[1] !== y) await o.move(x, y);
+	for (const key of modifiers) await o.keyDown(key);
+	for (let i = 1; i <= count; i += 1) {
+		if (i > 1 && delay) await sleep(delay);
+		await o.down({ button, clickCount: i });
+		if (delay) await sleep(delay);
+		await o.up({ button, clickCount: i });
+	}
+	for (const key of [...modifiers].reverse()) await o.keyUp(key);
+}
+
+/** click / dblclick / hover / check / uncheck: scroll into view, then the
+ * mouse engine moves to the point and presses where the cursor is. A point
+ * something else covers is reached for again, on Playwright's retry schedule. */
+function pointer(name: string): Flow {
+	return (engines, locator, original, [options = {}]) => {
+		const mouse = engines.fn("mouse");
+		const scroll = engines.fn("scroll");
+		if (!(mouse || scroll) || options.trial) return null;
+		return (async () => {
+			const { position } = options;
+			const page = locator.page();
+			const timeout: number =
+				options.timeout ?? page._timeoutSettings.timeout({}).timeout;
+			// 0 is no timeout, as in Playwright.
+			const deadline = timeout
+				? performance.now() + timeout
+				: Number.POSITIVE_INFINITY;
+			if (scroll) await scrollIntoView(engines, locator, timeout, true);
+			if (!mouse) return original(locator, options);
+			const click: Options = Object.fromEntries(
+				Object.entries(options).filter(([key]) => CLICK_OPTIONS.includes(key)),
+			);
+			click.clickCount ??= name === "dblclick" ? 2 : 1;
+			click.button ??= "left";
+			const toggles = name === "check" || name === "uncheck";
+			for (let attempt = 0; ; attempt += 1) {
+				if (!scroll)
+					// The point must be on screen; the browser's scroll engine plans this.
+					await locatorOriginal(locator, "scrollIntoViewIfNeeded")(locator, {
+						timeout,
+					});
+				const box = await locator.boundingBox({ timeout });
+				if (!box) return original(locator, options);
+				// position is relative to the padding box
+				const [left, top] = await locator.evaluate(
+					pageFunction(BORDERS),
+					undefined,
+					{ timeout },
+				);
+				const [x, y] = position
+					? [box.x + left + position.x, box.y + top + position.y]
+					: [box.x + box.width / 2, box.y + box.height / 2];
+				if (
+					toggles &&
+					(await locator.isChecked({ timeout })) === (name === "check")
+				)
+					return;
+				const reach = async (px: number, py: number) => {
+					if (options.force) return;
+					const miss = await locator.evaluate(pageFunction(PRESS_MISSES), [
+						px - box.x,
+						py - box.y,
+						name !== "hover",
+					]);
+					if (miss) throw new Missed(miss);
+				};
+				try {
+					if (name === "hover") {
+						await moveTo(engines, page, x, y);
+						await reach(...(POINTER.get(page) as [number, number]));
+					} else
+						await call(
+							engines,
+							"mouse",
+							page,
+							[x, y],
+							async (px = x, py = y, more?: Options) => {
+								await reach(px, py);
+								await press(
+									page,
+									px,
+									py,
+									click.button,
+									click.clickCount,
+									more?.delay,
+									click.modifiers ?? [],
+								);
+							},
+							{
+								click: {
+									button: click.button,
+									clickCount: click.clickCount,
+									box: position ? null : box,
+								},
+							},
+						);
+					break;
+				} catch (error) {
+					if (!(error instanceof Missed)) throw error;
+					if (performance.now() >= deadline)
+						throw new errors.TimeoutError(
+							`Timeout ${timeout}ms exceeded: ${name} ${error.message}`,
+						);
+					await sleep(RETRY_MS[Math.min(attempt, RETRY_MS.length - 1)]);
 				}
-				await moveTo(engines, locator.page(), x, y);
 			}
-		}
-		return original(locator, options);
-	})();
-};
+			if (
+				toggles &&
+				(await locator.isChecked({ timeout })) !== (name === "check")
+			)
+				throw new Error(
+					`Clicking the checkbox did not change its state (${name})`,
+				);
+		})();
+	};
+}
 
 /** The click before a fill (driver_defaults), with the mouse engine's move. The
  * fill's own hook then finds the field focused. */
@@ -323,10 +439,10 @@ async function clickToFocus(engines: Engines, locator: any, options: Options) {
 	await locatorOriginal(locator, "scrollIntoViewIfNeeded")(locator, {
 		timeout,
 	});
-	if (await evaluate(FILL_CLICK_LANDS)) {
+	if ((await evaluate(PRESS_MISSES)) === null) {
 		const original = locatorOriginal(locator, "click");
 		const click = { timeout, force };
-		await (pointer(engines, locator, original, [click]) ??
+		await (pointer("click")(engines, locator, original, [click]) ??
 			original(locator, click));
 	}
 }
@@ -365,11 +481,11 @@ const scrollLocator: Flow = (engines, locator, _original, [options = {}]) =>
 		: null;
 
 const LOCATOR_FLOWS: Record<string, Flow> = {
-	click: pointer,
-	dblclick: pointer,
-	hover: pointer,
-	check: pointer,
-	uncheck: pointer,
+	click: pointer("click"),
+	dblclick: pointer("dblclick"),
+	hover: pointer("hover"),
+	check: pointer("check"),
+	uncheck: pointer("uncheck"),
 	fill: keys("fill"),
 	type: keys("type"),
 	pressSequentially: keys("type"),
@@ -429,8 +545,12 @@ function routed(owner: any, name: string): Original {
 function attachPage(page: any, engines: Engines): void {
 	if (page[ENGINES]) return;
 	const { mouse, keyboard } = page;
+	const move = mouse.move.bind(mouse);
 	const o = {
-		move: direct(mouse.move.bind(mouse)),
+		move: direct((x: number, y: number, options?: Options) => {
+			POINTER.set(page, [x, y]);
+			return move(x, y, options);
+		}),
 		down: direct(mouse.down.bind(mouse)),
 		up: direct(mouse.up.bind(mouse)),
 		wheel: direct(mouse.wheel.bind(mouse)),
@@ -454,13 +574,28 @@ function attachPage(page: any, engines: Engines): void {
 	if (engines.fns.mouse) {
 		const clickAt =
 			(name: "click" | "dblclick"): Original =>
-			async (x, y, options) => {
-				await moveTo(engines, page, x, y);
-				return o[name](x, y, options);
+			(x, y, options: Options = {}) => {
+				const count = name === "dblclick" ? 2 : (options.clickCount ?? 1);
+				const button = options.button ?? "left";
+				return call(
+					engines,
+					"mouse",
+					page,
+					[x, y],
+					(px = x, py = y, more?: Options) =>
+						press(page, px, py, button, count, more?.delay, []),
+					{ click: { button, clickCount: count, box: null } },
+				);
 			};
 		mouse.move = passthroughUnless("mouse", o.move, (x, y, options) =>
-			call(engines, "mouse", page, [x, y], (nx = x, ny = y, more?: Options) =>
-				o.move(nx, ny, { ...options, ...more }),
+			call(
+				engines,
+				"mouse",
+				page,
+				[x, y],
+				(nx = x, ny = y, more?: Options) =>
+					o.move(nx, ny, { ...options, ...more }),
+				{ click: null },
 			),
 		);
 		mouse.click = passthroughUnless("mouse", o.click, clickAt("click"));
@@ -544,31 +679,46 @@ function isolateDispatch(connection: any): void {
 	};
 }
 
+/** Check a `humanize` setting before a launch. */
+export function check(humanize: unknown): void {
+	const { engines } = normalize(humanize);
+	if (CHANNELS.some((channel) => engines[channel].engine === "myuri"))
+		requireMyuri();
+}
+
 /**
- * Run the custom() engines of `humanize` on every page of `target`, a Browser or
+ * Run the engines of `humanize` on every page of `target`, a Browser or
  * BrowserContext, including pages and contexts opened later. Other browsers in
- * this process are untouched. Camoufox()/NewBrowser() call this themselves; for
- * one from `connect()`, launch it with raw() on those channels.
+ * this process are untouched. `os` ("macos", "windows" or "linux") is the
+ * launch identity's, whose people myuri plans for. Camoufox()/NewBrowser()
+ * call this themselves; for one from `connect()`, launch it without humanize.
  *
  * The streams use `humanize.seed`, or a random seed.
  */
-export function attachCustom<T>(
+export function attach<T>(
 	target: T,
 	humanize: HumanizeSetting,
+	os: OsName,
 	iKnowWhatImDoing?: boolean,
 ): T {
-	const fns = customEngines(humanize);
+	check(humanize);
+	const { engines: channels, seed: given } = normalize(humanize);
+	const fns: Partial<Record<Channel, CustomEngine>> = {};
+	for (const channel of CHANNELS) {
+		const engine = channels[channel];
+		if (engine.engine === "custom") fns[channel] = engine.fn;
+		else if (engine.engine === "myuri")
+			fns[channel] = myuriEngine(channel, engine.options, os);
+	}
 	if (!Object.keys(fns).length) return target;
 	const owner = target as any;
 	if (owner[ENGINES])
-		throw new Error(
-			"custom humanize engines are already attached to this browser",
-		);
+		throw new Error("humanize engines are already attached to this browser");
 	if (owner._connection?.isRemote())
 		LeakWarning.warn("humanize_custom_remote", iKnowWhatImDoing);
 	isolateDispatch(owner._connection);
 
-	const seed = normalize(humanize).seed ?? randomBytes(8).readBigUInt64BE();
+	const seed = given ?? randomBytes(8).readBigUInt64BE();
 	const engines = new Engines(fns, seed);
 
 	if (typeof owner.newContext !== "function") {

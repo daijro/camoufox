@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Union, overload
+from typing import Any, Dict, Optional, Tuple, Union, overload
 
 from playwright.sync_api import (
     Browser,
@@ -19,6 +19,7 @@ from .utils import (
     context_identity,
     host_identity,
     launch_options,
+    launch_os,
     needs_exit_geo,
     new_context_options,
     persistent_context_options,
@@ -120,9 +121,9 @@ def NewBrowser(
     # close, which used to strand one Xvfb and its /tmp/.X<n> lock per failed
     # launch.
     try:
-        browser = _launch(playwright, virtual_display, headless, from_options, persistent_context, debug, kwargs)
+        browser, os = _launch(playwright, virtual_display, headless, from_options, persistent_context, debug, kwargs)
         return _humanize_custom.attach(
-            browser, kwargs.get('humanize'), i_know_what_im_doing=kwargs.get('i_know_what_im_doing')
+            browser, kwargs.get('humanize'), os, i_know_what_im_doing=kwargs.get('i_know_what_im_doing')
         )
     except BaseException:
         if virtual_display:
@@ -138,7 +139,8 @@ def _launch(
     persistent_context: bool,
     debug: Optional[bool],
     kwargs: Dict[str, Any],
-) -> Union[Browser, BrowserContext]:
+) -> Tuple[Union[Browser, BrowserContext], str]:
+    """The browser (or persistent context), and its identity's OS."""
     # Options the caller built leave its contexts to the caller (host_identity).
     canvas_noise: Optional[bool] = False
     if not from_options:
@@ -171,13 +173,13 @@ def _launch(
                 **persistent_context_options(from_options, no_viewport_default)
             )
             driver_defaults.mark(context)
-            return sync_attach_vd(context, virtual_display)
+            return sync_attach_vd(context, virtual_display), launch_os(from_options)
 
         identity = host_identity(from_options, canvas_noise)
         browser = playwright.firefox.launch(**from_options)
         attach_context_defaults(browser, no_viewport_default)
         browser._camoufox_host_identity = identity
-        return sync_attach_vd(browser, virtual_display)
+        return sync_attach_vd(browser, virtual_display), launch_os(from_options)
     finally:
         if pid:
             cpu_affinity.restore(pid, previous)

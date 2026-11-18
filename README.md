@@ -530,6 +530,7 @@ claims the host's OS. Details are in
 | A SOCKS5 proxy with a username and password works, for the launch and per context: the launcher hands the credentials to Juggler, which Playwright alone refuses | Launcher, Juggler |
 | Headless reports a fine pointer, like a desktop | `force-default-pointer` patch |
 | `mouse.wheel()` turns notches, as a physical wheel does: 100 px is one notch, each its own event with a native tick | Juggler, `wheel-native-ticks` patch |
+| A press's click count is the identity's OS's, counted from the presses before it; Playwright's `click_count` is ignored. A held key repeats with that OS's delay and interval | Juggler |
 | Juggler's debugger leaves no side effects content can observe | `debugger-invisible-to-content` patch |
 | A stack the page captures while a driver call runs its code (`focus`, `dispatch_event`, an `mw:` evaluate) holds only the page's frames, never Juggler's, the isolated world's or the code the `mw:` evaluate compiled; a page function's `caller` is never driver code | Juggler, `debugger-invisible-to-content` patch |
 | Code an `mw:` evaluate runs is named after the document, as an inline script is, never `debugger eval code` | Juggler, `debugger-invisible-to-content` patch |
@@ -543,7 +544,7 @@ claims the host's OS. Details are in
 
 | Feature | How to use it | Where |
 |---|---|---|
-| Human input: none in the browser. Each Playwright input call is one native event; humanization is the driver's | `humanize={"mouse": custom(fn), ...}` runs your functions in the driver | [Human input](#human-input) |
+| Human input: none in the browser. Each Playwright input call is one native event of the identity's OS; humanization is the driver's | `humanize=True` runs myuri in the driver; `custom(fn)` runs your own functions | [Human input](#human-input) |
 | Run code in the page's own world | `main_world_eval=True`, then `page.evaluate("mw:...")` | Juggler |
 | Finish animations at once so Playwright never waits | `config={"instantAnimations": True}` (detectable; warns) | `no-css-animations` patch |
 | Read closed shadow roots | `config={"forceScopeAccess": True}` | `shadow-root-bypass` patch |
@@ -624,40 +625,56 @@ randomness of its own, so how human the input looks is up to the driver: send th
 moves, notches and keys a person would, at a person's times
 ([docs/input-dispatch.md](docs/input-dispatch.md) has each event's shape per OS).
 
-`humanize=True` and `humanize=<seconds>` are refused with a message saying so.
-`humanize={"mouse": ..., "keyboard": ..., "scroll": ..., "seed": ...}` remains,
-for the driver-side engines below; each channel is `raw()` (Playwright as it is)
-or `custom(fn)`, and an omitted channel is `raw()` ([docs/humanize.md](docs/humanize.md)).
+The `humanize` option picks an engine per channel, run in your own process:
+
+```python
+from camoufox.humanize import custom, myuri, raw
+
+Camoufox(humanize=True)   # myuri() on every channel
+Camoufox(humanize={"keyboard": myuri(wpm=70), "scroll": raw(), "seed": 1234})
+```
+
+- `myuri()` is [myuri](https://github.com/JWriter20/Myuri), fitted to recordings of
+  people on each OS and drawn for the launch identity's OS. Install it with
+  `pip install "camoufox[humanize]"`.
+- `custom(fn)` is a function of yours (below), and `raw()` is Playwright as it is.
+- A channel a dict leaves out is `myuri()`. `humanize=None` or `False`, the
+  default, is `raw()` everywhere.
+
+The engine decides when each event happens; the browser decides what each event
+looks like for the identity's OS ([docs/humanize.md](docs/humanize.md)).
 
 ### Writing your own engine: `custom(fn)`
 
-A channel can run a function of yours in your own process (Python below; TypeScript in [its README](typescript/README.md#your-own-humanize-engine-customfn)). The function plans the input and plays it through Playwright's own input methods, so the page sees the same trusted events as from any Playwright call. Your code never runs inside the browser. The other channels stay `raw()`.
+A channel can run a function of yours in your own process (Python below; TypeScript in [its README](typescript/README.md#your-own-humanize-engine-customfn)). The function plans the input and plays it through Playwright's own input methods, so the page sees the same trusted events as from any Playwright call. Your code never runs inside the browser. Pass `raw()` for the channels it leaves alone.
 
 ```python
 from camoufox.async_api import AsyncCamoufox
 from camoufox.humanize import custom, raw
 
-async def my_move(page, x, y, *, original, rng, play):
+async def my_move(page, x, y, *, original, rng, play, click):
     steps = my_model((x, y), rng)                     # [(t_ms, x, y), ...]
     await play([("move", sx, sy, t) for t, sx, sy in steps])
+    if click:
+        await original(x, y, delay=90 + 30 * rng())   # press at (x, y), holding 90-120 ms
 
-async with AsyncCamoufox(humanize={"mouse": custom(my_move), "scroll": raw(), "seed": 1234}) as browser:
+async with AsyncCamoufox(humanize={"mouse": custom(my_move), "keyboard": raw(), "scroll": raw(), "seed": 1234}) as browser:
     page = await browser.new_page()
     await page.locator("#submit").click()             # my_move plans the move, Playwright clicks
 ```
 
 | Channel | Called as | For |
 |---|---|---|
-| `mouse` | `fn(page, x, y, *, original, rng, play)` | `Mouse.move`/`click`/`dblclick`, and the move to the point of `click`, `dblclick` and `hover` on a `Page` or `Locator` |
+| `mouse` | `fn(page, x, y, *, original, rng, play, click)` with `click` `None` for a move, else `{"button", "click_count", "box"}` | `Mouse.move`/`click`/`dblclick`; `click`, `dblclick`, `hover`, `check`, `uncheck` on a `Page` or `Locator` |
 | `keyboard` | `fn(page, text, *, original, rng, play, kind)` with `kind` `"type"`, `"press"` or `"fill"` | `Keyboard.type`/`press`; `fill`, `type`, `press` on a `Page` or `Locator`, and `Locator.press_sequentially` |
 | `scroll` | `fn(page, target, *, original, rng, play)` with `target` a `Locator` or `(dx, dy)` | `Mouse.wheel`, `Locator.scroll_into_view_if_needed`, and bringing an element that is not in view into view before a click, hover or fill |
 
-- `original()` runs Playwright's own behaviour for the call. Calling it is how a function declines.
+- `original()` runs Playwright's own behaviour for the call. Calling it is how a function declines. For a click it is `original(x, y, delay=hold_ms)`: a mouse down and up at (x, y), after a move there only if the cursor is elsewhere; `delay` is the hold of each press (and, as in Playwright, the gap between the presses of a double click). It first checks that the point reaches the element, enabled and not covered; a press that would miss raises inside `original()`, and the function is called again until the timeout, which raises Playwright's `TimeoutError`. A click the function never presses does not happen.
 - `rng()` returns a float in [0, 1) from the channel's seeded stream: the same seed gives the same numbers in Python and TypeScript (`browser/tests/humanize/rng-vectors.json`).
 - `play(steps)` dispatches steps at their times, in ms from the start of the call: `("move", x, y, t)`, `("down" | "up", button, t)`, `("wheel", dx, dy, t)` (one wheel event each), `("key", key, "down" | "up", t)`, `("text", text, t)` (pasted, as `keyboard.insert_text` is). It waits until each step is due on a monotonic clock rather than sleeping between steps, so a slow round trip delays one step and never adds up. Bad steps raise `ValueError` before anything is sent.
-- Playwright's actions run inside its own server, so the wrappers act first: they scroll the element into view and move to the click point, and Playwright's own move then has no distance left. A `fill` selects the field's text first, so your keys replace it.
+- Playwright's actions run inside its own server, so the wrappers act first: they scroll the element into view, and the function moves to the click point, so Playwright's own move has no distance left (a zero-distance move sends no event). A `fill` selects the field's text first, so your keys replace it.
 - With the sync API the functions are plain functions; with the async API they may be `async`. Exceptions reach the caller unchanged.
-- The wrappers belong to the browser `Camoufox()` launched: other browsers in the same process are untouched. For a browser from `connect()`, launch it with `raw()` on those channels and call `camoufox.humanize.attach_custom(browser, humanize)`. Over a network each event is a round trip, so the launcher warns (`humanize_custom_remote`). `launch_server()` refuses `custom()`.
+- The wrappers belong to the browser `Camoufox()` launched: other browsers in the same process are untouched. For a browser from `connect()`, launch it without humanize and call `camoufox.humanize.attach(browser, humanize, os)` with its identity's OS. Over a network each event is a round trip, so the launcher warns (`humanize_custom_remote`). `launch_server()` refuses any engine but `raw()`.
 
 # Building the browser
 

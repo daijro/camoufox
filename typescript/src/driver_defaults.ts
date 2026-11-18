@@ -28,11 +28,17 @@ export const FILL_NEEDS_CLICK = `(e) => {
   return active !== field && !(field.isContentEditable && field.contains(active));
 }`;
 
-// Whether a click at the middle of the target reaches it, or its label.
-export const FILL_CLICK_LANDS = `(e) => {
+// Why a press at a point of the target would miss it, or null when it lands on
+// the target, its label's control, or the button or link it is in. `at` is
+// [dx, dy] into the target's box (its middle when absent), and a third true
+// entry also misses a disabled target.
+export const PRESS_MISSES = `(e, at) => {
   const field = e.closest('label')?.control || e;
+  const target = e.matches('input, textarea, select') ? e : e.closest('button, [role=button], a, [role=link]') || e;
+  if (at?.[2] && (target.matches(':disabled') || target.closest('[aria-disabled="true"]')))
+    return 'element is not enabled';
   const r = e.getBoundingClientRect();
-  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const [x, y] = at ? [r.left + at[0], r.top + at[1]] : [r.left + r.width / 2, r.top + r.height / 2];
   let hit = e.ownerDocument.elementFromPoint(x, y);
   while (hit?.shadowRoot) {
     const inner = hit.shadowRoot.elementFromPoint(x, y);
@@ -40,11 +46,11 @@ export const FILL_CLICK_LANDS = `(e) => {
       break;
     hit = inner;
   }
-  for (; hit; hit = hit.parentNode || hit.host) {
-    if (hit === e || hit === field || hit.control === field)
-      return true;
+  for (let n = hit; n; n = n.parentNode || n.host) {
+    if (n === e || n === target || n === field || n.control === field)
+      return null;
   }
-  return false;
+  return hit ? '<' + hit.localName + '> intercepts pointer events' : 'element is not at the point';
 }`;
 
 /**
@@ -63,7 +69,7 @@ async function clickToFocus(
 ): Promise<void> {
 	if (await evaluate(pageFunction(FILL_NEEDS_CLICK))) {
 		await target.scrollIntoViewIfNeeded({ timeout });
-		if (await evaluate(pageFunction(FILL_CLICK_LANDS)))
+		if ((await evaluate(pageFunction(PRESS_MISSES))) === null)
 			await target.click({ timeout, force });
 	}
 }

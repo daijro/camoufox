@@ -13,29 +13,54 @@ real event; the driver's job is that the sequence of events looks like a person.
 A driver that humanizes on its own (a cursor or typing library) gets exactly the
 events it sends, never a second layer of delays on top of its own.
 
-## What the launchers keep
+## The engines
 
-`humanize` is still a launch option in both launchers, for driver-side engines:
+`humanize` is a launch option in both launchers. Each channel (`mouse`,
+`keyboard`, `scroll`) runs one engine in the driver process:
 
 ```python
-from camoufox.humanize import custom, raw
+from camoufox.humanize import custom, myuri, raw
 
-humanize = {"mouse": custom(my_move), "keyboard": raw(), "scroll": raw(), "seed": 1234}
+humanize = {"mouse": myuri(), "keyboard": myuri(wpm=70), "scroll": raw(), "seed": 1234}
 ```
 
-- Each channel (`mouse`, `keyboard`, `scroll`) is `raw()` (Playwright as it is) or
-  `custom(fn)`. An omitted channel is `raw()`, and so is `humanize=None` or `False`.
-- `humanize=True`, a number, an engine name, or a dict naming any other engine is
-  refused with an error saying the browser no longer humanizes. Before this
-  change those turned on the browser's own cursor paths and wheel pacing.
+- `myuri()` is [myuri](https://github.com/JWriter20/Myuri), fitted to recordings
+  of people on each OS ([`ci/tribal-rules.yml`](../ci/tribal-rules.yml), the
+  `human-*` rules). It plans for the launch identity's OS, since input behaviour
+  belongs to the browser, not the context. It needs
+  `pip install "camoufox[humanize]"` (npm: `@jwriter20/myuri`).
+- `custom(fn)` runs your own function; the README's "Writing your own engine"
+  has the call signatures.
+- `raw()` is Playwright as it is.
+- `humanize=True` is `myuri()` on every channel, and a channel a dict leaves out
+  is `myuri()`. `humanize=None` or `False` (the default) is `raw()` everywhere.
 - Nothing about humanize reaches the browser's config. The `humanize*` keys are
   marked `removed` in `browser/settings/properties.json`.
 
-`custom(fn)` wraps Playwright's input methods on the client
-(`python/src/camoufox/_humanize_custom.py`, `typescript/src/_humanize_custom.ts`);
-the README's "Writing your own engine" has the call signatures. User code never
-runs in the browser. The browser guard is
-`browser/tests/playwright/patches/humanize-custom.py`.
+The engine owns timing and motion: the path, the dwell before a press, the hold,
+the gaps between keys, Shift's lead and trail, and how a scroll is split into
+wheel notches. The browser owns the shape of each event (deltaMode, wheelDelta,
+coalescing, fractional coordinates), which a driver cannot set
+([`humanize-timing-is-the-engine-and-shape-is-the-browser`](../ci/tribal-rules.yml)).
+
+The engines wrap Playwright's input methods on the client
+(`python/src/camoufox/_humanize_custom.py`, `_humanize_myuri.py`, and their
+TypeScript counterparts). User code never runs in the browser. The browser
+guard is `browser/tests/playwright/patches/humanize-custom.py`.
+
+A humanized click is pressed by the wrapper, not by Playwright's click. The
+engine moves the cursor and waits its dwell, and its `original()` sends a mouse
+down and up where the cursor is, held for the engine's drawn hold. Playwright's
+click would move again first, and the browser counts that move against the
+next press's click count ([Click count](input-dispatch.md#click-count)).
+Before pressing, the wrapper checks in the page's isolated world that the point
+reaches the element: nothing covers it, and the element is enabled. A press
+that would miss is planned again, with the engine called again, on Playwright's
+retry schedule until the call's timeout. It then raises Playwright's
+`TimeoutError`, naming what covers the point. Playwright's own wait for the
+element to stop moving is not part of this check. `trial=True` and `force=True`
+work as they do in Playwright: a trial click goes to Playwright alone, and a
+forced click skips the check.
 
 ## Seeds
 
@@ -62,7 +87,9 @@ one Playwright call would produce events no keyboard can:
 - **A refused paste.** A page that cancels the paste gets the text typed key by
   key at a person's rate, as a person types what they cannot paste.
 
-These are one command's own events, drawn in the content process from
+They are for raw Playwright. An engine that holds Shift itself, as myuri does,
+gets no second Shift: Juggler skips its own when a real Shift is down. These are
+one command's own events, drawn in the content process from
 `input/HumanDelay.js` with the figures input-dispatch.md cites; they never pace
 one command against the next. Mouse moves are also sent at least 8 ms apart (a
 125 Hz mouse's reports), which a driver pacing its moves at 8 ms or more never

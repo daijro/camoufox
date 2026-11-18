@@ -690,6 +690,130 @@ rules:
       in the process, permanently, at 0% CPU.
 
   # -------------------------------------------------------------------------
+  # Human input
+  #
+  # The evidence is five private recordings of one right-handed person filling
+  # one form on stock Firefox: macOS with a mouse and with a trackpad (both at
+  # device pixel ratio 2), and Windows with a mouse at 2.5 and a touchpad at 2.5
+  # and 1. Replays through Camoufox were compared with them event by event. The
+  # recordings stay private; the figures below are what they showed. Each
+  # figure is credited to what varies it: the OS, the input device, the
+  # display (scale or refresh rate) or the person. There is no Linux recording,
+  # so nothing here describes Linux.
+  # -------------------------------------------------------------------------
+
+  - id: humanize-timing-is-the-engine-and-shape-is-the-browser
+    title: The humanize engine decides when input happens; the browser decides what one event looks like
+    check: manual
+    evidence:
+      - "private recordings: rapid-click down-to-down was 141-157 ms for the person and 226-296 ms for replays that let the browser add its own waits"
+      - "private recordings: wheel deltaMode, wheelDelta, coalesced pointer events and fractional coordinates differ by OS and display scale and are invisible to a driver, which sends one Juggler command per event"
+    rationale: >-
+      Timing spans events, so only the process that plans the sequence can get
+      it right: paths, holds, dwells, typing gaps, Shift lead and trail, paste
+      chords and the scroll plan belong to the engine (myuri by default), drawn
+      for the launch identity's OS. Everything a page reads off a single event
+      -- deltaMode, wheelDelta, modifiers on a wheel, coalesced events,
+      fractional coordinates, a zero-distance move, the timestamp grid --
+      belongs to the browser, because a driver cannot set it. The browser's own
+      paste and auto-Shift timing remains only for raw Playwright, and steps
+      aside when the engine holds Shift itself.
+
+  - id: human-click-timing
+    title: Click timing belongs to the person, not the OS; the cursor's stillness before a press is the device's
+    check: manual
+    evidence:
+      - "private recordings: click hold p50 94-109 ms and rapid-click down-to-down 141-157 ms on both OSes with both devices"
+      - "private recordings: last move to pointerdown p50 48-63 ms with a mouse and 16-31 ms with a touchpad or trackpad, on both OSes"
+      - "private recordings: every Windows median is a multiple of 15.6 ms, the OS's input timestamp grid, so Windows and macOS figures differ by up to one grid step for that reason alone"
+    rationale: >-
+      These are the targets the engine's click model is fitted to, with one
+      model for every OS. A tap on a touchpad presses sooner after the last
+      move than a mouse button does. The press is a down and an up where the
+      engine's path ended, held for its drawn hold: Playwright's click moves
+      first, and the browser counts that move against the next press's click
+      count. Playwright's trial click is no dry run either (it presses, and
+      the page swallows the events), so the wrapper runs its own hit test in
+      the isolated world and plans again on a miss.
+
+  - id: human-pointer-moves-follow-the-os
+    title: How moves reach the page is the OS's; how often is the display's
+    check: manual
+    evidence:
+      - "private recordings (Windows, 60 Hz): one pointermove per frame (gap p50 16 ms) carrying every report since the last, 8 from a high-rate mouse and 2 from the touchpad"
+      - "private recordings (macOS): one pointermove per report with a coalesced list of length 1, 10 ms from a 100 Hz mouse and 8 ms from a trackpad, each on a display refreshing as fast (100 and 120 Hz, rAF 10.0 and 8.3 ms)"
+      - "stock 159.0 on macOS, real devices, every modifier logged in the parent and the page: none set or changed between moves, so the queue's coalescing check passed throughout"
+      - "stock 159.0 on macOS, moves fed through the native-event hook at 100-250 Hz on a 60 Hz display: one pointermove per frame carrying 2-4"
+      - "stock 159.0, injected input at 125 and 1000 Hz: Linux (XTest on X11) gives one pointermove per frame carrying 2 or 17 moves; on macOS, CGEventPost moves are merged by the window server to one per display frame for every app, before Firefox sees them"
+      - "stock 159.0 source: the content-process queue (BrowserChild::RecvRealMouseMoveEvent, CoalescedMouseData) has no platform branch and flushes on the refresh driver's tick"
+      - "private recordings: fractional pointermove clientX on 78-79% of Windows moves at scale 2.5 and none at scale 1; none from a macOS mouse at scale 2 and 50% from a macOS trackpad; mousemove clientX is always whole"
+      - "private recordings (Windows): 9.6-10.7% of mousemoves had no movement at scale 2.5 and 0.4% at 1, all steps inside one CSS pixel; no pointermove repeated a position"
+      - "private recordings (macOS): 16-19% of mousemoves had no movement, 98-99% at the exact same position, from a mouse and a trackpad, mostly away from any scroll, click or key"
+      - "private recordings: every gap between Windows pointermoves, keydowns and mouse wheel events is a whole number of 15.625 ms ticks (15, 16, 31, 32, 47 ms), from a mouse and a touchpad; coalesced moves within a tick share its stamp; a precision touchpad's wheel events, which Firefox makes itself once per frame, are off the grid"
+      - "private recordings: macOS input timestamps are off that grid (2-7% of keydown gaps on it)"
+      - "camoufox replays of the same tasks before input-timestamp-tick.patch: 2% of Windows pointermove gaps on the grid and no coalesced moves sharing a stamp"
+    rationale: >-
+      Each is read off the event, so each is the browser's. Firefox flushes
+      its move queue once per frame on every OS, so the cadence is the
+      display's refresh rate and the coalesced count is the report rate over
+      it: one per report on a Mac whose display keeps up with the pointer,
+      several on a 60 Hz one (driven-move-coalescing). It is the host
+      display's, not the identity's. The sub-pixel steps follow the display
+      scale on Windows (driven-move-device-pixels), and an exact repeat is part
+      of how macOS delivers moves. A Windows launch stamps driven mouse, wheel
+      and key events on the OS's tick (driven-input-timestamp-grid). The engine
+      plans moves at a device's report rate; it draws no OS grid. A
+      recording's cadence is read against that session's frame rate: a display list taken at another time misattributed
+      it once. Injected macOS input is merged by the window server before
+      Firefox sees it, so macOS input is measured with a real device.
+
+  - id: click-count-and-key-repeat-are-the-os
+    title: The claimed OS counts clicks and repeats held keys, for all driven input
+    check: manual
+    evidence:
+      - "stock 159.0 source: nsWindow.cpp counts a press within GetDoubleClickTime of the last one unless the pointer left the SM_CXDOUBLECLK box around the last release, and sets 2 on WM_*DBLCLK; macOS takes NSEvent clickCount; GTK sends 2BUTTON and 3BUTTON presses"
+      - "private recordings (Windows, mouse and touchpad): those rules with 500 ms, a 4 device-pixel box and Windows' double click within 1 device pixel of the last single press give the recorded detail of 651 of 652 presses; fifteen quick presses in place count 1, 2, 3, 2, 3, ..."
+      - "private recordings (macOS, mouse and trackpad): 500 ms and 3 points, unbounded, give 503 of 504"
+      - "private recordings: held keys repeat after 500 ms, every 31.25 ms on Windows and 83.3 ms on macOS; a Windows Shift held about half a second or longer repeats, a macOS modifier never does; only the last key pressed repeats"
+      - "GNOME's schema defaults: repeat delay 500 ms, interval 30 ms; the XKB keymap sets repeat= False for the modifiers"
+      - "camoufox replays of the same tasks before the change: every driven press reported the client's clickCount (1 for each page.click) and no held key repeated"
+    rationale: >-
+      Both are the OS's, read off the event, so they follow the claimed OS for
+      every driven press and key, raw Playwright included, not only a
+      humanizer's: a page sees fifteen quick clicks counted 1, 1, 1 or a key
+      held a second that never repeats whoever drove it. Juggler ignores the
+      client's clickCount (driven-click-count) and repeats the last held key
+      with the OS's delay and interval (driven-key-repeat). The Linux values
+      come from the defaults, not recordings. docs/input-dispatch.md has the
+      rules.
+
+  - id: human-wheel-is-line-mode
+    title: A notched wheel scrolls in lines, shaped by the OS
+    check: manual
+    evidence:
+      - "private recordings (Windows, wheel set to 3 lines): deltaMode 1, 6 lines and wheelDelta -120 per notch; a fast spin batches 2-4 notches into one event at about 16 ms gaps"
+      - "private recordings (macOS): deltaMode 1, 1-13 accelerated lines per event, wheelDelta/delta 48 vertical and 27 horizontal, at about 20 ms gaps"
+      - "private recordings: horizontal scrolling held Shift on every macOS event; on Windows it arrived as a mix of Shift with deltaY and deltaX"
+      - "private recordings: a touchpad or trackpad scrolls in pixels (deltaMode 0) on both OSes"
+    rationale: >-
+      Both mice were the same make with notched wheels, so the difference is
+      the OS. deltaMode, the wheelDelta ratio and the Shift modifier are
+      properties of the event, so the browser sets them for the launch OS; how
+      many notches and how far apart is the engine's scroll plan.
+
+  - id: human-typing-timing
+    title: Typing timing belongs to the person and the keyboard, not the OS
+    check: manual
+    evidence:
+      - "private recordings: key hold p50 95-125 ms and keydown gap p50 129-235 ms; the spread follows the keyboard and the session more than the OS"
+      - "private recordings: 33% of keydowns arrive with another key still held; 2.67 Shift keydowns per capital, all left Shift"
+    rationale: >-
+      These are the targets the engine's keystroke model is fitted to, with
+      one model for every OS; only the shortcut modifier follows the OS. The
+      engine presses Shift itself, so the browser's auto-Shift must not add a
+      second one.
+
+  # -------------------------------------------------------------------------
   # Config schema
   # -------------------------------------------------------------------------
 

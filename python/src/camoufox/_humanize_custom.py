@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import itertools
 import math
 import secrets
 import time
@@ -44,9 +45,11 @@ from contextvars import ContextVar
 from functools import wraps
 from typing import Any, Callable, Dict, Generator, List, Mapping, Optional, Tuple
 
+from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
+
 from ._warnings import LeakWarning
-from .driver_defaults import FILL_CLICK_LANDS, FILL_NEEDS_CLICK
-from .humanize import SeededRng, channel_stream, custom_engines, normalize
+from .driver_defaults import FILL_NEEDS_CLICK, PRESS_MISSES
+from .humanize import SeededRng, channel_stream, normalize
 
 # The channels whose function is running in this task. A call a function makes
 # on its own channel (page.mouse.move inside a mouse engine) goes straight to
@@ -54,8 +57,12 @@ from .humanize import SeededRng, channel_stream, custom_engines, normalize
 _ACTIVE = ContextVar('camoufox_humanize_custom', default=frozenset())
 
 _ENGINES = '_camoufox_custom_engines'
+# Marks an engine function that returns a flow rather than a result.
+FLOW = '_camoufox_flow'
 _ORIGINALS = '_camoufox_custom_originals'
 _ROUTED_FRAMES = '_camoufox_custom_routed'
+# Where the last move left the cursor on a page, in page px. Playwright does not report it.
+POINTER = '_camoufox_custom_pointer'
 
 # Is the element's box inside its frame's viewport?
 _IN_VIEW = """e => {
@@ -136,20 +143,15 @@ def _originals(page: Any) -> Dict[str, Callable[..., Any]]:
 
 
 def _call(engines: _Engines, channel: str, page: Any, args: Tuple, original: Callable[..., Any], **extra: Any) -> Flow:
-    """Call the channel's function, with its own channel passed through."""
+    """Call the channel's function, with its own channel passed through. A
+    built-in engine (`FLOW`) returns a flow, run in this API as the call's own."""
     fn = engines.fns[channel]
     token = _ACTIVE.set(_ACTIVE.get() | {channel})
     try:
-        return (
-            yield fn(
-                page,
-                *args,
-                original=original,
-                rng=engines.rng[channel],
-                play=_player(engines, page),
-                **extra,
-            )
-        )
+        result = fn(page, *args, original=original, rng=engines.rng[channel], play=_player(engines, page), **extra)
+        if getattr(fn, FLOW, False):
+            return (yield from result)
+        return (yield result)
     finally:
         _ACTIVE.reset(token)
 
@@ -243,7 +245,7 @@ def _play(page: Any, steps: Any) -> Flow:
 
 def _move(engines: _Engines, page: Any, x: float, y: float) -> Flow:
     move = _originals(page)['move']
-    return (yield from _call(engines, 'mouse', page, (x, y), lambda *a, **k: move(*(a or (x, y)), **k)))
+    return (yield from _call(engines, 'mouse', page, (x, y), lambda *a, **k: move(*(a or (x, y)), **k), click=None))
 
 
 def _locator_original(locator: Any, name: str) -> Callable[..., Any]:
@@ -262,34 +264,112 @@ def _scroll_into_view(engines: _Engines, locator: Any, timeout: Optional[float],
     )
 
 
-def _pointer(engines: _Engines, locator: Any, original: Callable[..., Any], params: Dict[str, Any]) -> Optional[Flow]:
-    """click / dblclick / hover: scroll into view, move to the point, then
-    Playwright's own action, whose move is then zero-length."""
+def _pointer(engines: _Engines, locator: Any, original: Callable[..., Any], params: Dict[str, Any], name: str) -> Optional[Flow]:
+    """click / dblclick / hover / check / uncheck: scroll into view, then the
+    mouse engine moves to the point and presses where the cursor is. A point
+    something else covers is reached for again, on Playwright's retry schedule."""
     mouse, scroll = engines.fn('mouse'), engines.fn('scroll')
     if not (mouse or scroll) or params.get('trial'):
         return None
 
     def flow() -> Flow:
         timeout = params.get('timeout')
+        if timeout is None:
+            timeout = locator.page._impl_obj._timeout_settings.timeout()
+        # 0 is no timeout, as in Playwright.
+        deadline = time.monotonic() + timeout / 1000 if timeout else math.inf
         if scroll:
             yield from _scroll_into_view(engines, locator, timeout, if_needed=True)
-        if mouse:
+        if not mouse:
+            return (yield original(locator, **params))
+        click = {k: v for k, v in params.items() if k in _CLICK_PARAMS}
+        click.setdefault('click_count', 2 if name == 'dblclick' else 1)
+        click.setdefault('button', 'left')
+        for attempt in itertools.count():
             if not scroll:
                 # The point must be on screen; the browser's scroll engine plans this.
                 yield _locator_original(locator, 'scroll_into_view_if_needed')(locator, timeout=timeout)
             box = yield locator.bounding_box(timeout=timeout)
-            if box:
-                position = params.get('position')
-                if position:
-                    # position is relative to the padding box
-                    left, top = yield locator.evaluate('e => [e.clientLeft, e.clientTop]', timeout=timeout)
-                    x, y = box['x'] + left + position['x'], box['y'] + top + position['y']
+            if not box:
+                return (yield original(locator, **params))
+            left, top = yield locator.evaluate(BORDERS, timeout=timeout)
+            position = params.get('position')
+            if position:
+                x, y = box['x'] + left + position['x'], box['y'] + top + position['y']
+            else:
+                x, y = box['x'] + box['width'] / 2, box['y'] + box['height'] / 2
+            if name in ('check', 'uncheck') and (yield locator.is_checked(timeout=timeout)) == (name == 'check'):
+                return None
+
+            def reach(px: float, py: float) -> Flow:
+                if not params.get('force'):
+                    miss = yield locator.evaluate(PRESS_MISSES, [px - box['x'], py - box['y'], name != 'hover'])
+                    if miss:
+                        raise _Missed(miss)
+
+            def press(px: float = x, py: float = y, *, delay: Optional[float] = None) -> Any:
+                def pressing() -> Flow:
+                    yield from reach(px, py)
+                    yield from _press(locator.page, px, py, click['button'], click['click_count'], delay,
+                                      click.get('modifiers') or ())
+                return engines.run(pressing())
+
+            try:
+                if name == 'hover':
+                    yield from _move(engines, locator.page, x, y)
+                    yield from reach(*getattr(locator.page, POINTER))
                 else:
-                    x, y = box['x'] + box['width'] / 2, box['y'] + box['height'] / 2
-                yield from _move(engines, locator.page, x, y)
-        return (yield original(locator, **params))
+                    yield from _call(
+                        engines, 'mouse', locator.page, (x, y), press,
+                        click={'button': click['button'], 'click_count': click['click_count'],
+                               'box': None if position else box},
+                    )
+                break
+            except _Missed as missed:
+                if time.monotonic() >= deadline:
+                    raise PlaywrightTimeoutError(f'Timeout {timeout:g}ms exceeded: {name} {missed}') from None
+                yield _Sleep(_RETRY_MS[min(attempt, len(_RETRY_MS) - 1)] / 1000)
+        if name in ('check', 'uncheck') and (yield locator.is_checked(timeout=timeout)) != (name == 'check'):
+            raise RuntimeError(f'Clicking the checkbox did not change its state ({name})')
+        return None
 
     return flow()
+
+
+class _Missed(Exception):
+    """A press would not reach its element: something covers the point."""
+
+
+# Playwright's waits between attempts at a pointer action.
+_RETRY_MS = (0, 20, 100, 100, 500)
+
+
+def _press(page: Any, x: float, y: float, button: str, count: int, delay: Optional[float], modifiers: Any) -> Flow:
+    """Press `count` times at (x, y), holding each press `delay` ms and waiting
+    as long between presses, as Playwright's click does. The cursor moves there
+    first only if it is somewhere else."""
+    o = _originals(page)
+    if getattr(page, POINTER, None) != (x, y):
+        yield o['move'](x, y)
+    for key in modifiers:
+        yield o['key_down'](key)
+    for i in range(1, count + 1):
+        if i > 1 and delay:
+            yield _Sleep(delay / 1000)
+        yield o['down'](button=button, click_count=i)
+        if delay:
+            yield _Sleep(delay / 1000)
+        yield o['up'](button=button, click_count=i)
+    for key in reversed(modifiers):
+        yield o['key_up'](key)
+
+
+# Playwright offsets a click's position by the computed border widths. An
+# element's clientLeft can differ: a themed text input's includes its frame.
+BORDERS = 'e => [getComputedStyle(e).borderLeftWidth, getComputedStyle(e).borderTopWidth].map(v => parseInt(v, 10))'
+
+# Locator.click parameters a press honours; position and delay are the engine's.
+_CLICK_PARAMS = ('button', 'click_count', 'modifiers')
 
 
 def _click_to_focus(engines: _Engines, locator: Any, params: Dict[str, Any]) -> Flow:
@@ -299,10 +379,10 @@ def _click_to_focus(engines: _Engines, locator: Any, params: Dict[str, Any]) -> 
     if not (yield locator.evaluate(FILL_NEEDS_CLICK, timeout=timeout)):
         return
     yield _locator_original(locator, 'scroll_into_view_if_needed')(locator, timeout=timeout)
-    if (yield locator.evaluate(FILL_CLICK_LANDS, timeout=timeout)):
+    if (yield locator.evaluate(PRESS_MISSES, timeout=timeout)) is None:
         click = {'timeout': timeout, 'force': params.get('force')}
         original = _locator_original(locator, 'click')
-        pointer = _pointer(engines, locator, original, click)
+        pointer = _pointer(engines, locator, original, click, 'click')
         if pointer:
             yield from pointer
         else:
@@ -349,12 +429,16 @@ def _scroll_locator(engines: _Engines, locator: Any, original: Callable[..., Any
     return _scroll_into_view(engines, locator, params.get('timeout'), if_needed=False)
 
 
+def _pointing(name: str) -> Callable[..., Optional[Flow]]:
+    return lambda engines, locator, original, params: _pointer(engines, locator, original, params, name)
+
+
 _LOCATOR_FLOWS: Dict[str, Callable[..., Optional[Flow]]] = {
-    'click': _pointer,
-    'dblclick': _pointer,
-    'hover': _pointer,
-    'check': _pointer,
-    'uncheck': _pointer,
+    'click': _pointing('click'),
+    'dblclick': _pointing('dblclick'),
+    'hover': _pointing('hover'),
+    'check': _pointing('check'),
+    'uncheck': _pointing('uncheck'),
     'fill': _keys('fill', 'value', 'select'),
     'type': _keys('type', 'text', 'focus'),
     'press_sequentially': _keys('type', 'text', 'focus'),
@@ -414,8 +498,14 @@ def _attach_page(page: Any, engines: _Engines) -> None:
     if getattr(page, _ENGINES, None) is not None:
         return
     mouse, keyboard = page.mouse, page.keyboard
+    raw_move = mouse.move
+
+    def move_raw(x: float, y: float, **kwargs: Any) -> Any:
+        setattr(page, POINTER, (x, y))
+        return raw_move(x, y, **kwargs)
+
     o = {
-        'move': mouse.move, 'down': mouse.down, 'up': mouse.up, 'wheel': mouse.wheel,
+        'move': move_raw, 'down': mouse.down, 'up': mouse.up, 'wheel': mouse.wheel,
         'click': mouse.click, 'dblclick': mouse.dblclick,
         'type': keyboard.type, 'press': keyboard.press,
         'key_down': keyboard.down, 'key_up': keyboard.up, 'insert_text': keyboard.insert_text,
@@ -437,13 +527,21 @@ def _attach_page(page: Any, engines: _Engines) -> None:
         def move(x: float, y: float, *, steps: Optional[int] = None) -> Flow:
             extra = {} if steps is None else {'steps': steps}
             return (yield from _call(
-                engines, 'mouse', page, (x, y), lambda *a, **k: o['move'](*(a or (x, y)), **{**extra, **k})
+                engines, 'mouse', page, (x, y), lambda *a, **k: o['move'](*(a or (x, y)), **{**extra, **k}),
+                click=None,
             ))
 
         def click_at(name: str) -> Callable[..., Flow]:
             def flow(x: float, y: float, **kwargs: Any) -> Flow:
-                yield from _move(engines, page, x, y)
-                return (yield o[name](x, y, **kwargs))
+                count = 2 if name == 'dblclick' else kwargs.get('click_count', 1)
+                button = kwargs.get('button', 'left')
+
+                def press(px: float = x, py: float = y, *, delay: Optional[float] = None) -> Any:
+                    return engines.run(_press(page, px, py, button, count, delay, ()))
+
+                return (yield from _call(
+                    engines, 'mouse', page, (x, y), press, click={'button': button, 'click_count': count, 'box': None},
+                ))
 
             return flow
 
@@ -529,45 +627,59 @@ def _is_async(target: Any) -> bool:
     return isinstance(target, AsyncBase)
 
 
-def check(humanize: Any, is_async: bool) -> Dict[str, Callable[..., Any]]:
-    """The custom engines of a `humanize` setting, checked before a launch."""
-    fns = custom_engines(humanize)
+def check(humanize: Any, is_async: bool) -> None:
+    """Check a `humanize` setting before a launch."""
+    engines, _seed = normalize(humanize)
+    if any(engine['engine'] == 'myuri' for engine in engines.values()):
+        from ._humanize_myuri import require
+
+        require()
     if not is_async:
-        for channel, fn in fns.items():
+        for channel, engine in engines.items():
+            fn = engine.get('fn')
             if inspect.iscoroutinefunction(fn):
                 raise ValueError(
                     f'humanize["{channel}"]: custom({getattr(fn, "__name__", fn)}) is async, but this is the '
                     'sync API. Pass a plain function, or use AsyncCamoufox.'
                 )
-    return fns
 
 
 def attach(
     target: Any,
     humanize: Any,
+    os: str,
     seed: Optional[int] = None,
     i_know_what_im_doing: Optional[bool] = None,
     is_async: Optional[bool] = None,
 ) -> Any:
     """
-    Run the custom engines of a `humanize` setting on every page of `target`, a
+    Run the engines of a `humanize` setting on every page of `target`, a
     Browser or BrowserContext, including pages and contexts opened later.
-    Other browsers in this process are untouched.
+    Other browsers in this process are untouched. `os` ('macos', 'windows' or
+    'linux') is the launch identity's, whose people myuri plans for.
 
     The streams use `humanize["seed"]`, or `seed`, or a random seed.
     """
     if is_async is None:
         is_async = _is_async(target)
-    fns = check(humanize, is_async)
+    check(humanize, is_async)
+    channels, given = normalize(humanize)
+    fns: Dict[str, Callable[..., Any]] = {}
+    for channel, engine in channels.items():
+        if engine['engine'] == 'custom':
+            fns[channel] = engine['fn']
+        elif engine['engine'] == 'myuri':
+            from ._humanize_myuri import engine as myuri_engine
+
+            fns[channel] = myuri_engine(channel, engine['options'], os)
     if not fns:
         return target
     if getattr(target, _ENGINES, None) is not None:
-        raise ValueError('custom humanize engines are already attached to this browser')
+        raise ValueError('humanize engines are already attached to this browser')
     impl = getattr(target, '_impl_obj', None)
     if getattr(getattr(impl, '_connection', None), 'is_remote', False):
         LeakWarning.warn('humanize_custom_remote', i_know_what_im_doing)
 
-    _, given = normalize(humanize)
     if given is None:
         given = seed if seed is not None else secrets.randbits(64)
     engines = _Engines(fns, given, is_async)

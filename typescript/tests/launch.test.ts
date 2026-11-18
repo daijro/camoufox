@@ -37,7 +37,7 @@ import {
 
 const { OSError } = await import("../src/pycompat.js");
 const { Version } = await import("../src/pkgman.js");
-const { custom, normalize, raw } = await import("../src/humanize.js");
+const { custom, myuri, normalize, raw } = await import("../src/humanize.js");
 const { InvalidPropertyType, UnknownIPLocation } = await import(
 	"../src/exceptions.js"
 );
@@ -836,6 +836,7 @@ describe("test_humanize", () => {
 	it.each([
 		null,
 		false,
+		true,
 		{},
 		{ mouse: raw() },
 		{
@@ -852,20 +853,27 @@ describe("test_humanize", () => {
 		);
 	});
 
-	it("defaults every channel to raw", () => {
-		expect(normalize(null)).toEqual({
-			engines: { mouse: raw(), keyboard: raw(), scroll: raw() },
+	it("no humanize is raw, and humanize is myuri", () => {
+		for (const off of [null, false])
+			expect(normalize(off)).toEqual({
+				engines: { mouse: raw(), keyboard: raw(), scroll: raw() },
+			});
+		expect(normalize(true)).toEqual({
+			engines: { mouse: myuri(), keyboard: myuri(), scroll: myuri() },
 		});
-		const { engines, seed } = normalize({ scroll: custom(noop), seed: 5 });
-		expect(engines.mouse).toEqual(raw());
-		expect(engines.keyboard).toEqual(raw());
+		const { engines, seed } = normalize({
+			scroll: custom(noop),
+			keyboard: { engine: "myuri", options: { wpm: 70 } },
+			seed: 5,
+		});
+		expect(engines.mouse).toEqual(myuri());
+		expect(engines.keyboard).toEqual(myuri({ wpm: 70 }));
 		expect(engines.scroll.engine).toBe("custom");
 		expect(engines.scroll.fn).toBe(noop);
 		expect(seed).toBe(5);
 	});
 
 	it.each([
-		true,
 		0,
 		1.5,
 		2,
@@ -873,9 +881,11 @@ describe("test_humanize", () => {
 		{ mouse: { engine: "auto", options: {} } },
 		{ scroll: { engine: "cursory", options: { maxTime: 1 } } },
 	])("refuses in-browser humanization (%#)", async (humanize) => {
-		expect(() => normalize(humanize)).toThrow("no longer humanizes");
+		expect(() => normalize(humanize)).toThrow(
+			"the browser does not humanize input",
+		);
 		await expect(launchHumanize(humanize)).rejects.toThrow(
-			"no longer humanizes",
+			"the browser does not humanize input",
 		);
 	});
 
@@ -886,7 +896,8 @@ describe("test_humanize", () => {
 		[{ seed: 2 ** 53 }, "bigint"],
 		[{ seed: true }, "seed"],
 		[{ seed: "1" }, "seed"],
-		[{ mouse: 3 }, "must be raw() or custom"],
+		[{ mouse: 3 }, "must be myuri(), custom(fn) or raw()"],
+		[{ mouse: { engine: "myuri", options: { speed: 1 } } }, "takes wpm"],
 		[{ mouse: "custom" }, "needs its function"],
 		[{ mouse: { ...custom(noop), options: { speed: 1 } } }, "takes no options"],
 		[{ mouse: { engine: "raw", options: { speed: 1 } } }, "takes no options"],

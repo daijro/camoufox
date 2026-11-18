@@ -74,7 +74,7 @@ thread and inherit any block on it — a 3s synchronous script delayed one by
 2849ms. One command holds at most one such wait per event it sends, and the
 browser sends no events a command did not ask for. A zero-displacement move
 produces no `eMouseMove`, so it is never acked; `Page.dispatchMouseEvent` does
-not wait for one (`noop-mousemove-deadlock.py`).
+not send one (`noop-mousemove-deadlock.py`, [Device pixels](#device-pixels)).
 `apz-repaints-flushed` waits at most `kAckDeadlineMs` too: a flush sent to a
 GPU process that dies never comes back, and stalled every such dispatch until
 the backstop. So does the drag path's `juggler-drag-finalized`, per input
@@ -145,6 +145,13 @@ sweep on Xvfb against stock 158.0.1: one
 `pointermove` per frame carrying 2 to 4 moves, and a `pointerrawupdate` for
 every move.
 
+The queue is flushed once per frame on every OS, so how many moves a
+`pointermove` carries is the pointer's report rate over the display's refresh
+rate. A 100 Hz mouse on a 100 Hz display, or an 8 ms trackpad on a 120 Hz one,
+gives one `pointermove` per report with a coalesced list of length 1; a
+high-rate mouse on a 60 Hz display gives a median of 8. The frame rate is the
+host's, so the page sees the host display's ratio whatever the identity's OS.
+
 The coalesced move reaches the page at the refresh tick and is acked as
 `mousemove <id>`, with the id of the newest move it carries. Any command of the
 page other than another move waits for that ack first (`PageHandler
@@ -157,6 +164,88 @@ Both waits are bounded by `kAckDeadlineMs`. A page that blocks its main thread
 past the deadline only ends the wait; the move stays queued and still reaches
 the page. `browser/tests/playwright/patches/driven-move-coalescing.py` checks
 the page's counts.
+
+## Device pixels
+
+Playwright floors every Firefox mouse coordinate to a whole CSS pixel before
+sending it, so a driver cannot ask for a sub-pixel point. A Windows mouse at a
+display scale above 1 moves in device pixels. PointerEvents report the point as
+a fractional `clientX` (78% of moves at 2.5, in a recording on stock 159.0).
+A step that stays inside one CSS pixel reaches the page as a `mousemove` with
+no movement (10.7%). At scale 1 neither happens, and Windows never repeats a
+position. A macOS mouse reports whole CSS pixels at scale 2, and repeats them:
+19% of its `pointermove`s and `mousemove`s are at the position before, with no
+movement.
+
+So under a Windows identity, `PageHandler._placeMove` puts each move on one of
+the device pixels inside the CSS pixel asked for
+(`MouseDispatch.devicePointsIn`). A move to the pixel the pointer is already
+in goes to another device pixel there, or is dropped when the pixel holds only
+one. A press or release in that pixel lands where the pointer is. The content
+area starts on the device pixel nearest its CSS origin, so the points are
+counted from there. A macOS identity sends every move, a repeat of the
+position included; a Linux identity drops a move to the pixel the pointer is on.
+Both keep the whole pixels Playwright sends.
+`browser/tests/playwright/patches/driven-move-device-pixels.py` checks the
+Windows and macOS shapes.
+
+## Timestamps
+
+Windows stamps an input message with its tick count (`GetMessageTime`): whole
+milliseconds that advance 15.625 ms at a time. In recordings on stock 159.0,
+every gap between `pointermove`s, `keydown`s and mouse `wheel` events is a run
+of those ticks (15, 16, 31, 32, 47 ms and so on), from a mouse and a touchpad
+alike, and coalesced moves that arrive within one tick share its stamp. macOS
+stamps input at high resolution. On Windows only a precision touchpad's scroll
+is off the grid, because Firefox makes those `wheel` events itself, once per
+frame.
+
+`input-timestamp-tick.patch` stamps the events juggler synthesizes with
+`MaskConfig::InputTimeStamp()`: mouse (`nsContentUtils::SynthesizeMouseEvent`),
+wheel (`nsDOMWindowUtils::SendWheelEvent`) and keys
+(`TextInputProcessor::PrepareKeyboardEventToDispatch`). Under a Windows launch
+that is the latest tick, read off `steady_clock`, which every process shares,
+so mouse events from the parent process and keys from the content process fall
+on one grid. Under any other launch it is the current time, as before. Events a
+page creates itself (`new Event()`) keep their high-resolution stamp, as they
+do on Windows. `browser/tests/playwright/patches/driven-input-timestamp-grid.py`
+checks both.
+
+## Click count
+
+The OS decides a press's click count (`detail`), so juggler counts driven
+presses as the claimed OS would and ignores the `clickCount` the client sends.
+The mouseup and the click take their press's count.
+
+- **Windows.** Firefox (`nsWindow.cpp`) counts up a press on the same button
+  within 500 ms of the last press, unless the pointer has moved 4 device pixels
+  from the last release; such a move resets the count. Windows sends its own
+  double click for a press within 500 ms and 1 device pixel of the last single
+  press, which sets the count to 2. Quick presses in place count
+  1, 2, 3, 2, 3, ...
+- **macOS.** `NSEvent.clickCount`: within 500 ms and 3 points of the last
+  press, without bound.
+- **GTK.** 1, 2, 3 and then 1 again, within GTK's default 400 ms and 5 pixels.
+
+`browser/tests/playwright/patches/driven-click-count.py` checks each.
+
+## Key repeat
+
+The OS repeats a held key, and only the last key pressed. Juggler repeats a
+held driven key with the claimed OS's delay and interval, as keydowns with
+`repeat` set; pressing another key moves the repeat to it, and releasing the
+key stops it. A repeat the client sends for the held key is dispatched as sent
+and does not restart the browser's.
+
+| OS | Delay | Interval | Modifiers |
+|---|---|---|---|
+| Windows | 500 ms | 31.25 ms | repeat |
+| macOS | 500 ms | 83.3 ms | do not repeat |
+| Linux | 500 ms | 30 ms | do not repeat |
+
+The Linux values are GNOME's defaults, and its XKB keymap marks the modifiers
+as not repeating. `browser/tests/playwright/patches/driven-key-repeat.py`
+checks each.
 
 ## Drags
 

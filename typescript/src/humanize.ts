@@ -4,19 +4,25 @@
  *
  *     import { Camoufox, custom, raw } from "camoufox";
  *
- *     const browser = await Camoufox({
+ *     await Camoufox({ humanize: true });          // myuri on every channel
+ *     await Camoufox({
  *       humanize: { mouse: custom(myMouse), scroll: raw(), seed: 1234 },
- *     });
+ *     });                                          // keyboard: myuri
  *
  * The browser has no humanization of its own: each Playwright input call
  * reaches the page as the one native-looking event it asks for, when it is
- * sent (docs/input-dispatch.md). A channel (mouse, keyboard, scroll) is either
- * raw(), Playwright's own calls unchanged, or custom(fn), a function in this
- * process that plans the channel's input and plays it through Playwright's own
- * input methods, with schedule pacing and a seeded stream
- * (_humanize_custom.ts). `humanize` itself may be null / false (every channel
- * raw), or an object per channel plus an optional `seed`; an omitted channel
- * is raw. Nothing about it reaches the browser's config.
+ * sent (docs/input-dispatch.md). A channel (mouse, keyboard, scroll) is one of
+ *
+ *     myuri()     paths, clicks, typing and wheel turns planned by myuri for
+ *                 the identity's OS (the optional @jwriter20/myuri package)
+ *     custom(fn)  a function in this process plans the channel's input
+ *     raw()       Playwright's own calls, unchanged
+ *
+ * Both planners play through Playwright's own input methods, with schedule
+ * pacing and a seeded stream (_humanize_custom.ts). `humanize` may be
+ * null / false (every channel raw), true (every channel myuri), or an object
+ * per channel plus an optional `seed`; an omitted channel is myuri. Nothing
+ * about it reaches the browser's config.
  */
 
 import { pyRepr, ValueError } from "./pycompat.js";
@@ -25,9 +31,30 @@ export const CHANNELS = ["mouse", "keyboard", "scroll"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
 export interface Engine {
-	engine: "raw" | "custom";
-	options: Record<string, never>;
+	engine: "raw" | "custom" | "myuri";
+	options: MyuriOptions;
 	fn?: CustomEngine;
+}
+
+/** What myuri() takes: `wpm` for the keyboard. */
+export interface MyuriOptions {
+	wpm?: number;
+}
+
+/** A box in page px, as Locator.boundingBox() gives it. */
+export interface Box {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/** The click a mouse engine is asked for. */
+export interface Click {
+	button: "left" | "right" | "middle";
+	clickCount: number;
+	/** The element's box when the caller gave no point in it, else null. */
+	box: Box | null;
 }
 
 /** What a custom() function gets after its channel's own arguments. */
@@ -46,12 +73,14 @@ export interface EngineTools {
 	>;
 	/** Keyboard only: "type", "press" or "fill". */
 	kind?: "type" | "press" | "fill";
+	/** Mouse only: null for a move, else the click to press through original. */
+	click?: Click | null;
 }
 
 export type CustomEngine = (page: any, ...args: any[]) => unknown;
 
 export type HumanizeSetting =
-	| false
+	| boolean
 	| Record<string, unknown>
 	| null
 	| undefined;
@@ -62,12 +91,34 @@ export function raw(): Engine {
 }
 
 /**
+ * myuri (https://github.com/JWriter20/Myuri) plans the channel's input as the
+ * people it was fitted to move, click, type and scroll on the identity's OS.
+ * `options` go to its planner: `wpm` for the keyboard.
+ */
+export function myuri(options: MyuriOptions = {}): Engine {
+	const unknown = Object.keys(options).filter((key) => key !== "wpm");
+	if (unknown.length)
+		throw new ValueError(
+			`myuri() takes no option ${JSON.stringify(unknown.sort())}; it takes wpm`,
+		);
+	return { engine: "myuri", options: { ...options } };
+}
+
+/**
  * A client-side engine: `fn` plans the channel's input in this process and
  * plays it through Playwright. Its signature, per channel:
  *
- *     mouse     fn(page, x, y, { original, rng, play })
+ *     mouse     fn(page, x, y, { original, rng, play, click })
  *     keyboard  fn(page, text, { original, rng, play, kind })
  *     scroll    fn(page, target, { original, rng, play })   target: a Locator or [dx, dy]
+ *
+ * For a move, `click` is null. For a click it is `{ button, clickCount, box }`,
+ * `box` the element's box when the caller gave no point in it (`fn` may then
+ * press anywhere in it). `fn` moves, then presses with
+ * `original(x, y, { delay })`: a mouse down and up at (x, y), moving there
+ * first only if the cursor is elsewhere. `delay` is how long each press is
+ * held, and between the presses of a double click. A point something covers
+ * rejects inside `original()`, and `fn` is called again until the timeout.
  *
  * Each wheel step is one wheel event, in whole notches as a physical wheel
  * turns: 100 px is one notch, rounded, at least one, all of a step's notches
@@ -83,8 +134,8 @@ export function custom(fn: CustomEngine): Engine {
 }
 
 const IN_BROWSER =
-	"the browser no longer humanizes input: each Playwright call is one event. " +
-	"Humanize in the driver, with custom(fn) per channel (camoufox.humanize) or a driver-level library";
+	"the browser does not humanize input: each Playwright call is one event. " +
+	"Pass True, or myuri(), custom(fn) or raw() per channel (camoufox.humanize)";
 
 function asEngine(channel: string, value: unknown): Engine {
 	const candidate =
@@ -95,7 +146,7 @@ function asEngine(channel: string, value: unknown): Engine {
 		typeof (candidate as { engine?: unknown }).engine !== "string"
 	)
 		throw new ValueError(
-			`humanize["${channel}"] must be raw() or custom(fn), got ${String(value)}`,
+			`humanize["${channel}"] must be myuri(), custom(fn) or raw(), got ${String(value)}`,
 		);
 	const entry = candidate as {
 		engine: string;
@@ -103,6 +154,7 @@ function asEngine(channel: string, value: unknown): Engine {
 		fn?: CustomEngine;
 	};
 	const hasOptions = Object.keys(entry.options ?? {}).length > 0;
+	if (entry.engine === "myuri") return myuri(entry.options);
 	if (entry.engine === "custom") {
 		if (typeof entry.fn !== "function")
 			throw new ValueError(
@@ -128,13 +180,15 @@ export function normalize(humanize: unknown): {
 	engines: Record<Channel, Engine>;
 	seed?: number | bigint;
 } {
+	const every = (engine: () => Engine) => ({
+		engines: Object.fromEntries(CHANNELS.map((c) => [c, engine()])) as Record<
+			Channel,
+			Engine
+		>,
+	});
 	if (humanize === null || humanize === undefined || humanize === false)
-		return {
-			engines: Object.fromEntries(CHANNELS.map((c) => [c, raw()])) as Record<
-				Channel,
-				Engine
-			>,
-		};
+		return every(raw);
+	if (humanize === true) return every(myuri);
 	if (typeof humanize !== "object" || Array.isArray(humanize))
 		throw new ValueError(`humanize=${pyRepr(humanize)}: ${IN_BROWSER}`);
 	const setting = humanize as Record<string, unknown>;
@@ -162,23 +216,16 @@ export function normalize(humanize: unknown): {
 	const engines = Object.fromEntries(
 		CHANNELS.map((c) => [
 			c,
-			asEngine(c, setting[c] === undefined ? "raw" : setting[c]),
+			asEngine(c, setting[c] === undefined ? "myuri" : setting[c]),
 		]),
 	) as Record<Channel, Engine>;
 	return { engines, seed };
 }
 
-/** The functions of a `humanize` setting's custom channels, by channel. */
-export function customEngines(
-	humanize: unknown,
-): Partial<Record<Channel, CustomEngine>> {
+/** The channels of a `humanize` setting that an engine in this process drives. */
+export function drivenChannels(humanize: unknown): Channel[] {
 	const { engines } = normalize(humanize);
-	return Object.fromEntries(
-		CHANNELS.filter((c) => engines[c].engine === "custom").map((c) => [
-			c,
-			engines[c].fn,
-		]),
-	);
+	return CHANNELS.filter((c) => engines[c].engine !== "raw");
 }
 
 // The seeded streams, one per channel, the same in the Python launcher

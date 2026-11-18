@@ -5,7 +5,7 @@
  */
 import "./node-floor.js";
 
-export { attachCustom } from "./_humanize_custom.js";
+export { attach } from "./_humanize_custom.js";
 export type { DefaultAddon } from "./addons.js";
 export { DefaultAddons } from "./addons.js";
 export {
@@ -20,13 +20,17 @@ export {
 	Screen,
 } from "./fingerprints.js";
 export {
+	type Box,
 	CHANNEL_TAGS,
+	type Click,
 	type CustomEngine,
 	channelStream,
 	custom,
-	customEngines,
+	drivenChannels,
 	type EngineTools,
 	type HumanizeSetting,
+	type MyuriOptions,
+	myuri,
 	raw,
 	SeededRng,
 	splitmix64,

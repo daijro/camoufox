@@ -242,6 +242,7 @@ this section in step with the launcher options.
 - **Use `geoip=True` with a proxy.** Without it the timezone and locale are the identity's, not the proxy's, and a warning is printed.
 - **`page.evaluate` is isolated.** It cannot read globals the page defined. Use `main_world_eval=True` and prefix the script with `mw:`. Without the option, a `mw:` evaluate fails with "Main world evaluation is disabled". `mw:` cannot return a handle (`evaluate_handle`).
 - **Leave the viewport alone.** When the window size is spoofed, new pages default to `no_viewport=True`; forcing a `viewport` asks the window to resize to something the identity does not claim.
+- **The OS counts clicks and repeats keys.** A press's `detail` follows the identity's OS, not `click_count`: presses count up only when quick and in place (`dblclick` is). A key held with `keyboard.down` repeats until `keyboard.up`, with that OS's delay and interval ([docs/input-dispatch.md](docs/input-dispatch.md#click-count)).
 - **`is_mobile` is ignored** (with a warning). Camoufox has desktop identities only.
 - **Persistent contexts** need `persistent_context=True` and `user_data_dir`, and cannot be served by `launch_server`.
 - **`headless="virtual"`** needs Linux, `Xvfb` and `setpriv` from util-linux (`CannotFindXvfb`, `VirtualDisplayNotSupported` otherwise). Xvfb has no GPU, so canvas and WebGL render in software and the identity reports `llvmpipe`.

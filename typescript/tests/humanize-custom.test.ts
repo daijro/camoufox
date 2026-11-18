@@ -7,14 +7,16 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { errors } from "playwright-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { attachCustom, validateSteps } from "../src/_humanize_custom.js";
+import { attach, validateSteps } from "../src/_humanize_custom.js";
 import {
 	CHANNELS,
 	type CustomEngine,
 	channelStream,
 	custom,
-	customEngines,
+	drivenChannels,
+	myuri,
 	normalize,
 	raw,
 	SeededRng,
@@ -72,17 +74,18 @@ describe("factory and config", () => {
 		expect(() =>
 			normalize({ mouse: { ...custom(noop), options: { speed: 1 } } }),
 		).toThrow("custom() takes no options");
-		expect(customEngines({ mouse: custom(noop), keyboard: raw() })).toEqual({
-			mouse: noop,
-		});
-		expect(customEngines(null)).toEqual({});
+		expect(
+			drivenChannels({ mouse: custom(noop), keyboard: raw(), scroll: raw() }),
+		).toEqual(["mouse"]);
+		expect(drivenChannels({ mouse: raw() })).toEqual(["keyboard", "scroll"]);
+		expect(drivenChannels(null)).toEqual([]);
 	});
 
-	it("a channel set to null is refused; only an omitted one is raw", () => {
+	it("a channel set to null is refused; an omitted one is myuri", () => {
 		expect(() => normalize({ mouse: null })).toThrow(
-			'humanize["mouse"] must be raw() or custom(fn)',
+			'humanize["mouse"] must be myuri(), custom(fn) or raw()',
 		);
-		expect(normalize({}).engines.mouse.engine).toBe("raw");
+		expect(normalize({}).engines.mouse.engine).toBe("myuri");
 		expect(normalize({ seed: null }).seed).toBeUndefined();
 	});
 
@@ -96,6 +99,8 @@ describe("factory and config", () => {
 				mouse: custom((_p, x, y) => {
 					calls.push([x, y]);
 				}),
+				keyboard: raw(),
+				scroll: raw(),
 			},
 		});
 		await (await launched.newPage()).mouse.move(1, 2);
@@ -116,7 +121,7 @@ describe("factory and config", () => {
 	it("launchServer refuses custom()", async () => {
 		await expect(
 			launchServer({ humanize: { mouse: custom(noop) } }),
-		).rejects.toThrow("launch_server() cannot run custom() humanize engines");
+		).rejects.toThrow("launch_server() cannot run humanize engines");
 	});
 });
 
@@ -183,7 +188,14 @@ function fakeBrowser(latency = 0) {
 			return new FakeLocator(this.owner, this.selector);
 		}
 		async click(o?: any) {
-			log("locator.click", this.selector, o?.position ?? null);
+			if (!o?.trial && !this.owner.checked.delete(this.selector))
+				this.owner.checked.add(this.selector);
+			log(
+				"locator.click",
+				this.selector,
+				o?.position ?? null,
+				o?.delay ?? null,
+			);
 		}
 		async dblclick(o?: any) {
 			log("locator.dblclick", this.selector, o?.position ?? null);
@@ -219,13 +231,21 @@ function fakeBrowser(latency = 0) {
 		async focus() {
 			log("locator.focus", this.selector);
 		}
+		async isChecked() {
+			return this.owner.checked.has(this.selector);
+		}
 		async boundingBox() {
 			return { ...boxes[this.selector][0] };
 		}
 		async evaluate(script: unknown) {
-			return String(script).includes("clientLeft")
-				? [2, 3]
-				: boxes[this.selector][1];
+			const source = String(script);
+			if (source.includes("borderLeftWidth")) return [2, 3];
+			if (source.includes("elementFromPoint")) {
+				// What covers the point at each press, until the list runs out.
+				this.owner.aimed = this.selector;
+				return this.owner.covered.shift() ?? null;
+			}
+			return boxes[this.selector][1];
 		}
 	}
 
@@ -265,6 +285,15 @@ function fakeBrowser(latency = 0) {
 
 	class FakePage {
 		readonly frame = new FakeFrame(this);
+		readonly checked = new Set<string>();
+		// The checkbox the next release toggles: what the last hit test found.
+		aimed: string | null = null;
+		covered: string[] = [];
+		timeout = 30000;
+		// Playwright's client keeps the default timeout here.
+		readonly _timeoutSettings = {
+			timeout: () => ({ timeout: this.timeout }),
+		};
 		readonly mouse = {
 			latency,
 			move: async (x: number, y: number) => {
@@ -272,10 +301,16 @@ function fakeBrowser(latency = 0) {
 				if (this.mouse.latency)
 					await new Promise((r) => setTimeout(r, this.mouse.latency));
 			},
-			down: async (o?: any) => log("mouse.down", o?.button ?? "left"),
-			up: async (o?: any) => log("mouse.up", o?.button ?? "left"),
+			down: async (o?: any) =>
+				log("mouse.down", o?.button ?? "left", o?.clickCount ?? 1),
+			up: async (o?: any) => {
+				log("mouse.up", o?.button ?? "left", o?.clickCount ?? 1);
+				if (this.aimed && !this.checked.delete(this.aimed))
+					this.checked.add(this.aimed);
+			},
 			wheel: async (dx: number, dy: number) => log("mouse.wheel", dx, dy),
-			click: async (x: number, y: number) => log("mouse.click", x, y),
+			click: async (x: number, y: number, o?: any) =>
+				log("mouse.click", x, y, o?.delay ?? null),
 			dblclick: async (x: number, y: number) => log("mouse.dblclick", x, y),
 		};
 		readonly keyboard = {
@@ -294,6 +329,9 @@ function fakeBrowser(latency = 0) {
 		}
 		locator(selector: string) {
 			return new FakeLocator(this, selector);
+		}
+		async evaluate() {
+			return [1000, 700];
 		}
 		async click(selector: string) {
 			log("page.click", selector);
@@ -357,19 +395,21 @@ function fakeBrowser(latency = 0) {
 	} as any;
 }
 
+/** A page whose channels are raw() except those `humanize` names. */
 async function attachedPage(humanize: Record<string, unknown>, latency = 0) {
 	const browser = fakeBrowser(latency);
-	attachCustom(browser, humanize);
+	attach(browser, { ...allRaw(), ...humanize }, "linux");
 	return { browser, page: await browser.newPage() };
 }
+
+const allRaw = () => Object.fromEntries(CHANNELS.map((c) => [c, raw()]));
 
 // ---- the reference engines -------------------------------------------------
 
 /** Three engines that draw from their streams, play steps, and use original. */
 function referenceEngines(log: unknown[][]) {
 	const at = { x: 0, y: 0 };
-	const move: CustomEngine = (_page, x, y, { rng, play }) => {
-		log.push(["fn.mouse", x, y]);
+	const path = (x: number, y: number, rng: SeededRng) => {
 		const n = 3 + Math.floor(rng() * 4);
 		const { x: sx, y: sy } = at;
 		const steps = [];
@@ -385,7 +425,20 @@ function referenceEngines(log: unknown[][]) {
 		}
 		at.x = x;
 		at.y = y;
-		return play(steps);
+		return steps;
+	};
+	const move: CustomEngine = async (
+		_page,
+		x,
+		y,
+		{ original, rng, play, click },
+	) => {
+		log.push(["fn.mouse", x, y, click ? click.clickCount : null]);
+		await play(path(x, y, rng));
+		if (click)
+			return original(undefined, undefined, {
+				delay: 90 + Math.floor(rng() * 30),
+			});
 	};
 	const keys: CustomEngine = (_page, text, { original, rng, play, kind }) => {
 		log.push(["fn.keyboard", kind, text]);
@@ -422,12 +475,16 @@ function referenceEngines(log: unknown[][]) {
 async function scenario() {
 	const browser = fakeBrowser();
 	const { move, keys, scroll } = referenceEngines(browser.events);
-	attachCustom(browser, {
-		mouse: custom(move),
-		keyboard: custom(keys),
-		scroll: custom(scroll),
-		seed: 1234,
-	});
+	attach(
+		browser,
+		{
+			mouse: custom(move),
+			keyboard: custom(keys),
+			scroll: custom(scroll),
+			seed: 1234,
+		},
+		"linux",
+	);
 	const page = await browser.newPage();
 	await page.mouse.move(300, 200);
 	await page.mouse.wheel(0, 480);
@@ -462,15 +519,148 @@ describe("wrappers", () => {
 		return { calls, fn };
 	};
 
-	it("a click calls the mouse engine once, at the point", async () => {
-		const { calls, fn } = recordingMouse();
-		const { browser, page } = await attachedPage({ mouse: custom(fn) });
+	it("a click is pressed by the mouse engine, at its point", async () => {
+		const seen: unknown[] = [];
+		const { browser, page } = await attachedPage({
+			mouse: custom((_p, x, y, { original, click }) => {
+				seen.push([x, y, click]);
+				return original(x + 1, y - 1, { delay: 104 });
+			}),
+		});
 		await page.locator("#near").click();
-		expect(calls).toEqual([[525, 310]]);
+		const box = browser.boxes["#near"][0];
+		expect(seen).toEqual([[525, 310, { button: "left", clickCount: 1, box }]]);
+		// The engine never moved, so the press moves to its point, then presses there.
+		expect(browser.events).toEqual([
+			["locator.scrollIntoViewIfNeeded", "#near"],
+			["mouse.move", 526, 309],
+			["mouse.down", "left", 1],
+			["mouse.up", "left", 1],
+		]);
+	});
+
+	it("a press after the engine moved sends no other move", async () => {
+		const { browser, page } = await attachedPage({
+			mouse: custom(async (p, x, y, { original }) => {
+				await p.mouse.move(x, y);
+				return original(x, y);
+			}),
+		});
+		await page.locator("#near").dblclick();
+		await page.mouse.click(10, 20);
 		expect(browser.events).toEqual([
 			["locator.scrollIntoViewIfNeeded", "#near"],
 			["mouse.move", 525, 310],
-			["locator.click", "#near", null],
+			["mouse.down", "left", 1],
+			["mouse.up", "left", 1],
+			["mouse.down", "left", 2],
+			["mouse.up", "left", 2],
+			["mouse.move", 10, 20],
+			["mouse.down", "left", 1],
+			["mouse.up", "left", 1],
+		]);
+	});
+
+	it("a covered point is reached for again", async () => {
+		const { calls, fn } = recordingMouse();
+		const { browser, page } = await attachedPage({ mouse: custom(fn) });
+		page.covered = ["<div> intercepts pointer events"];
+		await page.locator("#near").click();
+		expect(calls).toEqual([
+			[525, 310],
+			[525, 310],
+		]);
+		expect(
+			browser.events.filter((e: unknown[]) => e[0] === "mouse.down").length,
+		).toBe(1);
+	});
+
+	it("a forced press skips the check", async () => {
+		const { calls, fn } = recordingMouse();
+		const { browser, page } = await attachedPage({ mouse: custom(fn) });
+		page.covered = ["<div> intercepts pointer events"];
+		await page.locator("#near").click({ force: true });
+		expect(calls).toEqual([[525, 310]]);
+		expect(
+			browser.events.filter((e: unknown[]) => e[0] === "mouse.down").length,
+		).toBe(1);
+		expect(page.covered).toHaveLength(1);
+	});
+
+	it("a point covered past the timeout raises", async () => {
+		const { fn } = recordingMouse();
+		const { browser, page } = await attachedPage({ mouse: custom(fn) });
+		page.covered = Array(100).fill("<div> intercepts pointer events");
+		const error = await page
+			.locator("#near")
+			.click({ timeout: 150 })
+			.catch((e: Error) => e);
+		expect(error).toBeInstanceOf(errors.TimeoutError);
+		expect(error.message).toContain("<div> intercepts pointer events");
+		expect(browser.events.map((e: unknown[]) => e[0])).not.toContain(
+			"mouse.down",
+		);
+	});
+
+	it("a zero timeout waits for the point", async () => {
+		const { fn } = recordingMouse();
+		const { browser, page } = await attachedPage({ mouse: custom(fn) });
+		page.covered = Array(3).fill("<div> intercepts pointer events");
+		page.timeout = 0;
+		await page.locator("#near").click();
+		expect(
+			browser.events.filter((e: unknown[]) => e[0] === "mouse.down").length,
+		).toBe(1);
+	});
+
+	it("a hover is the engine move alone", async () => {
+		const { fn } = recordingMouse();
+		const { browser, page } = await attachedPage({ mouse: custom(fn) });
+		await page.locator("#near").hover();
+		expect(browser.events).toEqual([
+			["locator.scrollIntoViewIfNeeded", "#near"],
+			["mouse.move", 525, 310],
+		]);
+	});
+
+	it("myuri moves to a point in the box and clicks there", async () => {
+		const { browser, page } = await attachedPage({ mouse: myuri(), seed: 3 });
+		await page.locator("#near").click();
+		const box = browser.boxes["#near"][0];
+		const moves = browser.events.filter((e) => e[0] === "mouse.move");
+		expect(moves.length).toBeGreaterThan(1);
+		expect(browser.events.map((e) => e[0])).not.toContain("locator.click");
+		// The press is where the path ends, inside the box, with no move after it.
+		const [, x, y] = moves[moves.length - 1] as [string, number, number];
+		expect(x).toBeGreaterThanOrEqual(box.x);
+		expect(x).toBeLessThanOrEqual(box.x + box.width);
+		expect(y).toBeGreaterThanOrEqual(box.y);
+		expect(y).toBeLessThanOrEqual(box.y + box.height);
+		expect(browser.events.slice(-2)).toEqual([
+			["mouse.down", "left", 1],
+			["mouse.up", "left", 1],
+		]);
+	});
+
+	it("myuri turns a wheel in mouse notches", async () => {
+		const { browser, page } = await attachedPage({ scroll: myuri(), seed: 3 });
+		await page.mouse.wheel(0, 300);
+		const wheels = browser.events.filter((e) => e[0] === "mouse.wheel");
+		// Windows and Linux mouse wheels send one 100 px event a notch
+		// (docs/input-dispatch.md).
+		expect(wheels.length).toBeGreaterThan(0);
+		for (const [, dx, dy] of wheels as [string, number, number][]) {
+			expect(dx).toBe(0);
+			expect(Math.abs(dy)).toBe(100);
+		}
+	});
+
+	it("a click the engine never presses does not happen", async () => {
+		const { browser, page } = await attachedPage({ mouse: custom(noop) });
+		await page.locator("#near").click();
+		await page.mouse.click(10, 20);
+		expect(browser.events).toEqual([
+			["locator.scrollIntoViewIfNeeded", "#near"],
 		]);
 	});
 
@@ -479,12 +669,10 @@ describe("wrappers", () => {
 		const { browser, page } = await attachedPage({ mouse: custom(fn) });
 		await page.fill("#name", "text");
 		expect(calls).toEqual([[140, 132]]);
-		expect(
-			browser.events
-				.map((e: unknown[]) => e[0])
-				.filter((name: string) => name.startsWith("locator."))
-				.slice(-2),
-		).toEqual(["locator.click", "locator.fill"]);
+		expect(browser.events.map((e: unknown[]) => e[0]).slice(-2)).toEqual([
+			"mouse.up",
+			"locator.fill",
+		]);
 	});
 
 	it("a keyboard engine alone still clicks before a fill", async () => {
@@ -501,6 +689,7 @@ describe("wrappers", () => {
 		const { calls, fn } = recordingMouse();
 		const { page } = await attachedPage({ mouse: custom(fn) });
 		await page.check("#near");
+		await page.check("#near"); // already checked: no click
 		await page.mainFrame().click("#near");
 		expect(calls).toEqual([
 			[525, 310],
@@ -559,9 +748,9 @@ describe("wrappers", () => {
 			[3, 4],
 		]);
 		expect(other.events).toEqual([["mouse.move", 5, 6]]);
-		expect(() => attachCustom(browser, { mouse: custom(fn) })).toThrow(
-			"already attached",
-		);
+		expect(() =>
+			attach(browser, { ...allRaw(), mouse: custom(fn) }, "linux"),
+		).toThrow("already attached");
 	});
 
 	it("attaches to a persistent context's existing pages", async () => {
@@ -569,7 +758,7 @@ describe("wrappers", () => {
 		const browser = fakeBrowser();
 		const context = await browser.newContext();
 		const page = context.openPage();
-		attachCustom(context, { mouse: custom(fn) });
+		attach(context, { ...allRaw(), mouse: custom(fn) }, "linux");
 		await page.mouse.move(7, 8);
 		expect(calls).toEqual([[7, 8]]);
 	});
@@ -595,7 +784,7 @@ describe("wrappers", () => {
 			const browser = fakeBrowser();
 			browser._connection = { isRemote: () => isRemote, dispatch: noop };
 			const { warnings: caught } = await warnings.recordWarnings(async () =>
-				attachCustom(browser, { mouse: custom(noop) }),
+				attach(browser, { ...allRaw(), mouse: custom(noop) }, "linux"),
 			);
 			return caught.some((w) => w.message.includes("round trip"));
 		};
@@ -613,15 +802,20 @@ describe("wrappers", () => {
 			dispatch: () => onEvent(),
 		};
 		let first = true;
-		attachCustom(browser, {
-			mouse: custom((p, x, y, tools) => {
-				if (first) {
-					first = false;
-					browser._connection.dispatch();
-				}
-				return fn(p, x, y, tools);
-			}),
-		});
+		attach(
+			browser,
+			{
+				...allRaw(),
+				mouse: custom((p, x, y, tools) => {
+					if (first) {
+						first = false;
+						browser._connection.dispatch();
+					}
+					return fn(p, x, y, tools);
+				}),
+			},
+			"linux",
+		);
 		const page = await browser.newPage();
 		let inner: Promise<unknown> = Promise.resolve();
 		onEvent = () => {

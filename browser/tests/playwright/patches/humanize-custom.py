@@ -15,8 +15,9 @@ What PASS means:
     * every channel custom(): the page sees each planned move, key and wheel
       step, trusted, and nothing else: a locator click after the planned move
       adds no mousemove (Playwright's own move has no distance left), a fill
-      types the text key by key, and an element out of view is brought in by
-      the scroll function's wheel steps;
+      types the text key by key, the mouse function presses each click where
+      its path ended, and an element out of view is brought in by the scroll
+      function's wheel steps;
     * the same seed gives the same input; another seed does not.
 """
 
@@ -63,7 +64,7 @@ def reference_engines(log):
     at = {"x": 0.0, "y": 0.0}
     planned = []
 
-    async def move(page, x, y, *, original, rng, play):
+    async def move(page, x, y, *, original, rng, play, click):
         log.append(["mouse", x, y])
         n = 8 + math.floor(rng() * 8)
         planned.append(n)
@@ -75,7 +76,9 @@ def reference_engines(log):
             jitter = (rng() - 0.5) * 6 * (1 - f)
             steps.append(["move", sx + (x - sx) * ease + jitter, sy + (y - sy) * ease - jitter, i * 12])
         at.update(x=x, y=y)
-        return await play(steps)
+        played = await play(steps)
+        # A click is pressed by the engine, at the end of its path.
+        return await original(x, y, delay=60 + math.floor(rng() * 60)) if click else played
 
     async def keys(page, text, *, original, rng, play, kind):
         log.append(["keyboard", kind, text])
@@ -115,15 +118,21 @@ def reference_engines(log):
     return move, keys, scroll, planned
 
 
-async def custom_session(seed):
+def identity():
+    """One machine for every session. A screen that holds the 1000x700 page:
+    one that cannot clamps the page. Sessions that drew their own identities
+    laid the page out a device pixel apart (their fonts and pixel ratios), so
+    the same seed pressed other points."""
+    from camoufox.fingerprints import Screen, generate_fingerprint
+
+    return generate_fingerprint(os="linux", screen=Screen(min_width=1100, min_height=800))
+
+
+async def custom_session(seed, fingerprint):
     log = []
     move, keys, scroll, planned = reference_engines(log)
     humanize = {"mouse": custom(move), "keyboard": custom(keys), "scroll": custom(scroll), "seed": seed}
-    from camoufox.fingerprints import Screen
-
-    # A screen that holds the 1000x700 page: one that cannot clamps the page
-    # (one machine, one screen), and the replay compares pages of one size.
-    kwargs = dict(headless=True, os="linux", humanize=humanize, screen=Screen(min_width=1100, min_height=800))
+    kwargs = dict(headless=True, os="linux", humanize=humanize, fingerprint=fingerprint, i_know_what_im_doing=True)
     if EXECUTABLE_PATH:
         kwargs["executable_path"] = EXECUTABLE_PATH
     async with AsyncCamoufox(**kwargs) as browser:
@@ -150,7 +159,8 @@ async def custom_session(seed):
 async def main() -> int:
     failures = []
 
-    log, events, state, planned = await custom_session(1234)
+    fingerprint = identity()
+    log, events, state, planned = await custom_session(1234, fingerprint)
     kinds = [e[0] for e in events]
     moves = [e for e in events if e[0] == "mousemove"]
     wheels = [e for e in events if e[0] == "wheel"]
@@ -197,14 +207,17 @@ async def main() -> int:
     def replayed(evs):
         return [[e[0], e[5]] if e[0] == "wheel" else e[2:] for e in evs if e[0] != "mousemove"]
 
-    log_b, events_b, _, _ = await custom_session(1234)
-    log_c, _, _, _ = await custom_session(1235)
-    same = replayed(events_b) == replayed(events)
-    print(f"seed 1234 again: identical engine calls and page events but moves: {same and log_b == log}; "
-          f"seed 1235 plans differently: {log_c != log}")
-    if not same or log_b != log:
+    # The plan is compared, not the engine calls: the calls' targets are the
+    # elements' centres, and the scroll function's seeded steps land on the
+    # same notch.
+    log_b, events_b, _, planned_b = await custom_session(1234, fingerprint)
+    _, _, _, planned_c = await custom_session(1235, fingerprint)
+    same = replayed(events_b) == replayed(events) and log_b == log and planned_b == planned
+    print(f"seed 1234 again: identical engine calls, plans and page events but moves: {same}; "
+          f"seed 1235 plans differently: {planned_c != planned}")
+    if not same:
         failures.append("the same seed gave different input")
-    if log_c == log:
+    if planned_c == planned:
         failures.append("another seed gave the same input")
 
     for failure in failures:

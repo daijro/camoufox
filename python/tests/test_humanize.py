@@ -1,12 +1,12 @@
-"""Humanize launch configuration: raw() or custom(fn) per channel, run by the
-driver. Nothing of it reaches the browser's config."""
+"""Humanize launch configuration: myuri(), custom(fn) or raw() per channel, run
+by the driver. Nothing of it reaches the browser's config."""
 
 import json
 
 import pytest
 
 from camoufox import utils
-from camoufox.humanize import CHANNELS, custom, normalize, raw
+from camoufox.humanize import CHANNELS, custom, myuri, normalize, raw
 
 
 def noop(*_args, **_kwargs):
@@ -62,6 +62,7 @@ def captured_launch_config(monkeypatch):
     [
         None,
         False,
+        True,
         {},
         {"mouse": raw()},
         {"mouse": custom(noop), "keyboard": custom(noop), "scroll": custom(noop), "seed": 9},
@@ -73,22 +74,25 @@ def test_no_humanize_key_reaches_the_browser(captured_launch_config, humanize) -
     assert not [key for key in config if key.startswith("humanize")]
 
 
-def test_normalize_defaults_every_channel_to_raw() -> None:
-    engines, seed = normalize(None)
-    assert engines == {channel: raw() for channel in CHANNELS} and seed is None
-    engines, seed = normalize({"scroll": custom(noop), "seed": 5})
-    assert engines["mouse"] == raw() and engines["keyboard"] == raw()
+def test_no_humanize_is_raw_and_humanize_is_myuri() -> None:
+    for off in (None, False):
+        engines, seed = normalize(off)
+        assert engines == {channel: raw() for channel in CHANNELS} and seed is None
+    engines, seed = normalize(True)
+    assert engines == {channel: myuri() for channel in CHANNELS} and seed is None
+    engines, seed = normalize({"scroll": custom(noop), "keyboard": {"engine": "myuri", "options": {"wpm": 70}}, "seed": 5})
+    assert engines["mouse"] == myuri() and engines["keyboard"] == myuri(wpm=70)
     assert engines["scroll"]["engine"] == "custom" and engines["scroll"]["fn"] is noop
     assert seed == 5
 
 
 @pytest.mark.parametrize(
     "humanize",
-    [True, 1.5, 2, {"mouse": "cursory"}, {"mouse": {"engine": "auto", "options": {}}},
+    [1.5, 2, {"mouse": "cursory"}, {"mouse": {"engine": "auto", "options": {}}},
      {"scroll": {"engine": "cursory", "options": {"maxTime": 1}}}],
 )
 def test_in_browser_humanization_is_refused(humanize) -> None:
-    with pytest.raises(ValueError, match="no longer humanizes"):
+    with pytest.raises(ValueError, match="the browser does not humanize input"):
         normalize(humanize)
 
 
@@ -100,7 +104,8 @@ def test_in_browser_humanization_is_refused(humanize) -> None:
         ({"seed": 2**64}, "seed"),
         ({"seed": True}, "seed"),
         ({"seed": "1"}, "seed"),
-        ({"mouse": 3}, "must be raw\\(\\) or custom"),
+        ({"mouse": 3}, "must be myuri\\(\\), custom\\(fn\\) or raw\\(\\)"),
+        ({"mouse": {"engine": "myuri", "options": {"speed": 1}}}, "takes wpm"),
         ({"mouse": "custom"}, "needs its function"),
         ({"mouse": {**custom(noop), "options": {"speed": 1}}}, "takes no options"),
         ({"mouse": {"engine": "raw", "options": {"speed": 1}}}, "takes no options"),
@@ -122,5 +127,5 @@ def test_custom_needs_a_function() -> None:
 
 
 def test_launch_options_refuses_in_browser_humanization(captured_launch_config) -> None:
-    with pytest.raises(ValueError, match="no longer humanizes"):
-        captured_launch_config(True)
+    with pytest.raises(ValueError, match="the browser does not humanize input"):
+        captured_launch_config(1.5)

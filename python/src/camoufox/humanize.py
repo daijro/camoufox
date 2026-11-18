@@ -1,27 +1,31 @@
 """
 Per-channel humanized input, run by the driver, never by the browser.
 
-    from camoufox.humanize import custom, raw
+    from camoufox.humanize import custom, myuri, raw
 
+    Camoufox(humanize=True)                     # myuri on every channel
     Camoufox(humanize={
         "mouse": custom(my_mouse),
         "scroll": raw(),
         "seed": 1234,
-    })
+    })                                          # keyboard: myuri
 
 The browser has no humanization of its own: each Playwright input call reaches
 the page as the one native-looking event (or click, or key) it asks for, when
 it is sent (docs/input-dispatch.md). How a person moves, types and scrolls is
-the driver's job. A channel (mouse, keyboard, scroll) is either
+the driver's job. A channel (mouse, keyboard, scroll) is one of
 
+    myuri()     paths, clicks, typing and wheel turns planned by myuri for the
+                identity's OS (the `humanize` extra)
+    custom(fn)  a function in this process plans the channel's input
     raw()       Playwright's own calls, unchanged
-    custom(fn)  a function in this process plans the channel's input and plays
-                it through Playwright's own input methods, with schedule pacing
-                and a seeded stream (camoufox._humanize_custom)
 
-`humanize` itself may be None / False (every channel raw), or a dict per
-channel plus an optional "seed"; an omitted channel is raw. Nothing about it
-reaches the browser's config.
+Both planners play through Playwright's own input methods, with schedule pacing
+and a seeded stream (camoufox._humanize_custom).
+
+`humanize` may be None / False (every channel raw), True (every channel myuri),
+or a dict per channel plus an optional "seed"; an omitted channel is myuri.
+Nothing about it reaches the browser's config.
 """
 
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
@@ -37,18 +41,38 @@ def raw() -> Engine:
     return {'engine': 'raw', 'options': {}}
 
 
+def myuri(**options: Any) -> Engine:
+    """
+    myuri (https://github.com/JWriter20/Myuri) plans the channel's input as the
+    people it was fitted to move, click, type and scroll on the identity's OS.
+    `options` go to its planner: `wpm` for the keyboard.
+    """
+    unknown = set(options) - {'wpm'}
+    if unknown:
+        raise ValueError(f'myuri() takes no option {sorted(unknown)}; it takes wpm')
+    return {'engine': 'myuri', 'options': dict(options)}
+
+
 def custom(fn: Callable[..., Any]) -> Engine:
     """
     A client-side engine: `fn` plans the channel's input in this process and
     plays it through Playwright. Its signature, per channel:
 
-        mouse     fn(page, x, y, *, original, rng, play)
+        mouse     fn(page, x, y, *, original, rng, play, click)
         keyboard  fn(page, text, *, original, rng, play, kind)   kind: 'type', 'press' or 'fill'
         scroll    fn(page, target, *, original, rng, play)       target: a Locator or (dx, dy)
 
     `original` runs Playwright's own behaviour for the call, `rng` is the
     channel's seeded stream, and `play(steps)` dispatches steps on a schedule.
     With the async API `fn` may be async.
+
+    For a move, `click` is None. For a click it is a dict: `button`,
+    `click_count`, and `box`, the element's box when the caller gave no point
+    in it (`fn` may then press anywhere in it). `fn` moves, then presses with
+    `original(x, y, delay=hold_ms)`: a mouse down and up at (x, y), moving there
+    first only if the cursor is elsewhere. `delay` is how long each press is
+    held, and between the presses of a double click. A point something covers
+    raises inside `original()`, and `fn` is called again until the timeout.
 
     Each wheel step is one wheel event, in whole notches as a physical wheel
     turns: 100 px is one notch, rounded, at least one, all of a step's notches
@@ -61,16 +85,18 @@ def custom(fn: Callable[..., Any]) -> Engine:
 
 
 _IN_BROWSER = (
-    'the browser no longer humanizes input: each Playwright call is one event. '
-    'Humanize in the driver, with custom(fn) per channel (camoufox.humanize) or a driver-level library'
+    'the browser does not humanize input: each Playwright call is one event. '
+    'Pass True, or myuri(), custom(fn) or raw() per channel (camoufox.humanize)'
 )
 
 
 def _as_engine(channel: str, value: Any) -> Engine:
     candidate = {'engine': value, 'options': {}} if isinstance(value, str) else value
     if not isinstance(candidate, Mapping) or not isinstance(candidate.get('engine'), str):
-        raise ValueError(f'humanize["{channel}"] must be raw() or custom(fn), got {value!r}')
+        raise ValueError(f'humanize["{channel}"] must be myuri(), custom(fn) or raw(), got {value!r}')
     name = candidate['engine']
+    if name == 'myuri':
+        return myuri(**(candidate.get('options') or {}))
     if name == 'custom':
         if not callable(candidate.get('fn')):
             raise ValueError(f'humanize["{channel}"]: a custom engine needs its function, as custom(fn)')
@@ -89,6 +115,8 @@ def normalize(humanize: HumanizeSetting) -> Tuple[Dict[str, Engine], Optional[in
     not given)."""
     if humanize is None or humanize is False:
         return {channel: raw() for channel in CHANNELS}, None
+    if humanize is True:
+        return {channel: myuri() for channel in CHANNELS}, None
     if not isinstance(humanize, Mapping):
         raise ValueError(f'humanize={humanize!r}: {_IN_BROWSER}')
     unknown = set(humanize) - {*CHANNELS, 'seed'}
@@ -97,26 +125,28 @@ def normalize(humanize: HumanizeSetting) -> Tuple[Dict[str, Engine], Optional[in
     seed = humanize.get('seed')
     if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**64):
         raise ValueError(f'humanize["seed"] must be an integer in [0, 2**64), got {seed!r}')
-    engines = {channel: _as_engine(channel, humanize.get(channel, 'raw')) for channel in CHANNELS}
+    engines = {channel: _as_engine(channel, humanize.get(channel, 'myuri')) for channel in CHANNELS}
     return engines, seed
 
 
-def attach_custom(target: Any, humanize: HumanizeSetting, i_know_what_im_doing: Optional[bool] = None) -> Any:
+def attach(
+    target: Any, humanize: HumanizeSetting, os: str, i_know_what_im_doing: Optional[bool] = None
+) -> Any:
     """
-    Run the custom() engines of `humanize` on a Browser or BrowserContext that
-    camoufox did not launch in this process, e.g. one from `connect()`. Launch
-    that browser with raw() on those channels. Camoufox()/NewBrowser() call this
-    themselves.
+    Run the engines of `humanize` on a Browser or BrowserContext that camoufox
+    did not launch in this process, e.g. one from `connect()`. Launch that
+    browser without humanize; `os` ('macos', 'windows' or 'linux') is its
+    identity's. Camoufox()/NewBrowser() call this themselves.
     """
-    from ._humanize_custom import attach
+    from ._humanize_custom import attach as attach_engines
 
-    return attach(target, humanize, i_know_what_im_doing=i_know_what_im_doing)
+    return attach_engines(target, humanize, os, i_know_what_im_doing=i_know_what_im_doing)
 
 
-def custom_engines(humanize: HumanizeSetting) -> Dict[str, Callable[..., Any]]:
-    """The functions of a `humanize` setting's custom channels, by channel."""
+def driven_channels(humanize: HumanizeSetting) -> Tuple[str, ...]:
+    """The channels of a `humanize` setting that an engine in this process drives."""
     engines, _seed = normalize(humanize)
-    return {channel: engines[channel]['fn'] for channel in CHANNELS if engines[channel]['engine'] == 'custom'}
+    return tuple(channel for channel in CHANNELS if engines[channel]['engine'] != 'raw')
 
 
 # The seeded streams, one per channel, the same in the TypeScript launcher:

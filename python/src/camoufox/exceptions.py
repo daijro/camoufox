@@ -123,6 +123,14 @@ class NotInstalledGeoIPExtra(ImportError):
     ...
 
 
+class NotInstalledHumanizeExtra(ImportError):
+    """
+    Raised when humanize uses myuri and the myuri package is not installed.
+    """
+
+    ...
+
+
 class NonFirefoxFingerprint(Exception):
     """
     Raised when a passed fingerprint is not a Firefox fingerprint.
