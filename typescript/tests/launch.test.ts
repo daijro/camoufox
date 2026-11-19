@@ -1504,9 +1504,12 @@ describe.skipIf(!MODEL.ok)(
 			]);
 		});
 
-		it("a preset GPU is checked against the host core count (test_coherence.py)", async () => {
+		it("a preset GPU survives a host core count no Mac with it reports (test_coherence.py)", async () => {
 			// The launch replaces the preset's cores with the host's after the
-			// preset's GPU is read: the GPU has to fit the count that ships.
+			// preset's GPU is read. On a host whose count no Intel iGPU Mac
+			// reports, the count is the value that yields (16 is the most such a
+			// Mac claims), not the GPU -- the old order dropped the GPU and redrew
+			// it from the generic pool (daijro/camoufox#1090).
 			const base = fingerprints.loadPresets("152")?.presets.macos[0];
 			const preset = {
 				...base,
@@ -1524,14 +1527,19 @@ describe.skipIf(!MODEL.ok)(
 					unmaskedRenderer: "Intel(R) HD Graphics 400, or similar",
 				},
 			};
-			deps.fixHardwareConcurrency = (config, canPin) =>
-				fingerprints.fixHardwareConcurrency(config, canPin, { cpuCount: 20 });
+			deps.fixHardwareConcurrency = (config, canPin, _host, targetOs) =>
+				fingerprints.fixHardwareConcurrency(
+					config,
+					canPin,
+					{ cpuCount: 20 },
+					targetOs,
+				);
 			const config = await launchConfig({
 				os: "macos",
 				fingerprint_preset: preset,
 			});
-			expect(config["navigator.hardwareConcurrency"]).toBe(20);
-			expect(config["webGl:renderer"]).not.toContain("Intel");
+			expect(config["navigator.hardwareConcurrency"]).toBe(16);
+			expect(config["webGl:renderer"]).toBe(preset.webgl.unmaskedRenderer);
 		});
 
 		it("a preset GPU fpgen has never seen raises", async () => {
