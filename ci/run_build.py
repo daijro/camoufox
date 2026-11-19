@@ -55,7 +55,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     cmd = [sys.executable, "multibuild.py", "--target", args.target, "--arch", args.arch]
     if args.preflight:
         cmd.append("--preflight")
-    proc = run(cmd, cwd=BROWSER_ROOT, timeout=args.timeout, tee=True, capture=False)
+    proc = run(cmd, cwd=BROWSER_ROOT, timeout=args.timeout, tee=True)
     result.metrics["exit_code"] = proc.code
 
     if proc.code != 0:
