@@ -11,30 +11,28 @@ const {PageTarget} = ChromeUtils.importESModule('resource://gre/modules/juggler/
 const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
 const {MouseDispatch, kAckDeadlineMs} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/MouseDispatch.js');
 const kMoveIntervalMs = 8; // a 125 Hz mouse
-const {logNormalDelay} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanDelay.js');
-const {cursory, humanizedMove} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/CursorTrajectory.js');
-const {play} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/Pacer.js');
+
+// Camoufox: one Page.dispatchWheelEvent is one wheel event (see
+// Page.dispatchWheelEvent below and docs/input-dispatch.md). Pacing a scroll
+// into notches over time is the driver's job, not the browser's.
+const kPxPerNotch = 100;
+const kLinesPerNotch = 3;
+const kPxPerMacLine = 16;
+
+// Camoufox: how the claimed OS counts a press in place and repeats a held key
+// (docs/input-dispatch.md, "Click count" and "Key repeat").
+const kOsInput = {
+  windows: {clickMs: 500, repeatDelayMs: 500, repeatEveryMs: 31.25, modifiersRepeat: true},
+  macos: {clickMs: 500, repeatDelayMs: 500, repeatEveryMs: 1000 / 12, modifiersRepeat: false},
+  linux: {clickMs: 400, repeatDelayMs: 500, repeatEveryMs: 30, modifiersRepeat: false},
+};
+const kModifierKeys = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock']);
 
 const Cc = Components.classes;
 const Ci = Components.interfaces;
 const Cu = Components.utils;
 const XUL_NS = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
 const helper = new Helper();
-
-// How long a person holds a mouse button for a click. Human press durations
-// are right-skewed (arXiv 2607.26935 centres them on 100-120 ms), so this is a
-// log-normal with a 95 ms median, sigma 0.42, never under 50 ms.
-const clickHold = () => logNormalDelay(95, 0.42, 50);
-
-// How long a person's button stays up between the clicks of a double click:
-// 110 ms median, sigma 0.32, kept within 70-180 ms, so press to press stays
-// well inside the OS double-click time with clickHold() before it.
-const clickGap = () => logNormalDelay(110, 0.32, 70, 180);
-
-// How long a person's pointer rests on a target before pressing it: 125 ms
-// median, sigma 0.5, kept within 60-240 ms. Stock's OS input reads under
-// 250 ms from arrival to press; Playwright pressed under 10 ms after the move.
-const hoverDwell = () => logNormalDelay(125, 0.5, 60, 240);
 
 function hashConsoleMessage(params) {
   return params.location.lineNumber + ':' + params.location.columnNumber + ':' + params.location.url;
@@ -106,9 +104,14 @@ export class PageHandler {
     this._dragMoves = 0;
     this._dragHasPointer = false;
     this._lastMousePosition = { x: 0, y: 0 };
-    // Camoufox: last position an actual mousemove landed on. Used as the
-    // start point for the humanized cursor trajectory (humanize=True).
-    this._lastTrackedPos = { x: 0, y: 0 };
+    // Camoufox: the last point a mousemove asked for, and where it put the
+    // pointer (at), so a move that would not move it is skipped (it would
+    // never be acked).
+    this._lastTrackedPos = { x: 0, y: 0, at: { x: 0, y: 0 } };
+    // Camoufox: the OS's click count and the presses it is counted from, in
+    // device pixels (_countPress), and the key the OS is repeating (_holdKey).
+    this._clicks = { count: 0, button: -1, downAt: -Infinity, down: null, up: null, single: null };
+    this._heldKey = null;
     // Camoufox: documents whose content process accepts user input (see
     // _awaitUserInputGate), keyed by WindowGlobalParent.
     this._userInputGateOpen = new WeakSet();
@@ -131,13 +134,10 @@ export class PageHandler {
 
     this._pendingEventWatchers = new Set();
     this._moveDelivery = null;
-    this._moveDeliveredAt = 0;
     // Arrival order of mouse commands (beforeDispatch).
     this._mouseTurn = Promise.resolve();
-    this._mouseDispatched = Promise.resolve();
     this._mouseTurns = new Map();
     this._lastMoveAt = 0;
-    this._humanizeAbort = new AbortController();
     this._eventListeners = [
       helper.on(this._pageTarget, PageTarget.Events.DialogOpened, this._onDialogOpened.bind(this)),
       helper.on(this._pageTarget, PageTarget.Events.DialogClosed, this._onDialogClosed.bind(this)),
@@ -192,9 +192,7 @@ export class PageHandler {
   }
 
   async dispose() {
-    // Stop any humanized plan still playing; nothing more dispatches to a page
-    // that is going away.
-    this._humanizeAbort.abort();
+    this._heldKey = null;
     this._contentPage.dispose();
     for (const watcher of this._pendingEventWatchers)
       watcher.dispose();
@@ -576,22 +574,6 @@ export class PageHandler {
     return await this._contentPage.send('scrollIntoViewIfNeeded', options);
   }
 
-  // Camoufox: measure at each dispatch, after any await, like
-  // Page.dispatchMouseEvent does. Same conversion as a mouse event: a wheel at
-  // relative y == 0 would otherwise land on the chrome/content boundary and
-  // scroll the tab strip.
-  _sendWheelStep(win, modifiers, step) {
-    MouseDispatch.forBrowser(win, this._pageTarget._linkedBrowser, {modifiers}).sendWheel(step.x, step.y, {
-      deltaX: step.dx,
-      deltaY: step.dy,
-      deltaZ: step.dz,
-      deltaMode: step.mode,
-      lineOrPageDeltaX: step.ticks?.x ?? 0,
-      lineOrPageDeltaY: step.ticks?.y ?? 0,
-      nativeNotches: Boolean(step.ticks) && !this._identityIs('Mac', 'Darwin'),
-    });
-  }
-
   async ['Page.setInitScripts']({ scripts }) {
     return await this._pageTarget.setInitScripts(scripts);
   }
@@ -638,8 +620,16 @@ export class PageHandler {
       browser.focus();
   }
 
-  async ['Page.dispatchKeyEvent']({type, keyCode, code, key, repeat, location, text}) {
+  async ['Page.dispatchKeyEvent'](params) {
+    this._holdKey(params);
+    return await this._dispatchKeyEvent(params);
+  }
+
+  async _dispatchKeyEvent({type, keyCode, code, key, repeat, location, text}, held = null) {
     await this._awaitUserInputGate();
+    // A repeat is the OS's while the key is still the one it repeats.
+    if (held && this._heldKey !== held)
+      return;
     // key events don't fire if we are dragging.
     if (this._isDragging) {
       if (type === 'keydown' && key === 'Escape') {
@@ -697,7 +687,6 @@ export class PageHandler {
     if (!pending)
       return;
     await pending.delivered();
-    this._moveDeliveredAt = ChromeUtils.now();
     if (this._moveDelivery === pending)
       this._moveDelivery = null;
     pending.dispose();
@@ -747,7 +736,7 @@ export class PageHandler {
     await this._awaitUserInputGate();
     const win = this._pageTarget._window;
     const eventArgs = {button, clickCount, modifiers, buttons};
-    const sendEvents = async (types) => {
+    const sendEvents = async (types, at = {x, y}) => {
       // 1. Scroll element to the desired location first; the coordinates are relative to the element.
       this._pageTarget._linkedBrowser.scrollRectIntoViewIfNeeded(x, y, 0, 0);
       // 2. Make sure compositor is flushed after scrolling.
@@ -772,19 +761,10 @@ export class PageHandler {
       const watcher = new EventWatcher(this._pageEventSink, acks, this._pendingEventWatchers);
       const promises = [];
       for (const eventType of types) {
-        // Camoufox: with humanize on, a direct mousemove becomes a human-like
-        // trajectory of intermediate mousemoves that ends exactly on the
-        // requested destination.
-        const humanized = eventType === 'mousemove' && ChromeUtils.camouGetBool('humanize', false) &&
-            humanizedMove(this._lastTrackedPos, {x, y});
-        if (humanized) {
-          await dispatch.sendTrajectoryAcked(watcher, 'mousemove', this._lastTrackedPos, humanized.plan,
-              (plan, dispatchStep) => play(plan, dispatchStep, {signal: this._humanizeAbort.signal, deadlineMs: humanized.deadlineMs}),
-              (destX, destY) => this._sendMove(dispatch, watcher, destX, destY));
-        } else if (eventType === 'mousemove') {
-          promises.push(this._sendMove(dispatch, watcher, x, y));
+        if (eventType === 'mousemove') {
+          promises.push(this._sendMove(dispatch, watcher, at.x, at.y));
         } else {
-          promises.push(dispatch.sendAcked(watcher, eventType, x, y));
+          promises.push(dispatch.sendAcked(watcher, eventType, at.x, at.y));
         }
       }
       await Promise.all(promises);
@@ -794,8 +774,7 @@ export class PageHandler {
     // We must switch to proper tab in the tabbed browser so that
     // 1. Event is dispatched to a proper renderer.
     // 2. We receive an ack from the renderer for the dispatched event.
-    await this._clickPacing(type, clickCount);
-    const dispatched = this._mouseDispatched = this._pageTarget.activateAndRun(async () => {
+    const dispatched = this._pageTarget.activateAndRun(async () => {
       this._pageTarget.ensureContextMenuClosed();
       // If someone asks us to dispatch mouse event outside of viewport, then we normally would drop it.
       const dispatch = MouseDispatch.forBrowser(win, this._pageTarget._linkedBrowser, eventArgs);
@@ -813,7 +792,8 @@ export class PageHandler {
         // pointer re-enter content with the button already down -- pointerover /
         // pointerenter / mouseover carried buttons=1 and pressure=0.5, which a
         // real mouse never does (measured 2026-09-14 against XTEST input).
-        this._lastTrackedPos = { x: NaN, y: NaN };
+        this._lastTrackedPos = { x: NaN, y: NaN, at: { x: NaN, y: NaN } };
+        this._pointerMoved({ x: NaN, y: NaN });
         return;
       }
 
@@ -826,8 +806,9 @@ export class PageHandler {
         // fire it on press. Follow the claimed OS (measured 2026-09-14: stock
         // Windows contextmenu.buttons=0, camoufox 2).
         const eventNames = (button === 2 && !this._contextMenuOnMouseUp()) ? ['mousedown', 'contextmenu'] : ['mousedown'];
-        await sendEvents(eventNames);
-        this._buttonDownAt = ChromeUtils.now();
+        const at = this._pressPoint(x, y);
+        eventArgs.clickCount = this._countPress(button, at);
+        await sendEvents(eventNames, at);
         return;
       }
 
@@ -854,20 +835,14 @@ export class PageHandler {
         // that one stuck await wedges EVERY later input event for the life of the
         // page. Reproduces on a stock build as the first action:
         //     await page.mouse.move(0, 0);   // cursor starts at 0,0 -> no-op -> hang
-        // A no-op move has nothing to dispatch anyway, so return once the tracked
-        // position is (re)recorded.
-        if (Math.round(x) === Math.round(this._lastTrackedPos.x) &&
-            Math.round(y) === Math.round(this._lastTrackedPos.y)) {
-          this._lastTrackedPos = { x, y };
+        // A no-op move has nothing to dispatch anyway (_placeMove).
+        const at = this._placeMove(dispatch, x, y);
+        if (!at)
           return;
-        }
         const watcher = new EventWatcher(this._pageEventSink, ['dragstart', 'juggler-drag-finalized'], this._pendingEventWatchers);
-        await sendEvents(['mousemove']);
-        // Camoufox: remember where the cursor landed so the next humanized
-        // move starts its trajectory from the real previous position.
-        this._lastTrackedPos = { x, y };
-        if (!buttons)
-          this._movedAt = ChromeUtils.now();
+        await sendEvents(['mousemove'], at);
+        this._lastTrackedPos = { x, y, at };
+        this._pointerMoved(at);
         // A move with a button held may start a drag, which the page decides
         // when the move reaches it, at the refresh tick.
         if (buttons)
@@ -906,8 +881,10 @@ export class PageHandler {
           this._isDragging = false;
         } else {
           const eventNames = (button === 2 && this._contextMenuOnMouseUp()) ? ['mouseup', 'contextmenu'] : ['mouseup'];
-          await sendEvents(eventNames);
-          this._buttonUpAt = ChromeUtils.now();
+          const at = this._pressPoint(x, y);
+          eventArgs.clickCount = this._clicks.count;
+          this._clicks.up = this._devicePoint(at);
+          await sendEvents(eventNames, at);
         }
         return;
       }
@@ -916,44 +893,6 @@ export class PageHandler {
     // now comes after this one.
     this._mouseTurnTaken(params);
     await dispatched;
-  }
-
-  // Camoufox: a click's own pacing, on this page's turn and not on the chain
-  // every context shares: a person's rests hold no other page's input. The
-  // times they count from are set when the event before was dispatched, so
-  // that goes first; a failure there is its own command's to report.
-  async _clickPacing(type, clickCount) {
-    if (type !== 'mousedown' && type !== 'mouseup')
-      return;
-    await this._mouseDispatched.catch(() => {});
-    let wait = 0;
-    if (type === 'mouseup') {
-      // A person holds a button down for a while before letting go; Playwright
-      // sends mouseup right behind mousedown, so the page saw every press
-      // released under 10 ms. A script's own longer `delay` stands
-      // (driven-click-hold.py).
-      if (this._buttonDownAt !== undefined)
-        wait = this._buttonDownAt + clickHold() - ChromeUtils.now();
-      this._buttonDownAt = undefined;
-    } else if (clickCount > 1) {
-      // The second press of a double click comes a person's gap after the
-      // release, with no move before it (driven-dblclick-gap.py).
-      if (this._buttonUpAt !== undefined)
-        wait = this._buttonUpAt + clickGap() - ChromeUtils.now();
-    } else if (this._movedAt !== undefined) {
-      // A press comes a person's dwell after the move that brought the pointer
-      // to its target: a page read under 10 ms where stock reads under 250.
-      // It counts from the refresh tick that gave the page the move, a frame
-      // after the queue took it, as the page's mouseover does.
-      await this._moveDelivered();
-      wait = Math.max(this._movedAt, this._moveDeliveredAt) + hoverDwell() - ChromeUtils.now();
-    }
-    if (type === 'mousedown') {
-      this._buttonUpAt = undefined;
-      this._movedAt = undefined;
-    }
-    if (wait > 0)
-      await new Promise(resolve => setTimeout(resolve, wait));
   }
 
   // Whether the drag a mousemove started has a drag session. Waited for a
@@ -992,8 +931,112 @@ export class PageHandler {
     dispatch.leaveWindow(x, y);
   }
 
+  // Camoufox: the point a move to (x, y) puts the pointer on, or null when it
+  // would not move it. Playwright sends whole CSS pixels. A Windows mouse at a
+  // display scale above 1 sits on a device pixel inside one, and steps between
+  // them as a mousemove without movement; Windows never repeats a position. A
+  // Mac repeats it (docs/input-dispatch.md, "Device pixels").
+  _placeMove(dispatch, x, y) {
+    const last = this._lastTrackedPos;
+    if (this._identityIs('Mac', 'Darwin'))
+      return { x, y };
+    if (!this._identityIs('Win', 'WINNT')) {
+      if (Math.round(x) !== Math.round(last.x) || Math.round(y) !== Math.round(last.y))
+        return { x, y };
+      this._lastTrackedPos = { x, y, at: { x, y } };
+      return null;
+    }
+    const same = Math.floor(x) === Math.floor(last.x) && Math.floor(y) === Math.floor(last.y);
+    const points = dispatch.devicePointsIn(x, y).filter(p => !same || p.x !== last.at.x || p.y !== last.at.y);
+    return points.length ? points[Math.floor(Math.random() * points.length)] : null;
+  }
+
+  // Camoufox: a press where the pointer is, when it is in the pixel asked for.
+  _pressPoint(x, y) {
+    const last = this._lastTrackedPos;
+    return Math.floor(x) === Math.floor(last.x) && Math.floor(y) === Math.floor(last.y) ? last.at : { x, y };
+  }
+
   _contextMenuOnMouseUp() {
     return this._identityIs('Win', 'WINNT');
+  }
+
+  _identityOS() {
+    if (this._identityIs('Win', 'WINNT'))
+      return 'windows';
+    return this._identityIs('Mac', 'Darwin') ? 'macos' : 'linux';
+  }
+
+  _devicePoint(at) {
+    const scale = this._pageTarget._window.devicePixelRatio;
+    return { x: Math.round(at.x * scale), y: Math.round(at.y * scale) };
+  }
+
+  // Camoufox: the click count the OS gives a press at `at`; the client's
+  // clickCount is Playwright's guess at it. Checked against every press in
+  // people's recordings (docs/input-dispatch.md, "Click count").
+  _countPress(button, at) {
+    const c = this._clicks;
+    const p = this._devicePoint(at);
+    const os = this._identityOS();
+    const near = (q, d) => !!q && Math.abs(p.x - q.x) < d && Math.abs(p.y - q.y) < d;
+    const soon = button === c.button && Date.now() - c.downAt < kOsInput[os].clickMs;
+    if (os === 'windows') {
+      // Windows reports a press by the last single press as a double click;
+      // Firefox counts up any other press near the last release.
+      if (soon && near(c.single, 2)) {
+        c.count = 2;
+        c.single = null;
+      } else {
+        c.count = soon && near(c.up, 4) ? c.count + 1 : 1;
+        c.single = p;
+      }
+    } else if (os === 'macos') {
+      c.count = soon && near(c.down, 3 * this._pageTarget._window.devicePixelRatio) ? c.count + 1 : 1;
+    } else {
+      c.count = soon && near(c.down, 6) && c.count < 3 ? c.count + 1 : 1;
+    }
+    Object.assign(c, { button, downAt: Date.now(), down: p });
+    return c.count;
+  }
+
+  // Firefox on Windows starts the count again when the pointer leaves the
+  // last release's double-click box.
+  _pointerMoved(at) {
+    const c = this._clicks;
+    const p = this._devicePoint(at);
+    if (this._identityOS() === 'windows' && !(c.up && Math.abs(p.x - c.up.x) < 4 && Math.abs(p.y - c.up.y) < 4))
+      c.count = 0;
+  }
+
+  // Camoufox: the OS repeats the last key pressed while it is held, and a key
+  // up or another key stops it; a modifier that does not repeat leaves it.
+  _holdKey(params) {
+    const {type, key, repeat} = params;
+    if (type === 'keyup') {
+      if (this._heldKey?.key === key)
+        this._heldKey = null;
+      return;
+    }
+    const os = kOsInput[this._identityOS()];
+    if ((repeat && this._heldKey?.key === key) || (kModifierKeys.has(key) && !os.modifiersRepeat))
+      return;
+    const held = this._heldKey = { key };
+    const start = Date.now() + os.repeatDelayMs;
+    const next = k => setTimeout(async () => {
+      if (this._heldKey !== held)
+        return;
+      try {
+        await this._dispatchKeyEvent({...params, repeat: true}, held);
+      } catch (e) {
+        // The page is gone or no longer takes keys: nothing is held there.
+        if (this._heldKey === held)
+          this._heldKey = null;
+        return;
+      }
+      next(k + 1);
+    }, Math.max(0, start + k * os.repeatEveryMs - Date.now()));
+    next(0);
   }
 
   _identityIs(platformPrefix, hostOS) {
@@ -1004,34 +1047,51 @@ export class PageHandler {
     return Services.appinfo.OS === hostOS;
   }
 
+  // Camoufox: one call is one wheel event, sent as soon as the input chain
+  // allows, with no delay or split of the browser's own (docs/input-dispatch.md).
+  // A wheel turns in whole notches, so no event has a pixel delta:
+  //  - Windows / Linux identity: deltaMode line, 3 lines and a native tick per
+  //    notch (wheelDelta -120 each), 100 px = 1 notch, rounded, at least one
+  //    on a moving axis. A call worth several notches is ONE event carrying
+  //    all of them, which Firefox delivers when Windows reports a
+  //    WM_MOUSEWHEEL of n x WHEEL_DELTA or GTK a smooth scroll of delta n.
+  //  - macOS identity: one event of round(px / 16) lines, at least one, as
+  //    macOS reports a wheel frame; no native ticks.
+  // A driver that wants a person's wheel sends one call per event, at that
+  // event's time.
   async ['Page.dispatchWheelEvent']({x, y, button, deltaX, deltaY, deltaZ, modifiers }) {
     await this._awaitUserInputGate();
-    const activation = { muteNotificationsPopup: true };
+    const macOS = this._identityIs('Mac', 'Darwin');
+    const toLines = delta => {
+      if (!delta)
+        return 0;
+      const units = macOS ? Math.abs(delta) / kPxPerMacLine : Math.abs(delta) / kPxPerNotch;
+      return Math.sign(delta) * Math.max(1, Math.round(units)) * (macOS ? 1 : kLinesPerNotch);
+    };
+    const linesX = toLines(deltaX);
+    const linesY = toLines(deltaY);
     await this._pageTarget.activateAndRun(async () => {
       this._pageTarget.ensureContextMenuClosed();
 
       // 1. Scroll element to the desired location first; the coordinates are relative to the element.
       this._pageTarget._linkedBrowser.scrollRectIntoViewIfNeeded(x, y, 0, 0);
-      // 2. Get element's bounding box in the browser after the scroll is completed.
-      // 3. Make sure compositor is flushed after scrolling.
-      if (this._pageTarget._window.windowUtils.flushApzRepaints())
+      // 2. Make sure compositor is flushed after scrolling.
+      const win = this._pageTarget._window;
+      if (win.windowUtils.flushApzRepaints())
         await helper.awaitTopicWithin('apz-repaints-flushed', kAckDeadlineMs);
-    }, activation);
-    // Camoufox: a wheel turns in notches, as a mouse wheel does
-    // (docs/input-dispatch.md): no wheel produces a pixel delta. Each notch
-    // takes the activation slot alone, so a long wheel does not hold input in
-    // every other context, and waits out its gap from the notch before, however
-    // long the slot took to come.
-    const win = this._pageTarget._window;
-    const macOS = this._identityIs('Mac', 'Darwin');
-    const {steps} = cursory.planWheel({rng: Math.random, macOS}, {x, y}, {deltaX, deltaY, deltaZ});
-    let previous = 0;
-    for (const step of steps) {
-      if (step.t > previous)
-        await new Promise(resolve => setTimeout(resolve, step.t - previous));
-      previous = step.t;
-      await this._pageTarget.activateAndRun(() => this._sendWheelStep(win, modifiers, step), activation);
-    }
+      // 3. Measure at dispatch, after the await, like Page.dispatchMouseEvent:
+      //    a wheel at relative y == 0 would otherwise land on the
+      //    chrome/content boundary and scroll the tab strip.
+      MouseDispatch.forBrowser(win, this._pageTarget._linkedBrowser, {modifiers}).sendWheel(x, y, {
+        deltaX: linesX,
+        deltaY: linesY,
+        deltaZ: deltaZ || 0,
+        deltaMode: 1 /* WheelEvent.DOM_DELTA_LINE */,
+        lineOrPageDeltaX: linesX,
+        lineOrPageDeltaY: linesY,
+        nativeNotches: !macOS,
+      });
+    }, { muteNotificationsPopup: true });
   }
 
   async ['Page.insertText'](options) {

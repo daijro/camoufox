@@ -25,6 +25,8 @@ person cannot click it either, and fill() itself needs no click.
 
 from typing import Any
 
+from myuri.page_functions import HIT_TEST_JS
+
 _MARK = '_camoufox_driver_defaults'
 
 
@@ -70,30 +72,10 @@ FILL_NEEDS_CLICK = """(e) => {
   return active !== field && !(field.isContentEditable && field.contains(active));
 }"""
 
-# Whether a click at the middle of the target reaches it, or its label.
-FILL_CLICK_LANDS = """(e) => {
-  const field = e.closest('label')?.control || e;
-  const r = e.getBoundingClientRect();
-  const x = r.left + r.width / 2, y = r.top + r.height / 2;
-  let hit = e.ownerDocument.elementFromPoint(x, y);
-  while (hit?.shadowRoot) {
-    const inner = hit.shadowRoot.elementFromPoint(x, y);
-    if (!inner || inner === hit)
-      break;
-    hit = inner;
-  }
-  for (; hit; hit = hit.parentNode || hit.host) {
-    if (hit === e || hit === field || hit.control === field)
-      return true;
-  }
-  return false;
-}"""
-
-
 async def _click_to_focus(target: Any, evaluate: Any, timeout: Any, force: Any) -> None:
     if await evaluate(FILL_NEEDS_CLICK):
         await target.scroll_into_view_if_needed(timeout=timeout)
-        if await evaluate(FILL_CLICK_LANDS):
+        if await evaluate(HIT_TEST_JS) is None:
             await target.click(timeout=timeout, force=force)
 
 

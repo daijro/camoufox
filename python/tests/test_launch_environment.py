@@ -595,7 +595,9 @@ class TestScreenshotCaret:
 
             async def evaluate(self, expression, timeout=None):
                 evaluates.append(timeout)
-                return self.needs_click if expression == driver_defaults.FILL_NEEDS_CLICK else self.lands
+                if expression == driver_defaults.FILL_NEEDS_CLICK:
+                    return self.needs_click
+                return None if self.lands else '<div> intercepts pointer events'
 
             async def scroll_into_view_if_needed(self, timeout=None):
                 pass

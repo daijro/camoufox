@@ -54,6 +54,7 @@ import {
 	hostGpu,
 	setWebgpu,
 } from "./host_rendering.js";
+import { type HumanizeSetting, normalize } from "./humanize.js";
 import {
 	type ProxyConfig,
 	ProxyHelper,
@@ -146,6 +147,7 @@ type EnvVars = Record<string, string | number | boolean>;
 
 /** The OS names Camoufox takes, by target_os key. */
 const OS_NAMES = { win: "windows", mac: "macos", lin: "linux" } as const;
+export type OsName = (typeof OS_NAMES)[TargetOS];
 
 // Camoufox preferences to cache previous pages and requests
 export const CACHE_PREFS: Record<string, any> = LAUNCHER_CONSTANTS.cachePrefs;
@@ -1110,6 +1112,13 @@ export function camouConfigBlob(fromOptions: Record<string, any>): string {
 		.join("");
 }
 
+/** The OS of the identity these launch options claim, the host's when they
+ * claim no user agent. */
+export function launchOs(fromOptions: Record<string, any>): OsName {
+	const blob = camouConfigBlob(fromOptions);
+	return OS_NAMES[getTargetOs(blob ? JSON.parse(blob) : {})];
+}
+
 /**
  * The core count the browser must be pinned to for these launch options, or
  * null: the identity's navigator.hardwareConcurrency when this host can honour
@@ -1572,8 +1581,8 @@ export interface LaunchOptions {
 	geoip?: string | boolean;
 	/** Name of the GeoIP database to use (e.g. "GeoIP AIO by daijro"). */
 	geoip_db?: string;
-	/** Humanize the cursor movement: `true`, or the MAX duration in seconds. */
-	humanize?: boolean | number;
+	/** Driver-side humanization per channel, `{ mouse, keyboard, scroll, seed }` of myuri() or raw(); `true` is myuri() on every channel, and a channel the object omits is myuri(). The browser never humanizes input itself. */
+	humanize?: HumanizeSetting;
 	/** Locale(s) to use. The first listed locale is used for the Intl API. */
 	locale?: string | string[];
 	/** List of Firefox addons to use (paths to extracted addons). */
@@ -2199,15 +2208,9 @@ export async function launchOptions({
 	// it. setInto leaves an explicit caller value alone.
 	setInto(config, "voices:blockIfNotDefined", true);
 
-	// Pass the humanize option
-	if (pyTruthy(humanize)) {
-		setInto(config, "humanize", true);
-		// MaskConfig expects maxTime to be a JSON number.
-		// float(humanize): a JSON number with a floating-point representation.
-		if (typeof humanize === "number") {
-			setInto(config, "humanize:maxTime", new PyFloat(humanize));
-		}
-	}
+	// humanize runs in the driver (_humanize_playwright.ts): checked here, and
+	// nothing about it reaches the browser's config.
+	normalize(humanize);
 
 	// Enable the main world context creation
 	if (main_world_eval) {

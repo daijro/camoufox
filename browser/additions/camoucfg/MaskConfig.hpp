@@ -23,6 +23,9 @@ Written by daijro.
 #include <unordered_map>
 #include <cstring>
 #include <algorithm>
+#include <chrono>
+#include <cmath>
+#include "mozilla/TimeStamp.h"
 
 #ifdef _WIN32
 #  include <windows.h>
@@ -432,6 +435,22 @@ inline SpoofedOS GetSpoofedOS() {
     return platform ? SpoofedOSFor(*platform) : SpoofedOS::None;
   }();
   return os;
+}
+
+// The time a driven input event carries. Windows stamps input with its tick
+// count (GetMessageTime): whole milliseconds that advance 15.625 ms at a time.
+// The tick is read off steady_clock, which every process shares, through an
+// anchor taken once, so gaps between one process's events are exact.
+inline mozilla::TimeStamp InputTimeStamp() {
+  const auto now = mozilla::TimeStamp::Now();
+  if (GetSpoofedOS() != SpoofedOS::Windows) return now;
+  static const auto anchor = std::pair{
+      now, std::chrono::duration<double, std::milli>(
+               std::chrono::steady_clock::now().time_since_epoch())
+               .count()};
+  const double ms = anchor.second + (now - anchor.first).ToMilliseconds();
+  const double tick = std::floor(std::floor(ms / 15.625) * 15.625);
+  return now - mozilla::TimeDuration::FromMilliseconds(ms - tick);
 }
 
 // The ephemeral port range of an OS, which is where its kernel puts a socket
