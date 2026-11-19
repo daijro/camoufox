@@ -11,7 +11,7 @@ const Cu = Components.utils;
 const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
 const {setTimeout} = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
-const {normalDelay} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanDelay.js');
+const {keyHold, normalDelay, typeKeys} = ChromeUtils.importESModule('resource://gre/modules/juggler/input/HumanDelay.js');
 
 const dragService = Cc["@mozilla.org/widget/dragservice;1"].getService(
   Ci.nsIDragService
@@ -725,18 +725,22 @@ export class PageAgent {
   // Key by key on a US keyboard, at a person's rate. A character it has no key
   // for arrives as an input method commits it.
   async _typeText(text, field) {
-    for (const character of text) {
-      // Keys sent on would land in whatever took the focus.
-      if (focusedField(this._frameTree.mainFrame().domWindow()) !== field)
-        throw new Error('Cannot insert text: the field lost focus while it was being typed into');
-      const key = {...(usKey(character) ?? {key: 'Process', code: '', keyCode: 229}), location: 0, repeat: false};
-      const started = ChromeUtils.now();
-      await this._dispatchKeyEvent({type: 'keydown', ...key, text: character});
-      await pause(keyHold());
-      await this._dispatchKeyEvent({type: 'keyup', ...key});
-      // Timer.sys.mjs reads a negative delay as a huge unsigned one.
-      await pause(Math.max(0, started + keyInterval() - ChromeUtils.now()));
-    }
+    const keys = [...text].map(character => ({
+      character,
+      shifted: this._needsShift(character),
+      event: {...(usKey(character) ?? {key: 'Process', code: '', keyCode: 229}), location: 0, repeat: false},
+    }));
+    await typeKeys(keys, {
+      press: async ({character, event}) => {
+        // Keys sent on would land in whatever took the focus.
+        if (focusedField(this._frameTree.mainFrame().domWindow()) !== field)
+          throw new Error('Cannot insert text: the field lost focus while it was being typed into');
+        await this._dispatchKeyEvent({type: 'keydown', ...event, text: character});
+      },
+      release: ({event}) => this._dispatchKeyEvent({type: 'keyup', ...event}),
+      clock: () => ChromeUtils.now(),
+      sleep: pause,
+    });
   }
 
   async _crash() {
@@ -883,12 +887,6 @@ function pause(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// How long a person holds a key: 116.25 ms (SD 23.88; Dhakal et al.,
-// "Observations on Typing from 136 Million Keystrokes", CHI 2018), never under
-// 50 ms.
-const keyHold = () => normalDelay(116.25, 23.88, 50);
-// Press to press while typing, from the same study: 238.66 ms, SD 111.60.
-const keyInterval = () => normalDelay(238.66, 111.6, 80);
 // How far a modifier leads the key it modifies, and trails its release: tens
 // of ms. No recorded figure; these keep the mean and spread of the uniform
 // 35-90 ms and 20-65 ms draws they replaced, with those floors.
