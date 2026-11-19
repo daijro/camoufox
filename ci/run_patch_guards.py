@@ -102,6 +102,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "bare-launch-host-fonts",
         "certificate-revocations",
         "contentaccessible-parity",
+        "context-proxy-browser-traffic",
         "css-device-size-fractional",
         "driven-click-count",
         "driven-drag-gtk",
