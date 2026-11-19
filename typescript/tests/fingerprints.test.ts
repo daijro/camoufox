@@ -315,17 +315,15 @@ describe("media devices", () => {
 
 describe("fixHardwareConcurrency", () => {
 	it("bounds a Mac's draw to cores a Mac with its GPU has", () => {
-		// A macOS identity whose GPU no Intel-Mac IGP ships beside the kept
-		// count has its GPU dropped (daijro/camoufox#1090), so the count snaps
-		// to the GPU's table. A dGPU Intel Mac goes to 56 threads (the 2019
-		// Mac Pro), so its table still leaves 32 on a 64-core host.
+		// An Intel iGPU Mac reports at most 16 threads, so a kept draw snaps
+		// into that table (#1090); a dGPU Mac goes to 56 and keeps 32.
 		const host = { cpuCount: 32, canPinHost: true };
 		for (const drawn of [12, 6]) {
 			const c = {
 				"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
 				"navigator.hardwareConcurrency": drawn,
 			};
-			fixHardwareConcurrency(c, undefined, host, "macos");
+			fixHardwareConcurrency(c, undefined, host, "mac");
 			expect([...INTEL_MAC_IGP_CORES]).toContain(
 				c["navigator.hardwareConcurrency"],
 			);
@@ -334,7 +332,7 @@ describe("fixHardwareConcurrency", () => {
 			"webGl:renderer": "Radeon Pro 5300M, or similar",
 			"navigator.hardwareConcurrency": 32,
 		};
-		fixHardwareConcurrency(dgpu, undefined, host, "macos");
+		fixHardwareConcurrency(dgpu, undefined, host, "mac");
 		expect(dgpu["navigator.hardwareConcurrency"]).toBe(32);
 
 		// Off macOS the GPU does not bound the count.
@@ -342,7 +340,7 @@ describe("fixHardwareConcurrency", () => {
 			"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
 			"navigator.hardwareConcurrency": 12,
 		};
-		fixHardwareConcurrency(lin, undefined, host, "linux");
+		fixHardwareConcurrency(lin, undefined, host, "lin");
 		expect(lin["navigator.hardwareConcurrency"]).toBe(12);
 	});
 

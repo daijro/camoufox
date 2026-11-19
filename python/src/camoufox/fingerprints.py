@@ -10,7 +10,7 @@ from random import Random, choice, randrange
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from camoufox._warnings import WARNINGS_DATA, FallbackWarning, _warn_from_caller
-from camoufox.coherence import hardware_cpu
+from camoufox.coherence import hardware_cpu, intel_mac_cores
 from camoufox.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
@@ -795,28 +795,16 @@ def fix_hardware_concurrency(
     launcher value. A caller that sets navigator.hardwareConcurrency
     themselves is left alone (see the _user_set_navigator guard).
     """
-    # An Intel Mac's GPU bounds the counts beside it: no Intel iGPU Mac
-    # reports more than 16 threads, and the 2019 Mac Pro tops the dGPU table
-    # at 56. A host past its GPU's table would otherwise ship a count the
-    # launch then reads as incoherent with that GPU, and the GPU is the value
-    # that gets dropped -- a bundled macOS preset loses its recorded GPU on a
-    # many-core host (daijro/camoufox#1090). Apple Silicon needs nothing here:
-    # the apple-silicon-cores repair already snaps the count to the GPU.
-    machine_cores: Optional[FrozenSet[int]] = None
-    if target_os in ('mac', 'macos'):
-        from . import coherence as _coh
-
-        renderer = str(config.get('webGl:renderer') or '')
-        if renderer and 'Apple M' not in renderer:
-            machine_cores = (
-                _coh.INTEL_MAC_IGP_CORES if 'Intel' in renderer else _coh.INTEL_MAC_DGPU_CORES
-            )
+    # On an Intel Mac the count yields to the GPU: the GPU is read before this
+    # runs, and a count no Mac with it reports would drop it (#1090). Apple
+    # Silicon is snapped to its GPU by the apple-silicon-cores repair.
+    machine_cores = intel_mac_cores(config.get('webGl:renderer')) if target_os == 'mac' else None
 
     def table(cap: int) -> List[int]:
-        plausible = [c for c in PLAUSIBLE_CORE_COUNTS if c <= cap]
-        if machine_cores is None:
-            return plausible or [PLAUSIBLE_CORE_COUNTS[0]]
-        return sorted(set(plausible) & machine_cores) or plausible or [PLAUSIBLE_CORE_COUNTS[0]]
+        # Never empty: 4 is the plausible floor and every Intel Mac table has it.
+        plausible = [c for c in PLAUSIBLE_CORE_COUNTS if c <= cap] or [PLAUSIBLE_CORE_COUNTS[0]]
+        return [c for c in plausible if machine_cores is None or c in machine_cores]
+
     n = host_cpu_count()
     if not n:
         return
@@ -834,8 +822,7 @@ def fix_hardware_concurrency(
     pinnable = _can_pin() and can_pin is not False
 
     cap = int(n)
-    host_allowed = table(cap)
-    host_value = host_allowed[-1]
+    host_value = table(cap)[-1]
 
     drawn = config.get('navigator.hardwareConcurrency')
     if pinnable and isinstance(drawn, int) and drawn >= 1:

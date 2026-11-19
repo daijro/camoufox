@@ -175,12 +175,20 @@ def gpu_fits_os(renderer: Optional[str], target_os: str) -> bool:
     return True
 
 
-def _intel_mac_misfit(renderer: Optional[str], cores: Any, width: Any, height: Any) -> Optional[str]:
-    """Why no Intel Mac reports this GPU beside these cores and this screen."""
+def intel_mac_cores(renderer: Optional[str]) -> Optional[AbstractSet[int]]:
+    """The hardwareConcurrency values an Intel Mac with this GPU reports, or
+    None when the renderer is not an Intel Mac's (none, or Apple Silicon)."""
     renderer = str(renderer or '')
     if not renderer or 'Apple M' in renderer:
         return None
-    allowed = INTEL_MAC_IGP_CORES if 'Intel' in renderer else INTEL_MAC_DGPU_CORES
+    return INTEL_MAC_IGP_CORES if 'Intel' in renderer else INTEL_MAC_DGPU_CORES
+
+
+def _intel_mac_misfit(renderer: Optional[str], cores: Any, width: Any, height: Any) -> Optional[str]:
+    """Why no Intel Mac reports this GPU beside these cores and this screen."""
+    allowed = intel_mac_cores(renderer)
+    if allowed is None:
+        return None
     if isinstance(cores, int) and cores not in allowed:
         return f'{renderer!r} with hardwareConcurrency {cores}; no Intel Mac with that GPU reports it'
     if (width, height) in APPLE_SILICON_PANELS:

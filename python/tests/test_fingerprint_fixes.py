@@ -277,29 +277,24 @@ class TestSetMediaDevicesDefaults:
 
 class TestFixHardwareConcurrency:
     def test_a_mac_gpu_bounds_the_kept_draw_to_cores_a_mac_with_it_has(self, monkeypatch):
-        # The kept draw decides the identity's CPU and GPU the way the host
-        # count does (drop_incoherent_source_values reads it after this fix):
-        # a macOS identity whose GPU no Intel-Mac IGP ships beside the kept
-        # count has its GPU dropped, so the bundled preset loses its GPU on
-        # any host with more than 16 cores (daijro/camoufox#1090). A dGPU
-        # Intel Mac goes to 56 threads (the 2019 Mac Pro), so its table still
-        # leaves 32 on a 64-core host.
+        # An Intel iGPU Mac reports at most 16 threads, so a kept draw snaps
+        # into that table (#1090); a dGPU Mac goes to 56 and keeps 32.
         from camoufox import coherence, cpu_affinity, fingerprints as fp
 
         monkeypatch.setattr(cpu_affinity, "supported", lambda: True)
         monkeypatch.setattr(fp, "host_cpu_count", lambda: 32)
         c = {"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
              "navigator.hardwareConcurrency": 12}
-        fp.fix_hardware_concurrency(c, target_os="macos")
+        fp.fix_hardware_concurrency(c, target_os="mac")
         assert c["navigator.hardwareConcurrency"] in coherence.INTEL_MAC_IGP_CORES
         c = {"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
              "navigator.hardwareConcurrency": 6}
-        fp.fix_hardware_concurrency(c, target_os="macos")
+        fp.fix_hardware_concurrency(c, target_os="mac")
         assert c["navigator.hardwareConcurrency"] in coherence.INTEL_MAC_IGP_CORES
 
         c = {"webGl:renderer": "Radeon Pro 5300M, or similar",
              "navigator.hardwareConcurrency": 32}
-        fp.fix_hardware_concurrency(c, target_os="macos")
+        fp.fix_hardware_concurrency(c, target_os="mac")
         assert c["navigator.hardwareConcurrency"] == 32
 
     def test_keeps_a_plausible_draw_the_host_can_be_pinned_to(self, monkeypatch):
