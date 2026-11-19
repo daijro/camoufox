@@ -20,60 +20,23 @@ What PASS means:
     python browser/tests/playwright/patches/context-proxy-browser-traffic.py
 """
 
-import http.server
-import socketserver
 import sys
-import threading
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import resolve_binary  # noqa: E402
+from helpers import PushSite, RefusingProxy, resolve_binary, subscribe_to_push, wait_for_push  # noqa: E402
 
 CONTROL_HOST = "control.camoufox.test"
 PUSH_HOST = "push.camoufox.test"
 SUBSCRIBE_SECONDS = 30
 
 
-class Logging(http.server.BaseHTTPRequestHandler):
-    def _refuse(self) -> None:
-        self.server.seen.append(self.path)
-        self.send_error(502)
-
-    do_CONNECT = do_GET = do_POST = _refuse
-
-    def log_message(self, *args) -> None:
-        pass
-
-
-class LoggingProxy(socketserver.ThreadingMixIn, http.server.HTTPServer):
-    daemon_threads = True
-
-    def __init__(self) -> None:
-        super().__init__(("127.0.0.1", 0), Logging)
-        self.seen = []
-        threading.Thread(target=self.serve_forever, daemon=True).start()
-
-
-class Site(http.server.BaseHTTPRequestHandler):
-    def do_GET(self) -> None:
-        worker = self.path == "/sw.js"
-        self.send_response(200)
-        self.send_header("Content-Type", "text/javascript" if worker else "text/html")
-        self.end_headers()
-        self.wfile.write(b"" if worker else b"<!doctype html>")
-
-    def log_message(self, *args) -> None:
-        pass
-
-
 def main() -> int:
     from camoufox.sync_api import Camoufox
 
-    proxy = LoggingProxy()
-    site = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Site)
-    site.daemon_threads = True
-    threading.Thread(target=site.serve_forever, daemon=True).start()
+    proxy = RefusingProxy()
+    site = PushSite()
 
     with Camoufox(
         headless=True,
@@ -93,12 +56,9 @@ def main() -> int:
 
         # localhost is never proxied, so the page itself loads direct; only
         # the push connection it causes is the browser's own.
-        page.goto(f"http://localhost:{site.server_address[1]}/")
-        page.evaluate(
-            "void navigator.serviceWorker.register('/sw.js')"
-            ".then(() => navigator.serviceWorker.ready)"
-            ".then(r => r.pushManager.subscribe({ userVisibleOnly: true }))"
-        )
+        page.goto(site.url)
+        wait_for_push(page)
+        subscribe_to_push(page)
         deadline = time.monotonic() + SUBSCRIBE_SECONDS
         while time.monotonic() < deadline and not any(PUSH_HOST in seen for seen in proxy.seen):
             time.sleep(0.2)
