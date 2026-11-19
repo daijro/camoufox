@@ -2166,6 +2166,17 @@ export async function launchOptions({
 	}
 	setInto(firefox_user_prefs, "intl.locale.requested", requested);
 
+	// Stock learns its home region from a network lookup this launch turns
+	// off, and writes it here. Without it the search service offers the
+	// region-less engine list and the DoH rollout never decides.
+	if (pyTruthy(config["locale:region"])) {
+		setInto(
+			firefox_user_prefs,
+			"browser.search.region",
+			config["locale:region"],
+		);
+	}
+
 	// Spoof the speech-synthesis voice list. This has to fail CLOSED: leaving
 	// `voices` unset exposes every native voice on the box (#731). Drawn after
 	// the locale is resolved: the Windows voice list is the display language's
