@@ -2263,7 +2263,7 @@ index 62a4a22b4d..2eae90be5c 100644
  #include "mozilla/Maybe.h"
  
  #include "jit/IonTypes.h"
-@@ -187,6 +188,51 @@
+@@ -187,6 +188,51 @@ struct DefaultJitOptions {
  
  extern DefaultJitOptions JitOptions;
  
