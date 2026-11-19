@@ -634,6 +634,10 @@ Camoufox(humanize=True)   # myuri() on every channel
 Camoufox(humanize={"keyboard": myuri(wpm=70), "scroll": raw(), "seed": 1234})
 ```
 
+![A Linux identity with humanize on: myuri fills a form, types two lines, clicks buttons and scrolls to one 1800 px down](browser/assets/humanize.gif)
+
+<sub>A Linux identity with `humanize={"seed": 7}`, recorded at real speed. The red trail and the rings are drawn by the page from the mouse events it received.</sub>
+
 - `myuri()` is [myuri](https://github.com/JWriter20/Myuri)'s smart actions, fitted
   to recordings of people on each OS and drawn for the launch identity's OS: the
   path, the press, the typing and the wheel turns, and the decisions around a
