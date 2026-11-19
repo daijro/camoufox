@@ -543,7 +543,8 @@ describe("myuri", () => {
 
 	it("types into the field it selected", async () => {
 		const { browser, page } = await attachedPage({
-			keyboard: myuri({ wpm: 200 }),
+			keyboard: myuri(),
+			settings: { typing: { wpm: 200 } },
 		});
 		await page.fill("#name", "hi");
 		const kinds = names(browser);
@@ -570,6 +571,25 @@ describe("myuri", () => {
 		};
 		expect(await clicked(1)).toEqual(await clicked(1));
 		expect(await clicked(1)).not.toEqual(await clicked(2));
+	});
+
+	it("sets myuri's speed from the settings", async () => {
+		const reports = async (settings: object) => {
+			let total = 0;
+			for (let seed = 0; seed < 10; seed++) {
+				const { browser, page } = await attachedPage(
+					{ mouse: myuri(), settings },
+					seed,
+				);
+				await page.mouse.move(900, 600);
+				total += names(browser).filter((n) => n === "mouse.move").length;
+			}
+			return total;
+		};
+		// The pointer reports about every 10 ms, so a faster move reports less often.
+		expect(await reports({ mouse: { speedFactor: 3 } })).toBeLessThan(
+			(await reports({})) / 2,
+		);
 	});
 });
 

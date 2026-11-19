@@ -233,7 +233,11 @@ import { Camoufox, myuri, raw } from "camoufox";
 
 // `humanize: true` is myuri() on every channel
 const browser = await Camoufox({
-	humanize: { keyboard: myuri({ wpm: 70 }), scroll: raw(), seed: 1234 },
+	humanize: {
+		scroll: raw(),
+		seed: 1234,
+		settings: { mouse: { speedFactor: 2 }, typing: { wpm: 90 } },
+	},
 });
 await browser.close();
 ```
@@ -242,6 +246,7 @@ await browser.close();
 - `cursory()` is another name for `myuri()`: myuri runs cursory's paths.
 - `raw()` is Playwright as it is.
 - A channel an object leaves out is `myuri()`. `humanize: null` or `false`, the default, is `raw()` everywhere.
+- `settings` are [myuri's settings](https://github.com/JWriter20/Myuri#settings): mouse, scroll and typing speed, overshoot, typing mistakes and pauses. Pass any subset; the rest keep myuri's defaults, and an unknown key throws before launch. The `seed` draws one person around them, each speed within ±`variation` (0.2) of the value set; `{ variation: 0 }` plays them exactly.
 
 ### Replacing a part
 
@@ -264,7 +269,7 @@ const browser = await Camoufox({
 		scroll: myuri({
 			intoView: (page, locator) => locator.scrollIntoViewIfNeeded(),
 		}),
-		keyboard: myuri({ wpm: 70 }),
+		settings: { typing: { wpm: 70 } },
 		seed: 1234,
 	},
 });
@@ -321,7 +326,7 @@ names. Any other key is passed to Playwright's `firefox.launch()` (or
 | `geoip` | `boolean \| string` | none | `true` finds the public IP (through `proxy` if set); a string uses that IP. Sets timezone, locale, geolocation and the WebRTC IP. Without a proxy, also decides whether IPv6 stays on. |
 | `geoip_db` | `string` | the `camoufox set --geoip` choice | GeoIP database name, e.g. `"GeoIP AIO by daijro"`. |
 | `locale` | `string \| string[]` | from `geoip`, else the drawn identity's | Locale(s), e.g. `"en-US"`. The first is used for `Intl`. |
-| `humanize` | `boolean \| object` | every channel raw | Driver-side input. `true` is [`myuri()`](#human-input) on every channel; an object picks per channel (`mouse`, `keyboard`, `scroll`) `myuri()`, `myuri({ part: fn })` or `raw()`, an omitted channel being `myuri()`, plus an integer `seed` in [0, 2\*\*32). The browser never humanizes input; a number is refused. |
+| `humanize` | `boolean \| object` | every channel raw | Driver-side input. `true` is [`myuri()`](#human-input) on every channel; an object picks per channel (`mouse`, `keyboard`, `scroll`) `myuri()`, `myuri({ part: fn })` or `raw()`, an omitted channel being `myuri()`, plus an integer `seed` in [0, 2\*\*32) and myuri's `settings`. The browser never humanizes input; a number is refused. |
 | `screen` | `Screen \| { max_width?, max_height?, min_width?, min_height? }` | the real display when headed | Bounds the generated screen. |
 | `window` | `[number, number]` | generated | Fixed outer window size. |
 | `fonts` | `string[]` | none | Extra font families on top of the OS's own. |

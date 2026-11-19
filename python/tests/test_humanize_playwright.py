@@ -548,7 +548,7 @@ def test_the_click_before_a_fill_is_myuris():
 
 
 def test_myuri_types_into_the_field_it_selected():
-    browser, page = attached_page({"keyboard": myuri(wpm=200)})
+    browser, page = attached_page({"keyboard": myuri(), "settings": {"typing": {"wpm": 200}}})
     page.fill("#name", "hi")
     kinds = names(browser)
     # With a raw mouse the click before the fill is Playwright's.
@@ -567,6 +567,19 @@ def test_the_stream_follows_the_seed():
         return [e for e in browser.rec.events if e[0] == "mouse.move"]
 
     assert moves(1) == moves(1) != moves(2)
+
+
+def test_the_settings_set_myuris_speed():
+    def moves(settings):
+        total = 0
+        for seed in range(10):
+            browser, page = attached_page({"mouse": myuri(), "settings": settings}, seed=seed)
+            page.mouse.move(900, 600)
+            total += names(browser).count("mouse.move")
+        return total
+
+    # The pointer reports about every 10 ms, so a faster move reports less often.
+    assert moves({"mouse": {"speed_factor": 3}}) < moves({}) / 2
 
 
 # ---- parts and raw() channels ------------------------------------------------------
