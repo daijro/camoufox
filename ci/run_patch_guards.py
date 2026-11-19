@@ -91,6 +91,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "pointer-lock-offscreen",
         "screenshot-canvas-release",
         "socks5-proxy-auth",
+        "tab-switch-budget",
         "trusted-events",
         "ubo-lists-frozen",
         "visible-automation-cues",
