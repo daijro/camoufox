@@ -1140,9 +1140,9 @@ def _bt_profile(webgl_renderer: str, *, noswift_passed: bool) -> dict:
         "profiles": [
             {
                 "profile": {
+                    "name": "Linux Per-Context A",
                     "os": "linux",
                     "mode": "per-context",
-                    "index": 0,
                     "webglRenderer": webgl_renderer,
                 },
                 "results": {
@@ -1172,7 +1172,7 @@ def test_a_profile_that_asked_for_llvmpipe_is_not_graded_headless():
     from ci.run_build_tester import category_failures, flatten
 
     full = _bt_profile("llvmpipe, or similar", noswift_passed=False)
-    tid = "linux-per-context-0/extended/headlessDetection/noSwiftShader"
+    tid = "Linux Per-Context A/extended/headlessDetection/noSwiftShader"
     assert flatten(full)[tid] == "pass"
     assert category_failures(full, ["headlessDetection"]) == {}
 
@@ -1182,7 +1182,7 @@ def test_an_unasked_for_software_renderer_still_fails():
     from ci.run_build_tester import category_failures, flatten
 
     full = _bt_profile("AMD Radeon R9 200 Series", noswift_passed=False)
-    tid = "linux-per-context-0/extended/headlessDetection/noSwiftShader"
+    tid = "Linux Per-Context A/extended/headlessDetection/noSwiftShader"
     assert flatten(full)[tid] == "fail"
     assert category_failures(full, ["headlessDetection"]) == {"headlessDetection": 1}
 
@@ -1195,7 +1195,7 @@ def test_the_exemption_is_confined_to_that_one_check():
     checks = full["profiles"][0]["results"]["extended"]["headlessDetection"]
     checks["noWebdriver"] = {"passed": False, "detail": "navigator.webdriver = true"}
     tests = flatten(full)
-    assert tests["linux-per-context-0/extended/headlessDetection/noWebdriver"] == "fail"
+    assert tests["Linux Per-Context A/extended/headlessDetection/noWebdriver"] == "fail"
 
 
 # ---------------------------------------------------------------------------
@@ -2640,11 +2640,10 @@ def test_every_expensive_build_step_is_skipped_on_a_hit():
     """A hit that still spends twenty minutes clearing disk has saved nothing."""
     steps = _build_job()["steps"]
     guard = "steps.prebuilt.outputs.cache-hit != 'true'"
-    expensive = ("Maximize build space", "Remove unwanted tools", "Install build dependencies",
-                 "Create swap", "Prepare the source tree", "Build",
+    expensive = ("./.github/actions/build-host", "Prepare the source tree", "Build",
                  "Package the binary for the test jobs", "Restore ccache")
     for name in expensive:
-        step = next((s for s in steps if s.get("name") == name), None)
+        step = next((s for s in steps if name in (s.get("name"), s.get("uses"))), None)
         assert step is not None, f"{name} is gone -- update this list"
         assert step.get("if", "").strip() == guard, f"{name} runs even when the browser was restored"
 
@@ -2905,7 +2904,7 @@ def test_packaged_font_names_are_ascii(tmp_path, monkeypatch):
 PUBLISHED = [{"tag_name": "v1.0-beta.1", "draft": False, "prerelease": True, "body": ""}]
 
 
-def _scope(repo: pathlib.Path, base: str, releases=None) -> tuple[str, str]:
+def _scope(repo: pathlib.Path, base: str, releases=None, carried: str = "", built: str = "") -> tuple[str, str]:
     """Run the workflow's own "Does this change the browser?" step in `repo`.
 
     The step asks `ci.release paired` for the release built from the tree's
@@ -2914,11 +2913,13 @@ def _scope(repo: pathlib.Path, base: str, releases=None) -> tuple[str, str]:
     import subprocess
 
     text = WORKFLOW.read_text(encoding="utf-8")
-    start = text.index("        run: |\n          if [ \"${{ github.event_name }}\" != \"pull_request\" ]")
+    start = text.index("        run: |\n          if [ -n \"${{ steps.carry.outputs.run }}\" ]")
     end = text.index("      - name: May the stealth check run?", start)
     lines = text[start:end].splitlines()[1:]
     block = "\n".join(line[10:] if line.startswith(" " * 10) else line.strip() for line in lines)
-    block = block.replace("${{ github.event_name }}", "pull_request")
+    block = block.replace("${{ github.event_name }}", "push" if carried else "pull_request")
+    block = block.replace("${{ steps.carry.outputs.run }}", carried)
+    block = block.replace("${{ steps.carry.outputs.built }}", built)
     block = block.replace("${{ github.event.pull_request.base.sha }}", base)
     listed = repo.parent / "releases.json"
     listed.write_text(json.dumps(PUBLISHED if releases is None else releases))
@@ -2928,6 +2929,7 @@ def _scope(repo: pathlib.Path, base: str, releases=None) -> tuple[str, str]:
         f"python3 -m ci.release paired --root {repo} --releases {listed}",
     )
     out = repo.parent / "out.txt"
+    out.unlink(missing_ok=True)
     proc = subprocess.run(
         ["bash", "-e", "-c", block], cwd=repo, capture_output=True, text=True,
         env={**os.environ, "GITHUB_OUTPUT": str(out), "PYTHONPATH": str(CI_ROOT.parent)},
@@ -2989,6 +2991,12 @@ def test_browser_pr_builds(release_repo):
     (release_repo / "browser" / "patches" / "a.patch").write_text("b\n")
     _git(release_repo, "commit", "-qam", "browser change")
     assert _scope(release_repo, base)[0] == "browser_changed=true"
+
+
+def test_a_carried_push_requires_what_the_pull_request_run_ran(release_repo):
+    base = _git(release_repo, "rev-parse", "HEAD")
+    assert _scope(release_repo, base, carried="5", built="false")[0] == "browser_changed=false"
+    assert _scope(release_repo, base, carried="5", built="true")[0] == "browser_changed=true"
 
 
 def test_unpublished_release_tag_builds(release_repo):
@@ -3145,24 +3153,72 @@ def test_pull_requests_verify_the_fonts():
                for job in workflow["jobs"].values() for step in job.get("steps", []))
 
 
-def test_every_windows_release_build_installs_the_32_bit_loader():
+def _release_targets():
+    import yaml
+
+    matrix = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"))["jobs"]["build-browser"]["strategy"]["matrix"]
+    excluded = {(e["target"], e["arch"]) for e in matrix["exclude"]}
+    return {(t, a) for t in matrix["target"] for a in matrix["arch"]} - excluded
+
+
+def test_every_windows_build_installs_the_32_bit_loader():
     """Mozilla's Wine runs midl.exe through /lib/ld-linux.so.2. Clang from
     apt.llvm.org once pulled libc6-i386 in by accident; when that step went,
     the Windows x86_64 release failed at its first IDL file."""
     import subprocess
     import yaml
 
-    job = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]["build-browser"]
-    script = next(step["run"] for step in job["steps"] if step.get("name") == "Install dependencies")
-    matrix = job["strategy"]["matrix"]
-    excluded = [(e["target"], e["arch"]) for e in matrix.get("exclude", [])]
-    for arch in matrix["arch"]:
-        if ("windows", arch) in excluded:
-            continue
-        body = script.replace("${{ matrix.target }}", "windows").replace("${{ matrix.arch }}", arch)
-        out = subprocess.run(["bash", "-ec", "sudo() { echo \"$@\"; }\n" + body],
+    action = yaml.safe_load((CI_ROOT.parent / ".github" / "actions" / "build-host" / "action.yml").read_text(encoding="utf-8"))
+    script = next(step["run"] for step in action["runs"]["steps"] if step.get("name") == "Install dependencies")
+    windows = sorted(arch for target, arch in _release_targets() if target == "windows")
+    assert windows
+    for arch in windows:
+        out = subprocess.run(["bash", "-ec", "sudo() { echo \"$@\"; }\n" + script],
+                             env={**os.environ, "TARGET": "windows", "ARCH": arch},
                              capture_output=True, text=True, check=True).stdout
         assert "libc6-i386" in out.split(), f"windows {arch} does not install libc6-i386"
+
+
+def _steps(workflow, job):
+    import yaml
+
+    return yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / workflow).read_text(
+        encoding="utf-8"))["jobs"][job]["steps"]
+
+
+def _runs(steps):
+    """Every step's script, without its comments."""
+    return ["\n".join(line for line in (step.get("run") or "").splitlines()
+                      if not line.lstrip().startswith("#")) for step in steps]
+
+
+def test_every_release_target_is_built_or_preflighted_on_a_pull_request():
+    """Rule: one-build-entry-point. A target only a release builds is compiled
+    for the first time by the release."""
+    import yaml
+
+    jobs = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8"))["jobs"]
+    preflighted = {(e["target"], e["arch"]) for e in jobs["preflight"]["strategy"]["matrix"]["include"]}
+    assert jobs["build"]["env"]["BUILD_TARGET"] == "linux,x86_64"
+    assert preflighted | {("linux", "x86_64")} == _release_targets()
+    assert jobs["preflight"]["strategy"]["fail-fast"] is False
+    assert "preflight" in jobs["gate"]["needs"], "a failed preflight would not block the merge"
+
+
+def test_every_build_sets_up_its_host_the_same_way():
+    """The release's build installed its own packages, so a package only it
+    needed (the 32-bit loader) was first missed by a release."""
+    for workflow, job in (("tests.yml", "build"), ("tests.yml", "preflight"), ("release.yml", "build-browser")):
+        steps = _steps(workflow, job)
+        host = [s for s in steps if s.get("uses") == "./.github/actions/build-host"]
+        assert len(host) == 1, f"{workflow}:{job} does not set up its host through build-host"
+        assert set(host[0]["with"]) >= {"target", "arch"}
+        before = steps[:steps.index(host[0])]
+        assert any("actions/checkout" in s.get("uses", "") for s in before), "a local action needs the checkout first"
+        for run in _runs(steps):
+            assert "apt-get install" not in run or "zstd" in run, (
+                f"{workflow}:{job} installs build packages outside build-host")
 
 
 def test_one_failed_release_build_does_not_cancel_the_others():

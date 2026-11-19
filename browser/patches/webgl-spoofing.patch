@@ -297,46 +297,46 @@ index 097d202297..7c5f00b1e5 100644
 +    // host with a synchronous Msg_GetNumber on every call. A spoofed answer
 +    // still makes that round trip and discards it, so the page's stopwatch
 +    // reads stock's cost, not a table lookup's (getParameter vs isEnabled:
-+    // stock ~1000x, table answer ~1x).
-+    static constexpr GLenum kStockFetchedLimits[] = {
-+        LOCAL_GL_MAX_COLOR_ATTACHMENTS,
-+        LOCAL_GL_MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS,
-+        LOCAL_GL_MAX_COMBINED_UNIFORM_BLOCKS,
-+        LOCAL_GL_MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS,
-+        LOCAL_GL_MAX_DRAW_BUFFERS,
-+        LOCAL_GL_MAX_ELEMENTS_INDICES,
-+        LOCAL_GL_MAX_ELEMENTS_VERTICES,
-+        LOCAL_GL_MAX_ELEMENT_INDEX,
-+        LOCAL_GL_MAX_FRAGMENT_INPUT_COMPONENTS,
-+        LOCAL_GL_MAX_FRAGMENT_UNIFORM_BLOCKS,
-+        LOCAL_GL_MAX_FRAGMENT_UNIFORM_COMPONENTS,
-+        LOCAL_GL_MAX_FRAGMENT_UNIFORM_VECTORS,
-+        LOCAL_GL_MAX_PROGRAM_TEXEL_OFFSET,
-+        LOCAL_GL_MAX_RENDERBUFFER_SIZE,
-+        LOCAL_GL_MAX_SAMPLES,
-+        LOCAL_GL_MAX_SERVER_WAIT_TIMEOUT,
-+        LOCAL_GL_MAX_TEXTURE_IMAGE_UNITS,
-+        LOCAL_GL_MAX_TEXTURE_LOD_BIAS,
-+        LOCAL_GL_MAX_TEXTURE_MAX_ANISOTROPY,
-+        LOCAL_GL_MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS,
-+        LOCAL_GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS,
-+        LOCAL_GL_MAX_UNIFORM_BLOCK_SIZE,
-+        LOCAL_GL_MAX_VARYING_COMPONENTS,
-+        LOCAL_GL_MAX_VARYING_VECTORS,
-+        LOCAL_GL_MAX_VERTEX_OUTPUT_COMPONENTS,
-+        LOCAL_GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS,
-+        LOCAL_GL_MAX_VERTEX_UNIFORM_BLOCKS,
-+        LOCAL_GL_MAX_VERTEX_UNIFORM_COMPONENTS,
-+        LOCAL_GL_MAX_VERTEX_UNIFORM_VECTORS,
-+        LOCAL_GL_MIN_PROGRAM_TEXEL_OFFSET,
-+        LOCAL_GL_SUBPIXEL_BITS,
-+    };
++    // stock ~1000x, table answer ~1x). A switch, not a scan: a limit stock
++    // answers client-side (MAX_TEXTURE_SIZE) otherwise paid 31 comparisons
++    // on every call, which stock does not.
 +    const auto payStockFetch = [&] {
-+      for (const GLenum limit : kStockFetchedLimits) {
-+        if (limit == pname) {
-+          (void)GetNumber(pname);
-+          return;
-+        }
++      switch (pname) {
++      case LOCAL_GL_MAX_COLOR_ATTACHMENTS:
++      case LOCAL_GL_MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS:
++      case LOCAL_GL_MAX_COMBINED_UNIFORM_BLOCKS:
++      case LOCAL_GL_MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS:
++      case LOCAL_GL_MAX_DRAW_BUFFERS:
++      case LOCAL_GL_MAX_ELEMENTS_INDICES:
++      case LOCAL_GL_MAX_ELEMENTS_VERTICES:
++      case LOCAL_GL_MAX_ELEMENT_INDEX:
++      case LOCAL_GL_MAX_FRAGMENT_INPUT_COMPONENTS:
++      case LOCAL_GL_MAX_FRAGMENT_UNIFORM_BLOCKS:
++      case LOCAL_GL_MAX_FRAGMENT_UNIFORM_COMPONENTS:
++      case LOCAL_GL_MAX_FRAGMENT_UNIFORM_VECTORS:
++      case LOCAL_GL_MAX_PROGRAM_TEXEL_OFFSET:
++      case LOCAL_GL_MAX_RENDERBUFFER_SIZE:
++      case LOCAL_GL_MAX_SAMPLES:
++      case LOCAL_GL_MAX_SERVER_WAIT_TIMEOUT:
++      case LOCAL_GL_MAX_TEXTURE_IMAGE_UNITS:
++      case LOCAL_GL_MAX_TEXTURE_LOD_BIAS:
++      case LOCAL_GL_MAX_TEXTURE_MAX_ANISOTROPY:
++      case LOCAL_GL_MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS:
++      case LOCAL_GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS:
++      case LOCAL_GL_MAX_UNIFORM_BLOCK_SIZE:
++      case LOCAL_GL_MAX_VARYING_COMPONENTS:
++      case LOCAL_GL_MAX_VARYING_VECTORS:
++      case LOCAL_GL_MAX_VERTEX_OUTPUT_COMPONENTS:
++      case LOCAL_GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS:
++      case LOCAL_GL_MAX_VERTEX_UNIFORM_BLOCKS:
++      case LOCAL_GL_MAX_VERTEX_UNIFORM_COMPONENTS:
++      case LOCAL_GL_MAX_VERTEX_UNIFORM_VECTORS:
++      case LOCAL_GL_MIN_PROGRAM_TEXEL_OFFSET:
++      case LOCAL_GL_SUBPIXEL_BITS:
++        (void)GetNumber(pname);
++        break;
++      default:
++        break;
 +      }
 +    };
 +    switch (cached.kind) {

@@ -9,6 +9,7 @@ options:
                         Target architectures to build for each platform
   --bootstrap           Bootstrap the build system
   --clean               Clean the build directory before starting
+  --preflight           Check that each target builds, without building it
 
 Example:
 $ python3 multibuild.py --target linux windows macos --arch x86_64 arm64
@@ -77,6 +78,11 @@ class BSYS:
         os.environ['BUILD_TARGET'] = f'{self.target},{self.arch}'
         run('make build')
 
+    def preflight(self):
+        """Configure, run the export tiers and compile what the patches touch"""
+        os.environ['BUILD_TARGET'] = f'{self.target},{self.arch}'
+        run('make preflight')
+
     def package(self):
         """Package the Camoufox source code"""
         run(f'make package-{self.target} arch={self.arch}')
@@ -98,12 +104,15 @@ class BSYS:
         run('make clean')
 
 
-def run_build(target, arch):
+def run_build(target, arch, preflight=False):
     """
     Run the build for the given target and architecture
     """
     builder = BSYS(target, arch)
     builder.update_target()
+    if preflight:
+        builder.preflight()
+        return
     # Run build
     builder.build()
     # Run package
@@ -133,6 +142,11 @@ def main():
     parser.add_argument("--bootstrap", action="store_true", help="Bootstrap the build system")
     parser.add_argument(
         "--clean", action="store_true", help="Clean the build directory before starting"
+    )
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Check that each target builds, without building it",
     )
 
     args = parser.parse_args()
@@ -165,7 +179,7 @@ def main():
             ]:
                 print(f"Skipping {target} {arch}: Unsupported architecture.")
                 continue
-            run_build(target, arch)
+            run_build(target, arch, args.preflight)
 
 
 if __name__ == "__main__":

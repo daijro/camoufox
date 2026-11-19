@@ -126,7 +126,7 @@ persist a change there as a patch, never as an edit to that tree.
 | `browser/` | The browser build: `Makefile`, `upstream.sh`, `multibuild.py`, `Dockerfile`, and the directories below. |
 | `browser/patches/` | Diffs applied to Firefox: one per behaviour at the top level, plus `playwright/`, `librewolf/` and `ghostery/`. Browser behaviour changes here. |
 | `browser/additions/camoucfg/` | The C++ config layer. `MaskConfig.hpp` reads `CAMOU_CONFIG`, which the patches consult. |
-| `browser/additions/juggler/` | Camoufox's Juggler, Playwright's Firefox protocol. The page agent runs in an isolated world. `input/` holds the Cursory cursor trajectories. |
+| `browser/additions/juggler/` | Camoufox's Juggler, Playwright's Firefox protocol. The page agent runs in an isolated world. `input/` holds `MouseDispatch.js` (every synthesized mouse event) and `HumanDelay.js`; the browser adds no humanization of its own ([`docs/humanize.md`](docs/humanize.md)). |
 | `browser/settings/` | `camoufox.cfg` (prefs), `properties.json` (every config key and its type; a key the browser stops reading is marked `removed`, never deleted). |
 | `browser/scripts/` | `patch.py` applies patches and writes the mozconfig; `copy-additions.sh`, `package.py`, `install-deps.sh`, font tooling. |
 | `browser/assets/` | Mozconfigs, README images. |
@@ -150,7 +150,12 @@ make build                     # ./mach build
 make run                       # run the build (wipes ~/.camoufox)
 make package-linux arch=x86_64 # or package-macos / package-windows
 python3 multibuild.py --target linux windows macos --arch x86_64 arm64
+python3 multibuild.py --target windows macos --arch x86_64 --preflight  # compile what the patches touch, in minutes
 ```
+
+A pull request builds Linux x86_64 only. CI preflights the other release
+targets, and `--preflight` does the same locally for a patch with code for
+another OS or CPU.
 
 Every build, a local one included, is optimized as stock is
 ([`builds-are-optimized-like-stock`](ci/tribal-rules.yml)): with the PGO
@@ -237,6 +242,7 @@ this section in step with the launcher options.
 - **Use `geoip=True` with a proxy.** Without it the timezone and locale are the identity's, not the proxy's, and a warning is printed.
 - **`page.evaluate` is isolated.** It cannot read globals the page defined. Use `main_world_eval=True` and prefix the script with `mw:`. Without the option, a `mw:` evaluate fails with "Main world evaluation is disabled". `mw:` cannot return a handle (`evaluate_handle`).
 - **Leave the viewport alone.** When the window size is spoofed, new pages default to `no_viewport=True`; forcing a `viewport` asks the window to resize to something the identity does not claim.
+- **The OS counts clicks and repeats keys.** A press's `detail` follows the identity's OS, not `click_count`: presses count up only when quick and in place (`dblclick` is). A key held with `keyboard.down` repeats until `keyboard.up`, with that OS's delay and interval ([docs/input-dispatch.md](docs/input-dispatch.md#click-count)).
 - **`is_mobile` is ignored** (with a warning). Camoufox has desktop identities only.
 - **Persistent contexts** need `persistent_context=True` and `user_data_dir`, and cannot be served by `launch_server`.
 - **`headless="virtual"`** needs Linux, `Xvfb` and `setpriv` from util-linux (`CannotFindXvfb`, `VirtualDisplayNotSupported` otherwise). Xvfb has no GPU, so canvas and WebGL render in software and the identity reports `llvmpipe`.

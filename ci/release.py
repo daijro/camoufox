@@ -5,8 +5,8 @@ Releases ride a train, on the 1st and 15th of each month. The scheduled run
 promotes the newest prerelease to stable: the browser release it pairs with is
 marked stable and latest (no rebuild), and its library version without the bN
 suffix goes to PyPI and npm `latest`. A promotion is refused while an issue
-labelled `regression` is open. The run then dispatches a cut: main is tested,
-and a browser prerelease is built if the browser's sources changed (a GitHub
+labelled `regression` is open. The run then dispatches a cut: main is tested
+(unless main's own run already passed on it), and a browser prerelease is built if the browser's sources changed (a GitHub
 prerelease with its own release number), then -- if the library changed -- the
 Python package on PyPI and the npm package under the `next` dist-tag. A cut is
 also dispatched by hand for a fix that cannot wait, and pushing a `vX.Y.Z` tag on
@@ -33,6 +33,7 @@ build's working tree. Rebuilding from the tag with `set-build` reproduces it.
     python3 -m ci.release lib-diff --channel C --wheel W --tarball T --py-version V --npm-version V
     python3 -m ci.release promote                 # paired browser -> stable, latest
     python3 -m ci.release check-promotable --tag vX.Y.Z
+    python3 -m ci.release tested                  # passed=true when the gate passed on HEAD
 """
 
 from __future__ import annotations
@@ -610,7 +611,7 @@ def is_gate_check(name: str) -> bool:
     return name == GATE_CHECK or name.endswith(f" / {GATE_CHECK}")
 
 
-def _require_tested(sha: str) -> None:
+def gate_passed(sha: str) -> bool:
     """The test pipeline's gate check passed on exactly this commit."""
     checks: List[dict] = []
     for page in range(1, 11):
@@ -622,7 +623,11 @@ def _require_tested(sha: str) -> None:
         checks += batch
         if len(batch) < 100:
             break
-    if not any(is_gate_check(c.get("name", "")) and c.get("conclusion") == "success" for c in checks):
+    return any(is_gate_check(c.get("name", "")) and c.get("conclusion") == "success" for c in checks)
+
+
+def _require_tested(sha: str) -> None:
+    if not gate_passed(sha):
         die(f"'{GATE_CHECK}' has not passed on {sha[:10]}; nothing untested is released")
 
 
@@ -638,6 +643,13 @@ def cmd_check_promotable(args: argparse.Namespace) -> int:
     if not run(["git", "merge-base", "--is-ancestor", sha, "origin/main"], cwd=REPO_ROOT).ok:
         die(f"{args.tag} points at {sha[:10]}, which is not on main")
     _require_tested(sha)
+    return 0
+
+
+def cmd_tested(_: argparse.Namespace) -> int:
+    """Whether main's own run already passed on the commit a cut releases, so the
+    cut does not test it again."""
+    set_output("passed", "true" if gate_passed(_head()) else "false")
     return 0
 
 
@@ -701,6 +713,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.set_defaults(fn=cmd_lib_plan)
     p = sub.add_parser("check-promotable"); p.add_argument("--tag", required=True)
     p.set_defaults(fn=cmd_check_promotable)
+    sub.add_parser("tested").set_defaults(fn=cmd_tested)
     p = sub.add_parser("stamp"); p.add_argument("--browser-tag", required=True)
     p.add_argument("--py-version", required=True); p.add_argument("--npm-version", required=True)
     p.set_defaults(fn=cmd_stamp)

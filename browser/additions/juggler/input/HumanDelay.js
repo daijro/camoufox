@@ -7,8 +7,10 @@
 /**
  * A person's delay in ms: a normal draw around `mean` with standard deviation
  * `sd`, never under `min` nor over `max`. Every delay Juggler waits out
- * between a person's input events (a click's hold, a key's hold, a modifier's
- * lead) is drawn here, each with the figures its caller cites.
+ * inside one command (a key's hold, a paste or auto-Shift modifier's lead and
+ * trail, a refused paste's typing rate) is drawn here, each with the
+ * figures its caller cites: a normal draw for a modifier's lead or trail, a
+ * log-normal for a key's hold or interval.
  *
  * `random` returns floats in [0, 1); the unit tests pass a seeded stream.
  */

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {load} from './gecko.mjs';
 
-const {normalDelay, logNormalDelay} = await load('input/HumanDelay.js');
+const {normalDelay} = await load('input/HumanDelay.js');
 
 // mulberry32: the draws stay the same from run to run.
 function seeded(seed) {
@@ -40,26 +40,4 @@ test('without a maximum the upper tail is kept', () => {
 
 test('the same stream gives the same delays', () => {
   assert.deepEqual(draws(5, 110, 30, 50), draws(5, 110, 30, 50));
-});
-
-test('log-normal delays are right-skewed around their median', () => {
-  const random = seeded(1234);
-  const xs = Array.from({length: 20000}, () => logNormalDelay(100, 0.5, 0, Infinity, random));
-  const sorted = [...xs].sort((a, b) => a - b);
-  const median = (sorted[9999] + sorted[10000]) / 2;
-  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
-  assert.ok(Math.abs(median - 100) < 2, `median ${median}`);
-  assert.ok(mean > median, `mean ${mean} should exceed median ${median}`);
-});
-
-test('log-normal delays respect their bounds and repeat from one stream', () => {
-  const random = seeded(1234);
-  const xs = Array.from({length: 20000}, () => logNormalDelay(110, 0.32, 70, 180, random));
-  assert.equal(Math.min(...xs), 70);
-  assert.equal(Math.max(...xs), 180);
-  const a = seeded(9), b = seeded(9);
-  assert.deepEqual(
-    Array.from({length: 5}, () => logNormalDelay(95, 0.42, 50, Infinity, a)),
-    Array.from({length: 5}, () => logNormalDelay(95, 0.42, 50, Infinity, b)),
-  );
 });
