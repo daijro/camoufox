@@ -189,6 +189,8 @@ class NetworkRequest {
     if (this.redirectedFromId) {
       // Redirects are not interceptable.
       this._sendOnRequest(false);
+      // Everything this request needs from the previous one is inherited above.
+      redirectedFrom._releaseReferences();
     }
   }
 
@@ -460,6 +462,17 @@ class NetworkRequest {
     }
 
     delete this._responseBodyChunks;
+    this._releaseReferences();
+  }
+
+  // Gecko keeps a connection's notificationCallbacks (this object) until the
+  // connection closes, so a finished request must not hold its page, window or
+  // response bodies (Playwright's fix, microsoft/playwright#42747).
+  _releaseReferences() {
+    this.httpChannel = undefined;
+    this._originalListener = undefined;
+    this._pageNetwork = undefined;
+    this._interceptedChannel = undefined;
   }
 
   _shouldIntercept() {
