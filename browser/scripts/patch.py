@@ -195,7 +195,9 @@ def extract_build_target():
         assert target in AVAILABLE_TARGETS, f"Unsupported target: {target}"
         assert arch in AVAILABLE_ARCHS, f"Unsupported architecture: {arch}"
     else:
-        target, arch = "macos", "arm64"
+        # The documented build (README, AGENTS.md "Building") runs on Linux;
+        # make build/run/edit-cfg assume the obj-x86_64-pc-linux-gnu objdir.
+        target, arch = "linux", "x86_64"
     return target, arch
 
 
