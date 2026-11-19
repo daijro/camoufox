@@ -39,6 +39,20 @@ What PASS means:
       would otherwise corrupt, awaits promises, and reports page errors with
       their real message;
     * writes made through "mw:" are visible to page script;
+    * a stack the page captures while "mw:" code runs holds only the page's own
+      frames, as when the browser calls the page with no script below it; in
+      particular it names no "debugger eval code", the Debugger's default name
+      for what it compiles, which only DevTools and drivers produce;
+    * a page function's `caller` is null, so the page cannot read Juggler's
+      wrapper source;
+    * only the driver's code is hidden. Everything the page compiles while
+      "mw:" code calls it (eval, Function, an injected script, a getter, a
+      nested call) reports the stacks and callers it reports when a timer
+      calls the same function, so a page cannot hide code of its own and
+      sees none of its own code missing;
+    * a script element "mw:" code adds is the document's, so it keeps its
+      frame, and code in the isolated world, whose frames the page cannot
+      read, keeps its own stack for the errors it reports;
     * unprefixed evaluation stays isolated even with the flag on.
 """
 
@@ -54,6 +68,26 @@ PAGE = """
 <script>
   window.pageSecret = 41;
   window.pageAdd = (a, b) => a + b;
+  window.pageStack = () => new Error().stack;
+  window.pageCaller = function () { return window.pageCaller.caller; };
+  function inner() { return [inner.caller && inner.caller.name, new Error().stack]; }
+  function outer() { return inner(); }
+  Object.defineProperty(window, 'pageGetter', { get() { return new Error().stack; } });
+  window.pageOwnCode = function pageOwnCode() {
+    const seen = { stack: new Error().stack, caller: pageOwnCode.caller, nested: outer() };
+    seen.eval = eval('new Error().stack');
+    seen.indirectEval = (0, eval)('new Error().stack');
+    seen.function = new Function('return [arguments.callee.caller.name, new Error().stack]')();
+    const script = document.createElement('script');
+    script.textContent = 'window.injectedStack = new Error().stack;' +
+      'window.injected = function injected() { return [injected.caller.name, new Error().stack]; };';
+    document.head.append(script);
+    seen.injectedScript = window.injectedStack;
+    seen.injectedFunction = window.injected();
+    seen.getter = window.pageGetter;
+    try { null.field; } catch (error) { seen.thrown = [error.stack, error.fileName, error.lineNumber]; }
+    return (window.lastSeen = seen);
+  };
   document.querySelector('#probe').addEventListener('click', () => {
     document.documentElement.dataset.sawMainWorldWrite = String(window.writtenFromMw);
   });
@@ -132,6 +166,40 @@ async def _run_enabled() -> bool:
         _check(results, "page global", await page.evaluate("mw:window.pageSecret"), 41)
         _check(results, "page function", await page.evaluate("mw:window.pageAdd(1, 2)"), 3)
         _check(results, "unprefixed stays isolated", await page.evaluate("window.pageSecret"), None)
+
+        stack = await page.evaluate("mw:window.pageStack()")
+        print(f"       page stack: {stack.splitlines()}")
+        _check(results, "page stack names no debugger code", "debugger eval code" in stack, False)
+        _check(results, "page stack holds only the page's frame", len(stack.splitlines()), 1)
+        _check(results, "page function's caller is null", await page.evaluate("mw:window.pageCaller() === null"), True)
+
+        print("  -- only the driver's code is hidden --")
+        # The second timer runs after the first, which calls the page with no
+        # script below it.
+        from_timer = await page.evaluate(
+            "mw:setTimeout(window.pageOwnCode, 0),"
+            " new Promise(resolve => setTimeout(() => resolve(window.lastSeen), 0))"
+        )
+        from_driver = await page.evaluate("mw:window.pageOwnCode()")
+        for name, seen in from_timer.items():
+            _check(results, f"page code, {name}: as from a timer", from_driver[name], seen)
+        _check(results, "driver code leaves no frame", await page.evaluate("mw:new Error().stack"), "")
+        _check(results, "nor does code it evals", await page.evaluate("mw:eval('new Error().stack')"), "")
+        added = await page.evaluate(
+            "mw:(() => { const script = document.createElement('script');"
+            " script.textContent = 'window.addedStack = new Error().stack;\\n//# sourceURL=added.js';"
+            " document.head.append(script); return window.addedStack; })()"
+        )
+        _check(results, "a script element it adds keeps its frame", added.split(":")[0], "@added.js")
+        _check(results, "and shows no driver frame below it", len(added.splitlines()), 1)
+        isolated = await page.evaluate("(function isolatedFunction() { return new Error().stack; })()")
+        _check(results, "isolated code reads its own frames", "isolatedFunction" in isolated, True)
+        thrown = None
+        try:
+            await page.evaluate("(function isolatedFunction() { throw new Error('thrown'); })()")
+        except Exception as exc:  # noqa: BLE001 - the report is the point
+            thrown = str(exc)
+        _check(results, "and its errors report them", thrown is not None and "isolatedFunction" in thrown, True)
 
         print("  -- statements (#631) --")
         for label, script, expected in STATEMENT_CASES:

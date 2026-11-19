@@ -38,7 +38,7 @@ directions, plus that no user activation is granted), and the upstream suite's
 popup tests (page.evaluate(window.open) must keep working).
 
 diff --git a/docshell/base/BrowsingContext.cpp b/docshell/base/BrowsingContext.cpp
-index 5da611e913..d63498919d 100644
+index d13eb511df..5d17414ba2 100644
 --- a/docshell/base/BrowsingContext.cpp
 +++ b/docshell/base/BrowsingContext.cpp
 @@ -7,6 +7,7 @@
@@ -49,17 +49,15 @@ index 5da611e913..d63498919d 100644
  #ifdef ACCESSIBILITY
  #  include "mozilla/a11y/DocAccessibleParent.h"
  #  include "mozilla/a11y/Platform.h"
-@@ -4395,11 +4395,39 @@ void BrowsingContext::DidSet(FieldIndex<IDX_IsOffline>, bool aOldValue) {
+@@ -4349,12 +4350,36 @@ void BrowsingContext::DidSet(FieldIndex<IDX_ForceOffline>, bool aOldValue) {
+                    });
  }
  
 +// Camoufox: whether the code calling into the DOM right now is the driver's
 +// own (see IsPopupAllowed below).
 +static bool IsDriverScriptedCaller() {
 +  JSContext* cx = nsContentUtils::GetCurrentJSContext();
-+  JS::AutoFilename filename;
-+  return cx && JS::DescribeScriptedCaller(&filename, cx) && filename.get() &&
-+         StringBeginsWith(nsDependentCString(filename.get()),
-+                          "debugger eval code"_ns);
++  return cx && JS::IsScriptedCallerDebuggerCode(cx);
 +}
 +
  bool BrowsingContext::IsPopupAllowed() {
@@ -75,9 +73,8 @@ index 5da611e913..d63498919d 100644
 +    // driver's own code is the one calling: page code the evaluate reaches (a
 +    // getter, a Proxy trap, a toJSON) runs while the flag is set too, and must
 +    // meet the popup blocker exactly as it would on stock. Driver code is the
-+    // only code compiled as "debugger eval code" (Debugger executeInGlobal's
-+    // name, which //# sourceURL cannot set); an eval inside it is
-+    // "debugger eval code line N > eval".
++    // only code a Debugger evaluation compiles (Debugger executeInGlobal), and
++    // an eval inside it counts as driver code too.
 +    if (BrowsingContext* bc = context->GetBrowsingContext()) {
 +      if (nsIDocShell* shell = bc->GetDocShell()) {
 +        if (nsDocShell::Cast(shell)->DriverPopupsAllowed() &&
@@ -90,10 +87,10 @@ index 5da611e913..d63498919d 100644
  
    return false;
 diff --git a/docshell/base/nsDocShell.cpp b/docshell/base/nsDocShell.cpp
-index 16703bcea9..583ce3b917 100644
+index cc1ff457ba..bf67205004 100644
 --- a/docshell/base/nsDocShell.cpp
 +++ b/docshell/base/nsDocShell.cpp
-@@ -372,6 +372,7 @@ nsDocShell::nsDocShell(BrowsingContext* aBrowsingContext,
+@@ -371,6 +371,7 @@ nsDocShell::nsDocShell(BrowsingContext* aBrowsingContext,
        mBypassCSPEnabled(false),
        mForceActiveState(false),
        mDisallowBFCache(false),
@@ -101,7 +98,7 @@ index 16703bcea9..583ce3b917 100644
        mReducedMotionOverride(REDUCED_MOTION_OVERRIDE_NONE),
        mForcedColorsOverride(FORCED_COLORS_OVERRIDE_NO_OVERRIDE),
        mContrastOverride(CONTRAST_OVERRIDE_NONE),
-@@ -3046,6 +3047,21 @@ nsDocShell::SetDisallowBFCache(bool aEnabled) {
+@@ -3048,6 +3049,21 @@ nsDocShell::SetDisallowBFCache(bool aEnabled) {
    return NS_OK;
  }
  
@@ -124,10 +121,10 @@ index 16703bcea9..583ce3b917 100644
    return GetRootDocShell()->mBypassCSPEnabled;
  }
 diff --git a/docshell/base/nsDocShell.h b/docshell/base/nsDocShell.h
-index 5d9a683361..4a86b3e0e9 100644
+index bee50a595d..1358e40a2c 100644
 --- a/docshell/base/nsDocShell.h
 +++ b/docshell/base/nsDocShell.h
-@@ -390,6 +390,9 @@ class nsDocShell final : public nsDocLoader,
+@@ -391,6 +391,9 @@ class nsDocShell final : public nsDocLoader,
  
    bool ShouldOverrideHasFocus() const;
  
@@ -137,7 +134,7 @@ index 5d9a683361..4a86b3e0e9 100644
    bool IsBypassCSPEnabled();
  
    RefPtr<mozilla::GeolocationService> GetGeolocationServiceOverride();
-@@ -1341,6 +1344,7 @@ class nsDocShell final : public nsDocLoader,
+@@ -1354,6 +1357,7 @@ class nsDocShell final : public nsDocLoader,
    bool mBypassCSPEnabled : 1;
    bool mForceActiveState : 1;
    bool mDisallowBFCache : 1;
@@ -146,10 +143,10 @@ index 5d9a683361..4a86b3e0e9 100644
    RefPtr<mozilla::GeolocationService> mGeolocationServiceOverride;
    ReducedMotionOverride mReducedMotionOverride;
 diff --git a/docshell/base/nsIDocShell.idl b/docshell/base/nsIDocShell.idl
-index 12d05dfcaf..48cee8fc26 100644
+index 30062651e0..2675f303cb 100644
 --- a/docshell/base/nsIDocShell.idl
 +++ b/docshell/base/nsIDocShell.idl
-@@ -703,6 +703,23 @@ interface nsIDocShell : nsIDocShellTreeItem
+@@ -696,6 +696,23 @@ interface nsIDocShell : nsIDocShellTreeItem
  
    attribute boolean disallowBFCache;
  

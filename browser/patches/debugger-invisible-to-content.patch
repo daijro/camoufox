@@ -1,8 +1,8 @@
 diff --git a/js/src/builtin/Promise.cpp b/js/src/builtin/Promise.cpp
-index a3bb11ee07..73c11a087e 100644
+index dff04f721c..303b02594d 100644
 --- a/js/src/builtin/Promise.cpp
 +++ b/js/src/builtin/Promise.cpp
-@@ -6617,7 +6617,7 @@ static MOZ_ALWAYS_INLINE bool IsPromiseThenOrCatchRetValImplicitlyUsed(
+@@ -6725,7 +6725,7 @@ static MOZ_ALWAYS_INLINE bool IsPromiseThenOrCatchRetValImplicitlyUsed(
    }
  
    // If devtools is opened, the current realm will become debuggee.
@@ -27,10 +27,22 @@ index cb1998358d..58ec7e549f 100644
     * Return true if the given global is being observed by at least one
     * Debugger that is tracking allocations.
 diff --git a/js/src/debugger/Debugger.cpp b/js/src/debugger/Debugger.cpp
-index 895725a658..744e100a96 100644
+index 7349049205..a53674b18d 100644
 --- a/js/src/debugger/Debugger.cpp
 +++ b/js/src/debugger/Debugger.cpp
-@@ -543,6 +543,7 @@ Debugger::Debugger(JSContext* cx, NativeObject* dbg)
+@@ -405,6 +405,11 @@ bool js::ParseEvalOptions(JSContext* cx, HandleValue value,
+   }
+   options.setBypassCSP(ToBoolean(v));
+ 
++  if (!JS_GetProperty(cx, opts, "hideFromContent", &v)) {
++    return false;
++  }
++  options.setHideFromContent(ToBoolean(v));
++
+   if (options.kind() == EvalOptions::EnvKind::GlobalWithExtraOuterBindings) {
+     if (!JS_GetProperty(cx, opts, "useInnerBindings", &v)) {
+       return false;
+@@ -565,6 +570,7 @@ Debugger::Debugger(JSContext* cx, NativeObject* dbg)
        debuggees(cx->zone()),
        uncaughtExceptionHook(nullptr),
        allowUnobservedWasm(false),
@@ -38,7 +50,7 @@ index 895725a658..744e100a96 100644
        exclusiveDebuggerOnEval(false),
        inspectNativeCallArguments(false),
        collectCoverageInfo(false),
-@@ -820,6 +821,20 @@ bool DebugAPI::debuggerObservesNativeCall(GlobalObject* global) {
+@@ -842,6 +848,20 @@ bool DebugAPI::debuggerObservesNativeCall(GlobalObject* global) {
        global, [=](Debugger* dbg) { return dbg->observesNativeCalls(); });
  }
  
@@ -59,7 +71,7 @@ index 895725a658..744e100a96 100644
  /* static */
  bool DebugAPI::hasExceptionUnwindHook(GlobalObject* global) {
    return Debugger::hasLiveHook(global, Debugger::OnExceptionUnwind);
-@@ -3556,7 +3571,7 @@ Debugger::IsObserving Debugger::observesAllExecution() const {
+@@ -3578,7 +3598,7 @@ Debugger::IsObserving Debugger::observesAllExecution() const {
  }
  
  Debugger::IsObserving Debugger::observesWasm() const {
@@ -68,7 +80,7 @@ index 895725a658..744e100a96 100644
      return Observing;
    }
    return NotObserving;
-@@ -4335,6 +4350,8 @@ struct MOZ_STACK_CLASS Debugger::CallData {
+@@ -4357,6 +4377,8 @@ struct MOZ_STACK_CLASS Debugger::CallData {
    bool setUncaughtExceptionHook();
    bool getAllowUnobservedWasm();
    bool setAllowUnobservedWasm();
@@ -77,7 +89,7 @@ index 895725a658..744e100a96 100644
    bool getExclusiveDebuggerOnEval();
    bool setExclusiveDebuggerOnEval();
    bool getInspectNativeCallArguments();
-@@ -4606,6 +4623,28 @@ bool Debugger::CallData::setAllowUnobservedWasm() {
+@@ -4627,6 +4649,28 @@ bool Debugger::CallData::setAllowUnobservedWasm() {
    return true;
  }
  
@@ -106,7 +118,7 @@ index 895725a658..744e100a96 100644
  bool Debugger::CallData::getExclusiveDebuggerOnEval() {
    args.rval().setBoolean(dbg->exclusiveDebuggerOnEval);
    return true;
-@@ -5117,6 +5156,7 @@ bool Debugger::addDebuggeeGlobal(JSContext* cx, Handle<GlobalObject*> global) {
+@@ -5138,6 +5182,7 @@ bool Debugger::addDebuggeeGlobal(JSContext* cx, Handle<GlobalObject*> global) {
    // (5)
    AutoRestoreRealmDebugMode debugModeGuard(debuggeeRealm);
    debuggeeRealm->setIsDebuggee();
@@ -114,7 +126,7 @@ index 895725a658..744e100a96 100644
    debuggeeRealm->updateDebuggerObservesWasm();
    debuggeeRealm->updateDebuggerObservesCoverage();
    if (observesAllExecution() &&
-@@ -5238,6 +5278,7 @@ void Debugger::removeDebuggeeGlobal(JS::GCContext* gcx, GlobalObject* global,
+@@ -5259,6 +5304,7 @@ void Debugger::removeDebuggeeGlobal(JS::GCContext* gcx, GlobalObject* global,
      global->realm()->unsetIsDebuggee();
    } else {
      global->realm()->updateDebuggerObservesAllExecution();
@@ -122,7 +134,7 @@ index 895725a658..744e100a96 100644
      global->realm()->updateDebuggerObservesWasm();
      global->realm()->updateDebuggerObservesCoverage();
    }
-@@ -6942,6 +6983,8 @@ const JSPropertySpec Debugger::properties[] = {
+@@ -6628,6 +6674,8 @@ const JSPropertySpec Debugger::properties[] = {
                    setUncaughtExceptionHook),
      JS_DEBUG_PSGS("allowUnobservedWasm", getAllowUnobservedWasm,
                    setAllowUnobservedWasm),
@@ -132,10 +144,34 @@ index 895725a658..744e100a96 100644
                    setCollectCoverageInfo),
      JS_DEBUG_PSGS("exclusiveDebuggerOnEval", getExclusiveDebuggerOnEval,
 diff --git a/js/src/debugger/Debugger.h b/js/src/debugger/Debugger.h
-index bcf6cb8282..c2dfd45d24 100644
+index 50438c8f63..8dc5e4859d 100644
 --- a/js/src/debugger/Debugger.h
 +++ b/js/src/debugger/Debugger.h
-@@ -640,6 +640,13 @@ class Debugger : private mozilla::LinkedListElement<Debugger> {
+@@ -426,6 +426,7 @@ class MOZ_RAII EvalOptions {
+   unsigned lineno_ = 1;
+   bool hideFromDebugger_ = false;
+   bool bypassCSP_ = false;
++  bool hideFromContent_ = false;
+   bool allowRedeclaringExistingLexicalBinding_ = false;
+   EnvKind kind_;
+ 
+@@ -436,6 +437,7 @@ class MOZ_RAII EvalOptions {
+   unsigned lineno() const { return lineno_; }
+   bool hideFromDebugger() const { return hideFromDebugger_; }
+   bool bypassCSP() const { return bypassCSP_; }
++  bool hideFromContent() const { return hideFromContent_; }
+   EnvKind kind() const { return kind_; }
+   bool allowRedeclaringExistingLexicalBinding() const {
+     return allowRedeclaringExistingLexicalBinding_;
+@@ -450,6 +452,7 @@ class MOZ_RAII EvalOptions {
+   void setLineno(unsigned lineno) { lineno_ = lineno; }
+   void setHideFromDebugger(bool hide) { hideFromDebugger_ = hide; }
+   void setBypassCSP(bool bypass) { bypassCSP_ = bypass; }
++  void setHideFromContent(bool hide) { hideFromContent_ = hide; }
+   void setAllowRedeclaringExistingLexicalBinding(bool allow) {
+     allowRedeclaringExistingLexicalBinding_ = allow;
+   }
+@@ -649,6 +652,13 @@ class Debugger : private mozilla::LinkedListElement<Debugger> {
    HeapPtr<JSObject*> uncaughtExceptionHook; /* Strong reference. */
    bool allowUnobservedWasm;
  
@@ -149,7 +185,7 @@ index bcf6cb8282..c2dfd45d24 100644
    // When this flag is true, this debugger should be the only one to have its
    // hooks called when it evaluates via Frame.evalWithBindings,
    // Object.executeInGlobalWithBindings or Object.call.
-@@ -1035,6 +1042,8 @@ class Debugger : private mozilla::LinkedListElement<Debugger> {
+@@ -1044,6 +1054,8 @@ class Debugger : private mozilla::LinkedListElement<Debugger> {
  
    bool isExclusiveDebuggerOnEval() const;
  
@@ -158,11 +194,46 @@ index bcf6cb8282..c2dfd45d24 100644
   private:
    [[nodiscard]] static bool ensureExecutionObservabilityOfFrame(
        JSContext* cx, AbstractFramePtr frame);
+diff --git a/js/src/debugger/Frame.cpp b/js/src/debugger/Frame.cpp
+index f02ae572b2..e483331e6c 100644
+--- a/js/src/debugger/Frame.cpp
++++ b/js/src/debugger/Frame.cpp
+@@ -1059,7 +1059,9 @@ static bool EvaluateInEnv(
+       .setNoScriptRval(false)
+       .setFileAndLine(filename, evalOptions.lineno())
+       .setHideScriptFromDebugger(evalOptions.hideFromDebugger())
+-      .setIntroductionType("debugger eval")
++      .setIntroductionType(evalOptions.hideFromContent()
++                               ? js::HiddenDebuggerEvalIntroduction
++                               : "debugger eval")
+       /* Do not perform the Javascript filename validation security check for
+        * javascript executions sent through the debugger. Besides making up
+        * a filename for these codepaths, we must allow arbitrary JS execution
 diff --git a/js/src/jsapi.cpp b/js/src/jsapi.cpp
-index 567402e54e..5ce789e349 100644
+index 04fb2a5e66..666232e251 100644
 --- a/js/src/jsapi.cpp
 +++ b/js/src/jsapi.cpp
-@@ -5078,7 +5078,7 @@ JS_PUBLIC_API bool JS::IsAsyncStackCaptureEnabledForRealm(JSContext* cx) {
+@@ -4911,6 +4911,19 @@ JS_PUBLIC_API bool DescribeScriptedCaller(AutoFilename* filename, JSContext* cx,
+   return true;
+ }
+ 
++JS_PUBLIC_API bool IsScriptedCallerDebuggerCode(JSContext* cx) {
++  if (!cx->compartment()) {
++    return false;
++  }
++
++  NonBuiltinFrameIter i(cx, cx->realm()->principals());
++  if (i.done() || i.activation()->scriptedCallerIsHidden() || !i.hasScript()) {
++    return false;
++  }
++
++  return IsDebuggerEvalCode(i.script());
++}
++
+ // Fast path to get the activation and realm to use for GetScriptedCallerGlobal.
+ // If this returns false, the fast path didn't work out and the caller has to
+ // use the (much slower) NonBuiltinFrameIter path.
+@@ -5097,7 +5110,7 @@ JS_PUBLIC_API bool JS::IsAsyncStackCaptureEnabledForRealm(JSContext* cx) {
    }
  
    if (!cx->options().asyncStackCaptureDebuggeeOnly() ||
@@ -171,11 +242,121 @@ index 567402e54e..5ce789e349 100644
      return true;
    }
  
+diff --git a/js/src/jsapi.h b/js/src/jsapi.h
+index aa406d46e3..5b9d66ff31 100644
+--- a/js/src/jsapi.h
++++ b/js/src/jsapi.h
+@@ -940,6 +940,15 @@ extern JS_PUBLIC_API bool DescribeScriptedCaller(
+ 
+ extern JS_PUBLIC_API JSObject* GetScriptedCallerGlobal(JSContext* cx);
+ 
++/**
++ * Camoufox: whether the frame DescribeScriptedCaller would describe runs code
++ * a Debugger evaluation compiled (Debugger.Object.executeInGlobal and the
++ * other Debugger evals), or code that such code compiled through eval or
++ * Function. Unlike its filename, which the Debugger lets the caller choose,
++ * no page script can make its own code answer true.
++ */
++extern JS_PUBLIC_API bool IsScriptedCallerDebuggerCode(JSContext* cx);
++
+ /**
+  * Informs the JS engine that the scripted caller should be hidden. This can be
+  * used by the embedding to maintain an override of the scripted caller in its
+diff --git a/js/src/vm/JSFunction.cpp b/js/src/vm/JSFunction.cpp
+index d59add35d1..ad41a2602f 100644
+--- a/js/src/vm/JSFunction.cpp
++++ b/js/src/vm/JSFunction.cpp
+@@ -261,7 +261,8 @@ static bool CallerGetterImpl(JSContext* cx, const CallArgs& args) {
+     ++iter;
+   }
+ 
+-  if (iter.done() || !iter.isFunctionFrame()) {
++  if (iter.done() || !iter.isFunctionFrame() ||
++      iter.realm()->hidesDebuggerCodeFromContent(iter.script())) {
+     args.rval().setNull();
+     return true;
+   }
+diff --git a/js/src/vm/JSScript.cpp b/js/src/vm/JSScript.cpp
+index 1106b8c3bb..b88d22b731 100644
+--- a/js/src/vm/JSScript.cpp
++++ b/js/src/vm/JSScript.cpp
+@@ -3001,6 +3001,43 @@ out:
+   return script->offsetToPC(offset);
+ }
+ 
++const char js::HiddenDebuggerEvalIntroduction[] = "hidden debugger eval";
++
++// The introduction type of the Debugger evaluation that compiled |script|, or
++// that compiled the code eval or Function turned into |script|; null if none
++// did. The walk stops at anything else a script introduces, such as a script
++// element it adds to the document, which is the document's code.
++static const char* DebuggerEvalIntroduction(BaseScript* script) {
++  while (script) {
++    ScriptSource* ss = script->scriptSource();
++    if (!ss->hasIntroductionType()) {
++      return nullptr;
++    }
++    const char* type = ss->introductionType();
++    if (strcmp(type, "debugger eval") == 0 ||
++        strcmp(type, HiddenDebuggerEvalIntroduction) == 0) {
++      return type;
++    }
++    if (strcmp(type, "eval") != 0 && strcmp(type, "Function") != 0 &&
++        strcmp(type, "GeneratorFunction") != 0 &&
++        strcmp(type, "AsyncFunction") != 0 &&
++        strcmp(type, "AsyncGenerator") != 0) {
++      return nullptr;
++    }
++    script = script->sourceObject()->unwrappedIntroductionScript();
++  }
++  return nullptr;
++}
++
++bool js::IsDebuggerEvalCode(BaseScript* script) {
++  return DebuggerEvalIntroduction(script) != nullptr;
++}
++
++bool js::IsHiddenDebuggerEvalCode(BaseScript* script) {
++  const char* type = DebuggerEvalIntroduction(script);
++  return type && strcmp(type, HiddenDebuggerEvalIntroduction) == 0;
++}
++
+ JS_PUBLIC_API unsigned js::GetScriptLineExtent(
+     JSScript* script, JS::LimitedColumnNumberOneOrigin* columnp) {
+   unsigned lineno = script->lineno();
+diff --git a/js/src/vm/JSScript.h b/js/src/vm/JSScript.h
+index 239b31ee4c..96b04883a0 100644
+--- a/js/src/vm/JSScript.h
++++ b/js/src/vm/JSScript.h
+@@ -2531,6 +2531,15 @@ extern JS::UniqueChars FormatIntroducedFilename(const char* filename,
+ 
+ extern jsbytecode* LineNumberToPC(JSScript* script, unsigned lineno);
+ 
++// Whether a Debugger compiled |script|, or compiled the code that eval or
++// Function turned into |script|.
++extern bool IsDebuggerEvalCode(BaseScript* script);
++
++// The introduction type of a Debugger evaluation given the hideFromContent
++// option, and whether |script| is such code.
++extern const char HiddenDebuggerEvalIntroduction[];
++extern bool IsHiddenDebuggerEvalCode(BaseScript* script);
++
+ extern JS_PUBLIC_API unsigned GetScriptLineExtent(
+     JSScript* script, JS::LimitedColumnNumberOneOrigin* columnp = nullptr);
+ 
 diff --git a/js/src/vm/Realm.cpp b/js/src/vm/Realm.cpp
-index 5417e8b5d2..0684f1be95 100644
+index 08d20f419c..677aae8f3c 100644
 --- a/js/src/vm/Realm.cpp
 +++ b/js/src/vm/Realm.cpp
-@@ -442,6 +442,24 @@ void Realm::setNewObjectMetadata(JSContext* cx, HandleObject obj) {
+@@ -26,6 +26,7 @@
+ #include "vm/DateTime.h"
+ #include "vm/Iteration.h"
+ #include "vm/JSContext.h"
++#include "vm/JSScript.h"
+ #include "wasm/WasmInstance.h"
+ 
+ #include "gc/Marking-inl.h"
+@@ -453,6 +454,29 @@ void Realm::setNewObjectMetadata(JSContext* cx, HandleObject obj) {
    }
  }
  
@@ -197,10 +378,15 @@ index 5417e8b5d2..0684f1be95 100644
 +  }
 +}
 +
++bool Realm::hidesDebuggerCodeFromContent(BaseScript* script) const {
++  return isDebuggee() && !isDebuggeeVisibleToContent() &&
++         IsHiddenDebuggerEvalCode(script);
++}
++
  void Realm::updateDebuggerObservesFlag(unsigned flag) {
    MOZ_ASSERT(isDebuggee());
    MOZ_ASSERT(flag == DebuggerObservesAllExecution ||
-@@ -641,7 +659,7 @@ bool Realm::shouldCaptureStackForThrow() {
+@@ -664,7 +688,7 @@ bool Realm::shouldCaptureStackForThrow() {
    // To match other browsers, we always capture a stack trace if the realm is a
    // debuggee (this includes the devtools console being open) or if unlimited
    // stack traces have been enabled for this realm (used in automation).
@@ -210,10 +396,18 @@ index 5417e8b5d2..0684f1be95 100644
    }
  
 diff --git a/js/src/vm/Realm.h b/js/src/vm/Realm.h
-index b10dcc451c..087f93b90d 100644
+index 15ff9f089c..9ca9f980d8 100644
 --- a/js/src/vm/Realm.h
 +++ b/js/src/vm/Realm.h
-@@ -413,6 +413,9 @@ class JS::Realm : public JS::shadow::Realm {
+@@ -38,6 +38,7 @@ class LCovRealm;
+ }  // namespace coverage
+ 
+ class AutoRestoreRealmDebugMode;
++class BaseScript;
+ class DateTimeInfo;
+ class Debugger;
+ class GlobalObject;
+@@ -417,6 +418,9 @@ class JS::Realm : public JS::shadow::Realm {
      DebuggerObservesCoverage = 1 << 2,
      DebuggerObservesWasm = 1 << 3,
      DebuggerObservesNativeCall = 1 << 4,
@@ -223,7 +417,7 @@ index b10dcc451c..087f93b90d 100644
    };
    uint32_t debugModeBits_ = 0;
    friend class js::AutoRestoreRealmDebugMode;
-@@ -726,6 +729,16 @@ class JS::Realm : public JS::shadow::Realm {
+@@ -743,6 +747,21 @@ class JS::Realm : public JS::shadow::Realm {
    // object.
    bool isDebuggee() const { return !!(debugModeBits_ & IsDebuggee); }
  
@@ -237,10 +431,15 @@ index b10dcc451c..087f93b90d 100644
 +  }
 +  void updateAllDebuggersInvisibleToContent();
 +
++  // True for code an invisible-to-content Debugger compiled here with the
++  // hideFromContent option: content sees neither its frames nor its
++  // functions, as if the embedder had called in natively.
++  bool hidesDebuggerCodeFromContent(js::BaseScript* script) const;
++
    void setIsDebuggee();
    void unsetIsDebuggee();
  
-@@ -737,6 +750,7 @@ class JS::Realm : public JS::shadow::Realm {
+@@ -754,6 +773,7 @@ class JS::Realm : public JS::shadow::Realm {
      isTracingExecution_ = true;
      setIsDebuggee();
      updateDebuggerObservesAllExecution();
@@ -248,7 +447,7 @@ index b10dcc451c..087f93b90d 100644
    }
  
    void disableExecutionTracing() {
-@@ -750,6 +764,8 @@ class JS::Realm : public JS::shadow::Realm {
+@@ -767,6 +787,8 @@ class JS::Realm : public JS::shadow::Realm {
      updateDebuggerObservesAllExecution();
      if (!hasDebuggers()) {
        unsetIsDebuggee();
@@ -257,3 +456,19 @@ index b10dcc451c..087f93b90d 100644
      }
    }
  
+diff --git a/js/src/vm/SavedStacks.cpp b/js/src/vm/SavedStacks.cpp
+index db96f4fbbb..c133d931d9 100644
+--- a/js/src/vm/SavedStacks.cpp
++++ b/js/src/vm/SavedStacks.cpp
+@@ -1553,6 +1553,11 @@ bool SavedStacks::insertFrames(JSContext* cx, MutableHandle<SavedFrame*> frame,
+     displayAtom = iter.maybeFunctionDisplayAtom();
+ 
+     auto principals = iter.realm()->principals();
++    if (!iter.isWasm() && iter.hasScript() &&
++        iter.realm()->hidesDebuggerCodeFromContent(iter.script())) {
++      principals =
++          const_cast<JSPrincipals*>(cx->runtime()->trustedPrincipals());
++    }
+     MOZ_ASSERT_IF(framePtr && !iter.isWasm(), iter.pc());
+ 
+     // If we haven't yet seen the start, then don't add anything to the stack

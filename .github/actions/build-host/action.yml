@@ -1,0 +1,80 @@
+name: Build host
+description: >-
+  Free the disk space, install the packages and add the swap that building the
+  browser for one target needs. A release's build, a pull request's build and
+  the preflight of every other target all start here, so no build depends on a
+  package that only one of them installs.
+
+inputs:
+  target:
+    description: linux, windows or macos
+    required: true
+  arch:
+    description: x86_64, arm64 or i686
+    required: true
+  python-version:
+    required: false
+    default: "3.12"
+
+runs:
+  using: composite
+  steps:
+    # No checkout here: a local composite action is resolved from the
+    # workspace, so every caller checks out before reaching this.
+    - name: Maximize build space
+      uses: AdityaGarg8/remove-unwanted-software@8831c82abf29b34eb2caac48d5f999ecfc0d8eef # v4.1
+      with:
+        remove-dotnet: "true"
+        remove-android: "true"
+        remove-haskell: "true"
+        remove-codeql: "true"
+        remove-docker-images: "true"
+        remove-cached-tools: "true"
+        remove-swapfile: "true"
+        verbose: "false"
+
+    - name: Remove unwanted tools
+      shell: bash
+      run: |
+        sudo apt-get remove -y '^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' 'php.*' \
+          '^mongodb-.*' '^mysql-.*' > /dev/null 2>&1 || true
+        sudo apt-get remove -y azure-cli google-chrome-stable firefox mono-devel \
+          libgl1-mesa-dri --fix-missing > /dev/null 2>&1 || true
+        sudo apt-get autoremove -y > /dev/null 2>&1 || true
+        sudo apt-get clean > /dev/null 2>&1 || true
+
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install dependencies
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+        ARCH: ${{ inputs.arch }}
+      # No system LLVM: `mach bootstrap` fetches the clang and lld this Firefox
+      # is built with, and the LTO link needs that lld, which reads the bitcode
+      # the same LLVM wrote.
+      run: |
+        sudo apt-get update
+        # ccache: the mozconfig sets --with-ccache when it is installed, and
+        # every build here is meant to have it.
+        # fontconfig: browser/scripts/verify-fonts.py resolves every reportable
+        # family through fc-list/fc-match.
+        sudo apt-get install -y msitools p7zip-full aria2 ccache fontconfig
+        # libc6-i386: Mozilla's Wine runs midl.exe through /lib/ld-linux.so.2.
+        if [ "$TARGET" = windows ] || [ "$ARCH" != x86_64 ]; then
+          sudo apt-get install -y libc6-i386 lib32gcc-s1 lib32stdc++6 gcc-multilib g++-multilib
+        fi
+
+    - name: Create swap space
+      shell: bash
+      # The link step is OOM-killed on a standard runner without this, and
+      # reports as a bare SIGTERM that looks nothing like out-of-memory.
+      run: |
+        sudo fallocate -l 24G /swapfile
+        sudo chmod 600 /swapfile
+        sudo mkswap /swapfile
+        sudo swapon /swapfile
+        free -h
+        df -h /

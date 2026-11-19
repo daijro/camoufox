@@ -63,6 +63,8 @@ every command in this guide that does not say otherwise, from `browser/`:
 | `make checkpoint` | Commits tracked changes, keeping the `first-checkpoint` tag where it is. |
 | `make grep <text>` | Searches the top-level patches for a string. |
 | `make build` | `./mach build` (runs `make dir` first if the tree was never prepared). |
+| `make set-target` | Rewrites the mozconfig for `BUILD_TARGET`. The sources and every object directory are left as they are. |
+| `make preflight` | Checks that `BUILD_TARGET` builds without building it: configure, the export tiers, and the object of every source file a patch or an addition touches. |
 | `make run` | Runs the build with `debug` on in `CAMOU_CONFIG`; wipes `~/.camoufox`. `args="..."` passes arguments. |
 | `make path` | Prints the built `camoufox-bin`. |
 | `make stage-fonts` | Stages the font bundle into the unpackaged build, which tests through the launchers need. |

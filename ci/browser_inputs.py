@@ -72,7 +72,7 @@ BROWSER_DIRS = (
     "browser/scripts",
     "browser/bundle/fontconfig",
 )
-BROWSER_FILES = ("browser/upstream.sh", "browser/Makefile")
+BROWSER_FILES = ("browser/upstream.sh", "browser/Makefile", "browser/multibuild.py")
 
 # Tools under browser/scripts/ that no build runs, so touching one must not
 # invalidate a cached browser and cost an hour of compiling. ci/tests/test_ci.py
@@ -82,7 +82,6 @@ NON_NATIVE_SCRIPTS = frozenset(
     {
         "browser/scripts/_font_bundle.py",
         "browser/scripts/check-input-dispatch.py",
-        "browser/scripts/cursor-demo.py",
         "browser/scripts/gen-contentaccessible-manifest.py",
         "browser/scripts/gen-font-groups.py",
         "browser/scripts/gen-fonts-json.py",

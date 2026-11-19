@@ -346,15 +346,32 @@ export function sampleWebglForScreen(
 	cpu?: Record<string, any> | null,
 ): WebGLData {
 	const [arch, maker] = cpuPair(cpu);
-	const candidates = trace("gpu", targetOs).filter(
-		(result) =>
-			!isSoftwareRenderer(result.value.renderer) &&
-			result.value.renderer !== RFP_RENDERER &&
-			gpuFitsOs(result.value.renderer, targetOs) &&
-			gpuFitsMachine(result.value.renderer, targetOs, cores, width, height) &&
-			gpuScreenIsPlausible(result.value.renderer, width, height) &&
-			gpuFitsCpu(result.value.renderer, targetOs, arch, maker),
-	);
+	const fits = (
+		result: ReturnType<typeof trace>[number],
+		software: boolean,
+	): boolean =>
+		isSoftwareRenderer(result.value.renderer) === software &&
+		result.value.renderer !== RFP_RENDERER &&
+		gpuFitsOs(result.value.renderer, targetOs) &&
+		gpuFitsMachine(result.value.renderer, targetOs, cores, width, height) &&
+		gpuScreenIsPlausible(result.value.renderer, width, height) &&
+		gpuFitsCpu(result.value.renderer, targetOs, arch, maker);
+	let candidates = trace("gpu", targetOs).filter((r) => fits(r, false));
+	// Beside some CPUs fpgen records no hardware GPU at all: an ARM CPU in
+	// Firefox on Linux reports only llvmpipe. Such an identity draws what that
+	// population reports rather than nothing; any other draw still skips it.
+	if (
+		!candidates.length &&
+		cpu &&
+		Object.keys(cpu).length &&
+		!trace("gpu", targetOs).some(
+			(r) =>
+				!isSoftwareRenderer(r.value.renderer) &&
+				gpuFitsCpu(r.value.renderer, targetOs, arch, maker),
+		)
+	) {
+		candidates = trace("gpu", targetOs).filter((r) => fits(r, true));
+	}
 	if (!candidates.length) {
 		if (
 			cpu &&

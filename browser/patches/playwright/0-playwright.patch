@@ -959,7 +959,7 @@ index b39212b1c9..9321637f72 100644
  nsDOMWindowUtils::IsCORSSafelistedRequestHeader(const nsACString& aName,
                                                  const nsACString& aValue,
 diff --git a/dom/base/nsFocusManager.cpp b/dom/base/nsFocusManager.cpp
-index bb523c2717..d57e3992cd 100644
+index bb523c2717..a779c968c6 100644
 --- a/dom/base/nsFocusManager.cpp
 +++ b/dom/base/nsFocusManager.cpp
 @@ -1892,6 +1892,10 @@ Maybe<uint64_t> nsFocusManager::SetFocusInner(Element* aNewContent,
@@ -1974,22 +1974,6 @@ index c36ea65ae6..55c8db661d 100644
 +
  class ClippedTime;
  inline ClippedTime TimeClip(double time);
- 
-diff --git a/js/src/debugger/Object.cpp b/js/src/debugger/Object.cpp
-index dddede7b02..8866e8d393 100644
---- a/js/src/debugger/Object.cpp
-+++ b/js/src/debugger/Object.cpp
-@@ -2635,7 +2635,11 @@ Maybe<Completion> DebuggerObject::call(JSContext* cx,
-         invokeArgs[i].set(args2[i]);
-       }
- 
-+      // Disable CSP for the scope of the call.
-+      const JSSecurityCallbacks* securityCallbacks = JS_GetSecurityCallbacks(cx);
-+      JS_SetSecurityCallbacks(cx, nullptr);
-       ok = js::Call(cx, calleev, thisv, invokeArgs, &result);
-+      JS_SetSecurityCallbacks(cx, securityCallbacks);
-     }
-   }
  
 diff --git a/js/src/vm/DateTime.cpp b/js/src/vm/DateTime.cpp
 index 123965cf4b..57e8f2e9e0 100644

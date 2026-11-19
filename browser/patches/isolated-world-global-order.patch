@@ -1,12 +1,12 @@
 diff --git a/dom/bindings/BindingUtils.cpp b/dom/bindings/BindingUtils.cpp
-index 6cbfbce..c9272e3 100644
+index 6cbfbceb53..f9fcca84d6 100644
 --- a/dom/bindings/BindingUtils.cpp
 +++ b/dom/bindings/BindingUtils.cpp
 @@ -27,6 +27,7 @@
  #include "js/Symbol.h"
  #include "js/experimental/JitInfo.h"  // JSJit{Getter,Setter,Method}CallArgs, JSJit{Getter,Setter}Op, JSJitInfo
  #include "js/friend/StackLimits.h"  // js::AutoCheckRecursionLimit
-+#include "jsapi.h"  // JS::DescribeScriptedCaller, JS::GetScriptedCallerGlobal
++#include "jsapi.h"  // JS::DescribeScriptedCaller, JS::GetScriptedCallerGlobal, JS::IsScriptedCallerDebuggerCode
  #include "jsfriendapi.h"
  #include "mozilla/Assertions.h"
  #include "mozilla/DebugOnly.h"
@@ -32,7 +32,7 @@ index 6cbfbce..c9272e3 100644
      for (; *legacyWindowAliases; ++legacyWindowAliases) {
        if (!DefineConstructor(cx, global, *legacyWindowAliases, constructor)) {
          return nullptr;
-@@ -4059,6 +4066,122 @@ JSObject* UnprivilegedJunkScopeOrWorkerGlobal(const fallible_t&) {
+@@ -4059,6 +4066,120 @@ JSObject* UnprivilegedJunkScopeOrWorkerGlobal(const fallible_t&) {
  }
  }  // namespace binding_detail
  
@@ -134,28 +134,26 @@ index 6cbfbce..c9272e3 100644
 +  // Described from the caller's own realm: from the page's, frames the page's
 +  // principal does not subsume (Juggler's system modules) are not visible.
 +  JSAutoRealm ar(aCx, callerGlobal);
-+  JS::AutoFilename filename;
-+  if (!JS::DescribeScriptedCaller(&filename, aCx) || !filename.get()) {
-+    return false;
-+  }
-+  nsDependentCString caller(filename.get());
 +  // A driver's main-world evaluate (Juggler's `mw:` path, and its own helpers
-+  // in the main-world context) runs in the page's realm as Debugger code,
-+  // which keeps the Debugger's default name, and the script the `mw:` wrapper
-+  // evals is named after it ("debugger eval code line N > eval"). No script a
-+  // page loads or evals is called that (//# sourceURL changes only the display
-+  // name). What it creates is Juggler's, as from an isolated world: a
-+  // scraper's document.querySelectorAll() there must not define NodeList on
-+  // the window before the page uses it (main-world-eval-globals.py).
-+  constexpr auto kDebuggerEval = "debugger eval code"_ns;
-+  return StringBeginsWith(caller, kJuggler) ||
-+         StringBeginsWith(caller, kDebuggerEval);
++  // in the main-world context) runs in the page's realm as Debugger code, as
++  // does the script the `mw:` wrapper evals. Juggler names that code after
++  // the document, so it is told apart by how it was compiled, which no page
++  // script can imitate. What it creates is Juggler's, as from an isolated
++  // world: a scraper's document.querySelectorAll() there must not define
++  // NodeList on the window before the page uses it
++  // (main-world-eval-globals.py).
++  if (JS::IsScriptedCallerDebuggerCode(aCx)) {
++    return true;
++  }
++  JS::AutoFilename filename;
++  return JS::DescribeScriptedCaller(&filename, aCx) && filename.get() &&
++         StringBeginsWith(nsDependentCString(filename.get()), kJuggler);
 +}
 +
  JS::Handle<JSObject*> GetPerInterfaceObjectHandle(
      JSContext* aCx, size_t aSlotId, CreateInterfaceObjectsMethod aCreator,
      DefineInterfaceProperty aDefineOnGlobal) {
-@@ -4072,7 +4195,57 @@ JS::Handle<JSObject*> GetPerInterfaceObjectHandle(
+@@ -4072,7 +4193,57 @@ JS::Handle<JSObject*> GetPerInterfaceObjectHandle(
    ProtoAndIfaceCache& protoAndIfaceCache = *GetProtoAndIfaceCache(global);
    if (!protoAndIfaceCache.HasEntryInSlot(aSlotId)) {
      JS::Rooted<JSObject*> rootedGlobal(aCx, global);
