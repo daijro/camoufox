@@ -144,7 +144,9 @@ def test_a_release_bundles_the_ubo_its_tests_ran_with():
     step = next(s for s in resolve["steps"] if s.get("id") == "ubo")
     assert step["env"]["CAMOUFOX_UBO"] == "${{ inputs.ubo }}"
     build = tests["jobs"]["build"]["steps"]
-    staged = [s for s in build if "fetch-ubo.py stage" in s.get("run", "")]
+    # The built browser gets it when ci.run_build packages it, the restored one directly.
+    staged = [s for s in build
+              if "fetch-ubo.py stage" in s.get("run", "") or "python3 -m ci.run_build" in s.get("run", "")]
     assert len(staged) == 2, "both the built and the restored browser bundle this run's uBO"
     assert all(s["env"]["CAMOUFOX_UBO"] == "${{ needs.resolve.outputs.ubo }}" for s in staged)
 
