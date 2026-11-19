@@ -15,7 +15,7 @@ delivers.
 Now Juggler waits for the gate before it sends input. Over several fresh
 pages, each driven the moment goto returns (move, click, key, wheel):
 
-  - every wheel notch arrives: 3 for wheel(0, 300);
+  - every wheel notch arrives: 3 for wheel(0, 300), as one native event;
   - no trusted input event is stamped before domLoading + 100 ms.
 
     python browser/tests/playwright/patches/juggler-input-gate.py
@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
 PAGES = 6
-NOTCHES = 3  # wheel(0, 300): three notches of a line-mode wheel
+NOTCHES = 3  # wheel(0, 300): three notches of a line-mode wheel, wheelDeltaY -120 each
 GATE_MS = 100
 
 PAGE = b"""<!doctype html><html><body style="height:5000px"><input id=t autofocus><script>
@@ -40,7 +40,7 @@ const loading = performance.timing.domLoading - performance.timing.navigationSta
 for (const type of ['pointermove', 'mousemove', 'mousedown', 'click', 'keydown', 'wheel'])
   addEventListener(type, e => {
     if (!e.isTrusted) return;
-    seen.push([type, e.timeStamp - loading]);
+    seen.push([type, e.timeStamp - loading, type === 'wheel' ? -e.wheelDeltaY / 120 : 0]);
     document.body.dataset.seen = JSON.stringify(seen);
   }, true);
 </script></body></html>"""
@@ -75,12 +75,12 @@ def main() -> int:
             page.wait_for_timeout(1000)
             seen = json.loads(page.evaluate("() => document.body.dataset.seen || '[]'"))
             page.close()
-            wheels = [t for kind, t in seen if kind == "wheel"]
-            early = [(kind, round(t, 1)) for kind, t in seen if t < GATE_MS]
-            print(f"page {i}: {len(wheels)} wheel events; first input at "
-                  f"{min((t for _, t in seen), default=float('nan')):.1f} ms after loading; early={early}")
-            if len(wheels) != NOTCHES:
-                failures.append(f"page {i}: {len(wheels)} of {NOTCHES} wheel notches reached the page")
+            notches = sum(n for kind, _, n in seen if kind == "wheel")
+            early = [(kind, round(t, 1)) for kind, t, _ in seen if t < GATE_MS]
+            print(f"page {i}: {notches} wheel notches; first input at "
+                  f"{min((t for _, t, _ in seen), default=float('nan')):.1f} ms after loading; early={early}")
+            if notches != NOTCHES:
+                failures.append(f"page {i}: {notches} of {NOTCHES} wheel notches reached the page")
             if early:
                 failures.append(f"page {i}: trusted input inside the {GATE_MS} ms input gate: {early}")
     server.shutdown()

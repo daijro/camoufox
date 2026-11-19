@@ -1140,9 +1140,9 @@ def _bt_profile(webgl_renderer: str, *, noswift_passed: bool) -> dict:
         "profiles": [
             {
                 "profile": {
+                    "name": "Linux Per-Context A",
                     "os": "linux",
                     "mode": "per-context",
-                    "index": 0,
                     "webglRenderer": webgl_renderer,
                 },
                 "results": {
@@ -1172,7 +1172,7 @@ def test_a_profile_that_asked_for_llvmpipe_is_not_graded_headless():
     from ci.run_build_tester import category_failures, flatten
 
     full = _bt_profile("llvmpipe, or similar", noswift_passed=False)
-    tid = "linux-per-context-0/extended/headlessDetection/noSwiftShader"
+    tid = "Linux Per-Context A/extended/headlessDetection/noSwiftShader"
     assert flatten(full)[tid] == "pass"
     assert category_failures(full, ["headlessDetection"]) == {}
 
@@ -1182,7 +1182,7 @@ def test_an_unasked_for_software_renderer_still_fails():
     from ci.run_build_tester import category_failures, flatten
 
     full = _bt_profile("AMD Radeon R9 200 Series", noswift_passed=False)
-    tid = "linux-per-context-0/extended/headlessDetection/noSwiftShader"
+    tid = "Linux Per-Context A/extended/headlessDetection/noSwiftShader"
     assert flatten(full)[tid] == "fail"
     assert category_failures(full, ["headlessDetection"]) == {"headlessDetection": 1}
 
@@ -1195,7 +1195,7 @@ def test_the_exemption_is_confined_to_that_one_check():
     checks = full["profiles"][0]["results"]["extended"]["headlessDetection"]
     checks["noWebdriver"] = {"passed": False, "detail": "navigator.webdriver = true"}
     tests = flatten(full)
-    assert tests["linux-per-context-0/extended/headlessDetection/noWebdriver"] == "fail"
+    assert tests["Linux Per-Context A/extended/headlessDetection/noWebdriver"] == "fail"
 
 
 # ---------------------------------------------------------------------------
