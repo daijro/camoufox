@@ -27,7 +27,9 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+# 3.11: myuri (humanize) and its cursory need it, and 3.10 reached end of life
+# in October 2026.
+python = "^3.11"
 rich-click = "*"
 rich = "*"
 requests = "*"
@@ -48,6 +50,9 @@ screeninfo = "*"
 language-tags = "*"
 pysocks = "*"
 inquirer = "*"
+# humanize's default engine. Pinned: a seed must plan the same input in Python and
+# TypeScript, and in every install of one camoufox release.
+myuri = "4.0.0"
 maxminddb = {version = "*", optional = true}
 
 [tool.poetry.extras]

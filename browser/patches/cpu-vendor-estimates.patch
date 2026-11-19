@@ -1610,13 +1610,16 @@ index adfbdc30f0..6245760d93 100644
      void Init_ml4();
      void Init_lasx();
  
-@@ -63,6 +65,11 @@ namespace SkOpts {
+@@ -63,6 +65,14 @@ namespace SkOpts {
              #endif
          #endif
  
++        // The vendor table the raster pipeline reads (sk_cpu_estimates_cached).
++        sk_cpu_estimates_init_pipeline();
 +        // general.cpu_identity = ARM64: Skia's AArch64 code, emulated.
 +        if (sk_cpu_emulates_arm64()) { Init_neonemu(); }
 +    #elif defined(SK_CPU_ARM64)
++        sk_cpu_estimates_init_pipeline();
 +        // general.cpu_identity = Intel or AMD: Skia's x86-64 code, emulated.
 +        if (sk_cpu_emulates_x86()) { Init_ml3(); }
      #elif defined(SK_CPU_LOONGARCH)
@@ -1919,11 +1922,11 @@ index 9a0edd9594..711a5501b6 100644
 +        return sk_bit_cast<F>(bits);
 +    }
 +    SI F   rcp_approx(F v)   {  // use rcp_fast instead
-+        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rcp>(table, v); }
++        if (const uint32_t* table = sk_cpu_estimates_cached()) { return estimate_as<sk_cpu_estimate_rcp>(table, v); }
 +        return _mm256_rcp_ps  (v);
 +    }
 +    SI F   rsqrt_approx(F v) {
-+        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rsqrt>(table, v); }
++        if (const uint32_t* table = sk_cpu_estimates_cached()) { return estimate_as<sk_cpu_estimate_rsqrt>(table, v); }
 +        return _mm256_rsqrt_ps(v);
 +    }
      SI F   sqrt_ (F v)       { return _mm256_sqrt_ps (v);    }
@@ -1942,13 +1945,13 @@ index 9a0edd9594..711a5501b6 100644
 +        return sk_bit_cast<F>(bits);
 +    }
 +    SI F   rcp_approx(F v)     {  // use rcp_fast instead
-+        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rcp>(table, v); }
++        if (const uint32_t* table = sk_cpu_estimates_cached()) { return estimate_as<sk_cpu_estimate_rcp>(table, v); }
 +        return _mm_rcp_ps  (v);
 +    }
      SI F   rcp_precise (F v)   { F e = rcp_approx(v); return e * (2.0f - v * e); }
 -    SI F   rsqrt_approx(F v)   { return _mm_rsqrt_ps(v);    }
 +    SI F   rsqrt_approx(F v)   {
-+        if (const uint32_t* table = sk_cpu_estimates()) { return estimate_as<sk_cpu_estimate_rsqrt>(table, v); }
++        if (const uint32_t* table = sk_cpu_estimates_cached()) { return estimate_as<sk_cpu_estimate_rsqrt>(table, v); }
 +        return _mm_rsqrt_ps(v);
 +    }
      SI F    sqrt_(F v)         { return _mm_sqrt_ps (v);    }

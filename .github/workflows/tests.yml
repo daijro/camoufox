@@ -334,9 +334,9 @@ jobs:
         # patch guard.
         run: python3 browser/tests/ucrt-math/check.py
 
-      - name: Juggler input planners and pacing
-        # The cursor and wheel planners, the pacer and the delays are plain ES
-        # modules, so they run under Node without a browser build.
+      - name: Juggler input delays
+        # HumanDelay (the paste and auto-Shift modifier timing) is a plain ES
+        # module, so it runs under Node without a browser build.
         run: node --test browser/tests/juggler/*.test.mjs
 
       - name: CI pipeline self-tests
@@ -364,12 +364,12 @@ jobs:
           "
 
       # Every other job runs 3.12 or newer, whose grammar (PEP 701 f-strings)
-      # accepts code that 3.10, the oldest Python python/pyproject.toml allows,
+      # accepts code that 3.11, the oldest Python python/pyproject.toml allows,
       # cannot import.
       - uses: actions/setup-python@v5
         id: oldest-python
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - name: pythonlib compiles on its oldest Python
         run: ${{ steps.oldest-python.outputs.python-path }} -m compileall -q python/src
 
@@ -549,7 +549,7 @@ jobs:
       contents: read
     env:
       # `make dir` (inside ci.run_prepare) adds the Rust targets and fetches
-      # the PGO profile for BUILD_TARGET, and defaults to macos,arm64 when it
+      # the PGO profile for BUILD_TARGET, and defaults to linux,x86_64 when it
       # is unset. multibuild.py sets the same value again before building.
       BUILD_TARGET: linux,x86_64
     steps:
