@@ -549,7 +549,7 @@ jobs:
       contents: read
     env:
       # `make dir` (inside ci.run_prepare) adds the Rust targets and fetches
-      # the PGO profile for BUILD_TARGET, and defaults to macos,arm64 when it
+      # the PGO profile for BUILD_TARGET, and defaults to linux,x86_64 when it
       # is unset. multibuild.py sets the same value again before building.
       BUILD_TARGET: linux,x86_64
     steps:
