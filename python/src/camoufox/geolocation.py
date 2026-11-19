@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 from platformdirs import user_cache_dir
-from yaml import CDumper, CLoader
 from yaml import dump as yaml_dump
 from yaml import load as yaml_load
 
@@ -18,7 +17,7 @@ from ._warnings import WARNINGS_DATA, _warn_from_caller
 from .exceptions import NotInstalledGeoIPExtra, UnknownIPLocation
 from .ip import validate_ip
 from .locales import SELECTOR, Geolocation
-from .pkgman import LOCAL_DATA, unzip, webdl, write_atomic
+from .pkgman import LOCAL_DATA, Dumper, Loader, unzip, webdl, write_atomic
 
 try:
     import maxminddb  # type: ignore  # noqa: F401 (probes for the geoip extra)
@@ -60,7 +59,7 @@ def _load_geoip_repos() -> Tuple[List[Dict], str]:
     Load GeoIP repos and default name from repos.yml
     """
     with open(LOCAL_DATA / 'repos.yml', 'r') as f:
-        data = yaml_load(f, Loader=CLoader)
+        data = yaml_load(f, Loader=Loader)
     geoip_repos = data.get('geoip', [])
     default_name = data.get('default', {}).get('geoip', 'GeoIP AIO by daijro')
     return geoip_repos, default_name
@@ -115,7 +114,7 @@ def load_geoip_config() -> Dict:
     """
     if GEOIP_CONFIG.exists():
         with open(GEOIP_CONFIG, 'r') as f:
-            saved = yaml_load(f, Loader=CLoader) or {}
+            saved = yaml_load(f, Loader=Loader) or {}
         name = saved.get('name')
         known = {r.get('name', '').lower() for r in _load_geoip_repos()[0]}
         if not saved.get('explicit') and (name or '').lower() not in known:
@@ -137,7 +136,7 @@ def save_geoip_config(config: Dict, explicit: bool = False) -> None:
     if explicit:
         saved['explicit'] = True
     with open(GEOIP_CONFIG, 'w') as f:
-        yaml_dump(saved, f, Dumper=CDumper, default_flow_style=False)
+        yaml_dump(saved, f, Dumper=Dumper, default_flow_style=False)
 
 
 def get_mmdb_path(ip_version: str = 'ipv4', config: Optional[Dict] = None) -> Path:
@@ -247,7 +246,7 @@ def _chosen_explicitly(config: Dict) -> bool:
     if not GEOIP_CONFIG.exists():
         return False
     with open(GEOIP_CONFIG, 'r') as f:
-        saved = yaml_load(f, Loader=CLoader) or {}
+        saved = yaml_load(f, Loader=Loader) or {}
     return bool(saved.get('explicit')) and saved.get('name') == config['name']
 
 
