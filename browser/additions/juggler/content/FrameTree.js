@@ -90,6 +90,9 @@ export class FrameTree {
       }, 'juggler-navigation-started-renderer'),
       helper.addObserver(this._onDOMWindowCreated.bind(this), 'content-document-global-created'),
       helper.addObserver(this._onDOMWindowCreated.bind(this), 'juggler-dom-window-reused'),
+      // The observer topic, not the DOMDocElementInserted event, for the reason
+      // in components/Juggler.js.
+      helper.addObserver(this._onDocumentElementInserted.bind(this), 'document-element-inserted'),
       helper.addObserver((browsingContext, topic, why) => {
         this._onBrowsingContextAttached(browsingContext);
       }, 'browsing-context-attached'),
@@ -128,6 +131,19 @@ export class FrameTree {
         for (const frame of this.frames())
           frame._createIsolatedContext(worldName);
       }
+    }
+  }
+
+  // Camoufox: a page's initial about:blank exists before this FrameTree, so
+  // _createFrame() gave it execution contexts while no init script was set,
+  // and it never ran the context's. A driver that set_content()s it, without
+  // navigating, read the launch identity (navigator.platform, appVersion) next
+  // to the context's user agent. Run them there once the scripts are known.
+  runInitScriptsOnInitialDocuments() {
+    for (const frame of this.frames()) {
+      const document = frame.domWindow()?.document;
+      if (document && (document.isInitialDocument || document.documentURI === 'about:blank'))
+        frame._runInitScriptsOnCurrentDocument();
     }
   }
 
@@ -263,19 +279,17 @@ export class FrameTree {
     helper.removeListeners(this._dragEventListeners);
   }
 
-  onWindowEvent(event) {
-    // Firefox 152: the document's `ownerGlobal` is not yet set when
-    // DOMDocElementInserted fires; fall back to `defaultView`.
-    const win = event.target.ownerGlobal || event.target.defaultView;
-    if (event.type !== 'DOMDocElementInserted' || !win)
+  _onDocumentElementInserted(document) {
+    // Firefox 152: the document's `ownerGlobal` is not yet set when its
+    // element is inserted; fall back to `defaultView`.
+    const win = document.ownerGlobal || document.defaultView;
+    if (!win)
       return;
 
     const docShell = win.docShell;
     const frame = this.frameForDocShell(docShell);
-    if (!frame) {
-      dump(`WARNING: ${event.type} for unknown frame ${helper.browsingContextToFrameId(docShell.browsingContext)}\n`);
+    if (!frame)
       return;
-    }
     if (frame._pendingNavigationId) {
       docShell.QueryInterface(Ci.nsIWebNavigation);
       this._frameNavigationCommitted(frame, docShell.currentURI.spec);
@@ -369,8 +383,11 @@ export class FrameTree {
     }
     const frame = new Frame(this, this._runtime, browsingContext, parentFrame);
     this._frameIdToFrame.set(frame.id(), frame);
-    if (browsingContext.docShell?.domWindow && browsingContext.docShell?.domWindow.location)
-      frame._url = browsingContext.docShell.domWindow.location.href;
+    // The docShell's URI, not location.href: the page's Location object, made
+    // before its first script, would define `Location` on its window early.
+    const docShell = browsingContext.docShell;
+    if (docShell?.domWindow && docShell.QueryInterface(Ci.nsIWebNavigation).currentURI)
+      frame._url = docShell.currentURI.spec;
     this.emit(FrameTree.Events.FrameAttached, frame);
     // Create execution context **after** reporting frame.
     // This is our protocol contract.
@@ -493,7 +510,7 @@ class Frame {
         // We don't use this event.
       },
 
-      webSocketClosed: (webSocketSerialID, wasClean, code, reason) => {
+      webSocketClosed: (webSocketSerialID, httpChannelId, wasClean, code, reason) => {
         this._webSocketInfos.delete(webSocketSerialID);
         let error = '';
         if (!wasClean) {
@@ -747,7 +764,7 @@ class Frame {
     // they were hiding.
     ChromeUtils.camouSealFingerprintSetters(camouInnerWindowId);
 
-    const url = this.domWindow().location?.href;
+    const url = this.docShell().QueryInterface(Ci.nsIWebNavigation).currentURI?.spec;
     if (url === 'about:blank' && !this._url) {
       // Sometimes FrameTree is created too early, before the location has been set.
       this._url = url;
@@ -755,6 +772,25 @@ class Frame {
     }
 
     this._updateJavaScriptDisabled();
+  }
+
+  // Camoufox: the init-script half of _onGlobalObjectCleared(), for a document
+  // that already has its execution contexts. The setters open and close
+  // around it in this one turn, so no page script sees them.
+  _runInitScriptsOnCurrentDocument() {
+    const camouInnerWindowId = this.domWindow().windowGlobalChild.innerWindowId;
+    ChromeUtils.camouUnsealFingerprintSetters(camouInnerWindowId);
+    try {
+      for (const [name, world] of this._frameTree._isolatedWorlds) {
+        const executionContext = this._worldNameToContext.get(name);
+        if (!executionContext)
+          continue;
+        for (const script of world._scriptsToEvaluateOnNewDocument)
+          this._evaluateInitScript(executionContext, script);
+      }
+    } finally {
+      ChromeUtils.camouSealFingerprintSetters(camouInnerWindowId);
+    }
   }
 
   // Camoufox: run an init script in the world it asked for.

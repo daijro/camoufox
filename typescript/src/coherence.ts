@@ -10,7 +10,16 @@
  * `validate()` reports what is still broken; `apply()` repairs what it can.
  */
 import { LAUNCHER_CONSTANTS } from "./paths.js";
-import { isPyInt, num, pyRepr, pyStr, pyTruthy } from "./pycompat.js";
+import {
+	comparePyStr,
+	isPlainObject,
+	isPyInt,
+	num,
+	pyRepr,
+	pyStr,
+	pyTruthy,
+	ValueError,
+} from "./pycompat.js";
 
 type Config = Record<string, any>;
 
@@ -27,7 +36,10 @@ export const APPLE_SILICON_CORES: ReadonlySet<number> = new Set(
 export const PLAUSIBLE_DPR: Readonly<Record<string, readonly number[]>> =
 	LAUNCHER_CONSTANTS.plausibleDpr;
 
-/** colorDepth: Firefox reports 24, or 30 on a deep-colour display. */
+/**
+ * colorDepth: Firefox reports 24, or 30 on a deep-colour display. macOS
+ * defaults to deep colour, so a Mac reports 30, Intel or Apple Silicon.
+ */
 export const PLAUSIBLE_COLOR_DEPTH: ReadonlySet<number> = new Set([24, 30]);
 
 /** maxTouchPoints: consumer digitisers top out at 10 contacts. */
@@ -63,6 +75,11 @@ export const APPLE_SILICON_PANELS: ReadonlySet<string> = new Set(
 export interface Violation {
 	rule: string;
 	detail: string;
+	/**
+	 * The caller's own keys that the repair would have changed, and which were
+	 * kept as passed instead. Absent when nothing of the caller's is involved.
+	 */
+	kept?: string[];
 }
 
 export interface Rule {
@@ -71,6 +88,12 @@ export interface Rule {
 	check: (config: Config, targetOs: string) => string | null;
 	/** Repairs the identity in place. null where no correct value is determined. */
 	repair: ((config: Config, targetOs: string) => void) | null;
+	/**
+	 * Keys the repair only adjusts to stay consistent with what it repairs. A
+	 * caller who set any of them keeps all of them as they were, the repair
+	 * itself still runs, and they never block it.
+	 */
+	adjusts?: readonly string[];
 }
 
 function isNone(value: unknown): boolean {
@@ -204,22 +227,31 @@ function checkColorDepth(config: Config, targetOs: string): string | null {
 	if (isNone(depth)) return null;
 	if (!inColorDepths(depth))
 		return `screen.colorDepth ${pyStr(depth)}; Firefox reports 24 or 30`;
-	if (targetOs === "mac" && isAppleSilicon(config) && num(depth) !== 30) {
-		return `Apple Silicon Mac with colorDepth ${pyStr(depth)}; deep colour is the macOS default`;
+	if (targetOs === "mac" && num(depth) !== 30) {
+		return `macOS identity with colorDepth ${pyStr(depth)}; deep colour is the macOS default`;
 	}
 	return null;
 }
 
 function repairColorDepth(config: Config, targetOs: string): void {
-	const depth = config["screen.colorDepth"];
-	if (!isNone(depth) && !inColorDepths(depth)) config["screen.colorDepth"] = 24;
-	if (targetOs === "mac" && isAppleSilicon(config))
-		config["screen.colorDepth"] = 30;
+	if (targetOs === "mac") config["screen.colorDepth"] = 30;
+	else if (!inColorDepths(config["screen.colorDepth"]))
+		config["screen.colorDepth"] = 24;
+	if (!("screen.pixelDepth" in config))
+		config["screen.pixelDepth"] = config["screen.colorDepth"];
+}
+
+function checkPixelDepth(config: Config, _targetOs: string): string | null {
 	// pixelDepth is the same number in every browser that reports both.
-	if ("screen.pixelDepth" in config || "screen.colorDepth" in config) {
-		config["screen.pixelDepth"] =
-			"screen.colorDepth" in config ? config["screen.colorDepth"] : 24;
-	}
+	const pixel = config["screen.pixelDepth"];
+	const color = config["screen.colorDepth"] ?? 24;
+	if (!isNone(pixel) && num(pixel) !== num(color))
+		return `screen.pixelDepth ${pyStr(pixel)} differs from colorDepth ${pyStr(color)}`;
+	return null;
+}
+
+function repairPixelDepth(config: Config, _targetOs: string): void {
+	config["screen.pixelDepth"] = config["screen.colorDepth"] ?? 24;
 }
 
 function checkTouchPoints(config: Config, targetOs: string): string | null {
@@ -259,17 +291,70 @@ function checkDevicePixelRatio(
 	return null;
 }
 
-function repairDevicePixelRatio(config: Config, targetOs: string): void {
+// The CSS geometry a ratio scales: device pixels / devicePixelRatio.
+const CSS_GEOMETRY_KEYS = [
+	"screen.width",
+	"screen.height",
+	"screen.availWidth",
+	"screen.availHeight",
+	"screen.availLeft",
+	"screen.availTop",
+	"window.outerWidth",
+	"window.outerHeight",
+	"window.innerWidth",
+	"window.innerHeight",
+	"window.screenX",
+	"window.screenY",
+] as const;
+
+/** Python's round(): half to even, so both launchers draw the same geometry. */
+function roundHalfEven(v: number): number {
+	const r = Math.round(v);
+	return Math.abs(v % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+}
+
+/**
+ * A devicePixelRatio no display mode of the OS offers: a browser zoom folded
+ * into the ratio, which scaled every CSS size with it.
+ */
+export function isZoomedRatio(dpr: unknown, targetOs: string): boolean {
+	const allowed = PLAUSIBLE_DPR[targetOs];
+	if (!allowed?.length || typeof dpr !== "number" || !(dpr > 0)) return false;
+	return !allowed.some((v) => v === dpr);
+}
+
+/**
+ * Move the ratio to the nearest display mode, rescaling the CSS geometry so
+ * the screen stays the display behind it.
+ */
+export function repairDevicePixelRatio(
+	config: Config,
+	targetOs: string,
+	target?: number,
+): void {
 	const dpr = config["window.devicePixelRatio"];
 	const allowed = PLAUSIBLE_DPR[targetOs];
 	if (isNone(dpr) || !allowed?.length) return;
-	// Nearest real scaling step; min() keeps the first of equal distances.
+	// `target` is the scale a caller renders at; else the nearest real scaling
+	// step (min() keeps the first of equal distances).
 	const x = Number(num(dpr));
 	let best = allowed[0];
 	for (const v of allowed.slice(1)) {
 		if (Math.abs(v - x) < Math.abs(best - x)) best = v;
 	}
+	if (target !== undefined && target > 0) best = target;
 	config["window.devicePixelRatio"] = best;
+	// The scraped ratio has a browser zoom folded in, which shrank every CSS
+	// size by it; the display behind it keeps its device pixels. Rescale to the
+	// step so the screen is still that display: 1760x990 at 1.0909 is a
+	// 1920x1080 monitor, so 1920x1080 at 1. Firefox rounds device / ratio.
+	const scale = x / best;
+	for (const key of CSS_GEOMETRY_KEYS) {
+		const value = config[key];
+		if (typeof value === "number") {
+			config[key] = roundHalfEven(value * scale);
+		}
+	}
 }
 
 function checkWindowChrome(config: Config, _targetOs: string): string | null {
@@ -362,6 +447,279 @@ function checkArchAgreement(config: Config, _targetOs: string): string | null {
 	return null;
 }
 
+// The CPU the identity claims: its architecture (cpu:arch) and manufacturer
+// (cpu:manufacturer); coherence.py explains why it shows (canvas, Web Audio,
+// Opus, relaxed-SIMD wasm and NaN signs differ between x86-64 and ARM64, and
+// canvas and Opus between Intel and AMD) and has the sources for the table of
+// manufacturers per OS (launcher-constants.json, cpuManufacturers).
+//
+// The GPU decides where it can: Intel integrated graphics, Intel; "Radeon HD
+// 3200 Graphics", the bucket of AMD's APU graphics, AMD; every x86 Mac, Intel;
+// an Apple GPU, Apple ARM; an Adreno, Qualcomm; a VideoCore/V3D, Broadcom; a
+// Mali, an ARM SoC of some other maker. Any other GPU leaves the CPU open. A
+// core count only Intel's hybrids report (10, 14, 18, 22, 28) implies Intel,
+// for x86 only (an M4 Pro has 14).
+export const CPU_ARCHES = ["x86", "arm"] as const;
+export type CpuArch = (typeof CPU_ARCHES)[number];
+export const CPU_MANUFACTURERS: Readonly<
+	Record<string, Readonly<Record<string, readonly string[]>>>
+> = LAUNCHER_CONSTANTS.cpuManufacturers;
+export const CPU_VENDORS = ["intel", "amd"] as const;
+const INTEL_ONLY_CORE_COUNTS: ReadonlySet<unknown> = new Set(
+	LAUNCHER_CONSTANTS.intelOnlyCoreCounts,
+);
+export type CpuVendor = (typeof CPU_VENDORS)[number];
+const INTEL_IGPUS = [
+	"Intel(R) HD Graphics, or similar",
+	"Intel(R) HD Graphics 400, or similar",
+	"Intel(R) HD Graphics Direct3D11",
+	"Intel(R) HD Graphics 400 Direct3D11",
+];
+const AMD_IGPUS = ["Radeon HD 3200 Graphics"];
+/** ARM GPUs and the SoC makers that ship them. */
+const ARM_GPUS: ReadonlyArray<[string, readonly string[]]> = [
+	["Apple M", ["apple"]],
+	["Apple GPU", ["apple"]],
+	["Adreno", ["qualcomm"]],
+	["V3D", ["broadcom"]],
+	["VideoCore", ["broadcom"]],
+	["Mali", ["rockchip", "mediatek", "amlogic", "allwinner"]],
+	["Immortalis", ["mediatek"]],
+	["Tegra", ["nvidia"]],
+];
+
+/** The cpuManufacturers key for a launcher OS name (win, mac, lin, ...). */
+export function cpuOs(targetOs: string): "windows" | "mac" | "linux" {
+	const map: Record<string, "windows" | "mac"> = {
+		win: "windows",
+		windows: "windows",
+		mac: "mac",
+		macos: "mac",
+	};
+	return Object.hasOwn(map, targetOs) ? map[targetOs] : "linux";
+}
+
+export function cpuManufacturers(
+	targetOs: string,
+	arch: unknown,
+): readonly string[] {
+	const table = CPU_MANUFACTURERS[cpuOs(targetOs)];
+	return typeof arch === "string" && Object.hasOwn(table, arch)
+		? table[arch]
+		: [];
+}
+
+/**
+ * Check a caller's `cpu` option and fill in what it implies, as
+ * coherence.resolve_cpu does. Throws ValueError for anything no real machine
+ * running `targetOs` is: an unknown key, architecture or manufacturer, or a
+ * pair such as an AMD Mac or an Apple x86 CPU. A manufacturer alone implies
+ * its architecture.
+ */
+export function resolveCpu(
+	cpu: unknown,
+	targetOs: string,
+): Record<string, string> {
+	if (!isPlainObject(cpu)) {
+		throw new ValueError(
+			`cpu must be a dict such as {'arch': 'x86', 'manufacturer': 'intel'}, not ${pyRepr(cpu)}`,
+		);
+	}
+	const unknownKeys = Object.keys(cpu)
+		.filter((k) => k !== "arch" && k !== "manufacturer")
+		.sort(comparePyStr);
+	if (unknownKeys.length) {
+		throw new ValueError(
+			`cpu takes 'arch' and 'manufacturer', not ${unknownKeys.map(pyRepr).join(", ")}`,
+		);
+	}
+	let arch: unknown = isNone(cpu.arch) ? null : cpu.arch;
+	const maker: unknown = isNone(cpu.manufacturer) ? null : cpu.manufacturer;
+	if (arch !== null && !(CPU_ARCHES as readonly unknown[]).includes(arch)) {
+		throw new ValueError(
+			`cpu arch must be one of ('x86', 'arm'), not ${pyRepr(arch)}`,
+		);
+	}
+	const osName = cpuOs(targetOs);
+	const table = CPU_MANUFACTURERS[osName];
+	const makersOf = (a: string): readonly string[] =>
+		Object.hasOwn(table, a) ? table[a] : [];
+	if (maker !== null) {
+		const arches = CPU_ARCHES.filter((a) =>
+			(makersOf(a) as readonly unknown[]).includes(maker),
+		);
+		if (!arches.length) {
+			const known = [...new Set(Object.values(table).flat())].sort(
+				comparePyStr,
+			);
+			throw new ValueError(
+				`no ${osName} machine has a CPU made by ${pyRepr(maker)}; on ${osName} it is one of ${known.join(", ")}`,
+			);
+		}
+		if (arch === null) arch = arches[0];
+		else if (!(arches as readonly unknown[]).includes(arch)) {
+			throw new ValueError(
+				`no ${osName} machine has an ${pyStr(arch)} CPU made by ${pyRepr(maker)}; ${osName} ${pyStr(arch)} CPUs are made by ` +
+					`${makersOf(arch as string).join(", ") || "nobody"}`,
+			);
+		}
+	} else if (arch !== null && !makersOf(arch as string).length) {
+		throw new ValueError(`no ${osName} machine has an ${pyStr(arch)} CPU`);
+	}
+	const out: Record<string, string> = {};
+	if (arch !== null) out["cpu:arch"] = arch as string;
+	if (maker !== null) out["cpu:manufacturer"] = maker as string;
+	return out;
+}
+
+/**
+ * The CPU architecture this GPU implies and the manufacturers it allows, as
+ * coherence.gpu_cpu. [null, []] when the GPU leaves both open. An empty list
+ * with an architecture means any maker of that architecture on `targetOs`.
+ */
+export function gpuCpu(
+	gpuRenderer: unknown,
+	targetOs: string,
+): [CpuArch | null, readonly string[]] {
+	const r = pyTruthy(gpuRenderer) ? pyStr(gpuRenderer) : "";
+	if (!r) return [null, []];
+	for (const [marker, makers] of ARM_GPUS) {
+		if (r.includes(marker)) return ["arm", makers];
+	}
+	if (cpuOs(targetOs) === "mac") return ["x86", ["intel"]];
+	if (INTEL_IGPUS.some((igpu) => r.includes(igpu))) return ["x86", ["intel"]];
+	if (AMD_IGPUS.some((igpu) => r.includes(igpu))) return ["x86", ["amd"]];
+	return [null, []];
+}
+
+/** Whether a machine with this GPU can have this CPU. */
+export function gpuFitsCpu(
+	gpuRenderer: unknown,
+	targetOs: string,
+	arch: unknown,
+	maker: unknown,
+): boolean {
+	const [byGpu, makers] = gpuCpu(gpuRenderer, targetOs);
+	let a: unknown = isNone(arch) ? null : arch;
+	const m: unknown = isNone(maker) ? null : maker;
+	if (a === null && m !== null) {
+		a =
+			CPU_ARCHES.find((x) =>
+				(cpuManufacturers(targetOs, x) as readonly unknown[]).includes(m),
+			) ?? null;
+	}
+	// Mesa's software renderer draws on whatever CPU the machine has.
+	if (a === null || pyStr(gpuRenderer ?? "").includes("llvmpipe")) return true;
+	if (byGpu === null) {
+		// A discrete card or an open bucket: an x86 machine. No ARM laptop or
+		// board on sale carries a discrete GPU Firefox would name.
+		return a === "x86" && cpuOs(targetOs) !== "mac";
+	}
+	if (byGpu !== a) return false;
+	return (
+		m === null || !makers.length || (makers as readonly unknown[]).includes(m)
+	);
+}
+
+/** The x86 CPU vendor this GPU implies, or null when it leaves it open. */
+export function gpuCpuVendor(
+	gpuRenderer: unknown,
+	targetOs: string,
+): CpuVendor | null {
+	const [arch, makers] = gpuCpu(gpuRenderer, targetOs);
+	return arch === "x86" && makers.length === 1
+		? (makers[0] as CpuVendor)
+		: null;
+}
+
+/** The x86 CPU vendor this navigator.hardwareConcurrency implies, or null. */
+export function coresCpuVendor(cores: unknown): CpuVendor | null {
+	return INTEL_ONLY_CORE_COUNTS.has(cores) ? "intel" : null;
+}
+
+/**
+ * The [arch, manufacturer] the identity's GPU or, failing that, its core
+ * count implies.
+ */
+export function hardwareCpu(
+	config: Config,
+	targetOs: string,
+): [CpuArch | null, string | null] {
+	const [arch, makers] = gpuCpu(renderer(config), targetOs);
+	if (arch === "arm") return [arch, makers.length === 1 ? makers[0] : null];
+	const vendor =
+		(makers.length ? makers[0] : null) ||
+		coresCpuVendor(config["navigator.hardwareConcurrency"]);
+	return [vendor || arch ? "x86" : null, vendor];
+}
+
+/** The x86 CPU vendor the identity's GPU or, failing that, its core count implies. */
+export function hardwareCpuVendor(
+	config: Config,
+	targetOs: string,
+): CpuVendor | null {
+	const [arch, maker] = hardwareCpu(config, targetOs);
+	return arch === "x86" ? (maker as CpuVendor | null) : null;
+}
+
+/** Why the claimed CPU cannot sit in this machine, or null. */
+export function cpuConflict(config: Config, targetOs: string): string | null {
+	const arch = isNone(config["cpu:arch"]) ? null : config["cpu:arch"];
+	const maker = isNone(config["cpu:manufacturer"])
+		? null
+		: config["cpu:manufacturer"];
+	if (arch === null && maker === null) return null;
+	const cpu: Record<string, unknown> = {};
+	if (arch !== null) cpu.arch = arch;
+	if (maker !== null) cpu.manufacturer = maker;
+	try {
+		resolveCpu(cpu, targetOs);
+	} catch (e) {
+		if (e instanceof ValueError) return e.message;
+		throw e;
+	}
+	const r = renderer(config);
+	const claimed = [maker, arch]
+		.filter((v) => pyTruthy(v))
+		.map(pyStr)
+		.join(" ");
+	if (r && !gpuFitsCpu(r, targetOs, arch, maker)) {
+		return `CPU ${claimed} beside ${pyRepr(r)}`;
+	}
+	const cores = config["navigator.hardwareConcurrency"];
+	const byCores = coresCpuVendor(cores);
+	if (
+		(pyTruthy(arch) ? arch : "x86") === "x86" &&
+		pyTruthy(maker) &&
+		maker !== byCores &&
+		byCores
+	) {
+		return `CPU ${claimed} with hardwareConcurrency ${pyStr(cores)}, which only an Intel CPU reports`;
+	}
+	return null;
+}
+
+function checkCpu(config: Config, targetOs: string): string | null {
+	return cpuConflict(config, targetOs);
+}
+
+function repairCpu(config: Config, targetOs: string): void {
+	// The GPU decides. An AMD APU's GPU beside an Intel-only core count stays
+	// reported: no vendor matches both.
+	const [implied, maker] = hardwareCpu(config, targetOs);
+	const arch = implied ?? "x86";
+	config["cpu:arch"] = arch;
+	if (maker) config["cpu:manufacturer"] = maker;
+	else if (
+		!(cpuManufacturers(targetOs, arch) as readonly unknown[]).includes(
+			config["cpu:manufacturer"],
+		) ||
+		cpuConflict(config, targetOs)
+	) {
+		delete config["cpu:manufacturer"];
+	}
+}
+
 export const RULES: readonly Rule[] = [
 	{
 		name: "apple-silicon-cores",
@@ -371,11 +729,13 @@ export const RULES: readonly Rule[] = [
 	{ name: "gpu-matches-os", check: checkGpuMatchesOs, repair: null },
 	{ name: "intel-mac-hardware", check: checkIntelMacHardware, repair: null },
 	{ name: "color-depth", check: checkColorDepth, repair: repairColorDepth },
+	{ name: "pixel-depth", check: checkPixelDepth, repair: repairPixelDepth },
 	{ name: "touch-points", check: checkTouchPoints, repair: repairTouchPoints },
 	{
 		name: "device-pixel-ratio",
 		check: checkDevicePixelRatio,
 		repair: repairDevicePixelRatio,
+		adjusts: CSS_GEOMETRY_KEYS,
 	},
 	{
 		name: "window-chrome",
@@ -385,6 +745,7 @@ export const RULES: readonly Rule[] = [
 	{ name: "screen-shape", check: checkScreenShape, repair: null },
 	{ name: "avail-bounds", check: checkAvailBounds, repair: repairAvailBounds },
 	{ name: "arch-agreement", check: checkArchAgreement, repair: null },
+	{ name: "cpu-matches-hardware", check: checkCpu, repair: repairCpu },
 ];
 
 /** Whether the screen is one no desktop reports (portrait, or tiny). */
@@ -412,15 +773,32 @@ export function repairScreenOrientation(config: Config): boolean {
 	return true;
 }
 
+function changed(
+	before: Config,
+	after: Config,
+	keys: ReadonlySet<string>,
+): string[] {
+	return [...keys]
+		.filter(
+			(k) =>
+				k in before !== k in after ||
+				JSON.stringify(before[k]) !== JSON.stringify(after[k]),
+		)
+		.sort();
+}
+
 /**
  * Discard values a source supplied that this identity cannot keep (a preset's
  * GPU pair its OS, or its final core count and screen, rule out), so the
  * normal WebGL sampling draws a coherent one instead. Run after the core count
  * and the screen are final. Only values another pool can replace are dropped.
+ * A GPU the caller passed (a key in `keep`) is never dropped: it is reported,
+ * with the keys it kept, instead.
  */
 export function dropIncoherentSourceValues(
 	config: Config,
 	targetOs: string,
+	keep: ReadonlySet<string> = new Set(),
 ): Violation[] {
 	const r = renderer(config);
 	if (!r) return [];
@@ -428,6 +806,20 @@ export function dropIncoherentSourceValues(
 	if (!gpuFitsOs(r, targetOs)) rule = "gpu-matches-os";
 	else if (checkIntelMacHardware(config, targetOs)) rule = "intel-mac-hardware";
 	else return [];
+	const kept = changed(
+		config,
+		{},
+		new Set(["webGl:renderer", "webGl:vendor"].filter((k) => keep.has(k))),
+	);
+	if (kept.length) {
+		return [
+			{
+				rule,
+				detail: `${pyRepr(r)} does not fit this ${targetOs} identity`,
+				kept,
+			},
+		];
+	}
 	delete config["webGl:renderer"];
 	delete config["webGl:vendor"];
 	return [{ rule, detail: `dropped ${pyRepr(r)} for a ${targetOs} identity` }];
@@ -447,11 +839,38 @@ export function validate(config: Config, targetOs: string): Violation[] {
  * Repair what is determined, and report what is left. A rule with no repair
  * cannot be corrected without inventing a machine, so it is returned for the
  * caller to decide about.
+ *
+ * `keep` names the keys the caller set. A repair that would change one of
+ * them is not made: the caller's value stands, and the violation comes back
+ * with those keys in `kept` so the launcher can warn about it (#956). A repair
+ * that only touches other keys still runs.
  */
-export function apply(config: Config, targetOs: string): Violation[] {
+export function apply(
+	config: Config,
+	targetOs: string,
+	keep: ReadonlySet<string> = new Set(),
+): Violation[] {
+	const kept = new Map<string, string[]>();
 	for (const rule of RULES) {
-		if (rule.repair && rule.check(config, targetOs))
-			rule.repair(config, targetOs);
+		if (!rule.repair || !rule.check(config, targetOs)) continue;
+		const repaired: Config = { ...config };
+		rule.repair(repaired, targetOs);
+		if (rule.adjusts?.some((key) => keep.has(key))) {
+			for (const key of rule.adjusts) {
+				if (key in config) repaired[key] = config[key];
+				else delete repaired[key];
+			}
+		}
+		const blocked = changed(config, repaired, keep);
+		if (blocked.length) {
+			kept.set(rule.name, blocked);
+		} else {
+			for (const key of Object.keys(config))
+				if (!(key in repaired)) delete config[key];
+			Object.assign(config, repaired);
+		}
 	}
-	return validate(config, targetOs);
+	return validate(config, targetOs).map((v) =>
+		kept.has(v.rule) ? { ...v, kept: kept.get(v.rule) } : v,
+	);
 }

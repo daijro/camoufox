@@ -54,3 +54,14 @@ ac_add_options --enable-profile-use=cross
 ac_add_options --with-pgo-profile-path="$CAMOUFOX_PGO_PROFILE/merged.profdata"
 ac_add_options --with-pgo-jarlog="$CAMOUFOX_PGO_PROFILE/en-US.log"
 ac_add_options --enable-rust-simd
+
+# Stock Linux Firefox is built against the old libstdc++ ABI (Mozilla's
+# build/unix/mozconfig.unix -> mozconfig.stdcxx: MOZ_STDCXX_COMPAT=1, so
+# -D_GLIBCXX_USE_CXX11_ABI=0). Its std::string has no small-string buffer, so
+# every string a getter builds (WebGL VENDOR/VERSION, and many more) allocates;
+# without the flag Camoufox answered those at half stock's cost
+# (getter-cost-parity.py), and
+# Mozilla's PGO profile was trained on the old-ABI code.
+case "$CAMOUFOX_TARGET" in
+  *-linux-gnu) ac_add_options --enable-stdcxx-compat ;;
+esac

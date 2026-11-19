@@ -8,7 +8,7 @@
 
 if (!this.Debugger) {
   // Worker has a Debugger defined already.
-  const {addDebuggerToGlobal} = ChromeUtils.importESModule("resource://gre/modules/jsdebugger.sys.mjs");
+  const {addDebuggerToGlobal} = ChromeUtils.importESModule("moz-src:///devtools/platform/jsdebugger.sys.mjs");
   addDebuggerToGlobal(Components.utils.getGlobalForObject(globalThis));
 }
 
@@ -98,12 +98,30 @@ function isMainWorldRequest(functionDeclaration, args) {
 // Nothing in the body may close over Runtime.js scope: only the source text
 // crosses into the page, and the page's global is where every name resolves.
 function mainWorldEvaluate(isFunction, returnByValue, expression, argCount, ...argsAndHandles) {
+  // Constructor names, looked up only for a value that is one. Naming the
+  // constructors here resolved every lazy typed array class in the page on the
+  // first evaluate, out of the order the page's own first use resolves them:
+  // the globals moved and Object.getOwnPropertyNames(Int16Array) listed name
+  // before length, a visible global-order change.
   const typedArrays = {
-    i8: Int8Array, ui8: Uint8Array, ui8c: Uint8ClampedArray,
-    i16: Int16Array, ui16: Uint16Array,
-    i32: Int32Array, ui32: Uint32Array,
-    f32: Float32Array, f64: Float64Array,
-    bi64: BigInt64Array, bui64: BigUint64Array,
+    i8: 'Int8Array', ui8: 'Uint8Array', ui8c: 'Uint8ClampedArray',
+    i16: 'Int16Array', ui16: 'Uint16Array',
+    i32: 'Int32Array', ui32: 'Uint32Array',
+    f32: 'Float32Array', f64: 'Float64Array',
+    bi64: 'BigInt64Array', bui64: 'BigUint64Array',
+  };
+  const typedArrayKind = value => {
+    let tag;
+    try {
+      tag = Object.prototype.toString.call(value).slice(8, -1);
+    } catch (e) {
+      return undefined;
+    }
+    for (const kind of Object.keys(typedArrays)) {
+      if (typedArrays[kind] === tag)
+        return value instanceof globalThis[tag] ? kind : undefined;
+    }
+    return undefined;
   };
   const tagged = (value, name) => {
     try {
@@ -122,9 +140,11 @@ function mainWorldEvaluate(isFunction, returnByValue, expression, argCount, ...a
       if ('v' in value) {
         if (value.v === 'undefined') return undefined;
         if (value.v === 'null') return null;
-        if (value.v === 'NaN') return NaN;
-        if (value.v === 'Infinity') return Infinity;
-        if (value.v === '-Infinity') return -Infinity;
+        // 0 / 0 and 1 / 0, not NaN and Infinity: those names resolve the
+        // page's Number globals (NaN, isNaN, parseInt...) where they are read.
+        if (value.v === 'NaN') return 0 / 0;
+        if (value.v === 'Infinity') return 1 / 0;
+        if (value.v === '-Infinity') return -1 / 0;
         if (value.v === '-0') return -0;
         return undefined;
       }
@@ -166,7 +186,7 @@ function mainWorldEvaluate(isFunction, returnByValue, expression, argCount, ...a
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++)
           bytes[i] = binary.charCodeAt(i);
-        return new typedArrays[value.ta.k](bytes.buffer);
+        return new globalThis[typedArrays[value.ta.k]](bytes.buffer);
       }
     }
     return value;
@@ -187,11 +207,11 @@ function mainWorldEvaluate(isFunction, returnByValue, expression, argCount, ...a
       return {v: 'undefined'};
     if (Object.is(value, null))
       return {v: 'null'};
-    if (Object.is(value, NaN))
+    if (Object.is(value, 0 / 0))
       return {v: 'NaN'};
-    if (Object.is(value, Infinity))
+    if (Object.is(value, 1 / 0))
       return {v: 'Infinity'};
-    if (Object.is(value, -Infinity))
+    if (Object.is(value, -1 / 0))
       return {v: '-Infinity'};
     if (Object.is(value, -0))
       return {v: '-0'};
@@ -199,30 +219,32 @@ function mainWorldEvaluate(isFunction, returnByValue, expression, argCount, ...a
       return value;
     if (typeof value === 'bigint')
       return {bi: value.toString()};
-    if (value instanceof Error || tagged(value, 'Error')) {
+    // By internal class, not instanceof: naming Error, Date, URL or RegExp
+    // here resolved those page globals on the first evaluate, and the page's
+    // global order then showed it (the global-order regression).
+    if (tagged(value, 'Error') || tagged(value, 'DOMException')) {
       const header = value.name + ': ' + value.message;
       const stack = value.stack && value.stack.startsWith(header) ? value.stack : header + '\n' + value.stack;
       return {e: {n: value.name, m: value.message, s: stack}};
     }
-    if (value instanceof Date || tagged(value, 'Date'))
+    if (tagged(value, 'Date'))
       return {d: value.toJSON()};
-    if (value instanceof URL || tagged(value, 'URL'))
+    if (tagged(value, 'URL'))
       return {u: value.toJSON()};
-    if (value instanceof RegExp || tagged(value, 'RegExp'))
+    if (tagged(value, 'RegExp'))
       return {r: {p: value.source, f: value.flags}};
-    for (const kind of Object.keys(typedArrays)) {
-      if (value instanceof typedArrays[kind]) {
-        const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-        let binary = '';
-        for (const byte of bytes)
-          binary += String.fromCharCode(byte);
-        return {ta: {b: btoa(binary), k: kind}};
-      }
+    const kind = typedArrayKind(value);
+    if (kind) {
+      const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+      let binary = '';
+      for (const byte of bytes)
+        binary += String.fromCharCode(byte);
+      return {ta: {b: btoa(binary), k: kind}};
     }
     const seen = visited.ids.get(value);
     if (seen)
       return {ref: seen};
-    if (Array.isArray(value)) {
+    if (tagged(value, 'Array')) {
       const id = ++visited.lastId;
       visited.ids.set(value, id);
       const a = [];
@@ -278,7 +300,9 @@ function mainWorldEvaluate(isFunction, returnByValue, expression, argCount, ...a
     result = result(...parameters);
   else if (isFunction !== false && typeof result === 'function')
     result = result(...parameters);
-  if (result && typeof result.then === 'function')
+  // Only an object can be a promise: `.then` on a number read Number.prototype
+  // and resolved the page's Number globals (isNaN, parseInt...).
+  if (result && (typeof result === 'object' || typeof result === 'function') && typeof result.then === 'function')
     return result.then(jsonValue);
   return jsonValue(result);
 }
@@ -385,7 +409,7 @@ class Runtime {
       const result = await mainWorldContext.evaluateFunction(MAIN_WORLD_EVALUATE, mainWorldArgs, exceptionDetails);
       if (!result)
         return {exceptionDetails};
-      return {result: mainWorldContext.ensureSerializedToValue(result)};
+      return {result: mainWorldContext.ensurePlainToValue(result)};
     }
 
     const exceptionDetails = {};
@@ -534,8 +558,9 @@ class Runtime {
       return {success: true, obj: obj.promiseValue};
     if (obj.promiseState === 'rejected') {
       const debuggee = executionContext._debuggee;
-      exceptionDetails.text = debuggee.executeInGlobalWithBindings('e.message', {e: obj.promiseReason}, {useInnerBindings: true}).return;
-      exceptionDetails.stack = debuggee.executeInGlobalWithBindings('e.stack', {e: obj.promiseReason}, {useInnerBindings: true}).return;
+      const options = executionContext._evalOptions({useInnerBindings: true});
+      exceptionDetails.text = debuggee.executeInGlobalWithBindings('e.message', {e: obj.promiseReason}, options).return;
+      exceptionDetails.stack = debuggee.executeInGlobalWithBindings('e.stack', {e: obj.promiseReason}, options).return;
       return {success: false, obj: null};
     }
     let resolve, reject;
@@ -546,14 +571,25 @@ class Runtime {
     // Keyed by the Debugger.Object, which is unique per promise: Firefox 158
     // removed Debugger.Object.promiseID (bug 2044184).
     this._pendingPromises.set(obj, {resolve, reject, executionContext, exceptionDetails});
-    // Firefox 156 removed Debugger.onPromiseSettled (bug 2044167). As upstream
-    // Juggler does, attach reactions inside the debuggee that hit a `debugger;`
-    // statement when the promise settles, and sweep the pending promises from
-    // onDebuggerStatement. This also works in workers, which have no Xrays.
-    if (this._pendingPromises.size === 1)
+    // Firefox 156 removed Debugger.onPromiseSettled (bug 2044167).
+    //
+    // Camoufox: in a window, react to the promise from here, through the Xray
+    // unsafeDereference() hands back. A `p.then(...)` run in the page called
+    // whatever the page had put on Promise.prototype.then, and read
+    // p.constructor through any getter it had installed: a page could see the
+    // driver await its value. Through the Xray, neither runs.
+    if (executionContext._domWindow) {
+      const settled = () => this._onDebuggerStatement();
+      Promise.prototype.then.call(obj.unsafeDereference(), settled, settled);
+      return await promise;
+    }
+    // Workers have no Xrays. As upstream Juggler does, attach reactions inside
+    // the debuggee that hit a `debugger;` statement when the promise settles,
+    // and sweep the pending promises from onDebuggerStatement.
+    if (!this._debugger.onDebuggerStatement)
       this._debugger.onDebuggerStatement = this._onDebuggerStatement.bind(this);
     executionContext._debuggee.executeInGlobalWithBindings(
-        'p.then(() => { debugger; }, () => { debugger; })', {p: obj}, {useInnerBindings: true});
+        'p.then(() => { debugger; }, () => { debugger; })', {p: obj}, executionContext._evalOptions({useInnerBindings: true}));
     return await promise;
   }
 
@@ -567,8 +603,9 @@ class Runtime {
         continue;
       }
       const debuggee = pendingPromise.executionContext._debuggee;
-      pendingPromise.exceptionDetails.text = debuggee.executeInGlobalWithBindings('e.message', {e: obj.promiseReason}, {useInnerBindings: true}).return;
-      pendingPromise.exceptionDetails.stack = debuggee.executeInGlobalWithBindings('e.stack', {e: obj.promiseReason}, {useInnerBindings: true}).return;
+      const options = pendingPromise.executionContext._evalOptions({useInnerBindings: true});
+      pendingPromise.exceptionDetails.text = debuggee.executeInGlobalWithBindings('e.message', {e: obj.promiseReason}, options).return;
+      pendingPromise.exceptionDetails.stack = debuggee.executeInGlobalWithBindings('e.stack', {e: obj.promiseReason}, options).return;
       pendingPromise.resolve({success: false, obj: null});
     }
     if (!this._pendingPromises.size)
@@ -647,7 +684,31 @@ class ExecutionContext {
     // on; see mainWorldContext().
     this._resolveMainWorldGlobal = null;
     this._mainWorldContext = null;
-    this._jsonStringifyObject = this._debuggee.executeInGlobal(`((stringify, object) => {
+    // Made on first use: it names Date, Array and JSON in the context's
+    // global, which in the page's own world resolves them there.
+    this._jsonStringifyObjectValue = null;
+  }
+
+  // Camoufox: options for code compiled into the page's own global (its
+  // window with world isolation off, or a worker's global), whose frames the
+  // page's principal can read. hideFromContent keeps them out of the page's
+  // Error().stack and Function.caller. An isolated world's frames are not the
+  // page's to read, so that code keeps its own stacks. The page names its
+  // window's code after the document, as an inline <script> is, never the
+  // default "debugger eval code". C++ tells this code apart by how it was
+  // compiled, never by its name (JS::IsScriptedCallerDebuggerCode).
+  _evalOptions(options) {
+    if (!this._domWindow)
+      return {...options, hideFromContent: true};
+    if (this._contextGlobal !== this._domWindow)
+      return options;
+    return {...options, hideFromContent: true, url: this._domWindow.document.URL};
+  }
+
+  get _jsonStringifyObject() {
+    if (this._jsonStringifyObjectValue)
+      return this._jsonStringifyObjectValue;
+    return this._jsonStringifyObjectValue = this._debuggee.executeInGlobal(`((stringify, object) => {
       const oldToJSON = Date.prototype?.toJSON;
       if (oldToJSON)
         Date.prototype.toJSON = undefined;
@@ -669,7 +730,7 @@ class ExecutionContext {
         Array.prototype.toJSON = oldArrayToJSON;
 
       return hasSymbol ? undefined : result;
-    }).bind(null, JSON.stringify.bind(JSON))`).return;
+    }).bind(null, JSON.stringify.bind(JSON))`, this._evalOptions()).return;
   }
 
   id() {
@@ -763,7 +824,7 @@ class ExecutionContext {
     // stock Firefox grants activation only from real input, which juggler's
     // synthesized-trusted clicks already provide (measured 2026-09-14).
     let {success, obj} = this._getResult(
-        this.withDriverPopups(() => this._debuggee.executeInGlobal(script)), exceptionDetails);
+        this.withDriverPopups(() => this._debuggee.executeInGlobal(script, this._evalOptions())), exceptionDetails);
     if (!success)
       return null;
     if (obj && obj.isPromise) {
@@ -777,14 +838,14 @@ class ExecutionContext {
 
   evaluateScriptSafely(script) {
     try {
-      this._debuggee.executeInGlobal(script);
+      this._debuggee.executeInGlobal(script, this._evalOptions());
     } catch (e) {
       dump(`WARNING: ${e.message}\n${e.stack}\n`);
     }
   }
 
   async evaluateFunction(functionText, args, exceptionDetails = {}) {
-    const funEvaluation = this._getResult(this._debuggee.executeInGlobal('(' + functionText + ')'), exceptionDetails);
+    const funEvaluation = this._getResult(this._debuggee.executeInGlobal('(' + functionText + ')', this._evalOptions()), exceptionDetails);
     if (!funEvaluation.success)
       return null;
     if (!funEvaluation.obj.callable)
@@ -804,8 +865,18 @@ class ExecutionContext {
       }
     });
     // Camoufox: no synthetic user activation here either (see evaluateScript).
-    let {success, obj} = this._getResult(
-        this.withDriverPopups(() => funEvaluation.obj.apply(null, args)), exceptionDetails);
+    //
+    // Called from Debugger-compiled code with bypassCSP, so the page's CSP
+    // does not block an eval the call makes. Debugger.Object.apply does not
+    // lift CSP, and lifting it there by clearing every JS security callback let
+    // a page read the isolated world's and Juggler's frames in new Error().stack.
+    const bindings = {fn: funEvaluation.obj};
+    const names = args.map((arg, i) => {
+      bindings['arg' + i] = arg;
+      return 'arg' + i;
+    });
+    let {success, obj} = this._getResult(this.withDriverPopups(() => this._debuggee.executeInGlobalWithBindings(
+        `fn(${names.join(', ')})`, bindings, this._evalOptions({useInnerBindings: true, bypassCSP: true}))), exceptionDetails);
     if (!success)
       return null;
     if (obj && obj.isPromise) {
@@ -841,10 +912,25 @@ class ExecutionContext {
     return this._createRemoteObject(debuggerObj);
   }
 
-  _instanceOf(debuggerObj, rawObj, className) {
-    if (this._domWindow)
-      return rawObj instanceof this._domWindow[className];
-    return this._debuggee.executeInGlobalWithBindings('o instanceof this[className]', {o: debuggerObj, className: this._debuggee.makeDebuggeeValue(className)}, {useInnerBindings: true}).return;
+  // Camoufox: a result's subtype comes from its internal class, which Debugger
+  // reads without running page code. Testing `instanceof page[ClassName]`
+  // resolved the page's lazy standard classes from chrome, in an order no page
+  // does: Object.getOwnPropertyNames(Uint8Array) then listed name before length,
+  // and the globals moved, after any evaluate.
+  static _SUBTYPES = new Map([
+    ['RegExp', 'regexp'], ['Date', 'date'], ['Map', 'map'], ['Set', 'set'],
+    ['WeakMap', 'weakmap'], ['WeakSet', 'weakset'], ['Error', 'error'], ['Promise', 'promise'],
+    ...['Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array', 'Int32Array',
+        'Uint32Array', 'Float32Array', 'Float64Array'].map(name => [name, 'typedarray']),
+  ]);
+
+  _subtypeOfClass(debuggerObj) {
+    let target = debuggerObj;
+    try {
+      target = debuggerObj.unwrap() || debuggerObj;
+    } catch (e) {
+    }
+    return ExecutionContext._SUBTYPES.get(target.class);
   }
 
   _createRemoteObject(debuggerObj) {
@@ -862,29 +948,8 @@ class ExecutionContext {
         subtype = 'null';
       else if (typeof Node !== 'undefined' && Node.isInstance(rawObj))
         subtype = 'node';
-      else if (this._instanceOf(debuggerObj, rawObj, 'RegExp'))
-        subtype = 'regexp';
-      else if (this._instanceOf(debuggerObj, rawObj, 'Date'))
-        subtype = 'date';
-      else if (this._instanceOf(debuggerObj, rawObj, 'Map'))
-        subtype = 'map';
-      else if (this._instanceOf(debuggerObj, rawObj, 'Set'))
-        subtype = 'set';
-      else if (this._instanceOf(debuggerObj, rawObj, 'WeakMap'))
-        subtype = 'weakmap';
-      else if (this._instanceOf(debuggerObj, rawObj, 'WeakSet'))
-        subtype = 'weakset';
-      else if (this._instanceOf(debuggerObj, rawObj, 'Error'))
-        subtype = 'error';
-      else if (this._instanceOf(debuggerObj, rawObj, 'Promise'))
-        subtype = 'promise';
-      else if ((this._instanceOf(debuggerObj, rawObj, 'Int8Array')) || (this._instanceOf(debuggerObj, rawObj, 'Uint8Array')) ||
-               (this._instanceOf(debuggerObj, rawObj, 'Uint8ClampedArray')) || (this._instanceOf(debuggerObj, rawObj, 'Int16Array')) ||
-               (this._instanceOf(debuggerObj, rawObj, 'Uint16Array')) || (this._instanceOf(debuggerObj, rawObj, 'Int32Array')) ||
-               (this._instanceOf(debuggerObj, rawObj, 'Uint32Array')) || (this._instanceOf(debuggerObj, rawObj, 'Float32Array')) ||
-               (this._instanceOf(debuggerObj, rawObj, 'Float64Array'))) {
-        subtype = 'typedarray';
-      }
+      else
+        subtype = this._subtypeOfClass(debuggerObj);
       return {objectId, type, subtype};
     }
     if (typeof debuggerObj === 'symbol') {
@@ -903,6 +968,45 @@ class ExecutionContext {
     else if (Object.is(debuggerObj, -Infinity))
       unserializableValue = '-Infinity';
     return unserializableValue ? {unserializableValue} : {value: debuggerObj};
+  }
+
+  // Camoufox: mainWorldEvaluate's result is plain data it built in the page
+  // (objects, arrays, primitives). Read it through Debugger, not with the
+  // page's JSON.stringify: the stringify wrapper named JSON, Date and Array in
+  // the page, which resolved them there out of the page's own order, and
+  // stringify looked up the page's toJSON on every object (the global-order regression).
+  ensurePlainToValue(protocolObject) {
+    if (!protocolObject.objectId)
+      return protocolObject;
+    const obj = this._remoteObjects.get(protocolObject.objectId);
+    this._remoteObjects.delete(protocolObject.objectId);
+    return {value: this._plainValue(obj)};
+  }
+
+  // What JSON.parse(JSON.stringify(value)) gives for plain data, read without
+  // running page code: undefined members are left out, undefined items null.
+  _plainValue(value) {
+    if (!(value instanceof Debugger.Object))
+      return value;
+    const read = name => {
+      const descriptor = value.getOwnPropertyDescriptor(name);
+      return descriptor ? this._plainValue(descriptor.value) : undefined;
+    };
+    if (value.class === 'Array') {
+      const result = [];
+      for (let i = 0; i < read('length'); ++i) {
+        const item = read(String(i));
+        result.push(item === undefined ? null : item);
+      }
+      return result;
+    }
+    const result = {};
+    for (const name of value.getOwnPropertyNames()) {
+      const item = read(name);
+      if (item !== undefined)
+        result[name] = item;
+    }
+    return result;
   }
 
   ensureSerializedToValue(protocolObject) {
@@ -928,13 +1032,13 @@ class ExecutionContext {
       };
     }
     const baseObject = Array.isArray(obj) ? '([])' : '({})';
-    const debuggerObj = this._debuggee.executeInGlobal(baseObject).return;
+    const debuggerObj = this._debuggee.executeInGlobal(baseObject, this._evalOptions()).return;
     debuggerObj.defineProperties(properties);
     return debuggerObj;
   }
 
   _serialize(obj) {
-    const result = this._debuggee.executeInGlobalWithBindings('stringify(e)', {e: obj, stringify: this._jsonStringifyObject}, {useInnerBindings: true});
+    const result = this._debuggee.executeInGlobalWithBindings('stringify(e)', {e: obj, stringify: this._jsonStringifyObject}, this._evalOptions({useInnerBindings: true}));
     if (result.throw)
       throw new Error('Object is not serializable');
     return result.return === undefined ? undefined : JSON.parse(result.return);
@@ -966,9 +1070,10 @@ class ExecutionContext {
     if (!completionValue)
       throw new Error('evaluation terminated');
     if (completionValue.throw) {
-      if (this._debuggee.executeInGlobalWithBindings('e instanceof Error', {e: completionValue.throw}, {useInnerBindings: true}).return) {
-        exceptionDetails.text = this._debuggee.executeInGlobalWithBindings('e.message', {e: completionValue.throw}, {useInnerBindings: true}).return;
-        exceptionDetails.stack = this._debuggee.executeInGlobalWithBindings('e.stack', {e: completionValue.throw}, {useInnerBindings: true}).return;
+      const options = this._evalOptions({useInnerBindings: true});
+      if (this._debuggee.executeInGlobalWithBindings('e instanceof Error', {e: completionValue.throw}, options).return) {
+        exceptionDetails.text = this._debuggee.executeInGlobalWithBindings('e.message', {e: completionValue.throw}, options).return;
+        exceptionDetails.stack = this._debuggee.executeInGlobalWithBindings('e.stack', {e: completionValue.throw}, options).return;
       } else {
         exceptionDetails.value = this._serialize(completionValue.throw);
       }

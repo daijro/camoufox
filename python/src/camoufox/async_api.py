@@ -12,16 +12,21 @@ from typing_extensions import Literal
 
 from camoufox.virtdisplay import VirtualDisplay
 
+from . import _humanize_playwright, driver_defaults
 from .fingerprints import generate_context_fingerprint
-from .ip import Proxy, proxy_exit_geo
+from .ip import ExitGeo, Proxy, proxy_exit_geo
 from .utils import (
     async_attach_vd,
     attach_context_defaults,
+    attach_socks5_auth,
     context_identity,
     host_identity,
     launch_options,
+    launch_os,
+    needs_exit_geo,
     new_context_options,
     persistent_context_options,
+    place_at_exit,
     spoofs_window_dimensions,
     start_virtual_display,
 )
@@ -105,6 +110,9 @@ async def AsyncNewBrowser(
         **kwargs:
             All other keyword arguments passed to `launch_options()`.
     """
+    # humanize runs in this process: checked before the launch,
+    # attached to the browser after it (also with from_options).
+    _humanize_playwright.check(kwargs.get('humanize'), is_async=True)
     virtual_display, headless = await asyncio.get_running_loop().run_in_executor(
         None, start_virtual_display, headless, debug, kwargs
     )
@@ -113,8 +121,11 @@ async def AsyncNewBrowser(
     # close, which used to strand one Xvfb and its /tmp/.X<n> lock per failed
     # launch.
     try:
-        return await _new_browser(
+        browser, os = await _new_browser(
             playwright, virtual_display, headless, from_options, persistent_context, debug, kwargs
+        )
+        return _humanize_playwright.attach(
+            browser, kwargs.get('humanize'), os, i_know_what_im_doing=kwargs.get('i_know_what_im_doing')
         )
     except BaseException:
         if virtual_display:
@@ -130,7 +141,8 @@ async def _new_browser(
     persistent_context: bool,
     debug: Optional[bool],
     kwargs: Dict[str, Any],
-) -> Union[Browser, BrowserContext]:
+) -> Tuple[Union[Browser, BrowserContext], str]:
+    """The browser (or persistent context), and its identity's OS."""
     # Options the caller built leave its contexts to the caller (host_identity).
     canvas_noise: Optional[bool] = False
     if not from_options:
@@ -157,7 +169,7 @@ async def _new_browser(
     if not pid:
         return await _launch(
             playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise
-        )
+        ), launch_os(from_options)
     # The browser inherits the driver's mask at spawn, so two concurrent launches
     # on one driver must not interleave pin/restore: the second pin would land on
     # the first browser, and the first restore would leave the driver pinned.
@@ -166,7 +178,7 @@ async def _new_browser(
         try:
             return await _launch(
                 playwright, from_options, persistent_context, no_viewport_default, virtual_display, canvas_noise
-            )
+            ), launch_os(from_options)
         finally:
             cpu_affinity.restore(pid, previous)
 
@@ -194,6 +206,7 @@ async def _launch(
         context = await playwright.firefox.launch_persistent_context(
             **persistent_context_options(from_options, no_viewport_default)
         )
+        driver_defaults.mark(context)
         return await async_attach_vd(context, virtual_display)
 
     identity = await asyncio.get_running_loop().run_in_executor(None, host_identity, from_options, canvas_noise)
@@ -203,8 +216,8 @@ async def _launch(
     return await async_attach_vd(browser, virtual_display)
 
 
-async def _resolve_proxy_geo(proxy: Dict[str, str]) -> Tuple[str, str]:
-    """The proxy's exit IP and timezone, looked up off the event loop."""
+async def _resolve_proxy_geo(proxy: Dict[str, str]) -> ExitGeo:
+    """Where the proxy exits, looked up off the event loop."""
     # run_in_executor rather than asyncio.to_thread, which needs Python 3.9.
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, proxy_exit_geo, Proxy(**proxy).as_string())
@@ -237,8 +250,9 @@ async def AsyncNewContext(
         ff_version: Firefox major version to claim in the UA. Defaults to the browser's own.
         webrtc_ip: IPv4 or IPv6 address to spoof for WebRTC ICE candidates.
         proxy: Per-context proxy (Playwright format: {"server": "...", "username": "...", "password": "..."}).
-            Unless webrtc_ip and timezone_id are both given, they are looked up from the
-            proxy's exit IP; InvalidIP is raised if that lookup fails.
+            The context is placed where the proxy exits: webrtc_ip, timezone_id, locale and
+            geolocation each default to the exit IP's, looked up through the proxy unless all
+            four are given; InvalidIP is raised if that lookup fails.
         geolocation: Per-context geolocation ({"latitude": float, "longitude": float}).
         **context_kwargs: Additional Playwright new_context() options.
     """
@@ -246,11 +260,10 @@ async def AsyncNewContext(
     # the browser the page is actually talking to.
     ff_version = ff_version or browser.version.split('.', 1)[0]
 
-    # Auto-derive WebRTC IP and timezone from proxy's exit IP when not explicitly provided
-    if proxy and (not webrtc_ip or "timezone_id" not in context_kwargs):
-        exit_ip, timezone = await _resolve_proxy_geo(proxy)
-        webrtc_ip = webrtc_ip or exit_ip
-        context_kwargs.setdefault("timezone_id", timezone)
+    if proxy and needs_exit_geo(webrtc_ip, geolocation, context_kwargs):
+        webrtc_ip, geolocation = place_at_exit(
+            await _resolve_proxy_geo(proxy), webrtc_ip, geolocation, context_kwargs
+        )
 
     os, webgl_config = context_identity(browser, os, preset)
     fp = await asyncio.get_event_loop().run_in_executor(
@@ -260,6 +273,8 @@ async def AsyncNewContext(
         ),
     )
 
+    # A browser launched elsewhere takes SOCKS5 credentials too.
+    attach_socks5_auth(browser)
     context = await browser.new_context(**new_context_options(fp, context_kwargs, proxy, geolocation))
     await context.add_init_script(fp['init_script'])
     return context

@@ -547,6 +547,9 @@ const Network = {
     'setRequestInterception': {
       params: {
         enabled: t.Boolean,
+        // Playwright >= 1.64 sends this on every call; it is true for the internal page used to
+        // capture storage state, which must not have its requests handed to a service worker.
+        bypassServiceWorker: t.Optional(t.Boolean),
       },
     },
     'setExtraHTTPHeaders': {

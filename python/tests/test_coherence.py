@@ -142,11 +142,46 @@ class TestRules:
         assert config["screen.colorDepth"] == 30
         assert config["screen.pixelDepth"] == 30
 
+    def test_intel_mac_reports_deep_colour(self):
+        # 30 in all but one Intel Mac preset; macOS defaults to deep colour
+        # whatever the GPU.
+        config = {"webGl:renderer": "Intel(R) HD Graphics 400, or similar", "screen.colorDepth": 24}
+        assert [v.rule for v in coherence.validate(config, "mac")] == ["color-depth"]
+        assert coherence.apply(config, "mac") == []
+        assert config["screen.colorDepth"] == 30
+
+    def test_kept_keys_are_not_repaired(self):
+        config = {"webGl:renderer": "Apple M1, or similar", "screen.colorDepth": 24,
+                  "screen.pixelDepth": 30, "window.devicePixelRatio": 1.5}
+        left = coherence.apply(config, "mac", keep={"screen.colorDepth", "window.devicePixelRatio"})
+        assert [(v.rule, v.kept) for v in left] == [
+            ("color-depth", ("screen.colorDepth",)),
+            ("device-pixel-ratio", ("window.devicePixelRatio",)),
+        ]
+        assert config["screen.colorDepth"] == 24 and config["window.devicePixelRatio"] == 1.5
+        # pixelDepth is not kept, so it follows the colorDepth that stands.
+        assert config["screen.pixelDepth"] == 24
+
+    def test_a_repair_off_the_kept_keys_still_runs(self):
+        # The caller's innerHeight stands; the window grows to hold it.
+        config = {"window.innerHeight": 800, "window.outerHeight": 820}
+        assert coherence.apply(config, "lin", keep={"window.innerHeight"}) == []
+        assert config["window.innerHeight"] == 800
+        assert config["window.outerHeight"] == 800 + coherence.BROWSER_CHROME_HEIGHT
+
+    def test_kept_source_gpu_is_reported_not_dropped(self):
+        config = {"webGl:vendor": "Google Inc. (NVIDIA)",
+                  "webGl:renderer": "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11), or similar"}
+        left = coherence.drop_incoherent_source_values(config, "mac", keep={"webGl:renderer", "webGl:vendor"})
+        assert [(v.rule, v.kept) for v in left] == [("gpu-matches-os", ("webGl:renderer", "webGl:vendor"))]
+        assert "webGl:renderer" in config
+
     def test_colour_depth_is_24_or_30(self):
         config = {"screen.colorDepth": 32}
         assert [v.rule for v in coherence.validate(config, "lin")] == ["color-depth"]
         assert coherence.apply(config, "lin") == []
         assert config["screen.colorDepth"] == 24
+        assert config["screen.pixelDepth"] == 24
 
     def test_touch_points_are_a_digitiser_count(self):
         config = {"navigator.maxTouchPoints": 256}
@@ -176,6 +211,40 @@ class TestRules:
         assert [v.rule for v in coherence.validate({"window.devicePixelRatio": 1.5}, "mac")] == [
             "device-pixel-ratio"
         ]
+
+    def test_repairing_the_ratio_keeps_the_physical_display(self):
+        # fpgen's 1920x1080 monitor recorded at a 110% browser zoom: the zoom is
+        # folded into the ratio (1.0909) and shrinks every CSS size by it. The
+        # display mode is 100%, so the CSS geometry is the display's own. Kept
+        # at 1760x990 with a ratio of 1, the page claims a 1760x990 monitor
+        # while the browser renders at 1 on the real one: a fullscreen window
+        # measured 1920x1080 against screen.width 1760 (cg.12 on WSLg).
+        config = {"window.devicePixelRatio": 1.0909090909090908,
+                  "screen.width": 1760, "screen.height": 990,
+                  "screen.availWidth": 1760, "screen.availHeight": 946,
+                  "screen.availLeft": 0, "screen.availTop": 0,
+                  "window.outerWidth": 1760, "window.outerHeight": 953,
+                  "window.innerWidth": 1760, "window.innerHeight": 807,
+                  "window.screenX": -7, "window.screenY": -7}
+        coherence.apply(config, "win")
+        assert config["window.devicePixelRatio"] == 1
+        assert (config["screen.width"], config["screen.height"]) == (1920, 1080)
+        assert (config["screen.availWidth"], config["screen.availHeight"]) == (1920, 1032)
+        assert (config["window.outerWidth"], config["window.innerWidth"]) == (1920, 1920)
+        assert config["window.innerHeight"] == 880
+        assert (config["window.screenX"], config["window.screenY"]) == (-8, -8)
+        # A screen the caller set is the caller's display: the ratio still moves
+        # to a real step, and no CSS size is rescaled, the caller's or another.
+        config = {"window.devicePixelRatio": 1.0909090909090908, "screen.width": 1760,
+                  "screen.height": 990, "window.outerWidth": 1760}
+        assert coherence.apply(config, "win", keep={"screen.width"}) == []
+        assert config["window.devicePixelRatio"] == 1
+        assert (config["screen.width"], config["screen.height"], config["window.outerWidth"]) == (1760, 990, 1760)
+        # A ratio the caller set stays, reported by that key alone.
+        config = {"window.devicePixelRatio": 1.0909090909090908, "screen.width": 1760, "screen.height": 990}
+        left = coherence.apply(config, "win", keep={"window.devicePixelRatio", "screen.width"})
+        assert config["window.devicePixelRatio"] == 1.0909090909090908 and config["screen.width"] == 1760
+        assert [(v.rule, v.kept) for v in left] == [("device-pixel-ratio", ("window.devicePixelRatio",))]
 
     def test_desktop_screens_are_landscape(self):
         config = {"screen.width": 1440, "screen.height": 2560}

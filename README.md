@@ -46,6 +46,7 @@
       <strong>Special codes for Camoufox users:</strong><br>
       • <code>CAMOUFOX35</code> - 35% off to Mobile and Residential Proxies<br>
       • <code>CAMOUFOX40</code> - 40% off to ISP (Static) Proxies<br>
+      • <code>CAMOUFOX2X</code> - 2X traffic for Black Friday<br>
       Check Nodemaven's new GitHub for more web scraping and automation solutions - https://github.com/nodemaven
     </td>
   </tr>
@@ -119,6 +120,22 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
       Built for scraping, automation, and high-stealth workflows.<br>
       <b>🔥 Exclusive Offer</b> - Use code <b>Camoufox50</b><br>
       Get <b>50% recurring discount</b> (not just first month). Upgrade your proxies. Reduce bans. Scale properly
+    </td>
+  </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://niuproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox" target="_blank">
+        <img width="380" alt="NiuProxy" src="https://github.com/user-attachments/assets/85dc8020-af1b-4c5d-82a0-6024ce54903b"/>
+      </a>
+    </td>
+    <td valign="middle">
+      🚀 <strong>NiuProxy — Exclusive Camoufox Offer | 20% OFF</strong><br>
+      🔥 Special Prices with Code camoufox80:<br>
+      • Static Native ISP — $4.80/IP<br>
+      • Residential 1TB — $0.44/GB<br>
+      • Residential 10TB — $0.30/GB<br>
+      🎁 <strong>Use camoufox80 for 20% OFF all recharges!</strong><br>
+      👉 <a href="https://niuproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">Visit NiuProxy<a>
     </td>
   </tr>
 </table>
@@ -236,12 +253,12 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
   </tr>     
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://mangoproxy.com/?utm_source=github&utm_medium=partner&utm_campaign=daijro" target="_blank">
+      <a href="https://mangoproxy.com/prod-isp-static/?utm_source=daijro&utm_medium=partner&utm_campaign=daijro_github" target="_blank">
         <img width="380" alt="mangoproxy" src="https://github.com/user-attachments/assets/c2cd3ddf-c940-4906-be1b-5505dcdb6e06"/>
       </a>
     </td>
     <td valign="middle">
-      <a href="https://mangoproxy.com/?utm_source=github&utm_medium=partner&utm_campaign=daijro">MangoProxy</a> is a Residential, ISP, Mobile and Datacenter proxy service designed for professional tasks where stability, speed, and anonymity matter.<br>
+      <a href="https://mangoproxy.com/prod-isp-static/?utm_source=daijro&utm_medium=partner&utm_campaign=daijro_github">MangoProxy</a> is a Residential, ISP, Mobile and Datacenter proxy service designed for professional tasks where stability, speed, and anonymity matter.<br>
       Use code DAIJRO for 8% OFF ISP Static Proxies
     </td>
   </tr>
@@ -299,12 +316,20 @@ Camoufox is intended to be used with rotating proxies (preferably residential IP
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://roamproxy.com" target="_blank">
-        <img width="380" alt="Roamproxy" src="https://roamproxy.com/assets/camoufox-banner.png"/>
+      <a href="https://okkproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox" target="_blank">
+        <img width="380" alt="OkkProxy" src="https://github.com/user-attachments/assets/15df1ca6-bd84-4eee-9ed3-963bf343a021"/>
       </a>
     </td>
     <td valign="middle">
-      <strong><a href="https://roamproxy.com">Roam</a></strong> — Residential & static residential proxies, pay-as-you-go per GB. Use code CAMOUFOX15 for 15% extra credit on your first top-up.
+      👉 <strong><a href="https://okkproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">Get Started with OkkProxy</a></strong><br>
+      🚀 <strong>🔥 Static ISP Proxy Deals</strong><br>
+      • Broadcast IP — from $1.50/IP<br>
+      • Premium Native IP — from $4.50/IP<br>
+      🔥 <strong>Unlimited Residential Proxies — from $58/day</strong><br>
+      <strong>🎁 Use PAY2 for 10% OFF all recharges!</strong><br>
+      Also available: Rotating Residential and Mobile Proxies.<br>
+      👉 <a href="https://okkproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox">Visit NiuProxy<a>
+    </td>
   </tr>
 </table>
 </details>
@@ -439,6 +464,7 @@ right.
 | Screen and window sizes, color depth, CSS media features | The drawn device's display, the same in JS and CSS | Screen size is among the most identifying values, and CSS media queries read it without script | `screen-spoofing`, `fingerprint-injection` patches |
 | WebGL and WebGL2: vendor, renderer, parameters, extensions, shader precision, context attributes | One GPU fpgen recorded for Firefox on that OS. Values Firefox decides rather than the GPU follow the shipped Firefox ([`webgl-browser-owned-values-follow-firefox`](ci/tribal-rules.yml)) | The renderer string names the host's GPU, and its limits must agree with it | `webgl-spoofing` patch, `webgl.py` |
 | WebGPU: `navigator.gpu` and its adapter | `navigator.gpu` only where Firefox on the claimed device has it: Windows and Apple Silicon Macs. The adapter is the host's only when the identity claims the host's GPU; otherwise `requestAdapter()` returns `null`, as for a blocked or software GPU | The adapter's limits and features come from the real GPU | launcher, `host_rendering.py` |
+| Canvas, Web Audio, Opus, VP9, relaxed-SIMD wasm and NaN bits | The claimed CPU's arithmetic. Intel and AMD implement Skia's and Opus's estimate instructions RCPPS/RSQRTPS with different tables, so on an AMD host a canvas drawn with `color-dodge`, `color-burn`, `hue`, `saturation`, `color` or `luminosity` reads back other pixels than on Intel; an ARM64 CPU differs in far more (every Web Audio node and composite operation, Opus, VP9, NaN signs, relaxed SIMD). An x86-64 build computes as Intel, AMD or ARM64. `cpu` picks one; by default it follows the GPU (an Apple GPU is ARM, an Intel iGPU or Intel Mac is Intel, a Radeon iGPU is AMD) and otherwise is x86, 81% Intel as among Firefox's x86 users | The results split by CPU, not by OS or CPU generation, so they show the host's CPU | `cpu-vendor-estimates` patch, launcher |
 | Audio: sample rate, output latency, max channels | The identity's values | They follow the claimed device's audio hardware | `audio-context-spoofing` patch |
 | Fonts: installed list, `system-ui`, CSS2 system fonts | The claimed OS's fonts, from a bundled set; see [docs/FONTS.md](docs/FONTS.md) | Installed fonts reveal the OS and the software on it | `font-list-spoofing`, `font-hijacker`, `system-ui-font-spoofing` patches |
 | Speech voices | The claimed OS's voices, which actually speak | The voice list is specific to each OS, and a voice that cannot speak is a tell | `voice-spoofing`, `speech-voices-spoofing` patches |
@@ -447,6 +473,7 @@ right.
 | Timezone, locale and `Intl` | The identity's, per realm, workers included | They must agree with the IP's country | `timezone-spoofing`, `locale-spoofing` patches |
 | Geolocation | Coordinates from GeoIP, permission granted | They must agree with the IP | `geolocation-spoofing` patch, launcher |
 | WebRTC IP | ICE candidates, SDP and `getStats()` rewritten to the proxy IP | WebRTC otherwise reveals the real IP behind a proxy | `webrtc-ip-spoofing` patch |
+| WebRTC UDP behind a SOCKS5 proxy | STUN, TURN and peer-to-peer UDP go through the proxy's UDP relay (UDP ASSOCIATE), so the srflx candidate is the address the page's STUN server really saw; the local network gets no exception, and mDNS names stay in the browser. Without a relay, no UDP leaves the host and the srflx carries the proxy IP. Only a page's own loopback connection stays direct | Stock Firefox on the exit machine gathers a real srflx and connects peer to peer | `webrtc-socks5-udp` patch |
 | Touchscreen | A touchscreen laptop, not a phone | Touch points and pointer media must agree with the claimed device | `touchscreen-fingerprint-spoofing`, `force-default-pointer` patches |
 
 Left as stock Firefox has it, on purpose:
@@ -469,7 +496,12 @@ the identity claim the host's OS, and does the host render on a GPU?
 | | Identity on the host's OS | Identity on another OS |
 |---|---|---|
 | **GPU rendering** | 🟢 <ins><b>Most stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ No canvas noise: looks like stock Firefox<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ The claimed GPU is the host's, so the pixels agree with it<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Every identity on this machine claims the same GPU, so there is less fingerprint diversity | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Readback is random, so the real OS does not show<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Canvas noise: looks like LibreWolf, Tor Browser or Mullvad Browser, which are rarer than stock Firefox |
-| **Software rendering**<br/>(no GPU driver, as on most servers) | 🟢 <ins><b>Stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ No canvas noise: looks like stock Firefox<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Looks like a GPU falling back to software rendering, which is rarer than a working GPU | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Readback is random, so the real OS does not show<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Canvas noise: looks like LibreWolf, Tor Browser or Mullvad Browser, which are rarer than stock Firefox |
+| **Software rendering**<br/>(no working GPU driver, as on most servers) | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ No canvas noise: looks like stock Firefox<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Claims the software renderer (`llvmpipe` on Linux), so the pixels agree with it<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Reads as a server or a broken driver, and every identity on this machine claims the same renderer | 🟡 <ins><b>Less stealthy</b></ins><br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ Readback is random, so the real OS does not show<br/>&nbsp;&nbsp;&nbsp;&nbsp;✅ A GPU is drawn per identity, so identities differ<br/>&nbsp;&nbsp;&nbsp;&nbsp;⛔ Canvas noise: looks like LibreWolf, Tor Browser or Mullvad Browser, which are rarer than stock Firefox |
+
+A software-rendering host never claims a GPU. Firefox reads the name and the
+pixels from one GL context, so a GPU name over software pixels never happens on
+a real machine: with a broken GPU driver, Firefox reports `llvmpipe` too. To
+report a GPU, render on one with `headless="virtual-gpu"`.
 
 That is the default. These options override it:
 
@@ -490,9 +522,18 @@ claims the host's OS. Details are in
 | Playwright's `evaluate`, selectors and init scripts run in an isolated world the page cannot see | Juggler |
 | `navigator.webdriver` is `false` | `playwright/1-leak-fixes` patch |
 | `select_option`, `fill` on date and colour inputs, and `set_input_files` fire trusted events | `trusted-automation-events` patch |
+| `fill` and `keyboard.insert_text` paste the text as a person does: the paste shortcut and Firefox's own paste, without the system clipboard | Juggler |
+| Screenshots leave the page's DOM alone (no caret-hiding style writes) | Launcher |
+| Mouse moves coalesce per frame as a real mouse's do, spaced as a 125 Hz mouse's | Juggler, `input-coalescing-parity` patch |
+| A drag fires `drag` at its source with each motion, as GTK does | Juggler, `drag-source-events` patch |
+| Driver calls define no interfaces on the page's window | `isolated-world-global-order` patch |
+| A SOCKS5 proxy with a username and password works, for the launch and per context: the launcher hands the credentials to Juggler, which Playwright alone refuses | Launcher, Juggler |
 | Headless reports a fine pointer, like a desktop | `force-default-pointer` patch |
-| Wheel events carry native ticks, like a physical wheel | `wheel-native-ticks` patch |
+| `mouse.wheel()` turns notches, as a physical wheel does: 100 px is one notch, each its own event with a native tick | Juggler, `wheel-native-ticks` patch |
+| A press's click count is the identity's OS's, counted from the presses before it; Playwright's `click_count` is ignored. A held key repeats with that OS's delay and interval | Juggler |
 | Juggler's debugger leaves no side effects content can observe | `debugger-invisible-to-content` patch |
+| A stack the page captures while a driver call runs its code (`focus`, `dispatch_event`, an `mw:` evaluate) holds only the page's frames, never Juggler's, the isolated world's or the code the `mw:` evaluate compiled; a page function's `caller` is never driver code | Juggler, `debugger-invisible-to-content` patch |
+| Code an `mw:` evaluate runs is named after the document, as an inline script is, never `debugger eval code` | Juggler, `debugger-invisible-to-content` patch |
 | Per-context fingerprint setters are gone before page script runs | `window-setter-seal` patch |
 | Popup blocker on, as in stock Firefox | `popup-blocker-parity` patch |
 | On X11, a pointer-locked window partly off the top or left of the screen keeps running (stock Firefox can crash: the X server refuses the cursor barrier and GDK aborts) | `pointer-lock-offscreen` patch |
@@ -503,7 +544,7 @@ claims the host's OS. Details are in
 
 | Feature | How to use it | Where |
 |---|---|---|
-| Human cursor movement, replayed from 2356 recordings of real people ([Cursory](https://github.com/Vinyzu/cursory)) | `humanize=True`, or a number of seconds to cap each move | Juggler `input/` |
+| Human input: none in the browser. Each Playwright input call is one native event of the identity's OS; humanization is the driver's | `humanize=True` runs myuri in the driver; `myuri(part=fn)` replaces any of its parts | [Human input](#human-input) |
 | Run code in the page's own world | `main_world_eval=True`, then `page.evaluate("mw:...")` | Juggler |
 | Finish animations at once so Playwright never waits | `config={"instantAnimations": True}` (detectable; warns) | `no-css-animations` patch |
 | Read closed shadow roots | `config={"forceScopeAccess": True}` | `shadow-root-bypass` patch |
@@ -514,7 +555,7 @@ claims the host's OS. Details are in
 | Feature | Where |
 |---|---|
 | Load extracted addons without a debug server: `addons=["/path/to/addon"]` | launcher, `camoufox-window-module` patch |
-| uBlock Origin installed by default: each browser release bundles the newest uBO release on AMO when it is built (`browser/scripts/fetch-ubo.py`), blocking with the default filter lists packaged in it, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | packaging, launcher, `policies.json` |
+| uBlock Origin installed by default: each browser release bundles the uBO release pinned in `browser/scripts/data/ubo.json` (`browser/scripts/fetch-ubo.py`), blocking with the default filter lists packaged in it, never downloaded at launch (`exclude_addons=[DefaultAddons.UBO]` to drop it) | packaging (`fetch-ubo.py` freeze_lists), launcher |
 | Addons cannot open tabs unless `allow_addon_new_tab=True` | `disable-extension-newtab` patch |
 | Addons run in private browsing | `all-addons-private-mode` patch |
 
@@ -542,9 +583,8 @@ The full option list is in the [Python README](python/README.md#launch-options).
 |---|---|
 | Telemetry and data reporting removed at compile time | `librewolf/` patches |
 | Onboarding messages disabled | `ghostery/` patch |
-| No bundled search engines | `no-search-engines` patch |
 | Mozilla services and background traffic turned off | [`browser/settings/camoufox.cfg`](browser/settings/camoufox.cfg) |
-| Firefox's bundled certificate revocations (OneCRL) enforced in every profile, with no network fetch | `remote-security-settings` patch |
+| Firefox's bundled certificate revocations (OneCRL) enforced in every profile, with no network fetch | Stock Firefox since 159 |
 | Stock browser UI: no theme, toolbar or dialog changes | |
 
 > [!NOTE]
@@ -573,22 +613,100 @@ and anti-bot vendors look for the one that does not. File a
 [detection report](https://github.com/daijro/camoufox/issues/new?template=camoufox-detected.md)
 when you find one.
 
-## Human cursor
+## Human input
 
-<img src="browser/assets/humanize-cursor.svg" alt="Cursor paths Camoufox produced with humanize=True, replayed at their recorded speed" width="900">
+The browser does not humanize input. Each Playwright input call reaches the page
+as one event of the shape a real device gives stock Firefox: a `mouse.move` is
+one move, a click is a press and a release, `mouse.wheel(dx, dy)` is one wheel
+event in whole notches (Linux and Windows: 100 px a notch, carried in that one
+event as a fast spin of a notched wheel can be; macOS: one event of 16 px lines),
+and `fill()` is Firefox's own paste. The browser adds no timing, paths, pacing or
+randomness of its own, so how human the input looks is up to the driver: send the
+moves, notches and keys a person would, at a person's times
+([docs/input-dispatch.md](docs/input-dispatch.md) has each event's shape per OS).
 
-Each dot is a `mousemove` event the page received from six `page.mouse.move()`
-calls with `humanize=True`, shown at the speed it arrived; close dots mean the
-hand slowed down. `browser/scripts/cursor-demo.py` regenerates the figure.
+The `humanize` option picks an engine per channel, run in your own process:
 
-Camoufox does not compute its cursor paths. It picks one of Cursory's 2356
-recorded human movements that suits the move, morphs it onto the start and end
-points, and replays it with the recording's own timing, including pauses and
-overshoots. It ships [cursory-js](https://github.com/JWriter20/cursory-js), a
-TypeScript port that reproduces the Python original exactly, at
-`browser/additions/juggler/input/cursory/`. **Cursory is LGPLv3-or-later, not
-MPL-2.0 like the rest of the browser**; see
-[`NOTICE`](browser/additions/juggler/input/cursory/NOTICE).
+```python
+from camoufox.humanize import myuri, raw
+
+Camoufox(humanize=True)   # myuri() on every channel
+Camoufox(humanize={"keyboard": myuri(wpm=70), "scroll": raw(), "seed": 1234})
+```
+
+- `myuri()` is [myuri](https://github.com/JWriter20/Myuri)'s smart actions, fitted
+  to recordings of people on each OS and drawn for the launch identity's OS: the
+  path, the press, the typing and the wheel turns, and the decisions around a
+  click (scroll the element into view, choose the point, check that the press
+  lands, try again when it does not). Both packages depend on it, pinned to the
+  release they were tested with.
+- `cursory()` is another name for `myuri()`: myuri runs cursory's paths.
+- `raw()` is Playwright as it is.
+- A channel a dict leaves out is `myuri()`. `humanize=None` or `False`, the
+  default, is `raw()` everywhere.
+
+The engine decides when each event happens; the browser decides what each event
+looks like for the identity's OS ([docs/humanize.md](docs/humanize.md)).
+
+### Replacing a part: `myuri(part=fn)`
+
+Each piece of myuri is a part you can replace with a function of yours, in your own process (Python below; TypeScript in [its README](typescript/README.md#replacing-a-part)). The rest stay myuri's, so a scroll of your own still serves myuri's clicks, and your move still ends where myuri presses.
+
+```python
+import asyncio
+
+from camoufox.async_api import AsyncCamoufox
+from camoufox.humanize import myuri
+
+async def my_move(page, x, y, *, default, rng, play):
+    await asyncio.sleep(0.1 + 0.2 * rng())            # a pause to look, then myuri's path
+    await default()
+
+async def my_into_view(page, locator, *, default, rng, play):
+    await locator.scroll_into_view_if_needed()        # Playwright's own scroll
+    # or: await default() for myuri's wheel turns
+
+async with AsyncCamoufox(humanize={
+    "mouse": myuri(move=my_move),
+    "scroll": myuri(into_view=my_into_view),
+    "keyboard": myuri(wpm=70),
+    "seed": 1234,
+}) as browser:
+    page = await browser.new_page()
+    await page.set_content('<button id="submit" style="margin-top:3000px">Send</button>')
+    await page.locator("#submit").click()             # my_into_view, then myuri's click after my pause
+```
+
+| Channel | Part | Called as | myuri's part |
+|---|---|---|---|
+| `mouse` | `move` | `fn(page, x, y, ...)` | a path from the cursor to (x, y) |
+| | `press` | `fn(page, button, click_count, ...)` | the dwell, then each press and its hold |
+| | `point` | `fn(page, box, attempt, ...)`, returns `(x, y)` | where in the element's visible box to aim; `attempt` counts the misses |
+| | `reaches` | `fn(page, locator, x, y, pressing, ...)`, returns `None` or why it misses | whether a press at (x, y) lands on the element: not covered, enabled |
+| `scroll` | `into_view` | `fn(page, locator, ...)` | wheel turns until the element is in view, waiting for each scroll to land |
+| | `wheel` | `fn(page, dx, dy, ...)` | one scroll split into wheel notches |
+| `keyboard` | `type` | `fn(page, text, ...)` | keys at a person's rhythm, with the mistakes they make |
+| | `key` | `fn(page, key, ...)` | one key or chord (`"Enter"`, `"Control+a"`) |
+
+Every part is also called with `default`, `rng` and `play`, as keywords:
+
+- `default(*args)` runs myuri's part, with the same arguments when given none. A part that only adjusts myuri wraps it.
+- `rng()` returns a float in [0, 1) from the humanize seed's stream: one stream per browser, the same numbers in Python and TypeScript.
+- `play(steps)` dispatches steps at their times, in ms from the start of the call: `("move", x, y, t)`, `("down" | "up", button, t)`, `("wheel", dx, dy, t)` (one wheel event each), `("key", key, "down" | "up", t)`, `("text", text, t)` (pasted, as `keyboard.insert_text` is). It waits until each step is due on a monotonic clock rather than sleeping between steps, so a slow round trip delays one step and never adds up. Bad steps raise `ValueError` before anything is sent.
+- Playwright calls inside a part are Playwright's own: `page.mouse.move` in a move part moves the mouse once.
+- With the sync API a part is a plain function, and `default` and `play` return their result; with the async API they return awaitables, and the part may be `async`. Exceptions reach the caller unchanged.
+
+What each channel drives:
+
+| Channel | For |
+|---|---|
+| `mouse` | `Mouse.move`/`click`/`dblclick`; `click`, `dblclick`, `hover`, `check`, `uncheck` on a `Page`, `Frame` or `Locator`, and the click that focuses a field before `fill` |
+| `keyboard` | `Keyboard.type`/`press`; `fill`, `type`, `press` on a `Page`, `Frame` or `Locator`, and `Locator.press_sequentially` |
+| `scroll` | `Mouse.wheel`, `Locator.scroll_into_view_if_needed`, and bringing an element into view before a pointer action, fill or typing |
+
+- A click that never reaches its element raises Playwright's `TimeoutError` at the call's timeout, naming what covers the point. `trial=True` goes to Playwright alone, and `force=True` skips the reach check.
+- `ElementHandle` methods, `tap`, `drag_and_drop` and `drag_to` are Playwright's own.
+- The wrappers belong to the browser `Camoufox()` launched: other browsers in the same process are untouched. For a browser from `connect()`, launch it without humanize and call `camoufox.humanize.attach(browser, humanize, os)` with its identity's OS. Over a network each event is a round trip, so the launcher warns (`humanize_remote`). `launch_server()` refuses any engine but `raw()`.
 
 # Building the browser
 
@@ -652,6 +770,7 @@ python3 multibuild.py --target linux windows macos --arch x86_64 arm64
 | `--arch` | `x86_64`, `arm64`, `i686` (one or more; `i686` builds Windows only) |
 | `--bootstrap` | Bootstrap the build system first |
 | `--clean` | Clean the build directory first |
+| `--preflight` | Check that each target builds without building it: configure, the export tiers, and every patched source file (minutes, not hours) |
 
 Artifacts are written to `browser/dist/`.
 
@@ -735,7 +854,6 @@ flowchart TD
 | Part | Licence |
 |---|---|
 | The browser (`browser/`: patches, additions, settings, build system) | [MPL-2.0](LICENSE), the licence of the Firefox source it modifies |
-| Vendored Cursory trajectories | LGPLv3-or-later ([`NOTICE`](browser/additions/juggler/input/cursory/NOTICE)) |
 | Python package | MIT ([`python/LICENSE`](python/LICENSE)) |
 | TypeScript package | MIT ([`typescript/LICENSE`](typescript/LICENSE)); includes a port of NumPy's pairwise summation ([notice](typescript/THIRD_PARTY_NOTICES.md)) and depends on [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and [`python-random`](https://www.npmjs.com/package/python-random) |
 
@@ -746,7 +864,7 @@ flowchart TD
 | [LibreWolf](https://gitlab.com/librewolf-community/browser/source) | Debloat patches and the original build system |
 | [BetterFox](https://github.com/yokoffing/BetterFox) | Speed and debloat preferences |
 | [Ghostery](https://github.com/ghostery/user-agent-desktop) | Debloat reference ([disable onboarding](browser/patches/ghostery/Disable-Onboarding-Messages.patch)) |
-| [Vinyzu/cursory](https://github.com/Vinyzu/cursory) | The recorded human mouse movements behind `humanize=True`, vendored via [cursory-js](https://github.com/JWriter20/cursory-js) |
+| [Vinyzu/cursory](https://github.com/Vinyzu/cursory) | The recorded human mouse movements behind `humanize=True`, which [myuri](https://github.com/JWriter20/Myuri) replays (via [cursory-js](https://github.com/JWriter20/cursory-js) in TypeScript) |
 | [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor) | The Bézier cursor Camoufox used before Cursory |
 | [scrapfly/fingerprint-generator](https://github.com/scrapfly/fingerprint-generator) (fpgen) | The device distribution identities are drawn from |
 | [CreepJS](https://github.com/abrahamjuliot/creepjs), [Browserleaks](https://browserleaks.com), [BrowserScan](https://www.browserscan.net/) | Leak testing |

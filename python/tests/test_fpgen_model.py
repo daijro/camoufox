@@ -200,6 +200,29 @@ def test_tampered_download_installs_nothing(tmp_path, pinned, tamper):
     assert not data_dir.exists() or list(data_dir.iterdir()) == []
 
 
+def test_a_kept_archive_installs_without_downloading(tmp_path, pinned):
+    archive = tmp_path / "cache" / "model.zip"
+    ensure_fpgen_model(tmp_path / "first", archive=archive)
+    ensure_fpgen_model(tmp_path / "second", archive=archive)
+
+    assert len(pinned) == 1
+    assert archive.read_bytes() == pinned.payload
+    for name, data in MEMBERS.items():
+        assert (tmp_path / "second" / name).read_bytes() == data
+
+
+def test_a_tampered_kept_archive_installs_nothing(tmp_path, pinned):
+    archive = tmp_path / "model.zip"
+    archive.write_bytes(pinned.payload[:-1])
+    data_dir = tmp_path / "data"
+
+    with pytest.raises(CorruptedDownload):
+        ensure_fpgen_model(data_dir, archive=archive)
+
+    assert pinned == []
+    assert not data_dir.exists()
+
+
 def test_member_hashes_are_checked_even_when_the_archive_hash_matches(tmp_path, pinned):
     bad = _archive({**MEMBERS, "values.dat.zst": b"x"})
     pinned.payload = bad

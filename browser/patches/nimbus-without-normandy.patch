@@ -1,0 +1,36 @@
+Camoufox: Firefox Labs is off in a build without Normandy, with no policy file.
+
+The new tab's Activity Stream starts only once Nimbus reports ready
+(AboutNewTab.onBrowserReady). Stock starts Nimbus from Normandy, which this
+build leaves out (MOZ_NORMANDY), so Nimbus counted as enabled (rollouts on,
+Firefox Labs allowed) but never started. Every preloaded new tab's messages
+then queued in AboutNewTabParent, each holding its closed window: the parent
+grew ~7 MB per browser context and ~15 MB per crashed one
+(tests/native/test_crash_recovery.py).
+
+camoufox.cfg turns rollouts off (nimbus.rollouts.enabled). Firefox 159 reads
+Labs only from enterprise policy (Services.policies.isAllowed("FirefoxLabs")),
+and Camoufox ships no policy file, since any policy file puts Firefox in
+enterprise mode (enterprise-policies.py). So Labs follows the build flag here:
+with Normandy built out, Nimbus is disabled, reports ready at once, and
+Activity Stream starts.
+
+Guard: browser/tests/playwright/patches/nimbus-without-normandy.py.
+
+diff --git a/toolkit/components/nimbus/ExperimentAPI.sys.mjs b/toolkit/components/nimbus/ExperimentAPI.sys.mjs
+index 282c342ecc..172e8fc535 100644
+--- a/toolkit/components/nimbus/ExperimentAPI.sys.mjs
++++ b/toolkit/components/nimbus/ExperimentAPI.sys.mjs
+@@ -505,7 +505,11 @@ export const ExperimentAPI = new (class {
+   }
+ 
+   get labsEnabled() {
+-    return Services.policies.isAllowed("FirefoxLabs");
++    // Camoufox: stock starts Nimbus from Normandy. A build without Normandy
++    // never starts it, so Firefox Labs counted as enabled while Nimbus never
++    // reported ready, and the new tab's Activity Stream (which waits for it)
++    // never ran. Without a policy file to turn Labs off, the build flag does.
++    return AppConstants.MOZ_NORMANDY && Services.policies.isAllowed("FirefoxLabs");
+   }
+ 
+   get rolloutsEnabled() {

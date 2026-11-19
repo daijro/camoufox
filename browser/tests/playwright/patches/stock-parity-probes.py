@@ -12,12 +12,11 @@ an invariant stock Firefox 152 holds:
   gum-fake            getUserMedia({audio: true, fake: true}) resolves without a
                       prompt
   storage-partition   a cross-site iframe's document.hasStorageAccess() is false
-  wheel-default       page.mouse.wheel(0, 300) delivers the delta the caller
-                      asked for: one event, deltaMode 0, deltaY 300
-  wheel-notches       the same scroll with humanize=True arrives as 3 events
-                      with wheelDeltaY a multiple of 120, as a physical wheel
+  wheel-default       page.mouse.wheel(0, 300) arrives as one native wheel
+                      event of 3 notches, wheelDeltaY -360 (docs/input-dispatch.md);
+                      on Linux, as macOS's differs (driven-wheel-notches)
   wheel-scaled        wheel-default again at layout.css.devPixelsPerPx 2:
-                      still deltaY 300, not 150
+                      still 3 notches, not a count halved by the scale
   query-cost          matchMedia('(color: 8)') and navigator.hardwareConcurrency
                       cost about what matchMedia('(min-width: 1px)') and
                       navigator.userAgent do (no sync IPC per read)
@@ -25,9 +24,7 @@ an invariant stock Firefox 152 holds:
                       about what UTC getters do
   timezone-relaunch   a persistent profile relaunched with another timezone
                       reports the new one, in the page and in a worker
-  web-serial          navigator.serial exists on a secure page. Any enterprise
-                      policy turns Web Serial off unless DefaultSerialGuardSetting
-                      turns it back on
+  web-serial          navigator.serial exists on a secure page, as in stock
 
     python browser/tests/playwright/patches/stock-parity-probes.py
 """
@@ -138,7 +135,10 @@ PROBES = """async (port) => {
     const f = document.createElement('iframe');
     f.src = `http://127.0.0.1:${port}/frame`;
     document.body.appendChild(f);
-    setTimeout(() => r('timeout'), 5000);
+    // The bundled uBO holds every request until its filter lists are compiled,
+    // which in a fresh profile takes 2.7 s on a 16-core host and past 5 s on a
+    // CI runner. The value is what is checked; this only bounds a hang.
+    setTimeout(() => r('timeout'), 30000);
   });
 
   // The result of every read is accumulated into `sink`, and `sink` is returned.
@@ -188,7 +188,8 @@ def run_probes(binary, port):
     from camoufox.sync_api import Camoufox
 
     config = {"webrtc:ipv4": "203.0.113.7", "timezone": "Asia/Tokyo"}
-    with Camoufox(headless=True, executable_path=str(binary), config=config, i_know_what_im_doing=True) as b:
+    with Camoufox(headless=True, executable_path=str(binary), os="linux", config=config,
+                  i_know_what_im_doing=True) as b:
         page = b.new_page()
         page.goto(f"http://localhost:{port}/")
         page.wait_for_function("() => document.body.dataset.result", timeout=60000)
@@ -202,19 +203,16 @@ def run_probes(binary, port):
         return out
 
 
-def probe_wheel(binary, port, humanize, prefs=None):
-    """One scroll of 300px, with humanize on or off.
-
-    Off (the default) the caller's delta is delivered verbatim, which is what
-    upstream's own suite asserts. On, the scroll is quantised into the notches a
-    physical wheel produces. Both are shipped behaviour, so both are checked.
-    """
+def probe_wheel(binary, port, prefs=None):
+    """One scroll of 300px, quantised into the notches a physical wheel produces."""
     from camoufox.sync_api import Camoufox
 
-    with Camoufox(headless=True, executable_path=str(binary), humanize=humanize,
+    with Camoufox(headless=True, executable_path=str(binary), os="linux",
                   firefox_user_prefs=prefs or {}, i_know_what_im_doing=True) as b:
         page = b.new_page()
         page.goto(f"http://localhost:{port}/")
+        # The page is idle first, so the wheel is not queued behind the load.
+        page.evaluate("() => new Promise((r) => requestIdleCallback(() => r(), {timeout: 2000}))")
         page.mouse.move(200, 200)
         page.mouse.wheel(0, 300)
         page.wait_for_timeout(1500)
@@ -249,9 +247,7 @@ def main() -> int:
     server, port = serve()
     try:
         out = run_probes(binary, port)
-        out["wheelHumanized"] = probe_wheel(binary, port, humanize=True)
-        out["wheelScaled"] = probe_wheel(binary, port, humanize=False,
-                                         prefs={"layout.css.devPixelsPerPx": "2"})
+        out["wheelScaled"] = probe_wheel(binary, port, prefs={"layout.css.devPixelsPerPx": "2"})
         relaunch = relaunch_timezones(binary, port)
     finally:
         server.shutdown()
@@ -283,16 +279,10 @@ def main() -> int:
         failures.append(f"gum-fake: getUserMedia({{fake: true}}) {out['gumFake']}")
     if out["storageAccess"] is not False:
         failures.append(f"storage-partition: cross-site iframe hasStorageAccess() = {out['storageAccess']}")
-    wheel = out["wheel"]
-    # Default: the delta the caller asked for, in pixels, as one event.
-    if len(wheel) != 1 or wheel[0]["mode"] != 0 or wheel[0]["dy"] != 300:
-        failures.append(f"wheel-default: wheel(0, 300) gave {wheel}")
-    if [e["dy"] for e in out["wheelScaled"]] != [300]:
-        failures.append(f"wheel-scaled: wheel(0, 300) at 2x gave {out['wheelScaled']}")
-    # humanize=True: notches, each carrying one native tick.
-    humanized = out["wheelHumanized"]
-    if len(humanized) != 3 or any(e["wd"] % 120 for e in humanized):
-        failures.append(f"wheel-notches: humanized wheel(0, 300) gave {humanized}")
+    # 300 px is three notches, in one event, as one 360-unit WM_MOUSEWHEEL.
+    for name, events in (("wheel-default", out["wheel"]), ("wheel-scaled", out["wheelScaled"])):
+        if [e["wd"] for e in events] != [-360]:
+            failures.append(f"{name}: wheel(0, 300) gave {events}")
     # 20000 reads of a value that lives in the config cost ~20 ms here, i.e.
     # ~1 us each: a hash lookup, no IPC. The state this guards against is a sync
     # IPC per read, measured at ~12 us each when it regressed -- 240 ms over the
@@ -315,7 +305,7 @@ def main() -> int:
     if not out["secureContext"]:
         failures.append("web-serial: the probe page is not a secure context -- check is vacuous")
     elif not out["serial"]:
-        failures.append("web-serial: navigator.serial is missing (policies.json needs DefaultSerialGuardSetting: 3)")
+        failures.append("web-serial: navigator.serial is missing")
 
     print()
     if failures:

@@ -76,3 +76,8 @@ def test_a_pin_for_another_firefox_is_refused(served):
     served(_archive({"merged.profdata": b"p", "en-US.log": b"l"}))
     with pytest.raises(SystemExit, match="pgo.py pin"):
         pgo.fetch("macos", "arm64", "2.0")
+
+
+def test_the_shipped_remote_settings_are_for_this_firefox():
+    pin = json.loads((BROWSER_ROOT / "scripts" / "data" / "remote-settings.json").read_text())
+    assert pin["firefox"] == read_upstream_sh()["version"]

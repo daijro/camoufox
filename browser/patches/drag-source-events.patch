@@ -1,0 +1,25 @@
+diff --git a/dom/base/nsContentUtils.cpp b/dom/base/nsContentUtils.cpp
+index a8f545f133..f041906937 100644
+--- a/dom/base/nsContentUtils.cpp
++++ b/dom/base/nsContentUtils.cpp
+@@ -10465,6 +10465,20 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
+   } else if (aType.EqualsLiteral("drop")) {
+     msg = eDrop;
+     isPWDragEventMessage = true;
++  } else if (aType.EqualsLiteral("drag")) {
++    // Camoufox: a drag's motion fires `drag` at the source before dragover at
++    // the target, as GTK's nsDragSession::DispatchMotionEvents does; Juggler
++    // sends it ahead of each motion's dragover (PageAgent._dispatchDragEvent).
++    nsCOMPtr<nsIDragSession> session = GetDragSession(aWidget);
++    if (!session) {
++      return Err(NS_ERROR_FAILURE);
++    }
++    nsresult rv = session->FireDragEventAtSource(
++        eDrag, GetWidgetModifiers(aMouseEventData.mModifiers));
++    if (NS_FAILED(rv)) {
++      return Err(rv);
++    }
++    return false;
+   } else {
+     return Err(NS_ERROR_FAILURE);
+   }

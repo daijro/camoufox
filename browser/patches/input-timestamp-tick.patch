@@ -1,0 +1,60 @@
+diff --git a/dom/base/TextInputProcessor.cpp b/dom/base/TextInputProcessor.cpp
+index 929e614023..889790b7d8 100644
+--- a/dom/base/TextInputProcessor.cpp
++++ b/dom/base/TextInputProcessor.cpp
+@@ -2,6 +2,7 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
++#include "MaskConfig.hpp"
+ #include "mozilla/TextInputProcessor.h"
+ 
+ #include "mozilla/AutoRestore.h"
+@@ -969,6 +970,7 @@ nsresult TextInputProcessor::PrepareKeyboardEventToDispatch(
+   if (NS_WARN_IF(aKeyboardEvent.mCodeNameIndex == CODE_NAME_INDEX_USE_STRING)) {
+     return NS_ERROR_INVALID_ARG;
+   }
++  aKeyboardEvent.mTimeStamp = MaskConfig::InputTimeStamp();
+   if ((aKeyFlags & KEY_NON_PRINTABLE_KEY) &&
+       NS_WARN_IF(aKeyboardEvent.mKeyNameIndex == KEY_NAME_INDEX_USE_STRING)) {
+     return NS_ERROR_INVALID_ARG;
+diff --git a/dom/base/nsContentUtils.cpp b/dom/base/nsContentUtils.cpp
+index 5c41420da8..6d23c2ed28 100644
+--- a/dom/base/nsContentUtils.cpp
++++ b/dom/base/nsContentUtils.cpp
+@@ -4,6 +4,7 @@
+ 
+ /* A namespace class for static layout utilities. */
+ 
++#include "MaskConfig.hpp"
+ #include "nsContentUtils.h"
+ 
+ #include <fmt/format.h>
+@@ -10560,6 +10561,7 @@ Result<bool, nsresult> nsContentUtils::SynthesizeMouseEvent(
+   mouseOrPointerEvent.mJugglerEventId = aMouseEventData.mJugglerEventId;
+   mouseOrPointerEvent.convertToPointer = aOptions.mConvertToPointer;
+   mouseOrPointerEvent.mCallbackId = notifier.SaveCallback();
++  mouseOrPointerEvent.mTimeStamp = MaskConfig::InputTimeStamp();
+ 
+   nsPresContext* presContext = aPresShell->GetPresContext();
+   if (!presContext) {
+diff --git a/dom/base/nsDOMWindowUtils.cpp b/dom/base/nsDOMWindowUtils.cpp
+index d93380181f..4fa15b4d10 100644
+--- a/dom/base/nsDOMWindowUtils.cpp
++++ b/dom/base/nsDOMWindowUtils.cpp
+@@ -2,6 +2,7 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
++#include "MaskConfig.hpp"
+ #include "nsDOMWindowUtils.h"
+ 
+ #include <algorithm>
+@@ -792,6 +793,7 @@ nsDOMWindowUtils::SendWheelEvent(float aX, float aY, double aDeltaX,
+   mozilla::widget::AutoSynthesizedEventCallbackNotifier notifier(aCallback);
+ 
+   WidgetWheelEvent wheelEvent(true, eWheel, widget);
++  wheelEvent.mTimeStamp = MaskConfig::InputTimeStamp();
+   wheelEvent.mModifiers = nsContentUtils::GetWidgetModifiers(aModifiers);
+   wheelEvent.mDeltaX = aDeltaX;
+   wheelEvent.mDeltaY = aDeltaY;

@@ -1,0 +1,61 @@
+diff --git a/dom/base/WebRTCIPManager.cpp b/dom/base/WebRTCIPManager.cpp
+index 62198f4244..be6fa0bd06 100644
+--- a/dom/base/WebRTCIPManager.cpp
++++ b/dom/base/WebRTCIPManager.cpp
+@@ -23,6 +23,18 @@ WebRTCIPManager::IPv6KeyForUserContext(uint32_t userContextId) {
+   return key;
+ }
+ 
++/* static */ bool
++WebRTCIPManager::IsProxied(uint32_t userContextId) {
++  nsString key;
++  key.AppendLiteral(u"webrtc_proxied_");
++  key.AppendInt(userContextId);
++  bool proxied = false;
++  return (RoverfoxStorageManager::GetBool(key, proxied) && proxied) ||
++         (RoverfoxStorageManager::GetBool(u"webrtc_proxied_browser"_ns,
++                                          proxied) &&
++          proxied);
++}
++
+ /* static */ void
+ WebRTCIPManager::SetIPv4(uint32_t userContextId, const nsAString& ipv4) {
+   nsString key = IPv4KeyForUserContext(userContextId);
+diff --git a/dom/base/WebRTCIPManager.h b/dom/base/WebRTCIPManager.h
+index a134ba615a..14813f6bcb 100644
+--- a/dom/base/WebRTCIPManager.h
++++ b/dom/base/WebRTCIPManager.h
+@@ -44,6 +44,14 @@ public:
+    */
+   static bool GetIPv6(uint32_t userContextId, nsAString& outIPv6);
+ 
++  /**
++   * Whether this user context reaches the network through a proxy. Juggler's
++   * proxies are not in network.proxy.*, and a document with no HTTP channel
++   * (about:blank, srcdoc, blob:, data:) cannot answer for itself, so
++   * TargetRegistry.js records them in storage.
++   */
++  static bool IsProxied(uint32_t userContextId);
++
+   /**
+    * Mark the setWebRTCIPv4 function as used/disabled for a context.
+    * @param userContextId The user context ID
+diff --git a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
+index f2b647c364..c74c8161de 100644
+--- a/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
++++ b/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp
+@@ -4813,6 +4813,14 @@ bool PeerConnectionImpl::ShouldForceProxy() const {
+   // Ok, we're supposed to be proxy_only, but only if a proxy is configured.
+   // Let's just see if the document was loaded via a proxy.
+ 
++  // Camoufox: Juggler's proxies, per context and for the browser, are not in
++  // network.proxy.*. Without one the document chain and the prefs decide, so
++  // a direct launch stays direct.
++  if (mWindow && WebRTCIPManager::IsProxied(
++                     dom::RoverfoxStorageManager::UserContextId(mWindow.get()))) {
++    return true;
++  }
++
+   // Camoufox: about:blank, srcdoc, blob: and data: documents have no HTTP
+   // channel, so stock gathers in them as if no proxy were set, and STUN
+   // leaves around the proxy from the real address. They run for the document

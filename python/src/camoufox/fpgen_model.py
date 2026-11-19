@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import time
+from io import BytesIO
 from pathlib import Path
 from threading import Lock
 from types import ModuleType
@@ -83,10 +84,13 @@ def is_pinned(data_dir: Optional[Path] = None) -> bool:
     )
 
 
-def ensure_fpgen_model(data_dir: Optional[Path] = None, force: bool = False) -> None:
+def ensure_fpgen_model(
+    data_dir: Optional[Path] = None, force: bool = False, archive: Optional[Path] = None
+) -> None:
     """Install the pinned model unless it is already there, and keep fpgen from
     replacing it. Hashing the installed files takes ~2 ms, and catches a model
-    fpgen fetched over an earlier install."""
+    fpgen fetched over an earlier install. `archive` is a file the downloaded
+    archive is kept in and installed from, checked against the pin either way."""
     if os.getenv(CUSTOM_MODEL_ENV):
         return
     data_dir = data_dir or fpgen_data_dir()
@@ -103,7 +107,7 @@ def ensure_fpgen_model(data_dir: Optional[Path] = None, force: bool = False) -> 
             )
         try:
             if force or not is_pinned(data_dir):
-                _install(data_dir)
+                _install(data_dir, archive)
             _drop_foreign_decompressed(data_dir)
             _stamp(data_dir)
         except PermissionError as e:
@@ -116,10 +120,17 @@ def ensure_fpgen_model(data_dir: Optional[Path] = None, force: bool = False) -> 
             ) from e
 
 
-def _install(data_dir: Path) -> None:
-    print(f"Downloading fpgen model {PIN['tag']}: {PIN['url']}", file=sys.stderr)
-    buffer = webdl(PIN['url'], progress_callback=lambda done, total: None)
-    verify_sha256(buffer, PIN['sha256'], 'fpgen model')
+def _install(data_dir: Path, archive: Optional[Path] = None) -> None:
+    kept = archive is not None and archive.exists()
+    if kept:
+        buffer = BytesIO(archive.read_bytes())
+    else:
+        print(f"Downloading fpgen model {PIN['tag']}: {PIN['url']}", file=sys.stderr)
+        buffer = webdl(PIN['url'], progress_callback=lambda done, total: None)
+    verify_sha256(buffer, PIN['sha256'], f'fpgen model {archive}' if kept else 'fpgen model')
+    if archive and not kept:
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        write_atomic(archive, buffer.getvalue())
 
     members = {}
     with ZipFile(buffer) as zf:

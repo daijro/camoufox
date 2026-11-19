@@ -1,0 +1,28 @@
+name: Install the fpgen model
+description: >-
+  Install the fpgen model pinned by python/src/camoufox/fpgen-model.json, from
+  an archive cached across runs, so a job does not depend on GitHub serving the
+  release (a 504 there failed pythonlib and skipped every browser job). The
+  archive is checked against the pin whether it was cached or downloaded.
+  Left to itself, fpgen downloads its model on first import with TLS
+  verification off and no checksum, and only ever the April-2025 release
+  (python/scripts/pin-fpgen-model.py), so every job that installs pythonlib
+  runs this before anything imports fpgen.
+
+inputs:
+  python:
+    description: The interpreter camoufox is installed in
+    required: false
+    default: python3
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: .ci-work/fpgen-model.zip
+        key: fpgen-archive-${{ hashFiles('python/src/camoufox/fpgen-model.json') }}
+    - shell: bash
+      run: >-
+        ${{ inputs.python }} "$GITHUB_WORKSPACE/python/scripts/pin-fpgen-model.py"
+        --archive "$GITHUB_WORKSPACE/.ci-work/fpgen-model.zip"

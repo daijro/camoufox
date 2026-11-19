@@ -194,8 +194,10 @@ async def main() -> int:
 
         await page.fill("#filled", "x")
         await page.focus("#btn")
-        _check(results, "fill on a text input is identical to a keystroke",
-               shape(await rec.drain(), *text_events), typed)
+        pasted = [{**e, "inputType": "insertFromPaste"} if e.get("inputType") else e
+                  for e in typed]
+        _check(results, "fill on a text input is a trusted paste",
+               shape(await rec.drain(), *text_events), pasted)
 
         await page.fill("#capped", "123456")
         await rec.drain()

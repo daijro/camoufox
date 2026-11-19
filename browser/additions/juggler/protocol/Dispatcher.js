@@ -130,6 +130,10 @@ class ProtocolSession {
       throw new Error(`Session does not have a handler!`);
     if (!this._handler[method])
       throw new Error(`Handler for does not implement method "${method}"`);
+    // Camoufox: PageHandler holds other commands until the page has the last
+    // move (input-coalescing-parity.patch, docs/input-dispatch.md).
+    if (this._handler.beforeDispatch)
+      await this._handler.beforeDispatch(method, params);
     return await this._handler[method](params);
   }
 }

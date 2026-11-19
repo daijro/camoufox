@@ -1,0 +1,101 @@
+diff --git a/layout/style/FontFaceSet.cpp b/layout/style/FontFaceSet.cpp
+index aa8b0d72..b3bc50a3 100644
+--- a/layout/style/FontFaceSet.cpp
++++ b/layout/style/FontFaceSet.cpp
+@@ -12,6 +12,8 @@
+ #include "gfxFontUtils.h"
+ #include "mozilla/AsyncEventDispatcher.h"
+ #include "mozilla/BasePrincipal.h"
++#include "nsContentUtils.h"
++#include "xpcpublic.h"
+ #include "mozilla/FontPropertyTypes.h"
+ #include "mozilla/LoadInfo.h"
+ #include "mozilla/Logging.h"
+@@ -68,6 +70,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INHERITED(FontFaceSet,
+                                                   DOMEventTargetHelper)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE_RAWPTR(mImpl->GetDocument());
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mReady);
++  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPrivilegedReady);
+   for (size_t i = 0; i < tmp->mRuleFaces.Length(); i++) {
+     NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mRuleFaces[i].mFontFace);
+   }
+@@ -80,6 +83,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN_INHERITED(FontFaceSet,
+                                                 DOMEventTargetHelper)
+   tmp->Destroy();
+   NS_IMPL_CYCLE_COLLECTION_UNLINK(mReady);
++  NS_IMPL_CYCLE_COLLECTION_UNLINK(mPrivilegedReady);
+   for (size_t i = 0; i < tmp->mRuleFaces.Length(); i++) {
+     NS_IMPL_CYCLE_COLLECTION_UNLINK(mRuleFaces[i].mFontFace);
+   }
+@@ -191,9 +195,40 @@ bool FontFaceSet::Check(const nsACString& aFont, const nsAString& aText,
+   return true;
+ }
+ 
++Promise* FontFaceSet::GetPrivilegedReady(ErrorResult& aRv) {
++  // Settled ones have done their job; the binding holds the one returned.
++  mPrivilegedReady.RemoveElementsBy([](const RefPtr<Promise>& aPromise) {
++    return aPromise->State() != Promise::PromiseState::Pending;
++  });
++  nsIGlobalObject* global =
++      xpc::CurrentNativeGlobal(nsContentUtils::GetCurrentJSContext());
++  RefPtr<Promise> promise = Promise::Create(global, aRv);
++  if (!promise) {
++    aRv.Throw(NS_ERROR_FAILURE);
++    return nullptr;
++  }
++  const bool readyPending =
++      mReady ? mReady->State() == Promise::PromiseState::Pending
++             : !mResolveLazilyCreatedReadyPromise;
++  if (!readyPending) {
++    promise->MaybeResolve(this);
++  }
++  mPrivilegedReady.AppendElement(promise);
++  return promise;
++}
++
+ Promise* FontFaceSet::GetReady(ErrorResult& aRv) {
+   mImpl->EnsureReady();
+ 
++  // Camoufox: a system or expanded principal is never a web page's.
++  if (NS_IsMainThread() && nsContentUtils::GetCurrentJSContext()) {
++    nsIPrincipal* subject = nsContentUtils::SubjectPrincipal();
++    if (subject->IsSystemPrincipal() ||
++        subject->GetIsExpandedPrincipal()) {
++      return GetPrivilegedReady(aRv);
++    }
++  }
++
+   if (!mReady) {
+     nsCOMPtr<nsIGlobalObject> global = GetParentObject();
+     mReady = Promise::Create(global, aRv);
+@@ -469,6 +504,10 @@ void FontFaceSet::MaybeResolve() {
+   } else {
+     mResolveLazilyCreatedReadyPromise = true;
+   }
++  for (const RefPtr<Promise>& promise : mPrivilegedReady.Clone()) {
++    promise->MaybeResolve(this);
++  }
++  mPrivilegedReady.Clear();
+   DispatchEvent(*loadingdone);
+   if (loadingerror) {
+     DispatchEvent(*loadingerror);
+diff --git a/layout/style/FontFaceSet.h b/layout/style/FontFaceSet.h
+index 4fe3cabe..5ce78f9f 100644
+--- a/layout/style/FontFaceSet.h
++++ b/layout/style/FontFaceSet.h
+@@ -150,6 +150,15 @@ class FontFaceSet final : public DOMEventTargetHelper {
+   // Whether the ready promise must be resolved when it's created.
+   bool mResolveLazilyCreatedReadyPromise = false;
+ 
++  // Camoufox: ready promises handed to privileged callers (a driver's utility
++  // world), each in the caller's own global, resolved alongside mReady.
++  // GetReady() for such a caller neither creates mReady nor resolves it: that
++  // looks up "then" on this FontFaceSet in the page's realm, which a page
++  // reads as a getter on Object.prototype.then firing when nothing of its own
++  // asked for document.fonts.ready.
++  nsTArray<RefPtr<dom::Promise>> mPrivilegedReady;
++  dom::Promise* GetPrivilegedReady(ErrorResult& aRv);
++
+   // The @font-face rule backed FontFace objects in the FontFaceSet.
+   nsTArray<FontFaceRecord> mRuleFaces;
+ 

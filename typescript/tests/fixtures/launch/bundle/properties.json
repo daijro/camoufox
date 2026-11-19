@@ -59,6 +59,7 @@
   { "property": "webGl:contextAttributes", "type": "dict" },
   { "property": "webGl2:contextAttributes", "type": "dict" },
   { "property": "voices", "type": "array" },
+  { "property": "voices:speechd", "type": "dict" },
   { "property": "voices:blockIfNotDefined", "type": "bool" },
   { "property": "mediaDevices:micros", "type": "uint" },
   { "property": "mediaDevices:webcams", "type": "uint" },

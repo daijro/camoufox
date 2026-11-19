@@ -303,13 +303,17 @@
   ]
  },
  "mac": {
+  "source": "Stock Firefox on macOS 27.0 (26A428), Mac mini M4; the same 184-voice set is the most common macOS list in the fpgen corpus, which predates macOS 26",
   "base": [
    "Albert:en-US:local",
    "Alice:it-IT:local",
+   "Soumya:kn-IN:local",
    "Alva:sv-SE:local",
+   "Aman:en-IN:local",
    "Amélie:fr-CA:local",
    "Amira:ms-MY:local",
    "Anna:de-DE:local",
+   "Aru:kk-KZ:local",
    "Bad News:en-US:local",
    "Bahh:en-US:local",
    "Bells:en-US:local",
@@ -351,6 +355,7 @@
    "Flo (Chinese (China mainland)):zh-CN:local",
    "Flo (Chinese (Taiwan)):zh-TW:local",
    "Fred:en-US:local",
+   "Geeta:te-IN:local",
    "Good News:en-US:local",
    "Grandma (German (Germany)):de-DE:local",
    "Grandma (English (UK)):en-GB:local",
@@ -404,8 +409,10 @@
    "Mónica:es-ES:local",
    "Montse:ca-ES:local",
    "Nora:nb-NO:local",
+   "Ona:lt-LT:local",
    "Organ:en-US:local",
    "Paulina:es-MX:local",
+   "Piya:bn-IN:local",
    "Superstar:en-US:local",
    "Ralph:en-US:local",
    "Reed (German (Germany)):de-DE:local",
@@ -468,11 +475,13 @@
    "Shelley (Chinese (China mainland)):zh-CN:local",
    "Shelley (Chinese (Taiwan)):zh-TW:local",
    "Sinji:zh-HK:local",
+   "Tara:en-IN:local",
    "Tessa:en-ZA:local",
    "Thomas:fr-FR:local",
    "Tina:sl-SI:local",
    "Tingting:zh-CN:local",
    "Trinoids:en-US:local",
+   "Vani:ta-IN:local",
    "Whisper:en-US:local",
    "Xander:nl-NL:local",
    "Yelda:tr-TR:local",
@@ -481,6 +490,9 @@
    "Zosia:pl-PL:local",
    "Zuzana:cs-CZ:local"
   ],
+  "systemVoice": {
+   "default": "Samantha"
+  },
   "additions": [
    {
     "id": "macintalk-download",
@@ -524,139 +536,1319 @@
   ]
  },
  "lin": {
-  "base": [
-   "Afrikaans:af:local",
-   "Amharic:am:local",
-   "Aragonese:an:local",
-   "Arabic:ar:local",
-   "Assamese:as:local",
-   "Azerbaijani:az:local",
-   "Bashkir:ba:local",
-   "Belarusian:be:local",
-   "Bulgarian:bg:local",
-   "Bengali:bn:local",
-   "Bishnupriya Manipuri:bpy:local",
-   "Bosnian:bs:local",
-   "Catalan:ca:local",
-   "Cherokee:chr-US-QAAA-X-WEST:local",
-   "Chinese (Mandarin, latin as English):cmn:local",
-   "Chinese (Mandarin, latin as Pinyin):cmn-LATN-PINYIN:local",
-   "Czech:cs:local",
-   "Chuvash:cv:local",
-   "Welsh:cy:local",
-   "Danish:da:local",
-   "German:de:local",
-   "Greek:el:local",
-   "English (Caribbean):en-029:local",
-   "English (Great Britain):en-GB:local",
-   "English (Scotland):en-GB-SCOTLAND:local",
-   "English (Lancaster):en-GB-X-GBCLAN:local",
-   "English (West Midlands):en-GB-X-GBCWMD:local",
-   "English (Received Pronunciation):en-GB-X-RP:local",
-   "English (America):en-US:local",
-   "English (America, New York City):en-US-NYC:local",
-   "Esperanto:eo:local",
-   "Spanish (Spain):es:local",
-   "Spanish (Latin America):es-419:local",
-   "Estonian:et:local",
-   "Basque:eu:local",
-   "Persian:fa:local",
-   "Persian (Pinglish):fa-LATN:local",
-   "Finnish:fi:local",
-   "French (Belgium):fr-BE:local",
-   "French (Switzerland):fr-CH:local",
-   "French (France):fr-FR:local",
-   "Gaelic (Irish):ga:local",
-   "Gaelic (Scottish):gd:local",
-   "Guarani:gn:local",
-   "Greek (Ancient):grc:local",
-   "Gujarati:gu:local",
-   "Hakka Chinese:hak:local",
-   "Hawaiian:haw:local",
-   "Hebrew:he:local",
-   "Hindi:hi:local",
-   "Croatian:hr:local",
-   "Haitian Creole:ht:local",
-   "Hungarian:hu:local",
-   "Armenian (East Armenia):hy:local",
-   "Armenian (West Armenia):hyw:local",
-   "Interlingua:ia:local",
-   "Indonesian:id:local",
-   "Ido:io:local",
-   "Icelandic:is:local",
-   "Italian:it:local",
-   "Japanese:ja:local",
-   "Lojban:jbo:local",
-   "Georgian:ka:local",
-   "Kazakh:kk:local",
-   "Greenlandic:kl:local",
-   "Kannada:kn:local",
-   "Korean:ko:local",
-   "Konkani:kok:local",
-   "Kurdish:ku:local",
-   "Kyrgyz:ky:local",
-   "Latin:la:local",
-   "Luxembourgish:lb:local",
-   "Lingua Franca Nova:lfn:local",
-   "Lithuanian:lt:local",
-   "Latgalian:ltg:local",
-   "Latvian:lv:local",
-   "Māori:mi:local",
-   "Macedonian:mk:local",
-   "Malayalam:ml:local",
-   "Marathi:mr:local",
-   "Malay:ms:local",
-   "Maltese:mt:local",
-   "Myanmar (Burmese):my:local",
-   "Norwegian Bokmål:nb:local",
-   "Nahuatl (Classical):nci:local",
-   "Nepali:ne:local",
-   "Dutch:nl:local",
-   "Nogai:nog:local",
-   "Oromo:om:local",
-   "Oriya:or:local",
-   "Punjabi:pa:local",
-   "Papiamento:pap:local",
-   "Klingon:piqd:local",
-   "Polish:pl:local",
-   "Portuguese (Portugal):pt:local",
-   "Portuguese (Brazil):pt-BR:local",
-   "Pyash:py:local",
-   "Lang_Belta:qdb:local",
-   "Quechua:qu:local",
-   "K'iche':quc:local",
-   "Quenya:qya:local",
-   "Romanian:ro:local",
-   "Russian:ru:local",
-   "Russian (Latvia):ru-LV:local",
-   "Sindhi:sd:local",
-   "Shan (Tai Yai):shn:local",
-   "Sinhala:si:local",
-   "Sindarin:sjn:local",
-   "Slovak:sk:local",
-   "Slovenian:sl:local",
-   "Lule Saami:smj:local",
-   "Albanian:sq:local",
-   "Serbian:sr:local",
-   "Swedish:sv:local",
-   "Swahili:sw:local",
-   "Tamil:ta:local",
-   "Telugu:te:local",
-   "Thai:th:local",
-   "Turkmen:tk:local",
-   "Setswana:tn:local",
-   "Turkish:tr:local",
-   "Tatar:tt:local",
-   "Uyghur:ug:local",
-   "Ukrainian:uk:local",
-   "Urdu:ur:local",
-   "Uzbek:uz:local",
-   "Vietnamese (Northern):vi:local",
-   "Vietnamese (Central):vi-VN-X-CENTRAL:local",
-   "Vietnamese (Southern):vi-VN-X-SOUTH:local",
-   "Chinese (Cantonese):yue:local",
-   "Chinese (Cantonese, latin as Jyutping):yue:local"
-  ],
+  "releases": {
+   "ubuntu2404": {
+    "speechd": {
+     "languages": [
+      [
+       "Afrikaans",
+       "af"
+      ],
+      [
+       "Amharic",
+       "am"
+      ],
+      [
+       "Aragonese",
+       "an"
+      ],
+      [
+       "Arabic",
+       "ar"
+      ],
+      [
+       "Assamese",
+       "as"
+      ],
+      [
+       "Azerbaijani",
+       "az"
+      ],
+      [
+       "Bashkir",
+       "ba"
+      ],
+      [
+       "Belarusian",
+       "be"
+      ],
+      [
+       "Bulgarian",
+       "bg"
+      ],
+      [
+       "Bengali",
+       "bn"
+      ],
+      [
+       "Bishnupriya Manipuri",
+       "bpy"
+      ],
+      [
+       "Bosnian",
+       "bs"
+      ],
+      [
+       "Catalan",
+       "ca"
+      ],
+      [
+       "Cherokee ",
+       "chr-US-QAAA-X-WEST"
+      ],
+      [
+       "Chinese (Mandarin, latin as English)",
+       "cmn"
+      ],
+      [
+       "Chinese (Mandarin, latin as Pinyin)",
+       "cmn-LATN-PINYIN"
+      ],
+      [
+       "Czech",
+       "cs"
+      ],
+      [
+       "Chuvash",
+       "cv"
+      ],
+      [
+       "Welsh",
+       "cy"
+      ],
+      [
+       "Danish",
+       "da"
+      ],
+      [
+       "German",
+       "de"
+      ],
+      [
+       "Greek",
+       "el"
+      ],
+      [
+       "English (Caribbean)",
+       "en-029"
+      ],
+      [
+       "English (Great Britain)",
+       "en-GB"
+      ],
+      [
+       "English (Scotland)",
+       "en-GB-SCOTLAND"
+      ],
+      [
+       "English (Lancaster)",
+       "en-GB-X-GBCLAN"
+      ],
+      [
+       "English (West Midlands)",
+       "en-GB-X-GBCWMD"
+      ],
+      [
+       "English (Received Pronunciation)",
+       "en-GB-X-RP"
+      ],
+      [
+       "English (America)",
+       "en-US"
+      ],
+      [
+       "English (America, New York City)",
+       "en-US-NYC"
+      ],
+      [
+       "Esperanto",
+       "eo"
+      ],
+      [
+       "Spanish (Spain)",
+       "es"
+      ],
+      [
+       "Spanish (Latin America)",
+       "es-419"
+      ],
+      [
+       "Estonian",
+       "et"
+      ],
+      [
+       "Basque",
+       "eu"
+      ],
+      [
+       "Persian",
+       "fa"
+      ],
+      [
+       "Persian (Pinglish)",
+       "fa-LATN"
+      ],
+      [
+       "Finnish",
+       "fi"
+      ],
+      [
+       "French (Belgium)",
+       "fr-BE"
+      ],
+      [
+       "French (Switzerland)",
+       "fr-CH"
+      ],
+      [
+       "French (France)",
+       "fr-FR"
+      ],
+      [
+       "Gaelic (Irish)",
+       "ga"
+      ],
+      [
+       "Gaelic (Scottish)",
+       "gd"
+      ],
+      [
+       "Guarani",
+       "gn"
+      ],
+      [
+       "Greek (Ancient)",
+       "grc"
+      ],
+      [
+       "Gujarati",
+       "gu"
+      ],
+      [
+       "Hakka Chinese",
+       "hak"
+      ],
+      [
+       "Hawaiian",
+       "haw"
+      ],
+      [
+       "Hebrew",
+       "he"
+      ],
+      [
+       "Hindi",
+       "hi"
+      ],
+      [
+       "Croatian",
+       "hr"
+      ],
+      [
+       "Haitian Creole",
+       "ht"
+      ],
+      [
+       "Hungarian",
+       "hu"
+      ],
+      [
+       "Armenian (East Armenia)",
+       "hy"
+      ],
+      [
+       "Armenian (West Armenia)",
+       "hyw"
+      ],
+      [
+       "Interlingua",
+       "ia"
+      ],
+      [
+       "Indonesian",
+       "id"
+      ],
+      [
+       "Ido",
+       "io"
+      ],
+      [
+       "Icelandic",
+       "is"
+      ],
+      [
+       "Italian",
+       "it"
+      ],
+      [
+       "Japanese",
+       "ja"
+      ],
+      [
+       "Lojban",
+       "jbo"
+      ],
+      [
+       "Georgian",
+       "ka"
+      ],
+      [
+       "Kazakh",
+       "kk"
+      ],
+      [
+       "Greenlandic",
+       "kl"
+      ],
+      [
+       "Kannada",
+       "kn"
+      ],
+      [
+       "Korean",
+       "ko"
+      ],
+      [
+       "Konkani",
+       "kok"
+      ],
+      [
+       "Kurdish",
+       "ku"
+      ],
+      [
+       "Kyrgyz",
+       "ky"
+      ],
+      [
+       "Latin",
+       "la"
+      ],
+      [
+       "Luxembourgish",
+       "lb"
+      ],
+      [
+       "Lingua Franca Nova",
+       "lfn"
+      ],
+      [
+       "Lithuanian",
+       "lt"
+      ],
+      [
+       "Latgalian",
+       "ltg"
+      ],
+      [
+       "Latvian",
+       "lv"
+      ],
+      [
+       "Māori",
+       "mi"
+      ],
+      [
+       "Macedonian",
+       "mk"
+      ],
+      [
+       "Malayalam",
+       "ml"
+      ],
+      [
+       "Marathi",
+       "mr"
+      ],
+      [
+       "Malay",
+       "ms"
+      ],
+      [
+       "Maltese",
+       "mt"
+      ],
+      [
+       "Myanmar (Burmese)",
+       "my"
+      ],
+      [
+       "Norwegian Bokmål",
+       "nb"
+      ],
+      [
+       "Nahuatl (Classical)",
+       "nci"
+      ],
+      [
+       "Nepali",
+       "ne"
+      ],
+      [
+       "Dutch",
+       "nl"
+      ],
+      [
+       "Nogai",
+       "nog"
+      ],
+      [
+       "Oromo",
+       "om"
+      ],
+      [
+       "Oriya",
+       "or"
+      ],
+      [
+       "Punjabi",
+       "pa"
+      ],
+      [
+       "Papiamento",
+       "pap"
+      ],
+      [
+       "Klingon",
+       "piqd"
+      ],
+      [
+       "Polish",
+       "pl"
+      ],
+      [
+       "Portuguese (Portugal)",
+       "pt"
+      ],
+      [
+       "Portuguese (Brazil)",
+       "pt-BR"
+      ],
+      [
+       "Pyash",
+       "py"
+      ],
+      [
+       "Lang_Belta",
+       "qdb"
+      ],
+      [
+       "Quechua",
+       "qu"
+      ],
+      [
+       "K'iche'",
+       "quc"
+      ],
+      [
+       "Quenya",
+       "qya"
+      ],
+      [
+       "Romanian",
+       "ro"
+      ],
+      [
+       "Russian",
+       "ru"
+      ],
+      [
+       "Russian (Latvia)",
+       "ru-LV"
+      ],
+      [
+       "Sindhi",
+       "sd"
+      ],
+      [
+       "Shan (Tai Yai)",
+       "shn"
+      ],
+      [
+       "Sinhala",
+       "si"
+      ],
+      [
+       "Sindarin",
+       "sjn"
+      ],
+      [
+       "Slovak",
+       "sk"
+      ],
+      [
+       "Slovenian",
+       "sl"
+      ],
+      [
+       "Lule Saami",
+       "smj"
+      ],
+      [
+       "Albanian",
+       "sq"
+      ],
+      [
+       "Serbian",
+       "sr"
+      ],
+      [
+       "Swedish",
+       "sv"
+      ],
+      [
+       "Swahili",
+       "sw"
+      ],
+      [
+       "Tamil",
+       "ta"
+      ],
+      [
+       "Telugu",
+       "te"
+      ],
+      [
+       "Thai",
+       "th"
+      ],
+      [
+       "Turkmen",
+       "tk"
+      ],
+      [
+       "Setswana",
+       "tn"
+      ],
+      [
+       "Turkish",
+       "tr"
+      ],
+      [
+       "Tatar",
+       "tt"
+      ],
+      [
+       "Uyghur",
+       "ug"
+      ],
+      [
+       "Ukrainian",
+       "uk"
+      ],
+      [
+       "Urdu",
+       "ur"
+      ],
+      [
+       "Uzbek",
+       "uz"
+      ],
+      [
+       "Vietnamese (Northern)",
+       "vi"
+      ],
+      [
+       "Vietnamese (Central)",
+       "vi-VN-X-CENTRAL"
+      ],
+      [
+       "Vietnamese (Southern)",
+       "vi-VN-X-SOUTH"
+      ],
+      [
+       "Chinese (Cantonese)",
+       "yue"
+      ],
+      [
+       "Chinese (Cantonese, latin as Jyutping)",
+       "yue"
+      ]
+     ],
+     "variants": [
+      "Adam",
+      "Alex",
+      "Alicia",
+      "Andrea",
+      "Andy",
+      "Annie",
+      "Antonio",
+      "Auntie",
+      "Belinda",
+      "Benjamin",
+      "Boris",
+      "Caleb",
+      "David",
+      "Demonic",
+      "Denis",
+      "Diogo",
+      "Ed",
+      "Edward",
+      "Edward2",
+      "Gene",
+      "Gene2",
+      "Gustave",
+      "Half-LifeAnnouncementSystem",
+      "Henrique",
+      "Hugo",
+      "Iven",
+      "Iven2",
+      "Iven3",
+      "Iven4",
+      "Jacky",
+      "John",
+      "Kaukovalta",
+      "Lee",
+      "Linda",
+      "Marcelo",
+      "Marco",
+      "Mario",
+      "Max",
+      "Michael",
+      "Michel",
+      "Miguel",
+      "Mike",
+      "Mr_Serious",
+      "Nguyen",
+      "Pablo",
+      "Paul",
+      "Pedro",
+      "Quincy",
+      "RicishayMax",
+      "RicishayMax2",
+      "RicishayMax3",
+      "Rob",
+      "Robert",
+      "Robosoft",
+      "Robosoft2",
+      "Robosoft3",
+      "Robosoft4",
+      "Robosoft5",
+      "Robosoft6",
+      "Robosoft7",
+      "Robosoft8",
+      "Steph",
+      "Steph2",
+      "Steph3",
+      "Storm",
+      "Tweaky",
+      "UniversalRobot",
+      "Zac",
+      "anika",
+      "anikaRobot",
+      "anxiousAndy",
+      "fast_test",
+      "female2",
+      "female3",
+      "female4",
+      "female5",
+      "female_whisper",
+      "grandpa",
+      "klatt",
+      "klatt2",
+      "klatt3",
+      "klatt4",
+      "klatt5",
+      "klatt6",
+      "male2",
+      "male3",
+      "male4",
+      "male5",
+      "male6",
+      "male7",
+      "norbert",
+      "sandro",
+      "shelby",
+      "travis",
+      "victor",
+      "whisper",
+      "male8",
+      "female1",
+      "croak",
+      "male1",
+      "grandma"
+     ]
+    },
+    "source": "Ubuntu 24.04 default install: speech-dispatcher 0.12.0~rc2, espeak-ng-data 1.51; spd_list_synthesis_voices() = 131 languages x (base + 101 variants) = 13362 voices"
+   },
+   "ubuntu2604": {
+    "speechd": {
+     "languages": [
+      [
+       "Afrikaans",
+       "af"
+      ],
+      [
+       "Amharic",
+       "am"
+      ],
+      [
+       "Aragonese",
+       "an"
+      ],
+      [
+       "Arabic",
+       "ar"
+      ],
+      [
+       "Assamese",
+       "as"
+      ],
+      [
+       "Azerbaijani",
+       "az"
+      ],
+      [
+       "Bashkir",
+       "ba"
+      ],
+      [
+       "Belarusian",
+       "be"
+      ],
+      [
+       "Bulgarian",
+       "bg"
+      ],
+      [
+       "Bengali",
+       "bn"
+      ],
+      [
+       "Bishnupriya Manipuri",
+       "bpy"
+      ],
+      [
+       "Bosnian",
+       "bs"
+      ],
+      [
+       "Catalan",
+       "ca"
+      ],
+      [
+       "Catalan (Balearic)",
+       "ca-BA"
+      ],
+      [
+       "Catalan (North-western)",
+       "ca-NW"
+      ],
+      [
+       "Catalan (Valencian)",
+       "ca-VA"
+      ],
+      [
+       "Cherokee ",
+       "chr-US-QAAA-X-WEST"
+      ],
+      [
+       "Chinese (Mandarin, latin as English)",
+       "cmn"
+      ],
+      [
+       "Chinese (Mandarin, latin as Pinyin)",
+       "cmn-LATN-PINYIN"
+      ],
+      [
+       "Czech",
+       "cs"
+      ],
+      [
+       "Chuvash",
+       "cv"
+      ],
+      [
+       "Welsh",
+       "cy"
+      ],
+      [
+       "Danish",
+       "da"
+      ],
+      [
+       "German",
+       "de"
+      ],
+      [
+       "Greek",
+       "el"
+      ],
+      [
+       "English (Caribbean)",
+       "en-029"
+      ],
+      [
+       "English (Great Britain)",
+       "en-GB"
+      ],
+      [
+       "English (Scotland)",
+       "en-GB-SCOTLAND"
+      ],
+      [
+       "English (Lancaster)",
+       "en-GB-X-GBCLAN"
+      ],
+      [
+       "English (West Midlands)",
+       "en-GB-X-GBCWMD"
+      ],
+      [
+       "English (Received Pronunciation)",
+       "en-GB-X-RP"
+      ],
+      [
+       "English (Shavian alphabet)",
+       "en-SHAW"
+      ],
+      [
+       "English (America)",
+       "en-US"
+      ],
+      [
+       "English (America, New York City)",
+       "en-US-NYC"
+      ],
+      [
+       "Esperanto",
+       "eo"
+      ],
+      [
+       "Spanish (Spain)",
+       "es"
+      ],
+      [
+       "Spanish (Latin America)",
+       "es-419"
+      ],
+      [
+       "Estonian",
+       "et"
+      ],
+      [
+       "Basque",
+       "eu"
+      ],
+      [
+       "Persian",
+       "fa"
+      ],
+      [
+       "Persian (Pinglish)",
+       "fa-LATN"
+      ],
+      [
+       "Finnish",
+       "fi"
+      ],
+      [
+       "Faroese",
+       "fo"
+      ],
+      [
+       "French (Belgium)",
+       "fr-BE"
+      ],
+      [
+       "French (Switzerland)",
+       "fr-CH"
+      ],
+      [
+       "French (France)",
+       "fr-FR"
+      ],
+      [
+       "Gaelic (Irish)",
+       "ga"
+      ],
+      [
+       "Gaelic (Scottish)",
+       "gd"
+      ],
+      [
+       "Guarani",
+       "gn"
+      ],
+      [
+       "Greek (Ancient)",
+       "grc"
+      ],
+      [
+       "Gujarati",
+       "gu"
+      ],
+      [
+       "Hakka Chinese",
+       "hak"
+      ],
+      [
+       "Hawaiian",
+       "haw"
+      ],
+      [
+       "Hebrew",
+       "he"
+      ],
+      [
+       "Hindi",
+       "hi"
+      ],
+      [
+       "Croatian",
+       "hr"
+      ],
+      [
+       "Haitian Creole",
+       "ht"
+      ],
+      [
+       "Hungarian",
+       "hu"
+      ],
+      [
+       "Armenian (East Armenia)",
+       "hy"
+      ],
+      [
+       "Armenian (West Armenia)",
+       "hyw"
+      ],
+      [
+       "Interlingua",
+       "ia"
+      ],
+      [
+       "Indonesian",
+       "id"
+      ],
+      [
+       "Ido",
+       "io"
+      ],
+      [
+       "Icelandic",
+       "is"
+      ],
+      [
+       "Italian",
+       "it"
+      ],
+      [
+       "Japanese",
+       "ja"
+      ],
+      [
+       "Lojban",
+       "jbo"
+      ],
+      [
+       "Georgian",
+       "ka"
+      ],
+      [
+       "Karakalpak",
+       "kaa"
+      ],
+      [
+       "Kazakh",
+       "kk"
+      ],
+      [
+       "Greenlandic",
+       "kl"
+      ],
+      [
+       "Kannada",
+       "kn"
+      ],
+      [
+       "Korean",
+       "ko"
+      ],
+      [
+       "Konkani",
+       "kok"
+      ],
+      [
+       "Kurdish",
+       "ku"
+      ],
+      [
+       "Kyrgyz",
+       "ky"
+      ],
+      [
+       "Latin",
+       "la"
+      ],
+      [
+       "Luxembourgish",
+       "lb"
+      ],
+      [
+       "Lingua Franca Nova",
+       "lfn"
+      ],
+      [
+       "Lithuanian",
+       "lt"
+      ],
+      [
+       "Latgalian",
+       "ltg"
+      ],
+      [
+       "Latvian",
+       "lv"
+      ],
+      [
+       "Māori",
+       "mi"
+      ],
+      [
+       "Macedonian",
+       "mk"
+      ],
+      [
+       "Malayalam",
+       "ml"
+      ],
+      [
+       "Marathi",
+       "mr"
+      ],
+      [
+       "Malay",
+       "ms"
+      ],
+      [
+       "Maltese",
+       "mt"
+      ],
+      [
+       "Totontepec Mixe",
+       "mto"
+      ],
+      [
+       "Myanmar (Burmese)",
+       "my"
+      ],
+      [
+       "Norwegian Bokmål",
+       "nb"
+      ],
+      [
+       "Nahuatl (Classical)",
+       "nci"
+      ],
+      [
+       "Nepali",
+       "ne"
+      ],
+      [
+       "Dutch",
+       "nl"
+      ],
+      [
+       "Nogai",
+       "nog"
+      ],
+      [
+       "Oromo",
+       "om"
+      ],
+      [
+       "Oriya",
+       "or"
+      ],
+      [
+       "Punjabi",
+       "pa"
+      ],
+      [
+       "Papiamento",
+       "pap"
+      ],
+      [
+       "Klingon",
+       "piqd"
+      ],
+      [
+       "Polish",
+       "pl"
+      ],
+      [
+       "Portuguese (Portugal)",
+       "pt"
+      ],
+      [
+       "Portuguese (Brazil)",
+       "pt-BR"
+      ],
+      [
+       "Pyash",
+       "py"
+      ],
+      [
+       "Lang Belta",
+       "qdb"
+      ],
+      [
+       "Quechua",
+       "qu"
+      ],
+      [
+       "K'iche'",
+       "quc"
+      ],
+      [
+       "Quenya",
+       "qya"
+      ],
+      [
+       "Romanian",
+       "ro"
+      ],
+      [
+       "Russian",
+       "ru"
+      ],
+      [
+       "Russian (Classic)",
+       "ru-CL"
+      ],
+      [
+       "Russian (Latvia)",
+       "ru-LV"
+      ],
+      [
+       "Sindhi",
+       "sd"
+      ],
+      [
+       "Shan (Tai Yai)",
+       "shn"
+      ],
+      [
+       "Sinhala",
+       "si"
+      ],
+      [
+       "Sindarin",
+       "sjn"
+      ],
+      [
+       "Slovak",
+       "sk"
+      ],
+      [
+       "Slovenian",
+       "sl"
+      ],
+      [
+       "Lule Saami",
+       "smj"
+      ],
+      [
+       "Albanian",
+       "sq"
+      ],
+      [
+       "Serbian",
+       "sr"
+      ],
+      [
+       "Swedish",
+       "sv"
+      ],
+      [
+       "Swahili",
+       "sw"
+      ],
+      [
+       "Tamil",
+       "ta"
+      ],
+      [
+       "Telugu",
+       "te"
+      ],
+      [
+       "Thai",
+       "th"
+      ],
+      [
+       "Tigrinya",
+       "ti"
+      ],
+      [
+       "Turkmen",
+       "tk"
+      ],
+      [
+       "Setswana",
+       "tn"
+      ],
+      [
+       "Turkish",
+       "tr"
+      ],
+      [
+       "Tatar",
+       "tt"
+      ],
+      [
+       "Uyghur",
+       "ug"
+      ],
+      [
+       "Ukrainian",
+       "uk"
+      ],
+      [
+       "Urdu",
+       "ur"
+      ],
+      [
+       "Uzbek",
+       "uz"
+      ],
+      [
+       "Vietnamese (Northern)",
+       "vi"
+      ],
+      [
+       "Vietnamese (Central)",
+       "vi-VN-X-CENTRAL"
+      ],
+      [
+       "Vietnamese (Southern)",
+       "vi-VN-X-SOUTH"
+      ],
+      [
+       "xextan-test",
+       "xex"
+      ],
+      [
+       "Chinese (Cantonese)",
+       "yue"
+      ],
+      [
+       "Chinese (Cantonese, latin as Jyutping)",
+       "yue"
+      ]
+     ],
+     "variants": [
+      "Adam",
+      "Alex",
+      "Alicia",
+      "Andrea",
+      "Andy",
+      "Annie",
+      "Antonio",
+      "Auntie",
+      "Belinda",
+      "Benjamin",
+      "Boris",
+      "Caleb",
+      "David",
+      "Demonic",
+      "Denis",
+      "Diogo",
+      "Ed",
+      "Edward",
+      "Edward2",
+      "Gene",
+      "Gene2",
+      "Gustave",
+      "Half-LifeAnnouncementSystem",
+      "Henrique",
+      "Hugo",
+      "Ian",
+      "Iven",
+      "Iven2",
+      "Iven3",
+      "Iven4",
+      "Jacky",
+      "John",
+      "Kaukovalta",
+      "Lee",
+      "Linda",
+      "Marcelo",
+      "Marco",
+      "Mario",
+      "Max",
+      "Michael",
+      "Michel",
+      "Miguel",
+      "Mike",
+      "Mike2",
+      "Mr_Serious",
+      "Nguyen",
+      "Pablo",
+      "Paul",
+      "Pedro",
+      "Quincy",
+      "Reed",
+      "RicishayMax",
+      "RicishayMax2",
+      "RicishayMax3",
+      "Rob",
+      "Robert",
+      "Robosoft",
+      "Robosoft2",
+      "Robosoft3",
+      "Robosoft4",
+      "Robosoft5",
+      "Robosoft6",
+      "Robosoft7",
+      "Robosoft8",
+      "Steph",
+      "Steph2",
+      "Steph3",
+      "Storm",
+      "Tweaky",
+      "UniversalRobot",
+      "Zac",
+      "anika",
+      "anikaRobot",
+      "anxiousAndy",
+      "fast_test",
+      "female2",
+      "female3",
+      "female4",
+      "female5",
+      "female_whisper",
+      "grandpa",
+      "klatt",
+      "klatt2",
+      "klatt3",
+      "klatt4",
+      "klatt5",
+      "klatt6",
+      "male2",
+      "male3",
+      "male4",
+      "male5",
+      "male6",
+      "male7",
+      "norbert",
+      "sandro",
+      "shelby",
+      "travis",
+      "victor",
+      "whisper",
+      "male8",
+      "female1",
+      "croak",
+      "male1",
+      "grandma"
+     ]
+    },
+    "source": "Ubuntu 26.04 default install: speech-dispatcher 0.12.1, espeak-ng-data 1.52; spd_list_synthesis_voices() = 141 languages x (base + 104 variants) = 14805 voices"
+   }
+  },
   "additions": [
    {
     "id": "alt-speechd-modules",

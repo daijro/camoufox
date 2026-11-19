@@ -30,6 +30,7 @@ import enum
 import os
 import subprocess  # nosec
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -706,15 +707,18 @@ class Cycle(enum.Enum):
     CRASH = "crash"
 
 
-# The parent's first context costs it 150-200 MB with no crash at all, and the
-# second still 10-40 MB. A baseline taken before them counts that as growth.
-WARMUP_CYCLES = 2
+# The parent's first contexts cost it 150-200 MB with no crash at all. On Firefox
+# 159, stock as well, timed startup work then holds up to 400 MB more, on a clock
+# rather than per context: in the first seconds, about 20 s in and about 60 s in.
+# A phase read across one reports it as growth or shrinkage. From about 70 s the
+# parent stays within 30 MB or so, measured to 180 s.
+WARMUP_SECONDS = 75
 # Per phase. Long enough for a per-crash leak to outgrow the +-50 MB a phase
 # wanders by on its own.
 PHASE_CYCLES = 8
 # How much more the crash phase may grow the parent than the control phase.
-# Measured locally, 18 and 20 runs: -105..+26 MB with crashed tabs closed,
-# +132..+591 MB when every crashed page kept its window open.
+# Measured locally on two cores: -59..+18 MB over 20 runs with crashed tabs
+# closed, +150..+344 MB over 19 runs when every crashed page kept its window open.
 CRASH_EXCESS_LIMIT_MB = 100
 
 
@@ -761,9 +765,16 @@ async def test_the_parent_stays_flat_across_content_crashes(binary, psutil_mod, 
             await _context_cycle(psutil_mod, browser, cycle)
         return (rss() - before) / (1024 * 1024)
 
-    await phase(Cycle.CONTROL, WARMUP_CYCLES)
-    control_mb = await phase(Cycle.CONTROL, PHASE_CYCLES)
-    crash_mb = await phase(Cycle.CRASH, PHASE_CYCLES)
+    # Torn down whatever the measurement says: a browser left running would be
+    # the first camoufox-bin the next test finds, and it would kill that one.
+    try:
+        warmed_up = time.monotonic() + WARMUP_SECONDS
+        while time.monotonic() < warmed_up:
+            await _context_cycle(psutil_mod, browser, Cycle.CONTROL)
+        control_mb = await phase(Cycle.CONTROL, PHASE_CYCLES)
+        crash_mb = await phase(Cycle.CRASH, PHASE_CYCLES)
+    finally:
+        await teardown(manager, "teardown after measuring parent growth")
     excess_mb = crash_mb - control_mb
 
     # On every run, not just a failing one, so CI logs carry the distribution
@@ -781,8 +792,6 @@ async def test_the_parent_stays_flat_across_content_crashes(binary, psutil_mod, 
         f"{excess_mb:.0f} MB the crashes alone left behind. A crashing child should "
         "not drag the parent up with it."
     )
-
-    await teardown(manager, "teardown after measuring parent growth")
     leak_check.assert_clean()
 
 

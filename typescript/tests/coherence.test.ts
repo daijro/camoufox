@@ -138,11 +138,75 @@ describe("rules", () => {
 		expect(config["screen.pixelDepth"]).toBe(30);
 	});
 
+	it("an Intel Mac reports deep colour too", () => {
+		const config: Record<string, any> = {
+			"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
+			"screen.colorDepth": 24,
+		};
+		expect(rules(config, "mac")).toEqual(["color-depth"]);
+		expect(coherence.apply(config, "mac")).toEqual([]);
+		expect(config["screen.colorDepth"]).toBe(30);
+	});
+
+	it("does not repair a kept key", () => {
+		const config: Record<string, any> = {
+			"webGl:renderer": "Apple M1, or similar",
+			"screen.colorDepth": 24,
+			"screen.pixelDepth": 30,
+			"window.devicePixelRatio": 1.5,
+		};
+		const left = coherence.apply(
+			config,
+			"mac",
+			new Set(["screen.colorDepth", "window.devicePixelRatio"]),
+		);
+		expect(left.map((v) => [v.rule, v.kept])).toEqual([
+			["color-depth", ["screen.colorDepth"]],
+			["device-pixel-ratio", ["window.devicePixelRatio"]],
+		]);
+		expect(config["screen.colorDepth"]).toBe(24);
+		expect(config["window.devicePixelRatio"]).toBe(1.5);
+		// pixelDepth is not kept, so it follows the colorDepth that stands.
+		expect(config["screen.pixelDepth"]).toBe(24);
+	});
+
+	it("still runs a repair off the kept keys", () => {
+		const config: Record<string, any> = {
+			"window.innerHeight": 800,
+			"window.outerHeight": 820,
+		};
+		expect(
+			coherence.apply(config, "lin", new Set(["window.innerHeight"])),
+		).toEqual([]);
+		expect(config["window.innerHeight"]).toBe(800);
+		expect(config["window.outerHeight"]).toBe(
+			800 + coherence.BROWSER_CHROME_HEIGHT,
+		);
+	});
+
+	it("reports a kept source GPU instead of dropping it", () => {
+		const config: Record<string, any> = {
+			"webGl:vendor": "Google Inc. (NVIDIA)",
+			"webGl:renderer":
+				"ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11), or similar",
+		};
+		const left = coherence.dropIncoherentSourceValues(
+			config,
+			"mac",
+			new Set(["webGl:renderer", "webGl:vendor"]),
+		);
+		expect(left.map((v) => [v.rule, v.kept])).toEqual([
+			["gpu-matches-os", ["webGl:renderer", "webGl:vendor"]],
+		]);
+		expect("webGl:renderer" in config).toBe(true);
+	});
+
 	it("colour depth is 24 or 30", () => {
-		const config = { "screen.colorDepth": 32 };
+		const config: Record<string, any> = { "screen.colorDepth": 32 };
 		expect(rules(config, "lin")).toEqual(["color-depth"]);
 		expect(coherence.apply(config, "lin")).toEqual([]);
 		expect(config["screen.colorDepth"]).toBe(24);
+		expect(config["screen.pixelDepth"]).toBe(24);
 	});
 
 	it("touch points are a digitiser count", () => {
@@ -179,6 +243,75 @@ describe("rules", () => {
 		);
 		expect(rules({ "window.devicePixelRatio": 1.5 }, "mac")).toEqual([
 			"device-pixel-ratio",
+		]);
+	});
+
+	it("repairing the ratio keeps the physical display", () => {
+		// fpgen's 1920x1080 monitor recorded at a 110% browser zoom: the zoom is
+		// folded into the ratio (1.0909) and shrinks every CSS size by it. The
+		// display mode is 100%, so the CSS geometry is the display's own.
+		const config: Record<string, unknown> = {
+			"window.devicePixelRatio": 1.0909090909090908,
+			"screen.width": 1760,
+			"screen.height": 990,
+			"screen.availWidth": 1760,
+			"screen.availHeight": 946,
+			"screen.availLeft": 0,
+			"screen.availTop": 0,
+			"window.outerWidth": 1760,
+			"window.outerHeight": 953,
+			"window.innerWidth": 1760,
+			"window.innerHeight": 807,
+			"window.screenX": -7,
+			"window.screenY": -7,
+		};
+		coherence.apply(config, "win");
+		expect(config["window.devicePixelRatio"]).toBe(1);
+		expect([config["screen.width"], config["screen.height"]]).toEqual([
+			1920, 1080,
+		]);
+		expect([config["screen.availWidth"], config["screen.availHeight"]]).toEqual(
+			[1920, 1032],
+		);
+		expect([config["window.outerWidth"], config["window.innerWidth"]]).toEqual([
+			1920, 1920,
+		]);
+		expect(config["window.innerHeight"]).toBe(880);
+		expect([config["window.screenX"], config["window.screenY"]]).toEqual([
+			-8, -8,
+		]);
+		// A screen the caller set is the caller's display: the ratio still moves
+		// to a real step, and no CSS size is rescaled, the caller's or another.
+		const screenSet: Record<string, unknown> = {
+			"window.devicePixelRatio": 1.0909090909090908,
+			"screen.width": 1760,
+			"screen.height": 990,
+			"window.outerWidth": 1760,
+		};
+		expect(
+			coherence.apply(screenSet, "win", new Set(["screen.width"])),
+		).toEqual([]);
+		expect(screenSet["window.devicePixelRatio"]).toBe(1);
+		expect([
+			screenSet["screen.width"],
+			screenSet["screen.height"],
+			screenSet["window.outerWidth"],
+		]).toEqual([1760, 990, 1760]);
+		// A ratio the caller set stays, reported by that key alone.
+		const kept: Record<string, unknown> = {
+			"window.devicePixelRatio": 1.0909090909090908,
+			"screen.width": 1760,
+			"screen.height": 990,
+		};
+		const left = coherence.apply(
+			kept,
+			"win",
+			new Set(["window.devicePixelRatio", "screen.width"]),
+		);
+		expect(kept["window.devicePixelRatio"]).toBe(1.0909090909090908);
+		expect(kept["screen.width"]).toBe(1760);
+		expect(left.map((v) => [v.rule, v.kept])).toEqual([
+			["device-pixel-ratio", ["window.devicePixelRatio"]],
 		]);
 	});
 

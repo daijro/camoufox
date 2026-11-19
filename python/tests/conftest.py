@@ -1,4 +1,8 @@
+from pathlib import Path
+
 import pytest
+
+SETTINGS = Path(__file__).resolve().parents[2] / 'browser' / 'settings'
 
 
 @pytest.fixture(autouse=True)
@@ -10,3 +14,16 @@ def no_host_gpu_probe(monkeypatch):
     from camoufox import utils
 
     monkeypatch.setattr(utils, 'host_gpu', lambda *args: None)
+
+
+@pytest.fixture(autouse=True)
+def properties_of_this_checkout(monkeypatch):
+    """launch_options reads properties.json from the installed build, and CI
+    installs the last published one. This suite tests the checkout, whose
+    launcher may draw a key that build predates, so it reads the checkout's."""
+    from camoufox import utils
+
+    load = utils._load_properties
+    monkeypatch.setattr(
+        utils, '_load_properties', lambda path=None: load(path or SETTINGS / 'camoufox-bin')
+    )

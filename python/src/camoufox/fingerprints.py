@@ -10,6 +10,7 @@ from random import Random, choice, randrange
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from camoufox._warnings import WARNINGS_DATA, FallbackWarning, _warn_from_caller
+from camoufox.coherence import hardware_cpu
 from camoufox.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
@@ -277,18 +278,21 @@ def _load_font_bases() -> Dict[str, List[Dict[str, Any]]]:
     return _FONT_BASES_CACHE
 
 
-def _pick_base(os_key: str, rng: Any) -> List[str]:
-    """Draw one OS-version base by its real-world weight."""
+def _pick_release(os_key: str, rng: Any) -> Optional[Dict[str, Any]]:
+    """Draw the OS version a machine runs (a font-bases.json entry) by its
+    real-world weight. It is the identity's first draw, so the font list and
+    the voice list -- both drawn from the same seed -- land on the same
+    version."""
     bases = _load_font_bases().get(os_key) or []
     if not bases:
-        return []
+        return None
     roll = rng.random()
     cumulative = 0.0
     for base in bases:
         cumulative += base.get('weight', 0.0)
         if roll < cumulative:
-            return list(base['fonts'])
-    return list(bases[-1]['fonts'])
+            return base
+    return bases[-1]
 
 
 def _draw_units(os_key: str, rng: Any, exclude: Set[str],
@@ -391,7 +395,8 @@ def _generate_random_font_subset(
 
     # One machine runs one OS version, and has that version's default font set
     # in full -- so the base is drawn whole, by weight, and never subsetted.
-    base = _pick_base(os_key, rng)
+    release = _pick_release(os_key, rng)
+    base = list(release['fonts']) if release else []
     if not base:
         # No generated base data: fall back to the always-present core so a
         # draw is still coherent rather than empty.
@@ -430,6 +435,7 @@ def _generate_random_font_subset(
 #   macOS NSSpeechSynthesizer -> "urn:moz-tts:osx:<dotted-slug>"
 #   Windows SAPI              -> "urn:moz-tts:sapi:<dotted-slug>"
 #   Linux speech-dispatcher   -> "urn:moz-tts:speechd:<escaped-name>?<lang>"
+#   (the browser builds the Linux URIs itself from `voices:speechd`)
 _VOICE_URI_PREFIX = {
     'mac': 'urn:moz-tts:osx:',
     'win': 'urn:moz-tts:sapi:',
@@ -558,6 +564,36 @@ def _resolve_display_pack(packs: Dict[str, Any], fallback: str, locale: Optional
     return fallback if fallback in packs else next(iter(packs))
 
 
+def _speechd_grid(seed: Optional[int]) -> Dict[str, Any]:
+    """The speech-dispatcher voice grid of the Ubuntu release the identity runs
+    (voice-manifests.json, measured per release): its espeak-ng languages and
+    the variants each comes in."""
+    release = _pick_release('lin', _rng(seed))
+    releases = _load_voice_manifests()['lin']['releases']
+    return releases[release['id']]['speechd'] if release else next(iter(releases.values()))['speechd']
+
+
+def _speechd_voices(grid: Dict[str, Any]) -> List[Tuple[str, str]]:
+    """(name, lang) per voice in speech-dispatcher's order: each language alone,
+    then with every variant ("Afrikaans", "Afrikaans+Adam", ...). The browser
+    expands `voices:speechd` the same way (MaskConfig::MSpeechdVoices)."""
+    return [
+        (name if variant is None else f'{name}+{variant}', lang)
+        for name, lang in grid['languages']
+        for variant in [None, *grid['variants']]
+    ]
+
+
+def draw_voice_config(
+    target_os: str, locale: Optional[str] = None, seed: Optional[int] = None) -> Dict[str, Any]:
+    """The identity's voices as the config keys the browser reads: `voices`
+    on macOS and Windows, `voices:speechd` on Linux, whose ~15000 voices only
+    fit in the environment as their language x variant grid."""
+    if OS_KEYS.get(target_os) == 'lin':
+        return {'voices:speechd': _speechd_grid(seed)}
+    return {'voices': _generate_random_voice_subset(target_os, locale, seed)}
+
+
 def _generate_random_voice_subset(
     target_os: str, locale: Optional[str] = None, seed: Optional[int] = None) -> List[Dict[str, Any]]:
     """Generate the speech voice list for the given OS as MaskConfig objects.
@@ -572,12 +608,27 @@ def _generate_random_voice_subset(
     machine exposes (voice-manifests.json):
       Windows: the display language's OneCore pack (en-US: David/Mark/Zira),
                its legacy "Desktop" tokens, and occasionally extra packs;
-      macOS:   the compact + Eloquence base (~184 voices) plus rare downloads;
-      Linux:   speech-dispatcher's fixed espeak-ng list (131 voices).
+      macOS:   the compact + Eloquence base (184 voices) plus rare downloads;
+      Linux:   speech-dispatcher's espeak-ng grid for the identity's Ubuntu
+               release (13362 or 14805 voices), the same release its fonts
+               are drawn for.
     Seeded by the identity so the same identity always reports the same list.
     """
     rng = _rng(seed)
     os_key = OS_KEYS.get(target_os, 'mac')
+    if os_key == 'lin':
+        return [
+            {
+                'name': name,
+                'lang': lang,
+                'voiceUri': _voice_uri('lin', name, lang),
+                'isDefault': False,
+                # SpeechDispatcherService registers voices as local only when
+                # one is named "default"; espeak-ng has none.
+                'isLocalService': False,
+            }
+            for name, lang in _speechd_voices(_speechd_grid(seed))
+        ]
     manifest = _load_voice_manifests().get(os_key) or _load_voice_manifests()['mac']
 
     out: List[str] = []
@@ -650,9 +701,15 @@ def _generate_random_voice_subset(
         for (name, lang, vtype) in selected
     ]
 
-    # No voice carries default=true: stock Firefox 152 marks none on Windows
-    # (SAPI), macOS or Linux (measured 2026-09-14 on all three), so a spoofed
-    # default would be the odd one out.
+    # macOS marks its system voice default (Samantha on an English system:
+    # stock Firefox 152 on macOS 14, 15, 26 and 27, measured 2026-10-26).
+    # Other system languages are unmeasured; they keep Samantha, since Firefox
+    # always marks one voice on macOS. Windows (SAPI) and Linux mark none.
+    system_voice = (manifest.get('systemVoice') or {}).get('default')
+    for voice in voices:
+        if voice['name'] == system_voice:
+            voice['isDefault'] = True
+            break
     return voices
 
 
@@ -793,6 +850,39 @@ def fix_navigator_arch(config: Dict[str, Any], target_os: str) -> None:
         config['navigator.platform'] = target
     if config.get('navigator.oscpu') != target:
         config['navigator.oscpu'] = target
+
+
+# Intel's share of the x86 desktop CPUs running Firefox: the Firefox Public Data
+# Report's CPU vendor dataset for the week of 2026-11-02 counts Intel 76.86%,
+# AMD 17.61%, Apple 5.04% (data.firefox.com/dashboard/hardware), so Intel is
+# 76.86 / (76.86 + 17.61) of the x86 machines. The dataset has no per-OS split.
+X86_INTEL_SHARE: float = LAUNCHER_CONSTANTS['x86IntelShare']
+
+
+def set_cpu_default(config: Dict[str, Any], target_os: str, salt: int = 0) -> None:
+    """Fill in the identity's CPU (cpu:arch, cpu:manufacturer).
+
+    The CPU shows in values a page computes, not in anything Firefox reports:
+    canvas pixels, Web Audio samples, encoded Opus, relaxed-SIMD wasm and NaN
+    signs differ between x86-64 and ARM64, and canvas and Opus between Intel's
+    and AMD's RCPPS/RSQRTPS (coherence.py). The GPU decides what it can (an
+    Apple GPU is an Apple ARM CPU, an Intel iGPU or Intel Mac an Intel one, a
+    Radeon iGPU an AMD one), then a core count only Intel ships; any other x86
+    identity's vendor is drawn at Firefox's own x86 split, seeded by the
+    identity. An ARM identity whose GPU names no single SoC maker keeps its
+    manufacturer unset: every ARM64 CPU computes alike. Run after the GPU and
+    navigator.hardwareConcurrency are final. Keys the caller set are kept.
+    """
+    arch, maker = hardware_cpu(config, target_os)
+    arch = config.get('cpu:arch') or arch or 'x86'
+    config.setdefault('cpu:arch', arch)
+    if 'cpu:manufacturer' in config or arch != config['cpu:arch']:
+        return
+    if not maker and arch == 'x86':
+        draw = Random(identity_seed(config, salt) ^ 0xC9D0).random()
+        maker = 'intel' if draw < X86_INTEL_SHARE else 'amd'
+    if maker:
+        config['cpu:manufacturer'] = maker
 
 
 # What Firefox's baseline fingerprinting protection, on by default, reports in
@@ -1336,7 +1426,7 @@ def from_preset(preset: Dict, ff_version: Optional[str] = None, salt: Optional[i
         "the preset's recorded voices" if preset.get('speechVoices') else "the browser's own voices", preset_key,
     )
     if voices is not None:
-        config['voices'] = voices
+        config.update(voices)
     elif preset.get('speechVoices'):
         config['voices'] = _normalize_preset_voices(preset['speechVoices'], target_os)
 
@@ -1352,10 +1442,11 @@ def _draw_fonts(target_os: str, seed: int, instead: str, identity: Optional[str]
         return None
 
 
-def _draw_voices(target_os: str, seed: int, instead: str, identity: Optional[str]) -> Optional[List[Dict[str, Any]]]:
-    """The identity's voice draw, or None after a FallbackWarning naming `instead`."""
+def _draw_voices(target_os: str, seed: int, instead: str, identity: Optional[str]) -> Optional[Dict[str, Any]]:
+    """The identity's voice config (draw_voice_config), or None after a
+    FallbackWarning naming `instead`."""
     try:
-        return _generate_random_voice_subset(target_os, seed=seed)
+        return draw_voice_config(target_os, seed=seed)
     except (OSError, ValueError, KeyError) as e:
         FallbackWarning.warn('Drawing the speech voices', instead, e, identity)
         return None
@@ -1434,11 +1525,16 @@ def _build_init_script(values: Dict[str, Any]) -> str:
             f'  if (typeof w.setFontList === "function") w.setFontList({_json.dumps(joined)});'
         )
 
-    # Speech voices (comma-separated names). config['voices'] holds MaskConfig
-    # voice objects; extract the display name from each (tolerating a legacy
-    # list of plain name strings).
+    # Speech voices: comma-separated names, or a Linux identity's
+    # speech-dispatcher grid as JSON. config['voices'] holds MaskConfig voice
+    # objects; extract the display name from each (tolerating a legacy list of
+    # plain name strings).
     voices = values.get('speechVoices')
-    if voices and len(voices) > 0:
+    if isinstance(voices, dict):
+        lines.append(
+            f'  if (typeof w.setSpeechVoices === "function") w.setSpeechVoices({_json.dumps(_json.dumps(voices, separators=(",", ":")))});'
+        )
+    elif voices and len(voices) > 0:
         names = [v['name'] if isinstance(v, dict) else v for v in voices]
         joined = ','.join(names)
         lines.append(
@@ -1508,13 +1604,13 @@ def generate_context_fingerprint(
             )
             if fonts is not None:
                 config['fonts'] = fonts
-        if 'voices' not in config:
+        if 'voices' not in config and 'voices:speechd' not in config:
             voices = _draw_voices(
                 os_name, identity_seed(config, _salt), "the browser's launch-time voices",
                 config.get('navigator.userAgent'),
             )
             if voices is not None:
-                config['voices'] = voices
+                config.update(voices)
 
         if 'navigator.oscpu' not in config:
             oscpu = oscpu_for_platform(config.get('navigator.platform', ''))
@@ -1591,7 +1687,9 @@ def generate_context_fingerprint(
         'screenColorDepth': screen.get('colorDepth'),
         'timezone': preset.get('timezone') if isinstance(preset.get('timezone'), str) else config.get('timezone'),
         'fontList': config.get('fonts'),
-        'speechVoices': config.get('voices'),
+        'speechVoices': (
+            {'speechd': config['voices:speechd']} if 'voices:speechd' in config else config.get('voices')
+        ),
         'webrtcIP': webrtc_ip or '',
     }
 

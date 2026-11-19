@@ -1,8 +1,15 @@
-"""Regression tests for humanized cursor launch configuration."""
+"""Humanize launch configuration: myuri(), with the parts it is passed, or raw()
+per channel, run by the driver. Nothing of it reaches the browser's config."""
+
 
 import pytest
 
 from camoufox import utils
+from camoufox.humanize import CHANNELS, cursory, myuri, normalize, raw
+
+
+def noop(*_args, **_kwargs):
+    return None
 
 
 @pytest.fixture
@@ -16,7 +23,7 @@ def captured_launch_config(monkeypatch):
         utils, "_generate_random_font_subset", lambda *_args, **_kwargs: []
     )
     monkeypatch.setattr(
-        utils, "_generate_random_voice_subset", lambda *_args, **_kwargs: []
+        utils, "draw_voice_config", lambda *_args, **_kwargs: {"voices": []}
     )
     monkeypatch.setattr(utils, "validate_config", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(utils, "add_default_addons", lambda *_args, **_kwargs: None)
@@ -49,19 +56,73 @@ def captured_launch_config(monkeypatch):
     return launch
 
 
-def test_humanize_true_does_not_set_boolean_duration(captured_launch_config) -> None:
-    config = captured_launch_config(True)
+@pytest.mark.parametrize(
+    "humanize",
+    [
+        None,
+        False,
+        True,
+        {},
+        {"mouse": raw()},
+        {"mouse": myuri(move=noop), "keyboard": myuri(type=noop, wpm=70), "scroll": myuri(wheel=noop), "seed": 9},
+        {"keyboard": raw(), "seed": 2**32 - 1},
+    ],
+)
+def test_no_humanize_key_reaches_the_browser(captured_launch_config, humanize) -> None:
+    config = captured_launch_config(humanize)
+    assert not [key for key in config if key.startswith("humanize")]
 
-    assert config["humanize"] is True
-    assert "humanize:maxTime" not in config
+
+def test_no_humanize_is_raw_and_humanize_is_myuri() -> None:
+    for off in (None, False):
+        engines, seed = normalize(off)
+        assert engines == {channel: raw() for channel in CHANNELS} and seed is None
+    engines, seed = normalize(True)
+    assert engines == {channel: myuri() for channel in CHANNELS} and seed is None
+    engines, seed = normalize({"scroll": myuri(into_view=noop), "keyboard": {"engine": "myuri", "options": {"wpm": 70}}, "seed": 5})
+    assert engines["mouse"] == myuri() and engines["keyboard"] == myuri(wpm=70)
+    assert engines["scroll"] == myuri(into_view=noop)
+    assert seed == 5
 
 
-@pytest.mark.parametrize("duration", [1, 5, 1.25])
-def test_humanize_duration_is_encoded_as_double(
-    captured_launch_config, duration
-) -> None:
-    config = captured_launch_config(duration)
+def test_cursory_is_myuri() -> None:
+    assert cursory() == myuri() and cursory(move=noop) == myuri(move=noop)
+    engines, _seed = normalize({"mouse": {"engine": "cursory", "options": {"move": noop}}, "scroll": cursory()})
+    assert engines == {"mouse": myuri(move=noop), "keyboard": myuri(), "scroll": myuri()}
 
-    assert config["humanize"] is True
-    assert config["humanize:maxTime"] == float(duration)
-    assert type(config["humanize:maxTime"]) is float
+
+@pytest.mark.parametrize(
+    "humanize",
+    [1.5, 2, {"mouse": "cursory"}, {"mouse": {"engine": "auto", "options": {}}}],
+)
+def test_in_browser_humanization_is_refused(humanize) -> None:
+    with pytest.raises(ValueError, match="the browser does not humanize input"):
+        normalize(humanize)
+
+
+@pytest.mark.parametrize(
+    "humanize, message",
+    [
+        ({"touch": raw()}, "no channel"),
+        ({"seed": -1}, "seed"),
+        ({"seed": 2**32}, "seed"),
+        ({"seed": True}, "seed"),
+        ({"seed": "1"}, "seed"),
+        ({"mouse": 3}, "is not an engine"),
+        ({"mouse": {"engine": "myuri", "options": {"speed": 1}}}, r"myuri\(\) has no part 'speed'"),
+        ({"mouse": {"engine": "cursory", "options": {"maxTime": 1}}}, r"myuri\(\) has no part 'maxTime'"),
+        ({"mouse": myuri(type=noop)}, r'humanize\["mouse"\]: myuri\(type=...\) is not a mouse part'),
+        ({"mouse": {"engine": "myuri", "options": {"wpm": 70}}}, r"myuri\(wpm=...\) is not a mouse part"),
+        ({"keyboard": {"engine": "myuri", "options": {"type": "fast"}}}, "takes the function that replaces the part"),
+        ({"mouse": {"engine": "custom", "fn": noop}}, "is not an engine"),
+        ({"mouse": {"engine": "raw", "options": {"speed": 1}}}, "takes no options"),
+    ],
+)
+def test_malformed_settings_are_refused(humanize, message) -> None:
+    with pytest.raises(ValueError, match=message):
+        normalize(humanize)
+
+
+def test_launch_options_refuses_in_browser_humanization(captured_launch_config) -> None:
+    with pytest.raises(ValueError, match="the browser does not humanize input"):
+        captured_launch_config(1.5)

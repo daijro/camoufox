@@ -6,6 +6,8 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { LIBRARY_VERSION } from "../src/__version__.js";
+import { FRAME_ORIGIN, VIEWPORT } from "../src/_humanize_playwright.js";
+import { FILL_NEEDS_CLICK } from "../src/driver_defaults.js";
 import { DATA_FILES, LOCAL_DATA } from "../src/paths.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -45,5 +47,26 @@ describe("package.json tracks pyproject.toml", () => {
 		expect(path.resolve(LOCAL_DATA)).toBe(path.join(PYLIB, "src", "camoufox"));
 		for (const name of DATA_FILES)
 			expect(fs.existsSync(path.join(LOCAL_DATA, name)), name).toBe(true);
+	});
+});
+
+describe("the page scripts are the Python package's, byte for byte", () => {
+	const constant = (file: string, name: string) => {
+		const source = fs.readFileSync(
+			path.join(PYLIB, "src", "camoufox", file),
+			"utf-8",
+		);
+		const match =
+			source.match(new RegExp(`^${name} = """([^]*?)"""$`, "m")) ??
+			source.match(new RegExp(`^${name} = '([^'\n]*)'$`, "m"));
+		return match?.[1];
+	};
+
+	it.each([
+		["driver_defaults.py", "FILL_NEEDS_CLICK", FILL_NEEDS_CLICK],
+		["_humanize_playwright.py", "_VIEWPORT", VIEWPORT],
+		["_humanize_playwright.py", "_FRAME_ORIGIN", FRAME_ORIGIN],
+	])("%s %s", (file, name, script) => {
+		expect(script).toBe(constant(file, name));
 	});
 });

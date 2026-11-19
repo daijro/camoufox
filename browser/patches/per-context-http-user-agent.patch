@@ -1,0 +1,42 @@
+diff --git a/netwerk/protocol/http/HttpBaseChannel.cpp b/netwerk/protocol/http/HttpBaseChannel.cpp
+index b2d86d03ea..e00b738333 100644
+--- a/netwerk/protocol/http/HttpBaseChannel.cpp
++++ b/netwerk/protocol/http/HttpBaseChannel.cpp
+@@ -41,6 +41,7 @@
+ #include "mozilla/dom/Document.h"
+ #include "mozilla/dom/FetchPriority.h"
+ #include "mozilla/dom/LoadURIOptionsBinding.h"
++#include "mozilla/dom/NavigatorManager.h"
+ #include "mozilla/dom/ParentProcessChannelHandle.h"
+ #include "mozilla/dom/Performance.h"
+ #include "mozilla/dom/PerformanceStorage.h"
+@@ -537,14 +538,24 @@ NS_IMETHODIMP
+ HttpBaseChannel::SetDocshellUserAgentOverride() {
+   RefPtr<dom::BrowsingContext> bc;
+   MOZ_ALWAYS_SUCCEEDS(mLoadInfo->GetBrowsingContext(getter_AddRefs(bc)));
+-  if (!bc) {
+-    return NS_OK;
+-  }
+ 
+   nsAutoCString customUserAgent;
+-  bc->GetCustomUserAgent(customUserAgent);
++  if (bc) {
++    bc->GetCustomUserAgent(customUserAgent);
++  }
+   if (customUserAgent.IsEmpty() || customUserAgent.IsVoid()) {
+-    return NS_OK;
++    // Camoufox: a request with no browsing context of its own (a shared or
++    // service worker's, a CSP report, a keepalive fetch, a font a worker
++    // loads) sends its context's user agent, the one the context's
++    // navigator.userAgent reports (setNavigatorUserAgent), not the launch's.
++    nsAutoString contextUserAgent;
++    if (!dom::NavigatorManager::GetUserAgent(
++            mLoadInfo->GetOriginAttributes().mUserContextId,
++            contextUserAgent) ||
++        contextUserAgent.IsEmpty()) {
++      return NS_OK;
++    }
++    CopyUTF16toUTF8(contextUserAgent, customUserAgent);
+   }
+ 
+   nsresult rv = SetRequestHeaderInternal(

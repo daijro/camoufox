@@ -28,7 +28,7 @@ for the calling window's context, and is gone before any page script runs
 | `setWebGLVendor(vendor)` | `webgl-spoofing.patch` | `UNMASKED_VENDOR_WEBGL` |
 | `setWebGLRenderer(renderer)` | `webgl-spoofing.patch` | `UNMASKED_RENDERER_WEBGL` |
 | `setFontList(fonts)` | `font-list-spoofing.patch` | Which fonts exist (comma-separated, case-insensitive) |
-| `setSpeechVoices(voices)` | `speech-voices-spoofing.patch` | `speechSynthesis.getVoices()` (comma-separated names) |
+| `setSpeechVoices(voices)` | `speech-voices-spoofing.patch` | `speechSynthesis.getVoices()` (comma-separated names, or a JSON `{"speechd": grid}` for a Linux identity) |
 
 Supporting patches, with no setter of their own:
 
@@ -154,10 +154,9 @@ real value.
 | Pref | Why |
 |---|---|
 | `fission.autostart = true` | Disabled Fission is detectable; cross-process storage makes per-context values work with it |
-| `fission.webContentIsolationStrategy = 0` | Cross-site iframes stay in their parent's process |
-| `dom.ipc.processPrelaunch.enabled = false` | A prelaunched process could carry stale values |
+| `fission.webContentIsolationStrategy = 0` | Cross-site iframes stay in their parent's process. Set by Juggler when a driver is attached; otherwise Firefox's default |
 
-`dom.ipc.processCount` is not overridden.
+`dom.ipc.processCount` and `dom.ipc.processPrelaunch.enabled` are not overridden: a prelaunched process takes its context's values like any other (measured 2026-10-26, 3 contexts x 3 rounds).
 
 ## Patch details
 
@@ -210,7 +209,7 @@ The User-Agent's version is rewritten to the running browser's.
 | Screen, color depth | fpgen or the preset |
 | WebGL | One GPU fpgen recorded for Firefox on that OS, weighted by its share and checked against the machine (`coherence.gpu_fits_machine()`); `webgl_for_gpu()` adds its parameters, extensions and shader precisions |
 | Fonts | `_generate_random_font_subset()`: one OS-version base plus measured additions ([FONTS.md](FONTS.md)); never from presets |
-| Voices | `_generate_random_voice_subset()`, from `voice-manifests.json`, seeded by the identity; never from presets |
+| Voices | `draw_voice_config()`, from `voice-manifests.json`, seeded by the identity; never from presets. A Linux identity's voices come from the same Ubuntu release as its fonts, sent as a `voices:speechd` grid (languages x variants) that `MaskConfig::ExpandSpeechdGrid` expands: ~14000 voice objects do not fit in the environment. macOS uses the list measured on macOS 27 with its system voice default; Windows its OneCore packs |
 | Timezone | The preset, or `timezone` in `CAMOU_CONFIG` (from geoip); with a proxy, `NewContext` looks it up from the exit IP |
 | WebRTC IP | `NewContext`'s `webrtc_ip` or the proxy's exit IP, to the IPv4 or IPv6 setter; an invalid address raises `InvalidIP` |
 | Geolocation | The `geolocation` argument, via Playwright |

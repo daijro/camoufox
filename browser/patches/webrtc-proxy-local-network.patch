@@ -1,0 +1,200 @@
+diff --git a/dom/media/webrtc/transport/nr_socket_prsock.cpp b/dom/media/webrtc/transport/nr_socket_prsock.cpp
+index 824c40de63..c8bcce464c 100644
+--- a/dom/media/webrtc/transport/nr_socket_prsock.cpp
++++ b/dom/media/webrtc/transport/nr_socket_prsock.cpp
+@@ -753,7 +753,7 @@ int NrSocket::sendto(const void* msg, size_t len, int flags,
+   // mtransport) or the parent process -- never the content process, which uses
+   // NrUdpSocketIpc/NrTcpSocket (gated in NrUdpSocketIpc::sendto and enforced by
+   // STUNUDPSocketFilter in the parent process).
+-  if (IsForbiddenAddress(to)) {
++  if (IsForbiddenAddress(to) || RefusesDestination(to)) {
+     // Drop the packet, but report success so the caller does not retry.
+     _status = 0;
+     goto abort;
+@@ -1291,7 +1291,7 @@ int NrUdpSocketIpc::sendto(const void* msg, size_t len, int flags,
+   // so it is not a trust boundary; STUNUDPSocketFilter enforces the same
+   // restriction in the parent process. Drop the packet, but report success so
+   // the caller does not retry.
+-  if (IsForbiddenAddress(to)) {
++  if (IsForbiddenAddress(to) || RefusesDestination(to)) {
+     return 0;
+   }
+ 
+@@ -1600,15 +1600,17 @@ int NrSocketBase::CreateSocket(
+   int r, _status;
+   uint16_t port = 0;
+   std::optional<std::pair<uint16_t, uint16_t>> ports;
++  // Camoufox: behind a proxy, stock Firefox refuses UDP outright, which leaves
++  // a page with no host candidate and no connection even to a peer on this
++  // machine. Make the socket, but let it send only to the local network: the
++  // internet still sees nothing that went around the proxy.
++  const bool localNetworkOnly =
++      config && config->GetForceProxy() && addr->protocol == IPPROTO_UDP;
+ 
+   if (IsForbiddenAddress(addr)) {
+     ABORT(R_REJECTED);
+   }
+ 
+-  if (config && config->GetForceProxy() && addr->protocol == IPPROTO_UDP) {
+-    ABORT(R_REJECTED);
+-  }
+-
+   // Camoufox: a UDP socket's port reaches the page in its ICE candidates. When
+   // the identity's OS gives out ephemeral ports from another range than this
+   // host does, pick one from the identity's range, at random as its kernel
+@@ -1651,6 +1653,7 @@ int NrSocketBase::CreateSocket(
+       }
+     }
+ 
++    (*sock)->local_network_only_ = localNetworkOnly;
+     r = (*sock)->create(ports ? &bindAddr : addr);
+     if (!r) break;
+   }
+@@ -1665,6 +1668,10 @@ abort:
+ }
+ 
+ // static
++bool NrSocketBase::RefusesDestination(const nr_transport_addr* to) const {
++  return local_network_only_ && !nr_transport_addr_is_local_network(to);
++}
++
+ bool NrSocketBase::IsForbiddenAddress(const nr_transport_addr* addr) {
+   uint16_t port;
+   int r;
+diff --git a/dom/media/webrtc/transport/nr_socket_prsock.h b/dom/media/webrtc/transport/nr_socket_prsock.h
+index 929c68ce81..bfd5a26286 100644
+--- a/dom/media/webrtc/transport/nr_socket_prsock.h
++++ b/dom/media/webrtc/transport/nr_socket_prsock.h
+@@ -134,7 +134,11 @@ class NrSocketBase {
+   void fire_callback(int how);
+ 
+  protected:
++  // Camoufox: a UDP socket made behind a proxy sends only to the local network.
++  bool RefusesDestination(const nr_transport_addr* to) const;
++
+   bool connect_invoked_;
++  bool local_network_only_ = false;
+   nr_transport_addr my_addr_;
+ 
+  private:
+diff --git a/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_component.cpp b/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_component.cpp
+index b1ed4d1144..dc21b541d5 100644
+--- a/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_component.cpp
++++ b/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_component.cpp
+@@ -210,10 +210,12 @@ static int nr_ice_component_initialize_udp(struct nr_ice_ctx_ *ctx,nr_ice_compon
+     int j;
+     int r,_status;
+ 
+-    if(ctx->flags & NR_ICE_CTX_FLAGS_ONLY_PROXY) {
+-      /* No UDP support if we must use a proxy */
+-      return 0;
+-    }
++    /* Camoufox: behind a proxy, UDP host sockets still exist -- stock Firefox
++       always shows host candidates, and peers on this network connect through
++       them -- but they reach only the local network (NrSocketBase refuses the
++       rest), so no server on the internet learns the address the proxy hides.
++       STUN and TURN servers out there are skipped below for the same reason. */
++    const int local_only = ctx->flags & NR_ICE_CTX_FLAGS_ONLY_PROXY;
+ 
+     /* Now one ice_socket for each address */
+     for(i=0;i<addr_ct;i++){
+@@ -261,6 +263,12 @@ static int nr_ice_component_initialize_udp(struct nr_ice_ctx_ *ctx,nr_ice_compon
+           /* Skip non-UDP */
+           if (component->stream->stun_servers[j].addr.protocol != IPPROTO_UDP) continue;
+ 
++          if (local_only &&
++              !nr_transport_addr_is_local_network(&component->stream->stun_servers[j].addr)) {
++            r_log(LOG_ICE,LOG_INFO,"ICE-STREAM(%s): Skipping STUN server outside the local network behind a proxy",component->stream->label);
++            continue;
++          }
++
+           if (nr_transport_addr_check_compatibility(
+                   &addrs[i].addr, &component->stream->stun_servers[j].addr)) {
+             r_log(LOG_ICE,LOG_INFO,"ICE-STREAM(%s): Skipping STUN server because of address type mis-match",component->stream->label);
+@@ -299,6 +307,12 @@ static int nr_ice_component_initialize_udp(struct nr_ice_ctx_ *ctx,nr_ice_compon
+         if (component->stream->turn_servers[j].turn_server.addr.protocol != IPPROTO_UDP)
+           continue;
+ 
++        if (local_only &&
++            !nr_transport_addr_is_local_network(&component->stream->turn_servers[j].turn_server.addr)) {
++          r_log(LOG_ICE,LOG_INFO,"ICE-STREAM(%s): Skipping UDP TURN server outside the local network behind a proxy",component->stream->label);
++          continue;
++        }
++
+         if (nr_transport_addr_check_compatibility(
+                 &addrs[i].addr, &component->stream->turn_servers[j].turn_server.addr)) {
+           r_log(LOG_ICE,LOG_INFO,"ICE-STREAM(%s): Skipping TURN server because of address type mis-match",component->stream->label);
+@@ -454,9 +468,10 @@ static int nr_ice_component_initialize_tcp(struct nr_ice_ctx_ *ctx,nr_ice_compon
+       if (r != R_NOT_FOUND)
+         ABORT(r);
+     }
+-    if ((component->stream->flags & NR_ICE_CTX_FLAGS_RELAY_ONLY) ||
+-        (component->stream->flags & NR_ICE_CTX_FLAGS_ONLY_PROXY)) {
+-      r_log(LOG_ICE,LOG_WARNING,"ICE-STREAM(%s): relay/proxy only option results in ICE TCP being disabled",component->stream->label);
++    /* Camoufox: behind a proxy, TCP host candidates stay, as in stock Firefox;
++       their connections go through the proxy like every other TCP socket. */
++    if (component->stream->flags & NR_ICE_CTX_FLAGS_RELAY_ONLY) {
++      r_log(LOG_ICE,LOG_WARNING,"ICE-STREAM(%s): relay only option results in ICE TCP being disabled",component->stream->label);
+       ice_tcp_disabled = 1;
+     }
+ 
+@@ -1124,6 +1139,14 @@ int nr_ice_component_pair_candidate(nr_ice_peer_ctx *pctx, nr_ice_component *pco
+       if(!nr_ice_component_can_candidate_tcptype_pair(lcand->tcp_type, pcand->tcp_type))
+         continue;
+ 
++      /* Camoufox: behind a proxy, a UDP host candidate reaches only the local
++         network, and a TCP one goes through the proxy, which cannot reach it. */
++      if(lcand->type == HOST && (pctx->ctx->flags & NR_ICE_CTX_FLAGS_ONLY_PROXY)) {
++        int local = nr_transport_addr_is_local_network(&pcand->addr);
++        if(lcand->addr.protocol == IPPROTO_UDP ? !local : local)
++          continue;
++      }
++
+       /* https://datatracker.ietf.org/doc/html/draft-ietf-mmusic-mdns-ice-candidates#section-3.3.2-3 */
+       // Note: This probably should not hold for FQDN (as opposed to mDNS), but
+       // we don't really support that anyway for remote candidates.
+diff --git a/dom/media/webrtc/transport/third_party/nICEr/src/net/transport_addr.cpp b/dom/media/webrtc/transport/third_party/nICEr/src/net/transport_addr.cpp
+index 71045242b1..dbacfac6c3 100644
+--- a/dom/media/webrtc/transport/third_party/nICEr/src/net/transport_addr.cpp
++++ b/dom/media/webrtc/transport/third_party/nICEr/src/net/transport_addr.cpp
+@@ -571,6 +571,27 @@ int nr_transport_addr_get_private_addr_range(const nr_transport_addr *addr)
+     return(0);
+   }
+ 
++/* Camoufox: loopback, link-local, RFC1918 and IPv6 unique-local addresses.
++   Carrier-grade NAT space (100.64/10) is not: it is the ISP's network. */
++int nr_transport_addr_is_local_network(const nr_transport_addr *addr)
++  {
++    if (nr_transport_addr_is_loopback(addr) || nr_transport_addr_is_link_local(addr))
++      return(1);
++    switch(addr->ip_version){
++      case NR_IPV4:
++        {
++          int range = nr_transport_addr_get_private_addr_range(addr);
++          return(range >= 1 && range <= 3);
++        }
++      case NR_IPV6:
++        /* RFC4193: fc00::/7 */
++        return((addr->u.addr6.sin6_addr.s6_addr[0] & 0xFE) == 0xFC);
++      default:
++        break;
++    }
++    return(0);
++  }
++
+ int nr_transport_addr_is_reliable_transport(const nr_transport_addr *addr)
+   {
+     return addr->protocol == IPPROTO_TCP;
+diff --git a/dom/media/webrtc/transport/third_party/nICEr/src/net/transport_addr.h b/dom/media/webrtc/transport/third_party/nICEr/src/net/transport_addr.h
+index ac65a2206e..1e7f03887d 100644
+--- a/dom/media/webrtc/transport/third_party/nICEr/src/net/transport_addr.h
++++ b/dom/media/webrtc/transport/third_party/nICEr/src/net/transport_addr.h
+@@ -111,6 +111,8 @@ int nr_transport_addr_cmp(const nr_transport_addr *addr1,const nr_transport_addr
+ int nr_transport_addr_is_wildcard(const nr_transport_addr *addr);
+ int nr_transport_addr_is_loopback(const nr_transport_addr *addr);
+ int nr_transport_addr_get_private_addr_range(const nr_transport_addr *addr);
++/* Camoufox: whether packets to |addr| stay on the host's own network. */
++int nr_transport_addr_is_local_network(const nr_transport_addr *addr);
+ int nr_transport_addr_is_link_local(const nr_transport_addr *addr);
+ int nr_transport_addr_is_mac_based(const nr_transport_addr *addr);
+ int nr_transport_addr_is_teredo(const nr_transport_addr *addr);

@@ -44,7 +44,7 @@ def nothing_installed(monkeypatch, tmp_path):
                  "set_media_devices_defaults", "validate_config"):
         monkeypatch.setattr(utils, name, lambda *args, **kwargs: None)
     monkeypatch.setattr(utils, "_generate_random_font_subset", lambda *args, **kwargs: [])
-    monkeypatch.setattr(utils, "_generate_random_voice_subset", lambda *args, **kwargs: [])
+    monkeypatch.setattr(utils, "draw_voice_config", lambda *args, **kwargs: {"voices": []})
     monkeypatch.setattr(utils, "get_env_vars", lambda *args, **kwargs: {})
     return downloads, seen, str(binary)
 

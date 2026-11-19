@@ -7,6 +7,7 @@
  * pickers (`set`, `set --geoip`, `remove --select`) use a numbered
  * prompt in place of inquirer's arrow-key list.
  */
+import "./node-floor.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
@@ -200,15 +201,6 @@ function findInstalled(specifier: string): InstalledVersion | null {
 	}
 
 	return null;
-}
-
-/** Name of the active GeoIP source. */
-function getGeoIPSourceName(): string {
-	try {
-		return loadGeoipConfig().name ?? "Default";
-	} catch {
-		return "Default";
-	}
 }
 
 /**
@@ -987,10 +979,18 @@ function listInstalledVersions(showPaths: boolean): void {
 	}
 
 	if (fs.existsSync(GEOIP_DIR)) {
-		const mmdb = getMmdbPath();
+		let config: GeoIPRepo;
+		try {
+			config = loadGeoipConfig();
+		} catch (e) {
+			// the saved source is gone from repos.yml
+			rprint(`    └── ${(e as Error).message}`, "red");
+			return;
+		}
+		const mmdb = getMmdbPath("ipv4", config);
 		if (fs.existsSync(mmdb)) {
 			echo(`    └── ${path.basename(mmdb)} `, false);
-			secho(`(${getGeoIPSourceName()})`, { fg: "green" });
+			secho(`(${config.name ?? "Default"})`, { fg: "green" });
 		} else {
 			rprint("    └── Not downloaded", "yellow");
 		}
@@ -1287,9 +1287,17 @@ class VersionInfo {
 			this.row("Status", "Not supported (install camoufox[geoip])", "dim");
 			return;
 		}
-		const mmdbPath = getMmdbPath();
+		let config: GeoIPRepo;
+		try {
+			config = loadGeoipConfig();
+		} catch (e) {
+			// the saved source is gone from repos.yml
+			this.row("Database", (e as Error).message, "red");
+			return;
+		}
+		const mmdbPath = getMmdbPath("ipv4", config);
 		if (fs.existsSync(mmdbPath)) {
-			this.row("Database", loadGeoipConfig().name ?? "Unknown");
+			this.row("Database", config.name ?? "Unknown");
 			this.row("Updated", localTimestamp(fs.statSync(mmdbPath).mtime), "dim");
 		} else {
 			this.row("Database", "Not installed", "dim");

@@ -23,6 +23,9 @@ Written by daijro.
 #include <unordered_map>
 #include <cstring>
 #include <algorithm>
+#include <chrono>
+#include <cmath>
+#include "mozilla/TimeStamp.h"
 
 #ifdef _WIN32
 #  include <windows.h>
@@ -434,6 +437,22 @@ inline SpoofedOS GetSpoofedOS() {
   return os;
 }
 
+// The time a driven input event carries. Windows stamps input with its tick
+// count (GetMessageTime): whole milliseconds that advance 15.625 ms at a time.
+// The tick is read off steady_clock, which every process shares, through an
+// anchor taken once, so gaps between one process's events are exact.
+inline mozilla::TimeStamp InputTimeStamp() {
+  const auto now = mozilla::TimeStamp::Now();
+  if (GetSpoofedOS() != SpoofedOS::Windows) return now;
+  static const auto anchor = std::pair{
+      now, std::chrono::duration<double, std::milli>(
+               std::chrono::steady_clock::now().time_since_epoch())
+               .count()};
+  const double ms = anchor.second + (now - anchor.first).ToMilliseconds();
+  const double tick = std::floor(std::floor(ms / 15.625) * 15.625);
+  return now - mozilla::TimeDuration::FromMilliseconds(ms - tick);
+}
+
 // The ephemeral port range of an OS, which is where its kernel puts a socket
 // bound to port 0. A page sees these ports in WebRTC candidates.
 inline std::optional<std::pair<uint16_t, uint16_t>> SpoofedEphemeralPorts(
@@ -539,6 +558,55 @@ inline std::optional<std::array<int32_t, 3UL>> MShaderData(
                                    data["precision"].get<int32_t>()};
   }
   return std::nullopt;
+}
+
+// A Linux voice list is speech-dispatcher's: every espeak-ng language, alone
+// and then with each variant ("Afrikaans", "Afrikaans+Adam", ...), in the
+// order spd_list_synthesis_voices() returns them. It travels as that grid,
+// {"languages": [[name, lang], ...], "variants": [...]}, because the expanded
+// list is ~15000 voices, more than the environment can carry. Returns
+// (name, lang) pairs in speech-dispatcher's order, or nullopt for a malformed
+// grid.
+inline std::optional<std::vector<std::pair<std::string, std::string>>>
+ExpandSpeechdGrid(const nlohmann::json& grid) {
+  if (!grid.is_object() || !grid.contains("languages") ||
+      !grid["languages"].is_array() || !grid.contains("variants") ||
+      !grid["variants"].is_array()) {
+    return std::nullopt;
+  }
+  const auto& languages = grid["languages"];
+  const auto& variants = grid["variants"];
+  std::vector<std::pair<std::string, std::string>> voices;
+  voices.reserve(languages.size() * (variants.size() + 1));
+  for (const auto& language : languages) {
+    if (!language.is_array() || language.size() != 2 ||
+        !language[0].is_string() || !language[1].is_string()) {
+      return std::nullopt;
+    }
+    const auto name = language[0].get<std::string>();
+    const auto lang = language[1].get<std::string>();
+    voices.emplace_back(name, lang);
+    for (const auto& variant : variants) {
+      if (!variant.is_string()) {
+        return std::nullopt;
+      }
+      voices.emplace_back(name + "+" + variant.get<std::string>(), lang);
+    }
+  }
+  return voices;
+}
+
+inline std::optional<std::vector<std::pair<std::string, std::string>>>
+MSpeechdVoices() {
+  const auto* grid = Find("voices:speechd");
+  return grid ? ExpandSpeechdGrid(*grid) : std::nullopt;
+}
+
+// True while Camoufox owns the voice list, whatever its form: an empty or
+// unusable list must mean "no voices", never "all of the host's".
+inline bool SpoofsVoices() {
+  return GetBool("voices:blockIfNotDefined") || Find("voices") ||
+         Find("voices:speechd");
 }
 
 inline std::optional<

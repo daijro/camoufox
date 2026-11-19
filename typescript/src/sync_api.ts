@@ -16,13 +16,18 @@ import {
 	type BrowserType,
 	firefox,
 } from "playwright-core";
+import { attach } from "./_humanize_playwright.js";
 import * as cpuAffinity from "./cpu_affinity.js";
+import { attachDriverDefaults } from "./driver_defaults.js";
 import { generateContextFingerprint } from "./fingerprints.js";
+import { normalize } from "./humanize.js";
 import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "./ip.js";
+import { SELECTOR } from "./locales.js";
 import {
 	applyNoViewport,
 	attachDesktopOnlyWarning,
 	attachNoViewportDefault,
+	attachSocks5Auth,
 	attachStockMediaDefaults,
 	attachVirtualDisplay,
 	contextIdentity,
@@ -32,6 +37,7 @@ import {
 	hostIdentity,
 	type LaunchOptions,
 	launchOptions,
+	launchOs,
 	pinnedCoreCount,
 	STOCK_MEDIA_DEFAULTS,
 	spoofsWindowDimensions,
@@ -96,6 +102,9 @@ export async function NewBrowser(
 		...kwargs
 	}: NewBrowserOptions = {},
 ): Promise<Browser | BrowserContext> {
+	// humanize engines run in this process: checked before the launch,
+	// attached to the browser after it (also with from_options).
+	normalize(kwargs.humanize);
 	const [virtualDisplay, headlessBool] = await startVirtualDisplay(
 		headless,
 		debug,
@@ -134,14 +143,19 @@ export async function NewBrowser(
 	// as the identity reports, so measurable parallelism matches
 	// navigator.hardwareConcurrency; the driver gets its cores back afterwards.
 	const pinTo = pinnedCoreCount(fromOptions);
-	const launch = () =>
-		launchWith(
-			playwright,
-			fromOptions as Record<string, any>,
-			Boolean(persistent_context),
-			noViewportDefault,
-			virtualDisplay,
-			canvasNoise,
+	const launch = async () =>
+		attach(
+			await launchWith(
+				playwright,
+				fromOptions as Record<string, any>,
+				Boolean(persistent_context),
+				noViewportDefault,
+				virtualDisplay,
+				canvasNoise,
+			),
+			kwargs.humanize,
+			launchOs(fromOptions as Record<string, any>),
+			kwargs.i_know_what_im_doing,
 		);
 	try {
 		if (!pinTo) {
@@ -196,17 +210,20 @@ async function launchWith(
 			userDataDir ?? "",
 			options,
 		);
+		attachDriverDefaults(context);
 		return attachVirtualDisplay(context, virtualDisplay);
 	}
 
 	// Browser
 	const identity = await hostIdentity(fromOptions, canvasNoise);
 	const browser = await playwright.launch(fromOptions);
+	attachSocks5Auth(browser);
 	if (noViewportDefault) {
 		attachNoViewportDefault(browser);
 	}
 	attachStockMediaDefaults(browser);
 	attachDesktopOnlyWarning(browser);
+	attachDriverDefaults(browser);
 	(browser as any)._camoufoxHostIdentity = identity;
 	return attachVirtualDisplay(browser, virtualDisplay);
 }
@@ -269,13 +286,29 @@ export async function NewContext(
 	// the browser the page is actually talking to.
 	const ffVersion = ff_version || browser.version().split(".", 1)[0];
 
-	// Auto-derive the WebRTC IP and timezone from the proxy's exit IP when they
-	// aren't explicitly provided.
+	// Put a context behind a proxy where the proxy exits, as geoip places a
+	// launch: its WebRTC IP, clock, locale and position. A value the caller
+	// gave is kept.
 	let webrtcIp = webrtc_ip;
-	if (proxy && (!webrtcIp || !("timezoneId" in contextOptions))) {
-		const [exitIp, timezone] = await proxyExitGeo(ProxyHelper.asString(proxy));
-		webrtcIp ||= exitIp;
-		if (!("timezoneId" in contextOptions)) contextOptions.timezoneId = timezone;
+	let position = geolocation;
+	if (
+		proxy &&
+		!(
+			webrtcIp &&
+			position &&
+			"timezoneId" in contextOptions &&
+			"locale" in contextOptions
+		)
+	) {
+		const exit = await proxyExitGeo(ProxyHelper.asString(proxy));
+		webrtcIp ||= exit.ip;
+		position ||= { latitude: exit.latitude, longitude: exit.longitude };
+		if (!("timezoneId" in contextOptions))
+			contextOptions.timezoneId = exit.timezone;
+		if (!("locale" in contextOptions))
+			contextOptions.locale = (
+				await SELECTOR.fromRegion(exit.country)
+			).asString;
 	}
 
 	const [contextOs, webglConfig] = contextIdentity(browser, os, preset);
@@ -296,11 +329,13 @@ export async function NewContext(
 		...contextOptions,
 	};
 	if (proxy) opts.proxy = proxy;
-	if (geolocation) {
-		opts.geolocation = geolocation;
+	if (position) {
+		opts.geolocation = position;
 		opts.permissions ??= ["geolocation"];
 	}
 
+	// A browser launched elsewhere takes SOCKS5 credentials too.
+	attachSocks5Auth(browser);
 	const context = await browser.newContext(opts);
 	await context.addInitScript(fp.init_script);
 	return context;

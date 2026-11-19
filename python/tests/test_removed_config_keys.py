@@ -11,6 +11,9 @@ validate a removed key as a live one, and must say that it has no effect.
 
 import json
 
+import pytest
+
+from camoufox._warnings import LeakWarning
 from camoufox.utils import validate_config
 
 
@@ -34,3 +37,10 @@ def test_a_removed_key_is_not_type_checked(tmp_path):
         {"property": "navigator.languages", "type": "array", "removed": "156.0.1-beta.32"},
     ])
     validate_config({"navigator.languages": "not-an-array"}, path=binary)
+
+
+def test_a_build_without_the_voice_grid_warns_and_launches(tmp_path):
+    """A new library launches an older build (#835), but a Linux identity there reports no voices."""
+    binary = _browser_with(tmp_path, [{"property": "navigator.userAgent", "type": "str"}])
+    with pytest.warns(LeakWarning, match="voices:speechd"):
+        validate_config({"voices:speechd": {"languages": [], "variants": []}}, path=binary)

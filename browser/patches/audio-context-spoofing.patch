@@ -32,7 +32,7 @@ index af9a8c99f0..caa1eaf516 100644
  
  SPHINX_TREES["/media"] = "docs"
 diff --git a/dom/media/webaudio/AudioContext.cpp b/dom/media/webaudio/AudioContext.cpp
-index 7921349caf..355d9d4c13 100644
+index 6e7f17e7c3..87f7f93823 100644
 --- a/dom/media/webaudio/AudioContext.cpp
 +++ b/dom/media/webaudio/AudioContext.cpp
 @@ -4,6 +4,7 @@
@@ -52,11 +52,14 @@ index 7921349caf..355d9d4c13 100644
    double latency_s = 0.0;
    if (mShouldResistFingerprinting) {
  #ifdef XP_MACOSX
-@@ -714,6 +717,8 @@ void AudioContext::UnregisterActiveNode(AudioNode* aNode) {
+@@ -714,6 +717,11 @@ void AudioContext::UnregisterActiveNode(AudioNode* aNode) {
  }
  
  uint32_t AudioContext::MaxChannelCount() const {
-+  if (auto value = MaskConfig::GetUint32("AudioContext:maxChannelCount"))
++  // Camoufox: the identity's count is the output device's. An offline context
++  // has no device: its destination takes the channel count it was made with.
++  if (auto value = MaskConfig::GetUint32("AudioContext:maxChannelCount");
++      value && !mIsOffline)
 +    return value.value();
    if (mShouldResistFingerprinting) {
      return 2;

@@ -1,0 +1,20 @@
+diff --git a/dom/push/PushServiceWebSocket.sys.mjs b/dom/push/PushServiceWebSocket.sys.mjs
+index 9010576b00..f9b0b34b21 100644
+--- a/dom/push/PushServiceWebSocket.sys.mjs
++++ b/dom/push/PushServiceWebSocket.sys.mjs
+@@ -547,7 +547,14 @@ export var PushServiceWebSocket = {
+   connect(broadcastListeners) {
+     lazy.console.debug("connect()", broadcastListeners);
+     this._broadcastListeners = broadcastListeners;
+-    this._beginWSSetup();
++    // Camoufox: a browser no page has subscribed in has nothing to hear, and a
++    // connection at startup is traffic no user caused. A first subscription
++    // connects through _queueRequest.
++    this._mainPushService.getAllUnexpired().then(records => {
++      if (records.length && this._currentState == STATE_SHUT_DOWN) {
++        this._beginWSSetup();
++      }
++    });
+   },
+ 
+   isConnected() {

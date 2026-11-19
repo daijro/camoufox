@@ -186,7 +186,7 @@ def selected_build(request, tmp_path, monkeypatch):
                  "set_media_devices_defaults"):
         monkeypatch.setattr(utils, name, lambda *args, **kwargs: None)
     monkeypatch.setattr(utils, "_generate_random_font_subset", lambda *args, **kwargs: [])
-    monkeypatch.setattr(utils, "_generate_random_voice_subset", lambda *args, **kwargs: [])
+    monkeypatch.setattr(utils, "draw_voice_config", lambda *args, **kwargs: {"voices": []})
     monkeypatch.setattr(utils, "validate_config", lambda _config, path: seen.setdefault("properties", path))
     def get_env_vars(_config, _os, path):
         seen["bundle"] = path

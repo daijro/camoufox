@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import Marionette, free_port, hidden_display, marionette_args, resolve_binary  # noqa: E402
+from helpers import Marionette, free_port, hidden_display, marionette_args, marionette_env, resolve_binary  # noqa: E402
 
 JS = """
 const out = [];
@@ -46,7 +46,7 @@ return out;
 def inspect(binary: Path, config=None):
     from camoufox.sync_api import Camoufox
     port = free_port()
-    with Camoufox(headless=False, executable_path=str(binary), args=marionette_args(),
+    with Camoufox(headless=False, executable_path=str(binary), args=marionette_args(), env=marionette_env(),
                   firefox_user_prefs={"marionette.port": port}, config=config or {},
                   i_know_what_im_doing=True) as browser:
         context = browser.new_context()

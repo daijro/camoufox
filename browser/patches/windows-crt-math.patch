@@ -7,9 +7,9 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  
 +#include "builtin/UcrtMath.h"
  #include "jit/InlinableNatives.h"
+ #include "jit/JitOptions.h"
  #include "js/Class.h"
- #include "js/ForOfIterator.h"
-@@ -54,8 +55,22 @@
+@@ -55,8 +56,22 @@
  using mozilla::PositiveInfinity;
  using mozilla::WrappingMultiply;
  
@@ -33,7 +33,7 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
  }
  
  static inline bool UseFdlibmForSinCosTan(const CallArgs& args) {
-@@ -78,6 +93,11 @@
+@@ -79,6 +94,11 @@
      return fdlibm_pow(x, y);
    }
  #endif
@@ -45,40 +45,40 @@ diff --git a/js/src/builtin/Math.cpp b/js/src/builtin/Math.cpp
    // Every other platform's libm pow already produces the consensus value
    // for the inputs the math fingerprint samples, so we keep the faster
    // platform path.
-@@ -237,6 +257,11 @@
+@@ -238,6 +258,11 @@
  double js::math_cos_native_impl(double x) {
    MOZ_ASSERT(!math_use_fdlibm_for_sin_cos_tan());
    AutoUnsafeCallWithABI unsafe;
 +#ifdef JS_UCRT_MATH
 +  if (UseUcrtMath()) {
-+    return ucrt_cos(x);
++    return jit::X86NaN(ucrt_cos(x), x);
 +  }
 +#endif
-   return std::cos(x);
+   return jit::X86NaN(std::cos(x), x);
  }
  
-@@ -632,6 +657,11 @@
+@@ -633,6 +658,11 @@
  double js::math_sin_native_impl(double x) {
    MOZ_ASSERT(!math_use_fdlibm_for_sin_cos_tan());
    AutoUnsafeCallWithABI unsafe;
 +#ifdef JS_UCRT_MATH
 +  if (UseUcrtMath()) {
-+    return ucrt_sin(x);
++    return jit::X86NaN(ucrt_sin(x), x);
 +  }
 +#endif
-   return std::sin(x);
+   return jit::X86NaN(std::sin(x), x);
  }
  
-@@ -661,6 +691,11 @@
+@@ -662,6 +692,11 @@
  double js::math_tan_native_impl(double x) {
    MOZ_ASSERT(!math_use_fdlibm_for_sin_cos_tan());
    AutoUnsafeCallWithABI unsafe;
 +#ifdef JS_UCRT_MATH
 +  if (UseUcrtMath()) {
-+    return ucrt_tan(x);
++    return jit::X86NaN(ucrt_tan(x), x);
 +  }
 +#endif
-   return std::tan(x);
+   return jit::X86NaN(std::tan(x), x);
  }
  
 diff --git a/js/src/builtin/moz.build b/js/src/builtin/moz.build

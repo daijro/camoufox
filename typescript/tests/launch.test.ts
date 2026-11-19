@@ -9,6 +9,7 @@
  * behaviours the Python suite names, with the same stubs.
  */
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import {
 	afterAll,
@@ -34,12 +35,14 @@ import {
 	warnings,
 } from "./launch-host.js";
 
-const { OSError, PyFloat } = await import("../src/pycompat.js");
+const { OSError } = await import("../src/pycompat.js");
 const { Version } = await import("../src/pkgman.js");
+const { cursory, myuri, normalize, raw } = await import("../src/humanize.js");
 const { InvalidPropertyType, UnknownIPLocation } = await import(
 	"../src/exceptions.js"
 );
 const cpuAffinity = await import("../src/cpu_affinity.js");
+const { attachDriverDefaults } = await import("../src/driver_defaults.js");
 
 // Imported after launch-host, which has to set the cache directory first.
 const { MODEL } = await import("./fpgen-setup.js");
@@ -208,9 +211,33 @@ describe("test_launch_environment: prefs", () => {
 		});
 	});
 
-	describe("toggle settings are written both ways (test_launch_environment.py)", () => {
-		// A persistent profile keeps a user.js pref in prefs.js, so a toggle that
-		// only wrote when on stayed on after the flag was removed.
+	describe("custom_fonts_only warning", () => {
+		const TEXT = "Disabling OS-specific fonts";
+		const launchWith = async (opts: Record<string, any>) => {
+			const { error, warnings: caught } = await warnings.recordWarnings(() =>
+				utils.launchOptions({
+					env: { HOME },
+					...ua(LINUX_UA),
+					fonts: ["Arial"],
+					custom_fonts_only: true,
+					...opts,
+				}),
+			);
+			if (error) throw error;
+			return caught.filter((w) => w.message.includes(TEXT));
+		};
+		it("the flag silences it", async () => {
+			expect(await launchWith({ i_know_what_im_doing: true })).toEqual([]);
+		});
+		it("without the flag it warns and names the flag", async () => {
+			const caught = await launchWith({});
+			expect(caught).toHaveLength(1);
+			expect(caught[0].message).toContain("pass `i_know_what_im_doing=True`");
+		});
+	});
+
+	describe("toggle settings (test_launch_environment.py)", () => {
+		// Fresh profiles omit off toggles; persistent profiles clear old values.
 		const TOGGLES: [string, string, unknown, unknown][] = [
 			["block_webrtc", "media.peerconnection.enabled", true, false],
 			["block_images", "permissions.default.image", 1, 2],
@@ -222,8 +249,29 @@ describe("test_launch_environment: prefs", () => {
 			],
 		];
 		for (const [flag, pref, stock, toggled] of TOGGLES) {
-			it(`${flag} off writes the stock ${pref}`, async () => {
-				expect((await prefsFor(ua(LINUX_UA)))[pref]).toBe(stock);
+			it(`${flag} off writes no ${pref}, as stock writes none`, async () => {
+				expect(await prefsFor(ua(LINUX_UA))).not.toHaveProperty([pref]);
+			});
+			it(`${flag} off clears a ${pref} an earlier launch left in prefs.js`, () => {
+				const dir = fs.mkdtempSync(path.join(os.tmpdir(), "camoufox-toggle-"));
+				try {
+					fs.writeFileSync(
+						path.join(dir, "prefs.js"),
+						`user_pref("${pref}", ${JSON.stringify(toggled)});\n`,
+					);
+					const prefs: Record<string, unknown> = {};
+					utils.setTogglePref(prefs, pref, false, stock, toggled, dir);
+					expect(prefs).toEqual({ [pref]: stock });
+					fs.writeFileSync(
+						path.join(dir, "prefs.js"),
+						`user_pref("${pref}", ${JSON.stringify(stock)});\n`,
+					);
+					const clean: Record<string, unknown> = {};
+					utils.setTogglePref(clean, pref, false, stock, toggled, dir);
+					expect(clean).toEqual({});
+				} finally {
+					fs.rmSync(dir, { recursive: true, force: true });
+				}
 			});
 			it(`${flag} on writes the toggled ${pref}`, async () => {
 				expect((await prefsFor({ ...ua(LINUX_UA), [flag]: true }))[pref]).toBe(
@@ -502,6 +550,18 @@ describe("test_launch_environment: prefs", () => {
 			expect("media.eme.enabled" in prefs).toBe(false);
 			expect(prefs["middlemouse.paste"]).toBe(false);
 		});
+		it("doubles a wheel's lines as stock does on each OS", async () => {
+			for (const [u, enabled] of [
+				[WIN_UA, true],
+				[LINUX_UA, true],
+				[MAC_UA, false],
+			] as const) {
+				const { prefs } = await onHost("lin", u);
+				expect(prefs["mousewheel.system_scroll_override.enabled"]).toBe(
+					enabled,
+				);
+			}
+		});
 		it("draws Windows' scrollbars at Windows' size", async () => {
 			const classic = await onHost("lin", WIN_UA, {
 				firefox_user_prefs: { "ui.useOverlayScrollbars": 0 },
@@ -662,6 +722,53 @@ describe("test_launch_environment: stock media defaults", () => {
 	});
 });
 
+describe("test_launch_environment: screenshot caret", () => {
+	class Connection {
+		_objects = new Map();
+		sent: Array<[string, Record<string, any>]> = [];
+		sendMessageToServer(_object: any, method: string, params: any) {
+			this.sent.push([method, params]);
+			return Promise.resolve();
+		}
+	}
+	const owner = (parent: any, connection: Connection) => ({
+		_parent: parent,
+		_connection: connection,
+	});
+
+	it("pages under a Camoufox launch keep the caret", async () => {
+		const connection = new Connection();
+		const browser = attachDriverDefaults(owner(undefined, connection));
+		// handle, frame, page, context
+		const handle = owner(
+			owner(owner(owner(browser, connection), connection), connection),
+			connection,
+		);
+		await connection.sendMessageToServer(handle, "screenshot", {});
+		await connection.sendMessageToServer(handle, "screenshot", {
+			caret: "hide",
+		});
+		await connection.sendMessageToServer(handle, "click", {});
+		expect(connection.sent).toEqual([
+			["screenshot", { caret: "initial" }],
+			["screenshot", { caret: "hide" }],
+			["click", {}],
+		]);
+	});
+
+	it("other browsers on the same connection are left alone", async () => {
+		const connection = new Connection();
+		attachDriverDefaults(owner(undefined, connection));
+		attachDriverDefaults(owner(undefined, connection));
+		await connection.sendMessageToServer(
+			owner(owner(undefined, connection), connection),
+			"screenshot",
+			{},
+		);
+		expect(connection.sent).toEqual([["screenshot", {}]]);
+	});
+});
+
 describe("test_viewport_default", () => {
 	const opts = (blob: string) => {
 		const chunks: string[] = [];
@@ -743,28 +850,115 @@ describe("test_humanize", () => {
 		};
 	});
 
-	const launchHumanize = (humanize: boolean | number) =>
-		launch({ humanize, block_webgl: true, i_know_what_im_doing: true }).then(
-			() => captured,
-		);
+	const noop = () => undefined;
+	const launchHumanize = (humanize: unknown) =>
+		launch({
+			humanize: humanize as any,
+			block_webgl: true,
+			i_know_what_im_doing: true,
+		}).then(() => captured);
 
-	it("humanize: true sets no duration", async () => {
-		const config = await launchHumanize(true);
-		expect(config.humanize).toBe(true);
-		expect("humanize:maxTime" in config).toBe(false);
+	it.each([
+		null,
+		false,
+		true,
+		{},
+		{ mouse: raw() },
+		{
+			mouse: myuri({ move: noop }),
+			keyboard: myuri({ type: noop, wpm: 70 }),
+			scroll: myuri({ wheel: noop }),
+			seed: 9,
+		},
+		{ keyboard: raw(), seed: 2 ** 32 - 1 },
+	])("no humanize key reaches the browser (%#)", async (humanize) => {
+		const config = await launchHumanize(humanize);
+		expect(Object.keys(config).filter((k) => k.startsWith("humanize"))).toEqual(
+			[],
+		);
+	});
+
+	it("no humanize is raw, and humanize is myuri", () => {
+		for (const off of [null, false])
+			expect(normalize(off)).toEqual({
+				engines: { mouse: raw(), keyboard: raw(), scroll: raw() },
+			});
+		expect(normalize(true)).toEqual({
+			engines: { mouse: myuri(), keyboard: myuri(), scroll: myuri() },
+		});
+		const { engines, seed } = normalize({
+			scroll: myuri({ intoView: noop }),
+			keyboard: { engine: "myuri", options: { wpm: 70 } },
+			seed: 5,
+		});
+		expect(engines.mouse).toEqual(myuri());
+		expect(engines.keyboard).toEqual(myuri({ wpm: 70 }));
+		expect(engines.scroll).toEqual(myuri({ intoView: noop }));
+		expect(seed).toBe(5);
+	});
+
+	it("takes cursory() as myuri()", () => {
+		expect(cursory()).toEqual(myuri());
+		expect(cursory({ move: noop })).toEqual(myuri({ move: noop }));
+		expect(
+			normalize({
+				mouse: { engine: "cursory", options: { move: noop } },
+				scroll: cursory(),
+			}).engines,
+		).toEqual({
+			mouse: myuri({ move: noop }),
+			keyboard: myuri(),
+			scroll: myuri(),
+		});
 	});
 
 	it.each([
-		1, 5, 1.25,
-	])("a duration (%s) is encoded as a double", async (duration) => {
-		const config = await launchHumanize(duration);
-		expect(config.humanize).toBe(true);
-		expect(config["humanize:maxTime"]).toBeInstanceOf(PyFloat);
-		expect(Number(config["humanize:maxTime"])).toBe(duration);
-		// ...and serialized with a floating-point representation.
-		expect(utils.configJson({ t: config["humanize:maxTime"] })).toBe(
-			`{"t":${Number.isInteger(duration) ? `${duration}.0` : duration}}`,
+		0,
+		1.5,
+		2,
+		{ mouse: "cursory" },
+		{ mouse: { engine: "auto", options: {} } },
+		{ mouse: { engine: "custom", options: {} } },
+	])("refuses in-browser humanization (%#)", async (humanize) => {
+		expect(() => normalize(humanize)).toThrow(
+			"the browser does not humanize input",
 		);
+		await expect(launchHumanize(humanize)).rejects.toThrow(
+			"the browser does not humanize input",
+		);
+	});
+
+	it.each([
+		[{ touch: raw() }, "no channel"],
+		[{ seed: -1 }, "seed"],
+		[{ seed: 2 ** 32 }, "seed"],
+		[{ seed: 1.5 }, "seed"],
+		[{ seed: true }, "seed"],
+		[{ seed: "1" }, "seed"],
+		[{ mouse: 3 }, "is not an engine"],
+		[
+			{ mouse: { engine: "myuri", options: { speed: 1 } } },
+			"myuri() has no part 'speed'",
+		],
+		[
+			{ mouse: { engine: "cursory", options: { maxTime: 1 } } },
+			"myuri() has no part 'maxTime'",
+		],
+		[
+			{ mouse: myuri({ type: noop }) },
+			'humanize["mouse"]: myuri({ type }) is not a mouse part',
+		],
+		[
+			{ mouse: { engine: "myuri", options: { wpm: 70 } } },
+			"myuri({ wpm }) is not a mouse part",
+		],
+		[
+			{ keyboard: { engine: "myuri", options: { type: "fast" } } },
+			"takes the function that replaces the part",
+		],
+		[{ mouse: { engine: "raw", options: { speed: 1 } } }, "takes no options"],
+	])("refuses a malformed setting (%#)", (humanize, message) => {
+		expect(() => normalize(humanize)).toThrow(message);
 	});
 });
 
@@ -951,8 +1145,22 @@ describe("test_voices (launch half)", () => {
 		).toBe(false);
 	});
 
+	it("keeps a caller's speech-dispatcher grid", async () => {
+		const grid = {
+			languages: [["English (America)", "en-US"]],
+			variants: ["Adam"],
+		};
+		const c = await cfg({
+			os: "linux",
+			fingerprint_preset: undefined,
+			config: { "voices:speechd": grid },
+		});
+		expect(c["voices:speechd"]).toEqual(grid);
+		expect(c.voices).toBeUndefined();
+	});
+
 	it("fails closed when voice generation fails", async () => {
-		deps.generateRandomVoiceSubset = () => {
+		deps.drawVoiceConfig = () => {
 			throw new OSError("voice-manifests.json unreadable");
 		};
 		const { config, warned } = await launchWarning(
@@ -1031,6 +1239,71 @@ describe.skipIf(!MODEL.ok)(
 			}
 		});
 
+		const zoomedWindows = (dpr: number) => {
+			// fpgen's 1920x1080 monitor recorded at a 110% browser zoom: every CSS
+			// size shrunk by the zoom folded into the ratio.
+			const fp = fingerprints.generateFingerprint({ os: "windows" }) as Record<
+				string,
+				any
+			>;
+			Object.assign(fp.screen, {
+				width: 1760,
+				height: 990,
+				availWidth: 1760,
+				availHeight: 946,
+				availLeft: 0,
+				availTop: 0,
+			});
+			Object.assign(fp.window, {
+				devicePixelRatio: dpr,
+				outerWidth: 1760,
+				outerHeight: 953,
+				screenX: -7,
+				screenY: -7,
+			});
+			return fp;
+		};
+
+		it("a zoomed fpgen ratio claims the display it was recorded on", async () => {
+			// A ratio no display offers is a zoom: repaired to the display's scale
+			// with the geometry rescaled (test_launch_geometry.py).
+			withDisplay({ maxWidth: 1920, maxHeight: 1080 });
+			const config = await launchConfig({
+				headless: true,
+				fingerprint: zoomedWindows(1.0909090909090908),
+			});
+			expect(config["window.devicePixelRatio"]).toBe(1);
+			expect([config["screen.width"], config["screen.height"]]).toEqual([
+				1920, 1080,
+			]);
+			expect(config["screen.availHeight"]).toBe(1032);
+		});
+
+		it("a zoomed fpgen ratio follows the caller's render scale", async () => {
+			// A caller's layout.css.devPixelsPerPx is the scale the page renders
+			// at: the repair targets it, not the nearest step (1.75 for 1.818),
+			// or the page reports one ratio and matches another in matchMedia.
+			withDisplay({ maxWidth: 3840, maxHeight: 2160 });
+			const drawn = 1.8181818181818181;
+			const config = await launchConfig({
+				headless: true,
+				fingerprint: zoomedWindows(drawn),
+				firefox_user_prefs: { "layout.css.devPixelsPerPx": "1" },
+			});
+			expect(config["window.devicePixelRatio"]).toBe(1);
+			expect(config["screen.width"]).toBe(Math.round(1760 * drawn));
+		});
+
+		it("a real display scale from fpgen stays unmapped", async () => {
+			withDisplay({ maxWidth: 1920, maxHeight: 1080 });
+			const config = await launchConfig({
+				headless: true,
+				fingerprint: zoomedWindows(1.25),
+			});
+			expect("window.devicePixelRatio" in config).toBe(false);
+			expect(config["screen.width"]).toBe(1760);
+		});
+
 		it("headful generated geometry never exceeds the display (15 draws)", async () => {
 			withDisplay({ maxWidth: 1280, maxHeight: 720 });
 			for (let attempt = 0; attempt < 15; attempt++) {
@@ -1085,6 +1358,31 @@ describe.skipIf(!MODEL.ok)(
 			const first = await launchConfig({ os: "linux", fingerprint: fp });
 			const second = await launchConfig({ os: "linux", fingerprint: fp });
 			expect(drawn(first)).toBe(drawn(second));
+		});
+
+		it("a caller user agent alone still fixes the drawn platform", async () => {
+			// A Linux draw can carry another OS's platform beside its Linux oscpu.
+			// The caller set only the user agent, so platform and oscpu follow it.
+			const fp = fingerprints.generateFingerprint({ os: "linux" });
+			fp.navigator.platform = "Win32";
+			const config = await launchConfig({
+				os: undefined,
+				fingerprint: fp,
+				config: { "navigator.userAgent": LINUX_UA },
+			});
+			expect(config["navigator.platform"]).toBe("Linux x86_64");
+			expect(config["navigator.oscpu"]).toBe("Linux x86_64");
+		});
+
+		it("the caller's platform is kept when the user agent is set", async () => {
+			const config = await launchConfig({
+				os: undefined,
+				config: {
+					"navigator.userAgent": LINUX_UA,
+					"navigator.platform": "Linux i686",
+				},
+			});
+			expect(config["navigator.platform"]).toBe("Linux i686");
 		});
 
 		it("a fixed preset reproduces its fonts", async () => {
@@ -1430,5 +1728,74 @@ describe("cpu_affinity", () => {
 			"pinned launch restored",
 			"unpinned launch spawned",
 		]);
+	});
+});
+
+describe("test_caller_config_kept", () => {
+	beforeEach(() => stubHost());
+	const MAC = {
+		"navigator.userAgent": MAC_UA,
+		"navigator.platform": "MacIntel",
+		"webGl:vendor": "Apple",
+		"webGl:renderer": "Apple M1, or similar",
+		"screen.width": 1512,
+		"screen.height": 982,
+	};
+	const launchMac = (config: Record<string, any>, key: string) =>
+		launchWarning(
+			{
+				headless: true,
+				i_know_what_im_doing: true,
+				executable_path: BUNDLE_EXE,
+				os: "macos",
+				config,
+			},
+			"LeakWarning",
+			`LEAK: config sets ${key}`,
+		);
+
+	it("keeps an incoherent caller value and warns", async () => {
+		const depth = await launchMac(
+			{ ...MAC, "screen.colorDepth": 24 },
+			"screen.colorDepth",
+		);
+		expect(depth.config["screen.colorDepth"]).toBe(24);
+		expect(depth.config["screen.pixelDepth"] ?? 24).toBe(24);
+		expect(depth.warned).toBe(true);
+		const dpr = await launchMac(
+			{ ...MAC, "window.devicePixelRatio": 1.5 },
+			"window.devicePixelRatio",
+		);
+		expect(dpr.config["window.devicePixelRatio"]).toBe(1.5);
+		expect(dpr.warned).toBe(true);
+		// An Intel Mac GPU behind a notched panel only Apple Silicon Macs have.
+		const intel = "Intel(R) HD Graphics 400, or similar";
+		const gpu = await launchMac(
+			{ ...MAC, "webGl:vendor": "Intel Inc.", "webGl:renderer": intel },
+			"webGl:renderer",
+		);
+		expect(gpu.config["webGl:renderer"]).toBe(intel);
+		expect(gpu.warned).toBe(true);
+	});
+
+	it("is silent when the caller's values are coherent", async () => {
+		const kept = await launchMac(
+			{
+				...MAC,
+				"screen.colorDepth": 30,
+				"screen.pixelDepth": 30,
+				"window.devicePixelRatio": 2,
+			},
+			"",
+		);
+		expect(kept.config["screen.colorDepth"]).toBe(30);
+		expect(kept.warned).toBe(false);
+	});
+
+	it("draws colorDepth 30 for every macOS identity", async () => {
+		const drawn = await launchMac({ "navigator.userAgent": MAC_UA }, "");
+		expect(drawn.config["screen.colorDepth"]).toBe(30);
+		expect(drawn.config["screen.pixelDepth"]).toBe(30);
+		expect(drawn.warned).toBe(false);
 	});
 });

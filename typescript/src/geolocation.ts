@@ -156,8 +156,9 @@ export function warnIfDeprecated(config: GeoIPRepo): void {
 /**
  * Load the active GeoIP config from disk, falling back to the repos.yml default.
  *
- * A saved deprecated source that the user did not pick explicitly (every
- * cache written before the default changed) resolves to the default.
+ * A saved source the user did not pick explicitly resolves to the default
+ * when it is deprecated (every cache written before the default changed) or
+ * no longer in repos.yml. One picked explicitly and gone throws.
  */
 export function loadGeoipConfig(): GeoIPRepo {
 	if (fs.existsSync(GEOIP_CONFIG)) {
@@ -166,12 +167,12 @@ export function loadGeoipConfig(): GeoIPRepo {
 				string,
 				any
 			>) ?? {};
-		let config: GeoIPRepo;
-		try {
-			config = getGeoipConfigByName(saved.name);
-		} catch {
-			return saved as GeoIPRepo;
-		}
+		const known = loadGeoipRepos()[0].map((r) => (r.name ?? "").toLowerCase());
+		const name =
+			saved.explicit || known.includes(String(saved.name ?? "").toLowerCase())
+				? saved.name
+				: undefined;
+		const config = getGeoipConfigByName(name);
 		if (config.deprecated && !saved.explicit) {
 			return getGeoipConfigByName(undefined);
 		}

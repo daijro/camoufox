@@ -23,6 +23,15 @@ resolve ── static ─────────────── lint, tribal
                                summary ──► one comment on the PR ──► gate: "All tests passed"
 ```
 
+A push to `main` whose tree a passing pull request run already tested (nothing
+else merged in between) runs none of that again. `resolve` finds the run
+(`ci.carry`), `carry-browser` takes over the browser it tested, `sundial` runs
+against it, since a pull request from a fork has no credential for it, and
+`summary` reports the carried results with this run's grade. Each pull request
+run records the tree it tested as a `tested-tree-<tree>` artifact. A push that
+lands any other tree, or whose run's browser has expired (three days), is tested
+in full.
+
 ## Jobs
 
 | Job | Runner | What it proves |
@@ -31,13 +40,15 @@ resolve ── static ─────────────── lint, tribal
 | `pythonlib` | `ci.run_pythonlib` | `python/`'s own tests |
 | `typescript` | `ci.run_typescript` | Type check, lint, vitest, byte-for-byte parity with `python/` |
 | `install` | `ci.run_install` | The packed packages install into clean environments, fetch a real browser, and launch it and the browser under test through the installed package: the User-Agent claims the launched Firefox, the page and the request agree on it, the bundled fonts render, and a click and typed text reach the page as trusted events |
-| `build` / `fetch-browser` | `ci.run_prepare`, `ci.run_build` | The browser under test: compiled from this branch, or the published release built from the same sources |
+| `build` / `fetch-browser` | `ci.run_prepare`, `ci.run_build` | The browser under test: built and packaged from this branch by the command a release's build runs, or the published release built from the same sources |
+| `preflight` | `ci.run_prepare`, `ci.run_build --preflight` | Each target only a release builds (linux arm64, windows x86_64 and i686, macos x86_64 and arm64) configures, passes the export tiers, and compiles every source file a patch or an addition touches ([below](#what-a-release-builds)) |
 | `patch-guards` | `ci.run_patch_guards --group spoofing\|automation\|parity`, `ci.run_skiplist_audit` | One guard per shipped behaviour ([`browser/tests/playwright/`](../browser/tests/playwright/README.md)); every skiplist entry still fails |
 | `build-tester` | `ci.run_build_tester` | The raw binary against the anti-detect checks ([README](../browser/tests/build-tester/README.md)) |
 | `typescript-browser` | `ci.run_typescript --browser` | The npm launcher against a real browser |
 | `playwright` | `ci.run_playwright --shard i/6` | Upstream playwright-python's suite, plus [`browser/tests/playwright/camoufox/`](../browser/tests/playwright/camoufox/README.md) |
 | `native` | `ci.run_native --subset browser` | Leaks, context isolation, crash recovery ([below](#camoufoxs-own-suite)) |
 | `growth` | `ci.run_native --subset growth --shard i/7` | Memory growth, one test per runner |
+| `carry-browser` | | A carried push to `main`: the pull request run's browser, cached for `main` when it was built |
 | `sundial` | `ci.run_sundial` | The stealth grade ([below](#stealth-grade)) |
 | `summary` | `ci.summarize` | Folds every result into one table and a pull request comment |
 | `gate` | | The required check, **`All tests passed`** |
@@ -121,7 +132,9 @@ counted as fallbacks. The `route_web_socket` gap is real for users too:
 purpose, each with a reason (`ci/summarize.py` rejects an entry without one).
 A reason is not evidence, so `ci/run_skiplist_audit.py` runs every entry in the
 main world with the skiplist off and **fails the build if a skipped test
-passes**. `ISOLATION_HANGS` is a different list: those tests pass in the main
+passes**. An entry whose test passes or fails with machine speed names, in
+`checked_by`, the patch guard that checks its reason instead.
+`ISOLATION_HANGS` is a different list: those tests pass in the main
 world, so they would fail the audit, and `test_isolation_hangs_are_not_in_the_skiplist`
 keeps the two apart.
 
@@ -183,9 +196,11 @@ Anything that is not `success` fails it, including `skipped`, except:
 
 | May be skipped | When |
 |---|---|
-| `build` | The browser was fetched, not compiled |
+| `build`, `preflight` | The browser was fetched, not compiled |
 | `fetch-browser` | The browser was compiled, not fetched |
 | `sundial` | Disabled in `ci/sundial.yml`, or no credential |
+| `carry-browser` | The push to `main` was not carried |
+| every suite but `sundial` | The push to `main` was carried; `summary` requires their results from the pull request run |
 
 `sundial` may also record a `skip` result when the sundial service is
 unreachable. A rejected credential, a full report, or a score under the floor
@@ -212,7 +227,7 @@ Each tier gates the next, so a lint failure never reaches the build:
 |---|---|---|
 | 0 static | lint, self-tests, settled decisions | seconds |
 | 1 unit | pythonlib, typescript | about a minute |
-| 2 browser | build (browser sources changed) or fetch (they did not) | minutes to hours |
+| 2 browser | build and five preflights (browser sources changed) or fetch (they did not) | minutes to hours |
 | 3a smoke | patch guards, skiplist audit, build-tester, typescript-browser, install | about 15 min |
 | 3b full | Playwright × 6, native, growth × 7, stealth | about 40 min |
 | 4 gate | the required check | seconds |
@@ -222,11 +237,31 @@ Each tier gates the next, so a lint failure never reaches the build:
 | **Fetch instead of build** | A pull request that does not touch browser sources tests the published release built from exactly this tree's sources (`ci.release paired`). With no such release, it builds. |
 | **Compiled-input cache** | The build cache is keyed on a hash of the compiled inputs only (`ci/browser_inputs.py`). On a hit the browser is restored and this branch's Juggler JavaScript and other resources, the files Juggler's `moz.build` lists in `FINAL_TARGET_FILES`, are laid over it. Everything else, including any new file type, counts as native and forces a build. |
 | **No partial restore** | That cache has no `restore-keys`: a partial match would hand the tests a browser built from different sources. A self-test checks the key covers every browser-affecting path. |
-| **Warm ccache** | Pushes to `main` and a twice-weekly schedule keep the ccache from being evicted; pull requests restore it. |
+| **Warm ccache** | Pushes to `main` that build, and a twice-weekly schedule, keep the ccache from being evicted; pull requests restore it. A carried push builds nothing, so it caches the pull request's browser under the compiled-input key instead. |
+| **Carried pushes** | A push to `main` that lands the tree its pull request run tested reuses that run's results ([above](#the-test-pipeline)). |
 | **PGO and LTO** | Every build uses Mozilla's PGO profile for the same Firefox and links libxul with cross-language LTO, as a release does ([`builds-are-optimized-like-stock`](tribal-rules.yml)). ccache caches the compiles, not that link, so a warm build still pays for it. |
 | **Network retries only** | `ci.run_prepare` (`setup-minimal`, `dir`, `mozbootstrap`) retries only failures that read as transient network errors. A failed hunk or compile error fails at once. |
 
 Pushing to a branch cancels its running build (`cancel-in-progress`).
+
+## What a release builds
+
+A release builds six targets and a pull request builds one. Every step of a
+release's build therefore also runs on a pull request
+([`one-build-entry-point`](tribal-rules.yml)):
+
+| | Pull request | Release |
+|---|---|---|
+| Runner setup | [`build-host`](../.github/actions/build-host/action.yml) | the same action |
+| Source tree | `ci.run_prepare` | the same |
+| linux x86_64 | `ci.run_build`: `multibuild.py` retargets, builds and packages | the same command |
+| The other five targets | `ci.run_build --preflight`: `multibuild.py` retargets, then [`preflight.py`](../browser/scripts/preflight.py) configures, runs the `pre-export`, `export` and `pre-compile` tiers and compiles the objects of every patched or added source file | `ci.run_build`: the full build |
+
+A preflight does not link or package, so a link error on a cross-compiled
+target is still found by a release. Its compiles are cached per target, and a
+target that passed is not preflighted again until the browser's compiled
+inputs, `build-host` or the runner scripts change; the twice-weekly scheduled
+run preflights every target regardless.
 
 ## Releases
 
@@ -245,7 +280,8 @@ exactly one browser build.
      ▼
 dispatch on main ─► ubo ─► tests ─► plan ─┬─► build-browser ─► publish-browser ─┐
                   (AMO's  (tests.yml,     │   (only if its      v156.0.1-beta.N  │
-                   newest) this commit)   │    sources changed)                  ├─► publish-pypi ─► publish-npm ─► tag-library
+                   newest) unless main's  │    sources changed)                  ├─► publish-pypi ─► publish-npm ─► tag-library
+                           run passed it) │                                      │
                                           └─► build-library ─────────────────────┘   0.5.9bN          0.5.9-beta.N    v0.5.9bN
                                               (only if what it ships changed)        (pip: --pre)     @next
 
@@ -261,7 +297,7 @@ git tag v0.5.8 <tested main commit> && git push origin v0.5.8
 | Out of cycle | Run the Release workflow by hand on `main` (`gh workflow run release.yml --ref main`) to cut a prerelease now. Push a tag to promote by hand. |
 | Only a tested commit is released | A cut calls `tests.yml` on its commit and continues only if it passes. A promotion requires `All tests passed` on its commit. |
 | The browser is built only when its sources changed | `ci.browser_inputs.source_digest()` hashes the browser's sources. Each browser release carries a `manifest.json` with that digest, its commit, and the browser interface it speaks (`CONSTRAINTS.INTERFACE` in `python/src/camoufox/__version__.py`). A matching release is reused; otherwise `plan` takes the next unused `beta.N`. Nothing is committed: `ci.release set-build` writes the number into the build's tree. |
-| uBlock Origin | Every browser package bundles AMO's newest uBO release under `addons/UBO/` ([`browser/scripts/fetch-ubo.py`](../browser/scripts/fetch-ubo.py)), and both launchers load it from there. A cut resolves the release once, in the `ubo` job before `tests`, and hands it to the tests and every build, so the browser ships the uBO it was tested with. Its `manifest.json` (`ubo`) and release notes name it. A reused browser keeps the uBO it was built with. |
+| uBlock Origin | Every browser package bundles the uBO release pinned in [`browser/scripts/data/ubo.json`](../browser/scripts/data/ubo.json) under `addons/UBO/` ([`browser/scripts/fetch-ubo.py`](../browser/scripts/fetch-ubo.py)), and both launchers load it from there. A cut reads the pin once, in the `ubo` job before `tests`, and hands it to the tests and every build, so the browser ships the uBO it was tested with. A bump is a reviewed commit (`fetch-ubo.py newest` prints the candidate). Its `manifest.json` (`ubo`) and release notes name it. A reused browser keeps the uBO it was built with. |
 | Builds are attested | `gh attestation verify <file> --repo daijro/camoufox` |
 | Packages are built once | `publish-pypi` and `publish-npm` upload the files `build-library` made: `0.5.8b2` on PyPI, `0.5.8-beta.2` on npm. `pip install camoufox` skips prereleases without `--pre`; npm installs `latest`, not `next`. |
 | The pairing | `ci.release stamp` writes the paired browser release into `python/src/camoufox/browser-pin.json`, which both launchers read. On `main` the file is `{}`, so a development checkout follows its channel. |
@@ -277,7 +313,8 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | Command | Needs a browser | What it runs |
 |---|---|---|
 | `python3 -m ci.run_prepare` | | `make setup-minimal`, `dir`, `mozbootstrap` |
-| `python3 -m ci.run_build` | | The browser build |
+| `python3 -m ci.run_build` | | The browser build and package for linux x86_64; `--target`, `--arch` for another |
+| `python3 -m ci.run_build --target windows --arch x86_64 --preflight` | | Preflight one target |
 | `python3 -m ci.run_pythonlib` | | `python/`'s tests |
 | `python3 -m ci.run_typescript` | | `typescript/`'s tests |
 | `python3 -m ci.run_typescript --browser <bin>` | yes | The npm launcher end to end |

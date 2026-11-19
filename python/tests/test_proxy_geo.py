@@ -1,12 +1,16 @@
-"""NewContext derives the WebRTC IP and timezone from the proxy's exit IP.
+"""NewContext places a context behind a proxy where the proxy exits.
 
-Two defects, both of which left a context with the host's WebRTC IP and
-timezone while its traffic went through the proxy:
+Two defects left a context with the host's WebRTC IP and timezone while its
+traffic went through the proxy:
 
 - The lookup built its own proxy URL with urlparse, which reads a scheme-less
   server such as "1.2.3.4:8080" (a form Playwright accepts) as scheme "1.2.3.4"
   and drops the host.
 - A failed lookup was swallowed, and the context launched without the values.
+
+And the lookup moved only the clock: the locale and geolocation stayed the
+launch identity's, so a page saw the exit's timezone next to another country's
+language and position.
 """
 
 import asyncio
@@ -30,7 +34,14 @@ class _Response:
         return self._payload
 
 
-EXIT = {"status": "success", "query": "203.0.113.7", "timezone": "Europe/Paris"}
+EXIT = {
+    "status": "success",
+    "query": "203.0.113.7",
+    "timezone": "Europe/Paris",
+    "countryCode": "FR",
+    "lat": 48.8566,
+    "lon": 2.3522,
+}
 
 
 def _sync_browser():
@@ -103,9 +114,45 @@ def test_a_failed_lookup_raises_instead_of_launching_without_the_values(api, fai
 
 
 @pytest.mark.parametrize("api", ["sync", "async"])
-def test_no_lookup_when_both_values_are_given(api):
+def test_the_locale_and_position_move_with_the_clock(api):
+    with mock.patch.object(ip.requests, "get", return_value=_Response(EXIT)):
+        options, _ = _new_context(api, {"server": "1.2.3.4:8080"})
+    assert options["timezone_id"] == "Europe/Paris"
+    assert options["locale"].endswith("-FR")
+    assert options["geolocation"] == {"latitude": 48.8566, "longitude": 2.3522}
+    assert options["permissions"] == ["geolocation"]
+
+
+@pytest.mark.parametrize("api", ["sync", "async"])
+def test_values_the_caller_gave_are_kept(api):
+    position = {"latitude": 51.5072, "longitude": -0.1276}
+    with mock.patch.object(ip.requests, "get", return_value=_Response(EXIT)):
+        options, context = _new_context(
+            api, {"server": "1.2.3.4:8080"}, locale="en-GB", geolocation=position
+        )
+    assert (options["locale"], options["geolocation"]) == ("en-GB", position)
+    assert options["timezone_id"] == "Europe/Paris"
+    assert "203.0.113.7" in context.add_init_script.call_args.args[0]
+
+
+@pytest.mark.parametrize("api", ["sync", "async"])
+def test_a_lookup_without_the_country_raises(api):
+    partial = {key: value for key, value in EXIT.items() if key != "countryCode"}
+    with mock.patch.object(ip.requests, "get", return_value=_Response(partial)), pytest.raises(InvalidIP):
+        _new_context(api, {"server": "1.2.3.4:8080"})
+
+
+@pytest.mark.parametrize("api", ["sync", "async"])
+def test_no_lookup_when_every_value_is_given(api):
     with mock.patch.object(ip.requests, "get") as get:
-        _new_context(api, {"server": "1.2.3.4:8080"}, webrtc_ip="198.51.100.1", timezone_id="UTC")
+        _new_context(
+            api,
+            {"server": "1.2.3.4:8080"},
+            webrtc_ip="198.51.100.1",
+            timezone_id="UTC",
+            locale="en-US",
+            geolocation={"latitude": 40.7128, "longitude": -74.006},
+        )
     get.assert_not_called()
 
 

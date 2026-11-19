@@ -337,14 +337,22 @@ index f9fcb084a7..fc6c39473f 100644
  
  #include <algorithm>  // for max
  
-@@ -196,6 +197,13 @@ bool nsDeviceContext::GetScreenIsHDR() {
+@@ -196,6 +197,21 @@ bool nsDeviceContext::GetScreenIsHDR() {
  }
  
  nsSize nsDeviceContext::GetDeviceSurfaceDimensions() {
-+  // Check for height and width overrides from MaskConfig
++  // Camoufox: the claimed screen. A real screen whose device pixels round to
++  // it is that screen, and its size stays fractional as stock's does: 3456
++  // device px at 250 % is 1382.4 CSS px, so device-width matches no 1382px
++  // query although screen.width reads 1382.
 +  if (auto height = MaskConfig::GetInt32("screen.height"),
 +      width = MaskConfig::GetInt32("screen.width");
 +      height && width) {
++    nsSize real = GetRect().Size();
++    if (NSAppUnitsToIntPixels(real.width, AppUnitsPerCSSPixel()) == width.value() &&
++        NSAppUnitsToIntPixels(real.height, AppUnitsPerCSSPixel()) == height.value()) {
++      return real;
++    }
 +    nsRect outRect = CSSPixel::ToAppUnits(CSSIntRect(0, 0, width.value(), height.value()));
 +    return outRect.Size();
 +  }
@@ -376,15 +384,26 @@ index 1587fcffd8..4b1952bc5d 100644
  #include "mozilla/gfx/gfxVars.h"
  #include "nsCSSProps.h"
  #include "nsCSSValue.h"
-@@ -58,6 +61,26 @@ static nsSize GetSize(const Document& aDocument) {
+@@ -58,6 +61,40 @@ static nsSize GetSize(const Document& aDocument) {
  
  // A helper for three features below.
  static nsSize GetDeviceSize(const Document& aDocument) {
 +  // Camoufox: per-context size first, for the same internal-consistency reason
 +  // as the global override below -- CSS device-width has to agree with
 +  // screen.width or the disagreement is itself the fingerprint.
++  // A real screen whose device pixels round to the claimed size is that
++  // screen, kept fractional as stock keeps it (nsDeviceContext::
++  // GetDeviceSurfaceDimensions).
++  nsPresContext* claimedPc = aDocument.GetPresContext();
 +  if (uint32_t w = 0, h = 0; ScreenDimensionManager::GetDimensions(
 +          RoverfoxStorageManager::UserContextId(&aDocument), w, h)) {
++    if (claimedPc) {
++      nsSize real = claimedPc->DeviceContext()->GetRect().Size();
++      if (NSAppUnitsToIntPixels(real.width, AppUnitsPerCSSPixel()) == int32_t(w) &&
++          NSAppUnitsToIntPixels(real.height, AppUnitsPerCSSPixel()) == int32_t(h)) {
++        return real;
++      }
++    }
 +    return CSSPixel::ToAppUnits(
 +        CSSIntSize(static_cast<int32_t>(w), static_cast<int32_t>(h)));
 +  }
@@ -397,6 +416,9 @@ index 1587fcffd8..4b1952bc5d 100644
 +  if (auto width = MaskConfig::GetInt32("screen.width"),
 +      height = MaskConfig::GetInt32("screen.height");
 +      width && height) {
++    if (claimedPc && !claimedPc->IsRootPaginatedDocument()) {
++      return claimedPc->DeviceContext()->GetDeviceSurfaceDimensions();
++    }
 +    return CSSPixel::ToAppUnits(CSSIntSize(width.value(), height.value()));
 +  }
 +

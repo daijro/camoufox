@@ -43,7 +43,7 @@ def test_preset_font_draw(monkeypatch):
 
 
 def test_preset_voice_draw(monkeypatch):
-    monkeypatch.setattr(fp, "_generate_random_voice_subset", _fail(ValueError("bad manifest")))
+    monkeypatch.setattr(fp, "draw_voice_config", _fail(ValueError("bad manifest")))
     with pytest.warns(FallbackWarning, match=REPORT) as record:
         fp.from_preset(_preset(), "152")
     assert "ValueError: bad manifest" in _report(record)
@@ -53,7 +53,7 @@ def test_preset_voice_draw(monkeypatch):
     "target, error, key",
     [
         ("_generate_random_font_subset", OSError("fonts.json missing"), "fonts"),
-        ("_generate_random_voice_subset", ValueError("bad manifest"), "voices"),
+        ("draw_voice_config", ValueError("bad manifest"), "voices:speechd"),
     ],
 )
 def test_context_draws(monkeypatch, target, error, key):

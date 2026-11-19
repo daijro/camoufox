@@ -55,6 +55,70 @@ export class ProxyHelper {
 	}
 }
 
+export interface ProxyAuth {
+	host: string;
+	port: number | null;
+	username: string;
+	password: string;
+}
+
+/**
+ * Splits a SOCKS5 proxy's username and password from what Playwright is given.
+ *
+ * Playwright refuses a `socks5://` proxy that has a username ("Browser does
+ * not support socks5 proxy authentication"), but Juggler can send them
+ * (RFC 1929). Returns the proxy without its credentials, and the credentials
+ * with the proxy's host and port, for Juggler; or the proxy unchanged and
+ * null when it is not SOCKS5 or has no credentials.
+ */
+export function socks5Auth<T extends ProxyConfig | undefined | null>(
+	proxy: T,
+): [T, ProxyAuth | null] {
+	if (!proxy || !(proxy.username || proxy.password)) return [proxy, null];
+	const server = String(proxy.server ?? "");
+	// As Playwright reads the server: without a scheme, it is an HTTP proxy.
+	let url: URL;
+	try {
+		url = new URL(server.includes("://") ? server : `http://${server}`);
+	} catch (error) {
+		throw new InvalidProxy(`Invalid proxy server: ${server}`, { cause: error });
+	}
+	if (url.protocol.toLowerCase() !== "socks5:" || !url.hostname)
+		return [proxy, null];
+	const { username, password, ...bare } = proxy;
+	return [
+		bare as T,
+		{
+			host: url.hostname.replace(/^\[(.*)\]$/, "$1"),
+			port: url.port ? Number(url.port) : null,
+			username: username || "",
+			password: password || "",
+		},
+	];
+}
+
+/**
+ * The environment variable that carries a launch-level SOCKS5 proxy's
+ * credentials to Juggler (TargetRegistry.js), which clears it once read.
+ */
+export const PROXY_AUTH_ENV = "CAMOU_PROXY_AUTH";
+
+/** The environment that hands a launch-level proxy's credentials to Juggler. */
+export function proxyAuthEnv(auth: ProxyAuth): Record<string, string> {
+	return { [PROXY_AUTH_ENV]: JSON.stringify(auth) };
+}
+
+/**
+ * The init script that hands a context's SOCKS5 credentials to Juggler.
+ *
+ * Juggler takes it out of the context's init scripts (TargetRegistry.js), so
+ * it never reaches a page or a content process. It is valid JavaScript that
+ * does nothing, should a browser without that support run it.
+ */
+export function proxyAuthInitScript(auth: ProxyAuth): string {
+	return `camoufoxProxyAuth: (${JSON.stringify(auth)});`;
+}
+
 export function validIPv4(ip: string | false): boolean {
 	if (!ip) {
 		return false;
@@ -112,24 +176,36 @@ function getImpit(proxy?: string): Impit {
 }
 
 const PROXY_LOOKUP_FAILED =
-	"Could not look up the proxy's exit IP and timezone. Pass webrtc_ip and " +
-	"timezone_id explicitly to skip the lookup";
+	"Could not look up where the proxy exits. Pass webrtc_ip, timezoneId, " +
+	"locale and geolocation explicitly to skip the lookup";
+
+/** Where a proxy exits: its IP and that IP's timezone, country and position. */
+export interface ExitGeo {
+	ip: string;
+	timezone: string;
+	country: string;
+	latitude: number;
+	longitude: number;
+}
 
 /**
- * The exit IP of `proxy` and that IP's timezone, looked up through the proxy.
- * Throws InvalidIP when the lookup fails: a context that silently kept the
- * host's WebRTC IP and timezone behind a proxy would be a leak.
+ * Where `proxy` exits, looked up through the proxy. Throws InvalidIP when the
+ * lookup fails: a context that silently kept the host's WebRTC IP and timezone
+ * behind a proxy would be a leak.
  */
-export async function proxyExitGeo(proxy: string): Promise<[string, string]> {
+export async function proxyExitGeo(proxy: string): Promise<ExitGeo> {
 	let data: {
 		status?: string;
 		message?: string;
 		query?: string;
 		timezone?: string;
+		countryCode?: string;
+		lat?: number;
+		lon?: number;
 	};
 	try {
 		const response = await getImpit(proxy).fetch(
-			"http://ip-api.com/json?fields=status,message,query,timezone",
+			"http://ip-api.com/json?fields=status,message,query,timezone,countryCode,lat,lon",
 		);
 		if (!response.ok) {
 			throw new Error(`${response.status} Error: ${response.statusText}`);
@@ -138,13 +214,26 @@ export async function proxyExitGeo(proxy: string): Promise<[string, string]> {
 	} catch (error) {
 		throw new InvalidIP(`${PROXY_LOOKUP_FAILED}: ${error}`);
 	}
-	if (data.status !== "success" || !data.query || !data.timezone) {
+	if (
+		data.status !== "success" ||
+		!data.query ||
+		!data.timezone ||
+		!data.countryCode ||
+		data.lat == null ||
+		data.lon == null
+	) {
 		throw new InvalidIP(
 			`${PROXY_LOOKUP_FAILED}: ${data.message ?? JSON.stringify(data)}`,
 		);
 	}
 	validateIP(data.query);
-	return [data.query, data.timezone];
+	return {
+		ip: data.query,
+		timezone: data.timezone,
+		country: data.countryCode,
+		latitude: data.lat,
+		longitude: data.lon,
+	};
 }
 
 const PUBLIC_IP_URLS = [

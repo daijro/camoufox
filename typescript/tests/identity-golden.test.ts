@@ -507,6 +507,21 @@ describe("coherence", () => {
 				pairs(coherence.dropIncoherentSourceValues(dropped, c.os)),
 			).toEqual(c.dropped);
 			expect(h(dropped), label).toBe(c.droppedConfig);
+
+			const keep = new Set<string>(c.keep);
+			const withKept = (vs: coherence.Violation[]) =>
+				vs.map((v) => [v.rule, v.detail, v.kept ?? []]);
+			const keptApplied = clone(c.input);
+			expect(h(withKept(coherence.apply(keptApplied, c.os, keep))), label).toBe(
+				c.keptApply,
+			);
+			expect(h(keptApplied), label).toBe(c.keptApplied);
+			const keptDropped = clone(c.input);
+			expect(
+				withKept(coherence.dropIncoherentSourceValues(keptDropped, c.os, keep)),
+				label,
+			).toEqual(c.keptDropped);
+			expect(h(keptDropped), label).toBe(c.keptDroppedConfig);
 			expect(coherence.screenIsImplausible(c.input)).toBe(c.implausible);
 		});
 	});

@@ -34,9 +34,23 @@ rules:
       1280, innerHeight 984, fullpage 1280x5367 either way, with only
       fingerprint-rotation noise in the colour count. Second, it costs
       throughput: past 30-40 concurrent browsers the framebuffer becomes the
-      bottleneck on a machine that handles 70-80 at 1x1. The root window is not
-      a fingerprint -- screen.* comes from the generated fingerprint, applied
-      per context in the browser.
+      bottleneck on a machine that handles 70-80 at 1x1. The root's size is
+      not a fingerprint -- screen.* comes from the generated fingerprint,
+      applied per context in the browser -- but a window lying outside the
+      root is observable: X reports it fully obscured, and an occluded
+      window's navigator.mediaDevices.enumerateDevices() never settles
+      (measured 2026-11-03, window at the identity's 319,76 on the 1x1 root),
+      and with no window manager it is never focused either (X focus follows
+      the pointer, which a 1x1 root pins at 0,0). Firefox also sizes and
+      places windows inside the X screen: on 1x1 a 400x300 window.open came
+      up 120x54 at 0,0. So 1x1 holds only together with two patches:
+      virtual-display-off-root-not-occluded.patch (no occlusion for a window
+      outside the root; and with no window manager a new top-level window is
+      focused at its first VisibilityNotify, as any desktop does)
+      and virtual-display-claimed-screen.patch (an X screen smaller than the
+      claimed one reports the claimed one). Guards: virtual-display-window-visible,
+      popup-window-size, popup-covered-click,
+      startup-size-hold-yields, all at this default.
     expect:
       module: camoufox.virtdisplay
       attribute: DEFAULT_SCREEN
@@ -257,6 +271,17 @@ rules:
       except_paths: ["python/pyproject.toml"]
       allowed_forms: ["-e ../../../python", "-e ./python", "-e python"]
 
+  - id: ubo-release-pinned
+    title: The bundled uBlock Origin is a committed pin, never AMO's newest
+    check: manual   # ci/tests/test_fetch_ubo.py, browser/tests/playwright/patches/main-world-eval-globals.py
+    evidence:
+      - "2026-11-09: uBO 1.76.0 (AMO's newest mid-sync) put RegExp after URL in the global order of every tab after the first; stock 158, no uBO and uBO 1.75.4 keep it after Number in every tab and window"
+    rationale: >-
+      uBO runs in every page, so a uBO release can change what a page observes.
+      fetch-ubo.py resolve reads browser/scripts/data/ubo.json; `newest` prints
+      AMO's latest as a candidate. A bump is a commit, made after the stock
+      parity and automation guards pass with it.
+
   # -------------------------------------------------------------------------
   # Measurement
   # -------------------------------------------------------------------------
@@ -286,6 +311,49 @@ rules:
       on a plain utterance or ends the instant it starts. So the browser
       speaks it silently for as long as the text takes at ~150 words per
       minute. The two config keys that chose between the two tells are gone.
+
+  - id: driven-pages-stay-focused
+    title: A driven page stays focused and active, deliberately not stock
+    check: manual   # browser/tests/playwright/patches/driven-page-real-focus.py
+    evidence:
+      - "product decision, 2026-11-05: every page a caller opens must keep running as if a person is looking at it"
+      - "the stock-focus change in daijro/camoufox#997 made background pages lose focus and visibility; it is reverted here"
+    rationale: >-
+      Stock Firefox gives a page behind another window hasFocus() false, a
+      window blur, and a hidden, throttled state behind a foreground tab. A
+      driver's pages are all work the caller asked for, in parallel, so
+      Camoufox keeps every top-level driven document focused and active
+      (docShell.overrideHasFocus / forceActiveState). This is page-visible: it
+      is a product choice, not a parity bug.
+
+  - id: no-made-up-srflx
+    title: A srflx candidate comes only from a STUN answer
+    check: manual   # browser/tests/playwright/patches/webrtc-context-ip.py, webrtc-socks5-udp.py
+    evidence:
+      - "daijro/camoufox#997: the fabricated srflx is removed, and its guards now run against a STUN server that answers"
+      - "webrtc-socks5-udp.py: gathering behind a proxy with no UDP takes as long as against a STUN server that never answers"
+    rationale: >-
+      A srflx says the page's STUN server saw a Binding Request from that
+      address, and a page running its own server can tell it never did. Behind
+      a proxy with no UDP path, the page reads a machine whose UDP is blocked:
+      host candidates only, obfuscated even with capture permission, and
+      datagrams dropped silently so gathering times out as it does on a
+      firewalled machine. The identity's address replaces a srflx the browser
+      really gathered; it never invents one.
+
+  - id: juggler-records-the-proxy
+    title: Juggler records which contexts are proxied, not the launcher and not the page
+    check: manual   # browser/tests/playwright/patches/webrtc-socks5-udp.py (blob:, about:blank, launch proxy), webrtc-proxy-no-udp-around.py (bypass, system proxy)
+    evidence:
+      - "daijro/camoufox#997, CI run 42147151481: a raw browser.new_context(proxy=...) gathered around its SOCKS5 proxy on a blob: page"
+    rationale: >-
+      A document with no HTTP channel has no proxy lookup to go by, so WebRTC
+      needs another answer. Every proxy reaches Juggler, however the caller
+      set it, and Juggler's flag is a default-branch pref a page cannot see. A
+      launcher config key misses a caller's own new_context, and a window
+      method is one more name a page can find. A system proxy is recorded at
+      startup, and a page in its proxy's bypass list counts as proxied: it
+      gets no UDP or ICE TCP, because this machine is not the identity's.
 
   - id: no-glyph-spacing-noise
     title: Text is shaped exactly as stock Firefox shapes it; there is no spacing seed
@@ -353,8 +421,39 @@ rules:
       the audio hash with the values that must match across contexts, and the
       audio-matches-stock guard checks the build against the recorded values.
 
+  - id: canvas-follows-the-claimed-cpu-vendor
+    title: A page computes as the claimed CPU does, Intel, AMD or ARM64; the x86 vendor is drawn at Firefox's x86 share
+    check: manual   # ci/tests/test_cpu_estimates.py, browser/tests/cpu-estimates/check.py, guard cpu-vendor-estimates
+    evidence:
+      - "2026-11-10, all 2^32 inputs: Core i7-12700H (Linux) and i9-11900H (Windows 11) give identical RCPPS/RSQRTPS bits; Ryzen 7 9850X3D (Zen 5) and Threadripper 7970X (Zen 4) give identical bits; the two vendors differ (browser/tests/cpu-estimates/provenance.json)"
+      - "stock Firefox 159.0, gradient over gradient, getImageData FNV-1a: i9-11900H on Windows and Ryzen 9850X3D on Linux agree for source-over, multiply, screen and soft-light and differ for color-dodge, color-burn, hue, saturation, color and luminosity; the build with general.cpu_identity 1 on the Ryzen gives the i9's hashes for all ten (guard cpu-vendor-estimates)"
+      - "stock Firefox 159.0, WebCodecs AudioEncoder Opus 64 kbit/s mono, one second of a fixed signal: one byte stream on the i7-12700H (Linux) and i9-11900H (Windows), another on the Ryzen 9850X3D (Linux) and the Threadripper 7970X (Firefox 158, Linux); libopus celt/x86/vq_sse2.c calls _mm_rcp_ps and _mm_rsqrt_ps; the build with general.cpu_identity 1 on the Ryzen gives the Intel stream byte for byte (guard cpu-vendor-estimates)"
+      - "stock Firefox 159.0 on the same four x86 CPUs: Web Audio nodes, NaN bits, the 11 WebAssembly relaxed SIMD operations, WebGL shaders, flac/vorbis/AAC and the video encoders gave one value per OS, none per vendor; an Apple M4 differs in all of Web Audio, nearly all canvas operations, Opus, NaN sign and 9 relaxed SIMD operations"
+      - "2026-11-11, the build with general.cpu_identity 3 on the Ryzen 9850X3D, launched through the Python launcher under Xvfb: all 45 cpu-probe keys on which stock 159.0 x86-64 and ARM64 Linux differ (canvas text aside, which follows devicePixelRatio) equal the Apple M4 container's (guard cpu-vendor-estimates)"
+      - "2026-11-11, the aarch64 build on an Apple M4 (Debian container, Xvfb, 8 cores), launched through the Python launcher: cpu intel and amd each give stock's ten composite hashes and Opus stream, and all 46 cpu-probe keys on which stock 159.0 x86-64 and ARM64 Linux differ equal the i7-12700H's and the Ryzen 9850X3D's (guard cpu-vendor-estimates)"
+      - "Firefox Public Data Report, hardware, week of 2026-11-02: Intel 76.86%, AMD 17.61%, Apple 5.04%, so Intel is 81.4% of x86; no per-OS split is published"
+    rationale: >-
+      The two estimate instructions are specified only to a relative error, and
+      each vendor implements them with its own table, the same across that
+      vendor's generations and OSes. Skia's raster pipeline uses them for
+      blend modes, perspective and matrix inversion, and libopus for the PVQ
+      search in its encoder, so canvas readback and encoded Opus name the
+      host's vendor. The patch reproduces the other vendor's table when the
+      pref names it and changes nothing otherwise; libgkcodecs cannot read
+      prefs, so Gecko hands libopus the table before creating an encoder. The launcher draws the vendor
+      with the identity: from the GPU where only one vendor's CPU carries it
+      (Intel integrated graphics, Radeon APU graphics, every x86 Mac), else at
+      Firefox's x86 share, which Steam's survey would put far lower for Intel.
+      Audio is not part of the vendor split: the offline render splits x86-64
+      from ARM64, not Intel from AMD (audio-is-not-noised). An ARM64 identity
+      on x86-64 runs Firefox's aarch64 code paths emulated in C (Skia, Web
+      Audio, ffvpx, libopus) and ARM's NaN and relaxed SIMD rules in the JIT;
+      an Intel or AMD identity on ARM64 runs the x86 paths the same way (SSE,
+      AVX2 and FMA intrinsics in C, ffvpx's x86 assembly translated by
+      x86toc.py) and x86's NaN and relaxed SIMD rules.
+
   - id: cross-os-canvas-is-the-rfp-placeholder
-    title: On the host's OS the identity claims the host's GPU; on another OS or GPU canvas readback is RFP's random placeholder
+    title: On the host's OS the identity claims the host's GPU or software renderer; on another OS or GPU canvas readback is RFP's random placeholder
     check: automated
     evidence:
       - "v156.0.1-beta.32, 2026-10-06: getImageData and readPixels identical with privacy.fingerprintingProtection on and off; CanvasUtils.cpp checks EfficientCanvasRandomization (PNG deBG chunk only) before CanvasRandomization"
@@ -362,12 +461,18 @@ rules:
       - "v156.0.1-beta.32: the three RFP canvas targets in privacy.baselineFingerprintingProtection.overrides give RFP's readback (random, toDataURL ~770 bytes) with hardwareConcurrency untouched"
       - "v156.0.1-beta.32: a Linux host with an RTX 5080 and a Ryzen iGPU reported 'AMD, Radeon HD 3200 Graphics, or similar' to WebGL, headless and headed"
       - "v156.0.1-beta.32: a Linux identity whose config claimed availHeight 1053 on a 1080 screen read 1080 (nsRFPService::GetSpoofedScreenAvailSize, no Linux offset)"
+      - "Stock 159.0 on Linux with an RX 7900 XTX under Xorg: WebGL reads 'Radeon R9 200 Series, or similar' on the working driver; with MESA_LOADER_DRIVER_OVERRIDE=bogus or LIBGL_ALWAYS_SOFTWARE=1 it reads 'llvmpipe, or similar' from Mesa, with the same readPixels hash as Xvfb. A private window on Xvfb gives that hash too. Broken NVIDIA and blocklisted drivers were not tried"
+      - "dom/canvas/WebGLContext.cpp, Firefox 159: UNMASKED_RENDERER_WEBGL is gl->fGetString(LOCAL_GL_RENDERER) on the context that draws the pixels, unless webgl.override-unmasked-renderer is set (empty by default)"
+      - "Stock 159.0 with privacy.resistFingerprinting reports the renderer 'Mozilla', and LibreWolf ships that pref on, so a GPU name over random readback is not what LibreWolf shows either"
     rationale: >-
       Canvas and WebGL pixels come from the host's OS, driver and GPU. On the
       host's OS the identity claims the GPU Firefox reports there, read from the
       browser itself because Firefox may render on another device than system
-      tools name and sanitizes the name its own way; a software renderer
-      matches any GPU, as a machine whose driver failed to load. On another OS,
+      tools name and sanitizes the name its own way. A software renderer is
+      claimed like a GPU: Firefox reads the name and the pixels from one GL
+      context, so a GPU name over software pixels never happens on a real
+      machine, and a machine with a broken GPU driver reports llvmpipe too. It
+      reads as a server, which is better than a contradiction. On another OS,
       or with another GPU (one the caller or a preset names, or a host GPU
       fpgen never recorded, which has no WebGL data to claim), nothing can
       agree, and Firefox 156's private windows do not hide pixels, so the
@@ -417,7 +522,11 @@ rules:
       - "Windows: 156 exposes EXT_depth_clamp in WebGL1 and WebGL2 on both GPUs, 146 on neither, and no fpgen Windows record has it. third_party/angle/src/libANGLE/renderer/d3d/d3d11/renderer11_utils.cpp:1334 (156, ANGLE chromium/7778) sets depthClampEXT = true on every D3D11 feature level; 146's ANGLE (chromium/5359) never sets it"
       - "Linux: WebGL1 ALIASED_LINE_WIDTH_RANGE is [1, 2048] on 146 and [1, 1] on 156, WebGL2 [1, 1] on both. 146's dom/canvas/WebGLContext.cpp:324 forced REQUIRE_COMPAT_PROFILE on WebGL1 unless webgl.1.allow-core-profiles, which 146's StaticPrefList.yaml set on macOS only; 156 removed both, and WebGLContextValidate.cpp:211 reads the driver's range only off a core profile, leaving WebGLTypes.h:654's {1, 1}"
       - "fpgen Linux WebGL2 records: [1, 1] on 97%, the driver's range on the 3% without EXT_depth_clamp (GLES drivers, where Firefox reads it)"
+      - "fpgen Linux records for the GeForce GTX 480 and 980 also differ in WebGL1 and WebGL2 ALIASED_POINT_SIZE_RANGE, a 146 compatibility-profile value; CreepJS flags any mirrored non-string WebGL1/WebGL2 parameter that differs"
       - "browser/tests/playwright/patches/stock-gpu-parity.py fails on the 146-style WebGL1 range on Linux, on a hardware GPU and on llvmpipe, and passes with the fix"
+      - "Firefox 159 (bug 1735401) exposes EXT_texture_norm16 on WebGL2, no longer behind webgl.enable-draft-extensions: stock 159.0 on M1 (headless) and on Linux llvmpipe (Xvfb) list it on WebGL2 and not WebGL1; stock 158.0.1 on the same Linux and 146.0 on the same M1 list it on neither. dom/canvas/WebGLExtensions.cpp's IsSupported needs GLFeature::texture_norm16, core in desktop GL 3.1"
+      - "Firefox 159 caps WebGL2 MAX_UNIFORM_BLOCK_SIZE at 64 KiB (WebGL2ContextState.cpp, kMaxUniformBlockSize): on one Linux AMD machine, stock 146 reports 4294967292 and stock 159.0 65536, and stock-gpu-parity.py failed on the recording's 4120744960 until the launchers applied the cap"
+      - "Firefox 159 adds EXT_clip_control (GLFeature::clip_control, GL 4.5) and EXT_texture_mirror_clamp_to_edge (GL 4.4) to WebGL1 and WebGL2: stock 159.0 on Linux llvmpipe, x86_64 and aarch64, lists both where 158.0.1 lists neither, and stock 159.0 on M1 lists neither. 159's third_party/angle renderer11_utils.cpp sets textureMirrorClampToEdgeEXT on every D3D11 device and clipControlEXT from feature level 10_0"
     rationale: >-
       fpgen's records are right for the Firefox that made them; what goes
       stale is what that Firefox decided rather than the GPU. Hardware-owned
@@ -426,9 +535,10 @@ rules:
       corrected where the launchers convert a recording (to_config). ANGLE's
       D3D11 backend gives every Windows GPU EXT_depth_clamp, which takes its
       place in Firefox's alphabetical extension order. WebGL1 now shares
-      WebGL2's GL profile, so it reports the line width range the same device
-      recorded for WebGL2, which is right for core profiles and GLES drivers
-      alike. Live state that also changed (the stencil masks) is answered by
+      WebGL2's GL profile, so it reports the value the same device recorded
+      for WebGL2 for every parameter both contexts report (the line width
+      range, the point size range...), which is right for core profiles and
+      GLES drivers alike. Live state that also changed (the stencil masks) is answered by
       the real context and needs nothing. stock-gpu-parity finds the next
       drift: it fails where stock Firefox of the recorded release and of the
       shipped one differ on the same machine and Camoufox does not follow the
@@ -580,6 +690,170 @@ rules:
       in the process, permanently, at 0% CPU.
 
   # -------------------------------------------------------------------------
+  # Human input
+  #
+  # The evidence is five private recordings of one right-handed person filling
+  # one form on stock Firefox: macOS with a mouse and with a trackpad (both at
+  # device pixel ratio 2), and Windows with a mouse at 2.5 and a touchpad at 2.5
+  # and 1. Replays through Camoufox were compared with them event by event. The
+  # recordings stay private; the figures below are what they showed. Each
+  # figure is credited to what varies it: the OS, the input device, the
+  # display (scale or refresh rate) or the person. There is no Linux recording,
+  # so nothing here describes Linux.
+  # -------------------------------------------------------------------------
+
+  - id: humanize-timing-is-the-engine-and-shape-is-the-browser
+    title: The humanize engine decides when input happens; the browser decides what one event looks like
+    check: manual
+    evidence:
+      - "private recordings: rapid-click down-to-down was 141-157 ms for the person and 226-296 ms for replays that let the browser add its own waits"
+      - "private recordings: wheel deltaMode, wheelDelta, coalesced pointer events and fractional coordinates differ by OS and display scale and are invisible to a driver, which sends one Juggler command per event"
+    rationale: >-
+      Timing spans events, so only the process that plans the sequence can get
+      it right: paths, holds, dwells, typing gaps, Shift lead and trail, paste
+      chords and the scroll plan belong to the engine (myuri by default), drawn
+      for the launch identity's OS. Everything a page reads off a single event
+      -- deltaMode, wheelDelta, modifiers on a wheel, coalesced events,
+      fractional coordinates, a zero-distance move, the timestamp grid --
+      belongs to the browser, because a driver cannot set it. The browser's own
+      paste and auto-Shift timing remains only for raw Playwright, and steps
+      aside when the engine holds Shift itself.
+
+  - id: humanize-smart-actions-are-myuris
+    title: myuri is the one implementation of humanized input; Camoufox adapts Playwright to it
+    check: automated
+    evidence:
+      - "daijro/camoufox#1000: the launchers carried a second smart click (scroll into view, hit test, retry) beside the one in myuri; it moved into myuri (JWriter20/Myuri#23) and both launchers drive myuri.Actions"
+      - "JWriter20/Myuri#23: Actions takes a host of input calls and page reads, so one implementation drives Playwright in Python and TypeScript"
+    rationale: >-
+      Two copies of the decisions around a click drift, and input built from
+      two drifting copies is a fingerprint. The launchers hold only the host
+      (each event a Playwright input call), the wrappers that route
+      Playwright's methods to myuri, and the timeout and error Playwright's
+      action would give. A page read that decides where to aim or whether a
+      press lands (the hit test, the scroll plan) is myuri's, imported, never
+      written again here.
+
+  - id: humanize-parts-replace-myuris-pieces
+    title: A caller customises humanized input by replacing myuri's parts, with one seeded stream per browser
+    check: manual
+    evidence:
+      - "daijro/camoufox#1000: custom(fn) per channel replaced the whole channel, so a caller who wanted their own scroll lost myuri's clicks; it gave way to myuri(part=fn), with move, press, point, reaches, into_view, wheel, type and key"
+      - "browser/tests/humanize/sequence.json: one seeded scenario plays the same input in both launchers"
+    rationale: >-
+      myuri(part=fn) keeps every other part myuri's, so a replaced scroll still
+      serves myuri's clicks and a replaced move still ends where myuri
+      presses. A part is called with the page, its arguments, default (myuri's
+      part), rng and play; Playwright calls inside it are Playwright's own, so
+      it never recurses into myuri. raw() is Playwright's behaviour: its parts
+      are Playwright's, a move one event and a scroll into view Playwright's.
+      The seed is 32 bits, myuri's Mulberry32, and the browser has one stream
+      that every page and part draws from, so two pages never replay the same
+      draws and Python and TypeScript draw the same numbers.
+
+  - id: human-click-timing
+    title: Click timing belongs to the person, not the OS; the cursor's stillness before a press is the device's
+    check: manual
+    evidence:
+      - "private recordings: click hold p50 94-109 ms and rapid-click down-to-down 141-157 ms on both OSes with both devices"
+      - "private recordings: last move to pointerdown p50 48-63 ms with a mouse and 16-31 ms with a touchpad or trackpad, on both OSes"
+      - "private recordings: every Windows median is a multiple of 15.6 ms, the OS's input timestamp grid, so Windows and macOS figures differ by up to one grid step for that reason alone"
+      - "private recordings: a later press in a run of quick clicks in place is held 63/83/113 ms (p10/50/90, 130 presses), a first press 78/96/125 ms; the pointer does not move between them"
+    rationale: >-
+      These are the targets the engine's click model is fitted to, with one
+      model for every OS. A tap on a touchpad presses sooner after the last
+      move than a mouse button does. The press is a down and an up where the
+      engine's path ended, held for its drawn hold: Playwright's click moves
+      first, and the browser counts that move against the next press's click
+      count. Playwright's trial click is no dry run either (it presses, and
+      the page swallows the events), so myuri runs its own hit test in the
+      isolated world and aims again on a miss. A click on the target the
+      pointer already rests on presses where it is, and the engine is told
+      how long ago the last press was released, so a click within the OS's
+      500 ms continues the run as a person's quick clicks do.
+
+  - id: human-pointer-moves-follow-the-os
+    title: How moves reach the page is the OS's; how often is the display's
+    check: manual
+    evidence:
+      - "private recordings (Windows, 60 Hz): one pointermove per frame (gap p50 16 ms) carrying every report since the last, 8 from a high-rate mouse and 2 from the touchpad"
+      - "private recordings (macOS): one pointermove per report with a coalesced list of length 1, 10 ms from a 100 Hz mouse and 8 ms from a trackpad, each on a display refreshing as fast (100 and 120 Hz, rAF 10.0 and 8.3 ms)"
+      - "stock 159.0 on macOS, real devices, every modifier logged in the parent and the page: none set or changed between moves, so the queue's coalescing check passed throughout"
+      - "stock 159.0 on macOS, moves fed through the native-event hook at 100-250 Hz on a 60 Hz display: one pointermove per frame carrying 2-4"
+      - "stock 159.0, injected input at 125 and 1000 Hz: Linux (XTest on X11) gives one pointermove per frame carrying 2 or 17 moves; on macOS, CGEventPost moves are merged by the window server to one per display frame for every app, before Firefox sees them"
+      - "stock 159.0 source: the content-process queue (BrowserChild::RecvRealMouseMoveEvent, CoalescedMouseData) has no platform branch and flushes on the refresh driver's tick"
+      - "private recordings: fractional pointermove clientX on 78-79% of Windows moves at scale 2.5 and none at scale 1; none from a macOS mouse at scale 2 and 50% from a macOS trackpad; mousemove clientX is always whole"
+      - "private recordings (Windows): 9.6-10.7% of mousemoves had no movement at scale 2.5 and 0.4% at 1, all steps inside one CSS pixel; no pointermove repeated a position"
+      - "private recordings (macOS): 16-19% of mousemoves had no movement, 98-99% at the exact same position, from a mouse and a trackpad, mostly away from any scroll, click or key"
+      - "private recordings: every gap between Windows pointermoves, keydowns and mouse wheel events is a whole number of 15.625 ms ticks (15, 16, 31, 32, 47 ms), from a mouse and a touchpad; coalesced moves within a tick share its stamp; a precision touchpad's wheel events, which Firefox makes itself once per frame, are off the grid"
+      - "private recordings: macOS input timestamps are off that grid (2-7% of keydown gaps on it)"
+      - "camoufox replays of the same tasks before input-timestamp-tick.patch: 2% of Windows pointermove gaps on the grid and no coalesced moves sharing a stamp"
+    rationale: >-
+      Each is read off the event, so each is the browser's. Firefox flushes
+      its move queue once per frame on every OS, so the cadence is the
+      display's refresh rate and the coalesced count is the report rate over
+      it: one per report on a Mac whose display keeps up with the pointer,
+      several on a 60 Hz one (driven-move-coalescing). It is the host
+      display's, not the identity's. The sub-pixel steps follow the display
+      scale on Windows (driven-move-device-pixels), and an exact repeat is part
+      of how macOS delivers moves. A Windows launch stamps driven mouse, wheel
+      and key events on the OS's tick (driven-input-timestamp-grid). The engine
+      plans moves at a device's report rate; it draws no OS grid. A
+      recording's cadence is read against that session's frame rate: a display list taken at another time misattributed
+      it once. Injected macOS input is merged by the window server before
+      Firefox sees it, so macOS input is measured with a real device.
+
+  - id: click-count-and-key-repeat-are-the-os
+    title: The claimed OS counts clicks and repeats held keys, for all driven input
+    check: manual
+    evidence:
+      - "stock 159.0 source: nsWindow.cpp counts a press within GetDoubleClickTime of the last one unless the pointer left the SM_CXDOUBLECLK box around the last release, and sets 2 on WM_*DBLCLK; macOS takes NSEvent clickCount; GTK sends 2BUTTON and 3BUTTON presses"
+      - "private recordings (Windows, mouse and touchpad): those rules with 500 ms, a 4 device-pixel box and Windows' double click within 1 device pixel of the last single press give the recorded detail of 651 of 652 presses; fifteen quick presses in place count 1, 2, 3, 2, 3, ..."
+      - "private recordings (macOS, mouse and trackpad): 500 ms and 3 points, unbounded, give 503 of 504"
+      - "private recordings: held keys repeat after 500 ms, every 31.25 ms on Windows and 83.3 ms on macOS; a Windows Shift held about half a second or longer repeats, a macOS modifier never does; only the last key pressed repeats"
+      - "GNOME's schema defaults: repeat delay 500 ms, interval 30 ms; the XKB keymap sets repeat= False for the modifiers"
+      - "camoufox replays of the same tasks before the change: every driven press reported the client's clickCount (1 for each page.click) and no held key repeated"
+    rationale: >-
+      Both are the OS's, read off the event, so they follow the claimed OS for
+      every driven press and key, raw Playwright included, not only a
+      humanizer's: a page sees fifteen quick clicks counted 1, 1, 1 or a key
+      held a second that never repeats whoever drove it. Juggler ignores the
+      client's clickCount (driven-click-count) and repeats the last held key
+      with the OS's delay and interval (driven-key-repeat). The Linux values
+      come from the defaults, not recordings. docs/input-dispatch.md has the
+      rules.
+
+  - id: human-wheel-is-line-mode
+    title: A notched wheel scrolls in lines, shaped by the OS
+    check: manual
+    evidence:
+      - "private recordings (Windows, wheel set to 3 lines): deltaMode 1, 6 lines and wheelDelta -120 per notch; a fast spin batches 2-4 notches into one event at about 16 ms gaps"
+      - "private recordings (macOS): deltaMode 1, 1-13 accelerated lines per event, wheelDelta/delta 48 vertical and 27 horizontal, at about 20 ms gaps"
+      - "private recordings: horizontal scrolling held Shift on every macOS event; on Windows it arrived as a mix of Shift with deltaY and deltaX"
+      - "private recordings: a touchpad or trackpad scrolls in pixels (deltaMode 0) on both OSes"
+      - "private recordings (Windows mouse): every short scroll opened with a lone notch, then strokes of 1-5 notches (median 2) 47-78 ms apart; a stroke of 2-10 notches arrived about one notch a 15.6 ms tick"
+      - "private recordings (macOS mouse): after a re-grip of up to 140 ms the next stroke started at the last frame's lines or one fewer in 81% of 83; after 160 ms or more, always at one line"
+    rationale: >-
+      Both mice were the same make with notched wheels, so the difference is
+      the OS. deltaMode, the wheelDelta ratio and the Shift modifier are
+      properties of the event, so the browser sets them for the launch OS; how
+      many notches and how far apart is the engine's scroll plan, which nudges
+      a short scroll notch by notch and, on macOS, keeps the speed across a
+      quick re-grip as the OS does.
+
+  - id: human-typing-timing
+    title: Typing timing belongs to the person and the keyboard, not the OS
+    check: manual
+    evidence:
+      - "private recordings: key hold p50 95-125 ms and keydown gap p50 129-235 ms; the spread follows the keyboard and the session more than the OS"
+      - "private recordings: 33% of keydowns arrive with another key still held; 2.67 Shift keydowns per capital, all left Shift"
+    rationale: >-
+      These are the targets the engine's keystroke model is fitted to, with
+      one model for every OS; only the shortcut modifier follows the OS. The
+      engine presses Shift itself, so the browser's auto-Shift must not add a
+      second one.
+
+  # -------------------------------------------------------------------------
   # Config schema
   # -------------------------------------------------------------------------
 
@@ -619,6 +893,40 @@ rules:
       which answers plain GETs and cannot open the CONNECT tunnel the upgrade
       needs. A real proxy handles CONNECT, as every https:// site needs it to.
       Those tests are skiplisted rather than passed by changing the browser.
+
+  - id: no-enterprise-policies
+    title: Camoufox ships no policies.json; what a policy did lives in camoufox.cfg or the bundled uBO
+    check: manual   # browser/tests/playwright/patches/enterprise-policies.py
+    evidence:
+      - "measured 2026-10-26 on 158.0.1-beta.34: with policies.json, DoHHeuristics enterprisePolicy() returned policy_without_doh and DoH stood down; without it, no_policy_set"
+      - "the same file's SearchEngines policy and no-search-engines.patch left one inert engine where stock 158.0.1 adds Google, Bing, DuckDuckGo, Perplexity, Wikipedia (en), eBay (search-service-init.py)"
+    rationale: >-
+      Any policy file puts Firefox in enterprise mode, whatever it holds, and
+      enterprise mode is visible from outside: DNS over HTTPS stands down, and
+      the policies' own effects (no search engines, system addons removed)
+      differ from stock. Updates, studies and the first-run page stay off
+      through prefs in camoufox.cfg; uBO keeps its packaged lists through its
+      own default (scripts/fetch-ubo.py freeze_lists).
+
+  - id: no-background-traffic
+    title: Firefox's background services stay off; what a page can see of them comes bundled
+    check: manual   # browser/tests/playwright/patches/no-background-traffic.py, tracking-protection-lists.py
+    evidence:
+      - "toolkit/components/url-classifier/UrlClassifierRemoteSettingsService.sys.mjs: the moz-sbrs update scheme reads its lists through RemoteSettings, so the build's dumps can supply them"
+      - "dom/push/PushServiceWebSocket.sys.mjs _queueRequest: a registration opens the socket itself, so the startup connection is not needed for pushManager.subscribe()"
+      - "measured 2026-11-06 on the changeset of tracking-protection-lists: 36 of 446 records, 2.82 MB, apply to Firefox 159"
+    rationale: >-
+      Remote Settings, Push, connectivity and captive-portal probes, Safe
+      Browsing, region lookup and new tab feeds send requests no page asked
+      for, which only the proxy operator and Mozilla see. A page sees none of
+      them, but it does see the lists Remote Settings delivers: without the
+      tracking tables a fingerprinting script stock blocks would load. So the
+      requests stay off and the page-visible collections are a pinned snapshot
+      (scripts/remote_settings.py pin, run on every Firefox bump). Push still
+      works for a page that subscribes. Media plugin updates stay on: without
+      them getCapabilities() lists no H264 and Widevine never resolves (#713),
+      and neither ships with Firefox, so a fresh profile asks Mozilla for them
+      and downloads them from Cisco and Google.
 
   - id: ipv4-only-network-not-disable-ipv6
     title: geoip without a proxy keeps IPv6 only where it agrees, and never uses network.dns.disableIPv6
@@ -700,6 +1008,21 @@ rules:
       to manage. A fix that cannot wait is cut by dispatching release.yml on
       main, and an open issue labelled `regression` holds the promotion.
 
+  - id: a-tested-tree-is-tested-once
+    title: A push to main that lands a tree its pull request run passed, and a cut of a commit main's run passed, do not run the suites again
+    check: manual   # ci/tests/test_carry.py, ci/tests/test_release.py
+    evidence:
+      - "main runs 43528865366 and 43540606337 re-ran every suite on trees their pull request runs (#1038, #1039) had passed; the only failure in each was the getter-cost timing guard, which re-running only re-sampled"
+      - "release.yml's dispatch ran tests.yml a third time on a commit main's run had already passed before building anything"
+    rationale: >-
+      A pull request run tests the merge of the pull request into main as main
+      stood then. With nothing merged in between, the squashed commit has that
+      tree exactly, so a second run proves nothing new and only gives
+      non-deterministic checks another chance to fail after the merge. Main
+      still runs what the pull request could not, the stealth check, and tests
+      in full whenever its tree differs. A cut reuses main's own gate result,
+      the same check a promotion already requires.
+
   # -------------------------------------------------------------------------
   # Build
   # -------------------------------------------------------------------------
@@ -729,3 +1052,30 @@ rules:
       tree with (scripts/patch.py reads taskcluster/kinds/toolchain/rust.yml),
       because lld cannot read Rust bitcode from an LLVM newer than the
       bootstrapped clang's, and a Rust profile only fits that compiler.
+
+  - id: patches-never-edit-additions
+    title: A patch never edits a file browser/additions/ provides; the change goes in the addition
+    check: automated
+    evidence:
+      - "release run 43631788944: the aarch64 targets failed on an undeclared sk_cpu_emulates_x86 and the x86 targets on an undefined opus_mozilla_set_emulate_x86, both from cpu-vendor-estimates.patch hunks to four additions (#1034)"
+      - "make set-target (scripts/patch.py --mozconfig-only), which multibuild.py runs for each target, copied the additions over the patched tree, so the hunks had been applied and were then overwritten"
+    rationale: >-
+      An addition is a whole file this repository owns, so the copy in
+      browser/additions/ has to be the file that is compiled. A hunk on top of
+      it holds only until the additions are copied again, and a release copied
+      them after the patches while a pull request's build did not, so the
+      tests passed on code no release contained.
+
+  - id: one-build-entry-point
+    title: A pull request and a release build through one command, ci.run_build
+    check: automated
+    evidence:
+      - "release runs 41280578561, 43352392915, 43395652803 and 43631788944 each failed on a commit whose tests had passed, in a step only release.yml ran: midl.exe under Wine (twice), verify-fonts.py, and make set-target"
+      - "run 43631788944: tests.yml built with make build and release.yml with multibuild.py, whose make set-target changed the sources after they were patched"
+    rationale: >-
+      A step only a release runs is run for the first time by a release. The
+      pull request's build job therefore runs the release's command for linux
+      x86_64 (retarget, build, package), the preflight jobs run its front half
+      and compile the patched sources for every other release target, and all
+      of them set up the runner through .github/actions/build-host. Linking
+      and packaging the cross-compiled targets is all a release does first.

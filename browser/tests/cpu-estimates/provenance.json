@@ -1,0 +1,34 @@
+{
+  "amd": {
+    "cpus": [
+      {
+        "cpu": "AMD Ryzen 7 9850X3D 8-Core Processor",
+        "recorded": "2026-11-10"
+      },
+      {
+        "cpu": "AMD Ryzen Threadripper 7970X 32-Cores",
+        "recorded": "2026-11-10"
+      }
+    ],
+    "hashes": {
+      "rcp": "a58f161f570d0383",
+      "rsqrt": "bf5dbd40d0898383"
+    }
+  },
+  "intel": {
+    "cpus": [
+      {
+        "cpu": "12th Gen Intel(R) Core(TM) i7-12700H",
+        "recorded": "2026-11-10"
+      },
+      {
+        "cpu": "11th Gen Intel(R) Core(TM) i9-11900H @ 2.50GHz",
+        "recorded": "2026-11-10"
+      }
+    ],
+    "hashes": {
+      "rcp": "bfa9847d5afd0383",
+      "rsqrt": "7cdf6c7d3f010383"
+    }
+  }
+}

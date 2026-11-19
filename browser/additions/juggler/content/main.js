@@ -68,7 +68,14 @@ export function initialize(browsingContext, docShell) {
   const contextCrossProcessCookie = Services.cpmm.sharedData.get('juggler:context-cookie-' + browsingContext.originAttributes.userContextId) || { initScripts: [], bindings: [], settings: {} };
   const pageCrossProcessCookie = Services.cpmm.sharedData.get('juggler:page-cookie-' + browsingContext.browserId) || { initScripts: [], bindings: [], interceptFileChooserDialog: false };
 
-  // Enforce focused state for all top level documents.
+  // Camoufox: a driven page stays focused and active, even when another
+  // window or tab is in front. This is deliberate, not stock: the product
+  // wants every page a caller opens to behave as if a person is looking at
+  // it, so parallel pages do not lose focus or throttling. It is page-visible
+  // (document.hasFocus(), visibilityState, blur);
+  // see ci/tribal-rules.yml, driven-pages-stay-focused. Juggler's own OS input
+  // path still raises the selected tab through activateAndRun where the OS
+  // needs it.
   docShell.overrideHasFocus = true;
   docShell.forceActiveState = true;
   // A page reads this back: after a scripted same-origin `location.href = ...`
@@ -82,7 +89,6 @@ export function initialize(browsingContext, docShell) {
   // times out waiting for "load" and the next `page.evaluate` throws "The
   // operation is insecure" against the stale context. Closing this needs
   // FrameTree/PageAgent to treat a persisted pageshow as a navigation.
-  // See leak-sweep/LEAKS.md row 106 and leak-sweep/tools/bfcache-probe.py.
   docShell.disallowBFCache = true;
   data.frameTree = new FrameTree(browsingContext);
   for (const [name, value] of Object.entries(contextCrossProcessCookie.settings)) {
@@ -94,6 +100,9 @@ export function initialize(browsingContext, docShell) {
   data.frameTree.setInitScripts([...contextCrossProcessCookie.initScripts, ...pageCrossProcessCookie.initScripts]);
   data.channel = new SimpleChannel('', 'process-' + Services.appinfo.processID);
   data.pageAgent = new PageAgent(data.channel, data.frameTree);
+  // After PageAgent: what these scripts emit (binding calls, console) needs its
+  // listeners, and the driver needs the contexts it has just reported.
+  data.frameTree.runInitScriptsOnInitialDocuments();
   docShell.fileInputInterceptionEnabled = !!pageCrossProcessCookie.interceptFileChooserDialog;
 
   data.channel.register('', {

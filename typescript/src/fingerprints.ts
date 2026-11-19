@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { generate, InvalidConstraints } from "fpgen-js";
 import * as random from "python-random";
+import { hardwareCpu } from "./coherence.js";
 import {
 	supported as cpuAffinitySupported,
 	hostCoreCount,
@@ -335,17 +336,22 @@ function loadFontBases(): Record<string, FontBase[]> {
 	return fontBasesCache;
 }
 
-/** Draw one OS-version base by its real-world weight. */
-function pickBase(osKey: string, r: random.Random): string[] {
+/**
+ * Draw the OS version a machine runs (a font-bases.json entry) by its
+ * real-world weight (`_pick_release`). It is the identity's first draw, so the
+ * font list and the voice list, drawn from the same seed, land on the same
+ * version.
+ */
+function pickRelease(osKey: string, r: random.Random): any | null {
 	const bases = loadFontBases()[osKey] ?? [];
-	if (!bases.length) return [];
+	if (!bases.length) return null;
 	const roll = r.random();
 	let cumulative = 0.0;
 	for (const base of bases) {
 		cumulative += base.weight ?? 0.0;
-		if (roll < cumulative) return [...base.fonts];
+		if (roll < cumulative) return base;
 	}
-	return [...bases[bases.length - 1].fonts];
+	return bases[bases.length - 1];
 }
 
 function localeMatches(
@@ -457,7 +463,8 @@ export function generateRandomFontSubset(
 		return result;
 	}
 
-	let base = pickBase(osKey, r);
+	const release = pickRelease(osKey, r);
+	let base: string[] = release ? [...release.fonts] : [];
 	if (!base.length) base = fullList.filter((f) => essential.has(f));
 	const result = [...base];
 	const chosen = new Set(result);
@@ -652,11 +659,55 @@ function codePointGreater(a: string, b: string): boolean {
 	return comparePyStr(a, b) > 0;
 }
 
+/** A Linux identity's speech-dispatcher voices (`voices:speechd`). */
+export interface SpeechdGrid {
+	languages: Array<[string, string]>;
+	variants: string[];
+}
+
+/**
+ * The speech-dispatcher voice grid of the Ubuntu release the identity runs
+ * (`_speechd_grid`).
+ */
+function speechdGrid(seed?: number | bigint | null): SpeechdGrid {
+	const release = pickRelease("lin", rng(seed));
+	const releases = loadVoiceManifests().lin.releases;
+	return release
+		? releases[release.id].speechd
+		: (Object.values(releases)[0] as any).speechd;
+}
+
+/**
+ * (name, lang) per voice in speech-dispatcher's order (`_speechd_voices`):
+ * each language alone, then with every variant.
+ */
+export function speechdVoices(grid: SpeechdGrid): Array<[string, string]> {
+	return grid.languages.flatMap(([name, lang]) => [
+		[name, lang] as [string, string],
+		...grid.variants.map((v) => [`${name}+${v}`, lang] as [string, string]),
+	]);
+}
+
+/**
+ * The identity's voices as the config keys the browser reads
+ * (`draw_voice_config`): `voices` on macOS and Windows, `voices:speechd` on
+ * Linux, whose ~15000 voices only fit in the environment as their grid.
+ */
+export function drawVoiceConfig(
+	targetOs: string,
+	locale?: string | null,
+	seed?: number | bigint | null,
+): Record<string, any> {
+	if (osKeyOf(targetOs) === "lin")
+		return { "voices:speechd": speechdGrid(seed) };
+	return { voices: generateRandomVoiceSubset(targetOs, locale, seed) };
+}
+
 /**
  * The speech voice list for the given OS as MaskConfig voice objects
  * (`_generate_random_voice_subset`), following the measured per-OS model in
  * voice-manifests.json. Seeded by the identity so it always reports the same
- * list. No voice is marked default: stock Firefox marks none.
+ * list. macOS marks its system voice default; Windows and Linux mark none.
  */
 export function generateRandomVoiceSubset(
 	targetOs: string,
@@ -665,6 +716,17 @@ export function generateRandomVoiceSubset(
 ): VoiceObject[] {
 	const r = rng(seed);
 	const osKey = osKeyOf(targetOs);
+	if (osKey === "lin") {
+		return speechdVoices(speechdGrid(seed)).map(([name, lang]) => ({
+			name,
+			lang,
+			voiceUri: voiceUri("lin", name, lang),
+			isDefault: false,
+			// SpeechDispatcherService registers voices as local only when one
+			// is named "default"; espeak-ng has none.
+			isLocalService: false,
+		}));
+	}
 	const manifests = loadVoiceManifests();
 	const manifest = pyTruthy(manifests[osKey])
 		? manifests[osKey]
@@ -758,13 +820,17 @@ export function generateRandomVoiceSubset(
 	}
 
 	const selected = [...out, ...legacy].map(splitVoiceEntry);
-	return selected.map(([name, lang, vtype]) => ({
+	const voices = selected.map(([name, lang, vtype]) => ({
 		name,
 		lang,
 		voiceUri: voiceUri(osKey, name, lang),
 		isDefault: false,
 		isLocalService: vtype === "local",
 	}));
+	const systemVoice = manifest.systemVoice?.default;
+	const def = voices.find((v) => v.name === systemVoice);
+	if (def) def.isDefault = true;
+	return voices;
 }
 
 /**
@@ -1158,6 +1224,42 @@ export function setMediaDevicesDefaults(
 	Object.assign(config, drawMediaDevices(osKey, identitySeed(config, salt)));
 }
 
+/**
+ * Intel's share of the x86 desktop CPUs running Firefox (Firefox Public Data
+ * Report, week of 2026-11-02: Intel 76.86%, AMD 17.61%); fingerprints.py.
+ */
+export const X86_INTEL_SHARE: number = LAUNCHER_CONSTANTS.x86IntelShare;
+
+/**
+ * Fill in the identity's CPU (cpu:arch, cpu:manufacturer), as
+ * fingerprints.set_cpu_default does. The GPU decides what it can (an Apple
+ * GPU is an Apple ARM CPU, an Intel iGPU or Intel Mac an Intel one, a Radeon
+ * iGPU an AMD one), then a core count only Intel ships; any other x86
+ * identity's vendor is drawn at Firefox's own x86 split, seeded by the
+ * identity. An ARM identity whose GPU names no single SoC maker keeps its
+ * manufacturer unset: every ARM64 CPU computes alike. Run after the GPU and
+ * navigator.hardwareConcurrency are final. Keys the caller set are kept.
+ */
+export function setCpuDefault(
+	config: Config,
+	targetOs: string,
+	salt: number | bigint = 0,
+): void {
+	let [arch, maker]: [string | null, string | null] = hardwareCpu(
+		config,
+		targetOs,
+	);
+	arch =
+		(pyTruthy(config["cpu:arch"]) ? config["cpu:arch"] : null) || arch || "x86";
+	if (!("cpu:arch" in config)) config["cpu:arch"] = arch;
+	if ("cpu:manufacturer" in config || arch !== config["cpu:arch"]) return;
+	if (!maker && arch === "x86") {
+		const draw = rng((identitySeed(config, salt) ^ 0xc9d0) >>> 0).random();
+		maker = draw < X86_INTEL_SHARE ? "intel" : "amd";
+	}
+	if (maker) config["cpu:manufacturer"] = maker;
+}
+
 // ---------------------------------------------------------------------------
 // WebGL <-> screen coherence (#729)
 // ---------------------------------------------------------------------------
@@ -1429,10 +1531,9 @@ export function fromPreset(
 		}
 	}
 	try {
-		config.voices = generateRandomVoiceSubset(
-			targetOs,
-			null,
-			identitySeed(config, s),
+		Object.assign(
+			config,
+			drawVoiceConfig(targetOs, null, identitySeed(config, s)),
 		);
 	} catch (e) {
 		if (!isPyError(e, "OSError", "ValueError", "KeyError")) throw e;
@@ -1471,7 +1572,7 @@ export interface InitValues {
 	screenColorDepth?: number;
 	timezone?: string;
 	fontList?: string[];
-	speechVoices?: Array<string | VoiceObject>;
+	speechVoices?: Array<string | VoiceObject> | { speechd: SpeechdGrid };
 	webrtcIP?: string;
 }
 
@@ -1546,9 +1647,14 @@ export function buildInitScript(values: InitValues): string {
 		);
 	}
 
-	// Speech voices (comma-separated names)
+	// Speech voices: comma-separated names, or a Linux identity's
+	// speech-dispatcher grid as JSON
 	const voices = values.speechVoices;
-	if (voices?.length) {
+	if (voices && !Array.isArray(voices)) {
+		lines.push(
+			`  if (typeof w.setSpeechVoices === "function") w.setSpeechVoices(${pyJsonDumps(asciiJson(voices))});`,
+		);
+	} else if (voices?.length) {
 		const names = voices.map((v) =>
 			v !== null && typeof v === "object" ? v.name : v,
 		);
@@ -1559,6 +1665,14 @@ export function buildInitScript(values: InitValues): string {
 
 	lines.push("})();");
 	return lines.join("\n");
+}
+
+/** Python's json.dumps(value, separators=(",", ":")) for plain JSON data. */
+function asciiJson(value: unknown): string {
+	return JSON.stringify(value).replace(
+		/[\u007f-\uffff]/g,
+		(c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
+	);
 }
 
 /** json.dumps() with its defaults (ASCII-escaped, ", " / ": " separators) for scalars. */
@@ -1672,12 +1786,11 @@ export function generateContextFingerprint({
 				);
 			}
 		}
-		if (!("voices" in config)) {
+		if (!("voices" in config) && !("voices:speechd" in config)) {
 			try {
-				config.voices = generateRandomVoiceSubset(
-					osName,
-					null,
-					identitySeed(config, salt),
+				Object.assign(
+					config,
+					drawVoiceConfig(osName, null, identitySeed(config, salt)),
 				);
 			} catch (e) {
 				if (!isPyError(e, "OSError", "ValueError", "KeyError")) throw e;
@@ -1781,7 +1894,10 @@ export function generateContextFingerprint({
 				? resolvedPreset.timezone
 				: config.timezone,
 		fontList: config.fonts,
-		speechVoices: config.voices,
+		speechVoices:
+			"voices:speechd" in config
+				? { speechd: config["voices:speechd"] }
+				: config.voices,
 		webrtcIP: webrtc_ip || "",
 	};
 	const initScript = buildInitScript(initValues);

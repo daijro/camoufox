@@ -1,8 +1,8 @@
 diff --git a/browser/components/sessionstore/SessionStore.sys.mjs b/browser/components/sessionstore/SessionStore.sys.mjs
-index 7dfe2a31ca..67aa9ee0c5 100644
+index 9fa4c8e8cc..066e0c03e8 100644
 --- a/browser/components/sessionstore/SessionStore.sys.mjs
 +++ b/browser/components/sessionstore/SessionStore.sys.mjs
-@@ -4660,8 +4660,19 @@ class _SessionStore {
+@@ -4896,8 +4896,19 @@ class _SessionStore {
     *        Window reference
     */
    maybeDontRestoreTabs(aWindow) {
@@ -10,15 +10,15 @@ index 7dfe2a31ca..67aa9ee0c5 100644
 +    // separate chrome window that SessionStore may never have registered (the
 +    // popup-window path can skip onLoad tracking, and our session-restore is
 +    // disabled). globalOverlay.js calls this unconditionally on window close, so
-+    // an untracked window left this.#windows[aWindow.__SSi] undefined and the
-+    // bare property set threw, crashing Browser.removeBrowserContext and killing
-+    // the juggler channel. No-op for untracked windows, matching onClose's guard.
-+    const winData = aWindow.__SSi && this.#windows[aWindow.__SSi];
++    // an untracked window has no entry in this.#windows and the bare property
++    // set threw, crashing Browser.removeBrowserContext and killing the juggler
++    // channel. No-op for untracked windows, matching onClose's guard.
++    const winData = this.#windows[this.#windowIds.get(aWindow)];
 +    if (!winData) {
 +      return;
 +    }
      // Don't restore the tabs if we restore the session at startup
--    this.#windows[aWindow.__SSi]._maybeDontRestoreTabs = true;
+-    this.#windows[this.#windowIds.get(aWindow)]._maybeDontRestoreTabs = true;
 +    winData._maybeDontRestoreTabs = true;
    }
  

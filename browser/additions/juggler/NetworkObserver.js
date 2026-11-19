@@ -46,6 +46,9 @@ export class PageNetwork {
     this._extraHTTPHeaders = null;
     this._responseStorage = new ResponseStorage(MAX_RESPONSE_STORAGE_SIZE, MAX_RESPONSE_STORAGE_SIZE / 10);
     this._requestInterceptionEnabled = false;
+    // Playwright sends bypassServiceWorker=true for its internal storage-state page, which wants
+    // network-level interception rather than having the request handed to a service worker.
+    this._bypassServiceWorker = false;
     // This is requestId => NetworkRequest map, only contains requests that are
     // awaiting interception action (abort, resume, fulfill) over the protocol.
     this._interceptedRequests = new Map();
@@ -62,12 +65,14 @@ export class PageNetwork {
     ];
   }
 
-  enableRequestInterception() {
+  enableRequestInterception(bypassServiceWorker = false) {
     this._requestInterceptionEnabled = true;
+    this._bypassServiceWorker = !!bypassServiceWorker;
   }
 
   disableRequestInterception() {
     this._requestInterceptionEnabled = false;
+    this._bypassServiceWorker = false;
     for (const intercepted of this._interceptedRequests.values())
       intercepted.resume();
     this._interceptedRequests.clear();
@@ -150,8 +155,13 @@ class NetworkRequest {
     this._sentOnResponse = false;
     this._fulfilled = false;
 
+    // Firefox's own header order for this request, before anything of ours runs: at
+    // http-on-modify-request the channel already holds every header it will send except the ones
+    // necko adds in OnBeforeConnect. Resuming an intercepted request rebuilds the channel and
+    // loses this order, so it is put back from here.
+    this._originalHeaderOrder = requestHeaders(httpChannel).map(header => header.name.toLowerCase());
     if (this._overriddenHeadersForRedirect)
-      overrideRequestHeaders(httpChannel, this._overriddenHeadersForRedirect);
+      overrideRequestHeaders(httpChannel, this._overriddenHeadersForRedirect, this._originalHeaderOrder);
     else if (this._pageNetwork)
       appendExtraHTTPHeaders(httpChannel, this._pageNetwork.combinedExtraHTTPHeaders());
 
@@ -179,6 +189,8 @@ class NetworkRequest {
     if (this.redirectedFromId) {
       // Redirects are not interceptable.
       this._sendOnRequest(false);
+      // Everything this request needs from the previous one is inherited above.
+      redirectedFrom._releaseReferences();
     }
   }
 
@@ -241,10 +253,10 @@ class NetworkRequest {
 
     const extraHTTPHeaders = this._pageNetwork ? this._pageNetwork.combinedExtraHTTPHeaders() : [];
     if (headers) {
-      overrideRequestHeaders(this.httpChannel, headers);
+      overrideRequestHeaders(this.httpChannel, headers, this._originalHeaderOrder);
     } else {
       appendExtraHTTPHeaders(this.httpChannel, extraHTTPHeaders);
-      restoreInterceptedHeaderOrder(this.httpChannel, extraHTTPHeaders);
+      restoreInterceptedHeaderOrder(this.httpChannel, this._originalHeaderOrder);
     }
     if (method)
       this.httpChannel.requestMethod = method;
@@ -319,7 +331,7 @@ class NetworkRequest {
 
   // nsINetworkInterceptController
   shouldPrepareForIntercept(aURI, channel) {
-    const interceptController = this._fallThroughInterceptController();
+    const interceptController = this._shouldBypassServiceWorker() ? undefined : this._fallThroughInterceptController();
     if (interceptController && interceptController.shouldPrepareForIntercept(aURI, channel)) {
       // We assume that interceptController is a service worker if there is one,
       // and yield interception to it.
@@ -331,6 +343,11 @@ class NetworkRequest {
       // Not our channel? Just in case this happens, don't do anything.
       return false;
     }
+    // Necko has laid out the headers by now, "connection" and a re-evaluated referer included (an
+    // <img> sends "connection, referer", fetch() "referer, connection"), so this is the order a
+    // resumed request has to reproduce. It replaces the order read at http-on-modify-request,
+    // which a redirect's overridden headers were already laid out by.
+    this._originalHeaderOrder = requestHeaders(this.httpChannel).map(header => header.name.toLowerCase());
 
     const shouldIntercept = this._shouldIntercept();
     if (!shouldIntercept) {
@@ -445,6 +462,17 @@ class NetworkRequest {
     }
 
     delete this._responseBodyChunks;
+    this._releaseReferences();
+  }
+
+  // Gecko keeps a connection's notificationCallbacks (this object) until the
+  // connection closes, so a finished request must not hold its page, window or
+  // response bodies (Playwright's fix, microsoft/playwright#42747).
+  _releaseReferences() {
+    this.httpChannel = undefined;
+    this._originalListener = undefined;
+    this._pageNetwork = undefined;
+    this._interceptedChannel = undefined;
   }
 
   _shouldIntercept() {
@@ -461,6 +489,12 @@ class NetworkRequest {
     if (browserContext.requestInterceptionEnabled)
       return true;
     return false;
+  }
+
+  _shouldBypassServiceWorker() {
+    // The bypass flag lives on the page network, and only matters for requests we are intercepting
+    // anyway: handing those to the page's service worker is what the caller asked us not to do.
+    return !!this._pageNetwork?._bypassServiceWorker && this._shouldIntercept();
   }
 
   _fallThroughInterceptController() {
@@ -534,6 +568,13 @@ class NetworkRequest {
       requestStart: this.httpChannel.requestStartTime,
       responseStart: this.httpChannel.responseStartTime,
     };
+    // Camoufox: Page.navigate pre-connects as a typed load does, so a page's
+    // connection can predate its channel. Report those phases as a reused
+    // connection's (0, which the client reads as -1), not as negative times.
+    for (const phase of ['domainLookupStart', 'domainLookupEnd', 'connectStart', 'secureConnectionStart', 'connectEnd']) {
+      if (timing[phase] && timing[phase] < timing.startTime)
+        timing[phase] = 0;
+    }
 
     const { status, statusText, headers } = responseHead(this.httpChannel, opt_statusCode, opt_statusText);
     if (redirectStatus.includes(status) && this._overriddenHeadersForRedirect)
@@ -626,6 +667,23 @@ export class NetworkObserver {
         }
         if (this._targetRegistry.shouldBustHTTPAuthCacheForProxy(proxy))
           Services.obs.notifyObservers(null, "net:clear-active-logins");
+        // Camoufox: a SOCKS5 proxy gets its username and password (RFC 1929);
+        // Firefox takes credentials for SOCKS proxies only.
+        if (proxy.type === 'socks' && (proxy.username || proxy.password)) {
+          proxyFilter.onProxyFilterResult(protocolProxyService.newProxyInfoWithAuth(
+              proxy.type,
+              proxy.host,
+              proxy.port,
+              proxy.username || '',
+              proxy.password || '',
+              '', /* aProxyAuthorizationHeader */
+              '', /* aConnectionIsolationKey */
+              Ci.nsIProxyInfo.TRANSPARENT_PROXY_RESOLVES_HOST, /* aFlags */
+              UINT32_MAX, /* aFailoverTimeout */
+              null, /* failover proxy */
+          ));
+          return;
+        }
         proxyFilter.onProxyFilterResult(protocolProxyService.newProxyInfo(
             proxy.type,
             proxy.host,
@@ -808,13 +866,39 @@ function clearRequestHeaders(httpChannel) {
   }
 }
 
-function overrideRequestHeaders(httpChannel, headers) {
+// route.continue({headers}) replaces the whole header list. Writing the caller's list in its own
+// order (a dict, usually) put "cookie" -- the one header the clear keeps -- first and everything
+// else after it, so the resumed request left with Firefox's order scrambled. Keep each header in
+// the slot Firefox gave it, update its value, drop the ones the caller left out, and put the
+// caller's new headers where necko puts headers added from http-on-modify-request.
+function overrideRequestHeaders(httpChannel, headers, originalOrder) {
+  const nameOf = header => header.name.toLowerCase();
+  const wanted = new Map();
+  for (const header of headers)
+    wanted.set(nameOf(header), header);
+
+  const merged = [];
+  for (const header of requestHeaders(httpChannel)) {
+    const name = nameOf(header);
+    if (name === 'host')
+      continue;
+    if (wanted.has(name)) {
+      merged.push(wanted.get(name));
+      wanted.delete(name);
+    } else if (name === 'cookie') {
+      // Keep the "cookie" header. If there is an override, it will be set anyway.
+      // Otherwise, we may delete a cookie that was set for a redirect.
+      merged.push(header);
+    }
+  }
+  const ordered = orderRequestHeaders([...merged, ...wanted.values()], originalOrder);
+
   clearRequestHeaders(httpChannel);
-  appendExtraHTTPHeaders(httpChannel, headers);
+  for (const header of ordered)
+    httpChannel.setRequestHeader(header.name, '', false /* merge */);
+  appendExtraHTTPHeaders(httpChannel, ordered);
 }
 
-// Headers necko adds in HttpBaseChannel::Init, before anything else touches the channel.
-const DEFAULT_REQUEST_HEADERS = ['host', 'user-agent', 'accept', 'accept-language', 'accept-encoding'];
 // Headers necko adds in nsHttpChannel::OnBeforeConnect, which runs after the cookie header is set
 // and after http-on-modify-request, where we add the extra headers.
 const ON_BEFORE_CONNECT_HEADERS = ['upgrade-insecure-requests', 'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-user'];
@@ -825,49 +909,48 @@ const ON_BEFORE_CONNECT_HEADERS = ['upgrade-insecure-requests', 'sec-fetch-dest'
 // end up appended after every header that was copied over, rather than in the slot they occupy
 // on a channel that was never intercepted:
 //
-//   never intercepted: ... accept-encoding, connection, referer, cookie, sec-fetch-*
-//   after a resume:    ... accept-encoding, referer, sec-fetch-*, connection, cookie
+//   never intercepted: ... accept-encoding, [referer,] connection, [referer,] cookie, sec-fetch-*
+//   after a resume:    ... accept-encoding, [referer,] sec-fetch-*, connection, cookie
 //
 // Request header order is part of a browser's fingerprint, so the second layout tells a server the
-// request came from an automated browser. Put the two headers back in the order necko fills them
-// in: the defaults, "connection", whatever the channel was set up with, "cookie", and finally
-// everything added from http-on-modify-request onwards. Order on the wire follows
-// nsHttpHeaderArray, and setting a header that is already present updates it in place, so moving
-// one means deleting it and adding it back.
-function restoreInterceptedHeaderOrder(httpChannel, extraHTTPHeaders) {
+// request came from an automated browser. Where "referer" goes depends on the request type (a
+// fetch() sets it before "connection", an <img> after), so no fixed rule reproduces it: the order
+// is taken from the original channel. Order on the wire follows nsHttpHeaderArray, and setting a
+// header that is already present updates it in place, so moving one means deleting it and adding
+// it back.
+function restoreInterceptedHeaderOrder(httpChannel, originalOrder) {
   const headers = requestHeaders(httpChannel);
-  const nameOf = header => header.name.toLowerCase();
-
-  const displaced = [];
-  for (const name of ['connection', 'cookie']) {
-    const index = headers.findIndex(header => nameOf(header) === name);
-    if (index !== -1)
-      displaced.push(headers.splice(index, 1)[0]);
-  }
-  if (!displaced.length)
+  const ordered = orderRequestHeaders(headers, originalOrder);
+  if (ordered.every((header, i) => header === headers[i]))
     return;
-
-  const lateHeaders = new Set([
-    ...ON_BEFORE_CONNECT_HEADERS,
-    ...extraHTTPHeaders.map(header => header.name.toLowerCase()),
-  ]);
-  const firstIndex = predicate => {
-    const index = headers.findIndex(predicate);
-    return index === -1 ? headers.length : index;
-  };
-
-  for (const header of displaced) {
-    const boundary = nameOf(header) === 'connection' ?
-        firstIndex(h => !DEFAULT_REQUEST_HEADERS.includes(nameOf(h))) :
-        firstIndex(h => lateHeaders.has(nameOf(h)));
-    headers.splice(boundary, 0, header);
-  }
-
   // The host header cannot be removed, and it sorts first either way.
-  const movable = headers.filter(header => nameOf(header) !== 'host');
+  const movable = ordered.filter(header => header.name.toLowerCase() !== 'host');
   for (const header of movable)
     httpChannel.setRequestHeader(header.name, '', false /* merge */);
   appendExtraHTTPHeaders(httpChannel, movable);
+}
+
+// `headers` sorted into the order a channel that was never intercepted sends them:
+//   1. every header the original channel had, in its order (`originalOrder`, as the request
+//      recorded it before interception);
+//   2. headers added since (a route's new ones), in the order given;
+//   3. the ones necko adds in OnBeforeConnect.
+function orderRequestHeaders(headers, originalOrder) {
+  const nameOf = header => header.name.toLowerCase();
+  const rank = header => {
+    const name = nameOf(header);
+    const original = originalOrder.indexOf(name);
+    if (original !== -1)
+      return original;
+    const late = ON_BEFORE_CONNECT_HEADERS.indexOf(name);
+    if (late !== -1)
+      return originalOrder.length + 1 + late;
+    return originalOrder.length;
+  };
+  return headers
+      .map((header, index) => ({header, index, rank: rank(header)}))
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .map(entry => entry.header);
 }
 
 const redirectStatus = [301, 302, 303, 307, 308];

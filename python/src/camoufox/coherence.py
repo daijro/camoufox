@@ -28,7 +28,7 @@ dpr 2, "Apple M1, or similar" -- the machine is an M4, and Firefox generalises
 the renderer string itself).
 """
 
-from typing import Any, Callable, Dict, List, NamedTuple, Optional
+from typing import AbstractSet, Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 
 from .pkgman import LAUNCHER_CONSTANTS
 
@@ -53,8 +53,9 @@ APPLE_SILICON_CORES = frozenset(LAUNCHER_CONSTANTS['appleSiliconCores'])
 PLAUSIBLE_DPR = {os_key: tuple(steps) for os_key, steps in LAUNCHER_CONSTANTS['plausibleDpr'].items()}
 
 # colorDepth: Firefox reports 24, or 30 on a deep-colour display. macOS defaults
-# to deep colour, so an Apple Silicon Mac reports 30 (measured). 32 appears in
-# scraped data and is not a value Firefox emits.
+# to deep colour, so a Mac reports 30: measured on an M4 Mac mini and an M1 Pro
+# MacBook, and 30 in every Apple Silicon preset and all but one Intel Mac one.
+# 32 appears in scraped data and is not a value Firefox emits.
 PLAUSIBLE_COLOR_DEPTH = frozenset({24, 30})
 
 # maxTouchPoints: 0 with no digitiser, otherwise the panel's maximum simultaneous
@@ -111,6 +112,9 @@ APPLE_SILICON_PANELS = frozenset(
 class Violation(NamedTuple):
     rule: str
     detail: str
+    #: The caller's own keys that the repair would have changed, and which were
+    #: kept as passed instead. Empty when nothing of the caller's is involved.
+    kept: Tuple[str, ...] = ()
 
 
 class Rule(NamedTuple):
@@ -119,6 +123,10 @@ class Rule(NamedTuple):
     check: Callable[[Dict[str, Any], str], Optional[str]]
     #: Repairs the identity in place. None where no correct value is determined.
     repair: Optional[Callable[[Dict[str, Any], str], None]]
+    #: Keys the repair only adjusts to stay consistent with what it repairs. A
+    #: caller who set any of them keeps all of them as they were, the repair
+    #: itself still runs, and they never block it.
+    adjusts: Tuple[str, ...] = ()
 
 
 def _renderer(config: Dict[str, Any]) -> str:
@@ -219,20 +227,30 @@ def _check_color_depth(config: Dict[str, Any], target_os: str) -> Optional[str]:
         return None
     if depth not in PLAUSIBLE_COLOR_DEPTH:
         return f'screen.colorDepth {depth}; Firefox reports 24 or 30'
-    if target_os == 'mac' and _is_apple_silicon(config) and depth != 30:
-        return f'Apple Silicon Mac with colorDepth {depth}; deep colour is the macOS default'
+    if target_os == 'mac' and depth != 30:
+        return f'macOS identity with colorDepth {depth}; deep colour is the macOS default'
     return None
 
 
 def _repair_color_depth(config: Dict[str, Any], target_os: str) -> None:
-    depth = config.get('screen.colorDepth')
-    if depth is not None and depth not in PLAUSIBLE_COLOR_DEPTH:
-        config['screen.colorDepth'] = 24
-    if target_os == 'mac' and _is_apple_silicon(config):
+    if target_os == 'mac':
         config['screen.colorDepth'] = 30
+    elif config.get('screen.colorDepth') not in PLAUSIBLE_COLOR_DEPTH:
+        config['screen.colorDepth'] = 24
+    config.setdefault('screen.pixelDepth', config['screen.colorDepth'])
+
+
+def _check_pixel_depth(config: Dict[str, Any], target_os: str) -> Optional[str]:
     # pixelDepth is the same number in every browser that reports both.
-    if 'screen.pixelDepth' in config or 'screen.colorDepth' in config:
-        config['screen.pixelDepth'] = config.get('screen.colorDepth', 24)
+    pixel = config.get('screen.pixelDepth')
+    color = config.get('screen.colorDepth', 24)
+    if pixel is not None and pixel != color:
+        return f'screen.pixelDepth {pixel} differs from colorDepth {color}'
+    return None
+
+
+def _repair_pixel_depth(config: Dict[str, Any], target_os: str) -> None:
+    config['screen.pixelDepth'] = config.get('screen.colorDepth', 24)
 
 
 def _check_touch_points(config: Dict[str, Any], target_os: str) -> Optional[str]:
@@ -265,13 +283,45 @@ def _check_device_pixel_ratio(config: Dict[str, Any], target_os: str) -> Optiona
     return None
 
 
-def _repair_device_pixel_ratio(config: Dict[str, Any], target_os: str) -> None:
+# The CSS geometry a ratio scales: device pixels / devicePixelRatio.
+CSS_GEOMETRY_KEYS = (
+    'screen.width', 'screen.height', 'screen.availWidth', 'screen.availHeight',
+    'screen.availLeft', 'screen.availTop',
+    'window.outerWidth', 'window.outerHeight', 'window.innerWidth', 'window.innerHeight',
+    'window.screenX', 'window.screenY',
+)
+
+
+def is_zoomed_ratio(dpr: Any, target_os: str) -> bool:
+    """A devicePixelRatio no display mode of the OS offers: a browser zoom
+    folded into the ratio, which scaled every CSS size with it."""
+    allowed = PLAUSIBLE_DPR.get(target_os)
+    if not allowed or isinstance(dpr, bool) or not isinstance(dpr, (int, float)) or dpr <= 0:
+        return False
+    return float(dpr) not in {float(v) for v in allowed}
+
+
+def repair_device_pixel_ratio(config: Dict[str, Any], target_os: str,
+                              target: Optional[float] = None) -> None:
+    """Move the ratio to `target` (the scale a caller renders at) or else the
+    nearest display mode, rescaling the CSS geometry so the screen stays the
+    display behind it."""
     dpr = config.get('window.devicePixelRatio')
     allowed = PLAUSIBLE_DPR.get(target_os)
     if dpr is None or not allowed:
         return
     # Nearest real scaling step: 1.818 becomes 1.75 on Windows, 2 on macOS.
-    config['window.devicePixelRatio'] = min(allowed, key=lambda v: abs(float(v) - float(dpr)))
+    step = target if target else min(allowed, key=lambda v: abs(float(v) - float(dpr)))
+    config['window.devicePixelRatio'] = step
+    # The scraped ratio has a browser zoom folded in, which shrank every CSS
+    # size by it; the display behind it keeps its device pixels. Rescale to the
+    # step so the screen is still that display: 1760x990 at 1.0909 is a
+    # 1920x1080 monitor, so 1920x1080 at 1. Firefox rounds device / ratio.
+    scale = float(dpr) / float(step)
+    for key in CSS_GEOMETRY_KEYS:
+        value = config.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            config[key] = int(round(value * scale))
 
 
 def _check_window_chrome(config: Dict[str, Any], target_os: str) -> Optional[str]:
@@ -330,6 +380,213 @@ def _repair_avail_bounds(config: Dict[str, Any], target_os: str) -> None:
         config['screen.availHeight'] = height
 
 
+# The CPU the identity claims: its architecture (cpu:arch) and manufacturer
+# (cpu:manufacturer). Firefox's user agent and navigator never say (Firefox on
+# ARM64 Linux reports "Linux x86_64", Windows on ARM an x86 platform, an Apple
+# Silicon Mac "Intel Mac OS X"), but the values a page computes do: canvas
+# pixels, Web Audio samples, encoded Opus, relaxed-SIMD wasm results and the
+# sign of a NaN differ between x86-64 and ARM64, and within x86 the canvas and
+# Opus differ between Intel and AMD (their RCPPS/RSQRTPS tables). Every ARM64
+# chip computes as every other (an Apple M4 and a Cortex-A72 agree on all of
+# them), so the manufacturer of an ARM CPU only has to agree with the GPU.
+#
+# Which manufacturers make each OS's machines:
+#   mac      x86: Intel (every Intel Mac)    arm: Apple
+#   windows  x86: Intel, AMD                 arm: Qualcomm (Snapdragon X; the
+#            only Windows-on-ARM laptops on sale as of 2026-11)
+#   linux    x86: Intel, AMD                 arm: Apple (Asahi), Qualcomm,
+#            Broadcom (Raspberry Pi), NVIDIA, Ampere, Rockchip, MediaTek,
+#            Amlogic, Allwinner
+#
+# The GPU decides where it can. Every Intel integrated GPU reads "Intel(R) HD
+# Graphics" or "Intel(R) HD Graphics 400" (SanitizeRenderer.cpp), and only an
+# Intel CPU carries one; Arc, the A750 bucket, is a discrete card too. "Radeon
+# HD 3200 Graphics" is the bucket of AMD's integrated GPUs since Zen ("AMD
+# Radeon(TM) Graphics") besides the Radeon HD 2000-4000 cards of 2007-2009, so
+# on Windows and Linux it is taken as an AMD APU. Every x86 Mac has an Intel
+# CPU, whatever GPU it reports, and an Apple GPU sits on an Apple CPU. An
+# Adreno sits on a Qualcomm SoC, a VideoCore/V3D on a Broadcom one, a Mali on
+# an ARM SoC of some other maker. Any other GPU is a discrete card or a bucket
+# that leaves the CPU open.
+#
+# The core count can decide the x86 vendor too. Every AMD x86 CPU since 2015
+# runs one or two threads per core, and its one-thread parts have 2 to 8
+# cores, so it reports an even count with no 10, 14, 18, 22 or 28 (Wikipedia's
+# lists of Ryzen and Athlon processors, Zen 5c hybrids included). Intel's
+# hybrids reach those: the Core Ultra 5 225 reports 10, the 245K 14, the 125H
+# 18, the 155H 22 and the i7-14700K 28. ARM chips reach them too (an M4 Pro
+# has 14), so the rule is for x86 only.
+CPU_ARCHES = ('x86', 'arm')
+CPU_MANUFACTURERS: Dict[str, Dict[str, Tuple[str, ...]]] = {
+    os_: {arch: tuple(makers) for arch, makers in by_arch.items()}
+    for os_, by_arch in LAUNCHER_CONSTANTS['cpuManufacturers'].items()
+}
+CPU_VENDORS = ('intel', 'amd')
+INTEL_ONLY_CORE_COUNTS = frozenset(LAUNCHER_CONSTANTS['intelOnlyCoreCounts'])
+_INTEL_IGPUS = ('Intel(R) HD Graphics, or similar', 'Intel(R) HD Graphics 400, or similar',
+                'Intel(R) HD Graphics Direct3D11', 'Intel(R) HD Graphics 400 Direct3D11')
+_AMD_IGPUS = ('Radeon HD 3200 Graphics',)
+# ARM GPUs and the SoC makers that ship them.
+_ARM_GPUS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    ('Apple M', ('apple',)),
+    ('Apple GPU', ('apple',)),
+    ('Adreno', ('qualcomm',)),
+    ('V3D', ('broadcom',)),
+    ('VideoCore', ('broadcom',)),
+    ('Mali', ('rockchip', 'mediatek', 'amlogic', 'allwinner')),
+    ('Immortalis', ('mediatek',)),
+    ('Tegra', ('nvidia',)),
+)
+
+
+def cpu_os(target_os: str) -> str:
+    """The cpuManufacturers key for a launcher OS name (win, mac, lin, ...)."""
+    return {'win': 'windows', 'windows': 'windows', 'mac': 'mac', 'macos': 'mac'}.get(target_os, 'linux')
+
+
+def cpu_manufacturers(target_os: str, arch: str) -> Tuple[str, ...]:
+    return CPU_MANUFACTURERS[cpu_os(target_os)].get(arch, ())
+
+
+def resolve_cpu(cpu: Any, target_os: str) -> Dict[str, str]:
+    """Check a caller's `cpu` option and fill in what it implies.
+
+    Raises ValueError for anything no real machine running `target_os` is: an
+    unknown key, architecture or manufacturer, or a pair such as an AMD Mac or
+    an Apple x86 CPU. A manufacturer alone implies its architecture.
+    """
+    if not isinstance(cpu, dict):
+        raise ValueError(f"cpu must be a dict such as {{'arch': 'x86', 'manufacturer': 'intel'}}, not {cpu!r}")
+    unknown = sorted(set(cpu) - {'arch', 'manufacturer'})
+    if unknown:
+        raise ValueError(f"cpu takes 'arch' and 'manufacturer', not {', '.join(map(repr, unknown))}")
+    arch, maker = cpu.get('arch'), cpu.get('manufacturer')
+    if arch is not None and arch not in CPU_ARCHES:
+        raise ValueError(f"cpu arch must be one of {CPU_ARCHES}, not {arch!r}")
+    os_name = cpu_os(target_os)
+    table = CPU_MANUFACTURERS[os_name]
+    if maker is not None:
+        arches = [a for a in CPU_ARCHES if maker in table.get(a, ())]
+        if not arches:
+            known = sorted({m for makers in table.values() for m in makers})
+            raise ValueError(f"no {os_name} machine has a CPU made by {maker!r}; on {os_name} it is one of {', '.join(known)}")
+        if arch is None:
+            arch = arches[0]
+        elif arch not in arches:
+            raise ValueError(
+                f"no {os_name} machine has an {arch} CPU made by {maker!r}; {os_name} {arch} CPUs are made by "
+                f"{', '.join(table.get(arch, ())) or 'nobody'}"
+            )
+    elif arch is not None and not table.get(arch):
+        raise ValueError(f"no {os_name} machine has an {arch} CPU")
+    out = {}
+    if arch is not None:
+        out['cpu:arch'] = arch
+    if maker is not None:
+        out['cpu:manufacturer'] = maker
+    return out
+
+
+def gpu_cpu(renderer: Optional[str], target_os: str) -> Tuple[Optional[str], Tuple[str, ...]]:
+    """The CPU architecture this GPU implies and the manufacturers it allows.
+
+    (None, ()) when the GPU leaves both open. An empty tuple with an
+    architecture means any maker of that architecture on `target_os`.
+    """
+    renderer = str(renderer or '')
+    if not renderer:
+        return None, ()
+    for marker, makers in _ARM_GPUS:
+        if marker in renderer:
+            return 'arm', makers
+    if cpu_os(target_os) == 'mac':
+        return 'x86', ('intel',)
+    if any(igpu in renderer for igpu in _INTEL_IGPUS):
+        return 'x86', ('intel',)
+    if any(igpu in renderer for igpu in _AMD_IGPUS):
+        return 'x86', ('amd',)
+    return None, ()
+
+
+def gpu_fits_cpu(renderer: Optional[str], target_os: str, arch: Optional[str], maker: Optional[str]) -> bool:
+    """Whether a machine with this GPU can have this CPU."""
+    by_gpu, makers = gpu_cpu(renderer, target_os)
+    if arch is None and maker is not None:
+        arch = next((a for a in CPU_ARCHES if maker in cpu_manufacturers(target_os, a)), None)
+    if arch is None or 'llvmpipe' in str(renderer or ''):
+        # Mesa's software renderer draws on whatever CPU the machine has.
+        return True
+    if by_gpu is None:
+        # A discrete card or an open bucket: an x86 machine. No ARM laptop or
+        # board on sale carries a discrete GPU Firefox would name.
+        return arch == 'x86' and cpu_os(target_os) != 'mac'
+    if by_gpu != arch:
+        return False
+    return maker is None or not makers or maker in makers
+
+
+def gpu_cpu_vendor(renderer: Optional[str], target_os: str) -> Optional[str]:
+    """The x86 CPU vendor this GPU implies, or None when it leaves it open."""
+    arch, makers = gpu_cpu(renderer, target_os)
+    return makers[0] if arch == 'x86' and len(makers) == 1 else None
+
+
+def cores_cpu_vendor(cores: Any) -> Optional[str]:
+    """The x86 CPU vendor this navigator.hardwareConcurrency implies, or None."""
+    return 'intel' if cores in INTEL_ONLY_CORE_COUNTS else None
+
+
+def hardware_cpu(config: Dict[str, Any], target_os: str) -> Tuple[Optional[str], Optional[str]]:
+    """The (arch, manufacturer) the identity's GPU or, failing that, its core count implies."""
+    arch, makers = gpu_cpu(_renderer(config), target_os)
+    if arch == 'arm':
+        return arch, makers[0] if len(makers) == 1 else None
+    vendor = (makers[0] if makers else None) or cores_cpu_vendor(config.get('navigator.hardwareConcurrency'))
+    return ('x86' if vendor or arch else None), vendor
+
+
+def hardware_cpu_vendor(config: Dict[str, Any], target_os: str) -> Optional[str]:
+    """The x86 CPU vendor the identity's GPU or, failing that, its core count implies."""
+    arch, maker = hardware_cpu(config, target_os)
+    return maker if arch == 'x86' else None
+
+
+def cpu_conflict(config: Dict[str, Any], target_os: str) -> Optional[str]:
+    """Why the claimed CPU cannot sit in this machine, or None."""
+    arch, maker = config.get('cpu:arch'), config.get('cpu:manufacturer')
+    if arch is None and maker is None:
+        return None
+    try:
+        resolve_cpu({k: v for k, v in (('arch', arch), ('manufacturer', maker)) if v is not None}, target_os)
+    except ValueError as exc:
+        return str(exc)
+    renderer = _renderer(config)
+    claimed = ' '.join(str(v) for v in (maker, arch) if v)
+    if renderer and not gpu_fits_cpu(renderer, target_os, arch, maker):
+        return f'CPU {claimed} beside {renderer!r}'
+    cores = config.get('navigator.hardwareConcurrency')
+    if (arch or 'x86') == 'x86' and maker and maker != cores_cpu_vendor(cores) and cores_cpu_vendor(cores):
+        return f'CPU {claimed} with hardwareConcurrency {cores}, which only an Intel CPU reports'
+    return None
+
+
+def _check_cpu(config: Dict[str, Any], target_os: str) -> Optional[str]:
+    return cpu_conflict(config, target_os)
+
+
+def _repair_cpu(config: Dict[str, Any], target_os: str) -> None:
+    # The GPU decides. An AMD APU's GPU beside an Intel-only core count stays
+    # reported: no vendor matches both.
+    arch, maker = hardware_cpu(config, target_os)
+    if arch is None:
+        arch = 'x86'
+    config['cpu:arch'] = arch
+    if maker:
+        config['cpu:manufacturer'] = maker
+    elif config.get('cpu:manufacturer') not in cpu_manufacturers(target_os, arch) or cpu_conflict(config, target_os):
+        config.pop('cpu:manufacturer', None)
+
+
 def _check_arch_agreement(config: Dict[str, Any], target_os: str) -> Optional[str]:
     ua = str(config.get('navigator.userAgent') or '')
     platform = str(config.get('navigator.platform') or '')
@@ -346,12 +603,14 @@ RULES: List[Rule] = [
     Rule('gpu-matches-os', _check_gpu_matches_os, None),
     Rule('intel-mac-hardware', _check_intel_mac_hardware, None),
     Rule('color-depth', _check_color_depth, _repair_color_depth),
+    Rule('pixel-depth', _check_pixel_depth, _repair_pixel_depth),
     Rule('touch-points', _check_touch_points, _repair_touch_points),
-    Rule('device-pixel-ratio', _check_device_pixel_ratio, _repair_device_pixel_ratio),
+    Rule('device-pixel-ratio', _check_device_pixel_ratio, repair_device_pixel_ratio, CSS_GEOMETRY_KEYS),
     Rule('window-chrome', _check_window_chrome, _repair_window_chrome),
     Rule('screen-shape', _check_screen_shape, None),
     Rule('avail-bounds', _check_avail_bounds, _repair_avail_bounds),
     Rule('arch-agreement', _check_arch_agreement, None),
+    Rule('cpu-matches-hardware', _check_cpu, _repair_cpu),
 ]
 
 
@@ -379,7 +638,13 @@ def repair_screen_orientation(config: Dict[str, Any]) -> bool:
     return True
 
 
-def drop_incoherent_source_values(config: Dict[str, Any], target_os: str) -> List[Violation]:
+def _changed(before: Dict[str, Any], after: Dict[str, Any], keys: AbstractSet[str]) -> Tuple[str, ...]:
+    return tuple(sorted(k for k in keys if (k in before) != (k in after) or before.get(k) != after.get(k)))
+
+
+def drop_incoherent_source_values(
+    config: Dict[str, Any], target_os: str, keep: AbstractSet[str] = frozenset()
+) -> List[Violation]:
     """Discard values a source supplied that this identity cannot keep.
 
     Run after the core count and the screen are final, and before the pools
@@ -390,7 +655,8 @@ def drop_incoherent_source_values(config: Dict[str, Any], target_os: str) -> Lis
     WebGL sampling draws a coherent one instead.
 
     Only values that another pool can replace are dropped. Everything else is
-    left for `apply()` to repair or report.
+    left for `apply()` to repair or report. A GPU the caller passed (a key in
+    `keep`) is never dropped: it is reported, with the keys it kept, instead.
     """
     renderer = _renderer(config)
     if not renderer:
@@ -401,6 +667,9 @@ def drop_incoherent_source_values(config: Dict[str, Any], target_os: str) -> Lis
         rule = 'intel-mac-hardware'
     else:
         return []
+    kept = _changed(config, {}, keep & {'webGl:renderer', 'webGl:vendor'})
+    if kept:
+        return [Violation(rule, f'{renderer!r} does not fit this {target_os} identity', kept)]
     config.pop('webGl:renderer', None)
     config.pop('webGl:vendor', None)
     return [Violation(rule, f'dropped {renderer!r} for a {target_os} identity')]
@@ -416,15 +685,36 @@ def validate(config: Dict[str, Any], target_os: str) -> List[Violation]:
     return violations
 
 
-def apply(config: Dict[str, Any], target_os: str) -> List[Violation]:
+def apply(config: Dict[str, Any], target_os: str, keep: AbstractSet[str] = frozenset()) -> List[Violation]:
     """Repair what is determined, and report what is left.
 
     A rule with no repair -- a Windows GPU on a macOS identity, a portrait
     screen -- cannot be corrected without inventing a machine, so it is
     returned for the caller to decide about. The caller that draws the identity
     can simply draw again.
+
+    `keep` names the keys the caller set. A repair that would change one of
+    them is not made: the caller's value stands, and the violation comes back
+    with those keys in `kept` so the launcher can warn about it (#956). A
+    repair that only touches other keys (growing outerHeight to fit a caller's
+    innerHeight) still runs.
     """
+    kept: Dict[str, Tuple[str, ...]] = {}
     for rule in RULES:
-        if rule.repair and rule.check(config, target_os):
-            rule.repair(config, target_os)
-    return validate(config, target_os)
+        if not rule.repair or not rule.check(config, target_os):
+            continue
+        repaired = dict(config)
+        rule.repair(repaired, target_os)
+        if rule.adjusts and keep.intersection(rule.adjusts):
+            for key in rule.adjusts:
+                if key in config:
+                    repaired[key] = config[key]
+                else:
+                    repaired.pop(key, None)
+        blocked = _changed(config, repaired, keep)
+        if blocked:
+            kept[rule.name] = blocked
+        else:
+            config.clear()
+            config.update(repaired)
+    return [v._replace(kept=kept.get(v.rule, ())) for v in validate(config, target_os)]
