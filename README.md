@@ -855,7 +855,7 @@ flowchart TD
 |---|---|
 | The browser (`browser/`: patches, additions, settings, build system) | [MPL-2.0](LICENSE), the licence of the Firefox source it modifies |
 | Python package | MIT ([`python/LICENSE`](python/LICENSE)) |
-| TypeScript package | MIT ([`typescript/LICENSE`](typescript/LICENSE)); includes a port of NumPy's pairwise summation ([notice](typescript/THIRD_PARTY_NOTICES.md)) and depends on [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and [`python-random`](https://www.npmjs.com/package/python-random) |
+| TypeScript package | MIT ([`typescript/LICENSE`](typescript/LICENSE)); depends on [`camoucore`](https://github.com/CamouBrowser/camoucore) (MIT; carries a port of NumPy's pairwise summation, with its notice), [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and [`python-random`](https://www.npmjs.com/package/python-random) |
 
 ## Thanks
 

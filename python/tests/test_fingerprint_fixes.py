@@ -280,7 +280,8 @@ class TestFixHardwareConcurrency:
         # The fingerprint's value survives when it is a count a real desktop
         # ships with AND the browser can be pinned to it (reported == measurable
         # by construction).
-        from camoufox import cpu_affinity, fingerprints as fp
+        from camoucore import cpu_affinity
+        from camoufox import fingerprints as fp
 
         monkeypatch.setattr(cpu_affinity, "supported", lambda: True)
         monkeypatch.setattr(fp, "host_cpu_count", lambda: 16)
@@ -292,7 +293,8 @@ class TestFixHardwareConcurrency:
     def test_snaps_implausible_draws_down_into_the_table(self, monkeypatch):
         # Counts no desktop ships with (2, odd counts) snap DOWN into
         # PLAUSIBLE_CORE_COUNTS, with the table floor for anything below it.
-        from camoufox import cpu_affinity, fingerprints as fp
+        from camoucore import cpu_affinity
+        from camoufox import fingerprints as fp
 
         monkeypatch.setattr(cpu_affinity, "supported", lambda: True)
         monkeypatch.setattr(fp, "host_cpu_count", lambda: 16)
@@ -313,7 +315,8 @@ class TestFixHardwareConcurrency:
         # draw exceeds the host or the host cannot pin (macOS).
         # 18/22/24/28/32 are in the table (recorded on real devices); 2 is NOT,
         # although it is recorded, because 2 is the resistFingerprinting value.
-        from camoufox import cpu_affinity, fingerprints as fp
+        from camoucore import cpu_affinity
+        from camoufox import fingerprints as fp
 
         monkeypatch.setattr(cpu_affinity, "supported", lambda: False)
         for host, expected in (

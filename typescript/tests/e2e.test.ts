@@ -542,7 +542,7 @@ describe.runIf(ENABLED)("e2e: the TS launcher drives a real Camoufox", () => {
 						// The launching process got its cores back...
 						expect(selfCores()).toBe(before);
 						// ...and the browser it spawned runs on exactly `reported` cores.
-						const { parseCpuList } = await import("../src/cpu_affinity.js");
+						const { parseCpuList } = await import("camoucore/cpu_affinity.js");
 						const children = fs
 							.readFileSync(
 								`/proc/${process.pid}/task/${process.pid}/children`,

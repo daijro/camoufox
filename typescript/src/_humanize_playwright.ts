@@ -56,7 +56,7 @@ import {
 	normalize,
 } from "./humanize.js";
 import type { OsName } from "./utils.js";
-import { LeakWarning } from "./warnings.js";
+import { LeakWarning, loadWarnings } from "./warnings.js";
 
 /**
  * `inPart`: a part of the caller's is running; its Playwright calls are
@@ -523,7 +523,7 @@ export function attach<T>(
 	if (owner[SETUP])
 		throw new Error("humanize is already attached to this browser");
 	if (owner._connection?.isRemote())
-		LeakWarning.warn("humanize_remote", iKnowWhatImDoing);
+		LeakWarning.warn(loadWarnings().humanize_remote, iKnowWhatImDoing);
 	isolateDispatch(owner._connection);
 
 	const setup = new Setup(engines, seed ?? randomBytes(4).readUInt32BE(), os);

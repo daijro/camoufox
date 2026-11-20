@@ -11,16 +11,6 @@ import "./node-floor.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
-import { Argument, Command, Option } from "commander";
-import { ensureModel } from "fpgen-js";
-import { LIBRARY_VERSION } from "./__version__.js";
-import {
-	type BrowserPin,
-	effectivePin,
-	loadPin,
-	pinSpec,
-} from "./browser-pin.js";
-import { FileNotFoundError } from "./exceptions.js";
 import {
 	allowGeoip,
 	downloadMmdb,
@@ -31,7 +21,17 @@ import {
 	loadGeoipRepos,
 	saveGeoipConfig,
 	warnIfDeprecated,
-} from "./geolocation.js";
+} from "camoucore/geolocation.js";
+import { Argument, Command, Option } from "commander";
+import { ensureModel } from "fpgen-js";
+import { LIBRARY_VERSION } from "./__version__.js";
+import {
+	type BrowserPin,
+	effectivePin,
+	loadPin,
+	pinSpec,
+} from "./browser-pin.js";
+import { FileNotFoundError } from "./exceptions.js";
 import {
 	BROWSERS_DIR,
 	type CachedVersion,
@@ -983,7 +983,7 @@ function listInstalledVersions(showPaths: boolean): void {
 		try {
 			config = loadGeoipConfig();
 		} catch (e) {
-			// the saved source is gone from repos.yml
+			// the saved source is gone from the GeoIP list
 			rprint(`    └── ${(e as Error).message}`, "red");
 			return;
 		}
@@ -1291,7 +1291,7 @@ class VersionInfo {
 		try {
 			config = loadGeoipConfig();
 		} catch (e) {
-			// the saved source is gone from repos.yml
+			// the saved source is gone from the GeoIP list
 			this.row("Database", (e as Error).message, "red");
 			return;
 		}

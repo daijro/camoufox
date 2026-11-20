@@ -2,7 +2,7 @@ r"""
 On the launcher's virtual display the browser window is on screen, so pages behave as on a desktop.
 
 headless='virtual' (and, on Linux, headless=True) runs the browser on a private
-Xvfb whose root window is 1x1 by default (virtdisplay.DEFAULT_SCREEN). An identity
+Xvfb whose root window is 1x1 by default (Engine.virtual_screen). An identity
 places its window where a desktop would (window.screenX/Y, e.g. 319,76). A window
 that does not cover the root's one pixel is entirely off screen: X reports it
 fully obscured, and Firefox then never resolves
@@ -60,7 +60,9 @@ setTimeout(() => {
 
 
 def main() -> int:
-    from camoufox.virtdisplay import VirtualDisplay
+    from camoucore.virtdisplay import VirtualDisplay
+
+    from camoufox.product import PRODUCT
 
     got, done = {}, threading.Event()
 
@@ -83,7 +85,7 @@ def main() -> int:
     srv = socketserver.TCPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     profile = tempfile.mkdtemp(prefix="vd-visible-")
-    vd = VirtualDisplay()
+    vd = VirtualDisplay(PRODUCT)
     try:
         env = {k: v for k, v in os.environ.items() if k not in ("WAYLAND_DISPLAY", "WAYLAND_SOCKET")}
         env["DISPLAY"] = vd.get()

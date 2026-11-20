@@ -90,7 +90,8 @@ import numpy as np  # noqa: E402
 import orjson  # noqa: E402
 
 import camoufox.fingerprints as fingerprints  # noqa: E402
-from camoufox import geolocation, locales, utils  # noqa: E402
+from camoucore import geolocation, locales  # noqa: E402
+from camoufox import utils  # noqa: E402
 from camoufox.addons import DefaultAddons  # noqa: E402
 from camoufox.fingerprints import Screen  # noqa: E402
 from camoufox.utils import launch_options  # noqa: E402
@@ -121,7 +122,7 @@ utils._stock_profile_disk_capacity_kb = lambda: HOST['disk_capacity_kb']
 utils._host_os_key = lambda: HOST['host_os_key']
 utils.host_gpu = lambda *args: HOST['host_gpu']
 def _display():
-    from camoufox.display import DisplaySize
+    from camoucore.display import DisplaySize
 
     return DisplaySize(*HOST['display'])
 

@@ -28,7 +28,7 @@ camoufox fetch
 |---|---|
 | Python | 3.11 or newer |
 | Playwright | below 1.63 (installed as a dependency) |
-| `geoip` extra | needed for `geoip=`; downloads the [GeoIP All-in-One](https://github.com/daijro/geoip-all-in-one) database, refreshed once it is a week old |
+| `geoip` extra | needed for `geoip=`; downloads the [GeoIP All-in-One](https://github.com/daijro/geoip-all-in-one) database, refreshed once it is a week old, into `~/.cache/camoucore/geoip` on Linux (camoucore's cache, shared by every launcher built on it) |
 
 `camoufox fetch` installs the browser build this release is paired with, and
 fpgen's model, pinned by sha256. Without it, the first launch downloads both.

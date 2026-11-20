@@ -55,7 +55,7 @@ from ci._util import WORK_DIR, read_upstream_sh  # noqa: E402
 
 from camoufox import webgl  # noqa: E402
 from camoufox.fingerprints import _FPGEN_OS  # noqa: E402
-from camoufox.fpgen_model import load_fpgen  # noqa: E402
+from camoucore.fpgen_model import load_fpgen  # noqa: E402
 from camoufox.utils import launch_options, resolve_verstr  # noqa: E402
 
 ARCHIVE = "https://archive.mozilla.org/pub/firefox/releases/{version}/"

@@ -15,7 +15,7 @@ from camoufox import async_api, sync_api, utils
 class FakeDisplay:
     instances = []
 
-    def __init__(self, debug=None):
+    def __init__(self, product, debug=None):
         self.killed = False
         FakeDisplay.instances.append(self)
 

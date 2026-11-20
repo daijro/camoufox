@@ -8,8 +8,9 @@
  * playwright-core's launchServer() directly with the same options Python
  * would send: launchOptions() with every top-level key camelCased.
  */
+
+import { withUnpinnedLaunch } from "camoucore/cpu_affinity.js";
 import { type BrowserServer, firefox } from "playwright-core";
-import { withUnpinnedLaunch } from "./cpu_affinity.js";
 import { GpuDisplay, proveGpu } from "./gpudisplay.js";
 import { drivenChannels } from "./humanize.js";
 import { camelCase } from "./sync_api.js";

@@ -9,6 +9,10 @@
  * launch lock (async_api), and virtual-display teardown.
  */
 
+import * as cpuAffinity from "camoucore/cpu_affinity.js";
+import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "camoucore/ip.js";
+import { SELECTOR } from "camoucore/locales.js";
+import type { VirtualDisplay } from "camoucore/virtdisplay.js";
 import { ensureModel } from "fpgen-js";
 import {
 	type Browser,
@@ -17,12 +21,9 @@ import {
 	firefox,
 } from "playwright-core";
 import { attach } from "./_humanize_playwright.js";
-import * as cpuAffinity from "./cpu_affinity.js";
 import { attachDriverDefaults } from "./driver_defaults.js";
 import { generateContextFingerprint } from "./fingerprints.js";
 import { normalize } from "./humanize.js";
-import { type ProxyConfig, ProxyHelper, proxyExitGeo } from "./ip.js";
-import { SELECTOR } from "./locales.js";
 import {
 	applyNoViewport,
 	attachDesktopOnlyWarning,
@@ -43,7 +44,6 @@ import {
 	spoofsWindowDimensions,
 	startVirtualDisplay,
 } from "./utils.js";
-import type { VirtualDisplay } from "./virtdisplay.js";
 
 export type { Headless } from "./utils.js";
 

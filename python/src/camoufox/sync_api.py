@@ -8,11 +8,11 @@ from playwright.sync_api import (
 )
 from typing_extensions import Literal
 
-from camoufox.virtdisplay import VirtualDisplay
+from camoucore.ip import ExitGeo, Proxy, proxy_exit_geo
+from camoucore.virtdisplay import VirtualDisplay
 
 from . import _humanize_playwright, driver_defaults
 from .fingerprints import generate_context_fingerprint
-from .ip import ExitGeo, Proxy, proxy_exit_geo
 from .utils import (
     attach_context_defaults,
     attach_socks5_auth,
@@ -161,7 +161,7 @@ def _launch(
     # Pin the driver (and so the browser it is about to spawn) to as many
     # cores as the identity reports, so measurable parallelism matches
     # navigator.hardwareConcurrency; the driver gets its cores back afterwards.
-    from . import cpu_affinity
+    from camoucore import cpu_affinity
     from .utils import driver_pid, pinned_core_count
 
     pin_to = pinned_core_count(from_options)

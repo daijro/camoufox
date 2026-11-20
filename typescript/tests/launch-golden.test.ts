@@ -114,8 +114,8 @@ function firstDiff(have: string, want: string): string {
 let mods: {
 	utils: typeof import("../src/utils.js");
 	fingerprints: typeof import("../src/fingerprints.js");
-	locales: typeof import("../src/locales.js");
-	geolocation: typeof import("../src/geolocation.js");
+	locales: typeof import("camoucore/locales.js");
+	geolocation: typeof import("camoucore/geolocation.js");
 	warnings: typeof import("../src/warnings.js");
 };
 
@@ -128,8 +128,8 @@ beforeAll(async () => {
 	mods = {
 		utils: await import("../src/utils.js"),
 		fingerprints: await import("../src/fingerprints.js"),
-		locales: await import("../src/locales.js"),
-		geolocation: await import("../src/geolocation.js"),
+		locales: await import("camoucore/locales.js"),
+		geolocation: await import("camoucore/geolocation.js"),
 		warnings: await import("../src/warnings.js"),
 	};
 	expect(mods.utils.utilsDeps.installDir()).toBe(CACHE);

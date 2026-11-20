@@ -13,15 +13,15 @@
 import { createHash, randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { generate, InvalidConstraints } from "fpgen-js";
-import * as random from "python-random";
-import { hardwareCpu } from "./coherence.js";
 import {
 	supported as cpuAffinitySupported,
 	hostCoreCount,
-} from "./cpu_affinity.js";
-import { validateIP, validIPv4 } from "./ip.js";
-import { normalizeLocale } from "./locales.js";
+} from "camoucore/cpu_affinity.js";
+import { validateIP, validIPv4 } from "camoucore/ip.js";
+import { normalizeLocale } from "camoucore/locales.js";
+import { generate, InvalidConstraints } from "fpgen-js";
+import * as random from "python-random";
+import { hardwareCpu } from "./coherence.js";
 import { LAUNCHER_CONSTANTS, LOCAL_DATA, loadDataFile } from "./paths.js";
 import {
 	comparePyStr,

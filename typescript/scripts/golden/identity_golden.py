@@ -41,7 +41,7 @@ sys.path.insert(0, str(HERE))
 
 
 from camoufox import coherence  # noqa: E402
-from camoufox import cpu_affinity  # noqa: E402
+from camoucore import cpu_affinity  # noqa: E402
 from camoufox import fingerprints as fp  # noqa: E402
 from camoufox import webgl  # noqa: E402
 

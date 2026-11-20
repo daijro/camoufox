@@ -8,12 +8,23 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { inspect } from "node:util";
+import * as cpuAffinity from "camoucore/cpu_affinity.js";
+import { hasDisplay, largestDisplay } from "camoucore/display.js";
+import { geoipAllowed, getGeolocation } from "camoucore/geolocation.js";
+import {
+	type ProxyConfig,
+	ProxyHelper,
+	publicIP,
+	publicIPv6,
+	validIPv4,
+	validIPv6,
+} from "camoucore/ip.js";
+import { handleLocales } from "camoucore/locales.js";
+import { VirtualDisplay } from "camoucore/virtdisplay.js";
 import { ensureModel } from "fpgen-js";
 import { UAParser } from "ua-parser-js";
 import { addDefaultAddons, confirmPaths, type DefaultAddon } from "./addons.js";
 import * as coherence from "./coherence.js";
-import * as cpuAffinity from "./cpu_affinity.js";
-import { hasDisplay, largestDisplay } from "./display.js";
 import {
 	InvalidOS,
 	InvalidPropertyType,
@@ -45,7 +56,6 @@ import {
 	targetOsFromPlatform,
 	WINDOWS_11_MARKER_FONTS,
 } from "./fingerprints.js";
-import { geoipAllowed, getGeolocation } from "./geolocation.js";
 import { GPU_PREFS, GpuDisplay, proveGpu, selectGpu } from "./gpudisplay.js";
 import {
 	addCanvasPlaceholder,
@@ -55,18 +65,7 @@ import {
 	setWebgpu,
 } from "./host_rendering.js";
 import { type HumanizeSetting, normalize } from "./humanize.js";
-import {
-	type ProxyConfig,
-	ProxyHelper,
-	proxyAuthEnv,
-	proxyAuthInitScript,
-	publicIP,
-	publicIPv6,
-	socks5Auth,
-	validIPv4,
-	validIPv6,
-} from "./ip.js";
-import { handleLocales } from "./locales.js";
+import { proxyAuthEnv, proxyAuthInitScript, socks5Auth } from "./ip.js";
 import { INSTALL_DIR, LAUNCHER_CONSTANTS, OS_NAME } from "./paths.js";
 import {
 	buildFile,
@@ -81,6 +80,7 @@ import {
 	Version,
 	warnIfPackageOutdated,
 } from "./pkgman.js";
+import { PRODUCT } from "./product.js";
 import {
 	comparePyStr,
 	formatPyFloatRepr,
@@ -94,7 +94,6 @@ import {
 	pyTypeName,
 	ValueError,
 } from "./pycompat.js";
-import { VirtualDisplay } from "./virtdisplay.js";
 import {
 	FallbackWarning,
 	LeakWarning,
@@ -627,7 +626,7 @@ export function validateConfig(
 		const entry = properties[key];
 		if (!entry) {
 			if (key === "voices:speechd") {
-				LeakWarning.warn("voices_unread");
+				LeakWarning.warn(loadWarnings().voices_unread);
 			}
 			utilsDeps.print(`Skipping unknown patch ${key} : ${pyStr(value)}`);
 			continue; // Property not supported by this browser version; skip silently
@@ -826,7 +825,7 @@ function checkCustomFingerprint(fingerprint: Record<string, any>): void {
 		);
 	}
 
-	LeakWarning.warn("custom_fingerprint", false);
+	LeakWarning.warn(loadWarnings().custom_fingerprint, false);
 }
 
 /** ua_parser.user_agent_parser.ParseUserAgent(ua)['family']. */
@@ -1022,7 +1021,7 @@ async function keepsIPv6(
 	) {
 		return true;
 	}
-	LeakWarning.warn("ipv6_elsewhere", iKnowWhatImDoing);
+	LeakWarning.warn(loadWarnings().ipv6_elsewhere, iKnowWhatImDoing);
 	return false;
 }
 
@@ -1059,32 +1058,32 @@ function warnManualConfig(config: Record<string, any>): void {
 			"locale:",
 		)
 	) {
-		LeakWarning.warn("locale", false);
+		LeakWarning.warn(loadWarnings().locale, false);
 	}
 	// Manual geolocation and timezone setting
 	if (isDomainSet(config, "geolocation:", "timezone")) {
-		LeakWarning.warn("geolocation", false);
+		LeakWarning.warn(loadWarnings().geolocation, false);
 	}
 	// Manual User-Agent setting
 	if (isDomainSet(config, "headers.User-Agent")) {
-		LeakWarning.warn("header-ua", false);
+		LeakWarning.warn(loadWarnings()["header-ua"], false);
 	}
 	// Manual navigator setting
 	if (isDomainSet(config, "navigator.")) {
-		LeakWarning.warn("navigator", false);
+		LeakWarning.warn(loadWarnings().navigator, false);
 	}
 	// Touchscreen digitizer spoofing. Called out separately from the blanket
 	// navigator warning because the knock-on effects reach past navigator into
 	// CSS pointer media queries and the TouchEvent interfaces.
 	if (isDomainSet(config, "navigator.maxTouchPoints")) {
-		LeakWarning.warn("max_touch_points", false);
+		LeakWarning.warn(loadWarnings().max_touch_points, false);
 	}
 	if (pyTruthy(config.instantAnimations)) {
-		LeakWarning.warn("instant_animations", false);
+		LeakWarning.warn(loadWarnings().instant_animations, false);
 	}
 	// Manual screen/window setting
 	if (isDomainSet(config, "screen.", "window.", "document.body.")) {
-		LeakWarning.warn("viewport", false);
+		LeakWarning.warn(loadWarnings().viewport, false);
 	}
 }
 
@@ -1260,7 +1259,7 @@ export function attachDesktopOnlyWarning<T>(target: T): T {
 		if (typeof original !== "function") continue;
 		(target as any)[name] = (options?: Record<string, any>, ...rest: any[]) => {
 			if (options?.isMobile || options?.is_mobile)
-				LeakWarning.warn("is_mobile");
+				LeakWarning.warn(loadWarnings().is_mobile);
 			return original.call(target, options, ...rest);
 		};
 	}
@@ -1454,7 +1453,7 @@ export async function startVirtualDisplay(
 			"gpu and require_gpu apply to headless='virtual-gpu' only",
 		);
 	} else if (headless === "virtual") {
-		display = new VirtualDisplay(debug ?? false);
+		display = new VirtualDisplay(PRODUCT, debug ?? false);
 	} else {
 		return [null, headless];
 	}
@@ -1817,7 +1816,7 @@ export async function launchOptions({
 	let ffVersionStr: string;
 	if (ff_version) {
 		ffVersionStr = String(ff_version);
-		LeakWarning.warn("ff_version", i_know_what_im_doing);
+		LeakWarning.warn(loadWarnings().ff_version, i_know_what_im_doing);
 	} else {
 		ffVersionStr = resolveVerstr(executable_path).split(".")[0];
 	}
@@ -1953,7 +1952,7 @@ export async function launchOptions({
 	if (custom_fonts_only) {
 		firefox_user_prefs["gfx.bundled-fonts.activate"] = 0;
 		if (fonts?.length) {
-			LeakWarning.warn("custom_fonts_only", i_know_what_im_doing);
+			LeakWarning.warn(loadWarnings().custom_fonts_only, i_know_what_im_doing);
 		} else {
 			throw new ValueError(
 				"No custom fonts were passed, but `custom_fonts_only` is enabled.",
@@ -2142,7 +2141,7 @@ export async function launchOptions({
 		!(proxy?.server ?? "").includes("localhost") &&
 		!isDomainSet(config, "geolocation")
 	) {
-		LeakWarning.warn("proxy_without_geoip");
+		LeakWarning.warn(loadWarnings().proxy_without_geoip);
 	}
 
 	// Set locale
@@ -2226,10 +2225,10 @@ export async function launchOptions({
 	// Fresh profiles get a toggle's pref only when on. A persistent profile
 	// may need the stock value written once to clear an earlier toggled value.
 	if (block_images) {
-		LeakWarning.warn("block_images", i_know_what_im_doing);
+		LeakWarning.warn(loadWarnings().block_images, i_know_what_im_doing);
 	}
 	if (disable_coop) {
-		LeakWarning.warn("disable_coop", i_know_what_im_doing);
+		LeakWarning.warn(loadWarnings().disable_coop, i_know_what_im_doing);
 	}
 	const profileDir = (passthrough.user_data_dir ?? passthrough.userDataDir) as
 		| string
@@ -2255,7 +2254,7 @@ export async function launchOptions({
 	}
 	// A persistent context takes its context options here.
 	if (passthrough.is_mobile || passthrough.isMobile) {
-		LeakWarning.warn("is_mobile", i_know_what_im_doing);
+		LeakWarning.warn(loadWarnings().is_mobile, i_know_what_im_doing);
 	}
 
 	// Drop values the source supplied that this identity cannot keep, before the
@@ -2280,12 +2279,12 @@ export async function launchOptions({
 	);
 	if (coverCanvas) {
 		addCanvasPlaceholder(firefox_user_prefs);
-		LeakWarning.warn("canvas_noise", i_know_what_im_doing);
+		LeakWarning.warn(loadWarnings().canvas_noise, i_know_what_im_doing);
 	}
 
 	if (block_webgl) {
 		firefox_user_prefs["webgl.disabled"] = true;
-		LeakWarning.warn("block_webgl", i_know_what_im_doing);
+		LeakWarning.warn(loadWarnings().block_webgl, i_know_what_im_doing);
 	} else {
 		let webglFp: Record<string, any>;
 		const seed = () =>

@@ -276,7 +276,7 @@ def test_launch_server_surfaces_child_exit_instead_of_pipe_error(monkeypatch, tm
 class _FakeVirtualDisplay:
     instances = []
 
-    def __init__(self, debug=None):
+    def __init__(self, product, debug=None):
         self.debug = debug
         self.killed = False
         _FakeVirtualDisplay.instances.append(self)

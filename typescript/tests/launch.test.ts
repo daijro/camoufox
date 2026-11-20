@@ -41,7 +41,7 @@ const { cursory, myuri, normalize, raw } = await import("../src/humanize.js");
 const { InvalidPropertyType, UnknownIPLocation } = await import(
 	"../src/exceptions.js"
 );
-const cpuAffinity = await import("../src/cpu_affinity.js");
+const cpuAffinity = await import("camoucore/cpu_affinity.js");
 const { attachDriverDefaults } = await import("../src/driver_defaults.js");
 
 // Imported after launch-host, which has to set the cache directory first.
@@ -1630,35 +1630,6 @@ describe.skipIf(!MODEL.ok)(
 );
 
 describe("cpu_affinity", () => {
-	it("picks adjacent cores from a random start (test_identity_salt.TestAffinityPick)", () => {
-		const cores = Array.from({ length: 16 }, (_, i) => i);
-		const seen = new Set<string>();
-		for (let n = 0; n < 200; n++) {
-			const picked = cpuAffinity.pick(cores, 4);
-			expect(picked).toHaveLength(4);
-			expect(picked.every((c) => cores.includes(c))).toBe(true);
-			expect(
-				picked.some((s) =>
-					[0, 1, 2, 3].every((i) => picked.includes((s + i) % 16)),
-				),
-			).toBe(true);
-			seen.add(picked.join(","));
-		}
-		expect(seen.size).toBeGreaterThan(4);
-	});
-
-	it("parses a Linux cpu list", () => {
-		expect(cpuAffinity.parseCpuList("0-3,8,10-11\n")).toEqual([
-			0, 1, 2, 3, 8, 10, 11,
-		]);
-	});
-
-	it("round-trips a Windows affinity mask", () => {
-		expect(
-			cpuAffinity.maskToCores(cpuAffinity.coresToMask([0, 2, 5, 63])),
-		).toEqual([0, 2, 5, 63]);
-	});
-
 	it("pins only to a count the host can honour", () => {
 		const options = (hc: number) => ({
 			env: utils.getEnvVars(
@@ -1673,23 +1644,6 @@ describe("cpu_affinity", () => {
 		expect(utils.pinnedCoreCount(options(cores.length))).toBeNull();
 		expect(utils.pinnedCoreCount({})).toBeNull();
 	});
-
-	it.runIf(process.platform === "linux")(
-		"pins and restores this process on Linux",
-		() => {
-			if (!cpuAffinity.supported()) return;
-			const before = cpuAffinity.hostCores() ?? [];
-			if (before.length < 2) return;
-			const previous = cpuAffinity.pin(process.pid, 1);
-			try {
-				expect(previous).toEqual(before);
-				expect(cpuAffinity.hostCores()).toHaveLength(1);
-			} finally {
-				cpuAffinity.restore(process.pid, previous);
-			}
-			expect(cpuAffinity.hostCores()).toEqual(before);
-		},
-	);
 
 	it.runIf(process.platform === "linux")(
 		"a concurrent launch sees the host's cores, not another launch's pin",

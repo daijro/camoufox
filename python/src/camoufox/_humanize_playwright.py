@@ -49,7 +49,7 @@ from myuri import Actions, Missed, make_rng, run_async, run_sync
 from myuri.page_functions import HIT_TEST_JS
 from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
 
-from ._warnings import LeakWarning
+from ._warnings import WARNINGS_DATA, LeakWarning
 from .driver_defaults import FILL_NEEDS_CLICK
 from .humanize import normalize
 
@@ -517,7 +517,7 @@ def attach(
         raise ValueError('humanize is already attached to this browser')
     impl = getattr(target, '_impl_obj', None)
     if getattr(getattr(impl, '_connection', None), 'is_remote', False):
-        LeakWarning.warn('humanize_remote', i_know_what_im_doing)
+        LeakWarning.warn(WARNINGS_DATA['humanize_remote'], i_know_what_im_doing)
 
     setup = _Setup(engines, secrets.randbits(32) if seed is None else seed, os, is_async)
 

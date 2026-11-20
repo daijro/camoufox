@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Install the pinned fpgen model before anything imports fpgen.
 
-The launcher does this itself on first use (python/src/camoufox/fpgen_model.py,
+The launcher does this itself on first use (camoucore's fpgen_model.py,
 which explains why fpgen's own download is not used). This entry point exists
 for jobs that need the model in place before they start: CI, image builds, and
 the TypeScript golden recorder.
@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 
 try:
-    from camoufox.fpgen_model import PIN, ensure_fpgen_model, fpgen_data_dir, is_pinned
+    from camoucore.fpgen_model import PIN, ensure_fpgen_model, fpgen_data_dir, is_pinned
 except ImportError:
-    sys.exit('camoufox is not installed; `pip install -e python` from the repo root first')
+    sys.exit('camoucore is not installed; `pip install -e python` from the repo root first')
 
 
 def main():
