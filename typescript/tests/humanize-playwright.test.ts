@@ -654,8 +654,12 @@ describe("parts", () => {
 		await scroll.page.locator("#far").click();
 		const kinds = names(scroll.browser);
 		// myuri wheels over the scroller, reached in one move, then Playwright clicks.
+		// A first long scroll takes two passes (myuri reads the page's px per wheel
+		// px from the first), and the raw mouse sends each pass's move as asked.
 		expect(kinds[0]).toBe("mouse.move");
-		expect(kinds.filter((n) => n === "mouse.move")).toHaveLength(1);
+		expect(
+			new Set(moves(scroll.browser).map((e) => `${e[1]},${e[2]}`)).size,
+		).toBe(1);
 		expect(kinds.at(-1)).toBe("locator.click");
 		expect(kinds).toContain("mouse.wheel");
 	});

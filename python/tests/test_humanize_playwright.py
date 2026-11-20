@@ -629,7 +629,10 @@ def test_a_raw_scroll_is_playwrights_and_a_raw_mouse_is_one_move():
     page.locator("#far").click()
     kinds = names(browser)
     # myuri wheels over the scroller, reached in one move, then Playwright clicks.
-    assert kinds[0] == "mouse.move" and kinds.count("mouse.move") == 1 and kinds[-1] == "locator.click"
+    # A first long scroll takes two passes (myuri reads the page's px per wheel
+    # px from the first), and the raw mouse sends each pass's move as asked.
+    moves = {tuple(e[1:]) for e in browser.rec.events if e[0] == "mouse.move"}
+    assert kinds[0] == "mouse.move" and len(moves) == 1 and kinds[-1] == "locator.click"
     assert "mouse.wheel" in kinds
 
 
