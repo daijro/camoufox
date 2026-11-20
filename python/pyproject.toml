@@ -30,30 +30,29 @@ classifiers = [
 # 3.11: myuri (humanize) and its cursory need it, and 3.10 reached end of life
 # in October 2026.
 python = "^3.11"
+# The launcher code camoufox shares with the other CamouBrowser launchers:
+# downloads, GeoIP, locales, proxy lookups, Xvfb, the fpgen model pin. Pinned
+# to a commit until camoucore 0.2.0 is released; it brings fpgen, PyYAML,
+# platformdirs, screeninfo, language-tags and PySocks with it.
+camoucore = {git = "https://github.com/CamouBrowser/camoucore.git", rev = "6fbbc41fd17cb4a5ac9da07a98a83ab106b2f98d", subdirectory = "python"}
 rich-click = "*"
 rich = "*"
 requests = "*"
 orjson = "*"
-fpgen = "^1.3.0"
 # Keep a ceiling. 1.61 added Juggler params the protocol schema had to learn
 # (viewport isMobile/screenSize, webp screenshots, webSocketFrame timestamps)
 # and every Playwright minor is free to change Juggler again, while
 # camoufox.server imports playwright._impl._driver -- a private API with no
 # compat guarantee. Bump deliberately, with a run of `make -C browser tests`.
 playwright = "<1.63"
-pyyaml = "*"
-platformdirs = "*"
 numpy = "*"
 ua_parser = "*"
 typing_extensions = "*"
-screeninfo = "*"
-language-tags = "*"
-pysocks = "*"
 inquirer = "*"
 # humanize's default engine. Pinned: a seed must plan the same input in Python and
 # TypeScript, and in every install of one camoufox release.
 myuri = "4.0.0"
-maxminddb = {version = "*", optional = true}
+maxminddb = {version = "*", optional = true}  # camoucore[geoip]
 
 [tool.poetry.extras]
 geoip = ["maxminddb"]

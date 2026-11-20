@@ -9,11 +9,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
+import { pairwiseSum } from "camoucore/locales.js";
 import * as random from "python-random";
 import { describe, expect, it } from "vitest";
 import * as coherence from "../src/coherence.js";
 import * as fp from "../src/fingerprints.js";
-import { pairwiseSum } from "../src/locales.js";
 import { LOCAL_DATA } from "../src/paths.js";
 import {
 	crc32,

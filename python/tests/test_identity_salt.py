@@ -12,7 +12,9 @@ from unittest import mock
 import orjson
 import pytest
 
-from camoufox import cpu_affinity, utils
+from camoucore import cpu_affinity
+
+from camoufox import utils
 from camoufox import fingerprints as fp
 
 
@@ -178,20 +180,6 @@ class TestCoreCountFloor:
     def test_recorded_counts_are_in_the_table(self):
         for n in (18, 22, 28, 32):
             assert n in fp.PLAUSIBLE_CORE_COUNTS
-
-
-class TestAffinityPick:
-    def test_adjacent_cores_from_a_random_start(self):
-        cores = list(range(16))
-        starts = set()
-        for _ in range(200):
-            picked = cpu_affinity._pick(cores, 4)
-            assert len(picked) == 4 and set(picked) <= set(cores)
-            ring = sorted(picked)
-            # adjacent modulo 16
-            assert any(all((s + i) % 16 in picked for i in range(4)) for s in ring)
-            starts.add(tuple(picked))
-        assert len(starts) > 4
 
 
 class TestPrefsEnvIsAscii:

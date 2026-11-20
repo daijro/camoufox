@@ -31,7 +31,7 @@ npx camoufox fetch
 |---|---|
 | Node.js | 22.15 or newer |
 | `playwright-core` | peer dependency, below 1.63 |
-| GeoIP | built in; the [GeoIP All-in-One](https://github.com/daijro/geoip-all-in-one) database downloads on first use |
+| GeoIP | built in; the [GeoIP All-in-One](https://github.com/daijro/geoip-all-in-one) database downloads on first use, into `~/.cache/camoucore/geoip` on Linux (camoucore's cache, shared by every launcher built on it) |
 
 `camoufox fetch` installs the browser build this release is paired with.
 Without it, the first launch downloads it.
@@ -398,8 +398,8 @@ pnpm check       # biome lint and format
 pnpm typecheck   # tsc --noEmit
 ```
 
-The data files (presets, fonts, voices, `territoryInfo.xml`, ...) have one copy,
-in `python/src/camoufox/`. `DATA_FILES` in `src/paths.ts` lists them, and the
+The data files (presets, fonts, voices, ...) have one copy, in
+`python/src/camoufox/`. `DATA_FILES` in `src/paths.ts` lists them, and the
 build copies them into the package.
 
 **Parity.** Before the suite runs, `tests/golden-setup.ts` runs the scripts in
@@ -425,9 +425,8 @@ npm uploads use trusted publishing; no token is stored.
 ## Licence
 
 MIT ([`LICENSE`](https://github.com/daijro/camoufox/blob/main/typescript/LICENSE)).
-The browser itself is MPL-2.0. The package contains a port of NumPy's pairwise
-summation; its notice is in
-[`THIRD_PARTY_NOTICES.md`](https://github.com/daijro/camoufox/blob/main/typescript/THIRD_PARTY_NOTICES.md).
-It depends on [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and
+The browser itself is MPL-2.0. It depends on
+[`camoucore`](https://github.com/CamouBrowser/camoucore) (MIT; it carries a port
+of NumPy's pairwise summation, with its notice), [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and
 [`python-random`](https://www.npmjs.com/package/python-random), a bit-exact port
 of CPython's `random`, so seeded draws match the Python launcher.

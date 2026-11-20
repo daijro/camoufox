@@ -429,8 +429,8 @@ jobs:
     permissions:
       contents: read
     env:
-      # The fpgen model the TS port downloads (sha256-pinned by
-      # python/src/camoufox/fpgen-model.json). Kept in the workspace so it can be cached.
+      # The fpgen model the TS port downloads (sha256-pinned by camoucore's
+      # fpgen-model.json). Kept in the workspace so it can be cached.
       CAMOUFOX_FPGEN_DATA: ${{ github.workspace }}/.ci-work/fpgen
     steps:
       - uses: actions/checkout@v4
@@ -449,6 +449,7 @@ jobs:
           python3 -m venv .venv
           .venv/bin/pip install -r ci/requirements.txt -e python
       - uses: ./.github/actions/fpgen-model
+        id: fpgen
         with:
           python: .venv/bin/python
       - name: Test prerequisites
@@ -469,7 +470,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .ci-work/fpgen
-          key: fpgen-model-${{ hashFiles('python/src/camoufox/fpgen-model.json') }}
+          key: fpgen-model-${{ steps.fpgen.outputs.sha256 }}
       - name: Run
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -1169,6 +1170,7 @@ jobs:
       - run: |
           pip install -e python
       - uses: ./.github/actions/fpgen-model
+        id: fpgen
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: typescript/package.json
@@ -1180,7 +1182,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .ci-work/fpgen
-          key: fpgen-model-${{ hashFiles('python/src/camoufox/fpgen-model.json') }}
+          key: fpgen-model-${{ steps.fpgen.outputs.sha256 }}
       - name: Run
         env:
           GITHUB_TOKEN: ${{ github.token }}

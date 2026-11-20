@@ -11,7 +11,7 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from camoufox._warnings import WARNINGS_DATA, FallbackWarning, _warn_from_caller
 from camoufox.coherence import hardware_cpu
-from camoufox.ip import valid_ipv4, validate_ip
+from camoucore.ip import valid_ipv4, validate_ip
 from camoufox.pkgman import LAUNCHER_CONSTANTS, load_yaml
 
 # Load the fpgen mapping file
@@ -51,7 +51,7 @@ _FP_GENERATOR = None
 def _generator():
     global _FP_GENERATOR
     if _FP_GENERATOR is None:
-        from .fpgen_model import load_fpgen
+        from camoucore.fpgen_model import load_fpgen
 
         _FP_GENERATOR = load_fpgen().Generator()
     return _FP_GENERATOR
@@ -802,7 +802,7 @@ def fix_hardware_concurrency(config: Dict[str, Any], can_pin: Optional[bool] = N
     # the host cannot honour (more cores than it has), a host that cannot pin
     # (macOS), or pin_cpu_cores left off -- the default since 2026-09-17 --
     # falls back to the snapped host count, which is equally coherent.
-    from .cpu_affinity import supported as _can_pin
+    from camoucore.cpu_affinity import supported as _can_pin
 
     # can_pin=False: the caller launches the browser itself and nothing will
     # pin it (launch_server, launch_options used directly), so a kept draw
@@ -1659,7 +1659,7 @@ def generate_context_fingerprint(
     if timezone:
         config['timezone'] = timezone
     if locale:
-        from .locales import normalize_locale
+        from camoucore.locales import normalize_locale
         parsed = normalize_locale(locale)
         config['locale:language'] = parsed.language
         config['locale:region'] = parsed.region

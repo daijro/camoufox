@@ -1,75 +1,33 @@
 /**
- * Mirrors python/tests/test_geoip_config.py: which GeoIP source is active,
- * and when its database is refreshed.
+ * Mirrors python/tests/test_geoip_config.py: the CLI's handling of the GeoIP
+ * source. Which source is active, and when its database is refreshed, is
+ * camoucore's (its tests/geoip-config.test.ts).
  */
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { stringify as stringifyYaml } from "yaml";
-
-const DEFAULT = "GeoIP AIO by daijro";
-const DEPRECATED = "MaxMind GeoLite2";
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 let tmp: string;
-let g: typeof import("../src/geolocation.js");
-let w: typeof import("../src/warnings.js");
 
-beforeEach(async () => {
+beforeEach(() => {
 	tmp = fs.mkdtempSync(path.join(os.tmpdir(), "camoufox-geoip-"));
-	vi.resetModules();
-	// INSTALL_DIR is computed at import time
-	vi.doMock("../src/paths.js", async (importOriginal) => ({
-		...(await importOriginal<typeof import("../src/paths.js")>()),
-		INSTALL_DIR: tmp,
-	}));
-	g = await import("../src/geolocation.js");
-	w = await import("../src/warnings.js");
 });
 
 afterEach(() => {
-	vi.doUnmock("../src/paths.js");
+	vi.doUnmock("camoucore/geolocation.js");
 	fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-function saved(fields: Record<string, unknown>) {
-	fs.mkdirSync(g.GEOIP_DIR, { recursive: true });
-	fs.writeFileSync(g.GEOIP_CONFIG, stringifyYaml(fields));
-}
-
-it("defaults to AIO", () => {
-	expect(g.loadGeoipConfig().name).toBe(DEFAULT);
-});
-
-it("moves an implicit deprecated source to the default", () => {
-	// What every cache written before the default changed holds
-	saved({ name: DEPRECATED });
-	expect(g.loadGeoipConfig().name).toBe(DEFAULT);
-});
-
-it("keeps an explicit deprecated source", () => {
-	saved({ name: DEPRECATED, explicit: true });
-	expect(g.loadGeoipConfig().name).toBe(DEPRECATED);
-});
-
-it("moves an implicit source missing from repos.yml to the default", () => {
-	saved({ name: "Gone" });
-	const config = g.loadGeoipConfig();
-	expect(config.name).toBe(DEFAULT);
-	expect(config).toHaveProperty("urls");
-	expect(config).toHaveProperty("paths");
-});
-
-it("raises, naming it, for an explicit source missing from repos.yml", () => {
-	saved({ name: "Gone", explicit: true });
-	expect(() => g.loadGeoipConfig()).toThrow(
-		/'Gone' not found. Available: \[.*GeoIP AIO by daijro/,
-	);
-});
-
-it("the CLI reports an explicit source missing from repos.yml", async () => {
-	saved({ name: "Gone", explicit: true });
+it("the CLI reports an explicit source missing from the list", async () => {
+	const { ValueError } = await import("../src/pycompat.js");
+	vi.doMock("camoucore/geolocation.js", async (importOriginal) => ({
+		...(await importOriginal<typeof import("camoucore/geolocation.js")>()),
+		GEOIP_DIR: tmp,
+		loadGeoipConfig: () => {
+			throw new ValueError("GeoIP database 'Gone' not found. Available: []");
+		},
+	}));
 	const savedArgv = process.argv;
 	let output = "";
 	const write = vi
@@ -91,111 +49,4 @@ it("the CLI reports an explicit source missing from repos.yml", async () => {
 	}
 	expect(process.exitCode ?? 0).toBe(0);
 	expect(output.match(/'Gone' not found/g)).toHaveLength(2);
-});
-
-it("records an explicit choice", () => {
-	const config = g.getGeoipConfigByName(DEPRECATED);
-	g.saveGeoipConfig(config, true);
-	expect(g.loadGeoipConfig().name).toBe(DEPRECATED);
-	g.saveGeoipConfig(config);
-	expect(g.loadGeoipConfig().name).toBe(DEFAULT);
-});
-
-it("keeps an explicit choice through a refresh", async () => {
-	// `camoufox fetch` and the weekly refresh download without naming a source
-	saved({ name: DEPRECATED, explicit: true });
-	vi.doMock("../src/pkgman.js", async (importOriginal) => ({
-		...(await importOriginal<typeof import("../src/pkgman.js")>()),
-		webdl: async () => Buffer.from("x"),
-	}));
-	try {
-		await g.downloadMmdb();
-	} finally {
-		vi.doUnmock("../src/pkgman.js");
-	}
-	expect(g.loadGeoipConfig().name).toBe(DEPRECATED);
-	// The stubbed download, not a real one
-	expect(fs.readFileSync(g.getMmdbPath("ipv4"), "utf-8")).toBe("x");
-});
-
-it("unpacks the archive beside the database, not in os.tmpdir()", async () => {
-	// Renaming out of a tmpfs /tmp into the cache fails with EXDEV, which made
-	// `camoufox fetch` fail on the default (zipped) source.
-	let unpackedIn = "";
-	vi.doMock("../src/pkgman.js", async (importOriginal) => ({
-		...(await importOriginal<typeof import("../src/pkgman.js")>()),
-		webdl: async () => Buffer.from("zip"),
-		unzip: (_buffer: Buffer, dir: string) => {
-			unpackedIn = dir;
-			fs.writeFileSync(path.join(dir, "geoip.mmdb"), "db");
-		},
-	}));
-	try {
-		await g.downloadMmdb();
-	} finally {
-		vi.doUnmock("../src/pkgman.js");
-	}
-	expect(path.relative(g.GEOIP_DIR, unpackedIn).startsWith("..")).toBe(false);
-	expect(fs.readFileSync(g.getMmdbPath("ipv4"), "utf-8")).toBe("db");
-	expect(fs.existsSync(unpackedIn)).toBe(false);
-});
-
-it("warns on a deprecated source", async () => {
-	const { warnings } = await w.recordWarnings(() => {
-		g.warnIfDeprecated(g.getGeoipConfigByName(DEPRECATED));
-		g.warnIfDeprecated(g.getGeoipConfigByName(DEFAULT));
-	});
-	expect(warnings.map((x) => x.category)).toEqual(["FutureWarning"]);
-	expect(warnings[0].message).toContain(DEFAULT);
-});
-
-it.each([
-	[0.5, 400, false], // checked today: wait, even for an old build
-	[2, 3, false], // this week's build
-	[2, 9, true], // a release has been missed
-	[40, 3, false], // an old file holding a new build is not stale
-	[2, null, true], // unreadable database
-])("checked %s days ago, built %s days ago: stale=%s", async (checked, built, stale) => {
-	const config = g.loadGeoipConfig();
-	const mmdb = g.getMmdbPath("ipv4", config);
-	fs.mkdirSync(path.dirname(mmdb), { recursive: true });
-	fs.writeFileSync(mmdb, "");
-	const stamp = new Date(Date.now() - checked * DAY_MS);
-	fs.utimesSync(mmdb, stamp, stamp);
-	g.geoipDeps.openDatabase = async () => {
-		if (built === null) throw new Error("unreadable");
-		return {
-			get: () => null,
-			metadata: { buildEpoch: new Date(Date.now() - built * DAY_MS) },
-		};
-	};
-	expect(await g.needsUpdate(config)).toBe(stale);
-});
-
-it("needs an update when the database is missing", async () => {
-	expect(await g.needsUpdate()).toBe(true);
-});
-
-it("opens a database with the installed maxmind", async () => {
-	// Every other test fakes openDatabase, so this is the one that constructs
-	// maxmind's Reader as imported. The database is empty: the data section
-	// separator, then the metadata marker and the three fields Reader needs.
-	const str = (s: string) => Buffer.from([0x40 | s.length, ...Buffer.from(s)]);
-	const mmdb = path.join(tmp, "empty.mmdb");
-	fs.writeFileSync(
-		mmdb,
-		Buffer.concat([
-			Buffer.alloc(16),
-			Buffer.from("abcdef4d61784d696e642e636f6d", "hex"),
-			Buffer.from([0xe3]),
-			str("record_size"),
-			Buffer.from([0xa1, 24]),
-			str("ip_version"),
-			Buffer.from([0xa1, 4]),
-			str("node_count"),
-			Buffer.from([0xc0]),
-		]),
-	);
-	const reader = await g.geoipDeps.openDatabase(mmdb);
-	expect(reader.get("1.2.3.4")).toBeNull();
 });

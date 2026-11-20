@@ -5,6 +5,7 @@
  */
 import "./node-floor.js";
 
+export { VirtualDisplay } from "camoucore/virtdisplay.js";
 export { attach } from "./_humanize_playwright.js";
 export type { DefaultAddon } from "./addons.js";
 export { DefaultAddons } from "./addons.js";
@@ -47,5 +48,4 @@ export {
 	launchOptions,
 	launchOptions as launch_options,
 } from "./utils.js";
-export { VirtualDisplay } from "./virtdisplay.js";
 export { FallbackWarning, LeakWarning } from "./warnings.js";

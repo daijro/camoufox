@@ -37,7 +37,7 @@ let doMock: ReturnType<typeof vi.spyOn>;
 const MOCKED = [
 	"../src/browser-pin.js",
 	"../src/addons.js",
-	"../src/geolocation.js",
+	"camoucore/geolocation.js",
 	"fpgen-js",
 	"node:readline",
 ];
@@ -70,8 +70,8 @@ beforeEach(() => {
 		...(await load<typeof import("../src/browser-pin.js")>()),
 		effectivePin: () => pin,
 	}));
-	vi.doMock("../src/geolocation.js", async (load) => ({
-		...(await load<typeof import("../src/geolocation.js")>()),
+	vi.doMock("camoucore/geolocation.js", async (load) => ({
+		...(await load<typeof import("camoucore/geolocation.js")>()),
 		allowGeoip: () => false,
 	}));
 	vi.doMock("fpgen-js", async (load) => ({

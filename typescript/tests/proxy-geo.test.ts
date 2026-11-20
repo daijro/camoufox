@@ -3,26 +3,25 @@
  * Twin of python/tests/test_proxy_geo.py: the lookup must go through the
  * proxy as Playwright would reach it (a scheme-less server is http), a failed
  * lookup must raise rather than leave the context on the host's values, and
- * the locale and position move with the clock.
+ * the locale and position move with the clock. The lookup is camoucore's
+ * proxyExitGeo, tested there.
  * Also the twin of test_new_context_version.py: the context's UA names the
  * browser's Firefox version.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const impit = vi.hoisted(() => ({
-	proxyUrls: [] as (string | undefined)[],
+// The lookup itself is camoucore's, tested there; this file covers what
+// camoufox hands it and what it does with the answer.
+const lookup = vi.hoisted(() => ({
+	proxies: [] as string[],
 	respond: async (): Promise<unknown> => ({}),
 }));
 
-vi.mock("impit", () => ({
-	Impit: class {
-		// ip.ts caches one client per proxy URL, so record each request.
-		constructor(private options: { proxyUrl?: string }) {}
-		async fetch() {
-			impit.proxyUrls.push(this.options.proxyUrl);
-			const body = await impit.respond();
-			return { ok: true, status: 200, json: async () => body };
-		}
+vi.mock("camoucore/ip.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("camoucore/ip.js")>()),
+	proxyExitGeo: async (proxy: string) => {
+		lookup.proxies.push(proxy);
+		return lookup.respond();
 	},
 }));
 
@@ -31,12 +30,11 @@ const { InvalidIP } = await import("../src/exceptions.js");
 const { getRandomPreset } = await import("../src/fingerprints.js");
 
 const EXIT = {
-	status: "success",
-	query: "203.0.113.7",
+	ip: "203.0.113.7",
 	timezone: "Europe/Paris",
-	countryCode: "FR",
-	lat: 48.8566,
-	lon: 2.3522,
+	country: "FR",
+	latitude: 48.8566,
+	longitude: 2.3522,
 };
 
 function fakeBrowser(version = "152.0.4") {
@@ -57,8 +55,8 @@ function fakeBrowser(version = "152.0.4") {
 }
 
 beforeEach(() => {
-	impit.proxyUrls.length = 0;
-	impit.respond = async () => EXIT;
+	lookup.proxies.length = 0;
+	lookup.respond = async () => EXIT;
 });
 
 describe("NewContext proxy lookup", () => {
@@ -73,7 +71,7 @@ describe("NewContext proxy lookup", () => {
 			os: "linux",
 			proxy: { server, username: "u", password: "p" },
 		});
-		expect(impit.proxyUrls).toContain(expected);
+		expect(lookup.proxies).toEqual([expected]);
 		expect(calls.options.timezoneId).toBe("Europe/Paris");
 		expect(calls.script).toContain("203.0.113.7");
 	});
@@ -88,34 +86,21 @@ describe("NewContext proxy lookup", () => {
 			os: "linux",
 			proxy: { server: "proxy.example.com:8080", username, password },
 		});
-		const url = new URL(impit.proxyUrls[0] as string);
+		const url = new URL(lookup.proxies[0]);
 		expect([url.hostname, url.port]).toEqual(["proxy.example.com", "8080"]);
 		expect(decodeURIComponent(url.username)).toBe(username);
 		expect(decodeURIComponent(url.password)).toBe(password);
 	});
 
-	it.each([
-		[
-			"an unreachable proxy",
-			async () => {
-				throw new Error("proxy refused");
-			},
-		],
-		[
-			"a failed lookup",
-			async () => ({ status: "fail", message: "private range" }),
-		],
-	])("%s raises instead of launching without the values", async (_, respond) => {
-		impit.respond = respond;
-		const { browser } = fakeBrowser();
-		const launched = NewContext(browser, {
-			os: "linux",
-			proxy: { server: "1.2.3.4:8080" },
-		});
-		await expect(launched).rejects.toThrow(InvalidIP);
-		await expect(launched).rejects.toThrow(
-			/webrtc_ip, timezoneId, locale and geolocation/,
-		);
+	it("a failed lookup raises instead of launching without the values", async () => {
+		lookup.respond = async () => {
+			throw new InvalidIP("proxy refused");
+		};
+		const { browser, calls } = fakeBrowser();
+		await expect(
+			NewContext(browser, { os: "linux", proxy: { server: "1.2.3.4:8080" } }),
+		).rejects.toThrow(InvalidIP);
+		expect(calls.options).toBeUndefined();
 	});
 
 	it("moves the locale and position with the clock", async () => {
@@ -148,15 +133,6 @@ describe("NewContext proxy lookup", () => {
 		expect(calls.script).toContain("203.0.113.7");
 	});
 
-	it("raises on a lookup without the country", async () => {
-		const { countryCode: _, ...partial } = EXIT;
-		impit.respond = async () => partial;
-		const { browser } = fakeBrowser();
-		await expect(
-			NewContext(browser, { os: "linux", proxy: { server: "1.2.3.4:8080" } }),
-		).rejects.toThrow(InvalidIP);
-	});
-
 	it("skips the lookup when every value is given", async () => {
 		const { browser } = fakeBrowser();
 		await NewContext(browser, {
@@ -167,7 +143,7 @@ describe("NewContext proxy lookup", () => {
 			locale: "en-US",
 			geolocation: { latitude: 40.7128, longitude: -74.006 },
 		} as any);
-		expect(impit.proxyUrls).toEqual([]);
+		expect(lookup.proxies).toEqual([]);
 	});
 });
 

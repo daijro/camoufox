@@ -220,10 +220,12 @@ async def test_no_stale_x11_artifacts_after_virtual_display(leak_check):
     """
     if os.environ.get("CI_SKIP_VIRTUAL_DISPLAY"):
         pytest.skip("virtual display tests disabled for this run")
-    from camoufox.virtdisplay import VirtualDisplay
+    from camoucore.virtdisplay import VirtualDisplay
+
+    from camoufox.product import PRODUCT
 
     try:
-        display = VirtualDisplay()
+        display = VirtualDisplay(PRODUCT)
         number = display.get()
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"Xvfb unavailable: {exc}")
@@ -249,12 +251,14 @@ async def test_many_virtual_displays_are_unique_and_all_release(psutil_mod):
     at once. This is the cheap version of that race: claim a batch, assert they
     are distinct, release them, assert nothing is left.
     """
-    from camoufox.virtdisplay import VirtualDisplay
+    from camoucore.virtdisplay import VirtualDisplay
+
+    from camoufox.product import PRODUCT
 
     displays = []
     try:
         for _ in range(8):
-            display = VirtualDisplay()
+            display = VirtualDisplay(PRODUCT)
             displays.append((display, display.get()))
     except Exception as exc:  # noqa: BLE001
         for display, _ in displays:
@@ -286,10 +290,12 @@ async def test_cleanup_runs_even_when_xvfb_already_died(psutil_mod):
     """
     if os.environ.get("CI_SKIP_VIRTUAL_DISPLAY"):
         pytest.skip("virtual display tests disabled for this run")
-    from camoufox.virtdisplay import VirtualDisplay
+    from camoucore.virtdisplay import VirtualDisplay
+
+    from camoufox.product import PRODUCT
 
     try:
-        display = VirtualDisplay()
+        display = VirtualDisplay(PRODUCT)
         number = display.get().lstrip(":")
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"Xvfb unavailable: {exc}")

@@ -18,7 +18,7 @@ import orjson
 
 from .coherence import gpu_fits_cpu, gpu_fits_machine, gpu_fits_os
 from .fingerprints import _FPGEN_OS, gpu_screen_is_plausible, is_software_renderer
-from .fpgen_model import load_fpgen
+from camoucore.fpgen_model import load_fpgen
 
 # Extensions a release Firefox never exposes (draft extensions behind
 # webgl.enable-draft-extensions, or mobile-only): fpgen's corpus carries some

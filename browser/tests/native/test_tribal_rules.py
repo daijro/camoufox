@@ -88,45 +88,53 @@ def test_every_automated_rule_is_actually_asserted():
 
 
 def test_virtual_display_default_is_1x1x24():
-    from camoufox import virtdisplay
+    from camoufox.product import PRODUCT
 
-    assert virtdisplay.DEFAULT_SCREEN == "1x1x24", (
+    assert PRODUCT.engine.virtual_screen == "1x1x24", (
         "The Xvfb default screen size changed." + explain("virtual-display-default-1x1x24")
     )
 
 
 def test_the_screen_size_override_still_exists():
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
-    assert virtdisplay.SCREEN_ENV_VAR == "CAMOUFOX_VIRTUAL_DISPLAY_SIZE", explain(
+    from camoufox.product import PRODUCT
+
+    assert PRODUCT.env_var(virtdisplay.SCREEN_KEY) == "CAMOUFOX_VIRTUAL_DISPLAY_SIZE", explain(
         "virtual-display-size-override-exists"
     )
 
 
 def test_a_valid_override_is_honoured(monkeypatch):
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
-    monkeypatch.setenv(virtdisplay.SCREEN_ENV_VAR, "1920x1080x24")
-    assert virtdisplay._resolve_screen() == "1920x1080x24", explain(
+    from camoufox.product import PRODUCT
+
+    monkeypatch.setenv("CAMOUFOX_VIRTUAL_DISPLAY_SIZE", "1920x1080x24")
+    assert virtdisplay._resolve_screen(PRODUCT) == "1920x1080x24", explain(
         "virtual-display-size-override-exists"
     )
 
 
 def test_a_nonsense_override_is_rejected_rather_than_silently_ignored(monkeypatch):
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
-    monkeypatch.setenv(virtdisplay.SCREEN_ENV_VAR, "enormous")
+    from camoufox.product import PRODUCT
+
+    monkeypatch.setenv("CAMOUFOX_VIRTUAL_DISPLAY_SIZE", "enormous")
     with pytest.raises(Exception):
-        virtdisplay._resolve_screen()
+        virtdisplay._resolve_screen(PRODUCT)
 
 
 def test_composite_extension_is_off_by_default():
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
-    assert virtdisplay.COMPOSITE_ENV_VAR == "CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE", explain(
+    from camoufox.product import PRODUCT
+
+    assert PRODUCT.env_var(virtdisplay.COMPOSITE_KEY) == "CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE", explain(
         "composite-extension-off"
     )
-    args = [str(a) for a in virtdisplay.VirtualDisplay().xvfb_args]
+    args = [str(a) for a in virtdisplay.VirtualDisplay(PRODUCT).xvfb_args]
     # The flag is a pair: "-extension COMPOSITE" disables, "+extension" enables.
     # Asserting on the pair, not on the word, is the difference between checking
     # the setting and checking that the word is still spelled the same.
@@ -137,10 +145,12 @@ def test_composite_extension_is_off_by_default():
 
 
 def test_composite_can_still_be_turned_on(monkeypatch):
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
-    monkeypatch.setenv(virtdisplay.COMPOSITE_ENV_VAR, "1")
-    args = [str(a) for a in virtdisplay.VirtualDisplay().xvfb_args]
+    from camoufox.product import PRODUCT
+
+    monkeypatch.setenv("CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE", "1")
+    args = [str(a) for a in virtdisplay.VirtualDisplay(PRODUCT).xvfb_args]
     assert args[args.index("COMPOSITE") - 1] == "+extension", (
         "the Composite escape hatch no longer works." + explain("composite-extension-off")
     )
@@ -154,7 +164,9 @@ def _xvfb_launch() -> Dict[str, Any]:
     which is exactly the kind of vacuous assertion that makes a rule file worse
     than nothing.
     """
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
+
+    from camoufox.product import PRODUCT
 
     captured: Dict[str, Any] = {}
 
@@ -167,7 +179,7 @@ def _xvfb_launch() -> Dict[str, Any]:
         def poll(self):
             return None
 
-    display = virtdisplay.VirtualDisplay()
+    display = virtdisplay.VirtualDisplay(PRODUCT)
     monkey = pytest.MonkeyPatch()
     try:
         monkey.setattr(type(display), "xvfb_path", property(lambda self: "/usr/bin/Xvfb"))
@@ -208,7 +220,7 @@ def test_xvfb_carries_a_parent_death_signal():
 
 
 def test_the_displayfd_read_is_bounded():
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
     timeout = virtdisplay.DISPLAYFD_READ_TIMEOUT_S
     assert isinstance(timeout, (int, float)) and timeout > 0, explain("displayfd-read-timeout")
@@ -222,7 +234,7 @@ def test_cleanup_is_not_gated_on_the_process_still_running():
     """
     import ast as _ast
 
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
     tree = _ast.parse(inspect.getsource(virtdisplay.VirtualDisplay.kill).lstrip())
     parents = {}
@@ -256,7 +268,7 @@ def test_kill_sigkills_reaps_and_unlinks():
     Asserted structurally rather than behaviourally so it runs without Xvfb
     installed; the behavioural half lives in test_no_leaks.py.
     """
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
     source = inspect.getsource(virtdisplay.VirtualDisplay.kill)
     assert "SIGKILL" in source, (
@@ -287,7 +299,7 @@ def _gpu_display(monkeypatch, tmp_path):
 
 
 def test_the_gpu_display_claims_its_display_with_displayfd(monkeypatch, tmp_path):
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
     captured = {}
 

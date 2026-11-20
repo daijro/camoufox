@@ -16,6 +16,7 @@
  */
 import { execFileSync } from "node:child_process";
 import {
+	cpSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
@@ -101,10 +102,34 @@ if (problems.length === 0) {
 			.trim()
 			.split("\n")
 			.pop();
-		writeFileSync(
-			join(tmp, "package.json"),
-			'{"name":"pack-check","private":true,"type":"module"}',
-		);
+		// npm cannot install a git dependency from a subdirectory, so until
+		// camoucore 0.2.0 is on npm the check installs the pinned commit pnpm
+		// built, as that release will be. Drop this once the pin is a version.
+		const manifest = { name: "pack-check", private: true, type: "module" };
+		if (pkg.dependencies.camoucore.startsWith("github:")) {
+			// A copy without its scripts: npm and pnpm both run `prepare` (a
+			// rebuild, which fails without devDependencies) on pack.
+			const core = join(tmp, "camoucore");
+			cpSync(join(root, "node_modules", "camoucore"), core, {
+				recursive: true,
+				dereference: true,
+			});
+			const coreManifest = JSON.parse(
+				readFileSync(join(core, "package.json"), "utf8"),
+			);
+			delete coreManifest.scripts;
+			writeFileSync(join(core, "package.json"), JSON.stringify(coreManifest));
+			const coreTgz = execFileSync("npm", ["pack", "--pack-destination", tmp], {
+				cwd: core,
+				encoding: "utf8",
+			})
+				.trim()
+				.split("\n")
+				.pop();
+			manifest.overrides = { camoucore: `file:${join(tmp, coreTgz)}` };
+			console.log(`camoucore is a git pin: installing ${coreTgz} in its place`);
+		}
+		writeFileSync(join(tmp, "package.json"), JSON.stringify(manifest));
 		execFileSync(
 			"npm",
 			[

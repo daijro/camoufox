@@ -1,16 +1,11 @@
-"""Which GeoIP source is active, and when its database is refreshed."""
-
-import os
-import time
-import warnings
+"""The CLI over camoucore's GeoIP source choice. camoucore's tests cover the choice itself."""
 
 import pytest
 from yaml import safe_dump
 
-from camoufox import geolocation
+from camoucore import geolocation
 
 DEFAULT = "GeoIP AIO by daijro"
-DEPRECATED = "MaxMind GeoLite2"
 
 
 @pytest.fixture(autouse=True)
@@ -25,38 +20,7 @@ def _saved(cache, **fields):
     (cache / "config.yml").write_text(safe_dump(fields))
 
 
-def test_default_is_aio():
-    assert geolocation.load_geoip_config()["name"] == DEFAULT
-    repos, _ = geolocation._load_geoip_repos()
-    assert [r["name"] for r in repos if r.get("deprecated")] == [DEPRECATED]
-
-
-def test_implicit_deprecated_source_moves_to_default(cache):
-    # What every cache written before the default changed holds
-    _saved(cache, name=DEPRECATED)
-    assert geolocation.load_geoip_config()["name"] == DEFAULT
-
-
-def test_explicit_deprecated_source_is_kept(cache):
-    _saved(cache, name=DEPRECATED, explicit=True)
-    assert geolocation.load_geoip_config()["name"] == DEPRECATED
-
-
-def test_implicit_source_missing_from_repos_moves_to_default(cache):
-    # A source renamed or removed upstream, saved before it went
-    _saved(cache, name="Gone")
-    config = geolocation.load_geoip_config()
-    assert config["name"] == DEFAULT
-    assert "urls" in config and "paths" in config
-
-
-def test_explicit_source_missing_from_repos_raises_naming_it(cache):
-    _saved(cache, name="Gone", explicit=True)
-    with pytest.raises(ValueError, match=r"'Gone' not found. Available: .*GeoIP AIO by daijro"):
-        geolocation.load_geoip_config()
-
-
-def test_an_explicit_source_missing_from_repos_can_be_replaced_from_the_cli(cache, monkeypatch):
+def test_an_explicit_source_missing_from_the_list_can_be_replaced_from_the_cli(cache, monkeypatch):
     from camoufox import __main__ as cli
 
     _saved(cache, name="Gone", explicit=True)
@@ -65,7 +29,7 @@ def test_an_explicit_source_missing_from_repos_can_be_replaced_from_the_cli(cach
     assert geolocation.load_geoip_config()["name"] == DEFAULT
 
 
-def test_the_cli_reports_an_explicit_source_missing_from_repos(cache, monkeypatch, capsys):
+def test_the_cli_reports_an_explicit_source_missing_from_the_list(cache, monkeypatch, capsys):
     from click.testing import CliRunner
 
     from camoufox import __main__ as cli
@@ -83,83 +47,3 @@ def test_the_cli_reports_an_explicit_source_missing_from_repos(cache, monkeypatc
     result = CliRunner().invoke(cli.cli, ["list"])
     assert result.exit_code == 0, result.output
     assert "'Gone' not found" in result.output
-
-
-def test_save_records_explicit_choice(cache):
-    config = geolocation._get_geoip_config_by_name(DEPRECATED)
-    geolocation.save_geoip_config(config, explicit=True)
-    assert geolocation.load_geoip_config()["name"] == DEPRECATED
-    geolocation.save_geoip_config(config)
-    assert geolocation.load_geoip_config()["name"] == DEFAULT
-
-
-def test_refresh_keeps_an_explicit_choice(cache, monkeypatch):
-    # `camoufox fetch` and the weekly refresh download without naming a source
-    _saved(cache, name=DEPRECATED, explicit=True)
-    monkeypatch.setattr(geolocation, "webdl", lambda url, buffer, **kw: buffer.write(b"x"))
-    monkeypatch.setattr(geolocation, "_build_age_days", lambda path: 1)
-    geolocation.download_mmdb()
-    assert geolocation.load_geoip_config()["name"] == DEPRECATED
-
-
-def test_deprecated_source_warns():
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        geolocation.warn_if_deprecated(geolocation._get_geoip_config_by_name(DEPRECATED))
-        geolocation.warn_if_deprecated(geolocation._get_geoip_config_by_name(DEFAULT))
-    assert [w.category for w in caught] == [FutureWarning]
-    assert DEFAULT in str(caught[0].message)
-
-
-def _database(cache, checked_days_ago):
-    config = geolocation.load_geoip_config()
-    path = geolocation.get_mmdb_path("ipv4", config)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(b"")
-    stamp = time.time() - checked_days_ago * 86400
-    os.utime(path, (stamp, stamp))
-    return config
-
-
-@pytest.mark.parametrize(
-    "checked, built, stale",
-    [
-        (0.5, 400, False),  # checked today: wait, even for an old build
-        (2, 3, False),  # this week's build
-        (2, 9, True),  # a release has been missed
-        (40, 3, False),  # an old file holding a new build is not stale
-        (2, None, True),  # unreadable database
-    ],
-)
-def test_needs_update_reads_the_build_date(cache, monkeypatch, checked, built, stale):
-    config = _database(cache, checked)
-    monkeypatch.setattr(geolocation, "_build_age_days", lambda path: built)
-    assert geolocation.needs_update(config) is stale
-
-
-def test_missing_database_needs_update():
-    assert geolocation.needs_update() is True
-
-
-@pytest.mark.skipif(os.name == "nt", reason="POSIX mode bits stand in for the Windows ACL")
-def test_the_database_takes_its_directory_permissions_not_the_staging_files(cache, monkeypatch):
-    # The archive is unpacked in a private temporary directory. Since Python
-    # 3.13 that directory is owner-only on Windows, and a file moved out of it
-    # keeps that ACL, so another account or elevation level could not read the
-    # database. An owner-only staged file reproduces that here.
-    def unzip(zip_file, extract_path, **kw):
-        fd = os.open(os.path.join(extract_path, "geoip.mmdb"), os.O_WRONLY | os.O_CREAT, 0o600)
-        os.write(fd, b"db")
-        os.close(fd)
-
-    monkeypatch.setattr(geolocation, "webdl", lambda url, buffer, **kw: buffer.write(b"zip"))
-    monkeypatch.setattr(geolocation, "unzip", unzip)
-    monkeypatch.setattr(geolocation, "_build_age_days", lambda path: 1)
-    geolocation.download_mmdb()
-
-    mmdb = geolocation.get_mmdb_path("ipv4")
-    umask = os.umask(0)
-    os.umask(umask)
-    assert mmdb.read_bytes() == b"db"
-    assert mmdb.stat().st_mode & 0o777 == 0o666 & ~umask
-    assert not list(mmdb.parent.glob(".*.tmp"))

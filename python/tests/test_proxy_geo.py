@@ -11,6 +11,9 @@ traffic went through the proxy:
 And the lookup moved only the clock: the locale and geolocation stayed the
 launch identity's, so a page saw the exit's timezone next to another country's
 language and position.
+
+The lookup itself is camoucore's proxy_exit_geo, tested there; these cover
+what camoufox hands it and what it does with the answer.
 """
 
 import asyncio
@@ -19,7 +22,9 @@ from urllib.parse import unquote, urlsplit
 
 import pytest
 
-from camoufox import async_api, ip, sync_api
+from camoucore import ip
+
+from camoufox import async_api, sync_api
 from camoufox.exceptions import InvalidIP
 
 
@@ -136,13 +141,6 @@ def test_values_the_caller_gave_are_kept(api):
 
 
 @pytest.mark.parametrize("api", ["sync", "async"])
-def test_a_lookup_without_the_country_raises(api):
-    partial = {key: value for key, value in EXIT.items() if key != "countryCode"}
-    with mock.patch.object(ip.requests, "get", return_value=_Response(partial)), pytest.raises(InvalidIP):
-        _new_context(api, {"server": "1.2.3.4:8080"})
-
-
-@pytest.mark.parametrize("api", ["sync", "async"])
 def test_no_lookup_when_every_value_is_given(api):
     with mock.patch.object(ip.requests, "get") as get:
         _new_context(
@@ -154,29 +152,3 @@ def test_no_lookup_when_every_value_is_given(api):
             geolocation={"latitude": 40.7128, "longitude": -74.006},
         )
     get.assert_not_called()
-
-
-def test_lookups_through_a_proxy_get_longer_than_direct_ones(monkeypatch):
-    # A proxied probe adds a hop and a TLS handshake; 5 s failed whole launches
-    # behind proxies that route the long way round.
-    timeouts = []
-
-    def get(url, **kwargs):
-        timeouts.append((url, kwargs["timeout"], bool(kwargs.get("proxies"))))
-        response = mock.MagicMock()
-        response.text = "203.0.113.7"
-        response.json.return_value = EXIT
-        return response
-
-    monkeypatch.setattr(ip.requests, "get", get)
-    ip.public_ip.cache_clear()
-    ip.public_ip()
-    ip.public_ip("http://u:p@proxy.example.com:8080")
-    ip.proxy_exit_geo("http://u:p@proxy.example.com:8080")
-    ip.public_ip.cache_clear()
-    assert [(t, proxied) for _, t, proxied in timeouts] == [
-        (ip.DIRECT_IP_TIMEOUT, False),
-        (ip.PROXIED_IP_TIMEOUT, True),
-        (ip.PROXIED_IP_TIMEOUT, True),
-    ]
-    assert ip.PROXIED_IP_TIMEOUT > ip.DIRECT_IP_TIMEOUT

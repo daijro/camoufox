@@ -37,10 +37,6 @@ ff_version: >-
     If rotating the Firefox version is absolutely necessary, it would be more advisable to
     rotate between older versions of Camoufox instead.
 
-no_region: >-
-    Because you did not pass in a locale region, Camoufox will generate one for you.
-    This can cause suspicion if your IP does not match your locale region.
-
 instant_animations: >-
     instantAnimations makes every finite animation finish at once, so Playwright
     never waits on one. A page can see it: getComputedTiming() reports a duration
@@ -92,16 +88,6 @@ fallback: |-
     Please report this at https://github.com/daijro/camoufox/issues/new and include:
 
     {report}
-
-geoip_deprecated: >-
-    The GeoIP source "{name}" is deprecated and will be removed in a future release.
-    "{default}" is the default and resolves locations more accurately.
-    Run `camoufox set --geoip` to switch, or stop passing `geoip_db`.
-
-geoip_frozen: >-
-    The newest "{name}" GeoIP database was built {days} days ago, so its source may have
-    stopped publishing and locations may be out of date. Please report this at
-    https://github.com/daijro/camoufox/issues.
 
 audio_seed_removed: >-
     `audio:seed` has been removed and is ignored. Audio is now rendered exactly as

@@ -27,7 +27,7 @@ vi.mock("../src/gpudisplay.js", () => ({
 	GpuDisplay: class {},
 	proveGpu: mocks.proveGpu,
 }));
-vi.mock("../src/cpu_affinity.js", () => ({
+vi.mock("camoucore/cpu_affinity.js", () => ({
 	withUnpinnedLaunch: <T>(fn: () => T) => fn(),
 }));
 vi.mock("../src/utils.js", async () => {

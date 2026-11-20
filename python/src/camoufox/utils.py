@@ -12,12 +12,16 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import orjson
+from camoucore.display import has_display, largest_display
+from camoucore.geolocation import geoip_allowed, get_geolocation
+from camoucore.ip import ExitGeo, Proxy, public_ip, public_ipv6, valid_ipv4, valid_ipv6
+from camoucore.locales import SELECTOR, handle_locales
+from camoucore.virtdisplay import VirtualDisplay
 from typing_extensions import TypeAlias
 from ua_parser import user_agent_parser
 
 from . import driver_defaults
 from .addons import DefaultAddons, add_default_addons, confirm_paths
-from .display import has_display, largest_display
 from .exceptions import (
     InvalidOS,
     InvalidPropertyType,
@@ -26,12 +30,11 @@ from .exceptions import (
 )
 from .fingerprints import Screen, platform_to_os, from_fpgen, from_preset, generate_fingerprint, get_random_preset, _generate_random_font_subset, draw_voice_config, fix_navigator_arch, fix_hardware_concurrency, set_cpu_default, identity_salt, drop_audio_seed, identity_seed, follow_baseline_protection, clamp_screen_to_display, clamp_window_dimensions, clamp_window_position, raise_screen_to_modern_floor, set_media_devices_defaults, WINDOWS_11_MARKER_FONTS, OS_KEYS, OS_NAMES
 from . import coherence
-from .geolocation import geoip_allowed, get_geolocation
 from .humanize import HumanizeSetting, normalize as normalize_humanize
-from .ip import ExitGeo, Proxy, proxy_auth_env, proxy_auth_init_script, public_ip, public_ipv6, socks5_auth, valid_ipv4, valid_ipv6
-from .locales import SELECTOR, handle_locales
+from .ip import proxy_auth_env, proxy_auth_init_script, socks5_auth
 import warnings
 
+from .product import PRODUCT
 from .pkgman import (
     INSTALL_DIR,
     LAUNCHER_CONSTANTS,
@@ -47,7 +50,6 @@ from .pkgman import (
     warn_if_package_outdated,
 )
 from .gpudisplay import GPU_PREFS, GpuDisplay, async_prove_gpu, prove_gpu, select_gpu
-from .virtdisplay import VirtualDisplay
 from ._warnings import WARNINGS_DATA, FallbackWarning, LeakWarning, _warn_from_caller
 from .host_rendering import Gpu, add_canvas_placeholder, has_canvas_placeholder, host_gpu, set_webgpu
 from .webgl import firefox_gpus, sample_webgl_for_screen, webgl_for_gpu
@@ -368,7 +370,7 @@ def validate_config(config_map: Dict[str, str], path: Optional[Path] = None) -> 
         entry = properties.get(key)
         if not entry:
             if key == 'voices:speechd':
-                LeakWarning.warn('voices_unread')
+                LeakWarning.warn(WARNINGS_DATA['voices_unread'])
             print(f'Skipping unknown patch {key} : {value}')
             continue  # Not supported by this browser version: reported, then skipped
         if 'removed' in entry:
@@ -493,7 +495,7 @@ def get_screen_cons(headless: Optional[bool] = None) -> Optional[Screen]:
     Determines a sane viewport size for Camoufox if being ran in headful mode.
 
     Bounds are CSS pixels, the unit Firefox lays its windows out in -- see
-    camoufox.display for why that differs from the monitor's physical size.
+    camoucore.display for why that differs from the monitor's physical size.
     """
     if headless is True:
         return None  # Skip if headless
@@ -532,7 +534,7 @@ def check_custom_fingerprint(fingerprint: Dict[str, Any]) -> None:
             'If this is intentional, pass `i_know_what_im_doing=True`.'
         )
 
-    LeakWarning.warn('custom_fingerprint', False)
+    LeakWarning.warn(WARNINGS_DATA['custom_fingerprint'], False)
 
 
 def cpu_identity_pref(config: Dict[str, Any]) -> int:
@@ -652,7 +654,7 @@ def _keeps_ipv6(
         ipv6_config = {}
     if all(ipv6_config.get(key) == geo_config.get(key) for key in ('timezone', 'locale:region')):
         return True
-    LeakWarning.warn('ipv6_elsewhere', i_know_what_im_doing)
+    LeakWarning.warn(WARNINGS_DATA['ipv6_elsewhere'], i_know_what_im_doing)
     return False
 
 
@@ -679,26 +681,26 @@ def warn_manual_config(config: Dict[str, Any]) -> None:
     if is_domain_set(
         config, 'navigator.language', 'headers.Accept-Language', 'locale:'
     ):
-        LeakWarning.warn('locale', False)
+        LeakWarning.warn(WARNINGS_DATA['locale'], False)
     # Manual geolocation and timezone setting
     if is_domain_set(config, 'geolocation:', 'timezone'):
-        LeakWarning.warn('geolocation', False)
+        LeakWarning.warn(WARNINGS_DATA['geolocation'], False)
     # Manual User-Agent setting
     if is_domain_set(config, 'headers.User-Agent'):
-        LeakWarning.warn('header-ua', False)
+        LeakWarning.warn(WARNINGS_DATA['header-ua'], False)
     # Manual navigator setting
     if is_domain_set(config, 'navigator.'):
-        LeakWarning.warn('navigator', False)
+        LeakWarning.warn(WARNINGS_DATA['navigator'], False)
     # Touchscreen digitizer spoofing. Called out separately from the blanket
     # navigator warning because the knock-on effects reach past navigator into
     # CSS pointer media queries and the TouchEvent interfaces.
     if is_domain_set(config, 'navigator.maxTouchPoints'):
-        LeakWarning.warn('max_touch_points', False)
+        LeakWarning.warn(WARNINGS_DATA['max_touch_points'], False)
     if config.get('instantAnimations'):
-        LeakWarning.warn('instant_animations', False)
+        LeakWarning.warn(WARNINGS_DATA['instant_animations'], False)
     # Manual screen/window setting
     if is_domain_set(config, 'screen.', 'window.', 'document.body.'):
-        LeakWarning.warn('viewport', False)
+        LeakWarning.warn(WARNINGS_DATA['viewport'], False)
 
 
 def saved_pref(profile_dir: Optional[str], pref: str) -> Any:
@@ -756,7 +758,7 @@ def pinned_core_count(from_options: Dict[str, Any]) -> Optional[int]:
     or None: the identity's navigator.hardwareConcurrency when this host can
     honour it (see cpu_affinity), so a page measuring parallelism sees the
     reported number."""
-    from .cpu_affinity import host_cores, supported
+    from camoucore.cpu_affinity import host_cores, supported
 
     blob = _camou_config_blob(from_options)
     if not blob or not supported():
@@ -849,7 +851,7 @@ def attach_desktop_only_warning(target: Any) -> Any:
 
     def adjust(kwargs: Dict[str, Any]) -> None:
         if kwargs.get('is_mobile'):
-            LeakWarning.warn('is_mobile')
+            LeakWarning.warn(WARNINGS_DATA['is_mobile'])
 
     return _wrap_context_factories(target, adjust)
 
@@ -1064,7 +1066,7 @@ def start_virtual_display(
     elif gpu is not None or require_gpu is not None:
         raise ValueError("gpu and require_gpu apply to headless='virtual-gpu' only")
     elif headless == 'virtual':
-        display = VirtualDisplay(debug=debug)
+        display = VirtualDisplay(PRODUCT, debug=debug)
     else:
         return None, headless
     kwargs['virtual_display'] = display.get()
@@ -1426,7 +1428,7 @@ def launch_options(
     # Get the Firefox version
     if ff_version:
         ff_version_str = str(ff_version)
-        LeakWarning.warn('ff_version', i_know_what_im_doing)
+        LeakWarning.warn(WARNINGS_DATA['ff_version'], i_know_what_im_doing)
     else:
         ff_version_str = resolve_verstr(executable_path).split('.', 1)[0]
 
@@ -1547,7 +1549,7 @@ def launch_options(
     if custom_fonts_only:
         firefox_user_prefs['gfx.bundled-fonts.activate'] = 0
         if fonts:
-            LeakWarning.warn('custom_fonts_only', i_know_what_im_doing)
+            LeakWarning.warn(WARNINGS_DATA['custom_fonts_only'], i_know_what_im_doing)
         else:
             raise ValueError('No custom fonts were passed, but `custom_fonts_only` is enabled.')
     elif not _user_set_fonts or not config.get('fonts'):
@@ -1750,7 +1752,7 @@ def launch_options(
         and 'localhost' not in proxy.get('server', '')
         and not is_domain_set(config, 'geolocation')
     ):
-        LeakWarning.warn('proxy_without_geoip')
+        LeakWarning.warn(WARNINGS_DATA['proxy_without_geoip'])
 
     # Set locale
     if locale:
@@ -1833,9 +1835,9 @@ def launch_options(
     # Fresh profiles get a toggle's pref only when on. A persistent profile
     # may need the stock value written once to clear an earlier toggled value.
     if block_images:
-        LeakWarning.warn('block_images', i_know_what_im_doing)
+        LeakWarning.warn(WARNINGS_DATA['block_images'], i_know_what_im_doing)
     if disable_coop:
-        LeakWarning.warn('disable_coop', i_know_what_im_doing)
+        LeakWarning.warn(WARNINGS_DATA['disable_coop'], i_know_what_im_doing)
     for on, pref, stock, toggled in (
         (block_images, 'permissions.default.image', 1, 2),
         (block_webrtc, 'media.peerconnection.enabled', True, False),
@@ -1844,7 +1846,7 @@ def launch_options(
         set_toggle_pref(firefox_user_prefs, pref, bool(on), stock, toggled, launch_options.get('user_data_dir'))
     # A persistent context takes its context options here.
     if launch_options.get('is_mobile'):
-        LeakWarning.warn('is_mobile', i_know_what_im_doing)
+        LeakWarning.warn(WARNINGS_DATA['is_mobile'], i_know_what_im_doing)
 
     # Drop values the source supplied that this identity cannot keep, before the
     # WebGL pool below defers to them (a preset's own GPU pair wins over
@@ -1861,11 +1863,11 @@ def launch_options(
     )
     if cover_canvas:
         add_canvas_placeholder(firefox_user_prefs)
-        LeakWarning.warn('canvas_noise', i_know_what_im_doing)
+        LeakWarning.warn(WARNINGS_DATA['canvas_noise'], i_know_what_im_doing)
 
     if block_webgl:
         firefox_user_prefs['webgl.disabled'] = True
-        LeakWarning.warn('block_webgl', i_know_what_im_doing)
+        LeakWarning.warn(WARNINGS_DATA['block_webgl'], i_know_what_im_doing)
     else:
         # A pair the caller named, or the preset's own GPU, keeps its name and
         # gets that device's recorded parameters. webgl_for_gpu raises for a GPU
