@@ -17,7 +17,6 @@ resolve ── static ─────────────── lint, tribal
                                      └─ once guards and build-tester pass:
                                           ├─ playwright × 6 shards   (upstream suite + our own)
                                           ├─ native ───────── leaks, contexts, crash recovery
-                                          ├─ sundial ──────── stealth grade
                                           └─ growth × 7 shards  memory growth, one test per runner
                                   │
                                summary ──► one comment on the PR ──► gate: "All tests passed"
@@ -25,9 +24,8 @@ resolve ── static ─────────────── lint, tribal
 
 A push to `main` whose tree a passing pull request run already tested (nothing
 else merged in between) runs none of that again. `resolve` finds the run
-(`ci.carry`), `carry-browser` takes over the browser it tested, `sundial` runs
-against it, since a pull request from a fork has no credential for it, and
-`summary` reports the carried results with this run's grade. Each pull request
+(`ci.carry`), `carry-browser` caches the browser it tested for `main` when that
+run built one, and `summary` reports the carried results. Each pull request
 run records the tree it tested as a `tested-tree-<tree>` artifact. A push that
 lands any other tree, or whose run's browser has expired (three days), is tested
 in full.
@@ -49,7 +47,6 @@ in full.
 | `native` | `ci.run_native --subset browser` | Leaks, context isolation, crash recovery ([below](#camoufoxs-own-suite)) |
 | `growth` | `ci.run_native --subset growth --shard i/7` | Memory growth, one test per runner |
 | `carry-browser` | | A carried push to `main`: the pull request run's browser, cached for `main` when it was built |
-| `sundial` | `ci.run_sundial` | The stealth grade ([below](#stealth-grade)) |
 | `summary` | `ci.summarize` | Folds every result into one table and a pull request comment |
 | `gate` | | The required check, **`All tests passed`** |
 
@@ -157,37 +154,6 @@ authority on what fails; a local run is a hypothesis.
 | Settled decisions | Every mechanically checkable rule in [`ci/tribal-rules.yml`](tribal-rules.yml) (`test_tribal_rules.py`) |
 | GPU display | `headless="virtual-gpu"` renders on the card `CAMOUFOX_GPU` names, the identity claims that card, and the Xorg server exits with the browser (`test_gpu_display.py`). No runner has a GPU, so the `gpu` subset is run by hand and is not part of `all` |
 
-## Stealth grade
-
-`ci/run_sundial.py` reports **a letter grade and a count**, nothing else: no
-vector name, value or source, and no per-category breakdown. Everything that
-leaves `redact()` is checked against a whitelist (`_PUBLISHABLE`), so adding a
-field fails the run. The request asks for the score only (`?auto=1&score=1`),
-and a full report arriving anyway fails the run.
-
-```json
-{ "grade": "A", "checks_total": 412, "checks_passed": 403, "pass_rate": 0.978,
-  "out_of_scope_failed": 6, "cross_os_total": 24, "cross_os_passed": 5,
-  "os": "linux", "sundial_version": "0.3.1", "schema_version": 1 }
-```
-
-| Setting | Where |
-|---|---|
-| On/off switch, gated categories, `min_pass_rate` | [`ci/sundial.yml`](sundial.yml) |
-| Credential | `SUNDIAL_AUTOMATION_KEY` secret; `SUNDIAL_USERNAME` is optional |
-| Keep an encrypted full report for yourself | `SUNDIAL_REPORT_AGE_RECIPIENT` (an `age` public key) |
-
-Cross-OS checks read the host rather than the disguise, so they are counted
-separately and never scored. Without a credential (a fork pull request) the job
-is skipped and the summary says so.
-
-To see which category fails, run locally; `--explain` is refused under GitHub
-Actions:
-
-```bash
-python3 -m ci.run_sundial --explain --binary /path/to/camoufox-bin
-```
-
 ## Blocking a merge
 
 Branch protection on `main` requires one check, **`All tests passed`** (the
@@ -198,13 +164,8 @@ Anything that is not `success` fails it, including `skipped`, except:
 |---|---|
 | `build`, `preflight` | The browser was fetched, not compiled |
 | `fetch-browser` | The browser was compiled, not fetched |
-| `sundial` | Disabled in `ci/sundial.yml`, or no credential |
 | `carry-browser` | The push to `main` was not carried |
-| every suite but `sundial` | The push to `main` was carried; `summary` requires their results from the pull request run |
-
-`sundial` may also record a `skip` result when the sundial service is
-unreachable. A rejected credential, a full report, or a score under the floor
-still fails.
+| every suite | The push to `main` was carried; `summary` requires their results from the pull request run |
 
 The settings are in [`ci/branch-protection.json`](branch-protection.json). To
 apply them (needs admin):
@@ -229,7 +190,7 @@ Each tier gates the next, so a lint failure never reaches the build:
 | 1 unit | pythonlib, typescript | about a minute |
 | 2 browser | build and five preflights (browser sources changed) or fetch (they did not) | minutes to hours |
 | 3a smoke | patch guards, skiplist audit, build-tester, typescript-browser, install | about 15 min |
-| 3b full | Playwright × 6, native, growth × 7, stealth | about 40 min |
+| 3b full | Playwright × 6, native, growth × 7 | about 40 min |
 | 4 gate | the required check | seconds |
 
 | Mechanism | Effect |
@@ -328,7 +289,6 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | `python3 -m ci.run_native --subset browser --binary <bin>` | yes | Leaks, contexts, crashes |
 | `python3 -m ci.run_native --subset growth --binary <bin>` | yes | Memory growth; `--shard 3/7` for one test |
 | `CAMOUFOX_GPU=<pci> python3 -m ci.run_native --subset gpu --binary <bin>` | yes | `headless="virtual-gpu"` on a real GPU |
-| `python3 -m ci.run_sundial --binary <bin>` | yes | The stealth grade (needs the credential) |
 | `python3 -m ci.summarize --results-dir .ci-work/results` | | The summary table |
 | `GITHUB_EVENT_NAME=schedule python3 -m ci.release target` | | What the train would promote |
 | `python3 -m ci.release browser-plan` | | Whether a browser would be built or reused |
@@ -345,6 +305,6 @@ build tree. Each runner writes one result file to `.ci-work/results/`
 
 ## Self-tests
 
-`ci/tests/` asserts the pipeline reports honestly: redaction leaks nothing,
-skips carry reasons, shards partition exactly once, and version resolution never
-picks a suite newer than the browser. They run in the `static` job.
+`ci/tests/` asserts the pipeline reports honestly: skips carry reasons, shards
+partition exactly once, and version resolution never picks a suite newer than
+the browser. They run in the `static` job.

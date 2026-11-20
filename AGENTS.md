@@ -36,8 +36,7 @@ is in it, and they will not ask what a file was for.
   logs, debug logging, commented-out code, dead code, placeholder text, stub
   docs, or `TODO`s left as notes to self.
 - **Nothing private reaches this repo.** That includes proprietary results,
-  private repo names, and per-vector stealth detail. `ci/run_sundial.py` reports
-  a grade and a count; the vectors never leave that module.
+  private repo names, and per-vector stealth detail.
 - Write commits and PR titles for a stranger reading them in a year.
 - **Documentation is never stale.** Update the README, `docs/` and the package
   READMEs in the same pull request as the code that changed them, never
@@ -208,8 +207,6 @@ change while you work:
   in `ci/skiplist.yml`, with its reason.
 - **Tests against an unpackaged build** need `make -C browser stage-fonts` first.
   Without it the browser has no content fonts.
-- **The stealth grade** (`ci/run_sundial.py`) reports a letter and a count, never
-  the individual vectors.
 
 ---
 

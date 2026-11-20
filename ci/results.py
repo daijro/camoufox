@@ -13,10 +13,10 @@ Two properties do the real work:
   * Every record is stamped with the current run id. A stale file left over
     from an earlier run does not satisfy a gate.
 
-The one deliberate exception is a gate that records SKIP for a stated reason --
-currently only the stealth check, when sundial itself is unreachable. That is
-tolerated only for suites the workflow names in `--allow-skip`, and it is still
-not a pass: the summary shows it as skipped, with the reason.
+The one deliberate exception is a gate that records SKIP for a stated reason
+because something outside this repository was unavailable. That is tolerated
+only for suites the caller names in `--allow-skip`, and it is still not a pass:
+the summary shows it as skipped, with the reason.
 """
 
 from __future__ import annotations

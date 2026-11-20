@@ -84,7 +84,6 @@ proxies.txt
 checks-bundle.js
 .env
 
-# CI scratch space (results, junit, the sealed sundial report). Never
-# committed: this is where a stealth run's output lands, and an evidence
-# file in a public repository is permanent.
+# CI scratch space (results, junit). Never committed: an evidence file in a
+# public repository is permanent.
 .ci-work/

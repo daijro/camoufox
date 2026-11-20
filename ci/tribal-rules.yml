@@ -1019,8 +1019,7 @@ rules:
       stood then. With nothing merged in between, the squashed commit has that
       tree exactly, so a second run proves nothing new and only gives
       non-deterministic checks another chance to fail after the merge. Main
-      still runs what the pull request could not, the stealth check, and tests
-      in full whenever its tree differs. A cut reuses main's own gate result,
+      tests in full whenever its tree differs. A cut reuses main's own gate result,
       the same check a promotion already requires.
 
   # -------------------------------------------------------------------------
