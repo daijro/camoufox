@@ -44,11 +44,6 @@ release when you do not), then runs every suite. Branch protection requires one
 check, **`All tests passed`**. CI leaves a summary comment on the pull request,
 so there is nothing to attach by hand.
 
-The stealth check needs a credential, and GitHub gives secrets only to pull
-requests whose branch is in this repository. If you have write access, push your
-branch here rather than to a fork; on a fork pull request that check is skipped
-and the summary says so.
-
 While you work, run the suite that covers your change:
 
 | You changed | Run | Docs |

@@ -11,12 +11,12 @@ Runs last in CI. Three jobs:
     tick. Anything that failed is a failure.
 
     One narrow exception, opt-in per suite via `--allow-skip`: a suite that ran
-    and recorded SKIP with a reason. That exists for the stealth check, which
-    depends on a separate service -- when sundial is down the browser was never
-    measured, and blocking every merge in the repository on somebody else's
-    outage is the wrong answer. It is still not reported as a pass.
+    and recorded SKIP with a reason. That is for a suite that depends on a
+    service outside this repository -- when that service is down the browser
+    was never measured, and blocking every merge on somebody else's outage is
+    the wrong answer. It is still not reported as a pass.
   * **Report.** Writes the Markdown that lands in the job summary and the pull
-    request. The stealth line is a grade and a count; it never names a vector.
+    request.
 
 It also validates `ci/skiplist.yml`: an entry with no reason fails the run,
 because a skiplist that can grow silently is a way to make any test disappear.
@@ -55,7 +55,7 @@ _ORDER = [
     "native_rules", "pythonlib", "typescript", "install", "patches_apply", "build", "patch_guards",
     "patch_guards_spoofing", "patch_guards_automation", "patch_guards_parity",
     "skiplist_audit", "native_browser", "build_tester", "playwright", "typescript_browser",
-    "native_growth", "sundial",
+    "native_growth",
 ]
 
 
@@ -192,17 +192,6 @@ def render(merged: Dict[str, dict], required: List[str], problems: List[str], me
             # only useful thing to show, and showing a grade of "?" next to it
             # would read as a measurement that came back empty.
             detail = (record.get("notes") or ["skipped"])[-1]
-        elif name == "sundial":
-            # Grade and counts only. Never a category, never a vector.
-            # Named distinctly from the shard `metrics` above so the self-test
-            # can hold just these reads to sundial's publishable whitelist.
-            sundial_metrics = record.get("metrics") or {}
-            detail = (
-                f"grade **{sundial_metrics.get('grade', '?')}** — "
-                f"{sundial_metrics.get('checks_passed', 0)}"
-                f"/{sundial_metrics.get('checks_total', 0)} "
-                f"in-scope checks passed"
-            )
         elif tally:
             failed = tally.get("fail", 0) + tally.get("error", 0)
             detail = f"{tally.get('pass', 0)} passed, {failed} failed, {tally.get('total', 0)} collected"
@@ -238,9 +227,7 @@ def render(merged: Dict[str, dict], required: List[str], problems: List[str], me
         "are re-run with it off; those count as passes and are reported above as "
         "main-world fallbacks, which is the size of the isolated-world gap. Tests "
         "Camoufox cannot pass by design are deselected via "
-        "[`ci/skiplist.yml`](ci/skiplist.yml) — each with a stated reason. The stealth "
-        "check reports a grade only; its per-vector detail is deliberately never "
-        "published.</sub>",
+        "[`ci/skiplist.yml`](ci/skiplist.yml) — each with a stated reason.</sub>",
     ]
     return "\n".join(lines)
 
@@ -262,7 +249,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help=(
                             "suites allowed to record a reasoned SKIP without failing the "
                             "run. For a suite that depends on something outside this "
-                            "repository -- the stealth check needs sundial to be up."
+                            "repository."
                         ))
     args = parser.parse_args(argv)
 

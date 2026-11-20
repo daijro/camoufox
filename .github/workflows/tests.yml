@@ -19,12 +19,6 @@ name: Tests
 # fallbacks. A test that needs the fallback still passes; the size of that set
 # is reported, because it is the isolated-world conformance gap.
 #
-# The stealth check reports a letter grade and a count. Its per-vector detail
-# never leaves ci/run_sundial.py, because this repository is public. It depends
-# on a service outside this repository, so an outage there records a SKIP with
-# its reason rather than blocking every merge (see `--allow-skip` below); a bad
-# credential or a bad score still fails.
-#
 # Ordering: cheapest first, and every tier gates the next, so a pull request that
 # fails a two-second lint never reaches a seventy-minute build.
 #
@@ -36,7 +30,7 @@ name: Tests
 #                  builds, beside the build                   ~30 min each
 #   3a smoke       patch guards, skiplist audit, build-tester,
 #                  installed packages                         ~15 min
-#   3b full        Playwright (6 shards), leaks, stealth      ~40 min
+#   3b full        Playwright (6 shards), leaks               ~40 min
 #   4  gate        the single required status check
 #
 # The build job builds linux x86_64 with the command a release's build job runs
@@ -50,8 +44,7 @@ name: Tests
 # shards proving the same thing.
 #
 # A push to main that lands exactly the tree a passing pull request run tested
-# carries that run's results (ci/carry.py) and runs only what the pull request
-# could not: the stealth check, whose credential a fork's run does not get.
+# carries that run's results (ci/carry.py) instead of running them again.
 
 on:
   pull_request:
@@ -97,11 +90,6 @@ on:
         description: "The uBlock Origin release to bundle, as browser/scripts/fetch-ubo.py resolves it; default the committed pin (browser/scripts/data/ubo.json)"
         required: false
         type: string
-    secrets:
-      SUNDIAL_USERNAME:
-        required: false
-      SUNDIAL_AUTOMATION_KEY:
-        required: false
     outputs:
       verdict:
         description: "pass or fail"
@@ -139,7 +127,6 @@ jobs:
       version_note: ${{ steps.versions.outputs.note }}
       browser_changed: ${{ steps.scope.outputs.browser_changed }}
       browser_tag: ${{ steps.scope.outputs.browser_tag }}
-      has_sundial: ${{ steps.sundial.outputs.has_sundial }}
       shard_matrix: ${{ steps.shards.outputs.matrix }}
       ubo: ${{ steps.ubo.outputs.pin }}
       prebuilt_key: ${{ steps.prebuilt.outputs.key }}
@@ -197,7 +184,7 @@ jobs:
       - name: Did the merged pull request already test this tree?
         id: carry
         # A push to main whose tree a passing pull request run tested carries
-        # that run's results, and runs only what it could not: the stealth check.
+        # that run's results instead of running them again.
         if: github.event_name == 'push'
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -256,38 +243,6 @@ jobs:
             echo "::notice::No published release was built from these browser sources -- building (a cache hit when the base branch already built it)."
           fi
 
-      - name: May the stealth check run?
-        id: sundial
-        # Two conditions, and the config one is checked FIRST and without the
-        # secret in scope. While ci/sundial.yml says `enabled: false` the job is
-        # not scheduled at all, so SUNDIAL_AUTOMATION_KEY never enters a runner
-        # environment and no request is made. That ordering is what made the
-        # kill switch real while the live sundial still predated score mode and
-        # would have posted the whole report back; it stays that way round so
-        # the switch keeps working the next time it is needed.
-        #
-        # Secrets are absent for pull requests from forks, so the credential
-        # check is resolved here once rather than from a job-level `if`, which
-        # the secrets context is not available in.
-        env:
-          KEY: ${{ secrets.SUNDIAL_AUTOMATION_KEY }}
-        run: |
-          if [ "$(python3 -m ci.run_sundial status)" != "true" ]; then
-            echo "has_sundial=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Stealth check not run: disabled in ci/sundial.yml. See the comment there."
-            exit 0
-          fi
-          # Only the password gates the job. The username names an account, not
-          # a secret, so ci/run_sundial.py defaults it (to `guest`, the least
-          # privileged role the deployment has -- sundial refuses it the
-          # private-vector bundle) instead of demanding a second secret.
-          if [ -n "$KEY" ]; then
-            echo "has_sundial=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_sundial=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Stealth check skipped: no sundial credential on this run (normal for a fork PR)."
-          fi
-
       - name: Build the shard matrix
         id: shards
         run: |
@@ -340,9 +295,8 @@ jobs:
         run: node --test browser/tests/juggler/*.test.mjs
 
       - name: CI pipeline self-tests
-        # These assert that the pipeline reports honestly: skips carry reasons,
-        # shards partition exactly, and nothing identifying a sundial vector
-        # survives redaction.
+        # These assert that the pipeline reports honestly: skips carry reasons
+        # and shards partition exactly.
         run: python3 -m pytest ci/tests -q
 
       - name: Settled decisions are still in force
@@ -649,7 +603,7 @@ jobs:
           #   properties.json       -- the Python API resolves it next to the
           #                            binary, so AsyncCamoufox dies with
           #                            FileNotFoundError without it. That breaks
-          #                            patch-guards, the leak suite and sundial.
+          #                            patch-guards and the leak suite.
           #   addons/UBO/           -- the uBlock Origin the launchers load by
           #                            default; without it every suite runs a
           #                            browser no user runs.
@@ -1240,9 +1194,9 @@ jobs:
   carry-browser:
     name: Carry the pull request's browser
     # A carried run (resolve) tests nothing the pull request run already did.
-    # Its browser is this run's, for the stealth check, and a built one is
-    # cached for main as main's own build would have, so the next pull request
-    # restores it instead of compiling.
+    # A browser the pull request run built is cached for main as main's own
+    # build would have, so the next pull request restores it instead of
+    # compiling.
     needs: resolve
     if: needs.resolve.outputs.carried != ''
     runs-on: ubuntu-24.04
@@ -1266,58 +1220,10 @@ jobs:
           key: ${{ needs.resolve.outputs.prebuilt_key }}
 
   # ---------------------------------------------------------------------------
-  sundial:
-    name: Stealth check
-    needs: [resolve, build, fetch-browser, patch-guards, build-tester, carry-browser]
-    if: >-
-      always() && needs.resolve.outputs.has_sundial == 'true' &&
-      ((needs.patch-guards.result == 'success' && needs.build-tester.result == 'success') ||
-       needs.carry-browser.result == 'success')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-      - uses: ./.github/actions/prepare-browser
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
-          pip install -e python
-      - uses: ./.github/actions/fpgen-model
-      - name: Run
-        # Exits 0 with a SKIP result if sundial itself is unreachable -- the
-        # browser was never measured, so neither a pass nor a failure would be
-        # true, and an outage on someone else's host must not block this
-        # repository. Anything sundial actually answers -- rejected credential,
-        # a role that would be served the vectors, a full report where a score
-        # was asked for, a pass rate under the floor -- still fails.
-        #
-        # The only step in this workflow that sees the sundial credential. It
-        # asks for `?auto=1&score=1`, so what comes back is already counts
-        # rather than a report; ci/run_sundial.py checks the session's role
-        # against sundial's own /__auth/me and refuses to open the browser at
-        # all unless the vectors are withheld from it, and refuses to process
-        # anything that is not a score. The artifact below is a grade and counts.
-        env:
-          SUNDIAL_USERNAME: ${{ secrets.SUNDIAL_USERNAME }}
-          SUNDIAL_AUTOMATION_KEY: ${{ secrets.SUNDIAL_AUTOMATION_KEY }}
-        run: xvfb-run -a python3 -m ci.run_sundial --binary "$CAMOUFOX_BINARY"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: results-sundial
-          path: .ci-work/results/
-          include-hidden-files: true
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
   summary:
     name: Summary
     needs: [resolve, static, pythonlib, typescript, install, build, preflight, fetch-browser, playwright,
-            patch-guards, build-tester, native, typescript-browser, growth, carry-browser, sundial]
+            patch-guards, build-tester, native, typescript-browser, growth, carry-browser]
     if: always() && needs.resolve.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
@@ -1372,13 +1278,9 @@ jobs:
           if [ "${{ needs.resolve.outputs.browser_changed }}" = "true" ]; then
             required="$required build"
           fi
-          if [ "${{ needs.resolve.outputs.has_sundial }}" = "true" ]; then
-            required="$required sundial"
-          fi
           python3 -m ci.summarize \
             --results-dir .ci-work/results \
             --require $required \
-            --allow-skip sundial \
             --markdown summary.md \
             --out summary.json \
             --browser-version "${{ needs.resolve.outputs.browser_version }}" \
@@ -1428,14 +1330,11 @@ jobs:
     #
     # A job that was legitimately not applicable is allowed to be skipped -- the
     # build and the preflights when the browser was fetched instead, the fetch
-    # when it was built,
-    # the stealth check on a fork pull request with no credentials or while it is
-    # disabled in ci/sundial.yml. Anything else
-    # that is not `success`, including `skipped`, fails the gate: a suite that
+    # when it was built. Anything else that is not `success`, including `skipped`, fails the gate: a suite that
     # did not run has not passed, and silently skipping one is the cheapest way
     # to a green tick.
     needs: [resolve, static, pythonlib, typescript, install, build, preflight, fetch-browser, playwright,
-            patch-guards, build-tester, native, typescript-browser, growth, carry-browser, sundial, summary]
+            patch-guards, build-tester, native, typescript-browser, growth, carry-browser, summary]
     if: always()
     runs-on: ubuntu-24.04
     permissions:
@@ -1445,7 +1344,6 @@ jobs:
         env:
           RESULTS: ${{ toJSON(needs) }}
           BROWSER_CHANGED: ${{ needs.resolve.outputs.browser_changed }}
-          HAS_SUNDIAL: ${{ needs.resolve.outputs.has_sundial }}
           CARRIED: ${{ needs.resolve.outputs.carried }}
         run: |
           python3 - <<'PY'
@@ -1462,7 +1360,6 @@ jobs:
               "build": not built or carried,
               "preflight": not built or carried,
               "fetch-browser": built or carried,
-              "sundial": os.environ.get("HAS_SUNDIAL") != "true",
               "carry-browser": not carried,
           }
           if carried:

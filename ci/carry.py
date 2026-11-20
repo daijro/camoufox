@@ -9,8 +9,7 @@ main looks for a passing run of the merged pull request's head that recorded
 main's tree, and carries its results instead of re-running them.
 
 The run must still hold the browser it tested (`camoufox-dist`, kept three
-days): the suites a pull request from a fork cannot run, the stealth check,
-run on main against it.
+days): a browser the pull request run built is cached for main from it.
 
     python3 -m ci.carry --sha <main commit>
 """
