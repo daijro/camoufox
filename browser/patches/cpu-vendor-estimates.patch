@@ -2255,7 +2255,7 @@ index 64a142b361..0e85da2441 100644
    // Whether to perform expensive graph-consistency DEBUG-only assertions.
    // It can be useful to disable this to reduce DEBUG-compile time of large
 diff --git a/js/src/jit/JitOptions.h b/js/src/jit/JitOptions.h
-index 62a4a22b4d..d1fabe5a63 100644
+index 62a4a22b4d..2eae90be5c 100644
 --- a/js/src/jit/JitOptions.h
 +++ b/js/src/jit/JitOptions.h
 @@ -5,6 +5,7 @@
@@ -2266,7 +2266,7 @@ index 62a4a22b4d..d1fabe5a63 100644
  #include "mozilla/Maybe.h"
  
  #include "jit/IonTypes.h"
-@@ -187,6 +188,44 @@ struct DefaultJitOptions {
+@@ -187,6 +188,51 @@ struct DefaultJitOptions {
  
  extern DefaultJitOptions JitOptions;
  
@@ -2302,9 +2302,16 @@ index 62a4a22b4d..d1fabe5a63 100644
 +// the stores ArmNaN covers, the sign has to be set where the NaN is made,
 +// because x86 keeps the positive NaN a script writes.
 +inline double X86NaN(double r, double a, double b = 0) {
++#if defined(JS_CODEGEN_ARM64)
++  // Only an ARM64 build can emulate x86; elsewhere this is `r`, with no load
++  // or branch the stock build would not have on its arithmetic paths.
 +  if (EmulateX86 && r != r && a == a && b == b) {
 +    return mozilla::BitwiseCast<double>(uint64_t(0xFFF8000000000000));
 +  }
++#else
++  (void)a;
++  (void)b;
++#endif
 +  return r;
 +}
 +
