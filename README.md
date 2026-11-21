@@ -631,8 +631,13 @@ The `humanize` option picks an engine per channel, run in your own process:
 from camoufox.humanize import myuri, raw
 
 Camoufox(humanize=True)   # myuri() on every channel
-Camoufox(humanize={"keyboard": myuri(wpm=70), "scroll": raw(), "seed": 1234})
+Camoufox(humanize={"scroll": raw(), "seed": 1234})
+Camoufox(humanize={"settings": {"mouse": {"speed_factor": 2}, "typing": {"wpm": 90}}})
 ```
+
+![A Linux identity with humanize on: myuri fills a form, types two lines, clicks buttons and scrolls to one 1800 px down](browser/assets/humanize.gif)
+
+<sub>A Linux identity with `humanize={"seed": 7}`, recorded at real speed. The red trail and the rings are drawn by the page from the mouse events it received.</sub>
 
 - `myuri()` is [myuri](https://github.com/JWriter20/Myuri)'s smart actions, fitted
   to recordings of people on each OS and drawn for the launch identity's OS: the
@@ -644,6 +649,11 @@ Camoufox(humanize={"keyboard": myuri(wpm=70), "scroll": raw(), "seed": 1234})
 - `raw()` is Playwright as it is.
 - A channel a dict leaves out is `myuri()`. `humanize=None` or `False`, the
   default, is `raw()` everywhere.
+- `settings` are [myuri's settings](https://github.com/JWriter20/Myuri#settings): mouse, scroll and typing speed,
+  overshoot, typing mistakes and pauses. Pass any subset; the rest keep myuri's
+  defaults, and an unknown key raises `ValueError` before launch. The `seed`
+  draws one person around them, each speed within ±`variation` (0.2) of the
+  value set; `{"variation": 0}` plays them exactly.
 
 The engine decides when each event happens; the browser decides what each event
 looks like for the identity's OS ([docs/humanize.md](docs/humanize.md)).
@@ -669,7 +679,7 @@ async def my_into_view(page, locator, *, default, rng, play):
 async with AsyncCamoufox(humanize={
     "mouse": myuri(move=my_move),
     "scroll": myuri(into_view=my_into_view),
-    "keyboard": myuri(wpm=70),
+    "settings": {"typing": {"wpm": 70}},
     "seed": 1234,
 }) as browser:
     page = await browser.new_page()

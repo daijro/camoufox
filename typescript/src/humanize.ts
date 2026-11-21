@@ -8,8 +8,8 @@
  *     await Camoufox({
  *       humanize: {
  *         mouse: myuri({ move: myMove }),
- *         keyboard: myuri({ wpm: 70 }),
  *         scroll: raw(),
+ *         settings: { typing: { wpm: 70 } },
  *         seed: 1234,
  *       },
  *     });
@@ -29,11 +29,19 @@
  * `myuri(parts)` replaces any of myuri's parts on its channel with a function
  * of yours; the rest stay myuri's (_humanize_playwright.ts). `humanize` may be
  * null / false (every channel raw), true (every channel myuri), or an object
- * per channel plus an optional `seed`; an omitted channel is myuri. Nothing
- * about it reaches the browser's config.
+ * per channel plus an optional `seed` and `settings`; an omitted channel is
+ * myuri. `settings` are myuri's (its README lists each one), and the seed draws
+ * one person around them. Nothing about it reaches the browser's config.
  */
 
-import type { BoundingBox, PartContext, Vector } from "@jwriter20/myuri";
+import {
+	type BoundingBox,
+	type DeepPartial,
+	type MyuriSettings,
+	type PartContext,
+	resolveSettings,
+	type Vector,
+} from "@jwriter20/myuri";
 import { pyRepr, ValueError } from "./pycompat.js";
 
 export const CHANNELS = ["mouse", "keyboard", "scroll"] as const;
@@ -48,8 +56,7 @@ export const CHANNEL_PARTS: Record<Channel, readonly string[]> = {
 
 /**
  * What myuri() takes: functions that replace myuri's parts, each called with
- * the page, the part's arguments and `{ default, rng, play }`, and `wpm` for
- * the keyboard.
+ * the page, the part's arguments and `{ default, rng, play }`.
  */
 export interface MyuriOptions {
 	move?: (page: any, x: number, y: number, ctx: PartContext<void>) => unknown;
@@ -82,7 +89,6 @@ export interface MyuriOptions {
 	) => unknown;
 	type?: (page: any, text: string, ctx: PartContext<void>) => unknown;
 	key?: (page: any, key: string, ctx: PartContext<void>) => unknown;
-	wpm?: number;
 }
 
 export interface Engine {
@@ -112,19 +118,20 @@ export function raw(): Engine {
  *
  * `default(...args)` runs myuri's part (with the same arguments when given
  * none), `rng()` draws from the humanize seed's stream, and `play(steps)`
- * plays a timeline of input. `wpm` (keyboard) sets myuri's typing speed.
+ * plays a timeline of input. Speeds and the like are `humanize.settings`.
  */
 export function myuri(options: MyuriOptions = {}): Engine {
 	const parts = Object.values(CHANNEL_PARTS).flat();
 	const unknown = Object.keys(options)
-		.filter((key) => key !== "wpm" && !parts.includes(key))
+		.filter((key) => !parts.includes(key))
 		.sort();
 	if (unknown.length)
 		throw new ValueError(
-			`myuri() has no part '${unknown[0]}'; the parts are ${JSON.stringify(CHANNEL_PARTS)}, and wpm`,
+			`myuri() has no part '${unknown[0]}'; the parts are ${JSON.stringify(CHANNEL_PARTS)} ` +
+				"(speeds and the like are humanize.settings)",
 		);
 	for (const [name, fn] of Object.entries(options))
-		if (name !== "wpm" && typeof fn !== "function")
+		if (typeof fn !== "function")
 			throw new ValueError(
 				`myuri({ ${name} }) takes the function that replaces the part, got ${pyRepr(fn)}`,
 			);
@@ -153,10 +160,7 @@ function asEngine(channel: Channel, value: unknown): Engine {
 		return raw();
 	}
 	const engine = myuri(options);
-	const allowed = [
-		...CHANNEL_PARTS[channel],
-		...(channel === "keyboard" ? ["wpm"] : []),
-	];
+	const allowed = CHANNEL_PARTS[channel];
 	const misplaced = Object.keys(options)
 		.filter((key) => !allowed.includes(key))
 		.sort();
@@ -168,16 +172,24 @@ function asEngine(channel: Channel, value: unknown): Engine {
 	return engine;
 }
 
-/** The engine per channel of a `humanize` setting, and the seed if given. */
-export function normalize(humanize: unknown): {
+/** A checked `humanize` setting. */
+export interface Humanize {
 	engines: Record<Channel, Engine>;
 	seed?: number;
-} {
+	settings: DeepPartial<MyuriSettings>;
+}
+
+/**
+ * The engine per channel of a `humanize` setting, the seed if given, and
+ * myuri's settings ({} when not given).
+ */
+export function normalize(humanize: unknown): Humanize {
 	const every = (engine: () => Engine) => ({
 		engines: Object.fromEntries(CHANNELS.map((c) => [c, engine()])) as Record<
 			Channel,
 			Engine
 		>,
+		settings: {},
 	});
 	if (humanize === null || humanize === undefined || humanize === false)
 		return every(raw);
@@ -186,11 +198,14 @@ export function normalize(humanize: unknown): {
 		throw new ValueError(`humanize=${pyRepr(humanize)}: ${IN_BROWSER}`);
 	const setting = humanize as Record<string, unknown>;
 	const unknown = Object.keys(setting).filter(
-		(key) => !(CHANNELS as readonly string[]).includes(key) && key !== "seed",
+		(key) =>
+			!(CHANNELS as readonly string[]).includes(key) &&
+			key !== "seed" &&
+			key !== "settings",
 	);
 	if (unknown.length)
 		throw new ValueError(
-			`humanize has no channel ${JSON.stringify(unknown)}; the channels are ${CHANNELS.join(", ")} and "seed"`,
+			`humanize has no channel ${JSON.stringify(unknown)}; the channels are ${CHANNELS.join(", ")}, and "seed" and "settings"`,
 		);
 	const seed = (setting.seed ?? undefined) as number | undefined;
 	if (
@@ -200,13 +215,23 @@ export function normalize(humanize: unknown): {
 		throw new ValueError(
 			`humanize.seed must be an integer in [0, 2**32), got ${String(seed)}`,
 		);
+	const settings = (setting.settings ?? {}) as DeepPartial<MyuriSettings>;
+	if (typeof settings !== "object" || Array.isArray(settings))
+		throw new ValueError(
+			`humanize.settings must be an object of myuri settings, got ${pyRepr(settings)}`,
+		);
+	try {
+		resolveSettings(settings);
+	} catch (e) {
+		throw new ValueError(`humanize.settings: ${(e as Error).message}`);
+	}
 	const engines = Object.fromEntries(
 		CHANNELS.map((c) => [
 			c,
 			asEngine(c, setting[c] === undefined ? myuri() : setting[c]),
 		]),
 	) as Record<Channel, Engine>;
-	return { engines, seed };
+	return { engines, seed, settings };
 }
 
 /** The channels of a `humanize` setting that an engine in this process drives. */

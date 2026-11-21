@@ -548,7 +548,7 @@ def test_the_click_before_a_fill_is_myuris():
 
 
 def test_myuri_types_into_the_field_it_selected():
-    browser, page = attached_page({"keyboard": myuri(wpm=200)})
+    browser, page = attached_page({"keyboard": myuri(), "settings": {"typing": {"wpm": 200}}})
     page.fill("#name", "hi")
     kinds = names(browser)
     # With a raw mouse the click before the fill is Playwright's.
@@ -567,6 +567,19 @@ def test_the_stream_follows_the_seed():
         return [e for e in browser.rec.events if e[0] == "mouse.move"]
 
     assert moves(1) == moves(1) != moves(2)
+
+
+def test_the_settings_set_myuris_speed():
+    def moves(settings):
+        total = 0
+        for seed in range(10):
+            browser, page = attached_page({"mouse": myuri(), "settings": settings}, seed=seed)
+            page.mouse.move(900, 600)
+            total += names(browser).count("mouse.move")
+        return total
+
+    # The pointer reports about every 10 ms, so a faster move reports less often.
+    assert moves({"mouse": {"speed_factor": 3}}) < moves({}) / 2
 
 
 # ---- parts and raw() channels ------------------------------------------------------
@@ -616,7 +629,10 @@ def test_a_raw_scroll_is_playwrights_and_a_raw_mouse_is_one_move():
     page.locator("#far").click()
     kinds = names(browser)
     # myuri wheels over the scroller, reached in one move, then Playwright clicks.
-    assert kinds[0] == "mouse.move" and kinds.count("mouse.move") == 1 and kinds[-1] == "locator.click"
+    # A first long scroll takes two passes (myuri reads the page's px per wheel
+    # px from the first), and the raw mouse sends each pass's move as asked.
+    moves = {tuple(e[1:]) for e in browser.rec.events if e[0] == "mouse.move"}
+    assert kinds[0] == "mouse.move" and len(moves) == 1 and kinds[-1] == "locator.click"
     assert "mouse.wheel" in kinds
 
 
