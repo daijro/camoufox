@@ -1022,7 +1022,12 @@ export class PageHandler {
     if ((repeat && this._heldKey?.key === key) || (kModifierKeys.has(key) && !os.modifiersRepeat))
       return;
     const held = this._heldKey = { key };
+    // The OS sends a repeat every repeatEveryMs from start, and Firefox skips
+    // one sent while the page was still handling the last
+    // (BrowserChild::SkipRepeatedKeyEvent). A busy or late page gets the next
+    // repeat on the OS's schedule, never a burst of the ones it missed.
     const start = Date.now() + os.repeatDelayMs;
+    const due = () => Math.max(0, Math.ceil((Date.now() - start) / os.repeatEveryMs));
     const next = k => setTimeout(async () => {
       if (this._heldKey !== held)
         return;
@@ -1034,7 +1039,7 @@ export class PageHandler {
           this._heldKey = null;
         return;
       }
-      next(k + 1);
+      next(Math.max(k + 1, due()));
     }, Math.max(0, start + k * os.repeatEveryMs - Date.now()));
     next(0);
   }
