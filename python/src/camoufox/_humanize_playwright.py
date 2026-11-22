@@ -45,13 +45,13 @@ from contextvars import ContextVar
 from functools import wraps
 from typing import Any, Callable, Dict, Generator, Mapping, Optional, Tuple
 
-from myuri import Actions, Missed, make_rng, run_async, run_sync
+from myuri import Actions, Missed, make_rng, profile_from_seed, run_async, run_sync
 from myuri.page_functions import HIT_TEST_JS
 from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
 
 from ._warnings import LeakWarning
 from .driver_defaults import FILL_NEEDS_CLICK
-from .humanize import normalize
+from .humanize import Humanize, normalize
 
 Flow = Generator[Any, Any, Any]
 
@@ -178,12 +178,16 @@ def _callers_part(fn: Callable[..., Any], page: Any, is_async: bool) -> Callable
 class _Setup:
     """The humanize setting of one browser: its engines, its stream, and its API."""
 
-    def __init__(self, engines: Mapping[str, Any], seed: int, os: str, is_async: bool) -> None:
+    def __init__(self, engines: Mapping[str, Any], seed: int, settings: Mapping[str, Any], os: str, is_async: bool) -> None:
         self.engines = dict(engines)
         self.os = os
         self.is_async = is_async
         # One stream for every page, so two pages never replay the same draws.
         self.rng = make_rng(seed)
+        # One person for the whole browser, drawn from the seed around the
+        # settings. Camoufox identities point with a mouse unless told otherwise.
+        scroll = {'device': 'mouse', **(settings.get('scroll') or {})}
+        self.settings = profile_from_seed(seed, {**settings, 'scroll': scroll}, os)
 
     def drives(self, channel: str) -> bool:
         """Whether myuri drives the channel for the call being made."""
@@ -196,11 +200,9 @@ class _Setup:
                 parts.update(_RAW_PARTS[channel])
             else:
                 parts.update({name: _callers_part(fn, page, self.is_async)
-                              for name, fn in engine['options'].items() if name != 'wpm'})
+                              for name, fn in engine['options'].items()})
         return Actions(
-            _Host(page, self.is_async), self.rng, os=self.os,
-            # Camoufox identities point with a mouse, whose wheel turns in notches.
-            device='mouse', wpm=self.engines['keyboard']['options'].get('wpm'),
+            _Host(page, self.is_async), self.rng, os=self.os, settings=self.settings,
             asynchronous=self.is_async, parts=parts,
         )
 
@@ -479,18 +481,18 @@ def _is_async(target: Any) -> bool:
     return isinstance(target, AsyncBase)
 
 
-def check(humanize: Any, is_async: bool) -> Tuple[Dict[str, Any], Optional[int]]:
+def check(humanize: Any, is_async: bool) -> Humanize:
     """Check a `humanize` setting before a launch, and normalize it."""
-    engines, seed = normalize(humanize)
+    checked = normalize(humanize)
     if not is_async:
-        for channel, engine in engines.items():
+        for channel, engine in checked.engines.items():
             for name, fn in engine['options'].items():
                 if inspect.iscoroutinefunction(fn):
                     raise ValueError(
                         f'humanize["{channel}"]: myuri({name}={getattr(fn, "__name__", fn)}) is async, but this '
                         'is the sync API. Pass a plain function, or use AsyncCamoufox.'
                     )
-    return engines, seed
+    return checked
 
 
 def attach(
@@ -506,11 +508,12 @@ def attach(
     browsers in this process are untouched. `os` ('macos', 'windows' or
     'linux') is the launch identity's, whose people myuri plans for.
 
-    Every draw comes from one stream, of `humanize["seed"]` or a random seed.
+    Every draw comes from one stream, of `humanize["seed"]` or a random seed,
+    and the seed draws the person myuri plays around `humanize["settings"]`.
     """
     if is_async is None:
         is_async = _is_async(target)
-    engines, seed = check(humanize, is_async)
+    engines, seed, settings = check(humanize, is_async)
     if all(engine['engine'] == 'raw' for engine in engines.values()):
         return target
     if getattr(target, _SETUP, None) is not None:
@@ -519,7 +522,7 @@ def attach(
     if getattr(getattr(impl, '_connection', None), 'is_remote', False):
         LeakWarning.warn('humanize_remote', i_know_what_im_doing)
 
-    setup = _Setup(engines, secrets.randbits(32) if seed is None else seed, os, is_async)
+    setup = _Setup(engines, secrets.randbits(32) if seed is None else seed, settings, os, is_async)
 
     if not hasattr(target, 'new_context'):
         # A BrowserContext (a persistent context).

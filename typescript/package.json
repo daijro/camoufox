@@ -47,7 +47,7 @@
   "//@jwriter20/myuri": "Pinned to the release python/pyproject.toml pins, so a humanize seed plans the same input in both launchers.",
   "packageManager": "pnpm@10.33.4",
   "dependencies": {
-    "@jwriter20/myuri": "4.0.0",
+    "@jwriter20/myuri": "5.1.0",
     "adm-zip": "^0.6.1",
     "cli-progress": "^3.12.0",
     "commander": "^14.0.0",

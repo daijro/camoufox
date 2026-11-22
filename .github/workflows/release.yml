@@ -198,7 +198,12 @@ jobs:
   # ---------------------------------------------------------------------------
   build-browser:
     needs: [plan, ubo]
-    if: needs.plan.outputs.build_browser == 'true'
+    # `!cancelled()`: without a status check a job runs only if every job upstream of it succeeded,
+    # and `tests` is skipped when the commit was already tested, which skipped the build and both
+    # publishes (run 44952481674).
+    if: >-
+      !cancelled() && needs.plan.result == 'success' && needs.ubo.result == 'success' &&
+      needs.plan.outputs.build_browser == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -290,6 +295,8 @@ jobs:
 
   publish-browser:
     needs: [plan, ubo, build-browser]
+    if: >-
+      !cancelled() && needs.build-browser.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write # the release and its tag

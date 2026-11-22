@@ -6,8 +6,8 @@ Per-channel humanized input, run by the driver, never by the browser.
     Camoufox(humanize=True)                     # myuri on every channel
     Camoufox(humanize={
         "mouse": myuri(move=my_move),
-        "keyboard": myuri(wpm=70),
         "scroll": raw(),
+        "settings": {"typing": {"wpm": 70}},
         "seed": 1234,
     })
 
@@ -28,11 +28,15 @@ cursory() is another name for myuri(), which runs cursory's paths.
 of yours; the rest stay myuri's (camoufox._humanize_playwright).
 
 `humanize` may be None / False (every channel raw), True (every channel myuri),
-or a dict per channel plus an optional "seed"; an omitted channel is myuri.
-Nothing about it reaches the browser's config.
+or a dict per channel plus an optional "seed" and "settings"; an omitted
+channel is myuri. "settings" are myuri's (its README lists each one), and the
+seed draws one person around them. Nothing about it reaches the browser's
+config.
 """
 
-from typing import Any, Dict, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, Mapping, NamedTuple, Optional, Tuple, Union
+
+from myuri import resolve_settings
 
 CHANNELS = ('mouse', 'keyboard', 'scroll')
 
@@ -65,13 +69,14 @@ def myuri(**options: Any) -> Engine:
     `default(*args)` runs myuri's part (with the same arguments when given
     none), `rng()` draws from the humanize seed's stream, and `play(steps)`
     plays a timeline of input. With the async API each returns an awaitable,
-    and the part may be async. `wpm` (keyboard) sets myuri's typing speed.
+    and the part may be async. Speeds and the like are `humanize["settings"]`.
     """
-    unknown = set(options) - {part for parts in CHANNEL_PARTS.values() for part in parts} - {'wpm'}
+    unknown = set(options) - {part for parts in CHANNEL_PARTS.values() for part in parts}
     if unknown:
-        raise ValueError(f'myuri() has no part {sorted(unknown)[0]!r}; the parts are {CHANNEL_PARTS}, and wpm')
+        raise ValueError(f'myuri() has no part {sorted(unknown)[0]!r}; the parts are {CHANNEL_PARTS} '
+                         '(speeds and the like are humanize["settings"])')
     for name, fn in options.items():
-        if name != 'wpm' and not callable(fn):
+        if not callable(fn):
             raise ValueError(f'myuri({name}=...) takes the function that replaces the part, got {fn!r}')
     return {'engine': 'myuri', 'options': dict(options)}
 
@@ -94,31 +99,46 @@ def _as_engine(channel: str, value: Any) -> Engine:
             raise ValueError(f'humanize["{channel}"]: raw() takes no options')
         return raw()
     engine = myuri(**options)
-    allowed = CHANNEL_PARTS[channel] + (('wpm',) if channel == 'keyboard' else ())
-    misplaced = sorted(set(options) - set(allowed))
+    misplaced = sorted(set(options) - set(CHANNEL_PARTS[channel]))
     if misplaced:
         raise ValueError(f'humanize["{channel}"]: myuri({misplaced[0]}=...) is not a {channel} part; '
-                         f'the {channel} parts are {allowed}')
+                         f'the {channel} parts are {CHANNEL_PARTS[channel]}')
     return engine
 
 
-def normalize(humanize: HumanizeSetting) -> Tuple[Dict[str, Engine], Optional[int]]:
-    """The engine per channel of a `humanize` setting, and the seed (None when
-    not given)."""
+class Humanize(NamedTuple):
+    """A checked `humanize` setting."""
+
+    engines: Dict[str, Engine]
+    seed: Optional[int]
+    settings: Dict[str, Any]
+
+
+def normalize(humanize: HumanizeSetting) -> Humanize:
+    """The engine per channel of a `humanize` setting, the seed (None when not
+    given) and myuri's settings ({} when not given)."""
     if humanize is None or humanize is False:
-        return {channel: raw() for channel in CHANNELS}, None
+        return Humanize({channel: raw() for channel in CHANNELS}, None, {})
     if humanize is True:
-        return {channel: myuri() for channel in CHANNELS}, None
+        return Humanize({channel: myuri() for channel in CHANNELS}, None, {})
     if not isinstance(humanize, Mapping):
         raise ValueError(f'humanize={humanize!r}: {_IN_BROWSER}')
-    unknown = set(humanize) - {*CHANNELS, 'seed'}
+    unknown = set(humanize) - {*CHANNELS, 'seed', 'settings'}
     if unknown:
-        raise ValueError(f'humanize has no channel {sorted(unknown)}; the channels are {CHANNELS} and "seed"')
+        raise ValueError(f'humanize has no channel {sorted(unknown)}; '
+                         f'the channels are {CHANNELS}, and "seed" and "settings"')
     seed = humanize.get('seed')
     if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**32):
         raise ValueError(f'humanize["seed"] must be an integer in [0, 2**32), got {seed!r}')
+    settings = humanize.get('settings') or {}
+    if not isinstance(settings, Mapping):
+        raise ValueError(f'humanize["settings"] must be a dict of myuri settings, got {settings!r}')
+    try:
+        resolve_settings(dict(settings))
+    except KeyError as e:
+        raise ValueError(f'humanize["settings"]: {e.args[0]}') from None
     engines = {channel: _as_engine(channel, humanize.get(channel, myuri())) for channel in CHANNELS}
-    return engines, seed
+    return Humanize(engines, seed, dict(settings))
 
 
 def attach(
@@ -137,5 +157,5 @@ def attach(
 
 def driven_channels(humanize: HumanizeSetting) -> Tuple[str, ...]:
     """The channels of a `humanize` setting that an engine in this process drives."""
-    engines, _seed = normalize(humanize)
+    engines = normalize(humanize).engines
     return tuple(channel for channel in CHANNELS if engines[channel]['engine'] != 'raw')

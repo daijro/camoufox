@@ -64,7 +64,8 @@ def captured_launch_config(monkeypatch):
         True,
         {},
         {"mouse": raw()},
-        {"mouse": myuri(move=noop), "keyboard": myuri(type=noop, wpm=70), "scroll": myuri(wheel=noop), "seed": 9},
+        {"mouse": myuri(move=noop), "keyboard": myuri(type=noop), "scroll": myuri(wheel=noop), "seed": 9,
+         "settings": {"typing": {"wpm": 70}}},
         {"keyboard": raw(), "seed": 2**32 - 1},
     ],
 )
@@ -75,19 +76,18 @@ def test_no_humanize_key_reaches_the_browser(captured_launch_config, humanize) -
 
 def test_no_humanize_is_raw_and_humanize_is_myuri() -> None:
     for off in (None, False):
-        engines, seed = normalize(off)
-        assert engines == {channel: raw() for channel in CHANNELS} and seed is None
-    engines, seed = normalize(True)
-    assert engines == {channel: myuri() for channel in CHANNELS} and seed is None
-    engines, seed = normalize({"scroll": myuri(into_view=noop), "keyboard": {"engine": "myuri", "options": {"wpm": 70}}, "seed": 5})
-    assert engines["mouse"] == myuri() and engines["keyboard"] == myuri(wpm=70)
+        assert normalize(off) == ({channel: raw() for channel in CHANNELS}, None, {})
+    assert normalize(True) == ({channel: myuri() for channel in CHANNELS}, None, {})
+    engines, seed, settings = normalize({"scroll": myuri(into_view=noop), "keyboard": {"engine": "myuri", "options": {}},
+                                         "seed": 5, "settings": {"typing": {"wpm": 70}}})
+    assert engines["mouse"] == myuri() and engines["keyboard"] == myuri()
     assert engines["scroll"] == myuri(into_view=noop)
-    assert seed == 5
+    assert seed == 5 and settings == {"typing": {"wpm": 70}}
 
 
 def test_cursory_is_myuri() -> None:
     assert cursory() == myuri() and cursory(move=noop) == myuri(move=noop)
-    engines, _seed = normalize({"mouse": {"engine": "cursory", "options": {"move": noop}}, "scroll": cursory()})
+    engines = normalize({"mouse": {"engine": "cursory", "options": {"move": noop}}, "scroll": cursory()}).engines
     assert engines == {"mouse": myuri(move=noop), "keyboard": myuri(), "scroll": myuri()}
 
 
@@ -112,7 +112,9 @@ def test_in_browser_humanization_is_refused(humanize) -> None:
         ({"mouse": {"engine": "myuri", "options": {"speed": 1}}}, r"myuri\(\) has no part 'speed'"),
         ({"mouse": {"engine": "cursory", "options": {"maxTime": 1}}}, r"myuri\(\) has no part 'maxTime'"),
         ({"mouse": myuri(type=noop)}, r'humanize\["mouse"\]: myuri\(type=...\) is not a mouse part'),
-        ({"mouse": {"engine": "myuri", "options": {"wpm": 70}}}, r"myuri\(wpm=...\) is not a mouse part"),
+        ({"keyboard": {"engine": "myuri", "options": {"wpm": 70}}}, r"myuri\(\) has no part 'wpm'.*humanize\[\"settings\"\]"),
+        ({"settings": 70}, r'humanize\["settings"\] must be a dict'),
+        ({"settings": {"typing": {"speed": 70}}}, r"humanize\[\"settings\"\]: myuri: unknown settings key 'speed'"),
         ({"keyboard": {"engine": "myuri", "options": {"type": "fast"}}}, "takes the function that replaces the part"),
         ({"mouse": {"engine": "custom", "fn": noop}}, "is not an engine"),
         ({"mouse": {"engine": "raw", "options": {"speed": 1}}}, "takes no options"),

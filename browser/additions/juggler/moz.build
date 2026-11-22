@@ -16,6 +16,7 @@ FINAL_TARGET_FILES.modules.juggler += [
     "JugglerFrameParent.sys.mjs",
     "NetworkObserver.js",
     "SimpleChannel.js",
+    "SystemProxy.js",
     "TargetRegistry.js",
 ]
 FINAL_TARGET_FILES.modules.juggler.components += ["components/Juggler.js"]

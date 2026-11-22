@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@jwriter20/myuri':
-        specifier: 4.0.0
-        version: 4.0.0(playwright-core@1.62.0)
+        specifier: 5.1.0
+        version: 5.1.0(playwright-core@1.62.0)
       adm-zip:
         specifier: ^0.6.1
         version: 0.6.1
@@ -147,8 +147,8 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
-  '@jwriter20/myuri@4.0.0':
-    resolution: {integrity: sha512-rsKojCkMeN5t5VlJtRFmLtC1RNWR71UDmNF1HUk41KhCqjxDNcMgLX4L18aSlMg6tt/aOCMNjGeL2PWU3PHFmw==}
+  '@jwriter20/myuri@5.1.0':
+    resolution: {integrity: sha512-yG5foyrdXwHkyQb4zlup4eCeynryR/ko44Nnsh5EloUBkJ6vjE1AKajTqwsZ+UE9KT7O+mGuFS4ikgUa0f/omQ==}
     peerDependencies:
       playwright-core: '>=1.40.0'
     peerDependenciesMeta:
@@ -838,7 +838,7 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@jwriter20/myuri@4.0.0(playwright-core@1.62.0)':
+  '@jwriter20/myuri@5.1.0(playwright-core@1.62.0)':
     dependencies:
       cursory-js: 2.1.0
     optionalDependencies:

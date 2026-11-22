@@ -71,7 +71,17 @@ is in it, and they will not ask what a file was for.
   both.
 - **No flakes.** An intermittent failure means something is non-deterministic.
   Fix that behaviour. Never retry, loosen a threshold or skip the test to get
-  green.
+  green. A timing check measures what the browser did, never the driver's
+  sleep: the browser sees a `wait_for_timeout(n)` as n ms plus the driver's
+  and its own latency, which is unbounded on a loaded runner. Bound such a
+  quantity on one side (at least what n ms allows), and check order with
+  event order (nothing after the keyup), not with counts. A guard that waits
+  for something to be freed or settle polls to a deadline instead of
+  sleeping a fixed time. A guard that fails only on a loaded runner may be
+  showing a real difference from Firefox under load (driven key repeats
+  burst where Firefox skips them): compare stock Firefox under the same load
+  before deciding the check is wrong. Before trusting a fix, run the guard
+  many times on the CI runners, and break the code it guards to see it fail.
 - **A missing prerequisite fails in CI; it never passes as a skip.** A skip
   reads as green, so a job that forgot to install something passes having
   tested nothing.
