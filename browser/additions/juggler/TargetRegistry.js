@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
+const {usesSystemProxy} = ChromeUtils.importESModule('resource://gre/modules/juggler/SystemProxy.js');
 const {Preferences} = ChromeUtils.importESModule("resource://gre/modules/Preferences.sys.mjs");
 const {ContextualIdentityService} = ChromeUtils.importESModule("moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs");
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
@@ -109,24 +110,6 @@ function recordProxied(owner) {
   // load yet (about:blank, a fulfilled route) would resolve its dns-prefetch
   // links on this machine's resolver until then.
   Services.prefs.getDefaultBranch('network.dns.').setBoolPref('disablePrefetch', true);
-}
-
-// A system proxy is not in network.proxy.* either, and a content process
-// cannot ask the OS for it.
-function usesSystemProxy() {
-  if (Services.prefs.getIntPref('network.proxy.type') !== 5)
-    return false;
-  const settings = Cc['@mozilla.org/system-proxy-settings;1'].getService(Ci.nsISystemProxySettings);
-  if (settings.PACURI)
-    return true;
-  try {
-    return settings.getProxyForURI('https://camoufox.invalid/', 'https', 'camoufox.invalid', 443) !== 'DIRECT';
-  } catch (e) {
-    // This is how Linux answers when no proxy is set.
-    if (e.result === Cr.NS_ERROR_FAILURE)
-      return false;
-    throw e;
-  }
 }
 
 // Camoufox: every juggler browser context is a Firefox container. A PUBLIC
@@ -269,7 +252,10 @@ export class TargetRegistry {
     this._proxiesWithClashingAuthCacheKeys = new Set();
     this._browserProxy = null;
     this._launchProxyAuth = readLaunchProxyAuth();
-    if (usesSystemProxy())
+    // A system proxy is not in network.proxy.* either, and a content process
+    // cannot ask the OS for it.
+    const systemProxySettings = Cc['@mozilla.org/system-proxy-settings;1']?.getService(Ci.nsISystemProxySettings);
+    if (usesSystemProxy(Services.prefs.getIntPref('network.proxy.type'), systemProxySettings))
       recordProxied('browser');
 
     // Cleanup containers from previous runs (if any)
