@@ -3229,7 +3229,33 @@ def test_one_failed_release_build_does_not_cancel_the_others():
     jobs = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]
     assert jobs["build-browser"]["strategy"]["fail-fast"] is False
     publish = jobs["publish-browser"]
-    assert "build-browser" in publish["needs"] and "if" not in publish
+    # A failed leg fails the matrix's result, so this still publishes no partial release.
+    assert "build-browser" in publish["needs"]
+    assert "needs.build-browser.result == 'success'" in publish["if"]
+
+
+def _needs(job):
+    needs = job.get("needs", [])
+    return [needs] if isinstance(needs, str) else needs
+
+
+def test_a_tested_commit_still_builds_and_publishes():
+    """`tests` is skipped when the commit was already tested, and a job with no
+    status check runs only if every job upstream of it succeeded: a dispatch on
+    a tested commit skipped the browser build and both publishes (run 44952481674)."""
+    import yaml
+
+    jobs = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]
+    assert jobs["tests"]["if"], "tests is the job a dispatch can skip"
+    downstream, grew = {"tests"}, True
+    while grew:
+        more = {n for n, j in jobs.items() if set(_needs(j)) & downstream} - downstream
+        downstream |= more
+        grew = bool(more)
+    for name in sorted(downstream - {"tests"}):
+        job = jobs[name]
+        cond = str(job.get("if", ""))
+        assert "!cancelled()" in cond or "always()" in cond, f"{name} is skipped whenever tests is"
 
 
 # ---------------------------------------------------------------------------
