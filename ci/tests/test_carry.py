@@ -60,16 +60,16 @@ def test_a_commit_no_pull_request_merged_is_tested_in_full(monkeypatch):
     assert found is None
 
 
-def _gate(results, carried="", built="true", sundial="true"):
+def _gate(results, carried="", built="true"):
     step = next(s for s in yaml.safe_load(WORKFLOW.read_text())["jobs"]["gate"]["steps"]
                 if s.get("name") == "Check every tier")
     env = {**os.environ, "RESULTS": json.dumps({k: {"result": v} for k, v in results.items()}),
-           "BROWSER_CHANGED": built, "HAS_SUNDIAL": sundial, "CARRIED": carried}
+           "BROWSER_CHANGED": built, "CARRIED": carried}
     return subprocess.run(["bash", "-c", step["run"]], env=env, capture_output=True, text=True).returncode
 
 
 JOBS = yaml.safe_load(WORKFLOW.read_text())["jobs"]["gate"]["needs"]
-RERUN = {"resolve", "carry-browser", "sundial", "summary"}
+RERUN = {"resolve", "carry-browser", "summary"}
 
 
 def test_a_carried_run_passes_with_only_the_new_checks_run():
@@ -82,6 +82,6 @@ def test_skipping_the_suites_fails_unless_the_run_was_carried():
     assert _gate(results) != 0
 
 
-def test_a_carried_run_still_fails_when_the_stealth_check_fails():
+def test_a_carried_run_still_fails_when_carrying_the_browser_fails():
     results = {j: "success" if j in RERUN else "skipped" for j in JOBS}
-    assert _gate({**results, "sundial": "failure"}, carried="5") != 0
+    assert _gate({**results, "carry-browser": "failure"}, carried="5") != 0

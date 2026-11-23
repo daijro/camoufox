@@ -3,8 +3,6 @@
 The pipeline's job is to run the right suite against the right browser and
 report honestly. These cover the parts where "honestly" is load-bearing:
 
-  * nothing identifying a sundial vector may survive redaction, and the public
-    output is a grade rather than a breakdown of what is weak;
   * a skip must carry a reason, or it is indistinguishable from hiding a test;
   * sharding must be stable, so a flake does not appear to move between runners;
   * version resolution must never pick a suite newer than the browser, nor one
@@ -20,152 +18,16 @@ import json
 import os
 import pathlib
 import re
-import tempfile
-import urllib.error
-import urllib.parse
 
 import pytest
 
 from ci import results
 from ci._util import CI_DIR as CI_ROOT
 from ci._pytest import junit_test_id
-from ci._util import opaque_id, parse_version, read_upstream_sh
+from ci._util import parse_version, read_upstream_sh
 from ci.pw_camoufox_plugin import load_skiplist, parse_shard, shard_of, skip_reason
-from ci.run_sundial import _iter_entries, grade, redact
 from ci.summarize import merge_shards, validate_skiplist
 from ci.versions import resolve
-
-
-# ---------------------------------------------------------------------------
-# sundial redaction -- the one that must never regress
-# ---------------------------------------------------------------------------
-
-
-SECRETS = [
-    "canvas.rasterizer.subpixel-drift",
-    "A private vector name nobody may publish",
-    "checks whether the FMA3 path is present",
-    "return Math.fround(x) !== y",
-    "3.14159265358979",
-]
-
-FULL_REPORT = {
-    "schemaVersion": 1,
-    "sundialVersion": "0.3.1",
-    "identity": {"name": "Firefox", "os": "linux", "engine": "SpiderMonkey", "tz": "UTC"},
-    "summary": {"total": 3, "pass": 1, "fail": 2},
-    "failures": {
-        "Graphics": [{
-            "key": SECRETS[0], "id": "gfx-1", "name": SECRETS[1], "brief": SECRETS[2],
-            "src": SECRETS[3], "source": SECRETS[3], "value": SECRETS[4],
-            "expect": SECRETS[4], "category": "Graphics", "status": "fail",
-        }],
-        "Identity": [{
-            "key": "identity.nav.oscpu", "id": "id-9", "name": SECRETS[1],
-            "value": SECRETS[4], "category": "Identity", "status": "fail",
-        }],
-    },
-    "succeeded": {
-        "Identity": [{
-            "key": "identity.nav.platform", "id": "id-3", "name": SECRETS[1],
-            "value": SECRETS[4], "category": "Identity", "status": "pass",
-        }],
-    },
-    "private": {
-        "failures": {
-            "Locale": [{
-                "key": "pv-secret-vector", "id": "pv-1", "name": SECRETS[1],
-                "src": SECRETS[3], "category": "Locale", "status": "fail",
-            }],
-        },
-    },
-}
-
-GATED = ["Identity", "Security", "JS Engine", "Display", "Locale", "Network"]
-UNGATED = ["Graphics", "Audio", "CPU"]
-
-
-def test_redaction_leaks_nothing_identifying():
-    blob = json.dumps(redact(FULL_REPORT, GATED, UNGATED, os_name="linux", require_score_mode=False))
-    for secret in SECRETS:
-        assert secret not in blob, f"redaction leaked: {secret!r}"
-    for key in ("canvas.rasterizer.subpixel-drift", "identity.nav.oscpu", "pv-secret-vector"):
-        assert key not in blob, f"redaction leaked the vector key {key!r}"
-
-
-def test_only_whitelisted_keys_are_published():
-    """A whitelist, not a blacklist.
-
-    A blacklist only stops the leaks somebody already thought of: add a field to
-    redact() and forget to consider it, and a blacklist ships it. This fails.
-    """
-    from ci.run_sundial import _PUBLISHABLE
-
-    out = redact(FULL_REPORT, GATED, UNGATED, os_name="linux", require_score_mode=False)
-    assert set(out) <= _PUBLISHABLE, f"published beyond the whitelist: {set(out) - _PUBLISHABLE}"
-    assert set(out) == {
-        "grade", "checks_total", "checks_passed", "pass_rate",
-        "out_of_scope_failed", "unknown_category_checks",
-        "cross_os_total", "cross_os_passed",
-        "score_mode", "os", "sundial_version", "schema_version",
-    }
-
-
-def test_publishing_an_unlisted_key_is_refused():
-    """The whitelist has to actually bite, not just describe intent."""
-    from ci.run_sundial import _assert_publishable
-
-    with pytest.raises(RuntimeError, match="whitelist"):
-        _assert_publishable({"grade": "A", "by_category": {"Graphics": 3}})
-
-
-def test_no_per_vector_rows_survive():
-    """Not even opaque ones.
-
-    An HMAC names nothing, but a map of them says how many distinct checks fail
-    and lets a reader follow the same id across releases. The instruction was a
-    score, so there are no rows at all.
-    """
-    out = redact(FULL_REPORT, GATED, UNGATED, os_name="linux", require_score_mode=False)
-    assert "tests" not in out and "ungated_tests" not in out
-    for value in out.values():
-        assert not isinstance(value, dict), f"a mapping survived redaction: {value!r}"
-    # And nothing that looks like an opaque id.
-    blob = json.dumps(out)
-    for key in ("canvas.rasterizer.subpixel-drift", "identity.nav.oscpu", "pv-secret-vector"):
-        assert opaque_id(key) not in blob
-
-
-def test_no_category_names_are_published():
-    """A table reading "Graphics 3/17" is the most useful single fact an
-    adversary could take from a public CI log."""
-    blob = json.dumps(redact(FULL_REPORT, GATED, UNGATED, os_name="linux", require_score_mode=False))
-    for category in GATED + UNGATED:
-        assert category not in blob, f"published output names the category {category!r}"
-
-
-def test_only_in_scope_checks_are_scored():
-    out = redact(FULL_REPORT, GATED, UNGATED, os_name="linux", require_score_mode=False)
-    # Identity: one pass, one fail. Locale (private): one fail. -> 1/3 in scope.
-    assert out["checks_total"] == 3
-    assert out["checks_passed"] == 1
-    assert out["pass_rate"] == pytest.approx(1 / 3, abs=1e-4)
-    # Graphics is out of scope: counted, never scored.
-    assert out["out_of_scope_failed"] == 1
-
-
-@pytest.mark.parametrize(
-    "rate,expected",
-    [(1.0, "A+"), (0.99, "A+"), (0.975, "A"), (0.95, "B"), (0.91, "C"), (0.85, "D"), (0.5, "F")],
-)
-def test_grade_boundaries(rate, expected):
-    assert grade(rate) == expected
-
-
-def test_iter_entries_finds_public_and_private():
-    keys = {k for k, _, _ in _iter_entries(FULL_REPORT)}
-    assert "pv-secret-vector" in keys
-    assert "identity.nav.platform" in keys
 
 
 # ---------------------------------------------------------------------------
@@ -540,95 +402,6 @@ def test_the_gpu_subset_without_a_card_is_an_error(monkeypatch, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# sundial's score-only payload, with cross-OS split out
-# ---------------------------------------------------------------------------
-
-
-SCORE_PAYLOAD = {
-    "schemaVersion": 1,
-    "mode": "score",
-    "sundialVersion": "0.3.1",
-    "identity": {"name": "Firefox", "os": "linux"},
-    "buckets": {
-        # in scope, browser's own behaviour
-        "Identity|core": {"scored": 40, "passed": 39, "failed": 1},
-        "Network|core": {"scored": 12, "passed": 12, "failed": 0},
-        # in scope by category, but reads the host machine
-        "Locale|crossOs": {"scored": 18, "passed": 4, "failed": 14},
-        # out of scope entirely
-        "Graphics|core": {"scored": 9, "passed": 6, "failed": 3},
-        "Graphics|crossOs": {"scored": 6, "passed": 1, "failed": 5},
-    },
-}
-
-
-def test_cross_os_failures_never_count_against_the_score():
-    """A browser claiming macOS on Linux fails the host-OS detectors regardless.
-
-    Those read the machine underneath, not the disguise, and Camoufox does not
-    claim byte-identical cross-OS emulation -- so counting them would mark it
-    down for a promise nobody made.
-    """
-    out = redact(SCORE_PAYLOAD, GATED, UNGATED, os_name="linux")
-    # Identity + Network core only: 52 scored, 51 passed.
-    assert out["checks_total"] == 52
-    assert out["checks_passed"] == 51
-    assert out["pass_rate"] == pytest.approx(51 / 52, abs=1e-4)
-    # The 14 Locale cross-OS failures did not drag it down...
-    assert out["grade"] == "A"
-    # ...but they are still reported, from both categories.
-    assert out["cross_os_total"] == 24
-    assert out["cross_os_passed"] == 5
-
-
-def test_out_of_scope_failures_are_counted_but_not_scored():
-    out = redact(SCORE_PAYLOAD, GATED, UNGATED, os_name="linux")
-    # Graphics is not a gated category: its 3 core failures are counted only.
-    assert out["out_of_scope_failed"] == 3
-
-
-def test_the_score_payload_publishes_no_categories_or_classes():
-    """Checked against keys and values, not the raw JSON text.
-
-    A substring scan flagged "score_mode" for containing "core", which is the
-    kind of false positive that gets an assertion loosened until it stops
-    catching anything.
-    """
-    out = redact(SCORE_PAYLOAD, GATED, UNGATED, os_name="linux")
-    forbidden = {"Identity", "Network", "Locale", "Graphics", "crossOs", "core", "buckets"}
-
-    assert not (set(out) & forbidden), f"a published key names a category or class: {set(out) & forbidden}"
-    leaked = [v for v in out.values() if isinstance(v, str) and v in forbidden]
-    assert not leaked, f"a published value names a category or class: {leaked}"
-    # And no nested structure that could carry one.
-    assert all(not isinstance(v, (dict, list)) for v in out.values())
-
-
-def test_a_full_report_still_folds_to_the_same_shape():
-    """Older sundial, or a deliberate local run, must not break the gate."""
-    from ci.run_sundial import _PUBLISHABLE
-
-    out = redact(FULL_REPORT, GATED, UNGATED, os_name="linux", require_score_mode=False)
-    assert set(out) <= _PUBLISHABLE
-    assert out["checks_total"] == 3 and out["checks_passed"] == 1
-    # A full report carries no class tags, so nothing is attributed to cross-OS.
-    assert out["cross_os_total"] == 0
-
-
-def test_a_deployment_without_score_mode_is_flagged_not_silent():
-    """An old sundial ignores ?score=1 and posts the whole report.
-
-    The numbers still come out right, but nothing is classified, so every
-    cross-OS tally reads zero -- which looks like "no host-OS failures" rather
-    than "nobody sorted them". score_mode says which of those it is.
-    """
-    assert redact(SCORE_PAYLOAD, GATED, UNGATED, os_name="linux")["score_mode"] is True
-    legacy = redact(FULL_REPORT, GATED, UNGATED, os_name="linux", require_score_mode=False)
-    assert legacy["score_mode"] is False
-    assert legacy["cross_os_total"] == 0
-
-
-# ---------------------------------------------------------------------------
 # cross-profile uniqueness, judged by what each slot promises
 # ---------------------------------------------------------------------------
 
@@ -880,171 +653,6 @@ def test_pythonlib_still_pins_a_playwright_ceiling():
 
 
 # ---------------------------------------------------------------------------
-# score mode is a requirement, not a preference
-# ---------------------------------------------------------------------------
-
-
-def test_a_full_report_is_refused_by_default():
-    """The gate only ever asks for `?auto=1&score=1`.
-
-    So a full report arriving here means the deployment did not honour it. That
-    is the one case where the vectors really are in this process, and folding
-    them down anyway would mean they passed through and nobody noticed -- the
-    failure has to be loud.
-    """
-    with pytest.raises(RuntimeError, match="full report, not a score"):
-        redact(FULL_REPORT, GATED, UNGATED, os_name="linux")
-
-
-def test_a_full_report_still_folds_when_explicitly_allowed():
-    """The escape hatch is for a local run under an account allowed a report."""
-    out = redact(FULL_REPORT, GATED, UNGATED, os_name="linux", require_score_mode=False)
-    assert out["score_mode"] is False
-    assert out["checks_total"] > 0
-
-
-def test_the_score_payload_is_accepted_without_the_flag():
-    assert redact(SCORE_PAYLOAD, GATED, UNGATED, os_name="linux")["score_mode"] is True
-
-
-def test_consumers_only_read_published_metric_keys():
-    """Every `metrics[...]` read in the pipeline must name a key redact() emits.
-
-    This is the check that was missing when `redact()` renamed `gated_passed` to
-    `checks_passed`: the redaction tests all passed, because they only ever
-    exercised redact() itself, while its two consumers went on reading the old
-    names -- one raising KeyError on every successful run, the other silently
-    rendering "0/0 in-scope checks passed". Asserting the contract from the
-    consumer side is what catches that, so it is done by reading the source
-    rather than by calling one code path.
-    """
-    import ast
-
-    from ci.run_sundial import _PUBLISHABLE
-
-    # In run_sundial.py every `metrics` is sundial's. summarize.py also folds
-    # shard metrics for the other gates under that name, so there the sundial
-    # reads carry a distinct one.
-    holders = {"run_sundial.py": {"metrics"}, "summarize.py": {"sundial_metrics"}}
-
-    offenders = []
-    for module, names in holders.items():
-        path = CI_ROOT / module
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            key = name = None
-            # metrics["x"] -- reads only; `metrics["shards"] = n` is a write.
-            if (
-                isinstance(node, ast.Subscript)
-                and isinstance(node.ctx, ast.Load)
-                and isinstance(node.value, ast.Name)
-                and node.value.id in names
-                and isinstance(node.slice, ast.Constant)
-                and isinstance(node.slice.value, str)
-            ):
-                name, key = node.value.id, node.slice.value
-            # metrics.get("x", ...)
-            elif (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "get"
-                and isinstance(node.func.value, ast.Name)
-                and node.func.value.id in names
-                and node.args
-                and isinstance(node.args[0], ast.Constant)
-                and isinstance(node.args[0].value, str)
-            ):
-                name, key = node.func.value.id, node.args[0].value
-
-            if key is not None and key not in _PUBLISHABLE:
-                offenders.append(f"{module}: {name}[{key!r}]")
-
-
-    assert not offenders, (
-        "these read a metrics key redact() does not publish, so they will raise "
-        f"KeyError or render a zero: {offenders}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# the stealth-gate kill switch
-# ---------------------------------------------------------------------------
-
-
-def test_the_gate_is_off_unless_the_config_says_otherwise():
-    """Absent the key, off.
-
-    The check talks to a private suite and puts the answer in a public log, so
-    the safe default is not to run. A config predating the flag must not start
-    running by inheriting a permissive default.
-    """
-    from ci.run_sundial import is_enabled
-
-    assert is_enabled({}) is False
-    assert is_enabled({"url": "https://example.invalid"}) is False
-    assert is_enabled({"enabled": False}) is False
-    assert is_enabled({"enabled": True}) is True
-
-
-def test_sundial_yml_declares_enabled_explicitly():
-    """Whether CI may contact sundial is too important to be implicit.
-
-    Asserting the key is present (rather than that it is false) keeps this test
-    valid either way, while still forcing the decision to be written down.
-    """
-    import yaml
-
-    cfg = yaml.safe_load((CI_ROOT / "sundial.yml").read_text(encoding="utf-8")) or {}
-    assert "enabled" in cfg, "ci/sundial.yml must state `enabled:` one way or the other"
-    assert isinstance(cfg["enabled"], bool), "`enabled:` must be a bool, not a string"
-
-
-def test_a_disabled_gate_makes_no_request():
-    """Disabled means no credential is read and no connection is opened.
-
-    Asserted by making every route out fatal: authenticate(), both of the login
-    functions it can reach, and scan() all raise if called, and the credential is
-    put in the environment so that a gate which ignored the flag would sail past
-    the missing-credential check and hit them.
-    """
-    import ci.run_sundial as rs
-
-    calls = []
-
-    def explode(*args, **kwargs):
-        calls.append(args)
-        raise AssertionError("a disabled stealth gate contacted sundial")
-
-    names = ("authenticate", "login", "login_with_key", "scan")
-    monkey = {name: getattr(rs, name) for name in names}
-    monkey["_config"] = rs._config
-    for name in names:
-        setattr(rs, name, explode)
-    rs._config = lambda: {"enabled": False, "url": "https://sundial.invalid"}
-    old_key = os.environ.get("SUNDIAL_AUTOMATION_KEY")
-    os.environ["SUNDIAL_AUTOMATION_KEY"] = "would-be-used-if-the-flag-were-ignored"
-    try:
-        with tempfile.TemporaryDirectory() as tmp:
-            code = rs.gate(["--binary", "/nonexistent", "--evidence-dir", tmp])
-            produced = pathlib.Path(tmp) / "sundial.json"
-            written = json.loads(produced.read_text()) if produced.exists() else None
-    finally:
-        for name in names:
-            setattr(rs, name, monkey[name])
-        rs._config = monkey["_config"]
-        if old_key is None:
-            os.environ.pop("SUNDIAL_AUTOMATION_KEY", None)
-        else:
-            os.environ["SUNDIAL_AUTOMATION_KEY"] = old_key
-
-    assert calls == [], "the gate reached the network while disabled"
-    assert code == 0, "a disabled gate is a skip, not a failure"
-    # No result file, matching CI, where the job is never scheduled. A skip
-    # record here would fail a summary that CI would have passed.
-    assert written is None, "a disabled gate must not write a result file"
-
-
-# ---------------------------------------------------------------------------
 # the workflow's plumbing -- result files have to survive the round trip
 # ---------------------------------------------------------------------------
 
@@ -1118,7 +726,7 @@ def test_required_suites_are_names_a_runner_actually_writes():
         required.update(part for part in line.split() if not part.startswith("$"))
 
     producible = {
-        "build", "build_tester", "patch_guards", "pythonlib", "sundial",
+        "build", "build_tester", "patch_guards", "pythonlib",
         "patch_guards_spoofing", "patch_guards_automation", "patch_guards_parity",
         "native", "native_rules", "native_browser", "native_growth",
         "playwright", "skiplist_audit", "typescript", "typescript_browser", "install",
@@ -1313,75 +921,6 @@ def test_zero_attempts_still_runs_the_step_once(monkeypatch):
     assert code == 0
 
 
-# ---------------------------------------------------------------------------
-# a category nobody has ruled on is a blind spot, not an "out of scope"
-# ---------------------------------------------------------------------------
-
-
-def _score_payload(*buckets) -> dict:
-    """A minimal sundial score payload: (category, class, scored, passed)."""
-    return {
-        "schemaVersion": 1,
-        "mode": "score",
-        "sundialVersion": "0.5.0",
-        "buckets": {
-            f"{cat}|{cls}": {"scored": n, "passed": p, "failed": n - p}
-            for cat, cls, n, p in buckets
-        },
-    }
-
-
-def test_sundial_yml_names_every_section_sundial_has():
-    """ci/sundial.yml must partition sundial's taxonomy, not sample it.
-
-    sundial's SECTIONS are the `category` every scored entry carries. If the two
-    lists here do not cover all of them, whatever is missing is silently
-    unscored -- the gate would report a pass rate over a slice of the suite and
-    read exactly like a clean run.
-    """
-    import yaml
-
-    cfg = yaml.safe_load((CI_ROOT / "sundial.yml").read_text(encoding="utf-8"))
-    named = {c.lower() for c in cfg["gated_categories"]} | {
-        c.lower() for c in cfg["ungated_categories"]
-    }
-    # sundial 0.5.0, src/lib/engine.js SECTIONS[].label.
-    sundial_sections = {
-        "identity", "security", "js engine", "graphics",
-        "display", "locale", "audio", "cpu", "network",
-    }
-    assert sundial_sections <= named, (
-        f"not scored by either list: {sorted(sundial_sections - named)}"
-    )
-    assert not (named - sundial_sections), (
-        f"named here but not a sundial section: {sorted(named - sundial_sections)}"
-    )
-
-
-def test_a_category_in_neither_list_is_counted_as_unknown():
-    out = redact(
-        _score_payload(
-            ("Identity", "core", 10, 10),
-            ("Graphics", "core", 5, 3),      # deliberately ungated
-            ("Battery", "core", 4, 1),       # a section nobody has ruled on
-        ),
-        GATED, UNGATED, os_name="linux",
-    )
-    assert out["checks_total"] == 10
-    assert out["unknown_category_checks"] == 4
-    # Still only a count -- the category name never reaches the metrics.
-    assert "Battery" not in json.dumps(out)
-
-
-def test_a_known_ungated_category_is_not_unknown():
-    out = redact(
-        _score_payload(("Identity", "core", 10, 10), ("Graphics", "core", 5, 3)),
-        GATED, UNGATED, os_name="linux",
-    )
-    assert out["unknown_category_checks"] == 0
-    assert out["out_of_scope_failed"] == 2
-
-
 def test_run_capturing_keeps_stdout_and_stderr():
     """The classifier reads this output, so losing stderr loses the diagnosis."""
     from ci.run_prepare import _run_capturing
@@ -1410,155 +949,6 @@ def test_a_step_that_wedges_without_printing_is_killed():
     assert code == 124, "a timed-out step must not report success"
     assert "TIMEOUT" in out
     assert elapsed < 15, f"the timeout did not fire promptly ({elapsed:.1f}s)"
-
-
-# ---------------------------------------------------------------------------
-# the credential must not ride out on an error message
-# ---------------------------------------------------------------------------
-
-
-def test_scrub_removes_the_secret_in_both_encodings():
-    """An exception from urllib can carry the URL that raised it.
-
-    For the token route that URL *is* the credential, percent-encoded. Whatever
-    reaches result.note() is published to the results artifact and the pull
-    request comment, so it goes through scrub() first.
-    """
-    from ci.run_sundial import scrub
-
-    secret = "yPsM+key/with=specials"
-    quoted = urllib.parse.quote(secret, safe="")
-    text = f"HTTPError at https://sundial.daijro.dev/automated?key={quoted} and raw {secret}"
-    out = scrub(text, secret)
-    assert secret not in out
-    assert quoted not in out
-    assert out.count("<redacted>") == 2
-
-
-def test_scrub_is_a_no_op_without_a_secret():
-    from ci.run_sundial import scrub
-
-    assert scrub("nothing to hide", "") == "nothing to hide"
-
-
-def test_a_failed_login_never_publishes_the_credential():
-    """End to end: a bad credential fails the gate without leaking itself."""
-    import ci.run_sundial as rs
-
-    secret = "super-secret-automation-key"
-
-    def boom(base_url, key, **kwargs):
-        raise urllib.error.HTTPError(
-            f"{base_url}/automated?key={urllib.parse.quote(secret, safe='')}",
-            401, "Unauthorized", {}, None,
-        )
-
-    monkey = {"login_with_key": rs.login_with_key, "login": rs.login}
-    rs.login_with_key = boom
-    rs.login = lambda *a, **k: (_ for _ in ()).throw(RuntimeError(f"rejected {secret}"))
-    try:
-        with pytest.raises(RuntimeError) as exc_info:
-            rs.authenticate("https://sundial.invalid", "guest", secret)
-    finally:
-        rs.login_with_key, rs.login = monkey["login_with_key"], monkey["login"]
-
-    message = str(exc_info.value)
-    assert secret not in message, "the credential reached the published error text"
-    assert "<redacted>" in message
-    # Still says enough to act on.
-    assert "automation key" in message and "form login" in message
-
-
-# ---------------------------------------------------------------------------
-# CI must not scan under a role that is handed the vectors
-# ---------------------------------------------------------------------------
-
-
-def _with_role(monkeypatch, role):
-    import ci.run_sundial as rs
-
-    monkeypatch.setattr(rs, "session_role", lambda *a, **k: role)
-    return rs
-
-
-@pytest.mark.parametrize("role", ["guest", "ci"])
-def test_a_role_without_the_vectors_is_accepted(monkeypatch, role):
-    rs = _with_role(monkeypatch, role)
-    assert rs.assert_role_cannot_read_vectors("https://sundial.invalid", "cookie") == role
-
-
-@pytest.mark.parametrize("role", ["private", "admin"])
-def test_a_role_that_can_read_the_vectors_is_refused(monkeypatch, role):
-    """`/automated?key=` resolves to `private` when handed the private key.
-
-    The two keys look identical, so "we set the guest one" is an assumption
-    until something checks. Loading the vectors onto a public runner is the
-    exact outcome this gate exists to prevent, so the check has to come before
-    the browser opens sundial -- not after, and not in redaction, which only
-    governs what gets published.
-    """
-    rs = _with_role(monkeypatch, role)
-    with pytest.raises(RuntimeError, match=f"{role}.*role"):
-        rs.assert_role_cannot_read_vectors("https://sundial.invalid", "cookie")
-
-
-def test_an_unreadable_role_fails_closed(monkeypatch):
-    """Not knowing the role is not the same as the role being safe."""
-    rs = _with_role(monkeypatch, None)
-    with pytest.raises(RuntimeError, match="did not say what role"):
-        rs.assert_role_cannot_read_vectors("https://sundial.invalid", "cookie")
-
-
-def test_the_role_is_publishable_but_the_whitelist_still_bites():
-    from ci.run_sundial import _PUBLISHABLE, _assert_publishable
-
-    assert "sundial_role" in _PUBLISHABLE
-    _assert_publishable({"sundial_role": "guest"})
-    with pytest.raises(RuntimeError):
-        _assert_publishable({"sundial_role": "guest", "vector_name": "pv-secret"})
-
-
-def test_the_evidence_records_which_role_the_run_used(monkeypatch, tmp_path):
-    """`sundial_role` has to survive into the saved result, not just be checked.
-
-    redact()'s output replaces result.metrics wholesale, so a role recorded
-    before the scan was silently dropped on the way out -- the check still ran
-    and still failed closed, but the artifact did not say which role it had
-    confirmed, leaving "the vectors were never served to this session"
-    unverifiable after the fact.
-    """
-    import ci.run_sundial as rs
-
-    score = {
-        "schemaVersion": 1,
-        "mode": "score",
-        "sundialVersion": "v0.5.0",
-        "buckets": {"Identity|core": {"scored": 10, "passed": 10, "failed": 0}},
-    }
-
-    monkeypatch.setattr(rs, "_config", lambda: {
-        "enabled": True,
-        "url": "https://sundial.invalid",
-        "gated_categories": ["Identity"],
-        "ungated_categories": ["Graphics"],
-        "min_pass_rate": 0.9,
-    })
-    monkeypatch.setattr(rs, "authenticate", lambda *a, **k: "cookie")
-    monkeypatch.setattr(rs, "assert_role_cannot_read_vectors", lambda *a, **k: "guest")
-    async def _scan(**_kwargs):
-        return score
-
-    monkeypatch.setattr(rs, "scan", _scan)
-    monkeypatch.setattr(rs, "seal", lambda *a, **k: None)
-    monkeypatch.setenv("SUNDIAL_AUTOMATION_KEY", "a-key")
-
-    code = rs.gate(["--binary", str(tmp_path / "fake-bin"), "--evidence-dir", str(tmp_path)])
-    saved = json.loads((tmp_path / "sundial.json").read_text())
-
-    assert code == 0, saved.get("notes")
-    assert saved["metrics"]["sundial_role"] == "guest"
-    # And it is still only ever counts beside it.
-    assert "vector" not in json.dumps(saved).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -1641,107 +1031,6 @@ def test_every_camoufox_test_module_is_named_unlike_upstreams():
     assert not (set(ours) & generic), (
         f"{sorted(set(ours) & generic)} shares a name with an upstream module"
     )
-
-
-# ---------------------------------------------------------------------------
-# --explain: a local diagnostic that must stay local
-# ---------------------------------------------------------------------------
-
-
-def _explain_payload():
-    return {
-        "schemaVersion": 1,
-        "mode": "score",
-        "sundialVersion": "v0.5.0",
-        "buckets": {
-            "Identity|core": {"scored": 10, "passed": 8},
-            "Graphics|core": {"scored": 4, "passed": 3},
-            "Identity|crossOs": {"scored": 5, "passed": 4},
-        },
-    }
-
-
-def _stub_sundial(monkeypatch, rs, payload):
-    monkeypatch.setattr(rs, "_config", lambda: {
-        "enabled": True,
-        "url": "https://sundial.invalid",
-        "gated_categories": ["Identity"],
-        "ungated_categories": ["Graphics"],
-        "min_pass_rate": 0.5,
-    })
-    monkeypatch.setattr(rs, "authenticate", lambda *a, **k: "cookie")
-    monkeypatch.setattr(rs, "assert_role_cannot_read_vectors", lambda *a, **k: "guest")
-
-    async def _scan(**_kwargs):
-        return payload
-
-    monkeypatch.setattr(rs, "scan", _scan)
-    monkeypatch.setattr(rs, "seal", lambda *a, **k: None)
-    monkeypatch.setenv("SUNDIAL_AUTOMATION_KEY", "a-key")
-
-
-def test_explain_is_refused_in_ci(monkeypatch, tmp_path):
-    """A per-category weakness map must not be written to a public workflow log.
-
-    The counts are not vectors, but they do say where this browser is weak, and
-    the repository is public. Refused before anything is sent, so the flag cannot
-    be switched on in CI and discovered afterwards.
-    """
-    import ci.run_sundial as rs
-
-    _stub_sundial(monkeypatch, rs, _explain_payload())
-    monkeypatch.setenv("GITHUB_ACTIONS", "true")
-
-    with pytest.raises(SystemExit, match="public"):
-        rs.gate(["--explain", "--binary", str(tmp_path / "bin"), "--evidence-dir", str(tmp_path)])
-
-    assert not (tmp_path / "sundial.json").exists(), "refused before anything ran"
-
-
-def test_explain_prints_but_never_records(monkeypatch, tmp_path, capsys):
-    """The breakdown goes to the terminal; the artifact keeps only the whitelist.
-
-    This is the boundary the whole module is built around, so assert it on the
-    one path that deliberately produces more detail than it publishes.
-    """
-    import ci.run_sundial as rs
-
-    _stub_sundial(monkeypatch, rs, _explain_payload())
-    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-
-    code = rs.gate(["--explain", "--binary", str(tmp_path / "bin"), "--evidence-dir", str(tmp_path)])
-    printed = capsys.readouterr().out
-    saved = json.loads((tmp_path / "sundial.json").read_text())
-
-    assert code == 0, saved.get("notes")
-    assert "per-category breakdown" in printed and "Identity" in printed
-    # Nothing about categories reached the artifact.
-    assert "Identity" not in json.dumps(saved)
-    assert "breakdown" not in json.dumps(saved)
-    assert set(saved["metrics"]) <= set(rs._PUBLISHABLE)
-
-
-def test_explain_says_the_names_are_not_available(monkeypatch):
-    """The output must not imply it is showing individual checks.
-
-    Score mode carries no check names at all, so a reader who takes this for the
-    full answer would conclude the failing checks are unknowable rather than
-    that they need a different credential.
-    """
-    from ci.run_sundial import explain_buckets
-
-    lines = "\n".join(explain_buckets(_explain_payload(), ["Identity"], ["Graphics"]))
-    assert "--allow-full-report" in lines
-    assert "no check names" in lines
-
-
-def test_explain_flags_a_category_nobody_has_classified():
-    """Same rule as the gate: a new sundial section must not default to ignored."""
-    from ci.run_sundial import explain_buckets
-
-    payload = {"mode": "score", "buckets": {"Quantum|core": {"scored": 3, "passed": 1}}}
-    lines = "\n".join(explain_buckets(payload, ["Identity"], ["Graphics"]))
-    assert "UNKNOWN CATEGORY" in lines
 
 
 # ---------------------------------------------------------------------------
@@ -1957,7 +1246,7 @@ def test_the_workflow_checks_the_fetched_build():
 # ---------------------------------------------------------------------------
 
 
-def _required_suites(browser_changed: str, has_sundial: str) -> set:
+def _required_suites(browser_changed: str) -> set:
     """Run the workflow's own `required=` assembly and report what it produced.
 
     Extracted and executed rather than pattern-matched, because the bug this
@@ -1972,7 +1261,6 @@ def _required_suites(browser_changed: str, has_sundial: str) -> set:
     end = text.index("python3 -m ci.summarize", start)
     block = text[start:end]
     block = block.replace("${{ needs.resolve.outputs.browser_changed }}", browser_changed)
-    block = block.replace("${{ needs.resolve.outputs.has_sundial }}", has_sundial)
     proc = subprocess.run(
         ["bash", "-c", block + '\necho "$required"'],
         capture_output=True, text=True,
@@ -1991,14 +1279,14 @@ def test_build_is_required_only_when_the_browser_was_built():
     pythonlib, ci/ and tests/ alike. That is most of them, and it is precisely
     the cheap path this pipeline advertises.
     """
-    assert "build" in _required_suites("true", "false")
-    assert "build" not in _required_suites("false", "false")
+    assert "build" in _required_suites("true")
+    assert "build" not in _required_suites("false")
 
 
 def test_the_browser_suites_are_required_either_way():
     """Fetching instead of building narrows what was compiled, not what is tested."""
     for changed in ("true", "false"):
-        required = _required_suites(changed, "false")
+        required = _required_suites(changed)
         assert {
             "pythonlib", "install", "native_rules", "skiplist_audit", "build_tester",
             "playwright", "native_browser", "native_growth",
@@ -2006,13 +1294,8 @@ def test_the_browser_suites_are_required_either_way():
         } <= required, changed
 
 
-def test_sundial_is_required_only_when_there_is_a_credential():
-    assert "sundial" in _required_suites("true", "true")
-    assert "sundial" not in _required_suites("true", "false")
-
-
 # ---------------------------------------------------------------------------
-# sundial being down is not a verdict about the browser
+# a suite outside this repository's control may be let off a SKIP, by name
 # ---------------------------------------------------------------------------
 
 
@@ -2031,22 +1314,22 @@ def test_a_skipped_suite_fails_the_run_unless_it_is_explicitly_allowed(tmp_path)
     """
     from ci.summarize import main as summarize
 
-    _write_result(tmp_path, "sundial", results.SKIP, notes=["sundial is unreachable"])
+    _write_result(tmp_path, "external", results.SKIP, notes=["the service is unreachable"])
     _write_result(tmp_path, "playwright", results.SKIP, notes=["did not feel like it"])
 
     # Not allowed: both are failures.
-    assert summarize(["--results-dir", str(tmp_path), "--require", "sundial", "playwright"]) == 1
+    assert summarize(["--results-dir", str(tmp_path), "--require", "external", "playwright"]) == 1
 
     # Allowing one does not allow the other.
     code = summarize([
-        "--results-dir", str(tmp_path), "--require", "sundial", "playwright",
-        "--allow-skip", "sundial",
+        "--results-dir", str(tmp_path), "--require", "external", "playwright",
+        "--allow-skip", "external",
     ])
     assert code == 1, "a skip for a suite outside --allow-skip must still fail"
 
     (tmp_path / "playwright.json").unlink()
     code = summarize([
-        "--results-dir", str(tmp_path), "--require", "sundial", "--allow-skip", "sundial",
+        "--results-dir", str(tmp_path), "--require", "external", "--allow-skip", "external",
     ])
     assert code == 0
 
@@ -2055,135 +1338,46 @@ def test_an_allowed_skip_is_still_shown_as_a_skip(tmp_path):
     """Tolerated is not the same as invisible: it keeps its icon and its reason."""
     from ci.summarize import render
 
-    merged = {"sundial": {
-        "gate": "sundial", "status": results.SKIP, "tests": {}, "metrics": {},
-        "notes": ["stealth check skipped -- sundial could not be reached"],
+    merged = {"external": {
+        "gate": "external", "status": results.SKIP, "tests": {}, "metrics": {},
+        "notes": ["skipped -- the service could not be reached"],
     }}
-    markdown = render(merged, ["sundial"], [], {})
+    markdown = render(merged, ["external"], [], {})
     assert "⏭️" in markdown
     assert "could not be reached" in markdown
     assert "✅ Tests passed" in markdown  # tolerated: the run still passes
-    # And it must not render as a measurement that came back empty.
-    assert "grade **?**" not in markdown
 
 
-def test_the_workflow_allows_a_skip_only_for_sundial():
-    """A skip is tolerated because sundial is someone else's uptime. Nothing else
-    in this pipeline has that excuse -- every other suite runs on the runner."""
+def test_the_workflow_allows_no_suite_to_skip():
+    """Every suite this workflow runs runs on the runner, so none has an outage
+    elsewhere to excuse it. A skip is a failure for all of them."""
+    assert "--allow-skip" not in WORKFLOW.read_text(encoding="utf-8")
+
+
+def test_the_workflow_has_no_stealth_check():
+    """The sundial stealth check was taken out of CI; it is tested privately.
+
+    Pinned so it does not come back half-wired: a job, a credential or an
+    output left behind would fail or skip in ways the gate does not expect.
+    """
+    import yaml
+
     text = WORKFLOW.read_text(encoding="utf-8")
-    allowed = re.findall(r"--allow-skip ([^\\\n]*)", text)
-    assert allowed, "the summary step no longer passes --allow-skip"
-    for line in allowed:
-        assert line.split() == ["sundial"], line
+    workflow = yaml.safe_load(text)
+    assert "sundial" not in workflow["jobs"]
+    assert "SUNDIAL_" not in text
+    assert "sundial" not in text.lower()
 
 
-def test_only_a_transport_failure_counts_as_sundial_being_down():
-    """An HTTP reply is an answer, and answers get judged.
+def test_every_needs_names_a_job_that_exists():
+    import yaml
 
-    401 means the credential is wrong and 403 means the edge refused us -- both
-    are this repository's problem to fix, and skipping past them would turn a
-    misconfigured stealth gate into a permanently green one.
-    """
-    from ci.run_sundial import _unavailable_reason
-
-    def http(code):
-        return urllib.error.HTTPError("https://sundial.invalid", code, "", {}, None)
-
-    assert _unavailable_reason(http(500))
-    assert _unavailable_reason(http(503))
-    assert _unavailable_reason(http(429))
-    assert _unavailable_reason(urllib.error.URLError("Name or service not known"))
-    assert _unavailable_reason(TimeoutError("timed out"))
-    assert _unavailable_reason(ConnectionResetError("reset"))
-
-    assert _unavailable_reason(http(401)) is None
-    assert _unavailable_reason(http(403)) is None
-    assert _unavailable_reason(http(404)) is None
-    assert _unavailable_reason(RuntimeError("sundial rejected the credentials")) is None
-
-
-def test_an_unreachable_sundial_is_a_skip_and_a_bad_credential_is_not(monkeypatch, tmp_path):
-    """The gate's two exits, and the line between them.
-
-    Down: the browser was never measured, so neither pass nor fail is true, and
-    an outage on another host must not block every merge here. Rejected: sundial
-    answered, and the answer was about this repository's configuration.
-    """
-    import ci.run_sundial as rs
-
-    monkeypatch.setattr(rs, "_config", lambda: {
-        "enabled": True, "url": "https://sundial.invalid",
-        "gated_categories": ["Identity"], "ungated_categories": [], "min_pass_rate": 0.9,
-    })
-    monkeypatch.setenv("SUNDIAL_AUTOMATION_KEY", "a-key")
-    binary = tmp_path / "fake-bin"
-    binary.write_text("")
-
-    def down(*_a, **_k):
-        raise rs.SundialUnavailable("sundial could not be reached (Connection refused)")
-
-    monkeypatch.setattr(rs, "authenticate", down)
-    assert rs.gate(["--binary", str(binary), "--evidence-dir", str(tmp_path)]) == 0
-    saved = json.loads((tmp_path / "sundial.json").read_text())
-    assert saved["status"] == results.SKIP
-    assert "could not be reached" in " ".join(saved["notes"])
-
-    def rejected(*_a, **_k):
-        raise RuntimeError("sundial rejected the credentials.")
-
-    monkeypatch.setattr(rs, "authenticate", rejected)
-    assert rs.gate(["--binary", str(binary), "--evidence-dir", str(tmp_path)]) == 1
-    saved = json.loads((tmp_path / "sundial.json").read_text())
-    assert saved["status"] == results.ERROR
-
-
-def test_a_skip_note_cannot_carry_the_credential(monkeypatch, tmp_path):
-    """The token route puts the secret in the URL, and a URLError carries it."""
-    import ci.run_sundial as rs
-
-    secret = "super-secret-automation-key"
-    monkeypatch.setattr(rs, "_config", lambda: {
-        "enabled": True, "url": "https://sundial.invalid",
-        "gated_categories": ["Identity"], "ungated_categories": [], "min_pass_rate": 0.9,
-    })
-    monkeypatch.setenv("SUNDIAL_AUTOMATION_KEY", secret)
-    binary = tmp_path / "fake-bin"
-    binary.write_text("")
-
-    def down(*_a, **_k):
-        raise rs.SundialUnavailable(
-            f"sundial could not be reached: https://sundial.invalid/automated?key={secret}"
-        )
-
-    monkeypatch.setattr(rs, "authenticate", down)
-    rs.gate(["--binary", str(binary), "--evidence-dir", str(tmp_path)])
-    assert secret not in (tmp_path / "sundial.json").read_text()
-
-
-def test_one_route_answering_means_sundial_is_up(monkeypatch):
-    """Both routes are tried, and the key one 401s whenever the secret is a
-    password. That is an answer, so the failure that follows is a real one."""
-    import ci.run_sundial as rs
-
-    def key_route(*_a, **_k):
-        raise RuntimeError("the automation key route returned 401 and no session cookie")
-
-    def form_route(*_a, **_k):
-        raise RuntimeError("sundial rejected the credentials.")
-
-    monkeypatch.setattr(rs, "login_with_key", key_route)
-    monkeypatch.setattr(rs, "login", form_route)
-    with pytest.raises(RuntimeError) as caught:
-        rs.authenticate("https://sundial.invalid", "guest", "secret")
-    assert not isinstance(caught.value, rs.SundialUnavailable)
-
-    def unreachable(*_a, **_k):
-        raise rs.SundialUnavailable("sundial could not be reached (Connection refused)")
-
-    monkeypatch.setattr(rs, "login_with_key", unreachable)
-    monkeypatch.setattr(rs, "login", unreachable)
-    with pytest.raises(rs.SundialUnavailable):
-        rs.authenticate("https://sundial.invalid", "guest", "secret")
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    for name, job in jobs.items():
+        needs = job.get("needs", [])
+        needs = [needs] if isinstance(needs, str) else needs
+        missing = set(needs) - set(jobs)
+        assert not missing, f"{name} needs jobs that do not exist: {sorted(missing)}"
 
 
 # ---------------------------------------------------------------------------
@@ -2914,7 +2108,7 @@ def _scope(repo: pathlib.Path, base: str, releases=None, carried: str = "", buil
 
     text = WORKFLOW.read_text(encoding="utf-8")
     start = text.index("        run: |\n          if [ -n \"${{ steps.carry.outputs.run }}\" ]")
-    end = text.index("      - name: May the stealth check run?", start)
+    end = text.index("      - name: Build the shard matrix", start)
     lines = text[start:end].splitlines()[1:]
     block = "\n".join(line[10:] if line.startswith(" " * 10) else line.strip() for line in lines)
     block = block.replace("${{ github.event_name }}", "push" if carried else "pull_request")

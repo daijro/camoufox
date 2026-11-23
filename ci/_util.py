@@ -7,7 +7,6 @@ runner before anything is installed.
 from __future__ import annotations
 
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -33,10 +32,6 @@ RESULTS_DIR = Path(os.environ.get("CI_RESULTS_DIR", os.environ.get("HARNESS_EVID
 
 # Kept under the old name so harness code and existing call sites read the same.
 EVIDENCE_DIR = RESULTS_DIR
-
-# Salt for the HMACs that stand in for sundial's private vector names. A repo
-# constant on purpose: inverting it still needs the private vector list.
-DEFAULT_ID_SALT = "camoufox-harness/v1"
 
 
 # --------------------------------------------------------------------------
@@ -194,21 +189,6 @@ def http_json(url: str, *, timeout: int = 30, headers: Optional[Dict[str, str]] 
     req = urllib.request.Request(url, headers={"User-Agent": "camoufox-harness", **(headers or {})})
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
         return json.loads(resp.read().decode("utf-8"))
-
-
-# --------------------------------------------------------------------------
-# identifiers
-# --------------------------------------------------------------------------
-
-
-def opaque_id(raw: str, *, salt: Optional[str] = None) -> str:
-    """Stable, non-invertible id for a private test vector.
-
-    Used for anything sourced from sundial. The repo is public; a vector name
-    in a committed baseline is a permanent leak, an HMAC is not.
-    """
-    key = (salt or os.environ.get("HARNESS_ID_SALT") or DEFAULT_ID_SALT).encode()
-    return hmac.new(key, raw.encode("utf-8"), hashlib.sha256).hexdigest()[:20]
 
 
 # --------------------------------------------------------------------------
