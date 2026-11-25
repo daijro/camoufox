@@ -1304,6 +1304,37 @@ describe.skipIf(!MODEL.ok)(
 			expect(config["screen.width"]).toBe(Math.round(1760 * drawn));
 		});
 
+		it.each([
+			["windows", 48],
+			["macos", 76],
+			["linux", 0],
+		])("a caller-set screen claims the avail the browser reports (%s)", async (target, taskbar) => {
+			// Window placement is computed from the config's avail, so it must be
+			// baseline protection's rect, and a window that no longer fits is
+			// clamped like any other (test_launch_geometry.py).
+			const config = await launchConfig({
+				headless: true,
+				os: target,
+				config: {
+					"screen.width": 1920,
+					"screen.height": 1080,
+					"screen.availWidth": 1900,
+					"screen.availHeight": 1000,
+					"window.outerWidth": 1900,
+					"window.outerHeight": 1070,
+					"window.innerWidth": 1900,
+					"window.innerHeight": 1000,
+				},
+			});
+			expect(config["screen.availWidth"]).toBe(1920);
+			expect(config["screen.availHeight"]).toBe(1080 - taskbar);
+			expect(config["window.outerWidth"]).toBe(1900);
+			expect(config["window.outerHeight"]).toBe(Math.min(1070, 1080 - taskbar));
+			expect(config["window.innerHeight"]).toBeLessThanOrEqual(
+				config["window.outerHeight"],
+			);
+		});
+
 		it("a real display scale from fpgen stays unmapped", async () => {
 			withDisplay({ maxWidth: 1920, maxHeight: 1080 });
 			const config = await launchConfig({
