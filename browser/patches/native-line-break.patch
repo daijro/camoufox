@@ -29,17 +29,17 @@ index 69e3559310..c10935c286 100644
  
    RefPtr<StringBlobImpl> blobImpl = StringBlobImpl::Create(utf8Str, u""_ns);
 diff --git a/dom/file/moz.build b/dom/file/moz.build
-index 58e4a09788..4829966d0d 100644
+index 58e4a09788..8587147d4c 100644
 --- a/dom/file/moz.build
 +++ b/dom/file/moz.build
-@@ -51,6 +51,7 @@ UNIFIED_SOURCES += [
- 
- LOCAL_INCLUDES += [
-     "/dom/file/ipc",
-+    "/camoucfg",
+@@ -50,6 +50,7 @@ UNIFIED_SOURCES += [
  ]
  
- MOCHITEST_MANIFESTS += ["tests/mochitest.toml"]
+ LOCAL_INCLUDES += [
++    "/camoucfg",
+     "/dom/file/ipc",
+ ]
+ 
 diff --git a/dom/serializers/moz.build b/dom/serializers/moz.build
 index 7627faf4a4..e8662b3cdb 100644
 --- a/dom/serializers/moz.build
