@@ -2,6 +2,7 @@
 Shared helpers for patch verification tests.
 """
 
+import base64
 import http.server
 import ipaddress
 import socket
@@ -9,7 +10,7 @@ import socketserver
 import struct
 import threading
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Tuple
 
 
 @asynccontextmanager
@@ -255,12 +256,20 @@ class AnsweringStun:
 
 class RefusingProxy(socketserver.ThreadingMixIn, http.server.HTTPServer):
     """An HTTP proxy on this host that refuses every request and records where
-    each was going, so a guard sees the traffic with no network."""
+    each was going, so a guard sees the traffic with no network. With
+    `credentials` (username, password) it first demands Basic proxy auth and
+    records only the requests that sent them."""
 
     daemon_threads = True
 
     class _Handler(http.server.BaseHTTPRequestHandler):
         def _refuse(self) -> None:
+            if self.server.authorization and self.headers.get("Proxy-Authorization") != self.server.authorization:
+                self.send_response(407)
+                self.send_header("Proxy-Authenticate", 'Basic realm="camoufox"')
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             self.server.seen.append(self.path)
             self.send_error(502)
 
@@ -269,8 +278,9 @@ class RefusingProxy(socketserver.ThreadingMixIn, http.server.HTTPServer):
         def log_message(self, *args) -> None:
             pass
 
-    def __init__(self) -> None:
+    def __init__(self, credentials: Optional[Tuple[str, str]] = None) -> None:
         super().__init__(("127.0.0.1", 0), self._Handler)
+        self.authorization = "Basic " + base64.b64encode(":".join(credentials).encode()).decode() if credentials else None
         self.seen: List[str] = []
         threading.Thread(target=self.serve_forever, daemon=True).start()
 

@@ -306,14 +306,17 @@ class NetworkRequest {
   promptAuth(aChannel, level, authInfo) {
     if (authInfo.flags & Ci.nsIAuthInformation.PREVIOUS_FAILED)
       return false;
-    const pageNetwork = this._pageNetwork;
-    if (!pageNetwork)
-      return false;
     let credentials = null;
     if (authInfo.flags & Ci.nsIAuthInformation.AUTH_PROXY) {
+      // Camoufox: answered from the channel's proxy, not its page, so traffic
+      // no page owns (the push connection a context's proxy carries) can
+      // authenticate too.
       const proxy = this._networkObserver._targetRegistry.getProxyInfo(aChannel);
       credentials = proxy ? {username: proxy.username, password: proxy.password} : null;
     } else {
+      const pageNetwork = this._pageNetwork;
+      if (!pageNetwork)
+        return false;
       credentials = pageNetwork._target.browserContext().httpCredentials;
     }
     if (!credentials)
