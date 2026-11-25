@@ -71,7 +71,17 @@ is in it, and they will not ask what a file was for.
   both.
 - **No flakes.** An intermittent failure means something is non-deterministic.
   Fix that behaviour. Never retry, loosen a threshold or skip the test to get
-  green.
+  green. A timing check measures what the browser did, never the driver's
+  sleep: the browser sees a `wait_for_timeout(n)` as n ms plus the driver's
+  and its own latency, which is unbounded on a loaded runner. Bound such a
+  quantity on one side (at least what n ms allows), and check order with
+  event order (nothing after the keyup), not with counts. A guard that waits
+  for something to be freed or settle polls to a deadline instead of
+  sleeping a fixed time. A guard that fails only on a loaded runner may be
+  showing a real difference from Firefox under load (driven key repeats
+  burst where Firefox skips them): compare stock Firefox under the same load
+  before deciding the check is wrong. Before trusting a fix, run the guard
+  many times on the CI runners, and break the code it guards to see it fail.
 - **A missing prerequisite fails in CI; it never passes as a skip.** A skip
   reads as green, so a job that forgot to install something passes having
   tested nothing.
@@ -126,7 +136,7 @@ persist a change there as a patch, never as an edit to that tree.
 | `browser/` | The browser build: `Makefile`, `upstream.sh`, `multibuild.py`, `Dockerfile`, and the directories below. |
 | `browser/patches/` | Diffs applied to Firefox: one per behaviour at the top level, plus `playwright/`, `librewolf/` and `ghostery/`. Browser behaviour changes here. |
 | `browser/additions/camoucfg/` | The C++ config layer. `MaskConfig.hpp` reads `CAMOU_CONFIG`, which the patches consult. |
-| `browser/additions/juggler/` | Camoufox's Juggler, Playwright's Firefox protocol. The page agent runs in an isolated world. `input/` holds the Cursory cursor trajectories. |
+| `browser/additions/juggler/` | Camoufox's Juggler, Playwright's Firefox protocol. The page agent runs in an isolated world. `input/` holds `MouseDispatch.js` (every synthesized mouse event) and `HumanDelay.js`; the browser adds no humanization of its own ([`docs/humanize.md`](docs/humanize.md)). |
 | `browser/settings/` | `camoufox.cfg` (prefs), `properties.json` (every config key and its type; a key the browser stops reading is marked `removed`, never deleted). |
 | `browser/scripts/` | `patch.py` applies patches and writes the mozconfig; `copy-additions.sh`, `package.py`, `install-deps.sh`, font tooling. |
 | `browser/assets/` | Mozconfigs, README images. |
@@ -242,6 +252,7 @@ this section in step with the launcher options.
 - **Use `geoip=True` with a proxy.** Without it the timezone and locale are the identity's, not the proxy's, and a warning is printed.
 - **`page.evaluate` is isolated.** It cannot read globals the page defined. Use `main_world_eval=True` and prefix the script with `mw:`. Without the option, a `mw:` evaluate fails with "Main world evaluation is disabled". `mw:` cannot return a handle (`evaluate_handle`).
 - **Leave the viewport alone.** When the window size is spoofed, new pages default to `no_viewport=True`; forcing a `viewport` asks the window to resize to something the identity does not claim.
+- **The OS counts clicks and repeats keys.** A press's `detail` follows the identity's OS, not `click_count`: presses count up only when quick and in place (`dblclick` is). A key held with `keyboard.down` repeats until `keyboard.up`, with that OS's delay and interval ([docs/input-dispatch.md](docs/input-dispatch.md#click-count)).
 - **`is_mobile` is ignored** (with a warning). Camoufox has desktop identities only.
 - **Persistent contexts** need `persistent_context=True` and `user_data_dir`, and cannot be served by `launch_server`.
 - **`headless="virtual"`** needs Linux, `Xvfb` and `setpriv` from util-linux (`CannotFindXvfb`, `VirtualDisplayNotSupported` otherwise). Xvfb has no GPU, so canvas and WebGL render in software and the identity reports `llvmpipe`.

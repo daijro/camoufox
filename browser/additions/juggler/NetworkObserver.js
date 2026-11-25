@@ -7,6 +7,7 @@
 const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
 const { ChannelEventSinkFactory } = ChromeUtils.importESModule("resource://gre/modules/juggler/ChannelEventSink.sys.mjs");
+const {TargetRegistry} = ChromeUtils.importESModule('resource://gre/modules/juggler/TargetRegistry.js');
 
 
 const Cc = Components.classes;
@@ -189,6 +190,8 @@ class NetworkRequest {
     if (this.redirectedFromId) {
       // Redirects are not interceptable.
       this._sendOnRequest(false);
+      // Everything this request needs from the previous one is inherited above.
+      redirectedFrom._releaseReferences();
     }
   }
 
@@ -460,6 +463,17 @@ class NetworkRequest {
     }
 
     delete this._responseBodyChunks;
+    this._releaseReferences();
+  }
+
+  // Gecko keeps a connection's notificationCallbacks (this object) until the
+  // connection closes, so a finished request must not hold its page, window or
+  // response bodies (Playwright's fix, microsoft/playwright#42747).
+  _releaseReferences() {
+    this.httpChannel = undefined;
+    this._originalListener = undefined;
+    this._pageNetwork = undefined;
+    this._interceptedChannel = undefined;
   }
 
   _shouldIntercept() {
@@ -696,7 +710,22 @@ export class NetworkObserver {
       helper.addObserver(this._onResponse.bind(this, true /* fromCache */), 'http-on-examine-cached-response'),
       helper.addObserver(this._onResponse.bind(this, true /* fromCache */), 'http-on-examine-merged-response'),
       helper.addObserver(this._onServiceWorkerResponse.bind(this), 'service-worker-synthesized-response'),
+      helper.on(targetRegistry, TargetRegistry.Events.TargetDestroyed, this._onTargetDestroyed.bind(this)),
     ];
+  }
+
+  // A request lets go of its page when its channel stops (_releaseReferences). A channel
+  // cancelled while it is suspended -- by an extension's blocking webRequest listener, say
+  // uBlock Origin's while it loads its lists -- does not stop until it is resumed, and the
+  // request held its closed page in the meantime: target, browser and response bodies.
+  _onTargetDestroyed(target) {
+    const pageNetwork = target[pageNetworkSymbol];
+    if (!pageNetwork)
+      return;
+    for (const request of [...this._channelToRequest.values(), ...this._expectedRedirect.values()]) {
+      if (request._pageNetwork === pageNetwork)
+        request._pageNetwork = undefined;
+    }
   }
 
   _expectRedirect(channelId, previous) {

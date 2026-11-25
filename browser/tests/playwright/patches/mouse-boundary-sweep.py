@@ -5,9 +5,9 @@ This replaces hand-picked edge targets, which are what let four deadlocks
 through. Each of the earlier tests probed the coordinates that had just been
 found broken, so the next variant was always outside the list:
 
-    humanize-edge-deadlock.py   probes the right and bottom edges only, so the
+    the far-edge test           probed the right and bottom edges only, so the
                                 near edge (#751) passed it cleanly
-    humanize-mouse-trajectory.py  pins os="linux", the one spoofed OS whose
+    the trajectory test         pinned os="linux", the one spoofed OS whose
                                 chrome offset is immune to #751
 
 The failure they all share: a synthesized event that hit-tests outside the
@@ -21,7 +21,7 @@ Rather than guess which coordinates do that, sweep the ring:
     x in {0, 1, w/2, w-2, w-1}  x  y in {0, 1, h/2, h-2, h-1}
 
 across every spoofed OS (the chrome offset that decides #751 is a function of
-it: windows 51.4, macos 53.1, linux 56.5) and with humanize both off and on.
+it: windows 51.4, macos 53.1, linux 56.5).
 
 Each point must be *delivered*, not merely survived: the page has to observe a
 mousemove. A point that is dropped without hanging is still a bug -- it is the
@@ -35,7 +35,7 @@ sweep dies there, reporting one point instead of the whole failing set.
 Run against a specific build:
     CAMOUFOX_EXECUTABLE_PATH=/path/to/camoufox-bin python3 browser/tests/playwright/patches/mouse-boundary-sweep.py
 
-What PASS means: every ring coordinate, on every spoofed OS, humanized and not,
+What PASS means: every ring coordinate, on every spoofed OS,
 was acked and seen by the page; and input is still live at the end of each run.
 """
 
@@ -61,10 +61,10 @@ def _ring(w, h):
     return [(x, y) for y in ys for x in xs]
 
 
-async def _sweep(spoofed_os, humanize) -> list:
+async def _sweep(spoofed_os) -> list:
     """Returns the coordinates that did not reach the renderer."""
     undelivered = []
-    async with AsyncCamoufox(**launch_kwargs(os=spoofed_os, humanize=humanize)) as browser:
+    async with AsyncCamoufox(**launch_kwargs(os=spoofed_os)) as browser:
         page = await browser.new_page()
         await page.set_content('<body style="margin:0;height:1600px"></body>')
         await page.evaluate(RECORDER)
@@ -72,7 +72,7 @@ async def _sweep(spoofed_os, humanize) -> list:
         w, h = vp["w"], vp["h"]
         home = (int(w * INTERIOR[0]), int(h * INTERIOR[1]))
         points = _ring(w, h)
-        print(f"  [{spoofed_os}, humanize={humanize}] {w}x{h}: "
+        print(f"  [{spoofed_os}] {w}x{h}: "
               f"{len(points)} ring points", flush=True)
 
         for x, y in points:
@@ -103,13 +103,12 @@ async def main() -> int:
     print("\n=== viewport boundary sweep ===")
     failures = []
     for spoofed_os in SPOOFED_OSES:
-        for humanize in (False, True):
-            bad = await _sweep(spoofed_os, humanize)
-            for point, why in bad:
-                failures.append((spoofed_os, humanize, point, why))
-                print(f"    FAIL {point}  {why}", flush=True)
-            if not bad:
-                print("    ok", flush=True)
+        bad = await _sweep(spoofed_os)
+        for point, why in bad:
+            failures.append((spoofed_os, point, why))
+            print(f"    FAIL {point}  {why}", flush=True)
+        if not bad:
+            print("    ok", flush=True)
 
     if failures:
         print(f"\n  {len(failures)} coordinate(s) did not reach the renderer.\n"

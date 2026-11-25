@@ -1140,9 +1140,9 @@ def _bt_profile(webgl_renderer: str, *, noswift_passed: bool) -> dict:
         "profiles": [
             {
                 "profile": {
+                    "name": "Linux Per-Context A",
                     "os": "linux",
                     "mode": "per-context",
-                    "index": 0,
                     "webglRenderer": webgl_renderer,
                 },
                 "results": {
@@ -1172,7 +1172,7 @@ def test_a_profile_that_asked_for_llvmpipe_is_not_graded_headless():
     from ci.run_build_tester import category_failures, flatten
 
     full = _bt_profile("llvmpipe, or similar", noswift_passed=False)
-    tid = "linux-per-context-0/extended/headlessDetection/noSwiftShader"
+    tid = "Linux Per-Context A/extended/headlessDetection/noSwiftShader"
     assert flatten(full)[tid] == "pass"
     assert category_failures(full, ["headlessDetection"]) == {}
 
@@ -1182,7 +1182,7 @@ def test_an_unasked_for_software_renderer_still_fails():
     from ci.run_build_tester import category_failures, flatten
 
     full = _bt_profile("AMD Radeon R9 200 Series", noswift_passed=False)
-    tid = "linux-per-context-0/extended/headlessDetection/noSwiftShader"
+    tid = "Linux Per-Context A/extended/headlessDetection/noSwiftShader"
     assert flatten(full)[tid] == "fail"
     assert category_failures(full, ["headlessDetection"]) == {"headlessDetection": 1}
 
@@ -1195,7 +1195,7 @@ def test_the_exemption_is_confined_to_that_one_check():
     checks = full["profiles"][0]["results"]["extended"]["headlessDetection"]
     checks["noWebdriver"] = {"passed": False, "detail": "navigator.webdriver = true"}
     tests = flatten(full)
-    assert tests["linux-per-context-0/extended/headlessDetection/noWebdriver"] == "fail"
+    assert tests["Linux Per-Context A/extended/headlessDetection/noWebdriver"] == "fail"
 
 
 # ---------------------------------------------------------------------------
@@ -3229,7 +3229,33 @@ def test_one_failed_release_build_does_not_cancel_the_others():
     jobs = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]
     assert jobs["build-browser"]["strategy"]["fail-fast"] is False
     publish = jobs["publish-browser"]
-    assert "build-browser" in publish["needs"] and "if" not in publish
+    # A failed leg fails the matrix's result, so this still publishes no partial release.
+    assert "build-browser" in publish["needs"]
+    assert "needs.build-browser.result == 'success'" in publish["if"]
+
+
+def _needs(job):
+    needs = job.get("needs", [])
+    return [needs] if isinstance(needs, str) else needs
+
+
+def test_a_tested_commit_still_builds_and_publishes():
+    """`tests` is skipped when the commit was already tested, and a job with no
+    status check runs only if every job upstream of it succeeded: a dispatch on
+    a tested commit skipped the browser build and both publishes (run 44952481674)."""
+    import yaml
+
+    jobs = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]
+    assert jobs["tests"]["if"], "tests is the job a dispatch can skip"
+    downstream, grew = {"tests"}, True
+    while grew:
+        more = {n for n, j in jobs.items() if set(_needs(j)) & downstream} - downstream
+        downstream |= more
+        grew = bool(more)
+    for name in sorted(downstream - {"tests"}):
+        job = jobs[name]
+        cond = str(job.get("if", ""))
+        assert "!cancelled()" in cond or "always()" in cond, f"{name} is skipped whenever tests is"
 
 
 # ---------------------------------------------------------------------------
