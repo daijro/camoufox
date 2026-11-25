@@ -420,6 +420,27 @@ describe("test_launch_environment: prefs", () => {
 		});
 	});
 
+	describe("search region follows the locale region", () => {
+		const PREF = "browser.search.region";
+		it("a locale with a region sets it", async () => {
+			expect((await prefsFor({ ...ua(LINUX_UA), locale: "de-DE" }))[PREF]).toBe(
+				"DE",
+			);
+		});
+		it("no region sets nothing", async () => {
+			const config = { "locale:language": "en" };
+			expect(PREF in (await prefsFor(ua(LINUX_UA, config)))).toBe(false);
+		});
+		it("the caller's pref wins", async () => {
+			const prefs = await prefsFor({
+				...ua(LINUX_UA),
+				locale: "de-DE",
+				firefox_user_prefs: { [PREF]: "AT" },
+			});
+			expect(prefs[PREF]).toBe("AT");
+		});
+	});
+
 	describe("prefs reach startup (CAMOU_PREFS_<n>)", () => {
 		it("passes the prefs as env", async () => {
 			const opts = await launch({

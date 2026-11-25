@@ -1779,6 +1779,13 @@ def launch_options(
         requested = 'en-US'
     firefox_user_prefs.setdefault('intl.locale.requested', requested)
 
+    # Stock learns its home region from a network lookup this launch turns off,
+    # and writes it here. Without it the search service offers the region-less
+    # engine list (a German identity lacked Ecosia and Startpage) and the DoH
+    # rollout, which decides by region, never decides at all.
+    if config.get('locale:region'):
+        firefox_user_prefs.setdefault('browser.search.region', config['locale:region'])
+
     # Spoof the speech-synthesis voice list.
     #
     # This has to fail CLOSED. Firefox registers the host's speech-dispatcher /
