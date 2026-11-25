@@ -237,7 +237,10 @@ The OS repeats a held key, and only the last key pressed. Juggler repeats a
 held driven key with the claimed OS's delay and interval, as keydowns with
 `repeat` set; pressing another key moves the repeat to it, and releasing the
 key stops it. A repeat the client sends for the held key is dispatched as sent
-and does not restart the browser's.
+and does not restart the browser's. A repeat that comes due while the page is
+still handling the last is skipped, as Firefox skips an OS repeat that arrives
+while the page is busy (`BrowserChild::SkipRepeatedKeyEvent`): a busy page gets
+the next repeat on the OS's schedule, never a burst of the ones it missed.
 
 | OS | Delay | Interval | Modifiers |
 |---|---|---|---|

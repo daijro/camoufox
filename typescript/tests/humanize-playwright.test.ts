@@ -543,7 +543,8 @@ describe("myuri", () => {
 
 	it("types into the field it selected", async () => {
 		const { browser, page } = await attachedPage({
-			keyboard: myuri({ wpm: 200 }),
+			keyboard: myuri(),
+			settings: { typing: { wpm: 200 } },
 		});
 		await page.fill("#name", "hi");
 		const kinds = names(browser);
@@ -570,6 +571,25 @@ describe("myuri", () => {
 		};
 		expect(await clicked(1)).toEqual(await clicked(1));
 		expect(await clicked(1)).not.toEqual(await clicked(2));
+	});
+
+	it("sets myuri's speed from the settings", async () => {
+		const reports = async (settings: object) => {
+			let total = 0;
+			for (let seed = 0; seed < 10; seed++) {
+				const { browser, page } = await attachedPage(
+					{ mouse: myuri(), settings },
+					seed,
+				);
+				await page.mouse.move(900, 600);
+				total += names(browser).filter((n) => n === "mouse.move").length;
+			}
+			return total;
+		};
+		// The pointer reports about every 10 ms, so a faster move reports less often.
+		expect(await reports({ mouse: { speedFactor: 3 } })).toBeLessThan(
+			(await reports({})) / 2,
+		);
 	});
 });
 
@@ -634,8 +654,12 @@ describe("parts", () => {
 		await scroll.page.locator("#far").click();
 		const kinds = names(scroll.browser);
 		// myuri wheels over the scroller, reached in one move, then Playwright clicks.
+		// A first long scroll takes two passes (myuri reads the page's px per wheel
+		// px from the first), and the raw mouse sends each pass's move as asked.
 		expect(kinds[0]).toBe("mouse.move");
-		expect(kinds.filter((n) => n === "mouse.move")).toHaveLength(1);
+		expect(
+			new Set(moves(scroll.browser).map((e) => `${e[1]},${e[2]}`)).size,
+		).toBe(1);
 		expect(kinds.at(-1)).toBe("locator.click");
 		expect(kinds).toContain("mouse.wheel");
 	});

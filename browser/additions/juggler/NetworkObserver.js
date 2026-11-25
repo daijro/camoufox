@@ -7,6 +7,7 @@
 const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
 const { ChannelEventSinkFactory } = ChromeUtils.importESModule("resource://gre/modules/juggler/ChannelEventSink.sys.mjs");
+const {TargetRegistry} = ChromeUtils.importESModule('resource://gre/modules/juggler/TargetRegistry.js');
 
 
 const Cc = Components.classes;
@@ -709,7 +710,22 @@ export class NetworkObserver {
       helper.addObserver(this._onResponse.bind(this, true /* fromCache */), 'http-on-examine-cached-response'),
       helper.addObserver(this._onResponse.bind(this, true /* fromCache */), 'http-on-examine-merged-response'),
       helper.addObserver(this._onServiceWorkerResponse.bind(this), 'service-worker-synthesized-response'),
+      helper.on(targetRegistry, TargetRegistry.Events.TargetDestroyed, this._onTargetDestroyed.bind(this)),
     ];
+  }
+
+  // A request lets go of its page when its channel stops (_releaseReferences). A channel
+  // cancelled while it is suspended -- by an extension's blocking webRequest listener, say
+  // uBlock Origin's while it loads its lists -- does not stop until it is resumed, and the
+  // request held its closed page in the meantime: target, browser and response bodies.
+  _onTargetDestroyed(target) {
+    const pageNetwork = target[pageNetworkSymbol];
+    if (!pageNetwork)
+      return;
+    for (const request of [...this._channelToRequest.values(), ...this._expectedRedirect.values()]) {
+      if (request._pageNetwork === pageNetwork)
+        request._pageNetwork = undefined;
+    }
   }
 
   _expectRedirect(channelId, previous) {

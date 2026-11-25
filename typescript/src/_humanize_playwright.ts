@@ -36,9 +36,12 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomBytes } from "node:crypto";
 import {
 	Actions,
+	type DeepPartial,
+	generateProfile,
 	HIT_TEST_JS,
 	type Host,
 	Missed,
+	type MyuriSettings,
 	makeRng,
 	type Parts,
 } from "@jwriter20/myuri";
@@ -178,12 +181,19 @@ class Setup {
 	// One stream for every page, so two pages never replay the same draws.
 	readonly rng: () => number;
 
+	// One person for the whole browser, drawn from the seed around the settings.
+	readonly settings: MyuriSettings;
+
 	constructor(
 		readonly engines: Record<Channel, Engine>,
 		seed: number,
+		settings: DeepPartial<MyuriSettings>,
 		readonly os: OsName,
 	) {
 		this.rng = makeRng(seed);
+		// Camoufox identities point with a mouse unless told otherwise.
+		const scroll = { device: "mouse" as const, ...settings.scroll };
+		this.settings = generateProfile(seed, { ...settings, scroll }, os);
 	}
 
 	/** Whether myuri drives the channel for the call being made. */
@@ -201,21 +211,18 @@ class Setup {
 		for (const channel of CHANNELS) {
 			const { engine, options } = this.engines[channel];
 			if (engine === "raw") Object.assign(parts, RAW_PARTS[channel]);
+			// A part of the caller's, called with the page in place of the host;
+			// one that throws rejects, as Playwright's methods do.
 			else
 				for (const [name, fn] of Object.entries(options))
-					if (name !== "wpm")
-						// A part of the caller's, called with the page in place of the host;
-						// one that throws rejects, as Playwright's methods do.
-						parts[name] = async (_host: unknown, ...args: unknown[]) =>
-							within({ inPart: true }, () =>
-								(fn as (...a: unknown[]) => unknown)(page, ...args),
-							);
+					parts[name] = async (_host: unknown, ...args: unknown[]) =>
+						within({ inPart: true }, () =>
+							(fn as (...a: unknown[]) => unknown)(page, ...args),
+						);
 		}
 		return new Actions(host(page), this.rng, {
 			os: this.os,
-			// Camoufox identities point with a mouse, whose wheel turns in notches.
-			device: "mouse",
-			wpm: this.engines.keyboard.options.wpm,
+			settings: this.settings,
 			parts,
 		});
 	}
@@ -508,7 +515,8 @@ function isolateDispatch(connection: any): void {
  * Camoufox()/NewBrowser() call this themselves; for one from `connect()`,
  * launch it without humanize.
  *
- * Every draw comes from one stream, of `humanize.seed` or a random seed.
+ * Every draw comes from one stream, of `humanize.seed` or a random seed, and
+ * the seed draws the person myuri plays around `humanize.settings`.
  */
 export function attach<T>(
 	target: T,
@@ -516,7 +524,7 @@ export function attach<T>(
 	os: OsName,
 	iKnowWhatImDoing?: boolean,
 ): T {
-	const { engines, seed } = normalize(humanize);
+	const { engines, seed, settings } = normalize(humanize);
 	if (CHANNELS.every((channel) => engines[channel].engine === "raw"))
 		return target;
 	const owner = target as any;
@@ -526,7 +534,12 @@ export function attach<T>(
 		LeakWarning.warn("humanize_remote", iKnowWhatImDoing);
 	isolateDispatch(owner._connection);
 
-	const setup = new Setup(engines, seed ?? randomBytes(4).readUInt32BE(), os);
+	const setup = new Setup(
+		engines,
+		seed ?? randomBytes(4).readUInt32BE(),
+		settings,
+		os,
+	);
 
 	if (typeof owner.newContext !== "function") {
 		// A BrowserContext (a persistent context).
