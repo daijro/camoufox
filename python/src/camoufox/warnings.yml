@@ -108,6 +108,10 @@ audio_seed_removed: >-
     stock Firefox renders it: stock gives one value per CPU architecture, so noise
     was a tell, not a disguise (ci/tribal-rules.yml: audio-is-not-noised).
 
+humanize_remote: >-
+    humanize runs on a remote browser. Each event myuri plays is a round trip over the network,
+    so network jitter lands between the events. Run the driver next to the browser to avoid it.
+
 addon_not_bundled: >-
     This Camoufox build has no {addon} addon at {path}, so it launches without it.
     Browser releases bundle their default addons; an older release or an unpackaged build does not.

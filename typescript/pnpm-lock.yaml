@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@jwriter20/myuri':
+        specifier: 5.1.0
+        version: 5.1.0(playwright-core@1.62.0)
       adm-zip:
         specifier: ^0.6.1
         version: 0.6.1
@@ -143,6 +146,14 @@ packages:
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
+
+  '@jwriter20/myuri@5.1.0':
+    resolution: {integrity: sha512-yG5foyrdXwHkyQb4zlup4eCeynryR/ko44Nnsh5EloUBkJ6vjE1AKajTqwsZ+UE9KT7O+mGuFS4ikgUa0f/omQ==}
+    peerDependencies:
+      playwright-core: '>=1.40.0'
+    peerDependenciesMeta:
+      playwright-core:
+        optional: true
 
   '@napi-rs/wasm-runtime@1.2.2':
     resolution: {integrity: sha512-JfB4kuJQjaoHuCTseIINHtHWeJnvgEcxjwA5t/Y00ZgaOO1Crz3fjT/p8kT28zA/Caz7oiUMn3d6H2yOVCVwuw==}
@@ -341,6 +352,10 @@ packages:
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
+
+  cursory-js@2.1.0:
+    resolution: {integrity: sha512-xpOT6eF3goyfu6X4SPcEfymzeNr16oelBiGx76s0AJO9+wJbBS9nY66Vxnc4aIvF5KBmuixE91Ie/R6Sk4hKNg==}
+    engines: {node: '>=18'}
 
   detect-europe-js@0.1.2:
     resolution: {integrity: sha512-lgdERlL3u0aUdHocoouzT10d9I89VVhk0qNRmll7mXdGfJT1/wqZ2ZLA4oJAjeACPY5fT1wsbq2AT+GkuInsow==}
@@ -823,6 +838,12 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
+  '@jwriter20/myuri@5.1.0(playwright-core@1.62.0)':
+    dependencies:
+      cursory-js: 2.1.0
+    optionalDependencies:
+      playwright-core: 1.62.0
+
   '@napi-rs/wasm-runtime@1.2.2(@emnapi/core@2.0.0-alpha.3)(@emnapi/runtime@2.0.0-alpha.3)':
     dependencies:
       '@emnapi/core': 2.0.0-alpha.3
@@ -975,6 +996,8 @@ snapshots:
   commander@14.0.3: {}
 
   convert-source-map@2.0.0: {}
+
+  cursory-js@2.1.0: {}
 
   detect-europe-js@0.1.2: {}
 

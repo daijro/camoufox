@@ -13,6 +13,7 @@ from playwright._impl._driver import compute_driver_executable
 
 from camoufox.pkgman import LOCAL_DATA
 from camoufox.gpudisplay import GpuDisplay, prove_gpu
+from camoufox.humanize import driven_channels
 from camoufox.utils import launch_options, start_virtual_display
 from camoufox.virtdisplay import VirtualDisplay
 
@@ -66,6 +67,13 @@ def launch_server(**kwargs) -> NoReturn:
                 f"Camoufox(persistent_context=True, ...) in-process instead."
             )
         kwargs.pop(unsupported, None)
+
+    if driven_channels(kwargs.get('humanize')):
+        raise ValueError(
+            "launch_server() cannot run humanize engines: they run in the process that drives "
+            "the page. Serve without humanize, and on the client call "
+            "camoufox.humanize.attach(browser, humanize, os) on the connected browser."
+        )
 
     virtual_display, kwargs['headless'] = start_virtual_display(
         kwargs.get('headless'), kwargs.get('debug'), kwargs
