@@ -198,13 +198,18 @@ jobs:
   # ---------------------------------------------------------------------------
   build-browser:
     needs: [plan, ubo]
-    if: needs.plan.outputs.build_browser == 'true'
+    # `!cancelled()`: without a status check a job runs only if every job upstream of it succeeded,
+    # and `tests` is skipped when the commit was already tested, which skipped the build and both
+    # publishes (run 44952481674).
+    if: >-
+      !cancelled() && needs.plan.result == 'success' && needs.ubo.result == 'success' &&
+      needs.plan.outputs.build_browser == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
       # `make dir` (inside ci.run_prepare) writes the mozconfig and adds the Rust
-      # targets from BUILD_TARGET, defaulting to macos,arm64 when it is unset.
+      # targets from BUILD_TARGET, defaulting to linux,x86_64 when it is unset.
       # multibuild.py sets the same value again before building.
       BUILD_TARGET: ${{ matrix.target }},${{ matrix.arch }}
       # The uBlock Origin release the tests ran with; scripts/package.py bundles it.
@@ -290,6 +295,8 @@ jobs:
 
   publish-browser:
     needs: [plan, ubo, build-browser]
+    if: >-
+      !cancelled() && needs.build-browser.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write # the release and its tag
@@ -366,10 +373,10 @@ jobs:
 
       - name: Check Python compatibility
         # The package must run on the floor pyproject.toml declares (python =
-        # "^3.10"); `3.10-` means "needs at most 3.10". typing_extensions is a
+        # "^3.11"); `3.11-` means "needs at most 3.11". typing_extensions is a
         # dependency, not a stdlib module for vermin to date.
         working-directory: python
-        run: ../.venv/bin/vermin . --eval-annotations --backport typing_extensions --target=3.10- --violations src/camoufox/
+        run: ../.venv/bin/vermin . --eval-annotations --backport typing_extensions --target=3.11- --violations src/camoufox/
 
       - name: Stamp the version and the paired browser
         run: |

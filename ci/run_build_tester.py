@@ -87,9 +87,9 @@ def flatten(full: dict) -> Dict[str, str]:
     tests: Dict[str, str] = {}
     for profile in full.get("profiles") or []:
         meta = profile.get("profile") or {}
-        # Identify by os+mode+index, never by the display name, which carries a
-        # random letter suffix and would churn every run.
-        slot = f"{meta.get('os', '?')}-{meta.get('mode', '?')}-{meta.get('index', profile.get('index', 0))}"
+        # runner.py's display name ("macOS Per-Context A") is the one field that
+        # tells a run's profiles apart, and it is the same every run.
+        slot = meta["name"]
         results = profile.get("results") or {}
         if profile.get("error"):
             tests[f"{slot}/launch"] = evidence.ERROR
@@ -251,6 +251,30 @@ def main(argv: Optional[List[str]] = None) -> int:
         pretty = ", ".join(f"{k}: {v}" for k, v in sorted(failures.items()))
         result.note(f"categories policy requires clean have failing checks -- {pretty}")
         violations.append(f"categories that must be clean have failing checks: {pretty}")
+        status = evidence.FAIL
+
+    profiles = full.get("profiles") or []
+    errored = [p["profile"]["name"] for p in profiles if p.get("error")]
+    launched = len(profiles) - len(errored)
+    expected = int(cfg.get("profile_count", 8))
+    if errored or launched < expected:
+        reason = (
+            f"{launched} of {expected} profiles produced results"
+            + (f"; failed to launch: {', '.join(errored)}" if errored else "")
+        )
+        result.note(reason)
+        violations.append(reason)
+        status = evidence.FAIL
+    # runner.py exits 1 exactly when its raw totals differ, which includes
+    # checks this gate does not grade; any other exit code is unexplained.
+    explained = 0 if full.get("totalPassed") == full.get("totalChecks") else 1
+    if proc.code != explained:
+        reason = (
+            f"build-tester exited {proc.code}, but its totals "
+            f"({full.get('totalPassed')}/{full.get('totalChecks')}) account for {explained}"
+        )
+        result.note(reason)
+        violations.append(reason)
         status = evidence.FAIL
 
     slots = uniqueness(full)

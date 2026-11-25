@@ -1,15 +1,12 @@
 """browser/scripts/patch.py --mozconfig-only (make set-target) retargets a tree and leaves its sources alone."""
 
-import importlib.util
-import sys
-
 import pytest
 
 from ci._util import BROWSER_ROOT
 
 
 @pytest.fixture
-def patcher(tmp_path, monkeypatch):
+def patcher(tmp_path, monkeypatch, load_patch_py):
     """scripts/patch.py as `make set-target` runs it, in a browser/ that holds
     one addition and a tree where a patch has since changed that file."""
     for shared in ("scripts", "assets", "settings"):
@@ -23,12 +20,7 @@ def patcher(tmp_path, monkeypatch):
     (tree / "owned.cpp").write_text("as patched\n")
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["patch.py", "1.0", "r1", "--mozconfig-only"])
-    monkeypatch.syspath_prepend(str(BROWSER_ROOT / "scripts"))
-    spec = importlib.util.spec_from_file_location("patch_py", BROWSER_ROOT / "scripts" / "patch.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.Patcher, tree
+    return load_patch_py("--mozconfig-only").Patcher, tree
 
 
 def test_set_target_leaves_the_patched_sources_alone(patcher):

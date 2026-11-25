@@ -132,9 +132,8 @@ class TestViewportOperationsDoNotDeadlock:
     changes, so that wait never ends -- the same trap no_viewport exists for
     (#666), reached through an explicit call instead.
 
-    Mapping fpgen's real inner dimensions hung
-    browser/tests/playwright/patches/humanize-edge-deadlock.py for the full 600s
-    CI timeout.
+    Mapping fpgen's real inner dimensions hung a patch guard that sets the
+    viewport size for the full 600s CI timeout.
     """
 
     def test_inner_dimensions_are_never_spoofed(self):
