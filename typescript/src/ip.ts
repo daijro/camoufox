@@ -176,7 +176,7 @@ function getImpit(proxy?: string): Impit {
 }
 
 const PROXY_LOOKUP_FAILED =
-	"Could not look up where the proxy exits. Pass webrtc_ip, timezone_id, " +
+	"Could not look up where the proxy exits. Pass webrtc_ip, timezoneId, " +
 	"locale and geolocation explicitly to skip the lookup";
 
 /** Where a proxy exits: its IP and that IP's timezone, country and position. */

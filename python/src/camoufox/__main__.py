@@ -114,16 +114,6 @@ def _find_installed(specifier: str) -> Optional[InstalledVersion]:
     return None
 
 
-def _get_geoip_source_name() -> str:
-    """
-    Get the name of the active GeoIP source
-    """
-    try:
-        return load_geoip_config().get("name", "Default")
-    except Exception:
-        return "Default"
-
-
 def _do_sync(spoof_os=None, spoof_arch=None) -> bool:
     """
     Sync available versions from remote repositories. Returns True on success
@@ -725,7 +715,10 @@ def _select_geoip_source():
         rprint("No GeoIP sources configured.", fg="red")
         return
 
-    current = load_geoip_config().get("name", "")
+    try:
+        current = load_geoip_config().get("name", "")
+    except ValueError:
+        current = ""  # the saved source is gone; picking one replaces it
     choices = [
         (
             r["name"]
@@ -775,10 +768,16 @@ def _list_installed(show_paths: bool):
         click.echo()
 
     if GEOIP_DIR.exists():
-        mmdb = get_mmdb_path()
+        try:
+            config = load_geoip_config()
+        except ValueError as exc:
+            # the saved source is gone from repos.yml
+            rprint(f"    └── {exc}", fg="red")
+            return
+        mmdb = get_mmdb_path(config=config)
         if mmdb.exists():
             click.echo(f"    └── {mmdb.name} ", nl=False)
-            click.secho(f"({_get_geoip_source_name()})", fg="green")
+            click.secho(f"({config.get('name', 'Default')})", fg="green")
         else:
             rprint("    └── Not downloaded", fg="yellow")
     else:
@@ -1073,11 +1072,16 @@ class VersionInfo:
             # maxminddb not installed
             self._row("Status", "Not supported (install camoufox[geoip])", style="dim")
         else:
-            mmdb_path = get_mmdb_path()
+            try:
+                config = load_geoip_config()
+            except ValueError as exc:
+                # the saved source is gone from repos.yml
+                self._row("Database", str(exc), style="red")
+                return
+            mmdb_path = get_mmdb_path(config=config)
             if mmdb_path.exists():
                 # Show active database name and last update time
-                geoip_cfg = load_geoip_config()
-                self._row("Database", geoip_cfg.get("name", "Unknown"))
+                self._row("Database", config.get("name", "Unknown"))
                 mtime = mmdb_path.stat().st_mtime
                 dt = datetime.fromtimestamp(mtime, tz=timezone.utc).astimezone()
                 self._row("Updated", dt.strftime("%Y-%m-%d %H:%M"), style="dim")

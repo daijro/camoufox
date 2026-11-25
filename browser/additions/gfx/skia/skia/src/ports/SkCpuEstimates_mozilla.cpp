@@ -88,3 +88,8 @@ bool sk_cpu_emulates_arm64() { return false; }
 bool sk_cpu_emulates_x86() { return false; }
 
 #endif
+
+// Every architecture's sk_cpu_estimates() above, resolved for the pipeline.
+const uint32_t* gSkCpuEstimatesForPipeline = nullptr;
+
+void sk_cpu_estimates_init_pipeline() { gSkCpuEstimatesForPipeline = sk_cpu_estimates(); }

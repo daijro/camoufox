@@ -52,8 +52,7 @@ skip:
   # stock timing (instantAnimations is now opt-in) they pass too.
   #
   # See docs/input-dispatch.md.
-  # browser/tests/playwright/patches/humanize-mouse-trajectory.py and
-  # browser/tests/playwright/patches/input-ack-backstop.py assert the behaviour
+  # browser/tests/playwright/patches/input-ack-backstop.py asserts the behaviour
   # that replaces them.
 
   - test: tests/async/test_keyboard.py::test_should_send_proper_codes_while_typing

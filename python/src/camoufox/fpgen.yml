@@ -33,7 +33,7 @@ window:
   outerWidth: window.outerWidth
   # innerWidth/innerHeight are deliberately NOT mapped: Playwright's
   # set_viewport_size() waits for the page to report the size it set, which a
-  # spoofed value never does (#666; browser/tests/playwright/patches/humanize-edge-deadlock.py).
+  # spoofed value never does (#666).
   screenX: window.screenX
   screenY: window.screenY
   # devicePixelRatio is not mapped: any value but 1 is a spoofing tell unless

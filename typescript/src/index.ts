@@ -5,6 +5,7 @@
  */
 import "./node-floor.js";
 
+export { attach } from "./_humanize_playwright.js";
 export type { DefaultAddon } from "./addons.js";
 export { DefaultAddons } from "./addons.js";
 export {
@@ -18,6 +19,13 @@ export {
 	loadPresets,
 	Screen,
 } from "./fingerprints.js";
+export {
+	cursory,
+	type HumanizeSetting,
+	type MyuriOptions,
+	myuri,
+	raw,
+} from "./humanize.js";
 export {
 	findInstalledVersion,
 	listInstalled,
