@@ -113,7 +113,9 @@ describe("NewContext proxy lookup", () => {
 			proxy: { server: "1.2.3.4:8080" },
 		});
 		await expect(launched).rejects.toThrow(InvalidIP);
-		await expect(launched).rejects.toThrow(/webrtc_ip/);
+		await expect(launched).rejects.toThrow(
+			/webrtc_ip, timezoneId, locale and geolocation/,
+		);
 	});
 
 	it("moves the locale and position with the clock", async () => {

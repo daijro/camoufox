@@ -929,15 +929,32 @@ describe.skipIf(!MODEL.ok)("fpgen generation (needs the model)", () => {
 	it("accepts a list of OSes (Python raises InvalidConstraints here)", () => {
 		// Divergence by design: fpgen passes predicates the casefolded value,
 		// so Python's `v in {'Linux', 'Windows'}` never matches; TS compares
-		// casefolded.
-		const platforms = new Set<string>();
-		for (let i = 0; i < 20; i++) {
-			const f = generateFingerprint({ os: ["linux", "windows"] });
-			const p = String(f.navigator.platform);
-			expect(p.includes("Linux") || p === "Win32", p).toBe(true);
-			platforms.add(p === "Win32" ? "win" : "lin");
+		// casefolded. The predicate is checked directly because 20 random
+		// draws miss one of the OSes in about 0.4% of runs (#1094).
+		const real = Generator.prototype.generate;
+		let predicate: ((v: unknown) => boolean) | null = null;
+		const spy = vi
+			.spyOn(Generator.prototype, "generate")
+			.mockImplementation(function (this: Generator, ...args: any[]) {
+				const conditions = (args[0] ?? {}) as Record<string, unknown>;
+				if (typeof conditions.os === "function")
+					predicate = conditions.os as (v: unknown) => boolean;
+				return (real as any).apply(this, args);
+			});
+		try {
+			for (let i = 0; i < 20; i++) {
+				const f = generateFingerprint({ os: ["linux", "windows"] });
+				const p = String(f.navigator.platform);
+				expect(p.includes("Linux") || p === "Win32", p).toBe(true);
+			}
+			expect(predicate).not.toBeNull();
+			const pred = predicate as (v: unknown) => boolean;
+			expect(pred("linux")).toBe(true);
+			expect(pred("windows")).toBe(true);
+			expect(pred("macos")).toBe(false);
+		} finally {
+			spy.mockRestore();
 		}
-		expect(platforms.size).toBe(2);
 	});
 
 	it("rejects an unknown OS", () => {

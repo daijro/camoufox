@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const {Helper} = ChromeUtils.importESModule('resource://gre/modules/juggler/Helper.js');
+const {usesSystemProxy} = ChromeUtils.importESModule('resource://gre/modules/juggler/SystemProxy.js');
 const {Preferences} = ChromeUtils.importESModule("resource://gre/modules/Preferences.sys.mjs");
 const {ContextualIdentityService} = ChromeUtils.importESModule("moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs");
 const {NetUtil} = ChromeUtils.importESModule('resource://gre/modules/NetUtil.sys.mjs');
@@ -18,10 +19,11 @@ const {setTimeout, clearTimeout} = ChromeUtils.importESModule("resource://gre/mo
 // The per-ack deadline in MouseDispatch.js covers the await that has actually
 // caused all four shipped deadlocks, and apz-repaints-flushed and
 // juggler-drag-finalized share it, but other unbounded waits are reachable
-// from a single slot -- TabSwitchDone below, the drag path's dragover waits,
-// and the cross-process dispatchDragEvent sends all have the same shape. None
-// of them has failed yet. Bounding only the wait that has already bitten us
-// is the posture that produced those four fixes, so bound the slot itself too.
+// from a single slot -- TabSwitchDone, the drag path's dragover waits,
+// and the cross-process dispatchDragEvent sends all have the same shape, and
+// a TabSwitchDone that never fires wedges the chain (#1092). Bounding only the
+// wait that has already bitten us is the posture that produced those four
+// fixes, so bound the slot itself too.
 //
 // Sized as a backstop, not a tuning knob: with a 5s ack deadline a legitimate
 // worst-case input slot approaches 10s, so this must sit well clear of that.
@@ -108,24 +110,6 @@ function recordProxied(owner) {
   // load yet (about:blank, a fulfilled route) would resolve its dns-prefetch
   // links on this machine's resolver until then.
   Services.prefs.getDefaultBranch('network.dns.').setBoolPref('disablePrefetch', true);
-}
-
-// A system proxy is not in network.proxy.* either, and a content process
-// cannot ask the OS for it.
-function usesSystemProxy() {
-  if (Services.prefs.getIntPref('network.proxy.type') !== 5)
-    return false;
-  const settings = Cc['@mozilla.org/system-proxy-settings;1'].getService(Ci.nsISystemProxySettings);
-  if (settings.PACURI)
-    return true;
-  try {
-    return settings.getProxyForURI('https://camoufox.invalid/', 'https', 'camoufox.invalid', 443) !== 'DIRECT';
-  } catch (e) {
-    // This is how Linux answers when no proxy is set.
-    if (e.result === Cr.NS_ERROR_FAILURE)
-      return false;
-    throw e;
-  }
 }
 
 // Camoufox: every juggler browser context is a Firefox container. A PUBLIC
@@ -268,7 +252,10 @@ export class TargetRegistry {
     this._proxiesWithClashingAuthCacheKeys = new Set();
     this._browserProxy = null;
     this._launchProxyAuth = readLaunchProxyAuth();
-    if (usesSystemProxy())
+    // A system proxy is not in network.proxy.* either, and a content process
+    // cannot ask the OS for it.
+    const systemProxySettings = Cc['@mozilla.org/system-proxy-settings;1']?.getService(Ci.nsISystemProxySettings);
+    if (usesSystemProxy(Services.prefs.getIntPref('network.proxy.type'), systemProxySettings))
       recordProxied('browser');
 
     // Cleanup containers from previous runs (if any)
@@ -670,11 +657,6 @@ export class PageTarget {
     // to disallow concurrent tab switching.
     const result = globalTabAndWindowActivationChain.then(async () => {
       this._window.focus();
-      if (tabBrowser.selectedTab !== this._tab) {
-        const promise = helper.awaitEvent(ownerWindow, 'TabSwitchDone');
-        tabBrowser.selectedTab = this._tab;
-        await promise;
-      }
       const notificationsPopup = muteNotificationsPopup ? this._linkedBrowser?.ownerDocument.getElementById('notification-popup') : null;
       notificationsPopup?.style.setProperty('pointer-events', 'none');
       try {
@@ -682,13 +664,35 @@ export class PageTarget {
         const expired = new Promise(resolve => {
           timer = setTimeout(() => resolve(kSlotExpired), kActivationSlotBudgetMs);
         });
+        // The tab switch is inside the budget: a TabSwitchDone that never
+        // fires must not wedge the chain, and its listener goes with the slot.
+        let onSwitched;
+        let entered = false;
+        const run = async () => {
+          if (tabBrowser.selectedTab !== this._tab) {
+            const switched = new Promise(resolve => {
+              onSwitched = () => resolve();
+              ownerWindow.addEventListener('TabSwitchDone', onSwitched, {once: true});
+            });
+            tabBrowser.selectedTab = this._tab;
+            await switched;
+          }
+          entered = true;
+          return callback();
+        };
         try {
-          if (await Promise.race([callback(), expired]) === kSlotExpired) {
+          if (await Promise.race([run(), expired]) === kSlotExpired) {
             dump(`[juggler] WARN activation-chain slot exceeded ` +
                  `${kActivationSlotBudgetMs}ms; advancing the chain without it\n`);
+            // The command never ran, so it must not report success; the chain
+            // still advances (it swallows this rejection below).
+            if (!entered)
+              throw new Error(`Tab switch did not complete within ${kActivationSlotBudgetMs}ms`);
           }
         } finally {
           clearTimeout(timer);
+          if (onSwitched)
+            ownerWindow.removeEventListener('TabSwitchDone', onSwitched);
         }
       } finally {
         notificationsPopup?.style.removeProperty('pointer-events');

@@ -12,10 +12,9 @@ an invariant stock Firefox 152 holds:
   gum-fake            getUserMedia({audio: true, fake: true}) resolves without a
                       prompt
   storage-partition   a cross-site iframe's document.hasStorageAccess() is false
-  wheel-default       page.mouse.wheel(0, 300) arrives as a physical wheel's
-                      3 notches, each wheelDeltaY -120 (docs/input-dispatch.md);
+  wheel-default       page.mouse.wheel(0, 300) arrives as one native wheel
+                      event of 3 notches, wheelDeltaY -360 (docs/input-dispatch.md);
                       on Linux, as macOS's differs (driven-wheel-notches)
-  wheel-notches       the same with humanize=True, which does not change it
   wheel-scaled        wheel-default again at layout.css.devPixelsPerPx 2:
                       still 3 notches, not a count halved by the scale
   query-cost          matchMedia('(color: 8)') and navigator.hardwareConcurrency
@@ -204,23 +203,15 @@ def run_probes(binary, port):
         return out
 
 
-def probe_wheel(binary, port, humanize, prefs=None):
-    """One scroll of 300px, with humanize on or off.
-
-    Either way the scroll is quantised into the notches a physical wheel
-    produces; both settings are checked so neither drifts from the other.
-    """
+def probe_wheel(binary, port, prefs=None):
+    """One scroll of 300px, quantised into the notches a physical wheel produces."""
     from camoufox.sync_api import Camoufox
 
-    with Camoufox(headless=True, executable_path=str(binary), os="linux", humanize=humanize,
+    with Camoufox(headless=True, executable_path=str(binary), os="linux",
                   firefox_user_prefs=prefs or {}, i_know_what_im_doing=True) as b:
         page = b.new_page()
         page.goto(f"http://localhost:{port}/")
-        # The notches come 18-60 ms apart, and a content process still busy with the
-        # load when they arrive gets two in its queue at once and fires them as one
-        # wheel event (BrowserChild::RecvMouseWheelEvent coalescing): stock Linux
-        # 158.0.1 does the same with XTest notches 30 ms apart and a 150 ms busy page
-        # (deltaY [6, 12]). The page is idle first, so the notches are what is compared.
+        # The page is idle first, so the wheel is not queued behind the load.
         page.evaluate("() => new Promise((r) => requestIdleCallback(() => r(), {timeout: 2000}))")
         page.mouse.move(200, 200)
         page.mouse.wheel(0, 300)
@@ -256,9 +247,7 @@ def main() -> int:
     server, port = serve()
     try:
         out = run_probes(binary, port)
-        out["wheelHumanized"] = probe_wheel(binary, port, humanize=True)
-        out["wheelScaled"] = probe_wheel(binary, port, humanize=False,
-                                         prefs={"layout.css.devPixelsPerPx": "2"})
+        out["wheelScaled"] = probe_wheel(binary, port, prefs={"layout.css.devPixelsPerPx": "2"})
         relaunch = relaunch_timezones(binary, port)
     finally:
         server.shutdown()
@@ -290,10 +279,9 @@ def main() -> int:
         failures.append(f"gum-fake: getUserMedia({{fake: true}}) {out['gumFake']}")
     if out["storageAccess"] is not False:
         failures.append(f"storage-partition: cross-site iframe hasStorageAccess() = {out['storageAccess']}")
-    # 300 px is three notches, each one native tick, humanized or not.
-    for name, events in (("wheel-default", out["wheel"]), ("wheel-notches", out["wheelHumanized"]),
-                         ("wheel-scaled", out["wheelScaled"])):
-        if [e["wd"] for e in events] != [-120, -120, -120]:
+    # 300 px is three notches, in one event, as one 360-unit WM_MOUSEWHEEL.
+    for name, events in (("wheel-default", out["wheel"]), ("wheel-scaled", out["wheelScaled"])):
+        if [e["wd"] for e in events] != [-360]:
             failures.append(f"{name}: wheel(0, 300) gave {events}")
     # 20000 reads of a value that lives in the config cost ~20 ms here, i.e.
     # ~1 us each: a hash lookup, no IPC. The state this guards against is a sync

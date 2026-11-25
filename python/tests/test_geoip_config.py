@@ -42,6 +42,49 @@ def test_explicit_deprecated_source_is_kept(cache):
     assert geolocation.load_geoip_config()["name"] == DEPRECATED
 
 
+def test_implicit_source_missing_from_repos_moves_to_default(cache):
+    # A source renamed or removed upstream, saved before it went
+    _saved(cache, name="Gone")
+    config = geolocation.load_geoip_config()
+    assert config["name"] == DEFAULT
+    assert "urls" in config and "paths" in config
+
+
+def test_explicit_source_missing_from_repos_raises_naming_it(cache):
+    _saved(cache, name="Gone", explicit=True)
+    with pytest.raises(ValueError, match=r"'Gone' not found. Available: .*GeoIP AIO by daijro"):
+        geolocation.load_geoip_config()
+
+
+def test_an_explicit_source_missing_from_repos_can_be_replaced_from_the_cli(cache, monkeypatch):
+    from camoufox import __main__ as cli
+
+    _saved(cache, name="Gone", explicit=True)
+    monkeypatch.setattr(cli, "_inquirer_select", lambda choices, message: dict(choices)[DEFAULT])
+    cli._select_geoip_source()
+    assert geolocation.load_geoip_config()["name"] == DEFAULT
+
+
+def test_the_cli_reports_an_explicit_source_missing_from_repos(cache, monkeypatch, capsys):
+    from click.testing import CliRunner
+
+    from camoufox import __main__ as cli
+
+    _saved(cache, name="Gone", explicit=True)
+    monkeypatch.setattr(cli, "ALLOW_GEOIP", True)
+    monkeypatch.setattr(cli, "GEOIP_DIR", cache)
+    monkeypatch.setattr(cli, "print_tree", lambda **_: None)
+
+    info = cli.VersionInfo()
+    info.geoip()
+    info.console.print(info.t)
+    assert "'Gone' not found" in " ".join(capsys.readouterr().out.split())
+
+    result = CliRunner().invoke(cli.cli, ["list"])
+    assert result.exit_code == 0, result.output
+    assert "'Gone' not found" in result.output
+
+
 def test_save_records_explicit_choice(cache):
     config = geolocation._get_geoip_config_by_name(DEPRECATED)
     geolocation.save_geoip_config(config, explicit=True)
