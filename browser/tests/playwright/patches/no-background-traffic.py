@@ -20,15 +20,12 @@ What PASS means:
     python browser/tests/playwright/patches/no-background-traffic.py
 """
 
-import http.server
-import socketserver
 import sys
-import threading
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import resolve_binary  # noqa: E402
+from helpers import PushSite, RefusingProxy, resolve_binary, subscribe_to_push, wait_for_push  # noqa: E402
 
 # A build without the fix shows every background service named above within this
 # long on a fresh profile.
@@ -38,39 +35,7 @@ PUSH_HOST = "push.camoufox.test"
 SUBSCRIBE_SECONDS = 20
 
 
-class Logging(http.server.BaseHTTPRequestHandler):
-    def _refuse(self) -> None:
-        self.server.seen.append(self.path)
-        self.send_error(502)
-
-    do_CONNECT = do_GET = do_POST = _refuse
-
-    def log_message(self, *args) -> None:
-        pass
-
-
-class LoggingProxy(socketserver.ThreadingMixIn, http.server.HTTPServer):
-    daemon_threads = True
-
-    def __init__(self) -> None:
-        super().__init__(("127.0.0.1", 0), Logging)
-        self.seen = []
-        threading.Thread(target=self.serve_forever, daemon=True).start()
-
-
-class Site(http.server.BaseHTTPRequestHandler):
-    def do_GET(self) -> None:
-        worker = self.path == "/sw.js"
-        self.send_response(200)
-        self.send_header("Content-Type", "text/javascript" if worker else "text/html")
-        self.end_headers()
-        self.wfile.write(b"" if worker else b"<!doctype html>")
-
-    def log_message(self, *args) -> None:
-        pass
-
-
-def launch(proxy: LoggingProxy, **prefs):
+def launch(proxy: RefusingProxy, **prefs):
     from camoufox.sync_api import Camoufox
 
     port = proxy.server_address[1]
@@ -91,7 +56,7 @@ def launch(proxy: LoggingProxy, **prefs):
 
 
 def main() -> int:
-    proxy = LoggingProxy()
+    proxy = RefusingProxy()
     with launch(proxy, **{"media.gmp-manager.updateEnabled": False}) as browser:
         page = browser.new_page()
         time.sleep(IDLE_SECONDS)
@@ -102,22 +67,16 @@ def main() -> int:
             pass
     control = [seen for seen in proxy.seen if CONTROL_HOST in seen]
 
-    site = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Site)
-    site.daemon_threads = True
-    threading.Thread(target=site.serve_forever, daemon=True).start()
+    site = PushSite()
     proxy.seen.clear()
     with launch(proxy, **{"dom.push.serverURL": f"wss://{PUSH_HOST}/"}) as browser:
         context = browser.new_context()
         context.grant_permissions(["notifications"])
         page = context.new_page()
-        page.goto(f"http://localhost:{site.server_address[1]}/")
-        time.sleep(2)
+        page.goto(site.url)
+        wait_for_push(page)
         before_subscribe = [seen for seen in proxy.seen if PUSH_HOST in seen]
-        page.evaluate(
-            "void navigator.serviceWorker.register('/sw.js')"
-            ".then(() => navigator.serviceWorker.ready)"
-            ".then(r => r.pushManager.subscribe({ userVisibleOnly: true }))"
-        )
+        subscribe_to_push(page)
         deadline = time.monotonic() + SUBSCRIBE_SECONDS
         while time.monotonic() < deadline and not any(PUSH_HOST in seen for seen in proxy.seen):
             time.sleep(0.2)

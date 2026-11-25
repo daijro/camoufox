@@ -2,12 +2,15 @@
 Shared helpers for patch verification tests.
 """
 
+import base64
+import http.server
 import ipaddress
 import socket
+import socketserver
 import struct
 import threading
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Tuple
 
 
 @asynccontextmanager
@@ -249,3 +252,88 @@ class AnsweringStun:
 
     def close(self) -> None:
         self.sock.close()
+
+
+class RefusingProxy(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    """An HTTP proxy on this host that refuses every request and records where
+    each was going, so a guard sees the traffic with no network. With
+    `credentials` (username, password) it first demands Basic proxy auth and
+    records only the requests that sent them."""
+
+    daemon_threads = True
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def _refuse(self) -> None:
+            if self.server.authorization and self.headers.get("Proxy-Authorization") != self.server.authorization:
+                self.send_response(407)
+                self.send_header("Proxy-Authenticate", 'Basic realm="camoufox"')
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.server.seen.append(self.path)
+            self.send_error(502)
+
+        do_CONNECT = do_GET = do_POST = _refuse
+
+        def log_message(self, *args) -> None:
+            pass
+
+    def __init__(self, credentials: Optional[Tuple[str, str]] = None) -> None:
+        super().__init__(("127.0.0.1", 0), self._Handler)
+        self.authorization = "Basic " + base64.b64encode(":".join(credentials).encode()).decode() if credentials else None
+        self.seen: List[str] = []
+        threading.Thread(target=self.serve_forever, daemon=True).start()
+
+
+class PushSite(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    """A blank page and an empty service worker on localhost, which no proxy
+    carries, for a page that subscribes to push."""
+
+    daemon_threads = True
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            worker = self.path == "/sw.js"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/javascript" if worker else "text/html")
+            self.end_headers()
+            self.wfile.write(b"" if worker else b"<!doctype html>")
+
+        def log_message(self, *args) -> None:
+            pass
+
+    def __init__(self) -> None:
+        super().__init__(("127.0.0.1", 0), self._Handler)
+        self.url = f"http://localhost:{self.server_address[1]}/"
+        threading.Thread(target=self.serve_forever, daemon=True).start()
+
+
+# The parent's push service listens only once a late startup task has started
+# it, and drops a request sent before then, which never settles. A
+# getSubscription() that settles shows it listening; it opens no connection.
+_PUSH_READY = """async () => {
+  await navigator.serviceWorker.register('/sw.js');
+  const reg = await navigator.serviceWorker.ready;
+  const deadline = performance.now() + 30000;
+  const settled = () => Promise.race([
+    reg.pushManager.getSubscription().then(() => true),
+    new Promise(resolve => setTimeout(() => resolve(false), 500)),
+  ]);
+  while (!(await settled())) {
+    if (performance.now() > deadline)
+      throw new Error('the push service never answered');
+  }
+}"""
+
+
+def wait_for_push(page) -> None:
+    """Register PushSite's service worker on page and wait until the push
+    service answers it."""
+    page.evaluate(_PUSH_READY)
+
+
+def subscribe_to_push(page) -> None:
+    """Start a push subscription from page, without waiting for the server."""
+    page.evaluate(
+        "void navigator.serviceWorker.ready.then(r => r.pushManager.subscribe({ userVisibleOnly: true }))"
+    )

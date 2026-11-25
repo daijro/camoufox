@@ -112,6 +112,18 @@ function recordProxied(owner) {
   Services.prefs.getDefaultBranch('network.dns.').setBoolPref('disablePrefetch', true);
 }
 
+// Whether a channel was made for a page (a document, a frame, a worker), as
+// opposed to the browser's own traffic, which has no browsing context and the
+// system principal.
+function belongsToPage(loadInfo) {
+  if (!loadInfo)
+    return false;
+  if (loadInfo.browsingContextID || loadInfo.workerAssociatedBrowsingContextID)
+    return true;
+  const principal = loadInfo.loadingPrincipal || loadInfo.triggeringPrincipal;
+  return !!principal && !principal.isSystemPrincipal;
+}
+
 // Camoufox: every juggler browser context is a Firefox container. A PUBLIC
 // container renders its name ("JUGGLER <id>") and colour in the URL bar and the
 // tab strip -- a visible automation cue a real Firefox never shows. The
@@ -454,13 +466,29 @@ export class TargetRegistry {
   }
 
   getProxyInfo(channel) {
-    const originAttributes = channel.loadInfo && channel.loadInfo.originAttributes;
+    const loadInfo = channel.loadInfo;
+    const originAttributes = loadInfo && loadInfo.originAttributes;
     const browserContext = originAttributes ? this.browserContextForUserContextId(originAttributes.userContextId) : null;
     // Prefer context proxy and fallback to browser-level proxy.
-    const proxyInfo = (browserContext && browserContext._proxy) || this._browserProxy;
+    let proxyInfo = (browserContext && browserContext._proxy) || this._browserProxy;
+    // Camoufox: with proxies on contexts only, the browser's own traffic (the
+    // push websocket every context shares, media plugin update checks) went
+    // out direct, from this machine's address. It takes the newest proxied
+    // context's proxy instead. A page's own request keeps its context's choice.
+    if (!proxyInfo && !belongsToPage(loadInfo))
+      proxyInfo = this._newestContextProxy();
     if (!proxyInfo || proxyInfo.bypass.some(domainSuffix => channel.URI.host.endsWith(domainSuffix)))
       return null;
     return proxyInfo;
+  }
+
+  _newestContextProxy() {
+    let newest = null;
+    for (const browserContext of this._browserContextIdToBrowserContext.values()) {
+      if (browserContext._proxy)
+        newest = browserContext._proxy;
+    }
+    return newest;
   }
 
   defaultContext() {
