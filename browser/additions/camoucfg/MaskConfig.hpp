@@ -469,6 +469,28 @@ inline std::optional<std::pair<uint16_t, uint16_t>> SpoofedEphemeralPorts(
   }
 }
 
+// The native line break of the OS an identity presents: "\r\n" on Windows,
+// "\n" on macOS and Linux, and, without an identity, the build's own. A page
+// observes it in a Blob's {endings: "native"} size and in the plain-text
+// serializer's line separators, so it is answered from the presented OS, never
+// the build's -- a Windows identity on a Linux host must report CRLF, as a real
+// Windows Firefox would.
+inline bool NativeLineBreakIsCRLF(SpoofedOS aOS = GetSpoofedOS()) {
+  switch (aOS) {
+    case SpoofedOS::Windows:
+      return true;
+    case SpoofedOS::MacOS:
+    case SpoofedOS::Linux:
+      return false;
+    default:
+#ifdef XP_WIN
+      return true;
+#else
+      return false;
+#endif
+  }
+}
+
 inline std::optional<std::array<uint32_t, 4>> GetRect(std::string_view left,
                                                      std::string_view top,
                                                      std::string_view width,

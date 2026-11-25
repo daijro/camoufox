@@ -41,6 +41,7 @@ be listed there.
 | `locale-spoofing.patch` | `locale:*`, `navigator.language` |
 | `media-codec-spoofing.patch` | `media:spoof_codecs` (bypasses `PDMFactory::Supports()` in `MP4Decoder`/`MatroskaDecoder` so `canPlayType()`/`isTypeSupported()` don't leak system codec libraries, and answers `decodingInfo()` to match) |
 | `media-device-spoofing.patch` | `mediaDevices:*` |
+| `native-line-break.patch` | the launch OS via `GetSpoofedOS()` (no config key) |
 | `navigator-spoofing.patch` | `navigator.*` |
 | `network-patches.patch` | `headers.*`, `navigator.userAgent` |
 | `no-css-animations.patch` | `instantAnimations` |

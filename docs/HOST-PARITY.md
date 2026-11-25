@@ -10,15 +10,19 @@ the host. This lists each one, what a page reads, and how it is closed.
 | GTK keyboard | Ctrl+Up in `<textarea>` moved up a line (Windows: line start); Alt+Backspace no undo; Shift+Delete with nothing selected did nothing; Ctrl+/ selected all; AltGr `keyCode` 225 (Windows: 18); Ctrl+Backspace on a rich-text selection deleted only the selection | `input:windowsKeyboard`: Windows' shortcut tables replace GTK's text bindings (native and the ones synthesized events get), AltGr reports Alt, Windows' caret style in HTML editors. Launch-wide; set it `false` to keep Linux behaviour. The tables, text bindings and AltGr are GTK code, so on a macOS host only the caret style changes | `windows-keyboard.patch`, launcher |
 | Linux behaviour defaults | middle click pastes the primary selection, double-click selects no trailing space, instant fullscreen, GTK scrollbar clicks | Windows' defaults (`windowsBehaviourPrefs` in `launcher-constants.json`). Measured on stock Windows: `middlemouse.paste`, `general.autoScroll`, `eat_space_to_next_word`, the fullscreen transition. From Firefox 158's `all.js`, `firefox.js` and `StaticPrefList.yaml` only: `middlemouse.scrollbarPosition`, `ui.scrollToClick`, `slider.snapMultiplier`, `click_and_hold_track` | launcher |
 | Scrollbars from the host theme | a Windows 10 identity's classic scrollbars 12 px (GTK's); stock Windows 17 px | Windows' non-native scrollbars (`widget.non-native-theme.scrollbar.style` 4 or 5, following `ui.useOverlayScrollbars`) at Windows' size | launcher |
+| Native line endings from the build | `new Blob(["a\nb"], {endings: "native"}).size` was 3 on the Linux build claiming Windows (stock Windows 159: 4, i.e. `"a\r\nb"`); `Selection.toString()` across `<p>x</p><p>y</p>` gave `"x\n\ny"` where Windows gives `"x\r\n\r\ny"` | both answered from the presented OS by `MaskConfig::NativeLineBreakIsCRLF()` instead of `#ifdef XP_WIN` / `NS_ULINEBREAK`; a Linux build claiming Windows reports CRLF, and a Windows build claiming macOS or Linux reports LF | `native-line-break.patch` |
 
 These apply only when the identity claims Windows and the host is not Windows;
 on a Windows host the build already behaves this way. Every default yields to a
-value the caller sets.
+value the caller sets. Native line endings are the exception in that they are
+answered from the presented OS in both directions: a macOS or Linux identity
+reports LF even on a Windows host.
 
 They are the browser's, not a context's: prefs and launch config set from the
 OS the browser was launched with. On a browser launched as Windows, a context
-created with `NewContext(os="macos")` still has Windows' math, keyboard and
-behaviour; on a browser launched as Linux, a Windows context has Linux's.
+created with `NewContext(os="macos")` still has Windows' math, keyboard,
+behaviour and native line endings; on a browser launched as Linux, a Windows
+context has Linux's.
 `NewContext` does not refuse that, because a launch without `os` draws its OS
 from fpgen's mix, and a refusal would then come and go with the draw. Launch
 with the `os` whose behaviour the contexts need, or one browser per OS.

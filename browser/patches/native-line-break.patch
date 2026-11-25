@@ -1,0 +1,82 @@
+diff --git a/dom/file/BlobSet.cpp b/dom/file/BlobSet.cpp
+index 69e3559310..c10935c286 100644
+--- a/dom/file/BlobSet.cpp
++++ b/dom/file/BlobSet.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "mozilla/dom/BlobSet.h"
+ 
++#include "MaskConfig.hpp"
+ #include "MemoryBlobImpl.h"
+ #include "MultipartBlobImpl.h"
+ #include "StringBlobImpl.h"
+@@ -50,12 +51,12 @@ nsresult BlobSet::AppendUTF8String(const nsACString& aUTF8String,
+         return NS_ERROR_OUT_OF_MEMORY;
+       }
+     }
+-#ifdef XP_WIN
+-    if (NS_WARN_IF(
+-            !utf8Str.ReplaceSubstring("\n", "\r\n", mozilla::fallible))) {
+-      return NS_ERROR_OUT_OF_MEMORY;
++    if (MaskConfig::NativeLineBreakIsCRLF()) {
++      if (NS_WARN_IF(
++              !utf8Str.ReplaceSubstring("\n", "\r\n", mozilla::fallible))) {
++        return NS_ERROR_OUT_OF_MEMORY;
++      }
+     }
+-#endif
+   }
+ 
+   RefPtr<StringBlobImpl> blobImpl = StringBlobImpl::Create(utf8Str, u""_ns);
+diff --git a/dom/file/moz.build b/dom/file/moz.build
+index 58e4a09788..8587147d4c 100644
+--- a/dom/file/moz.build
++++ b/dom/file/moz.build
+@@ -50,6 +50,7 @@ UNIFIED_SOURCES += [
+ ]
+ 
+ LOCAL_INCLUDES += [
++    "/camoucfg",
+     "/dom/file/ipc",
+ ]
+ 
+diff --git a/dom/serializers/moz.build b/dom/serializers/moz.build
+index 7627faf4a4..e8662b3cdb 100644
+--- a/dom/serializers/moz.build
++++ b/dom/serializers/moz.build
+@@ -29,6 +29,8 @@ UNIFIED_SOURCES += [
+     "nsXMLContentSerializer.cpp",
+ ]
+ 
++LOCAL_INCLUDES += ["/camoucfg"]
++
+ TEST_DIRS += [
+     "gtest",
+     "tests/mochitest",
+diff --git a/dom/serializers/nsPlainTextSerializer.cpp b/dom/serializers/nsPlainTextSerializer.cpp
+index 0b4ba7625b..041ea75f03 100644
+--- a/dom/serializers/nsPlainTextSerializer.cpp
++++ b/dom/serializers/nsPlainTextSerializer.cpp
+@@ -10,6 +10,7 @@
+ 
+ #include "nsPlainTextSerializer.h"
+ 
++#include "MaskConfig.hpp"
+ #include "mozilla/Casting.h"
+ #include "mozilla/Preferences.h"
+ #include "mozilla/Span.h"
+@@ -99,8 +100,12 @@ static void DetermineLineBreak(const int32_t aFlags, nsAString& aLineBreak) {
+     // Unix/DOM
+     aLineBreak.AssignLiteral(u"\n");
+   } else {
+-    // Platform/default
+-    aLineBreak.AssignLiteral(NS_ULINEBREAK);
++    // Platform/default: the presented OS's, not the build's.
++    if (MaskConfig::NativeLineBreakIsCRLF()) {
++      aLineBreak.AssignLiteral(u"\r\n");
++    } else {
++      aLineBreak.AssignLiteral(u"\n");
++    }
+   }
+ }
+ 
