@@ -12,6 +12,7 @@ Run:
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from collections import defaultdict
@@ -68,7 +69,9 @@ def compile_objects(objects, objdir):
     wrapper = objdir / 'preflight.mk'
     targets = ' '.join(str(n) for n in range(len(rules)))
     wrapper.write_text(f'.PHONY: all {targets}\nall: {targets}\n' + ''.join(rules))
-    run(f'make -f {wrapper} -k -j{os.cpu_count()} --output-sync=target')
+    # Apple's make 3.81 has no --output-sync; Homebrew installs GNU make as gmake
+    make = shutil.which('gmake') or 'make'
+    run(f'{make} -f {wrapper} -k -j{os.cpu_count()} --output-sync=target')
 
 
 if __name__ == '__main__':
