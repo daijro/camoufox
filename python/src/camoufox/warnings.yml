@@ -46,6 +46,12 @@ instant_animations: >-
     never waits on one. A page can see it: getComputedTiming() reports a duration
     of 0 where stock Firefox reports the real one.
 
+context_proxy_without_launch_proxy: >-
+    This browser was launched without a proxy, so its own traffic, which belongs
+    to no context (the push connection every context shares), goes through the
+    first proxied context's proxy for the browser's life. Pass a launch-level
+    `proxy` to choose where it goes.
+
 is_mobile: >-
     Camoufox is built for desktops and only draws desktop identities, so is_mobile
     cannot produce a believable phone and will leak: the page still sees a desktop

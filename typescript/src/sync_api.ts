@@ -27,6 +27,7 @@ import {
 	applyNoViewport,
 	attachDesktopOnlyWarning,
 	attachNoViewportDefault,
+	attachSharedTrafficWarning,
 	attachSocks5Auth,
 	attachStockMediaDefaults,
 	attachVirtualDisplay,
@@ -218,6 +219,7 @@ async function launchWith(
 	const identity = await hostIdentity(fromOptions, canvasNoise);
 	const browser = await playwright.launch(fromOptions);
 	attachSocks5Auth(browser);
+	if (!fromOptions.proxy) attachSharedTrafficWarning(browser);
 	if (noViewportDefault) {
 		attachNoViewportDefault(browser);
 	}

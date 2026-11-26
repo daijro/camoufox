@@ -211,7 +211,7 @@ async def _launch(
 
     identity = await asyncio.get_running_loop().run_in_executor(None, host_identity, from_options, canvas_noise)
     browser = await playwright.firefox.launch(**from_options)
-    attach_context_defaults(browser, no_viewport_default)
+    attach_context_defaults(browser, no_viewport_default, bool(from_options.get('proxy')))
     browser._camoufox_host_identity = identity
     return await async_attach_vd(browser, virtual_display)
 
