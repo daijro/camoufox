@@ -916,6 +916,21 @@ def test_no_config_key_is_ever_deleted():
     )
 
 
+def test_git_keeps_every_patch_byte_for_byte():
+    patches = subprocess.run(
+        ["git", "ls-files", "browser/patches"], cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+    ).stdout
+    attrs = subprocess.run(
+        ["git", "check-attr", "--stdin", "text"], input=patches,
+        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+    ).stdout.splitlines()
+    converted = [line.split(": ")[0] for line in attrs if not line.endswith(": text: unset")]
+    assert patches and not converted, (
+        f"git converts the line endings of {converted}; mark browser/patches `-text` in .gitattributes"
+        + explain("patches-are-committed-byte-for-byte")
+    )
+
+
 # ---------------------------------------------------------------------------
 # branding
 # ---------------------------------------------------------------------------

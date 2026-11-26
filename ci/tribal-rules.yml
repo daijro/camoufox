@@ -854,6 +854,23 @@ rules:
       second one.
 
   # -------------------------------------------------------------------------
+  # Patches
+  # -------------------------------------------------------------------------
+
+  - id: patches-are-committed-byte-for-byte
+    title: Git never converts the line endings of a patch
+    check: automated
+    evidence:
+      - "PR #1138: windows-version-info-vendor.patch applied locally, then failed every CI build with 'Hunk #1 FAILED at 1 (different line endings)' on ipc/app/module.ver"
+    rationale: >-
+      A patch is a diff of Firefox's exact bytes, and some Firefox files
+      (ipc/app/module.ver) end their lines in CRLF. Under the repo's
+      `text=auto eol=lf`, git stripped the CRs from such a hunk on commit, so
+      the patch applied from the working copy it was written to and failed on
+      every fresh checkout. browser/patches is `-text` in .gitattributes, so
+      git stores and checks out each patch exactly as `make diff` wrote it.
+
+  # -------------------------------------------------------------------------
   # Config schema
   # -------------------------------------------------------------------------
 
