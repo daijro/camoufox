@@ -121,7 +121,7 @@ def package_hashes(root: Path, jar: str, prefixes: list) -> dict:
     """Member -> SHA-256 for one package, from the jar if packaged, else from the
     tree. `mach build` leaves dist/bin without omni.ja: the same resources sit
     as loose files at their jar paths, under dist/bin/browser/ for
-    browser/omni.ja and dist/bin/ for omni.ja. CI tests that unpackaged tree.
+    browser/omni.ja and dist/bin/ for omni.ja. A local objdir build is that tree.
 
     Returns None when neither is present, so the caller can say which.
     """

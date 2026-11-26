@@ -235,7 +235,8 @@ Each tier gates the next, so a lint failure never reaches the build:
 | Mechanism | Effect |
 |---|---|
 | **Fetch instead of build** | A pull request that does not touch browser sources tests the published release built from exactly this tree's sources (`ci.release paired`). With no such release, it builds. |
-| **Compiled-input cache** | The build cache is keyed on a hash of the compiled inputs only (`ci/browser_inputs.py`). On a hit the browser is restored and this branch's Juggler JavaScript and other resources, the files Juggler's `moz.build` lists in `FINAL_TARGET_FILES`, are laid over it. Everything else, including any new file type, counts as native and forces a build. |
+| **Packaged like a release** | Every suite tests the package `ci.run_build` makes, as a release does, not its objdir's `dist/bin` ([`ci-tests-the-packaged-browser`](tribal-rules.yml)). |
+| **Compiled-input cache** | The build cache is keyed on a hash of the compiled inputs only (`ci/browser_inputs.py`). On a hit the package is restored and this branch's Juggler JavaScript and other resources, the files Juggler's `moz.build` lists in `FINAL_TARGET_FILES`, are written into its `omni.ja`. Everything else, including any new file type, counts as native and forces a build. |
 | **No partial restore** | That cache has no `restore-keys`: a partial match would hand the tests a browser built from different sources. A self-test checks the key covers every browser-affecting path. |
 | **Warm ccache** | Pushes to `main` that build, and a twice-weekly schedule, keep the ccache from being evicted; pull requests restore it. A carried push builds nothing, so it caches the pull request's browser under the compiled-input key instead. |
 | **Carried pushes** | A push to `main` that lands the tree its pull request run tested reuses that run's results ([above](#the-test-pipeline)). |

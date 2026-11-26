@@ -198,8 +198,9 @@ def gpu_process(binary):
 
 async def gpu_process_killed() -> int:
     print("\n=== scrolling while the GPU process dies ===")
-    # In the profile's user.js: firefox_user_prefs reach CI's unpackaged build
-    # after gfx has read these startup-only prefs, so it starts no GPU process.
+    # In the profile's user.js: on an unpackaged build, firefox_user_prefs
+    # arrive after gfx has read these startup-only prefs (daijro/camoufox#1050),
+    # so it would start no GPU process.
     with tempfile.TemporaryDirectory() as profile, hidden_display():
         Path(profile, "user.js").write_text(
             'user_pref("layers.gpu-process.enabled", true);\n'
