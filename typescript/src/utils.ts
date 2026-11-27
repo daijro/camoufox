@@ -1936,10 +1936,13 @@ export async function launchOptions({
 					Math.trunc(screenCons.maxHeight / fit)) as number,
 			);
 		}
-		utilsDeps.followBaselineProtection(config, targetOs);
-		utilsDeps.clampWindowDimensions(config);
-		utilsDeps.clampWindowPosition(config);
 	}
+
+	// Every launch, a caller's screen and window included: the config claims the
+	// avail rect the browser reports, and the window is fitted inside it.
+	utilsDeps.followBaselineProtection(config, targetOs);
+	utilsDeps.clampWindowDimensions(config);
+	if (!userSetScreenWindow) utilsDeps.clampWindowPosition(config);
 
 	// Deliberately NOT setting window.history.length: browser/settings/camoufox.cfg runs
 	// Firefox's stock max_entries, so the real value starts at 1 and grows with

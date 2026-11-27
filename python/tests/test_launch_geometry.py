@@ -196,3 +196,30 @@ def test_a_zoomed_fpgen_ratio_follows_the_caller_s_render_scale():
     assert config["window.devicePixelRatio"] == 1
     assert opts["firefox_user_prefs"]["layout.css.devPixelsPerPx"] == "1"
     assert config["screen.width"] == round(1760 * drawn)
+
+
+@pytest.mark.parametrize("target,taskbar", [("windows", 48), ("macos", 76), ("linux", 0)])
+def test_a_caller_set_screen_claims_the_avail_the_browser_reports(target, taskbar):
+    # The config's avail is what window placement is computed from, so it must
+    # be the rect baseline protection reports, not the caller's raw one; a
+    # caller's window that no longer fits is clamped like any other.
+    with host(None):
+        config = launch(
+            headless=True,
+            os=target,
+            config={
+                "screen.width": 1920,
+                "screen.height": 1080,
+                "screen.availWidth": 1900,
+                "screen.availHeight": 1000,
+                "window.outerWidth": 1900,
+                "window.outerHeight": 1070,
+                "window.innerWidth": 1900,
+                "window.innerHeight": 1000,
+            },
+        )
+    assert config["screen.availWidth"] == 1920
+    assert config["screen.availHeight"] == 1080 - taskbar
+    assert config["window.outerWidth"] == 1900
+    assert config["window.outerHeight"] == min(1070, 1080 - taskbar)
+    assert config["window.innerHeight"] <= config["window.outerHeight"]

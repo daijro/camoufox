@@ -1523,8 +1523,12 @@ def launch_options(
             fit = _physical_scale(config)
             clamp_screen_to_display(config, screen_cons.max_width and int(screen_cons.max_width / fit),
                                     screen_cons.max_height and int(screen_cons.max_height / fit))
-        follow_baseline_protection(config, target_os)
-        clamp_window_dimensions(config)
+
+    # Every launch, a caller's screen and window included: the config claims the
+    # avail rect the browser reports, and the window is fitted inside it.
+    follow_baseline_protection(config, target_os)
+    clamp_window_dimensions(config)
+    if not _user_set_screen_window:
         clamp_window_position(config)
 
     # Deliberately NOT setting window.history.length. It used to be pinned to a

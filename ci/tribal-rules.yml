@@ -490,7 +490,9 @@ rules:
       followBaselineProtection): the available screen is the screen less 48px
       on Windows, 76px on macOS and nothing on Linux, and more than one touch
       point is 5. A config claiming fpgen's recorded values read differently
-      on the page.
+      on the page. This holds whether or not the caller set screen.* or
+      window.*: the launchers always write the rect the browser reports and
+      fit a window that no longer fits inside it.
 
   - id: webgpu-follows-the-claimed-device
     title: navigator.gpu where Firefox on the claimed device has it; the host's adapter only behind the host's own GPU
