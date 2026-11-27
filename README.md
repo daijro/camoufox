@@ -548,6 +548,7 @@ claims the host's OS. Details are in
 | Run code in the page's own world | `main_world_eval=True`, then `page.evaluate("mw:...")` | Juggler |
 | Finish animations at once so Playwright never waits | `config={"instantAnimations": True}` (detectable; warns) | `no-css-animations` patch |
 | Read closed shadow roots | `config={"forceScopeAccess": True}` | `shadow-root-bypass` patch |
+| Send an HTTP proxy its credentials with the first request instead of after a 407 (Basic; turn it on only for a proxy that takes Basic) | `config={"proxy:preemptiveBasicAuth": True}` | Juggler |
 | Many identities in one browser | `NewContext(browser, os=..., proxy=...)` | per-context patches, launcher |
 
 ### Addons
