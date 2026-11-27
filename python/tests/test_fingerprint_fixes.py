@@ -276,6 +276,27 @@ class TestSetMediaDevicesDefaults:
 
 
 class TestFixHardwareConcurrency:
+    def test_a_mac_gpu_bounds_the_kept_draw_to_cores_a_mac_with_it_has(self, monkeypatch):
+        # An Intel iGPU Mac reports at most 16 threads, so a kept draw snaps
+        # into that table (#1090); a dGPU Mac goes to 56 and keeps 32.
+        from camoufox import coherence, cpu_affinity, fingerprints as fp
+
+        monkeypatch.setattr(cpu_affinity, "supported", lambda: True)
+        monkeypatch.setattr(fp, "host_cpu_count", lambda: 32)
+        c = {"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
+             "navigator.hardwareConcurrency": 12}
+        fp.fix_hardware_concurrency(c, target_os="mac")
+        assert c["navigator.hardwareConcurrency"] in coherence.INTEL_MAC_IGP_CORES
+        c = {"webGl:renderer": "Intel(R) HD Graphics 400, or similar",
+             "navigator.hardwareConcurrency": 6}
+        fp.fix_hardware_concurrency(c, target_os="mac")
+        assert c["navigator.hardwareConcurrency"] in coherence.INTEL_MAC_IGP_CORES
+
+        c = {"webGl:renderer": "Radeon Pro 5300M, or similar",
+             "navigator.hardwareConcurrency": 32}
+        fp.fix_hardware_concurrency(c, target_os="mac")
+        assert c["navigator.hardwareConcurrency"] == 32
+
     def test_keeps_a_plausible_draw_the_host_can_be_pinned_to(self, monkeypatch):
         # The fingerprint's value survives when it is a count a real desktop
         # ships with AND the browser can be pinned to it (reported == measurable

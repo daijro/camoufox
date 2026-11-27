@@ -156,6 +156,18 @@ function isAppleSiliconPanel(width: unknown, height: unknown): boolean {
 	);
 }
 
+/**
+ * The hardwareConcurrency values an Intel Mac with this GPU reports, or null
+ * when the renderer is not an Intel Mac's (none, or Apple Silicon).
+ */
+export function intelMacCores(
+	rendererString: unknown,
+): ReadonlySet<number> | null {
+	const r = pyTruthy(rendererString) ? pyStr(rendererString) : "";
+	if (!r || r.includes("Apple M")) return null;
+	return r.includes("Intel") ? INTEL_MAC_IGP_CORES : INTEL_MAC_DGPU_CORES;
+}
+
 /** Why no Intel Mac reports this GPU beside these cores and this screen. */
 function intelMacMisfit(
 	rendererString: unknown,
@@ -163,11 +175,9 @@ function intelMacMisfit(
 	width: unknown,
 	height: unknown,
 ): string | null {
-	const r = pyTruthy(rendererString) ? pyStr(rendererString) : "";
-	if (!r || r.includes("Apple M")) return null;
-	const allowed = r.includes("Intel")
-		? INTEL_MAC_IGP_CORES
-		: INTEL_MAC_DGPU_CORES;
+	const allowed = intelMacCores(rendererString);
+	if (!allowed) return null;
+	const r = pyStr(rendererString);
 	if (isPyInt(cores) && !allowed.has(Number(cores))) {
 		return `${pyRepr(r)} with hardwareConcurrency ${pyStr(cores)}; no Intel Mac with that GPU reports it`;
 	}
