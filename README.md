@@ -103,27 +103,6 @@ Get 10% off Byteful Residential Bandwidth with the code: CAMOUFOX10
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://proxyempire.io/?ref=camoufox&utm_source=github&utm_medium=paid_referral&utm_campaign=open_source_sponsorship&utm_content=camoufox" target="_blank">
-        <img width="380" alt="proxyempire" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f"/>
-      </a>
-    </td>
-    <td valign="middle">
-      <b>🚀 Camoufox × ProxyEmpire</b><br>
-      Running Camoufox? Your proxy layer decides whether you scale — or get blocked.<br>
-      <a href="https://proxyempire.io/?ref=camoufox&utm_source=github&utm_medium=paid_referral&utm_campaign=open_source_sponsorship&utm_content=camoufox">ProxyEmpire</a> delivers:<br>
-      • 🌍 30M+ Residential IPs (170+ countries)<br>
-      • 📱 4G/5G Mobile Proxies<br>
-      • 🔄 Rotating & Sticky Sessions<br>
-      • ⚡ Unlimited Concurrent Sessions<br>
-      • 🎯 Precise geo-targeting<br>
-      • HTTP, HTTPS & SOCKS5 Support<br>
-      Built for scraping, automation, and high-stealth workflows.<br>
-      <b>🔥 Exclusive Offer</b> - Use code <b>Camoufox50</b><br>
-      Get <b>50% recurring discount</b> (not just first month). Upgrade your proxies. Reduce bans. Scale properly
-    </td>
-  </tr>
-  <tr>
-    <td width="25%" align="center" valign="middle">
       <a href="https://niuproxy.com/?utm_source=camoufox&utm_medium=camoufox&ref=camoufox" target="_blank">
         <img width="380" alt="NiuProxy" src="https://github.com/user-attachments/assets/85dc8020-af1b-4c5d-82a0-6024ce54903b"/>
       </a>
