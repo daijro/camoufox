@@ -1267,6 +1267,25 @@ export function attachDesktopOnlyWarning<T>(target: T): T {
 	return target;
 }
 
+/**
+ * Warn when a browser launched without a proxy gets a context proxy: the
+ * browser's own traffic (the push connection every context shares) then takes
+ * the first proxied context's proxy for the browser's life
+ * (TargetRegistry.getProxyInfo).
+ */
+export function attachSharedTrafficWarning<T>(target: T): T {
+	for (const name of ["newPage", "newContext"] as const) {
+		const original = (target as any)[name];
+		if (typeof original !== "function") continue;
+		(target as any)[name] = (options?: Record<string, any>, ...rest: any[]) => {
+			if (options?.proxy)
+				LeakWarning.warn("context_proxy_without_launch_proxy");
+			return original.call(target, options, ...rest);
+		};
+	}
+	return target;
+}
+
 /** The machine a browser's contexts must claim: its OS and, if hardware, its GPU. */
 export type HostIdentity = [TargetOS | null, Gpu | null];
 

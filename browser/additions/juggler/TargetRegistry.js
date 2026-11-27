@@ -263,6 +263,7 @@ export class TargetRegistry {
 
     this._proxiesWithClashingAuthCacheKeys = new Set();
     this._browserProxy = null;
+    this._sharedTrafficContext = null;
     this._launchProxyAuth = readLaunchProxyAuth();
     // A system proxy is not in network.proxy.* either, and a content process
     // cannot ask the OS for it.
@@ -430,6 +431,9 @@ export class TargetRegistry {
     const allProxies = [...this._browserContextIdToBrowserContext.values()].map(bc => bc._proxy).filter(Boolean);
     if (this._browserProxy)
       allProxies.push(this._browserProxy);
+    // A closed context's proxy still carries the browser's own traffic.
+    if (this._sharedTrafficContext?._proxy)
+      allProxies.push(this._sharedTrafficContext._proxy);
     const proxyAuthCacheKeyAndProxy = allProxies.map(proxy => [
       JSON.stringify({
         type: proxy.type,
@@ -473,22 +477,14 @@ export class TargetRegistry {
     let proxyInfo = (browserContext && browserContext._proxy) || this._browserProxy;
     // Camoufox: with proxies on contexts only, the browser's own traffic (the
     // push websocket every context shares, media plugin update checks) went
-    // out direct, from this machine's address. It takes the newest proxied
-    // context's proxy instead. A page's own request keeps its context's choice.
+    // out direct, from this machine's address. It takes the first proxied
+    // context's proxy instead, for the browser's life, so it never moves as
+    // contexts open and close. A page's own request keeps its context's choice.
     if (!proxyInfo && !belongsToPage(loadInfo))
-      proxyInfo = this._newestContextProxy();
+      proxyInfo = this._sharedTrafficContext?._proxy || null;
     if (!proxyInfo || proxyInfo.bypass.some(domainSuffix => channel.URI.host.endsWith(domainSuffix)))
       return null;
     return proxyInfo;
-  }
-
-  _newestContextProxy() {
-    let newest = null;
-    for (const browserContext of this._browserContextIdToBrowserContext.values()) {
-      if (browserContext._proxy)
-        newest = browserContext._proxy;
-    }
-    return newest;
   }
 
   defaultContext() {
@@ -1478,6 +1474,8 @@ class BrowserContext {
     // Clear AuthCache.
     Services.obs.notifyObservers(null, "net:clear-active-logins");
     this._proxy = withProxyAuth(proxy, this._proxyAuth);
+    if (this._proxy && !this._registry._sharedTrafficContext)
+      this._registry._sharedTrafficContext = this;
     recordProxied(this.userContextId);
     this._registry._updateProxiesWithSameAuthCacheAndDifferentCredentials();
   }

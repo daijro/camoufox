@@ -854,6 +854,19 @@ def attach_desktop_only_warning(target: Any) -> Any:
     return _wrap_context_factories(target, adjust)
 
 
+def attach_shared_traffic_warning(target: Any) -> Any:
+    """Warn when a browser launched without a proxy gets a context proxy: the
+    browser's own traffic (the push connection every context shares) then
+    takes the first proxied context's proxy for the browser's life
+    (TargetRegistry.getProxyInfo)."""
+
+    def adjust(kwargs: Dict[str, Any]) -> None:
+        if kwargs.get('proxy'):
+            LeakWarning.warn('context_proxy_without_launch_proxy')
+
+    return _wrap_context_factories(target, adjust)
+
+
 def attach_no_viewport_default(target: Any) -> Any:
     """
     Default new_page()/new_context() to no_viewport=True.
@@ -917,9 +930,11 @@ def attach_socks5_auth(target: Any) -> Any:
     return target
 
 
-def attach_context_defaults(browser: Any, no_viewport_default: bool) -> None:
+def attach_context_defaults(browser: Any, no_viewport_default: bool, launch_proxy: bool) -> None:
     """Give every new_page()/new_context() of `browser` Camoufox's defaults."""
     attach_socks5_auth(browser)
+    if not launch_proxy:
+        attach_shared_traffic_warning(browser)
     if no_viewport_default:
         attach_no_viewport_default(browser)
     attach_stock_media_defaults(browser)

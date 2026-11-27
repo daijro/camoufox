@@ -177,7 +177,7 @@ def _launch(
 
         identity = host_identity(from_options, canvas_noise)
         browser = playwright.firefox.launch(**from_options)
-        attach_context_defaults(browser, no_viewport_default)
+        attach_context_defaults(browser, no_viewport_default, bool(from_options.get('proxy')))
         browser._camoufox_host_identity = identity
         return sync_attach_vd(browser, virtual_display), launch_os(from_options)
     finally:

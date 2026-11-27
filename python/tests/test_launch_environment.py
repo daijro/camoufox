@@ -644,6 +644,36 @@ class TestScreenshotCaret:
         assert not hasattr(OldFrame, "_fill")
 
 
+class TestSharedTrafficProxyWarning:
+    """The browser's own traffic belongs to no context. A browser launched
+    without a proxy sends it through the first proxied context's proxy, so a
+    context proxy there gets a LeakWarning recommending a launch proxy."""
+
+    class FakeBrowser:
+        def new_page(self, **kwargs):
+            return kwargs
+
+        def new_context(self, **kwargs):
+            return kwargs
+
+    def test_a_context_proxy_without_a_launch_proxy_warns(self):
+        from camoufox._warnings import LeakWarning
+
+        browser = utils.attach_shared_traffic_warning(self.FakeBrowser())
+        for create in (browser.new_page, browser.new_context):
+            with pytest.warns(LeakWarning, match="launch-level `proxy`"):
+                create(proxy={"server": "http://127.0.0.1:8080"})
+
+    def test_no_context_proxy_does_not(self):
+        import warnings
+
+        browser = utils.attach_shared_traffic_warning(self.FakeBrowser())
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            browser.new_context()
+            browser.new_page(proxy=None)
+
+
 class TestDesktopOnlyWarning:
     """Camoufox has only desktop identities and Juggler never enters Responsive
     Design Mode, so is_mobile on new_page()/new_context() gets a LeakWarning."""

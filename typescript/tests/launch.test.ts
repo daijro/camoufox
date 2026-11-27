@@ -741,6 +741,26 @@ describe("test_launch_environment: stock media defaults", () => {
 		);
 		expect(none).toEqual([]);
 	});
+
+	it("a context proxy on a browser launched without one warns", async () => {
+		const browser = utils.attachSharedTrafficWarning(new FakeBrowser());
+		for (const create of ["newPage", "newContext"] as const) {
+			const { warnings: caught } = await warnings.recordWarnings(async () =>
+				browser[create]({ proxy: { server: "http://127.0.0.1:8080" } }),
+			);
+			expect(
+				caught.some(
+					(w) =>
+						w.category === "LeakWarning" &&
+						w.message.includes("launch-level `proxy`"),
+				),
+			).toBe(true);
+		}
+		const { warnings: none } = await warnings.recordWarnings(async () =>
+			browser.newContext(),
+		);
+		expect(none).toEqual([]);
+	});
 });
 
 describe("test_launch_environment: screenshot caret", () => {

@@ -126,7 +126,7 @@ with Camoufox(headless=True, canvas_noise=True) as browser:
 | `os` | `"windows"`, `"macos"` or `"linux"` for the drawn identity. On a browser without canvas noise, the host's OS, and anything else raises `ValueError`. |
 | `ff_version` | Firefox major version claimed in the User-Agent. Defaults to the browser's own. |
 | `webrtc_ip` | IPv4 or IPv6 address WebRTC reports. |
-| `proxy` | Per-context proxy, in Playwright's format. The context is placed where the proxy exits: `webrtc_ip`, `timezone_id`, `locale` and `geolocation` each default to the exit IP's, looked up through the proxy unless all four are given, and `InvalidIP` is raised if the lookup fails. |
+| `proxy` | Per-context proxy, in Playwright's format. The context is placed where the proxy exits: `webrtc_ip`, `timezone_id`, `locale` and `geolocation` each default to the exit IP's, looked up through the proxy unless all four are given, and `InvalidIP` is raised if the lookup fails. The browser's own traffic (the push connection every context shares) belongs to no context: it takes the launch `proxy`, or without one the first proxied context's, for the browser's life. |
 | `geolocation` | `{"latitude": ..., "longitude": ...}`; also grants the `geolocation` permission. |
 | anything else | Passed to Playwright's `new_context()`, overriding the generated value. |
 
