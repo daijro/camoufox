@@ -70,6 +70,22 @@ _VIEWPORT = '() => [innerWidth, innerHeight]'
 _FRAME_ORIGIN = 'e => { if (window === window.top) return null; const r = e.getBoundingClientRect(); return [r.x, r.y]; }'
 
 
+def _adapt_page_fn(fn: Any) -> Any:
+    """Make frame window comparisons in page functions hold across SpiderMonkey's
+    isolated realm, where el.ownerDocument.defaultView !== window even for the
+    frame's own content window (#1143).
+    """
+    if isinstance(fn, str):
+        if 'win !== window' in fn:
+            fn = fn.replace('win !== window', 'win !== window && (!win.document || win.document !== document)')
+        if 'node.ownerDocument.defaultView !== window' in fn:
+            fn = fn.replace(
+                'node.ownerDocument.defaultView !== window',
+                'node.ownerDocument.defaultView !== window && (!node.ownerDocument.defaultView.document || node.ownerDocument.defaultView.document !== document)',
+            )
+    return fn
+
+
 class _Host:
     """myuri's host on one page: every event is a Playwright input call."""
 
@@ -113,7 +129,7 @@ class _Host:
         return self._insert_text(text)
 
     def evaluate(self, target: Any, fn: str, arg: Any) -> Any:
-        return target.evaluate(fn, arg, timeout=_TIMEOUT.get())
+        return target.evaluate(_adapt_page_fn(fn), arg, timeout=_TIMEOUT.get())
 
     def offset(self, target: Any) -> Any:
         return self.run(self._offset(target))

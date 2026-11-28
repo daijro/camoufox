@@ -199,9 +199,9 @@ def make_locator_class():
             page = self._page
             if expression == hp._FRAME_ORIGIN:
                 return page.rec.ret(None if self.selector != "#framed" else [self._box()["x"], self._box()["y"]])
-            if expression == SCROLL_PLAN_JS:
+            if expression in (SCROLL_PLAN_JS, hp._adapt_page_fn(SCROLL_PLAN_JS)):
                 return page.rec.ret(self._plan(arg))
-            if expression == HIT_TEST_JS:
+            if expression in (HIT_TEST_JS, hp._adapt_page_fn(HIT_TEST_JS)):
                 # What covers the point at each press, until the list runs out.
                 page.aimed = self.selector
                 return page.rec.ret(page.covered.pop(0) if page.covered else None)
@@ -491,6 +491,16 @@ def test_myuri_reaches_into_an_iframe_at_its_offset():
     moves = [e for e in browser.rec.events if e[0] == "mouse.move"]
     framed = LAYOUT["#framed"]
     assert in_box(*moves[-1][1:], {**framed, "x": framed["x"] + FRAME[0], "y": framed["y"] + FRAME[1]})
+
+
+def test_adapt_page_fn_guards_frame_traversal():
+    adapted_scroll = hp._adapt_page_fn(SCROLL_PLAN_JS)
+    adapted_hit = hp._adapt_page_fn(HIT_TEST_JS)
+    assert "win !== window && (!win.document || win.document !== document)" in adapted_scroll
+    assert "win !== window && (!win.document || win.document !== document)" in adapted_hit
+    assert "node.ownerDocument.defaultView !== window && (!node.ownerDocument.defaultView.document || node.ownerDocument.defaultView.document !== document)" in adapted_scroll
+    assert hp._adapt_page_fn("() => 42") == "() => 42"
+    assert hp._adapt_page_fn(123) == 123
 
 
 def test_myuri_wheels_an_element_into_view_in_mouse_notches():

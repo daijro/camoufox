@@ -112,6 +112,41 @@ export const clock = {
 	sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
 };
 
+/**
+ * Make frame window comparisons in page functions hold across SpiderMonkey's
+ * isolated realm, where el.ownerDocument.defaultView !== window even for the
+ * frame's own content window (#1143).
+ */
+export function adaptPageFn(fn: any): any {
+	if (typeof fn === "string") {
+		return fixRealmComparisons(fn);
+	}
+	if (typeof fn === "function") {
+		const src = String(fn);
+		if (src.includes("!== window")) {
+			return pageFunction(fixRealmComparisons(src));
+		}
+	}
+	return fn;
+}
+
+function fixRealmComparisons(src: string): string {
+	let res = src;
+	if (res.includes("win !== window")) {
+		res = res.replaceAll(
+			"win !== window",
+			"win !== window && (!win.document || win.document !== document)",
+		);
+	}
+	if (res.includes("node.ownerDocument.defaultView !== window")) {
+		res = res.replaceAll(
+			"node.ownerDocument.defaultView !== window",
+			"node.ownerDocument.defaultView !== window && (!node.ownerDocument.defaultView.document || node.ownerDocument.defaultView.document !== document)",
+		);
+	}
+	return res;
+}
+
 /** `fn` as Playwright's own: a call it makes on a wrapped method passes through. */
 function direct<F extends Original>(fn: F): F {
 	return ((...args: any[]) =>
@@ -138,7 +173,7 @@ function host(page: any): Host<any> {
 		keyUp: direct(keyboard.up.bind(keyboard)),
 		insertText: direct(keyboard.insertText.bind(keyboard)),
 		evaluate: (target, fn, arg) =>
-			target.evaluate(fn, arg, { timeout: timeout() }),
+			target.evaluate(adaptPageFn(fn), arg, { timeout: timeout() }),
 		offset: async (target) => {
 			const origin = await target.evaluate(
 				pageFunction(FRAME_ORIGIN),

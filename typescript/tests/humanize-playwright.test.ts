@@ -15,6 +15,7 @@ import {
 import { errors } from "playwright-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	adaptPageFn,
 	attach,
 	clock,
 	FRAME_ORIGIN,
@@ -154,8 +155,15 @@ function fakeBrowser() {
 				return this.selector === "#framed"
 					? [this.box().x, this.box().y]
 					: null;
-			if (fn === SCROLL_PLAN_JS) return this.plan(arg);
-			if (fn === HIT_TEST_JS) {
+			if (
+				fn === SCROLL_PLAN_JS ||
+				String(fn) === String(adaptPageFn(SCROLL_PLAN_JS))
+			)
+				return this.plan(arg);
+			if (
+				fn === HIT_TEST_JS ||
+				String(fn) === String(adaptPageFn(HIT_TEST_JS))
+			) {
 				// What covers the point at each press, until the list runs out.
 				page.aimed = this.selector;
 				return page.covered.shift() ?? null;
@@ -470,6 +478,22 @@ describe("myuri", () => {
 				y: framed.y + FRAME[1],
 			}),
 		).toBe(true);
+	});
+
+	it("adaptPageFn guards frame traversal across isolated realms", () => {
+		const adaptedScroll = String(adaptPageFn(SCROLL_PLAN_JS));
+		const adaptedHit = String(adaptPageFn(HIT_TEST_JS));
+		expect(adaptedScroll).toContain(
+			"win !== window && (!win.document || win.document !== document)",
+		);
+		expect(adaptedHit).toContain(
+			"win !== window && (!win.document || win.document !== document)",
+		);
+		expect(adaptedScroll).toContain(
+			"node.ownerDocument.defaultView !== window && (!node.ownerDocument.defaultView.document || node.ownerDocument.defaultView.document !== document)",
+		);
+		expect(adaptPageFn("() => 42")).toBe("() => 42");
+		expect(adaptPageFn(123 as unknown as string)).toBe(123);
 	});
 
 	it("wheels an element into view in mouse notches", async () => {
