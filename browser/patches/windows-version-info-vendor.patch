@@ -1,0 +1,68 @@
+Camoufox: name Camoufox, not Mozilla, in the Windows version resources.
+
+config/create_rc.py writes every exe's and dll's VERSIONINFO, defaulting to
+CompanyName "Mozilla Foundation" and LegalTrademarks "Mozilla", and the
+module.ver of camoufox.exe, private_browsing.exe and plugin-container.exe set
+"Mozilla Corporation" and Firefox's trademark line. An unsigned file claiming
+to be Mozilla's reads as an impersonation to antivirus. CompanyName now
+defaults to MOZ_APP_VENDOR and the trademark line is empty; the copyright
+still credits the Mozilla developers. None of this is visible to a page.
+
+diff --git a/browser/app/module.ver b/browser/app/module.ver
+index 5ef8d2a02a..333c1eb4b0 100644
+--- a/browser/app/module.ver
++++ b/browser/app/module.ver
+@@ -1,8 +1,6 @@
+-WIN32_MODULE_COMPANYNAME=Mozilla Corporation
+-WIN32_MODULE_COPYRIGHT=©Firefox and Mozilla Developers; available under the MPL 2 license.
++WIN32_MODULE_COPYRIGHT=©Camoufox and Mozilla Developers; available under the MPL 2 license.
+ WIN32_MODULE_PRODUCTVERSION=@MOZ_APP_WINVERSION@
+ WIN32_MODULE_PRODUCTVERSION_STRING=@MOZ_APP_VERSION@
+-WIN32_MODULE_TRADEMARKS=Firefox is a Trademark of The Mozilla Foundation.
+ WIN32_MODULE_DESCRIPTION=@MOZ_APP_DISPLAYNAME@
+ WIN32_MODULE_PRODUCTNAME=@MOZ_APP_DISPLAYNAME@
+ WIN32_MODULE_NAME=@MOZ_APP_DISPLAYNAME@
+diff --git a/browser/app/pbproxy/module.ver b/browser/app/pbproxy/module.ver
+index 5ef8d2a02a..333c1eb4b0 100644
+--- a/browser/app/pbproxy/module.ver
++++ b/browser/app/pbproxy/module.ver
+@@ -1,8 +1,6 @@
+-WIN32_MODULE_COMPANYNAME=Mozilla Corporation
+-WIN32_MODULE_COPYRIGHT=©Firefox and Mozilla Developers; available under the MPL 2 license.
++WIN32_MODULE_COPYRIGHT=©Camoufox and Mozilla Developers; available under the MPL 2 license.
+ WIN32_MODULE_PRODUCTVERSION=@MOZ_APP_WINVERSION@
+ WIN32_MODULE_PRODUCTVERSION_STRING=@MOZ_APP_VERSION@
+-WIN32_MODULE_TRADEMARKS=Firefox is a Trademark of The Mozilla Foundation.
+ WIN32_MODULE_DESCRIPTION=@MOZ_APP_DISPLAYNAME@
+ WIN32_MODULE_PRODUCTNAME=@MOZ_APP_DISPLAYNAME@
+ WIN32_MODULE_NAME=@MOZ_APP_DISPLAYNAME@
+diff --git a/config/create_rc.py b/config/create_rc.py
+index a3cabd5064..ad12e241ab 100644
+--- a/config/create_rc.py
++++ b/config/create_rc.py
+@@ -300,12 +300,14 @@ def generate_module_rc():
+         fileflags=" | ".join(flags),
+         comment=overrides.get("WIN32_MODULE_COMMENT", ""),
+         copyright=overrides.get("WIN32_MODULE_COPYRIGHT", "License: MPL 2"),
+-        company=overrides.get("WIN32_MODULE_COMPANYNAME", "Mozilla Foundation"),
++        company=overrides.get(
++            "WIN32_MODULE_COMPANYNAME", buildconfig.substs["MOZ_APP_VENDOR"]
++        ),
+         description=overrides.get("WIN32_MODULE_DESCRIPTION", ""),
+         mfversion=overrides.get("WIN32_MODULE_FILEVERSION_STRING", milestone_string),
+         mpversion=overrides.get("WIN32_MODULE_PRODUCTVERSION_STRING", milestone_string),
+         module=overrides.get("WIN32_MODULE_NAME", ""),
+-        trademarks=overrides.get("WIN32_MODULE_TRADEMARKS", "Mozilla"),
++        trademarks=overrides.get("WIN32_MODULE_TRADEMARKS", ""),
+         binary=overrides.get("WIN32_MODULE_ORIGINAL_FILENAME", binary),
+         productname=overrides.get("WIN32_MODULE_PRODUCTNAME", display_name),
+         buildid=buildid,
+diff --git a/ipc/app/module.ver b/ipc/app/module.ver
+index 8abbd23f0e..a09b51ba26 100644
+--- a/ipc/app/module.ver
++++ b/ipc/app/module.ver
+@@ -1,4 +1,3 @@
+-WIN32_MODULE_COMPANYNAME=Mozilla Corporation
+ WIN32_MODULE_PRODUCTVERSION=@MOZ_APP_WINVERSION@
+ WIN32_MODULE_PRODUCTVERSION_STRING=@MOZ_APP_VERSION@
+ WIN32_MODULE_DESCRIPTION=Plugin Container for @MOZ_APP_DISPLAYNAME@

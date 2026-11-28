@@ -854,6 +854,23 @@ rules:
       second one.
 
   # -------------------------------------------------------------------------
+  # Patches
+  # -------------------------------------------------------------------------
+
+  - id: patches-are-committed-byte-for-byte
+    title: Git never converts the line endings of a patch
+    check: automated
+    evidence:
+      - "PR #1138: windows-version-info-vendor.patch applied locally, then failed every CI build with 'Hunk #1 FAILED at 1 (different line endings)' on ipc/app/module.ver"
+    rationale: >-
+      A patch is a diff of Firefox's exact bytes, and some Firefox files
+      (ipc/app/module.ver) end their lines in CRLF. Under the repo's
+      `text=auto eol=lf`, git stripped the CRs from such a hunk on commit, so
+      the patch applied from the working copy it was written to and failed on
+      every fresh checkout. browser/patches is `-text` in .gitattributes, so
+      git stores and checks out each patch exactly as `make diff` wrote it.
+
+  # -------------------------------------------------------------------------
   # Config schema
   # -------------------------------------------------------------------------
 
@@ -1079,3 +1096,18 @@ rules:
       and compile the patched sources for every other release target, and all
       of them set up the runner through .github/actions/build-host. Linking
       and packaging the cross-compiled targets is all a release does first.
+
+  - id: binaries-name-their-vendor
+    title: Pages see stock Firefox; the Windows binaries' version resources name Camoufox
+    check: manual   # browser/scripts/package.py vendor_claims, on every Windows package
+    evidence:
+      - "issue #1008: Windows Defender flags the release as Trojan:Win32/Bearfoos.A!ml"
+      - "v159.0-beta.43: camoufox.exe and every other Mozilla-built file unsigned, with CompanyName Mozilla Corporation or Mozilla Foundation"
+      - "browser/patches/windows-version-info-vendor.patch"
+    rationale: >-
+      navigator.userAgent, appName, product and vendor are what a page reads,
+      and they stay exactly stock Firefox's. A PE version resource is not
+      readable from a page; antivirus and the person who owns the binary read
+      it, and an unsigned file calling itself Mozilla's is an impersonation.
+      CompanyName comes from MOZ_APP_VENDOR and no trademark line is claimed;
+      the copyright line still credits the Mozilla developers, whose code it is.

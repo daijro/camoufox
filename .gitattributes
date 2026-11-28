@@ -1,2 +1,3 @@
 * text=auto eol=lf
 browser/tests/playwright/** linguist-detectable=false
+browser/patches/** -text
