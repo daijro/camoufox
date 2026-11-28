@@ -74,6 +74,7 @@
   { "property": "disableWorldIsolation", "type": "bool" },
   { "property": "allowAddonNewtab", "type": "bool" },
   { "property": "forceScopeAccess", "type": "bool" },
+  { "property": "proxy:preemptiveBasicAuth", "type": "bool" },
 
   { "property": "instantAnimations", "type": "bool" },
   { "property": "addons", "type": "array" },

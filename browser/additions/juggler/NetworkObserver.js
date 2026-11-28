@@ -27,6 +27,11 @@ const StorageStream = CC('@mozilla.org/storagestream;1', 'nsIStorageStream', 'in
 // Cap response storage with 100Mb per tracked tab.
 const MAX_RESPONSE_STORAGE_SIZE = 100 * 1024 * 1024;
 
+// Camoufox: Basic credentials on the first request through an authenticated http proxy, so a new
+// tunnel does not start with a 407 (#1144). Opt-in: Basic gives the password away to a proxy that
+// would have asked for another scheme.
+const PREEMPTIVE_PROXY_AUTH = ChromeUtils.camouGetBool('proxy:preemptiveBasicAuth', false);
+
 const pageNetworkSymbol = Symbol('PageNetwork');
 
 export class PageNetwork {
@@ -231,7 +236,7 @@ class NetworkRequest {
   }
 
   // Instrumentation called by NetworkObserver.
-  _onInternalRedirect(newChannel) {
+  _onInternalRedirect(newChannel, flags) {
     // Intercepted requests produce "internal redirects" - this is both for our own
     // interception and service workers.
     // An internal redirect does not necessarily have the same channelId,
@@ -240,6 +245,11 @@ class NetworkRequest {
     this._networkObserver._channelToRequest.delete(this.httpChannel);
     this.httpChannel = newChannel;
     this._networkObserver._channelToRequest.set(this.httpChannel, this);
+    // Camoufox: necko copies Proxy-Authorization to a replacement, which can resolve another proxy
+    // or none (route.continue({url})). Drop it: the channel gets its own in BeginConnect, and Basic
+    // from Juggler if its proxy is ours. An auth retry keeps the answer necko just computed.
+    if (PREEMPTIVE_PROXY_AUTH && !(flags & Ci.nsIChannelEventSink.REDIRECT_AUTH_RETRY))
+      newChannel.setRequestHeader('Proxy-Authorization', '', false /* merge */);
   }
 
   // Instrumentation called by NetworkObserver.
@@ -263,6 +273,23 @@ class NetworkRequest {
       this.httpChannel.requestMethod = method;
     if (postData !== undefined)
       setPostData(this.httpChannel, postData, headers);
+  }
+
+  // Instrumentation called by NetworkObserver, after every other header change of this pass.
+  // `before` is the Proxy-Authorization necko gave the channel for the proxy it resolved (cached, or
+  // negotiated on an auth retry). It wins over anything Juggler's overrides or the client's extra
+  // headers wrote; without one, Juggler's proxy gets Basic.
+  _applyProxyAuthorization(before) {
+    const channel = this.httpChannel;
+    const info = channel instanceof Ci.nsIProxiedChannel ? channel.proxyInfo : null;
+    const proxy = this._networkObserver._targetRegistry.getProxyInfo(channel);
+    let value = '';
+    // Only a proxy that speaks HTTP sees the header; DIRECT and SOCKS would hand it to the site.
+    if (info && info.type !== 'direct' && !info.type.startsWith('socks')) {
+      const ours = proxy?.type === 'http' && (proxy.username || proxy.password) && proxyKey(info) === proxyKey(proxy);
+      value = before || (ours ? basicAuthorization(proxy.username, proxy.password) : '');
+    }
+    channel.setRequestHeader('Proxy-Authorization', value, false /* merge */);
   }
 
   // nsIInterfaceRequestor
@@ -540,7 +567,7 @@ class NetworkRequest {
       requestId: this.requestId,
       redirectedFrom: this.redirectedFromId,
       postData: readRequestPostData(this.httpChannel),
-      headers: requestHeaders(this.httpChannel),
+      headers: reportedRequestHeaders(this.httpChannel),
       method: this.httpChannel.requestMethod,
       navigationId: this.navigationId,
       cause: causeTypeToString(causeType),
@@ -751,7 +778,7 @@ export class NetworkObserver {
     const request = this._channelToRequest.get(oldHttpChannel);
     if (flags & Ci.nsIChannelEventSink.REDIRECT_INTERNAL) {
       if (request)
-        request._onInternalRedirect(newHttpChannel);
+        request._onInternalRedirect(newHttpChannel, flags);
     } else if (flags & Ci.nsIChannelEventSink.REDIRECT_STS_UPGRADE) {
       if (request) {
         // This is an internal HSTS upgrade. The original http request is canceled, and a new
@@ -770,6 +797,7 @@ export class NetworkObserver {
     if (!(channel instanceof Ci.nsIHttpChannel))
       return;
     const httpChannel = channel.QueryInterface(Ci.nsIHttpChannel);
+    const proxyAuthorization = PREEMPTIVE_PROXY_AUTH ? requestHeader(httpChannel, 'proxy-authorization') : null;
     const channelId = httpChannel.channelId + '';
     const redirectedFrom = this._expectedRedirect.get(channelId);
     if (redirectedFrom) {
@@ -782,6 +810,8 @@ export class NetworkObserver {
       else
         new NetworkRequest(this, httpChannel);
     }
+    if (PREEMPTIVE_PROXY_AUTH)
+      this._channelToRequest.get(httpChannel)._applyProxyAuthorization(proxyAuthorization);
   }
 
   _onResponse(fromCache, httpChannel, topic) {
@@ -878,6 +908,35 @@ function requestHeaders(httpChannel) {
     visitHeader: (name, value) => headers.push({name, value}),
   });
   return headers;
+}
+
+// With proxy:preemptiveBasicAuth, Proxy-Authorization is transport auth Juggler manages: it stays
+// out of request.headers() and HARs, whoever set it.
+function reportedRequestHeaders(httpChannel) {
+  const headers = requestHeaders(httpChannel);
+  return PREEMPTIVE_PROXY_AUTH ? headers.filter(header => header.name.toLowerCase() !== 'proxy-authorization') : headers;
+}
+
+function requestHeader(httpChannel, name) {
+  try {
+    return httpChannel.getRequestHeader(name) || null;
+  } catch (e) {
+    if (e.result == Cr.NS_ERROR_NOT_AVAILABLE)
+      return null;
+    throw e;
+  }
+}
+
+// Juggler's proxy and the one necko resolved for a channel (nsIProxyInfo) can differ: a bypassed
+// host, another proxy filter, a failover.
+function proxyKey(proxy) {
+  return `${proxy.type}://${proxy.host}:${proxy.port}`;
+}
+
+// What Firefox's own Basic authenticator sends: UTF-8 "user:password" (nsHttpBasicAuth.cpp).
+function basicAuthorization(username, password) {
+  const bytes = new TextEncoder().encode(`${username || ''}:${password || ''}`);
+  return 'Basic ' + btoa(String.fromCharCode(...bytes));
 }
 
 function clearRequestHeaders(httpChannel) {
