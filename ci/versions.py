@@ -30,7 +30,6 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 from ._util import (
-    REPO_ROOT,
     gh_headers,
     http_json,
     log,
@@ -42,8 +41,9 @@ from ._util import (
 
 BROWSERS_JSON = "https://raw.githubusercontent.com/microsoft/playwright/{ref}/packages/playwright-core/browsers.json"
 TAGS_API = "https://api.github.com/repos/microsoft/playwright-python/tags?per_page=100"
-PYPROJECT = "python/pyproject.toml"
-_CEILING = re.compile(r'^playwright\s*=\s*"<\s*([0-9][0-9.]*)"', re.M)
+# The driver's Playwright requirement, as importlib.metadata reports it:
+# "playwright (<1.63)" or "playwright<1.63", maybe with a floor beside it.
+_CEILING = re.compile(r"^playwright(?![\w.-])[^;]*?<\s*([0-9][0-9.]*)")
 
 # Consulted only when the network is unavailable or GitHub is rate-limiting an
 # unauthenticated runner. Deliberately short: it is a floor, not a source of
@@ -101,26 +101,36 @@ def pins(limit: int = 10) -> List[Tuple[str, str]]:
     return list(FALLBACK_PINS)
 
 
-def client_ceiling() -> Optional[Tuple[int, int, int]]:
-    """The Playwright version pythonlib refuses to go to, or None if unpinned.
+def client_ceiling(requires: Optional[List[str]] = None) -> Optional[Tuple[int, int, int]]:
+    """The Playwright version the camoufox driver refuses to go to, or None if unpinned.
 
     `camoufox.server` imports `playwright._impl._driver`, a private API with no
     compatibility guarantee, and every Playwright minor is free to change
-    Juggler. pythonlib pins a ceiling for that reason, and a suite run above it
+    Juggler. The driver pins a ceiling for that reason, and a suite run above it
     would be testing the browser against a client its own package will not
     install -- a green run that proves nothing a user can reproduce.
+
+    Read from the installed driver's metadata (.github/actions/driver installs
+    it); `requires` stands in for that in tests.
     """
-    try:
-        text = (REPO_ROOT / PYPROJECT).read_text(encoding="utf-8")
-    except OSError:
-        return None
-    found = _CEILING.search(text)
-    if not found:
-        return None
-    try:
-        return parse_version(found.group(1))
-    except ValueError:
-        return None
+    if requires is None:
+        from importlib import metadata
+
+        try:
+            # The launcher's requirements are camoucore's; the `camoufox`
+            # wrapper requires only camoucore itself.
+            requires = metadata.requires("camoucore") or []
+        except metadata.PackageNotFoundError:
+            log("the camoufox driver is not installed, so no Playwright ceiling applies", level="WARN")
+            return None
+    for req in requires:
+        found = _CEILING.match(req.strip())
+        if found:
+            try:
+                return parse_version(found.group(1))
+            except ValueError:
+                return None
+    return None
 
 
 def resolve(
@@ -146,7 +156,7 @@ def resolve(
         # Newest suite that is not ahead of the browser we are testing.
         eligible = [(t, f) for t, f in available if major(f) <= ours]
 
-        # ... and not above the client ceiling pythonlib pins. Dropping this
+        # ... and not above the client ceiling the driver pins. Dropping this
         # filter does not fail loudly: the suite installs a client the shipped
         # package forbids, and whatever Juggler changed in between reads as a
         # browser bug.
@@ -156,15 +166,15 @@ def resolve(
             if allowed and allowed != eligible:
                 dropped = sorted({t for t, _ in eligible} - {t for t, _ in allowed})
                 log(
-                    f"ignoring {', '.join(dropped)}: at or above pythonlib's "
-                    f"playwright ceiling ({PYPROJECT})"
+                    f"ignoring {', '.join(dropped)}: at or above the camoufox driver's "
+                    "playwright ceiling"
                 )
                 eligible = allowed
             elif not allowed:
                 log(
-                    f"every suite not ahead of Firefox {ours} is at or above pythonlib's "
-                    f"playwright ceiling; testing above it. Bump the ceiling in {PYPROJECT} "
-                    "or expect protocol noise.",
+                    f"every suite not ahead of Firefox {ours} is at or above the camoufox "
+                    "driver's playwright ceiling; testing above it. Raise the ceiling in "
+                    "camoucore or expect protocol noise.",
                     level="WARN",
                 )
 
@@ -205,7 +215,7 @@ def upstream_mismatch(browser_version: Optional[str]) -> Optional[str]:
 
     Only suite SELECTION follows `--browser-version`. The build does not: both
     `ci.run_build` and `make` read upstream.sh, and the fetch path downloads
-    whatever pythonlib considers current. So asking for a version the branch
+    whatever the driver considers current. So asking for a version the branch
     does not pin gets you the old browser tested against the new suite -- the
     exact inversion of the intent, and silent.
 

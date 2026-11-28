@@ -17,6 +17,7 @@ build.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import inspect
 import json
 import re
@@ -29,7 +30,12 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BROWSER = REPO_ROOT / "browser"
-sys.path.insert(0, str(REPO_ROOT / "python" / "src"))
+# The launcher half of a rule is checked against the installed launcher,
+# camoucore.camoufox (the release camoucore, or the camoucore source
+# ci/driver-ref selects); the `camoufox` package is only the wrapper's stubs.
+# Its TypeScript twin is held to the same rules by camoucore's own tests.
+_SPEC = importlib.util.find_spec("camoucore")
+PACKAGE = Path(next(iter(_SPEC.submodule_search_locations))) / "camoufox" if _SPEC else None
 
 RULES_PATH = REPO_ROOT / "ci" / "tribal-rules.yml"
 
@@ -87,46 +93,56 @@ def test_every_automated_rule_is_actually_asserted():
 # ---------------------------------------------------------------------------
 
 
-def test_virtual_display_default_is_1x1x24():
-    from camoufox import virtdisplay
 
-    assert virtdisplay.DEFAULT_SCREEN == "1x1x24", (
+
+def test_virtual_display_default_is_1x1x24():
+    from camoufox.product import PRODUCT
+
+    assert PRODUCT.engine.virtual_screen == "1x1x24", (
         "The Xvfb default screen size changed." + explain("virtual-display-default-1x1x24")
     )
 
 
 def test_the_screen_size_override_still_exists():
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
-    assert virtdisplay.SCREEN_ENV_VAR == "CAMOUFOX_VIRTUAL_DISPLAY_SIZE", explain(
+    from camoufox.product import PRODUCT
+
+    assert PRODUCT.env_var(virtdisplay.SCREEN_KEY) == "CAMOUFOX_VIRTUAL_DISPLAY_SIZE", explain(
         "virtual-display-size-override-exists"
     )
 
 
 def test_a_valid_override_is_honoured(monkeypatch):
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
-    monkeypatch.setenv(virtdisplay.SCREEN_ENV_VAR, "1920x1080x24")
-    assert virtdisplay._resolve_screen() == "1920x1080x24", explain(
+    from camoufox.product import PRODUCT
+
+    monkeypatch.setenv("CAMOUFOX_VIRTUAL_DISPLAY_SIZE", "1920x1080x24")
+    assert virtdisplay._resolve_screen(PRODUCT) == "1920x1080x24", explain(
         "virtual-display-size-override-exists"
     )
 
 
 def test_a_nonsense_override_is_rejected_rather_than_silently_ignored(monkeypatch):
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
-    monkeypatch.setenv(virtdisplay.SCREEN_ENV_VAR, "enormous")
+    from camoufox.product import PRODUCT
+
+    monkeypatch.setenv("CAMOUFOX_VIRTUAL_DISPLAY_SIZE", "enormous")
     with pytest.raises(Exception):
-        virtdisplay._resolve_screen()
+        virtdisplay._resolve_screen(PRODUCT)
 
 
 def test_composite_extension_is_off_by_default():
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
-    assert virtdisplay.COMPOSITE_ENV_VAR == "CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE", explain(
+    from camoufox.product import PRODUCT
+
+    assert PRODUCT.env_var(virtdisplay.COMPOSITE_KEY) == "CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE", explain(
         "composite-extension-off"
     )
-    args = [str(a) for a in virtdisplay.VirtualDisplay().xvfb_args]
+    args = [str(a) for a in virtdisplay.VirtualDisplay(PRODUCT).xvfb_args]
     # The flag is a pair: "-extension COMPOSITE" disables, "+extension" enables.
     # Asserting on the pair, not on the word, is the difference between checking
     # the setting and checking that the word is still spelled the same.
@@ -137,10 +153,12 @@ def test_composite_extension_is_off_by_default():
 
 
 def test_composite_can_still_be_turned_on(monkeypatch):
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
-    monkeypatch.setenv(virtdisplay.COMPOSITE_ENV_VAR, "1")
-    args = [str(a) for a in virtdisplay.VirtualDisplay().xvfb_args]
+    from camoufox.product import PRODUCT
+
+    monkeypatch.setenv("CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE", "1")
+    args = [str(a) for a in virtdisplay.VirtualDisplay(PRODUCT).xvfb_args]
     assert args[args.index("COMPOSITE") - 1] == "+extension", (
         "the Composite escape hatch no longer works." + explain("composite-extension-off")
     )
@@ -154,7 +172,9 @@ def _xvfb_launch() -> Dict[str, Any]:
     which is exactly the kind of vacuous assertion that makes a rule file worse
     than nothing.
     """
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
+
+    from camoufox.product import PRODUCT
 
     captured: Dict[str, Any] = {}
 
@@ -167,7 +187,7 @@ def _xvfb_launch() -> Dict[str, Any]:
         def poll(self):
             return None
 
-    display = virtdisplay.VirtualDisplay()
+    display = virtdisplay.VirtualDisplay(PRODUCT)
     monkey = pytest.MonkeyPatch()
     try:
         monkey.setattr(type(display), "xvfb_path", property(lambda self: "/usr/bin/Xvfb"))
@@ -208,7 +228,7 @@ def test_xvfb_carries_a_parent_death_signal():
 
 
 def test_the_displayfd_read_is_bounded():
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
     timeout = virtdisplay.DISPLAYFD_READ_TIMEOUT_S
     assert isinstance(timeout, (int, float)) and timeout > 0, explain("displayfd-read-timeout")
@@ -222,7 +242,7 @@ def test_cleanup_is_not_gated_on_the_process_still_running():
     """
     import ast as _ast
 
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
     tree = _ast.parse(inspect.getsource(virtdisplay.VirtualDisplay.kill).lstrip())
     parents = {}
@@ -256,7 +276,7 @@ def test_kill_sigkills_reaps_and_unlinks():
     Asserted structurally rather than behaviourally so it runs without Xvfb
     installed; the behavioural half lives in test_no_leaks.py.
     """
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
     source = inspect.getsource(virtdisplay.VirtualDisplay.kill)
     assert "SIGKILL" in source, (
@@ -287,7 +307,7 @@ def _gpu_display(monkeypatch, tmp_path):
 
 
 def test_the_gpu_display_claims_its_display_with_displayfd(monkeypatch, tmp_path):
-    from camoufox import virtdisplay
+    from camoucore import virtdisplay
 
     captured = {}
 
@@ -373,32 +393,42 @@ def _dependency_files():
             # Skip the generated Firefox tree and any fetched upstream checkout.
             if any(p.startswith("camoufox-1") or p.startswith("playwright-python-") for p in path.parts):
                 continue
-            if path.relative_to(REPO_ROOT).as_posix() == "python/pyproject.toml":
-                continue
             out.append(path)
     return out
 
 
 def test_no_third_party_camoufox_distribution_is_installed():
-    """The only `camoufox` this repository installs is its own, from python/.
+    """The only `camoufox` this repository installs is the official one.
+
+    That is `camoufox` from PyPI (this repository's release wrapper) or the
+    package it pins, `camoucore` (whose camoucore.camoufox is the launcher),
+    optionally with extras and a version, or camoucore's source (an editable
+    python/camoucore). The root pyproject.toml's dependency lines are checked
+    like any requirement, quotes and trailing commas aside.
 
     build-tester generates the fingerprints it grades with, so whichever
     distribution provides `camoufox` *is* the thing under test. This caught a
     real one: build-tester/requirements.txt pinned `cloverlabs-camoufox` from
-    #521 until it was replaced with a local editable install of this package.
+    #521 until it was replaced with the official package.
     """
-    allowed = {"-e ../../../python", "-e ./python", "-e python", "-e .", "camoufox"}
+    official = re.compile(r"(camoufox|camoucore)(\[[a-z0-9_,\s-]+\])?\s*([<>=!~]=?\s*[0-9][0-9a-z.*]*\s*,?\s*)*")
     offenders = []
     for path in _dependency_files():
         for lineno, raw in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
             line = raw.split("#", 1)[0].strip()
             if not line or "camoufox" not in line.lower():
                 continue
-            if line in allowed:
+            # A PEP 621 dependency array entry: "camoucore==0.6.0",
+            entry = line.rstrip(",").strip()
+            if len(entry) > 1 and entry[0] == entry[-1] and entry[0] in "\"'":
+                line = entry[1:-1].strip()
+            if official.fullmatch(line):
                 continue
-            # A requirement line naming camoufox that is not a local path is a
-            # redistribution by definition.
-            if line.startswith("-e ") and Path(line[3:].strip()).name == "python":
+            # camoucore's source of the same package.
+            if line.startswith("-e ") and Path(line[3:].strip()).as_posix().endswith("python/camoucore"):
+                continue
+            # A console script into camoucore's launcher is not a dependency.
+            if re.fullmatch(r'[\w-]+\s*=\s*"camoucore\.camoufox[.:][\w.:]*"', line):
                 continue
             # pyproject metadata (name/urls) is not a dependency.
             if any(line.startswith(k) for k in ("name", "repository", "homepage", "documentation", "#")):
@@ -696,10 +726,9 @@ def test_no_glyph_spacing_seed_anywhere():
     """No config key, no setter, no shaper hook."""
     declared = _live_properties()
     assert "fonts:spacing_seed" not in declared, explain("no-glyph-spacing-noise")
-    for source in [*sorted((BROWSER / "patches").rglob("*.patch")),
-                   REPO_ROOT / "python" / "src" / "camoufox" / "fingerprints.py"]:
+    for source in [*sorted((BROWSER / "patches").rglob("*.patch")), PACKAGE / "fingerprints.py"]:
         assert "FontSpacingSeed" not in source.read_text(encoding="utf-8", errors="ignore"), (
-            f"{source.relative_to(REPO_ROOT)} still carries the spacing seed"
+            f"{source} still carries the spacing seed"
             + explain("no-glyph-spacing-noise")
         )
 
@@ -717,9 +746,8 @@ def test_no_audio_noise_anywhere():
             assert marker not in text, (
                 f"{source.relative_to(REPO_ROOT)} still carries {marker}" + explain(rule_id)
             )
-    for launcher in ("python/src/camoufox/fingerprints.py", "typescript/src/fingerprints.ts",
-                     "python/src/camoufox/utils.py", "typescript/src/utils.ts"):
-        text = (REPO_ROOT / launcher).read_text(encoding="utf-8")
+    for launcher in ("fingerprints.py", "utils.py"):
+        text = (PACKAGE / launcher).read_text(encoding="utf-8")
         assert "setAudioFingerprintSeed" not in text, (
             f"{launcher} still calls setAudioFingerprintSeed" + explain(rule_id)
         )
@@ -737,8 +765,8 @@ def test_no_canvas_seed_is_declared_or_sent():
     """Nothing in the browser reads a canvas seed, so neither launcher sends one."""
     declared = _live_properties()
     assert not {k for k in declared if k.startswith("canvas:")}, explain("canvas-is-not-noised")
-    for launcher in ("python/src/camoufox/fingerprints.py", "typescript/src/fingerprints.ts"):
-        assert "setCanvasSeed" not in (REPO_ROOT / launcher).read_text(encoding="utf-8"), (
+    for launcher in ("fingerprints.py",):
+        assert "setCanvasSeed" not in (PACKAGE / launcher).read_text(encoding="utf-8"), (
             f"{launcher} still calls setCanvasSeed" + explain("canvas-is-not-noised")
         )
 
@@ -755,10 +783,6 @@ def test_cross_os_canvas_is_rfps_placeholder_and_spoofs_feed_baseline_protection
         "+CanvasExtractionBeforeUserInputIsBlocked",
         "+CanvasExtractionFromThirdPartiesIsBlocked",
     ), why
-    ts = (REPO_ROOT / "typescript" / "src" / "host_rendering.ts").read_text(encoding="utf-8")
-    for target in (BASELINE_OVERRIDES_PREF, *CANVAS_PLACEHOLDER_TARGETS):
-        assert f'"{target}"' in ts, why
-
     patches = BROWSER / "patches"
     screen = (patches / "screen-spoofing.patch").read_text(encoding="utf-8")
     assert "const nsAString& aPlatform" in screen, why
@@ -773,10 +797,6 @@ def test_cross_os_canvas_is_rfps_placeholder_and_spoofs_feed_baseline_protection
 
     assert BASELINE_TASKBAR_HEIGHT == {"win": 48, "mac": 76, "lin": 0}, why
     assert BASELINE_MULTI_TOUCH_POINTS == 5, why
-    # TypeScript reads the same launcher-constants.json entries.
-    fingerprints_ts = (REPO_ROOT / "typescript" / "src" / "fingerprints.ts").read_text(encoding="utf-8")
-    for key in ("LAUNCHER_CONSTANTS.baselineTaskbarHeight", "LAUNCHER_CONSTANTS.baselineMultiTouchPoints"):
-        assert key in fingerprints_ts, why
 
 
 def test_webgpu_follows_the_claimed_device():
@@ -791,9 +811,6 @@ def test_webgpu_follows_the_claimed_device():
 
     why = explain("webgpu-follows-the-claimed-device")
     assert (WEBGPU_BLOCKLIST_PREF, FEATURE_STATUS_OK, FEATURE_BLOCKED_DEVICE) == ("gfx.blacklist.webgpu", 1, 4), why
-    ts = (REPO_ROOT / "typescript" / "src" / "host_rendering.ts").read_text(encoding="utf-8")
-    for line in (f'WEBGPU_BLOCKLIST_PREF = "{WEBGPU_BLOCKLIST_PREF}"', "FEATURE_STATUS_OK = 1", "FEATURE_BLOCKED_DEVICE = 4"):
-        assert line in ts, why
 
     nvidia = ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar")
     for target_os, gpu, host, want in (
@@ -825,10 +842,6 @@ def test_webgl_browser_owned_values_follow_firefox():
         assert config["webGl:parameters"]["33902"] == [1, 1], why
         assert config["webGl:parameters"]["33901"] == [1, 255], why
         assert ("EXT_depth_clamp" in config["webGl:supportedExtensions"]) == (target_os == "win"), why
-    ts = (REPO_ROOT / "typescript" / "src" / "webgl.ts").read_text(encoding="utf-8")
-    for line in ('win: ["EXT_depth_clamp"]',
-                 'for (const [key, value] of Object.entries(config["webGl2:parameters"]))'):
-        assert line in ts, why
 
     assert (BROWSER / "tests" / "playwright" / "patches" / "stock-gpu-parity.py").exists(), why
     assert '"stock-gpu-parity"' in (REPO_ROOT / "ci" / "run_patch_guards.py").read_text(encoding="utf-8"), why
@@ -1015,11 +1028,10 @@ def test_juggler_is_not_a_chrome_package():
 def test_the_launchers_take_the_smart_actions_page_reads_from_myuri():
     """Rule: humanize-smart-actions-are-myuris."""
     launchers = {
-        "python": (REPO_ROOT / "python" / "src" / "camoufox", "*.py", "from myuri.page_functions import HIT_TEST_JS"),
-        "typescript": (REPO_ROOT / "typescript" / "src", "*.ts", "HIT_TEST_JS"),
+        "python": (PACKAGE, "*.py", "from myuri.page_functions import HIT_TEST_JS"),
     }
     for name, (root, pattern, import_line) in launchers.items():
-        sources = {f.relative_to(REPO_ROOT): f.read_text(encoding="utf-8") for f in root.rglob(pattern)}
+        sources = {f.relative_to(root): f.read_text(encoding="utf-8") for f in root.rglob(pattern)}
         own = [str(f) for f, text in sources.items() if "elementFromPoint" in text or "elementsFromPoint" in text]
         assert not own, f"{name} hit-tests the page itself in {own}" + explain("humanize-smart-actions-are-myuris")
         assert any(import_line in text and "myuri" in text for text in sources.values()), (

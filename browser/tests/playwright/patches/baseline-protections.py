@@ -13,8 +13,8 @@ them too, for the claimed platform:
     hardwareConcurrency        left as spoofed: not a baseline target
 
 The launchers add privacy.resistFingerprinting's three canvas targets to the
-baseline overrides for an identity on another OS (python/src/camoufox/
-host_rendering.py). Readback must then be random, as in LibreWolf; without
+baseline overrides for an identity on another OS (the camoufox
+package's host_rendering.py). Readback must then be random, as in LibreWolf; without
 them it must be what the machine renders, every time.
 
 WebGPU follows the claimed device (set_webgpu): no navigator.gpu where stock
@@ -39,8 +39,6 @@ from typing import Any, Dict, List
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(REPO_ROOT / "python" / "src"))
 from camoufox.host_rendering import add_canvas_placeholder, set_webgpu  # noqa: E402
 from camoufox.utils import get_pref_env_vars  # noqa: E402
 

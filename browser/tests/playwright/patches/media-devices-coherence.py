@@ -1,5 +1,5 @@
 """
-Verify media-device spoofing (media-device-spoofing.patch + pythonlib
+Verify media-device spoofing (media-device-spoofing.patch + the driver's
 media-devices.json) presents ONE coherent machine.
 
 Stock Firefox exposes, before any getUserMedia grant, at most one device per

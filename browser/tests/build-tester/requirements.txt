@@ -1,7 +1,10 @@
-# This tree's python/, relative to build-tester/ (ci/tribal-rules.yml: no-third-party-camoufox-distribution).
--e ../../../python
+# The camoufox driver is not listed here: CI installs it before this file
+# through .github/actions/driver (the root wrapper with its exact camoucore
+# pin, or the CamouBrowser/camoucore ref in ci/driver-ref plus the wrapper),
+# and run_tests.sh installs the root wrapper. Naming it here would
+# let pip swap a camoucore checkout for the PyPI release.
 
 # 1.61 sent viewport.isMobile in Browser.setDefaultViewport, which this
 # juggler's protocol schema rejected; the schema now accepts it, so the cap
-# moves up rather than away. Matches the cap in python/pyproject.toml.
+# moves up rather than away. Matches the driver's own cap.
 playwright<1.63

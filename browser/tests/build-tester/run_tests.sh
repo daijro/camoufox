@@ -56,9 +56,17 @@ fi
 PYTHON=".venv/bin/python"
 PIP=".venv/bin/pip"
 
-echo "==> Installing camoufox from local source + playwright..."
+echo "==> Installing camoufox + playwright..."
 $PIP uninstall -y cloverlabs-camoufox >/dev/null 2>&1 || true
-$PIP install -q -e ../../../python playwright
+# A camoucore already in the venv (say, an editable checkout) is kept and the
+# root wrapper goes on top of it without deps; otherwise the wrapper brings
+# the camoucore release it pins.
+if $PYTHON -c "import camoucore.camoufox" >/dev/null 2>&1; then
+    $PIP install -q --no-deps ../../..
+else
+    $PIP install -q ../../..
+fi
+$PIP install -q -r requirements.txt
 
 echo "==> Running build tester..."
 $PYTHON scripts/run_tests.py "$BINARY" "${EXTRA_ARGS[@]}"

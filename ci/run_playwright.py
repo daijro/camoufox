@@ -66,7 +66,7 @@ GROUPS: Tuple[Group, ...] = (
     Group(("tests/async/",), sharded=True),
     # The sync API is a greenlet wrapper over the same Juggler traffic, so much of
     # this duplicates tests/async/ at the protocol level. It is here because
-    # pythonlib ships a sync API that users drive, and the wrapper has its own
+    # the driver ships a sync API that users drive, and the wrapper has its own
     # timeout and reentrancy behaviour the async tests cannot reach.
     Group(("tests/sync/",), sharded=True),
     # Six tests. Not sharded: splitting them would hand some shard an empty

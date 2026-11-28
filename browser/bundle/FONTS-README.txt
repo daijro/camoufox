@@ -36,7 +36,7 @@ set of OSes that use it:
 
 The bundle used to be three per-OS directories, which meant 41% of it (1.63 GB)
 was byte-identical copies of the same faces. Grouping removed that without
-changing a single reportable family -- python/src/camoufox/fonts.json is
+changing a single reportable family -- the driver's fonts.json was
 byte-identical across the change.
 
 The group directory is also the per-OS GATE on Linux: utils._generate_fontconfig
@@ -82,7 +82,7 @@ files, in this order, and checked by scripts/verify-fonts.py:
     scripts/gen-fonts-json.py     bundle + font-manifests.json -> fonts.json
                                   (--print-bases also prints the
                                   _ESSENTIAL_FONTS_* literals for
-                                  python/src/camoufox/fingerprints.py, which are
+                                  the driver's fingerprints.py, which are
                                   the INTERSECTION of that OS's version bases)
     scripts/gen-font-groups.py    fonts.json + font-manifests.json ->
                                   font-groups.json (the addition units, each

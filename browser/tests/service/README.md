@@ -4,7 +4,7 @@ End-to-end antibot-detection tests that verify a pip-installed camoufox release 
 
 ## Prerequisites
 
-- Python 3.10+ (what `python/` requires)
+- Python 3.10+ (what the `camoufox` driver requires)
 - Node.js (for building the TypeScript checks bundle via `esbuild`)
 - At least one proxy in `proxies.txt`
 
@@ -19,12 +19,12 @@ End-to-end antibot-detection tests that verify a pip-installed camoufox release 
 `run_tests.sh` will:
 1. Install npm deps in `../build-tester/` (for `esbuild`, first run only)
 2. Create a `.venv` virtualenv (first run only)
-3. Build a wheel from `../../../python` and install it (tests the actual packaged artifact)
+3. Install the `camoufox` driver from PyPI (tests the actual published package). Set `CAMOUFOX_DRIVER` to install another: a pinned version (`camoufox==0.6.0`) or a [camoucore](https://github.com/CamouBrowser/camoucore) checkout (`<camoucore>/python/camoucore`, which gets this repository's `camoufox` wrapper on top)
 4. **Phase 1** — run the suite against the locally compiled binary, auto-detected from:
    - macOS: `../../camoufox-*/obj-*-apple-darwin/dist/Camoufox.app/Contents/MacOS/camoufox`
    - Linux: `../../camoufox-*/obj-*-linux-*/dist/bin/camoufox-bin`
 
-   Skipped (with a notice) if no local build is found. On macOS, the script also copies `properties.json` from `Camoufox.app/Contents/Resources/` into `MacOS/` so pythonlib can locate it next to the binary.
+   Skipped (with a notice) if no local build is found. On macOS, the script also copies `properties.json` from `Camoufox.app/Contents/Resources/` into `MacOS/` so the driver can locate it next to the binary.
 5. **Phase 2** — download the official binary (`--browser-version`, default `official/stable`) and run the suite against it
 6. Exit `0` only if both phases pass
 
@@ -35,7 +35,7 @@ looked up at `..\..\camoufox-*\obj-*-windows-msvc\dist\bin\camoufox.exe`. Its
 options are the ones below in PowerShell form (`-BrowserVersion`,
 `-ProfileCount`, `-Proxies`, `-Headful`, `-NoCert`, `-SaveCert`, `-Binary`).
 
-> **Heads-up on Phase 2:** if the latest `official/stable` is older than the Firefox version the local pythonlib targets, the binary may not understand newer fingerprint patches and the test page can fail to produce results. Pin a newer binary with `--browser-version` to avoid this.
+> **Heads-up on Phase 2:** if the latest `official/stable` is older than the Firefox version the installed driver targets, the binary may not understand newer fingerprint patches and the test page can fail to produce results. Pin a newer binary with `--browser-version` to avoid this.
 
 ## Proxies
 
@@ -71,10 +71,9 @@ cd ../build-tester && npm install && cd ../service
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Build wheel from local source and install it
-pip install build
-(cd ../../../python && rm -rf dist && python -m build --wheel -o dist)
-pip install --force-reinstall ../../../python/dist/*.whl
+# Install the driver (or a camoucore checkout's python/camoucore, then
+# `pip install --no-deps` this repository's root for the camoufox wrapper)
+pip install camoufox
 
 # Download the browser binary
 python -m camoufox fetch
@@ -138,4 +137,4 @@ fingerprints.
 
 ## Failure Triage
 
-If a check fails, **fix it in the Python package** (`../../../python/src/camoufox/`), not in the test. The test is intentionally a black-box validator — it only uses the public `AsyncNewContext` API and trusts camoufox to produce correct fingerprints.
+If a check fails, **fix it in the Python package** (`python/camoucore/src/camoucore/camoufox/` in [camoucore](https://github.com/CamouBrowser/camoucore)), not in the test. The test is intentionally a black-box validator — it only uses the public `AsyncNewContext` API and trusts camoufox to produce correct fingerprints.

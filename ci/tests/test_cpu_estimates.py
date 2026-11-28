@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+from importlib.resources import files
 
 import pytest
 
@@ -26,7 +27,7 @@ def test_the_generated_tables_are_current():
 def test_the_launcher_sends_the_patchs_vendor_numbers():
     header = (OPTS / "SkCpuEstimates.h").read_text()
     enum = {m[1]: int(m[2]) for m in re.finditer(r"SK_CPU_(?:VENDOR|IDENTITY)_(INTEL|AMD|ARM64) = (\d+)", header)}
-    constants = json.loads((REPO_ROOT / "python" / "src" / "camoufox" / "launcher-constants.json").read_text())
+    constants = json.loads((files("camoucore.camoufox") / "launcher-constants.json").read_text())
     table = constants["cpuIdentityPref"]
     assert {"INTEL": table["x86/intel"], "AMD": table["x86/amd"], "ARM64": table["arm"]} == enum == {"INTEL": 1, "AMD": 2, "ARM64": 3}
 

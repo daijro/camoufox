@@ -31,12 +31,13 @@ list that claims the system face once does.
 import asyncio
 import json
 import sys
+from importlib.resources import files
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import launch_kwargs  # noqa: E402
 
-CAMOUFOX = Path(__file__).resolve().parents[4] / "python" / "src" / "camoufox"
+CAMOUFOX = files("camoucore.camoufox")
 
 ORIGIN = "https://camoufox.test/"
 # The ratio counts the names fallback pays for the system face under. Measured

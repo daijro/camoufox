@@ -8,7 +8,7 @@ report honestly. These cover the parts where "honestly" is load-bearing:
   * a skip must carry a reason, or it is indistinguishable from hiding a test;
   * sharding must be stable, so a flake does not appear to move between runners;
   * version resolution must never pick a suite newer than the browser, nor one
-    above the Playwright ceiling pythonlib pins;
+    above the Playwright ceiling the camoufox driver pins;
   * test identities must survive being run from a different working directory.
 
 Run:  python3 -m pytest ci/tests -q
@@ -759,22 +759,6 @@ def test_run_pytest_clears_a_previous_runs_junit(tmp_path, monkeypatch):
     assert _pytest.parse_junit(junit) == {}
 
 
-def test_typescript_does_not_grade_a_previous_runs_junit(tmp_path, monkeypatch):
-    """vitest that dies before writing junit is an error, not the last result."""
-    import ci.run_typescript as ts
-    from ci._util import Result
-
-    monkeypatch.setattr(ts, "WORK_DIR", tmp_path)
-    (tmp_path / "junit-typescript_browser.xml").write_text(
-        '<testsuites><testsuite name="tests/e2e.test.ts">'
-        '<testcase classname="tests/e2e.test.ts" name="e2e old"/></testsuite></testsuites>')
-    monkeypatch.setattr(ts, "run", lambda cmd, **kw: Result(1 if "vitest" in cmd else 0, "", ""))
-    binary = tmp_path / "camoufox-bin"
-    binary.touch()
-    code = ts.main(["--browser", str(binary), "--evidence-dir", str(tmp_path / "evidence")])
-    assert code == 1
-
-
 def test_build_tester_rebuilds_a_checks_bundle_older_than_its_source(tmp_path):
     """An edited check must reach the browser, not the bundle built before it."""
     import importlib.util
@@ -809,8 +793,7 @@ def test_build_tester_identities_claim_the_binarys_firefox_version(monkeypatch):
     """
     scripts = CI_ROOT.parent / "browser/tests/build-tester/scripts"
     monkeypatch.syspath_prepend(str(scripts))
-    # presets builds the identities with the in-tree camoufox package.
-    monkeypatch.syspath_prepend(str(CI_ROOT.parent / "python/src"))
+    # presets builds the identities with the installed camoufox package.
     import presets
 
     major = read_upstream_sh()["version"].split(".", 1)[0]
@@ -836,11 +819,11 @@ def test_build_tester_gets_an_absolute_binary_path(tmp_path, monkeypatch):
     assert seen == [tmp_path / "camoufox-bin"]
 
 
-def test_version_resolution_honours_pythonlibs_playwright_ceiling():
-    """The resolver must not pick a client pythonlib refuses to install.
+def test_version_resolution_honours_the_drivers_playwright_ceiling():
+    """The resolver must not pick a client the driver refuses to install.
 
     `camoufox.server` imports `playwright._impl._driver`, a private API, so
-    pythonlib pins a ceiling. Without this filter a Firefox bump silently moves
+    the driver pins a ceiling. Without this filter a Firefox bump silently moves
     the suite above that ceiling, and whatever Juggler changed in between is
     reported as a browser failure in a suite nobody shipping the package could
     reproduce.
@@ -859,24 +842,42 @@ def test_version_resolution_honours_pythonlibs_playwright_ceiling():
         versions.pins, versions.client_ceiling = real_pins, real_ceiling
 
     assert resolved["playwright_tag"] == "v1.62.0", (
-        "resolved to a Playwright at or above pythonlib's ceiling; the suite would "
+        "resolved to a Playwright at or above the driver's ceiling; the suite would "
         "install a client the shipped package forbids"
     )
 
 
-def test_pythonlib_still_pins_a_playwright_ceiling():
+def test_the_driver_still_pins_a_playwright_ceiling():
     """The filter above is only as real as the pin it reads.
 
-    If the ceiling is dropped from pyproject.toml, `client_ceiling()` returns
-    None and the filter quietly stops applying -- so assert the pin exists here
-    rather than discovering it from a protocol failure later.
+    If the installed driver drops its ceiling, `client_ceiling()` returns None
+    and the filter quietly stops applying -- so assert the pin exists here
+    rather than discovering it from a protocol failure later. A missing driver
+    fails: .github/actions/driver installs it.
     """
+    import importlib.util
+
     from ci.versions import client_ceiling
 
+    assert importlib.util.find_spec("camoucore"), "the camoufox driver (camoucore) is not installed"
     assert client_ceiling() is not None, (
-        "python/pyproject.toml no longer pins a playwright ceiling, so "
+        "the installed camoufox driver no longer pins a playwright ceiling, so "
         "ci.versions has nothing to clamp the suite to"
     )
+
+
+@pytest.mark.parametrize("requires, ceiling", [
+    (["playwright (<1.63)"], (1, 63, 0)),
+    (["browserforge", "playwright<1.63,>=1.50"], (1, 63, 0)),
+    (["playwright (>=1.50,<1.62.1)"], (1, 62, 1)),
+    (["playwright-stealth<2", "playwright"], None),
+    (["playwright<1.63; extra == 'x'"], (1, 63, 0)),
+    ([], None),
+])
+def test_the_ceiling_is_read_from_the_drivers_requirements(requires, ceiling):
+    from ci.versions import client_ceiling
+
+    assert client_ceiling(requires) == ceiling
 
 
 # ---------------------------------------------------------------------------
@@ -1118,10 +1119,10 @@ def test_required_suites_are_names_a_runner_actually_writes():
         required.update(part for part in line.split() if not part.startswith("$"))
 
     producible = {
-        "build", "build_tester", "patch_guards", "pythonlib", "sundial",
+        "build", "build_tester", "patch_guards", "sundial",
         "patch_guards_spoofing", "patch_guards_automation", "patch_guards_parity",
         "native", "native_rules", "native_browser", "native_growth",
-        "playwright", "skiplist_audit", "typescript", "typescript_browser", "install",
+        "playwright", "skiplist_audit",
     }
     unknown = required - producible
     assert not unknown, (
@@ -1982,7 +1983,7 @@ def _required_suites(browser_changed: str, has_sundial: str) -> set:
     import subprocess
 
     text = WORKFLOW.read_text(encoding="utf-8")
-    start = text.index('required="pythonlib')
+    start = text.index('required="native_rules')
     end = text.index("python3 -m ci.summarize", start)
     block = text[start:end]
     block = block.replace("${{ needs.resolve.outputs.browser_changed }}", browser_changed)
@@ -2002,7 +2003,7 @@ def test_build_is_required_only_when_the_browser_was_built():
     whenever the browser was fetched instead. summarize treats a required suite
     with no result as a failure -- correctly -- so requiring it unconditionally
     blocked every pull request that did not touch browser sources: docs,
-    pythonlib, ci/ and tests/ alike. That is most of them, and it is precisely
+    ci/ and tests/ alike. That is most of them, and it is precisely
     the cheap path this pipeline advertises.
     """
     assert "build" in _required_suites("true", "false")
@@ -2014,7 +2015,7 @@ def test_the_browser_suites_are_required_either_way():
     for changed in ("true", "false"):
         required = _required_suites(changed, "false")
         assert {
-            "pythonlib", "install", "native_rules", "skiplist_audit", "build_tester",
+            "native_rules", "skiplist_audit", "build_tester",
             "playwright", "native_browser", "native_growth",
             "patch_guards_spoofing", "patch_guards_automation", "patch_guards_parity",
         } <= required, changed
@@ -2800,11 +2801,11 @@ def test_group_timeout_is_shorter_than_the_job_timeout():
 
 
 # ---------------------------------------------------------------------------
-# build-tester agrees with the identities pythonlib can present
+# build-tester agrees with the identities the driver can present
 # ---------------------------------------------------------------------------
 
 
-def test_build_tester_accepts_every_core_count_pythonlib_presents():
+def test_build_tester_accepts_every_core_count_the_driver_presents():
     """A real identity must not fail build-tester's plausibility check.
 
     build-tester's plausibleHWC list lacked 18 and 22 -- both real (Intel Meteor
@@ -2820,7 +2821,9 @@ def test_build_tester_accepts_every_core_count_pythonlib_presents():
     accepted = {int(n) for n in re.findall(r"\d+", listed.group(1))}
 
     presented = set()
-    lib = repo / "python/src/camoufox"
+    from importlib.resources import files
+
+    lib = files("camoucore.camoufox")
     for name in ("fingerprint-presets.json", "fingerprint-presets-v150.json"):
         data = json.loads((lib / name).read_text(encoding="utf-8"))
         for rows in data.get("presets", {}).values():
@@ -2833,7 +2836,7 @@ def test_build_tester_accepts_every_core_count_pythonlib_presents():
 
     missing = sorted(presented - accepted)
     assert not missing, (
-        f"build-tester's plausibleHWC rejects core counts pythonlib presents: {missing}. "
+        f"build-tester's plausibleHWC rejects core counts the driver presents: {missing}. "
         "Add them to the list in browser/tests/build-tester/src/lib/checks/extended.ts."
     )
 
@@ -2972,8 +2975,8 @@ def release_repo(tmp_path):
     (repo / "browser" / "patches" / "a.patch").write_text("a\n")
     (repo / "browser" / "additions" / "juggler").mkdir(parents=True)
     (repo / "browser" / "additions" / "juggler" / "moz.build").write_text('FINAL_TARGET_FILES.modules.juggler += []\n')
-    (repo / "typescript").mkdir()
-    (repo / "typescript" / "x.ts").write_text("x\n")
+    (repo / "ci").mkdir()
+    (repo / "ci" / "x.py").write_text("x\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "release")
     _git(repo, "tag", "v1.0-beta.1")
@@ -2982,7 +2985,7 @@ def release_repo(tmp_path):
 
 def test_driver_pr_on_the_released_sources_tests_the_release(release_repo):
     base = _git(release_repo, "rev-parse", "HEAD")
-    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    (release_repo / "ci" / "x.py").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
     assert "browser_changed=false" in _scope(release_repo, base)[0].splitlines()
 
@@ -2993,7 +2996,7 @@ def test_driver_pr_on_unreleased_browser_sources_builds(release_repo):
     (release_repo / "browser" / "patches" / "a.patch").write_text("merged but unreleased\n")
     _git(release_repo, "commit", "-qam", "browser change merged to main")
     base = _git(release_repo, "rev-parse", "HEAD")
-    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    (release_repo / "ci" / "x.py").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
     result, log = _scope(release_repo, base)
     assert result == "browser_changed=true"
@@ -3016,7 +3019,7 @@ def test_a_carried_push_requires_what_the_pull_request_run_ran(release_repo):
 def test_unpublished_release_tag_builds(release_repo):
     _git(release_repo, "tag", "-d", "v1.0-beta.1")
     base = _git(release_repo, "rev-parse", "HEAD")
-    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    (release_repo / "ci" / "x.py").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
     assert _scope(release_repo, base)[0] == "browser_changed=true"
 
@@ -3025,7 +3028,7 @@ def test_unpublished_release_tag_builds(release_repo):
 def test_driver_pr_whose_release_is_not_published_builds(release_repo, releases):
     """A tag alone is not a release: #811 must not pair with a draft or a missing one."""
     base = _git(release_repo, "rev-parse", "HEAD")
-    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    (release_repo / "ci" / "x.py").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
     assert _scope(release_repo, base, releases)[0] == "browser_changed=true"
 
@@ -3034,7 +3037,7 @@ def test_driver_pr_tests_the_prerelease_of_its_sources_not_the_latest_release(re
     """#811: v156.0.1-beta.32 was a prerelease and the fetch took the latest stable
     release, 152.0.4. The pairing names the prerelease, and the fetch job uses it."""
     base = _git(release_repo, "rev-parse", "HEAD")
-    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    (release_repo / "ci" / "x.py").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
     stable = {"tag_name": "v0.9-beta.0", "draft": False, "prerelease": False, "body": ""}
     result, _ = _scope(release_repo, base, PUBLISHED + [stable])
@@ -3053,7 +3056,7 @@ def test_driver_pr_pairs_by_the_source_digest_in_the_release_manifest(release_re
     from ci.release import manifest
 
     base = _git(release_repo, "rev-parse", "HEAD")
-    (release_repo / "typescript" / "x.ts").write_text("y\n")
+    (release_repo / "ci" / "x.py").write_text("y\n")
     _git(release_repo, "commit", "-qam", "driver change")
     cut = {"tag_name": "v1.0-beta.2", "draft": False, "prerelease": True,
            "manifest": manifest("v1.0-beta.2", source_digest(release_repo), "0" * 40)}
@@ -3139,7 +3142,7 @@ def test_memory_growth_runs_on_pull_requests_and_gates_the_merge():
     assert "growth" in jobs["summary"]["needs"]
 
 
-def test_every_workflow_step_running_verify_fonts_installs_the_package():
+def test_every_workflow_step_running_verify_fonts_installs_the_driver():
     """verify-fonts.py imports camoufox for its draw checks. The release job ran
     it without the package, so the merged release failed on the first import."""
     import yaml
@@ -3147,13 +3150,32 @@ def test_every_workflow_step_running_verify_fonts_installs_the_package():
     for workflow in sorted((CI_ROOT.parent / ".github" / "workflows").glob("*.yml")):
         jobs = yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"]
         for name, job in jobs.items():
+            installed = False
             for step in job.get("steps", []):
-                run = "\n".join(line for line in (step.get("run") or "").splitlines()
-                                if not line.lstrip().startswith("#"))
-                if "verify-fonts.py" in run:
-                    assert "pip install -e ../python" in run or "pip install -e python" in run, (
-                        f"{workflow.name}:{name} runs verify-fonts.py without installing the camoufox package"
+                installed = installed or step.get("uses") == "./.github/actions/driver"
+                if "verify-fonts.py" in (step.get("run") or ""):
+                    assert installed, (
+                        f"{workflow.name}:{name} runs verify-fonts.py before installing the "
+                        "camoufox driver (.github/actions/driver)"
                     )
+
+
+def test_every_job_that_imports_the_driver_installs_it_one_way():
+    """The driver comes from .github/actions/driver and nowhere else, so
+    ci/driver-ref reaches every job that drives the browser."""
+    import yaml
+
+    for path in [*(CI_ROOT.parent / ".github" / "workflows").glob("*.yml"),
+                 *(CI_ROOT.parent / ".github" / "actions").glob("*/action.yml")]:
+        if path.parent.name == "driver":
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert not re.search(r"pip install[^\n]*\bcamoufox\b|npm (i|install)[^\n]*\bcamoufox\b|-e \.*/?python\b",
+                             text), f"{path.name} installs the driver itself"
+    jobs = yaml.safe_load((CI_ROOT.parent / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8"))["jobs"]
+    for name in ("resolve", "static", "fetch-browser", "patch-guards", "build-tester", "native", "growth",
+                 "sundial"):
+        assert any(s.get("uses") == "./.github/actions/driver" for s in jobs[name]["steps"]), name
 
 
 def test_pull_requests_verify_the_fonts():
@@ -3270,121 +3292,6 @@ def test_a_tested_commit_still_builds_and_publishes():
         job = jobs[name]
         cond = str(job.get("if", ""))
         assert "!cancelled()" in cond or "always()" in cond, f"{name} is skipped whenever tests is"
-
-
-# ---------------------------------------------------------------------------
-# the installed packages launch a browser
-# ---------------------------------------------------------------------------
-
-
-def _probe(ua="Mozilla/5.0 (X11; Linux x86_64; rv:156.0) Gecko/20100101 Firefox/156.0", fonts=None):
-    return {"navigator": {"userAgent": ua},
-            "fonts": fonts if fonts is not None else {"Arial": True, "DejaVu Sans": True, "Menlo": False}}
-
-
-def test_a_coherent_installed_launch_has_no_problems():
-    from ci.run_install import identity_problems
-
-    ua = _probe()["navigator"]["userAgent"]
-    assert identity_problems(_probe(), ua, "156.0.1-beta.32", ["Arial", "DejaVu Sans", "Cantarell"]) == []
-
-
-def test_an_installed_launch_must_claim_the_browser_it_runs():
-    from ci.run_install import identity_problems
-
-    ua = "Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0"
-    problems = identity_problems(_probe(ua), ua, "156.0.1", ["Arial"])
-    assert len(problems) == 1 and "Firefox 156.0.1" in problems[0]
-
-
-def test_an_installed_launch_must_send_the_user_agent_the_page_sees():
-    from ci.run_install import identity_problems
-
-    other = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:156.0) Gecko/20100101 Firefox/156.0"
-    problems = identity_problems(_probe(), other, "156.0.1", ["Arial"])
-    assert len(problems) == 1 and "request's User-Agent" in problems[0]
-
-
-def test_an_installed_launch_must_render_the_fonts_it_claims():
-    """No fonts beside the binary, or a fontconfig that cannot find them, and
-    every family measures as the fallback."""
-    from ci.run_install import identity_problems
-
-    ua = _probe()["navigator"]["userAgent"]
-    missing = identity_problems(_probe(fonts={"Arial": False, "DejaVu Sans": True}), ua, "156.0", ["Arial"])
-    assert len(missing) == 1 and "'Arial'" in missing[0]
-    unmeasured = identity_problems(_probe(fonts={"Menlo": True}), ua, "156.0", ["Arial"])
-    assert len(unmeasured) == 1 and "none of the fonts" in unmeasured[0]
-
-
-_CLICK = {"type": "click", "trusted": True, "target": "button"}
-
-
-def _typed(text, trusted=True, target="input"):
-    return [{"type": t, "trusted": trusted, "target": target} for _ in text for t in ("keydown", "keyup")]
-
-
-def test_a_trusted_click_and_typing_have_no_problems():
-    from ci.run_install import interaction_problems
-
-    assert interaction_problems([_CLICK, *_typed("ab")], "ab", "ab") == []
-
-
-def test_the_click_must_reach_the_button_once_and_trusted():
-    from ci.run_install import interaction_problems
-
-    for clicks in ([], [_CLICK, _CLICK], [{**_CLICK, "trusted": False}], [{**_CLICK, "target": "input"}]):
-        problems = interaction_problems([*clicks, *_typed("ab")], "ab", "ab")
-        assert len(problems) == 1 and "one trusted click" in problems[0], clicks
-
-
-def test_the_typed_text_must_land_in_the_input():
-    from ci.run_install import interaction_problems
-
-    problems = interaction_problems([_CLICK, *_typed("ab")], "a", "ab")
-    assert len(problems) == 1 and "holds 'a'" in problems[0]
-
-
-def test_every_key_must_arrive_trusted_on_the_input():
-    """A dropped key, an untrusted key or one that lands elsewhere is not what
-    a user's typing produces, even when the input ends up holding the text."""
-    from ci.run_install import interaction_problems
-
-    dropped = interaction_problems([_CLICK, *_typed("a")], "ab", "ab")
-    assert len(dropped) == 1 and "typed 2 keys" in dropped[0]
-    untrusted = interaction_problems([_CLICK, *_typed("ab", trusted=False)], "ab", "ab")
-    assert len(untrusted) == 1 and "untrusted" in untrusted[0]
-    elsewhere = interaction_problems([_CLICK, *_typed("ab", target="button")], "ab", "ab")
-    assert len(elsewhere) == 1 and "missed the input" in elsewhere[0]
-
-
-def test_the_install_gate_launches_and_interacts_through_each_installed_package():
-    """`camoufox fetch` alone proved the packages install; nothing launched a
-    browser through them. Each launch goes through the user's import path, the
-    installed package rather than the source tree, also targets the browser
-    under test, and clicks and types the same way from Python and Node."""
-    from ci import run_install
-
-    source = (CI_ROOT / "run_install.py").read_text(encoding="utf-8")
-    assert '"--browser", type=Path, required=True' in source
-    assert '[str(python), "-I", str(PYTHON_PROBE)]' in source
-    assert "shutil.copy(NODE_PROBE, project / NODE_PROBE.name)" in source
-    assert '{"executable_path": str(browser)}' in source
-    python_probe = run_install.PYTHON_PROBE.read_text(encoding="utf-8")
-    node_probe = run_install.NODE_PROBE.read_text(encoding="utf-8")
-    assert "from camoufox.sync_api import Camoufox" in python_probe
-    assert 'import { Camoufox } from "camoufox";' in node_probe
-    for step in ("locator('#button').click()", "locator('#input').press_sequentially(text)"):
-        assert step in python_probe
-    for step in ('locator("#button").click()', 'locator("#input").pressSequentially(req.text)'):
-        assert step in node_probe
-    assert run_install.PROBE.is_file()
-
-    install = _jobs()["install"]
-    assert any(s.get("uses") == "./.github/actions/prepare-browser" for s in install["steps"])
-    assert {"build", "fetch-browser"} <= set(install["needs"])
-    runs = "\n".join(s.get("run") or "" for s in install["steps"])
-    assert '--browser "$CAMOUFOX_BINARY"' in runs
 
 
 def test_packaged_entries_are_readable_by_every_user(tmp_path):

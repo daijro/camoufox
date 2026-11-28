@@ -75,7 +75,7 @@ rules:
     check: automated
     evidence:
       - "issue #93: no video under headless='virtual'"
-      - "python/src/camoufox/virtdisplay.py: the measurement table"
+      - "camoucore virtdisplay.py (formerly camoufox/virtdisplay.py): the measurement table"
     rationale: >-
       Briefly enabled on the theory that disabling it caused #93. It did not --
       #93 was a Juggler bug, fixed by capturing the screencast from the
@@ -265,11 +265,14 @@ rules:
       graded against someone else's fingerprint generation, a divergence between
       the two reads as a browser bug, and every CI run pulls an outside package
       into a job holding repository credentials. The only `camoufox` this
-      repository may install is python/ from this tree.
+      repository may install is the official one: `camoufox` from PyPI (the
+      release wrapper in this repository), the package it pins, `camoucore`
+      (whose camoucore.camoufox is the launcher), or camoucore's source in
+      CamouBrowser/camoucore (python/camoucore), which is what ci/driver-ref
+      selects.
     expect:
       no_dependency_matching: "camoufox"
-      except_paths: ["python/pyproject.toml"]
-      allowed_forms: ["-e ../../../python", "-e ./python", "-e python"]
+      allowed_forms: ["camoufox", "camoufox[<extras>]", "camoucore==<version>", "camoucore[<extras>]==<version>", "-e <camoucore>/python/camoucore"]
 
   - id: ubo-release-pinned
     title: The bundled uBlock Origin is a committed pin, never AMO's newest
@@ -610,7 +613,7 @@ rules:
     title: A virtual display never clamps the generated screen
     check: automated
     evidence:
-      - "python/src/camoufox/utils.py: the `not virtual_display` guards"
+      - "camoucore python/camoucore/src/camoucore/camoufox/utils.py: the `not virtual_display` guards"
     rationale: >-
       This is what makes the 1x1 default safe. If clamping applied, a 1x1 root
       window would clamp every generated screen down to 1x1 and the fingerprint

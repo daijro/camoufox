@@ -201,12 +201,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
     env = {
+        # The guards drive the browser through the installed camoufox driver,
+        # which resolves the binary from this variable rather than a packaged install.
         "CAMOUFOX_EXECUTABLE_PATH": str(binary),
-        # The guards drive the browser through the Python package, which resolves
-        # the binary from this variable rather than a packaged install.
-        "PYTHONPATH": os.pathsep.join(
-            filter(None, [str(REPO_ROOT / "python" / "src"), os.environ.get("PYTHONPATH", "")])
-        ),
     }
 
     selected = [

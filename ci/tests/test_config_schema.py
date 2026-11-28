@@ -19,7 +19,7 @@ a schema entry are two halves of one change; this test fails the build when only
 one half lands.
 
 Run with:
-    cd python && python -m pytest tests/test_config_schema.py -v
+    python3 -m pytest ci/tests/test_config_schema.py -v
 """
 
 import json

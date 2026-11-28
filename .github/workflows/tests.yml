@@ -29,25 +29,28 @@ name: Tests
 # fails a two-second lint never reaches a seventy-minute build.
 #
 #   0  static      lint, self-tests, settled decisions        seconds
-#   1  unit        pythonlib                                  ~1 min
-#   2  browser     BUILD if patches/additions changed,
+#   1  browser     BUILD if patches/additions changed,
 #                  otherwise FETCH the released binary        ~70 min / ~1 min
 #                  PREFLIGHT the targets only a release
 #                  builds, beside the build                   ~30 min each
-#   3a smoke       patch guards, skiplist audit, build-tester,
-#                  installed packages                         ~15 min
-#   3b full        Playwright (6 shards), leaks, stealth      ~40 min
-#   4  gate        the single required status check
+#   2a smoke       patch guards, skiplist audit, build-tester ~15 min
+#   2b full        Playwright (6 shards), leaks, stealth      ~40 min
+#   3  gate        the single required status check
+#
+# The browser is driven through the camoufox driver, which lives in
+# CamouBrowser/camoucore: every job that needs it installs it with
+# .github/actions/driver -- the published package, or the camoucore ref in
+# ci/driver-ref (ci/README.md, "The driver").
 #
 # The build job builds linux x86_64 with the command a release's build job runs
 # for every target (ci.run_build), and the preflight jobs run that command's
 # front half for the other five, so a release does not run a build step for the
 # first time (ci/tribal-rules.yml: one-build-entry-point).
 #
-# A driver-only pull request never builds: there is nothing new to compile, so it
-# is tested against the published browser its users actually run. Tier 3b waits
-# on 3a so a browser that fails its guards does not also burn six Playwright
-# shards proving the same thing.
+# A pull request that leaves the browser's sources alone never builds: there is
+# nothing new to compile, so it is tested against the published browser built
+# from them. Tier 2b waits on 2a so a browser that fails its guards does not
+# also burn six Playwright shards proving the same thing.
 #
 # A push to main that lands exactly the tree a passing pull request run tested
 # carries that run's results (ci/carry.py) and runs only what the pull request
@@ -153,6 +156,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -r ci/requirements.txt
+      # ci.versions reads the Playwright ceiling the driver declares.
+      - uses: ./.github/actions/driver
+        with:
+          extras: ""
 
       - id: versions
         env:
@@ -215,10 +222,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         # Only a change that can alter the binary justifies compiling one. A
-        # pull request that touches python/ or ci/ is a driver change: it
-        # still gets the full browser suite, but against the published build its
-        # users are running, which takes a minute instead of seventy -- as long
-        # as that build matches this tree's browser sources (see below).
+        # pull request that touches only ci/, tests or ci/driver-ref still gets
+        # the full browser suite, but against the published build its users
+        # are running, which takes a minute instead of seventy -- as long as
+        # that build matches this tree's browser sources (see below).
         run: |
           if [ -n "${{ steps.carry.outputs.run }}" ]; then
             # What the carried run did, so the summary requires what it ran.
@@ -230,7 +237,7 @@ jobs:
             echo "::notice::Not a pull request -- building, which also refreshes the shared ccache."
             exit 0
           fi
-          sources='^(browser/patches/|browser/additions/|browser/settings/|browser/assets/|browser/scripts/|browser/bundle/fontconfig/|browser/upstream\.sh|browser/Makefile|browser/multibuild\.py)'
+          sources='^(browser/patches/|browser/additions/|browser/settings/|browser/assets/|browser/scripts/|browser/bundle/fontconfig/|browser/upstream\.sh|browser/Makefile|browser/multibuild\.py|browser/INTERFACE)'
           base="${{ github.event.pull_request.base.sha }}"
           changed=$(git diff --name-only "$base"...HEAD || echo "")
           echo "changed files:"; echo "$changed" | sed 's/^/  /'
@@ -246,8 +253,8 @@ jobs:
           # release (a merged browser change not built yet), testing a release
           # pairs new guards with an old browser, and every guard for the
           # unbuilt change fails on a pull request that never touched it. So
-          # test the release built from exactly these sources -- the one this
-          # tree's library would be paired with (ci/release.py) -- or build.
+          # test the release built from exactly these sources -- the one a
+          # driver release pairs with (ci/release.py) -- or build.
           if python3 -m ci.release paired; then
             echo "browser_changed=false" >> "$GITHUB_OUTPUT"
             echo "::notice::A published release was built from these browser sources -- testing against it."
@@ -317,10 +324,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      # -e python because the settled-decisions tests import camoufox.* to
-      # assert against it. It is a pure-Python install; no browser involved.
-      - run: |
-          pip install -r ci/requirements.txt pytest -e python
+      - run: pip install -r ci/requirements.txt pytest
+      - name: The release wrapper pins one exact driver
+        # pyproject.toml and package.json must name the same camoucore-camoufox.
+        run: python3 -m ci.release driver
+      # The settled-decisions tests and ci/tests read the driver's data files
+      # and import camoufox.* to assert against it. No browser involved.
+      - uses: ./.github/actions/driver
       - uses: ./.github/actions/fpgen-model
 
       - name: Synthesized input goes through one chokepoint
@@ -363,16 +373,6 @@ jobs:
           print(f'skiplist OK: {len(load_skiplist())} entries, every one with a reason')
           "
 
-      # Every other job runs 3.12 or newer, whose grammar (PEP 701 f-strings)
-      # accepts code that 3.11, the oldest Python python/pyproject.toml allows,
-      # cannot import.
-      - uses: actions/setup-python@v5
-        id: oldest-python
-        with:
-          python-version: "3.11"
-      - name: pythonlib compiles on its oldest Python
-        run: ${{ steps.oldest-python.outputs.python-path }} -m compileall -q python/src
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -382,166 +382,11 @@ jobs:
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
-  pythonlib:
-    name: pythonlib
-    # Tier 1. Waits on the static checks so an obvious mistake costs seconds.
-    needs: [resolve, static]
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
-          # The geoip extra: python/tests/test_geoip_sources.py downloads every GeoIP
-          # source and fails when one stops publishing, which gates releases.
-          pip install -r ci/requirements.txt pytest -e 'python[geoip]'
-      - uses: ./.github/actions/fpgen-model
-      - name: Run
-        # pythonlib resolves the published release through the GitHub API
-        # (pkgman.py honours GITHUB_TOKEN). Unauthenticated, a runner shares the
-        # 60-requests-an-hour anonymous quota for its whole IP range and the job
-        # fails on `403 rate limit exceeded` having tested nothing.
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 -m ci.run_pythonlib
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: results-pythonlib
-          path: .ci-work/results/
-          include-hidden-files: true
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
-  typescript:
-    name: typescript
-    # Tier 1, beside pythonlib. The npm package's type check, lint and vitest
-    # suite, including the golden tests that hold it to pythonlib's output byte
-    # for byte -- so a pythonlib change that typescript/ does not mirror fails
-    # here, in a minute, not after the build.
-    needs: [resolve, static]
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    env:
-      # The fpgen model the TS port downloads (sha256-pinned by
-      # python/src/camoufox/fpgen-model.json). Kept in the workspace so it can be cached.
-      CAMOUFOX_FPGEN_DATA: ${{ github.workspace }}/.ci-work/fpgen
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-      - uses: actions/setup-python@v5
-        with:
-          # Not PYTHON_VERSION: the golden fixtures are regenerated from this
-          # interpreter, and pycompat.ts's pySum() reproduces sum() as 3.14
-          # computes it (3.12/3.13 round mixed int/float sums differently in
-          # the last bit).
-          python-version: "3.14"
-      - run: |
-          # A venv at the repo root: tests/golden-setup.ts records the golden
-          # fixtures from its pythonlib before the suite runs.
-          python3 -m venv .venv
-          .venv/bin/pip install -r ci/requirements.txt -e python
-      - uses: ./.github/actions/fpgen-model
-        with:
-          python: .venv/bin/python
-      - name: Test prerequisites
-        # Everything tests/prereq.ts may ask for. In CI a missing prerequisite
-        # FAILS its tests rather than skipping them, so this list is the job's
-        # contract. xvfb: the virtual-display lifecycle.
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends xvfb
-      - uses: pnpm/action-setup@v4
-        with:
-          package_json_file: typescript/package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-          cache-dependency-path: typescript/pnpm-lock.yaml
-      - uses: actions/cache@v4
-        with:
-          path: .ci-work/fpgen
-          key: fpgen-model-${{ hashFiles('python/src/camoufox/fpgen-model.json') }}
-      - name: Run
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: .venv/bin/python -m ci.run_typescript
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: results-typescript
-          path: .ci-work/results/
-          include-hidden-files: true
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
-  install:
-    name: Install from the packages
-    # Tier 3a. Every other suite runs from the source tree; this one installs
-    # the packed pythonlib and npm package into clean environments and runs the
-    # real `camoufox fetch`, with TMPDIR on its own tmpfs so a rename from the
-    # temporary directory into the cache fails here as it fails for users
-    # (EXDEV). Each installed package then launches the browser it fetched and
-    # the browser under test, clicks and types on a local page, and checks
-    # what the page saw, so it waits for the latter. See ci/run_install.py.
-    needs: [resolve, static, build, fetch-browser]
-    if: always() && (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-      - uses: ./.github/actions/prepare-browser
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - uses: pnpm/action-setup@v4
-        with:
-          package_json_file: typescript/package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-          cache-dependency-path: typescript/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-        working-directory: typescript
-      - name: A temporary directory on its own filesystem
-        run: |
-          sudo mkdir -p /mnt/install-tmp
-          sudo mount -t tmpfs -o size=4g,mode=1777 tmpfs /mnt/install-tmp
-      - name: Run
-        # Both launchers resolve the release through the GitHub API; an
-        # anonymous runner shares a 60-an-hour quota for its IP range.
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        # Pinned like a published package: to the release built from these
-        # browser sources when there is one, else the newest release.
-        run: |
-          python3 -m ci.run_install --tmpdir /mnt/install-tmp \
-            --browser-tag "${{ needs.resolve.outputs.browser_tag }}" --browser "$CAMOUFOX_BINARY"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: results-install
-          path: .ci-work/results/
-          include-hidden-files: true
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
   build:
     name: Build (linux x86_64)
-    # Tier 2. Nothing gets compiled until the cheap tiers are green -- this is
+    # Tier 1. Nothing gets compiled until the cheap tiers are green -- this is
     # over an hour cold, and a lint failure should never cost that.
-    needs: [resolve, static, pythonlib]
+    needs: [resolve, static]
     if: needs.resolve.outputs.browser_changed == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 330
@@ -750,13 +595,13 @@ jobs:
   # ---------------------------------------------------------------------------
   preflight:
     name: Preflight (${{ matrix.target }} ${{ matrix.arch }})
-    # Tier 2, beside the build. A release builds five targets no pull request
+    # Tier 1, beside the build. A release builds five targets no pull request
     # does, and each used to be compiled for the first time by the release.
     # This runs the release's own steps for each of them up to the compile --
     # the same packages, `make set-target`, configure, and the export tiers --
     # then compiles the object of every source file a patch or an addition
     # touches (browser/scripts/preflight.py). It does not link or package.
-    needs: [resolve, static, pythonlib]
+    needs: [resolve, static]
     if: needs.resolve.outputs.browser_changed == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 150
@@ -836,11 +681,12 @@ jobs:
   # ---------------------------------------------------------------------------
   fetch-browser:
     name: Fetch the released browser
-    # The other half of tier 2. A driver-only change has nothing new to compile,
-    # so it is tested against the build its users are actually running. Uploads
+    # The other half of tier 1. A change that leaves the browser's sources alone
+    # has nothing new to compile, so it is tested against the build its users
+    # are actually running. Uploads
     # the same artifact name as `build`, so every downstream job is identical
     # whichever way the browser arrived.
-    needs: [resolve, static, pythonlib]
+    needs: [resolve, static]
     if: needs.resolve.outputs.browser_changed == 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -853,23 +699,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
-          pip install -r ci/requirements.txt -e python
+      - run: pip install -r ci/requirements.txt
+      - uses: ./.github/actions/driver
       - uses: ./.github/actions/fpgen-model
 
       - name: Download
-        # Same GitHub API path as the pythonlib job above, and the same anonymous
-        # rate limit if the token is missing.
+        # The driver resolves the release through the GitHub API (pkgman.py
+        # honours GITHUB_TOKEN); an anonymous runner shares a 60-an-hour quota
+        # for its whole IP range.
         env:
           GITHUB_TOKEN: ${{ github.token }}
           CAMOUFOX_UBO: ${{ needs.resolve.outputs.ubo }}
         run: |
           set -euo pipefail
           # The release built from this tree's sources, installed the way a
-          # released library installs its paired browser: stamp the pin, fetch.
-          python3 -m ci.release stamp --browser-tag "${{ needs.resolve.outputs.browser_tag }}" \
-            --py-version "$(sed -n 's/^version = "\(.*\)"/\1/p' python/pyproject.toml)" \
-            --npm-version "$(python3 -c "import json; print(json.load(open('typescript/package.json'))['version'])")"
+          # released driver installs its paired browser: pin the installed
+          # driver to it, then fetch.
+          python3 -m ci.release stamp --browser-tag "${{ needs.resolve.outputs.browser_tag }}"
           python -m camoufox fetch
           # The ACTIVE build's directory, resolved the way the launcher resolves
           # it. `camoufox path` prints the cache root, and multiversion installs
@@ -913,7 +759,7 @@ jobs:
   # ---------------------------------------------------------------------------
   playwright:
     name: Playwright ${{ matrix.shard }}
-    # Tier 3b. Gated on 3a: a browser that fails its patch guards is broken, and
+    # Tier 2b. Gated on 2a: a browser that fails its patch guards is broken, and
     # six shards would take forty minutes to reach the same conclusion.
     needs: [resolve, build, fetch-browser, patch-guards, build-tester]
     if: always() && needs.patch-guards.result == 'success' && needs.build-tester.result == 'success'
@@ -968,8 +814,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   patch-guards:
-    # Tier 3a: the cheap checks on a fresh browser. If these fail the browser is
-    # broken in an obvious way and tier 3b would only say so more slowly.
+    # Tier 2a: the cheap checks on a fresh browser. If these fail the browser is
+    # broken in an obvious way and tier 2b would only say so more slowly.
     #
     # Whether the patches APPLY is the build's job; these check that what they
     # do still works. One leg per kind of guarantee (ci/run_patch_guards.py
@@ -998,8 +844,7 @@ jobs:
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
-          pip install -e python
+      - uses: ./.github/actions/driver
       - uses: ./.github/actions/fpgen-model
       # Fonts and properties.json are staged into the artifact by the build job;
       # `make stage-fonts` here would find no source tree and do nothing.
@@ -1038,8 +883,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   build-tester:
-    # Tier 3a: the cheap checks on a fresh browser. If these fail the browser is
-    # broken in an obvious way and tier 3b would only say so more slowly.
+    # Tier 2a: the cheap checks on a fresh browser. If these fail the browser is
+    # broken in an obvious way and tier 2b would only say so more slowly.
     if: always() && (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
     name: build-tester
     needs: [resolve, build, fetch-browser]
@@ -1054,17 +899,16 @@ jobs:
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - uses: ./.github/actions/driver
       - run: |
           cd browser/tests/build-tester && npm install && pip install -r requirements.txt
-      # build-tester installs pythonlib through its own requirements.txt
-      # (`-e ../../../python`), and still needs the pin before fpgen loads
-      # (observed downloading the April-2025 model in run 36050915401).
+      # The driver needs the model pin before fpgen loads (observed downloading
+      # the April-2025 model in run 36050915401).
       - uses: ./.github/actions/fpgen-model
       - name: Verify the bundled fonts match fonts.json
         # The release runs the full check before it builds. This quick one, on
         # the fonts the artifact carries, fails the pull request that breaks it.
         run: |
-          pip install -e python
           python3 browser/scripts/verify-fonts.py --quick --bundle "$(dirname "$CAMOUFOX_BINARY")"
       - run: xvfb-run -a python3 -m ci.run_build_tester --binary "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
@@ -1103,8 +947,7 @@ jobs:
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
-          pip install -e python
+      - uses: ./.github/actions/driver
       - uses: ./.github/actions/fpgen-model
       - name: Run
         # Launches browsers, kills them, and proves nothing survived -- the
@@ -1137,63 +980,6 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  typescript-browser:
-    name: typescript (browser)
-    # Tier 3a. Launches the browser under test through the TS API -- headless,
-    # persistent context, and launchServer -- and checks that a page sees the
-    # same identity pythonlib's launch of it shows.
-    needs: [resolve, build, fetch-browser, typescript]
-    if: >-
-      always() && needs.typescript.result == 'success' &&
-      (needs.build.result == 'success' || needs.fetch-browser.result == 'success')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    env:
-      CAMOUFOX_FPGEN_DATA: ${{ github.workspace }}/.ci-work/fpgen
-      # The browser under test is the build job's unpackaged dist/bin, which
-      # packages en-US only: browser/scripts/package.py adds the langpacks, and CI never
-      # runs it. A de-DE/fr-FR identity therefore presents en-US here though a
-      # packaged release presents de-DE. The e2e locale assertions skip on that
-      # (named) gap; everything else in the page-vs-config checks still runs.
-      # Remove this once the test artifact carries the langpacks.
-      CAMOUFOX_TEST_ALLOW_MISSING: packaged-locales
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-      - uses: ./.github/actions/prepare-browser
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
-          pip install -e python
-      - uses: ./.github/actions/fpgen-model
-      - uses: pnpm/action-setup@v4
-        with:
-          package_json_file: typescript/package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-          cache-dependency-path: typescript/pnpm-lock.yaml
-      - uses: actions/cache@v4
-        with:
-          path: .ci-work/fpgen
-          key: fpgen-model-${{ hashFiles('python/src/camoufox/fpgen-model.json') }}
-      - name: Run
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: xvfb-run -a python3 -m ci.run_typescript --browser "$CAMOUFOX_BINARY"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: results-typescript-browser
-          path: .ci-work/results/
-          include-hidden-files: true
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
   growth:
     name: Memory growth ${{ matrix.shard }}
     # Every mechanism is churned twice -- at n and 4n -- to measure whether
@@ -1223,8 +1009,7 @@ jobs:
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
-          pip install -e python
+      - uses: ./.github/actions/driver
       - uses: ./.github/actions/fpgen-model
       - run: xvfb-run -a python3 -m ci.run_native --subset growth --shard "${{ matrix.shard }}" --binary "$CAMOUFOX_BINARY"
       - uses: actions/upload-artifact@v4
@@ -1284,8 +1069,7 @@ jobs:
       - uses: ./.github/actions/prepare-browser
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
-          pip install -e python
+      - uses: ./.github/actions/driver
       - uses: ./.github/actions/fpgen-model
       - name: Run
         # Exits 0 with a SKIP result if sundial itself is unreachable -- the
@@ -1316,8 +1100,8 @@ jobs:
   # ---------------------------------------------------------------------------
   summary:
     name: Summary
-    needs: [resolve, static, pythonlib, typescript, install, build, preflight, fetch-browser, playwright,
-            patch-guards, build-tester, native, typescript-browser, growth, carry-browser, sundial]
+    needs: [resolve, static, build, preflight, fetch-browser, playwright,
+            patch-guards, build-tester, native, growth, carry-browser, sundial]
     if: always() && needs.resolve.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
@@ -1368,7 +1152,7 @@ jobs:
           # summarize report "produced no result file" and fail the gate on
           # every pull request that did not touch the browser. Which is most of
           # them, and exactly the cheap path this pipeline advertises.
-          required="pythonlib typescript install typescript_browser native_rules patch_guards_spoofing patch_guards_automation patch_guards_parity skiplist_audit build_tester playwright native_browser native_growth"
+          required="native_rules patch_guards_spoofing patch_guards_automation patch_guards_parity skiplist_audit build_tester playwright native_browser native_growth"
           if [ "${{ needs.resolve.outputs.browser_changed }}" = "true" ]; then
             required="$required build"
           fi
@@ -1434,8 +1218,8 @@ jobs:
     # that is not `success`, including `skipped`, fails the gate: a suite that
     # did not run has not passed, and silently skipping one is the cheapest way
     # to a green tick.
-    needs: [resolve, static, pythonlib, typescript, install, build, preflight, fetch-browser, playwright,
-            patch-guards, build-tester, native, typescript-browser, growth, carry-browser, sundial, summary]
+    needs: [resolve, static, build, preflight, fetch-browser, playwright,
+            patch-guards, build-tester, native, growth, carry-browser, sundial, summary]
     if: always()
     runs-on: ubuntu-24.04
     permissions:
@@ -1466,9 +1250,8 @@ jobs:
               "carry-browser": not carried,
           }
           if carried:
-              may_skip.update(dict.fromkeys(("static", "pythonlib", "typescript", "install", "playwright",
-                                             "patch-guards", "build-tester", "native", "typescript-browser",
-                                             "growth"), True))
+              may_skip.update(dict.fromkeys(("static", "playwright", "patch-guards", "build-tester",
+                                             "native", "growth"), True))
 
           problems = []
           for name, result in sorted(results.items()):

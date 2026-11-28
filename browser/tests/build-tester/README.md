@@ -2,9 +2,14 @@
 
 Tests a raw Camoufox binary (Firefox) directly against the same antibot-detection checks used in the service tests. Use this to validate a binary before packaging/releasing — it bypasses the Python package entirely.
 
+To test against unreleased driver code, install it into `.venv/` first from a
+[camoucore](https://github.com/CamouBrowser/camoucore) checkout
+(`pip install -e <camoucore>/python/camoucore`); `run_tests.sh` keeps it and
+installs this repository's `camoufox` wrapper on top without dependencies.
+
 ## Prerequisites
 
-- Python 3.10+ (what `python/` requires)
+- Python 3.10+ (what the `camoufox` driver requires)
 - Node.js (for building the TypeScript checks bundle via `esbuild`)
 
 ## Setup
@@ -14,7 +19,7 @@ Tests a raw Camoufox binary (Firefox) directly against the same antibot-detectio
 npm install
 
 # Install Python deps
-pip install -r requirements.txt   # installs -e ../../../python, this tree's package
+pip install -r requirements.txt   # the camoufox driver from PyPI, unless one is installed
 ```
 
 ## Usage
@@ -29,7 +34,7 @@ python scripts/run_tests.py /path/to/camoufox-bin/camoufox
 ```
 
 `./run_tests.sh <binary_path> [options]` does the setup for you: it installs the
-npm dependencies and creates `.venv/` with this tree's `python/` package on first
+npm dependencies and creates `.venv/` with the `camoufox` driver on first
 run, then calls `run_tests.py`. It forwards every option below except `--json`.
 
 In CI the suite runs through `python3 -m ci.run_build_tester --binary <path>`

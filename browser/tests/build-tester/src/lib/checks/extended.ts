@@ -1120,7 +1120,7 @@ export async function runExtendedChecks(): Promise<
 
     // hardwareConcurrency should be a common value. 18 and 22 are real:
     // Intel Meteor Lake laptops (Core Ultra 5 125H = 18 threads, Core Ultra 7
-    // 155H = 22), and both are in the recorded presets. Every value pythonlib
+    // 155H = 22), and both are in the recorded presets. Every value the driver
     // can present must be here -- ci/tests/test_ci.py checks it.
     result.trashDetection.plausibleHWC = (() => {
       const hwc = navigator.hardwareConcurrency;

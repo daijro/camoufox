@@ -1,13 +1,14 @@
 name: Install the fpgen model
 description: >-
-  Install the fpgen model pinned by python/src/camoufox/fpgen-model.json, from
-  an archive cached across runs, so a job does not depend on GitHub serving the
-  release (a 504 there failed pythonlib and skipped every browser job). The
-  archive is checked against the pin whether it was cached or downloaded.
+  Install the fpgen model pinned by the installed driver's fpgen-model.json
+  (it ships in camoucore, CamouBrowser/camoucore), from an archive cached
+  across runs, so a job does not depend on GitHub serving the release (a 504
+  there once failed the first job and skipped every browser job). The archive
+  is checked against the pin whether it was cached or downloaded.
   Left to itself, fpgen downloads its model on first import with TLS
   verification off and no checksum, and only ever the April-2025 release
-  (python/scripts/pin-fpgen-model.py), so every job that installs pythonlib
-  runs this before anything imports fpgen.
+  (camoucore.fpgen_model), so every job that installs the driver (the
+  driver action) runs this before anything imports fpgen.
 
 inputs:
   python:
@@ -18,11 +19,22 @@ inputs:
 runs:
   using: composite
   steps:
+    # hashFiles() only sees the workspace, and the pin lives in the installed
+    # driver, so the key is the pin's own hash.
+    - id: pin
+      shell: bash
+      run: >-
+        echo "hash=$(${{ inputs.python }} -c "import hashlib;
+        from importlib.resources import files;
+        print(hashlib.sha256((files('camoucore') / 'fpgen-model.json').read_bytes()).hexdigest())")"
+        >> "$GITHUB_OUTPUT"
     - uses: actions/cache@v4
       with:
         path: .ci-work/fpgen-model.zip
-        key: fpgen-archive-${{ hashFiles('python/src/camoufox/fpgen-model.json') }}
+        key: fpgen-archive-${{ steps.pin.outputs.hash }}
     - shell: bash
       run: >-
-        ${{ inputs.python }} "$GITHUB_WORKSPACE/python/scripts/pin-fpgen-model.py"
-        --archive "$GITHUB_WORKSPACE/.ci-work/fpgen-model.zip"
+        ${{ inputs.python }} -c "import sys; from pathlib import Path;
+        from camoucore.fpgen_model import ensure_fpgen_model;
+        ensure_fpgen_model(archive=Path(sys.argv[1]))"
+        "$GITHUB_WORKSPACE/.ci-work/fpgen-model.zip"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate python/src/camoufox/font-groups.json from the per-OS font manifest.
+"""Regenerate the camoufox package's font-groups.json from the per-OS font manifest.
 
 The manifest (scripts/data/font-manifests.json) models a real machine's font set
 as ONE OS-version base plus independent additions, and it distinguishes two kinds
@@ -21,15 +21,22 @@ manifest's, and it is why `prob`, `requiresLocale` and `sizes` survive the trip
 choice but to treat every unit as equally likely.
 
 Usage (after the bundle or the manifest changed, and AFTER gen-fonts-json.py):
-    python3 scripts/gen-font-groups.py
+    python3 scripts/gen-font-groups.py [--camoucore DIR]
+
+fonts.json, font-groups.json and font-bases.json are the driver's, in
+https://github.com/CamouBrowser/camoucore: this reads and writes a camoucore
+checkout (--camoucore DIR, $CAMOUCORE_DIR, or ../camoucore beside this
+repository; see _camoufox_package.py). Commit the output there, in a camoucore
+pull request.
 """
 
 import argparse
 import json
 import os
 
+from _camoufox_package import add_camoucore_argument, camoucore_package_dir
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PACKAGE = os.path.join(os.path.dirname(REPO), 'python', 'src', 'camoufox')
 OS_KEYS = ('win', 'mac', 'lin')
 
 
@@ -100,10 +107,16 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--manifest', default=os.path.join(REPO, 'scripts', 'data', 'font-manifests.json'))
-    ap.add_argument('--fonts', default=os.path.join(PACKAGE, 'fonts.json'))
-    ap.add_argument('--out', default=os.path.join(PACKAGE, 'font-groups.json'))
-    ap.add_argument('--out-bases', default=os.path.join(PACKAGE, 'font-bases.json'))
+    add_camoucore_argument(ap)
+    ap.add_argument('--fonts', default=None, help='default: fonts.json in the camoucore checkout')
+    ap.add_argument('--out', default=None, help='default: font-groups.json in the camoucore checkout')
+    ap.add_argument('--out-bases', default=None, help='default: font-bases.json in the camoucore checkout')
     args = ap.parse_args()
+    if None in (args.fonts, args.out, args.out_bases):
+        package = str(camoucore_package_dir())
+        args.fonts = args.fonts or os.path.join(package, 'fonts.json')
+        args.out = args.out or os.path.join(package, 'font-groups.json')
+        args.out_bases = args.out_bases or os.path.join(package, 'font-bases.json')
 
     with open(args.manifest) as fh:
         manifest = json.load(fh)
