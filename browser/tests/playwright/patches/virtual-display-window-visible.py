@@ -58,6 +58,7 @@ setTimeout(() => {
 
 
 def main() -> int:
+    from camoucore.camoufox.product import PRODUCT
     from camoucore.virtdisplay import VirtualDisplay
 
     got, done = {}, threading.Event()
@@ -81,7 +82,7 @@ def main() -> int:
     srv = socketserver.TCPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     profile = tempfile.mkdtemp(prefix="vd-visible-")
-    vd = VirtualDisplay()
+    vd = VirtualDisplay(PRODUCT)
     try:
         env = {k: v for k, v in os.environ.items() if k not in ("WAYLAND_DISPLAY", "WAYLAND_SOCKET")}
         env["DISPLAY"] = vd.get()
