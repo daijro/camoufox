@@ -4,11 +4,14 @@
 /browser/mozilla-unified
 dist/
 bin/
+# The release wrapper's packages (python -m build / npm pack at the root)
+/python-dist/
+/npm-dist/
+/camoufox-*.tgz
+*.egg-info/
 
 
 # Internal testing
-python/test*
-!python/tests/
 /browser/bundle/fonts/extra
 
 # The font bundle is a release asset, not repo content: ~2.1 GB extracted,
@@ -21,7 +24,6 @@ python/test*
 /browser/bundle/fonts-bundle-*.tar.xz
 /browser/bundle/*.tar.xz.part
 /browser/bundle/langpacks/
-python/*.png
 browser/scripts/*.png
 browser/scripts/test*
 .vscode

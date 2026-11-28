@@ -1,0 +1,11 @@
+# A CamouBrowser/camoucore git ref (branch, tag or commit). While this file
+# names one, CI installs camoucore from that ref with camoucore's
+# scripts/install-driver.sh (.github/actions/driver), and the `camoufox`
+# wrapper on top of it, instead of the camoucore release the root
+# pyproject.toml / npm/package.json pin; ci/release.py publishes no camoufox
+# wrapper meanwhile (a stable release refuses). Delete this file once that
+# camoucore is released and pinned.
+#
+# one-package: camoucore#13, the one `camoucore` package the wrapper follows;
+# camoucore 0.6.0 is released from it.
+one-package

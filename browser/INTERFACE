@@ -1,0 +1,9 @@
+# The browser interface this tree builds: one integer. Every browser release
+# declares it in its manifest.json (ci/release.py reads it from here), and each
+# driver release accepts browsers from its MIN_INTERFACE up to its INTERFACE
+# (camoufox/__version__.py in https://github.com/CamouBrowser/camoucore).
+#
+# Raise it when a browser change would break released drivers, and ship the
+# browser first, then a driver that speaks it (ci/README.md, "The driver").
+# Releases from before manifests carried the field are interface 1.
+1

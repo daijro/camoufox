@@ -157,7 +157,9 @@ def _git(repo, *args):
 @pytest.fixture
 def library_repo(tmp_path):
     """A repo whose last library release, v0.5.7b1, is tagged on HEAD."""
-    for rel in ("python/src/camoufox/a.py", "docs/a.md", "browser/patches/a.patch", "browser/upstream.sh"):
+    for rel in ("pyproject.toml", "npm/index.js", "npm/package.json", "camoufox/sync_api.py",
+                "camoufox_pin/browser-pin.json", "README.md",
+                "docs/a.md", "browser/patches/a.patch", "browser/upstream.sh"):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text("a\n")
     _git(tmp_path, "init", "-q", "-b", "main")
@@ -169,7 +171,11 @@ def library_repo(tmp_path):
 
 @pytest.mark.parametrize("changed, publish", [
     ("docs/a.md", False),
-    ("python/src/camoufox/a.py", True),
+    ("README.md", False),
+    ("pyproject.toml", True),  # e.g. a new driver pin
+    ("npm/index.js", True),
+    ("npm/package.json", True),
+    ("camoufox/sync_api.py", True),
     ("browser/patches/a.patch", True),  # a new browser means a new pin
 ])
 def test_a_library_prerelease_is_published_only_when_what_it_ships_changed(library_repo, changed, publish):
@@ -222,43 +228,96 @@ def test_the_source_digest_ignores_the_release_number_and_nothing_else(tmp_path)
     assert browser_inputs.source_digest(root) != before
 
 
-def test_stamp_writes_the_pin_and_every_version(tmp_path, monkeypatch):
-    for name, src in [("PIN_FILE", release.PIN_FILE), ("PYPROJECT", release.PYPROJECT),
-                      ("PACKAGE_JSON", release.PACKAGE_JSON), ("TS_VERSION", release.TS_VERSION)]:
-        dst = tmp_path / src.name
-        shutil.copy(src, dst)
-        monkeypatch.setattr(release, name, dst)
-    monkeypatch.setenv("GITHUB_REPOSITORY", "daijro/camoufox")
-
-    release.cmd_stamp(argparse.Namespace(browser_tag="v156.0.1-beta.33",
-                                         py_version="0.5.8b2", npm_version="0.5.8-beta.2"))
-
-    assert json.loads(release.PIN_FILE.read_text()) == {
-        "tag": "v156.0.1-beta.33", "repo": "daijro/camoufox", "repo_name": "Official",
-        "version": "156.0.1", "build": "beta.33",
-    }
-    assert 'version = "0.5.8b2"' in release.PYPROJECT.read_text()
-    assert json.loads(release.PACKAGE_JSON.read_text())["version"] == "0.5.8-beta.2"
-    assert 'LIBRARY_VERSION = "0.5.8-beta.2"' in release.TS_VERSION.read_text()
+def _wrapper(tmp_path):
+    root = tmp_path / "wrapper"
+    for rel in ("pyproject.toml", *release.PIN_PATHS, "npm/package.json"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(release.REPO_ROOT / rel, root / rel)
+    return root
 
 
-def test_the_pin_and_the_launchers_agree_on_its_format(tmp_path, monkeypatch):
-    """What stamp writes is what pythonlib's loader reads."""
-    import sys
+def test_stamp_writes_the_pin_and_every_version(tmp_path):
+    root = _wrapper(tmp_path)
+    release.stamp_checkout("v156.0.1-beta.33", "0.5.8b2", "0.5.8-beta.2", "daijro/camoufox", root)
 
-    sys.path.insert(0, str(release.REPO_ROOT / "python" / "src"))
-    from camoufox.browser_pin import load_pin
+    for rel in release.PIN_PATHS:  # the PyPI package's and the npm package's
+        assert json.loads((root / rel).read_text()) == {
+            "tag": "v156.0.1-beta.33", "repo": "daijro/camoufox", "repo_name": "Official",
+            "version": "156.0.1", "build": "beta.33",
+        }, rel
+    assert 'version = "0.5.8b2"' in (root / "pyproject.toml").read_text()
+    pkg = json.loads((root / "npm/package.json").read_text())
+    assert pkg["version"] == "0.5.8-beta.2"
+    # Only the wrapper's own version moves; the camoucore pin stays exact.
+    assert release.driver_version(root) == release.driver_version()
 
-    monkeypatch.setattr(release, "PIN_FILE", tmp_path / "browser-pin.json")
-    for name in ("PYPROJECT", "PACKAGE_JSON", "TS_VERSION"):
-        dst = tmp_path / getattr(release, name).name
-        shutil.copy(getattr(release, name), dst)
-        monkeypatch.setattr(release, name, dst)
-    release.cmd_stamp(argparse.Namespace(browser_tag="v156.0.1-beta.33",
-                                         py_version="0.5.8", npm_version="0.5.8"))
-    pin = load_pin(release.PIN_FILE)
+
+def test_stamp_takes_both_versions_or_neither():
+    with pytest.raises(SystemExit):
+        release.cmd_stamp(argparse.Namespace(browser_tag="v156.0.1-beta.33", py_version="0.5.8",
+                                             npm_version=None))
+
+
+def test_the_pin_and_the_driver_agree_on_its_format(tmp_path):
+    """What stamp writes is what the installed driver's loader reads."""
+    browser_pin = pytest.importorskip("camoufox.browser_pin")
+    root = _wrapper(tmp_path)
+    release.stamp_checkout("v156.0.1-beta.33", "0.5.8", "0.5.8", "daijro/camoufox", root)
+    pin = browser_pin.load_pin(root / "camoufox_pin" / "browser-pin.json")
     assert (pin.repo_name, pin.version, pin.build, pin.tag) == \
         ("official", "156.0.1", "beta.33", "v156.0.1-beta.33")
+
+
+def test_the_checked_in_wrapper_is_unpinned_and_pins_one_exact_camoucore():
+    for rel in release.PIN_PATHS:
+        assert json.loads((release.REPO_ROOT / rel).read_text()) == {}, f"{rel} is stamped only by a release"
+    assert re.fullmatch(r"\d+\.\d+\.\d+(-beta\.\d+)?", release.driver_version())
+    # Both extras' lines name camoucore itself, not a renamed or second package.
+    pyproject = (release.REPO_ROOT / "pyproject.toml").read_text()
+    assert re.findall(r'"(camoucore[^"=]*)==', pyproject) == ["camoucore", "camoucore[geoip]"]
+
+
+@pytest.mark.parametrize("py, npm, why", [
+    ('"camoucore>=0.6.0"', "0.6.0", "only ==X.Y.Z"),
+    ('"camoucore==0.6.0"', "^0.6.0", "only an exact"),
+    ('"camoucore==0.6.1"', "0.6.0", "pin one version"),
+])
+def test_a_loose_or_split_camoucore_pin_is_refused(tmp_path, py, npm, why):
+    root = _wrapper(tmp_path)
+    text = (root / "pyproject.toml").read_text()
+    (root / "pyproject.toml").write_text(re.sub(r'"camoucore==[^"]+"', py, text, count=1))
+    pkg = json.loads((root / "npm/package.json").read_text())
+    pkg["dependencies"]["camoucore"] = npm
+    (root / "npm/package.json").write_text(json.dumps(pkg))
+    with pytest.raises(ValueError, match=why):
+        release.driver_version(root)
+
+
+def test_the_two_browser_pins_must_agree(tmp_path):
+    root = _wrapper(tmp_path)
+    (root / release.PIN_PATHS[1]).write_text('{"tag": "v1"}\n')
+    with pytest.raises(ValueError, match="differ"):
+        release.driver_version(root)
+
+
+def test_the_npm_wrapper_keeps_playwright_core_a_peer(tmp_path):
+    root = _wrapper(tmp_path)
+    pkg = json.loads((root / "npm/package.json").read_text())
+    del pkg["peerDependencies"]
+    (root / "npm/package.json").write_text(json.dumps(pkg))
+    with pytest.raises(ValueError, match="playwright-core"):
+        release.driver_version(root)
+
+
+def test_no_wrapper_is_published_against_an_unreleased_driver(tmp_path):
+    root = _wrapper(tmp_path)
+    (root / "ci").mkdir()
+    assert release.wrapper_blocker(root, published=lambda v: []) is None
+    assert "not published on npm" in release.wrapper_blocker(root, published=lambda v: ["npm"])
+    (root / "ci" / "driver-ref").write_text("# a comment\nsome-branch\n")
+    assert "ci/driver-ref names camoucore some-branch" in release.wrapper_blocker(root, published=lambda v: [])
+    (root / "ci" / "driver-ref").write_text("# only a comment\n")
+    assert release.wrapper_blocker(root, published=lambda v: []) is None
 
 
 # The jobs each kind of run skips by design, and the jobs it must reach: a cut
@@ -378,22 +437,22 @@ def test_each_registry_is_published_only_when_its_own_package_changed():
                           .read_text(encoding="utf-8"))["jobs"]
     assert "outputs.publish_pypi == 'true'" in jobs["publish-pypi"]["if"]
     assert "outputs.publish_npm == 'true'" in jobs["publish-npm"]["if"]
-    # npm must not depend on PyPI having published: a TypeScript-only change skips PyPI.
+    # npm must not depend on PyPI having published: an npm-only change skips PyPI.
     assert "needs.publish-pypi.result == 'skipped'" in jobs["publish-npm"]["if"]
     steps = jobs["build-library"]["steps"]
     assert any("ci.release lib-diff" in s.get("run", "") for s in steps)
 
 
-def test_the_manifest_declares_the_interface_both_libraries_speak():
-    """Python and TypeScript must refuse the same browsers (#835)."""
+def test_the_manifest_declares_the_interface_browser_INTERFACE_names():
     interface = release.browser_interface()
     assert release.manifest("v1", "d", "0" * 40)["interface"] == interface
-    ts = (release.REPO_ROOT / "typescript" / "src" / "__version__.ts").read_text(encoding="utf-8")
-    assert re.search(rf"^\s*static readonly INTERFACE: number = {interface};$", ts, re.M), "typescript/src/__version__.ts INTERFACE differs"
-    py = (release.REPO_ROOT / "python" / "src" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
-    ts_min = re.search(r"^\s*static readonly MIN_INTERFACE: number = (\d+);$", ts, re.M)
-    py_min = re.search(r"^\s*MIN_INTERFACE = (\d+)$", py, re.M)
-    assert ts_min and py_min and ts_min[1] == py_min[1], "MIN_INTERFACE differs between the libraries"
+
+
+def test_the_installed_driver_accepts_the_interface_this_tree_builds():
+    """A browser whose interface the driver CI tests with refuses is untestable (#835)."""
+    version = pytest.importorskip("camoufox.__version__")
+    c = version.CONSTRAINTS
+    assert c.MIN_INTERFACE <= release.browser_interface() <= c.INTERFACE
 
 
 def test_a_cut_skips_the_tests_main_already_passed():

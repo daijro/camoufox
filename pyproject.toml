@@ -1,0 +1,62 @@
+# The `camoufox` package on PyPI: a release wrapper, not the launcher.
+#
+# The launcher (fingerprints, CLI, MCP server) is camoucore.camoufox, in the
+# one `camoucore` package built from https://github.com/CamouBrowser/camoucore.
+# This package is that launcher under its own name, laid out as camoucore's
+# RELEASING.md, "The wrapper packages", says:
+#
+#   * camoufox/: `import camoufox` re-exports camoucore.camoufox, and one stub
+#     per public submodule replaces itself with camoucore's, so
+#     `camoufox.sync_api is camoucore.camoufox.sync_api`;
+#   * an exact pin of the camoucore release it was tested with, so
+#     `pip install camoufox` gets that release and nothing newer; and
+#   * camoufox_pin/browser-pin.json, the one browser release built from the
+#     same sources as this package. The checked-in copy is `{}` (unpinned);
+#     .github/workflows/release.yml stamps it (ci/release.py stamp).
+#
+# Keep the two camoucore pins below and the one in npm/package.json the same
+# version (ci/release.py checks). Launcher changes go to camoucore, not here.
+#
+# The wrapper is MIT, like camoucore (camoufox/LICENSE); the browser sources in
+# this repository are under the repository's LICENSE (MPL-2.0), and none of
+# them is in this package.
+
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
+name = "camoufox"
+version = "0.5.7"
+description = "Camoufox: the anti-detect Firefox build and its Playwright launcher"
+authors = [{ name = "daijro", email = "daijro.dev@gmail.com" }]
+license = "MIT"
+license-files = ["camoufox/LICENSE"]
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["fingerprint", "browser", "scraping", "firefox", "playwright"]
+classifiers = [
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Browsers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "camoucore==0.6.0",
+]
+
+[project.optional-dependencies]
+geoip = [
+    "camoucore[geoip]==0.6.0",
+]
+
+[project.scripts]
+camoufox = "camoucore.camoufox.__main__:cli"
+
+[project.urls]
+Homepage = "https://camoufox.com/python"
+Repository = "https://github.com/daijro/camoufox"
+Launcher = "https://github.com/CamouBrowser/camoucore"
+
+[tool.poetry]
+packages = [{ include = "camoufox" }, { include = "camoufox_pin" }]
+include = [{ path = "camoufox_pin/browser-pin.json", format = ["sdist", "wheel"] }]

@@ -1,0 +1,132 @@
+name: Install the camoufox driver
+description: >-
+  The one way a job gets the camoufox driver (Python, and npm when asked).
+  The launcher is camoucore.camoufox (npm: camoucore/camoufox) in the one
+  `camoucore` package from CamouBrowser/camoucore; this repository ships the
+  browser and the `camoufox` release wrapper (pyproject.toml, camoufox/ and
+  camoufox_pin/ at its root; npm/), which is that launcher under its own name
+  at one exact camoucore version. The wrapper is always installed from this
+  checkout, so `import camoufox` and the `camoufox` CLI are what users get.
+  By default it brings the exact camoucore release it pins, as
+  `pip install camoufox` and `npm i camoufox` would. If ci/driver-ref holds a
+  camoucore git ref, camoucore is first installed from that ref with
+  camoucore's scripts/install-driver.sh and the wrapper goes on top without
+  its dependencies, so a browser change that needs an unreleased camoucore
+  can be tested before either ships. ci/check_wrapper.py then checks the
+  install against camoucore's wrapper contract. See ci/README.md, "The driver".
+
+  The Python driver goes into a virtualenv made with --system-site-packages
+  (anything the job installed before stays importable), and the venv's bin/ is
+  put first on PATH, so `python3` and `pip` in later steps are that venv's.
+
+inputs:
+  extras:
+    description: Python extras to install, comma separated (empty for none)
+    required: false
+    default: geoip
+  venv:
+    description: Where the Python driver's virtualenv goes (default <runner temp>/camoufox-driver)
+    required: false
+    default: ""
+  npm-dir:
+    description: Where to install the npm package; empty skips npm
+    required: false
+    default: ""
+
+outputs:
+  source:
+    description: "`pinned` (the wrapper's exact camoucore), or the camoucore ref ci/driver-ref named"
+    value: ${{ steps.ref.outputs.source }}
+
+runs:
+  using: composite
+  steps:
+    - id: ref
+      shell: bash
+      env:
+        VENV: ${{ inputs.venv }}
+      run: |
+        ref=""
+        if [ -f "$GITHUB_WORKSPACE/ci/driver-ref" ]; then
+          ref=$(grep -v '^[[:space:]]*#' "$GITHUB_WORKSPACE/ci/driver-ref" | tr -d '[:space:]' || true)
+        fi
+        {
+          echo "ref=$ref"
+          echo "venv=${VENV:-$RUNNER_TEMP/camoufox-driver}"
+          echo "source=${ref:-pinned}"
+        } >> "$GITHUB_OUTPUT"
+        if [ -n "$ref" ]; then
+          echo "::notice::camoufox driver from CamouBrowser/camoucore@$ref (ci/driver-ref)"
+        fi
+
+    - name: Make the driver's virtualenv
+      shell: bash
+      env:
+        VENV: ${{ steps.ref.outputs.venv }}
+      run: |
+        python3 -m venv --system-site-packages "$VENV"
+        echo "$VENV/bin" >> "$GITHUB_PATH"
+        echo "VIRTUAL_ENV=$VENV" >> "$GITHUB_ENV"
+
+    # Default: the wrapper, which pulls the exact camoucore release it pins
+    # from PyPI / npm -- what users install.
+    - name: Install the wrapper and the camoucore it pins
+      if: steps.ref.outputs.ref == ''
+      shell: bash
+      env:
+        VENV: ${{ steps.ref.outputs.venv }}
+        EXTRAS: ${{ inputs.extras }}
+        NPM_DIR: ${{ inputs.npm-dir }}
+      run: |
+        spec="$GITHUB_WORKSPACE"
+        if [ -n "$EXTRAS" ]; then spec="${GITHUB_WORKSPACE}[${EXTRAS}]"; fi
+        "$VENV/bin/python" -m pip install --upgrade "$spec"
+        if [ -n "$NPM_DIR" ]; then
+          mkdir -p "$NPM_DIR"
+          pack=$(mktemp -d)
+          (cd "$GITHUB_WORKSPACE/npm" && npm pack --ignore-scripts --pack-destination "$pack" >/dev/null)
+          npm i --prefix "$NPM_DIR" --no-audit --no-fund "$pack"/camoufox-*.tgz
+        fi
+
+    # Override: camoucore from the ref in ci/driver-ref, the wrapper on top.
+    - name: Check out camoucore
+      if: steps.ref.outputs.ref != ''
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        repository: CamouBrowser/camoucore
+        ref: ${{ steps.ref.outputs.ref }}
+        path: .ci-work/camoucore
+        persist-credentials: false
+    - name: Install camoucore from the ref, then the wrapper
+      if: steps.ref.outputs.ref != ''
+      shell: bash
+      env:
+        VENV: ${{ steps.ref.outputs.venv }}
+        NPM_DIR: ${{ inputs.npm-dir }}
+        EXTRAS: ${{ inputs.extras }}
+      run: |
+        "$GITHUB_WORKSPACE/.ci-work/camoucore/scripts/install-driver.sh" camoufox "$VENV" "$NPM_DIR" "$EXTRAS"
+        # --no-deps: the camoucore just installed stands in for the release
+        # the wrapper pins.
+        "$VENV/bin/python" -m pip install --no-deps "$GITHUB_WORKSPACE"
+        if [ -n "$NPM_DIR" ]; then
+          pack=$(mktemp -d)
+          (cd "$GITHUB_WORKSPACE/npm" && npm pack --ignore-scripts --pack-destination "$pack" >/dev/null)
+          # camoucore is already in NPM_DIR at the ref's version, which
+          # satisfies the wrapper's pin while the two agree.
+          npm i --prefix "$NPM_DIR" --no-audit --no-fund "$pack"/camoufox-*.tgz
+        fi
+
+    - name: Check the wrapper against camoucore's contract
+      shell: bash
+      env:
+        VENV: ${{ steps.ref.outputs.venv }}
+        NPM_DIR: ${{ inputs.npm-dir }}
+        REF: ${{ steps.ref.outputs.ref }}
+      run: |
+        args=()
+        if [ -z "$REF" ]; then args+=(--exact-camoucore); fi
+        if [ -n "$NPM_DIR" ]; then args+=(--npm-dir "$NPM_DIR"); fi
+        # Out of the checkout, whose camoufox/ would shadow the installed one.
+        cd "$RUNNER_TEMP"
+        "$VENV/bin/python" "$GITHUB_WORKSPACE/ci/check_wrapper.py" "${args[@]}"
