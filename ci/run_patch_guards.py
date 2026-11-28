@@ -59,6 +59,7 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "startup-size-frame-extents",
         "system-font-alias-stall",
         "system-ui-font-spoofing",
+        "timezone-local-time",
         "timezone-stable",
         "touchscreen-digitizer",
         "webgl-live-state",

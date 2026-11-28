@@ -1,13 +1,62 @@
+diff --git a/dom/base/Document.cpp b/dom/base/Document.cpp
+index 5deb11fe65..11effdcb40 100644
+--- a/dom/base/Document.cpp
++++ b/dom/base/Document.cpp
+@@ -30,7 +30,9 @@
+ #include "PseudoStyleType.h"
+ #include "SharedLcpMarkerState.h"
+ #include "StorageAccessPermissionRequest.h"
++#include "RoverfoxStorageManager.h"
+ #include "ThirdPartyUtil.h"
++#include "TimezoneManager.h"
+ #include "domstubs.h"
+ #include "gfxPlatform.h"
+ #include "imgIContainer.h"
+@@ -4606,10 +4608,15 @@ void Document::SetDocumentURI(nsIURI* aURI) {
+ }
+ 
+ static void GetFormattedTimeString(PRTime aTime, bool aUniversal,
++                                   uint32_t aUserContextId,
+                                    nsAString& aFormattedTimeString) {
+   PRExplodedTime prtime;
+-  PR_ExplodeTime(aTime, aUniversal ? PR_GMTParameters : PR_LocalTimeParameters,
+-                 &prtime);
++  if (aUniversal || !TimezoneManager::ExplodeLocalTime(aTime, aUserContextId,
++                                                        &prtime)) {
++    PR_ExplodeTime(aTime,
++                   aUniversal ? PR_GMTParameters : PR_LocalTimeParameters,
++                   &prtime);
++  }
+   // "MM/DD/YYYY hh:mm:ss"
+   char formatedTime[24];
+   if (SprintfLiteral(formatedTime, "%02d/%02d/%04d %02d:%02d:%02d",
+@@ -4629,6 +4636,7 @@ void Document::GetLastModified(nsAString& aLastModified) const {
+   } else {
+     GetFormattedTimeString(PR_Now(),
+                            ShouldResistFingerprinting(RFPTarget::JSDateTimeUTC),
++                           RoverfoxStorageManager::UserContextId(this),
+                            aLastModified);
+   }
+ }
+@@ -12247,6 +12255,7 @@ void Document::RetrieveRelevantHeaders(nsIChannel* aChannel) {
+   if (modDate != 0) {
+     GetFormattedTimeString(modDate,
+                            ShouldResistFingerprinting(RFPTarget::JSDateTimeUTC),
++                           RoverfoxStorageManager::UserContextId(this),
+                            mLastModified);
+   }
+ }
 diff --git a/dom/base/TimezoneManager.cpp b/dom/base/TimezoneManager.cpp
 new file mode 100644
-index 0000000000..6e63ce3bb6
+index 0000000000..8c6b94bfd2
 --- /dev/null
 +++ b/dom/base/TimezoneManager.cpp
-@@ -0,0 +1,60 @@
+@@ -0,0 +1,91 @@
 +#include "TimezoneManager.h"
 +#include "RoverfoxStorageManager.h"
 +#include "MaskConfig.hpp"
 +#include "mozilla/StaticMutex.h"
++#include "mozilla/intl/TimeZone.h"
 +
 +namespace mozilla {
 +namespace dom {
@@ -32,6 +81,36 @@ index 0000000000..6e63ce3bb6
 +    return true;
 +  }
 +  return false;
++}
++
++/* static */ bool TimezoneManager::ExplodeLocalTime(PRTime aTime,
++                                                    uint32_t userContextId,
++                                                    PRExplodedTime* aOut) {
++  nsAutoString zone;
++  if (!GetTimezone(userContextId, zone)) {
++    return false;
++  }
++  const NS_ConvertUTF16toUTF8 name(zone);
++  auto created =
++      intl::TimeZone::TryCreate(Some(Span(name.get(), name.Length())));
++  if (created.isErr()) {
++    MOZ_CRASH_UNSAFE_PRINTF("timezone_invalid: ICU cannot load the zone '%s'",
++                            name.get());
++  }
++  const UniquePtr<intl::TimeZone> tz = created.unwrap();
++  const int64_t utcMs = aTime / PR_USEC_PER_MSEC;
++  auto offsetMs = tz->GetOffsetMs(utcMs);
++  auto rawMs = tz->GetRawOffsetMs();
++  if (offsetMs.isErr() || rawMs.isErr()) {
++    MOZ_CRASH_UNSAFE_PRINTF("timezone_invalid: ICU has no offset for '%s'",
++                            name.get());
++  }
++  // The wall clock is the instant shifted by the zone's offset, read as UTC.
++  PR_ExplodeTime(aTime + int64_t(offsetMs.unwrap()) * PR_USEC_PER_MSEC,
++                 PR_GMTParameters, aOut);
++  aOut->tm_params.tp_gmt_offset = rawMs.unwrap() / 1000;
++  aOut->tm_params.tp_dst_offset = (offsetMs.unwrap() - rawMs.unwrap()) / 1000;
++  return true;
 +}
 +
 +static StaticMutex sProcessTimezoneMutex;
@@ -66,14 +145,15 @@ index 0000000000..6e63ce3bb6
 +}  // namespace mozilla
 diff --git a/dom/base/TimezoneManager.h b/dom/base/TimezoneManager.h
 new file mode 100644
-index 0000000000..34c35cfd76
+index 0000000000..1fcad9fa04
 --- /dev/null
 +++ b/dom/base/TimezoneManager.h
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,39 @@
 +#ifndef mozilla_dom_TimezoneManager_h
 +#define mozilla_dom_TimezoneManager_h
 +
 +#include "nsString.h"
++#include "prtime.h"
 +
 +struct JSContext;
 +class JSObject;
@@ -85,6 +165,14 @@ index 0000000000..34c35cfd76
 + public:
 +  static void SetTimezone(uint32_t userContextId, const nsAString& timezone);
 +  static bool GetTimezone(uint32_t userContextId, nsAString& outTimezone);
++
++  // The wall clock of the claimed zone at aTime, as PR_ExplodeTime(aTime,
++  // PR_LocalTimeParameters) would give it for the host's zone, with the offset
++  // ICU has for that instant. False when the context claims no zone: the
++  // caller then keeps its stock call. A zone ICU cannot load crashes with
++  // "timezone_invalid" and the zone, never answers in the host's zone.
++  static bool ExplodeLocalTime(PRTime aTime, uint32_t userContextId,
++                               PRExplodedTime* aOut);
 +
 +  // The zone JS::SetTimeZoneOverride last applied process-wide. A realm already
 +  // reports it without a per-realm override, which is not free: setting one
@@ -302,6 +390,46 @@ index f8563ba6eb..ad144a8d36 100644
    JS_FireOnNewGlobalObject(aCx, global);
  
    return data->mScope;
+diff --git a/dom/xslt/xslt/txEXSLTFunctions.cpp b/dom/xslt/xslt/txEXSLTFunctions.cpp
+index ba2f3c2e60..b2cad84d03 100644
+--- a/dom/xslt/xslt/txEXSLTFunctions.cpp
++++ b/dom/xslt/xslt/txEXSLTFunctions.cpp
+@@ -2,6 +2,8 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
++#include "RoverfoxStorageManager.h"
++#include "TimezoneManager.h"
+ #include "mozilla/EnumeratedArray.h"
+ #include "mozilla/EnumeratedRange.h"
+ #include "mozilla/FloatingPoint.h"
+@@ -584,10 +586,8 @@ nsresult txEXSLTFunctionCall::evaluate(txIEvalContext* aContext,
+       Document* sourceDoc = getSourceDocument(aContext);
+       NS_ENSURE_STATE(sourceDoc);
+ 
+-      PRTimeParamFn timezone =
+-          sourceDoc->ShouldResistFingerprinting(RFPTarget::JSDateTimeUTC)
+-              ? PR_GMTParameters
+-              : PR_LocalTimeParameters;
++      const bool universal =
++          sourceDoc->ShouldResistFingerprinting(RFPTarget::JSDateTimeUTC);
+ 
+       PRTime time =
+           sourceDoc->ShouldResistFingerprinting(RFPTarget::ReduceTimerPrecision)
+@@ -596,7 +596,12 @@ nsresult txEXSLTFunctionCall::evaluate(txIEvalContext* aContext,
+                     RTPCallerType::ResistFingerprinting) *
+                     PR_USEC_PER_SEC
+               : PR_Now();
+-      PR_ExplodeTime(time, timezone, &prtime);
++      if (universal || !mozilla::dom::TimezoneManager::ExplodeLocalTime(
++                           time, mozilla::dom::RoverfoxStorageManager::UserContextId(sourceDoc),
++                           &prtime)) {
++        PR_ExplodeTime(time, universal ? PR_GMTParameters : PR_LocalTimeParameters,
++                       &prtime);
++      }
+ 
+       int32_t offset =
+           (prtime.tm_params.tp_gmt_offset + prtime.tm_params.tp_dst_offset) /
 diff --git a/js/public/Date.h b/js/public/Date.h
 index 55c8db661d..8472a8d11a 100644
 --- a/js/public/Date.h
