@@ -1,6 +1,7 @@
 r"""
-A closed page is freed while its HTTP connections stay open (#1107), and while
-a request it made is suspended.
+A closed page is freed while its HTTP connections stay open (#1107), while a
+request it made is suspended, and after a request it made was redirected to a
+non-HTTP channel (#1060).
 
 Juggler sets each NetworkRequest as its channel's notificationCallbacks, and
 Gecko keeps a connection's callbacks until the connection closes. A finished
@@ -15,9 +16,18 @@ uBlock Origin's is while it loads its lists -- does not stop until it is
 resumed. CI caught it about once in 60 runs: the page's favicon, aborted and
 still pending, held the page. A destroyed page's requests now drop it too.
 
+A request redirected to a non-HTTP channel -- a moz-extension:// resource, as
+uBlock Origin's surrogate scripts and Firefox's SmartBlock shims are -- ends on
+that channel, so onStopRequest returned before Juggler stopped tracking it: the
+request, with its channel and listener, stayed alive for the browser's lifetime.
+It is now released there, as in Playwright's Juggler (microsoft/playwright#44301).
+
 The guard loads a page from a local HTTP/2 server and closes it, then loads a
-second page, suspends one of its requests, and closes that, and checks through
-Marionette that garbage collection frees each page's target and PageNetwork.
+second page, suspends one of its requests, and closes that, then loads a page
+whose script Firefox replaces with its Google Analytics shim (tracking
+protection on, the host marked as a tracker), and closes that. It checks
+through Marionette that garbage collection frees each page's target and
+PageNetwork, and Juggler's request for the shimmed script.
 The server is HTTP/2 on this host's own address because that holds the
 callbacks every time; HTTP/1.1, or a loopback address, does not.
 
@@ -37,7 +47,8 @@ SERVER = r"""
 const http2 = require('node:http2'), fs = require('node:fs');
 const [key, cert, host] = process.argv.slice(1);
 const scripts = [...Array(6).keys()].map(i => `<script src="/a${i}.js"></script>`).join('');
-const pages = {'/': `<body>${scripts}</body>`, '/held': '<body><img src="/held.png"></body>'};
+const pages = {'/': `<body>${scripts}</body>`, '/held': '<body><img src="/held.png"></body>',
+               '/shimmed': '<body><script src="https://www.google-analytics.com/analytics.js"></script></body>'};
 const server = http2.createSecureServer({key: fs.readFileSync(key), cert: fs.readFileSync(cert)});
 server.on('stream', (stream, headers) => {
   const page = pages[headers[':path']];
@@ -65,6 +76,25 @@ Services.obs.removeObserver(g.heldObserver, 'http-on-modify-request');
 for (const channel of g.heldChannels) channel.resume();
 return 0;
 """
+# Keeps a weak reference to Juggler's request for the script SmartBlock redirects
+# to its shim.
+WATCH_SHIMMED = """
+const {NetworkObserver} = ChromeUtils.importESModule("resource://gre/modules/juggler/NetworkObserver.js");
+const g = Cu.getGlobalForObject(Services);
+g.shimmedObserver = {observe(channel) {
+  channel.QueryInterface(Ci.nsIHttpChannel);
+  if (channel.URI.host !== 'www.google-analytics.com')
+    return;
+  Services.obs.removeObserver(g.shimmedObserver, 'http-on-modify-request');
+  // Juggler's own observer, registered first, runs after this one.
+  Services.tm.dispatchToMainThread(() => {
+    g.shimmedRequest = new WeakRef(NetworkObserver.instance()._channelToRequest.get(channel));
+  });
+}};
+Services.obs.addObserver(g.shimmedObserver, 'http-on-modify-request');
+return 0;
+"""
+SHIMMED = "return !!Cu.getGlobalForObject(Services).shimmedRequest;"
 PROBE = """
 const {TargetRegistry} = ChromeUtils.importESModule("resource://gre/modules/juggler/TargetRegistry.js");
 const target = TargetRegistry.instance().targets().find(t => t.linkedBrowser().currentURI.spec === arguments[0]);
@@ -76,7 +106,8 @@ COLLECT = "Cu.forceGC(); Cu.forceCC(); Cu.forceShrinkingGC(); return 0;"
 ALIVE = """
 const {TargetRegistry} = ChromeUtils.importESModule("resource://gre/modules/juggler/TargetRegistry.js");
 const p = Cu.getGlobalForObject(TargetRegistry).closedPageProbe;
-return {target: !!p.target.deref(), network: !!p.network.deref()};
+const shimmed = Cu.getGlobalForObject(Services).shimmedRequest;
+return {target: !!p.target.deref(), network: !!p.network.deref(), ...(shimmed && {request: !!shimmed.deref()})};
 """
 # A page that is freed is freed by the first collection; one that is held stays
 # held for as long as its connection or its suspended request, which outlast
@@ -93,7 +124,7 @@ def close_and_collect(m, page, url):
     while True:
         m.js(COLLECT)
         alive = m.js(ALIVE)
-        if not (alive["target"] or alive["network"]) or time.monotonic() > deadline:
+        if not any(alive.values()) or time.monotonic() > deadline:
             return alive
         time.sleep(0.2)
 
@@ -111,9 +142,15 @@ def main() -> int:
     url = f"https://{host}:{server.stdout.readline().strip()}/"
     port = free_port()
     results = {}
+    prefs = {
+        "marionette.port": port,
+        # Tracking protection blocks the host, so SmartBlock replaces its script with a shim.
+        "privacy.trackingprotection.enabled": True,
+        "urlclassifier.trackingTable.testEntries": "www.google-analytics.com",
+    }
     try:
-        with Camoufox(**launch_kwargs(args=marionette_args(), env=marionette_env(), firefox_user_prefs={"marionette.port": port},
-                                      i_know_what_im_doing=True)) as browser:
+        with Camoufox(**launch_kwargs(args=marionette_args(), env=marionette_env(), firefox_user_prefs=prefs,
+                                      main_world_eval=True, i_know_what_im_doing=True)) as browser:
             # One context that outlives the pages, as in a long-running crawler:
             # closing a context closes its connections.
             context = browser.new_context(ignore_https_errors=True)
@@ -134,6 +171,13 @@ def main() -> int:
                     time.sleep(0.1)
                 results["a request suspended"] = close_and_collect(m, page, url + "held")
                 m.js(RESUME)
+
+                m.js(WATCH_SHIMMED)
+                page = context.new_page()
+                page.goto(url + "shimmed", wait_until="load")
+                assert page.evaluate("mw:typeof window.ga") == "function", "the script was not replaced by its shim"
+                assert m.js(SHIMMED), "Juggler's request for the shimmed script was not captured"
+                results["a request redirected to a shim"] = close_and_collect(m, page, url + "shimmed")
             finally:
                 m.close()
             context.close()
@@ -142,14 +186,17 @@ def main() -> int:
 
     failed = False
     for case, alive in results.items():
-        held = alive["target"] or alive["network"]
+        held = any(alive.values())
         failed |= held
-        print(f"  {case}: after close and GC, target alive={alive['target']}, PageNetwork alive={alive['network']}"
-              f"{'  <-- held' if held else ''}")
+        names = {"target": "target", "network": "PageNetwork", "request": "shimmed request"}
+        print(f"  {case}: after close and GC, "
+              + ", ".join(f"{names[k]} alive={v}" for k, v in alive.items())
+              + ("  <-- held" if held else ""))
     if failed:
         print("FAIL: a closed page stays in the parent")
         return 1
-    print("PASS: a closed page is freed while its connections stay open or a request of its is suspended.")
+    print("PASS: a closed page is freed while its connections stay open, a request of its is suspended,"
+          " or a request of its was redirected to a non-HTTP channel.")
     return 0
 
 
