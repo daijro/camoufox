@@ -17,6 +17,7 @@ alias -- fails here, pointing at camoucore.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import PurePosixPath
 from typing import Callable, Iterable, List, Optional
@@ -86,13 +87,45 @@ def violations(paths: Iterable[str], read: Callable[[str], Optional[str]] = _rea
     return [f"{p}: {why}" for p in paths if (why := violation(p, read))]
 
 
+# `from camoufox.<module> import ...` / `import camoufox.<module>` in Python code.
+IMPORT = re.compile(r"^[ \t]*(?:from|import)[ \t]+camoufox\.([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
+
+
+def unaliased_imports(paths: Iterable[str], read: Callable[[str], Optional[str]] = _read) -> List[str]:
+    """Imports of a camoufox.<module> the wrapper has no stub for.
+
+    The wrapper aliases only camoucore.camoufox's public modules; a browser test
+    that imports a camoucore core module (virtdisplay, fpgen_model, ...) under
+    the camoufox name fails at run time, often only on the runner that reaches
+    it, so it fails here instead. Import it from camoucore.
+    """
+    paths = list(paths)
+    aliased = {PurePosixPath(p).stem for p in paths
+               if PurePosixPath(p).parent == PurePosixPath("camoufox") and p.endswith(".py")}
+    found = []
+    for rel in paths:
+        if not rel.endswith(".py") or PurePosixPath(rel).parts[0] not in CODE_ROOTS:
+            continue
+        text = read(rel) or ""
+        for match in IMPORT.finditer(text):
+            if match[1] not in aliased:
+                line = text.count("\n", 0, match.start()) + 1
+                found.append(f"{rel}:{line}: camoufox.{match[1]} is not a camoucore.camoufox module "
+                             f"the wrapper aliases; import it from camoucore")
+    return found
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     del argv
     paths = run(["git", "ls-files"], cwd=REPO_ROOT, check=True).stdout.splitlines()
     found = violations(paths)
+    unaliased = unaliased_imports(paths)
+    for line in unaliased:
+        print(f"::error file={line.split(':', 1)[0]}::{line}")
     if not found:
-        print("no driver code in this repository")
-        return 0
+        if not unaliased:
+            print("no driver code in this repository")
+        return 1 if unaliased else 0
     for line in found:
         print(f"::error file={line.split(':', 1)[0]}::{line}. Driver and launcher changes "
               f"go to {CAMOUCORE} (see CONTRIBUTING.md).")

@@ -2,7 +2,7 @@
 
 import pytest
 
-from ci.check_no_driver import STUB, violation, violations
+from ci.check_no_driver import STUB, unaliased_imports, violation, violations
 
 
 @pytest.mark.parametrize("path", [
@@ -67,3 +67,16 @@ def test_the_checked_in_wrapper_passes():
     tracked = subprocess.run(["git", "ls-files"], cwd=REPO_ROOT, check=True,
                              capture_output=True, text=True).stdout.splitlines()
     assert violations(tracked) == []
+
+
+def test_an_import_of_a_module_the_wrapper_does_not_alias_fails():
+    files = {
+        "camoufox/sync_api.py": STUB.format(module="sync_api"),
+        "browser/tests/a.py": "from camoufox.sync_api import Camoufox\nfrom camoucore.virtdisplay import VirtualDisplay\n",
+        "browser/tests/b.py": "import os\n\n    from camoufox.virtdisplay import VirtualDisplay\n",
+        "ci/c.py": "import camoufox.fpgen_model\n",
+        "browser/tests/d.ts": "import { x } from 'camoufox.virtdisplay'\n",
+    }
+    found = unaliased_imports(files, files.get)
+    assert [f.split(": ")[0] for f in found] == ["browser/tests/b.py:3", "ci/c.py:1"]
+    assert all("import it from camoucore" in f for f in found)

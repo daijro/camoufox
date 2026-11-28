@@ -55,7 +55,10 @@ published there in the one `camoucore` package (PyPI and npm), as
 (Python and TypeScript, fingerprints, the CLI, the MCP server) go to camoucore:
 the static job's `python3 -m ci.check_no_driver` fails a pull request that adds
 `python/`, `typescript/`, a `camoufox/` module that is more than an alias stub,
-or Python or TypeScript outside `browser/`, `ci/` and `.github/`.
+or Python or TypeScript outside `browser/`, `ci/` and `.github/`. It also fails
+a test that imports `camoufox.<module>` for a module the wrapper does not alias:
+core modules such as `virtdisplay`, `fpgen_model` and `_warnings` are
+`camoucore.<module>`.
 
 What this repository still releases is the `camoufox` package on PyPI and npm,
 a **release wrapper** with no launcher code of its own, laid out as camoucore's
@@ -391,7 +394,7 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | `python3 -m ci.release paired` | | The release built from this tree |
 | `python3 -m ci.release driver` | | The `camoucore` version the wrapper pins |
 | `<venv>/bin/python ci/check_wrapper.py [--npm-dir DIR]` | | An installed wrapper is camoucore's launcher (run outside the checkout) |
-| `python3 -m ci.check_no_driver` | | No launcher code in this repository |
+| `python3 -m ci.check_no_driver` | | No launcher code in this repository, and no import of an unaliased `camoufox.<module>` |
 | `python3 browser/scripts/fetch-ubo.py resolve` | | The uBlock Origin release a cut would bundle |
 | `make -C browser stage-ubo` | | Bundle it into your build tree's `dist/bin`, as packaging does |
 | `python3 -m pytest ci/tests -q` | | The pipeline's own tests |

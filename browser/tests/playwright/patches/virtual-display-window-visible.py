@@ -58,7 +58,7 @@ setTimeout(() => {
 
 
 def main() -> int:
-    from camoufox.virtdisplay import VirtualDisplay
+    from camoucore.virtdisplay import VirtualDisplay
 
     got, done = {}, threading.Event()
 

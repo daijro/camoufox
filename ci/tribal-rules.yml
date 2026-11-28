@@ -52,8 +52,8 @@ rules:
       popup-window-size, popup-covered-click,
       startup-size-hold-yields, all at this default.
     expect:
-      module: camoufox.virtdisplay
-      attribute: DEFAULT_SCREEN
+      module: camoucore.camoufox.product
+      attribute: PRODUCT.engine.virtual_screen
       equals: "1x1x24"
 
   - id: virtual-display-size-override-exists
@@ -66,8 +66,8 @@ rules:
       real framebuffer sets CAMOUFOX_VIRTUAL_DISPLAY_SIZE. Removing the hatch
       would turn a settled disagreement back into an open one.
     expect:
-      module: camoufox.virtdisplay
-      attribute: SCREEN_ENV_VAR
+      module: camoucore.virtdisplay
+      attribute: SCREEN_KEY  # PRODUCT.env_var(SCREEN_KEY)
       equals: CAMOUFOX_VIRTUAL_DISPLAY_SIZE
 
   - id: composite-extension-off
@@ -85,8 +85,8 @@ rules:
       longer dangerous, but it is no longer useful either. Off is the
       long-standing default and there is now no reason to move.
     expect:
-      module: camoufox.virtdisplay
-      attribute: COMPOSITE_ENV_VAR
+      module: camoucore.virtdisplay
+      attribute: COMPOSITE_KEY  # PRODUCT.env_var(COMPOSITE_KEY)
       equals: CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE
 
   - id: displayfd-not-lockfile-scan
@@ -104,7 +104,7 @@ rules:
       Xorg takes it through the setuid wrapper too, so it does not use the
       random display number and lock-file wait it was ported from.
     expect:
-      module: camoufox.virtdisplay
+      module: camoucore.virtdisplay
       xvfb_args_contain: "-displayfd"
 
   - id: displayfd-read-timeout
@@ -118,7 +118,7 @@ rules:
       host took up to 8.4 s to report, so ten failed launches that would have
       succeeded.
     expect:
-      module: camoufox.virtdisplay
+      module: camoucore.virtdisplay
       attribute: DISPLAYFD_READ_TIMEOUT_S
       is_positive_number: true
 

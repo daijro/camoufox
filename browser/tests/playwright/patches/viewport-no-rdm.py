@@ -78,7 +78,7 @@ def click_events(page) -> str:
 
 
 def check(os_name: str, binary) -> list:
-    from camoufox._warnings import LeakWarning
+    from camoucore._warnings import LeakWarning
     from camoufox.sync_api import Camoufox
 
     with Camoufox(os=os_name, headless=True, executable_path=str(binary),
