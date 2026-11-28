@@ -8,6 +8,7 @@ import { HIT_TEST_JS, SCROLL_PLAN_JS } from "@jwriter20/myuri";
 import { firefox } from "playwright-core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+	adaptPageFn,
 	attach as attachHumanize,
 	clock,
 	FRAME_ORIGIN,
@@ -63,13 +64,19 @@ function client({
 		if (method === "screenshot") return { binary: "" };
 		if (method !== "evaluateExpression") return {};
 		// The hit test answers null, or why a press would miss.
-		if (params.expression === HIT_TEST)
+		if (
+			params.expression === HIT_TEST ||
+			params.expression === String(adaptPageFn(HIT_TEST_JS))
+		)
 			return {
 				value: serialized(lands ? null : "<div> intercepts pointer events"),
 			};
 		// The field, in view in the top window.
 		if (params.expression === FRAME_ORIGIN) return { value: serialized(null) };
-		if (params.expression === String(SCROLL_PLAN_JS))
+		if (
+			params.expression === String(SCROLL_PLAN_JS) ||
+			params.expression === String(adaptPageFn(SCROLL_PLAN_JS))
+		)
 			return {
 				value: serialized({
 					inView: true,
@@ -292,7 +299,7 @@ describe("myuri on the real client", () => {
 		await frame.click("#a");
 		expect(seen).toHaveLength(1);
 		expect(inBox(seen[0])).toBe(true);
-		expect(calls()).toContain(HIT_TEST);
+		expect(calls()).toContain(String(adaptPageFn(HIT_TEST_JS)));
 		expect(input).toEqual([
 			["mouse.move", ...seen[0]],
 			["mouse.down"],
