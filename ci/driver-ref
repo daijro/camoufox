@@ -8,4 +8,4 @@
 #
 # one-package: camoucore#13, the one `camoucore` package the wrapper follows;
 # camoucore 0.6.0 is released from it.
-one-package
+main
