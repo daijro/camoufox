@@ -41,12 +41,12 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "camoucore==0.6.1",
+    "camoucore==0.6.2",
 ]
 
 [project.optional-dependencies]
 geoip = [
-    "camoucore[geoip]==0.6.1",
+    "camoucore[geoip]==0.6.2",
 ]
 
 [project.scripts]

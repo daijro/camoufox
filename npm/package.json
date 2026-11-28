@@ -25,7 +25,7 @@
     "LICENSE"
   ],
   "dependencies": {
-    "camoucore": "0.6.1"
+    "camoucore": "0.6.2"
   },
   "peerDependencies": {
     "playwright-core": "<1.63"
