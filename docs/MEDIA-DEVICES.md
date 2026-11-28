@@ -1,7 +1,8 @@
 # Media devices
 
 How Camoufox presents `navigator.mediaDevices` (`media-device-spoofing.patch`,
-`python/src/camoufox/media-devices.json`, `draw_media_devices()`).
+the driver's `media-devices.json` and `draw_media_devices()` in
+[camoucore](https://github.com/CamouBrowser/camoucore)).
 
 ## What a page can see
 

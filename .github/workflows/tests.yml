@@ -325,8 +325,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -r ci/requirements.txt pytest
+      - name: No driver code in this repository
+        # The driver lives in CamouBrowser/camoucore; this repository is the
+        # browser and the release wrapper. Fails a pull request that adds
+        # python/, typescript/, pythonlib/ or launcher modules back.
+        run: python3 -m ci.check_no_driver
       - name: The release wrapper pins one exact driver
-        # pyproject.toml and package.json must name the same camoucore-camoufox.
+        # pyproject.toml and npm/package.json must name the same camoucore.
         run: python3 -m ci.release driver
       # The settled-decisions tests and ci/tests read the driver's data files
       # and import camoufox.* to assert against it. No browser involved.

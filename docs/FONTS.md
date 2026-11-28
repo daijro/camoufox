@@ -4,10 +4,11 @@ Camoufox ships its own fonts so that font enumeration and text rendering are a
 property of the *claimed* OS rather than of the host. There are two halves: a
 font bundle (`browser/bundle/fonts/`) and one fontconfig per OS
 (`browser/bundle/fontconfig/<os>/fonts.conf`). The data the launcher draws from
-(`python/src/camoufox/fonts.json`, `font-bases.json`, `font-groups.json` and
-`essential-fonts.json`) is generated against that bundle and must be regenerated
+(`fonts.json`, `font-bases.json`, `font-groups.json` and `essential-fonts.json`
+in the driver's [`camoucore/camoufox/`](https://github.com/CamouBrowser/camoucore/blob/main/python/camoucore/src/camoucore/camoufox), in
+camoucore) is generated against that bundle and must be regenerated
 with it. The marker fonts and Windows 11 marker fonts, in `markerFonts` and
-`windows11MarkerFonts` of `python/src/camoufox/launcher-constants.json`, are
+`windows11MarkerFonts` of the driver's `launcher-constants.json`, are
 kept by hand and must name fonts the bundle has.
 
 ## Getting the bundle
@@ -234,7 +235,7 @@ and `font-hijacker.patch` does not activate the bundle. On a Windows host the
 Win11 marker families are *subtracted* when the host cannot render them, rather
 than added when it can; claiming a marker the host lacks is the leak.
 
-`python/tests/test_font_distribution.py` covers this: base
+The driver's `tests/test_font_distribution.py` covers this: base
 completeness and weights, per-unit probability, bundle atomicity, à-la-carte
 sizing, locale gating, determinism, renderable-only, and that the draw actually
 varies (distinct lists, no single list dominating). Tolerances are binomial, at

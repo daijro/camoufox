@@ -21,8 +21,12 @@ it, so there is one set of rules. Edit them here.
 
 ## Before you write a function
 
-Search for an existing implementation first: `python/src/camoufox/`, `ci/`,
-`browser/scripts/` and `browser/additions/`. If something close
+Search for an existing implementation first: `ci/`, `browser/scripts/` and
+`browser/additions/`, and for launcher code the drivers in
+[CamouBrowser/camoucore](https://github.com/CamouBrowser/camoucore). Launcher changes
+(Python and TypeScript, fingerprints, the CLI, the MCP server) are made there,
+never here: this repository holds the browser patches, the build and the
+release wrapper. If something close
 exists, extend it rather than forking it. Duplicated logic is a serious defect
 here, because the copies drift and a fingerprint built from two drifting copies
 is detectable.
@@ -54,7 +58,7 @@ is in it, and they will not ask what a file was for.
   Fail loudly instead.
 - **Check real data before inventing a value.** Every spoofed value must be
   something a real device reports. Take it from the recorded distributions
-  (fpgen, `python/src/camoufox/*.json`), not from memory.
+  (fpgen, the driver's data files in camoucore), not from memory.
 - **Read the provider's docs** before writing against a third-party API or a
   Firefox internal. Never infer an endpoint, pref or field from memory.
 - **Comments say why, in a sentence or two.** Simple code needs none. A longer
@@ -142,8 +146,8 @@ persist a change there as a patch, never as an edit to that tree.
 | `browser/assets/` | Mozconfigs, README images. |
 | `browser/bundle/` | The per-OS `fontconfig/` files and `FONTS-README.txt`. The fonts are a release asset (`make fonts-extract`), pinned by `browser/scripts/data/font-bundle.json`. |
 | `browser/tests/` | Browser test suites (below): `build-tester/`, `native/`, `service/`, `playwright/`. |
-| `python/` | The `camoufox` PyPI package (`pythonlib`), the reference launcher. It draws identities with [fpgen](https://github.com/scrapfly/fingerprint-generator), checks them with `coherence.py`, and launches the binary. Source in `src/camoufox/`, tests in `tests/`. |
-| `typescript/` | The `camoufox` npm package, a port of the Python launcher. |
+| `browser/INTERFACE` | The launch interface this build speaks. A driver accepts a range of it ([`ci/README.md`](ci/README.md#the-driver)). |
+| `pyproject.toml`, `camoufox/`, `camoufox_pin/`, `npm/` | The `camoufox` release wrapper on PyPI and npm: camoucore's launcher (`camoucore.camoufox`) under the `camoufox` name, one alias stub per module, an exact `camoucore` pin, and the browser pin that `release.yml` stamps. MIT (`camoufox/LICENSE`, `npm/LICENSE`). No launcher code: `ci/check_no_driver.py` fails a PR that adds any, and `ci/check_wrapper.py` checks an install against camoucore ([`ci/README.md`](ci/README.md#the-driver)). |
 | `ci/` | The test pipeline (below). `ci/tribal-rules.yml` holds the settled decisions. |
 | `docs/` | Design notes and maintenance guides. |
 
@@ -209,8 +213,6 @@ change while you work:
 |---|---|
 | Patches, C++, Juggler | `python3 -m ci.run_build_tester --binary <camoufox-bin>` (the anti-detect suite) and `python3 -m ci.run_patch_guards --binary <camoufox-bin>` (one guard per shipped behaviour, in three groups: `--group spoofing|automation|parity`) |
 | Automation behaviour | `make -C browser tests`, the upstream Playwright suite with `ci/skiplist.yml` applied |
-| `python/` | `python3 -m ci.run_pythonlib` |
-| `typescript/` | `python3 -m ci.run_typescript` (add `--browser <camoufox-bin>` for the end-to-end half) |
 | `ci/` itself | `python3 -m pytest ci/tests -q` |
 
 - **`browser/tests/playwright/` is not a fork of Playwright's tests.** It holds
@@ -225,8 +227,11 @@ change while you work:
 
 # Using Camoufox
 
-The package READMEs are the full reference: every launch option, the CLI, and
-examples ([Python](python/README.md), [TypeScript](typescript/README.md)). Every
+The drivers are the `camoufox` packages on PyPI and npm (`pip install
+"camoufox[geoip]"`, `npm i camoufox`), the launcher in the `camoucore`
+package under the `camoufox` name. Its source, issues and docs, the
+full reference for every launch option, the CLI and examples, are in
+[CamouBrowser/camoucore](https://github.com/CamouBrowser/camoucore). Every
 config key and its type is in
 [`browser/settings/properties.json`](browser/settings/properties.json). Keep
 this section in step with the launcher options.

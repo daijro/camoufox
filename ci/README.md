@@ -8,19 +8,15 @@ specific browser version, so there is one meaning of "the tests pass". Every job
 
 ```
 resolve ── static ─────────────── lint, tribal rules, skiplist, self-tests  (seconds)
-             ├─ typescript ────── type check, lint, vitest, golden parity
-             └─ pythonlib ─────── the package's own tests                   (a minute)
-                  └─ build or fetch ─┬─ patch guards × 3 + skiplist audit
-                                     ├─ build-tester ─────── 8 fingerprint profiles
-                                     ├─ typescript-browser ─ the npm launcher end to end
-                                     ├─ install ──────────── packed packages: fetch, launch, click, type
-                                     └─ once guards and build-tester pass:
-                                          ├─ playwright × 6 shards   (upstream suite + our own)
-                                          ├─ native ───────── leaks, contexts, crash recovery
-                                          ├─ sundial ──────── stealth grade
-                                          └─ growth × 7 shards  memory growth, one test per runner
-                                  │
-                               summary ──► one comment on the PR ──► gate: "All tests passed"
+             └─ build or fetch ─┬─ patch guards × 3 + skiplist audit
+                                ├─ build-tester ─────── 8 fingerprint profiles
+                                └─ once guards and build-tester pass:
+                                     ├─ playwright × 6 shards   (upstream suite + our own)
+                                     ├─ native ───────── leaks, contexts, crash recovery
+                                     ├─ sundial ──────── stealth grade
+                                     └─ growth × 7 shards  memory growth, one test per runner
+                             │
+                          summary ──► one comment on the PR ──► gate: "All tests passed"
 ```
 
 A push to `main` whose tree a passing pull request run already tested (nothing
@@ -37,14 +33,10 @@ in full.
 | Job | Runner | What it proves |
 |---|---|---|
 | `static` | `ci.run_native --subset rules`, `pytest ci/tests`, `browser/scripts/check-input-dispatch.py` | Settled decisions still hold, the skiplist is valid, input goes through one chokepoint, the pipeline reports honestly |
-| `pythonlib` | `ci.run_pythonlib` | `python/`'s own tests |
-| `typescript` | `ci.run_typescript` | Type check, lint, vitest, byte-for-byte parity with `python/` |
-| `install` | `ci.run_install` | The packed packages install into clean environments, fetch a real browser, and launch it and the browser under test through the installed package: the User-Agent claims the launched Firefox, the page and the request agree on it, the bundled fonts render, and a click and typed text reach the page as trusted events |
 | `build` / `fetch-browser` | `ci.run_prepare`, `ci.run_build` | The browser under test: built and packaged from this branch by the command a release's build runs, or the published release built from the same sources |
 | `preflight` | `ci.run_prepare`, `ci.run_build --preflight` | Each target only a release builds (linux arm64, windows x86_64 and i686, macos x86_64 and arm64) configures, passes the export tiers, and compiles every source file a patch or an addition touches ([below](#what-a-release-builds)) |
 | `patch-guards` | `ci.run_patch_guards --group spoofing\|automation\|parity`, `ci.run_skiplist_audit` | One guard per shipped behaviour ([`browser/tests/playwright/`](../browser/tests/playwright/README.md)); every skiplist entry still fails |
 | `build-tester` | `ci.run_build_tester` | The raw binary against the anti-detect checks ([README](../browser/tests/build-tester/README.md)) |
-| `typescript-browser` | `ci.run_typescript --browser` | The npm launcher against a real browser |
 | `playwright` | `ci.run_playwright --shard i/6` | Upstream playwright-python's suite, plus [`browser/tests/playwright/camoufox/`](../browser/tests/playwright/camoufox/README.md) |
 | `native` | `ci.run_native --subset browser` | Leaks, context isolation, crash recovery ([below](#camoufoxs-own-suite)) |
 | `growth` | `ci.run_native --subset growth --shard i/7` | Memory growth, one test per runner |
@@ -53,6 +45,75 @@ in full.
 | `summary` | `ci.summarize` | Folds every result into one table and a pull request comment |
 | `gate` | | The required check, **`All tests passed`** |
 
+## The driver
+
+This repository builds the browser. The drivers that launch it, the Python and
+TypeScript launchers, are developed in
+[CamouBrowser/camoucore](https://github.com/CamouBrowser/camoucore) and
+published there in the one `camoucore` package (PyPI and npm), as
+`camoucore.camoufox` (npm: `camoucore/camoufox`). Driver and launcher changes
+(Python and TypeScript, fingerprints, the CLI, the MCP server) go to camoucore:
+the static job's `python3 -m ci.check_no_driver` fails a pull request that adds
+`python/`, `typescript/`, a `camoufox/` module that is more than an alias stub,
+or Python or TypeScript outside `browser/`, `ci/` and `.github/`.
+
+What this repository still releases is the `camoufox` package on PyPI and npm,
+a **release wrapper** with no launcher code of its own, laid out as camoucore's
+[RELEASING.md](https://github.com/CamouBrowser/camoucore/blob/main/RELEASING.md)
+("The wrapper packages") says:
+
+| File | What it is |
+|---|---|
+| [`pyproject.toml`](../pyproject.toml) | `camoufox` on PyPI: depends on `camoucore==X.Y.Z` (and `camoucore[geoip]==X.Y.Z` for the `geoip` extra); the `camoufox` console script is `camoucore.camoufox.__main__:cli` |
+| [`camoufox/`](../camoufox) | `import camoufox` re-exports `camoucore.camoufox`; one stub per public submodule makes `camoufox.<m>` the same module as `camoucore.camoufox.<m>`; `__main__.py` makes `python -m camoufox` the CLI. A new camoucore module needs a stub here (`ci/check_wrapper.py` fails without one) |
+| [`npm/`](../npm) | `camoufox` on npm (packed from `npm/`, so its LICENSE is the wrapper's): depends on `camoucore` `X.Y.Z` with a `playwright-core` peer; `index.js` re-exports `camoucore/camoufox` and the `camoufox` bin imports `camoucore/camoufox/cli.js` |
+| [`camoufox_pin/browser-pin.json`](../camoufox_pin/browser-pin.json) and `npm/camoufox_pin/browser-pin.json` | The browser release this wrapper was tested with, byte-identical copies. `{}` in the checkout; `release.yml` stamps both. The launcher reads it before its own as `importlib.resources.files("camoufox_pin") / "browser-pin.json"` (Python) or `camoufox/camoufox_pin/browser-pin.json` (npm) |
+| `camoufox/LICENSE`, `npm/LICENSE` | MIT, the wrapper's licence (camoucore's too). The browser sources stay under the root [LICENSE](../LICENSE) (MPL-2.0), which neither package ships |
+
+Both manifests must pin the same exact camoucore version, and the two pin
+copies must agree; `python3 -m ci.release driver` prints the version and fails
+otherwise. `ci/check_wrapper.py` checks an installed wrapper against the
+contract (every module aliased, the pin read is the wrapper's, both commands
+run); `.github/actions/driver` and `release.yml` run it. Raising the pin
+is a pull request here, after camoucore has published that version.
+
+Every job that drives the browser installs the driver the same way, through
+[`.github/actions/driver`](../.github/actions/driver/action.yml):
+
+| `ci/driver-ref` | What the jobs install |
+|---|---|
+| missing or empty (the default) | The wrapper from this checkout, `pip install ".[<extras>]"`, which resolves the pinned `camoucore` from PyPI; where a job asks for npm, `npm/` packed and installed with its pinned camoucore |
+| a camoucore branch, tag or commit | That camoucore commit, checked out into `.ci-work/camoucore` and installed by its `scripts/install-driver.sh camoufox <venv> <npm-dir>`, then this checkout's wrapper on top without dependencies (`pip install --no-deps`, and `npm/` packed and installed), so `camoufox` is that commit's launcher with this repository's pin |
+
+The file holds one ref; lines starting with `#` are ignored. Set it on a branch
+that needs unreleased driver code, and empty it again once that driver is
+published and pinned. While it is set, `release.yml` publishes no wrapper (a
+prerelease skips the libraries, a stable tag fails).
+
+The generators that write driver data (`browser/scripts/gen-fonts-json.py`,
+`gen-font-groups.py`) write into a camoucore checkout: `--camoucore <dir>`,
+`CAMOUCORE_DIR`, or a `camoucore` directory next to this checkout. Their output
+lands through a camoucore pull request. The drift checks here
+(`verify-fonts.py`, `ci/tests/test_essential_aliases.py`,
+`test_cpu_estimates.py`) compare the browser with the installed driver.
+
+**The browser ships first, then the driver.** A driver checks the interface a
+browser declares ([`browser/INTERFACE`](../browser/INTERFACE), copied into each
+release's `manifest.json`) and launches only builds inside its own
+`MIN_INTERFACE`..`INTERFACE` range. A change to what the browser reads or
+accepts from a launcher therefore lands in this order:
+
+1. Bump `browser/INTERFACE` here, with the browser change, in a pull request
+   whose `ci/driver-ref` names the camoucore branch that speaks the new
+   interface. CI tests the browser against that driver.
+2. Release the browser (`release.yml`). Published drivers keep launching the
+   builds they already accept.
+3. Merge and release the driver in camoucore, raising its `INTERFACE`.
+4. Empty `ci/driver-ref` here, so CI follows the published driver again.
+
+A change that neither side reads (a patch fix, a new spoofed value inside an
+existing key) keeps the interface and needs no driver change.
+
 ## Which browser, which suite
 
 `ci/versions.py` answers both, and every entry point uses it:
@@ -60,7 +121,7 @@ in full.
 | Question | Answer |
 |---|---|
 | Browser | `browser/upstream.sh`, or the version a caller passes |
-| Suite | The newest released playwright-python tag whose pinned Firefox is not ahead of that browser, and which is below the Playwright ceiling in `python/pyproject.toml` |
+| Suite | The newest released playwright-python tag whose pinned Firefox is not ahead of that browser, and which is below the Playwright ceiling the installed driver declares (its `playwright<X` requirement) |
 
 Playwright trails Firefox and skips versions, so the suite's Firefox is often a
 release or two behind the browser. That is the normal case; the summary says
@@ -226,11 +287,10 @@ Each tier gates the next, so a lint failure never reaches the build:
 | Tier | Jobs | Time |
 |---|---|---|
 | 0 static | lint, self-tests, settled decisions | seconds |
-| 1 unit | pythonlib, typescript | about a minute |
-| 2 browser | build and five preflights (browser sources changed) or fetch (they did not) | minutes to hours |
-| 3a smoke | patch guards, skiplist audit, build-tester, typescript-browser, install | about 15 min |
-| 3b full | Playwright × 6, native, growth × 7, stealth | about 40 min |
-| 4 gate | the required check | seconds |
+| 1 browser | build and five preflights (browser sources changed) or fetch (they did not) | minutes to hours |
+| 2a smoke | patch guards, skiplist audit, build-tester | about 15 min |
+| 2b full | Playwright × 6, native, growth × 7, stealth | about 40 min |
+| 3 gate | the required check | seconds |
 
 | Mechanism | Effect |
 |---|---|
@@ -266,44 +326,44 @@ run preflights every target regardless.
 ## Releases
 
 One workflow, [`release.yml`](../.github/workflows/release.yml), makes every
-release, on a **train**: on the 1st and 15th of each month the newest
-**prerelease** is promoted to **stable**, and a new prerelease is cut from
-`main`. Merges are tested by `tests.yml` but not released, so users see two
-releases a month rather than one per merge. Each library release is paired with
-exactly one browser build.
+browser release, on a **train**: on the 1st and 15th of each month the newest
+browser **prerelease** is promoted to **stable**, and a new prerelease is cut
+from `main`. Merges are tested by `tests.yml` but not released, so users see two
+releases a month rather than one per merge. The same run publishes the
+`camoufox` wrapper ([The driver](#the-driver)) when anything it ships changed:
+`<next>bN` to PyPI and `<next>-beta.N` to npm `next` on a cut, `X.Y.Z` to PyPI
+and npm `latest` on a `vX.Y.Z` tag. The driver itself is released from
+camoucore, after the browser it needs.
 
 ```
-1st and 15th ─► plan ─► build-library ─► promote-browser ─► publish-pypi ─► publish-npm ─► tag-library ─► cut
- (schedule)    (newest prerelease,        paired → stable     0.5.8            0.5.8 @latest   v0.5.8         │
-                no open regression)                                                                         │
-     ┌──────────────────────────────────────────────────────────────────────────────────────────────────────┘
+1st and 15th ─► plan ─────────────────► promote-browser ─► cut
+ (schedule)    (newest browser          v156.0.1-beta.N     │
+                prerelease, no open     → stable, latest    │
+                regression)                                 │
+     ┌──────────────────────────────────────────────────────┘
      ▼
-dispatch on main ─► ubo ─► tests ─► plan ─┬─► build-browser ─► publish-browser ─┐
-                  (AMO's  (tests.yml,     │   (only if its      v156.0.1-beta.N  │
-                   newest) unless main's  │    sources changed)                  ├─► publish-pypi ─► publish-npm ─► tag-library
-                           run passed it) │                                      │
-                                          └─► build-library ─────────────────────┘   0.5.9bN          0.5.9-beta.N    v0.5.9bN
-                                              (only if what it ships changed)        (pip: --pre)     @next
+dispatch on main ─► ubo ─► tests ─► plan ─► build-browser ─► publish-browser
+                  (AMO's  (tests.yml,       (only if its      v156.0.1-beta.N
+                   newest) unless main's     sources changed)  (prerelease)
+                           run passed it)
 
-git tag v0.5.8 <tested main commit> && git push origin v0.5.8
-               ─► plan ─► build-library ─► promote-browser ─► publish-pypi ─► publish-npm
-                  (checks)                 paired → stable       0.5.8           0.5.8 @latest
+dispatch with promote ─► plan ─► promote-browser
 ```
 
 | Rule | Detail |
 |---|---|
-| The train | The scheduled run promotes the newest library prerelease tag (`v0.5.8bN`) at the commit it was cut from, as `v0.5.8`, then its `cut` job dispatches `release.yml` on `main`. With no prerelease since the last promotion it promotes nothing; a cut with nothing changed publishes nothing. |
+| The train | The scheduled run promotes the newest browser release if it is still a prerelease, then its `cut` job dispatches `release.yml` on `main`. With nothing new since the last promotion it promotes nothing; a cut whose browser sources did not change publishes nothing. |
 | A regression holds the train | While an issue labelled `regression` is open, the promotion fails and says which issues hold it; the cut still runs. The label must exist, so an empty answer means "none open", not "nobody could mark one". |
-| Out of cycle | Run the Release workflow by hand on `main` (`gh workflow run release.yml --ref main`) to cut a prerelease now. Push a tag to promote by hand. |
-| Only a tested commit is released | A cut calls `tests.yml` on its commit and continues only if it passes. A promotion requires `All tests passed` on its commit. |
-| The browser is built only when its sources changed | `ci.browser_inputs.source_digest()` hashes the browser's sources. Each browser release carries a `manifest.json` with that digest, its commit, and the browser interface it speaks (`CONSTRAINTS.INTERFACE` in `python/src/camoufox/__version__.py`). A matching release is reused; otherwise `plan` takes the next unused `beta.N`. Nothing is committed: `ci.release set-build` writes the number into the build's tree. |
-| uBlock Origin | Every browser package bundles the uBO release pinned in [`browser/scripts/data/ubo.json`](../browser/scripts/data/ubo.json) under `addons/UBO/` ([`browser/scripts/fetch-ubo.py`](../browser/scripts/fetch-ubo.py)), and both launchers load it from there. A cut reads the pin once, in the `ubo` job before `tests`, and hands it to the tests and every build, so the browser ships the uBO it was tested with. A bump is a reviewed commit (`fetch-ubo.py newest` prints the candidate). Its `manifest.json` (`ubo`) and release notes name it. A reused browser keeps the uBO it was built with. |
+| Out of cycle | Run the Release workflow by hand on `main` (`gh workflow run release.yml --ref main`) to cut a prerelease now, or with `-f promote=true` to promote the newest prerelease now. |
+| Only a tested commit is released | A cut calls `tests.yml` on its commit and continues only if it passes. A promotion requires `All tests passed` on the commit its release was built from, and that commit on `main`. |
+| The browser is built only when its sources changed | `ci.browser_inputs.source_digest()` hashes the browser's sources. Each browser release carries a `manifest.json` with that digest, its commit, and the interface it speaks (`browser/INTERFACE`). A matching release is reused; otherwise `plan` takes the next unused `beta.N`. Nothing is committed: `ci.release set-build` writes the number into the build's tree. |
+| uBlock Origin | Every browser package bundles the uBO release pinned in [`browser/scripts/data/ubo.json`](../browser/scripts/data/ubo.json) under `addons/UBO/` ([`browser/scripts/fetch-ubo.py`](../browser/scripts/fetch-ubo.py)), and the drivers load it from there. A cut reads the pin once, in the `ubo` job before `tests`, and hands it to the tests and every build, so the browser ships the uBO it was tested with. A bump is a reviewed commit (`fetch-ubo.py newest` prints the candidate). Its `manifest.json` (`ubo`) and release notes name it. A reused browser keeps the uBO it was built with. |
 | Builds are attested | `gh attestation verify <file> --repo daijro/camoufox` |
-| Packages are built once | `publish-pypi` and `publish-npm` upload the files `build-library` made: `0.5.8b2` on PyPI, `0.5.8-beta.2` on npm. `pip install camoufox` skips prereleases without `--pre`; npm installs `latest`, not `next`. |
-| The pairing | `ci.release stamp` writes the paired browser release into `python/src/camoufox/browser-pin.json`, which both launchers read. On `main` the file is `{}`, so a development checkout follows its channel. |
-| Promotion | Refused unless the commit is on `main`, `All tests passed` succeeded on it, X.Y.Z is newer than every release, and a browser release was built from its sources. The paired browser becomes the stable release without a rebuild. |
-| Failed publish | Re-run the failed jobs; every version and tag comes from `plan`. |
-| Credentials | None stored. PyPI and npm use trusted publishing (OIDC) from `release.yml`. |
+| The pairing | `build-library` stamps the browser release built from the same sources into both copies of `browser-pin.json` and the wrapper versions into both manifests (`ci.release stamp --browser-tag <tag> --py-version <v> --npm-version <v>`), builds the wheel, sdist and npm tarball once, and checks that each installs and exposes the pin. To test a branch against a browser release, `ci.release stamp --browser-tag <tag>` without versions writes the pin into the installed packages, as `fetch-browser` does. |
+| What publishes a wrapper | `ci.release lib-plan` publishes when anything the wrapper ships changed (`pyproject.toml`, `camoufox/`, `camoufox_pin/`, `npm/`, or the browser), each registry only if its package differs from the newest one there (`lib-diff`). It refuses a wrapper while `ci/driver-ref` is set or the pinned `camoucore` is missing from PyPI or npm: a stable tag fails, a prerelease publishes the browser alone. |
+| Promotion | Refused unless the tag is a browser release, its commit is on `main`, and `All tests passed` succeeded on it. The release becomes stable and latest without a rebuild. |
+| Failed publish | Re-run the failed jobs; every tag comes from `plan`. |
+| Credentials | None stored. |
 
 Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 `upstream.sh` names.
@@ -315,10 +375,6 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | `python3 -m ci.run_prepare` | | `make setup-minimal`, `dir`, `mozbootstrap` |
 | `python3 -m ci.run_build` | | The browser build and package for linux x86_64; `--target`, `--arch` for another |
 | `python3 -m ci.run_build --target windows --arch x86_64 --preflight` | | Preflight one target |
-| `python3 -m ci.run_pythonlib` | | `python/`'s tests |
-| `python3 -m ci.run_typescript` | | `typescript/`'s tests |
-| `python3 -m ci.run_typescript --browser <bin>` | yes | The npm launcher end to end |
-| `python3 -m ci.run_install --tmpdir /mnt/tmpfs --browser <bin>` | yes | Packed packages, a real fetch, and a launch, click and typing through each installed package; the tmpdir must be its own filesystem |
 | `python3 -m ci.run_patch_guards --binary <bin>` | yes | Patch guards; `--group spoofing\|automation\|parity`, `--only <name>` |
 | `python3 -m ci.run_patch_guards --binary <bin> --only stock-gpu-parity` | yes | WebGL and WebGPU against stock Firefox of the same version, downloaded into `.ci-work` ([upgrade step](../docs/patch-upgrading-guide.md#browser-owned-gpu-values)) |
 | `python3 -m ci.run_build_tester --binary <bin>` | yes | build-tester |
@@ -333,7 +389,9 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 | `GITHUB_EVENT_NAME=schedule python3 -m ci.release target` | | What the train would promote |
 | `python3 -m ci.release browser-plan` | | Whether a browser would be built or reused |
 | `python3 -m ci.release paired` | | The release built from this tree |
-| `python3 -m ci.release lib-plan --channel prerelease` | | The next library version |
+| `python3 -m ci.release driver` | | The `camoucore` version the wrapper pins |
+| `<venv>/bin/python ci/check_wrapper.py [--npm-dir DIR]` | | An installed wrapper is camoucore's launcher (run outside the checkout) |
+| `python3 -m ci.check_no_driver` | | No launcher code in this repository |
 | `python3 browser/scripts/fetch-ubo.py resolve` | | The uBlock Origin release a cut would bundle |
 | `make -C browser stage-ubo` | | Bundle it into your build tree's `dist/bin`, as packaging does |
 | `python3 -m pytest ci/tests -q` | | The pipeline's own tests |
@@ -342,6 +400,10 @@ Releases cut before manifests existed (up to `v156.0.1-beta.32`) pair by the tag
 build tree. Each runner writes one result file to `.ci-work/results/`
 (`run_prepare` writes none). A required suite with no result file is a
 **failure**, never a skip.
+
+The runners, and `ci/tests`, import the `camoufox` driver: install it first,
+through the wrapper (`pip install ".[geoip]"` at the root) or from a camoucore
+checkout (`scripts/install-driver.sh camoufox <venv> -`).
 
 ## Self-tests
 

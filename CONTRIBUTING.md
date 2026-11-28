@@ -19,9 +19,20 @@ The browser builds on Linux; the steps are in the
 enables it, so a rebuild after a small change takes about 5 minutes instead of
 40.
 
-The launchers need no browser build to develop:
-[`python/README.md`](python/README.md#development) and
-[`typescript/README.md`](typescript/README.md#development).
+### What goes where
+
+| Change | Repository |
+|---|---|
+| The launchers, Python and TypeScript: launch options, fingerprint generation and its data files, geoip, `camoufox fetch` and the rest of the CLI, the MCP server | [CamouBrowser/camoucore](https://github.com/CamouBrowser/camoucore), where they ship in the one `camoucore` package as `camoucore.camoufox` (npm: `camoucore/camoufox`). Code, tests and issues go there ([Python](https://github.com/CamouBrowser/camoucore/blob/main/python/camoucore/docs/camoufox.md#development), [TypeScript](https://github.com/CamouBrowser/camoucore/blob/main/typescript/camoucore/docs/camoufox.md#development)). |
+| The browser: patches, settings, fonts, the build, its tests and CI | Here. |
+| The `camoufox` release wrapper (`pyproject.toml`, `camoufox/`, `camoufox_pin/`, `npm/`): camoucore's launcher under the `camoufox` name, an exact `camoucore` pin and the browser pin | Here, but it holds no launcher code: only alias stubs and version pins. |
+
+A change that needs both ships the browser first, then the launcher
+([`ci/README.md`](ci/README.md#the-driver)). The static CI job fails a pull
+request here that adds launcher code (`python/`, `typescript/`, a
+`camoufox/` module that is more than an alias stub, or Python or TypeScript
+outside `browser/`, `ci/` and `.github/`); open it against camoucore
+instead.
 
 ## Pull request rules
 
@@ -56,7 +67,7 @@ While you work, run the suite that covers your change:
 | Which suite for which change | the table in `AGENTS.md` | [`AGENTS.md`](AGENTS.md#testing) |
 | Any CI job, locally | `python3 -m ci.<runner>` | [`ci/README.md`](ci/README.md#running-a-piece-by-hand) |
 | Browser patches, C++, Juggler | build-tester: the raw binary, no launcher | [`browser/tests/build-tester/README.md`](browser/tests/build-tester/README.md) |
-| `python/`, proxy handling | service tests: the installed package with real proxies | [`browser/tests/service/README.md`](browser/tests/service/README.md) |
+| Proxy handling | service tests: the installed driver with real proxies | [`browser/tests/service/README.md`](browser/tests/service/README.md) |
 
 build-tester and the service tests check different layers, and passing one
 does not stand in for the other. How they differ:
@@ -64,7 +75,9 @@ does not stand in for the other. How they differ:
 
 ## Reporting issues
 
-Search existing issues first. Include:
+Search existing issues first. A launcher problem (options, identities, install,
+`camoufox fetch`) belongs in [camoucore's issues](https://github.com/CamouBrowser/camoucore/issues);
+a browser one (a patch, a detection, a crash) here. Include:
 
 - Camoufox package and browser version (`camoufox version`)
 - OS, and your Python or Node.js version

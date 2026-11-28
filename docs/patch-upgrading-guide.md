@@ -451,8 +451,8 @@ python3 browser/tests/playwright/patches/stock-gpu-parity.py --binary <camoufox-
 
 For each failure, find in the Firefox source why the value changed and whether
 it holds on every device of that backend, then follow it where the launchers
-convert a recording (`to_config` in `python/src/camoufox/webgl.py` and
-`typescript/src/webgl.ts`).
+convert a recording (`to_config` in camoucore's
+`python/camoucore/src/camoucore/camoufox/webgl.py` and `typescript/camoucore/src/camoufox/webgl.ts`).
 
 ---
 
