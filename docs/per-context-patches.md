@@ -3,8 +3,8 @@
 `CAMOU_CONFIG` sets one identity for the whole browser. The per-context patches
 let each Playwright context carry its own, so one Camoufox process can run many
 sessions that do not correlate. The launchers use them through `NewContext()`
-([Python](../python/README.md#one-browser-many-identities),
-[TypeScript](../typescript/README.md#one-browser-many-identities)); this page is
+([Python](https://github.com/CamouBrowser/camoucore/blob/main/python/camoucore/docs/camoufox.md#one-browser-many-identities),
+[TypeScript](https://github.com/CamouBrowser/camoucore/blob/main/typescript/camoucore/docs/camoufox.md#one-browser-many-identities)); this page is
 for people working on the patches or driving the browser without a launcher.
 
 ## The setters

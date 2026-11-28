@@ -98,13 +98,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         else FILES[args.subset]
     )
 
-    env = {
-        # browser/tests/native/conftest.py puts pythonlib on sys.path itself; this is
-        # for the browser half, which needs a binary to point at.
-        "PYTHONPATH": os.pathsep.join(
-            filter(None, [str(REPO_ROOT / "python" / "src"), os.environ.get("PYTHONPATH", "")])
-        ),
-    }
+    # The tests import the installed camoufox driver (.github/actions/driver);
+    # the browser half also needs a binary to point at.
+    env: dict = {}
     if args.subset != "rules":
         binary = args.binary
         if binary is None:

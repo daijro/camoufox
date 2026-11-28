@@ -72,7 +72,7 @@ BROWSER_DIRS = (
     "browser/scripts",
     "browser/bundle/fontconfig",
 )
-BROWSER_FILES = ("browser/upstream.sh", "browser/Makefile", "browser/multibuild.py")
+BROWSER_FILES = ("browser/upstream.sh", "browser/Makefile", "browser/multibuild.py", "browser/INTERFACE")
 
 # Tools under browser/scripts/ that no build runs, so touching one must not
 # invalidate a cached browser and cost an hour of compiling. ci/tests/test_ci.py
@@ -80,6 +80,7 @@ BROWSER_FILES = ("browser/upstream.sh", "browser/Makefile", "browser/multibuild.
 # run would serve a stale binary to every suite downstream.
 NON_NATIVE_SCRIPTS = frozenset(
     {
+        "browser/scripts/_camoufox_package.py",
         "browser/scripts/_font_bundle.py",
         "browser/scripts/check-input-dispatch.py",
         "browser/scripts/gen-contentaccessible-manifest.py",

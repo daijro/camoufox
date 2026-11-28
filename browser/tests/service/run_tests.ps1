@@ -56,7 +56,7 @@ $env:PYTHONIOENCODING     = "utf-8"
 # --- Resolve paths ---
 $ScriptDir      = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $BuildTesterDir = [IO.Path]::Combine($ScriptDir, "..", "build-tester")
-$PythonDir      = [IO.Path]::Combine($ScriptDir, "..", "..", "..", "python")
+$Driver         = if ($env:CAMOUFOX_DRIVER) { $env:CAMOUFOX_DRIVER } else { "camoufox" }
 $VenvDir        = Join-Path $ScriptDir ".venv"
 $PythonExe      = [IO.Path]::Combine($VenvDir, "Scripts", "python.exe")
 $PipExe         = [IO.Path]::Combine($VenvDir, "Scripts", "pip.exe")
@@ -87,26 +87,12 @@ if (-not (Test-Path $VenvDir)) {
     python -m venv $VenvDir
 }
 
-# --- Build camoufox wheel ---
-Write-Host "==> Building camoufox wheel from $PythonDir ..."
-& $PipExe install -q build
-$DistDir = [IO.Path]::Combine($PythonDir, "dist")
-if (Test-Path $DistDir) {
-    Remove-Item -Recurse -Force $DistDir
-}
-Push-Location $PythonDir
-& $PythonExe -m build --wheel -o dist | Out-Null
-Pop-Location
-
-# --- Install wheel ---
-Write-Host "==> Installing camoufox from local wheel..."
+# --- Install the driver ---
+# Published from CamouBrowser/camoucore. CAMOUFOX_DRIVER picks another one:
+# a version ("camoufox==0.6.0") or a camoucore checkout ("<camoucore>\python\camoufox").
+Write-Host "==> Installing the camoufox driver ($Driver)..."
 try { & $PipExe uninstall -y camoufox cloverlabs-camoufox 2>&1 | Out-Null } catch {}
-$Wheel = Get-ChildItem ([IO.Path]::Combine($PythonDir, "dist", "*.whl")) | Select-Object -First 1
-if (-not $Wheel) {
-    Write-Error "ERROR: No wheel found in $PythonDir\dist"
-    exit 1
-}
-& $PipExe install -q --force-reinstall $Wheel.FullName
+& $PipExe install -q --force-reinstall $Driver
 
 # --- Locate locally compiled Windows binary ---
 # Build output: ../../camoufox-*/obj-*-windows-msvc/dist/bin/camoufox.exe

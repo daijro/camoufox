@@ -13,11 +13,12 @@ import importlib.util
 import json
 import pathlib
 import sys
+from importlib.resources import files
 
 import pytest
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-PACKAGE = REPO / "python" / "src" / "camoufox"
+PACKAGE = files("camoucore.camoufox")
 
 
 def _aliases():

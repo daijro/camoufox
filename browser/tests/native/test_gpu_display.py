@@ -6,7 +6,7 @@ CI has no GPU runner, so this is a subset of its own, run on a machine with one:
 
     CAMOUFOX_GPU=01:00.0 python3 -m ci.run_native --subset gpu --binary path/to/camoufox-bin
 
-The GPU-free half is python/tests/test_gpudisplay.py.
+The GPU-free half is the driver's tests/test_gpudisplay.py, in CamouBrowser/camoucore.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ READ_GPU = """() => {
 }"""
 
 
-# Opt-in, like typescript/tests/gpu-display.test.ts: without a card named, a
+# Opt-in, like the camoufox TypeScript driver's gpu-display test: without a card named, a
 # plain `pytest browser/tests/native` skips this file. `ci.run_native --subset
 # gpu` refuses to run without one, so a requested GPU run never passes empty.
 pytestmark = pytest.mark.skipif(

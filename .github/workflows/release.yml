@@ -15,7 +15,9 @@ name: Release
 #                  and <next>-beta.N to npm under the `next` dist-tag. Each
 #                  registry gets it only if its own package differs from the
 #                  newest version already there (ci.release lib-diff), so a
-#                  TypeScript-only change publishes nothing to PyPI. Dispatched
+#                  change to the npm index alone publishes nothing to PyPI. No
+#                  wrapper prerelease goes out while ci/driver-ref is set (a
+#                  stable tag fails then). Dispatched
 #                  by hand for a fix that cannot wait for the train.
 #   tag vX.Y.Z     (stable)      on a main commit whose tests passed: the
 #                  browser prerelease built from that commit's sources becomes
@@ -23,10 +25,16 @@ name: Release
 #                  PyPI and to npm `latest`. The train promotes the same way,
 #                  at the commit its prerelease was cut from.
 #
-# Each package is stamped with the browser release built from the same sources
-# (ci/release.py stamp -> python/src/camoufox/browser-pin.json), and both
-# launchers fetch and launch exactly that build by default. A browser release is
-# found by the source digest in its manifest.json asset (ci.browser_inputs).
+# The packages are the `camoufox` release wrapper (PyPI: pyproject.toml,
+# camoufox/, camoufox_pin/ at the repository root; npm: npm/): the
+# camoucore.camoufox launcher from the one `camoucore` package
+# (https://github.com/CamouBrowser/camoucore) under its own name, pinned to one
+# exact camoucore version, plus camoufox_pin/browser-pin.json. Each is stamped
+# with the browser release built from the same sources (ci/release.py stamp),
+# and the launcher fetches and launches exactly that build by default. No
+# wrapper is published while ci/driver-ref is set or the pinned camoucore is
+# missing from either registry. A browser release is found by the source
+# digest in its manifest.json asset (ci.browser_inputs).
 #
 # Packages are built once, in build-library, and the publish jobs upload exactly
 # those files. PyPI and npm both use trusted publishing (OIDC): no token is
@@ -254,23 +262,24 @@ jobs:
         # The bundle is a release asset, not repo content (~2.16 GB extracted,
         # 843 MB as .tar.xz -- see browser/scripts/fetch-fonts.py). Without this
         # the package would ship with NO fonts while
-        # python/src/camoufox/fonts.json still reports hundreds of families,
+        # the driver's fonts.json still reports hundreds of families,
         # which is a reverse leak in the shipped browser. After the dependency
         # install, so the download uses aria2c's parallel connections rather
         # than the curl fallback.
         working-directory: browser
         run: make fonts-extract
 
+      - uses: ./.github/actions/driver
+        with:
+          extras: ""
       - name: Verify the font bundle matches the manifest
         # Full run, not --quick: this is the release path, and the one invariant
         # that cannot be recovered after publishing is a family fonts.json
         # reports that the packaged fontconfig cannot resolve.
-        # It checks the launcher's own font draws, so it needs the camoufox
-        # package and its dependencies.
+        # It checks the launcher's own font draws against the driver's fonts.json,
+        # so it needs the camoufox driver (installed just before).
         working-directory: browser
-        run: |
-          python3 -m pip install -e ../python
-          python3 scripts/verify-fonts.py
+        run: python3 scripts/verify-fonts.py
 
       - name: Prepare the source tree
         # setup-minimal (which fetches the tarball) -> dir -> mozbootstrap, with
@@ -364,68 +373,75 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install tools and pythonlib
-        # The npm build copies pythonlib's data files and the pinned fpgen model.
+      # The packages are the release wrapper: camoucore's launcher under the
+      # camoufox name, at one exact camoucore version (built and released from
+      # https://github.com/CamouBrowser/camoucore), plus
+      # camoufox_pin/browser-pin.json. plan's lib-plan already refused a
+      # camoucore that is not on both registries, or a ci/driver-ref still in
+      # place.
+      - name: Install tools
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install vermin build twine -r ci/requirements.txt -e python
-          .venv/bin/python python/scripts/pin-fpgen-model.py
-
-      - name: Check Python compatibility
-        # The package must run on the floor pyproject.toml declares (python =
-        # "^3.11"); `3.11-` means "needs at most 3.11". typing_extensions is a
-        # dependency, not a stdlib module for vermin to date.
-        working-directory: python
-        run: ../.venv/bin/vermin . --eval-annotations --backport typing_extensions --target=3.11- --violations src/camoufox/
+          .venv/bin/pip install build twine -r ci/requirements.txt
+          echo "driver=$(.venv/bin/python -m ci.release driver)" >> "$GITHUB_ENV"
 
       - name: Stamp the version and the paired browser
         run: |
-          python3 -m ci.release stamp \
+          .venv/bin/python -m ci.release stamp \
             --browser-tag "${{ needs.plan.outputs.browser_tag }}" \
             --py-version "${{ needs.plan.outputs.py_version }}" \
             --npm-version "${{ needs.plan.outputs.npm_version }}"
-          cat python/src/camoufox/browser-pin.json
+          cat camoufox_pin/browser-pin.json
+          cmp camoufox_pin/browser-pin.json npm/camoufox_pin/browser-pin.json
 
       - name: Build the Python package
-        working-directory: python
         run: |
-          ../.venv/bin/python -m build
-          ../.venv/bin/twine check dist/*
+          .venv/bin/python -m build --outdir python-dist
+          .venv/bin/twine check python-dist/*
 
-      - name: The wheel carries its browser pin
-        working-directory: python
+      - name: The wheel carries its browser pin and is camoucore's launcher
         run: |
-          ../.venv/bin/python - <<'EOF'
+          .venv/bin/python - <<'EOF'
           import glob, json, zipfile
-          wheel = glob.glob("dist/*.whl")[0]
-          pin = json.loads(zipfile.ZipFile(wheel).read("camoufox/browser-pin.json"))
+          wheel = glob.glob("python-dist/*.whl")[0]
+          z = zipfile.ZipFile(wheel)
+          pin = json.loads(z.read("camoufox_pin/browser-pin.json"))
           assert pin["tag"] == "${{ needs.plan.outputs.browser_tag }}", pin
+          # The wrapper's licence (MIT), not the browser sources' (MPL-2.0).
+          assert [n for n in z.namelist() if "/licenses/" in n] == [
+              n for n in z.namelist() if n.endswith(".dist-info/licenses/camoufox/LICENSE")], z.namelist()
           print(f"{wheel} pins {pin['tag']}")
           EOF
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          package_json_file: typescript/package.json
+          python3 -m venv "$RUNNER_TEMP/smoke"
+          "$RUNNER_TEMP/smoke/bin/pip" install python-dist/*.whl
+          test "$("$RUNNER_TEMP/smoke/bin/python" -c 'import importlib.metadata as m; print(m.version("camoucore"))')" \
+            = "$(echo "${{ env.driver }}" | sed 's/-beta\./b/')"
+          # Out of the checkout, whose camoufox/ would shadow the installed one.
+          (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/smoke/bin/python" "$GITHUB_WORKSPACE/ci/check_wrapper.py" \
+            --exact-camoucore --pin-tag "${{ needs.plan.outputs.browser_tag }}")
 
       - name: Set up Node
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "24"
-          cache: pnpm
-          cache-dependency-path: typescript/pnpm-lock.yaml
 
       - name: Build the npm package
-        working-directory: typescript
         run: |
-          pnpm install --frozen-lockfile
-          pnpm build
-          node scripts/check-pack.mjs
-          tag=$(node -p "require('./dist/data-files/browser-pin.json').tag")
+          tag=$(node -p "require('./npm/camoufox_pin/browser-pin.json').tag")
           test "$tag" = "${{ needs.plan.outputs.browser_tag }}" || {
-            echo "::error::dist pins '$tag', expected ${{ needs.plan.outputs.browser_tag }}"; exit 1; }
-          mkdir ../npm-dist
-          npm pack --ignore-scripts --pack-destination ../npm-dist
+            echo "::error::camoufox_pin pins '$tag', expected ${{ needs.plan.outputs.browser_tag }}"; exit 1; }
+          mkdir npm-dist
+          # Packed from npm/, so the tarball's LICENSE is npm/LICENSE (MIT):
+          # npm adds a package root's LICENSE whatever `files` says.
+          (cd npm && npm pack --ignore-scripts --pack-destination ../npm-dist)
+          tar -xOzf npm-dist/*.tgz package/LICENSE | grep -q "^MIT License"
+          # The wrapper resolves its camoucore, exports camoucore/camoufox,
+          # runs the CLI and the MCP server, and its pin wins.
+          mkdir "$RUNNER_TEMP/npm-smoke"
+          npm i --prefix "$RUNNER_TEMP/npm-smoke" "$PWD"/npm-dist/*.tgz
+          (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/smoke/bin/python" "$GITHUB_WORKSPACE/ci/check_wrapper.py" \
+            --no-python --exact-camoucore --npm-dir "$RUNNER_TEMP/npm-smoke" \
+            --pin-tag "${{ needs.plan.outputs.browser_tag }}")
 
       - id: diff
         name: Which registries this release changes anything on
@@ -433,14 +449,14 @@ jobs:
         # published again under a new number.
         run: |
           .venv/bin/python -m ci.release lib-diff --channel "${{ needs.plan.outputs.channel }}" \
-            --wheel python/dist/*.whl --tarball npm-dist/*.tgz \
+            --wheel python-dist/*.whl --tarball npm-dist/*.tgz \
             --py-version "${{ needs.plan.outputs.py_version }}" \
             --npm-version "${{ needs.plan.outputs.npm_version }}"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: python-dist
-          path: python/dist/
+          path: python-dist/
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: npm-dist

@@ -1,6 +1,6 @@
 """
 Verify humanized input in the browser: myuri's smart actions, run by the
-launcher (python/src/camoufox/_humanize_playwright.py), reach the page as
+launcher (the camoufox package's _humanize_playwright.py), reach the page as
 trusted events, and a part the caller replaces runs in myuri's place.
 
 Run against a specific build:

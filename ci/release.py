@@ -12,12 +12,22 @@ Python package on PyPI and the npm package under the `next` dist-tag. A cut is
 also dispatched by hand for a fix that cannot wait, and pushing a `vX.Y.Z` tag on
 a tested main commit still promotes it by hand.
 
-Each library release is paired with exactly one browser release -- the one built
-from the same sources, found by `ci.browser_inputs.source_digest()` in the
-release's manifest.json asset -- and `stamp` writes that pairing into the package
-(python/src/camoufox/browser-pin.json, read by both launchers). A library therefore
-never runs a browser it was not released with unless its user explicitly chooses
-another.
+The "library" here is the `camoufox` release wrapper (pyproject.toml,
+camoufox/ and camoufox_pin/ at the repository root for PyPI; npm/ for npm): the
+camoucore.camoufox launcher from the one `camoucore` package
+(https://github.com/CamouBrowser/camoucore) under its own name, at one exact
+camoucore version, plus camoufox_pin/browser-pin.json. Each wrapper release is
+paired with exactly one browser release -- the one built from the same sources,
+found by `ci.browser_inputs.source_digest()` in the release's manifest.json
+asset -- and `stamp` writes that pairing into camoufox_pin/browser-pin.json and
+its npm copy, which the launcher reads (Python:
+importlib.resources.files("camoufox_pin"); npm:
+camoufox/camoufox_pin/browser-pin.json). A library therefore never runs a
+browser it was not released with unless its user explicitly chooses another.
+
+The wrapper is only published against a released camoucore: lib-plan refuses
+while ci/driver-ref names an unreleased camoucore ref, or while the pinned
+camoucore version is missing from PyPI or npm.
 
 A browser release's number is not committed anywhere: its tag points at the
 tested main commit, and `set-build` writes the number from the tag name into the
@@ -29,7 +39,9 @@ build's working tree. Rebuilding from the tag with `set-build` reproduces it.
     python3 -m ci.release manifest --tag T --digest D --commit C [--ubo PIN]   # the release's manifest.json
     python3 -m ci.release paired [--root DIR] [--releases JSON]  # the browser release for this tree
     python3 -m ci.release lib-plan --channel prerelease|stable [--tag vX.Y.Z]
-    python3 -m ci.release stamp --browser-tag T --py-version V --npm-version V
+    python3 -m ci.release stamp --browser-tag T --py-version V --npm-version V   # the checkout, for a release
+    python3 -m ci.release stamp --browser-tag T   # the installed driver's pin, for a CI fetch
+    python3 -m ci.release driver                  # the camoucore version the wrapper pins
     python3 -m ci.release lib-diff --channel C --wheel W --tarball T --py-version V --npm-version V
     python3 -m ci.release promote                 # paired browser -> stable, latest
     python3 -m ci.release check-promotable --tag vX.Y.Z
@@ -52,10 +64,20 @@ from .browser_inputs import BROWSER_DIRS, BROWSER_FILES, NON_NATIVE_SCRIPTS, sou
 
 PYPI_PROJECT = "camoufox"
 NPM_PACKAGE = "camoufox"
-PIN_FILE = REPO_ROOT / "python" / "src" / "camoufox" / "browser-pin.json"
-PYPROJECT = REPO_ROOT / "python" / "pyproject.toml"
-PACKAGE_JSON = REPO_ROOT / "typescript" / "package.json"
-TS_VERSION = REPO_ROOT / "typescript" / "src" / "__version__.ts"
+# The one camoucore package the wrapper depends on, at one exact version; the
+# launcher in it is camoucore.camoufox (npm: camoucore/camoufox).
+DRIVER_PACKAGE = "camoucore"
+PIN_PACKAGE = "camoufox_pin"
+PIN_FILE = REPO_ROOT / PIN_PACKAGE / "browser-pin.json"
+PYPROJECT = REPO_ROOT / "pyproject.toml"
+# The npm wrapper is packed from npm/, so its tarball carries npm/LICENSE (MIT)
+# rather than the repository's LICENSE, which npm adds from a package's root.
+NPM_DIR = "npm"
+PACKAGE_JSON = REPO_ROOT / NPM_DIR / "package.json"
+# The browser pin, once per package; stamp writes both, and they must agree.
+PIN_PATHS = (f"{PIN_PACKAGE}/browser-pin.json", f"{NPM_DIR}/{PIN_PACKAGE}/browser-pin.json")
+# A camoucore git ref CI installs the driver from instead of the pinned release.
+DRIVER_REF = REPO_ROOT / "ci" / "driver-ref"
 
 # Attached to every browser release; how a library finds its browser.
 MANIFEST_ASSET = "manifest.json"
@@ -71,8 +93,9 @@ STABLE_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 # Every published library version is tagged: vX.Y.Z, or vX.Y.ZbN for a
 # prerelease (PEP 440 spelling, so it never reads as a browser tag).
 LIBRARY_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:b(\d+))?$")
-# What a library release ships besides the browser it pairs with.
-LIBRARY_DIRS = ("python", "typescript")
+# What a library (wrapper) release ships besides the browser it pairs with.
+LIBRARY_FILES = ("pyproject.toml",)
+LIBRARY_DIRS = ("camoufox", PIN_PACKAGE, NPM_DIR)
 _BROWSER_TAG = re.compile(r"^v(?P<version>[^-]+)-(?P<prefix>[a-z]+)\.(?P<n>\d+)$")
 
 
@@ -160,12 +183,105 @@ def next_browser_release(upstream_release: str, tags: Iterable[str]) -> str:
 
 
 def browser_interface(root: Path = REPO_ROOT) -> int:
-    """The browser interface this tree declares (CONSTRAINTS.INTERFACE)."""
-    text = (root / "python" / "src" / "camoufox" / "__version__.py").read_text(encoding="utf-8")
-    m = re.search(r"^\s*INTERFACE = (\d+)$", text, re.M)
-    if not m:
-        raise ValueError("python/src/camoufox/__version__.py declares no INTERFACE")
-    return int(m[1])
+    """The browser interface this tree builds (browser/INTERFACE).
+
+    Drivers accept browsers from their MIN_INTERFACE up to their INTERFACE
+    (camoufox/__version__.py in camoucore); the browser declares its own here.
+    """
+    lines = [ln.strip() for ln in (root / "browser" / "INTERFACE").read_text(encoding="utf-8").splitlines()]
+    values = [ln for ln in lines if ln and not ln.startswith("#")]
+    if len(values) != 1 or not values[0].isdigit():
+        raise ValueError("browser/INTERFACE must hold one integer")
+    return int(values[0])
+
+
+# ---------------------------------------------------------------------------
+# the driver the wrapper pins
+# ---------------------------------------------------------------------------
+
+# A requirement on camoucore, maybe with extras and a version; not the console
+# script's "camoucore.camoufox.__main__:cli".
+_PY_DRIVER_PIN = re.compile(r'"camoucore(?:\[[^\]]*\])?\s*((?:[<>=!~][^"]*)?)"')
+
+
+def driver_version(root: Path = REPO_ROOT) -> str:
+    """The camoucore version the wrapper pins, the same in every manifest.
+
+    pyproject.toml pins it in `dependencies` and again in each extra, and
+    npm/package.json in `dependencies`; all must be one exact version, or pip
+    and npm users would get different launchers from one release. The two
+    copies of the browser pin must agree too.
+    """
+    pins = [m[1].strip() for m in _PY_DRIVER_PIN.finditer((root / "pyproject.toml").read_text(encoding="utf-8"))]
+    if not pins:
+        raise ValueError(f"pyproject.toml does not depend on {DRIVER_PACKAGE}")
+    bad = [p for p in pins if not re.fullmatch(r"==\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?", p)]
+    if bad:
+        raise ValueError(f"pyproject.toml pins {DRIVER_PACKAGE} {', '.join(bad)}; only ==X.Y.Z is allowed")
+    py = {p[2:] for p in pins}
+    pkg = json.loads((root / NPM_DIR / "package.json").read_text(encoding="utf-8"))
+    npm = pkg.get("dependencies", {}).get(DRIVER_PACKAGE)
+    if npm is None:
+        raise ValueError(f"{NPM_DIR}/package.json does not depend on {DRIVER_PACKAGE}")
+    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?", npm):
+        raise ValueError(f"{NPM_DIR}/package.json pins {DRIVER_PACKAGE} {npm!r}; only an exact X.Y.Z is allowed")
+    if len(py) != 1 or py != {npm.replace("-beta.", "b")}:
+        raise ValueError(f"{DRIVER_PACKAGE} is pinned to {sorted(py)} in pyproject.toml "
+                         f"but {npm} in {NPM_DIR}/package.json; pin one version")
+    if "playwright-core" not in pkg.get("peerDependencies", {}):
+        raise ValueError(f"{NPM_DIR}/package.json lost its playwright-core peer dependency")
+    pins = {rel: (root / rel).read_bytes() for rel in PIN_PATHS}
+    if len(set(pins.values())) != 1:
+        raise ValueError(f"{' and '.join(PIN_PATHS)} differ; they are one pin (ci.release stamp writes both)")
+    return npm
+
+
+def driver_ref(root: Path = REPO_ROOT) -> Optional[str]:
+    """The camoucore ref in ci/driver-ref, or None when CI uses the pinned release."""
+    path = root / "ci" / "driver-ref"
+    if not path.exists():
+        return None
+    refs = [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.strip().startswith("#")]
+    return refs[0] if refs else None
+
+
+def driver_published(version: str) -> List[str]:
+    """The registries that lack camoucore `version` (empty when both have it)."""
+    import urllib.error
+
+    missing = []
+    py_version = version.replace("-beta.", "b")
+    for name, url in (("PyPI", f"https://pypi.org/pypi/{DRIVER_PACKAGE}/{py_version}/json"),
+                      ("npm", f"https://registry.npmjs.org/{DRIVER_PACKAGE}/{version}")):
+        try:
+            http_json(url)
+        except urllib.error.HTTPError as err:
+            if err.code != 404:
+                raise
+            missing.append(name)
+    return missing
+
+
+def wrapper_blocker(root: Path = REPO_ROOT, published=driver_published) -> Optional[str]:
+    """Why the wrapper cannot be published from `root` now, or None.
+
+    A wrapper names camoucore by exact version, so publishing one whose
+    camoucore is not on both registries ships a package nobody can install; and
+    while ci/driver-ref is set, CI tested an unreleased camoucore ref, not that pin.
+    """
+    ref = driver_ref(root)
+    if ref:
+        return (f"ci/driver-ref names camoucore {ref}: CI tested an unreleased camoucore. Release "
+                f"camoucore, pin it in pyproject.toml and {NPM_DIR}/package.json, and delete ci/driver-ref")
+    try:
+        version = driver_version(root)
+    except ValueError as err:
+        return str(err)
+    missing = published(version)
+    if missing:
+        return f"{DRIVER_PACKAGE} {version} is not published on {' or '.join(missing)}"
+    return None
 
 
 def manifest(tag: str, digest: str, commit: str, ubo: Optional[dict] = None) -> dict:
@@ -236,7 +352,8 @@ def train_promotion(tags: Iterable[str]) -> Optional[Tuple[str, str]]:
 
 def is_library_source(rel: str) -> bool:
     """Whether a change to `rel` changes what a library release would ship."""
-    return rel.split("/", 1)[0] in LIBRARY_DIRS or is_browser_source(rel)
+    return (rel in LIBRARY_FILES or rel.split("/", 1)[0] in LIBRARY_DIRS
+            or is_browser_source(rel))
 
 
 def is_browser_source(rel: str) -> bool:
@@ -413,7 +530,7 @@ def registry_versions() -> Tuple[List[str], List[str]]:
 def checked_in_version() -> str:
     m = re.search(r'^version = "([^"]+)"', PYPROJECT.read_text(), re.M)
     if not m:
-        die("python/pyproject.toml has no version")
+        die("pyproject.toml has no version")
     return m[1]
 
 
@@ -554,10 +671,18 @@ def cmd_lib_plan(args: argparse.Namespace) -> int:
     set_output("py_version", plan.py)
     set_output("npm_version", plan.npm)
     set_output("dist_tag", plan.dist_tag)
+    root = Path(args.root).resolve()
     publish = True
     if args.channel == "prerelease":
-        publish, why = library_changed(Path(args.root).resolve())
+        publish, why = library_changed(root)
         log(why)
+    if publish:
+        blocker = wrapper_blocker(root)
+        if blocker and args.channel == "stable":
+            die(f"cannot release camoufox {plan.py}: {blocker}")
+        if blocker:
+            log(f"no library prerelease: {blocker}", level="WARN")
+            publish = False
     set_output("publish", "true" if publish else "false")
     return 0
 
@@ -585,8 +710,8 @@ def cmd_lib_diff(args: argparse.Namespace) -> int:
     lib-plan only knows that something a library ships moved since the last
     release. Here the packages are built, so each is compared, file by file, with
     the newest version on its own registry. The Python package and the npm
-    package ship different things (a TypeScript-only change leaves the wheel
-    byte-identical), so each registry is decided on its own; the version counter
+    package ship different things (a change to the npm index alone leaves the
+    wheel byte-identical), so each registry is decided on its own; the version counter
     stays shared, which is why a registry can skip a number. A stable tag always
     publishes both: it is the maintainer's explicit release.
     """
@@ -653,26 +778,90 @@ def cmd_tested(_: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_stamp(args: argparse.Namespace) -> int:
-    m = _BROWSER_TAG.match(args.browser_tag)
+def pin_json(browser_tag: str, repo: str) -> str:
+    m = _BROWSER_TAG.match(browser_tag)
     if not m:
-        die(f"{args.browser_tag!r} is not a browser release tag")
-    PIN_FILE.write_text(json.dumps({
-        "tag": args.browser_tag,
-        "repo": repo_name(),
+        raise ValueError(f"{browser_tag!r} is not a browser release tag")
+    return json.dumps({
+        "tag": browser_tag,
+        "repo": repo,
         "repo_name": "Official",
         "version": m["version"],
         "build": f"{m['prefix']}.{m['n']}",
-    }, indent=2) + "\n")
-    PYPROJECT.write_text(re.sub(r'^version = "[^"]+"', f'version = "{args.py_version}"',
-                                PYPROJECT.read_text(), count=1, flags=re.M))
-    pkg = json.loads(PACKAGE_JSON.read_text())
-    pkg["version"] = args.npm_version
-    PACKAGE_JSON.write_text(json.dumps(pkg, indent="\t") + "\n")
-    TS_VERSION.write_text(re.sub(r'(LIBRARY_VERSION\s*=\s*")[^"]+(")', rf"\g<1>{args.npm_version}\g<2>",
-                                 TS_VERSION.read_text(), count=1))
-    log(f"stamped camoufox {args.py_version} / {NPM_PACKAGE} {args.npm_version} "
-        f"with browser {args.browser_tag}")
+    }, indent=2) + "\n"
+
+
+def stamp_checkout(browser_tag: str, py_version: str, npm_version: str, repo: str,
+                   root: Path = REPO_ROOT) -> None:
+    """Write a release's versions and browser pin into the wrapper at `root`."""
+    pin = pin_json(browser_tag, repo)
+    for rel in PIN_PATHS:
+        (root / rel).write_text(pin)
+    pyproject = root / "pyproject.toml"
+    pyproject.write_text(re.sub(r'^version = "[^"]+"', f'version = "{py_version}"',
+                                pyproject.read_text(), count=1, flags=re.M))
+    package_json = root / NPM_DIR / "package.json"
+    pkg = json.loads(package_json.read_text())
+    pkg["version"] = npm_version
+    package_json.write_text(json.dumps(pkg, indent=2) + "\n")
+
+
+def installed_pin_files() -> List[Path]:
+    """Every installed browser-pin.json the launcher may read.
+
+    The wrapper's camoufox_pin (the one that wins, and the one
+    .github/actions/driver always installs), and camoucore's own copy beside
+    camoucore.camoufox, which it falls back to without the wrapper.
+    """
+    from importlib.machinery import PathFinder
+
+    # `python3 -m ci.release` puts the checkout first on sys.path, and the
+    # checkout's own camoufox_pin is not what the launcher reads.
+    search = [p for p in sys.path if Path(p or ".").resolve() != REPO_ROOT.resolve()]
+    found = []
+    for name, sub in ((PIN_PACKAGE, ""), (DRIVER_PACKAGE, "camoufox")):
+        spec = PathFinder.find_spec(name, search)
+        if spec is None or not spec.submodule_search_locations:
+            continue
+        for loc in spec.submodule_search_locations:
+            pin = Path(loc) / sub / "browser-pin.json"
+            if pin.exists() and pin.resolve() != PIN_FILE.resolve():
+                found.append(pin)
+    return found
+
+
+def cmd_stamp(args: argparse.Namespace) -> int:
+    if (args.py_version is None) != (args.npm_version is None):
+        die("stamp takes both --py-version and --npm-version (a release), or neither (the installed driver)")
+    try:
+        if args.py_version is not None:
+            stamp_checkout(args.browser_tag, args.py_version, args.npm_version, repo_name())
+            log(f"stamped camoufox {args.py_version} / {NPM_PACKAGE} {args.npm_version} "
+                f"with browser {args.browser_tag}")
+            return 0
+        pin = pin_json(args.browser_tag, repo_name())
+    except ValueError as err:
+        die(str(err))
+    files = installed_pin_files()
+    if not files:
+        die("no installed camoufox driver carries a browser-pin.json (install it with .github/actions/driver)")
+    for f in files:
+        f.write_text(pin)
+        log(f"{f}: pinned to browser {args.browser_tag}")
+    return 0
+
+
+def cmd_driver(_: argparse.Namespace) -> int:
+    """Print the camoucore version the wrapper pins (checking the pins agree)."""
+    try:
+        version = driver_version()
+    except ValueError as err:
+        die(str(err))
+    print(version)
+    set_output("driver_version", version)
+    ref = driver_ref()
+    if ref:
+        log(f"ci/driver-ref overrides it in CI: camoucore {ref}", level="WARN")
     return 0
 
 
@@ -715,9 +904,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.set_defaults(fn=cmd_check_promotable)
     sub.add_parser("tested").set_defaults(fn=cmd_tested)
     p = sub.add_parser("stamp"); p.add_argument("--browser-tag", required=True)
-    p.add_argument("--py-version", required=True); p.add_argument("--npm-version", required=True)
+    p.add_argument("--py-version"); p.add_argument("--npm-version")
     p.set_defaults(fn=cmd_stamp)
     sub.add_parser("promote").set_defaults(fn=cmd_promote)
+    sub.add_parser("driver").set_defaults(fn=cmd_driver)
     p = sub.add_parser("lib-diff"); p.add_argument("--channel", choices=["prerelease", "stable"], required=True)
     p.add_argument("--wheel", required=True); p.add_argument("--tarball", required=True)
     p.add_argument("--py-version", required=True); p.add_argument("--npm-version", required=True)

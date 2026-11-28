@@ -31,7 +31,7 @@ def inject_locales(target_dir, target, version, src_dir):
     (input.validationMessage, XML parse errors) in English -- a mix no real
     Firefox produces. A langpack add-on does not fix it: the parent pre-creates
     those string bundles before add-ons start. Packaged locales are what a
-    Mozilla localized build has, selected by intl.locale.requested (pythonlib).
+    Mozilla localized build has, selected by intl.locale.requested (the driver).
     """
     langpacks = os.path.join('bundle', 'langpacks')
     version_file = os.path.join(langpacks, 'VERSION')

@@ -52,8 +52,8 @@ rules:
       popup-window-size, popup-covered-click,
       startup-size-hold-yields, all at this default.
     expect:
-      module: camoufox.virtdisplay
-      attribute: DEFAULT_SCREEN
+      module: camoucore.camoufox.product
+      attribute: PRODUCT.engine.virtual_screen
       equals: "1x1x24"
 
   - id: virtual-display-size-override-exists
@@ -66,8 +66,8 @@ rules:
       real framebuffer sets CAMOUFOX_VIRTUAL_DISPLAY_SIZE. Removing the hatch
       would turn a settled disagreement back into an open one.
     expect:
-      module: camoufox.virtdisplay
-      attribute: SCREEN_ENV_VAR
+      module: camoucore.virtdisplay
+      attribute: SCREEN_KEY  # PRODUCT.env_var(SCREEN_KEY)
       equals: CAMOUFOX_VIRTUAL_DISPLAY_SIZE
 
   - id: composite-extension-off
@@ -75,7 +75,7 @@ rules:
     check: automated
     evidence:
       - "issue #93: no video under headless='virtual'"
-      - "python/src/camoufox/virtdisplay.py: the measurement table"
+      - "camoucore virtdisplay.py (formerly camoufox/virtdisplay.py): the measurement table"
     rationale: >-
       Briefly enabled on the theory that disabling it caused #93. It did not --
       #93 was a Juggler bug, fixed by capturing the screencast from the
@@ -85,8 +85,8 @@ rules:
       longer dangerous, but it is no longer useful either. Off is the
       long-standing default and there is now no reason to move.
     expect:
-      module: camoufox.virtdisplay
-      attribute: COMPOSITE_ENV_VAR
+      module: camoucore.virtdisplay
+      attribute: COMPOSITE_KEY  # PRODUCT.env_var(COMPOSITE_KEY)
       equals: CAMOUFOX_VIRTUAL_DISPLAY_COMPOSITE
 
   - id: displayfd-not-lockfile-scan
@@ -104,7 +104,7 @@ rules:
       Xorg takes it through the setuid wrapper too, so it does not use the
       random display number and lock-file wait it was ported from.
     expect:
-      module: camoufox.virtdisplay
+      module: camoucore.virtdisplay
       xvfb_args_contain: "-displayfd"
 
   - id: displayfd-read-timeout
@@ -118,7 +118,7 @@ rules:
       host took up to 8.4 s to report, so ten failed launches that would have
       succeeded.
     expect:
-      module: camoufox.virtdisplay
+      module: camoucore.virtdisplay
       attribute: DISPLAYFD_READ_TIMEOUT_S
       is_positive_number: true
 
@@ -265,11 +265,14 @@ rules:
       graded against someone else's fingerprint generation, a divergence between
       the two reads as a browser bug, and every CI run pulls an outside package
       into a job holding repository credentials. The only `camoufox` this
-      repository may install is python/ from this tree.
+      repository may install is the official one: `camoufox` from PyPI (the
+      release wrapper in this repository), the package it pins, `camoucore`
+      (whose camoucore.camoufox is the launcher), or camoucore's source in
+      CamouBrowser/camoucore (python/camoucore), which is what ci/driver-ref
+      selects.
     expect:
       no_dependency_matching: "camoufox"
-      except_paths: ["python/pyproject.toml"]
-      allowed_forms: ["-e ../../../python", "-e ./python", "-e python"]
+      allowed_forms: ["camoufox", "camoufox[<extras>]", "camoucore==<version>", "camoucore[<extras>]==<version>", "-e <camoucore>/python/camoucore"]
 
   - id: ubo-release-pinned
     title: The bundled uBlock Origin is a committed pin, never AMO's newest
@@ -610,7 +613,7 @@ rules:
     title: A virtual display never clamps the generated screen
     check: automated
     evidence:
-      - "python/src/camoufox/utils.py: the `not virtual_display` guards"
+      - "camoucore python/camoucore/src/camoucore/camoufox/utils.py: the `not virtual_display` guards"
     rationale: >-
       This is what makes the 1x1 default safe. If clamping applied, a 1x1 root
       window would clamp every generated screen down to 1x1 and the fingerprint

@@ -2,14 +2,14 @@
 """Verify the font bundle, the per-OS fontconfig and fonts.json agree.
 
 The invariant this guards: every family the Python launcher can REPORT for an
-OS (python/src/camoufox/fonts.json[os], plus the essential, Windows 11 and
+OS (the camoufox package's fonts.json[os], plus the essential, Windows 11 and
 marker fonts in essential-fonts.json and launcher-constants.json beside it) is a
 family the packaged browser can RENDER under that OS's bundled fontconfig. A
 name that fails this is a reverse leak: the page is told the font exists and then measures the
 fallback.
 
 For each OS it
-  1. generates a runtime fonts.conf the way python/src/camoufox/utils.py does
+  1. generates a runtime fonts.conf the way the camoufox package's utils.py does
      (the cwd-relative <dir> rewritten to an absolute bundle/fonts, which is the
      Linux package layout: fonts/{linux,windows,macos} plus the browser's own
      TwemojiMozilla.ttf) and runs fc-list against it;
@@ -40,12 +40,11 @@ import subprocess
 import sys
 import tempfile
 
+from _camoufox_package import package_dir
 from _font_bundle import read_groups, require_bundle
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PYTHON_SRC = os.path.join(os.path.dirname(REPO), 'python', 'src')
-PACKAGE = os.path.join(PYTHON_SRC, 'camoufox')
-sys.path.insert(0, PYTHON_SRC)
+PACKAGE = str(package_dir())
 from camoufox.fingerprints import _generate_random_font_subset, _load_font_bases, _load_font_groups  # noqa: E402
 
 OSDIRS = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}

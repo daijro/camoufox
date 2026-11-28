@@ -325,9 +325,21 @@ an automation layer the page cannot see.
 
 | Package | Install | Docs |
 |---|---|---|
-| Python | `pip install -U "camoufox[geoip]"` | [`python/README.md`](python/README.md) |
-| TypeScript / Node.js | `npm install camoufox playwright-core` | [`typescript/README.md`](typescript/README.md) |
+| Python ([PyPI](https://pypi.org/project/camoufox/)) | `pip install -U "camoufox[geoip]"` | [Python driver README](https://github.com/CamouBrowser/camoucore/blob/main/python/camoucore/docs/camoufox.md) |
+| TypeScript / Node.js ([npm](https://www.npmjs.com/package/camoufox)) | `npm install camoufox playwright-core` | [TypeScript driver README](https://github.com/CamouBrowser/camoucore/blob/main/typescript/camoucore/docs/camoufox.md) |
 | AI coding agents | | [`AGENTS.md`](AGENTS.md#using-camoufox) |
+
+This repository builds the browser. The drivers that launch it, the Python
+and TypeScript launchers, are developed in
+[CamouBrowser/camoucore](https://github.com/CamouBrowser/camoucore) and
+published there in the one `camoucore` package, as `camoucore.camoufox` (npm:
+`camoucore/camoufox`); report driver bugs
+[there](https://github.com/CamouBrowser/camoucore/issues). The `camoufox`
+packages on PyPI and npm are released from this repository: each is that
+launcher under the `camoufox` name, pins one exact `camoucore` and records the
+browser release it was tested with (`camoufox_pin/browser-pin.json`), so
+`import camoufox` and the `camoufox` command are camoucore's, and `camoufox
+fetch` installs that browser.
 
 ## Quick start
 
@@ -376,7 +388,7 @@ match the exit IP. For many identities in one browser, use `NewContext()`.
 flowchart TB
     YOU(["Your Playwright code"])
 
-    subgraph L["Launcher: python/ or typescript/"]
+    subgraph L["Launcher: the camoufox driver (camoucore)"]
         FP["fpgen<br/>draws a real device"] --> CO["coherence.py<br/>rejects impossible combinations"]
         CO --> ID[["Identity"]]
         GEO["geoip<br/>timezone, locale, WebRTC IP"] --> ID
@@ -459,7 +471,7 @@ Left as stock Firefox has it, on purpose:
 
 | Trait | What a page sees | Why it is not spoofed |
 |---|---|---|
-| Canvas pixels | What the GPU and fonts produce. As in stock Firefox, each context's PNG exports (`toDataURL`, `toBlob`) carry a per-session `deBG` chunk; the pixels themselves are untouched. On the host's OS the identity claims the host's GPU, so the pixels agree with it; on another OS readback returns random data, as `privacy.resistFingerprinting` does in LibreWolf ([the canvas on another OS](python/README.md#the-canvas-on-another-os)) | Stock Firefox does not perturb pixels in its default configuration, so noise would only mark the browser as a spoofer ([`canvas-is-not-noised`](ci/tribal-rules.yml)) |
+| Canvas pixels | What the GPU and fonts produce. As in stock Firefox, each context's PNG exports (`toDataURL`, `toBlob`) carry a per-session `deBG` chunk; the pixels themselves are untouched. On the host's OS the identity claims the host's GPU, so the pixels agree with it; on another OS readback returns random data, as `privacy.resistFingerprinting` does in LibreWolf ([the canvas on another OS](https://github.com/CamouBrowser/camoucore/blob/main/python/camoucore/docs/camoufox.md#the-canvas-on-another-os)) | Stock Firefox does not perturb pixels in its default configuration, so noise would only mark the browser as a spoofer ([`canvas-is-not-noised`](ci/tribal-rules.yml)) |
 | Text widths | What the font really measures | The same font on the same OS measures the same everywhere; widths no real machine produces are a fingerprint ([`no-glyph-spacing-noise`](ci/tribal-rules.yml)) |
 | Audio render (`OfflineAudioContext`, `AnalyserNode`) | What the host CPU computes, the same in every context and every launch | Stock Firefox renders one value per CPU architecture, whatever the OS, sound card or sample rate, so a noised value is one no real machine produces ([`audio-is-not-noised`](ci/tribal-rules.yml)) |
 
@@ -492,7 +504,7 @@ That is the default. These options override it:
 
 Noise is set per browser, not per context. Without it, every `NewContext()`
 claims the host's OS. Details are in
-[the canvas on another OS](python/README.md#the-canvas-on-another-os).
+[the canvas on another OS](https://github.com/CamouBrowser/camoucore/blob/main/python/camoucore/docs/camoufox.md#the-canvas-on-another-os).
 
 ### Hiding automation
 
@@ -554,7 +566,7 @@ claims the host's OS. Details are in
 | Block images, WebRTC or WebGL | `block_images`, `block_webrtc`, `block_webgl` |
 | The host's GPU on the host's OS; random canvas readback, as in LibreWolf, on another OS | default; `canvas_noise=True` or `False` to choose |
 
-The full option list is in the [Python README](python/README.md#launch-options).
+The full option list is in the [Python driver README](https://github.com/CamouBrowser/camoucore/blob/main/python/camoucore/docs/camoufox.md#launch-options).
 
 ### Debloat
 
@@ -639,7 +651,7 @@ looks like for the identity's OS ([docs/humanize.md](docs/humanize.md)).
 
 ### Replacing a part: `myuri(part=fn)`
 
-Each piece of myuri is a part you can replace with a function of yours, in your own process (Python below; TypeScript in [its README](typescript/README.md#replacing-a-part)). The rest stay myuri's, so a scroll of your own still serves myuri's clicks, and your move still ends where myuri presses.
+Each piece of myuri is a part you can replace with a function of yours, in your own process (Python below; TypeScript in [its README](https://github.com/CamouBrowser/camoucore/blob/main/typescript/camoucore/docs/camoufox.md#replacing-a-part)). The rest stay myuri's, so a scroll of your own still serves myuri's clicks, and your move still ends where myuri presses.
 
 ```python
 import asyncio
@@ -843,8 +855,9 @@ flowchart TD
 | Part | Licence |
 |---|---|
 | The browser (`browser/`: patches, additions, settings, build system) | [MPL-2.0](LICENSE), the licence of the Firefox source it modifies |
-| Python package | MIT ([`python/LICENSE`](python/LICENSE)) |
-| TypeScript package | MIT ([`typescript/LICENSE`](typescript/LICENSE)); includes a port of NumPy's pairwise summation ([notice](typescript/THIRD_PARTY_NOTICES.md)) and depends on [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and [`python-random`](https://www.npmjs.com/package/python-random) |
+| The `camoufox` release wrapper (`pyproject.toml`, `camoufox/`, `camoufox_pin/`, `npm/`) | MIT, like the driver it installs ([`camoufox/LICENSE`](camoufox/LICENSE), shipped in both packages); it adds no code to that driver |
+| Python driver | MIT ([camoucore](https://github.com/CamouBrowser/camoucore/blob/main/python/camoucore/LICENSE)) |
+| TypeScript driver | MIT ([camoucore](https://github.com/CamouBrowser/camoucore/blob/main/typescript/camoucore/LICENSE)); depends on [`camoucore`](https://github.com/CamouBrowser/camoucore) (MIT; carries a port of NumPy's pairwise summation, with its notice), [`fpgen-js`](https://www.npmjs.com/package/fpgen-js) (Apache-2.0) and [`python-random`](https://www.npmjs.com/package/python-random) |
 
 ## Thanks
 

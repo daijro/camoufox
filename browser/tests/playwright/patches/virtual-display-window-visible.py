@@ -45,8 +45,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
-ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(ROOT / "python" / "src"))
 
 PAGE = b"""<!doctype html><meta charset=utf-8><body><script>
 setTimeout(() => {
@@ -60,7 +58,8 @@ setTimeout(() => {
 
 
 def main() -> int:
-    from camoufox.virtdisplay import VirtualDisplay
+    from camoucore.camoufox.product import PRODUCT
+    from camoucore.virtdisplay import VirtualDisplay
 
     got, done = {}, threading.Event()
 
@@ -83,7 +82,7 @@ def main() -> int:
     srv = socketserver.TCPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     profile = tempfile.mkdtemp(prefix="vd-visible-")
-    vd = VirtualDisplay()
+    vd = VirtualDisplay(PRODUCT)
     try:
         env = {k: v for k, v in os.environ.items() if k not in ("WAYLAND_DISPLAY", "WAYLAND_SOCKET")}
         env["DISPLAY"] = vd.get()

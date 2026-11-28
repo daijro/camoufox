@@ -177,7 +177,7 @@ async def test_a_context_is_internally_coherent(binary):
     assert int(values.get("screenHeight") or 0) > 1, (
         f"screen height is {values.get('screenHeight')!r}. A 1x1 virtual display root "
         "must never clamp the generated screen -- see the `not virtual_display` guards "
-        "in python/src/camoufox/utils.py."
+        "in the camoufox package's utils.py."
     )
 
 

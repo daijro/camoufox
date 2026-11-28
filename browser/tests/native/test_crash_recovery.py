@@ -394,14 +394,15 @@ async def test_a_stale_x11_lock_does_not_block_the_next_display(psutil_mod):
     if not _virtual_display_supported():
         pytest.skip("Xvfb is not installed")
 
-    from camoufox.virtdisplay import VirtualDisplay
+    from camoucore.camoufox.product import PRODUCT
+    from camoucore.virtdisplay import VirtualDisplay
 
     litter = Path("/tmp/.X77-lock")
     created = not litter.exists()
     if created:
         litter.write_text("99999\n")
     try:
-        display = VirtualDisplay()
+        display = VirtualDisplay(PRODUCT)
         number = display.get()
         assert number.startswith(":")
         display.kill()

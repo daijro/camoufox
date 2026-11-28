@@ -29,12 +29,13 @@ import sys
 import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from importlib.resources import files
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
-CAMOUFOX = Path(__file__).resolve().parents[4] / "python" / "src" / "camoufox"
+CAMOUFOX = files("camoucore.camoufox")
 
 HOSTS = [f"127.0.0.{n}" for n in range(1, 9)]
 

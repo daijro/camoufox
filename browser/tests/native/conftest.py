@@ -17,7 +17,6 @@ from __future__ import annotations
 import gc
 import os
 import resource
-import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -27,7 +26,6 @@ from typing import Dict, Iterable, List, Optional, Set
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO_ROOT / "python" / "src"))
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--browsers", type=int, default=3,

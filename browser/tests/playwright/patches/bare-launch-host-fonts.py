@@ -12,7 +12,7 @@ Windows, and sans-serif measured 99 px high where stock measures 98.
 
 The reference is the same binary on a profile with gfx.bundled-fonts.activate=0,
 which registers nothing from fonts/. Each family the bundle can render
-(python/src/camoufox/fonts.json, every OS) is measured against the generic
+(the camoufox package's fonts.json, every OS) is measured against the generic
 fallbacks, and the generics are measured as a 72 px span. Both launches must
 agree, except for Twemoji Mozilla, which only the default launch has.
 
@@ -23,13 +23,13 @@ import asyncio
 import json
 import sys
 import tempfile
+from importlib.resources import files
 from pathlib import Path
 from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import resolve_binary  # noqa: E402
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
 
 STOCK_BUNDLED = "Twemoji Mozilla"
 ORIGIN = "https://camoufox.test/"
@@ -56,7 +56,7 @@ document.documentElement.dataset.probe = JSON.stringify({rendered, spans});
 
 
 def bundle_families() -> List[str]:
-    lists = json.loads((REPO_ROOT / "python" / "src" / "camoufox" / "fonts.json").read_text())
+    lists = json.loads((files("camoucore.camoufox") / "fonts.json").read_text())
     return sorted(set().union(*lists.values()))
 
 

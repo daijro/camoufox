@@ -13,7 +13,7 @@ nsIGfxInfo. Without it gfxInfo has nothing, and the driver blocklist refuses
 
 `scripts/package.py` used to drop both as "unneeded" (~50 KB), and the launcher
 covered for it with `webgl.force-enabled`, so the breakage only showed on a
-launch that did not go through pythonlib -- measured 2026-09-18: stock Firefox
+launch that did not go through the driver -- measured 2026-09-18: stock Firefox
 152.0.4 on this machine returned a full WebGL 2.0 context from the real GPU and
 camoufox returned `null` from `canvas.getContext('webgl')`.
 
@@ -28,7 +28,7 @@ that display-less fallback, and a missing gfxtest still shows as the refusal.
 
 Three checks, because each alone can pass while the others are broken: the
 packaging list must not name them, the build under test must have them beside
-the binary, and a bare display-less headless launch -- no pythonlib, so no
+the binary, and a bare display-less headless launch -- no driver, so no
 `webgl.force-enabled` -- must still get a context.
 
     python browser/tests/playwright/patches/gfx-probes-packaged.py

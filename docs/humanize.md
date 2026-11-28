@@ -54,7 +54,8 @@ coalescing, fractional coordinates), which a driver cannot set
 ([`humanize-timing-is-the-engine-and-shape-is-the-browser`](../ci/tribal-rules.yml)).
 
 The engines wrap Playwright's input methods on the client
-(`python/src/camoufox/_humanize_playwright.py` and its TypeScript counterpart).
+(`_humanize_playwright.py` in the Python driver and its TypeScript counterpart, in
+[camoucore](https://github.com/CamouBrowser/camoucore)).
 Each page gets one `myuri.Actions`, whose host sends every event through
 Playwright's own input methods. A `raw()` channel's parts are Playwright's: its
 move is one event and its scroll into view is Playwright's. User code never runs

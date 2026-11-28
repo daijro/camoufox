@@ -1,0 +1,58 @@
+{
+  "name": "camoufox",
+  "version": "0.5.7",
+  "description": "Camoufox: the anti-detect Firefox build and its Playwright launcher. The camoucore/camoufox launcher under its own name.",
+  "//": "A release wrapper, not the launcher: everything comes from camoucore/camoufox in the one camoucore package (https://github.com/CamouBrowser/camoucore), pinned to one exact version (keep it equal to the root pyproject.toml's; ci/release.py checks), laid out as camoucore's RELEASING.md, 'The wrapper packages', says. This adds camoufox_pin/browser-pin.json, stamped by .github/workflows/release.yml with the browser release built from the same sources (a copy of the root camoufox_pin/browser-pin.json), read as camoufox/camoufox_pin/browser-pin.json. Packed from this directory, so the tarball carries this directory's MIT LICENSE, not the repository's.",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./camoufox_pin/browser-pin.json": "./camoufox_pin/browser-pin.json",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "camoufox": "cli.js"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "cli.js",
+    "camoufox_pin/browser-pin.json",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "camoucore": "0.6.2"
+  },
+  "peerDependencies": {
+    "playwright-core": "<1.63"
+  },
+  "keywords": [
+    "camoufox",
+    "firefox",
+    "playwright",
+    "fingerprint",
+    "anti-detect",
+    "scraping"
+  ],
+  "homepage": "https://camoufox.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daijro/camoufox.git",
+    "directory": "npm"
+  },
+  "bugs": {
+    "url": "https://github.com/daijro/camoufox/issues"
+  },
+  "engines": {
+    "node": ">= 22.15"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

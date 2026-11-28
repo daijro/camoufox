@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate python/src/camoufox/fonts.json FROM the actual bundled fonts.
+"""Regenerate the camoufox package's fonts.json FROM the actual bundled fonts.
 
 fonts.json[os] is the pool the per-launch font draw reports from
 (fingerprints._generate_random_font_subset) and the list update_fonts() merges
@@ -27,8 +27,8 @@ are written next to the output (fonts.json.unreported.txt is NOT produced in
 the package; pass --dump-union to see them) so the gap stays visible.
 
 Usage (build machine, after the bundle changed):
-    python3 scripts/gen-fonts-json.py [--bundle bundle/fonts]
-                                      [--out ../python/src/camoufox/fonts.json]
+    python3 scripts/gen-fonts-json.py [--camoucore DIR] [--bundle bundle/fonts]
+                                      [--out <camoucore>/python/camoucore/src/camoucore/camoufox/fonts.json]
                                       [--manifest scripts/data/font-manifests.json]
                                       [--print-bases] [--dump-union DIR]
 
@@ -36,8 +36,14 @@ The manifest lists, per OS, the base font sets of each OS version (with their
 real-world share) and the optional additions (Office, LibreOffice, developer
 and web fonts) with their install probability, per OS. --print-bases prints
 the OS base lists (intersected with the result) and writes the essential floor
-to python/src/camoufox/essential-fonts.json, which both launchers read and which
+to the camoufox package's essential-fonts.json, which both launchers read and which
 must be kept in step with this file.
+
+The driver's data files live in https://github.com/CamouBrowser/camoucore, so
+this reads and writes a camoucore checkout (--camoucore DIR, $CAMOUCORE_DIR, or
+../camoucore beside this repository; see _camoufox_package.py). Commit the
+output there, in a camoucore pull request. Imported without a checkout (the
+tests do, for ALIASES), it reads the installed driver instead.
 """
 import argparse
 import json
@@ -45,10 +51,14 @@ import os
 import subprocess
 import sys
 
+from _camoufox_package import add_camoucore_argument, camoucore_package_dir, package_dir
 from _font_bundle import read_groups, require_bundle
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PACKAGE = os.path.join(os.path.dirname(REPO), 'python', 'src', 'camoufox')
+# Read from the camoucore checkout when there is one, else the installed driver;
+# written only to the checkout (main() refuses otherwise).
+_CHECKOUT = camoucore_package_dir(required=False)
+PACKAGE = str(_CHECKOUT or package_dir())
 OSDIRS = {'win': 'windows', 'mac': 'macos', 'lin': 'linux'}
 FONT_EXT = ('.ttf', '.otf', '.ttc', '.dfont')
 
@@ -203,12 +213,15 @@ def manifest_names(man, os_key):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--bundle', default=os.path.join(REPO, 'bundle', 'fonts'))
-    ap.add_argument('--out', default=os.path.join(PACKAGE, 'fonts.json'))
+    add_camoucore_argument(ap)
+    ap.add_argument('--out', default=None, help='default: fonts.json in the camoucore checkout')
     ap.add_argument('--manifest', default=os.path.join(REPO, 'scripts', 'data', 'font-manifests.json'),
                     help='per-OS font manifest (bases + additions)')
     ap.add_argument('--print-bases', action='store_true', help='print OS base lists as Python literals')
     ap.add_argument('--dump-union', default=None, help='dir to write <os>-union.txt / <os>-unreported.txt')
     args = ap.parse_args()
+    if args.out is None:
+        args.out = os.path.join(str(camoucore_package_dir()), 'fonts.json')
     require_bundle(args.bundle)
 
     man = load_manifest(args)
@@ -314,7 +327,7 @@ def main():
             print(f'# _ESSENTIAL_FONTS_{suffix}: {len(common)} families '
                   f'(intersection of {len(bases)} base(s) + aliases)')
             essential[os_key] = sorted(common)
-        path = os.path.join(PACKAGE, 'essential-fonts.json')
+        path = os.path.join(str(camoucore_package_dir()), 'essential-fonts.json')
         # Both launchers read every OS's list at import, so a file missing one
         # breaks `import camoufox`. Keep the old file rather than write that.
         missing = [k for k in OSDIRS if k not in essential]
